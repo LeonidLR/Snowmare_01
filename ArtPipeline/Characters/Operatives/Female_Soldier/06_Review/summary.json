@@ -86,6 +86,1620 @@
     ]
   },
   "stage_times": {
-    "source": "2026-10-20 21:50:11"
+    "source": "2026-10-20 21:50:11",
+    "clean": "2026-10-20 22:00:09",
+    "reduce": "2026-10-20 22:20:45",
+    "atlas": "2026-10-20 22:22:14",
+    "bake": "2026-10-20 22:38:57",
+    "export": "2026-10-20 22:39:08",
+    "review": "2026-10-20 22:40:55",
+    "qa": "2026-10-20 22:40:55"
+  },
+  "clean": {
+    "hair_slots": [
+      "M_Female_Soldier_Eyes_Hair",
+      "M_Female_Soldier_Hair"
+    ],
+    "hair_triangles_removed": 6626,
+    "transparent_slots": [
+      "M_Female_Soldier_Glasses_Glass",
+      "M_Female_Soldier_Beacon_Glass",
+      "M_Female_Glowstick",
+      "M_Female_Soldier_Head_in_Balaclava"
+    ],
+    "transparent_triangles_removed": 4701,
+    "hidden_triangles_removed": 17086,
+    "hidden_triangles_by_slot": {
+      "M_Female_Soldier_Head": 9703,
+      "MI_Female_Soldier_Trouthers": 299,
+      "M_Female_Soldier_Eyes": 3108,
+      "MI_Female_Soldier_Trouthers_3": 57,
+      "MI_Female_Soldier_Trouthers_5": 4,
+      "MI_Female_Soldier_Trouthers_6": 159,
+      "M_Female_Soldier_Boots": 1,
+      "M_Female_Soldier_Bodyoutfit": 1752,
+      "MI_Female_Soldeir_Torso": 1164,
+      "MI_Female_Soldeir_Torso_10": 101,
+      "M_Female_Soldier_Backpack": 66,
+      "M_Female_Soldier_Hand": 39,
+      "MI_Female_Soldier_Helmet_Outfit_15": 180,
+      "M_Femele_Soldier_Helmet": 339,
+      "MI_Female_Soldier_Chevron": 1,
+      "MI_Female_Soldier_Chevron_23": 32,
+      "MI_Female_Soldier_Chevron_24": 47,
+      "MI_Female_Soldier_Chevron_25": 34
+    },
+    "triangles_after": 122334,
+    "triangles_after_per_slot": {
+      "MI_Female_Soldier_Trouthers": 13640,
+      "MI_Female_Soldier_Trouthers_1": 276,
+      "MI_Female_Soldier_Trouthers_2": 276,
+      "MI_Female_Soldier_Trouthers_3": 1322,
+      "MI_Female_Soldier_Trouthers_4": 180,
+      "MI_Female_Soldier_Trouthers_5": 176,
+      "MI_Female_Soldier_Trouthers_6": 2110,
+      "M_Female_Soldier_Boots": 3571,
+      "M_Female_Soldier_Bodyoutfit": 29032,
+      "MI_Female_Soldeir_Torso": 14862,
+      "MI_Female_Soldeir_Torso_10": 2733,
+      "M_Female_Soldier_Backpack": 8454,
+      "M_Female_Soldier_Hand": 6513,
+      "MI_Female_Soldier_Helmet_Outfit": 0,
+      "M_Female_Soldier_Glasses_Glass": 0,
+      "MI_Female_Soldier_Helmet_Outfit_15": 12707,
+      "M_Female_Soldier_Beacon_Glass": 0,
+      "M_Female_Soldier_Helmet_Beacon_Light": 8,
+      "M_Female_Soldier_flashlight_bulb": 186,
+      "M_Female_Glowstick": 0,
+      "M_Female_Glowstick_Light": 64,
+      "M_Femele_Soldier_Helmet": 11471,
+      "MI_Female_Soldier_Chevron": 567,
+      "MI_Female_Soldier_Chevron_23": 536,
+      "MI_Female_Soldier_Chevron_24": 521,
+      "MI_Female_Soldier_Chevron_25": 534,
+      "MI_Female_Soldier_Chevron_26": 568,
+      "MI_Female_Soldier_Chevron_27": 568,
+      "M_Female_Soldier_Head": 10735,
+      "M_Female_Soldier_Eyes": 724,
+      "M_Female_Soldier_Eyes_Hair": 0,
+      "M_Female_Soldier_Hair": 0,
+      "M_Female_Soldier_Head_in_Balaclava": 0
+    },
+    "vertices_after": 88950,
+    "hidden_method": {
+      "rays_sphere": 80,
+      "samples_per_triangle": 4,
+      "keep_ring": 1,
+      "anim_frames_per_anim": 2,
+      "forward": [
+        -0.0026401395443826914,
+        -0.9999964833259583,
+        0.0
+      ],
+      "poses": [
+        {
+          "pose": "rest",
+          "still_hidden": 34908,
+          "seconds": 26.6
+        },
+        {
+          "pose": "crouch_deep",
+          "still_hidden": 32429,
+          "seconds": 51.7
+        },
+        {
+          "pose": "kneel_aim",
+          "still_hidden": 31525,
+          "seconds": 28.4
+        },
+        {
+          "pose": "arms_up",
+          "still_hidden": 31094,
+          "seconds": 24.4
+        },
+        {
+          "pose": "arms_hug",
+          "still_hidden": 30967,
+          "seconds": 23.8
+        },
+        {
+          "pose": "twist_bend",
+          "still_hidden": 30396,
+          "seconds": 53.7
+        },
+        {
+          "pose": "twist_bend_other",
+          "still_hidden": 30014,
+          "seconds": 39.0
+        },
+        {
+          "pose": "prone_look_up",
+          "still_hidden": 29657,
+          "seconds": 20.1
+        },
+        {
+          "pose": "lunge_spread",
+          "still_hidden": 29536,
+          "seconds": 20.5
+        },
+        {
+          "pose": "sit_reach",
+          "still_hidden": 29118,
+          "seconds": 31.8
+        },
+        {
+          "pose": "ThirdPersonIdle@18",
+          "still_hidden": 28572,
+          "seconds": 43.9
+        },
+        {
+          "pose": "ThirdPersonIdle@51",
+          "still_hidden": 28382,
+          "seconds": 31.3
+        },
+        {
+          "pose": "ThirdPersonJump_End@2",
+          "still_hidden": 28115,
+          "seconds": 16.3
+        },
+        {
+          "pose": "ThirdPersonJump_End@6",
+          "still_hidden": 27950,
+          "seconds": 17.3
+        },
+        {
+          "pose": "ThirdPersonJump_Loop@6",
+          "still_hidden": 27737,
+          "seconds": 15.7
+        },
+        {
+          "pose": "ThirdPersonJump_Loop@15",
+          "still_hidden": 27602,
+          "seconds": 15.6
+        },
+        {
+          "pose": "ThirdPersonJump_Start@4",
+          "still_hidden": 27416,
+          "seconds": 15.5
+        },
+        {
+          "pose": "ThirdPersonJump_Start@10",
+          "still_hidden": 27291,
+          "seconds": 15.9
+        },
+        {
+          "pose": "ThirdPersonRun@5",
+          "still_hidden": 27120,
+          "seconds": 22.7
+        },
+        {
+          "pose": "ThirdPersonRun@13",
+          "still_hidden": 26969,
+          "seconds": 17.1
+        },
+        {
+          "pose": "ThirdPersonWalk@7",
+          "still_hidden": 26917,
+          "seconds": 15.4
+        },
+        {
+          "pose": "ThirdPersonWalk@20",
+          "still_hidden": 26812,
+          "seconds": 15.6
+        },
+        {
+          "pose": "ThirdPerson_Jump@2",
+          "still_hidden": 26812,
+          "seconds": 14.9
+        },
+        {
+          "pose": "ThirdPerson_Jump@6",
+          "still_hidden": 26811,
+          "seconds": 17.4
+        }
+      ]
+    }
+  },
+  "reduce": {
+    "target_tris": 50000,
+    "triangles_before": 122334,
+    "triangles_after": 49983,
+    "vertices_welded": 63808,
+    "vertices_after": 27112,
+    "per_material": {
+      "MI_Female_Soldier_Trouthers": {
+        "before": 13640,
+        "budget": 5415,
+        "after": 5414,
+        "keep_weight": 1.0,
+        "ratio": 0.397,
+        "passes": [
+          0.397
+        ]
+      },
+      "MI_Female_Soldier_Trouthers_1": {
+        "before": 276,
+        "budget": 110,
+        "after": 109,
+        "keep_weight": 1.0,
+        "ratio": 0.395,
+        "passes": [
+          0.399
+        ]
+      },
+      "MI_Female_Soldier_Trouthers_2": {
+        "before": 276,
+        "budget": 110,
+        "after": 109,
+        "keep_weight": 1.0,
+        "ratio": 0.395,
+        "passes": [
+          0.399
+        ]
+      },
+      "MI_Female_Soldier_Trouthers_3": {
+        "before": 1322,
+        "budget": 525,
+        "after": 525,
+        "keep_weight": 1.0,
+        "ratio": 0.397,
+        "passes": [
+          0.397
+        ]
+      },
+      "MI_Female_Soldier_Trouthers_4": {
+        "before": 180,
+        "budget": 71,
+        "after": 70,
+        "keep_weight": 1.0,
+        "ratio": 0.389,
+        "passes": [
+          0.394
+        ]
+      },
+      "MI_Female_Soldier_Trouthers_5": {
+        "before": 176,
+        "budget": 70,
+        "after": 69,
+        "keep_weight": 1.0,
+        "ratio": 0.392,
+        "passes": [
+          0.398
+        ]
+      },
+      "MI_Female_Soldier_Trouthers_6": {
+        "before": 2110,
+        "budget": 838,
+        "after": 838,
+        "keep_weight": 1.0,
+        "ratio": 0.397,
+        "passes": [
+          0.397
+        ]
+      },
+      "M_Female_Soldier_Boots": {
+        "before": 3571,
+        "budget": 1276,
+        "after": 1275,
+        "keep_weight": 0.9,
+        "ratio": 0.357,
+        "passes": [
+          0.357
+        ]
+      },
+      "M_Female_Soldier_Bodyoutfit": {
+        "before": 29032,
+        "budget": 11526,
+        "after": 11525,
+        "keep_weight": 1.0,
+        "ratio": 0.397,
+        "passes": [
+          0.397
+        ]
+      },
+      "MI_Female_Soldeir_Torso": {
+        "before": 14862,
+        "budget": 5900,
+        "after": 5899,
+        "keep_weight": 1.0,
+        "ratio": 0.397,
+        "passes": [
+          0.397
+        ]
+      },
+      "MI_Female_Soldeir_Torso_10": {
+        "before": 2733,
+        "budget": 1085,
+        "after": 1085,
+        "keep_weight": 1.0,
+        "ratio": 0.397,
+        "passes": [
+          0.397
+        ]
+      },
+      "M_Female_Soldier_Backpack": {
+        "before": 8454,
+        "budget": 2349,
+        "after": 2348,
+        "keep_weight": 0.7,
+        "ratio": 0.278,
+        "passes": [
+          0.278
+        ]
+      },
+      "M_Female_Soldier_Hand": {
+        "before": 6513,
+        "budget": 2586,
+        "after": 2585,
+        "keep_weight": 1.0,
+        "ratio": 0.397,
+        "passes": [
+          0.397
+        ]
+      },
+      "MI_Female_Soldier_Helmet_Outfit": {
+        "before": 0,
+        "budget": 0,
+        "after": 0,
+        "keep_weight": 1.3,
+        "ratio": 0.0,
+        "passes": []
+      },
+      "M_Female_Soldier_Glasses_Glass": {
+        "before": 0,
+        "budget": 0,
+        "after": 0,
+        "keep_weight": 1.0,
+        "ratio": 0.0,
+        "passes": []
+      },
+      "MI_Female_Soldier_Helmet_Outfit_15": {
+        "before": 12707,
+        "budget": 6558,
+        "after": 6557,
+        "keep_weight": 1.3,
+        "ratio": 0.516,
+        "passes": [
+          0.516
+        ]
+      },
+      "M_Female_Soldier_Beacon_Glass": {
+        "before": 0,
+        "budget": 0,
+        "after": 0,
+        "keep_weight": 0.8,
+        "ratio": 0.0,
+        "passes": []
+      },
+      "M_Female_Soldier_Helmet_Beacon_Light": {
+        "before": 8,
+        "budget": 8,
+        "after": 8,
+        "keep_weight": 0.8,
+        "ratio": 1.0,
+        "passes": []
+      },
+      "M_Female_Soldier_flashlight_bulb": {
+        "before": 186,
+        "budget": 59,
+        "after": 59,
+        "keep_weight": 0.8,
+        "ratio": 0.317,
+        "passes": [
+          0.317
+        ]
+      },
+      "M_Female_Glowstick": {
+        "before": 0,
+        "budget": 0,
+        "after": 0,
+        "keep_weight": 0.8,
+        "ratio": 0.0,
+        "passes": []
+      },
+      "M_Female_Glowstick_Light": {
+        "before": 64,
+        "budget": 24,
+        "after": 24,
+        "keep_weight": 0.8,
+        "ratio": 0.375,
+        "passes": [
+          0.375
+        ]
+      },
+      "M_Femele_Soldier_Helmet": {
+        "before": 11471,
+        "budget": 5009,
+        "after": 5008,
+        "keep_weight": 1.1,
+        "ratio": 0.437,
+        "passes": [
+          0.437
+        ]
+      },
+      "MI_Female_Soldier_Chevron": {
+        "before": 567,
+        "budget": 113,
+        "after": 113,
+        "keep_weight": 0.5,
+        "ratio": 0.199,
+        "passes": [
+          0.199
+        ]
+      },
+      "MI_Female_Soldier_Chevron_23": {
+        "before": 536,
+        "budget": 106,
+        "after": 106,
+        "keep_weight": 0.5,
+        "ratio": 0.198,
+        "passes": [
+          0.198
+        ]
+      },
+      "MI_Female_Soldier_Chevron_24": {
+        "before": 521,
+        "budget": 103,
+        "after": 102,
+        "keep_weight": 0.5,
+        "ratio": 0.196,
+        "passes": [
+          0.198
+        ]
+      },
+      "MI_Female_Soldier_Chevron_25": {
+        "before": 534,
+        "budget": 106,
+        "after": 106,
+        "keep_weight": 0.5,
+        "ratio": 0.199,
+        "passes": [
+          0.199
+        ]
+      },
+      "MI_Female_Soldier_Chevron_26": {
+        "before": 568,
+        "budget": 113,
+        "after": 112,
+        "keep_weight": 0.5,
+        "ratio": 0.197,
+        "passes": [
+          0.199
+        ]
+      },
+      "MI_Female_Soldier_Chevron_27": {
+        "before": 568,
+        "budget": 113,
+        "after": 112,
+        "keep_weight": 0.5,
+        "ratio": 0.197,
+        "passes": [
+          0.199
+        ]
+      },
+      "M_Female_Soldier_Head": {
+        "before": 10735,
+        "budget": 5540,
+        "after": 5539,
+        "keep_weight": 1.3,
+        "ratio": 0.516,
+        "passes": [
+          0.516
+        ]
+      },
+      "M_Female_Soldier_Eyes": {
+        "before": 724,
+        "budget": 287,
+        "after": 286,
+        "keep_weight": 1.0,
+        "ratio": 0.395,
+        "passes": [
+          0.396
+        ]
+      },
+      "M_Female_Soldier_Eyes_Hair": {
+        "before": 0,
+        "budget": 0,
+        "after": 0,
+        "keep_weight": 1.0,
+        "ratio": 0.0,
+        "passes": []
+      },
+      "M_Female_Soldier_Hair": {
+        "before": 0,
+        "budget": 0,
+        "after": 0,
+        "keep_weight": 1.0,
+        "ratio": 0.0,
+        "passes": []
+      },
+      "M_Female_Soldier_Head_in_Balaclava": {
+        "before": 0,
+        "budget": 0,
+        "after": 0,
+        "keep_weight": 1.0,
+        "ratio": 0.0,
+        "passes": []
+      }
+    },
+    "g": 0.397,
+    "protect_factor": 2.0,
+    "protection": {
+      "open_border_edges": 5846,
+      "uv_seam_edges": 22738,
+      "joint_blend_vertices": 8761
+    },
+    "degenerate_faces": 0,
+    "non_manifold_edges": 15,
+    "unweighted_vertices": 0,
+    "sharp_angle": 60.0,
+    "authored_normals_restored_loops": 24,
+    "seconds": 10.0,
+    "decimate_seconds": 5.6
+  },
+  "atlas": {
+    "source_blend": "reduce",
+    "packer": "uvpackmaster4",
+    "packer_note": "UVPackmaster result {'PASS_THROUGH', 'FINISHED'} retcode 0 (UVPackmaster Engine: 4.1.0 PRO)",
+    "pack_seconds": 68.6,
+    "resolution": 4096,
+    "margin_px": 12,
+    "border_px": 4,
+    "rotation_step": 90,
+    "islands": 2376,
+    "clusters": 983,
+    "down_facing_clusters": 116,
+    "mirrored_stacked_clusters_rot180": {
+      "MI_Female_Soldier_Trouthers": 1,
+      "MI_Female_Soldier_Trouthers_3": 4,
+      "MI_Female_Soldier_Trouthers_6": 3,
+      "M_Female_Soldier_Boots": 1,
+      "M_Female_Soldier_Bodyoutfit": 5,
+      "MI_Female_Soldeir_Torso": 3,
+      "MI_Female_Soldeir_Torso_10": 2,
+      "M_Female_Soldier_Backpack": 4,
+      "M_Female_Soldier_Hand": 1,
+      "MI_Female_Soldier_Helmet_Outfit_15": 3,
+      "M_Female_Glowstick_Light": 1,
+      "M_Femele_Soldier_Helmet": 6,
+      "MI_Female_Soldier_Chevron_24": 1,
+      "MI_Female_Soldier_Chevron_26": 3,
+      "MI_Female_Soldier_Chevron_27": 3,
+      "M_Female_Soldier_Head": 3,
+      "M_Female_Soldier_Eyes": 1
+    },
+    "mirrored_stacked_faces": 31881,
+    "uv_area_sum": 0.7917,
+    "loops_out_of_0_1": 0,
+    "texel_density": {
+      "MI_Female_Soldier_Trouthers": {
+        "atlas_px_per_cm": 13.5,
+        "source_px_per_cm": 30.45,
+        "ratio": 0.443,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Trouthers_1": {
+        "atlas_px_per_cm": 13.38,
+        "source_px_per_cm": 37.89,
+        "ratio": 0.353,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Trouthers_2": {
+        "atlas_px_per_cm": 13.38,
+        "source_px_per_cm": 37.89,
+        "ratio": 0.353,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Trouthers_3": {
+        "atlas_px_per_cm": 13.3,
+        "source_px_per_cm": 31.24,
+        "ratio": 0.426,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Trouthers_4": {
+        "atlas_px_per_cm": 13.18,
+        "source_px_per_cm": 34.89,
+        "ratio": 0.378,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Trouthers_5": {
+        "atlas_px_per_cm": 13.16,
+        "source_px_per_cm": 35.03,
+        "ratio": 0.376,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Trouthers_6": {
+        "atlas_px_per_cm": 12.92,
+        "source_px_per_cm": 35.95,
+        "ratio": 0.36,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "M_Female_Soldier_Boots": {
+        "atlas_px_per_cm": 10.81,
+        "source_px_per_cm": 31.39,
+        "ratio": 0.344,
+        "weight": 0.8,
+        "source_res": 2048
+      },
+      "M_Female_Soldier_Bodyoutfit": {
+        "atlas_px_per_cm": 17.51,
+        "source_px_per_cm": 46.63,
+        "ratio": 0.376,
+        "weight": 1.3,
+        "source_res": 4096
+      },
+      "MI_Female_Soldeir_Torso": {
+        "atlas_px_per_cm": 17.49,
+        "source_px_per_cm": 30.54,
+        "ratio": 0.573,
+        "weight": 1.3,
+        "source_res": 4096
+      },
+      "MI_Female_Soldeir_Torso_10": {
+        "atlas_px_per_cm": 17.56,
+        "source_px_per_cm": 32.5,
+        "ratio": 0.54,
+        "weight": 1.3,
+        "source_res": 4096
+      },
+      "M_Female_Soldier_Backpack": {
+        "atlas_px_per_cm": 12.14,
+        "source_px_per_cm": 47.97,
+        "ratio": 0.253,
+        "weight": 0.9,
+        "source_res": 4096
+      },
+      "M_Female_Soldier_Hand": {
+        "atlas_px_per_cm": 13.51,
+        "source_px_per_cm": 63.18,
+        "ratio": 0.214,
+        "weight": 1.0,
+        "source_res": 2048
+      },
+      "MI_Female_Soldier_Helmet_Outfit_15": {
+        "atlas_px_per_cm": 24.27,
+        "source_px_per_cm": 103.19,
+        "ratio": 0.235,
+        "weight": 1.8,
+        "source_res": 4096
+      },
+      "M_Female_Soldier_Helmet_Beacon_Light": {
+        "atlas_px_per_cm": 24.33,
+        "source_px_per_cm": 22730.31,
+        "ratio": 0.001,
+        "weight": 1.8,
+        "source_res": 4096
+      },
+      "M_Female_Soldier_flashlight_bulb": {
+        "atlas_px_per_cm": 8.11,
+        "source_px_per_cm": 133.51,
+        "ratio": 0.061,
+        "weight": 0.6,
+        "source_res": 4096
+      },
+      "M_Female_Glowstick_Light": {
+        "atlas_px_per_cm": 8.11,
+        "source_px_per_cm": 476.07,
+        "ratio": 0.017,
+        "weight": 0.6,
+        "source_res": 4096
+      },
+      "M_Femele_Soldier_Helmet": {
+        "atlas_px_per_cm": 23.98,
+        "source_px_per_cm": 43.18,
+        "ratio": 0.555,
+        "weight": 1.8,
+        "source_res": 2048
+      },
+      "MI_Female_Soldier_Chevron": {
+        "atlas_px_per_cm": 8.0,
+        "source_px_per_cm": 110.49,
+        "ratio": 0.072,
+        "weight": 0.6,
+        "source_res": 1024
+      },
+      "MI_Female_Soldier_Chevron_23": {
+        "atlas_px_per_cm": 8.11,
+        "source_px_per_cm": 381.27,
+        "ratio": 0.021,
+        "weight": 0.6,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Chevron_24": {
+        "atlas_px_per_cm": 8.11,
+        "source_px_per_cm": 527.41,
+        "ratio": 0.015,
+        "weight": 0.6,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Chevron_25": {
+        "atlas_px_per_cm": 8.11,
+        "source_px_per_cm": 513.91,
+        "ratio": 0.016,
+        "weight": 0.6,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Chevron_26": {
+        "atlas_px_per_cm": 8.11,
+        "source_px_per_cm": 518.06,
+        "ratio": 0.016,
+        "weight": 0.6,
+        "source_res": 4096
+      },
+      "MI_Female_Soldier_Chevron_27": {
+        "atlas_px_per_cm": 6.95,
+        "source_px_per_cm": 517.7,
+        "ratio": 0.013,
+        "weight": 0.6,
+        "source_res": 4096
+      },
+      "M_Female_Soldier_Head": {
+        "atlas_px_per_cm": 24.31,
+        "source_px_per_cm": 43.45,
+        "ratio": 0.559,
+        "weight": 1.8,
+        "source_res": 2048
+      },
+      "M_Female_Soldier_Eyes": {
+        "atlas_px_per_cm": 13.51,
+        "source_px_per_cm": 199.82,
+        "ratio": 0.068,
+        "weight": 1.0,
+        "source_res": 1024
+      }
+    },
+    "cross_material_overlap_px_1k": 0,
+    "covered_px_1k": 757521,
+    "cross_material_overlap_percent": 0.0,
+    "layout_image": "06_Review/atlas_layout.png",
+    "layout_legend": {
+      "MI_Female_Soldier_Trouthers": "#f25454",
+      "MI_Female_Soldier_Trouthers_1": "#f27154",
+      "MI_Female_Soldier_Trouthers_2": "#f28e54",
+      "MI_Female_Soldier_Trouthers_3": "#f2aa54",
+      "MI_Female_Soldier_Trouthers_4": "#f2c754",
+      "MI_Female_Soldier_Trouthers_5": "#f2e354",
+      "MI_Female_Soldier_Trouthers_6": "#e3f254",
+      "M_Female_Soldier_Boots": "#c7f254",
+      "M_Female_Soldier_Bodyoutfit": "#aaf254",
+      "MI_Female_Soldeir_Torso": "#8ef254",
+      "MI_Female_Soldeir_Torso_10": "#71f254",
+      "M_Female_Soldier_Backpack": "#54f254",
+      "M_Female_Soldier_Hand": "#54f271",
+      "MI_Female_Soldier_Helmet_Outfit": "#54f28e",
+      "M_Female_Soldier_Glasses_Glass": "#54f2aa",
+      "MI_Female_Soldier_Helmet_Outfit_15": "#54f2c7",
+      "M_Female_Soldier_Beacon_Glass": "#54f2e3",
+      "M_Female_Soldier_Helmet_Beacon_Light": "#54e3f2",
+      "M_Female_Soldier_flashlight_bulb": "#54c7f2",
+      "M_Female_Glowstick": "#54aaf2",
+      "M_Female_Glowstick_Light": "#548ef2",
+      "M_Femele_Soldier_Helmet": "#5471f2",
+      "MI_Female_Soldier_Chevron": "#5454f2",
+      "MI_Female_Soldier_Chevron_23": "#7154f2",
+      "MI_Female_Soldier_Chevron_24": "#8e54f2",
+      "MI_Female_Soldier_Chevron_25": "#aa54f2",
+      "MI_Female_Soldier_Chevron_26": "#c754f2",
+      "MI_Female_Soldier_Chevron_27": "#e354f2",
+      "M_Female_Soldier_Head": "#f254e3",
+      "M_Female_Soldier_Eyes": "#f254c7",
+      "M_Female_Soldier_Eyes_Hair": "#f254aa",
+      "M_Female_Soldier_Hair": "#f2548e",
+      "M_Female_Soldier_Head_in_Balaclava": "#f25471"
+    },
+    "note": "coverage % is measured on the baked mask in blender_bake.py"
+  },
+  "bake": {
+    "mode": "project",
+    "device": "OPTIX",
+    "samples": 4,
+    "margin_px": 16,
+    "resolution": 4096,
+    "orm_resolution": 2048,
+    "cage_extrusion_cm": 0.6,
+    "max_ray_cm": 3.0,
+    "ray_miss_percent": 0.124,
+    "variants": {
+      "default": {
+        "outputs": {
+          "BaseColor": "T_Female_Soldier_BaseColor.png",
+          "Normal": "T_Female_Soldier_Normal.png",
+          "ORM": "T_Female_Soldier_ORM.png",
+          "Sheen": "T_Female_Soldier_Sheen.png"
+        },
+        "emissive_glow_percent": 0.016,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": true,
+        "two_sided": true
+      }
+    },
+    "self_baked_slots": [
+      "M_Female_Soldier_Helmet_Beacon_Light"
+    ],
+    "normal_back_facing_clamped_percent": 6.597,
+    "atlas_coverage_percent": 72.23,
+    "seconds": {
+      "coverage": 1.2,
+      "hit": 25.7,
+      "base_color": 178.5,
+      "opacity": 156.0,
+      "normal": 235.7,
+      "ao": 75.5,
+      "roughness": 68.5,
+      "metallic": 96.7,
+      "emissive_probe": 22.5,
+      "sheen": 14.5
+    },
+    "orm_channel_stats": {
+      "ao": {
+        "min": 0.0,
+        "mean": 0.7,
+        "max": 1.0
+      },
+      "roughness": {
+        "min": 0.0,
+        "mean": 0.776,
+        "max": 1.0
+      },
+      "metallic": {
+        "min": 0.0,
+        "mean": 0.008,
+        "max": 1.0
+      }
+    },
+    "sheen_values": [
+      0.0
+    ],
+    "bake_warnings": [
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used"
+    ],
+    "outputs": {
+      "BaseColor": "04_Textures_Baked/T_Female_Soldier_BaseColor.png",
+      "Normal": "04_Textures_Baked/T_Female_Soldier_Normal.png",
+      "ORM": "04_Textures_Baked/T_Female_Soldier_ORM.png",
+      "Sheen": "04_Textures_Baked/T_Female_Soldier_Sheen.png"
+    }
+  },
+  "export": {
+    "fbx": "05_Export/SK_Female_Soldier_1slot.fbx",
+    "checks": {
+      "one_mesh": true,
+      "armature_object": "Armature",
+      "material_slots": [
+        "M_Body"
+      ],
+      "uv_maps": [
+        "UV_Atlas"
+      ],
+      "triangles": 49983,
+      "vertices": 27112,
+      "vertex_groups": 58,
+      "shape_keys": 52,
+      "custom_normals": true,
+      "bones_source": 67,
+      "bones_export": 68,
+      "root_bone": true,
+      "bones_missing": [],
+      "bones_extra": [],
+      "parent_mismatch": [],
+      "max_bone_deviation_cm": 0.0004,
+      "max_bone_rotation_deg": 0.0,
+      "root_added": true,
+      "source_armature_world": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "source_armature_identity": true,
+      "leaf_bones": [],
+      "ok": true
+    }
+  },
+  "review": {
+    "pose_sheet": "pose_sheet.png",
+    "pose_sheet_poses": [
+      "crouch_deep",
+      "kneel_aim",
+      "arms_up",
+      "twist_bend",
+      "prone_look_up"
+    ],
+    "views": {
+      "front34": {
+        "rgb_rmse_0_255": 4.88,
+        "mean_delta_e76": 0.86,
+        "p95_delta_e76": 2.96,
+        "silhouette_iou": 0.9938,
+        "pixels_compared": 119389,
+        "image": "compare_front34.png"
+      },
+      "back34": {
+        "rgb_rmse_0_255": 6.57,
+        "mean_delta_e76": 0.95,
+        "p95_delta_e76": 3.3,
+        "silhouette_iou": 0.9934,
+        "pixels_compared": 115330,
+        "image": "compare_back34.png"
+      },
+      "tactical": {
+        "rgb_rmse_0_255": 5.08,
+        "mean_delta_e76": 0.89,
+        "p95_delta_e76": 2.91,
+        "silhouette_iou": 0.9933,
+        "pixels_compared": 87958,
+        "image": "compare_tactical.png"
+      },
+      "face": {
+        "rgb_rmse_0_255": 8.05,
+        "mean_delta_e76": 1.31,
+        "p95_delta_e76": 5.11,
+        "silhouette_iou": 0.9957,
+        "pixels_compared": 482756,
+        "image": "compare_face.png"
+      }
+    },
+    "texture_memory": {
+      "before_mb": 462.7,
+      "after_mb": 36.0,
+      "after_without_optional_mb": 34.7,
+      "before_textures": 51,
+      "before_detail": {
+        "T_Female_Soldie_Camouflage_1_Colour": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "base_color"
+        },
+        "T_Female_Soldeir_Torso_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldeir_Torso_ID": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldeir_Torso_ID_extra": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "base_color"
+        },
+        "T_Female_Soldeir_Torso_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_Female_Soldeir_Torso_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Backpack_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Backpack_ID": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Backpack_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Backpack_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Bodyoutfit_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Bodyoutfit_ID": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Bodyoutfit_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Bodyoutfit_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Boots_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Boots_ID": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Boots_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Boots_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Chevron_BaseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT5",
+          "mb": 1.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Chevron_Normal": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "BC5",
+          "mb": 1.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Chevron_OcclusionRoughnessMetallic": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT1",
+          "mb": 0.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Eye_BaseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT5",
+          "mb": 1.33,
+          "role": "mixed:base_color+opacity"
+        },
+        "T_Female_Soldier_Eye_Normal": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "BC5",
+          "mb": 1.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Eye_OcclusionRoughnessMetallic": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT1",
+          "mb": 0.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Hand_ID": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Hands_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "mixed:base_color+opacity"
+        },
+        "T_Female_Soldier_Hands_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Hands_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Head_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "mixed:base_color+opacity"
+        },
+        "T_Female_Soldier_Head_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Head_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Helmet_outfit_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Helmet_outfit_ID": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Helmet_outfit_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Helmet_outfit_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_Trousers_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Trousers_ID": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Trousers_ID_extra": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_Trousers_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_Trousers_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_Female_Soldier_hair_ao": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "mixed:base_color+metallic+roughness+specular"
+        },
+        "T_Female_Soldier_hair_diff": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "base_color"
+        },
+        "T_Female_Soldier_hair_flow": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_hair_id": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "mixed:base_color+metallic+roughness+specular"
+        },
+        "T_Female_Soldier_hair_normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Female_Soldier_hair_opacity": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "mixed:opacity+opacity_mask"
+        },
+        "T_Female_Soldier_hair_root": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "mixed:base_color+metallic+roughness+specular"
+        },
+        "T_Femele_Soldier_Helmet_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "base_color"
+        },
+        "T_Femele_Soldier_Helmet_ID": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "base_color"
+        },
+        "T_Femele_Soldier_Helmet_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Femele_Soldier_Helmet_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        }
+      },
+      "after_detail": {
+        "BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67
+        },
+        "Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33
+        },
+        "ORM": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1 (TC_Masks)",
+          "mb": 2.67
+        },
+        "Sheen": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "G8",
+          "mb": 1.33
+        }
+      },
+      "assumptions": "full mip chain (x4/3); Default -> DXT1 when the PNG alpha is opaque else DXT5; normal maps BC5; streaming / LOD bias not applied"
+    },
+    "render_samples": 64,
+    "resolution": 1024
+  },
+  "qa": {
+    "slots_before": 33,
+    "slots_after": 1,
+    "triangles_before": 150747,
+    "triangles_after": 49983,
+    "triangles_removed_hidden": 17086,
+    "triangles_removed_hair": 6626,
+    "triangles_removed_check_by_position": 28413,
+    "atlas_coverage_percent": 72.23,
+    "texture_memory_before_mb": 462.7,
+    "texture_memory_after_mb": 36.0,
+    "hidden_in_all_poses_before_safety_ring": 26811,
+    "bake_warnings": [
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "MI_Female_Soldier_Trouthers/base_color: unsupported expression StaticSwitch - default used",
+      "slot 1 (MI_Female_Soldier_Trouthers_1) not in the inventory",
+      "slot 2 (MI_Female_Soldier_Trouthers_2) not in the inventory",
+      "slot 3 (MI_Female_Soldier_Trouthers_3) not in the inventory",
+      "slot 4 (MI_Female_Soldier_Trouthers_4) not in the inventory",
+      "slot 5 (MI_Female_Soldier_Trouthers_5) not in the inventory",
+      "slot 6 (MI_Female_Soldier_Trouthers_6) not in the inventory",
+      "M_Female_Soldier_Boots/base_color: unsupported expression StaticSwitch - default used",
+      "M_Female_Soldier_Bodyoutfit/base_color: unsupported expression StaticSwitch - default used",
+      "MI_Female_Soldeir_Torso/base_color: unsupported expression StaticSwitch - default used",
+      "slot 10 (MI_Female_Soldeir_Torso_10) not in the inventory",
+      "M_Female_Soldier_Backpack/base_color: unsupported expression StaticSwitch - default used",
+      "M_Female_Soldier_Hand/base_color: unsupported expression StaticSwitch - default used",
+      "MI_Female_Soldier_Helmet_Outfit/base_color: unsupported expression StaticSwitch - default used",
+      "slot 15 (MI_Female_Soldier_Helmet_Outfit_15) not in the inventory",
+      "M_Femele_Soldier_Helmet/base_color: unsupported expression StaticSwitch - default used",
+      "slot 23 (MI_Female_Soldier_Chevron_23) not in the inventory",
+      "slot 24 (MI_Female_Soldier_Chevron_24) not in the inventory",
+      "slot 25 (MI_Female_Soldier_Chevron_25) not in the inventory",
+      "slot 26 (MI_Female_Soldier_Chevron_26) not in the inventory",
+      "slot 27 (MI_Female_Soldier_Chevron_27) not in the inventory",
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Eyes_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/base_color: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/roughness: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used",
+      "M_Female_Soldier_Hair/metallic: unsupported expression MaterialFunctionCall - default used"
+    ],
+    "emissive_texel_fraction": null,
+    "cross_material_overlap_percent": 0.0,
+    "export_roundtrip_ok": true,
+    "worst_view_mean_delta_e": 1.31,
+    "min_silhouette_iou": 0.9933,
+    "triangles_per_material_after": {
+      "MI_Female_Soldier_Trouthers": 5414,
+      "MI_Female_Soldier_Trouthers_1": 109,
+      "MI_Female_Soldier_Trouthers_2": 109,
+      "MI_Female_Soldier_Trouthers_3": 525,
+      "MI_Female_Soldier_Trouthers_4": 70,
+      "MI_Female_Soldier_Trouthers_5": 69,
+      "MI_Female_Soldier_Trouthers_6": 838,
+      "M_Female_Soldier_Boots": 1275,
+      "M_Female_Soldier_Bodyoutfit": 11525,
+      "MI_Female_Soldeir_Torso": 5899,
+      "MI_Female_Soldeir_Torso_10": 1085,
+      "M_Female_Soldier_Backpack": 2348,
+      "M_Female_Soldier_Hand": 2585,
+      "MI_Female_Soldier_Helmet_Outfit": 0,
+      "M_Female_Soldier_Glasses_Glass": 0,
+      "MI_Female_Soldier_Helmet_Outfit_15": 6557,
+      "M_Female_Soldier_Beacon_Glass": 0,
+      "M_Female_Soldier_Helmet_Beacon_Light": 8,
+      "M_Female_Soldier_flashlight_bulb": 59,
+      "M_Female_Glowstick": 0,
+      "M_Female_Glowstick_Light": 24,
+      "M_Femele_Soldier_Helmet": 5008,
+      "MI_Female_Soldier_Chevron": 113,
+      "MI_Female_Soldier_Chevron_23": 106,
+      "MI_Female_Soldier_Chevron_24": 102,
+      "MI_Female_Soldier_Chevron_25": 106,
+      "MI_Female_Soldier_Chevron_26": 112,
+      "MI_Female_Soldier_Chevron_27": 112,
+      "M_Female_Soldier_Head": 5539,
+      "M_Female_Soldier_Eyes": 286,
+      "M_Female_Soldier_Eyes_Hair": 0,
+      "M_Female_Soldier_Hair": 0,
+      "M_Female_Soldier_Head_in_Balaclava": 0
+    },
+    "ray_miss_percent": 0.124
   }
 }

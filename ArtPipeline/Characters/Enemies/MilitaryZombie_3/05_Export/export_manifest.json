@@ -3,7 +3,8 @@
   "material_slot": "M_Body",
   "uv0": "UV_Atlas",
   "skeleton": "/Game/military_zombie_set2/Meshes/base_mesh/SK_Mannequin.SK_Mannequin",
-  "root_bone_added": "root",
+  "root_bone": "root",
+  "root_bone_added": true,
   "top_bones_reparented": [
     "pelvis",
     "ik_foot_root",
@@ -47,8 +48,8 @@
     "uv_maps": [
       "UV_Atlas"
     ],
-    "triangles": 16823,
-    "vertices": 8614,
+    "triangles": 19591,
+    "vertices": 9883,
     "vertex_groups": 78,
     "shape_keys": 0,
     "custom_normals": true,
@@ -58,9 +59,38 @@
     "bones_missing": [],
     "bones_extra": [],
     "parent_mismatch": [],
-    "max_bone_deviation_cm": 18.1848,
+    "max_bone_deviation_cm": 0.0005,
+    "max_bone_rotation_deg": 0.0396,
+    "root_added": true,
+    "source_armature_world": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        -6.123232939436859e-17,
+        0.0
+      ],
+      [
+        0.0,
+        6.123232939436859e-17,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "source_armature_identity": true,
     "leaf_bones": [],
-    "ok": false
+    "ok": true
   },
   "textures": {
     "BaseColor": "T_MilitaryZombie_3_Set1_BaseColor.png",

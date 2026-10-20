@@ -67,7 +67,7 @@ namespace OptimizedCharacterSmoke
 		const TCHAR* Original;
 		const TCHAR* Blueprint;
 		int32 MaxTriangles;
-		/** Look variants (texture sets, MI_<Asset>_Set<N>); 0 = one MI_<Asset>. */
+		/** Unused (the look variants are discovered: MI_<Asset>[_<Variant>] in the asset's folder). */
 		int32 Variants;
 	};
 
@@ -108,12 +108,30 @@ namespace OptimizedCharacterSmoke
 		return FString::Printf(TEXT("%s/SK_%s_1slot.SK_%s_1slot"), *Folder(C), C.Asset, C.Asset);
 	}
 
-	/** Variant 0..N-1 -> MI_<Asset>_Set<N+1>; no variants -> MI_<Asset>. */
-	FString InstancePath(const FCase& C, int32 Variant)
+	constexpr int32 MaxVariants = 8;
+
+	/** The look variants of an asset (texture sets): MI_<Asset> and MI_<Asset>_<Default|Set1..Set12>, as imported. */
+	TArray<FString> FindInstances(const FCase& C)
 	{
-		const FString Name = C.Variants > 0 ? FString::Printf(TEXT("MI_%s_Set%d"), C.Asset, Variant + 1) : FString::Printf(TEXT("MI_%s"), C.Asset);
-		return FString::Printf(TEXT("%s/%s.%s"), *Folder(C), *Name, *Name);
+		TArray<FString> Found;
+		TArray<FString> Suffixes = { TEXT(""), TEXT("_Default") };
+		for (int32 Index = 1; Index <= 12; ++Index)
+		{
+			Suffixes.Add(FString::Printf(TEXT("_Set%d"), Index));
+		}
+		for (const FString& Suffix : Suffixes)
+		{
+			const FString Name = FString::Printf(TEXT("MI_%s%s"), C.Asset, *Suffix);
+			const FString Path = FString::Printf(TEXT("%s/%s.%s"), *Folder(C), *Name, *Name);
+			if (LoadObject<UMaterialInstance>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				Found.Add(Path);
+			}
+		}
+		return Found;
 	}
+
+	FString InstancePath(const FCase& C, int32 Variant);
 
 	/** Load warnings / errors that mention the new assets (missing skeleton, texture, shader compile failure ...). */
 	class FWarningCatcher : public FOutputDevice
@@ -165,10 +183,28 @@ namespace OptimizedCharacterSmoke
 		SmokeUtils::FClearArena Arena;
 		FCoverSlot Slots[2];
 		int32 MarkFrame = 0;
+		/** MI paths of the current case; [0] = the mesh's own slot material. */
+		TArray<FString> Instances;
+		/** A variant step found no such variant: its stills are skipped. */
+		bool bSkip = false;
 		TUniquePtr<FWarningCatcher> Catcher;
 	};
 
 	TSharedPtr<FRunner> Runner;
+
+	FString InstancePath(const FCase& C, int32 Variant)
+	{
+		return Runner->Instances.IsValidIndex(Variant) ? Runner->Instances[Variant] : FString();
+	}
+
+	FString VariantLabel(int32 Variant)
+	{
+		const FString Path = Runner->Instances.IsValidIndex(Variant) ? Runner->Instances[Variant] : FString();
+		FString Name = FPaths::GetExtension(Path); // "MI_<Asset>_<Variant>"
+		Name.RemoveFromStart(FString::Printf(TEXT("MI_%s"), Runner->Case ? Runner->Case->Asset : TEXT("")));
+		Name.RemoveFromStart(TEXT("_"));
+		return Name.IsEmpty() ? FString(TEXT("default")) : Name;
+	}
 
 	AOperativeCharacter* OpA() { return Cast<AOperativeCharacter>(Runner->Original.Get()); }
 	AOperativeCharacter* OpB() { return Cast<AOperativeCharacter>(Runner->Optimized.Get()); }
@@ -320,7 +356,18 @@ namespace OptimizedCharacterSmoke
 		Check(Materials.Num() == 1, FString::Printf(TEXT("one material slot (%d; original %d)"), Materials.Num(), Original->GetMaterials().Num()));
 		int64 BytesOptimized = 0;
 		TSet<const UTexture*> SeenA;
-		for (int32 Variant = 0; Variant < FMath::Max(1, C.Variants); ++Variant)
+		Runner->Instances = FindInstances(C);
+		{
+			// the mesh's own slot material first: variant 0 = the look the mesh carries
+			const UMaterialInterface* Own = Materials.Num() ? Materials[0].MaterialInterface.Get() : nullptr;
+			const int32 OwnIndex = Own ? Runner->Instances.IndexOfByKey(Own->GetPathName()) : INDEX_NONE;
+			Check(OwnIndex != INDEX_NONE, FString::Printf(TEXT("slot 0 = %s is one of the %d look variants"), *GetPathNameSafe(Own), Runner->Instances.Num()));
+			if (OwnIndex > 0)
+			{
+				Runner->Instances.Swap(0, OwnIndex);
+			}
+		}
+		for (int32 Variant = 0; Variant < Runner->Instances.Num(); ++Variant)
 		{
 			const UMaterialInstance* Instance = LoadObject<UMaterialInstance>(nullptr, *InstancePath(C, Variant));
 			// M_CharacterMaster or one of its _Masked / _TwoSided twins (bodies with cut-outs / two-sided cloth)
@@ -337,8 +384,8 @@ namespace OptimizedCharacterSmoke
 			}
 			BytesOptimized += TextureBytes(Instance, SeenA);
 		}
-		const UMaterialInstance* Slot0 = Materials.Num() ? Cast<UMaterialInstance>(Materials[0].MaterialInterface) : nullptr;
-		Check(Slot0 && Slot0->GetPathName() == InstancePath(C, 0), FString::Printf(TEXT("slot 0 = %s"), *GetPathNameSafe(Slot0)));
+		UE_LOG(LogCodexTactics, Display, TEXT("OptimizedCharacterSmoke: [%s] %d look variant(s): %s"), C.Asset, Runner->Instances.Num(),
+			*FString::Join(Runner->Instances, TEXT(", ")));
 		Check(Optimized->GetSkeleton() && Optimized->GetSkeleton() == Original->GetSkeleton(),
 			FString::Printf(TEXT("same skeleton %s"), *GetPathNameSafe(Optimized->GetSkeleton())));
 		{
@@ -543,18 +590,26 @@ namespace OptimizedCharacterSmoke
 	/** Pose check + (when rendering) the tactical and the close still of the state. */
 	void AddShots(TArray<FStep>& S, FString State, float TargetZ = 0.f, float YawDeg = 0.f)
 	{
-		S.Add([State, YawDeg](UWorld*) { CheckPose(*State); AimCamera(false, 0.f, YawDeg); return 3; });
+		S.Add([State, YawDeg](UWorld*) { if (Runner->bSkip) { return 0; } CheckPose(*State); AimCamera(false, 0.f, YawDeg); return 3; });
 		S.Add([State](UWorld*)
 		{
+			if (Runner->bSkip)
+			{
+				return 0;
+			}
 			if (Runner->bRender)
 			{
 				FScreenshotRequest::RequestScreenshot(Runner->Dir / FString::Printf(TEXT("%02d_%s_tactical.png"), Runner->Shots++, *State), false, false);
 			}
 			return 3;
 		});
-		S.Add([TargetZ, YawDeg](UWorld*) { AimCamera(true, TargetZ, YawDeg); return 3; });
+		S.Add([TargetZ, YawDeg](UWorld*) { if (Runner->bSkip) { return 0; } AimCamera(true, TargetZ, YawDeg); return 3; });
 		S.Add([State](UWorld*)
 		{
+			if (Runner->bSkip)
+			{
+				return 0;
+			}
 			if (Runner->bRender)
 			{
 				FScreenshotRequest::RequestScreenshot(Runner->Dir / FString::Printf(TEXT("%02d_%s_close.png"), Runner->Shots++, *State), false, false);
@@ -797,6 +852,25 @@ namespace OptimizedCharacterSmoke
 			ResetPair(World);
 			return 30;
 		});
+		// the other look variants on the optimized body: an idle still each
+		for (int32 Variant = 1; Variant < MaxVariants; ++Variant)
+		{
+			S.Add([Variant](UWorld*)
+			{
+				Runner->bSkip = !Runner->Instances.IsValidIndex(Variant);
+				if (Runner->bSkip)
+				{
+					return 0;
+				}
+				UMaterialInterface* Look = LoadObject<UMaterialInterface>(nullptr, *Runner->Instances[Variant]);
+				OpB()->GetMesh()->SetMaterial(0, Look);
+				UE_LOG(LogCodexTactics, Display, TEXT("OptimizedCharacterSmoke: [%s] variant %d = %s"), Runner->Case->Asset, Variant, *VariantLabel(Variant));
+				Check(Look != nullptr, FString::Printf(TEXT("variant %d loads"), Variant));
+				return 30;
+			});
+			AddShots(S, FString::Printf(TEXT("variant%d_idle"), Variant));
+		}
+		S.Add([](UWorld*) { Runner->bSkip = false; return 10; });
 	}
 
 	// ------------------------------------------------------------------------------------------------ enemies
@@ -839,7 +913,8 @@ namespace OptimizedCharacterSmoke
 		else
 		{
 			Mesh->SetSkeletalMeshAsset(LoadObject<USkeletalMesh>(nullptr, C.Original));
-			if (C.Variants > 0 && Enemy->LookVariants.MaterialSets.IsValidIndex(Runner->Variant))
+			// a Blueprint with look variants (Military Zombie): the original wears the same material set as the optimized MI
+			if (Enemy->LookVariants.MaterialSets.IsValidIndex(Runner->Variant))
 			{
 				for (const TPair<FName, TObjectPtr<UMaterialInterface>>& Slot : Enemy->LookVariants.MaterialSets[Runner->Variant].SlotMaterials)
 				{
@@ -883,9 +958,9 @@ namespace OptimizedCharacterSmoke
 		return 90;
 	}
 
-	void AddEnemySteps(TArray<FStep>& S, int32 Variants)
+	void AddEnemySteps(TArray<FStep>& S, int32 /*Unused*/)
 	{
-		S.Add([](UWorld* World) { Runner->Variant = 0; return SetUpEnemies(World); });
+		S.Add([](UWorld* World) { Runner->Variant = 0; Runner->bSkip = false; return SetUpEnemies(World); });
 		AddShots(S, TEXT("idle"));
 		// move: a search walk 8 m ahead
 		S.Add([](UWorld* World)
@@ -945,13 +1020,23 @@ namespace OptimizedCharacterSmoke
 			return 90;
 		});
 		AddShots(S, TEXT("death"));
-		// the other look variants: an idle still each
-		for (int32 Variant = 1; Variant < Variants; ++Variant)
+		// the other look variants: an idle still each (steps for up to MaxVariants; missing ones are skipped)
+		for (int32 Variant = 1; Variant < MaxVariants; ++Variant)
 		{
-			S.Add([Variant](UWorld* World) { Runner->Variant = Variant; return SetUpEnemies(World); });
-			AddShots(S, FString::Printf(TEXT("idle_set%d"), Variant + 1));
+			S.Add([Variant](UWorld* World)
+			{
+				Runner->bSkip = !Runner->Instances.IsValidIndex(Variant);
+				if (Runner->bSkip)
+				{
+					return 0;
+				}
+				Runner->Variant = Variant;
+				UE_LOG(LogCodexTactics, Display, TEXT("OptimizedCharacterSmoke: [%s] variant %d = %s"), Runner->Case->Asset, Variant, *VariantLabel(Variant));
+				return SetUpEnemies(World);
+			});
+			AddShots(S, FString::Printf(TEXT("variant%d_idle"), Variant));
 		}
-		S.Add([](UWorld*) { ClearProps(); return 10; });
+		S.Add([](UWorld*) { Runner->bSkip = false; ClearProps(); return 10; });
 	}
 
 	// ------------------------------------------------------------------------------------------------ run

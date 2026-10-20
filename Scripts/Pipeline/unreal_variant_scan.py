@@ -31,8 +31,13 @@ def parse():
 
 
 def signature(path):
-    """Path with every number replaced (ordinals too): materials of the same slot in different sets share it."""
-    s = ORDINAL.sub("#", path)
+    """Path with every number replaced (ordinals too) and the master / instance naming dropped (MA_x_1st, M_x_2nd_Inst,
+    MI_x_Inst): materials of the same slot in different sets share it."""
+    folder, _, name = path.rpartition("/")
+    name = name.split(".")[0]
+    name = re.sub(r"^(MA|MI|M)_", "", name)
+    name = re.sub(r"_Inst$", "", name)
+    s = ORDINAL.sub("#", folder + "/" + name)
     return DIGITS.sub("#", s)
 
 
@@ -57,28 +62,49 @@ def main():
             continue
         slots = [(str(m.get_editor_property("material_slot_name")), m.get_editor_property("material_interface"))
                  for m in mesh.materials]
-        root = pack_root(mesh.get_path_name())
+        # the packs of the slot materials (a mesh moved into /Game/Characters keeps its pack's materials)
+        roots = sorted({pack_root(m.get_path_name()) for _, m in slots if m} | {pack_root(mesh.get_path_name())})
+        root = ", ".join(roots)
         flt = unreal.ARFilter(class_paths=[unreal.TopLevelAssetPath("/Script/Engine", "MaterialInstanceConstant"),
                                            unreal.TopLevelAssetPath("/Script/Engine", "Material")],
-                              package_paths=[root], recursive_paths=True)
+                              package_paths=roots, recursive_paths=True)
         by_sig = {}
+        all_paths = []
         for ad in reg.get_assets(flt):
             p = str(ad.package_name) + "." + str(ad.asset_name)
             by_sig.setdefault(signature(p), []).append(p)
+            all_paths.append(p)
         variants = {}
         per_slot = {}
         for slot, mat in slots:
             own = mat.get_path_name() if mat else None
             if not own:
                 continue
-            cands = sorted(by_sig.get(signature(own), [own]))
+            cands = set(by_sig.get(signature(own), [own]))
+            # "<Material>_Inst_2nd" style colour instances of the slot material (Post_Apo_Survivor: hoodie / pants)
+            base_name = own.split(".")[-1]
+            cands |= {c for c in all_paths if c.split(".")[-1].startswith(base_name + "_Inst")}
+            cands = sorted(cands)
             per_slot[slot] = cands
             own_nums = numbers(own)
+            own_name = own.split(".")[-1]
+
+            def style(path):
+                # the same naming style as the material the mesh uses wins (MI_x_Inst over the pack's M_x master)
+                name = path.split(".")[-1]
+                return (name.split("_")[0] == own_name.split("_")[0]) + (name.endswith("_Inst") == own_name.endswith("_Inst"))
+
             for c in cands:
                 nums = numbers(c)
-                # the variant key = the numbers that differ from the mesh's own material
-                key = "_".join(n for n, o in zip(nums, own_nums) if n != o) or "own"
-                variants.setdefault(key, {})[slot] = c
+                # the variant key = the numbers that differ from the mesh's own material (extra trailing numbers count)
+                diff = [n for n, o in zip(nums, own_nums) if n != o] + list(nums[len(own_nums):])
+                key = "_".join(diff) or "own"
+                if key == "own":
+                    continue  # the mesh's own look = its own materials
+                current = variants.setdefault(key, {}).get(slot)
+                if current is None or style(c) > style(current):
+                    variants[key][slot] = c
+            variants.setdefault("own", {})[slot] = own
         resolved = {}
         for key, mapping in variants.items():
             resolved[key] = {slot: mapping.get(slot) or (mat.get_path_name() if mat else None) for slot, mat in slots}

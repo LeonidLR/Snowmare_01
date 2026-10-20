@@ -1,0 +1,32 @@
+[
+ {
+  "name": "Set1",
+  "slots": {
+   "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_1.M_Combat_Dog_skin_1"
+  }
+ },
+ {
+  "name": "Set2",
+  "slots": {
+   "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_2.M_Combat_Dog_skin_2"
+  }
+ },
+ {
+  "name": "Set3",
+  "slots": {
+   "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_3.M_Combat_Dog_skin_3"
+  }
+ },
+ {
+  "name": "Set4",
+  "slots": {
+   "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_4.M_Combat_Dog_skin_4"
+  }
+ },
+ {
+  "name": "Set5",
+  "slots": {
+   "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_5.M_Combat_Dog_skin_5"
+  }
+ }
+]

@@ -62,6 +62,10 @@
       "base_material": "/Game/Combat_Dog/Materials/M_Combat_Dog_Master.M_Combat_Dog_Master",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {
+        "Use Normal Texture?": true,
+        "Use Detail Normal Texture?": true
+      },
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -101,6 +105,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions02/Utility/BlendAngleCorrectedNormals.BlendAngleCorrectedNormals",
                   "inputs": [
                     {
                       "node": "Multiply",
@@ -176,6 +181,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 1.0,
+                                  "v_tiling": 1.0,
                                   "input": "A"
                                 },
                                 {
@@ -404,6 +411,1558 @@
           ]
         }
       }
+    },
+    "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_2.M_Combat_Dog_skin_2": {
+      "path": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_2.M_Combat_Dog_skin_2",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {
+        "RGB Texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m",
+        "DetailNormal": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+        "Main Texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_a.T_Combat_Dog_skin_2_a",
+        "Normal Texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_n.T_Combat_Dog_skin_2_n",
+        "Subsurface Texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_Scattering.T_Combat_Dog_skin_2_Scattering"
+      },
+      "scalar_params": {
+        "Metallic Intensity": 0.0,
+        "Roughness Intensity": 1.5,
+        "Brightness Intensity": 1.0,
+        "Normal Intensity": 1.0,
+        "Detail Normal Intensity": 0.0,
+        "Detail Normal Scale": 5.0,
+        "AO Intensity": 1.0,
+        "Subsurface Intensity": 1.0
+      },
+      "vector_params": {
+        "Subsurface Color": [
+          0.02500000037252903,
+          0.020161999389529228,
+          0.012707999907433987,
+          1.0
+        ]
+      },
+      "used_textures": [
+        "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_n.T_Combat_Dog_skin_2_n",
+        "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+        "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_a.T_Combat_Dog_skin_2_a",
+        "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m",
+        "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_Scattering.T_Combat_Dog_skin_2_Scattering"
+      ],
+      "base_material": "/Game/Combat_Dog/Materials/M_Combat_Dog_Master.M_Combat_Dog_Master",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {
+        "Use Normal Texture?": true,
+        "Use Detail Normal Texture?": true
+      },
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_a.T_Combat_Dog_skin_2_a",
+              "parameter_name": "Main Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brightness Intensity",
+              "default_value": 1.0,
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "StaticSwitchParameter",
+          "output": "",
+          "parameter_name": "Use Normal Texture?",
+          "default_value": true,
+          "inputs": [
+            {
+              "node": "StaticSwitchParameter",
+              "output": "",
+              "parameter_name": "Use Detail Normal Texture?",
+              "default_value": true,
+              "inputs": [
+                {
+                  "node": "MaterialFunctionCall",
+                  "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions02/Utility/BlendAngleCorrectedNormals.BlendAngleCorrectedNormals",
+                  "inputs": [
+                    {
+                      "node": "Multiply",
+                      "output": "",
+                      "const_a": 0.0,
+                      "const_b": 1.0,
+                      "inputs": [
+                        {
+                          "node": "TextureSampleParameter2D",
+                          "output": "RGB",
+                          "texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_n.T_Combat_Dog_skin_2_n",
+                          "parameter_name": "Normal Texture",
+                          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                          "input": "A"
+                        },
+                        {
+                          "node": "AppendVector",
+                          "output": "",
+                          "inputs": [
+                            {
+                              "node": "AppendVector",
+                              "output": "",
+                              "inputs": [
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "A"
+                            },
+                            {
+                              "node": "Constant",
+                              "output": "",
+                              "r": 1.0,
+                              "input": "B"
+                            }
+                          ],
+                          "input": "B"
+                        }
+                      ],
+                      "input": "BaseNormal"
+                    },
+                    {
+                      "node": "Multiply",
+                      "output": "",
+                      "const_a": 0.0,
+                      "const_b": 1.0,
+                      "inputs": [
+                        {
+                          "node": "TextureSampleParameter2D",
+                          "output": "RGB",
+                          "texture": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+                          "parameter_name": "DetailNormal",
+                          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                          "inputs": [
+                            {
+                              "node": "Multiply",
+                              "output": "",
+                              "const_a": 0.0,
+                              "const_b": 1.0,
+                              "inputs": [
+                                {
+                                  "node": "TextureCoordinate",
+                                  "output": "",
+                                  "coordinate_index": 0,
+                                  "u_tiling": 1.0,
+                                  "v_tiling": 1.0,
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Detail Normal Scale",
+                                  "default_value": 5.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "UVs"
+                            }
+                          ],
+                          "input": "A"
+                        },
+                        {
+                          "node": "Add",
+                          "output": "",
+                          "const_a": 0.0,
+                          "const_b": 1.0,
+                          "inputs": [
+                            {
+                              "node": "Constant3Vector",
+                              "output": "",
+                              "constant": [
+                                0.0,
+                                0.0,
+                                1.0,
+                                0.0
+                              ],
+                              "input": "A"
+                            },
+                            {
+                              "node": "Multiply",
+                              "output": "",
+                              "const_a": 0.0,
+                              "const_b": 1.0,
+                              "inputs": [
+                                {
+                                  "node": "Constant3Vector",
+                                  "output": "",
+                                  "constant": [
+                                    1.0,
+                                    1.0,
+                                    0.0,
+                                    0.0
+                                  ],
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Detail Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "B"
+                            }
+                          ],
+                          "input": "B"
+                        }
+                      ],
+                      "input": "AdditionalNormal"
+                    }
+                  ],
+                  "input": "True"
+                },
+                {
+                  "node": "Multiply",
+                  "output": "",
+                  "const_a": 0.0,
+                  "const_b": 1.0,
+                  "inputs": [
+                    {
+                      "node": "TextureSampleParameter2D",
+                      "output": "RGB",
+                      "texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_n.T_Combat_Dog_skin_2_n",
+                      "parameter_name": "Normal Texture",
+                      "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                      "input": "A"
+                    },
+                    {
+                      "node": "AppendVector",
+                      "output": "",
+                      "inputs": [
+                        {
+                          "node": "AppendVector",
+                          "output": "",
+                          "inputs": [
+                            {
+                              "node": "ScalarParameter",
+                              "output": "",
+                              "parameter_name": "Normal Intensity",
+                              "default_value": 1.0,
+                              "input": "A"
+                            },
+                            {
+                              "node": "ScalarParameter",
+                              "output": "",
+                              "parameter_name": "Normal Intensity",
+                              "default_value": 1.0,
+                              "input": "B"
+                            }
+                          ],
+                          "input": "A"
+                        },
+                        {
+                          "node": "Constant",
+                          "output": "",
+                          "r": 1.0,
+                          "input": "B"
+                        }
+                      ],
+                      "input": "B"
+                    }
+                  ],
+                  "input": "False"
+                }
+              ],
+              "input": "True"
+            },
+            {
+              "node": "Constant3Vector",
+              "output": "",
+              "constant": [
+                0.0,
+                0.0,
+                1.0,
+                0.0
+              ],
+              "input": "False"
+            }
+          ]
+        },
+        "roughness": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "G",
+              "texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Roughness Intensity",
+              "default_value": 0.23238499462604523,
+              "input": "B"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "B",
+              "texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Metallic Intensity",
+              "default_value": 0.0,
+              "input": "B"
+            }
+          ]
+        },
+        "ambient_occlusion": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "R",
+              "texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "AO Intensity",
+              "default_value": 0.23238499462604523,
+              "input": "B"
+            }
+          ]
+        },
+        "opacity": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_Scattering.T_Combat_Dog_skin_2_Scattering",
+              "parameter_name": "Subsurface Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Subsurface Intensity",
+              "default_value": 0.0,
+              "input": "B"
+            }
+          ]
+        }
+      }
+    },
+    "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_3.M_Combat_Dog_skin_3": {
+      "path": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_3.M_Combat_Dog_skin_3",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {
+        "RGB Texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m",
+        "DetailNormal": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+        "Main Texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_a.T_Combat_Dog_skin_3_a",
+        "Normal Texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_n.T_Combat_Dog_skin_3_n",
+        "Subsurface Texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_Scattering.T_Combat_Dog_skin_3_Scattering"
+      },
+      "scalar_params": {
+        "Metallic Intensity": 0.0,
+        "Roughness Intensity": 1.5,
+        "Brightness Intensity": 1.0,
+        "Normal Intensity": 1.0,
+        "Detail Normal Intensity": 0.0,
+        "Detail Normal Scale": 5.0,
+        "AO Intensity": 1.0,
+        "Subsurface Intensity": 1.0
+      },
+      "vector_params": {
+        "Subsurface Color": [
+          0.02500000037252903,
+          0.020161999389529228,
+          0.012707999907433987,
+          1.0
+        ]
+      },
+      "used_textures": [
+        "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_n.T_Combat_Dog_skin_3_n",
+        "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+        "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_a.T_Combat_Dog_skin_3_a",
+        "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m",
+        "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_Scattering.T_Combat_Dog_skin_3_Scattering"
+      ],
+      "base_material": "/Game/Combat_Dog/Materials/M_Combat_Dog_Master.M_Combat_Dog_Master",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {
+        "Use Normal Texture?": true,
+        "Use Detail Normal Texture?": true
+      },
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_a.T_Combat_Dog_skin_3_a",
+              "parameter_name": "Main Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brightness Intensity",
+              "default_value": 1.0,
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "StaticSwitchParameter",
+          "output": "",
+          "parameter_name": "Use Normal Texture?",
+          "default_value": true,
+          "inputs": [
+            {
+              "node": "StaticSwitchParameter",
+              "output": "",
+              "parameter_name": "Use Detail Normal Texture?",
+              "default_value": true,
+              "inputs": [
+                {
+                  "node": "MaterialFunctionCall",
+                  "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions02/Utility/BlendAngleCorrectedNormals.BlendAngleCorrectedNormals",
+                  "inputs": [
+                    {
+                      "node": "Multiply",
+                      "output": "",
+                      "const_a": 0.0,
+                      "const_b": 1.0,
+                      "inputs": [
+                        {
+                          "node": "TextureSampleParameter2D",
+                          "output": "RGB",
+                          "texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_n.T_Combat_Dog_skin_3_n",
+                          "parameter_name": "Normal Texture",
+                          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                          "input": "A"
+                        },
+                        {
+                          "node": "AppendVector",
+                          "output": "",
+                          "inputs": [
+                            {
+                              "node": "AppendVector",
+                              "output": "",
+                              "inputs": [
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "A"
+                            },
+                            {
+                              "node": "Constant",
+                              "output": "",
+                              "r": 1.0,
+                              "input": "B"
+                            }
+                          ],
+                          "input": "B"
+                        }
+                      ],
+                      "input": "BaseNormal"
+                    },
+                    {
+                      "node": "Multiply",
+                      "output": "",
+                      "const_a": 0.0,
+                      "const_b": 1.0,
+                      "inputs": [
+                        {
+                          "node": "TextureSampleParameter2D",
+                          "output": "RGB",
+                          "texture": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+                          "parameter_name": "DetailNormal",
+                          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                          "inputs": [
+                            {
+                              "node": "Multiply",
+                              "output": "",
+                              "const_a": 0.0,
+                              "const_b": 1.0,
+                              "inputs": [
+                                {
+                                  "node": "TextureCoordinate",
+                                  "output": "",
+                                  "coordinate_index": 0,
+                                  "u_tiling": 1.0,
+                                  "v_tiling": 1.0,
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Detail Normal Scale",
+                                  "default_value": 5.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "UVs"
+                            }
+                          ],
+                          "input": "A"
+                        },
+                        {
+                          "node": "Add",
+                          "output": "",
+                          "const_a": 0.0,
+                          "const_b": 1.0,
+                          "inputs": [
+                            {
+                              "node": "Constant3Vector",
+                              "output": "",
+                              "constant": [
+                                0.0,
+                                0.0,
+                                1.0,
+                                0.0
+                              ],
+                              "input": "A"
+                            },
+                            {
+                              "node": "Multiply",
+                              "output": "",
+                              "const_a": 0.0,
+                              "const_b": 1.0,
+                              "inputs": [
+                                {
+                                  "node": "Constant3Vector",
+                                  "output": "",
+                                  "constant": [
+                                    1.0,
+                                    1.0,
+                                    0.0,
+                                    0.0
+                                  ],
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Detail Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "B"
+                            }
+                          ],
+                          "input": "B"
+                        }
+                      ],
+                      "input": "AdditionalNormal"
+                    }
+                  ],
+                  "input": "True"
+                },
+                {
+                  "node": "Multiply",
+                  "output": "",
+                  "const_a": 0.0,
+                  "const_b": 1.0,
+                  "inputs": [
+                    {
+                      "node": "TextureSampleParameter2D",
+                      "output": "RGB",
+                      "texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_n.T_Combat_Dog_skin_3_n",
+                      "parameter_name": "Normal Texture",
+                      "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                      "input": "A"
+                    },
+                    {
+                      "node": "AppendVector",
+                      "output": "",
+                      "inputs": [
+                        {
+                          "node": "AppendVector",
+                          "output": "",
+                          "inputs": [
+                            {
+                              "node": "ScalarParameter",
+                              "output": "",
+                              "parameter_name": "Normal Intensity",
+                              "default_value": 1.0,
+                              "input": "A"
+                            },
+                            {
+                              "node": "ScalarParameter",
+                              "output": "",
+                              "parameter_name": "Normal Intensity",
+                              "default_value": 1.0,
+                              "input": "B"
+                            }
+                          ],
+                          "input": "A"
+                        },
+                        {
+                          "node": "Constant",
+                          "output": "",
+                          "r": 1.0,
+                          "input": "B"
+                        }
+                      ],
+                      "input": "B"
+                    }
+                  ],
+                  "input": "False"
+                }
+              ],
+              "input": "True"
+            },
+            {
+              "node": "Constant3Vector",
+              "output": "",
+              "constant": [
+                0.0,
+                0.0,
+                1.0,
+                0.0
+              ],
+              "input": "False"
+            }
+          ]
+        },
+        "roughness": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "G",
+              "texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Roughness Intensity",
+              "default_value": 0.23238499462604523,
+              "input": "B"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "B",
+              "texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Metallic Intensity",
+              "default_value": 0.0,
+              "input": "B"
+            }
+          ]
+        },
+        "ambient_occlusion": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "R",
+              "texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "AO Intensity",
+              "default_value": 0.23238499462604523,
+              "input": "B"
+            }
+          ]
+        },
+        "opacity": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_Scattering.T_Combat_Dog_skin_3_Scattering",
+              "parameter_name": "Subsurface Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Subsurface Intensity",
+              "default_value": 0.0,
+              "input": "B"
+            }
+          ]
+        }
+      }
+    },
+    "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_4.M_Combat_Dog_skin_4": {
+      "path": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_4.M_Combat_Dog_skin_4",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {
+        "RGB Texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m",
+        "DetailNormal": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+        "Main Texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_a.T_Combat_Dog_skin_4_a",
+        "Normal Texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_n.T_Combat_Dog_skin_4_n",
+        "Subsurface Texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_Scattering.T_Combat_Dog_skin_4_Scattering"
+      },
+      "scalar_params": {
+        "Metallic Intensity": 0.0,
+        "Roughness Intensity": 1.0,
+        "Brightness Intensity": 1.0,
+        "Normal Intensity": 1.0,
+        "Detail Normal Intensity": 0.0,
+        "Detail Normal Scale": 5.0,
+        "AO Intensity": 1.0,
+        "Subsurface Intensity": 1.0
+      },
+      "vector_params": {
+        "Subsurface Color": [
+          0.02500000037252903,
+          0.020161999389529228,
+          0.012707999907433987,
+          1.0
+        ]
+      },
+      "used_textures": [
+        "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_n.T_Combat_Dog_skin_4_n",
+        "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+        "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_a.T_Combat_Dog_skin_4_a",
+        "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m",
+        "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_Scattering.T_Combat_Dog_skin_4_Scattering"
+      ],
+      "base_material": "/Game/Combat_Dog/Materials/M_Combat_Dog_Master.M_Combat_Dog_Master",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {
+        "Use Normal Texture?": true,
+        "Use Detail Normal Texture?": true
+      },
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_a.T_Combat_Dog_skin_4_a",
+              "parameter_name": "Main Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brightness Intensity",
+              "default_value": 1.0,
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "StaticSwitchParameter",
+          "output": "",
+          "parameter_name": "Use Normal Texture?",
+          "default_value": true,
+          "inputs": [
+            {
+              "node": "StaticSwitchParameter",
+              "output": "",
+              "parameter_name": "Use Detail Normal Texture?",
+              "default_value": true,
+              "inputs": [
+                {
+                  "node": "MaterialFunctionCall",
+                  "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions02/Utility/BlendAngleCorrectedNormals.BlendAngleCorrectedNormals",
+                  "inputs": [
+                    {
+                      "node": "Multiply",
+                      "output": "",
+                      "const_a": 0.0,
+                      "const_b": 1.0,
+                      "inputs": [
+                        {
+                          "node": "TextureSampleParameter2D",
+                          "output": "RGB",
+                          "texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_n.T_Combat_Dog_skin_4_n",
+                          "parameter_name": "Normal Texture",
+                          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                          "input": "A"
+                        },
+                        {
+                          "node": "AppendVector",
+                          "output": "",
+                          "inputs": [
+                            {
+                              "node": "AppendVector",
+                              "output": "",
+                              "inputs": [
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "A"
+                            },
+                            {
+                              "node": "Constant",
+                              "output": "",
+                              "r": 1.0,
+                              "input": "B"
+                            }
+                          ],
+                          "input": "B"
+                        }
+                      ],
+                      "input": "BaseNormal"
+                    },
+                    {
+                      "node": "Multiply",
+                      "output": "",
+                      "const_a": 0.0,
+                      "const_b": 1.0,
+                      "inputs": [
+                        {
+                          "node": "TextureSampleParameter2D",
+                          "output": "RGB",
+                          "texture": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+                          "parameter_name": "DetailNormal",
+                          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                          "inputs": [
+                            {
+                              "node": "Multiply",
+                              "output": "",
+                              "const_a": 0.0,
+                              "const_b": 1.0,
+                              "inputs": [
+                                {
+                                  "node": "TextureCoordinate",
+                                  "output": "",
+                                  "coordinate_index": 0,
+                                  "u_tiling": 1.0,
+                                  "v_tiling": 1.0,
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Detail Normal Scale",
+                                  "default_value": 5.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "UVs"
+                            }
+                          ],
+                          "input": "A"
+                        },
+                        {
+                          "node": "Add",
+                          "output": "",
+                          "const_a": 0.0,
+                          "const_b": 1.0,
+                          "inputs": [
+                            {
+                              "node": "Constant3Vector",
+                              "output": "",
+                              "constant": [
+                                0.0,
+                                0.0,
+                                1.0,
+                                0.0
+                              ],
+                              "input": "A"
+                            },
+                            {
+                              "node": "Multiply",
+                              "output": "",
+                              "const_a": 0.0,
+                              "const_b": 1.0,
+                              "inputs": [
+                                {
+                                  "node": "Constant3Vector",
+                                  "output": "",
+                                  "constant": [
+                                    1.0,
+                                    1.0,
+                                    0.0,
+                                    0.0
+                                  ],
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Detail Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "B"
+                            }
+                          ],
+                          "input": "B"
+                        }
+                      ],
+                      "input": "AdditionalNormal"
+                    }
+                  ],
+                  "input": "True"
+                },
+                {
+                  "node": "Multiply",
+                  "output": "",
+                  "const_a": 0.0,
+                  "const_b": 1.0,
+                  "inputs": [
+                    {
+                      "node": "TextureSampleParameter2D",
+                      "output": "RGB",
+                      "texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_n.T_Combat_Dog_skin_4_n",
+                      "parameter_name": "Normal Texture",
+                      "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                      "input": "A"
+                    },
+                    {
+                      "node": "AppendVector",
+                      "output": "",
+                      "inputs": [
+                        {
+                          "node": "AppendVector",
+                          "output": "",
+                          "inputs": [
+                            {
+                              "node": "ScalarParameter",
+                              "output": "",
+                              "parameter_name": "Normal Intensity",
+                              "default_value": 1.0,
+                              "input": "A"
+                            },
+                            {
+                              "node": "ScalarParameter",
+                              "output": "",
+                              "parameter_name": "Normal Intensity",
+                              "default_value": 1.0,
+                              "input": "B"
+                            }
+                          ],
+                          "input": "A"
+                        },
+                        {
+                          "node": "Constant",
+                          "output": "",
+                          "r": 1.0,
+                          "input": "B"
+                        }
+                      ],
+                      "input": "B"
+                    }
+                  ],
+                  "input": "False"
+                }
+              ],
+              "input": "True"
+            },
+            {
+              "node": "Constant3Vector",
+              "output": "",
+              "constant": [
+                0.0,
+                0.0,
+                1.0,
+                0.0
+              ],
+              "input": "False"
+            }
+          ]
+        },
+        "roughness": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "G",
+              "texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Roughness Intensity",
+              "default_value": 0.23238499462604523,
+              "input": "B"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "B",
+              "texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Metallic Intensity",
+              "default_value": 0.0,
+              "input": "B"
+            }
+          ]
+        },
+        "ambient_occlusion": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "R",
+              "texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "AO Intensity",
+              "default_value": 0.23238499462604523,
+              "input": "B"
+            }
+          ]
+        },
+        "opacity": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_Scattering.T_Combat_Dog_skin_4_Scattering",
+              "parameter_name": "Subsurface Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Subsurface Intensity",
+              "default_value": 0.0,
+              "input": "B"
+            }
+          ]
+        }
+      }
+    },
+    "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_5.M_Combat_Dog_skin_5": {
+      "path": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_5.M_Combat_Dog_skin_5",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {
+        "RGB Texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m",
+        "DetailNormal": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+        "Main Texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_a.T_Combat_Dog_skin_5_a",
+        "Normal Texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_n.T_Combat_Dog_skin_5_n",
+        "Subsurface Texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_Scattering.T_Combat_Dog_skin_5_Scattering"
+      },
+      "scalar_params": {
+        "Metallic Intensity": 0.0,
+        "Roughness Intensity": 1.0,
+        "Brightness Intensity": 1.0,
+        "Normal Intensity": 1.0,
+        "Detail Normal Intensity": 0.0,
+        "Detail Normal Scale": 5.0,
+        "AO Intensity": 1.0,
+        "Subsurface Intensity": 1.0
+      },
+      "vector_params": {
+        "Subsurface Color": [
+          0.02500000037252903,
+          0.020161999389529228,
+          0.012707999907433987,
+          1.0
+        ]
+      },
+      "used_textures": [
+        "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_n.T_Combat_Dog_skin_5_n",
+        "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+        "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_a.T_Combat_Dog_skin_5_a",
+        "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m",
+        "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_Scattering.T_Combat_Dog_skin_5_Scattering"
+      ],
+      "base_material": "/Game/Combat_Dog/Materials/M_Combat_Dog_Master.M_Combat_Dog_Master",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {
+        "Use Normal Texture?": true,
+        "Use Detail Normal Texture?": true
+      },
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_a.T_Combat_Dog_skin_5_a",
+              "parameter_name": "Main Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brightness Intensity",
+              "default_value": 1.0,
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "StaticSwitchParameter",
+          "output": "",
+          "parameter_name": "Use Normal Texture?",
+          "default_value": true,
+          "inputs": [
+            {
+              "node": "StaticSwitchParameter",
+              "output": "",
+              "parameter_name": "Use Detail Normal Texture?",
+              "default_value": true,
+              "inputs": [
+                {
+                  "node": "MaterialFunctionCall",
+                  "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions02/Utility/BlendAngleCorrectedNormals.BlendAngleCorrectedNormals",
+                  "inputs": [
+                    {
+                      "node": "Multiply",
+                      "output": "",
+                      "const_a": 0.0,
+                      "const_b": 1.0,
+                      "inputs": [
+                        {
+                          "node": "TextureSampleParameter2D",
+                          "output": "RGB",
+                          "texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_n.T_Combat_Dog_skin_5_n",
+                          "parameter_name": "Normal Texture",
+                          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                          "input": "A"
+                        },
+                        {
+                          "node": "AppendVector",
+                          "output": "",
+                          "inputs": [
+                            {
+                              "node": "AppendVector",
+                              "output": "",
+                              "inputs": [
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "A"
+                            },
+                            {
+                              "node": "Constant",
+                              "output": "",
+                              "r": 1.0,
+                              "input": "B"
+                            }
+                          ],
+                          "input": "B"
+                        }
+                      ],
+                      "input": "BaseNormal"
+                    },
+                    {
+                      "node": "Multiply",
+                      "output": "",
+                      "const_a": 0.0,
+                      "const_b": 1.0,
+                      "inputs": [
+                        {
+                          "node": "TextureSampleParameter2D",
+                          "output": "RGB",
+                          "texture": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+                          "parameter_name": "DetailNormal",
+                          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                          "inputs": [
+                            {
+                              "node": "Multiply",
+                              "output": "",
+                              "const_a": 0.0,
+                              "const_b": 1.0,
+                              "inputs": [
+                                {
+                                  "node": "TextureCoordinate",
+                                  "output": "",
+                                  "coordinate_index": 0,
+                                  "u_tiling": 1.0,
+                                  "v_tiling": 1.0,
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Detail Normal Scale",
+                                  "default_value": 5.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "UVs"
+                            }
+                          ],
+                          "input": "A"
+                        },
+                        {
+                          "node": "Add",
+                          "output": "",
+                          "const_a": 0.0,
+                          "const_b": 1.0,
+                          "inputs": [
+                            {
+                              "node": "Constant3Vector",
+                              "output": "",
+                              "constant": [
+                                0.0,
+                                0.0,
+                                1.0,
+                                0.0
+                              ],
+                              "input": "A"
+                            },
+                            {
+                              "node": "Multiply",
+                              "output": "",
+                              "const_a": 0.0,
+                              "const_b": 1.0,
+                              "inputs": [
+                                {
+                                  "node": "Constant3Vector",
+                                  "output": "",
+                                  "constant": [
+                                    1.0,
+                                    1.0,
+                                    0.0,
+                                    0.0
+                                  ],
+                                  "input": "A"
+                                },
+                                {
+                                  "node": "ScalarParameter",
+                                  "output": "",
+                                  "parameter_name": "Detail Normal Intensity",
+                                  "default_value": 1.0,
+                                  "input": "B"
+                                }
+                              ],
+                              "input": "B"
+                            }
+                          ],
+                          "input": "B"
+                        }
+                      ],
+                      "input": "AdditionalNormal"
+                    }
+                  ],
+                  "input": "True"
+                },
+                {
+                  "node": "Multiply",
+                  "output": "",
+                  "const_a": 0.0,
+                  "const_b": 1.0,
+                  "inputs": [
+                    {
+                      "node": "TextureSampleParameter2D",
+                      "output": "RGB",
+                      "texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_n.T_Combat_Dog_skin_5_n",
+                      "parameter_name": "Normal Texture",
+                      "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+                      "input": "A"
+                    },
+                    {
+                      "node": "AppendVector",
+                      "output": "",
+                      "inputs": [
+                        {
+                          "node": "AppendVector",
+                          "output": "",
+                          "inputs": [
+                            {
+                              "node": "ScalarParameter",
+                              "output": "",
+                              "parameter_name": "Normal Intensity",
+                              "default_value": 1.0,
+                              "input": "A"
+                            },
+                            {
+                              "node": "ScalarParameter",
+                              "output": "",
+                              "parameter_name": "Normal Intensity",
+                              "default_value": 1.0,
+                              "input": "B"
+                            }
+                          ],
+                          "input": "A"
+                        },
+                        {
+                          "node": "Constant",
+                          "output": "",
+                          "r": 1.0,
+                          "input": "B"
+                        }
+                      ],
+                      "input": "B"
+                    }
+                  ],
+                  "input": "False"
+                }
+              ],
+              "input": "True"
+            },
+            {
+              "node": "Constant3Vector",
+              "output": "",
+              "constant": [
+                0.0,
+                0.0,
+                1.0,
+                0.0
+              ],
+              "input": "False"
+            }
+          ]
+        },
+        "roughness": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "G",
+              "texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Roughness Intensity",
+              "default_value": 0.23238499462604523,
+              "input": "B"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "B",
+              "texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Metallic Intensity",
+              "default_value": 0.0,
+              "input": "B"
+            }
+          ]
+        },
+        "ambient_occlusion": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "R",
+              "texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m",
+              "parameter_name": "RGB Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "AO Intensity",
+              "default_value": 0.23238499462604523,
+              "input": "B"
+            }
+          ]
+        },
+        "opacity": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_Scattering.T_Combat_Dog_skin_5_Scattering",
+              "parameter_name": "Subsurface Texture",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Subsurface Intensity",
+              "default_value": 0.0,
+              "input": "B"
+            }
+          ]
+        }
+      }
     }
   },
   "textures": {
@@ -442,6 +2001,182 @@
     },
     "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_n.T_Combat_Dog_skin_1_n": {
       "path": "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_n.T_Combat_Dog_skin_1_n",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m": {
+      "path": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_Scattering.T_Combat_Dog_skin_2_Scattering": {
+      "path": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_Scattering.T_Combat_Dog_skin_2_Scattering",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_a.T_Combat_Dog_skin_2_a": {
+      "path": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_a.T_Combat_Dog_skin_2_a",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_n.T_Combat_Dog_skin_2_n": {
+      "path": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_n.T_Combat_Dog_skin_2_n",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m": {
+      "path": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_Scattering.T_Combat_Dog_skin_3_Scattering": {
+      "path": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_Scattering.T_Combat_Dog_skin_3_Scattering",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_a.T_Combat_Dog_skin_3_a": {
+      "path": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_a.T_Combat_Dog_skin_3_a",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_n.T_Combat_Dog_skin_3_n": {
+      "path": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_n.T_Combat_Dog_skin_3_n",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m": {
+      "path": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_Scattering.T_Combat_Dog_skin_4_Scattering": {
+      "path": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_Scattering.T_Combat_Dog_skin_4_Scattering",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_a.T_Combat_Dog_skin_4_a": {
+      "path": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_a.T_Combat_Dog_skin_4_a",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_n.T_Combat_Dog_skin_4_n": {
+      "path": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_n.T_Combat_Dog_skin_4_n",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m": {
+      "path": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_Scattering.T_Combat_Dog_skin_5_Scattering": {
+      "path": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_Scattering.T_Combat_Dog_skin_5_Scattering",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_a.T_Combat_Dog_skin_5_a": {
+      "path": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_a.T_Combat_Dog_skin_5_a",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_n.T_Combat_Dog_skin_5_n": {
+      "path": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_n.T_Combat_Dog_skin_5_n",
       "class": "Texture2D",
       "size_x": 32,
       "size_y": 32,
@@ -494,22 +2229,65 @@
       "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_Scattering.T_Combat_Dog_skin_1_Scattering": "02_Textures_Source/T_Combat_Dog_skin_1_Scattering.png",
       "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_a.T_Combat_Dog_skin_1_a": "02_Textures_Source/T_Combat_Dog_skin_1_a.png",
       "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_n.T_Combat_Dog_skin_1_n": "02_Textures_Source/T_Combat_Dog_skin_1_n.png",
+      "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m": "02_Textures_Source/T_Combat_Dog_skin_2_RGB_AO_rg_m.png",
+      "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_Scattering.T_Combat_Dog_skin_2_Scattering": "02_Textures_Source/T_Combat_Dog_skin_2_Scattering.png",
+      "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_a.T_Combat_Dog_skin_2_a": "02_Textures_Source/T_Combat_Dog_skin_2_a.png",
+      "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_n.T_Combat_Dog_skin_2_n": "02_Textures_Source/T_Combat_Dog_skin_2_n.png",
+      "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m": "02_Textures_Source/T_Combat_Dog_skin_3_RGB_AO_rg_m.png",
+      "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_Scattering.T_Combat_Dog_skin_3_Scattering": "02_Textures_Source/T_Combat_Dog_skin_3_Scattering.png",
+      "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_a.T_Combat_Dog_skin_3_a": "02_Textures_Source/T_Combat_Dog_skin_3_a.png",
+      "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_n.T_Combat_Dog_skin_3_n": "02_Textures_Source/T_Combat_Dog_skin_3_n.png",
+      "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m": "02_Textures_Source/T_Combat_Dog_skin_4_RGB_AO_rg_m.png",
+      "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_Scattering.T_Combat_Dog_skin_4_Scattering": "02_Textures_Source/T_Combat_Dog_skin_4_Scattering.png",
+      "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_a.T_Combat_Dog_skin_4_a": "02_Textures_Source/T_Combat_Dog_skin_4_a.png",
+      "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_n.T_Combat_Dog_skin_4_n": "02_Textures_Source/T_Combat_Dog_skin_4_n.png",
+      "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m": "02_Textures_Source/T_Combat_Dog_skin_5_RGB_AO_rg_m.png",
+      "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_Scattering.T_Combat_Dog_skin_5_Scattering": "02_Textures_Source/T_Combat_Dog_skin_5_Scattering.png",
+      "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_a.T_Combat_Dog_skin_5_a": "02_Textures_Source/T_Combat_Dog_skin_5_a.png",
+      "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_n.T_Combat_Dog_skin_5_n": "02_Textures_Source/T_Combat_Dog_skin_5_n.png",
       "/Game/Combat_Dog/Textures/T_Detail.T_Detail": "02_Textures_Source/T_Detail.png"
     },
-    "animations": {
-      "/Game/Combat_Dog/Anims/Anim_Combat_Dog_Attack_1.Anim_Combat_Dog_Attack_1": "01_Source/anims/Anim_Combat_Dog_Attack_1.fbx",
-      "/Game/Combat_Dog/Anims/Anim_Combat_Dog_Attack_2.Anim_Combat_Dog_Attack_2": "01_Source/anims/Anim_Combat_Dog_Attack_2.fbx",
-      "/Game/Combat_Dog/Anims/Anim_Combat_Dog_Attack_3.Anim_Combat_Dog_Attack_3": "01_Source/anims/Anim_Combat_Dog_Attack_3.fbx",
-      "/Game/Combat_Dog/Anims/Anim_Combat_Dog_Death.Anim_Combat_Dog_Death": "01_Source/anims/Anim_Combat_Dog_Death.fbx",
-      "/Game/Combat_Dog/Anims/Anim_Combat_Dog_GetHit_1.Anim_Combat_Dog_GetHit_1": "01_Source/anims/Anim_Combat_Dog_GetHit_1.fbx",
-      "/Game/Combat_Dog/Anims/Anim_Combat_Dog_GetHit_2.Anim_Combat_Dog_GetHit_2": "01_Source/anims/Anim_Combat_Dog_GetHit_2.fbx",
-      "/Game/Combat_Dog/Anims/Anim_Combat_Dog_GetHit_3.Anim_Combat_Dog_GetHit_3": "01_Source/anims/Anim_Combat_Dog_GetHit_3.fbx",
-      "/Game/Combat_Dog/Anims/Anim_Combat_Dog_Idle_1.Anim_Combat_Dog_Idle_1": "01_Source/anims/Anim_Combat_Dog_Idle_1.fbx"
-    }
+    "animations": {}
   },
   "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
   "lod0_section_material_slots": [
     0
   ],
-  "variants": []
+  "variants": [
+    {
+      "name": "Set1",
+      "slots": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_1.M_Combat_Dog_skin_1"
+      },
+      "unknown_slots": []
+    },
+    {
+      "name": "Set2",
+      "slots": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_2.M_Combat_Dog_skin_2"
+      },
+      "unknown_slots": []
+    },
+    {
+      "name": "Set3",
+      "slots": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_3.M_Combat_Dog_skin_3"
+      },
+      "unknown_slots": []
+    },
+    {
+      "name": "Set4",
+      "slots": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_4.M_Combat_Dog_skin_4"
+      },
+      "unknown_slots": []
+    },
+    {
+      "name": "Set5",
+      "slots": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_5.M_Combat_Dog_skin_5"
+      },
+      "unknown_slots": []
+    }
+  ]
 }

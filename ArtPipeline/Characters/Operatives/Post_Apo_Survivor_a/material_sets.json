@@ -1,0 +1,59 @@
+[
+ {
+  "name": "Set1",
+  "slots": {
+   "M_Axe": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe",
+   "M_Backpack": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack",
+   "M_Boot_Glove": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove",
+   "M_Carabiners": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners",
+   "M_Flashlight": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight",
+   "M_Mask": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask",
+   "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie.M_Outfit_Hoodie",
+   "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants.M_Outfit_Pants",
+   "M_Radio": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio",
+   "M_Rope_a": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a",
+   "M_Rope_b": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b",
+   "M_Shovel": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel",
+   "M_Small_Bags": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags",
+   "M_Waist_Pack": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack"
+  }
+ },
+ {
+  "name": "Set2",
+  "slots": {
+   "M_Axe": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe",
+   "M_Backpack": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack",
+   "M_Boot_Glove": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove",
+   "M_Carabiners": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners",
+   "M_Flashlight": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight",
+   "M_Mask": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask",
+   "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie_Inst_2nd.M_Outfit_Hoodie_Inst_2nd",
+   "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants_Inst_2nd.M_Outfit_Pants_Inst_2nd",
+   "M_Radio": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio",
+   "M_Rope_a": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a",
+   "M_Rope_b": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b",
+   "M_Shovel": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel",
+   "M_Small_Bags": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags",
+   "M_Waist_Pack": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack"
+  }
+ },
+ {
+  "name": "Set3",
+  "slots": {
+   "M_Axe": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe",
+   "M_Backpack": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack",
+   "M_Boot_Glove": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove",
+   "M_Carabiners": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners",
+   "M_Flashlight": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight",
+   "M_Mask": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask",
+   "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie_Inst_3rd.M_Outfit_Hoodie_Inst_3rd",
+   "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants_Inst_3rd.M_Outfit_Pants_Inst_3rd",
+   "M_Radio": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio",
+   "M_Rope_a": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a",
+   "M_Rope_b": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b",
+   "M_Shovel": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel",
+   "M_Small_Bags": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags",
+   "M_Waist_Pack": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack"
+  }
+ }
+]

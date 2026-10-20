@@ -66,6 +66,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_1/M_helmet_set_1.M_helmet_set_1",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -100,6 +101,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -156,6 +158,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_1/M_body_kit_set_1.M_body_kit_set_1",
       "blend_mode": "BLEND_MASKED",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -190,6 +193,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -252,6 +256,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_1/M_armor_set_1.M_armor_set_1",
       "blend_mode": "BLEND_MASKED",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -286,6 +291,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -348,6 +354,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_1/M_head_set_1.M_head_set_1",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -382,6 +389,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -438,6 +446,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_1/M_bodi_set_1.M_bodi_set_1",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -472,6 +481,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -522,6 +532,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_2/M_body_kit_set_2.M_body_kit_set_2",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -556,6 +567,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -612,6 +624,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_2/M_armor_set_2.M_armor_set_2",
       "blend_mode": "BLEND_MASKED",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -646,6 +659,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -708,6 +722,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_2/M_head_set_2.M_head_set_2",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -742,6 +757,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -798,6 +814,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_2/M_bodi_set_2.M_bodi_set_2",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -832,6 +849,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -888,6 +906,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_3/M_body_kit_set_3.M_body_kit_set_3",
       "blend_mode": "BLEND_MASKED",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -922,6 +941,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -978,6 +998,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_3/M_armor_set_3.M_armor_set_3",
       "blend_mode": "BLEND_MASKED",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -1012,6 +1033,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -1074,6 +1096,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_3/M_head_set_3.M_head_set_3",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -1108,6 +1131,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -1164,6 +1188,7 @@
       "base_material": "/Game/military_zombie_set2/material/set_3/M_bodi_set_3.M_bodi_set_3",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -1198,6 +1223,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -1751,16 +1777,7 @@
       "/Game/military_zombie_set2/texture/set_3/T_head_set_2_Normal.T_head_set_2_Normal": "02_Textures_Source/T_head_set_2_Normal.png",
       "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_set_2_OcclusionRoughnessMetallic.png"
     },
-    "animations": {
-      "/Game/military_zombie_set2/Demo/anim_MM_Walk_InPlace.anim_MM_Walk_InPlace": "01_Source/anims/anim_MM_Walk_InPlace.fbx",
-      "/Game/military_zombie_set2/Demo/anim_MM_Walk_Fwd.anim_MM_Walk_Fwd": "01_Source/anims/anim_MM_Walk_Fwd.fbx",
-      "/Game/military_zombie_set2/Demo/anim_MM_Run_Fwd.anim_MM_Run_Fwd": "01_Source/anims/anim_MM_Run_Fwd.fbx",
-      "/Game/military_zombie_set2/Demo/anim_MM_Jump.anim_MM_Jump": "01_Source/anims/anim_MM_Jump.fbx",
-      "/Game/military_zombie_set2/Demo/anim_MM_Idle.anim_MM_Idle": "01_Source/anims/anim_MM_Idle.fbx",
-      "/Game/military_zombie_set2/Demo/anim_MF_Walk_Fwd.anim_MF_Walk_Fwd": "01_Source/anims/anim_MF_Walk_Fwd.fbx",
-      "/Game/military_zombie_set2/Demo/anim_MF_Run_Fwd.anim_MF_Run_Fwd": "01_Source/anims/anim_MF_Run_Fwd.fbx",
-      "/Game/military_zombie_set2/Demo/anim_MF_Idle.anim_MF_Idle": "01_Source/anims/anim_MF_Idle.fbx"
-    }
+    "animations": {}
   },
   "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
   "lod0_section_material_slots": [
@@ -1780,9 +1797,7 @@
         "M_head_set_2": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
         "M_bodi_set_2": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
       },
-      "unknown_slots": [
-        "M_blouse_set_2"
-      ]
+      "unknown_slots": []
     },
     {
       "name": "Set2",
@@ -1793,9 +1808,7 @@
         "M_head_set_2": "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
         "M_bodi_set_2": "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst"
       },
-      "unknown_slots": [
-        "M_blouse_set_2"
-      ]
+      "unknown_slots": []
     },
     {
       "name": "Set3",
@@ -1806,9 +1819,31 @@
         "M_head_set_2": "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
         "M_bodi_set_2": "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst"
       },
-      "unknown_slots": [
-        "M_blouse_set_2"
-      ]
+      "unknown_slots": []
     }
-  ]
+  ],
+  "blender_material_slots": {
+    "helmet_set_3": [
+      "helmet_set_3"
+    ],
+    "M_bodi_kit_set_2": [
+      "M_bodi_kit_set_2"
+    ],
+    "M_armor_set_2": [
+      "M_armor_set_2"
+    ],
+    "M_head_set_2": [
+      "M_head_set_2"
+    ],
+    "M_bodi_set_2": [
+      "M_bodi_set_2"
+    ]
+  },
+  "lod0_section_triangles": {
+    "helmet_set_3": 5738,
+    "M_bodi_kit_set_2": 13406,
+    "M_armor_set_2": 31895,
+    "M_head_set_2": 9751,
+    "M_bodi_set_2": 8980
+  }
 }

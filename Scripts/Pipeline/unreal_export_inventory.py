@@ -289,7 +289,10 @@ def main():
         with open(args.material_sets_file, "r", encoding="utf-8") as f:
             sets = json.load(f)
         slot_names = [s["slot_name"] for s in inv["slots"]]
-        for index, mapping in enumerate(sets):
+        for index, entry in enumerate(sets):
+            # [{slot: material}, ...] or [{"name": "Set2", "slots": {slot: material}}, ...]
+            mapping = entry.get("slots", entry) if isinstance(entry, dict) else {}
+            vname = entry.get("name") if isinstance(entry, dict) and "slots" in entry else "Set%d" % (index + 1)
             resolved = {}
             for slot in inv["slots"]:
                 mpath = mapping.get(slot["slot_name"]) or slot["material"]
@@ -297,7 +300,7 @@ def main():
                 mat = unreal.load_asset(mpath) if mpath else None
                 if mat and mpath not in inv["materials"]:
                     inv["materials"][mpath] = material_info(mat)
-            inv["variants"].append({"name": "Set%d" % (index + 1), "slots": resolved,
+            inv["variants"].append({"name": vname, "slots": resolved,
                                     "unknown_slots": sorted(k for k in mapping if k not in slot_names)})
 
     tex_paths = set()

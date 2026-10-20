@@ -290,6 +290,17 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Trousers.M_Female_Soldier_Trousers",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {
+        "Furniture_Textur_Color": false,
+        "Molly_Textur_Color": true,
+        "Belts_Textur_Colour": true,
+        "Fabric_Textur_Colour": true,
+        "BaseColour_Overpaint": true,
+        "Bottom_Textur_Color": true,
+        "Plastic_Textur_Color": false,
+        "Edging_Textur_Color": true,
+        "Holster_Textur_Color": false
+      },
       "graph": {
         "base_color": {
           "node": "StaticSwitch",
@@ -308,48 +319,56 @@
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "LinearInterpolate",
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "LinearInterpolate",
                               "output": "",
                               "const_a": 0.0,
                               "const_b": 1.0,
+                              "const_alpha": 0.5,
                               "inputs": [
                                 {
                                   "node": "LinearInterpolate",
                                   "output": "",
                                   "const_a": 0.0,
                                   "const_b": 1.0,
+                                  "const_alpha": 0.5,
                                   "inputs": [
                                     {
                                       "node": "LinearInterpolate",
                                       "output": "",
                                       "const_a": 0.0,
                                       "const_b": 1.0,
+                                      "const_alpha": 0.5,
                                       "inputs": [
                                         {
                                           "node": "LinearInterpolate",
                                           "output": "",
                                           "const_a": 0.0,
                                           "const_b": 1.0,
+                                          "const_alpha": 0.5,
                                           "input": "A"
                                         },
                                         {
@@ -484,6 +503,8 @@
                                           "node": "TextureCoordinate",
                                           "output": "",
                                           "coordinate_index": 0,
+                                          "u_tiling": 5.0,
+                                          "v_tiling": 5.0,
                                           "input": "UVs"
                                         }
                                       ],
@@ -553,6 +574,8 @@
                                       "node": "TextureCoordinate",
                                       "output": "",
                                       "coordinate_index": 0,
+                                      "u_tiling": 5.0,
+                                      "v_tiling": 5.0,
                                       "input": "UVs"
                                     }
                                   ],
@@ -622,6 +645,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 5.0,
+                                  "v_tiling": 5.0,
                                   "input": "UVs"
                                 }
                               ],
@@ -691,6 +716,8 @@
                               "node": "TextureCoordinate",
                               "output": "",
                               "coordinate_index": 0,
+                              "u_tiling": 5.0,
+                              "v_tiling": 5.0,
                               "input": "UVs"
                             }
                           ],
@@ -819,6 +846,13 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Boot.M_Female_Soldier_Boot",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {
+        "Sole_Textur_Color": false,
+        "Lace_Textur_Color": false,
+        "Fabric_2_Textur_Colour": true,
+        "Fabric_1_Textur_Colour": false,
+        "BaseColour_Overpaint": true
+      },
       "graph": {
         "base_color": {
           "node": "StaticSwitch",
@@ -837,24 +871,28 @@
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "LinearInterpolate",
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -885,6 +923,8 @@
                                           "node": "TextureCoordinate",
                                           "output": "",
                                           "coordinate_index": 0,
+                                          "u_tiling": 5.0,
+                                          "v_tiling": 5.0,
                                           "input": "UVs"
                                         }
                                       ],
@@ -954,6 +994,8 @@
                                       "node": "TextureCoordinate",
                                       "output": "",
                                       "coordinate_index": 0,
+                                      "u_tiling": 5.0,
+                                      "v_tiling": 5.0,
                                       "input": "UVs"
                                     }
                                   ],
@@ -1023,6 +1065,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 5.0,
+                                  "v_tiling": 5.0,
                                   "input": "UVs"
                                 }
                               ],
@@ -1092,6 +1136,8 @@
                               "node": "TextureCoordinate",
                               "output": "",
                               "coordinate_index": 0,
+                              "u_tiling": 5.0,
+                              "v_tiling": 5.0,
                               "input": "UVs"
                             }
                           ],
@@ -1220,6 +1266,13 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Bodyoutfit.M_Female_Soldier_Bodyoutfit",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {
+        "StropsTextur_Color": true,
+        "Velcro_Textur_Color": false,
+        "Fabric_Textur_Color": true,
+        "Furniture_Textur_Color": false,
+        "BaseColour_Overpaint": true
+      },
       "graph": {
         "base_color": {
           "node": "StaticSwitch",
@@ -1238,24 +1291,28 @@
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "LinearInterpolate",
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -1286,6 +1343,8 @@
                                           "node": "TextureCoordinate",
                                           "output": "",
                                           "coordinate_index": 0,
+                                          "u_tiling": 5.0,
+                                          "v_tiling": 5.0,
                                           "input": "UVs"
                                         }
                                       ],
@@ -1356,6 +1415,8 @@
                                       "node": "TextureCoordinate",
                                       "output": "",
                                       "coordinate_index": 0,
+                                      "u_tiling": 5.0,
+                                      "v_tiling": 5.0,
                                       "input": "UVs"
                                     }
                                   ],
@@ -1425,6 +1486,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 5.0,
+                                  "v_tiling": 5.0,
                                   "input": "UVs"
                                 }
                               ],
@@ -1494,6 +1557,8 @@
                               "node": "TextureCoordinate",
                               "output": "",
                               "coordinate_index": 0,
+                              "u_tiling": 5.0,
+                              "v_tiling": 5.0,
                               "input": "UVs"
                             }
                           ],
@@ -1636,6 +1701,15 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldeir_Torso.M_Female_Soldeir_Torso",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {
+        "Velcro_Textur_Color": false,
+        "Body_Armor_Textur_Color": true,
+        "Molly_Textur_Colour": true,
+        "Fabric_Textur_Colour": true,
+        "BaseColour_Overpaint": true,
+        "Scarf_Textur_Color": true,
+        "Lining_Textur_Color": true
+      },
       "graph": {
         "base_color": {
           "node": "StaticSwitch",
@@ -1654,36 +1728,42 @@
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "LinearInterpolate",
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "LinearInterpolate",
                               "output": "",
                               "const_a": 0.0,
                               "const_b": 1.0,
+                              "const_alpha": 0.5,
                               "inputs": [
                                 {
                                   "node": "LinearInterpolate",
                                   "output": "",
                                   "const_a": 0.0,
                                   "const_b": 1.0,
+                                  "const_alpha": 0.5,
                                   "inputs": [
                                     {
                                       "node": "TextureSample",
@@ -1807,6 +1887,8 @@
                                           "node": "TextureCoordinate",
                                           "output": "",
                                           "coordinate_index": 0,
+                                          "u_tiling": 5.0,
+                                          "v_tiling": 5.0,
                                           "input": "UVs"
                                         }
                                       ],
@@ -1876,6 +1958,8 @@
                                       "node": "TextureCoordinate",
                                       "output": "",
                                       "coordinate_index": 0,
+                                      "u_tiling": 5.0,
+                                      "v_tiling": 5.0,
                                       "input": "UVs"
                                     }
                                   ],
@@ -1945,6 +2029,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 5.0,
+                                  "v_tiling": 5.0,
                                   "input": "UVs"
                                 }
                               ],
@@ -2014,6 +2100,8 @@
                               "node": "TextureCoordinate",
                               "output": "",
                               "coordinate_index": 0,
+                              "u_tiling": 5.0,
+                              "v_tiling": 5.0,
                               "input": "UVs"
                             }
                           ],
@@ -2142,6 +2230,13 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Backpack.M_Female_Soldier_Backpack",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {
+        "Furniture_Textur_Color": false,
+        "Zipper_Textur_Color": false,
+        "Strops_Textur_Colour": true,
+        "Fabric_Textur_Colour": true,
+        "BaseColour_Overpaint": true
+      },
       "graph": {
         "base_color": {
           "node": "StaticSwitch",
@@ -2160,24 +2255,28 @@
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "LinearInterpolate",
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -2208,6 +2307,8 @@
                                           "node": "TextureCoordinate",
                                           "output": "",
                                           "coordinate_index": 0,
+                                          "u_tiling": 5.0,
+                                          "v_tiling": 5.0,
                                           "input": "UVs"
                                         }
                                       ],
@@ -2278,6 +2379,8 @@
                                       "node": "TextureCoordinate",
                                       "output": "",
                                       "coordinate_index": 0,
+                                      "u_tiling": 5.0,
+                                      "v_tiling": 5.0,
                                       "input": "UVs"
                                     }
                                   ],
@@ -2347,6 +2450,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 5.0,
+                                  "v_tiling": 5.0,
                                   "input": "UVs"
                                 }
                               ],
@@ -2416,6 +2521,8 @@
                               "node": "TextureCoordinate",
                               "output": "",
                               "coordinate_index": 0,
+                              "u_tiling": 5.0,
+                              "v_tiling": 5.0,
                               "input": "UVs"
                             }
                           ],
@@ -2530,6 +2637,11 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Hand.M_Female_Soldier_Hand",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {
+        "Fabric_Texture_Colour": true,
+        "Plastic_Texture_Colour": false,
+        "BaseColour_Overpaint": true
+      },
       "graph": {
         "base_color": {
           "node": "StaticSwitch",
@@ -2548,12 +2660,14 @@
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -2584,6 +2698,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 5.0,
+                                  "v_tiling": 5.0,
                                   "input": "UVs"
                                 }
                               ],
@@ -2653,6 +2769,8 @@
                               "node": "TextureCoordinate",
                               "output": "",
                               "coordinate_index": 0,
+                              "u_tiling": 5.0,
+                              "v_tiling": 5.0,
                               "input": "UVs"
                             }
                           ],
@@ -2788,6 +2906,13 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Helmet_Outfit.M_Female_Soldier_Helmet_Outfit",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
+      "static_switch_params": {
+        "Glasses_Textur_Color": false,
+        "Rubber_button_Textur_Color": false,
+        "Fabric_Textur_Colour": true,
+        "Plastic_Textur_Colour": false,
+        "BaseColour_Overpaint": true
+      },
       "graph": {
         "base_color": {
           "node": "StaticSwitch",
@@ -2806,24 +2931,28 @@
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "LinearInterpolate",
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -2854,6 +2983,8 @@
                                           "node": "TextureCoordinate",
                                           "output": "",
                                           "coordinate_index": 0,
+                                          "u_tiling": 5.0,
+                                          "v_tiling": 5.0,
                                           "input": "UVs"
                                         }
                                       ],
@@ -2923,6 +3054,8 @@
                                       "node": "TextureCoordinate",
                                       "output": "",
                                       "coordinate_index": 0,
+                                      "u_tiling": 5.0,
+                                      "v_tiling": 5.0,
                                       "input": "UVs"
                                     }
                                   ],
@@ -2993,6 +3126,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 5.0,
+                                  "v_tiling": 5.0,
                                   "input": "UVs"
                                 }
                               ],
@@ -3062,6 +3197,8 @@
                               "node": "TextureCoordinate",
                               "output": "",
                               "coordinate_index": 0,
+                              "u_tiling": 5.0,
+                              "v_tiling": 5.0,
                               "input": "UVs"
                             }
                           ],
@@ -3170,6 +3307,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Glasses_Glass.M_Female_Soldier_Glasses_Glass",
       "blend_mode": "BLEND_TRANSLUCENT",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "VectorParameter",
@@ -3187,6 +3325,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3214,6 +3353,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3241,6 +3381,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3288,6 +3429,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Beacon_glass.M_Female_Soldier_Beacon_glass",
       "blend_mode": "BLEND_TRANSLUCENT",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "VectorParameter",
@@ -3311,6 +3453,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3338,6 +3481,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3365,6 +3509,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3399,6 +3544,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Helmet_Beacon_Light.M_Female_Soldier_Helmet_Beacon_Light",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {},
       "graph": {
         "emissive_color": {
           "node": "Multiply",
@@ -3437,6 +3583,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_flashlight_bulb.M_Female_Soldier_flashlight_bulb",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {},
       "graph": {
         "emissive_color": {
           "node": "Multiply",
@@ -3491,6 +3638,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Glasses_Glass.M_Female_Soldier_Glasses_Glass",
       "blend_mode": "BLEND_TRANSLUCENT",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "VectorParameter",
@@ -3508,6 +3656,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3535,6 +3684,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3562,6 +3712,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -3591,6 +3742,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Glowstick_Light.M_Female_Soldier_Glowstick_Light",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {},
       "graph": {
         "emissive_color": {
           "node": "Multiply",
@@ -3665,6 +3817,13 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Helmet.M_Female_Soldier_Helmet",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {
+        "Strops_Textur_Color": true,
+        "Plastic_Textur_Color": false,
+        "Velcro_Textur_Colour": false,
+        "Helmet_Textur_Colour": true,
+        "BaseColour_Overpaint": true
+      },
       "graph": {
         "base_color": {
           "node": "StaticSwitch",
@@ -3683,24 +3842,28 @@
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "LinearInterpolate",
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -3731,6 +3894,8 @@
                                           "node": "TextureCoordinate",
                                           "output": "",
                                           "coordinate_index": 0,
+                                          "u_tiling": 5.0,
+                                          "v_tiling": 5.0,
                                           "input": "UVs"
                                         }
                                       ],
@@ -3800,6 +3965,8 @@
                                       "node": "TextureCoordinate",
                                       "output": "",
                                       "coordinate_index": 0,
+                                      "u_tiling": 5.0,
+                                      "v_tiling": 5.0,
                                       "input": "UVs"
                                     }
                                   ],
@@ -3869,6 +4036,8 @@
                                   "node": "TextureCoordinate",
                                   "output": "",
                                   "coordinate_index": 0,
+                                  "u_tiling": 5.0,
+                                  "v_tiling": 5.0,
                                   "input": "UVs"
                                 }
                               ],
@@ -3938,6 +4107,8 @@
                               "node": "TextureCoordinate",
                               "output": "",
                               "coordinate_index": 0,
+                              "u_tiling": 5.0,
+                              "v_tiling": 5.0,
                               "input": "UVs"
                             }
                           ],
@@ -4036,6 +4207,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Chevron.M_Female_Soldier_Chevron",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "TextureSample",
@@ -4083,6 +4255,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Head.M_Female_Soldier_Head",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "TextureSample",
@@ -4136,6 +4309,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Eyes.M_Female_Soldier_Eyes",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "TextureSample",
@@ -4222,24 +4396,28 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Eyes_Hair.M_Female_Soldier_Eyes_Hair",
       "blend_mode": "BLEND_MASKED",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "LinearInterpolate",
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "LinearInterpolate",
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -4290,10 +4468,12 @@
                     {
                       "node": "MaterialFunctionCall",
                       "output": "Result",
+                      "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                       "inputs": [
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -4327,6 +4507,7 @@
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "TextureSample",
@@ -4390,6 +4571,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -4413,12 +4595,14 @@
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "TextureSample",
@@ -4469,10 +4653,12 @@
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                           "inputs": [
                             {
                               "node": "MaterialFunctionCall",
                               "output": "Result",
+                              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                               "inputs": [
                                 {
                                   "node": "TextureSample",
@@ -4506,6 +4692,7 @@
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -4583,18 +4770,21 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "LinearInterpolate",
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "ScalarParameter",
@@ -4645,10 +4835,12 @@
                     {
                       "node": "MaterialFunctionCall",
                       "output": "Result",
+                      "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                       "inputs": [
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -4682,6 +4874,7 @@
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -4745,6 +4938,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -4768,12 +4962,14 @@
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -4824,10 +5020,12 @@
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                           "inputs": [
                             {
                               "node": "MaterialFunctionCall",
                               "output": "Result",
+                              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                               "inputs": [
                                 {
                                   "node": "TextureSample",
@@ -4861,6 +5059,7 @@
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "ScalarParameter",
@@ -4932,18 +5131,21 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "LinearInterpolate",
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "ScalarParameter",
@@ -4994,10 +5196,12 @@
                     {
                       "node": "MaterialFunctionCall",
                       "output": "Result",
+                      "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                       "inputs": [
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -5031,6 +5235,7 @@
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -5094,6 +5299,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -5117,12 +5323,14 @@
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -5173,10 +5381,12 @@
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                           "inputs": [
                             {
                               "node": "MaterialFunctionCall",
                               "output": "Result",
+                              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                               "inputs": [
                                 {
                                   "node": "TextureSample",
@@ -5210,6 +5420,7 @@
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "ScalarParameter",
@@ -5281,18 +5492,21 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "LinearInterpolate",
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "ScalarParameter",
@@ -5343,10 +5557,12 @@
                     {
                       "node": "MaterialFunctionCall",
                       "output": "Result",
+                      "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                       "inputs": [
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -5380,6 +5596,7 @@
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -5443,6 +5660,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -5466,12 +5684,14 @@
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -5522,10 +5742,12 @@
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                           "inputs": [
                             {
                               "node": "MaterialFunctionCall",
                               "output": "Result",
+                              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                               "inputs": [
                                 {
                                   "node": "TextureSample",
@@ -5559,6 +5781,7 @@
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "ScalarParameter",
@@ -5686,24 +5909,28 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Hair.M_Female_Soldier_Hair",
       "blend_mode": "BLEND_MASKED",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "LinearInterpolate",
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "LinearInterpolate",
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -5754,10 +5981,12 @@
                     {
                       "node": "MaterialFunctionCall",
                       "output": "Result",
+                      "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                       "inputs": [
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -5791,6 +6020,7 @@
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "TextureSample",
@@ -5854,6 +6084,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -5877,12 +6108,14 @@
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "TextureSample",
@@ -5933,10 +6166,12 @@
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                           "inputs": [
                             {
                               "node": "MaterialFunctionCall",
                               "output": "Result",
+                              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                               "inputs": [
                                 {
                                   "node": "TextureSample",
@@ -5970,6 +6205,7 @@
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -6047,18 +6283,21 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "LinearInterpolate",
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "ScalarParameter",
@@ -6109,10 +6348,12 @@
                     {
                       "node": "MaterialFunctionCall",
                       "output": "Result",
+                      "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                       "inputs": [
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -6146,6 +6387,7 @@
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -6209,6 +6451,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -6232,12 +6475,14 @@
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -6288,10 +6533,12 @@
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                           "inputs": [
                             {
                               "node": "MaterialFunctionCall",
                               "output": "Result",
+                              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                               "inputs": [
                                 {
                                   "node": "TextureSample",
@@ -6325,6 +6572,7 @@
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "ScalarParameter",
@@ -6396,18 +6644,21 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "LinearInterpolate",
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "ScalarParameter",
@@ -6458,10 +6709,12 @@
                     {
                       "node": "MaterialFunctionCall",
                       "output": "Result",
+                      "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                       "inputs": [
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -6495,6 +6748,7 @@
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -6558,6 +6812,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -6581,12 +6836,14 @@
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -6637,10 +6894,12 @@
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                           "inputs": [
                             {
                               "node": "MaterialFunctionCall",
                               "output": "Result",
+                              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                               "inputs": [
                                 {
                                   "node": "TextureSample",
@@ -6674,6 +6933,7 @@
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "ScalarParameter",
@@ -6745,18 +7005,21 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "LinearInterpolate",
               "output": "",
               "const_a": 0.0,
               "const_b": 1.0,
+              "const_alpha": 0.5,
               "inputs": [
                 {
                   "node": "LinearInterpolate",
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "ScalarParameter",
@@ -6807,10 +7070,12 @@
                     {
                       "node": "MaterialFunctionCall",
                       "output": "Result",
+                      "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                       "inputs": [
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                           "inputs": [
                             {
                               "node": "TextureSample",
@@ -6844,6 +7109,7 @@
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -6907,6 +7173,7 @@
                 {
                   "node": "MaterialFunctionCall",
                   "output": "Result",
+                  "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                   "inputs": [
                     {
                       "node": "TextureSample",
@@ -6930,12 +7197,14 @@
                   "output": "",
                   "const_a": 0.0,
                   "const_b": 1.0,
+                  "const_alpha": 0.5,
                   "inputs": [
                     {
                       "node": "LinearInterpolate",
                       "output": "",
                       "const_a": 0.0,
                       "const_b": 1.0,
+                      "const_alpha": 0.5,
                       "inputs": [
                         {
                           "node": "ScalarParameter",
@@ -6986,10 +7255,12 @@
                         {
                           "node": "MaterialFunctionCall",
                           "output": "Result",
+                          "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/CheapContrast.CheapContrast",
                           "inputs": [
                             {
                               "node": "MaterialFunctionCall",
                               "output": "Result",
+                              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/ImageAdjustment/Contrast_Preserve_Color.Contrast_Preserve_Color",
                               "inputs": [
                                 {
                                   "node": "TextureSample",
@@ -7023,6 +7294,7 @@
                           "output": "",
                           "const_a": 0.0,
                           "const_b": 1.0,
+                          "const_alpha": 0.5,
                           "inputs": [
                             {
                               "node": "ScalarParameter",
@@ -7129,6 +7401,7 @@
       "base_material": "/Game/Female_Soldier/Materials/M_Female_Soldier_Eyes_sclera.M_Female_Soldier_Eyes_sclera",
       "blend_mode": "BLEND_TRANSLUCENT",
       "two_sided": true,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "VectorParameter",
@@ -7146,6 +7419,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -7173,6 +7447,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -7200,6 +7475,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -7892,68 +8168,8 @@
   ],
   "exports": {
     "mesh_fbx": "01_Source/SK_Female_Soldier.fbx",
-    "textures": {
-      "/Game/Female_Soldier/Textures/Extra_Textures/T_Female_Soldie_Camouflage_1_Colour.T_Female_Soldie_Camouflage_1_Colour": "02_Textures_Source/T_Female_Soldie_Camouflage_1_Colour.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_BaseColor.T_Female_Soldeir_Torso_BaseColor": "02_Textures_Source/T_Female_Soldeir_Torso_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_ID.T_Female_Soldeir_Torso_ID": "02_Textures_Source/T_Female_Soldeir_Torso_ID.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_ID_extra.T_Female_Soldeir_Torso_ID_extra": "02_Textures_Source/T_Female_Soldeir_Torso_ID_extra.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_Normal.T_Female_Soldeir_Torso_Normal": "02_Textures_Source/T_Female_Soldeir_Torso_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_OcclusionRoughnessMetallic.T_Female_Soldeir_Torso_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldeir_Torso_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Backpack_BaseColor.T_Female_Soldier_Backpack_BaseColor": "02_Textures_Source/T_Female_Soldier_Backpack_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Backpack_ID.T_Female_Soldier_Backpack_ID": "02_Textures_Source/T_Female_Soldier_Backpack_ID.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Backpack_Normal.T_Female_Soldier_Backpack_Normal": "02_Textures_Source/T_Female_Soldier_Backpack_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Backpack_OcclusionRoughnessMetallic.T_Female_Soldier_Backpack_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Backpack_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Bodyoutfit_BaseColor.T_Female_Soldier_Bodyoutfit_BaseColor": "02_Textures_Source/T_Female_Soldier_Bodyoutfit_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Bodyoutfit_ID.T_Female_Soldier_Bodyoutfit_ID": "02_Textures_Source/T_Female_Soldier_Bodyoutfit_ID.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Bodyoutfit_Normal.T_Female_Soldier_Bodyoutfit_Normal": "02_Textures_Source/T_Female_Soldier_Bodyoutfit_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Bodyoutfit_OcclusionRoughnessMetallic.T_Female_Soldier_Bodyoutfit_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Bodyoutfit_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Boots_BaseColor.T_Female_Soldier_Boots_BaseColor": "02_Textures_Source/T_Female_Soldier_Boots_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Boots_ID.T_Female_Soldier_Boots_ID": "02_Textures_Source/T_Female_Soldier_Boots_ID.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Boots_Normal.T_Female_Soldier_Boots_Normal": "02_Textures_Source/T_Female_Soldier_Boots_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Boots_OcclusionRoughnessMetallic.T_Female_Soldier_Boots_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Boots_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Chevron_BaseColor.T_Female_Soldier_Chevron_BaseColor": "02_Textures_Source/T_Female_Soldier_Chevron_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Chevron_Normal.T_Female_Soldier_Chevron_Normal": "02_Textures_Source/T_Female_Soldier_Chevron_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Chevron_OcclusionRoughnessMetallic.T_Female_Soldier_Chevron_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Chevron_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Eye_BaseColor.T_Female_Soldier_Eye_BaseColor": "02_Textures_Source/T_Female_Soldier_Eye_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Eye_Normal.T_Female_Soldier_Eye_Normal": "02_Textures_Source/T_Female_Soldier_Eye_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Eye_OcclusionRoughnessMetallic.T_Female_Soldier_Eye_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Eye_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Hand_ID.T_Female_Soldier_Hand_ID": "02_Textures_Source/T_Female_Soldier_Hand_ID.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Hands_BaseColor.T_Female_Soldier_Hands_BaseColor": "02_Textures_Source/T_Female_Soldier_Hands_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Hands_Normal.T_Female_Soldier_Hands_Normal": "02_Textures_Source/T_Female_Soldier_Hands_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Hands_OcclusionRoughnessMetallic.T_Female_Soldier_Hands_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Hands_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Head_BaseColor.T_Female_Soldier_Head_BaseColor": "02_Textures_Source/T_Female_Soldier_Head_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Head_Normal.T_Female_Soldier_Head_Normal": "02_Textures_Source/T_Female_Soldier_Head_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Head_OcclusionRoughnessMetallic.T_Female_Soldier_Head_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Head_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Helmet_outfit_BaseColor.T_Female_Soldier_Helmet_outfit_BaseColor": "02_Textures_Source/T_Female_Soldier_Helmet_outfit_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Helmet_outfit_ID.T_Female_Soldier_Helmet_outfit_ID": "02_Textures_Source/T_Female_Soldier_Helmet_outfit_ID.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Helmet_outfit_Normal.T_Female_Soldier_Helmet_outfit_Normal": "02_Textures_Source/T_Female_Soldier_Helmet_outfit_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Helmet_outfit_OcclusionRoughnessMetallic.T_Female_Soldier_Helmet_outfit_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Helmet_outfit_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_BaseColor.T_Female_Soldier_Trousers_BaseColor": "02_Textures_Source/T_Female_Soldier_Trousers_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_ID.T_Female_Soldier_Trousers_ID": "02_Textures_Source/T_Female_Soldier_Trousers_ID.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_ID_extra.T_Female_Soldier_Trousers_ID_extra": "02_Textures_Source/T_Female_Soldier_Trousers_ID_extra.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_Normal.T_Female_Soldier_Trousers_Normal": "02_Textures_Source/T_Female_Soldier_Trousers_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_OcclusionRoughnessMetallic.T_Female_Soldier_Trousers_OcclusionRoughnessMetallic": "02_Textures_Source/T_Female_Soldier_Trousers_OcclusionRoughnessMetallic.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_ao.T_Female_Soldier_hair_ao": "02_Textures_Source/T_Female_Soldier_hair_ao.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_diff.T_Female_Soldier_hair_diff": "02_Textures_Source/T_Female_Soldier_hair_diff.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_flow.T_Female_Soldier_hair_flow": "02_Textures_Source/T_Female_Soldier_hair_flow.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_id.T_Female_Soldier_hair_id": "02_Textures_Source/T_Female_Soldier_hair_id.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_normal.T_Female_Soldier_hair_normal": "02_Textures_Source/T_Female_Soldier_hair_normal.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_opacity.T_Female_Soldier_hair_opacity": "02_Textures_Source/T_Female_Soldier_hair_opacity.png",
-      "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_root.T_Female_Soldier_hair_root": "02_Textures_Source/T_Female_Soldier_hair_root.png",
-      "/Game/Female_Soldier/Textures/T_Femele_Soldier_Helmet_BaseColor.T_Femele_Soldier_Helmet_BaseColor": "02_Textures_Source/T_Femele_Soldier_Helmet_BaseColor.png",
-      "/Game/Female_Soldier/Textures/T_Femele_Soldier_Helmet_ID.T_Femele_Soldier_Helmet_ID": "02_Textures_Source/T_Femele_Soldier_Helmet_ID.png",
-      "/Game/Female_Soldier/Textures/T_Femele_Soldier_Helmet_Normal.T_Femele_Soldier_Helmet_Normal": "02_Textures_Source/T_Femele_Soldier_Helmet_Normal.png",
-      "/Game/Female_Soldier/Textures/T_Femele_Soldier_Helmet_OcclusionRoughnessMetallic.T_Femele_Soldier_Helmet_OcclusionRoughnessMetallic": "02_Textures_Source/T_Femele_Soldier_Helmet_OcclusionRoughnessMetallic.png"
-    },
-    "animations": {
-      "/Game/Female_Soldier/Demo/ThirdPersonIdle.ThirdPersonIdle": "01_Source/anims/ThirdPersonIdle.fbx",
-      "/Game/Female_Soldier/Demo/ThirdPersonJump_End.ThirdPersonJump_End": "01_Source/anims/ThirdPersonJump_End.fbx",
-      "/Game/Female_Soldier/Demo/ThirdPersonJump_Loop.ThirdPersonJump_Loop": "01_Source/anims/ThirdPersonJump_Loop.fbx",
-      "/Game/Female_Soldier/Demo/ThirdPersonJump_Start.ThirdPersonJump_Start": "01_Source/anims/ThirdPersonJump_Start.fbx",
-      "/Game/Female_Soldier/Demo/ThirdPersonRun.ThirdPersonRun": "01_Source/anims/ThirdPersonRun.fbx",
-      "/Game/Female_Soldier/Demo/ThirdPersonWalk.ThirdPersonWalk": "01_Source/anims/ThirdPersonWalk.fbx",
-      "/Game/Female_Soldier/Demo/ThirdPerson_Jump.ThirdPerson_Jump": "01_Source/anims/ThirdPerson_Jump.fbx"
-    }
+    "textures": {},
+    "animations": {}
   },
   "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
   "lod0_section_material_slots": [
@@ -7989,115 +8205,5 @@
     -1,
     -1
   ],
-  "variants": [],
-  "lod0_section_triangles": {
-    "MI_Female_Soldier_Trouthers": 13939,
-    "MI_Female_Soldier_Trouthers_1": 276,
-    "MI_Female_Soldier_Trouthers_2": 276,
-    "MI_Female_Soldier_Trouthers_3": 1379,
-    "MI_Female_Soldier_Trouthers_4": 180,
-    "MI_Female_Soldier_Trouthers_5": 180,
-    "MI_Female_Soldier_Trouthers_6": 2269,
-    "M_Female_Soldier_Boots": 3572,
-    "M_Female_Soldier_Bodyoutfit": 30784,
-    "MI_Female_Soldeir_Torso": 16026,
-    "MI_Female_Soldeir_Torso_10": 2834,
-    "M_Female_Soldier_Backpack": 8520,
-    "M_Female_Soldier_Hand": 6552,
-    "MI_Female_Soldier_Helmet_Outfit": 0,
-    "M_Female_Soldier_Glasses_Glass": 0,
-    "MI_Female_Soldier_Helmet_Outfit_15": 12887,
-    "M_Female_Soldier_Beacon_Glass": 653,
-    "M_Female_Soldier_Helmet_Beacon_Light": 8,
-    "M_Female_Soldier_flashlight_bulb": 186,
-    "M_Female_Glowstick": 216,
-    "M_Female_Glowstick_Light": 64,
-    "M_Femele_Soldier_Helmet": 11810,
-    "MI_Female_Soldier_Chevron": 568,
-    "MI_Female_Soldier_Chevron_23": 568,
-    "MI_Female_Soldier_Chevron_24": 568,
-    "MI_Female_Soldier_Chevron_25": 568,
-    "MI_Female_Soldier_Chevron_26": 568,
-    "MI_Female_Soldier_Chevron_27": 568,
-    "M_Female_Soldier_Head": 20438,
-    "M_Female_Soldier_Eyes": 3832,
-    "M_Female_Soldier_Eyes_Hair": 5144,
-    "M_Female_Soldier_Hair": 1482,
-    "M_Female_Soldier_Head_in_Balaclava": 3832
-  },
-  "blender_material_slots": {
-    "MI_Female_Soldier_Trouthers": [
-      "M_Female_Soldier_Weapon_Legs",
-      "M_Female_Soldier_Legs_Clip_Back",
-      "M_Female_Soldier_Legs_Clip_Front",
-      "M_Female_Soldier_Legs_Holster",
-      "M_Female_Soldier_Legs_Holster_Clip_Back",
-      "M_Female_Soldier_Legs_Holster_Clip_Front",
-      "M_Female_Soldier_Legs_Pistol"
-    ],
-    "M_Female_Soldier_Boots": [
-      "M_Female_Soldier_Boots"
-    ],
-    "M_Female_Soldier_Bodyoutfit": [
-      "M_Female_Soldier_Bodyoutfit"
-    ],
-    "MI_Female_Soldeir_Torso": [
-      "M_Female_Soldeir_Torso",
-      "M_Female_Soldier_Hood"
-    ],
-    "M_Female_Soldier_Backpack": [
-      "M_Female_Soldier_Backpack"
-    ],
-    "M_Female_Soldier_Hand": [
-      "M_Female_Soldier_Hand"
-    ],
-    "MI_Female_Soldier_Helmet_Outfit": [
-      "M_Female_Soldier_Glasses",
-      "M_Female_Soldier_Helmet_Outfit"
-    ],
-    "M_Female_Soldier_Glasses_Glass": [
-      "M_Female_Soldier_Glasses_Glass"
-    ],
-    "M_Female_Soldier_Beacon_Glass": [
-      "M_Female_Soldier_Beacon_Glass"
-    ],
-    "M_Female_Soldier_Helmet_Beacon_Light": [
-      "M_Female_Soldier_Helmet_Beacon_Light"
-    ],
-    "M_Female_Soldier_flashlight_bulb": [
-      "M_Female_Soldier_flashlight_bulb"
-    ],
-    "M_Female_Glowstick": [
-      "M_Female_Glowstick"
-    ],
-    "M_Female_Glowstick_Light": [
-      "M_Female_Glowstick_Light"
-    ],
-    "M_Femele_Soldier_Helmet": [
-      "M_Femele_Soldier_Helmet"
-    ],
-    "MI_Female_Soldier_Chevron": [
-      "M_Female_Soldier_Chevron_Backpack",
-      "M_Female_Soldier_Chevron_Chest",
-      "M_Female_Soldier_Chevron_Head_Left",
-      "M_Female_Soldier_Chevron_Head_Right",
-      "M_Female_Soldier_Chevron_Left_Arm",
-      "M_Female_Soldier_Chevron_Right_Arm"
-    ],
-    "M_Female_Soldier_Head": [
-      "M_Female_Soldier_Head"
-    ],
-    "M_Female_Soldier_Eyes": [
-      "M_Female_Soldier_Eyes"
-    ],
-    "M_Female_Soldier_Eyes_Hair": [
-      "M_Female_Soldier_Eyes_Hair"
-    ],
-    "M_Female_Soldier_Hair": [
-      "M_Female_Soldier_Hair"
-    ],
-    "M_Female_Soldier_Head_in_Balaclava": [
-      "M_Female_Soldier_Head_in_Balaclava"
-    ]
-  }
+  "variants": []
 }

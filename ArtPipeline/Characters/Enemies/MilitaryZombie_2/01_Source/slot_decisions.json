@@ -1,0 +1,51 @@
+{
+  "_doc": "Ground truth: slot -> keep / remove-hair / remove-transparent / remove-hidden / separate-transparent with the reason. Hidden = no ray from the triangle escapes to a viewer in the rest pose, 9 procedural extreme poses and the sampled animation frames (single-sided: back faces do not occlude).",
+  "hair_regex": "hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom",
+  "slots": {
+    "M_armor_set_2": {
+      "slot_index": 0,
+      "decision": "keep",
+      "reason": "opaque (masked: needs an opacity mask in the atlas); 0 of 27773 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_MASKED",
+      "two_sided": true,
+      "triangles": 27773,
+      "hidden_triangles_removed": 0
+    },
+    "M_blouse_set_2": {
+      "slot_index": 1,
+      "decision": "keep",
+      "reason": "opaque (masked: needs an opacity mask in the atlas); 0 of 3289 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_MASKED",
+      "two_sided": true,
+      "triangles": 3289,
+      "hidden_triangles_removed": 0
+    },
+    "M_head_set_2": {
+      "slot_index": 2,
+      "decision": "keep",
+      "reason": "opaque; 0 of 9751 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "triangles": 9751,
+      "hidden_triangles_removed": 0
+    },
+    "M_bodi_set_2": {
+      "slot_index": 3,
+      "decision": "keep",
+      "reason": "opaque; 0 of 8980 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "triangles": 8980,
+      "hidden_triangles_removed": 0
+    },
+    "pasted__hair": {
+      "slot_index": 4,
+      "decision": "remove-hair",
+      "reason": "material name matches the hair regex 'hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom'",
+      "blend_mode": "BLEND_MASKED",
+      "two_sided": true,
+      "triangles": 1766,
+      "hidden_triangles_removed": 0
+    }
+  }
+}

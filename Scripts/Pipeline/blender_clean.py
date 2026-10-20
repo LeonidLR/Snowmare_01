@@ -385,7 +385,8 @@ def main():
         delete_faces(mesh, hair_faces | transp_faces)
 
     # --- hidden triangles
-    excl_re = re.compile(args.hidden_exclude, re.I) if args.hidden_exclude else None
+    hidden_exclude = args.hidden_exclude or paths.config.get("hidden_exclude", "")
+    excl_re = re.compile(hidden_exclude, re.I) if hidden_exclude else None
     exclude = set(hair_mats) | set(transp_mats) | {i for i, s in enumerate(mesh.material_slots)
                                                    if excl_re and s.material and excl_re.search(s.material.name)}
     hidden, pose_log, fwd = (set(), [], None)

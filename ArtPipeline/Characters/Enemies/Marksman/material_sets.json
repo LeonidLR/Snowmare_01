@@ -1,0 +1,37 @@
+[
+ {
+  "name": "Set1",
+  "slots": {
+   "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_1_Inst.MI_head_set_1_Inst",
+   "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
+  }
+ },
+ {
+  "name": "Set2",
+  "slots": {
+   "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_2_Inst.MI_head_set_2_Inst",
+   "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst"
+  }
+ },
+ {
+  "name": "Set3",
+  "slots": {
+   "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_3_Inst.MI_head_set_3_Inst",
+   "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst"
+  }
+ },
+ {
+  "name": "Set4",
+  "slots": {
+   "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_4_Inst.MI_head_set_4_Inst",
+   "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst"
+  }
+ },
+ {
+  "name": "Set5",
+  "slots": {
+   "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_5_Inst.MI_head_set_5_Inst",
+   "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_5_Inst.MI_bodi_set_5_Inst"
+  }
+ }
+]

@@ -10,6 +10,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Dest,
     [string]$MasterDir = "/Game/Characters/Materials",
     [switch]$AllowExisting,
+    [string]$VariantsOnly = "",
     [string]$Engine = "C:\Program Files\Epic Games\UE_5.8"
 )
 $ErrorActionPreference = "Stop"
@@ -22,6 +23,7 @@ $after = Join-Path $review "content_after_import.json"
 python (Join-Path $PSScriptRoot "content_snapshot.py") snap $before --exclude $Dest --exclude $MasterDir
 $pyArgs = @("--asset-dir", $AssetDir, "--dest", $Dest, "--master-dir", $MasterDir)
 if ($AllowExisting) { $pyArgs += "--allow-existing" }
+if ($VariantsOnly) { $pyArgs += @("--variants-only", $VariantsOnly) }
 $env:CODEX_PIPELINE_ARGS = ConvertTo-Json -Compress $pyArgs
 $log = Join-Path $AssetDir "05_Export\unreal_import.log"
 $script = Join-Path $PSScriptRoot "unreal_import_optimized.py"

@@ -26,7 +26,8 @@
     "bake": "2026-10-20 21:52:34",
     "export": "2026-10-20 22:10:08",
     "review": "2026-10-20 21:54:16",
-    "qa": "2026-10-20 21:54:16"
+    "qa": "2026-10-20 21:54:16",
+    "variant_bake_setup": "2026-10-20 22:43:10"
   },
   "clean": {
     "hair_slots": [],
@@ -758,5 +759,17 @@
       "M_Helmet_A": 3308
     },
     "ray_miss_percent": 0.021
+  },
+  "variant_bake_setup": {
+    "variants": [
+      "Set1",
+      "Set2",
+      "Set3",
+      "Set4",
+      "Set5"
+    ],
+    "low_faces": 19914,
+    "faces_far_from_high": 0,
+    "warnings": []
   }
 }

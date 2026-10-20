@@ -1,0 +1,30 @@
+[
+ {
+  "name": "Set3",
+  "slots": {
+   "T_bodi": "/Game/Biochemical_Monster_2/Materials/M_bodi_set_3.M_bodi_set_3",
+   "T_head": "/Game/Biochemical_Monster_2/Materials/M_head_set_3.M_head_set_3"
+  }
+ },
+ {
+  "name": "Set1",
+  "slots": {
+   "T_bodi": "/Game/Biochemical_Monster_2/Materials/M_bodi_set_1.M_bodi_set_1",
+   "T_head": "/Game/Biochemical_Monster_2/Materials/M_head_set_1.M_head_set_1"
+  }
+ },
+ {
+  "name": "Set2",
+  "slots": {
+   "T_bodi": "/Game/Biochemical_Monster_2/Materials/M_bodi_set_2.M_bodi_set_2",
+   "T_head": "/Game/Biochemical_Monster_2/Materials/M_head_set_2.M_head_set_2"
+  }
+ },
+ {
+  "name": "Set4",
+  "slots": {
+   "T_bodi": "/Game/Biochemical_Monster_2/Materials/M_bodi_set_4.M_bodi_set_4",
+   "T_head": "/Game/Biochemical_Monster_2/Materials/M_head_set_4.M_head_set_4"
+  }
+ }
+]

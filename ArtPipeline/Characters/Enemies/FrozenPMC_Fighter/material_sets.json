@@ -1,0 +1,68 @@
+[
+ {
+  "name": "Default",
+  "slots": {
+   "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_4th_Inst.M_Jacket_Body_A_4th_Inst",
+   "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_2nd_Inst.M_Arms_A_2nd_Inst",
+   "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+   "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+   "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+   "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st"
+  }
+ },
+ {
+  "name": "Set1",
+  "slots": {
+   "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Jacket_Body_A_1st.MA_Jacket_Body_A_1st",
+   "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Arms_A_1st.MA_Arms_A_1st",
+   "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+   "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Pants_A_1st.MA_Pants_A_1st",
+   "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+   "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st"
+  }
+ },
+ {
+  "name": "Set2",
+  "slots": {
+   "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_2nd_Inst.M_Jacket_Body_A_2nd_Inst",
+   "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_2nd_Inst.M_Arms_A_2nd_Inst",
+   "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Boot_A_2nd_Inst.M_Boot_A_2nd_Inst",
+   "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+   "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Glove_A_2nd_Inst.M_Glove_A_2nd_Inst",
+   "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Helmet_A_2nd_Inst.M_Helmet_A_2nd_Inst"
+  }
+ },
+ {
+  "name": "Set3",
+  "slots": {
+   "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_3rd_Inst.M_Jacket_Body_A_3rd_Inst",
+   "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_3rd_Inst.M_Arms_A_3rd_Inst",
+   "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Boot_A_3rd_Inst.M_Boot_A_3rd_Inst",
+   "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_3rd_Inst.M_Pants_A_3rd_Inst",
+   "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+   "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st"
+  }
+ },
+ {
+  "name": "Set4",
+  "slots": {
+   "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_4th_Inst.M_Jacket_Body_A_4th_Inst",
+   "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_4th_Inst.M_Arms_A_4th_Inst",
+   "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+   "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+   "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+   "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st"
+  }
+ },
+ {
+  "name": "Set5",
+  "slots": {
+   "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_5th_Inst.M_Jacket_Body_A_5th_Inst",
+   "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_5th_Inst.M_Arms_A_5th_Inst",
+   "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+   "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+   "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+   "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st"
+  }
+ }
+]

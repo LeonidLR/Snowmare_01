@@ -45,6 +45,10 @@ def parse():
     p.add_argument("--cage-extrusion", type=float, default=0.6, help="cm, project mode")
     p.add_argument("--max-ray", type=float, default=3.0, help="cm, project mode (0 = unlimited)")
     p.add_argument("--cpu", action="store_true")
+    p.add_argument("--input-blend", default="", help="bake this set-up instead of 03_Blender/<mesh>_atlas.blend")
+    p.add_argument("--only-variants", default="", help="comma separated: bake only these look variants")
+    p.add_argument("--project-all", action="store_true", help="project every material (the low mesh has no source uv)")
+    p.add_argument("--no-save", action="store_true", help="do not write 03_Blender/<mesh>_bake.blend")
     p.add_argument("--emissive-threshold", type=float, default=0.1,
                    help="write an Emissive map only when more than this %% of the atlas texels glow (designer 2026-10-20: "
                         "no Emissive unless something really glows)")
@@ -298,7 +302,7 @@ def main():
     args = parse()
     paths = pc.Paths(args.asset_dir)
     orm_res = args.orm_res or args.res // 2
-    bpy.ops.wm.open_mainfile(filepath=paths.atlas_blend)
+    bpy.ops.wm.open_mainfile(filepath=args.input_blend or paths.atlas_blend)
     mesh = bpy.data.objects[paths.mesh_name]
     high = bpy.data.objects.get(paths.high_name)
     mode = "project" if high else "self"
@@ -338,8 +342,14 @@ def main():
     slot_names = [sl.material.name for sl in mesh.material_slots]  # = the Unreal slot names (blender_clean.py)
     inv = paths.inventory
     variants = inv.get("variants") or [None]
+    if args.only_variants:
+        wanted = [v.strip() for v in args.only_variants.split(",") if v.strip()]
+        variants = [v for v in variants if v and v["name"] in wanted]
+        if len(variants) != len(wanted):
+            raise RuntimeError("variants %s not all in the inventory" % wanted)
     red = pc.load_json(paths.report_path).get("reduce", {}).get("per_material", {})
-    self_slots = [i for i, n in enumerate(slot_names) if red.get(n, {}).get("ratio", 0) >= 0.999] if high else []
+    self_slots = [i for i, n in enumerate(slot_names) if red.get(n, {}).get("ratio", 0) >= 0.999] \
+        if high and not args.project_all else []
     per_variant = {}
     miss_pct = None
     normal_clamped_pct = None
@@ -453,7 +463,18 @@ def main():
             for sl in mesh.material_slots:
                 wire_emission(sl.material, "normal")  # back to the BSDF
 
-    bpy.ops.wm.save_as_mainfile(filepath=paths.bake_blend, compress=True)
+    if not args.no_save:
+        bpy.ops.wm.save_as_mainfile(filepath=paths.bake_blend, compress=True)
+    if args.only_variants:
+        # extra variants of an imported asset: merge them into the existing bake record, keep everything else
+        summary = pc.load_json(paths.report_path)
+        bake = summary.get("bake", {})
+        bake.setdefault("variants", {}).update(per_variant)
+        bake.setdefault("extra_variant_runs", []).append({"variants": list(per_variant), "ray_miss_percent": miss_pct,
+                                                          "warnings": warnings[:20]})
+        pc.update_summary(paths, "bake", bake)
+        print("[pipeline] BAKE_DONE mode=%s variants=%s misses=%s%%" % (mode, ",".join(per_variant), miss_pct))
+        return
 
     stats = {}
     f = orm_res // args.aux_res if orm_res % args.aux_res == 0 else 0

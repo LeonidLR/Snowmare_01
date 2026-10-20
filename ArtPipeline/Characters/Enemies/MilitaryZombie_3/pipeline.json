@@ -3,5 +3,6 @@
   "target_tris": 20000,
   "res": 2048,
   "keep_weights": "head=1.0,bodi=1.0",
-  "texel_weights": "head=1.8,bodi=1.0"
+  "texel_weights": "head=1.8,bodi=1.0",
+  "hidden_exclude": "head|skin"
 }

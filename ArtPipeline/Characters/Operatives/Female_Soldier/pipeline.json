@@ -2,6 +2,7 @@
   "category": "operative",
   "target_tris": 50000,
   "res": 4096,
-  "keep_weights": "trouthers|bodyoutfit|torso|_hand$|boot|helmet_outfit|_head$=100,femele_soldier_helmet|_helmet$=0.9,backpack=0.7,chevron=0.5,glowstick|beacon|flashlight=0.6",
-  "texel_weights": "_head$|helmet|glasses=1.8,torso|bodyoutfit=1.3,trouthers|hand=1.0,boot=0.8,backpack=0.9,chevron=0.6,glowstick|beacon|flashlight=0.6"
+  "keep_weights": "_head$|helmet_outfit=1.3,bodyoutfit|torso|trouthers|_hand$=1.0,boot=0.9,femele_soldier_helmet|_helmet$=1.1,backpack=0.7,chevron=0.5,glowstick|beacon|flashlight=0.8",
+  "texel_weights": "_head$|helmet|glasses=1.8,torso|bodyoutfit=1.3,trouthers|hand=1.0,boot=0.8,backpack=0.9,chevron=0.6,glowstick|beacon|flashlight=0.6",
+  "notes": "Body ~110k of the 122k cleaned triangles: no 100-weights (keep everything) here, every part scales; helmet kept close to the head (a shredded helmet in the first try)."
 }

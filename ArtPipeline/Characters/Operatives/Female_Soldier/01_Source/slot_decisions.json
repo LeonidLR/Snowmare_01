@@ -1,0 +1,303 @@
+{
+  "_doc": "Ground truth: slot -> keep / remove-hair / remove-transparent / remove-hidden / separate-transparent with the reason. Hidden = no ray from the triangle escapes to a viewer in the rest pose, 9 procedural extreme poses and the sampled animation frames (single-sided: back faces do not occlude).",
+  "hair_regex": "hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom",
+  "slots": {
+    "MI_Female_Soldier_Trouthers": {
+      "slot_index": 0,
+      "decision": "keep",
+      "reason": "opaque; 299 of 13939 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 13939,
+      "hidden_triangles_removed": 299
+    },
+    "MI_Female_Soldier_Trouthers_1": {
+      "slot_index": 1,
+      "decision": "keep",
+      "reason": "opaque; 0 of 276 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 276,
+      "hidden_triangles_removed": 0
+    },
+    "MI_Female_Soldier_Trouthers_2": {
+      "slot_index": 2,
+      "decision": "keep",
+      "reason": "opaque; 0 of 276 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 276,
+      "hidden_triangles_removed": 0
+    },
+    "MI_Female_Soldier_Trouthers_3": {
+      "slot_index": 3,
+      "decision": "keep",
+      "reason": "opaque; 57 of 1379 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 1379,
+      "hidden_triangles_removed": 57
+    },
+    "MI_Female_Soldier_Trouthers_4": {
+      "slot_index": 4,
+      "decision": "keep",
+      "reason": "opaque; 0 of 180 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 180,
+      "hidden_triangles_removed": 0
+    },
+    "MI_Female_Soldier_Trouthers_5": {
+      "slot_index": 5,
+      "decision": "keep",
+      "reason": "opaque; 4 of 180 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 180,
+      "hidden_triangles_removed": 4
+    },
+    "MI_Female_Soldier_Trouthers_6": {
+      "slot_index": 6,
+      "decision": "keep",
+      "reason": "opaque; 159 of 2269 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 2269,
+      "hidden_triangles_removed": 159
+    },
+    "M_Female_Soldier_Boots": {
+      "slot_index": 7,
+      "decision": "keep",
+      "reason": "opaque; 1 of 3572 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 3572,
+      "hidden_triangles_removed": 1
+    },
+    "M_Female_Soldier_Bodyoutfit": {
+      "slot_index": 8,
+      "decision": "keep",
+      "reason": "opaque; 1752 of 30784 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 30784,
+      "hidden_triangles_removed": 1752
+    },
+    "MI_Female_Soldeir_Torso": {
+      "slot_index": 9,
+      "decision": "keep",
+      "reason": "opaque; 1164 of 16026 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 16026,
+      "hidden_triangles_removed": 1164
+    },
+    "MI_Female_Soldeir_Torso_10": {
+      "slot_index": 10,
+      "decision": "keep",
+      "reason": "opaque; 101 of 2834 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 2834,
+      "hidden_triangles_removed": 101
+    },
+    "M_Female_Soldier_Backpack": {
+      "slot_index": 11,
+      "decision": "keep",
+      "reason": "opaque; 66 of 8520 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 8520,
+      "hidden_triangles_removed": 66
+    },
+    "M_Female_Soldier_Hand": {
+      "slot_index": 12,
+      "decision": "keep",
+      "reason": "opaque; 39 of 6552 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 6552,
+      "hidden_triangles_removed": 39
+    },
+    "MI_Female_Soldier_Helmet_Outfit": {
+      "slot_index": 13,
+      "decision": "keep",
+      "reason": "opaque; 0 of 0 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "triangles": 0,
+      "hidden_triangles_removed": 0
+    },
+    "M_Female_Soldier_Glasses_Glass": {
+      "slot_index": 14,
+      "decision": "remove-transparent",
+      "reason": "blend mode BLEND_TRANSLUCENT: glass / overlay layer removed, what is behind shows",
+      "blend_mode": "BLEND_TRANSLUCENT",
+      "two_sided": true,
+      "triangles": 0,
+      "hidden_triangles_removed": 0
+    },
+    "MI_Female_Soldier_Helmet_Outfit_15": {
+      "slot_index": 15,
+      "decision": "keep",
+      "reason": "opaque; 180 of 12887 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 12887,
+      "hidden_triangles_removed": 180
+    },
+    "M_Female_Soldier_Beacon_Glass": {
+      "slot_index": 16,
+      "decision": "remove-transparent",
+      "reason": "blend mode BLEND_TRANSLUCENT: glass / overlay layer removed, what is behind shows",
+      "blend_mode": "BLEND_TRANSLUCENT",
+      "two_sided": true,
+      "triangles": 653,
+      "hidden_triangles_removed": 0
+    },
+    "M_Female_Soldier_Helmet_Beacon_Light": {
+      "slot_index": 17,
+      "decision": "keep",
+      "reason": "opaque; 0 of 8 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 8,
+      "hidden_triangles_removed": 0
+    },
+    "M_Female_Soldier_flashlight_bulb": {
+      "slot_index": 18,
+      "decision": "keep",
+      "reason": "opaque; 0 of 186 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 186,
+      "hidden_triangles_removed": 0
+    },
+    "M_Female_Glowstick": {
+      "slot_index": 19,
+      "decision": "remove-transparent",
+      "reason": "blend mode BLEND_TRANSLUCENT: glass / overlay layer removed, what is behind shows",
+      "blend_mode": "BLEND_TRANSLUCENT",
+      "two_sided": true,
+      "triangles": 216,
+      "hidden_triangles_removed": 0
+    },
+    "M_Female_Glowstick_Light": {
+      "slot_index": 20,
+      "decision": "keep",
+      "reason": "opaque; 0 of 64 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 64,
+      "hidden_triangles_removed": 0
+    },
+    "M_Femele_Soldier_Helmet": {
+      "slot_index": 21,
+      "decision": "keep",
+      "reason": "opaque; 339 of 11810 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 11810,
+      "hidden_triangles_removed": 339
+    },
+    "MI_Female_Soldier_Chevron": {
+      "slot_index": 22,
+      "decision": "keep",
+      "reason": "opaque; 1 of 568 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 568,
+      "hidden_triangles_removed": 1
+    },
+    "MI_Female_Soldier_Chevron_23": {
+      "slot_index": 23,
+      "decision": "keep",
+      "reason": "opaque; 32 of 568 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 568,
+      "hidden_triangles_removed": 32
+    },
+    "MI_Female_Soldier_Chevron_24": {
+      "slot_index": 24,
+      "decision": "keep",
+      "reason": "opaque; 47 of 568 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 568,
+      "hidden_triangles_removed": 47
+    },
+    "MI_Female_Soldier_Chevron_25": {
+      "slot_index": 25,
+      "decision": "keep",
+      "reason": "opaque; 34 of 568 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 568,
+      "hidden_triangles_removed": 34
+    },
+    "MI_Female_Soldier_Chevron_26": {
+      "slot_index": 26,
+      "decision": "keep",
+      "reason": "opaque; 0 of 568 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 568,
+      "hidden_triangles_removed": 0
+    },
+    "MI_Female_Soldier_Chevron_27": {
+      "slot_index": 27,
+      "decision": "keep",
+      "reason": "opaque; 0 of 568 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": null,
+      "triangles": 568,
+      "hidden_triangles_removed": 0
+    },
+    "M_Female_Soldier_Head": {
+      "slot_index": 28,
+      "decision": "keep",
+      "reason": "opaque; 9703 of 20438 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 20438,
+      "hidden_triangles_removed": 9703
+    },
+    "M_Female_Soldier_Eyes": {
+      "slot_index": 29,
+      "decision": "keep",
+      "reason": "opaque; 3108 of 3832 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 3832,
+      "hidden_triangles_removed": 3108
+    },
+    "M_Female_Soldier_Eyes_Hair": {
+      "slot_index": 30,
+      "decision": "remove-hair",
+      "reason": "material name matches the hair regex 'hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom'",
+      "blend_mode": "BLEND_MASKED",
+      "two_sided": true,
+      "triangles": 5144,
+      "hidden_triangles_removed": 0
+    },
+    "M_Female_Soldier_Hair": {
+      "slot_index": 31,
+      "decision": "remove-hair",
+      "reason": "material name matches the hair regex 'hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom'",
+      "blend_mode": "BLEND_MASKED",
+      "two_sided": true,
+      "triangles": 1482,
+      "hidden_triangles_removed": 0
+    },
+    "M_Female_Soldier_Head_in_Balaclava": {
+      "slot_index": 32,
+      "decision": "remove-transparent",
+      "reason": "blend mode BLEND_TRANSLUCENT: glass / overlay layer removed, what is behind shows",
+      "blend_mode": "BLEND_TRANSLUCENT",
+      "two_sided": true,
+      "triangles": 3832,
+      "hidden_triangles_removed": 0
+    }
+  }
+}

@@ -1,0 +1,23 @@
+[
+ {
+  "name": "Set1",
+  "slots": {
+   "M_head_set_2": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+   "M_bodi_set_2": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
+  }
+ },
+ {
+  "name": "Set2",
+  "slots": {
+   "M_head_set_2": "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+   "M_bodi_set_2": "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst"
+  }
+ },
+ {
+  "name": "Set3",
+  "slots": {
+   "M_head_set_2": "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+   "M_bodi_set_2": "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst"
+  }
+ }
+]

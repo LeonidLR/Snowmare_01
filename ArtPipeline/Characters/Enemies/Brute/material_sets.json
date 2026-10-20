@@ -1,0 +1,30 @@
+[
+ {
+  "name": "Set2",
+  "slots": {
+   "T_head": "/Game/Mutant_monster_1/material/MI_head_set_2_Inst.MI_head_set_2_Inst",
+   "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst"
+  }
+ },
+ {
+  "name": "Set1",
+  "slots": {
+   "T_head": "/Game/Mutant_monster_1/material/MI_head_set_1_Inst.MI_head_set_1_Inst",
+   "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
+  }
+ },
+ {
+  "name": "Set3",
+  "slots": {
+   "T_head": "/Game/Mutant_monster_1/material/MI_head_set_3_Inst.MI_head_set_3_Inst",
+   "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst"
+  }
+ },
+ {
+  "name": "Set4",
+  "slots": {
+   "T_head": "/Game/Mutant_monster_1/material/MI_head_set_4_Inst.MI_head_set_4_Inst",
+   "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst"
+  }
+ }
+]

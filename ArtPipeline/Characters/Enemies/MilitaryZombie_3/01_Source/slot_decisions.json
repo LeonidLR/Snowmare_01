@@ -5,11 +5,11 @@
     "M_head_set_2": {
       "slot_index": 0,
       "decision": "keep",
-      "reason": "opaque; 2768 of 9751 triangles hidden in every test pose and removed",
+      "reason": "opaque; 0 of 9751 triangles hidden in every test pose and removed",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": true,
       "triangles": 9751,
-      "hidden_triangles_removed": 2768
+      "hidden_triangles_removed": 0
     },
     "M_bodi_set_2": {
       "slot_index": 1,

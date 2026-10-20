@@ -48,6 +48,7 @@
       "base_material": "/Game/Mutant_monster_1/material/M_head_set_2.M_head_set_2",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -82,6 +83,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -138,6 +140,7 @@
       "base_material": "/Game/Mutant_monster_1/material/M_bodi_set_2.M_bodi_set_2",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "static_switch_params": {},
       "graph": {
         "base_color": {
           "node": "Multiply",
@@ -172,6 +175,7 @@
           "output": "",
           "const_a": 0.0,
           "const_b": 1.0,
+          "const_alpha": 0.5,
           "inputs": [
             {
               "node": "ScalarParameter",
@@ -209,9 +213,627 @@
           "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
         }
       }
+    },
+    "/Game/Mutant_monster_1/material/MI_head_set_1_Inst.MI_head_set_1_Inst": {
+      "path": "/Game/Mutant_monster_1/material/MI_head_set_1_Inst.MI_head_set_1_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Mutant_monster_1/texture/set_1/T_head_Normal.T_head_Normal",
+        "/Game/Mutant_monster_1/texture/set_1/T_head_BaseColor.T_head_BaseColor",
+        "/Game/Mutant_monster_1/texture/set_1/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Mutant_monster_1/material/M_head_set_1.M_head_set_1",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Mutant_monster_1/texture/set_1/T_head_BaseColor.T_head_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Mutant_monster_1/texture/set_1/T_head_Normal.T_head_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Mutant_monster_1/texture/set_1/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Mutant_monster_1/texture/set_1/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Mutant_monster_1/texture/set_1/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/Mutant_monster_1/material/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst": {
+      "path": "/Game/Mutant_monster_1/material/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Mutant_monster_1/texture/set_1/T_bodi_Normal.T_bodi_Normal",
+        "/Game/Mutant_monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor",
+        "/Game/Mutant_monster_1/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Mutant_monster_1/material/M_bodi_set_1.M_bodi_set_1",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Mutant_monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Mutant_monster_1/texture/set_1/T_bodi_Normal.T_bodi_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Mutant_monster_1/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Mutant_monster_1/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Mutant_monster_1/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/Mutant_monster_1/material/MI_head_set_3_Inst.MI_head_set_3_Inst": {
+      "path": "/Game/Mutant_monster_1/material/MI_head_set_3_Inst.MI_head_set_3_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Mutant_monster_1/texture/set_3/T_head_Normal.T_head_Normal",
+        "/Game/Mutant_monster_1/texture/set_3/T_head_BaseColor.T_head_BaseColor",
+        "/Game/Mutant_monster_1/texture/set_3/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Mutant_monster_1/material/M_head_set_3.M_head_set_3",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Mutant_monster_1/texture/set_3/T_head_BaseColor.T_head_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Mutant_monster_1/texture/set_3/T_head_Normal.T_head_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Mutant_monster_1/texture/set_3/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Mutant_monster_1/texture/set_3/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Mutant_monster_1/texture/set_3/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/Mutant_monster_1/material/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst": {
+      "path": "/Game/Mutant_monster_1/material/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Mutant_monster_1/texture/set_3/T_bodi_Normal.T_bodi_Normal",
+        "/Game/Mutant_monster_1/texture/set_3/T_bodi_BaseColor.T_bodi_BaseColor",
+        "/Game/Mutant_monster_1/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Mutant_monster_1/material/M_bodi_set_3.M_bodi_set_3",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Mutant_monster_1/texture/set_3/T_bodi_BaseColor.T_bodi_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Mutant_monster_1/texture/set_3/T_bodi_Normal.T_bodi_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Mutant_monster_1/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Mutant_monster_1/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Mutant_monster_1/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/Mutant_monster_1/material/MI_head_set_4_Inst.MI_head_set_4_Inst": {
+      "path": "/Game/Mutant_monster_1/material/MI_head_set_4_Inst.MI_head_set_4_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Mutant_monster_1/texture/set_4/T_head_Normal.T_head_Normal",
+        "/Game/Mutant_monster_1/texture/set_4/T_head_BaseColor.T_head_BaseColor",
+        "/Game/Mutant_monster_1/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Mutant_monster_1/material/M_head_set_4.M_head_set_4",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Mutant_monster_1/texture/set_4/T_head_BaseColor.T_head_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Mutant_monster_1/texture/set_4/T_head_Normal.T_head_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Mutant_monster_1/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Mutant_monster_1/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Mutant_monster_1/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/Mutant_monster_1/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst": {
+      "path": "/Game/Mutant_monster_1/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Mutant_monster_1/texture/set_4/T_bodi_Normal.T_bodi_Normal",
+        "/Game/Mutant_monster_1/texture/set_4/T_bodi_BaseColor.T_bodi_BaseColor",
+        "/Game/Mutant_monster_1/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Mutant_monster_1/material/M_bodi_set_4.M_bodi_set_4",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Mutant_monster_1/texture/set_4/T_bodi_BaseColor.T_bodi_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Mutant_monster_1/texture/set_4/T_bodi_Normal.T_bodi_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Mutant_monster_1/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Mutant_monster_1/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Mutant_monster_1/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
     }
   },
   "textures": {
+    "/Game/Mutant_monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor": {
+      "path": "/Game/Mutant_monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_1/T_bodi_Normal.T_bodi_Normal": {
+      "path": "/Game/Mutant_monster_1/texture/set_1/T_bodi_Normal.T_bodi_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": {
+      "path": "/Game/Mutant_monster_1/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_1/T_head_BaseColor.T_head_BaseColor": {
+      "path": "/Game/Mutant_monster_1/texture/set_1/T_head_BaseColor.T_head_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_1/T_head_Normal.T_head_Normal": {
+      "path": "/Game/Mutant_monster_1/texture/set_1/T_head_Normal.T_head_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_1/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": {
+      "path": "/Game/Mutant_monster_1/texture/set_1/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
     "/Game/Mutant_monster_1/texture/set_2/T_bodi_BaseColor.T_bodi_BaseColor": {
       "path": "/Game/Mutant_monster_1/texture/set_2/T_bodi_BaseColor.T_bodi_BaseColor",
       "class": "Texture2D",
@@ -277,6 +899,138 @@
       "lod_group": "TEXTUREGROUP_WORLD",
       "max_texture_size": 0,
       "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_3/T_bodi_BaseColor.T_bodi_BaseColor": {
+      "path": "/Game/Mutant_monster_1/texture/set_3/T_bodi_BaseColor.T_bodi_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_3/T_bodi_Normal.T_bodi_Normal": {
+      "path": "/Game/Mutant_monster_1/texture/set_3/T_bodi_Normal.T_bodi_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": {
+      "path": "/Game/Mutant_monster_1/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_3/T_head_BaseColor.T_head_BaseColor": {
+      "path": "/Game/Mutant_monster_1/texture/set_3/T_head_BaseColor.T_head_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_3/T_head_Normal.T_head_Normal": {
+      "path": "/Game/Mutant_monster_1/texture/set_3/T_head_Normal.T_head_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_3/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": {
+      "path": "/Game/Mutant_monster_1/texture/set_3/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_4/T_bodi_BaseColor.T_bodi_BaseColor": {
+      "path": "/Game/Mutant_monster_1/texture/set_4/T_bodi_BaseColor.T_bodi_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_4/T_bodi_Normal.T_bodi_Normal": {
+      "path": "/Game/Mutant_monster_1/texture/set_4/T_bodi_Normal.T_bodi_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": {
+      "path": "/Game/Mutant_monster_1/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_4/T_head_BaseColor.T_head_BaseColor": {
+      "path": "/Game/Mutant_monster_1/texture/set_4/T_head_BaseColor.T_head_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_4/T_head_Normal.T_head_Normal": {
+      "path": "/Game/Mutant_monster_1/texture/set_4/T_head_Normal.T_head_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Mutant_monster_1/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": {
+      "path": "/Game/Mutant_monster_1/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
     }
   },
   "morph_targets": [],
@@ -311,28 +1065,70 @@
   "exports": {
     "mesh_fbx": "01_Source/SK_base_mesh_1.fbx",
     "textures": {
+      "/Game/Mutant_monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor": "02_Textures_Source/T_bodi_BaseColor.png",
+      "/Game/Mutant_monster_1/texture/set_1/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
+      "/Game/Mutant_monster_1/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png",
+      "/Game/Mutant_monster_1/texture/set_1/T_head_BaseColor.T_head_BaseColor": "02_Textures_Source/T_head_BaseColor.png",
+      "/Game/Mutant_monster_1/texture/set_1/T_head_Normal.T_head_Normal": "02_Textures_Source/T_head_Normal.png",
+      "/Game/Mutant_monster_1/texture/set_1/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_OcclusionRoughnessMetallic.png",
       "/Game/Mutant_monster_1/texture/set_2/T_bodi_BaseColor.T_bodi_BaseColor": "02_Textures_Source/T_bodi_BaseColor.png",
       "/Game/Mutant_monster_1/texture/set_2/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
       "/Game/Mutant_monster_1/texture/set_2/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png",
       "/Game/Mutant_monster_1/texture/set_2/T_head_BaseColor.T_head_BaseColor": "02_Textures_Source/T_head_BaseColor.png",
       "/Game/Mutant_monster_1/texture/set_2/T_head_Normal.T_head_Normal": "02_Textures_Source/T_head_Normal.png",
-      "/Game/Mutant_monster_1/texture/set_2/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_OcclusionRoughnessMetallic.png"
+      "/Game/Mutant_monster_1/texture/set_2/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_OcclusionRoughnessMetallic.png",
+      "/Game/Mutant_monster_1/texture/set_3/T_bodi_BaseColor.T_bodi_BaseColor": "02_Textures_Source/T_bodi_BaseColor.png",
+      "/Game/Mutant_monster_1/texture/set_3/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
+      "/Game/Mutant_monster_1/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png",
+      "/Game/Mutant_monster_1/texture/set_3/T_head_BaseColor.T_head_BaseColor": "02_Textures_Source/T_head_BaseColor.png",
+      "/Game/Mutant_monster_1/texture/set_3/T_head_Normal.T_head_Normal": "02_Textures_Source/T_head_Normal.png",
+      "/Game/Mutant_monster_1/texture/set_3/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_OcclusionRoughnessMetallic.png",
+      "/Game/Mutant_monster_1/texture/set_4/T_bodi_BaseColor.T_bodi_BaseColor": "02_Textures_Source/T_bodi_BaseColor.png",
+      "/Game/Mutant_monster_1/texture/set_4/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
+      "/Game/Mutant_monster_1/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png",
+      "/Game/Mutant_monster_1/texture/set_4/T_head_BaseColor.T_head_BaseColor": "02_Textures_Source/T_head_BaseColor.png",
+      "/Game/Mutant_monster_1/texture/set_4/T_head_Normal.T_head_Normal": "02_Textures_Source/T_head_Normal.png",
+      "/Game/Mutant_monster_1/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_OcclusionRoughnessMetallic.png"
     },
-    "animations": {
-      "/Game/Animations_KnockDown/Brute/Death_Back.Death_Back": "01_Source/anims/Death_Back.fbx",
-      "/Game/Animations_KnockDown/Brute/Death_Front.Death_Front": "01_Source/anims/Death_Front.fbx",
-      "/Game/Mutant_monster_1/Demo/Mannequin/Animations/anim_ThirdPerson_Jump.anim_ThirdPerson_Jump": "01_Source/anims/anim_ThirdPerson_Jump.fbx",
-      "/Game/Mutant_monster_1/Demo/Mannequin/Animations/anim_ThirdPersonWalk.anim_ThirdPersonWalk": "01_Source/anims/anim_ThirdPersonWalk.fbx",
-      "/Game/Mutant_monster_1/Demo/Mannequin/Animations/anim_ThirdPersonRun.anim_ThirdPersonRun": "01_Source/anims/anim_ThirdPersonRun.fbx",
-      "/Game/Mutant_monster_1/Demo/Mannequin/Animations/anim_ThirdPersonJump_Start.anim_ThirdPersonJump_Start": "01_Source/anims/anim_ThirdPersonJump_Start.fbx",
-      "/Game/Mutant_monster_1/Demo/Mannequin/Animations/anim_ThirdPersonJump_Loop.anim_ThirdPersonJump_Loop": "01_Source/anims/anim_ThirdPersonJump_Loop.fbx",
-      "/Game/Mutant_monster_1/Demo/Mannequin/Animations/anim_ThirdPersonJump_End.anim_ThirdPersonJump_End": "01_Source/anims/anim_ThirdPersonJump_End.fbx"
-    }
+    "animations": {}
   },
   "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
   "lod0_section_material_slots": [
     0,
     1
   ],
-  "variants": []
+  "variants": [
+    {
+      "name": "Set2",
+      "slots": {
+        "T_head": "/Game/Mutant_monster_1/material/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst"
+      },
+      "unknown_slots": []
+    },
+    {
+      "name": "Set1",
+      "slots": {
+        "T_head": "/Game/Mutant_monster_1/material/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
+      },
+      "unknown_slots": []
+    },
+    {
+      "name": "Set3",
+      "slots": {
+        "T_head": "/Game/Mutant_monster_1/material/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst"
+      },
+      "unknown_slots": []
+    },
+    {
+      "name": "Set4",
+      "slots": {
+        "T_head": "/Game/Mutant_monster_1/material/MI_head_set_4_Inst.MI_head_set_4_Inst",
+        "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst"
+      },
+      "unknown_slots": []
+    }
+  ]
 }

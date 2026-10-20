@@ -1,0 +1,317 @@
+{
+  "_doc": "Ground truth: texture -> role. method=material_graph means the role was read from the Unreal material graph (which output / channel the texture feeds); name_guess is the suffix heuristic.",
+  "textures": {
+    "T_armor_set_2_BaseColor": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_armor_set_2_BaseColor.T_armor_set_2_BaseColor",
+      "role": "mixed:base_color+opacity_mask",
+      "channels": {
+        "base_color": "RGB",
+        "opacity_mask": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_armor_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_armor_set_2_Normal": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_armor_set_2_Normal.T_armor_set_2_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_armor_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_armor_set_2_OcclusionRoughnessMetallic": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_armor_set_2_OcclusionRoughnessMetallic.T_armor_set_2_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_armor_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_blouse_set_2_BaseColor": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_blouse_set_2_BaseColor.T_blouse_set_2_BaseColor",
+      "role": "mixed:base_color+opacity_mask",
+      "channels": {
+        "base_color": "RGB",
+        "opacity_mask": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_blouse_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_blouse_set_2_Normal": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_blouse_set_2_Normal.T_blouse_set_2_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_blouse_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_blouse_set_2_OcclusionRoughnessMetallic": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_blouse_set_2_OcclusionRoughnessMetallic.T_blouse_set_2_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_blouse_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_bodi_set_2_BaseColor": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_bodi_set_2_Normal": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_bodi_set_2_OcclusionRoughnessMetallic": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_head_set_2_BaseColor": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_head_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_head_set_2_Normal": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_Normal.T_head_set_2_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_head_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_head_set_2_OcclusionRoughnessMetallic": {
+      "asset": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_head_set_3_Inst"
+      ],
+      "warnings": []
+    },
+    "T_hair_BaseColor": {
+      "asset": "/Game/military_zombie_set2/texture/set_2/T_hair_BaseColor.T_hair_BaseColor",
+      "role": "mixed:base_color+opacity_mask",
+      "channels": {
+        "base_color": "RGB",
+        "opacity_mask": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_hair_set_1_Inst"
+      ],
+      "warnings": []
+    },
+    "T_hair_Normal": {
+      "asset": "/Game/military_zombie_set2/texture/set_2/T_hair_Normal.T_hair_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_hair_set_1_Inst"
+      ],
+      "warnings": []
+    },
+    "T_hair_OcclusionRoughnessMetallic": {
+      "asset": "/Game/military_zombie_set2/texture/set_2/T_hair_OcclusionRoughnessMetallic.T_hair_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_hair_set_1_Inst"
+      ],
+      "warnings": []
+    }
+  }
+}

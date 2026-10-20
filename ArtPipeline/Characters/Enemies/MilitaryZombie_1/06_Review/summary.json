@@ -1,0 +1,739 @@
+{
+  "asset": "SKM_base_mesh_set2_1",
+  "source": {
+    "slots": 5,
+    "triangles": 69770,
+    "vertices": 39940,
+    "triangles_per_slot": {
+      "helmet_set_3": 5738,
+      "M_bodi_kit_set_2": 13406,
+      "M_armor_set_2": 31895,
+      "M_head_set_2": 9751,
+      "M_bodi_set_2": 8980
+    },
+    "bones": 160,
+    "uv_maps": [
+      "DiffuseUV"
+    ],
+    "material_warnings": []
+  },
+  "stage_times": {
+    "source": "2026-10-20 22:29:06",
+    "clean": "2026-10-20 22:29:25",
+    "reduce": "2026-10-20 22:29:42",
+    "atlas": "2026-10-20 22:31:09",
+    "bake": "2026-10-20 22:36:35",
+    "export": "2026-10-20 22:36:47",
+    "review": "2026-10-20 22:38:46",
+    "qa": "2026-10-20 22:38:46"
+  },
+  "clean": {
+    "hair_slots": [],
+    "hair_triangles_removed": 0,
+    "transparent_slots": [],
+    "transparent_triangles_removed": 0,
+    "hidden_triangles_removed": 54,
+    "hidden_triangles_by_slot": {
+      "helmet_set_3": 54
+    },
+    "triangles_after": 69716,
+    "triangles_after_per_slot": {
+      "helmet_set_3": 5684,
+      "M_bodi_kit_set_2": 13406,
+      "M_armor_set_2": 31895,
+      "M_head_set_2": 9751,
+      "M_bodi_set_2": 8980
+    },
+    "vertices_after": 39907,
+    "hidden_method": {
+      "rays_sphere": 80,
+      "samples_per_triangle": 4,
+      "keep_ring": 1,
+      "anim_frames_per_anim": 2,
+      "forward": [
+        -0.0016412450931966305,
+        -0.9999986290931702,
+        0.0
+      ],
+      "poses": [
+        {
+          "pose": "rest",
+          "still_hidden": 368,
+          "seconds": 2.6
+        },
+        {
+          "pose": "crouch_deep",
+          "still_hidden": 313,
+          "seconds": 0.6
+        },
+        {
+          "pose": "kneel_aim",
+          "still_hidden": 288,
+          "seconds": 0.5
+        },
+        {
+          "pose": "arms_up",
+          "still_hidden": 274,
+          "seconds": 0.4
+        },
+        {
+          "pose": "arms_hug",
+          "still_hidden": 273,
+          "seconds": 0.7
+        },
+        {
+          "pose": "twist_bend",
+          "still_hidden": 260,
+          "seconds": 0.5
+        },
+        {
+          "pose": "twist_bend_other",
+          "still_hidden": 255,
+          "seconds": 0.5
+        },
+        {
+          "pose": "prone_look_up",
+          "still_hidden": 242,
+          "seconds": 0.4
+        },
+        {
+          "pose": "lunge_spread",
+          "still_hidden": 241,
+          "seconds": 0.4
+        },
+        {
+          "pose": "sit_reach",
+          "still_hidden": 227,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MF_Idle@34",
+          "still_hidden": 225,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MF_Idle@99",
+          "still_hidden": 223,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MF_Run_Fwd@14",
+          "still_hidden": 221,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MF_Run_Fwd@42",
+          "still_hidden": 219,
+          "seconds": 0.5
+        },
+        {
+          "pose": "anim_MF_Walk_Fwd@15",
+          "still_hidden": 217,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MF_Walk_Fwd@44",
+          "still_hidden": 216,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MM_Idle@58",
+          "still_hidden": 214,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MM_Idle@172",
+          "still_hidden": 214,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MM_Jump@8",
+          "still_hidden": 210,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MM_Jump@21",
+          "still_hidden": 209,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MM_Run_Fwd@16",
+          "still_hidden": 207,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MM_Run_Fwd@44",
+          "still_hidden": 207,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_MM_Walk_Fwd@22",
+          "still_hidden": 206,
+          "seconds": 0.3
+        },
+        {
+          "pose": "anim_MM_Walk_Fwd@63",
+          "still_hidden": 206,
+          "seconds": 0.3
+        },
+        {
+          "pose": "anim_MM_Walk_InPlace@22",
+          "still_hidden": 206,
+          "seconds": 0.3
+        },
+        {
+          "pose": "anim_MM_Walk_InPlace@63",
+          "still_hidden": 206,
+          "seconds": 0.4
+        }
+      ]
+    }
+  },
+  "reduce": {
+    "target_tris": 20000,
+    "triangles_before": 69716,
+    "triangles_after": 19942,
+    "vertices_welded": 36196,
+    "vertices_after": 10865,
+    "per_material": {
+      "helmet_set_3": {
+        "before": 5684,
+        "budget": 1734,
+        "after": 1733,
+        "keep_weight": 0.6,
+        "ratio": 0.305,
+        "passes": [
+          0.305
+        ]
+      },
+      "M_bodi_kit_set_2": {
+        "before": 13406,
+        "budget": 3067,
+        "after": 3067,
+        "keep_weight": 0.45,
+        "ratio": 0.229,
+        "passes": [
+          0.229
+        ]
+      },
+      "M_armor_set_2": {
+        "before": 31895,
+        "budget": 5676,
+        "after": 5675,
+        "keep_weight": 0.35,
+        "ratio": 0.178,
+        "passes": [
+          0.178
+        ]
+      },
+      "M_head_set_2": {
+        "before": 9751,
+        "budget": 4958,
+        "after": 4929,
+        "keep_weight": 1.0,
+        "ratio": 0.505,
+        "passes": [
+          0.508
+        ]
+      },
+      "M_bodi_set_2": {
+        "before": 8980,
+        "budget": 4566,
+        "after": 4538,
+        "keep_weight": 1.0,
+        "ratio": 0.505,
+        "passes": [
+          0.508
+        ]
+      }
+    },
+    "g": 0.5084,
+    "protect_factor": 2.0,
+    "protection": {
+      "uv_seam_edges": 3453,
+      "open_border_edges": 2720,
+      "material_border_edges": 28,
+      "joint_blend_vertices": 11962
+    },
+    "degenerate_faces": 0,
+    "non_manifold_edges": 0,
+    "unweighted_vertices": 0,
+    "sharp_angle": 60.0,
+    "authored_normals_restored_loops": 0,
+    "seconds": 8.6,
+    "decimate_seconds": 2.1
+  },
+  "atlas": {
+    "source_blend": "reduce",
+    "packer": "uvpackmaster4",
+    "packer_note": "UVPackmaster result {'PASS_THROUGH', 'FINISHED'} retcode 0 (UVPackmaster Engine: 4.1.0 PRO)",
+    "pack_seconds": 68.3,
+    "resolution": 2048,
+    "margin_px": 8,
+    "border_px": 2,
+    "rotation_step": 90,
+    "islands": 201,
+    "clusters": 32,
+    "down_facing_clusters": 2,
+    "mirrored_stacked_clusters_rot180": {
+      "helmet_set_3": 4,
+      "M_bodi_kit_set_2": 1,
+      "M_armor_set_2": 1,
+      "M_head_set_2": 1,
+      "M_bodi_set_2": 1
+    },
+    "mirrored_stacked_faces": 19649,
+    "uv_area_sum": 0.7877,
+    "loops_out_of_0_1": 0,
+    "texel_density": {
+      "helmet_set_3": {
+        "atlas_px_per_cm": 9.76,
+        "source_px_per_cm": 33.6,
+        "ratio": 0.29,
+        "weight": 1.3,
+        "source_res": 2048
+      },
+      "M_bodi_kit_set_2": {
+        "atlas_px_per_cm": 6.01,
+        "source_px_per_cm": 14.35,
+        "ratio": 0.419,
+        "weight": 0.8,
+        "source_res": 2048
+      },
+      "M_armor_set_2": {
+        "atlas_px_per_cm": 7.51,
+        "source_px_per_cm": 21.47,
+        "ratio": 0.35,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "M_head_set_2": {
+        "atlas_px_per_cm": 13.52,
+        "source_px_per_cm": 37.74,
+        "ratio": 0.358,
+        "weight": 1.8,
+        "source_res": 2048
+      },
+      "M_bodi_set_2": {
+        "atlas_px_per_cm": 7.51,
+        "source_px_per_cm": 25.39,
+        "ratio": 0.296,
+        "weight": 1.0,
+        "source_res": 4096
+      }
+    },
+    "cross_material_overlap_px_1k": 0,
+    "covered_px_1k": 825333,
+    "cross_material_overlap_percent": 0.0,
+    "layout_image": "06_Review/atlas_layout.png",
+    "layout_legend": {
+      "helmet_set_3": "#f25454",
+      "M_bodi_kit_set_2": "#d2f254",
+      "M_armor_set_2": "#54f293",
+      "M_head_set_2": "#5493f2",
+      "M_bodi_set_2": "#d254f2"
+    },
+    "note": "coverage % is measured on the baked mask in blender_bake.py"
+  },
+  "bake": {
+    "mode": "project",
+    "device": "OPTIX",
+    "samples": 4,
+    "margin_px": 8,
+    "resolution": 2048,
+    "orm_resolution": 1024,
+    "cage_extrusion_cm": 0.6,
+    "max_ray_cm": 3.0,
+    "ray_miss_percent": 0.129,
+    "variants": {
+      "Set1": {
+        "outputs": {
+          "BaseColor": "T_MilitaryZombie_1_Set1_BaseColor.png",
+          "Normal": "T_MilitaryZombie_1_Set1_Normal.png",
+          "ORM": "T_MilitaryZombie_1_Set1_ORM.png",
+          "Sheen": "T_MilitaryZombie_1_Set1_Sheen.png"
+        },
+        "emissive_glow_percent": 0.0,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": true,
+        "two_sided": true
+      },
+      "Set2": {
+        "outputs": {
+          "BaseColor": "T_MilitaryZombie_1_Set2_BaseColor.png",
+          "Normal": "T_MilitaryZombie_1_Set2_Normal.png",
+          "ORM": "T_MilitaryZombie_1_Set2_ORM.png",
+          "Sheen": "T_MilitaryZombie_1_Set2_Sheen.png"
+        },
+        "emissive_glow_percent": 0.0,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": true,
+        "two_sided": true
+      },
+      "Set3": {
+        "outputs": {
+          "BaseColor": "T_MilitaryZombie_1_Set3_BaseColor.png",
+          "Normal": "T_MilitaryZombie_1_Set3_Normal.png",
+          "ORM": "T_MilitaryZombie_1_Set3_ORM.png",
+          "Sheen": "T_MilitaryZombie_1_Set3_Sheen.png"
+        },
+        "emissive_glow_percent": 0.0,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": true,
+        "two_sided": true
+      }
+    },
+    "self_baked_slots": [],
+    "normal_back_facing_clamped_percent": 3.574,
+    "atlas_coverage_percent": 78.71,
+    "seconds": {
+      "coverage": 1.3,
+      "hit": 6.7,
+      "base_color": 14.2,
+      "opacity": 12.7,
+      "normal": 16.1,
+      "ao": 7.4,
+      "roughness": 6.0,
+      "metallic": 6.1,
+      "emissive_probe": 5.6,
+      "sheen": 7.6
+    },
+    "orm_channel_stats": {
+      "ao": {
+        "min": 0.0,
+        "mean": 0.73,
+        "max": 1.0
+      },
+      "roughness": {
+        "min": 0.0,
+        "mean": 0.692,
+        "max": 1.0
+      },
+      "metallic": {
+        "min": 0.0,
+        "mean": 0.037,
+        "max": 1.0
+      }
+    },
+    "sheen_values": [
+      0.0
+    ],
+    "bake_warnings": [],
+    "outputs": {
+      "BaseColor": "04_Textures_Baked/T_MilitaryZombie_1_Set1_BaseColor.png",
+      "Normal": "04_Textures_Baked/T_MilitaryZombie_1_Set1_Normal.png",
+      "ORM": "04_Textures_Baked/T_MilitaryZombie_1_Set1_ORM.png",
+      "Sheen": "04_Textures_Baked/T_MilitaryZombie_1_Set1_Sheen.png"
+    }
+  },
+  "export": {
+    "fbx": "05_Export/SK_MilitaryZombie_1_1slot.fbx",
+    "checks": {
+      "one_mesh": true,
+      "armature_object": "Armature",
+      "material_slots": [
+        "M_Body"
+      ],
+      "uv_maps": [
+        "UV_Atlas"
+      ],
+      "triangles": 19942,
+      "vertices": 10865,
+      "vertex_groups": 79,
+      "shape_keys": 0,
+      "custom_normals": true,
+      "bones_source": 160,
+      "bones_export": 161,
+      "root_bone": true,
+      "bones_missing": [],
+      "bones_extra": [],
+      "parent_mismatch": [],
+      "max_bone_deviation_cm": 0.0001,
+      "max_bone_rotation_deg": 0.0791,
+      "root_added": true,
+      "source_armature_world": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          -6.123232939436859e-17,
+          0.0
+        ],
+        [
+          0.0,
+          6.123232939436859e-17,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "source_armature_identity": true,
+      "leaf_bones": [],
+      "ok": true
+    }
+  },
+  "review": {
+    "pose_sheet": "pose_sheet.png",
+    "pose_sheet_poses": [
+      "crouch_deep",
+      "kneel_aim",
+      "arms_up",
+      "twist_bend",
+      "prone_look_up"
+    ],
+    "views": {
+      "front34": {
+        "rgb_rmse_0_255": 6.53,
+        "mean_delta_e76": 1.72,
+        "p95_delta_e76": 5.17,
+        "silhouette_iou": 0.9924,
+        "pixels_compared": 137058,
+        "image": "compare_front34.png"
+      },
+      "back34": {
+        "rgb_rmse_0_255": 5.66,
+        "mean_delta_e76": 1.54,
+        "p95_delta_e76": 4.3,
+        "silhouette_iou": 0.9929,
+        "pixels_compared": 131441,
+        "image": "compare_back34.png"
+      },
+      "tactical": {
+        "rgb_rmse_0_255": 6.07,
+        "mean_delta_e76": 1.72,
+        "p95_delta_e76": 5.04,
+        "silhouette_iou": 0.9926,
+        "pixels_compared": 105426,
+        "image": "compare_tactical.png"
+      },
+      "face": {
+        "rgb_rmse_0_255": 11.69,
+        "mean_delta_e76": 3.09,
+        "p95_delta_e76": 10.82,
+        "silhouette_iou": 0.9914,
+        "pixels_compared": 427721,
+        "image": "compare_face.png"
+      }
+    },
+    "texture_memory": {
+      "before_mb": 370.7,
+      "after_mb": 10.0,
+      "after_without_optional_mb": 8.7,
+      "before_textures": 15,
+      "before_detail": {
+        "T_armor_set_2_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "mixed:base_color+opacity_mask"
+        },
+        "T_armor_set_2_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_armor_set_2_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_bodi_kit_set_2_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT5",
+          "mb": 5.33,
+          "role": "base_color"
+        },
+        "T_bodi_kit_set_2_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_bodi_kit_set_2_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_bodi_set_2_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "base_color"
+        },
+        "T_bodi_set_2_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_bodi_set_2_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_head_set_2_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "base_color"
+        },
+        "T_head_set_2_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_head_set_2_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_helmet_set_1_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "base_color"
+        },
+        "T_helmet_set_1_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_helmet_set_1_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        }
+      },
+      "after_detail": {
+        "BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67
+        },
+        "Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33
+        },
+        "ORM": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT1 (TC_Masks)",
+          "mb": 0.67
+        },
+        "Sheen": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "G8",
+          "mb": 1.33
+        }
+      },
+      "assumptions": "full mip chain (x4/3); Default -> DXT1 when the PNG alpha is opaque else DXT5; normal maps BC5; streaming / LOD bias not applied"
+    },
+    "render_samples": 64,
+    "resolution": 1024
+  },
+  "qa": {
+    "slots_before": 5,
+    "slots_after": 1,
+    "triangles_before": 69770,
+    "triangles_after": 19942,
+    "triangles_removed_hidden": 54,
+    "triangles_removed_hair": 0,
+    "triangles_removed_check_by_position": 54,
+    "atlas_coverage_percent": 78.71,
+    "texture_memory_before_mb": 370.7,
+    "texture_memory_after_mb": 10.0,
+    "hidden_in_all_poses_before_safety_ring": 206,
+    "bake_warnings": [],
+    "emissive_texel_fraction": null,
+    "cross_material_overlap_percent": 0.0,
+    "export_roundtrip_ok": true,
+    "worst_view_mean_delta_e": 3.09,
+    "min_silhouette_iou": 0.9914,
+    "triangles_per_material_after": {
+      "helmet_set_3": 1733,
+      "M_bodi_kit_set_2": 3067,
+      "M_armor_set_2": 5675,
+      "M_head_set_2": 4929,
+      "M_bodi_set_2": 4538
+    },
+    "ray_miss_percent": 0.129
+  }
+}

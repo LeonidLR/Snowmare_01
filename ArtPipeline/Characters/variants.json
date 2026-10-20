@@ -1,0 +1,793 @@
+{
+  "/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a": {
+    "pack": "/Game/Post_Apo_Survivor",
+    "slots": [
+      "M_Axe",
+      "M_Backpack",
+      "M_Boot_Glove",
+      "M_Carabiners",
+      "M_Flashlight",
+      "M_Mask",
+      "M_Outfit_Hoodie",
+      "M_Outfit_Pants",
+      "M_Radio",
+      "M_Rope_a",
+      "M_Rope_b",
+      "M_Shovel",
+      "M_Small_Bags",
+      "M_Waist_Pack"
+    ],
+    "per_slot_candidates": {
+      "M_Axe": [
+        "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe"
+      ],
+      "M_Backpack": [
+        "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack"
+      ],
+      "M_Boot_Glove": [
+        "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove"
+      ],
+      "M_Carabiners": [
+        "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners"
+      ],
+      "M_Flashlight": [
+        "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight"
+      ],
+      "M_Mask": [
+        "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask"
+      ],
+      "M_Outfit_Hoodie": [
+        "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie.M_Outfit_Hoodie",
+        "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie_Inst_2nd.M_Outfit_Hoodie_Inst_2nd",
+        "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie_Inst_3rd.M_Outfit_Hoodie_Inst_3rd"
+      ],
+      "M_Outfit_Pants": [
+        "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants.M_Outfit_Pants",
+        "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants_Inst_2nd.M_Outfit_Pants_Inst_2nd",
+        "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants_Inst_3rd.M_Outfit_Pants_Inst_3rd"
+      ],
+      "M_Radio": [
+        "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio"
+      ],
+      "M_Rope_a": [
+        "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a"
+      ],
+      "M_Rope_b": [
+        "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b"
+      ],
+      "M_Shovel": [
+        "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel"
+      ],
+      "M_Small_Bags": [
+        "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags"
+      ],
+      "M_Waist_Pack": [
+        "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack"
+      ]
+    },
+    "variants": {
+      "own": {
+        "M_Axe": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe",
+        "M_Backpack": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack",
+        "M_Boot_Glove": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove",
+        "M_Carabiners": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners",
+        "M_Flashlight": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight",
+        "M_Mask": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask",
+        "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie.M_Outfit_Hoodie",
+        "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants.M_Outfit_Pants",
+        "M_Radio": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio",
+        "M_Rope_a": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a",
+        "M_Rope_b": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b",
+        "M_Shovel": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel",
+        "M_Small_Bags": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags",
+        "M_Waist_Pack": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack",
+        "_covered_slots": [
+          "M_Axe",
+          "M_Backpack",
+          "M_Boot_Glove",
+          "M_Carabiners",
+          "M_Flashlight",
+          "M_Mask",
+          "M_Outfit_Hoodie",
+          "M_Outfit_Pants",
+          "M_Radio",
+          "M_Rope_a",
+          "M_Rope_b",
+          "M_Shovel",
+          "M_Small_Bags",
+          "M_Waist_Pack"
+        ]
+      },
+      "2_2": {
+        "M_Axe": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe",
+        "M_Backpack": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack",
+        "M_Boot_Glove": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove",
+        "M_Carabiners": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners",
+        "M_Flashlight": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight",
+        "M_Mask": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask",
+        "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie_Inst_2nd.M_Outfit_Hoodie_Inst_2nd",
+        "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants_Inst_2nd.M_Outfit_Pants_Inst_2nd",
+        "M_Radio": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio",
+        "M_Rope_a": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a",
+        "M_Rope_b": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b",
+        "M_Shovel": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel",
+        "M_Small_Bags": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags",
+        "M_Waist_Pack": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack",
+        "_covered_slots": [
+          "M_Outfit_Hoodie",
+          "M_Outfit_Pants"
+        ]
+      },
+      "3_3": {
+        "M_Axe": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe",
+        "M_Backpack": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack",
+        "M_Boot_Glove": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove",
+        "M_Carabiners": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners",
+        "M_Flashlight": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight",
+        "M_Mask": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask",
+        "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie_Inst_3rd.M_Outfit_Hoodie_Inst_3rd",
+        "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants_Inst_3rd.M_Outfit_Pants_Inst_3rd",
+        "M_Radio": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio",
+        "M_Rope_a": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a",
+        "M_Rope_b": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b",
+        "M_Shovel": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel",
+        "M_Small_Bags": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags",
+        "M_Waist_Pack": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack",
+        "_covered_slots": [
+          "M_Outfit_Hoodie",
+          "M_Outfit_Pants"
+        ]
+      }
+    }
+  },
+  "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Mesh/SKM_FrozenPMC_Fighter": {
+    "pack": "/Game/Characters, /Game/Cyberpunk_Explorer_A",
+    "slots": [
+      "M_Jacket_Body_A",
+      "M_Arms_A",
+      "M_Boot_A",
+      "M_Pants_A",
+      "M_Glove_A",
+      "M_Helmet_A"
+    ],
+    "per_slot_candidates": {
+      "M_Jacket_Body_A": [
+        "/Game/Cyberpunk_Explorer_A/Materials/MA_Jacket_Body_A_1st.MA_Jacket_Body_A_1st",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_2nd_Inst.M_Jacket_Body_A_2nd_Inst",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_3rd_Inst.M_Jacket_Body_A_3rd_Inst",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_4th_Inst.M_Jacket_Body_A_4th_Inst",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_5th_Inst.M_Jacket_Body_A_5th_Inst"
+      ],
+      "M_Arms_A": [
+        "/Game/Cyberpunk_Explorer_A/Materials/MA_Arms_A_1st.MA_Arms_A_1st",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_2nd_Inst.M_Arms_A_2nd_Inst",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_3rd_Inst.M_Arms_A_3rd_Inst",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_4th_Inst.M_Arms_A_4th_Inst",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_5th_Inst.M_Arms_A_5th_Inst"
+      ],
+      "M_Boot_A": [
+        "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Boot_A_2nd_Inst.M_Boot_A_2nd_Inst",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Boot_A_3rd_Inst.M_Boot_A_3rd_Inst"
+      ],
+      "M_Pants_A": [
+        "/Game/Cyberpunk_Explorer_A/Materials/MA_Pants_A_1st.MA_Pants_A_1st",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_3rd_Inst.M_Pants_A_3rd_Inst"
+      ],
+      "M_Glove_A": [
+        "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Glove_A_2nd_Inst.M_Glove_A_2nd_Inst"
+      ],
+      "M_Helmet_A": [
+        "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st",
+        "/Game/Cyberpunk_Explorer_A/Materials/M_Helmet_A_2nd_Inst.M_Helmet_A_2nd_Inst"
+      ]
+    },
+    "variants": {
+      "1_1": {
+        "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Jacket_Body_A_1st.MA_Jacket_Body_A_1st",
+        "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Arms_A_1st.MA_Arms_A_1st",
+        "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+        "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Pants_A_1st.MA_Pants_A_1st",
+        "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+        "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st",
+        "_covered_slots": [
+          "M_Arms_A",
+          "M_Jacket_Body_A",
+          "M_Pants_A"
+        ]
+      },
+      "2_2": {
+        "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_2nd_Inst.M_Jacket_Body_A_2nd_Inst",
+        "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_2nd_Inst.M_Arms_A_2nd_Inst",
+        "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Boot_A_2nd_Inst.M_Boot_A_2nd_Inst",
+        "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+        "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Glove_A_2nd_Inst.M_Glove_A_2nd_Inst",
+        "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Helmet_A_2nd_Inst.M_Helmet_A_2nd_Inst",
+        "_covered_slots": [
+          "M_Boot_A",
+          "M_Glove_A",
+          "M_Helmet_A",
+          "M_Jacket_Body_A"
+        ]
+      },
+      "3_3": {
+        "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_3rd_Inst.M_Jacket_Body_A_3rd_Inst",
+        "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_3rd_Inst.M_Arms_A_3rd_Inst",
+        "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Boot_A_3rd_Inst.M_Boot_A_3rd_Inst",
+        "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_3rd_Inst.M_Pants_A_3rd_Inst",
+        "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+        "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st",
+        "_covered_slots": [
+          "M_Arms_A",
+          "M_Boot_A",
+          "M_Jacket_Body_A",
+          "M_Pants_A"
+        ]
+      },
+      "5_5": {
+        "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_5th_Inst.M_Jacket_Body_A_5th_Inst",
+        "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_5th_Inst.M_Arms_A_5th_Inst",
+        "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+        "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+        "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+        "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st",
+        "_covered_slots": [
+          "M_Arms_A",
+          "M_Jacket_Body_A"
+        ]
+      },
+      "own": {
+        "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_4th_Inst.M_Jacket_Body_A_4th_Inst",
+        "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_2nd_Inst.M_Arms_A_2nd_Inst",
+        "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+        "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+        "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+        "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st",
+        "_covered_slots": [
+          "M_Arms_A",
+          "M_Boot_A",
+          "M_Glove_A",
+          "M_Helmet_A",
+          "M_Jacket_Body_A",
+          "M_Pants_A"
+        ]
+      },
+      "4_4": {
+        "M_Jacket_Body_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_4th_Inst.M_Jacket_Body_A_4th_Inst",
+        "M_Arms_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_4th_Inst.M_Arms_A_4th_Inst",
+        "M_Boot_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+        "M_Pants_A": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+        "M_Glove_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+        "M_Helmet_A": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st",
+        "_covered_slots": [
+          "M_Arms_A"
+        ]
+      }
+    }
+  },
+  "/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1": {
+    "pack": "/Game/military_zombie_set2",
+    "slots": [
+      "helmet_set_3",
+      "M_bodi_kit_set_2",
+      "M_armor_set_2",
+      "M_head_set_2",
+      "M_bodi_set_2"
+    ],
+    "per_slot_candidates": {
+      "helmet_set_3": [
+        "/Game/military_zombie_set2/material/set_1/MI_helmet_set_1_Inst.MI_helmet_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_helmet_set_1.M_helmet_set_1"
+      ],
+      "M_bodi_kit_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_body_kit_set_1_Inst.MI_body_kit_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_body_kit_set_1.M_body_kit_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_body_kit_set_2_Inst.MI_body_kit_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_body_kit_set_2.M_body_kit_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_body_kit_set_3_Inst.MI_body_kit_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_body_kit_set_3.M_body_kit_set_3"
+      ],
+      "M_armor_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_armor_set_1_Inst.MI_armor_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_armor_set_1.M_armor_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_armor_set_2_Inst.MI_armor_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_armor_set_2.M_armor_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_armor_set_3_Inst.MI_armor_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_armor_set_3.M_armor_set_3"
+      ],
+      "M_head_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_head_set_1.M_head_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_head_set_2.M_head_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_head_set_3.M_head_set_3"
+      ],
+      "M_bodi_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_bodi_set_1.M_bodi_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_bodi_set_2.M_bodi_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_bodi_set_3.M_bodi_set_3"
+      ]
+    },
+    "variants": {
+      "own": {
+        "helmet_set_3": "/Game/military_zombie_set2/material/set_1/MI_helmet_set_1_Inst.MI_helmet_set_1_Inst",
+        "M_bodi_kit_set_2": "/Game/military_zombie_set2/material/set_1/MI_body_kit_set_1_Inst.MI_body_kit_set_1_Inst",
+        "M_armor_set_2": "/Game/military_zombie_set2/material/set_1/MI_armor_set_1_Inst.MI_armor_set_1_Inst",
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "_covered_slots": [
+          "M_armor_set_2",
+          "M_bodi_kit_set_2",
+          "M_bodi_set_2",
+          "M_head_set_2",
+          "helmet_set_3"
+        ]
+      },
+      "2_2_2": {
+        "helmet_set_3": "/Game/military_zombie_set2/material/set_1/MI_helmet_set_1_Inst.MI_helmet_set_1_Inst",
+        "M_bodi_kit_set_2": "/Game/military_zombie_set2/material/set_2/MI_body_kit_set_2_Inst.MI_body_kit_set_2_Inst",
+        "M_armor_set_2": "/Game/military_zombie_set2/material/set_2/MI_armor_set_2_Inst.MI_armor_set_2_Inst",
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "_covered_slots": [
+          "M_armor_set_2",
+          "M_bodi_kit_set_2",
+          "M_bodi_set_2",
+          "M_head_set_2"
+        ]
+      },
+      "3_3_3": {
+        "helmet_set_3": "/Game/military_zombie_set2/material/set_1/MI_helmet_set_1_Inst.MI_helmet_set_1_Inst",
+        "M_bodi_kit_set_2": "/Game/military_zombie_set2/material/set_3/MI_body_kit_set_3_Inst.MI_body_kit_set_3_Inst",
+        "M_armor_set_2": "/Game/military_zombie_set2/material/set_3/MI_armor_set_3_Inst.MI_armor_set_3_Inst",
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "_covered_slots": [
+          "M_armor_set_2",
+          "M_bodi_kit_set_2",
+          "M_bodi_set_2",
+          "M_head_set_2"
+        ]
+      }
+    }
+  },
+  "/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_2": {
+    "pack": "/Game/military_zombie_set2",
+    "slots": [
+      "M_armor_set_2",
+      "M_blouse_set_2",
+      "M_head_set_2",
+      "M_bodi_set_2",
+      "pasted__hair"
+    ],
+    "per_slot_candidates": {
+      "M_armor_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_armor_set_1_Inst.MI_armor_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_armor_set_1.M_armor_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_armor_set_2_Inst.MI_armor_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_armor_set_2.M_armor_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_armor_set_3_Inst.MI_armor_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_armor_set_3.M_armor_set_3"
+      ],
+      "M_blouse_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_blouse_set_1_Inst.MI_blouse_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_blouse_set_1.M_blouse_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_blouse_set_2_Inst.MI_blouse_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_blouse_set_2.M_blouse_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_blouse_set_3_Inst.MI_blouse_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_blouse_set_3.M_blouse_set_3"
+      ],
+      "M_head_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_head_set_1.M_head_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_head_set_2.M_head_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_head_set_3.M_head_set_3"
+      ],
+      "M_bodi_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_bodi_set_1.M_bodi_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_bodi_set_2.M_bodi_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_bodi_set_3.M_bodi_set_3"
+      ],
+      "pasted__hair": [
+        "/Game/military_zombie_set2/material/MI_hair_set_1_Inst.MI_hair_set_1_Inst",
+        "/Game/military_zombie_set2/material/M_hair_set_1.M_hair_set_1"
+      ]
+    },
+    "variants": {
+      "2_2_2": {
+        "M_armor_set_2": "/Game/military_zombie_set2/material/set_2/MI_armor_set_2_Inst.MI_armor_set_2_Inst",
+        "M_blouse_set_2": "/Game/military_zombie_set2/material/set_2/MI_blouse_set_2_Inst.MI_blouse_set_2_Inst",
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "pasted__hair": "/Game/military_zombie_set2/material/MI_hair_set_1_Inst.MI_hair_set_1_Inst",
+        "_covered_slots": [
+          "M_armor_set_2",
+          "M_blouse_set_2",
+          "M_bodi_set_2",
+          "M_head_set_2"
+        ]
+      },
+      "3_3_3": {
+        "M_armor_set_2": "/Game/military_zombie_set2/material/set_3/MI_armor_set_3_Inst.MI_armor_set_3_Inst",
+        "M_blouse_set_2": "/Game/military_zombie_set2/material/set_3/MI_blouse_set_3_Inst.MI_blouse_set_3_Inst",
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "pasted__hair": "/Game/military_zombie_set2/material/MI_hair_set_1_Inst.MI_hair_set_1_Inst",
+        "_covered_slots": [
+          "M_armor_set_2",
+          "M_blouse_set_2",
+          "M_bodi_set_2",
+          "M_head_set_2"
+        ]
+      },
+      "own": {
+        "M_armor_set_2": "/Game/military_zombie_set2/material/set_1/MI_armor_set_1_Inst.MI_armor_set_1_Inst",
+        "M_blouse_set_2": "/Game/military_zombie_set2/material/set_1/MI_blouse_set_1_Inst.MI_blouse_set_1_Inst",
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "pasted__hair": "/Game/military_zombie_set2/material/MI_hair_set_1_Inst.MI_hair_set_1_Inst",
+        "_covered_slots": [
+          "M_armor_set_2",
+          "M_blouse_set_2",
+          "M_bodi_set_2",
+          "M_head_set_2",
+          "pasted__hair"
+        ]
+      }
+    }
+  },
+  "/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_3": {
+    "pack": "/Game/military_zombie_set2",
+    "slots": [
+      "M_head_set_2",
+      "M_bodi_set_2"
+    ],
+    "per_slot_candidates": {
+      "M_head_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_head_set_1.M_head_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_head_set_2.M_head_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_head_set_3.M_head_set_3"
+      ],
+      "M_bodi_set_2": [
+        "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "/Game/military_zombie_set2/material/set_1/M_bodi_set_1.M_bodi_set_1",
+        "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "/Game/military_zombie_set2/material/set_2/M_bodi_set_2.M_bodi_set_2",
+        "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "/Game/military_zombie_set2/material/set_3/M_bodi_set_3.M_bodi_set_3"
+      ]
+    },
+    "variants": {
+      "2_2_2": {
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "_covered_slots": [
+          "M_bodi_set_2",
+          "M_head_set_2"
+        ]
+      },
+      "3_3_3": {
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "_covered_slots": [
+          "M_bodi_set_2",
+          "M_head_set_2"
+        ]
+      },
+      "own": {
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "_covered_slots": [
+          "M_bodi_set_2",
+          "M_head_set_2"
+        ]
+      }
+    }
+  },
+  "/Game/Mutant_monster_1/Meshes/base_mesh/SK_base_mesh_1": {
+    "pack": "/Game/Mutant_monster_1",
+    "slots": [
+      "T_head",
+      "T_bodi"
+    ],
+    "per_slot_candidates": {
+      "T_head": [
+        "/Game/Mutant_monster_1/material/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "/Game/Mutant_monster_1/material/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "/Game/Mutant_monster_1/material/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "/Game/Mutant_monster_1/material/MI_head_set_4_Inst.MI_head_set_4_Inst",
+        "/Game/Mutant_monster_1/material/M_head_set_1.M_head_set_1",
+        "/Game/Mutant_monster_1/material/M_head_set_2.M_head_set_2",
+        "/Game/Mutant_monster_1/material/M_head_set_3.M_head_set_3",
+        "/Game/Mutant_monster_1/material/M_head_set_4.M_head_set_4"
+      ],
+      "T_bodi": [
+        "/Game/Mutant_monster_1/material/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "/Game/Mutant_monster_1/material/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "/Game/Mutant_monster_1/material/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "/Game/Mutant_monster_1/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+        "/Game/Mutant_monster_1/material/M_bodi_set_1.M_bodi_set_1",
+        "/Game/Mutant_monster_1/material/M_bodi_set_2.M_bodi_set_2",
+        "/Game/Mutant_monster_1/material/M_bodi_set_3.M_bodi_set_3",
+        "/Game/Mutant_monster_1/material/M_bodi_set_4.M_bodi_set_4"
+      ]
+    },
+    "variants": {
+      "1_1": {
+        "T_head": "/Game/Mutant_monster_1/material/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "3_3": {
+        "T_head": "/Game/Mutant_monster_1/material/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "4_4": {
+        "T_head": "/Game/Mutant_monster_1/material/MI_head_set_4_Inst.MI_head_set_4_Inst",
+        "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "own": {
+        "T_head": "/Game/Mutant_monster_1/material/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "T_bodi": "/Game/Mutant_monster_1/material/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      }
+    }
+  },
+  "/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh": {
+    "pack": "/Game/Biochemical_Monster_1",
+    "slots": [
+      "T_head",
+      "T_bodi"
+    ],
+    "per_slot_candidates": {
+      "T_head": [
+        "/Game/Biochemical_Monster_1/materials/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "/Game/Biochemical_Monster_1/materials/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "/Game/Biochemical_Monster_1/materials/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "/Game/Biochemical_Monster_1/materials/MI_head_set_4_Inst.MI_head_set_4_Inst",
+        "/Game/Biochemical_Monster_1/materials/MI_head_set_5_Inst.MI_head_set_5_Inst",
+        "/Game/Biochemical_Monster_1/materials/M_head_set_1.M_head_set_1",
+        "/Game/Biochemical_Monster_1/materials/M_head_set_2.M_head_set_2",
+        "/Game/Biochemical_Monster_1/materials/M_head_set_3.M_head_set_3",
+        "/Game/Biochemical_Monster_1/materials/M_head_set_4.M_head_set_4",
+        "/Game/Biochemical_Monster_1/materials/M_head_set_5.M_head_set_5"
+      ],
+      "T_bodi": [
+        "/Game/Biochemical_Monster_1/materials/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "/Game/Biochemical_Monster_1/materials/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "/Game/Biochemical_Monster_1/materials/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "/Game/Biochemical_Monster_1/materials/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+        "/Game/Biochemical_Monster_1/materials/MI_bodi_set_5_Inst.MI_bodi_set_5_Inst",
+        "/Game/Biochemical_Monster_1/materials/M_bodi_set_1.M_bodi_set_1",
+        "/Game/Biochemical_Monster_1/materials/M_bodi_set_2.M_bodi_set_2",
+        "/Game/Biochemical_Monster_1/materials/M_bodi_set_3.M_bodi_set_3",
+        "/Game/Biochemical_Monster_1/materials/M_bodi_set_4.M_bodi_set_4",
+        "/Game/Biochemical_Monster_1/materials/M_bodi_set_5.M_bodi_set_5"
+      ]
+    },
+    "variants": {
+      "2_2": {
+        "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "3_3": {
+        "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "4_4": {
+        "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_4_Inst.MI_head_set_4_Inst",
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "5_5": {
+        "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_5_Inst.MI_head_set_5_Inst",
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_5_Inst.MI_bodi_set_5_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "own": {
+        "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      }
+    }
+  },
+  "/Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh": {
+    "pack": "/Game/Biochemical_Monster_2",
+    "slots": [
+      "T_bodi",
+      "T_head"
+    ],
+    "per_slot_candidates": {
+      "T_bodi": [
+        "/Game/Biochemical_Monster_2/Materials/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "/Game/Biochemical_Monster_2/Materials/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "/Game/Biochemical_Monster_2/Materials/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "/Game/Biochemical_Monster_2/Materials/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+        "/Game/Biochemical_Monster_2/Materials/M_bodi_set_1.M_bodi_set_1",
+        "/Game/Biochemical_Monster_2/Materials/M_bodi_set_2.M_bodi_set_2",
+        "/Game/Biochemical_Monster_2/Materials/M_bodi_set_3.M_bodi_set_3",
+        "/Game/Biochemical_Monster_2/Materials/M_bodi_set_4.M_bodi_set_4"
+      ],
+      "T_head": [
+        "/Game/Biochemical_Monster_2/Materials/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "/Game/Biochemical_Monster_2/Materials/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "/Game/Biochemical_Monster_2/Materials/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "/Game/Biochemical_Monster_2/Materials/MI_head_set_4_Inst.MI_head_set_4_Inst",
+        "/Game/Biochemical_Monster_2/Materials/M_head_set_1.M_head_set_1",
+        "/Game/Biochemical_Monster_2/Materials/M_head_set_2.M_head_set_2",
+        "/Game/Biochemical_Monster_2/Materials/M_head_set_3.M_head_set_3",
+        "/Game/Biochemical_Monster_2/Materials/M_head_set_4.M_head_set_4"
+      ]
+    },
+    "variants": {
+      "1_1": {
+        "T_bodi": "/Game/Biochemical_Monster_2/Materials/M_bodi_set_1.M_bodi_set_1",
+        "T_head": "/Game/Biochemical_Monster_2/Materials/M_head_set_1.M_head_set_1",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "2_2": {
+        "T_bodi": "/Game/Biochemical_Monster_2/Materials/M_bodi_set_2.M_bodi_set_2",
+        "T_head": "/Game/Biochemical_Monster_2/Materials/M_head_set_2.M_head_set_2",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "4_4": {
+        "T_bodi": "/Game/Biochemical_Monster_2/Materials/M_bodi_set_4.M_bodi_set_4",
+        "T_head": "/Game/Biochemical_Monster_2/Materials/M_head_set_4.M_head_set_4",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      },
+      "own": {
+        "T_bodi": "/Game/Biochemical_Monster_2/Materials/M_bodi_set_3.M_bodi_set_3",
+        "T_head": "/Game/Biochemical_Monster_2/Materials/M_head_set_3.M_head_set_3",
+        "_covered_slots": [
+          "T_bodi",
+          "T_head"
+        ]
+      }
+    }
+  },
+  "/Game/Combat_Dog/Mesh/SK_Combat_Dog": {
+    "pack": "/Game/Combat_Dog",
+    "slots": [
+      "M_Combat_Dog_skin_1"
+    ],
+    "per_slot_candidates": {
+      "M_Combat_Dog_skin_1": [
+        "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_1.M_Combat_Dog_skin_1",
+        "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_2.M_Combat_Dog_skin_2",
+        "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_3.M_Combat_Dog_skin_3",
+        "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_4.M_Combat_Dog_skin_4",
+        "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_5.M_Combat_Dog_skin_5"
+      ]
+    },
+    "variants": {
+      "2_2": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_2.M_Combat_Dog_skin_2",
+        "_covered_slots": [
+          "M_Combat_Dog_skin_1"
+        ]
+      },
+      "3_3": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_3.M_Combat_Dog_skin_3",
+        "_covered_slots": [
+          "M_Combat_Dog_skin_1"
+        ]
+      },
+      "4_4": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_4.M_Combat_Dog_skin_4",
+        "_covered_slots": [
+          "M_Combat_Dog_skin_1"
+        ]
+      },
+      "5_5": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_5.M_Combat_Dog_skin_5",
+        "_covered_slots": [
+          "M_Combat_Dog_skin_1"
+        ]
+      },
+      "own": {
+        "M_Combat_Dog_skin_1": "/Game/Combat_Dog/Materials/Skins/M_Combat_Dog_skin_1.M_Combat_Dog_skin_1",
+        "_covered_slots": [
+          "M_Combat_Dog_skin_1"
+        ]
+      }
+    }
+  },
+  "/Game/mutant_monster_2/base_mesh/SK_base_mesh": {
+    "pack": "/Game/mutant_monster_2",
+    "slots": [
+      "T_bodi"
+    ],
+    "per_slot_candidates": {
+      "T_bodi": [
+        "/Game/mutant_monster_2/material/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "/Game/mutant_monster_2/material/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "/Game/mutant_monster_2/material/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "/Game/mutant_monster_2/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+        "/Game/mutant_monster_2/material/M_bodi_set_1.M_bodi_set_1",
+        "/Game/mutant_monster_2/material/M_bodi_set_2.M_bodi_set_2",
+        "/Game/mutant_monster_2/material/M_bodi_set_3.M_bodi_set_3",
+        "/Game/mutant_monster_2/material/M_bodi_set_4.M_bodi_set_4"
+      ]
+    },
+    "variants": {
+      "1_1": {
+        "T_bodi": "/Game/mutant_monster_2/material/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "_covered_slots": [
+          "T_bodi"
+        ]
+      },
+      "2_2": {
+        "T_bodi": "/Game/mutant_monster_2/material/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "_covered_slots": [
+          "T_bodi"
+        ]
+      },
+      "3_3": {
+        "T_bodi": "/Game/mutant_monster_2/material/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "_covered_slots": [
+          "T_bodi"
+        ]
+      },
+      "own": {
+        "T_bodi": "/Game/mutant_monster_2/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+        "_covered_slots": [
+          "T_bodi"
+        ]
+      }
+    }
+  }
+}

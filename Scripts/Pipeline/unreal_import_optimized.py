@@ -34,6 +34,9 @@ def parse():
     p.add_argument("--master-name", default="M_CharacterMaster")
     p.add_argument("--lods", type=int, default=3, help="LOD count generated in Unreal (LOD0 = the imported mesh)")
     p.add_argument("--allow-existing", action="store_true", help="re-import over assets already in --dest")
+    p.add_argument("--variants-only", default="",
+                   help="comma separated look variants to ADD to an imported asset: their textures + MI only; the mesh, "
+                        "its slot and every existing asset stay untouched")
     return p.parse_args(argv)
 
 
@@ -179,7 +182,13 @@ def main():
     # do no harm: refuse to run over existing assets unless asked to
     existing = [str(a) for a in unreal.EditorAssetLibrary.list_assets(args.dest, recursive=True)]         if unreal.EditorAssetLibrary.does_directory_exist(args.dest) else []
     master_path = "%s/%s" % (args.master_dir, args.master_name)
-    if existing and not args.allow_existing:
+    only = [v.strip() for v in args.variants_only.split(",") if v.strip()]
+    if only:
+        clash = [e for e in existing if any(("_%s_" % v) in e.split("/")[-1] or e.split(".")[-1].endswith("_" + v)
+                                            for v in only)]
+        if clash:
+            raise RuntimeError("variant assets already exist: %s" % clash)
+    elif existing and not args.allow_existing:
         raise RuntimeError("assets already in %s: %s (use --allow-existing to re-import)" % (args.dest, existing))
     unreal.log("PIPELINE_IMPORT existing in dest: %s; master exists: %s" % (
         existing, unreal.EditorAssetLibrary.does_asset_exist(master_path)))
@@ -191,6 +200,10 @@ def main():
     # Look variants (texture sets, e.g. the Military Zombie): one texture set + one MI per variant on the same mesh;
     # the mesh's slot gets the first variant's MI.
     variant_names = [v["name"] for v in inv.get("variants") or []] or [None]
+    if only:
+        variant_names = [v for v in variant_names if v in only]
+        if len(variant_names) != len(only):
+            raise RuntimeError("variants %s not in the inventory" % only)
     mel = unreal.MaterialEditingLibrary
     master = None
     masters, instances, all_textures = [], [], []
@@ -233,6 +246,16 @@ def main():
             mel.update_material_instance(mi)
         instances.append(mi)
     mi = instances[0]
+    if only:
+        saved = []
+        changed = [m for m in {m.get_path_name(): m for m in masters}.values() if m.get_path_name() in CHANGED_MASTERS]
+        for a in changed + instances + all_textures:
+            p = a.get_path_name().split(".")[0]
+            if p.startswith(args.dest) or p.startswith(args.master_dir):
+                unreal.EditorAssetLibrary.save_asset(p, only_if_is_dirty=False)
+                saved.append(p)
+        unreal.log("PIPELINE_IMPORT_DONE %s" % json.dumps({"saved": saved, "variants": variant_names, "mesh": "untouched"}))
+        return
 
     ui = unreal.FbxImportUI()
     ui.set_editor_property("import_mesh", True)
