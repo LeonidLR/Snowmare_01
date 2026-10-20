@@ -150,12 +150,26 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 	}
 	// Low cover (user request 2026-10-07): the pack's fire stance is a sideways lean round an edge (crouched _L +73 cm,
 	// _R -40 cm); over a low cover he fires over the top where he is, so the clips' sideways root step is cancelled.
-	if (bInCover && CurrentCoverHeight == ECoverHeight::LowCover && !bShimmying && GetMesh())
+	// EXCEPT in the corner peek (game designer 2026-10-20: "at the low wall's end he looks fully hidden behind the barricade
+	// although the peek sight sees round the corner"): there the root step IS the lean out past the end, so the cancel eases out
+	// (CoverLeanCancelAlpha 1 -> 0 over CoverLeanBlendSeconds) while the peek is on and back in when it is over.
+	const float CancelTarget = IsPeekingRoundCorner() ? 0.f : 1.f;
+	CoverLeanCancelAlpha = FMath::FInterpConstantTo(CoverLeanCancelAlpha, CancelTarget, DeltaTime, 1.f / FMath::Max(CoverLeanBlendSeconds, 0.05f));
+	if (bInCover && CurrentCoverHeight == ECoverHeight::LowCover && !bShimmying && GetMesh() && CoverLeanCancelAlpha > 0.f)
 	{
 		const FVector RootComponentSpace = GetMesh()->GetSocketTransform(TEXT("root"), RTS_Component).GetLocation();
 		const FVector RootWorldOffset = GetMesh()->GetComponentTransform().TransformVector(RootComponentSpace);
 		const FVector Tangent = CoverSlot.RightTangent();
-		Wanted -= Tangent * FVector::DotProduct(RootWorldOffset, Tangent);
+		Wanted -= Tangent * FVector::DotProduct(RootWorldOffset, Tangent) * CoverLeanCancelAlpha;
+	}
+	// The corner peek leans a little further out than the clip's own step-out (CornerLeanExtraPack*Cm: the _R clips' head is only 14 cm past the
+	// edge): an eased share of it on the mesh while the peek is on, tracked with the other offsets and gone when it is over.
+	const bool bLeansOut = IsPeekingRoundCorner();
+	CornerLeanExtraAlpha = FMath::FInterpConstantTo(CornerLeanExtraAlpha, bLeansOut ? 1.f : 0.f, DeltaTime, 1.f / FMath::Max(CoverLeanBlendSeconds, 0.05f));
+	if (bInCover && CornerLeanExtraAlpha > 0.f)
+	{
+		const float Extra = CoverFacingRules::ClipIndex(CoverFacing) == 0 ? CornerLeanExtraPackLCm : CornerLeanExtraPackRCm;
+		Wanted += CoverFacingRules::AlongWallDirection(CoverSlot, CoverFacing) * Extra * CornerLeanExtraAlpha;
 	}
 	// The body's yaw on entry: (1 - enter clip weight) of the turn the actor made at once is drawn back on the mesh.
 	float WantedYaw = 0.f;
@@ -271,6 +285,8 @@ void AOperativeCharacter::ResetBodyOffsets()
 	bBodyYawFree = false;
 	CoverWallPush = 0.f;
 	CoverWallPushAppliedLocal = FVector::ZeroVector;
+	CoverLeanCancelAlpha = 1.f;
+	CornerLeanExtraAlpha = 0.f;
 	EnforceMeshBaseOffset();
 }
 

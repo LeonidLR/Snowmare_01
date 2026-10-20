@@ -656,13 +656,28 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone", meta = (ClampMin = "0"))
 	float VisionConeRangeCm = 1400.f;
 
-	/** Half angle of the cone, degrees (Godot vision_cone_angle 70 = +-35). Operatives fire all round; this is their watch sector. */
+	/**
+	 * Half angle of the cone, degrees (Godot vision_cone_angle 70 = +-35). Since 2026-10-20 the squad's sight has a real field of view
+	 * (UTacticalSightSubsystem::GetFovDeg: 140 standing / crouched, 110 prone) and the drawn cone uses it; this value is only the
+	 * cone of the old 360 degree sight (Codex.Sight.Fov 0, or no tactical sight running).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone", meta = (ClampMin = "1", ClampMax = "180"))
 	float VisionConeHalfAngleDeg = 35.f;
 
 	/** Range the cone shows now, cm. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Vision Cone")
 	float GetVisionConeRange() const;
+
+	/** Half angle the cone shows now: half the stance's field of view while the FOV rule runs, else VisionConeHalfAngleDeg. */
+	float GetVisionConeHalfAngle() const;
+
+	/**
+	 * Where his own eyes look (planar unit vector), what UTacticalSightSubsystem::CanOperativeSee and his drawn cone centre on (2026-10-20):
+	 * out of cover his body's facing; in cover he looks ALONG the wall to the side he faces (CoverFacing; the clips' look-around pose) and, in
+	 * the fire-ready / corner aim, over the cover the way the corner stance aims (CoverFacingRules::CornerAimDirection). The peek cone
+	 * (GetPeekSight) stays separate.
+	 */
+	FVector GetSightFacing() const;
 
 	/** Godot _is_any_enemy_spotted: a combat / priority target, or a living enemy inside the cone with a clear line. */
 	bool IsEnemySpottedInCone() const;
@@ -1308,6 +1323,24 @@ public:
 	float CoverEnterDecelSeconds = 0.4f;
 
 	/**
+	 * Low cover corner peek (2026-10-20): the cancelled sideways root step of the crouched fire stance is let through over this long when the
+	 * peek starts (he visibly leans out past the wall's end) and cancelled again when it is over, s.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
+	float CoverLeanBlendSeconds = 0.25f;
+
+	/**
+	 * Corner peek (2026-10-20): the mesh leans this much further out past the wall's end than the clip's own step-out, per pack clip side, cm.
+	 * Measured on the head bone: the _L clips (his right corner) put the head 25 cm past the edge, the _R ones (his left corner) only 14 cm -
+	 * his head sits right over the pelvis - so _R gets +11. A tracked, eased mesh offset (CoverEntryAppliedOffset), gone when the peek is over;
+	 * the stand-off is NOT shortened instead: hugging the wall 17 cm from its end lets his eyes see round it (PeekSightSmoke).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerLeanExtraPackLCm = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerLeanExtraPackRCm = 11.f;
+
+	/**
 	 * Wall clearance (user report 2026-10-11: the body / rifle sank into the wall - during a cover entry the old run pose,
 	 * held on the turned mesh, blends with the enter clip and swings a hand through the wall): while in cover the closest
 	 * skin bone to the wall plane is kept this far out; the mesh is pushed out along the wall normal by what is missing,
@@ -1829,6 +1862,13 @@ private:
 	 * a teleport / a new wall normal while the push was on left up to ~1.2 m of it on the mesh for good (the body beside its capsule).
 	 */
 	FVector CoverWallPushAppliedLocal = FVector::ZeroVector;
+	/**
+	 * Low cover: share of the fire stance's sideways root step that is cancelled on the mesh (1 = over the top, where he stands; 0 = the corner
+	 * peek, where the step is the lean out past the wall's end - 2026-10-20). Eased by UpdateCoverEntryBlend over CoverLeanBlendSeconds.
+	 */
+	float CoverLeanCancelAlpha = 1.f;
+	/** The corner peek's extra lean share (0..1, CornerLeanExtraPack*Cm), eased by UpdateCoverEntryBlend. */
+	float CornerLeanExtraAlpha = 0.f;
 	FVector CoverWallPushDir = FVector::ForwardVector;
 	/** Skin bones (no IK targets / virtual bones) of the mesh asset the list was built for. */
 	TArray<int32> CoverClearanceBones;

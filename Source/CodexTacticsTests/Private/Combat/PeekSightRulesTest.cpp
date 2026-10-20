@@ -91,6 +91,14 @@ bool FPeekSightLeanPointTest::RunTest(const FString& Parameters)
 	// The corner shot's muzzle uses the same point (no drift between the shot and the sight).
 	TestTrue(TEXT("same as the corner muzzle offset"), Right.Equals(CoverRules::CornerMuzzle(High, ECoverFacing::Right, StandEye, 70.f), 0.01f));
 
+	// 2026-10-20: the eye also sits CornerLeanDepthCm out in front of the wall's face line (where the clip's head is), along its normal.
+	const FPeekSightConfig DepthConfig;
+	const FVector RightEye = PeekSightRules::CornerLeanEyePoint(DepthConfig, Right, High.WallNormal);
+	TestEqual(TEXT("data: the leaned-out head is 35 cm in front of the capsule"), DepthConfig.CornerLeanDepthCm, 35.f);
+	TestTrue(TEXT("the corner-lean eye: the lean point moved 35 cm along the wall normal, nothing else"),
+		RightEye.Equals(Right + High.WallNormal.GetSafeNormal2D() * 35.f, 0.01f) && FMath::IsNearlyEqual(RightEye.Z, Right.Z, 0.01f));
+	TestTrue(TEXT("... still 20 cm past the edge along the wall"), FMath::IsNearlyEqual(static_cast<float>(FVector::DotProduct(RightEye - Right, Right - StandEye)), 0.f, 0.5f));
+
 	// Sight lines: an enemy round the right corner, 4 m behind the wall, 1.5 m past its end (X 615, Y -350, profile 150).
 	const FVector Enemy(615.f, -350.f, 150.f);
 	TestTrue(TEXT("hugging (eyes at the capsule): the wall hides the enemy round the corner"), PeekSightTestSegmentHitsWall(StandEye, Enemy, 250.f));

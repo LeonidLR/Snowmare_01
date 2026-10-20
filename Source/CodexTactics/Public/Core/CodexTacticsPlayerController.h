@@ -305,6 +305,8 @@ private:
 	void InventoryKey();
 	/** O: shows / hides the enemies' vision cones (UVisionConeComponent::SetPlayerEnemyCones; user decision 2026-10-13). */
 	void VisionConesKey();
+	/** Shift + O: shows / hides the squad's own vision cones (UVisionConeComponent::SetPlayerSquadCones; user approval 2026-10-20). */
+	void SquadVisionConesKey();
 	/**
 	 * Rev 5g (user request 2026-10-14): M inside a building - the fixed interior camera <-> the normal top-down view
 	 * (UInteriorExitSubsystem::ToggleInteriorView; command Camera.InteriorView, never locked).

@@ -223,6 +223,14 @@ public:
 	static bool IsPlayerEnemyConesOn();
 	static void SetPlayerEnemyCones(bool bOn);
 
+	/**
+	 * The player's SQUAD-cone toggle (Shift+O, user approval 2026-10-20; separate from O = the enemies'): console Codex.VisionCones.Squad. On, every
+	 * living operative's cone is drawn (his sight: the stance's field of view, the peek cone while peeking); off, each operative's own
+	 * bShowVisionCone. Combines like the enemies': bShowVisionCone || toggle, the debug CVar Codex.Debug.VisionCones 0 / 1 overrides both. Session setting.
+	 */
+	static bool IsPlayerSquadConesOn();
+	static void SetPlayerSquadCones(bool bOn);
+
 	static const FVisionConeBuildStats& GetBuildStats();
 	static void ResetBuildStats();
 

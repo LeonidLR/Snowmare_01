@@ -510,8 +510,10 @@ bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) c
 	const float EyeCm = SightRules::EyeHeight(Stance);
 	if (Pose == EPeekSightPose::CornerLean)
 	{
-		// The eyes leaned out past the corner edge as far as the corner shot's muzzle (CornerFireOriginFor), the aim of the corner stance.
-		OutEye = CoverRules::CornerLeanPoint(CoverSlot, CoverFacing, Feet + FVector(0.f, 0.f, EyeCm), CoverRules::GetConfig().CornerPeekOffsetCm);
+		// The eyes leaned out past the corner edge as far as the corner shot's muzzle (CornerFireOriginFor), the aim of the corner stance;
+		// 2026-10-20: and out in front of the wall's face line where the clip's head is (CornerLeanDepthCm, measured on the head bone).
+		OutEye = PeekSightRules::CornerLeanEyePoint(PeekSightConfig,
+			CoverRules::CornerLeanPoint(CoverSlot, CoverFacing, Feet + FVector(0.f, 0.f, EyeCm), CoverRules::GetConfig().CornerPeekOffsetCm), CoverSlot.WallNormal);
 		OutDirection = PeekSightRules::TwistedDirection(CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), GetAppliedAimYaw());
 		return true;
 	}

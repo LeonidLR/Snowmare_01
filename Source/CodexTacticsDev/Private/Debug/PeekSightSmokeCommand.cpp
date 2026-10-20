@@ -264,7 +264,11 @@ namespace PeekSightSmoke
 			Check(State, !Op->bInCover && Op->GetPeekSightPose() == EPeekSightPose::None, FString::Printf(TEXT("standing free at the wall's end %s"),
 				*Frame(State, Op->GetActorLocation())));
 			Check(State, PlaceWalkerAndLook(State, Sight, 800.f, 800.f), TEXT("standing at the END of the wall: an enemy in the open past the corner (F 800, R 800) is seen"));
-			Check(State, PlaceWalkerAndLook(State, Sight, 540.f, 1300.f), TEXT("... and one along the wall line beyond the corner (F 540, R 1300)"));
+			// 2026-10-20: his sight is a 140 deg field of view round his facing (along F here): the enemy along the wall line is 90 deg off,
+			// so he looks along the wall first (as a man at the wall's end does).
+			Op->SetActorRotation(State.R.Rotation());
+			Check(State, PlaceWalkerAndLook(State, Sight, 540.f, 1300.f), TEXT("... and, looking along the wall, one along the wall line beyond the corner (F 540, R 1300)"));
+			Op->SetActorRotation(State.F.Rotation());
 			Check(State, !PlaceWalkerAndLook(State, Sight, 1015.f, 350.f), TEXT("... one 4 m behind the wall, 1.5 m past its end, is hidden by the wall"));
 			Check(State, TakeCoverAt(World, Op, State, 570.f, 150.f, 90.f), TEXT("he takes cover at the high wall near its +R end"));
 			Next(State, 2);

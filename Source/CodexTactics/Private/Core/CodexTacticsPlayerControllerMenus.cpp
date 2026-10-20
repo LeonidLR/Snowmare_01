@@ -178,6 +178,26 @@ void ACodexTacticsPlayerController::VisionConesKey()
 	}
 }
 
+void ACodexTacticsPlayerController::SquadVisionConesKey()
+{
+	// Locked with O (the tutorial teaches both on the A4 cones card), reported as its own command.
+	if (RefuseIfLocked(PlayerCommands::ToggleVisionCones))
+	{
+		return;
+	}
+	const bool bOn = !UVisionConeComponent::IsPlayerSquadConesOn();
+	UVisionConeComponent::SetPlayerSquadCones(bOn);
+	ControllerCommands::Report(this, PlayerCommands::ToggleSquadVisionCones);
+	GameplayEvents::Raise(this, GameplayEvents::SquadVisionConesToggled);
+	GameplayEvents::Raise(this, FName(*(GameplayEvents::SquadVisionConesToggled.ToString() + (bOn ? TEXT(".On") : TEXT(".Off")))));
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), bOn
+			? LOCTEXT("SquadVisionConesOn", "Squad vision cones ON: what your operatives can see is drawn on the ground.")
+			: LOCTEXT("SquadVisionConesOff", "Squad vision cones OFF."));
+	}
+}
+
 void ACodexTacticsPlayerController::DialogueSkip()
 {
 	ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(GetHUD());

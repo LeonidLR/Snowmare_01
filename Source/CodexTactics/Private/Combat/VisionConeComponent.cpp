@@ -46,6 +46,8 @@ namespace VisionConeConsole
 		TEXT("Vision cones on the ground (operatives and enemies): 0 all off, 1 all on, -1 each character's bShowVisionCone (default)."));
 	static TAutoConsoleVariable<int32> CVarPlayerEnemyCones(TEXT("Codex.VisionCones.Enemies"), 0,
 		TEXT("The player's enemy vision-cone toggle (O / pause menu): 1 every living enemy's cone is drawn, 0 each enemy's own setting (default)."));
+	static TAutoConsoleVariable<int32> CVarPlayerSquadCones(TEXT("Codex.VisionCones.Squad"), 0,
+		TEXT("The player's squad vision-cone toggle (Shift+O): 1 every living operative's cone is drawn, 0 each operative's own setting (default)."));
 	static TAutoConsoleVariable<int32> CVarMaxRebuildsPerFrame(TEXT("Codex.VisionCones.MaxRebuildsPerFrame"), 6,
 		TEXT("Occluded vision cones: most cones re-traced in one frame (others wait a frame; a cone waiting 3 refresh periods goes anyway)."));
 
@@ -238,6 +240,16 @@ bool UVisionConeComponent::IsPlayerEnemyConesOn()
 void UVisionConeComponent::SetPlayerEnemyCones(bool bOn)
 {
 	VisionConeConsole::CVarPlayerEnemyCones->Set(bOn ? 1 : 0, ECVF_SetByCode);
+}
+
+bool UVisionConeComponent::IsPlayerSquadConesOn()
+{
+	return VisionConeConsole::CVarPlayerSquadCones.GetValueOnGameThread() != 0;
+}
+
+void UVisionConeComponent::SetPlayerSquadCones(bool bOn)
+{
+	VisionConeConsole::CVarPlayerSquadCones->Set(bOn ? 1 : 0, ECVF_SetByCode);
 }
 
 const FVisionConeBuildStats& UVisionConeComponent::GetBuildStats()

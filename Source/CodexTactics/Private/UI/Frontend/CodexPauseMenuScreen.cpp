@@ -84,12 +84,19 @@ namespace
 		{ TEXT("SkipTutorialButton"), TEXT("SkipTutorial") },
 		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial") },
 		{ TEXT("VisionConesButton"), TEXT("VisionCones") },
+		{ TEXT("SquadVisionConesButton"), TEXT("SquadVisionCones") },
 	};
 
 	FText VisionConesLabel()
 	{
 		return UVisionConeComponent::IsPlayerEnemyConesOn() ? NSLOCTEXT("CodexPauseMenu", "VisionConesOn", "VISION CONES: ON")
 			: NSLOCTEXT("CodexPauseMenu", "VisionConesOff", "VISION CONES: OFF");
+	}
+
+	FText SquadVisionConesLabel()
+	{
+		return UVisionConeComponent::IsPlayerSquadConesOn() ? NSLOCTEXT("CodexPauseMenu", "SquadVisionConesOn", "SQUAD VISION CONES: ON")
+			: NSLOCTEXT("CodexPauseMenu", "SquadVisionConesOff", "SQUAD VISION CONES: OFF");
 	}
 }
 
@@ -118,12 +125,14 @@ void UCodexPauseMenuScreen::EnsureExtraEntries()
 		const FText Label = FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("Controls", "CONTROLS")
 			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialOn", "TUTORIAL: ON")
 			: FName(Extra.EntryId) == TEXT("SkipTutorial") ? LOCTEXT("SkipTutorial", "SKIP TUTORIAL")
-			: FName(Extra.EntryId) == TEXT("VisionCones") ? VisionConesLabel() : LOCTEXT("ResetTutorial", "RESET TUTORIAL");
+			: FName(Extra.EntryId) == TEXT("VisionCones") ? VisionConesLabel()
+			: FName(Extra.EntryId) == TEXT("SquadVisionCones") ? SquadVisionConesLabel() : LOCTEXT("ResetTutorial", "RESET TUTORIAL");
 		UCodexMenuButton* Button = MakeEntryButton(*WidgetTree, Extra.WidgetName, Extra.EntryId, Label, FText::GetEmpty());
 		Button->SetDescriptionText(FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).")
 			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).")
 			: FName(Extra.EntryId) == TEXT("SkipTutorial") ? LOCTEXT("SkipTutorialDesc", "Skip the whole tutorial for this mission: all controls unlock.")
 			: FName(Extra.EntryId) == TEXT("VisionCones") ? LOCTEXT("VisionConesDesc", "Draw what the enemies can see on the ground (also the O key).")
+			: FName(Extra.EntryId) == TEXT("SquadVisionCones") ? LOCTEXT("SquadVisionConesDesc", "Draw what your operatives can see on the ground (also Shift+O).")
 			: LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again."));
 		UPanelSlot* PanelSlot = Parent->InsertChildAt(++Index, Button);
 		if (UVerticalBoxSlot* BoxSlot = Cast<UVerticalBoxSlot>(PanelSlot))
@@ -155,6 +164,10 @@ void UCodexPauseMenuScreen::RefreshTutorialEntries()
 	if (UCodexMenuButton* Cones = FindEntryButton(TEXT("VisionCones")))
 	{
 		Cones->SetButtonText(VisionConesLabel());
+	}
+	if (UCodexMenuButton* SquadCones = FindEntryButton(TEXT("SquadVisionCones")))
+	{
+		SquadCones->SetButtonText(SquadVisionConesLabel());
 	}
 }
 
@@ -220,6 +233,12 @@ void UCodexPauseMenuScreen::OnEntryActivated(FName EntryId)
 	{
 		// User decision 2026-10-13 (Commandos style): the player's enemy vision-cone toggle, also on the O key.
 		UVisionConeComponent::SetPlayerEnemyCones(!UVisionConeComponent::IsPlayerEnemyConesOn());
+		RefreshTutorialEntries();
+	}
+	else if (EntryId == TEXT("SquadVisionCones"))
+	{
+		// User approval 2026-10-20: the squad's own cones (what the operatives see), also on Shift+O.
+		UVisionConeComponent::SetPlayerSquadCones(!UVisionConeComponent::IsPlayerSquadConesOn());
 		RefreshTutorialEntries();
 	}
 	else if (EntryId == TEXT("Tutorial"))
@@ -314,6 +333,7 @@ void UCodexPauseMenuScreen::BuildDefaultTree(UWidgetTree& Tree) const
 		{ TEXT("SkipTutorialButton"), TEXT("SkipTutorial"), LOCTEXT("SkipTutorial", "SKIP TUTORIAL"), LOCTEXT("SkipTutorialDesc", "Skip the whole tutorial for this mission: all controls unlock.") },
 		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial"), LOCTEXT("ResetTutorial", "RESET TUTORIAL"), LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again.") },
 		{ TEXT("VisionConesButton"), TEXT("VisionCones"), LOCTEXT("VisionConesOff", "VISION CONES: OFF"), LOCTEXT("VisionConesDesc", "Draw what the enemies can see on the ground (also the O key).") },
+		{ TEXT("SquadVisionConesButton"), TEXT("SquadVisionCones"), LOCTEXT("SquadVisionConesOff", "SQUAD VISION CONES: OFF"), LOCTEXT("SquadVisionConesDesc", "Draw what your operatives can see on the ground (also Shift+O).") },
 		{ TEXT("QuitToMenuButton"), TEXT("QuitToMenu"), LOCTEXT("QuitToMenu", "QUIT TO MAIN MENU"), LOCTEXT("QuitToMenuDesc", "Leave the mission for the main menu.") },
 		{ TEXT("QuitGameButton"), TEXT("QuitGame"), LOCTEXT("QuitGame", "QUIT GAME"), LOCTEXT("QuitGameDesc", "Quit to the desktop.") },
 	};

@@ -219,6 +219,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	// Demo 01 (2026-10-13): I = the inventory drawer (a tutorial lock target), O = the enemies' vision cones (Commandos style).
 	InputComponent->BindKey(EKeys::I, IE_Pressed, this, &ACodexTacticsPlayerController::InventoryKey);
 	InputComponent->BindKey(EKeys::O, IE_Pressed, this, &ACodexTacticsPlayerController::VisionConesKey);
+	// Shift + O (2026-10-20): the operatives' own cones (what the squad sees); plain O stays the enemies'.
+	InputComponent->BindKey(FInputChord(EKeys::O, true, false, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::SquadVisionConesKey);
 	// Rev 5g: M = interior camera <-> outside view inside a building (a free key; F1 row Camera.InteriorView).
 	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ACodexTacticsPlayerController::InteriorViewKey);
 	// Minimap (2026-10-18): F2 = the top-right panel MAP <-> MESSAGES, F3 = the full-screen map in any mode (Tab outside

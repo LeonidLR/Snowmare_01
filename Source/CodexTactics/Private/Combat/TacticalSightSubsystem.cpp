@@ -26,6 +26,14 @@ namespace TacticalSight
 	static TAutoConsoleVariable<int32> CVarSightExploration(TEXT("Codex.Sight.Exploration"), 1,
 		TEXT("Symmetric sight while exploring (2026-10-19): 1 an enemy no operative sees from his stance's eye height is hidden / not targetable in exploration too; 0 everything is shown outside the fight (the old rule)"));
 
+	static TAutoConsoleVariable<int32> CVarFov(TEXT("Codex.Sight.Fov"), 1,
+		TEXT("Operative field of view (2026-10-20): 1 an operative's own eyes see only inside a planar FOV round his facing (Codex.Sight.Fov*Deg per stance; 2 m all-round touch reveal, the peek cone separate); 0 the old 360 degree sight"));
+	static TAutoConsoleVariable<int32> CVarFovFight(TEXT("Codex.Sight.FovFight"), 1,
+		TEXT("The field of view also applies in the real-time / paused wave fight (1, default); 0 only while exploring (the fight keeps the 360 degree sight)"));
+	static TAutoConsoleVariable<float> CVarFovStanding(TEXT("Codex.Sight.FovStandDeg"), 140.f, TEXT("Total field of view of a standing operative, degrees"));
+	static TAutoConsoleVariable<float> CVarFovCrouching(TEXT("Codex.Sight.FovCrouchDeg"), 140.f, TEXT("Total field of view of a crouching operative, degrees"));
+	static TAutoConsoleVariable<float> CVarFovProne(TEXT("Codex.Sight.FovProneDeg"), 110.f, TEXT("Total field of view of a prone operative, degrees"));
+
 	FVector Feet(const AActor& Actor)
 	{
 		const ACharacter* Character = Cast<ACharacter>(&Actor);
@@ -60,6 +68,26 @@ bool UTacticalSightSubsystem::IsActive() const
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	return Flow && TacticalSight::CVarSight.GetValueOnGameThread() != 0 && Flow->GetPhase() == ECodexGamePhase::WaveCombat
 		&& Flow->GetCombatMode() != ECodexCombatMode::TurnBased;
+}
+
+SightRules::FSightFovConfig UTacticalSightSubsystem::GetFovConfig()
+{
+	SightRules::FSightFovConfig Config;
+	Config.StandingDeg = TacticalSight::CVarFovStanding.GetValueOnGameThread();
+	Config.CrouchingDeg = TacticalSight::CVarFovCrouching.GetValueOnGameThread();
+	Config.ProneDeg = TacticalSight::CVarFovProne.GetValueOnGameThread();
+	return Config;
+}
+
+bool UTacticalSightSubsystem::IsFovRuleActive() const
+{
+	return IsSquadSightActive() && TacticalSight::CVarFov.GetValueOnGameThread() != 0
+		&& (TacticalSight::CVarFovFight.GetValueOnGameThread() != 0 || !IsActive());
+}
+
+float UTacticalSightSubsystem::GetFovDeg(EOperativeStance Stance) const
+{
+	return IsFovRuleActive() ? SightRules::FieldOfViewDeg(GetFovConfig(), Stance) : 360.f;
 }
 
 bool UTacticalSightSubsystem::IsSquadSightActive() const
@@ -162,8 +190,10 @@ bool UTacticalSightSubsystem::HasClearSight(const FVector& From, const FVector& 
 bool UTacticalSightSubsystem::CanOperativeSee(const AOperativeCharacter& Operative, const FVector& TargetPoint) const
 {
 	// His own eyes (stance height over the capsule): what his position allows - hugging a wall, that wall hides what lies behind it.
+	// 2026-10-20: ... and only inside his field of view round his facing (stance FOV; the 2 m touch reveal is the caller's).
 	const FVector Eye = EyePoint(Operative);
-	if (FVector::Dist(Eye, TargetPoint) <= MaxSightCm && HasClearSight(Eye, TargetPoint))
+	if (FVector::Dist(Eye, TargetPoint) <= MaxSightCm && SightRules::IsInFieldOfView(Eye, Operative.GetSightFacing(), TargetPoint, GetFovDeg(Operative.GetStance()))
+		&& HasClearSight(Eye, TargetPoint))
 	{
 		return true;
 	}

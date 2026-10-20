@@ -134,3 +134,40 @@ bool FSightEyeHeightWallTest::RunTest(const FString&)
 	TestEqual(TEXT("one fade time for the world and the minimap"), UMinimapSubsystem::EnemyFadeSeconds, LastKnownFadeSeconds);
 	return true;
 }
+
+// Field of view (game designer 2026-10-20: "the other two crawl away in the opposite direction, yet the enemies are fully visible").
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightFieldOfViewTest, "CodexTactics.Combat.Sight.FieldOfView",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightFieldOfViewTest::RunTest(const FString& Parameters)
+{
+	using namespace SightRules;
+	const FSightFovConfig Config;
+	TestEqual(TEXT("data: standing 140 deg"), FieldOfViewDeg(Config, EOperativeStance::Standing), 140.f);
+	TestEqual(TEXT("data: crouched 140 deg"), FieldOfViewDeg(Config, EOperativeStance::Crouching), 140.f);
+	TestEqual(TEXT("data: prone 110 deg"), FieldOfViewDeg(Config, EOperativeStance::Prone), 110.f);
+
+	const FVector Eye(0.f, 0.f, 160.f);
+	const FVector Facing(1.f, 0.f, 0.f);
+	auto At = [](float YawDeg, float DistanceCm) { return FRotator(0.f, YawDeg, 0.f).Vector() * DistanceCm + FVector(0.f, 0.f, 150.f); };
+	// Standing / crouched: +-70 deg.
+	TestTrue(TEXT("straight ahead"), IsInFieldOfView(Eye, Facing, At(0.f, 2000.f), FieldOfViewDeg(Config, EOperativeStance::Standing)));
+	TestTrue(TEXT("standing: 69 deg off still seen"), IsInFieldOfView(Eye, Facing, At(69.f, 2000.f), 140.f));
+	TestTrue(TEXT("standing: -69 deg off still seen"), IsInFieldOfView(Eye, Facing, At(-69.f, 2000.f), 140.f));
+	TestFalse(TEXT("standing: 72 deg off is outside"), IsInFieldOfView(Eye, Facing, At(72.f, 2000.f), 140.f));
+	TestFalse(TEXT("standing: beside him (90 deg) is outside"), IsInFieldOfView(Eye, Facing, At(90.f, 2000.f), 140.f));
+	TestFalse(TEXT("standing: directly behind him (the screenshot: enemies 20 m behind the squad's backs)"), IsInFieldOfView(Eye, Facing, At(180.f, 2000.f), 140.f));
+	// Prone: +-55 deg.
+	TestTrue(TEXT("prone: 54 deg off seen"), IsInFieldOfView(Eye, Facing, At(54.f, 2000.f), FieldOfViewDeg(Config, EOperativeStance::Prone)));
+	TestFalse(TEXT("prone: 60 deg off is outside (standing would see it)"), IsInFieldOfView(Eye, Facing, At(60.f, 2000.f), FieldOfViewDeg(Config, EOperativeStance::Prone)));
+	TestTrue(TEXT("... the same 60 deg standing"), IsInFieldOfView(Eye, Facing, At(60.f, 2000.f), FieldOfViewDeg(Config, EOperativeStance::Standing)));
+	// The angle is planar: height does not matter; a point right above / below him and a zero facing count as inside; 360 sees all round.
+	TestTrue(TEXT("planar: a target high above the eye at the same angle"), IsInFieldOfView(Eye, Facing, FVector(2000.f, 0.f, 900.f), 140.f));
+	TestTrue(TEXT("straight above: inside"), IsInFieldOfView(Eye, Facing, FVector(0.f, 0.f, 900.f), 140.f));
+	TestTrue(TEXT("no facing: inside"), IsInFieldOfView(Eye, FVector::ZeroVector, At(180.f, 500.f), 140.f));
+	TestTrue(TEXT("360: all round"), IsInFieldOfView(Eye, Facing, At(180.f, 500.f), 360.f));
+	// The facing is any direction, not just +X.
+	TestTrue(TEXT("facing +Y: a target at +Y"), IsInFieldOfView(Eye, FVector(0.f, 1.f, 0.f), FVector(0.f, 1500.f, 150.f), 140.f));
+	TestFalse(TEXT("facing +Y: a target at -Y"), IsInFieldOfView(Eye, FVector(0.f, 1.f, 0.f), FVector(0.f, -1500.f, 150.f), 140.f));
+	return true;
+}
