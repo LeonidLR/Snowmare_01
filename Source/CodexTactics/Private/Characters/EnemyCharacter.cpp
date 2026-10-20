@@ -88,6 +88,13 @@ void AEnemyCharacter::BeginPlay()
 	InitPatrol();
 	// User request 2026-10-11: placed in the map without a route -> guards its post until it perceives the squad.
 	TryStartGuardPost();
+	// Game designer 2026-10-20 (Military Zombie): per-instance look; a placed one may wake up with its entrance clip (wave /
+	// horde spawns get it from UWaveSubsystem::SpawnEnemy).
+	ApplyLookVariants();
+	if (bPlacedInLevel && bPlayEntranceWhenPlaced)
+	{
+		PlaySpawnEntrance();
+	}
 }
 
 void AEnemyCharacter::Tick(float DeltaTime)

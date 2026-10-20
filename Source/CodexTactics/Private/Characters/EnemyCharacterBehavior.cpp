@@ -73,6 +73,11 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	{
 		AttackTimer -= DeltaTime;
 	}
+	// Game designer 2026-10-20: it stands for its alert roar / spawn entrance (EnemyCharacterPerformance.cpp).
+	if (TickPerformanceLock(DeltaTime))
+	{
+		return;
+	}
 	// Sprint 11: a patroller / escort walks its route until alerted (then the normal combat AI below takes over).
 	if (bPatrolActive)
 	{

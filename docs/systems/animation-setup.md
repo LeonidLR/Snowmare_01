@@ -4,7 +4,7 @@
 > Clips are wired by idempotent scripts in `Scripts/Editor/setup_*animation.py`; the sections below list per feature what C++ does and what the user adds in the ABP.
 >
 > Key files:
-> - `Characters/OperativeAnimInstance`, `EnemyAnimInstance`, `Scripts/Editor/setup_operative_*animation.py`, `setup_enemy_animation.py`, `UOperativeAnimGraphLibrary`
+> - `Characters/OperativeAnimInstance`, `EnemyAnimInstance`, `Scripts/Editor/setup_operative_*animation.py`, `setup_enemy_animation.py`, `create_frozen_pmc_fighter.py`, `create_military_zombie.py`, `UOperativeAnimGraphLibrary`
 > - Smokes `AimOffsetSmoke`, `GrenadeAnimSmoke`, `SniperSmoke`, `WarmIdleSmoke`, `DeathCamSmoke`; weather idles / warming rules: [survival-cold-heat](survival-cold-heat.md)
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
@@ -326,3 +326,57 @@ human set (e.g. the Manny / RifleAnims clips) would be one ABP class-default cha
 (jacket 4th, arms 2nd, pants 2nd, boots / gloves / helmet 1st); other `M_*_Inst` variants go into the BP's Override Materials. (3) Fixing the pack mesh
 (Skeletal Mesh editor -> Skeleton Editing: delete `SKM_Cyberpunk_Explorer_A`, or re-import without the scene root) would let a body share SK_Mannequin
 directly; then re-run the batch with the pack mesh as the target and point the BP at it.
+
+
+## Military Zombie: the Frostbitten's ABP logic with the pack's own clips (game designer 2026-10-20)
+
+**Inspection** (read-only, logged by `Scripts/Editor/create_military_zombie.py` into `Saved/Logs/create_military_zombie.txt`):
+
+| | Finding |
+|---|---|
+| Skeleton | `/Game/military_zombie_set2/Meshes/base_mesh/SK_Mannequin` - the pack's own copy of the Epic UE5 Manny (161 bones, same names in the same order as `/Game/Characters/Mannequins/Meshes/SK_Mannequin`; no compatible skeletons listed). Not the Frostbitten's (`mutant_monster_2/.../SK_UE4_Mannequin_Skeleton`, 68 bones: all 68 names shared, 93 more and another spine / neck / finger hierarchy here). |
+| Meshes | `base_mesh/SKM_base_mesh_set2_1/2/3` and every `mech_separate/*` part are on that skeleton; no stray FBX root bone (root has no parent - unlike Cyberpunk_Explorer_A), so an ABP on it spawns. 180-185 cm, feet at the origin, facing +Y. |
+| Variants | `SKM_base_mesh_set2_1/2/3` are three ASSEMBLED bodies, one mesh each (1: helmet + body kit + armor, 2: blouse + armor + hair, 3: bare body); the `mech_separate` parts are the same pieces split out (for custom assemblies: leader-pose components - not needed). `material/set_1/2/3` = three texture sets of the same slots (`MI_<part>_set_N_Inst`; helmet: set 1 only; hair: one). |
+| Clips | All on the pack skeleton (no retarget), all IN PLACE (root motion off, the root bone never moves). Lengths: idle_1/3/4/5/6 3.5 / 6.2 / 4.2 / 17 / 8.3 s, walking_1..4 2.6 / 3.9 / 8.4 / 4.5 s (slow shambles: ~20 / 30 / 15 / 25 cm/s at rate 1, from the planted foot's stride), run_1 / run_2 0.70 / 0.73 s (~360 / ~660 cm/s), attack_1..4 3.8 / 2.6 / 4.6 / 2.7 s, hit 2.0, Dying 3.3 (falls forward ~1.6 m), rage 3.4, devour 24.5 (kneels and feeds from 1.5 s to 23 s), transformation 20.5 (standing; twitching 7.5-17.5 s, the arms come up at the end). No notifies. `Demo/` = Manny demo clips (not used). |
+
+**Route (user guidance "use the Frostbitten Animation Blueprint, just swap its animations"):** the Frostbitten graph references no asset - its
+sequence players are bound to `IdleAnimation` / `WalkAnimation` / `RunAnimation` and the one-shots are played by `UEnemyAnimInstance` from class
+defaults. So `ABP_Enemy_MilitaryZombie` is a **child Animation Blueprint of `ABP_Enemy_Frostbitten`** (same graph, slots `DefaultSlot` /
+`UpperBody`, upper-body hit layer from `spine_01`, same C++ logic; the user's ABP is untouched and every later edit of its graph carries over) whose
+target skeleton is the pack's skeleton (`AnimBlueprintFactory` with the Frostbitten ABP class as parent - no Asset Override needed, no clip
+retarget, the user's skeleton not re-saved: the script reports "pack packages dirtied: none"). Its class defaults hold the zombie clips:
+
+| Role | Clip(s) | When |
+|---|---|---|
+| Idle loop | anim_idle_1/3/4/5/6, one per instance by the spawn seed (`bSeededIdleVariant`) | standing |
+| Idle variety | the same 5 as `IdleBreakAnimations`: every 6-12 s of calm idle another idle clip plays once (never the loop it plays), cross-faded 0.35 s | standing calm (not moving / attacking / hit / knocked down / in the turn-based fight) |
+| Devour | `IdleActivityAnimations` = anim_devour, 35 % of the idle breaks | only while it does not hunt the squad (guard / patrol pauses). The game keeps no lasting corpses (enemy bodies decay after 5 s), so it is a random calm activity, not "feeding on a body". |
+| Walk | `WalkAnimationVariants` = walking_1..4 with their ground speeds, one per instance (seed) | moving below `RunSpeedThreshold` 200 cm/s: patrols (190), lure investigation |
+| Run | `RunAnimationVariants` = run_1 (360) / run_2 (660), one per instance | the charge (2.8 m/s) |
+| Attacks | anim_attack_1..4, one at random per blow (x1.2 like the Frostbitten: 3.4 s average vs its 3.6 s) | melee |
+| Hit | anim_hit (upper body while moving, full body standing) | damage |
+| Death | anim_Dying, held | killed standing; killed while knocked down = Manny `Death_*` |
+| Alert roar | `AlertAnimations` = anim_rage x1.2 (2.8 s), standing, facing the alarm | a guard / patrol notices the squad (`BreakPatrol`) |
+| Spawn entrance | `EntranceAnimations` = anim_transformation from 14.5 s x1.5 (~4 s), standing | wave / horde spawn (`UWaveSubsystem::SpawnEnemy`), placed ones with `bPlayEntranceWhenPlaced` |
+| Knockdown | Epic Manny `/Game/Animations_KnockDown/Knocked_*`, `Revive_*`, `Death_*` (same bone names) | a >= 40 HP hit (Frostbitten rule) |
+
+**New `UEnemyAnimInstance` API (all empty = no change for the other enemies):** `WalkAnimationVariants` / `RunAnimationVariants`
+(`FEnemyLocomotionVariant` clip + ground speed), `bSeededIdleVariant`, `IdleBreakAnimations`, `IdleActivityAnimations` + `IdleActivityChance`,
+`IdleBreakInterval` / `IdleBreakPlayRate` / `IdleBreakBlendSeconds`, `AlertAnimations` + `AlertPlayRate` / `AlertMaxSeconds`, `EntranceAnimations` +
+`EntrancePlayRate` / `EntranceStartOffset` / `EntranceMaxSeconds`; `NotifyAlert()` / `NotifyEntrance()` (return the stand-still seconds),
+`IsPerformancePlaying`, `StopPerformance`, `GetIdleBreakClip`, state `bIsPerforming` / `bIsIdleBreak` for graphs. The variants are picked from
+`AEnemyCharacter::GetVariantSeed()` at BeginPlay (a deferred spawn updates the anim once before its seed is final: `RepickVariants`).
+
+**Checked** (`MilitaryZombieSmoke`, fixed 60 fps and a rendered 30 fps run): no T-pose (idle 30-68 cm off the reference pose), feet on the
+ground (idle toe -2..0.6 cm, walk 0..10, run -1.6..16), idle break + devour seen, walk variant at rate 1.8, roar 2.7 s standing, run variant,
+attack clip + damage, hit clip, Manny knockdown (pelvis 11 cm) + `Death_Back`, entrance 3.7 s standing then hunting, anim_Dying held, 0 missing-bone /
+ensure lines. Renders: `Saved/Screenshots/military_zombie_{idle,devour,walk,rage,run,attack,hit,knockdown,death_down,transformation,death}.png`
+(`UnrealEditor.exe ... -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -benchmark -fps=30 -ExecCmds="CodexTactics.MilitaryZombieSmoke shot"`).
+
+**For the user to check / decide:** (1) the walks are slow shambles (15-30 cm/s at rate 1) while the Frostbitten's patrol walks at 190 cm/s: the
+walk plays at the 1.8x cap and the feet slide; a slower `PatrolWalkSpeed` on `BP_Enemy_MilitaryZombie` (gameplay: patrol coverage) or faster
+walk play would fix it. (2) run_2 is a sprint (~660 cm/s) played at 0.6x for the 280 cm/s charge (the feet move slower than the body).
+(3) Devour blends out over 0.35 s when the zombie starts to walk (it rises while stepping off). (4) The roar delays the charge by ~2.8 s
+(gameplay). (5) The dying clip falls ~1.6 m forward of the capsule (in place clip): the corpse lies in front of where it stood.
+(6) Look variants are random per spawn; pin one with `VariantSeedOverride`, or edit `LookVariants` on the Blueprint.
+

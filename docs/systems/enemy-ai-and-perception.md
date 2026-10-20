@@ -6,7 +6,7 @@
 >
 > Key files:
 > - `Combat/EnemyRegistrySubsystem`, `EnemyRegistryRules`, `Characters/EnemyTacticsRules`, `Characters/EnemyCharacter`, `EnemyAIController`
-> - Data `Content/Data/AI/ai_tuning.json`; smokes `EnemyAISmoke`, `EnemyTacticsSmoke`, `EnemyArchetypeSmoke`, `PmcFighterSmoke` (Frozen PMC Fighter, last section)
+> - Data `Content/Data/AI/ai_tuning.json`; smokes `EnemyAISmoke`, `EnemyTacticsSmoke`, `EnemyArchetypeSmoke`, `PmcFighterSmoke` (Frozen PMC Fighter), `MilitaryZombieSmoke` (Military Zombie, last section)
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
@@ -68,3 +68,35 @@ never overwrites a saved asset; `CODEX_PMC_REAPPLY=1` re-applies the BP fields) 
   in the reference pose, feet on the ground, walks to the squad, attacks the leader, hit clip, Manny knockdown, death from the ground, a second one
   dies standing; `shot` = `Saved/Screenshots/pmc_fighter_*.png`, rendered). Animation route and skeleton facts: [animation-setup](animation-setup.md)
   "Frozen PMC Fighter".
+
+
+## Military Zombie = a Frostbitten variant with its own clips (game designer 2026-10-20, branch agents/zombie2)
+
+The designer added the pack `/Game/military_zombie_set2` ("set up its Blueprint and Animation Blueprint - all the animations it has"; user
+guidance the same day: "use the Frostbitten Animation Blueprint on this enemy, just swap its animations").
+`/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie` + `ABP_Enemy_MilitaryZombie` (made by `Scripts/Editor/create_military_zombie.py`,
+idempotent, never overwrites a saved asset; `CODEX_MZ_REAPPLY=1` re-applies the class defaults / BP fields):
+
+- **Parent:** a child Blueprint of `BP_Enemy_Frostbitten`, like the Frozen PMC Fighter (archetype Frostbitten through the class mapping: 60 HP,
+  2.8 m/s, melee AI, knockdown, 18 m cone, kill EXP). Nameplate `DisplayNameOverride` = "Military Zombie"; knockdown clips =
+  `/Game/Animations_KnockDown` itself (`bOverrideKnockdownClipFolder`, folder ""): the pack's skeleton is a copy of the Epic UE5 Manny with the
+  same 161 bone names / hierarchy, so the Manny originals play by bone name (verified: `Knocked_Back`, `Death_Back` from the ground).
+- **Look variants (new, data):** `AEnemyCharacter::LookVariants` (`FEnemyLookVariants`: `Meshes` + `MaterialSets` of `FEnemyMaterialSet` slot-name ->
+  material) picked at BeginPlay by `GetVariantSeed()` (`EnemyAnimRules::MakeVariantSeed` of the actor name + spawn point, or `VariantSeedOverride`
+  >= 0 per instance): the zombie has the pack's 3 assembled bodies (`SKM_base_mesh_set2_1` helmet + kit + armor, `_2` blouse + armor + hair,
+  `_3` bare body) x the 3 texture sets (`material/set_1/2/3`, slots by name; the helmet exists in set 1 only). The save stores the class only:
+  a loaded zombie may come back with another look (cosmetic).
+- **Alert roar (new):** `BreakPatrol` (a guard / patrol notices the squad: sight, hearing, damage, a partner's alarm) calls
+  `StartAlertPerformance`: the ABP's `AlertAnimations` clip (`anim_rage` x1.2 = 2.8 s) plays and the enemy stands still facing the alarm point
+  (`PerformanceLockTimer`, held in `TickBehavior` before the patrol / combat code by `TickPerformanceLock`; a hit / knockdown that replaces the clip
+  ends the hold at once). Wave / horde spawns hunt from the start and do not roar. **Gameplay note:** the roar gives the squad ~2.8 s before
+  the charge; tunable per ABP (`AlertPlayRate`, `AlertMaxSeconds`, or empty `AlertAnimations` = no roar).
+- **Spawn entrance (new):** `UWaveSubsystem::SpawnEnemy` calls `AEnemyCharacter::PlaySpawnEntrance()` on every wave / horde / turn-based
+  reinforcement spawn (a no-op for every enemy whose ABP has no `EntranceAnimations`); a placed enemy plays it at BeginPlay with the instance flag
+  `bPlayEntranceWhenPlaced`. Save-game restores do not go through `SpawnEnemy` (no entrance on load). The zombie plays the last part of
+  `anim_transformation` (from 14.5 s at x1.5 = ~4 s) standing, then hunts.
+- **Waves:** like the PMC, the wave spawner still spawns `BP_Enemy_Frostbitten` for `frostbitten` (one class per archetype). The zombie is placed by
+  hand or spawned by code; a `military_zombie` wave type (an archetype or a per-entry class) is not done - ask first.
+- Code: `Private/Characters/EnemyCharacterPerformance.cpp` (new unit), pure rules `Characters/EnemyAnimRules` (tests
+  `CodexTactics.Characters.EnemyAnim.*`); asset test `CodexTactics.Characters.EnemyAssets.MilitaryZombie`; smoke `MilitaryZombieSmoke`
+  (`Saved/Screenshots/military_zombie_*.png`). Animation route and clip roles: [animation-setup](animation-setup.md) "Military Zombie".
