@@ -14,6 +14,25 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-21 evening — NEXT SESSION START HERE
+
+- main 429b60f is LOCAL ONLY (ahead of origin by 2: the compound quest merge). NOT pushed on purpose: the quest's layout
+  script removed the lake map's built navmesh (TRAPS rule for commandlet saves) -> TutorialAmbushLakeSmoke and
+  TutorialAmbushLakeLureSpottedSmoke fail until the user opens L_Demo01_A_FrozenLake in the editor, lets the navmesh
+  build and saves. Then: commit the map, run all lake smokes, push.
+- Open question to the user: investigate why patrol zombies stand still on a RUNTIME-built navmesh (path Moving, speed 0;
+  likely the same as the "operative stuck at Overlook_LowCover after a skirmish" report) - real risk for packaged builds.
+- Quest designer notes: generator not reachable from the north (shed back wall at the compound wall); HQ line
+  "Get the squad inside!" on gate open is wrong here (gate = exit); quest objective banner duplicates the tutorial's;
+  A5 / A6 / A9-A10 lessons not written; quest objects are cubes (no art yet).
+- Pending from the user: minimap full map north-up rectangle (asked "make the level a straight rectangle");
+  prone-death clip for the Marksman (AS_Prone_Aim_Death sinks 12 cm, option: anim_death there too); PMC BP not switched.
+- Paused: visual QA via the API (Scripts/Tools/visual_qa.py, calibration 7/13 at $0.10; HUD over the right body causes
+  false alarms; key in the user's env ANTHROPIC_API_KEY, never printed).
+- Today done + pushed: optimized single-slot bodies switched in BPs (all but PMC), Marksman rifle + retarget, A4 in two
+  parts + skirmish mode + SPOTTED pause + wall lessons + Susanin off, cover switch (sprint, face under cursor, coplanar
+  buildings), top-down minimap, disarm from cover + trap windows close.
+
 ## Checkpoint 2026-10-21 — character single-slot roll-out DONE (main 6225283 pushed)
 
 - From 2026-10-20 the user dropped Gemini: shaders / materials / VFX / perf are ours.
