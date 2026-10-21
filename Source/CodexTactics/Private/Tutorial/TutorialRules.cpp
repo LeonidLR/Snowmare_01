@@ -25,6 +25,11 @@ int32 FTutorialStepsData::FindBeatIndex(FName BeatId) const
 	return BeatId.IsNone() ? INDEX_NONE : Beats.IndexOfByPredicate([BeatId](const FTutorialBeat& Beat) { return Beat.Id == BeatId; });
 }
 
+const FTutorialEnemyBinding* FTutorialStepsData::FindEnemy(FName BindingId) const
+{
+	return BindingId.IsNone() ? nullptr : Enemies.FindByPredicate([BindingId](const FTutorialEnemyBinding& Binding) { return Binding.Id == BindingId; });
+}
+
 namespace TutorialRulesLocal
 {
 	FString JsonString(const TSharedPtr<FJsonObject>& Object, const TCHAR* Field, const FString& Default = FString())
@@ -121,6 +126,40 @@ namespace TutorialRulesLocal
 		Names.Add(TEXT("squad_not_low_in.<volume>"));
 		Names.Add(TEXT("squad_not_across.<volume>"));
 		return FString::Join(Names, TEXT(" | "));
+	}
+
+	/**
+	 * 2026-10-21: "enemy" / "within_m" / "off_route_m" of a trigger / complete / cancel_on object (FTutorialEnemyFilter). "enemy" naming no
+	 * binding of the file: OutError and false (checked after every binding is parsed). The distances without "enemy", or a filter without
+	 * the "event" it filters: warnings.
+	 */
+	bool ParseEnemyFilter(const TSharedPtr<FJsonObject>& Object, const FTutorialStepsData& Data, bool bHasEvent, const FString& Where,
+		FTutorialEnemyFilter& OutFilter, TArray<FString>& OutWarnings, FString& OutError)
+	{
+		OutFilter = FTutorialEnemyFilter();
+		if (!Object.IsValid())
+		{
+			return true;
+		}
+		const FString Enemy = JsonString(Object, TEXT("enemy"));
+		OutFilter.Enemy = Enemy.IsEmpty() ? NAME_None : FName(*Enemy);
+		OutFilter.WithinMetres = FMath::Max(0.f, static_cast<float>(JsonNumber(Object, TEXT("within_m"), 0.0)));
+		OutFilter.OffRouteMetres = FMath::Max(0.f, static_cast<float>(JsonNumber(Object, TEXT("off_route_m"), 0.0)));
+		if (!OutFilter.Enemy.IsNone() && !Data.FindEnemy(OutFilter.Enemy))
+		{
+			OutError = FString::Printf(TEXT("%s: \"enemy\" names an unknown binding \"%s\" (declare it in the root \"enemies\")"), *Where, *Enemy);
+			return false;
+		}
+		if (OutFilter.Enemy.IsNone() && (OutFilter.WithinMetres > 0.f || OutFilter.OffRouteMetres > 0.f))
+		{
+			OutWarnings.Add(Where + TEXT(": \"within_m\" / \"off_route_m\" only filter an \"enemy\" event - no \"enemy\" given (ignored)"));
+			OutFilter.WithinMetres = OutFilter.OffRouteMetres = 0.f;
+		}
+		if (OutFilter.IsSet() && !bHasEvent)
+		{
+			OutWarnings.Add(Where + TEXT(": \"enemy\" only filters events - no \"event\" given"));
+		}
+		return true;
 	}
 
 	/**
@@ -339,10 +378,36 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		OutError = TEXT("tutorial steps: not valid JSON");
 		return false;
 	}
-	WarnUnknownKeys(Root, { TEXT("version"), TEXT("id"), TEXT("start_beat"), TEXT("beats"), TEXT("steps") }, TEXT("root"), OutWarnings);
+	WarnUnknownKeys(Root, { TEXT("version"), TEXT("id"), TEXT("start_beat"), TEXT("beats"), TEXT("steps"), TEXT("enemies") }, TEXT("root"), OutWarnings);
 	OutData.Version = static_cast<int32>(JsonNumber(Root, TEXT("version"), 1.0));
 	OutData.Id = JsonString(Root, TEXT("id"));
 	OutData.StartBeat = FName(*JsonString(Root, TEXT("start_beat")));
+
+	// 2026-10-21: "enemies" - the level enemies lessons are bound to (selectors by route / actor; the map is not changed for them).
+	for (const TSharedPtr<FJsonObject>& Object : JsonObjects(Root, TEXT("enemies")))
+	{
+		const FString Id = JsonString(Object, TEXT("id"));
+		if (Id.IsEmpty())
+		{
+			OutError = TEXT("tutorial steps: an \"enemies\" binding without \"id\"");
+			return false;
+		}
+		if (OutData.FindEnemy(FName(*Id)))
+		{
+			OutError = FString::Printf(TEXT("tutorial steps: duplicate enemy binding id \"%s\""), *Id);
+			return false;
+		}
+		WarnUnknownKeys(Object, { TEXT("id"), TEXT("route"), TEXT("actor") }, TEXT("enemy ") + Id, OutWarnings);
+		FTutorialEnemyBinding& Binding = OutData.Enemies.AddDefaulted_GetRef();
+		Binding.Id = FName(*Id);
+		Binding.Routes = JsonStrings(Object, TEXT("route"));
+		Binding.Actors = JsonStrings(Object, TEXT("actor"));
+		if (Binding.Routes.IsEmpty() && Binding.Actors.IsEmpty())
+		{
+			OutError = FString::Printf(TEXT("tutorial steps: enemy binding \"%s\" needs \"route\" and / or \"actor\" (label, object name or tag)"), *Id);
+			return false;
+		}
+	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Beats = nullptr;
 	if (Root->TryGetArrayField(TEXT("beats"), Beats))
@@ -421,7 +486,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			const TSharedPtr<FJsonObject> Trigger = *TriggerObject;
 			WarnUnknownKeys(Trigger, { TEXT("type"), TEXT("volume"), TEXT("event"), TEXT("step"), TEXT("command"), TEXT("count"), TEXT("delay_s"),
-				TEXT("requires") }, Where + TEXT(" trigger"), OutWarnings);
+				TEXT("requires"), TEXT("enemy"), TEXT("within_m"), TEXT("off_route_m") }, Where + TEXT(" trigger"), OutWarnings);
 			if (!ParseTriggerType(JsonString(Trigger, TEXT("type"), TEXT("manual")), Step.Trigger.Type))
 			{
 				OutError = FString::Printf(TEXT("%s: unknown trigger type \"%s\""), *Where, *JsonString(Trigger, TEXT("type")));
@@ -442,6 +507,10 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			{
 				Step.Trigger.Requires.Add(FName(*Required));
 			}
+			if (!ParseEnemyFilter(Trigger, OutData, !Step.Trigger.Event.IsEmpty(), Where + TEXT(" trigger"), Step.Trigger.EnemyFilter, OutWarnings, OutError))
+			{
+				return false;
+			}
 		}
 		else if (!Step.Beat.IsNone())
 		{
@@ -453,8 +522,8 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			const TSharedPtr<FJsonObject> Complete = *CompleteObject;
 			WarnUnknownKeys(Complete, { TEXT("command"), TEXT("commands"), TEXT("event"), TEXT("count"), TEXT("volume"), TEXT("timeout_s"),
-				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from"), TEXT("condition"), TEXT("subject"), TEXT("role_spots") },
-				Where + TEXT(" complete"), OutWarnings);
+				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from"), TEXT("condition"), TEXT("subject"), TEXT("role_spots"),
+				TEXT("enemy"), TEXT("within_m"), TEXT("off_route_m") }, Where + TEXT(" complete"), OutWarnings);
 			Step.Complete.Commands = JsonStrings(Complete, TEXT("commands"));
 			Step.Complete.Commands.Append(JsonStrings(Complete, TEXT("command")));
 			Step.Complete.Event = JsonString(Complete, TEXT("event"));
@@ -465,6 +534,10 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Step.Complete.HoldSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Complete, TEXT("hold_s"), 0.0)));
 			Step.Complete.InVolume = FName(*JsonString(Complete, TEXT("in_volume")));
 			Step.Complete.bRoleSpots = JsonBool(Complete, TEXT("role_spots"), false);
+			if (!ParseEnemyFilter(Complete, OutData, !Step.Complete.Event.IsEmpty(), Where + TEXT(" complete"), Step.Complete.EnemyFilter, OutWarnings, OutError))
+			{
+				return false;
+			}
 			if (Step.Complete.bRoleSpots && Step.Complete.Event.IsEmpty())
 			{
 				OutWarnings.Add(Where + TEXT(": \"role_spots\" only filters events - no \"event\" given"));
@@ -550,12 +623,17 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		if (Object->TryGetObjectField(TEXT("cancel_on"), CancelObject))
 		{
 			const TSharedPtr<FJsonObject> Cancel = *CancelObject;
-			WarnUnknownKeys(Cancel, { TEXT("step"), TEXT("event"), TEXT("volume") }, Where + TEXT(" cancel_on"), OutWarnings);
+			WarnUnknownKeys(Cancel, { TEXT("step"), TEXT("event"), TEXT("volume"), TEXT("enemy"), TEXT("within_m"), TEXT("off_route_m") }, Where + TEXT(" cancel_on"),
+				OutWarnings);
 			for (const FString& Other : JsonStrings(Cancel, TEXT("step")))
 			{
 				Step.CancelOn.Steps.AddUnique(FName(*Other));
 			}
 			Step.CancelOn.Event = JsonString(Cancel, TEXT("event"));
+			if (!ParseEnemyFilter(Cancel, OutData, !Step.CancelOn.Event.IsEmpty(), Where + TEXT(" cancel_on"), Step.CancelOn.EnemyFilter, OutWarnings, OutError))
+			{
+				return false;
+			}
 			for (const FString& Volume : JsonStrings(Cancel, TEXT("volume")))
 			{
 				Step.CancelOn.Volumes.AddUnique(FName(*Volume));
@@ -791,7 +869,15 @@ void TutorialRules::ValidateSteps(const FTutorialStepsData& Data, TArray<FString
 		}
 		if (Step.Guide.ToString().StartsWith(TEXT("@")) && !IsKnownGuideSpot(Step.Guide))
 		{
-			OutWarnings.Add(FString::Printf(TEXT("%s: unknown guide spot \"%s\" (@patrol_route)"), *Where, *Step.Guide.ToString()));
+			OutWarnings.Add(FString::Printf(TEXT("%s: unknown guide spot \"%s\" (@patrol_route, @patrol_route.<enemy>, @lure_spot.<enemy>, @enemy.<enemy>)"),
+				*Where, *Step.Guide.ToString()));
+		}
+		// 2026-10-21: an enemy-bound spot names a binding of the file.
+		FString SpotKind;
+		FName SpotEnemy;
+		if (ParseGuideSpot(Step.Guide, SpotKind, SpotEnemy) && !SpotEnemy.IsNone() && !Data.FindEnemy(SpotEnemy))
+		{
+			OutWarnings.Add(FString::Printf(TEXT("%s: guide spot \"%s\" names an unknown enemy binding (root \"enemies\")"), *Where, *Step.Guide.ToString()));
 		}
 		if (Step.Confine.bFreeFocus && Step.Focus.IsNone())
 		{
@@ -1288,9 +1374,114 @@ FName TutorialRules::ParseRoleFocus(FName Focus)
 	return NAME_None;
 }
 
+bool TutorialRules::ParseGuideSpot(FName Guide, FString& OutKind, FName& OutEnemy)
+{
+	OutKind.Reset();
+	OutEnemy = NAME_None;
+	const FString Text = Guide.IsNone() ? FString() : Guide.ToString();
+	if (!Text.StartsWith(TEXT("@")))
+	{
+		return false;
+	}
+	FString Kind = Text.Mid(1);
+	FString Enemy;
+	if (Kind.Split(TEXT("."), &Kind, &Enemy))
+	{
+		OutEnemy = Enemy.IsEmpty() ? NAME_None : FName(*Enemy);
+	}
+	OutKind = Kind.ToLower();
+	return true;
+}
+
 bool TutorialRules::IsKnownGuideSpot(FName Guide)
 {
-	return Guide == FName(TEXT("@patrol_route"));
+	FString Kind;
+	FName Enemy;
+	if (!ParseGuideSpot(Guide, Kind, Enemy))
+	{
+		return false;
+	}
+	if (Kind == TEXT("patrol_route"))
+	{
+		return true; // the level's routes, or the bound enemy's
+	}
+	return (Kind == TEXT("lure_spot") || Kind == TEXT("enemy")) && !Enemy.IsNone();
+}
+
+bool TutorialRules::MatchesActorSelector(const FString& Selector, FName ObjectName, const FString& Label, const TArray<FName>& Tags)
+{
+	const FString Wanted = Selector.TrimStartAndEnd();
+	if (Wanted.IsEmpty())
+	{
+		return false;
+	}
+	if ((!ObjectName.IsNone() && ObjectName.ToString().Equals(Wanted, ESearchCase::IgnoreCase)) || (!Label.IsEmpty() && Label.Equals(Wanted, ESearchCase::IgnoreCase)))
+	{
+		return true;
+	}
+	return Tags.ContainsByPredicate([&Wanted](FName Tag) { return !Tag.IsNone() && Tag.ToString().Equals(Wanted, ESearchCase::IgnoreCase); });
+}
+
+FVector TutorialRules::NearestPointOnRoute(const TArray<FVector>& Points, bool bLoop, const FVector& From)
+{
+	FVector Best = Points.IsEmpty() ? From : Points[0];
+	double BestDistance = TNumericLimits<double>::Max();
+	const int32 Segments = Points.Num() < 2 ? Points.Num() : (bLoop ? Points.Num() : Points.Num() - 1);
+	for (int32 Index = 0; Index < Segments; ++Index)
+	{
+		const FVector A = Points[Index];
+		const FVector B = Points.Num() < 2 ? A : Points[(Index + 1) % Points.Num()];
+		// 2D: the segment flattened at A's height (a waypoint dragged below the ground must not pull the spot under it).
+		const FVector Candidate = FMath::ClosestPointOnSegment(FVector(From.X, From.Y, A.Z), A, FVector(B.X, B.Y, A.Z));
+		const double Distance = FVector::DistSquared2D(Candidate, From);
+		if (Distance < BestDistance)
+		{
+			BestDistance = Distance;
+			Best = Candidate;
+		}
+	}
+	return Best;
+}
+
+float TutorialRules::DistanceToRoute2D(const TArray<FVector>& Points, bool bLoop, const FVector& Location)
+{
+	if (Points.IsEmpty())
+	{
+		return MAX_flt;
+	}
+	return static_cast<float>(FVector::Dist2D(NearestPointOnRoute(Points, bLoop, Location), Location));
+}
+
+FVector TutorialRules::LureSpotTowards(const FVector& RoutePoint, const FVector& From, float DistanceCm)
+{
+	const FVector Flat(From.X - RoutePoint.X, From.Y - RoutePoint.Y, 0.f);
+	const double Length = Flat.Size();
+	if (Length <= DistanceCm || Length < KINDA_SMALL_NUMBER)
+	{
+		return From;
+	}
+	return RoutePoint + Flat / Length * DistanceCm;
+}
+
+bool TutorialRules::PassesEnemyFilter(const FTutorialEnemyFilter& Filter, bool bSubjectMatches, float NearestOperativeCm, float OffRouteCm)
+{
+	if (!Filter.IsSet())
+	{
+		return true;
+	}
+	if (!bSubjectMatches)
+	{
+		return false; // another enemy (or an operative): not this lesson's
+	}
+	if (Filter.WithinMetres > 0.f && (NearestOperativeCm < 0.f || NearestOperativeCm > Filter.WithinMetres * 100.f))
+	{
+		return false; // nobody close: not a close-range kill
+	}
+	if (Filter.OffRouteMetres > 0.f && OffRouteCm >= 0.f && OffRouteCm < Filter.OffRouteMetres * 100.f)
+	{
+		return false; // still on its beat: not lured into the open
+	}
+	return true;
 }
 
 bool TutorialRules::IsConditionMet(const TArray<FTutorialCondition>& Conditions, TFunctionRef<float(FName)> Stat)

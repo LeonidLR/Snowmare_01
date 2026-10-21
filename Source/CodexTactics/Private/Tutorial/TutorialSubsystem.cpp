@@ -171,25 +171,35 @@ namespace TutorialSubsystemLocal
 		return IsWoundedFocus(Focus) || !TutorialRules::ParseRoleFocus(Focus).IsNone();
 	}
 
-	/** The point of the polyline Points (closed when bLoop) nearest to From (2D distance; Z of the segment). */
-	FVector NearestOnRoute(const TArray<FVector>& Points, bool bLoop, const FVector& From)
+	/** The waypoints of a patrol route (world). */
+	TArray<FVector> TutorialRoutePoints(const APatrolRouteActor& Route)
 	{
-		FVector Best = Points.IsEmpty() ? From : Points[0];
-		double BestDistance = TNumericLimits<double>::Max();
-		const int32 Segments = Points.Num() < 2 ? Points.Num() : (bLoop ? Points.Num() : Points.Num() - 1);
-		for (int32 Index = 0; Index < Segments; ++Index)
+		TArray<FVector> Points;
+		for (int32 Index = 0; Index < Route.GetNumberOfWaypoints(); ++Index)
 		{
-			const FVector A = Points[Index];
-			const FVector B = Points.Num() < 2 ? A : Points[(Index + 1) % Points.Num()];
-			const FVector Candidate = FMath::ClosestPointOnSegment(FVector(From.X, From.Y, A.Z), A, B);
-			const double Distance = FVector::DistSquared2D(Candidate, From);
-			if (Distance < BestDistance)
-			{
-				BestDistance = Distance;
-				Best = Candidate;
-			}
+			Points.Add(Route.GetWaypointWorldLocation(Index));
 		}
-		return Best;
+		return Points;
+	}
+
+	/** An actor's label in editor builds (the "enemies" selectors), empty in cooked builds. */
+	FString TutorialActorLabel(const AActor& Actor)
+	{
+#if WITH_EDITOR
+		return Actor.GetActorLabel(false);
+#else
+		return FString();
+#endif
+	}
+
+	/** Actor matches any of the "enemies" selectors (label, object name, tag). */
+	bool TutorialActorMatchesAny(const AActor& Actor, const TArray<FString>& Selectors)
+	{
+		const FString Label = TutorialActorLabel(Actor);
+		return Selectors.ContainsByPredicate([&Actor, &Label](const FString& Selector)
+		{
+			return TutorialRules::MatchesActorSelector(Selector, Actor.GetFName(), Label, Actor.Tags);
+		});
 	}
 
 	/** A squad member that counts for the squad stats: present and not dead (no health component = alive). */
@@ -337,7 +347,10 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 		FVector Location;
 		return ResolveGuideSpot(Spot, StepId, Location);
 	};
+	// 2026-10-21: "enemy" filters - each A4 part reacts only to ITS zombie (the subject actor resolved in the world).
+	Machine.EnemyFilterProvider = [this](const FTutorialEnemyFilter& Filter, FName SubjectId) { return PassesEnemyFilterNow(Filter, SubjectId); };
 	Machine.Load(Data);
+	LogEnemyBindings();
 	// Rev 5f (monotonic route): the place of every beat volume of the level (a volume that starts a beat lies at its start).
 	if (UWorld* World = GetWorld())
 	{
@@ -1693,11 +1706,13 @@ FVector UTutorialSubsystem::GetVolumeGroundPoint(const ATutorialTriggerVolume& V
 bool UTutorialSubsystem::ResolveGuideSpot(FName Spot, FName StepId, FVector& OutLocation) const
 {
 	UWorld* World = GetWorld();
-	if (!World || Spot != FName(TEXT("@patrol_route")))
+	FString Kind;
+	FName Enemy;
+	if (!World || !TutorialRules::ParseGuideSpot(Spot, Kind, Enemy) || !TutorialRules::IsKnownGuideSpot(Spot))
 	{
 		return false;
 	}
-	// The point of the level's patrol routes nearest to the step's focus operative (the ambusher), else to the leader: where the wire goes.
+	// The step's focus operative (the ambusher), else the leader: whom the spot is for.
 	const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 	const AOperativeCharacter* From = GetFocusOperative(StepId);
 	From = From ? From : (Squad ? Squad->GetLeader() : nullptr);
@@ -1705,21 +1720,59 @@ bool UTutorialSubsystem::ResolveGuideSpot(FName Spot, FName StepId, FVector& Out
 	{
 		return false;
 	}
+	const FVector FromLocation = From->GetActorLocation();
+	if (Kind == TEXT("enemy"))
+	{
+		// "@enemy.<enemy>" (2026-10-21): the nearest LIVING bound enemy - the target follows him while he walks.
+		bool bFound = false;
+		double BestDistance = TNumericLimits<double>::Max();
+		for (const AEnemyCharacter* Bound : FindBoundEnemies(Enemy))
+		{
+			const UHealthComponent* Health = Bound ? Bound->GetHealthComponent() : nullptr;
+			if (!Bound || Bound->IsDying() || (Health && !Health->IsAlive()))
+			{
+				continue;
+			}
+			const double Distance = FVector::DistSquared2D(Bound->GetActorLocation(), FromLocation);
+			if (Distance < BestDistance)
+			{
+				BestDistance = Distance;
+				OutLocation = Bound->GetActorLocation() - FVector(0.f, 0.f, Bound->GetSimpleCollisionHalfHeight());
+				bFound = true;
+			}
+		}
+		return bFound;
+	}
+	// The routes to look at: every patrol route of the level ("@patrol_route"), or only the bound enemies' ("@...<enemy>").
+	TArray<const APatrolRouteActor*> Routes;
+	if (Enemy.IsNone())
+	{
+		for (TActorIterator<APatrolRouteActor> It(World); It; ++It)
+		{
+			Routes.Add(*It);
+		}
+	}
+	else
+	{
+		for (const AEnemyCharacter* Bound : FindBoundEnemies(Enemy))
+		{
+			if (Bound && Bound->AssignedPatrolRoute)
+			{
+				Routes.AddUnique(Bound->AssignedPatrolRoute.Get());
+			}
+		}
+	}
 	bool bFound = false;
 	double BestDistance = TNumericLimits<double>::Max();
-	for (TActorIterator<APatrolRouteActor> It(World); It; ++It)
+	for (const APatrolRouteActor* Route : Routes)
 	{
-		TArray<FVector> Points;
-		for (int32 Index = 0; Index < It->GetNumberOfWaypoints(); ++Index)
-		{
-			Points.Add(It->GetWaypointWorldLocation(Index));
-		}
+		const TArray<FVector> Points = Route ? TutorialSubsystemLocal::TutorialRoutePoints(*Route) : TArray<FVector>();
 		if (Points.IsEmpty())
 		{
 			continue;
 		}
-		const FVector Candidate = TutorialSubsystemLocal::NearestOnRoute(Points, It->bIsLoop, From->GetActorLocation());
-		const double Distance = FVector::DistSquared2D(Candidate, From->GetActorLocation());
+		const FVector Candidate = TutorialRules::NearestPointOnRoute(Points, Route->bIsLoop, FromLocation);
+		const double Distance = FVector::DistSquared2D(Candidate, FromLocation);
 		if (Distance < BestDistance)
 		{
 			BestDistance = Distance;
@@ -1727,7 +1780,123 @@ bool UTutorialSubsystem::ResolveGuideSpot(FName Spot, FName StepId, FVector& Out
 			bFound = true;
 		}
 	}
+	if (bFound && Kind == TEXT("lure_spot"))
+	{
+		// "@lure_spot.<enemy>": short of the route towards her, inside the whistle / crouched throw reach; on the ground.
+		OutLocation = TutorialRules::LureSpotTowards(OutLocation, FromLocation, TutorialRules::LureSpotDistanceCm);
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(TutorialLureSpotGround), false);
+		Params.AddIgnoredActor(From);
+		if (World->LineTraceSingleByObjectType(Hit, OutLocation + FVector(0.f, 0.f, 500.f), OutLocation - FVector(0.f, 0.f, 1500.f),
+			FCollisionObjectQueryParams(ECC_WorldStatic), Params))
+		{
+			OutLocation = Hit.ImpactPoint;
+		}
+	}
 	return bFound;
+}
+
+TArray<AEnemyCharacter*> UTutorialSubsystem::FindBoundEnemies(FName BindingId) const
+{
+	TArray<AEnemyCharacter*> Out;
+	const UWorld* World = GetWorld();
+	if (!World || !Machine.GetData().FindEnemy(BindingId))
+	{
+		return Out;
+	}
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+	{
+		if (Enemy && IsEnemyBound(*Enemy, BindingId))
+		{
+			Out.Add(Enemy);
+		}
+	}
+	return Out;
+}
+
+bool UTutorialSubsystem::IsEnemyBound(const AEnemyCharacter& Enemy, FName BindingId) const
+{
+	const FTutorialEnemyBinding* Binding = Machine.GetData().FindEnemy(BindingId);
+	if (!Binding)
+	{
+		return false;
+	}
+	const APatrolRouteActor* Route = Enemy.AssignedPatrolRoute.Get();
+	return (Route && TutorialSubsystemLocal::TutorialActorMatchesAny(*Route, Binding->Routes))
+		|| TutorialSubsystemLocal::TutorialActorMatchesAny(Enemy, Binding->Actors);
+}
+
+bool UTutorialSubsystem::PassesEnemyFilterNow(const FTutorialEnemyFilter& Filter, FName SubjectId) const
+{
+	const UWorld* World = GetWorld();
+	if (!Filter.IsSet())
+	{
+		return true;
+	}
+	if (!World || SubjectId.IsNone())
+	{
+		return false;
+	}
+	// The subject by its object name (the bus passes Subject->GetFName()); a dying enemy is still in the world when its kill is raised.
+	const AEnemyCharacter* Subject = nullptr;
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+	{
+		if (Enemy && Enemy->GetFName() == SubjectId)
+		{
+			Subject = Enemy;
+			break;
+		}
+	}
+	if (!Subject)
+	{
+		return false; // not an enemy (an operative tripped the wire) or gone
+	}
+	float NearestCm = -1.f;
+	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+	{
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (TutorialSubsystemLocal::IsLivingOrUntracked(Member))
+			{
+				const float Distance = static_cast<float>(FVector::Dist(Member->GetActorLocation(), Subject->GetActorLocation()));
+				NearestCm = NearestCm < 0.f ? Distance : FMath::Min(NearestCm, Distance);
+			}
+		}
+	}
+	float OffRouteCm = -1.f;
+	if (const APatrolRouteActor* Route = Subject->AssignedPatrolRoute.Get())
+	{
+		const TArray<FVector> Points = TutorialSubsystemLocal::TutorialRoutePoints(*Route);
+		OffRouteCm = Points.IsEmpty() ? -1.f : TutorialRules::DistanceToRoute2D(Points, Route->bIsLoop, Subject->GetActorLocation());
+	}
+	const bool bBound = IsEnemyBound(*Subject, Filter.Enemy);
+	const bool bPasses = TutorialRules::PassesEnemyFilter(Filter, bBound, NearestCm, OffRouteCm);
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: enemy filter %s on %s: bound %d, nearest operative %.1f m (within %.0f), off its route %.1f m (at least %.0f) -> %s"),
+		*Filter.Enemy.ToString(), *SubjectId.ToString(), bBound ? 1 : 0, NearestCm / 100.f, Filter.WithinMetres, OffRouteCm / 100.f, Filter.OffRouteMetres,
+		bPasses ? TEXT("counts") : TEXT("does not count"));
+	return bPasses;
+}
+
+void UTutorialSubsystem::LogEnemyBindings() const
+{
+	for (const FTutorialEnemyBinding& Binding : Machine.GetData().Enemies)
+	{
+		TArray<FString> Names;
+		for (const AEnemyCharacter* Enemy : FindBoundEnemies(Binding.Id))
+		{
+			const APatrolRouteActor* Route = Enemy->AssignedPatrolRoute.Get();
+			Names.Add(FString::Printf(TEXT("%s (route %s)"), *Enemy->GetName(), Route ? *Route->GetName() : TEXT("-")));
+		}
+		if (Names.IsEmpty())
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Tutorial: enemy binding %s (route %s / actor %s) matches no enemy in this level - its steps end by their timeouts only"),
+				*Binding.Id.ToString(), *FString::Join(Binding.Routes, TEXT(", ")), *FString::Join(Binding.Actors, TEXT(", ")));
+		}
+		else
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: enemy binding %s -> %s"), *Binding.Id.ToString(), *FString::Join(Names, TEXT(", ")));
+		}
+	}
 }
 
 void UTutorialSubsystem::RefreshGuide()

@@ -40,7 +40,8 @@ namespace TutorialRules
 	/**
 	 * Parses a steps JSON (the schema: docs/systems/tutorial-engine.md). Errors fail (invalid JSON, a step / beat without id, a
 	 * duplicate id, an unknown kind / trigger type / stat / action / focus / subject / confine stance, a trigger without its
-	 * required field, a step id reference - after_step, requires, distinct_from, cancel_on, confine until - naming no step);
+	 * required field, a step id reference - after_step, requires, distinct_from, cancel_on, confine until - naming no step; 2026-10-21: an
+	 * "enemies" binding without id / selectors or duplicated, an "enemy" filter naming no binding);
 	 * soft problems go to OutWarnings (an unknown key at any level, a beat not declared in "beats" is added, "blocking": true is
 	 * forced off, a filter without the completion it filters, a hint card without completion gets timeout_s 12, ...).
 	 */
@@ -207,8 +208,45 @@ namespace TutorialRules
 	CODEXTACTICS_API bool ProjectToView(const FVector& CameraLocation, const FRotator& CameraRotation, float HorizontalFovDegrees, const FVector2D& ViewSize,
 		const FVector& World, FVector2D& OutScreen);
 
-	/** The runtime spots a "guide": "@<name>" may name (2026-10-20): "@patrol_route". */
+	/**
+	 * The runtime spots a "guide": "@<name>" may name: "@patrol_route" (2026-10-20: the level's routes), and since 2026-10-21 the
+	 * enemy-bound spots "@patrol_route.<enemy>" (that enemy binding's route), "@lure_spot.<enemy>" (where to stand to lure it:
+	 * LureSpotDistanceCm short of its route, towards the focus operative) and "@enemy.<enemy>" (the enemy itself, followed while it moves).
+	 */
 	CODEXTACTICS_API bool IsKnownGuideSpot(FName Guide);
+
+	/**
+	 * Splits a guide spot: "@lure_spot.A4_LURE" -> OutKind "lure_spot", OutEnemy "A4_LURE"; "@patrol_route" -> "patrol_route", none.
+	 * False when Guide is not a "@" spot.
+	 */
+	CODEXTACTICS_API bool ParseGuideSpot(FName Guide, FString& OutKind, FName& OutEnemy);
+
+	/** "@lure_spot.<enemy>": the spot stands this far from the enemy's route (inside the 12 m whistle and the 11.25 m crouched throw). */
+	constexpr float LureSpotDistanceCm = 1000.f;
+
+	/**
+	 * An "enemies" selector (2026-10-21) matches an actor by its object name, its actor label (editor builds; empty elsewhere) or one of its
+	 * actor tags - case-insensitive, whole words.
+	 */
+	CODEXTACTICS_API bool MatchesActorSelector(const FString& Selector, FName ObjectName, const FString& Label, const TArray<FName>& Tags);
+
+	/** 2D distance from Location to the polyline Points (closed when bLoop); a single point = the distance to it; no points = MAX_flt. */
+	CODEXTACTICS_API float DistanceToRoute2D(const TArray<FVector>& Points, bool bLoop, const FVector& Location);
+
+	/** The polyline point nearest (2D) to From (closed when bLoop); From itself for no points. */
+	CODEXTACTICS_API FVector NearestPointOnRoute(const TArray<FVector>& Points, bool bLoop, const FVector& From);
+
+	/**
+	 * "@lure_spot": the point DistanceCm from RoutePoint towards From (2D, RoutePoint's height); From itself when it is already that
+	 * close or closer.
+	 */
+	CODEXTACTICS_API FVector LureSpotTowards(const FVector& RoutePoint, const FVector& From, float DistanceCm);
+
+	/**
+	 * Does an event with these facts pass the enemy filter? bSubjectMatches = the subject is an enemy of the binding; NearestOperativeCm =
+	 * the nearest living operative's distance (< 0 = none); OffRouteCm = its 2D distance from its route (< 0 = no route: passes).
+	 */
+	CODEXTACTICS_API bool PassesEnemyFilter(const FTutorialEnemyFilter& Filter, bool bSubjectMatches, float NearestOperativeCm, float OffRouteCm);
 
 	/**
 	 * "focus": "role:<EOperativeRole>" (2026-10-20, the A4 ambusher) -> the role name ("MedicSapper"), else NAME_None. Chosen when the

@@ -10,6 +10,7 @@
 #include "Tutorial/TutorialStateMachine.h"
 #include "TutorialSubsystem.generated.h"
 
+class AEnemyCharacter;
 class AOperativeCharacter;
 class ATutorialMarkerActor;
 class ATutorialTriggerVolume;
@@ -386,6 +387,24 @@ public:
 	AOperativeCharacter* GetFocusOperative(FName StepId) const;
 
 	/**
+	 * 2026-10-21 ("enemies" bindings, the A4 ambush split): the level's enemies (alive or dying) that belong to the steps file's binding
+	 * BindingId - their patrol route or they themselves match one of its selectors (label, object name, tag). Empty for an unknown id.
+	 */
+	TArray<AEnemyCharacter*> FindBoundEnemies(FName BindingId) const;
+
+	/** Enemy belongs to the binding BindingId of the loaded steps (FindBoundEnemies). */
+	bool IsEnemyBound(const AEnemyCharacter& Enemy, FName BindingId) const;
+
+	/**
+	 * The "enemy" filter of an event now: the subject (an enemy of the world by object name) is bound, a living operative stands within
+	 * "within_m" and it stands at least "off_route_m" from its patrol route (TutorialRules::PassesEnemyFilter). The state machine asks it.
+	 */
+	bool PassesEnemyFilterNow(const FTutorialEnemyFilter& Filter, FName SubjectId) const;
+
+	/** Re-resolves the current navigation target now (normally every tick; smokes that just placed what a spot needs). */
+	void RefreshGuideNow() { RefreshGuide(); }
+
+	/**
 	 * "role_spots" (2026-10-19, the A3 cover lesson): Operative stands at his role's spot of StepId - within the ring (+ 80 cm) of the
 	 * step's marker whose RoleId is his role. True when the level has no role marker for that step (an older map: any place counts).
 	 */
@@ -562,8 +581,14 @@ private:
 	float MaxNextInstructionSeconds = 0.f;
 	/** Accumulates the no-instruction time (Tick). */
 	void TickPacing(float RealDelta);
-	/** "@patrol_route" (2026-10-20): the patrol routes' point nearest to the step's focus operative; false when the level has none. */
+	/**
+	 * "@patrol_route" (2026-10-20): the patrol routes' point nearest to the step's focus operative; false when the level has none.
+	 * 2026-10-21: "@patrol_route.<enemy>" (only the bound enemies' routes), "@lure_spot.<enemy>" (TutorialRules::LureSpotDistanceCm short
+	 * of that route towards the focus operative, on the ground) and "@enemy.<enemy>" (the nearest living bound enemy; false when none lives).
+	 */
 	bool ResolveGuideSpot(FName Spot, FName StepId, FVector& OutLocation) const;
+	/** Logs, once per steps load, which level enemies each "enemies" binding found (none: a warning - those steps end by timeout only). */
+	void LogEnemyBindings() const;
 	/** Resolves Machine.GetGuide() in the world (nearest marker / the beacon at the volume), logs + telemetry when it changes. */
 	void RefreshGuide();
 	/** The registered volume with this id nearest to Near, null when the level has none. */

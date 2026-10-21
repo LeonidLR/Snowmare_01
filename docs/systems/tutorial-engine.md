@@ -4,15 +4,16 @@
 > `TutorialRules` + `TutorialStateMachine` drive hint cards, objectives, radio lines and feed lines from `Content/Data/Tutorial/*.json`. The content of the
 > actual Demo 01 flow is in [demo01-lake](demo01-lake.md).
 >
-> **The top of this file (sections 1-18) is the authoritative reference of the steps JSON schema and the runtime semantics (current to 2026-10-20).**
+> **The top of this file (sections 1-19) is the authoritative reference of the steps JSON schema and the runtime semantics (current to 2026-10-21).**
 > The revision-by-revision notes it was distilled from are kept verbatim under [History](#history) at the end.
 >
 > Key files:
 > - `Core/PlayerCommands.h`, `Tutorial/TutorialTypes.h` (data), `Tutorial/TutorialRules` (parse, validate, locks, save format), `TutorialStateMachine` (pure
 >   per-step machine), `TutorialSubsystem` (world glue), `TutorialTriggerVolume`, `TutorialMarkerActor`, `UI/TutorialOverlayWidget`
 > - `Core/DemoModeSubsystem`; data `Content/Data/Tutorial/<file>.json`; texts `narrative_manifest.json` "tutorial" + `demo_01_texts_draft.json`
-> - tests `CodexTactics.Tutorial.*` (schema: `Schema.Parse / UnknownKeys / References / DemoFile / DemoFileReferences / DemoFileA0A1Flow`); smokes
->   `TutorialSmoke`, `TutorialSaveSmoke`, `PeekMinesSmoke`, `TrapSoloSmoke`, `BridgeFenceSmoke`, `InteriorExitSmoke`
+> - tests `CodexTactics.Tutorial.*` (schema: `Schema.Parse / UnknownKeys / References / DemoFile / DemoFileReferences / DemoFileA0A1Flow`; enemy bindings:
+>   `AmbushLesson.EnemyBindingSchema / PartsBoundToTheirZombie`); smokes `TutorialSmoke`, `TutorialSaveSmoke`, `TutorialAmbushLakeSmoke`, `PeekMinesSmoke`,
+>   `TrapSoloSmoke`, `BridgeFenceSmoke`, `InteriorExitSmoke`
 >
 > [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
@@ -59,7 +60,7 @@ Every way a step finishes without being played normally reaches the runtime as o
 ### 3. File root and beats
 
 ```json
-{ "version": 1, "id": "demo_01_frozen_lake", "start_beat": "A0", "beats": [ ... ], "steps": [ ... ] }
+{ "version": 1, "id": "demo_01_frozen_lake", "start_beat": "A0", "enemies": [ ... ], "beats": [ ... ], "steps": [ ... ] }
 ```
 
 | Key | Type | Default | Meaning |
@@ -69,6 +70,7 @@ Every way a step finishes without being played normally reaches the runtime as o
 | `start_beat` | beat id | none | Started when the steps load (fresh start / RESET). Unknown id: warning, ignored. None: no beat runs until a step / volume starts one. |
 | `beats` | array | [] | Beat objects (below), in story order: the file order IS the beat order. |
 | `steps` | array | **required** | Step objects; their file order also orders the route (section 9) and the "n / m" card counter. |
+| `enemies` | array | [] | 2026-10-21: enemy bindings `{ "id", "route", "actor" }` - the level enemies a lesson is about (section 19). |
 | `_anything` | any | - | Keys starting with `_` are comments at every level (never warned). |
 
 Beat object:
@@ -143,6 +145,7 @@ No `trigger` object: `beat_start` when the step has a `beat`, else `manual`. A `
 | `count` | int >= 1 | 1 | `event`, `failure_retry`: occurrences needed (counted only while the step may trigger and is armed) |
 | `delay_s` | float >= 0 | 0 | every type: Waiting this long before it becomes due (the condition / precredit checks run after the delay) |
 | `requires` | step id or array | [] | every type except manual starts: the trigger counts only after each listed step has been triggered (left Idle) at least once; events / volumes / conditions before that are ignored, not stored. Unknown id: error. |
+| `enemy`, `within_m`, `off_route_m` | binding id, metres | none | `event`, `failure_retry` (2026-10-21, section 19): only events of that bound enemy count as hits (others are not stored). |
 
 | `type` | Fires when |
 |---|---|
@@ -174,14 +177,17 @@ No `trigger` object: `beat_start` when the step has a `beat`, else `manual`. A `
 | `distinct_from` | step id or array | [] | Event / volume filter: an operative who counted for any of those steps never counts here (needs a subject). Self or unknown id: error. |
 | `subject` | `"focus"` | none | Event filter: only the step's focus operative's events count (none chosen yet: anyone). Other values: error. |
 | `role_spots` | bool | false | Event filter: the subject must stand at HIS role's spot of this step (section 10); also counted while already standing there in cover. |
+| `enemy` | binding id | none | 2026-10-21, event filter: the subject must be an enemy of that `enemies` binding (section 19). Unknown id: error. |
+| `within_m` | float > 0 | 0 (off) | With `enemy`: a living operative stood within this many metres of the enemy when the event came (a close-range shot). Without `enemy`: warning, ignored. |
+| `off_route_m` | float > 0 | 0 (off) | With `enemy`: the enemy stood at least this many metres (2D) off its own patrol route (lured off its beat; no route = passes). |
 
 A filter without the completion it filters (`in_volume`, `subject`, `role_spots`, `distinct_operatives` without `event`; `distinct_from` without
 `event` / `volume`): warning. Completion paths combine as **OR**: whichever reaches the counter / holds first finishes the step; `hold_s` gates every
 counting path (commands, events, volume entry), not `condition` or the timeout.
 
 **Filter order for an event** (first failing filter drops it, nothing is stored): the step was running when the event came -> `event` pattern ->
-`in_volume` -> `subject: focus` -> `role_spots` -> confinement order (section 12) -> `distinct_from` -> `distinct_operatives` -> count (the subject
-becomes a contributor of the step). A **volume entry** passes: running -> `volume` id -> `distinct_from` -> confinement order -> complete.
+`in_volume` -> `subject: focus` -> `enemy` (+ `within_m` / `off_route_m`) -> `role_spots` -> confinement order (section 12) -> `distinct_from` ->
+`distinct_operatives` -> count (the subject becomes a contributor of the step). A **volume entry** passes: running -> `volume` id -> `distinct_from` -> confinement order -> complete.
 **Presence** counts the same way without an event: a running step with `complete.volume` counts the members already standing in it when it queues /
 shows; a running `role_spots` step counts, every tick, each member in cover (not mid-shimmy, alive) at his spot - with the event filters, never twice.
 
@@ -275,7 +281,8 @@ A role's ring hides once an operative of that role counted. A level with no role
 
 ### 11. `"cancel_on"` - drop a step when its moment is over
 
-`{ "step": id | [ids], "event": pattern, "volume": id | [ids] }` (any of them; none: warning; unknown / own step id: error). A running step is
+`{ "step": id | [ids], "event": pattern, "volume": id | [ids] }` (any of them; none: warning; unknown / own step id: error; 2026-10-21: `enemy` /
+`within_m` / `off_route_m` next to `event` = only that bound enemy's event cancels, section 19). A running step is
 cancelled (Skipped, `bCancelled`, no breather) when a listed step finishes, the event happens or a squad member enters a listed volume. Waiting /
 Queued: never played later. Shown: a radio / walk_talk lets the line on screen run out and drops the rest; other kinds hide at once. If a listed step
 had already finished when this step becomes due, it is cancelled immediately. Its `after_step` followers still fire. Twins cancel each other with
@@ -349,12 +356,14 @@ load; while a load is pending the tutorial does not start (no checkpoint over th
 
 - `TutorialRules::ParseSteps`: **errors** abort the load (invalid JSON, no `steps`, missing / duplicate ids, unknown kind / trigger type / stat / action /
   focus / subject / confine stance, a type without its required field, every step reference: `trigger.step`, `requires`, `distinct_from`,
-  `cancel_on.step`, `confine.until`); **warnings**: an unknown key at any level (root, beat, step, trigger, complete, condition clauses, action,
-  cancel_on, confine, confine exit, line), undeclared beat, `blocking: true`, a filter without its completion, a card without completion, an empty
-  `cancel_on`, no text, unknown `start_beat`.
+  `cancel_on.step`, `confine.until`; 2026-10-21: an `enemies` binding without `id` / selectors or duplicated, an `enemy` filter naming no binding);
+  **warnings**: an unknown key at any level (root, beat, step, trigger, complete, condition clauses, action, cancel_on, confine, confine exit, line,
+  enemy binding), undeclared beat, `blocking: true`, a filter without its completion (also `enemy` without `event`, `within_m` / `off_route_m`
+  without `enemy`), a card without completion, an empty `cancel_on`, no text, unknown `start_beat`.
 - `TutorialRules::ValidateSteps` (run by `LoadStepsFile`): warnings for command patterns matching no registered command (`complete.commands`,
   `trigger.command`, beat / step `lock` / `unlock`), dotted key caps that are not registered, `subject: focus` without `focus`, `after_step` cycles,
-  `beyond` on a step without a place (the route cannot move), a `guide` naming the step itself.
+  `beyond` on a step without a place (the route cannot move), a `guide` naming the step itself, an unknown `@` guide spot or one naming an unknown
+  enemy binding.
 - Tests: `Schema.UnknownKeys`, `Schema.References`; the shipped file must load with **zero** warnings (`Schema.DemoFile`, `Schema.DemoFileReferences`,
   which also checks that every `text_id` / line / beat title exists in the manifest or the draft texts and every `{key:...}` token names a command).
 
@@ -408,8 +417,13 @@ appears the moment an action completes. Priority, first match wins:
 
 `"guide": "none"` on a step: it names nothing (the next rule decides). `"guide": "@patrol_route"` (a **spot** the runtime computes,
 `ETutorialGuideKind::Spot`): the point of the level's patrol routes (`APatrolRouteActor` waypoints, a loop closed) nearest to the step's focus
-operative (else the leader) - where the A4 ambusher rigs the wire; no patrol route in the level: the automatic choice. Unknown `@` spots: warning. An explicit `guide` the level cannot show (no such volume /
-markers) falls back to the automatic choice (the log says `NOT in the level`).
+operative (else the leader) - where the A4 ambusher rigs the wire; no patrol route in the level: the automatic choice. 2026-10-21, spots bound to an
+`enemies` binding (section 19): `"@patrol_route.<enemy>"` (only the bound enemies' routes), `"@lure_spot.<enemy>"` (`TutorialRules::LureSpotDistanceCm`
+= 10 m short of that route's nearest point, towards the focus operative, on the ground - inside the 12 m whistle and the 11.25 m crouched throw;
+she is already closer: where she stands) and `"@enemy.<enemy>"` (the nearest LIVING bound enemy's feet - the beacon follows him; none alive: the
+automatic choice). Route points are taken flat at the segment start's height (a waypoint dragged under the ground does not pull the spot under it).
+Unknown `@` spots: warning. An explicit `guide` the level cannot show (no such volume / markers) falls back to the automatic choice (the log says
+`NOT in the level`).
 
 **Route progress** (`GetRouteProgressKey`): the furthest place reached - an arrival (`HandleVolume`, not while a confinement holds), a
 step passed by `beyond` (its place), at least the current beat's start. Never goes back. Saved as `"route"` (the volume id).
@@ -474,6 +488,43 @@ Pacing table (2026-10-20, the scripted player on the demo file; "baseline" = `54
 | baseline | 32 | 3.91 s | 1.50 s (25.3 s incl. walks) | 28 | 14.2 s | 14.2 s |
 | before | 32 | 3.75 s | 1.50 s | 28 | 14.2 s | 0.0 s |
 | now | 32 | 3.30 s | 0.75-1.0 s | 6 (all walks to the next place, not chained cards) | 9.8 s | 0.0 s |
+
+### 19. Enemy bindings (`"enemies"` + `"enemy"` filters, 2026-10-21)
+
+Game designer 2026-10-21: the A4 ambush lesson has two parts, each about ONE specific zombie of the level (part 1: the one walking a perimeter
+round a building -> tripwire; part 2: another one lured into the open -> close shot); the other zombie must not complete or break the other
+part. A lesson binds to its enemy **without any map change**:
+
+```json
+"enemies": [ { "id": "A4_PERIMETER", "route": "PatrolRoute_A4_Hounds" }, { "id": "A4_LURE", "route": "PatrolRoute_A4_Frostbitten" } ],
+...
+"complete": { "event": "TripwireTriggered.Enemy", "enemy": "A4_PERIMETER", "timeout_s": 240 }
+"complete": { "event": "EnemyKilled.Squad", "enemy": "A4_LURE", "within_m": 10, "off_route_m": 4, "timeout_s": 120 }
+"trigger":  { "type": "event", "event": "StealthLure.Heard", "enemy": "A4_LURE", "requires": ["A4_lure"] }
+"cancel_on": { "event": "EnemyKilled", "enemy": "A4_PERIMETER" }
+```
+
+| Key | Meaning |
+|---|---|
+| `enemies[].id` | **required**, unique; what `enemy` filters and the `@...<enemy>` guide spots name. |
+| `enemies[].route` | string or array of selectors: the enemy whose patrol route (`AEnemyCharacter::AssignedPatrolRoute`) matches one belongs to the binding. |
+| `enemies[].actor` | string or array of selectors on the enemy itself. At least one of `route` / `actor`: error otherwise. |
+| selector | matches an actor's **label** (editor builds - also `-game` with the editor binary; labels are editor-only data), its **object name** or one of its **actor tags**, case-insensitive, whole words (`TutorialRules::MatchesActorSelector`). For a cooked build give the actor a tag with the same text. |
+| `enemy` (trigger / complete / cancel_on) | the event's subject must be an enemy of that binding. Unset runtime provider / an unknown subject / an operative: the event never counts. |
+| `within_m` / `off_route_m` | measured on the subject at the event: the nearest living operative (3D) and its 2D distance from its own route (`TutorialRules::PassesEnemyFilter`). |
+
+**Runtime** (`UTutorialSubsystem::PassesEnemyFilterNow` = `FTutorialStateMachine::EnemyFilterProvider`): the subject id is the actor's object
+name (the event bus subject); the enemy is looked up in the enemy registry (a dying enemy still counts - its kill is raised in `HandleDied`).
+`FindBoundEnemies` / `IsEnemyBound` (public, smokes); `LogEnemyBindings` logs at every steps load which level enemies each binding found - none:
+a warning ("its steps end by their timeouts only"; strict: no fallback to "any enemy", so the other zombie can never stand in).
+**Event `EnemyKilled`** (`GameplayEvents::EnemyKilled`, `AEnemyCharacter::HandleDied`): Subject = the enemy, Target = the operative whose attack
+killed it (matched by the attacker name), Kind `Squad` (an operative's shot / blow / grenade) / `Trap` (a mine / wire / charge blast) / `Other`;
+raised as `EnemyKilled.<Kind>` FIRST, then `EnemyKilled` - a step completing on the specific kill finishes before a step reacting to any kill
+sees it (the A4 close shot and its "not up close" twin line).
+Tests `CodexTactics.Tutorial.AmbushLesson.EnemyBindingSchema` (parse / errors / warnings / spots / the pure rules on the user's route
+coordinates), `PartsBoundToTheirZombie` (each part ignores the other zombie: trips, lures, kills; trap / far / on-the-beat kills; killed before
+the lure; no provider), `LureSchema`, `TrapThenLure`, `OneOperative`; smokes `TutorialSmoke` stages 130-136 (tagged routes on the movement
+test map) and `TutorialAmbushLakeSmoke` (the user's lake layout, real wire / whistle / shots).
 
 ## History
 

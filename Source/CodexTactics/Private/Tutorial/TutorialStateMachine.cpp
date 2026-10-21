@@ -786,7 +786,17 @@ void FTutorialStateMachine::CancelStep(int32 Index)
 	FinishFlagged(Index, ETutorialStepState::Skipped, &FTutorialTransition::bCancelled);
 }
 
-void FTutorialStateMachine::CancelMatching(FName FinishedStep, FName EventName, FName VolumeId)
+bool FTutorialStateMachine::PassesEnemyFilter(const FTutorialEnemyFilter& Filter, FName SubjectId) const
+{
+	if (!Filter.IsSet())
+	{
+		return true;
+	}
+	// 2026-10-21: only the bound enemy's event counts (each A4 part reacts to ITS zombie); no runtime to ask = never.
+	return !SubjectId.IsNone() && EnemyFilterProvider && EnemyFilterProvider(Filter, SubjectId);
+}
+
+void FTutorialStateMachine::CancelMatching(FName FinishedStep, FName EventName, FName VolumeId, FName SubjectId)
 {
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
@@ -796,7 +806,8 @@ void FTutorialStateMachine::CancelMatching(FName FinishedStep, FName EventName, 
 			continue;
 		}
 		const bool bMatch = (!FinishedStep.IsNone() && Cancel.Steps.Contains(FinishedStep))
-			|| (!EventName.IsNone() && !Cancel.Event.IsEmpty() && TutorialRules::MatchesName(Cancel.Event, EventName))
+			|| (!EventName.IsNone() && !Cancel.Event.IsEmpty() && TutorialRules::MatchesName(Cancel.Event, EventName)
+				&& PassesEnemyFilter(Cancel.EnemyFilter, SubjectId))
 			|| (!VolumeId.IsNone() && Cancel.Volumes.Contains(VolumeId));
 		if (bMatch)
 		{
@@ -1034,19 +1045,23 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 					continue; // "subject": "focus": someone else's event (the medkit healed another operative)
 				}
 			}
+			if (!PassesEnemyFilter(Complete.EnemyFilter, SubjectId))
+			{
+				continue; // "enemy": another enemy's event (the far zombie walked into the near zombie's wire)
+			}
 			TryCountEventSubject(Index, SubjectId);
 		}
 	}
-	CancelMatching(NAME_None, EventName, NAME_None);
+	CancelMatching(NAME_None, EventName, NAME_None, SubjectId);
 	NoteConfineEvent(EventName, SubjectId);
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
 		const FTutorialTrigger& Trigger = Data.Steps[Index].Trigger;
 		const bool bFailure = Trigger.Type == ETutorialTriggerType::FailureRetry;
 		if ((Trigger.Type != ETutorialTriggerType::Event && !bFailure) || !TutorialRules::MatchesName(Trigger.Event, EventName) || !CanTrigger(Index)
-			|| !IsArmed(Index))
+			|| !IsArmed(Index) || !PassesEnemyFilter(Trigger.EnemyFilter, SubjectId))
 		{
-			continue; // not armed yet ("requires"): the event is not stored
+			continue; // not armed yet ("requires") / another enemy's event: the event is not stored
 		}
 		FRuntime& State = Runtime[Index];
 		if (++State.TriggerHits < Trigger.Count)

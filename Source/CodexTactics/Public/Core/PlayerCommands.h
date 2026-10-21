@@ -412,6 +412,13 @@ namespace GameplayEvents
 	 * "Throw", Location = the noise). Once per enemy per noise.
 	 */
 	extern CODEXTACTICS_API const FName LureHeard;
+	/**
+	 * "EnemyKilled" (2026-10-21, the A4 close-shot lesson): an enemy died (Subject = the enemy, Target = the operative whose attack killed
+	 * it - matched by the attacker name - or none, Kind = "Squad" (an operative's shot / blow / grenade), "Trap" (a mine / wire / charge
+	 * blast) or "Other", Location = where it died). Raised as "EnemyKilled.<Kind>" FIRST and then as "EnemyKilled", so a step completing on
+	 * the specific kill finishes before a step reacting to any kill of that enemy sees it.
+	 */
+	extern CODEXTACTICS_API const FName EnemyKilled;
 	/** An operative settled in a cover slot (arrived and pressed to the wall; not on the order). Also "CoverEntered.High" / ".Low". */
 	extern CODEXTACTICS_API const FName CoverEntered;
 	/** An operative left his cover (moved off, ordered elsewhere, knocked out of it). */

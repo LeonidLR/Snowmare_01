@@ -22,6 +22,42 @@ locked on Demo 01 until the safety unlock-all - a wave / horde fight or the tuto
 
 ## Decision blocks, newest first (old §6 «Tutorial» section)
 
+**Demo 01 2026-10-21 (game designer: "split the stealth lesson into two parts: in the FIRST a zombie walks a perimeter round ONE building -
+we set a tripwire for it; in the SECOND you LURE a zombie out into open ground and shoot it at close range"; and "I split the two patrol
+routes onto two zombies and two buildings - keep the placement as it is").** **The user's layout (read from his map, nothing moved):** two
+`BP_Enemy_MilitaryZombie` placed in A4 - `BP_Enemy_MilitaryZombie` (object `BP_Enemy_MilitaryZombie_C_1`, at (24633, -2512)) on the route
+labelled `PatrolRoute_A4_Hounds` (`PatrolRouteActor_1`, a closed 4-point loop (25642, -2473) -> (24640, -2490) -> (25047, -3374) -> (25625, -3422),
+~10 x 9 m, round **`Container_A4_South`** at (25320, -2940); its west corner is 5.5 m past the overlook's low cover) = **part 1**; and
+`BP_Enemy_MilitaryZombie2` (`..._C_3`, at (27443, -1447)) on `PatrolRoute_A4_Frostbitten` (`PatrolRouteActor_0`, the user moved it: loop
+(27177, -2775) -> (27977, -2775) -> (29163, -1775, **z -1256**) -> (27477, -1399), past **`Container_A4_North`**, which the user moved to
+(27520, -2361), and through the compound gate) = **part 2**. The old frostbitten + hound are gone; the route names are the rev 5 ones.
+**Binding (engine, every level; [tutorial-engine](tutorial-engine.md) section 19):** the steps file's new root `"enemies"` binds
+`A4_PERIMETER` / `A4_LURE` by their route's label (selectors match labels, object names and tags - no map change); `"enemy"` (+ `"within_m"`,
+`"off_route_m"`) next to an `"event"` in a trigger / completion / cancel_on counts only that zombie's events. New event **`EnemyKilled`**
+(`.Squad` / `.Trap` / `.Other`, the specific one first; Target = the killer). New guide spots `@patrol_route.<enemy>`, `@lure_spot.<enemy>`
+(10 m short of his path, towards her), `@enemy.<enemy>` (follows him). **Beats (A4):** `A4_cones` -> (`A4_posture` twin) -> PART 1
+`A4_tripwire` ("PART 1: TRIPWIRE - {focus} ALONE", target = the nearest point of the PERIMETER zombie's loop) -> objective `A4_trap_wait`
+(done only on THAT zombie's `TripwireTriggered.Enemy`; cancelled when he dies another way; 240 s) + `A4_wt_trap` ("That's one. The other one is
+still by the far container.", only for him) -> PART 2 `A4_lure` ("PART 2: LURE - {focus}", target = the lure spot by the far zombie's path,
+unlocks `Stealth.*`, done only on THE FAR zombie's `StealthLure.Heard`; dropped if he dies before the lure) -> `A4_close_shot` (replaces
+`A4_lure_ambush`; "PART 2: CLOSE SHOT - let him come close - under 10 m, away from the far container - then Ctrl+click him or AGGRESSIVE";
+triggered by his `StealthLure.Heard`, target = him; done on `EnemyKilled.Squad` of THE FAR zombie with an operative within 10 m and him >= 4 m
+off his route; 120 s) / feed `A4_close_shot_far` ("He's down - but not up close in the open ...", any other kill of him; twins with
+`cancel_on` both ways). The Medic-Sapper still does both parts alone, the pair held at the overlook until the lure is heard; monotonic
+progress, one current target + edge arrow, locks, precredit, SKIP TUTORIAL and checkpoints are unchanged (no new saved state: bindings are data).
+Texts (draft): `WT_A4_01` / `03` / `04`, `TUT_A4_TRIPWIRE`, `OBJ_A4_TRAP`, `TUT_A4_LURE`, `TUT_A4_CLOSE_SHOT`, `TUT_A4_CLOSE_SHOT_FAR` (the old
+`TUT_A4_AMBUSH` is gone). Tests `CodexTactics.Tutorial.AmbushLesson.*` (+ `EnemyBindingSchema`, `PartsBoundToTheirZombie`), `Flow.Pacing`;
+TutorialSmoke stages 130-136; the new **`TutorialAmbushLakeSmoke`** on the user's layout (both bindings find exactly his two zombies, part 1's
+route is a loop round ONE container; a REAL wire rigged by the Medic-Sapper on the loop, the far zombie's trip event refused, the perimeter
+zombie walks into the wire -> part 1; the perimeter zombie's lure event refused, a REAL whistle from the lure spot -> the far zombie
+investigates -> the close-shot card; the perimeter zombie shot dead 6 m from her, 6.3 m off its loop -> NOT counted; the far zombie comes
+4.6 m off his route to 5.4 m and is shot dead -> part 2 done). `Shot` mode writes `Saved/Screenshots/AmbushLake/01_part1_perimeter_zombie_and_wire.png`,
+`02_part2_lured_into_the_open.png`, `03_part2_close_shot.png`. **Map notes (nothing changed):** the far route's third waypoint lies 12.6 m
+under the ground (z -1256) - the patroller's path to it is the user's to check; the bindings use the route LABELS (editor data): for a
+cooked build tag the two routes `PatrolRoute_A4_Hounds` / `PatrolRoute_A4_Frostbitten`; the user's `Content/military_zombie_set2` pack is
+untracked in git (the optimized Military Zombie mesh needs its skeleton - without it the game asserts in `AEnemyGhostActor::CopyMeshes`).
+
+
 **Demo 01 2026-10-20 d (game designer: "there's no flow - transitions feel forced, I keep waiting for the next instruction"): the pacing pass.**
 Content and order unchanged. (1) The card breather 1.5 -> **0.8 s** (engine, every level). (2) Delays: `A0_cam_pan` 2 -> 1 s (with the radio
 and the objective), `A1_heatpack_mate` / `A1_sprint` / `A1_obj_hut` + `A1_wt_resupply` / `A1_share` + `A1_share_card` / `A1_regroup` /
