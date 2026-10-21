@@ -3,11 +3,13 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "Core/PlayerCommands.h"
+#include "Interactables/ActionMenuTypes.h"
 #include "GameFramework/Actor.h"
 #include "EventBusProbe.generated.h"
 
 class AOperativeCharacter;
 class UCodexEventBus;
+class UInteractionSubsystem;
 
 /** Dev-only listener for EventBusSmoke: counts every UCodexEventBus event it hears. */
 UCLASS(Transient)
@@ -34,6 +36,13 @@ public:
 	UFUNCTION() void OnGenerator(bool bPowered) { ++Counts.FindOrAdd(TEXT("generator")); bLastPowered = bPowered; }
 	UFUNCTION() void OnSaved(const FString& SlotName, bool bAutosave) { ++Counts.FindOrAdd(TEXT("saved")); LastSlot = SlotName; }
 	UFUNCTION() void OnLoaded(const FString& SlotName) { ++Counts.FindOrAdd(TEXT("loaded")); }
+
+	// --- The action menu window (DisarmCoverSmoke): every OnActionMenuChanged the HUD would hear. ---
+
+	int32 MenuOpens = 0;
+	int32 MenuCloses = 0;
+	void ListenActionMenu(UInteractionSubsystem* Interactions);
+	UFUNCTION() void OnActionMenu(bool bOpen, const FActionMenuSpec& Menu) { ++(bOpen ? MenuOpens : MenuCloses); }
 
 	int32 Count(const TCHAR* Key) const { const int32* Value = Counts.Find(Key); return Value ? *Value : 0; }
 

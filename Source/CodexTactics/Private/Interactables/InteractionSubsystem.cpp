@@ -16,6 +16,7 @@
 #include "Interactables/UseOrderRules.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
+#include "Vehicles/VehicleSubsystem.h"
 
 bool UInteractionSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
@@ -25,6 +26,51 @@ bool UInteractionSubsystem::DoesSupportWorldType(const EWorldType::Type WorldTyp
 TStatId UInteractionSubsystem::GetStatId() const
 {
 	RETURN_QUICK_DECLARE_CYCLE_STAT(UInteractionSubsystem, STATGROUP_Tickables);
+}
+
+namespace InteractionCommands
+{
+	/** Demo 01 command id of a confirmed action menu (defuse / light / use), decided before the action changes the object. */
+	FName ForConfirm(const AInteractableActor& Target)
+	{
+		if (Target.IsA<ATripwireActor>())
+		{
+			return PlayerCommands::DisarmTripwire;
+		}
+		if (const AProximityMineActor* Mine = Cast<AProximityMineActor>(&Target))
+		{
+			return Mine->bPlacedBySquad ? PlayerCommands::UseObject : PlayerCommands::DisarmMine;
+		}
+		if (Target.bTrapped)
+		{
+			return PlayerCommands::DisarmTrap;
+		}
+		if (const ABarrelActor* Barrel = Cast<ABarrelActor>(&Target); Barrel && !Barrel->IsBurning() && !Barrel->IsBurnt())
+		{
+			return PlayerCommands::LightBarrel;
+		}
+		return PlayerCommands::UseObject;
+	}
+
+	/** The confirmed action is a disarm / defuse (a wire, a mine, a rigged object). */
+	bool IsDisarm(const AInteractableActor& Target)
+	{
+		const FName Id = ForConfirm(Target);
+		return Id == PlayerCommands::DisarmTripwire || Id == PlayerCommands::DisarmMine || Id == PlayerCommands::DisarmTrap;
+	}
+}
+
+void UInteractionSubsystem::StepOffCoverForDisarm(AOperativeCharacter& Leader) const
+{
+	// Rev 2026-10-21 (game designer: "in cover, pressed to the wall, a disarm order does nothing"): the work needs the open (crouched over
+	// the charge; the pickup clip is off in cover), so a disarm order takes him off the wall. Not for the orders OrderMoveTo refuses.
+	if ((!Leader.bInCover && !Leader.HasPendingCover()) || Leader.IsRaging() || Leader.IsPanicking() || Leader.IsKnockedDown()
+		|| VehicleQueries::IsMounted(&Leader))
+	{
+		return;
+	}
+	Leader.ClearPendingCover();
+	Leader.LeaveCoverToMove(TEXT("disarm order"));
 }
 
 bool UInteractionSubsystem::RequestInteraction(AInteractableActor* Target, bool bSprint)
@@ -43,6 +89,14 @@ bool UInteractionSubsystem::RequestInteraction(AInteractableActor* Target, bool 
 	if (ADeployableActor* Deployable = Cast<ADeployableActor>(Target))
 	{
 		Deployable->ApproachingDefuser = bSprint && !Target->UsesDisarmApproach() ? nullptr : Leader;
+	}
+	// A disarm order from the wall (real time): in reach of the spot the menu opens at once and no move order follows (it would take him off
+	// the wall), so he steps off here; farther away OrderMoveTo below does it. The pause plans the walk / confirms later (ConfirmActionMenu).
+	const UGameFlowSubsystem* ClickFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (InteractionCommands::IsDisarm(*Target) && !(ClickFlow && ClickFlow->GetCombatMode() == ECodexCombatMode::TacticalPause)
+		&& Target->IsInInteractionReach(Leader->GetActorLocation(), Leader->IsMoving()))
+	{
+		StepOffCoverForDisarm(*Leader);
 	}
 	if (TryOpenMenu())
 	{
@@ -83,31 +137,6 @@ void UInteractionSubsystem::ClearDefuser(AInteractableActor* Target) const
 	}
 }
 
-namespace InteractionCommands
-{
-	/** Demo 01 command id of a confirmed action menu (defuse / light / use), decided before the action changes the object. */
-	FName ForConfirm(const AInteractableActor& Target)
-	{
-		if (Target.IsA<ATripwireActor>())
-		{
-			return PlayerCommands::DisarmTripwire;
-		}
-		if (const AProximityMineActor* Mine = Cast<AProximityMineActor>(&Target))
-		{
-			return Mine->bPlacedBySquad ? PlayerCommands::UseObject : PlayerCommands::DisarmMine;
-		}
-		if (Target.bTrapped)
-		{
-			return PlayerCommands::DisarmTrap;
-		}
-		if (const ABarrelActor* Barrel = Cast<ABarrelActor>(&Target); Barrel && !Barrel->IsBurning() && !Barrel->IsBurnt())
-		{
-			return PlayerCommands::LightBarrel;
-		}
-		return PlayerCommands::UseObject;
-	}
-}
-
 void UInteractionSubsystem::TrapActionMenu()
 {
 	AInteractableActor* Target = MenuTarget.Get();
@@ -128,6 +157,7 @@ void UInteractionSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	TickUseOrders(DeltaTime);
+	CloseStaleWindows();
 	if (Pending.IsValid())
 	{
 		TryOpenMenu();
@@ -187,6 +217,8 @@ void UInteractionSubsystem::OpenMenuFor(AInteractableActor* Target, AOperativeCh
 		return;
 	}
 	MenuTarget = Target;
+	bMenuOpen = true;
+	bMenuTargetTrapped = Target->bTrapped;
 	Menu = Request.Menu;
 	// Godot _open_action_menu: any object that can carry a trap offers "Set trap (N)" / "No grenades".
 	Menu.bAllowTrap = Target->CanReceiveTrap();
@@ -224,6 +256,10 @@ void UInteractionSubsystem::ConfirmActionMenu()
 		{
 			OrderUse(Leader, Target);
 			return;
+		}
+		if (InteractionCommands::IsDisarm(*Target))
+		{
+			StepOffCoverForDisarm(*Leader); // the pause's menu opened in cover, or any other path that skipped the walk-up
 		}
 		Target->ExecuteAction(Leader);
 	}
@@ -537,11 +573,30 @@ void UInteractionSubsystem::CancelActionMenu()
 
 void UInteractionSubsystem::CloseMenu()
 {
-	if (MenuTarget.IsValid())
+	// Keyed by bMenuOpen, not by the weak target: a destroyed object (a disarmed wire) must still close its window (Cancel too).
+	if (bMenuOpen)
 	{
+		bMenuOpen = false;
 		ClearDefuser(MenuTarget.Get());
 		MenuTarget.Reset();
 		OnActionMenuChanged.Broadcast(false, Menu);
+	}
+}
+
+void UInteractionSubsystem::CloseStaleWindows()
+{
+	if (bMenuOpen)
+	{
+		const AInteractableActor* Target = MenuTarget.Get();
+		if (!Target || Target->ShouldCloseActionMenu() || Target->bTrapped != bMenuTargetTrapped)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Action menu closed: %s is gone, disarmed or spent"), Target ? *Target->GetName() : TEXT("its object"));
+			CloseMenu();
+		}
+	}
+	if (LootCrate.IsStale())
+	{
+		CloseLootDialog(); // the crate was destroyed under the open window
 	}
 }
 
