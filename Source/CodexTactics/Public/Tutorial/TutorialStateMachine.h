@@ -85,6 +85,12 @@ public:
 	TFunction<bool(FName VolumeId)> VolumeProvider;
 	/** The runtime can show the spot "@<name>" for this step (ETutorialGuideKind::Spot). Unset = no spot can be shown. */
 	TFunction<bool(FName Spot, FName StepId)> SpotProvider;
+	/**
+	 * 2026-10-21 (the A4 ambush, one zombie per part): does the event subject SubjectId pass an "enemy" filter (FTutorialEnemyFilter: the
+	 * subject is an enemy of that binding, a living operative within "within_m", at least "off_route_m" off its route)? Set by the runtime
+	 * (UTutorialSubsystem: TutorialRules::PassesEnemyFilter on the subject actor) or by tests. Unset: a filtered event never counts.
+	 */
+	TFunction<bool(const FTutorialEnemyFilter& Filter, FName SubjectId)> EnemyFilterProvider;
 
 	/** Replaces the steps and resets all progress. */
 	void Load(const FTutorialStepsData& InData);
@@ -297,7 +303,9 @@ private:
 	/** Rev 5e: drops a running step as Skipped and marks its transition bCancelled (FTutorialCancelOn). */
 	void CancelStep(int32 Index);
 	/** Rev 5e: cancels every running step whose "cancel_on" matches (a finished step / an event / a volume entry). */
-	void CancelMatching(FName FinishedStep, FName EventName, FName VolumeId);
+	void CancelMatching(FName FinishedStep, FName EventName, FName VolumeId, FName SubjectId = NAME_None);
+	/** An event of SubjectId passes Filter (no filter = always; EnemyFilterProvider unset = never). */
+	bool PassesEnemyFilter(const FTutorialEnemyFilter& Filter, FName SubjectId) const;
 	/** Every step of an after_step trigger's "step" list has finished at least once (FTutorialTrigger::AfterSteps). */
 	bool AreAfterStepsFinished(int32 Index) const;
 	/** Every "trigger.requires" step has been triggered at least once. */

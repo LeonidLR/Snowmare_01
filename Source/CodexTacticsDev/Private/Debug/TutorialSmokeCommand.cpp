@@ -51,6 +51,10 @@
 //     (tap = next line, hold = skip); (rev 5i) SKIP TUTORIAL from A0: the button shows in A0, the pause menu entry asks and No
 //     keeps it, the button asks with the world paused and Yes skips - no cards / strip / objectives, C and the inventory (locked at
 //     A0) work, every command free, one feed line; the save says skipped, RESET starts it again, loading the save skips it again;
+//     2026-10-21 (the A4 ambush in two parts, each bound to ITS zombie by the demo file's "enemies"): the smoke's two routes carry the
+//     lake's route labels as tags; the far zombie's TripwireTriggered.Enemy does not complete part 1, the perimeter zombie's does; the
+//     whistle lures the far zombie (part 2), the close-shot card's target follows him, the perimeter zombie "killed" beside the squad does
+//     not complete it, the far one killed off his route within 10 m does (kill EVENTS here; TutorialAmbushLakeSmoke shoots for real);
 // 10. (2026-10-20, the current navigation target) stages 140-153 on a runtime course (the lake's volumes + a bridge + the bridge marker):
 //     the squad crosses the "crevasse" WITHOUT the bridge beacon (teleported across beside the bridge) -> the bridge objective is passed
 //     (never shown, its marker never appears), the target jumps to the hut approach; the whole hut lesson (Solo B, select 2, both door
@@ -114,6 +118,7 @@ class APatrolRouteActor;
 #include "UI/Frontend/CodexUITags.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/BoxComponent.h"
+#include "Components/SplineComponent.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Data/DialogueSequenceAsset.h"
@@ -207,6 +212,9 @@ namespace TutorialSmoke
 		int32 GuideArrowChecks = 0;
 		/** 2026-10-20 ambush by one operative: the patrol route of the wire spot, a held mate. */
 		TWeakObjectPtr<APatrolRouteActor> AmbushRoute;
+		/** 2026-10-21: part 2's route (the A4_LURE binding) and part 1's zombie (on AmbushRoute, the A4_PERIMETER binding). */
+		TWeakObjectPtr<APatrolRouteActor> LureRoute;
+		TWeakObjectPtr<AEnemyCharacter> PerimeterEnemy;
 		TWeakObjectPtr<AOperativeCharacter> AmbushMate;
 	};
 
@@ -2234,6 +2242,18 @@ namespace TutorialSmoke
 				FActorSpawnParameters RouteParams;
 				RouteParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 				State.AmbushRoute = World->SpawnActor<APatrolRouteActor>(APatrolRouteActor::StaticClass(), FTransform(RouteSpot), RouteParams);
+				// 2026-10-21: the demo file binds part 1 to the zombie on the route labelled PatrolRoute_A4_Hounds on the lake (a selector also
+				// matches a tag) and part 2 to PatrolRoute_A4_Frostbitten - the smoke's routes carry those tags.
+				if (APatrolRouteActor* Route = State.AmbushRoute.Get())
+				{
+					Route->Tags.Add(FName(TEXT("PatrolRoute_A4_Hounds")));
+				}
+				const FVector LureRouteSpot = Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 800.f;
+				State.LureRoute = World->SpawnActor<APatrolRouteActor>(APatrolRouteActor::StaticClass(), FTransform(LureRouteSpot), RouteParams);
+				if (APatrolRouteActor* Route = State.LureRoute.Get())
+				{
+					Route->Tags.Add(FName(TEXT("PatrolRoute_A4_Frostbitten")));
+				}
 			}
 			Check(State, Tutorial->TriggerStep(TEXT("A4_cones")) && Tutorial->GetCurrentBeat() == FName(TEXT("A4")), TEXT("A4 started with the cone card"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Skipped || Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Waiting,
@@ -2279,6 +2299,27 @@ namespace TutorialSmoke
 				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
 			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
 				TEXT("the lure is still locked"));
+			// 2026-10-21: part 1's zombie walks the AmbushRoute (senses off, parked: only its events matter here).
+			if (!State.PerimeterEnemy.IsValid())
+			{
+				const FVector RouteStart = State.AmbushRoute.IsValid() ? State.AmbushRoute->GetActorLocation() : Leader->GetActorLocation();
+				AEnemyCharacter* Zombie = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten, RouteStart + FVector(0.f, 0.f, 100.f),
+					FRotator::ZeroRotator);
+				if (Zombie)
+				{
+					Zombie->bOverridePerception = true;
+					Zombie->PerceptionOverride.SightRangeCm = 0.f;
+					Zombie->PerceptionOverride.ProximityCm = 0.f;
+					Zombie->PerceptionOverride.HearWalkCm = Zombie->PerceptionOverride.HearRunCm = 0.f;
+					Zombie->PerceptionOverride.HearCrouchWalkCm = Zombie->PerceptionOverride.HearCrawlCm = 0.f;
+					Zombie->PerceptionOverride.HearGunshotCm = Zombie->PerceptionOverride.HearExplosionCm = 0.f;
+					Zombie->PerceptionOverride.SmellRadiusCm = 0.f;
+					Zombie->AssignedPatrolRoute = State.AmbushRoute.Get();
+					Zombie->CustomTimeDilation = 0.f;
+					Zombie->SetActorTickEnabled(false);
+				}
+				State.PerimeterEnemy = Zombie;
+			}
 			// 2026-10-20 (game designer): the ambush is done by ONE operative - the Medic-Sapper; Solo with her selected, the others held.
 			{
 				AOperativeCharacter* Ambusher = Tutorial->GetFocusOperative(TEXT("A4_tripwire"));
@@ -2291,38 +2332,24 @@ namespace TutorialSmoke
 					&& Tutorial->IsConfining() && Tutorial->GetCardView().Title.ToString().Contains(Ambusher->DisplayName.ToString().ToUpper()),
 					FString::Printf(TEXT("ambush: the Medic-Sapper alone (%s), Solo on with her selected, the squad held, the card names her ('%s')"),
 						Ambusher ? *Ambusher->DisplayName.ToString() : TEXT("-"), *Tutorial->GetCardView().Title.ToString()));
+				Tutorial->RefreshGuideNow();
 				const FTutorialGuideView& Guide = Tutorial->GetGuideView();
 				const APatrolRouteActor* Route = State.AmbushRoute.Get();
-				// The spot is the point of the level's patrol routes nearest to her: the smoke's route 12 m ahead, or a map route that happens to
-				// lie nearer to where she stands (the squad's spots vary a little from run to run).
+				// 2026-10-21: the spot is on the PERIMETER zombie's route only ("@patrol_route.A4_PERIMETER"), nearest to her.
 				FVector Nearest = FVector::ZeroVector;
-				double NearestDist = TNumericLimits<double>::Max();
-				for (TActorIterator<APatrolRouteActor> It(World); It && Ambusher; ++It)
+				if (Route && Ambusher)
 				{
 					TArray<FVector> Points;
-					for (int32 Index = 0; Index < It->GetNumberOfWaypoints(); ++Index)
+					for (int32 Index = 0; Index < Route->GetNumberOfWaypoints(); ++Index)
 					{
-						Points.Add(It->GetWaypointWorldLocation(Index));
+						Points.Add(Route->GetWaypointWorldLocation(Index));
 					}
-					const int32 Segments = Points.Num() > 1 ? (It->bIsLoop ? Points.Num() : Points.Num() - 1) : Points.Num();
-					for (int32 Index = 0; Index < Segments; ++Index)
-					{
-						const FVector A = Points[Index];
-						const FVector B = Points.Num() > 1 ? Points[(Index + 1) % Points.Num()] : A;
-						const FVector From(Ambusher->GetActorLocation().X, Ambusher->GetActorLocation().Y, A.Z);
-						const FVector Candidate = FMath::ClosestPointOnSegment(From, A, FVector(B.X, B.Y, A.Z));
-						if (FVector::DistSquared2D(Candidate, From) < NearestDist)
-						{
-							NearestDist = FVector::DistSquared2D(Candidate, From);
-							Nearest = Candidate;
-						}
-					}
+					Nearest = TutorialRules::NearestPointOnRoute(Points, Route->bIsLoop, Ambusher->GetActorLocation());
 				}
-				const float FromOwnRoute = Route ? static_cast<float>(FVector::Dist2D(Guide.Location, Route->GetActorLocation())) : -1.f;
-				Check(State, Guide.bValid && Guide.Guide.Kind == ETutorialGuideKind::Spot && Route
-					&& (FromOwnRoute < 200.f || FVector::Dist2D(Guide.Location, Nearest) < 50.f),
-					FString::Printf(TEXT("ambush: the current target is the wire spot on the patrol route nearest to her (%s, %.0f cm from the smoke's route, %.0f cm from the nearest route point)"),
-						*UTutorialSubsystem::DescribeGuide(Guide.Guide), FromOwnRoute, FVector::Dist2D(Guide.Location, Nearest)));
+				Check(State, Guide.bValid && Guide.Guide.Kind == ETutorialGuideKind::Spot && Guide.Guide.Id == FName(TEXT("@patrol_route.A4_PERIMETER")) && Route
+					&& FVector::Dist2D(Guide.Location, Nearest) < 50.f,
+					FString::Printf(TEXT("ambush: the current target is the wire spot on the perimeter zombie's route nearest to her (%s, %.0f cm from it)"),
+						*UTutorialSubsystem::DescribeGuide(Guide.Guide), FVector::Dist2D(Guide.Location, Nearest)));
 				const FVector Far = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 1000.f);
 				const int32 LinesBefore = CountMessages(World, TEXT("handles it"));
 				Check(State, Mate && Mate->OrderMoveTo(Far, false) == EOperativeOrderResult::Refused && CountMessages(World, TEXT("handles it")) == LinesBefore + 1,
@@ -2352,6 +2379,16 @@ namespace TutorialSmoke
 				Guard->PerceptionOverride.SmellRadiusCm = 0.f;
 				Guard->GetHealthComponent()->SetMaxHealth(100000.f);
 				World->GetSubsystem<ULevelEncounterSubsystem>()->MarkLevelEnemy(Guard);
+				// 2026-10-21: part 2's zombie (A4_LURE): its route is the tagged LureRoute, moved onto its post (a two-point route 1 m long: it
+				// stays there, on patrol).
+				if (APatrolRouteActor* Route = State.LureRoute.Get(); Route && Route->GetRouteSpline())
+				{
+					Route->SetActorLocation(Post);
+					Route->GetRouteSpline()->ClearSplinePoints(false);
+					Route->GetRouteSpline()->AddSplinePoint(Post, ESplineCoordinateSpace::World, false);
+					Route->GetRouteSpline()->AddSplinePoint(Post + Ahead * 50.f, ESplineCoordinateSpace::World, true);
+					Guard->AssignedPatrolRoute = Route;
+				}
 			}
 			State.LureEnemy = Guard;
 			Next(State);
@@ -2366,9 +2403,22 @@ namespace TutorialSmoke
 			AEnemyCharacter* Guard = State.LureEnemy.Get();
 			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Active,
 				TEXT("rigged: the card completes, the objective 'wait until the patrol walks into the wire' shows"));
-			Check(State, Guard && Guard->IsGuardingPost() && !Guard->IsHuntingSquad(), TEXT("the second enemy guards its post, unaware"));
-			Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), TEXT("BP_Enemy_Frostbitten_Trapped")); // the first one walked into it
-			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed, TEXT("part 1: an enemy pulled the pin -> the objective is done"));
+			Check(State, Guard && Guard->IsOnPatrol() && !Guard->IsHuntingSquad(), TEXT("the second enemy stands on its route, unaware"));
+			// 2026-10-21: each part reacts only to ITS zombie - the far one (part 2's) pulling a pin does not complete part 1.
+			Check(State, Guard && Tutorial->IsEnemyBound(*Guard, TEXT("A4_LURE")) && State.PerimeterEnemy.IsValid()
+				&& Tutorial->IsEnemyBound(*State.PerimeterEnemy, TEXT("A4_PERIMETER")) && !Tutorial->IsEnemyBound(*Guard, TEXT("A4_PERIMETER")),
+				TEXT("bindings: the guard is A4_LURE (its route's tag), the perimeter zombie A4_PERIMETER"));
+			if (Guard)
+			{
+				Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), Guard->GetFName());
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A4_wt_trap")) == ETutorialStepState::Idle,
+				TEXT("part 1: the FAR zombie tripping a wire does not complete it (no 'that's one' line)"));
+			if (AEnemyCharacter* Zombie = State.PerimeterEnemy.Get())
+			{
+				Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), Zombie->GetFName()); // the perimeter zombie walked into it
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed, TEXT("part 1: the perimeter zombie pulled the pin -> the objective is done"));
 			Next(State);
 			return true;
 		}
@@ -2414,27 +2464,72 @@ namespace TutorialSmoke
 		}
 		case 134:
 		{
-			if (Tutorial->GetStepState(TEXT("A4_lure_ambush")) != ETutorialStepState::Active && State.StageTime < 5.f)
+			if (Tutorial->GetStepState(TEXT("A4_close_shot")) != ETutorialStepState::Active && State.StageTime < 5.f)
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A4_lure_ambush")) == ETutorialStepState::Active, FString::Printf(TEXT("he is coming: the AMBUSH card (%s)"),
-				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure_ambush")))));
-			// The fight itself is the A4 Phase 2 (and would unlock everything): the guard is taken away before the posture key.
-			if (AEnemyCharacter* Guard = State.LureEnemy.Get())
+			Check(State, Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Active, FString::Printf(TEXT("he is coming: the CLOSE SHOT card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_close_shot")))));
+			Tutorial->RefreshGuideNow();
+			Check(State, Tutorial->GetGuideView().bValid && Tutorial->GetGuideView().Guide.Id == FName(TEXT("@enemy.A4_LURE")) && State.LureEnemy.IsValid()
+				&& FVector::Dist2D(Tutorial->GetGuideView().Location, State.LureEnemy->GetActorLocation()) < 50.f,
+				FString::Printf(TEXT("the current target follows him (%s)"), *UTutorialSubsystem::DescribeGuide(Tutorial->GetGuideView().Guide)));
+			// 2026-10-21: the PERIMETER zombie "shot" right beside an operative, far off its route: not part 2's zombie (the kill event only:
+			// a real shot would start the fight - the lake smoke TutorialAmbushLakeSmoke shoots for real).
+			if (AEnemyCharacter* Zombie = State.PerimeterEnemy.Get())
 			{
-				Guard->Destroy();
+				const FVector Beside = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() - Leader->GetActorForwardVector().GetSafeNormal2D() * 400.f);
+				Zombie->SetActorLocation(FVector(Beside.X, Beside.Y, Zombie->GetActorLocation().Z), false, nullptr, ETeleportType::TeleportPhysics);
+				Tutorial->NotifyEvent(TEXT("EnemyKilled.Squad"), Zombie->GetFName());
+				Tutorial->NotifyEvent(TEXT("EnemyKilled"), Zombie->GetFName());
 			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A4_close_shot_far")) == ETutorialStepState::Idle,
+				TEXT("part 2: the PERIMETER zombie killed up close does not complete the close shot (nor the 'not up close' line)"));
 			Next(State);
 			return true;
 		}
 		case 135:
 		{
-			if (State.StageTime < 0.3f)
+			// The far zombie walks to the whistle: killed once he is off his route (>= 4 m) and within 10 m of an operative.
+			AEnemyCharacter* Guard = State.LureEnemy.Get();
+			const APatrolRouteActor* Route = State.LureRoute.Get();
+			float OffRoute = 0.f;
+			float Nearest = TNumericLimits<float>::Max();
+			if (Guard && Route)
+			{
+				TArray<FVector> Points;
+				for (int32 Index = 0; Index < Route->GetNumberOfWaypoints(); ++Index)
+				{
+					Points.Add(Route->GetWaypointWorldLocation(Index));
+				}
+				OffRoute = TutorialRules::DistanceToRoute2D(Points, Route->bIsLoop, Guard->GetActorLocation());
+				for (const AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					Nearest = FMath::Min(Nearest, static_cast<float>(FVector::Dist(Member->GetActorLocation(), Guard->GetActorLocation())));
+				}
+			}
+			if ((OffRoute < 450.f || Nearest > 950.f) && State.StageTime < 12.f)
 			{
 				return true;
 			}
-			Tap(PC, State, EKeys::Slash); // AGGRESSIVE (the leader)
+			Check(State, Guard && OffRoute >= 400.f && Nearest <= 1000.f, FString::Printf(TEXT("the lured zombie came off his route (%.1f m) to %.1f m from the squad"),
+				OffRoute / 100.f, Nearest / 100.f));
+			if (Guard)
+			{
+				Tutorial->NotifyEvent(TEXT("EnemyKilled.Squad"), Guard->GetFName()); // the close shot (the kill event; the fight is the lake smoke's)
+				Tutorial->NotifyEvent(TEXT("EnemyKilled"), Guard->GetFName());
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Completed, FString::Printf(TEXT("part 2: the close shot in the open completes it (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_close_shot")))));
+			// The fight itself would unlock everything: both zombies are taken away.
+			if (Guard)
+			{
+				Guard->Destroy();
+			}
+			if (AEnemyCharacter* Zombie = State.PerimeterEnemy.Get())
+			{
+				Zombie->Destroy();
+			}
 			Next(State);
 			return true;
 		}
@@ -2444,8 +2539,8 @@ namespace TutorialSmoke
 			{
 				return true;
 			}
-			Check(State, Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Aggressive
-				&& Tutorial->GetStepState(TEXT("A4_lure_ambush")) == ETutorialStepState::Completed, TEXT("'/' AGGRESSIVE completes the ambush card"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_close_shot_far")) == ETutorialStepState::Skipped,
+				FString::Printf(TEXT("the 'not up close' line never shows after a close shot (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_close_shot_far")))));
 			Check(State, World->GetSubsystem<UGameFlowSubsystem>()->GetPhase() == ECodexGamePhase::Exploration, TEXT("no fight started in the smoke (Phase 2)"));
 			// The squad holds fire again: an Aggressive squad would open fire on the next enemy it sees (the level is an ambush level
 			// since the guard was placed - "auto" + placed enemies) and the fight would unlock everything.

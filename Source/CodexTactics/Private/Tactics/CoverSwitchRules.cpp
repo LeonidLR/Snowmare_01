@@ -90,9 +90,16 @@ namespace CoverSwitchRules
 		}
 	}
 
-	bool IsSwitchConfirm(bool bDoubleClick, ECoverSwitchVerdict Verdict, bool bLocked)
+	bool IsSwitchConfirm(bool /*bDoubleClick*/, ECoverSwitchVerdict Verdict, bool bLocked)
 	{
-		return bDoubleClick && Verdict == ECoverSwitchVerdict::Switch && !bLocked;
+		return Verdict == ECoverSwitchVerdict::Switch && !bLocked;
+	}
+
+	bool UsesCornerTarget(const FVector2D& HoveredFaceNormal, const FVector2D& ProtectedNormal, float MinDot)
+	{
+		const FVector2D Face = HoveredFaceNormal.GetSafeNormal();
+		const FVector2D Protected = ProtectedNormal.GetSafeNormal();
+		return !Face.IsNearlyZero() && !Protected.IsNearlyZero() && FVector2D::DotProduct(Face, Protected) >= MinDot;
 	}
 
 	ECoverSwitchApproach ClassifyApproach(const FCoverSlot& Target, const FVector& From)
@@ -112,11 +119,11 @@ namespace CoverSwitchRules
 		return static_cast<int32>(Approach) * 2 + CoverFacingRules::ClipIndex(ArrivalFacing);
 	}
 
-	FString ClipName(ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, bool bCrouch)
+	FString ClipName(ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, bool bCrouch, bool bSprint)
 	{
 		const TCHAR* From = Approach == ECoverSwitchApproach::FromPackL ? TEXT("_L") : Approach == ECoverSwitchApproach::FromPackR ? TEXT("_R") : TEXT("");
 		const TCHAR* End = CoverFacingRules::ClipIndex(ArrivalFacing) == 0 ? TEXT("L") : TEXT("R");
-		return FString::Printf(TEXT("anim_M4_std_jog_fwd%s_to_cvr_%s_idle_%s"), From, bCrouch ? TEXT("crch") : TEXT("std"), End);
+		return FString::Printf(TEXT("anim_M4_std_%s_fwd%s_to_cvr_%s_idle_%s"), bSprint ? TEXT("sprint") : TEXT("jog"), From, bCrouch ? TEXT("crch") : TEXT("std"), End);
 	}
 
 	FVector2D OffsetAt(const FCoverSwitchTrack& Track, float Time)
@@ -142,7 +149,7 @@ namespace CoverSwitchRules
 	}
 
 	FCoverSwitchClipStart ChooseClipStart(const TArray<FCoverSwitchTrack>& TracksByApproach, const FVector2D& RunnerOffset, float MinClipLeftSeconds,
-		const FVector2D& RunnerDirection, float MinHeadingDot)
+		const FVector2D& RunnerDirection, float MinHeadingDot, const TArray<float>& TrackBiasCm)
 	{
 		FCoverSwitchClipStart Best;
 		float BestMismatch = TNumericLimits<float>::Max();
@@ -168,9 +175,12 @@ namespace CoverSwitchRules
 					}
 				}
 				const float Mismatch = static_cast<float>(FVector2D::Distance(RunnerOffset, Track.Offsets[Index]));
-				if (Mismatch < BestMismatch)
+				// A bias prefers a set (the sprint run-ins for a sprinting runner); the reported mismatch stays the real one.
+				const float Scored = Mismatch + (TrackBiasCm.IsValidIndex(Approach) ? TrackBiasCm[Approach] : 0.f);
+				if (Scored < BestMismatch)
 				{
-					BestMismatch = Mismatch;
+					BestMismatch = Scored;
+					Best.Track = Approach;
 					Best.Approach = Approach;
 					Best.StartSeconds = Track.Times[Index];
 					Best.ClipOffset = Track.Offsets[Index];

@@ -921,6 +921,16 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchSwitchEnter = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
 
+	/**
+	 * The pack's SPRINT run-ins (user 2026-10-21: "only the walking animation, no fast movement"), same indices: std_sprint_fwd[_L|_R]_to_cvr_
+	 * {std|crch}_idle_L / _R. Measured (2026-10-21, root bone): the body comes in at ~960-1015 cm/s (the jog ones 400-530) and is still 0.97-1.27
+	 * s in; from 2 m out 0.58-0.80 s are left (jog 0.83-1.02). A sprinting dash prefers them (AOperativeCharacter::CoverSwitchSprintPreferenceCm).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandSwitchSprintEnter = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchSwitchSprintEnter = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+
 	/** Blend-in of the switch run-in clip over the running pose (its jog matches the run, so a plain eased blend), s. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverSwitchBlendSeconds = 0.2f;
@@ -928,14 +938,15 @@ public:
 	/** A switch run-in clip of the stance is assigned / loaded (any of the six). */
 	bool HasCoverSwitchClips(bool bCrouch) const;
 
-	/** The run-in clip for Approach ending facing ArrivalFacing; nullptr when that one is missing. */
-	UAnimSequenceBase* GetCoverSwitchClip(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing) const;
+	/** The run-in clip for Approach ending facing ArrivalFacing (bSprint: the sprint set); nullptr when that one is missing. */
+	UAnimSequenceBase* GetCoverSwitchClip(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, bool bSprint = false) const;
 
 	/**
 	 * The clip's root track as world XY offsets from where it ends, for a mesh whose component yaw in the world is MeshWorldYaw
 	 * (actor yaw + the Blueprint's mesh yaw), sampled at 30 Hz (cached per clip). False when the clip is missing.
 	 */
-	bool GetCoverSwitchTrack(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, float MeshWorldYaw, FCoverSwitchTrack& OutTrack) const;
+	bool GetCoverSwitchTrack(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, float MeshWorldYaw, FCoverSwitchTrack& OutTrack,
+		bool bSprint = false) const;
 
 	/** Name of the last switch run-in clip started (smokes / logs), empty before the first one. */
 	const FString& GetLastCoverSwitchClip() const { return LastCoverSwitchClip; }

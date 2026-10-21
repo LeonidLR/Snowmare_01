@@ -134,6 +134,10 @@ bool FCoverSwitchClipChoiceTest::RunTest(const FString&)
 		FString(TEXT("anim_M4_std_jog_fwd_R_to_cvr_crch_idle_L")));
 	TestEqual(TEXT("Straight in, facing his right"), CoverSwitchRules::ClipName(ECoverSwitchApproach::Front, ECoverFacing::Right, false),
 		FString(TEXT("anim_M4_std_jog_fwd_to_cvr_std_idle_L")));
+	TestEqual(TEXT("The sprint run-in of the same approach / ending"), CoverSwitchRules::ClipName(ECoverSwitchApproach::FromPackL, ECoverFacing::Right, false, true),
+		FString(TEXT("anim_M4_std_sprint_fwd_L_to_cvr_std_idle_L")));
+	TestEqual(TEXT("... crouched"), CoverSwitchRules::ClipName(ECoverSwitchApproach::FromPackR, ECoverFacing::Left, true, true),
+		FString(TEXT("anim_M4_std_sprint_fwd_R_to_cvr_crch_idle_R")));
 	TestEqual(TEXT("Index: front / right = 0"), CoverSwitchRules::ClipArrayIndex(ECoverSwitchApproach::Front, ECoverFacing::Right), 0);
 	TestEqual(TEXT("Index: from pack L / right = 2"), CoverSwitchRules::ClipArrayIndex(ECoverSwitchApproach::FromPackL, ECoverFacing::Right), 2);
 	TestEqual(TEXT("Index: from pack R / left = 5"), CoverSwitchRules::ClipArrayIndex(ECoverSwitchApproach::FromPackR, ECoverFacing::Left), 5);
@@ -183,6 +187,17 @@ bool FCoverSwitchClipStartTest::RunTest(const FString&)
 	OnlySide[1] = Tracks[1];
 	TestEqual(TEXT("Only the pack-L clip exists: it is taken"), CoverSwitchRules::ChooseClipStart(OnlySide, FVector2D(220.f, 0.f), 0.6f).Approach,
 		static_cast<int32>(ECoverSwitchApproach::FromPackL));
+	// Jog (0-2) and sprint (3-5) sets together: a bias prefers the sprint set when its body is about as near; the real mismatch is reported.
+	TArray<FCoverSwitchTrack> Both = Tracks;
+	Both.Add(MakeSwitchTrack(FVector2D(0.f, 860.f), 1.5f)); // sprint, front: shaped like the jog one, longer
+	Both.Add(MakeSwitchTrack(FVector2D(0.f, 860.f), 1.5f)); // sprint, from pack L
+	Both.Add(MakeSwitchTrack(FVector2D(0.f, -760.f), 1.5f)); // sprint, from pack R
+	Both[3] = MakeSwitchTrack(FVector2D(700.f, 0.f), 1.5f);
+	const TArray<float> PreferSprint = { 0.f, 0.f, 0.f, -60.f, -60.f, -60.f };
+	const FCoverSwitchClipStart Sprinted = CoverSwitchRules::ChooseClipStart(Both, FVector2D(10.f, 210.f), 0.6f, FVector2D(0.f, -1.f), 0.5f, PreferSprint);
+	TestTrue(TEXT("Sprinting from his right: the sprint _L run-in (track 4)"), Sprinted.Track == 4 && Sprinted.MismatchCm < 40.f);
+	const FCoverSwitchClipStart Jogged = CoverSwitchRules::ChooseClipStart(Both, FVector2D(10.f, 210.f), 0.6f, FVector2D(0.f, -1.f), 0.5f);
+	TestTrue(TEXT("... without the bias the nearest body of either set"), Jogged.Track == 1 || Jogged.Track == 4);
 	TArray<FCoverSwitchTrack> None;
 	None.SetNum(3);
 	TestEqual(TEXT("No clips: no choice"), CoverSwitchRules::ChooseClipStart(None, FVector2D(220.f, 0.f), 0.6f).Approach, static_cast<int32>(INDEX_NONE));
@@ -194,7 +209,7 @@ bool FCoverSwitchClickRulesTest::RunTest(const FString&)
 {
 	// Double-click at a wall edge = the switch; everything else = the ordinary cover order (preview -> confirm, unchanged).
 	TestTrue(TEXT("Double-click, switch verdict: the switch"), CoverSwitchRules::IsSwitchConfirm(true, ECoverSwitchVerdict::Switch));
-	TestFalse(TEXT("A slow second click: the ordinary cover order"), CoverSwitchRules::IsSwitchConfirm(false, ECoverSwitchVerdict::Switch));
+	TestTrue(TEXT("A slow second click: the switch too (user 2026-10-21: the quick dash on any confirm)"), CoverSwitchRules::IsSwitchConfirm(false, ECoverSwitchVerdict::Switch));
 	TestFalse(TEXT("Double-click, not at an edge: the ordinary (running) cover order"), CoverSwitchRules::IsSwitchConfirm(true, ECoverSwitchVerdict::NotAtEdge));
 	TestFalse(TEXT("Double-click, out of range: the ordinary cover order"), CoverSwitchRules::IsSwitchConfirm(true, ECoverSwitchVerdict::OutOfRange));
 	TestFalse(TEXT("Double-click, the tutorial still locks it: the ordinary cover order"),
@@ -256,6 +271,12 @@ bool FCoverSwitchCornerToCornerTest::RunTest(const FString&)
 		static_cast<int32>(ECoverFacing::Left));
 	Arrived.bLeftEdgeExposed = false;
 	Arrived.RightEdgeDistanceCm = 150.f;
+	// The hovered face decides (user 2026-10-21): the protected side -> the corner rule, the end face towards him / the back -> that face.
+	TestTrue(TEXT("Front face (same side as his wall): the corner target"), CoverSwitchRules::UsesCornerTarget(FVector2D(0.f, -1.f), Protected));
+	TestFalse(TEXT("End face towards him (perpendicular): the slot on that face"), CoverSwitchRules::UsesCornerTarget(FVector2D(-1.f, 0.f), Protected));
+	TestFalse(TEXT("The back face: that face"), CoverSwitchRules::UsesCornerTarget(FVector2D(0.f, 1.f), Protected));
+	TestTrue(TEXT("A face turned 40 deg: still the protected side"), CoverSwitchRules::UsesCornerTarget(FVector2D(FMath::Sin(FMath::DegreesToRadians(40.f)),
+		-FMath::Cos(FMath::DegreesToRadians(40.f))), Protected));
 	TestEqual(TEXT("Arrival facing: no edge within the reach -> the fallback"), static_cast<int32>(CoverSwitchRules::ArrivalFacing(Arrived, 100.f, ECoverFacing::Left)),
 		static_cast<int32>(ECoverFacing::Left));
 	return true;

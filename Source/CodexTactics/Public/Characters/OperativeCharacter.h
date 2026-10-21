@@ -1054,6 +1054,8 @@ public:
 	/** The current cover entry came from a switch dash: the AnimInstance plays the run-in clip (approach / start below). */
 	bool IsCoverSwitchEntry() const { return bInCover && bCoverSwitchEntry; }
 	ECoverSwitchApproach GetCoverSwitchApproach() const { return CoverSwitchApproach; }
+	/** The run-in clip is the pack's sprint one (std_sprint_fwd*_to_cvr_*), else the jog one. */
+	bool IsCoverSwitchSprintClip() const { return bCoverSwitchSprintClip; }
 	/** Where the run-in clip starts, s (its body nearest to where he ran in from: CoverSwitchRules::ChooseClipStart). */
 	float GetCoverSwitchStartSeconds() const { return CoverSwitchStartSeconds; }
 	/** Switch arrivals through the run-in clip so far (smokes). */
@@ -1095,6 +1097,13 @@ public:
 	/** The clip's body more than this from the runner (a run in from an odd direction): the ordinary run-in / enter clip instead, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0"))
 	float CoverSwitchMaxMismatchCm = 110.f;
+
+	/**
+	 * A sprinting dash (>= 500 cm/s) prefers the pack's sprint run-ins by this much of the clip fit (user 2026-10-21: "click and he quickly
+	 * moves from one edge to the other"), cm. 0 = the nearest body of either set.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0"))
+	float CoverSwitchSprintPreferenceCm = 60.f;
 
 	/** At least this much of the run-in clip plays (its turn into the wall), s. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0.1"))
@@ -2036,6 +2045,7 @@ private:
 	bool bCoverSwitchEntry = false;
 	bool bCoverSwitchEntryRequest = false;
 	ECoverSwitchApproach CoverSwitchApproach = ECoverSwitchApproach::Front;
+	bool bCoverSwitchSprintClip = false;
 	float CoverSwitchStartSeconds = 0.f;
 	int32 CoverSwitchCount = 0;
 	float LastCoverSwitchMismatchCm = 0.f;

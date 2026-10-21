@@ -322,39 +322,42 @@
       "title": "THE AMBUSH"
     },
     "WT_A4_01": {
-      "text": "Contact. Two frozen ones on a loop between the sheds — and dogs. Nobody fire."
+      "text": "Contact. Two of them - one walking circles round the near container, the other by the far one. Nobody fire."
     },
     "WT_A4_02": {
       "text": "They don't see us yet. We pick the ground, not them."
     },
     "WT_A4_03": {
-      "text": "A wire across their path and they do our work for us."
+      "text": "The near one first. A wire across his loop and he does our work for us."
     },
     "TUT_A4_CONES": {
       "title": "WHAT THEY SEE",
       "text": "Press {key:View.VisionCones} to show the enemies' vision cones on the ground. Stay out of them — prone you are much harder to spot."
     },
     "TUT_A4_TRIPWIRE": {
-      "title": "AMBUSH - {focus} ALONE",
-      "text": "{focus} sets the ambush; the other two hold the overlook as fire support. She is selected (Solo): open the inventory ({key:Inventory.Open}), choose the tripwire and click anchor A, then anchor B across the patrol's path - the marker shows the nearest point of the route. Costs two grenades."
+      "title": "PART 1: TRIPWIRE - {focus} ALONE",
+      "text": "{focus} sets the wire for the zombie walking round the NEAR container; the other two hold the overlook as fire support. She is selected (Solo): open the inventory ({key:Inventory.Open}), choose the tripwire and click anchor A, then anchor B across his loop - the marker shows its nearest point. Costs two grenades."
     },
     "TUT_A4_HIDDEN": {
       "title": "OUT OF SIGHT",
       "text": "Prone behind cover they can't see you - but you can't see them either. Peek ({key:Cover.CornerPeek}) or rise ({key:Stance.Crouch} / {key:Stance.Stand}) to look."
     },
     "OBJ_A4_TRAP": {
-      "text": "{focus}: back behind the low cover - wait until the patrol walks into the wire"
+      "text": "{focus}: back behind the low cover - wait until the zombie on the loop walks into the wire"
     },
     "WT_A4_04": {
-      "text": "That's one. The other one is still out there."
+      "text": "That's one. The other one is still by the far container."
     },
     "TUT_A4_LURE": {
-      "title": "LURE - {focus}",
-      "text": "Now the other one. {focus}: from behind the low cover at the overlook throw a stone {key:Stealth.Throw} near his path - he goes to the noise. A whistle {key:Stealth.Whistle} calls him to you (about 12 m, less through cover). Only while they have not spotted you."
+      "title": "PART 2: LURE - {focus}",
+      "text": "Now the zombie by the FAR container. {focus}: move up to the marker (about 10 m from his path - stay crouched), then throw a stone {key:Stealth.Throw} between him and you, or whistle {key:Stealth.Whistle} to call him to you. He leaves his path to check the noise. Only while they have not spotted you."
     },
-    "TUT_A4_AMBUSH": {
-      "title": "AMBUSH - OPEN FIRE",
-      "text": "He's coming to check the noise. The squad is free again - the two at the overlook are your fire support. Switch to AGGRESSIVE (Alt + {key:Posture.Aggressive}): everyone opens fire the moment he is in sight - or Ctrl+click him yourself."
+    "TUT_A4_CLOSE_SHOT": {
+      "title": "PART 2: CLOSE SHOT",
+      "text": "He's coming out into the open. Let him come close - under 10 m, away from the far container - then Ctrl+click him ({key:Attack.TargetedShot}) or switch to AGGRESSIVE (Alt + {key:Posture.Aggressive}). The two at the overlook are free again as fire support."
+    },
+    "TUT_A4_CLOSE_SHOT_FAR": {
+      "text": "He's down - but not up close in the open. Next time let him come off his path and close before you shoot."
     },
     "TUT_MEDKIT": {
       "title": "MEDKIT",

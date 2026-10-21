@@ -13,6 +13,7 @@
 #include "Combat/WaveVictorySubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Core/PlayerCommands.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
@@ -151,6 +152,31 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 		}
 	}
 
+	// 2026-10-21 (the tutorial's close-shot lesson): who killed it - an operative's direct attack, a trap blast or something else.
+	{
+		const FString Killer = AttackerSource.IsEmpty() ? LastAttackerSource : AttackerSource; // this blow first, the last hit else
+		FGameplayEventContext Context;
+		Context.Subject = this;
+		Context.Location = GetActorLocation();
+		Context.Kind = IsTrapBlastInProgress() ? FName(TEXT("Trap")) : FName(TEXT("Other"));
+		if (Context.Kind != FName(TEXT("Trap")))
+		{
+			if (const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+			{
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (Member && !Killer.IsEmpty() && Member->DisplayName.ToString() == Killer)
+					{
+						Context.Target = Member;
+						Context.Kind = FName(TEXT("Squad"));
+						break;
+					}
+				}
+			}
+		}
+		GameplayEvents::RaiseWithContext(this, FName(*(GameplayEvents::EnemyKilled.ToString() + TEXT(".") + Context.Kind.ToString())), Context);
+		GameplayEvents::RaiseWithContext(this, GameplayEvents::EnemyKilled, Context);
+	}
 	OnEnemyDied.Broadcast(this);
 	OnEnemyDiedNative.Broadcast(this);
 	OnDeath();

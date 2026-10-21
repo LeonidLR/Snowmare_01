@@ -102,6 +102,8 @@ struct CODEXTACTICS_API FCoverSwitchClipStart
 	FVector2D ClipOffset = FVector2D::ZeroVector;
 	/** Distance between the runner and the clip body at StartSeconds, cm (eased out by the run-in glide). */
 	float MismatchCm = 0.f;
+	/** The track chosen (index into the tracks given; Approach = Track % 3 when jog and sprint sets are passed together). */
+	int32 Track = INDEX_NONE;
 };
 
 namespace CoverSwitchRules
@@ -126,10 +128,19 @@ namespace CoverSwitchRules
 	CODEXTACTICS_API const TCHAR* VerdictName(ECoverSwitchVerdict Verdict);
 
 	/**
-	 * The confirm click on the cover ghost: a switch only for a double-click with a Switch verdict and the command not locked;
-	 * everything else is the ordinary cover order (unchanged input rules).
+	 * The confirm click on the cover ghost: the switch for a Switch verdict with the command not locked - a double-click AND (user
+	 * 2026-10-21: "click and he quickly moves from one edge to the other") a slow second click alike; everything else is the ordinary
+	 * cover order. bDoubleClick is kept for the log / callers.
 	 */
 	CODEXTACTICS_API bool IsSwitchConfirm(bool bDoubleClick, ECoverSwitchVerdict Verdict, bool bLocked = false);
+
+	/**
+	 * Which target rule a hovered face takes (user 2026-10-21: "bring the perpendicular move back - the edge when I want it AND the
+	 * perpendicular wall"): a face on the protected side (its normal within acos(MinDot) of his own wall's normal) -> the nearest corner
+	 * of that side in the mirrored pose (ChooseSwitchCorner); any other face (the end face towards him, the back) -> a slot on that face
+	 * where the cursor is.
+	 */
+	CODEXTACTICS_API bool UsesCornerTarget(const FVector2D& HoveredFaceNormal, const FVector2D& ProtectedNormal, float MinDot = 0.5f);
 
 	/**
 	 * Geometric approach class of a run from From into Target (2D): straight at the wall when the component along the wall
@@ -141,8 +152,11 @@ namespace CoverSwitchRules
 	/** Index into the 6-clip arrays: Approach * 2 + CoverFacingRules::ClipIndex(ArrivalFacing). */
 	CODEXTACTICS_API int32 ClipArrayIndex(ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing);
 
-	/** The pack clip's asset name, e.g. "anim_M4_std_jog_fwd_L_to_cvr_std_idle_L" (logs, smokes, the default clip paths). */
-	CODEXTACTICS_API FString ClipName(ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, bool bCrouch);
+	/**
+	 * The pack clip's asset name, e.g. "anim_M4_std_jog_fwd_L_to_cvr_std_idle_L" (logs, smokes, the default clip paths); bSprint: the
+	 * pack's sprint run-in of the same approach / ending ("anim_M4_std_sprint_fwd_L_to_cvr_std_idle_L").
+	 */
+	CODEXTACTICS_API FString ClipName(ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, bool bCrouch, bool bSprint = false);
 
 	/** Track offset at Time (linear between the samples, clamped to the ends). */
 	CODEXTACTICS_API FVector2D OffsetAt(const FCoverSwitchTrack& Track, float Time);
@@ -174,5 +188,6 @@ namespace CoverSwitchRules
 	CODEXTACTICS_API ECoverFacing ArrivalFacing(const FCoverSlot& Slot, float ReachCm, ECoverFacing Fallback);
 
 	CODEXTACTICS_API FCoverSwitchClipStart ChooseClipStart(const TArray<FCoverSwitchTrack>& TracksByApproach, const FVector2D& RunnerOffset,
-		float MinClipLeftSeconds, const FVector2D& RunnerDirection = FVector2D::ZeroVector, float MinHeadingDot = 0.5f);
+		float MinClipLeftSeconds, const FVector2D& RunnerDirection = FVector2D::ZeroVector, float MinHeadingDot = 0.5f,
+		const TArray<float>& TrackBiasCm = TArray<float>());
 }

@@ -7,7 +7,8 @@
     "Beats implemented here (Phase 1 = user steps 1-9 + the standalone A3 fence / A4 cone cards): A0 drop (the HQ radio talks while the squad may",
     "already walk and the staged camera lesson runs alongside; 'click to walk' right after the camera chain, rev 5c; sprint locked until A1, rev 5e), A1 crossing (the shaky bridge holds the followers: one at a",
     "time on its own, rev 5c; squad banter, cold -> heat pack = inventory unlock, 'double-click to run' = sprint unlock (rev 5e), hut: a tactical entry = select + solo + cover at the door, loot, share the heat packs (rev 5d), regroup, box), A2 camp (rev 5d: push the barrel into the half-ruined building + light it there),",
-    "A3 approach (stances, vault, low fence crawl, cover, mines / wires spotted), A4 ambush (vision-cone toggle, tripwire; the fight itself is Phase 2).",
+    "A3 approach (stances, vault, low fence crawl, cover, mines / wires spotted), A4 ambush (vision-cone toggle; 2026-10-21 in two parts: part 1 a tripwire on the near zombie's loop, part 2 lure the far zombie into the open and shoot it at close range).",
+    "'enemies' (2026-10-21): the level enemies a lesson is bound to (by their patrol route / own label, name or tag); 'enemy' next to an 'event' in a trigger / complete / cancel_on counts only that enemy's events (with 'within_m' / 'off_route_m' for the close shot in the open).",
     "Beats A5-A8 are designed in the beat sheet only.",
     "PROGRESSIVE UNLOCK (user request 2026-10-13, beat sheet section 'Locks'): beat A0 locks every command family not taught yet; camera, Order.Move /",
     "Order.Interact (walk-up), Select.*, Dialogue.* and System.* are never locked; SPRINT is locked again from the level start until the heat pack lesson (rev 5e,",
@@ -34,6 +35,12 @@
   "version": 1,
   "id": "demo_01_frozen_lake",
   "start_beat": "A0",
+  "enemies": [
+    { "_comment": "2026-10-21 (game designer: the A4 ambush in two parts, the two patrols split onto two zombies and two buildings in the map - placement kept as it is): PART 1's zombie = the one walking the closed loop round the NEAR container (Container_A4_South). Bound by its patrol route's actor label (the route keeps its old name 'Hounds' from the rev 5 layout) - no map change needed. Labels are editor data: for a cooked build give the route actor the tag 'PatrolRoute_A4_Hounds' (a selector matches labels, object names and tags).",
+      "id": "A4_PERIMETER", "route": "PatrolRoute_A4_Hounds" },
+    { "_comment": "PART 2's zombie = the one by the FAR container (Container_A4_North), route 'PatrolRoute_A4_Frostbitten' (old name kept).",
+      "id": "A4_LURE", "route": "PatrolRoute_A4_Frostbitten" }
+  ],
   "beats": [
     { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0",
       "lock": ["Stance.*", "Squad.*", "Posture.*", "Cover.*", "Object.*", "Item.*", "Inventory.*", "Loot.*", "Trap.*", "Deploy.*", "Attack.*",
@@ -545,7 +552,7 @@
     },
 
     {
-      "_comment": "User flow step 11 (A4, VOL_A4_OVERLOOK): the patrols come into view. Phase 1 ships the vision-cone toggle card and the tripwire card; the ambush fight itself (patrol encounter group) is Phase 2 (beat sheet rev 5 section 1.3).",
+      "_comment": "User flow step 11 (A4, VOL_A4_OVERLOOK): the two zombies come into view. 2026-10-21 (game designer): the ambush lesson has TWO parts, each bound to ITS zombie ('enemies' bindings at the top of this file): part 1 = a tripwire on the loop of the zombie walking round the NEAR container (A4_PERIMETER), part 2 = lure the zombie by the FAR container (A4_LURE) out into the open and shoot it at close range.",
       "id": "A4_wt_contact", "beat": "A4", "kind": "walk_talk",
       "trigger": { "type": "beat_start" },
       "lines": [
@@ -578,14 +585,14 @@
       "complete": { "commands": ["Posture.Passive"] }
     },
     {
-      "_comment": "2026-10-20 (game designer: 'two stay in place, one sets up the ambush'): the ambush is done by ONE operative - the MEDIC-SAPPER (traps are her job; decision: a fixed role reads clearer than 'whoever you select first', and the cards can name her; dead / missing: the leader). When the card is triggered the squad is STOPPED and held at the overlook ('confine' with 'free': 'focus': she alone may move anywhere; the others' orders outside are refused with 'Hold here - <Name> handles it.'); when it shows the squad switches to Solo with her selected ('solo_focus'). The hold ends when the lure (part 2) is done (until A4_lure), when a fight starts, the tutorial is switched off / skipped. The current target is the nearest point of the patrol routes ('@patrol_route': where the wire goes).",
+      "_comment": "PART 1 - THE TRIPWIRE (2026-10-21: bound to the zombie on the loop round the NEAR container, A4_PERIMETER). 2026-10-20 (game designer: 'two stay in place, one sets up the ambush'): done by ONE operative - the MEDIC-SAPPER (traps are her job; a fixed role reads clearer than 'whoever you select first', and the cards can name her; dead / missing: the leader). When the card is triggered the squad is STOPPED and held at the overlook ('confine' with 'free': 'focus': she alone may move anywhere; the others' orders outside are refused with 'Hold here - <Name> handles it.'); when it shows the squad switches to Solo with her selected ('solo_focus'). The hold ends when the lure (part 2) is heard (until A4_lure), when a fight starts, the tutorial is switched off / skipped. The current target is the nearest point of THAT zombie's loop ('@patrol_route.A4_PERIMETER': where the wire goes).",
       "id": "A4_tripwire", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_TRIPWIRE",
       "keys": ["Inventory.Open", "Deploy.Tripwire"],
       "focus": "role:MedicSapper",
       "unlock": ["Deploy.Tripwire", "Squad.Solo"],
       "precredit": false,
       "action": { "type": "solo_focus" },
-      "guide": "@patrol_route",
+      "guide": "@patrol_route.A4_PERIMETER",
       "trigger": { "type": "after_step", "step": "A4_cones" },
       "confine": { "volume": "VOL_A4_OVERLOOK", "free": "focus", "until": "A4_lure", "stop": true },
       "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
@@ -600,37 +607,48 @@
       "complete": { "commands": ["Stance.Crouch", "Stance.Stand", "Stance.Squad.Crouch", "Stance.Squad.Stand", "Cover.CornerPeek"], "timeout_s": 20 }
     },
     {
-      "_comment": "2026-10-19 b (game designer play-test): THE AMBUSH, part 1 - the wire is rigged, now wait until a patrol walks into it (event TripwireTriggered.Enemy: an ENEMY pulled the pin of any wire - the squad's own or a PMC one; the 140-damage blast kills a frostbitten / a hound). 240 s at most: the lure part follows either way (a wire that never caught anyone still leaves two to lure).",
+      "_comment": "PART 1, the wait: the wire is rigged, now wait until THE PERIMETER ZOMBIE walks into it (event TripwireTriggered.Enemy with 'enemy': 'A4_PERIMETER' - the far zombie pulling a pin does not count; the squad's own wire or a PMC one). 240 s at most: part 2 follows either way. Killed another way (shot, a mine): part 1 is over at once ('cancel_on' its EnemyKilled).",
       "id": "A4_trap_wait", "beat": "A4", "kind": "objective", "text_id": "OBJ_A4_TRAP",
       "focus": "role:MedicSapper",
       "guide": "VOL_A4_OVERLOOK",
       "trigger": { "type": "after_step", "step": "A4_tripwire" },
-      "complete": { "event": "TripwireTriggered.Enemy", "timeout_s": 240 }
+      "cancel_on": { "event": "EnemyKilled", "enemy": "A4_PERIMETER" },
+      "complete": { "event": "TripwireTriggered.Enemy", "enemy": "A4_PERIMETER", "timeout_s": 240 }
     },
     {
       "id": "A4_wt_trap", "beat": "A4", "kind": "walk_talk",
-      "trigger": { "type": "event", "event": "TripwireTriggered.Enemy", "requires": ["A4_tripwire"] },
+      "trigger": { "type": "event", "event": "TripwireTriggered.Enemy", "enemy": "A4_PERIMETER", "requires": ["A4_tripwire"] },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A4_04" } ]
     },
     {
-      "_comment": "2026-10-19 b: THE AMBUSH, part 2 - the other enemy is LURED: whistle [5] from cover (the noise at the whistler: he comes to you) or throw a stone [6] (the noise where it lands: he goes there). Unlocks Stealth.* (locked since A0). Done when an enemy reacts to a lure - it heard it and investigates (event StealthLure.Heard from UStealthLureSubsystem::EmitNoise; the lure needs exploration and an undetected squad). Never precredited (a lure before the card does not count), 180 s.",
+      "_comment": "PART 2 - THE LURE (2026-10-21: bound to the zombie by the FAR container, A4_LURE): she moves up to the lure spot ('@lure_spot.A4_LURE': 10 m short of his path, towards her) and whistles [5] (the noise at her: he comes to her) or throws a stone [6] (the noise where it lands: he goes there). Unlocks Stealth.* (locked since A0). Done when THAT zombie reacts to a lure - it heard it and investigates (StealthLure.Heard with 'enemy': 'A4_LURE'; the near zombie hearing it does not count; the lure needs exploration and an undetected squad). Never precredited, 180 s; killed before he was lured: the card is dropped.",
       "id": "A4_lure", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_LURE",
       "keys": ["Stealth.Whistle", "Stealth.Throw"],
       "focus": "role:MedicSapper",
-      "guide": "VOL_A4_OVERLOOK",
+      "guide": "@lure_spot.A4_LURE",
       "unlock": ["Stealth.*"],
       "precredit": false,
       "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 0.5 },
-      "complete": { "event": "StealthLure.Heard", "timeout_s": 180 }
+      "cancel_on": { "event": "EnemyKilled", "enemy": "A4_LURE" },
+      "complete": { "event": "StealthLure.Heard", "enemy": "A4_LURE", "timeout_s": 180 }
     },
     {
-      "_comment": "2026-10-19 b: the reminder once he is coming - AGGRESSIVE opens fire the moment he is in sight (the fight starts through the normal path), or Ctrl+click him. Done on Posture.Aggressive, a targeted shot or the fight starting (CombatStarted; a fight unlocks everything anyway); 60 s.",
-      "id": "A4_lure_ambush", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_AMBUSH",
+      "_comment": "PART 2, the close shot (2026-10-21, game designer: 'lure a zombie out into open ground and shoot it at close range'): once the far zombie heard the lure he walks to the noise. Done when the squad KILLS THAT zombie (EnemyKilled.Squad: an operative's shot / blow / grenade, not a trap) while an operative stands within 10 m of him ('within_m') and he is at least 4 m off his own patrol route ('off_route_m': out in the open, away from the far container). The current target follows him ('@enemy.A4_LURE'). Killed far away / still on his beat: the feed line A4_close_shot_far says so and drops this card (twins with 'cancel_on' both ways). 120 s.",
+      "id": "A4_close_shot", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_CLOSE_SHOT",
       "focus": "role:MedicSapper",
-      "keys": ["Posture.Aggressive", "Attack.TargetedShot"],
+      "keys": ["Attack.TargetedShot", "Posture.Aggressive"],
       "precredit": false,
-      "trigger": { "type": "event", "event": "StealthLure.Heard", "requires": ["A4_lure"] },
-      "complete": { "commands": ["Posture.Aggressive", "Attack.TargetedShot"], "event": "CombatStarted", "timeout_s": 60 }
+      "guide": "@enemy.A4_LURE",
+      "trigger": { "type": "event", "event": "StealthLure.Heard", "enemy": "A4_LURE", "requires": ["A4_lure"] },
+      "cancel_on": { "step": "A4_close_shot_far" },
+      "complete": { "event": "EnemyKilled.Squad", "enemy": "A4_LURE", "within_m": 10, "off_route_m": 4, "timeout_s": 120 }
+    },
+    {
+      "_comment": "2026-10-21: the far zombie died, but not by a close shot in the open (shot from far away, on his beat, by a trap): one feed line, and the close-shot card is dropped. In the good case EnemyKilled.Squad completes the card first (the game raises EnemyKilled.<Kind> before EnemyKilled) and this line is cancelled.",
+      "id": "A4_close_shot_far", "beat": "A4", "kind": "feed", "text_id": "TUT_A4_CLOSE_SHOT_FAR",
+      "trigger": { "type": "event", "event": "EnemyKilled", "enemy": "A4_LURE", "requires": ["A4_lure"] },
+      "cancel_on": { "step": "A4_close_shot" },
+      "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A4_CLOSE_SHOT_FAR" } ]
     },
 
     {

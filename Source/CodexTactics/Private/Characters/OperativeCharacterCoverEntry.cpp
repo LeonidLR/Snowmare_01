@@ -110,9 +110,11 @@ FCoverSlot AOperativeCharacter::ResolveCoverSwitchSlot(const FCoverSlot& Target,
 	// and he arrives facing that corner, back along the new wall towards the open side he came over (the mirrored pose).
 	FCoverFootprint Footprint;
 	int32 ClickedEdge = INDEX_NONE;
-	if (World && CoverWrapWorld::FootprintForSlot(Target, Footprint, ClickedEdge))
+	const FVector2D Protected = FVector2D(bInCover ? CoverSlot.WallNormal : Target.WallNormal).GetSafeNormal();
+	// User 2026-10-21: the hovered face decides - a face on the protected side -> its nearest corner (below); another face (the end face
+	// towards him) -> the slot there, where the cursor is (the old perpendicular move, below the corner rule).
+	if (World && CoverSwitchRules::UsesCornerTarget(FVector2D(Target.WallNormal), Protected) && CoverWrapWorld::FootprintForSlot(Target, Footprint, ClickedEdge))
 	{
-		const FVector2D Protected = FVector2D(bInCover ? CoverSlot.WallNormal : Target.WallNormal).GetSafeNormal();
 		const bool bCrouched = Target.Height == ECoverHeight::LowCover;
 		const FCoverFacingConfig FacingConfig = GetCoverFacingConfig();
 		const float Offset = FCoverTraceConfig().SlotOffsetCm;
@@ -232,15 +234,26 @@ bool AOperativeCharacter::TryEnterCoverSwitchFromRun()
 	const FVector2D Runner(Here.X - Slot.WorldLocation.X, Here.Y - Slot.WorldLocation.Y);
 	// The clip's body as the mesh draws it at the slot (actor yaw = the wall normal, plus the Blueprint's mesh yaw).
 	const FVector2D RunDirection(Velocity2D.X, Velocity2D.Y);
-	auto Choose = [this, Anim, bCrouch, &Runner, &RunDirection](ECoverFacing Facing, float ActorYaw)
+	// Tracks 0-2: the jog run-ins by approach, 3-5: the sprint ones (2026-10-21); a sprinting runner prefers the sprint set.
+	const bool bSprintRunner = Speed >= 500.f;
+	auto Choose = [this, Anim, bCrouch, bSprintRunner, &Runner, &RunDirection](ECoverFacing Facing, float ActorYaw)
 	{
 		TArray<FCoverSwitchTrack> Tracks;
-		Tracks.SetNum(3);
-		for (int32 Approach = 0; Approach < 3; ++Approach)
+		TArray<float> Bias;
+		Tracks.SetNum(6);
+		Bias.Init(0.f, 6);
+		for (int32 Index = 0; Index < 6; ++Index)
 		{
-			Anim->GetCoverSwitchTrack(bCrouch, static_cast<ECoverSwitchApproach>(Approach), Facing, ActorYaw + MeshBaseYaw, Tracks[Approach]);
+			const bool bSprintClip = Index >= 3;
+			Anim->GetCoverSwitchTrack(bCrouch, static_cast<ECoverSwitchApproach>(Index % 3), Facing, ActorYaw + MeshBaseYaw, Tracks[Index], bSprintClip);
+			Bias[Index] = bSprintClip == bSprintRunner ? -CoverSwitchSprintPreferenceCm : 0.f;
 		}
-		return CoverSwitchRules::ChooseClipStart(Tracks, Runner, CoverSwitchMinClipSeconds, RunDirection);
+		FCoverSwitchClipStart Choice = CoverSwitchRules::ChooseClipStart(Tracks, Runner, CoverSwitchMinClipSeconds, RunDirection, 0.5f, Bias);
+		if (Choice.Track != INDEX_NONE)
+		{
+			Choice.Approach = Choice.Track % 3;
+		}
+		return Choice;
 	};
 	FCoverSwitchClipStart Choice = Choose(bCoverSwitchFacingPending ? CoverSwitchArrivalFacing : PredictCoverFacing(Slot), CoverFacingRules::FacingYaw(Slot, ECoverFacing::Right));
 	// The moment: the clip's body close to him, or the fit no longer improving (a diagonal run-in nears the clips' line until the clip's
@@ -280,6 +293,7 @@ bool AOperativeCharacter::TryEnterCoverSwitchFromRun()
 	else
 	{
 		CoverSwitchApproach = static_cast<ECoverSwitchApproach>(Choice.Approach);
+		bCoverSwitchSprintClip = Choice.Track >= 3;
 		CoverSwitchStartSeconds = Choice.StartSeconds;
 		LastCoverSwitchMismatchCm = Choice.MismatchCm;
 		++CoverSwitchCount;
@@ -289,7 +303,7 @@ bool AOperativeCharacter::TryEnterCoverSwitchFromRun()
 	CoverEntryGlide = FVector(Delta.X, Delta.Y, 0.f) - CoverEntryClipOffset;
 	CoverEntryBlendTime = 0.f;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: cover switch run-in %s from %.2f s (%.0f cm out, speed %.0f, clip body %.0f cm off the runner)"),
-		*DisplayName.ToString(), *CoverSwitchRules::ClipName(CoverSwitchApproach, CoverFacing, bCrouch), CoverSwitchStartSeconds, Distance, Speed,
+		*DisplayName.ToString(), *CoverSwitchRules::ClipName(CoverSwitchApproach, CoverFacing, bCrouch, bCoverSwitchSprintClip), CoverSwitchStartSeconds, Distance, Speed,
 		Choice.MismatchCm);
 	return true;
 }

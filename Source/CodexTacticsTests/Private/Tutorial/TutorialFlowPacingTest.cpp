@@ -164,6 +164,8 @@ namespace TutorialFlowTestData
 			return false;
 		};
 		Machine.SpotProvider = [](FName, FName) { return true; };
+		// 2026-10-21: the scripted player's enemy events are those of the zombie the lesson is bound to.
+		Machine.EnemyFilterProvider = [](const FTutorialEnemyFilter&, FName) { return true; };
 		Machine.Load(Data);
 		Machine.RegisterVolumeBeat(TEXT("VOL_A0_BEACON1"), TEXT("A1"));
 		Machine.RegisterVolumeBeat(TEXT("VOL_A2_CAMP"), TEXT("A2"));
@@ -209,7 +211,7 @@ namespace TutorialFlowTestData
 					}
 				}
 			}
-			if (Machine.GetState(TEXT("A4_lure_ambush")) == ETutorialStepState::Completed || TutorialRules::IsFinished(Machine.GetState(TEXT("A4_lure_ambush"))))
+			if (TutorialRules::IsFinished(Machine.GetState(TEXT("A4_close_shot"))))
 			{
 				Result.bFinished = true;
 				break;

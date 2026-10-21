@@ -101,6 +101,38 @@ struct CODEXTACTICS_API FTutorialAction
 	float MinLevel = 0.f;
 };
 
+/**
+ * An enemy filter on the event of a trigger / completion / cancel_on (2026-10-21, the A4 ambush split into two parts, each bound to ITS
+ * zombie): JSON keys "enemy" (an id of the file's "enemies" bindings), "within_m" and "off_route_m" next to the "event" they filter.
+ * The event counts only when its subject is an enemy of that binding (FTutorialStateMachine::EnemyFilterProvider; the runtime resolves
+ * the subject actor and the binding's selectors) and, when set, a living operative stood within WithinM metres of it and it stood at
+ * least OffRouteM metres from its own patrol route (lured off its beat into the open) at that moment.
+ */
+struct CODEXTACTICS_API FTutorialEnemyFilter
+{
+	/** The "enemies" binding id; none = no enemy filter (the other two keys need it). */
+	FName Enemy;
+	/** "within_m" > 0: the nearest living operative stood at most this many metres from the enemy (a close-range shot). */
+	float WithinMetres = 0.f;
+	/** "off_route_m" > 0: the enemy stood at least this many metres (2D) from its patrol route (an enemy without a route passes). */
+	float OffRouteMetres = 0.f;
+
+	bool IsSet() const { return !Enemy.IsNone(); }
+};
+
+/**
+ * One "enemies" binding of a steps file (2026-10-21): the level enemy a lesson is about, found WITHOUT changing the map. An enemy belongs to
+ * the binding when any selector matches: "route" = its patrol route actor (AEnemyCharacter::AssignedPatrolRoute) by actor label (editor
+ * builds), object name or actor tag; "actor" = the enemy itself by the same three. JSON:
+ *   "enemies": [ { "id": "A4_PERIMETER", "route": ["PatrolRoute_A4_Hounds", "PatrolRouteActor_1"] } ]
+ */
+struct CODEXTACTICS_API FTutorialEnemyBinding
+{
+	FName Id;
+	TArray<FString> Routes;
+	TArray<FString> Actors;
+};
+
 struct CODEXTACTICS_API FTutorialTrigger
 {
 	ETutorialTriggerType Type = ETutorialTriggerType::Manual;
@@ -123,6 +155,8 @@ struct CODEXTACTICS_API FTutorialTrigger
 	 * conditions before that are ignored, not stored). Manual TriggerStep / ReplayStep ignore it.
 	 */
 	TArray<FName> Requires;
+	/** "enemy" / "within_m" / "off_route_m" (2026-10-21): only events of that enemy count as hits ("event" / "failure_retry" triggers). */
+	FTutorialEnemyFilter EnemyFilter;
 };
 
 struct CODEXTACTICS_API FTutorialCompletion
@@ -163,6 +197,8 @@ struct CODEXTACTICS_API FTutorialCompletion
 	 * (HandleRoleSpotPresence). A level without such markers: any place counts (no soft-lock on an older map).
 	 */
 	bool bRoleSpots = false;
+	/** "enemy" / "within_m" / "off_route_m" (2026-10-21): an event counts only when its subject is that enemy (FTutorialEnemyFilter). */
+	FTutorialEnemyFilter EnemyFilter;
 	/** > 0: an active step that is not done after this many seconds times out (hides; counts as finished). */
 	float TimeoutSeconds = 0.f;
 	/**
@@ -193,6 +229,8 @@ struct CODEXTACTICS_API FTutorialCancelOn
 	TArray<FName> Steps;
 	FString Event;
 	TArray<FName> Volumes;
+	/** "enemy" / "within_m" / "off_route_m" next to "event" (2026-10-21): only that enemy's event cancels. */
+	FTutorialEnemyFilter EnemyFilter;
 
 	bool IsSet() const { return Steps.Num() > 0 || !Event.IsEmpty() || Volumes.Num() > 0; }
 };
@@ -354,7 +392,8 @@ enum class ETutorialGuideKind : uint8
 	Volume,
 	/**
 	 * A spot the runtime computes ("guide": "@<name>", 2026-10-20): "@patrol_route" = the point of the level's patrol routes nearest
-	 * to the step's focus operative (where the A4 ambusher rigs the wire). The guide beacon stands there.
+	 * to the step's focus operative (where the A4 ambusher rigs the wire); 2026-10-21: "@patrol_route.<enemy>", "@lure_spot.<enemy>",
+	 * "@enemy.<enemy>" (an "enemies" binding; TutorialRules::IsKnownGuideSpot). The guide beacon stands there.
 	 */
 	Spot
 };
@@ -395,8 +434,11 @@ struct CODEXTACTICS_API FTutorialStepsData
 	FName StartBeat;
 	TArray<FTutorialBeat> Beats;
 	TArray<FTutorialStep> Steps;
+	/** "enemies" (2026-10-21): the level enemies lessons are bound to (FTutorialEnemyBinding). */
+	TArray<FTutorialEnemyBinding> Enemies;
 
 	const FTutorialStep* FindStep(FName StepId) const;
+	const FTutorialEnemyBinding* FindEnemy(FName BindingId) const;
 	int32 FindStepIndex(FName StepId) const;
 	int32 FindBeatIndex(FName BeatId) const;
 };
