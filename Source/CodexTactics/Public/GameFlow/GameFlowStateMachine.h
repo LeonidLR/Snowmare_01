@@ -110,6 +110,18 @@ public:
 	EGameFlowResult EnterFreeTacticalPause();
 	/** The sudden wave stays in real time without a horde intro (smokes, the bot). */
 	void CancelHordeIntro();
+	/**
+	 * 2026-10-21 (the tutorial action "tactical_pause": the squad was spotted mid-lesson): RealTime -> the FREE tactical pause (no charge, no
+	 * timer; only the player ends it) in any wave fight. NotInWave / NotInRealTime otherwise.
+	 */
+	EGameFlowResult EnterLessonPause();
+	/** The fight now is a skirmish (an ambush fight on a level with "ambush_fight": "skirmish"). */
+	bool IsSkirmish() const { return bAmbushFight && Config.bAmbushSkirmish; }
+	/**
+	 * 2026-10-21: the skirmish's enemies are down - WaveCombat (any sub-mode) -> Exploration at once (no WaveCleared panel, no PostCombat);
+	 * the combat zone can be triggered again (the next skirmish). WrongPhase when not in a skirmish.
+	 */
+	EGameFlowResult FinishSkirmish();
 	/** WaveCombat (any sub-mode) -> WaveCleared. */
 	EGameFlowResult NotifyWaveCleared();
 	/**

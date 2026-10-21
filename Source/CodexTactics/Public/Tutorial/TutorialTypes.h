@@ -92,6 +92,8 @@ struct CODEXTACTICS_API FTutorialAction
 	/**
 	 * "cold_bump": every squad member's cold + Amount, raised to at least MinLevel (UColdSurvivalComponent::AddColdShock).
 	 * "set_posture" (2026-10-19): the whole squad's fire posture becomes Posture (USquadSubsystem::SetSquadPosture, overrides cleared).
+	 * "tactical_pause" (2026-10-21): the fight's FREE tactical pause (no charge / timer; the player resumes) - when no fight runs yet, it
+	 * opens as soon as one starts within 3 s (the card about being spotted comes a moment before the fight).
 	 */
 	FName Type;
 	/** "posture" of a set_posture action: "passive" | "defensive" | "aggressive" (FirePostureRules::ParseName). */

@@ -147,6 +147,10 @@ export interface LevelConfig {
   patrol_search_seconds?: number;
   /** UE horde after 4 min of real-time fight (Content/Data/AI/horde.json); false switches it off for the level. */
   horde_enabled?: boolean;
+  /** UE (2026-10-21): placed-enemy fights - level (all of them, wave panel) | skirmish (only those that engaged; straight back to exploration). */
+  ambush_fight?: 'level' | 'skirmish';
+  /** UE (2026-10-21): the Susanin rescue wave; 0 = never on this level, absent = random among waves 1-3. */
+  susanin_wave?: number;
   /** Per-level overrides of horde.json (same keys). */
   horde?: Record<string, unknown>;
   /** UE blast gate (GateProgressRules): generator_waves (default) creeps open only while the generator runs during the waves, full open after the final wave; instant = terminal opens it. */

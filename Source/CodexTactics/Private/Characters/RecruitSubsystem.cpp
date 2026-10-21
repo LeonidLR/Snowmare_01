@@ -60,9 +60,10 @@ TStatId URecruitSubsystem::GetStatId() const
 void URecruitSubsystem::HandleWaveStarted(int32 WaveIndex, int32 TotalEnemies)
 {
 	UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>();
-	if (!Waves || WaveIndex != Waves->GetSusaninRescueWave() || bRescueTriggered)
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (!Waves || WaveIndex != Waves->GetSusaninRescueWave() || bRescueTriggered || (Flow && Flow->IsSkirmish()))
 	{
-		return;
+		return; // 2026-10-21: never in a skirmish (and "susanin_wave": 0 switches it off on a level)
 	}
 	// Godot: randf_range(5, 8) s after the wave starts (3 s in headless test mode).
 	const float Delay = Waves->bInstantRandomEvents ? 3.f : FMath::FRandRange(5.f, 8.f);

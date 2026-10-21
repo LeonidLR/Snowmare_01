@@ -348,9 +348,21 @@
     "WT_A4_04": {
       "text": "That's one. The other one is still by the far container."
     },
+    "TUT_A4_SPOTTED": {
+      "title": "SPOTTED - FIGHT BACK",
+      "text": "He has seen you and the game is paused. The squad is PASSIVE - they will not fire back. Switch to DEFENSIVE (Alt + {key:Posture.Defensive}) or AGGRESSIVE (Alt + {key:Posture.Aggressive}), then press {key:Time.Pause} to fight on. A failed ambush is no game over - kill him and the game simply goes on."
+    },
+    "TUT_A4_HUG_WALL": {
+      "title": "PART 2: MOVE TACTICALLY - {focus}",
+      "text": "Now the zombie by the FAR container. Don't walk out in the open: click the wall of the NEAR container - {focus} runs into cover and hugs it, out of his sight. If he spots you, it's just a fight - the game goes on."
+    },
+    "TUT_A4_ROUND_CORNER": {
+      "title": "PART 2: ROUND THE CORNER",
+      "text": "In cover, click further along the same container or round its corner: {focus} follows the wall and turns the corner without leaving cover. Stop at the corner that faces the far container."
+    },
     "TUT_A4_LURE": {
       "title": "PART 2: LURE - {focus}",
-      "text": "Now the zombie by the FAR container. {focus}: move up to the marker (about 10 m from his path - stay crouched), then throw a stone {key:Stealth.Throw} between him and you, or whistle {key:Stealth.Whistle} to call him to you. He leaves his path to check the noise. Only while they have not spotted you."
+      "text": "The squad holds fire again (PASSIVE). {focus}: from the corner, or the marker about 10 m from his path, throw a stone {key:Stealth.Throw} between him and you, or whistle {key:Stealth.Whistle} to call him to you. He leaves his path to check the noise. If he spots you, it's just a fight - the game goes on."
     },
     "TUT_A4_CLOSE_SHOT": {
       "title": "PART 2: CLOSE SHOT",

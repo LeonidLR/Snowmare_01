@@ -112,7 +112,7 @@ namespace TutorialRulesLocal
 	/** The plain condition stats (UTutorialSubsystem::GetConditionStat); the prefixed ones are listed by DescribeKnownStats. */
 	const TCHAR* const PlainConditionStats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
 		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max"), TEXT("squad_prone"),
-		TEXT("enemies_unseen") };
+		TEXT("enemies_unseen"), TEXT("squad_passive"), TEXT("in_fight") };
 
 	/** "squad_cold_max | ... | traps_spotted.<tag> | squad_not_low_in.<volume>" for the parse error of an unknown stat. */
 	FString DescribeKnownStats()
@@ -604,7 +604,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Action.Type = FName(*JsonString(ActionObject, TEXT("type")));
 			if (!IsKnownAction(Action.Type))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump, set_posture, solo_focus)"), *Where, *Action.Type.ToString());
+				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump, set_posture, solo_focus, tactical_pause)"), *Where, *Action.Type.ToString());
 				return false;
 			}
 			Action.Posture = JsonString(ActionObject, TEXT("posture"));
@@ -1347,7 +1347,8 @@ bool TutorialRules::IsKnownStat(FName Stat)
 
 bool TutorialRules::IsKnownAction(FName Type)
 {
-	return Type == FName(TEXT("cold_bump")) || Type == FName(TEXT("set_posture")) || Type == FName(TEXT("solo_focus"));
+	return Type == FName(TEXT("cold_bump")) || Type == FName(TEXT("set_posture")) || Type == FName(TEXT("solo_focus"))
+		|| Type == FName(TEXT("tactical_pause"));
 }
 
 bool TutorialRules::IsKnownFocus(FName Focus)

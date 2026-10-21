@@ -386,6 +386,39 @@ void FGameFlowStateMachine::CancelHordeIntro()
 	bAwaitingHordeIntro = false;
 }
 
+EGameFlowResult FGameFlowStateMachine::EnterLessonPause()
+{
+	if (Phase != ECodexGamePhase::WaveCombat)
+	{
+		return EGameFlowResult::NotInWave;
+	}
+	if (CombatMode != ECodexCombatMode::RealTime)
+	{
+		return EGameFlowResult::NotInRealTime;
+	}
+	bAwaitingHordeIntro = false;
+	bFreePause = true; // no charge, no timer: the player resumes (Space)
+	PauseTimeRemaining = 0.f;
+	SetState(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause);
+	return EGameFlowResult::Ok;
+}
+
+EGameFlowResult FGameFlowStateMachine::FinishSkirmish()
+{
+	if (Phase != ECodexGamePhase::WaveCombat || !IsSkirmish())
+	{
+		return EGameFlowResult::WrongPhase;
+	}
+	PauseTimeRemaining = 0.f;
+	bFreePause = false;
+	bAwaitingHordeIntro = false;
+	bCombatUnlocked = false;
+	bAmbushFight = false;
+	WaveIndex = 0; // a skirmish is no wave: the level's scripted waves still start at 1
+	SetState(ECodexGamePhase::Exploration, ECodexCombatMode::None);
+	return EGameFlowResult::Ok;
+}
+
 void FGameFlowStateMachine::ReleaseTacticalPause()
 {
 	bFreePause = false;

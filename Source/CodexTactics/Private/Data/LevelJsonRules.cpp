@@ -138,6 +138,15 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	// UE-only (user request 2026-10-06): the horde after a long real-time fight (defaults in Content/Data/AI/horde.json).
 	bool bHordeEnabled = true;
 	Config.bHordeEnabled = !Root->TryGetBoolField(TEXT("horde_enabled"), bHordeEnabled) || bHordeEnabled;
+	// 2026-10-21: "ambush_fight": "level" | "skirmish" (placed-enemy fights) and "susanin_wave" (0 = off).
+	const FString AmbushFight = LevelJsonString(Root, TEXT("ambush_fight"), TEXT("level"));
+	if (AmbushFight != TEXT("level") && AmbushFight != TEXT("skirmish"))
+	{
+		OutError = FString::Printf(TEXT("unknown ambush_fight '%s' (level | skirmish)"), *AmbushFight);
+		return false;
+	}
+	Config.bAmbushSkirmish = AmbushFight == TEXT("skirmish");
+	Config.SusaninWave = FMath::Max(-1, static_cast<int32>(LevelJsonNumber(Root, TEXT("susanin_wave"), -1.f)));
 	if (const TSharedPtr<FJsonObject> Horde = LevelJsonObject(Root, TEXT("horde")))
 	{
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Config.HordeOverrideJson);

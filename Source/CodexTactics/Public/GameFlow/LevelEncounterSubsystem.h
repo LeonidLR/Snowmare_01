@@ -90,6 +90,8 @@ public:
 	/** How many ambush fights started in this world (smokes). */
 	int32 GetAmbushStarts() const { return AmbushStarts; }
 	EAmbushTrigger GetLastTrigger() const { return LastTrigger; }
+	/** The actor whose contact started the last ambush fight (2026-10-21: the skirmish adopts it first). */
+	AActor* GetLastContactSource() const { return LastContactSource.Get(); }
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Encounter")
 	FOnAmbushCombatStarted OnAmbushCombatStarted;
@@ -106,4 +108,5 @@ private:
 	float SearchSecondsOverride = -1.f;
 	int32 AmbushStarts = 0;
 	EAmbushTrigger LastTrigger = EAmbushTrigger::AttackOrder;
+	TWeakObjectPtr<AActor> LastContactSource;
 };

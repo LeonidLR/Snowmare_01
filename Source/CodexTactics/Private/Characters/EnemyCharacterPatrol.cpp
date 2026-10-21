@@ -5,6 +5,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "AI/PatrolRouteActor.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
+#include "Core/PlayerCommands.h"
 #include "CodexTactics.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "AIController.h"
@@ -328,6 +329,22 @@ void AEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertL
 		StartAlertPerformance(AlertLocation);
 	}
 	PropagatePatrolBreak(AlertLocation);
+	// 2026-10-21: the tutorial hears it first (the A4 "spotted" card pauses the fight that starts right below).
+	{
+		const TCHAR* CauseName = TEXT("Other");
+		switch (Cause)
+		{
+		case EPatrolAlertCause::Sight: CauseName = TEXT("Sight"); break;
+		case EPatrolAlertCause::Hearing: CauseName = TEXT("Hearing"); break;
+		case EPatrolAlertCause::Smell: CauseName = TEXT("Smell"); break;
+		case EPatrolAlertCause::Damage: CauseName = TEXT("Damage"); break;
+		case EPatrolAlertCause::PartnerAlert: CauseName = TEXT("PartnerAlert"); break;
+		case EPatrolAlertCause::LeaderLost: CauseName = TEXT("LeaderLost"); break;
+		default: break;
+		}
+		GameplayEvents::Raise(this, FName(*FString::Printf(TEXT("%s.%s"), *GameplayEvents::EnemyAlerted.ToString(), CauseName)), this);
+		GameplayEvents::Raise(this, GameplayEvents::EnemyAlerted, this);
+	}
 	// User request 2026-10-06: an enemy that engages the squad starts the fight on an ambush level.
 	ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::PatrolDetection, this);
 }

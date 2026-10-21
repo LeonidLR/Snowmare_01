@@ -22,6 +22,27 @@ locked on Demo 01 until the safety unlock-all - a wave / horde fight or the tuto
 
 ## Decision blocks, newest first (old §6 «Tutorial» section)
 
+**Demo 01 2026-10-21 b (user play-test of the two-part ambush; all four recommendations approved).** (1) **Spotted -> fight back:** "while we
+approach the first zombie it may spot us - the attack is ruined and the PASSIVE operatives won't even fire back; put the game into a TACTICAL
+PAUSE and ask for DEFENSIVE or AGGRESSIVE". New card **`A4_spotted`** (`TUT_A4_SPOTTED` "SPOTTED - FIGHT BACK"): when either A4 zombie
+(binding `A4_ANY`) ENGAGES the squad (new event `EnemyAlerted`, `requires: A4_tripwire`) while somebody is PASSIVE (stat `squad_passive`),
+action **`tactical_pause`** (the free pause: no charge, no timer), done on `Posture.Defensive` / `Posture.Aggressive` (Alt = squad) or when
+nobody is PASSIVE any more; once per level (the same card for a part-2 failure). The stealth card of the moment is dropped (`A4_tripwire`,
+`A4_hug_wall`, `A4_round_corner`: `cancel_on` EnemyAlerted; `A4_lure`: `Enemy*` of its zombie); the close-shot card keeps its slot (it already
+says AGGRESSIVE; a spotted card waiting behind it is dropped when it finishes - no late pause). (2) **Part 2 moves tactically:** before the
+lure, `A4_hug_wall` ("PART 2: MOVE TACTICALLY - click the wall of the NEAR container: she runs into cover and hugs it", her `CoverEntered`,
+target = the near zombie's loop round that container) and `A4_round_corner` ("ROUND THE CORNER - click further along the same container or
+round its corner", `Cover.Shimmy` (the wall-following) / `Cover.Corner` / `Cover.Switch` or `CornerReached`); both never precredited,
+skipped while a fight runs (stat `in_fight`); `A4_lure` follows them, sets the squad **PASSIVE** again (action) and its text says so; the
+wall card, the lure card and the spotted card say **"If he spots you, it's just a fight - the game goes on"**. (3) **No waves here:** the
+lake's level JSON `"ambush_fight": "skirmish"` - a fight with placed enemies is a skirmish of the zombie that engaged (the other keeps
+patrolling), no wave banner, and when it is down the game is straight back in exploration (no victory panel, no teleport, no cleanup) -
+[waves-horde-encounters](waves-horde-encounters.md) "Skirmishes"; the A6 scripted defence waves keep their panel. (4) **Susanin off here:**
+`"susanin_wave": 0` (the feature stays). Smokes `TutorialAmbushLakeSmoke` (+ the real wall-hug / wall-follow round `Container_A4_South`),
+`TutorialAmbushLakeSpottedSmoke` (part 1 fails), `TutorialAmbushLakeLureSpottedSmoke` (part 2 fails). Observed in the part-1 failure smoke:
+right after the skirmish the Medic-Sapper, standing pressed against `Overlook_LowCover`, did not move on a click whose navmesh path runs
+straight across that low cover (no vault came); walking round its end worked - to check in play.
+
 **Demo 01 2026-10-21 (game designer: "split the stealth lesson into two parts: in the FIRST a zombie walks a perimeter round ONE building -
 we set a tripwire for it; in the SECOND you LURE a zombie out into open ground and shoot it at close range"; and "I split the two patrol
 routes onto two zombies and two buildings - keep the placement as it is").** **The user's layout (read from his map, nothing moved):** two

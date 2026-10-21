@@ -154,6 +154,13 @@ struct CODEXTACTICS_API FGameFlowConfig
 	bool bAmbushSingleFight = true;
 
 	/**
+	 * 2026-10-21 (level JSON "ambush_fight": "skirmish"): an ambush fight is a skirmish of the enemies that engaged the squad; when they are
+	 * down the flow returns straight to Exploration (FGameFlowStateMachine::FinishSkirmish) - no WaveCleared / PostCombat.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambush")
+	bool bAmbushSkirmish = false;
+
+	/**
 	 * Horde waves start suddenly (user decision 2026-10-11, UE-only): no pre-combat cutscene, no preparation / rest
 	 * countdown — the wave spawns at once and the fight opens in a FREE, untimed tactical pause (no charge spent) while
 	 * UHordeIntroSubsystem flies the camera over the new enemy types. False restores the old start (cutscene ->

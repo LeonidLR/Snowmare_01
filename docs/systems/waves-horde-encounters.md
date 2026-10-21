@@ -9,6 +9,25 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## Skirmishes and the Susanin switch (2026-10-21)
+
+User play-test of the Demo 01 A4 ambush: "if the first or the second zombie attacks and we kill it, remove the next-wave option - they attack
+us, we kill them and play on, as smooth as possible, no waves at this stage" and "remove Susanin appearing during the fight". Approved: the
+placed-enemy fights of the lake (A4, the A5 base) are skirmishes; the A6 scripted defence waves keep their panel.
+
+| Level JSON key | Values | Effect |
+|---|---|---|
+| `"ambush_fight"` | `"level"` (default) / `"skirmish"` | `FLevelCombatConfig::bAmbushSkirmish` -> `FGameFlowConfig::bAmbushSkirmish` (`LevelFlowRules::ApplyLevel`). A skirmish = the ambush fight (`StartAmbushCombat`) of only the enemies that ENGAGED: the contact's source (`ULevelEncounterSubsystem::GetLastContactSource`) + every level enemy that broke its patrol and is not back on it (its escort / leader break with it) - `UWaveSubsystem::AdoptSkirmishEnemies`; the others keep patrolling. A level enemy that engages later (sight, hearing the fight, being hit) joins it (`NotifyHostileContact` -> `UWaveSubsystem::JoinSkirmish`). No `OnWaveStarted` (no wave objective, no Susanin, no flank breach), the combat banner reads `CONTACT \| HOSTILES: n`, the feed "Contact!". When the last of them dies: `FGameFlowStateMachine::FinishSkirmish` = WaveCombat (any sub-mode) -> **Exploration at once** (no WaveCleared panel, no PostCombat teleport / enemy cleanup, no wave XP; wave index 0, the combat zone free again for the next skirmish), the feed "Clear. Carry on - quietly."; a skirmish whose only enemy died from the very shot that started it ends on the next `UWaveSubsystem::Tick` (never inside the flow's own broadcast). Scripted waves are never skirmishes. |
+| `"susanin_wave"` | `0` = never, `N` = that wave, no key = random among 1-3 (Godot) | `FLevelCombatConfig::SusaninWave`, applied in `UWaveSubsystem::SetLevelConfig`; `URecruitSubsystem::HandleWaveStarted` also never fires in a skirmish. The feature stays (the user will say where to place it). |
+
+Also (every level): the victory panel's button of a single ambush fight (`bAmbushSingleFight`, "level" mode) reads "End combat and continue
+exploring" (it was "Start the next wave (2/3)" while it led to PostCombat anyway). The tutorial's lesson pause: `FGameFlowStateMachine::EnterLessonPause`
+= RealTime -> the FREE tactical pause (no charge, no timer) in any wave fight (`UTutorialSubsystem` action `tactical_pause`).
+Data: `Content/Data/LevelJson/L_Demo01_A_FrozenLake.json` (`"ambush_fight": "skirmish"`, `"susanin_wave": 0`), schema
+`Content/Data/Schemas/level_config.schema.json`, Wave Editor `types.ts`. Tests `CodexTactics.GameFlow.Skirmish.LevelJson / Flow`; smokes
+`TutorialAmbushLakeSmoke` / `TutorialAmbushLakeSpottedSmoke` / `TutorialAmbushLakeLureSpottedSmoke` (each fight ends straight in exploration, the
+other zombie keeps patrolling), `AmbushSmoke`, `PatrolAmbushSmoke`, `LevelWaveSmoke`, `SusaninSmoke`.
+
 ## Game flow / combat (old §5): phases, sudden horde, level enemies, guard posts
 
 **Game flow / combat (partly Gemini)**

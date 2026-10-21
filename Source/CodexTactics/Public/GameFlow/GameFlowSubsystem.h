@@ -124,6 +124,12 @@ public:
 	/** The current fight was started by an ambush (the placed enemies are the wave). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	bool IsAmbushFight() const { return Machine.IsAmbushFight(); }
+	/** 2026-10-21: the fight is a skirmish ("ambush_fight": "skirmish"; FGameFlowStateMachine::IsSkirmish). */
+	bool IsSkirmish() const { return Machine.IsSkirmish(); }
+	/** 2026-10-21: the skirmish is over - straight back to Exploration (FGameFlowStateMachine::FinishSkirmish). */
+	EGameFlowResult FinishSkirmish() { return Machine.FinishSkirmish(); }
+	/** 2026-10-21: the tutorial's free pause in a fight (FGameFlowStateMachine::EnterLessonPause). */
+	EGameFlowResult EnterLessonPause() { return Machine.EnterLessonPause(); }
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult FinishPreparation() { SyncSuddenStartOverride(); return Machine.FinishPreparation(); }
