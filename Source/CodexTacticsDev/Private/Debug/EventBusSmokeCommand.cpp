@@ -4,12 +4,18 @@
 // inventory items, feed lines, the dialogue window, rage, the generator, save / load, a fallen operative.
 
 #include "Debug/EventBusProbe.h"
+#include "Interactables/InteractionSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
 
 void UEventBusProbe::ListenGameplayEvents(UCodexEventBus* Bus)
 {
 	Bus->OnGameplayEvent.AddDynamic(this, &UEventBusProbe::OnGameplayEvent);
 	Bus->OnGameplayEventDetailed.AddDynamic(this, &UEventBusProbe::OnGameplayEventDetailed);
+}
+
+void UEventBusProbe::ListenActionMenu(UInteractionSubsystem* Interactions)
+{
+	Interactions->OnActionMenuChanged.AddDynamic(this, &UEventBusProbe::OnActionMenu);
 }
 
 void UEventBusProbe::Listen(UCodexEventBus* Bus)

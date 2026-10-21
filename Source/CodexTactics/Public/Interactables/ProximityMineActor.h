@@ -31,6 +31,8 @@ public:
 	virtual void RevealByPeek(AOperativeCharacter* Spotter) override;
 	/** 2026-10-15: a visible live mine is walked right up to (DisarmStandOffCm from its centre, on the operative's side). */
 	virtual bool UsesDisarmApproach() const override { return bTrapped && bRevealed && !bDetonated; }
+	/** A detonated mine is spent: its Defuse window closes. */
+	virtual bool ShouldCloseActionMenu() const override { return bDetonated || Super::ShouldCloseActionMenu(); }
 
 	/** The operative protected from the trigger while he works on it (TrapApproachRules::UpdateDefuserLease), or nullptr. */
 	const AOperativeCharacter* GetDefuserLease() const { return DefuserLease.Get(); }

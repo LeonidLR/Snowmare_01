@@ -41,7 +41,12 @@ patrolling), no wave banner, and when it is down the game is straight back in ex
 `"susanin_wave": 0` (the feature stays). Smokes `TutorialAmbushLakeSmoke` (+ the real wall-hug / wall-follow round `Container_A4_South`),
 `TutorialAmbushLakeSpottedSmoke` (part 1 fails), `TutorialAmbushLakeLureSpottedSmoke` (part 2 fails). Observed in the part-1 failure smoke:
 right after the skirmish the Medic-Sapper, standing pressed against `Overlook_LowCover`, did not move on a click whose navmesh path runs
-straight across that low cover (no vault came); walking round its end worked - to check in play.
+straight across that low cover (no vault came); walking round its end worked - to check in play. **2026-10-21 follow-up (`LowCoverMoveLakeSmoke` on the real `Overlook_LowCover`, 1 m x 6 m, tag `Vault`):** NOT reproduced in the clean state - from cover (both
+sides), after a fire order at a frozen hound and a (forced) end of the skirmish, a shimmy along the wall (200 cm) and a move order across the cover (the navmesh path goes ROUND
+its end, 5 points) both work, as does an order standing pressed against its face (outside the cover state, 15 cm off the navmesh: the crowd agent still moves). Not ruled
+out: the free lesson pause / a flow phase with time dilation ~0 (`WaveCleared`, `GameOver`: `FGameFlowStateMachine::GetTimeDilation`) while the order is given - path status Moving,
+speed 0 is exactly what a near-zero global time dilation looks like; a skirmish must end in Exploration (`FinishSkirmish`). If it comes back: log `GetGlobalTimeDilation`, the
+flow phase / mode and `LogDiagnostics` of `LowCoverMoveSmokeCommand.cpp` at the moment.
 
 **Demo 01 2026-10-21 (game designer: "split the stealth lesson into two parts: in the FIRST a zombie walks a perimeter round ONE building -
 we set a tripwire for it; in the SECOND you LURE a zombie out into open ground and shoot it at close range"; and "I split the two patrol

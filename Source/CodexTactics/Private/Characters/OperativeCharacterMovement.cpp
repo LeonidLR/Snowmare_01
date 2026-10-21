@@ -405,6 +405,7 @@ void AOperativeCharacter::HandleMoveFinished()
 void AOperativeCharacter::SetFacingPoint(const FVector& Point)
 {
 	StopOperative();
+	ClearIdleFacing(); // an ordered facing is not undone by a parked follower's stale idle facing (it turned him back right after the disarm menu opened)
 	const FVector Direction = (Point - GetActorLocation()).GetSafeNormal2D();
 	if (!Direction.IsNearlyZero())
 	{

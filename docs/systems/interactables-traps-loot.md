@@ -65,6 +65,18 @@
   once (the squad is placed behind it at `CombatStart`, the waves spawn on the near side). Saved: `world_state.gate_progress`
   {progress, final_wave_cleared} per gate (generator health / broken were already saved with the interactables).
 
+## Disarm orders from the cover, and the action window's lifetime (game designer 2026-10-21)
+
+- **From the cover:** a disarm order (click on a spotted wire / live mine / rigged object, `InteractionCommands::IsDisarm`) takes the operative off the wall:
+  in reach of the disarm spot the menu would open at once with no move order, so `UInteractionSubsystem::RequestInteraction` calls
+  `StepOffCoverForDisarm` (real time) first - `LeaveCoverToMove`, never for what `OrderMoveTo` refuses (raging, panicking, knocked down, aboard);
+  farther away `OrderMoveTo` leaves the cover as for any move. A menu opened in the cover by another path (the tactical pause, `OpenMenuNow`) is
+  handled at `ConfirmActionMenu` (same helper). Check: `DisarmCoverSmoke`.
+- **The window follows its object:** `UInteractionSubsystem::bMenuOpen` (not the weak `MenuTarget`) says the menu is on screen; `Tick` ->
+  `CloseStaleWindows` closes it when the object is destroyed, `AInteractableActor::ShouldCloseActionMenu()` (awaiting the pickup grab; a tripped
+  wire; a detonated mine) or its `bTrapped` changed since the window opened; Cancel always closes (it used to do nothing once the wire was gone).
+  `OnActionMenuChanged(false)` is broadcast exactly once per window (the HUD hides `UActionMenuWidget`). A loot dialog whose crate was destroyed closes the same way.
+
 ## How to place a PMC tripwire (old §6)
 
 ### How to place a PMC tripwire (Demo 01 G3, 2026-10-12)

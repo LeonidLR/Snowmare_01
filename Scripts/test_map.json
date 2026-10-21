@@ -31,7 +31,8 @@
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
-    "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke"
+    "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke",
+    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -51,6 +52,7 @@
     "TutorialSmoke": { "exclusive": true, "timeout": 600, "_why": "realTime, ~170 s on a free machine (the A0-A4 demo flow + the guide course): the default 300 s is tight under load" },
     "TutorialSaveSmoke": { "exclusive": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600 },
     "PMCTripwireSmoke": { "exclusive": true },
+    "LowCoverMoveLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "_why": "2026-10-21: the real Overlook_LowCover: shimmy / move after a skirmish from a low cover (lake layout)" },
     "PauseMenuSmoke": { "exclusive": true },
     "ControlsScreenSmoke": { "exclusive": true },
     "EventBusSmoke": { "exclusive": true },
@@ -185,6 +187,13 @@
         "Scripts/Editor/setup_operative_interaction_animation.py", "Content/Characters/Operatives/Anims/Interactions/**"],
       "tests": ["CodexTactics.Characters.InteractionAnim", "CodexTactics.Interactables.TrapApproach", "CodexTactics.Survival.WarmIdle"],
       "smokes": ["LootSmoke", "DeployableSmoke", "PMCTripwireSmoke", "WarmIdleSmoke", "TrapSoloSmoke", "PeekMinesSmoke"]
+    },
+    {
+      "name": "interaction-menu",
+      "_comment": "2026-10-21: a disarm order from the cover leaves the wall; the action menu / loot window close when their object is gone / disarmed / spent (UInteractionSubsystem::CloseStaleWindows).",
+      "globs": ["Source/**/Interactables/InteractionSubsystem*", "Source/**/Interactables/InteractableActor*", "Source/**/Debug/DisarmCoverSmoke*", "Source/**/Debug/LowCoverMoveSmoke*", "Source/**/Debug/EventBusProbe*"],
+      "tests": ["CodexTactics.Interactables"],
+      "smokes": ["DisarmCoverSmoke", "PMCTripwireSmoke", "DeployableSmoke", "LootSmoke", "ClickRulesSmoke", "BarrelSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "tripwire",

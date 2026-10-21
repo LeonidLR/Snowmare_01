@@ -139,6 +139,13 @@ public:
 	 */
 	bool IsAwaitingPickup() const { return bAwaitingPickup; }
 
+	/**
+	 * The action menu opened for this object is stale and the interaction subsystem closes it (polled every tick; rev 2026-10-21, game
+	 * designer: the tripwire window stayed on screen after the wire was disarmed): the object is going away or is disarmed and waits for
+	 * its pickup grab. Overrides add their spent states (a tripped wire, a detonated mine).
+	 */
+	virtual bool ShouldCloseActionMenu() const { return bAwaitingPickup || IsActorBeingDestroyed(); }
+
 	/** Seconds the last disarm pickup waited for its grab moment (smokes). */
 	float GetLastPickupDelaySeconds() const { return LastPickupDelaySeconds; }
 

@@ -229,6 +229,8 @@ public:
 
 	/** 2026-10-15: a laid, visible, live wire is walked right up to - DisarmStandOffCm from the closest wire point, on his side. */
 	virtual bool UsesDisarmApproach() const override { return bSetUp && !bPreview && !bTripped && IsSpotted(); }
+	/** A tripped wire is spent (the pin is out, the blast follows): its Disarm window closes. */
+	virtual bool ShouldCloseActionMenu() const override { return bTripped || Super::ShouldCloseActionMenu(); }
 	/** The closest point of the wire (ground level under it). */
 	virtual FVector GetDisarmFocusPoint(const FVector& From) const override;
 	virtual FVector GetDisarmApproachPoint(const FVector& From) const override;

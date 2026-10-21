@@ -80,7 +80,7 @@ public:
 	AInteractableActor* GetPendingInteraction() const { return Pending.Get(); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Interactables")
-	bool IsActionMenuOpen() const { return MenuTarget.IsValid(); }
+	bool IsActionMenuOpen() const { return bMenuOpen && MenuTarget.IsValid(); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Interactables")
 	AInteractableActor* GetMenuTarget() const { return MenuTarget.Get(); }
@@ -154,11 +154,22 @@ private:
 	bool TryOpenMenu();
 	void OpenMenuFor(AInteractableActor* Target, AOperativeCharacter* Leader);
 	void CloseMenu();
+	/**
+	 * Closes the menu / the loot dialog whose object is gone (destroyed), disarmed and waiting for its pickup, spent (tripped / detonated)
+	 * or no longer rigged (AInteractableActor::ShouldCloseActionMenu). Polled every tick: the target dies by many paths.
+	 */
+	void CloseStaleWindows();
+	/** A disarm order from the wall: steps the leader off the cover (never when the order itself would be refused). */
+	void StepOffCoverForDisarm(AOperativeCharacter& Leader) const;
 	/** Clears the «approaching defuser» mark of a mine (Godot _close_action_menu). */
 	void ClearDefuser(AInteractableActor* Target) const;
 
 	TWeakObjectPtr<AInteractableActor> Pending;
 	TWeakObjectPtr<AInteractableActor> MenuTarget;
+	/** The menu is on screen (MenuTarget alone cannot say: it is a weak pointer, stale once the object is destroyed). */
+	bool bMenuOpen = false;
+	/** AInteractableActor::bTrapped of the menu's object when it opened (a change = the rigging was spent / defused: the menu is stale). */
+	bool bMenuTargetTrapped = false;
 	TWeakObjectPtr<ALootCrateActor> LootCrate;
 	FActionMenuSpec Menu;
 };
