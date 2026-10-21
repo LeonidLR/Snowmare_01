@@ -23,6 +23,10 @@
 //    towards him) still dashes diagonally to that front-face corner and he arrives facing right (mirrored), at the corner.
 //    Shot mode adds cover_corner_switch_preview.png / _dash / _settled;
 //    (2026-10-21: a click on B's FAR end of the front face - the face under the cursor decides, see 10);
+// 11 two buildings in a row (user bug 2026-10-21: "I can't dash from the edge of one building to the edge of the other"): B moved so its
+//    front face lies in A's plane (0 cm, 30 cm back, 30 cm forward; gaps 2.5 / 2.5 / 3.5 m) - hovering B's front face near its near edge
+//    and in its middle shows the ghost on B's FRONT face at the near corner in the mirrored pose; the double-click (HandleWorldHit) dashes
+//    there at a sprint (they used to count as ONE wall: the click was a shimmy, no switch). B goes back to its place for 8.
 // 10 the committed target is the hovered ghost (user bug 2026-10-20: "the ghost is right, I click it again - he ends round the corner"),
 //    through the controller's click path (HandleWorldHit, the real double-click timing): from A's end, hover B's near edge - its END face
 //    (towards A) and its front face near the edge - then click: the first click starts no order and its ghost stays where the hover ghost
@@ -100,6 +104,11 @@ namespace CoverSwitchSmoke
 		float SwitchSeenAt = -1.f;
 		/** 10: the click case (0 end face double, 1 front face double, 2 front face slow), its hit, the hovered ghost. */
 		int32 ClickCase = 0;
+		/** 11: the coplanar case, B's original place, B's near end and front face in the arena frame. */
+		int32 CoplanarCase = 0;
+		FVector BHome = FVector::ZeroVector;
+		float BMinR = 0.f;
+		float BFaceF = 0.f;
 		/** The face the click case expects to end on (its normal) and whether the run-in clip may be the ordinary entry. */
 		FVector ExpectNormal = FVector::ZeroVector;
 		bool bAnyEntry = false;
@@ -320,8 +329,11 @@ namespace CoverSwitchSmoke
 		Check(State, State.bSawOutOfCover, FString::Printf(TEXT("%s: out of cover on the way (exposed)"), Label));
 		if (State.bExpectSwitch)
 		{
-			// 2026-10-21: the quick dash - a sprint all the way to the run-in.
-			Check(State, State.MaxDashSpeed >= 600.f, FString::Printf(TEXT("%s: a sprint dash, not a walk (top speed %.0f cm/s)"), Label, State.MaxDashSpeed));
+			// 2026-10-21: the quick dash - a sprint up to the run-in (a short dash hands over to the sprint run-in while still speeding up).
+			const FString RunIn = Anim ? Anim->GetLastCoverSwitchClip() : FString();
+			const bool bSprintRunIn = bSwitched && RunIn.Contains(TEXT("_sprint_"));
+			Check(State, State.MaxDashSpeed >= 600.f || (bSprintRunIn && State.MaxDashSpeed >= 450.f),
+				FString::Printf(TEXT("%s: a sprint dash, not a walk (top speed %.0f cm/s, run-in %s)"), Label, State.MaxDashSpeed, bSwitched ? *RunIn : TEXT("-")));
 		}
 		if (State.bExpectSwitch && !State.bAnyEntry)
 		{
@@ -849,7 +861,7 @@ namespace CoverSwitchSmoke
 			ResetSquad(Squad, State, FVector2D(0.f, 100.f));
 			Op->OrderTakeCover(State.SlotAEnd, false);
 			++State.ClickCase;
-			Next(State, State.ClickCase <= 2 ? 27 : 17); // then 8: the pause in a fight
+			Next(State, State.ClickCase <= 2 ? 27 : 40); // then 11: two buildings in a row, then 8: the pause in a fight
 			return true;
 		}
 		case 17:
@@ -1022,6 +1034,125 @@ namespace CoverSwitchSmoke
 			Op->LeaveCover(TEXT("smoke end"));
 			Op->OrderMoveTo(State.P, false);
 			Next(State, 21);
+			return true;
+		}
+		case 40: // 11: B in a row with A (its front face in A's plane, a little back / forward)
+		{
+			AStaticMeshActor* B = State.Walls[1].Get();
+			if (State.CoplanarCase == 0)
+			{
+				State.BHome = B ? B->GetActorLocation() : FVector::ZeroVector;
+			}
+			const float Offsets[3] = { 0.f, 30.f, -30.f };
+			const float MinRs[3] = { 550.f, 550.f, 650.f };
+			State.BFaceF = NearFaceA + Offsets[State.CoplanarCase];
+			State.BMinR = MinRs[State.CoplanarCase];
+			if (B)
+			{
+				const FVector At = State.P + State.F * (State.BFaceF + 20.f) + State.R * (State.BMinR + 150.f);
+				B->SetActorLocation(FVector(At.X, At.Y, State.BHome.Z));
+			}
+			ResetSquad(Squad, State, FVector2D(0.f, 100.f));
+			Op->OrderTakeCover(State.SlotAEnd, false);
+			Next(State, 41);
+			return true;
+		}
+		case 41:
+		{
+			if ((!Settled(Op) || State.StageTime < 3.f) && State.StageTime < 15.f)
+			{
+				return true; // the navmesh rebuilds round B's new place
+			}
+			const TCHAR* Labels[3] = { TEXT("in A's plane, 2.5 m gap"), TEXT("30 cm back, 2.5 m gap"), TEXT("30 cm forward, 3.5 m gap") };
+			const FString Label = FString::Printf(TEXT("11 (%s)"), Labels[State.CoplanarCase]);
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(CoverSwitchSmokeRow), false);
+			for (const TWeakObjectPtr<AOperativeCharacter>& Each : State.Members)
+			{
+				Params.AddIgnoredActor(Each.Get());
+			}
+			auto FrontHit = [&](float AtR)
+			{
+				FHitResult Hit;
+				const FVector Start = State.P + State.F * (State.BFaceF - 150.f) + State.R * AtR + FVector(0.f, 0.f, State.GroundZ - State.P.Z + 120.f);
+				World->LineTraceSingleByChannel(Hit, Start, Start + State.F * 400.f, ECC_Visibility, Params);
+				return Hit;
+			};
+			const float CornerR = State.BMinR + 57.f; // the Right stand-off from B's near corner
+			FVector GhostNear = FVector::ZeroVector;
+			for (const float AtR : { State.BMinR + 40.f, State.BMinR + 150.f })
+			{
+				const FHitResult Hit = FrontHit(AtR);
+				const bool bHover = Hit.GetActor() == State.Walls[1].Get() && PC->UpdateCoverSwitchHover(Op, &Hit) && PC->IsCoverSwitchHoverShown();
+				const ACoverGhostActor* Ghost = PC->GetCoverSwitchGhost();
+				const FVector At = Ghost ? Ghost->GetSlot().WorldLocation : FVector::ZeroVector;
+				const bool bFront = Ghost && FVector::DotProduct(Ghost->GetSlot().WallNormal, -State.F) > 0.9f;
+				FCoverSlot Probe;
+				const bool bProbe = PC->FindCoverSlotForHit(Hit, Probe);
+				Check(State, bHover && bFront && FMath::Abs(AlongR(State, At) - CornerR) < 25.f && Ghost->GetShownFacing() == ECoverFacing::Right,
+					FString::Printf(TEXT("%s: hovering B's front face at R %.0f -> the ghost on B's FRONT face at its near corner (R %.0f, front %d), mirrored (facing %s) [verdict %s]"),
+						*Label, AtR, AlongR(State, At), bFront ? 1 : 0, Ghost && Ghost->GetShownFacing() == ECoverFacing::Left ? TEXT("left") : TEXT("right"),
+						bProbe ? CoverSwitchRules::VerdictName(Op->EvaluateCoverSwitch(Probe)) : TEXT("no slot")));
+				if (AtR < State.BMinR + 100.f)
+				{
+					GhostNear = At;
+				}
+			}
+			PC->UpdateCoverSwitchHover(nullptr, nullptr);
+			// The double-click on B's front face near its edge, through the click dispatcher.
+			const FHitResult Click = FrontHit(State.BMinR + 40.f);
+			State.Target = State.SlotB;
+			State.Target.WallActor = State.Walls[1];
+			State.bExpectSwitch = true;
+			State.bAnyEntry = true;
+			State.MaxDashSpeed = 0.f;
+			State.bSawSprint = State.bSawOutOfCover = State.bSawSwitchEntry = false;
+			State.SwitchCountBefore = Op->GetCoverSwitchCount();
+			State.HoverAt = GhostNear;
+			State.HoverFacing = ECoverFacing::Right;
+			State.ExpectNormal = -State.F;
+			State.StartDistance = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), GhostNear));
+			PC->HandleWorldHit(Click);
+			PC->HandleWorldHit(Click);
+			Check(State, PC->WasLastCoverConfirmSwitch() && Op->HasPendingCoverSwitch() && FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, GhostNear) < 5.f,
+				FString::Printf(TEXT("%s: the double-click is the switch to that corner (%.0f cm off the ghost; verdict %s)"), *Label,
+					FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, GhostNear), CoverSwitchRules::VerdictName(PC->GetLastCoverSwitchVerdict())));
+			Next(State, 42);
+			return true;
+		}
+		case 42:
+		{
+			if (!CheckArrival(State, Op, TEXT("11 (two buildings in a row)")))
+			{
+				return true;
+			}
+			const FCoverSlot& Arrived = Op->GetCoverSlot();
+			Check(State, Arrived.WallActor.Get() == State.Walls[1].Get() && FVector::Dist2D(Arrived.WorldLocation, State.HoverAt) < 10.f
+				&& FVector::DotProduct(Arrived.WallNormal, -State.F) > 0.9f && Op->CoverFacing == ECoverFacing::Right && Op->bAtCoverCorner,
+				FString::Printf(TEXT("11 case %d: in cover on B's front face at its near corner (%.0f cm off the ghost), mirrored (facing right), at the corner"),
+					State.CoplanarCase, FVector::Dist2D(Arrived.WorldLocation, State.HoverAt)));
+			++State.CoplanarCase;
+			if (State.CoplanarCase <= 2)
+			{
+				Next(State, 40);
+				return true;
+			}
+			// B back to its place for 8.
+			if (AStaticMeshActor* B = State.Walls[1].Get())
+			{
+				B->SetActorLocation(State.BHome);
+			}
+			ResetSquad(Squad, State, FVector2D(0.f, 100.f));
+			Next(State, 43);
+			return true;
+		}
+		case 43:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true; // the navmesh rebuilds
+			}
+			Op->OrderTakeCover(State.SlotAEnd, false);
+			Next(State, 17);
 			return true;
 		}
 		case 21:

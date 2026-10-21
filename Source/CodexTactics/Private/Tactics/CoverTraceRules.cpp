@@ -76,7 +76,21 @@ namespace CoverTraceRules
 			return false;
 		}
 		const float PlaneDistance = FMath::Abs(FVector::DotProduct(B.WallPoint - A.WallPoint, A.WallNormal));
-		return PlaneDistance <= Config.SameWallPlaneDistanceCm;
+		if (PlaneDistance > Config.SameWallPlaneDistanceCm)
+		{
+			return false;
+		}
+		// User bug 2026-10-21 ("I can't dash from the edge of one building to the edge of the other"): two buildings whose faces lie in one
+		// plane with a GAP between them are two walls - the other one lies past an exposed edge of this one (or this one past an exposed edge
+		// of the other). Without it the click on the other building was a shimmy along "his wall" and never a cover switch. A wall made of
+		// several pieces butting against each other has no exposed edge between them: still one wall.
+		auto BeyondEdge = [](const FCoverSlot& From, const FCoverSlot& To)
+		{
+			const float Along = static_cast<float>(FVector::DotProduct(To.WallPoint - From.WallPoint, From.RightTangent()));
+			return (Along > 0.f && From.bRightEdgeExposed && Along > From.RightEdgeDistanceCm + SameWallEdgeToleranceCm)
+				|| (Along < 0.f && From.bLeftEdgeExposed && -Along > From.LeftEdgeDistanceCm + SameWallEdgeToleranceCm);
+		};
+		return !BeyondEdge(A, B) && !BeyondEdge(B, A);
 	}
 
 	float AlongWallDistance(const FCoverSlot& A, const FVector& Point)
