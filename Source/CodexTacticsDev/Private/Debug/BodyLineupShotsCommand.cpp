@@ -52,7 +52,7 @@ namespace BodyLineupShots
 		{ TEXT("zombies"), TEXT("/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie.BP_Enemy_MilitaryZombie_C"), 9, 130.f },
 		{ TEXT("hounds"), TEXT("/Game/Characters/Enemies/Hound/BP_Enemy_Hound.BP_Enemy_Hound_C"), 5, 140.f },
 		{ TEXT("frostbitten"), TEXT("/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten.BP_Enemy_Frostbitten_C"), 4, 150.f },
-		{ TEXT("brutes"), TEXT("/Game/Characters/Enemies/Brute/BP_Enemy_Brute.BP_Enemy_Brute_C"), 4, 260.f },
+		{ TEXT("brutes"), TEXT("/Game/Characters/Enemies/Brute/BP_Enemy_Brute.BP_Enemy_Brute_C"), 4, 430.f },
 		{ TEXT("cutters"), TEXT("/Game/Characters/Enemies/Cutter/BP_Enemy_Cutter.BP_Enemy_Cutter_C"), 4, 170.f },
 	};
 
@@ -163,7 +163,7 @@ namespace BodyLineupShots
 	}
 
 	/** Camera in front of the row (looking back along -Forward), framing Count bodies. */
-	void FrameRow(int32 Count, float SpacingCm, float TargetZ)
+	void FrameRow(int32 Count, float SpacingCm, float TargetZ, float BodyRadius = 0.f)
 	{
 		ACameraActor* Camera = Runner->Camera.Get();
 		if (!Camera)
@@ -172,8 +172,9 @@ namespace BodyLineupShots
 		}
 		const SmokeUtils::FClearArena& A = Runner->Arena;
 		const FVector Mid = A.Origin + FVector(0.f, 0.f, TargetZ);
-		const float Width = FMath::Max(300.f, Count * SpacingCm);
-		const FVector Eye = Mid + A.Forward * (Width * 1.05f + 150.f) + FVector(0.f, 0.f, Width * 0.18f + 40.f);
+		// wide enough for the row and far enough for tall bodies (a brute)
+		const float Width = FMath::Max3(300.f, Count * SpacingCm, BodyRadius * 3.f);
+		const FVector Eye = Mid + A.Forward * (Width * 1.05f + 150.f + BodyRadius * 2.f) + FVector(0.f, 0.f, Width * 0.18f + 40.f);
 		Camera->SetActorLocationAndRotation(Eye, (Mid - Eye).Rotation());
 		Camera->GetCameraComponent()->SetFieldOfView(55.f);
 	}
@@ -364,7 +365,15 @@ namespace BodyLineupShots
 				*GetNameSafe(Mesh->GetSkeletalMeshAsset()), SetIndex, *GetNameSafe(Mesh->GetMaterial(0))));
 		}
 		Check(Seeds.Num() == G.Count, FString::Printf(TEXT("%s: %d distinct looks spawned (%d expected)"), G.Name, Seeds.Num(), G.Count));
-		FrameRow(Seeds.Num(), G.SpacingCm, 90.f);
+		float Radius = 0.f;
+		for (const TWeakObjectPtr<AActor>& Each : Runner->Props)
+		{
+			if (const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Each.Get()))
+			{
+				Radius = FMath::Max(Radius, Enemy->GetMesh()->Bounds.SphereRadius);
+			}
+		}
+		FrameRow(Seeds.Num(), G.SpacingCm, FMath::Max(90.f, Radius * 0.9f), Radius);
 		return 150;
 	}
 
