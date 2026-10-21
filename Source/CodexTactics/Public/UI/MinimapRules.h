@@ -3,8 +3,8 @@
 #include "CoreMinimal.h"
 
 /**
- * Pure minimap math (user decisions 2026-10-18, docs/design/MINIMAP.md; UE-only, no Godot reference): the isometric
- * orthographic projection the floor captures are taken with (world <-> map UV, the inverse along the view ray onto a
+ * Pure minimap math (user decisions 2026-10-18, docs/design/MINIMAP.md; UE-only, no Godot reference): the orthographic
+ * projection the floor captures are taken with (straight down since 2026-10-21, the old isometric view behind a CVar) (world <-> map UV, the inverse along the view ray onto a
  * height plane), the panel / full-map view on screen (zoom, pan, clicks), floor bands (auto-detected from stacked walkable
  * surfaces or a level JSON list), which geometry each floor's capture hides, the fog of war grid (reveal discs, base64 for
  * the save) and the fading last-known enemy icon. Everything is testable without a world (CodexTactics.UI.Minimap.*).
@@ -18,15 +18,21 @@ enum class EMinimapPanelMode : uint8
 };
 
 /**
- * Orthographic view of the level from the start camera's yaw / pitch (never rotates with the player's camera). Map UV
- * (0, 0) = the image's top-left corner, (1, 1) its bottom-right; U follows the view's right axis, V its down axis.
+ * Orthographic view of the level at the start camera's yaw (never rotates with the player's camera), looking straight
+ * down (PitchDeg -90, game designer 2026-10-21: map up = the start camera's forward, so the map's directions match the
+ * screen's) or, with Codex.Minimap.TopDown 0, isometric at the start camera's pitch (the 2026-10-18 view; the name stays).
+ * Map UV (0, 0) = the image's top-left corner, (1, 1) its bottom-right; U follows the view's right axis, V its down axis
+ * (straight down: the yaw's horizontal right / backward - the up axis is the yaw's horizontal forward, never degenerate).
  */
 struct CODEXTACTICS_API FMinimapIsoProjection
 {
+	/** Pitch of the top-down map (straight down). */
+	static constexpr float TopDownPitchDeg = -90.f;
+
 	/** The world point at the image centre. */
 	FVector Center = FVector::ZeroVector;
 	float YawDeg = 45.f;
-	/** Negative = looking down (the tactical camera's -35.26). */
+	/** Negative = looking down (-90 = straight down; the tactical camera's iso angle -35.26). */
 	float PitchDeg = -35.26f;
 	/** Ortho width / height of the image, cm. */
 	float WidthCm = 10000.f;
@@ -38,10 +44,18 @@ struct CODEXTACTICS_API FMinimapIsoProjection
 	FVector GetRight() const;
 	/** Image up axis. */
 	FVector GetUp() const;
+	/** Straight down: heights do not move a point on the map. */
+	bool IsTopDown() const { return PitchDeg <= TopDownPitchDeg + 0.01f; }
 	/** Width / height. */
 	float GetAspect() const { return HeightCm > KINDA_SMALL_NUMBER ? WidthCm / HeightCm : 1.f; }
 
 	FVector2D WorldToMap(const FVector& World) const;
+	/**
+	 * A world direction's heading on the image: unit, x = right, y = down, in square image units (world cm on the image,
+	 * so an arrow drawn on screen points the right way whatever Width / Height); its vertical part is dropped. Zero for a
+	 * vertical direction. Straight down: the yaw's forward = (0, -1). (Facing arrows of the icons, door bars.)
+	 */
+	FVector2D MapDirection(const FVector& Direction) const;
 	/** The point of the image plane (through Center, facing the view) at Map. */
 	FVector MapToImagePlane(const FVector2D& Map) const;
 	/** Where the view ray through Map crosses the horizontal plane Z = PlaneZ (the inverse of WorldToMap at that height). */
@@ -80,6 +94,9 @@ struct CODEXTACTICS_API FMinimapView
 
 namespace MinimapRules
 {
+	/** Pitch of the map capture: straight down when bTopDown (default), else the start camera's pitch (the old iso view). */
+	CODEXTACTICS_API float CapturePitch(bool bTopDown, float CameraPitchDeg);
+
 	/** Wheel zoom: one notch scales the span by 1.25 (positive notches = zoom out), clamped. */
 	CODEXTACTICS_API float StepZoomSpan(float SpanU, float Notches, float MinSpan, float MaxSpan);
 	/** The view zoomed to NewSpanU keeping the map point under Cursor where it is. */
@@ -146,6 +163,13 @@ namespace MinimapRules
 	 * (roofs, ceilings, upper storeys - terrain independent); floor k: its bottom is CutClearanceCm above that floor's surface.
 	 */
 	CODEXTACTICS_API bool HideOnFloor(int32 Floor, float BottomZ, float BottomAboveGroundCm, TConstArrayView<float> UpperBases, const FFloorParams& Params);
+	/**
+	 * Height clip of Floor's capture (2026-10-21, top-down only: the view's near plane is then horizontal): an upper floor k
+	 * is drawn below UpperBases[k-1] + CutClearanceCm, so a building made as ONE mesh (storeys + roof) shows that storey's
+	 * rooms, its walls cut 2 m up like a floor plan. None (unset) for the ground - one clip height cannot follow the terrain
+	 * (hills, rocks, trees would be cut open) - and for the iso view.
+	 */
+	CODEXTACTICS_API TOptional<float> FloorClipZ(int32 Floor, TConstArrayView<float> UpperBases, bool bTopDown, const FFloorParams& Params);
 	/** Display name of a floor: "GROUND", "FLOOR 2", ... */
 	CODEXTACTICS_API FString FloorLabel(int32 Floor);
 

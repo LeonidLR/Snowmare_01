@@ -25,13 +25,13 @@ enum class EMinimapIconKind : uint8
 	Door
 };
 
-/** One icon drawn over the captured map image (projected with the capture's own iso projection). */
+/** One icon drawn over the captured map image (projected with the capture's own projection). */
 struct CODEXTACTICS_API FMinimapIcon
 {
 	EMinimapIconKind Kind = EMinimapIconKind::Operative;
 	FVector World = FVector::ZeroVector;
 	FVector2D MapUV = FVector2D::ZeroVector;
-	/** Facing on the map (unit, map UV space); zero = none. */
+	/** Facing on the map (unit, image space with square pixels = a screen direction; FMinimapIsoProjection::MapDirection); zero = none. */
 	FVector2D MapFacing = FVector2D::ZeroVector;
 	FLinearColor Color = FLinearColor::White;
 	float Alpha = 1.f;
@@ -53,6 +53,8 @@ struct FMinimapFloorCapture
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> Hidden;
 	/** Height of this floor's walking plane (fog quad, click fallback), world Z. */
 	float PlaneZ = 0.f;
+	/** Top-down upper floors: nothing above this world Z is drawn (the capture's near plane; MinimapRules::FloorClipZ). */
+	TOptional<float> ClipZ;
 	/** Capture passes still to render (exposure / lighting settle over a few frames). */
 	int32 PassesLeft = 0;
 	/** Game-thread time of its CaptureScene calls, ms. */
@@ -79,8 +81,9 @@ enum class EMinimapClick : uint8
 /**
  * Minimap (user decisions 2026-10-18, docs/design/MINIMAP.md; UE-only): in the top-right panel (switched with the message
  * feed, F2 / the header) or full screen (Tab; F3 in turn-based combat where Tab is "next operative"). The level is
- * captured ONCE per floor at load (orthographic SceneCapture2D at the level start camera's yaw / pitch; characters,
- * markers, effects hidden; per floor the geometry above it left out), live icons are projected over it with the same
+ * captured ONCE per floor at load (orthographic SceneCapture2D straight down at the level start camera's yaw, 2026-10-21;
+ * Codex.Minimap.TopDown 0 = the old iso view at its pitch; characters, markers, effects hidden; per floor the geometry
+ * above it left out), live icons are projected over it with the same
  * matrix: squad (leader highlighted, facing arrow), enemies while seen (last known spot fading), tutorial objectives,
  * spotted traps, building doors, the camera's view footprint. Fog of war per floor (reveal discs round the operatives,
  * saved). Floors: level JSON "minimap.floors_cm" or auto-detected from stacked walkable surfaces; the selected operative's
@@ -100,6 +103,8 @@ public:
 	virtual TStatId GetStatId() const override;
 
 	static UMinimapSubsystem* Get(const UObject* WorldContext);
+	/** Codex.Minimap.TopDown: the next capture looks straight down (default) or isometric (0). */
+	static bool IsTopDownEnabled();
 
 	// --- Panel / full map -------------------------------------------------------------------------------------------
 
@@ -144,6 +149,8 @@ public:
 	/** Captures done (or created headless), floors and fog set up. */
 	bool IsReady() const { return bReady; }
 	const FMinimapIsoProjection& GetProjection() const { return Projection; }
+	/** The transient capture actor (smokes: its view axes = the projection's). */
+	const ASceneCapture2D* GetCaptureActor() const { return CaptureActor; }
 	int32 GetFloorCount() const { return 1 + UpperFloorBases.Num(); }
 	const TArray<float>& GetUpperFloorBases() const { return UpperFloorBases; }
 	/** Floors from the level JSON (true) or auto-detected. */

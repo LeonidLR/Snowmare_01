@@ -1,5 +1,6 @@
 // CodexTactics.UI.Minimap.* - minimap rules (user decisions 2026-10-18, docs/design/MINIMAP.md; UE-only, no Godot reference):
-// the isometric capture projection (world -> map UV and the inverse onto a height plane, fitted to the level), the screen view
+// the capture projection, isometric and straight down (2026-10-21: world -> map UV and the inverse onto a height plane, fitted
+// to the level, facing arrows, the pitch the CVar picks), the screen view
 // (square pixels, zoom round the cursor, clamping, the whole image fitted), the camera footprint, clipping, floor bands (auto
 // detection, data clean-up, the selected operative's floor with hysteresis, what each floor's capture hides), the fog of war
 // grid (reveal, per floor, base64 round trip) and the fading enemy icon; the level JSON "minimap" block.
@@ -24,6 +25,15 @@ namespace MinimapTest
 		P.PitchDeg = -35.26f;
 		P.WidthCm = 8000.f;
 		P.HeightCm = 6000.f;
+		return P;
+	}
+
+	/** The top-down map (2026-10-21): straight down at the start camera's yaw, a non-square image. */
+	FMinimapIsoProjection TopDown(float YawDeg)
+	{
+		FMinimapIsoProjection P = Iso();
+		P.YawDeg = YawDeg;
+		P.PitchDeg = FMinimapIsoProjection::TopDownPitchDeg;
 		return P;
 	}
 }
@@ -93,6 +103,85 @@ bool FMinimapProjectionFitTest::RunTest(const FString&)
 	Wide.WidthCm = 1000.f;
 	Wide.HeightCm = 2000.f;
 	TestEqual(TEXT("texture 1:2 -> 1024 x 2048"), Wide.ChooseTextureSize(2048), FIntPoint(1024, 2048));
+	return true;
+}
+
+MINIMAP_TEST(FMinimapProjectionTopDownTest, "Projection.TopDown")
+bool FMinimapProjectionTopDownTest::RunTest(const FString&)
+{
+	TestEqual(TEXT("CVar on: straight down whatever the camera's pitch"), MinimapRules::CapturePitch(true, -35.26f), -90.f);
+	TestEqual(TEXT("CVar off: the start camera's pitch (the old iso view)"), MinimapRules::CapturePitch(false, -35.26f), -35.26f);
+	TestEqual(TEXT("CVar off: a level / upward camera pitch is kept looking down"), MinimapRules::CapturePitch(false, 5.f), -10.f);
+	for (const float Yaw : { 45.f, 0.f, 137.f, -90.f })
+	{
+		const FMinimapIsoProjection P = MinimapTest::TopDown(Yaw);
+		const FString At = FString::Printf(TEXT("yaw %.0f"), Yaw);
+		const FVector YawForward = FRotator(0.f, Yaw, 0.f).Vector();
+		const FVector YawRight = FRotator(0.f, Yaw + 90.f, 0.f).Vector();
+		TestTrue(At + TEXT(": top-down"), P.IsTopDown() && !MinimapTest::Iso().IsTopDown());
+		// The gimbal pitch is not degenerate: forward straight down, up = the yaw's forward, right = the yaw's right.
+		TestTrue(At + TEXT(": looks straight down"), P.GetForward().Equals(FVector(0.f, 0.f, -1.f), 1e-5f));
+		TestTrue(FString::Printf(TEXT("%s: image up = the start camera's forward (%s)"), *At, *P.GetUp().ToString()), P.GetUp().Equals(YawForward, 1e-5f));
+		TestTrue(At + TEXT(": image right = the start camera's right"), P.GetRight().Equals(YawRight, 1e-5f));
+		// Round trip at any height; a height never moves a point on the map; the inverse is a vertical drop.
+		for (const FVector& World : { FVector(0.f, 0.f, 0.f), FVector(2500.f, -800.f, 400.f), FVector(-3000.f, 4100.f, -120.f) })
+		{
+			const FVector2D UV = P.WorldToMap(World);
+			TestTrue(At + TEXT(": inverse at its height ") + World.ToString(), P.MapToWorldOnPlane(UV, World.Z).Equals(World, 0.05f));
+			TestTrue(At + TEXT(": 6 m higher = the same map point"), P.WorldToMap(World + FVector(0.f, 0.f, 600.f)).Equals(UV, 1e-5f));
+			const FVector Above = P.MapToWorldOnPlane(UV, World.Z + 450.f);
+			TestTrue(At + TEXT(": the inverse onto another floor's plane = straight above"), FVector2D(Above).Equals(FVector2D(World), 0.05f)
+				&& FMath::IsNearlyEqual(Above.Z, World.Z + 450.f, 0.05f));
+		}
+		// Map directions match the screen's at the start angle: forward = up the map, right = right.
+		const FVector2D Ahead = P.WorldToMap(P.Center + YawForward * 1000.f) - P.WorldToMap(P.Center);
+		TestTrue(At + TEXT(": ahead of the camera = up the map"), FMath::Abs(Ahead.X) < 1e-5f && Ahead.Y < 0.f);
+		const FVector2D Side = P.WorldToMap(P.Center + YawRight * 1000.f) - P.WorldToMap(P.Center);
+		TestTrue(At + TEXT(": the camera's right = right on the map"), Side.X > 0.f && FMath::Abs(Side.Y) < 1e-5f);
+	}
+	// Fit: the box's corners (any height) on the image with the margin; heights do not grow the image; up = +X at yaw 0.
+	const FBox Bounds(FVector(-5000.f, -2500.f, -100.f), FVector(5000.f, 2500.f, 900.f));
+	const FMinimapIsoProjection Fitted = FMinimapIsoProjection::Fit(Bounds, 0.f, FMinimapIsoProjection::TopDownPitchDeg, 500.f);
+	TestTrue(FString::Printf(TEXT("fit at yaw 0: 50 m wide (+Y), 100 m high (+X) plus margins (%.0f x %.0f)"), Fitted.WidthCm, Fitted.HeightCm),
+		FMath::IsNearlyEqual(Fitted.WidthCm, 6000.f, 0.5f) && FMath::IsNearlyEqual(Fitted.HeightCm, 11000.f, 0.5f));
+	TestTrue(TEXT("fit: aspect = width / height of the ground footprint"), FMath::IsNearlyEqual(Fitted.GetAspect(), 6000.f / 11000.f, 1e-4f));
+	TestTrue(TEXT("fit: the low far corner on the image"), Fitted.WorldToMap(FVector(5000.f, -2500.f, -100.f)).Equals(FVector2D(500.f / 6000.f, 500.f / 11000.f), 1e-4f));
+	const FMinimapIsoProjection Fitted45 = FMinimapIsoProjection::Fit(Bounds, 45.f, FMinimapIsoProjection::TopDownPitchDeg, 0.f);
+	TestTrue(TEXT("fit at yaw 45: the diamond's diagonals"), FMath::IsNearlyEqual(Fitted45.WidthCm, 7500.f * UE_SQRT_2, 1.f)
+		&& FMath::IsNearlyEqual(Fitted45.HeightCm, 7500.f * UE_SQRT_2, 1.f));
+	const FMinimapIsoProjection Pixels = Fitted.WithPixelAspect(1117, 2048);
+	TestTrue(TEXT("pixel aspect kept, grown never cropped"), FMath::IsNearlyEqual(Pixels.GetAspect(), 1117.f / 2048.f, 1e-4f)
+		&& Pixels.WidthCm >= Fitted.WidthCm - 0.01f && Pixels.HeightCm >= Fitted.HeightCm - 0.01f);
+	return true;
+}
+
+MINIMAP_TEST(FMinimapProjectionFacingTest, "Projection.Facing")
+bool FMinimapProjectionFacingTest::RunTest(const FString&)
+{
+	// Top-down, a non-square image (80 x 60 m): the arrow of a heading turned A deg clockwise from the camera's forward points A
+	// deg clockwise from up on screen (x right, y down) - the UV delta would be skewed by the 4:3 image.
+	for (const float Yaw : { 45.f, 20.f })
+	{
+		const FMinimapIsoProjection P = MinimapTest::TopDown(Yaw);
+		for (const float Turn : { 0.f, 30.f, 90.f, 180.f, -60.f })
+		{
+			const FVector Heading = FRotator(0.f, Yaw + Turn, 0.f).Vector();
+			const FVector2D Expected(FMath::Sin(FMath::DegreesToRadians(Turn)), -FMath::Cos(FMath::DegreesToRadians(Turn)));
+			const FVector2D Arrow = P.MapDirection(Heading * 3.f + FVector(0.f, 0.f, 250.f)); // length and slope do not matter
+			TestTrue(FString::Printf(TEXT("yaw %.0f, turned %.0f: arrow %s (expected %s)"), Yaw, Turn, *Arrow.ToString(), *Expected.ToString()), Arrow.Equals(Expected, 1e-4f));
+		}
+	}
+	TestTrue(TEXT("a vertical direction has no arrow"), MinimapTest::TopDown(45.f).MapDirection(FVector(0.f, 0.f, 1.f)).IsZero());
+	// Iso: ahead still points up the image (foreshortened, then normalised), the camera's right still right.
+	const FMinimapIsoProjection Iso = MinimapTest::Iso();
+	TestTrue(TEXT("iso: ahead = up"), Iso.MapDirection(FRotator(0.f, 45.f, 0.f).Vector()).Equals(FVector2D(0.f, -1.f), 1e-4f));
+	TestTrue(TEXT("iso: right = right"), Iso.MapDirection(FRotator(0.f, 135.f, 0.f).Vector()).Equals(FVector2D(1.f, 0.f), 1e-4f));
+	// The arrow agrees with where the icon would move on screen through a square-pixel view of that projection.
+	const FMinimapIsoProjection P = MinimapTest::TopDown(20.f);
+	const FMinimapView View = FMinimapView::Make(FVector2D(0.f, 0.f), FVector2D(400.f, 300.f), FVector2D(0.5f, 0.5f), 0.5f, P.GetAspect());
+	const FVector Heading = FRotator(0.f, 20.f + 33.f, 0.f).Vector();
+	const FVector2D OnScreen = (View.MapToScreen(P.WorldToMap(P.Center + Heading * 500.f)) - View.MapToScreen(P.WorldToMap(P.Center))).GetSafeNormal();
+	TestTrue(FString::Printf(TEXT("arrow = the screen motion (%s vs %s)"), *P.MapDirection(Heading).ToString(), *OnScreen.ToString()), P.MapDirection(Heading).Equals(OnScreen, 1e-3f));
 	return true;
 }
 
@@ -243,6 +332,23 @@ bool FMinimapFloorSelectTest::RunTest(const FString&)
 	TestFalse(TEXT("3rd floor map: the 3rd floor's walls stay"), HideOnFloor(2, 805.f, 805.f, Bases, Params));
 	TestEqual(TEXT("label ground"), MinimapRules::FloorLabel(0), FString(TEXT("GROUND")));
 	TestEqual(TEXT("label 2nd floor"), MinimapRules::FloorLabel(1), FString(TEXT("FLOOR 2")));
+	return true;
+}
+
+MINIMAP_TEST(FMinimapFloorClipTest, "Floors.TopDownClip")
+bool FMinimapFloorClipTest::RunTest(const FString&)
+{
+	// Top-down (2026-10-21): an upper floor's capture is clipped 2 m above its walking surface (a one-mesh building's roof and
+	// upper storeys gone, its walls cut like a floor plan); the ground never (the terrain varies); the iso view never.
+	const MinimapRules::FFloorParams Params;
+	const TArray<float> Bases = { 400.f, 750.f };
+	TestFalse(TEXT("ground: no clip"), MinimapRules::FloorClipZ(0, Bases, true, Params).IsSet());
+	TestEqual(TEXT("floor 2: 2 m above its surface"), MinimapRules::FloorClipZ(1, Bases, true, Params).Get(0.f), 600.f);
+	TestEqual(TEXT("floor 3: 2 m above its surface"), MinimapRules::FloorClipZ(2, Bases, true, Params).Get(0.f), 950.f);
+	TestFalse(TEXT("no such floor: no clip"), MinimapRules::FloorClipZ(3, Bases, true, Params).IsSet());
+	TestFalse(TEXT("iso view: no clip (its near plane is not horizontal)"), MinimapRules::FloorClipZ(1, Bases, false, Params).IsSet());
+	// The clip sits where the per-piece cut starts: a piece hidden on floor 2 lies wholly above the clip.
+	TestTrue(TEXT("the clip = the per-piece cut height"), MinimapRules::HideOnFloor(1, 600.f, 600.f, Bases, Params) && !MinimapRules::HideOnFloor(1, 599.f, 599.f, Bases, Params));
 	return true;
 }
 

@@ -1,7 +1,7 @@
 // ACodexTacticsHUD: the minimap (user decisions 2026-10-18, docs/design/MINIMAP.md; UE-only) - the MAP | MESSAGES header of the
 // top-right panel, the corner map and the full-screen map (Tab). Content and layout come from UMinimapSubsystem; this unit
 // only draws: the floor's captured image (the visible UV window), the fog quad (clipped triangles), the camera footprint and
-// the live icons projected with the capture's iso projection.
+// the live icons projected with the capture's projection (top-down or iso).
 
 #include "UI/CodexTacticsHUD.h"
 
