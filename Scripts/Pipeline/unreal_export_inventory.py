@@ -83,6 +83,10 @@ def material_info(mat):
         info["two_sided"] = bool(base.get_editor_property("two_sided"))
     except Exception:
         pass
+    try:  # Default Lit / Subsurface / ... (the single-slot master has a Subsurface variant)
+        info["shading_model"] = enum_name(base.get_editor_property("shading_model"))
+    except Exception:
+        pass
     for name in mel.get_texture_parameter_names(mat):
         tex = (mel.get_material_instance_texture_parameter_value(mat, name) if is_instance
                else mel.get_material_default_texture_parameter_value(mat, name))
@@ -90,6 +94,13 @@ def material_info(mat):
     for name in mel.get_scalar_parameter_names(mat):
         info["scalar_params"][str(name)] = (mel.get_material_instance_scalar_parameter_value(mat, name) if is_instance
                                             else mel.get_material_default_scalar_parameter_value(mat, name))
+    if is_instance:  # which values the instance itself overrides (the rest comes from its parent chain)
+        try:
+            info["scalar_overrides"] = {str(v.get_editor_property("parameter_info").get_editor_property("name")):
+                                        float(v.get_editor_property("parameter_value"))
+                                        for v in mat.get_editor_property("scalar_parameter_values")}
+        except Exception as exc:
+            info["scalar_overrides_error"] = str(exc)
     for name in mel.get_vector_parameter_names(mat):
         v = (mel.get_material_instance_vector_parameter_value(mat, name) if is_instance
              else mel.get_material_default_vector_parameter_value(mat, name))
@@ -127,7 +138,7 @@ def material_info(mat):
 
 GRAPH_PROPERTIES = [(n, getattr(unreal.MaterialProperty, "MP_" + n.upper(), None)) for n in (
     "base_color", "normal", "roughness", "metallic", "specular", "ambient_occlusion", "emissive_color", "opacity",
-    "opacity_mask")]
+    "opacity_mask", "subsurface_color")]
 GRAPH_PROPERTIES = [(n, p) for n, p in GRAPH_PROPERTIES if p is not None]
 
 

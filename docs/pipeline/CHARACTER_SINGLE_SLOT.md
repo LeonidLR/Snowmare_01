@@ -195,7 +195,7 @@ variants of one body: one reduced mesh + one atlas, one texture set + MI per var
 | Order | Asset (ArtPipeline / Optimized folder) | Body mesh | Used by | Tris | Slots | Target | Notes |
 |---|---|---|---|---|---|---|---|
 | done | Operatives/Post_Apo_Survivor_a | /Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a | BP_Operative (all 3 squad members) | 213 548 | 14 | 50k | pilot, imported; looks Set1 (MI_Post_Apo_Survivor_a) + Set2 / Set3 (camouflage, navy) on the same mesh |
-| baked, awaiting OK | Operatives/Female_Soldier | /Game/Female_Soldier/Mesh/SK_Female_soldier | BP_Operative_FemaleSoldier | 150 747 | 33 (21 materials) | 50k | hair / lashes (masked) removed; translucent glass + eye layers removed; glow sticks / beacon -> Emissive if it really glows |
+| done | Operatives/Female_Soldier | /Game/Female_Soldier/Mesh/SK_Female_soldier | BP_Operative_FemaleSoldier | 150 747 | 33 (21 materials) | 50k | hair / lashes (masked) removed; translucent glass + eye layers removed; glow sticks / beacon -> Emissive if it really glows |
 | done | Enemies/FrozenPMC_Fighter | /Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Mesh/SKM_FrozenPMC_Fighter | BP_Enemy_FrozenPMC_Fighter | 33 613 | 6 | 20k | imported 19 914 tris; Default + Set1-5 |
 | done | Enemies/MilitaryZombie_1 | /Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1 | BP_Enemy_MilitaryZombie (LookVariants body 1) | 69 770 | 5 | 20k | imported 19 942 tris; 3 texture sets (Set1-3) |
 | done | Enemies/MilitaryZombie_2 | .../SKM_base_mesh_set2_2 | BP_Enemy_MilitaryZombie (body 2) | 51 559 | 5 | 20k | imported 19 953 tris; 3 texture sets; the mohawk stays (masked, user 2026-10-20) |
@@ -204,7 +204,7 @@ variants of one body: one reduced mesh + one atlas, one texture set + MI per var
 | done | Enemies/Marksman | /Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Marksman | 17 992 | 2 | 20k | imported 17 992 tris, Set1-5, Emissive (the pack glows) |
 | done | Enemies/Cutter | /Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Cutter | 28 592 | 2 | 20k | imported 19 950 tris, Set3 (own) + Set1, 2, 4 |
 | done | Enemies/Hound | /Game/Combat_Dog/Mesh/SK_Combat_Dog | BP_Enemy_Hound | 13 904 | 1 | 10k | imported 9 999 tris, Set1-5; biped root Bip001 (root transform moved into the root bone) |
-| imported, open | Enemies/Frostbitten | /Game/mutant_monster_2/base_mesh/SK_base_mesh | BP_Enemy_Frostbitten | 24 142 | 1 | 20k | imported 20 000 tris, Set4 (own) + Set1-3; the pack material is Subsurface (scattering mask in the BaseColor alpha): the Default Lit master renders it darker - decision pending |
+| done | Enemies/Frostbitten | /Game/mutant_monster_2/base_mesh/SK_base_mesh | BP_Enemy_Frostbitten | 24 142 | 1 | 20k | imported 20 000 tris, Set4 (own) + Set1-3; Subsurface pack material -> M_CharacterMaster_Subsurface (user 2026-10-21) |
 
 Per-asset settings live in `ArtPipeline/Characters/<Group>/<Asset>/pipeline.json` (target, keep / texel weights by material
 name). No Blueprint is switched to the optimized meshes (the user's call); `CodexTactics.OptimizedCharacterSmoke` swaps them at
@@ -268,5 +268,12 @@ More traps (2026-10-20/21):
 - Re-imports: `run_unreal_import.ps1 -VariantsOnly <sets> -AllowExisting` replaces a variant's textures + MI (mesh untouched);
   a re-import without glow switches `UseEmissive` off on an existing MI. `ensure_emissive` is the only change ever made to an
   existing master (the optional UseEmissive branch, default off: renders identically, A/B checked on the pilot).
+- Subsurface pack materials (Frostbitten, user 2026-10-21): the inventory records `shading_model`, `scalar_overrides` and
+  the `subsurface_color` graph; the bake writes `T_<Asset>[_<Variant>]_Subsurface.png` (RGB = SubsurfaceColor, A = the
+  scatter amount = the material's Opacity input) and the import parents those MIs to `M_CharacterMaster_Subsurface`
+  (shading model Subsurface, `Subsurface` texture -> SubsurfaceColor / Opacity). Frostbitten Set2 has `Brighness` = 0 in its
+  own MI (a black BaseColor by the pack's design): its look comes from the subsurface colour, as in the original.
+- `cleanup_intermediates.ps1` keeps `_Emissive` / `_Subsurface` maps too (before 2026-10-21 it dropped the Emissive PNGs of
+  Brute / Cutter / Marksman after their import; the Unreal assets are complete, a re-import needs a re-bake).
 - The smoke prestreams textures and finishes shader compilation before every still (a freshly swapped look otherwise shows
   low mips or a fallback shader).

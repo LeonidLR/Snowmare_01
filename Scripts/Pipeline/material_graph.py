@@ -410,8 +410,23 @@ class GraphBuilder:
                 sep = self.node("ShaderNodeSeparateColor")
                 self.nt.links.new(opacity, sep.inputs[0])
                 opacity = sep.outputs["Red"]
+        # Subsurface shading model (Frostbitten): SubsurfaceColor and the scatter amount (Unreal: the Opacity input)
+        subsurface, scatter = (1.0, 1.0, 1.0), 0.0
+        if "SUBSURFACE" in str(self.minfo.get("shading_model", "")):
+            if "subsurface_color" in graph:
+                self.y = -1800
+                subsurface = self.eval(graph["subsurface_color"], "subsurface_color", 0.0)
+            if "opacity" in graph:
+                self.y = -2200
+                scatter = self.eval(graph["opacity"], "opacity", 0.0)
+                if self.is_color(scatter):
+                    sep = self.node("ShaderNodeSeparateColor")
+                    self.nt.links.new(scatter, sep.inputs[0])
+                    scatter = sep.outputs["Red"]
         sockets = {
             "opacity": self.reroute("OUT_opacity", opacity),
+            "subsurface": self.reroute("OUT_subsurface", self.to_color(subsurface)),
+            "scatter": self.reroute("OUT_scatter", scatter),
             "base_color": self.reroute("OUT_base_color", self.to_color(out["base_color"])),
             "sheen": self.reroute("OUT_sheen", sheen),
             "roughness": self.reroute("OUT_roughness", out["roughness"]),

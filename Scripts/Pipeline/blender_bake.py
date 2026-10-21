@@ -472,6 +472,7 @@ def main():
 
         mats = [inv["materials"].get(m_, {}) for m_ in look_materials(slot_names, var, inv)]
         masked = any("MASKED" in str(m_.get("blend_mode", "")) for m_ in mats)
+        subsurface = any("SUBSURFACE" in str(m_.get("shading_model", "")) for m_ in mats)
         two_sided = any(m_.get("two_sided") for m_ in mats)
         bc = bake_channel("base_color", args.res, "base_color", "Non-Color")
         if overlay:
@@ -492,6 +493,16 @@ def main():
         pc.write_png(tex("BaseColor"), srgb[::-1], 8)
         srgb = srgb[..., :3]
         preview(np.concatenate([srgb, np.ones_like(srgb[..., :1])], -1), tex("BaseColor_preview"))
+
+        if subsurface:
+            # Subsurface look: its SubsurfaceColor (sRGB) + the scatter amount in alpha -> the Subsurface master
+            ss = bake_channel("subsurface", args.res, "subsurface", "Non-Color")
+            sc = bake_channel("scatter", args.res, "scatter", "Non-Color")
+            lin_s = np.clip(ss[..., :3], 0, 1)
+            srgb_s = np.where(lin_s <= 0.0031308, lin_s * 12.92, 1.055 * np.power(lin_s, 1 / 2.4) - 0.055)
+            pc.write_png(tex("Subsurface"), np.concatenate([srgb_s, np.clip(sc[..., :1], 0, 1)], axis=-1)[::-1], 8)
+        elif os.path.exists(tex("Subsurface")):
+            os.remove(tex("Subsurface"))
 
         nrm = bake_channel("normal", args.res, "normal", "Non-Color", kind="normal")
         # A ray that reaches the back of a thin high part (buckle, strap edge) returns a normal pointing INTO the low
@@ -542,7 +553,7 @@ def main():
                         if os.path.exists(tex(k))},
             "emissive_glow_percent": glow_pct, "emissive_written": emissive_written,
             "emissive_strength": round(emissive_scale, 3), "masked": masked, "two_sided": two_sided,
-            "overlay_percent": overlay_pct}
+            "overlay_percent": overlay_pct, "subsurface": subsurface}
         if proj:
             proj.cleanup()
             for sl in mesh.material_slots:

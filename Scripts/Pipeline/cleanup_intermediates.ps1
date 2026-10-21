@@ -2,7 +2,7 @@
 # (user request 2026-10-20: "every temporary Blender file, every texture preview, every file that is not
 # brought into Unreal - delete it, it takes a lot of space").
 #
-# Kept: 04_Textures_Baked final maps (*_BaseColor/_Normal/_ORM/_Sheen.png) and 05_Export/*.fbx (what Unreal
+# Kept: 04_Textures_Baked final maps (*_BaseColor/_Normal/_ORM/_Sheen/_Emissive/_Subsurface.png) and 05_Export/*.fbx (what Unreal
 # imported), every *.md / *.json metadata file (except the import-guard content snapshots) and anything git tracks.
 # Deleted: 01_Source FBX / anims / logs, 02_Textures_Source, 03_Blender (.blend + logs), texture previews,
 # 06_Review renders and in-game shots, 05_Export logs, content snapshots.
@@ -31,7 +31,7 @@ Push-Location $repo
 try { git ls-files -- (Resolve-Path -Relative $assetDir) | ForEach-Object { $tracked[(Join-Path $repo $_).Replace('/', '\')] = $true } }
 finally { Pop-Location }
 
-$finalMaps = '_(BaseColor|Normal|ORM|Sheen)\.png$'
+$finalMaps = '_(BaseColor|Normal|ORM|Sheen|Emissive|Subsurface)\.png$'
 $victims = Get-ChildItem -Path $assetDir -File -Recurse | Where-Object {
     $file = $_  # inside switch, $_ is the switch value
     $rel = $file.FullName.Substring($assetDir.Length + 1)

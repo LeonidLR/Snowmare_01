@@ -117,10 +117,12 @@ def ensure_emissive(mat):
     return True
 
 
-def master_material(directory, name, defaults, masked=False, two_sided=False):
-    """M_CharacterMaster[_Masked][_TwoSided]: the same graph; masked = opacity mask from the BaseColor alpha (clip 0.3333),
-    two-sided when the original body had two-sided materials (single-layer cloth)."""
-    name = name + ("_Masked" if masked else "") + ("_TwoSided" if two_sided else "")
+def master_material(directory, name, defaults, masked=False, two_sided=False, subsurface=False):
+    """M_CharacterMaster[_Masked][_TwoSided][_Subsurface]: the same graph; masked = opacity mask from the BaseColor alpha
+    (clip 0.3333), two-sided when the original body had two-sided materials (single-layer cloth); subsurface = shading
+    model Subsurface, SubsurfaceColor from the Subsurface texture's RGB and the scatter amount (Opacity) from its alpha
+    (Frostbitten, user 2026-10-21)."""
+    name = name + ("_Masked" if masked else "") + ("_TwoSided" if two_sided else "") + ("_Subsurface" if subsurface else "")
     path = "%s/%s" % (directory, name)
     if unreal.EditorAssetLibrary.does_asset_exist(path):
         return unreal.load_asset(path)  # shared by every body: never re-defaulted to this asset's textures
@@ -139,6 +141,11 @@ def master_material(directory, name, defaults, masked=False, two_sided=False):
         mat.set_editor_property("opacity_mask_clip_value", 0.3333)
     if two_sided:
         mat.set_editor_property("two_sided", True)
+    if subsurface:
+        mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_SUBSURFACE)
+        ssc = tex_param("Subsurface", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, -900, 600)
+        mel.connect_material_property(ssc, "RGB", unreal.MaterialProperty.MP_SUBSURFACE_COLOR)
+        mel.connect_material_property(ssc, "A", unreal.MaterialProperty.MP_OPACITY)
     bc = tex_param("BaseColor", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, -900, -300)
     if masked:
         mel.connect_material_property(bc, "A", unreal.MaterialProperty.MP_OPACITY_MASK)
@@ -222,7 +229,14 @@ def main():
         all_textures += list(tex.values())
         summary = json.load(open(os.path.join(args.asset_dir, "06_Review", "summary.json"), encoding="utf-8"))
         flags = summary.get("bake", {}).get("variants", {}).get(vname or "default", {})
-        master = master_material(args.master_dir, args.master_name, tex, bool(flags.get("masked")), bool(flags.get("two_sided")))
+        ss_png = os.path.join(baked, "T_%s_Subsurface.png" % tag)
+        subsurface = bool(flags.get("subsurface")) and os.path.exists(ss_png)
+        if subsurface:
+            tex["Subsurface"] = texture(ss_png, args.dest, "T_%s_Subsurface" % tag, True, tc.TC_DEFAULT,
+                                        tg.TEXTUREGROUP_CHARACTER)
+            all_textures.append(tex["Subsurface"])
+        master = master_material(args.master_dir, args.master_name, tex, bool(flags.get("masked")),
+                                 bool(flags.get("two_sided")), subsurface)
         masters.append(master)
         mi_path = "%s/MI_%s" % (args.dest, tag)
         if unreal.EditorAssetLibrary.does_asset_exist(mi_path):
