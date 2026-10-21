@@ -419,6 +419,12 @@ namespace GameplayEvents
 	 * the specific kill finishes before a step reacting to any kill of that enemy sees it.
 	 */
 	extern CODEXTACTICS_API const FName EnemyKilled;
+	/**
+	 * "EnemyAlerted" (2026-10-21, the A4 "spotted" lesson): a patrolling / guarding enemy broke off to engage the squad (it saw / heard /
+	 * smelled an operative, was hit, or its patrol mate broke off; not a trap's search). Subject = the enemy; also raised as
+	 * "EnemyAlerted.<Cause>" (Sight, Hearing, Smell, Damage, PartnerAlert, LeaderLost) FIRST. Raised before the fight starts.
+	 */
+	extern CODEXTACTICS_API const FName EnemyAlerted;
 	/** An operative settled in a cover slot (arrived and pressed to the wall; not on the order). Also "CoverEntered.High" / ".Low". */
 	extern CODEXTACTICS_API const FName CoverEntered;
 	/** An operative left his cover (moved off, ordered elsewhere, knocked out of it). */

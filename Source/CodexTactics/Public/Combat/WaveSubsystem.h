@@ -91,6 +91,12 @@ public:
 
 	/** Wave (1-3) of the mission's flank breach (Godot dynamic_breach_wave: [1, 2, 3] shuffled, Susanin takes one first). */
 	int32 GetDynamicBreachWave() const { return DynamicBreachWave; }
+	/**
+	 * 2026-10-21: a level enemy that engages the squad during a skirmish joins it (ULevelEncounterSubsystem::NotifyHostileContact).
+	 * True when it was added.
+	 */
+	bool JoinSkirmish(AEnemyCharacter* Enemy);
+
 	/** Wave of the Susanin rescue event (Godot susanin_rescue_wave). */
 	int32 GetSusaninRescueWave() const { return SusaninRescueWave; }
 	void SetRandomEventWaves(int32 BreachWave, int32 SusaninWave) { DynamicBreachWave = BreachWave; SusaninRescueWave = SusaninWave; }
@@ -169,6 +175,13 @@ private:
 	 * guards) are the wave — none are spawned; the fight is won when they are all down.
 	 */
 	void AdoptLevelEnemies();
+	/**
+	 * 2026-10-21 (level "ambush_fight": "skirmish"): only the enemies that engaged the squad are the fight - the contact's source and every
+	 * level enemy that broke its patrol and is not back on it (its escort / leader broke with it); the others keep patrolling.
+	 */
+	void AdoptSkirmishEnemies();
+	/** Adds Enemy to the fight's living enemies (death -> HandleEnemyDied); false when already in it / dying. */
+	bool AdoptEnemy(AEnemyCharacter* Enemy);
 
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);

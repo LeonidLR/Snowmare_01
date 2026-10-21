@@ -258,6 +258,23 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	bool bHordeEnabled = true;
 
 	/**
+	 * "ambush_fight": "skirmish" (2026-10-21, user: "they attack, we kill them and play on - no waves at this stage"): an ambush fight of
+	 * placed enemies is a SKIRMISH - only the enemies that spotted / attack the squad (+ their escort / leader) fight, the others keep
+	 * patrolling; no wave banner; when the last of them dies the game goes straight back to exploration (no victory panel, no post-combat
+	 * teleport, no enemy cleanup). "level" (default): the whole level's enemies are the fight (the 2026-10-06 rule). Scripted waves are
+	 * never skirmishes.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	bool bAmbushSkirmish = false;
+
+	/**
+	 * "susanin_wave" (2026-10-21): the wave of the Susanin rescue event - 0 = never on this level, 1..N = that wave, -1 (no key) = random
+	 * among waves 1-3 (Godot main.gd). Skirmishes never trigger it.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 SusaninWave = -1;
+
+	/**
 	 * "horde": this level's overrides of Content/Data/AI/horde.json (same keys, e.g. {"trigger_seconds": 180,
 	 * "count": 10}), kept as JSON text; empty = the file's values (HordeRules::ResolveForLevel).
 	 */

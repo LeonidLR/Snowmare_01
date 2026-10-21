@@ -258,6 +258,8 @@ neither comparator: error. Stats (`UTutorialSubsystem::GetConditionStat`, "livin
 | `squad_injury_max` | % of health the most wounded living member has lost (30 = below 70 %) |
 | `squad_prone` | living members lying prone |
 | `enemies_unseen` | living enemies no operative sees now (0 while the squad's sight is off) |
+| `squad_passive` | 2026-10-21: living members whose effective fire posture is PASSIVE |
+| `in_fight` | 2026-10-21: 1 while a fight runs (phase WaveCombat: a skirmish or a wave), else 0 |
 | `traps_spotted.<tag>` | traps with `SpotEventTag` = tag the squad knows of (spotted or dealt with) |
 | `squad_not_low_in.<volume>` | living members NOT crouched / prone within 3 m of that volume's box (`below 1` = all are down there) |
 | `squad_not_across.<volume>` | living members NOT across the bridge (`ABridgeCrossingVolume`) nearest to that volume: still on the volume's side of the span's middle, or on the span (`BridgeRules::IsAcrossFrom`); `below 1` = the whole squad is on the far side, however it got there. No bridge / no such volume: every living member counts. |
@@ -266,7 +268,9 @@ neither comparator: error. Stats (`UTutorialSubsystem::GetConditionStat`, "livin
 `{"type": "cold_bump", "amount": 20, "min_level": 42}` - every squad member's cold + amount, raised to at least `min_level` (0-100; a cold shock, not
 scaled by the level's cold rate); `{"type": "solo_focus"}` (2026-10-20) - Solo ON and the step's focus operative selected (he alone takes the orders);
 `{"type": "set_posture", "posture": "passive" | "defensive" | "aggressive"}` - the whole squad's fire posture
-(overrides cleared; missing / unknown posture: error). Unknown type: error.
+(overrides cleared; missing / unknown posture: error); `{"type": "tactical_pause"}` (2026-10-21) - the fight's FREE tactical pause
+(`UGameFlowSubsystem::EnterLessonPause`: no charge, no timer, the player resumes with Space); shown a moment before the fight starts (the
+card about being spotted comes with `EnemyAlerted`), it opens as soon as the fight runs in real time, within 3 s, else it is dropped. Unknown type: error.
 
 **Focus:** `role:<EOperativeRole>` (2026-10-20, the A4 ambusher) = the living operative of that role, chosen when the step is TRIGGERED (so a
 confinement's `free` operative is known at once), else the leader; a floating "<NAME>: YOUR TASK" over him when shown; `{focus}` also works in
@@ -521,6 +525,10 @@ a warning ("its steps end by their timeouts only"; strict: no fallback to "any e
 killed it (matched by the attacker name), Kind `Squad` (an operative's shot / blow / grenade) / `Trap` (a mine / wire / charge blast) / `Other`;
 raised as `EnemyKilled.<Kind>` FIRST, then `EnemyKilled` - a step completing on the specific kill finishes before a step reacting to any kill
 sees it (the A4 close shot and its "not up close" twin line).
+**2026-10-21 b:** a binding may name several routes (`A4_ANY` = both zombies); new event **`EnemyAlerted`** (`AEnemyCharacter::BreakPatrol`: a
+patrolling / guarding enemy broke off to engage the squad - sight, hearing, smell, a hit, its patrol mate; Subject = the enemy; also
+`EnemyAlerted.<Cause>` first; raised BEFORE the fight starts) - the A4 "spotted" card; `@patrol_route.<enemy>` also finds the binding's routes
+themselves once its enemy is dead and gone.
 Tests `CodexTactics.Tutorial.AmbushLesson.EnemyBindingSchema` (parse / errors / warnings / spots / the pure rules on the user's route
 coordinates), `PartsBoundToTheirZombie` (each part ignores the other zombie: trips, lures, kills; trap / far / on-the-beat kills; killed before
 the lure; no provider), `LureSchema`, `TrapThenLure`, `OneOperative`; smokes `TutorialSmoke` stages 130-136 (tagged routes on the movement

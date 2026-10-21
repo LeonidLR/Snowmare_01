@@ -2,6 +2,7 @@
 
 #include "AI/PatrolRouteActor.h"
 #include "Characters/EnemyCharacter.h"
+#include "Combat/WaveSubsystem.h"
 #include "CodexTactics.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/EnemyPerception.h"
@@ -84,11 +85,18 @@ bool ULevelEncounterSubsystem::NotifyHostileContact(EAmbushTrigger Trigger, AAct
 {
 	UWorld* World = GetWorld();
 	UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	// 2026-10-21: a skirmish is on - another level enemy that engages the squad joins it (the rest keep patrolling).
+	if (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsSkirmish() && IsLevelEnemy(Source))
+	{
+		UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+		return Waves && Waves->JoinSkirmish(Cast<AEnemyCharacter>(Source));
+	}
 	if (!Flow || !LevelEncounterRules::ShouldStartFightOnContact(IsAmbushCombatStart(), IsLevelEnemy(Source), Flow->GetPhase(),
 		Flow->IsCombatUnlocked()))
 	{
 		return false;
 	}
+	LastContactSource = Source; // the skirmish adopts it (UWaveSubsystem::AdoptSkirmishEnemies), before the flow starts the fight
 	if (Flow->StartAmbushCombat() != EGameFlowResult::Ok)
 	{
 		return false;

@@ -228,10 +228,20 @@ bool FTutorialAmbushLureSchemaTest::RunTest(const FString&)
 	TestTrue(TEXT("'that's one' only for the perimeter zombie"), Line && Line->Trigger.EnemyFilter.Enemy == FName(TEXT("A4_PERIMETER")));
 	const FTutorialStep* Lure = Data.FindStep(TEXT("A4_lure"));
 	TestTrue(TEXT("part 2: the lure card after part 1, keys 5 / 6, unlocks Stealth.*, done when THE FAR zombie heard it"), Lure && Lure->Kind == ETutorialStepKind::HintCard
-		&& Lure->Trigger.Type == ETutorialTriggerType::AfterStep && Lure->Trigger.Step == FName(TEXT("A4_trap_wait"))
+		&& Lure->Trigger.Type == ETutorialTriggerType::AfterStep && Lure->Trigger.Step == FName(TEXT("A4_round_corner"))
 		&& Lure->Keys.Contains(PlayerCommands::StealthWhistle.ToString()) && Lure->Keys.Contains(PlayerCommands::StealthThrow.ToString())
 		&& Lure->Unlock.Contains(TEXT("Stealth.*")) && Lure->Complete.Event == GameplayEvents::LureHeard.ToString()
 		&& Lure->Complete.EnemyFilter.Enemy == FName(TEXT("A4_LURE")) && !Lure->bPrecredit && Lure->Guide == FName(TEXT("@lure_spot.A4_LURE")));
+	// 2026-10-21 b: part 2's approach - cover at the near container (her CoverEntered), then round it in cover (wall-follow / corner moves).
+	const FTutorialStep* Hug = Data.FindStep(TEXT("A4_hug_wall"));
+	const FTutorialStep* Corner = Data.FindStep(TEXT("A4_round_corner"));
+	TestTrue(TEXT("the wall card after part 1: her own cover, never precredited, skipped in a fight, dropped when a zombie engages"), Hug
+		&& Hug->Trigger.Type == ETutorialTriggerType::AfterStep && Hug->Trigger.Step == FName(TEXT("A4_trap_wait"))
+		&& Hug->Complete.Event == GameplayEvents::CoverEntered.ToString() && Hug->Complete.bFocusSubject && !Hug->bPrecredit
+		&& Hug->Conditions.Num() == 1 && Hug->Conditions[0].Stat == FName(TEXT("in_fight")) && Hug->CancelOn.EnemyFilter.Enemy == FName(TEXT("A4_ANY")));
+	TestTrue(TEXT("the corner card: the wall-following / corner commands or CornerReached"), Corner && Corner->Trigger.Step == FName(TEXT("A4_hug_wall"))
+		&& Corner->Complete.Commands.Contains(PlayerCommands::CoverShimmy.ToString()) && Corner->Complete.Commands.Contains(PlayerCommands::CoverCorner.ToString())
+		&& Corner->Complete.Event == GameplayEvents::CornerReached.ToString() && !Corner->bPrecredit);
 	const FTutorialStep* Shot = Data.FindStep(TEXT("A4_close_shot"));
 	TestTrue(TEXT("part 2: the close shot - THE FAR zombie killed by the squad, an operative within 10 m, 4 m off his route"), Shot
 		&& Shot->Kind == ETutorialStepKind::HintCard && Shot->Trigger.Type == ETutorialTriggerType::Event && Shot->Trigger.Event == GameplayEvents::LureHeard.ToString()
@@ -262,7 +272,8 @@ namespace TutorialAmbushTestData
 			Machine.EnemyFilterProvider = [this](const FTutorialEnemyFilter& Filter, FName SubjectId)
 			{
 				const bool bBound = (SubjectId == FName(TEXT("Z1")) && Filter.Enemy == FName(TEXT("A4_PERIMETER")))
-					|| (SubjectId == FName(TEXT("Z2")) && Filter.Enemy == FName(TEXT("A4_LURE")));
+					|| (SubjectId == FName(TEXT("Z2")) && Filter.Enemy == FName(TEXT("A4_LURE")))
+					|| ((SubjectId == FName(TEXT("Z1")) || SubjectId == FName(TEXT("Z2"))) && Filter.Enemy == FName(TEXT("A4_ANY")));
 				return TutorialRules::PassesEnemyFilter(Filter, bBound, NearestCm, OffRouteCm);
 			};
 		}
@@ -278,6 +289,15 @@ namespace TutorialAmbushTestData
 				Machine.CompleteStep(Step.Id);
 			}
 		}
+	}
+
+	/** 2026-10-21: part 2's approach - she takes cover at the near container, then rounds its corner in cover. */
+	void PassTheWall(FTutorialStateMachine& Machine)
+	{
+		Machine.HandleEvent(GameplayEvents::CoverEntered, TEXT("Medic"));
+		Settle(Machine);
+		Machine.HandleCommand(PlayerCommands::CoverShimmy);
+		Settle(Machine);
 	}
 
 	/** IntoTheField -> A4 -> cones -> posture -> the wire rigged: part 1 waits for the perimeter zombie. */
@@ -326,6 +346,8 @@ bool FTutorialAmbushLureFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("the perimeter zombie walked into the wire: part 1 done"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Completed);
 	TestTrue(TEXT("the 'that's one' line"), Machine.GetState(TEXT("A4_wt_trap")) != ETutorialStepState::Idle);
 	Settle(Machine);
+	TestEqual(TEXT("part 2 starts with the wall card"), Machine.GetState(TEXT("A4_hug_wall")), ETutorialStepState::Active);
+	PassTheWall(Machine);
 	TestEqual(TEXT("part 2: the lure card"), Machine.GetState(TEXT("A4_lure")), ETutorialStepState::Active);
 	TestFalse(TEXT("... unlocks whistle and throw"), Machine.IsCommandLocked(PlayerCommands::StealthWhistle) || Machine.IsCommandLocked(PlayerCommands::StealthThrow));
 	Machine.HandleCommand(PlayerCommands::StealthWhistle);
@@ -356,7 +378,8 @@ bool FTutorialAmbushLureFlowTest::RunTest(const FString&)
 		Slow.Tick(1.f);
 	}
 	TestEqual(TEXT("no catch: the wait times out"), Slow.GetState(TEXT("A4_trap_wait")), ETutorialStepState::TimedOut);
-	TestTrue(TEXT("... and the lure card comes anyway"), TutorialRules::IsRunning(Slow.GetState(TEXT("A4_lure"))) || TutorialRules::IsFinished(Slow.GetState(TEXT("A4_lure"))));
+	TestTrue(TEXT("... and part 2 comes anyway (the wall card)"), TutorialRules::IsRunning(Slow.GetState(TEXT("A4_hug_wall")))
+		|| TutorialRules::IsFinished(Slow.GetState(TEXT("A4_hug_wall"))));
 	return true;
 }
 
@@ -391,6 +414,8 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
 	TestEqual(TEXT("the perimeter zombie: part 1 done"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Completed);
 	Settle(Machine);
+	TestEqual(TEXT("part 2 starts with the wall card"), Machine.GetState(TEXT("A4_hug_wall")), ETutorialStepState::Active);
+	PassTheWall(Machine);
 	TestEqual(TEXT("part 2: the lure card"), Machine.GetState(TEXT("A4_lure")), ETutorialStepState::Active);
 	// The NEAR zombie hears the lure (it survived the wire): not part 2's zombie.
 	Machine.HandleEvent(GameplayEvents::LureHeard, TEXT("Z1"));
@@ -417,6 +442,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 		ToTheWait(Trap);
 		Trap.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
 		Settle(Trap);
+		PassTheWall(Trap);
 		Trap.HandleEvent(GameplayEvents::LureHeard, TEXT("Z2"));
 		Settle(Trap);
 		Trap.HandleEvent(TEXT("EnemyKilled.Trap"), TEXT("Z2"));
@@ -435,6 +461,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 		ToTheWait(Shot);
 		Shot.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
 		Settle(Shot);
+		PassTheWall(Shot);
 		Shot.HandleEvent(GameplayEvents::LureHeard, TEXT("Z2"));
 		Settle(Shot);
 		Zombies.NearestCm = Facts.Key;
@@ -454,6 +481,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 		ToTheWait(Early);
 		Early.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
 		Settle(Early);
+		PassTheWall(Early);
 		TestEqual(TEXT("the lure card is up"), Early.GetState(TEXT("A4_lure")), ETutorialStepState::Active);
 		Zombies.NearestCm = 2500.f;
 		Early.HandleEvent(TEXT("EnemyKilled.Squad"), TEXT("Z2"));
@@ -474,7 +502,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 		Shot1.HandleEvent(GameplayEvents::EnemyKilled, TEXT("Z1"));
 		Settle(Shot1);
 		TestEqual(TEXT("the perimeter zombie killed otherwise: the wait is dropped"), Shot1.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Skipped);
-		TestEqual(TEXT("... the lure card follows"), Shot1.GetState(TEXT("A4_lure")), ETutorialStepState::Active);
+		TestEqual(TEXT("... part 2 follows (the wall card)"), Shot1.GetState(TEXT("A4_hug_wall")), ETutorialStepState::Active);
 	}
 	// No runtime filter (a level without the bindings' enemies / a unit test without the provider): a filtered event never counts.
 	{
@@ -647,6 +675,9 @@ bool FTutorialAmbushOneOperativeTest::RunTest(const FString&)
 	TestEqual(TEXT("the wait: back to the overlook"), Machine.GetGuide().Id, FName(TEXT("VOL_A4_OVERLOOK")));
 	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
 	Settle(Machine);
+	TestTrue(TEXT("part 2: the wall card - her target at the near container (the perimeter loop)"), Machine.GetState(TEXT("A4_hug_wall")) == ETutorialStepState::Active
+		&& Machine.GetGuide().Id == FName(TEXT("@patrol_route.A4_PERIMETER")));
+	PassTheWall(Machine);
 	TestTrue(TEXT("part 2: the lure - still held"), Machine.GetState(TEXT("A4_lure")) == ETutorialStepState::Active && Machine.IsConfined());
 	TestTrue(TEXT("part 2: her target is the lure spot short of the FAR zombie's path"), Machine.GetGuide().Kind == ETutorialGuideKind::Spot
 		&& Machine.GetGuide().Id == FName(TEXT("@lure_spot.A4_LURE")));
@@ -721,6 +752,147 @@ bool FTutorialAmbushHiddenCardTest::RunTest(const FString&)
 	TestEqual(TEXT("the out-of-sight card shows"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Active);
 	Machine.HandleCommand(PlayerCommands::StanceStand);
 	TestEqual(TEXT("rising to look completes it"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Completed);
+	return true;
+}
+
+// 2026-10-21 (user play-test): a zombie that ENGAGES the PASSIVE squad mid-lesson -> the free tactical pause + the posture card (once per
+// level, either part); the stealth cards of the moment are dropped and the lesson goes on after the skirmish. Part 2's approach along the
+// near container's wall.
+TUTORIAL_AMBUSH_TEST(FTutorialAmbushSpottedTest, "SpottedPausesTheFight")
+bool FTutorialAmbushSpottedTest::RunTest(const FString&)
+{
+	using namespace TutorialAmbushTestData;
+	FTutorialStepsData Data;
+	if (!LoadDemo(*this, Data))
+	{
+		return false;
+	}
+	const FTutorialStep* Card = Data.FindStep(TEXT("A4_spotted"));
+	TestTrue(TEXT("the spotted card: either zombie engages, the tactical pause, DEFENSIVE / AGGRESSIVE, only a PASSIVE squad"), Card
+		&& Card->Trigger.Event == GameplayEvents::EnemyAlerted.ToString() && Card->Trigger.EnemyFilter.Enemy == FName(TEXT("A4_ANY"))
+		&& Card->Actions.ContainsByPredicate([](const FTutorialAction& Action) { return Action.Type == FName(TEXT("tactical_pause")); })
+		&& Card->Complete.Commands.Contains(PlayerCommands::PostureDefensive.ToString()) && Card->Complete.Commands.Contains(PlayerCommands::PostureAggressive.ToString())
+		&& Card->Conditions.Num() == 1 && Card->Conditions[0].Stat == FName(TEXT("squad_passive")) && Card->bOnce);
+	const FTutorialStep* Lure = Data.FindStep(TEXT("A4_lure"));
+	TestTrue(TEXT("the lure card sets the squad PASSIVE again"), Lure && Lure->Actions.ContainsByPredicate([](const FTutorialAction& Action)
+	{
+		return Action.Type == FName(TEXT("set_posture")) && Action.Posture == TEXT("passive");
+	}));
+	TestTrue(TEXT("known: action tactical_pause, stats squad_passive / in_fight"), TutorialRules::IsKnownAction(TEXT("tactical_pause"))
+		&& TutorialRules::IsKnownStat(TEXT("squad_passive")) && TutorialRules::IsKnownStat(TEXT("in_fight")));
+
+	TMap<FName, float> Stats;
+	Stats.Add(TEXT("squad_passive"), 3.f);
+	auto Install = [&Stats](FTutorialStateMachine& Machine)
+	{
+		Machine.StatProvider = [&Stats](FName Stat) { const float* Value = Stats.Find(Stat); return Value ? *Value : 0.f; };
+	};
+	FZombies Zombies;
+
+	// PART 1 fails: the perimeter zombie spots her while she rigs the wire.
+	{
+		FTutorialStateMachine Machine;
+		Zombies.Install(Machine);
+		Install(Machine);
+		Machine.Load(Data);
+		IntoTheField(Machine);
+		Machine.StartBeat(TEXT("A4"));
+		Settle(Machine);
+		Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+		Settle(Machine);
+		Machine.HandleCommand(PlayerCommands::PosturePassive);
+		Settle(Machine);
+		TestEqual(TEXT("the wire card"), Machine.GetState(TEXT("A4_tripwire")), ETutorialStepState::Active);
+		Machine.HandleEvent(GameplayEvents::EnemyAlerted, TEXT("Engineer"));
+		TestEqual(TEXT("an operative's 'alert' is nothing"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Idle);
+		Stats.Add(TEXT("in_fight"), 1.f);
+		Machine.HandleEvent(GameplayEvents::EnemyAlerted, TEXT("Z1"));
+		Settle(Machine);
+		TestEqual(TEXT("spotted: the wire card is dropped"), Machine.GetState(TEXT("A4_tripwire")), ETutorialStepState::Skipped);
+		TestEqual(TEXT("... the SPOTTED card (pause + posture)"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Active);
+		Machine.HandleCommand(PlayerCommands::PostureDefensive);
+		TestEqual(TEXT("DEFENSIVE completes it"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Completed);
+		// The skirmish: the perimeter zombie is shot dead -> the wait is over, the fight ends, part 2 follows.
+		Machine.HandleEvent(TEXT("EnemyKilled.Squad"), TEXT("Z1"));
+		Machine.HandleEvent(GameplayEvents::EnemyKilled, TEXT("Z1"));
+		Stats.Add(TEXT("in_fight"), 0.f);
+		Settle(Machine);
+		TestEqual(TEXT("part 1 is over"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Skipped);
+		TestEqual(TEXT("part 2 goes on: the wall card"), Machine.GetState(TEXT("A4_hug_wall")), ETutorialStepState::Active);
+		PassTheWall(Machine);
+		TestEqual(TEXT("... round the corner, then the lure"), Machine.GetState(TEXT("A4_lure")), ETutorialStepState::Active);
+		// The far zombie spots her too: once per level - no second card, no second pause; the lure card is dropped.
+		Stats.Add(TEXT("in_fight"), 1.f);
+		Machine.HandleEvent(GameplayEvents::EnemyAlerted, TEXT("Z2"));
+		Settle(Machine);
+		TestEqual(TEXT("spotted again: the lure card is dropped"), Machine.GetState(TEXT("A4_lure")), ETutorialStepState::Skipped);
+		TestEqual(TEXT("... the spotted card never comes twice"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Completed);
+		Stats.Add(TEXT("in_fight"), 0.f);
+	}
+	// PART 2 fails during the approach: the far zombie spots her at the wall -> the card, the stealth chain ends quietly.
+	{
+		FTutorialStateMachine Machine;
+		Zombies.Install(Machine);
+		Install(Machine);
+		Machine.Load(Data);
+		ToTheWait(Machine);
+		Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+		Settle(Machine);
+		TestEqual(TEXT("the wall card"), Machine.GetState(TEXT("A4_hug_wall")), ETutorialStepState::Active);
+		Stats.Add(TEXT("in_fight"), 1.f);
+		Machine.HandleEvent(GameplayEvents::EnemyAlerted, TEXT("Z2"));
+		Settle(Machine);
+		TestEqual(TEXT("spotted at the wall: the wall card is dropped"), Machine.GetState(TEXT("A4_hug_wall")), ETutorialStepState::Skipped);
+		TestEqual(TEXT("... the SPOTTED card"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Active);
+		TestTrue(TEXT("... the corner and lure cards skip themselves in the fight"), Machine.GetState(TEXT("A4_round_corner")) == ETutorialStepState::Skipped
+			&& Machine.GetState(TEXT("A4_lure")) == ETutorialStepState::Skipped);
+		Stats.Add(TEXT("squad_passive"), 0.f);
+		Machine.Tick(0.5f);
+		TestEqual(TEXT("nobody PASSIVE any more (Alt + /): the card completes"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Completed);
+		Stats.Add(TEXT("squad_passive"), 3.f);
+		Stats.Add(TEXT("in_fight"), 0.f);
+	}
+	// PART 2: the lured zombie spots her while the close-shot card is up - the card keeps its slot (it already says AGGRESSIVE).
+	{
+		FTutorialStateMachine Machine;
+		Zombies.Install(Machine);
+		Install(Machine);
+		Machine.Load(Data);
+		ToTheWait(Machine);
+		Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+		Settle(Machine);
+		PassTheWall(Machine);
+		Machine.HandleEvent(GameplayEvents::LureHeard, TEXT("Z2"));
+		Settle(Machine);
+		TestEqual(TEXT("the close-shot card"), Machine.GetState(TEXT("A4_close_shot")), ETutorialStepState::Active);
+		Stats.Add(TEXT("in_fight"), 1.f);
+		Machine.HandleEvent(GameplayEvents::EnemyAlerted, TEXT("Z2"));
+		Settle(Machine);
+		TestEqual(TEXT("he spots her up close: the close-shot card stays"), Machine.GetState(TEXT("A4_close_shot")), ETutorialStepState::Active);
+		TestNotEqual(TEXT("... the spotted card waits behind it"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Active);
+		Zombies.NearestCm = 500.f;
+		Zombies.OffRouteCm = 700.f;
+		Machine.HandleEvent(TEXT("EnemyKilled.Squad"), TEXT("Z2"));
+		Machine.HandleEvent(GameplayEvents::EnemyKilled, TEXT("Z2"));
+		Settle(Machine);
+		TestEqual(TEXT("shot up close in the open: done"), Machine.GetState(TEXT("A4_close_shot")), ETutorialStepState::Completed);
+		TestEqual(TEXT("... the waiting spotted card is dropped (no late pause)"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Skipped);
+		Zombies.NearestCm = 3000.f;
+		Zombies.OffRouteCm = 0.f;
+		Stats.Add(TEXT("in_fight"), 0.f);
+	}
+	// A squad already firing back (not PASSIVE): no card, no pause.
+	{
+		FTutorialStateMachine Machine;
+		Zombies.Install(Machine);
+		Stats.Add(TEXT("squad_passive"), 0.f);
+		Install(Machine);
+		Machine.Load(Data);
+		ToTheWait(Machine);
+		Machine.HandleEvent(GameplayEvents::EnemyAlerted, TEXT("Z1"));
+		Settle(Machine);
+		TestEqual(TEXT("an AGGRESSIVE squad: no spotted card"), Machine.GetState(TEXT("A4_spotted")), ETutorialStepState::Skipped);
+	}
 	return true;
 }
 

@@ -20,6 +20,16 @@
 //  4. the PERIMETER zombie is shot dead for real 6 m from her, off its loop: the close shot is NOT completed (nor the "not up close" line);
 //  5. the far zombie comes off his route (>= 4.5 m) within 9.5 m of her: she shoots him dead for real -> EnemyKilled.Squad -> the
 //     close-shot card completes, the "not up close" line never shows.
+// 2026-10-21 b (user play-test): part 2 starts with the approach along the NEAR container - she takes cover at its wall for real
+// (OrderTakeCover -> CoverEntered), then rounds it in cover for real (the controller's wall-following, TryOrderCoverWrap). The lake is
+// "ambush_fight": "skirmish": every fight above is a skirmish of the zombie that engaged (the other keeps patrolling) and ends straight
+// in exploration (no WaveCleared / PostCombat, no teleport, no cleanup).
+//   CodexTactics.TutorialAmbushLakeSpottedSmoke     = PART 1 FAILS: the perimeter zombie spots her at the wire card (BreakPatrol, Sight):
+//     the wire card is dropped, the SPOTTED card + the free tactical pause, a skirmish of that zombie alone (the far one keeps patrolling);
+//     AGGRESSIVE completes the card, Space resumes, she shoots him dead -> straight back to exploring (no wave panel, the squad not
+//     teleported, the far zombie still there and patrolling) -> part 2 goes on (wall, corner, lure, close shot).
+//   CodexTactics.TutorialAmbushLakeLureSpottedSmoke = PART 2 FAILS: after the wire, the far zombie spots her at the wall card: the SPOTTED
+//     card + pause (first time on the level), the corner / lure cards skip themselves, a skirmish of the far zombie alone, killed -> exploring.
 
 #include "CoreMinimal.h"
 
@@ -34,6 +44,12 @@
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Containers/Ticker.h"
+#include "Characters/FirePostureRules.h"
+#include "AI/PatrolRouteRules.h"
+#include "Tactics/CoverTraceRules.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "Core/CodexTacticsPlayerController.h"
+#include "Combat/WaveSubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Debug/EventBusProbe.h"
@@ -42,7 +58,9 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/RelocationSubsystem.h"
@@ -63,8 +81,24 @@ namespace TutorialAmbushLakeSmoke
 	const FName PerimeterBinding(TEXT("A4_PERIMETER"));
 	const FName LureBinding(TEXT("A4_LURE"));
 
+	enum class EMode : uint8
+	{
+		Success,
+		/** Part 1 fails: the perimeter zombie spots the squad at the wire card. */
+		SpottedPart1,
+		/** Part 2 fails: the far zombie spots her at the wall card. */
+		SpottedPart2
+	};
+
 	struct FState
 	{
+		EMode Mode = EMode::Success;
+		FCoverSlot ContainerSlot;
+		int32 CoverRetries = 0;
+		FVector LureSpot = FVector::ZeroVector;
+		/** The flow went through WaveCleared / PostCombat during a skirmish (it must not). */
+		bool bSawWavePanel = false;
+		FVector BeforeKill = FVector::ZeroVector;
 		float Time = 0.f;
 		float StageTime = 0.f;
 		int32 Stage = 0;
@@ -73,6 +107,10 @@ namespace TutorialAmbushLakeSmoke
 		int32 ShotIndex = 0;
 		/** A requested frame is taken this many seconds after the camera was pointed (0 = none pending). */
 		float ShotAt = -1.f;
+		/** When the last frame was requested from the renderer (later stages wait a moment so it shows that moment). */
+		float FrameTakenAt = -10.f;
+		/** The camera follows another actor for a frame; back to the leader afterwards. */
+		bool bRestoreFollow = false;
 		FString ShotName;
 		TWeakObjectPtr<AEnemyCharacter> Perimeter;
 		TWeakObjectPtr<AEnemyCharacter> Lured;
@@ -167,6 +205,8 @@ namespace TutorialAmbushLakeSmoke
 		Enemy.PerceptionOverride.HearWalkCm = Enemy.PerceptionOverride.HearRunCm = 0.f;
 		Enemy.PerceptionOverride.HearCrouchWalkCm = Enemy.PerceptionOverride.HearCrawlCm = 0.f;
 		Enemy.PerceptionOverride.SmellRadiusCm = 0.f;
+		// The fight's gunshots too (a zombie that hears the fight joins the skirmish - real, but each smoke checks its own zombie's).
+		Enemy.PerceptionOverride.HearGunshotCm = Enemy.PerceptionOverride.HearExplosionCm = 0.f;
 	}
 
 	/** "Shot" runs: points the tactical camera at Where. */
@@ -180,13 +220,22 @@ namespace TutorialAmbushLakeSmoke
 	}
 
 	/** "Shot" runs: points the tactical camera at Where (unless bFocus is off) and takes a frame Delay seconds later. */
-	void RequestFrame(UWorld* World, FState& State, const FVector& Where, const TCHAR* Name, float Distance = 1700.f, float Delay = 0.7f, bool bFocus = true)
+	void RequestFrame(UWorld* World, FState& State, const FVector& Where, const TCHAR* Name, float Distance = 1700.f, float Delay = 0.7f, bool bFocus = true,
+		AActor* Follow = nullptr)
 	{
 		if (!State.bShots || State.ShotAt >= 0.f)
 		{
 			return;
 		}
-		if (bFocus)
+		APlayerController* PC = World->GetFirstPlayerController();
+		ATacticalCameraPawn* Camera = PC ? Cast<ATacticalCameraPawn>(PC->GetPawn()) : nullptr;
+		if (Follow && Camera)
+		{
+			Camera->SetFollowTarget(Follow); // the camera follows the leader otherwise: frame this actor
+			Camera->SnapToFollowTarget();
+			State.bRestoreFollow = true;
+		}
+		else if (bFocus)
 		{
 			PointCamera(World, State, Where, Distance);
 		}
@@ -202,6 +251,7 @@ namespace TutorialAmbushLakeSmoke
 			FScreenshotRequest::RequestScreenshot(Path, /*bShowUI*/ true, /*bAddFilenameSuffix*/ false);
 			UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] frame -> %s"), *Path);
 			State.ShotAt = -1.f;
+			State.FrameTakenAt = State.Time;
 		}
 	}
 
@@ -229,6 +279,19 @@ namespace TutorialAmbushLakeSmoke
 			}
 		}
 		return Best;
+	}
+
+	/** A squad mate of the Medic-Sapper (the fire support that ends a skirmish; she walks on afterwards). */
+	AOperativeCharacter* FireSupport(const USquadSubsystem& Squad, const AOperativeCharacter* Medic)
+	{
+		for (AOperativeCharacter* Member : Squad.GetMembers())
+		{
+			if (Member && Member != Medic && (!Member->HealthComponent || Member->HealthComponent->IsAlive()))
+			{
+				return Member;
+			}
+		}
+		return nullptr;
 	}
 
 	bool IsDead(const AEnemyCharacter* Enemy)
@@ -260,6 +323,16 @@ namespace TutorialAmbushLakeSmoke
 			return false;
 		}
 		TickFrame(State);
+		if (State.bRestoreFollow && State.ShotAt < 0.f && State.Time > State.FrameTakenAt + 0.3f)
+		{
+			State.bRestoreFollow = false;
+			APlayerController* PC = World->GetFirstPlayerController();
+			const USquadSubsystem* LeaderSquad = World->GetSubsystem<USquadSubsystem>();
+			if (ATacticalCameraPawn* Camera = PC ? Cast<ATacticalCameraPawn>(PC->GetPawn()) : nullptr; Camera && LeaderSquad && LeaderSquad->GetLeader())
+			{
+				Camera->SetFollowTarget(LeaderSquad->GetLeader());
+			}
+		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>();
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
@@ -272,7 +345,7 @@ namespace TutorialAmbushLakeSmoke
 			}
 			return true;
 		}
-		if (State.Time > 400.f)
+		if (State.Time > 600.f)
 		{
 			Check(State, false, FString::Printf(TEXT("time out in stage %d"), State.Stage));
 			return Finish(State, false);
@@ -280,6 +353,11 @@ namespace TutorialAmbushLakeSmoke
 		AEnemyCharacter* Perimeter = State.Perimeter.Get();
 		AEnemyCharacter* Lured = State.Lured.Get();
 		AOperativeCharacter* Medic = State.Medic.Get();
+		if (const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			Flow && (Flow->GetPhase() == ECodexGamePhase::WaveCleared || Flow->GetPhase() == ECodexGamePhase::PostCombat))
+		{
+			State.bSawWavePanel = true;
+		}
 		// Cards that queue in between (the overlook posture twin behind the wire card, the out-of-sight card): the player does what they ask.
 		if (Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Active)
 		{
@@ -426,6 +504,12 @@ namespace TutorialAmbushLakeSmoke
 			Check(State, Guide.bValid && Guide.Guide.Id == FName(TEXT("@patrol_route.A4_PERIMETER")) && FVector::Dist2D(Guide.Location, OnLoop) < 50.f && FromFarRoute > 500.f,
 				FString::Printf(TEXT("the current target is on the PERIMETER zombie's loop (%s at %s, %.0f cm from the loop point nearest to her, %.1f m from the far route)"),
 					*UTutorialSubsystem::DescribeGuide(Guide.Guide), *Guide.Location.ToCompactString(), FVector::Dist2D(Guide.Location, OnLoop), FromFarRoute / 100.f));
+			if (State.Mode == EMode::SpottedPart1)
+			{
+				State.Stage = 20; // the perimeter zombie spots her before the wire is rigged
+				State.StageTime = 0.f;
+				return true;
+			}
 			// The wire: across the loop's first leg at its middle (perpendicular, 3 m), the REAL two-click placement.
 			const FVector LegA = Loop[0];
 			const FVector LegB = Loop.Num() > 1 ? Loop[1] : Loop[0] + FVector(100.f, 0.f, 0.f);
@@ -493,7 +577,8 @@ namespace TutorialAmbushLakeSmoke
 				PerimeterTrips += State.Probe->EventNames[Index] == GameplayEvents::TripwireTriggeredByEnemy && State.Probe->EventSubjects[Index] == Perimeter->GetFName() ? 1 : 0;
 			}
 			Check(State, PerimeterTrips == 1, FString::Printf(TEXT("the pin was pulled by %s (part 1's zombie)"), *Perimeter->GetName()));
-			Next(State);
+			State.Stage = 40;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 6:
@@ -511,24 +596,24 @@ namespace TutorialAmbushLakeSmoke
 			Check(State, Guide.bValid && Guide.Guide.Id == FName(TEXT("@lure_spot.A4_LURE")) && FromFarRoute > 900.f && FromFarRoute < 1100.f,
 				FString::Printf(TEXT("the current target is the lure spot 10 m short of the FAR zombie's path (%s, %.1f m from it)"),
 					*UTutorialSubsystem::DescribeGuide(Guide.Guide), FromFarRoute / 100.f));
-			// The perimeter zombie (alive: it survived the wire) hears a lure: not part 2's zombie.
-			Tutorial->NotifyEvent(GameplayEvents::LureHeard, Perimeter->GetFName());
-			Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Idle,
-				TEXT("PART 2: the PERIMETER zombie's StealthLure.Heard does not complete the lure (no close-shot card)"));
-			// She goes to the spot; he may be anywhere on his route: up to 11 m of him (inside the 12 m whistle) along her line.
-			FVector Spot = Guide.bValid ? Guide.Location : Medic->GetActorLocation();
-			const FVector ToHim = (Lured->GetActorLocation() - Spot).GetSafeNormal2D();
-			const float Far = static_cast<float>(FVector::Dist2D(Spot, Lured->GetActorLocation()));
-			if (Far > 1100.f)
+			Check(State, Squad->GetEffectivePosture(Medic) == ESquadFirePosture::Passive, TEXT("the lure card sets the squad PASSIVE again"));
+			if (!IsDead(Perimeter))
 			{
-				Spot += ToHim * (Far - 1100.f);
+				// The perimeter zombie (alive: it survived the wire) hears a lure: not part 2's zombie.
+				Tutorial->NotifyEvent(GameplayEvents::LureHeard, Perimeter->GetFName());
+				Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Idle,
+					TEXT("PART 2: the PERIMETER zombie's StealthLure.Heard does not complete the lure (no close-shot card)"));
 			}
+			// She goes to the spot; he may be anywhere on his route: up to 11 m of him (inside the 12 m whistle) along her line.
+			// The guide's spot is 10 m off his path: she waits there until he passes it (the off-route rule of the close shot needs it).
+			FVector Spot = Guide.bValid ? Guide.Location : Medic->GetActorLocation();
 			Spot = SmokeUtils::FreeSpot(World, Spot, Medic);
-			Place(World, *Medic, Spot);
-			Medic->SetStance(EOperativeStance::Crouching);
+			State.LureSpot = Spot;
+			Medic->OrderMoveTo(Spot, false); // out of her cover, to the lure spot (the real order)
 			UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] lure spot %s (target %s), the far zombie %.1f m away at %s, %.1f m off his route"), *Spot.ToCompactString(),
 				*Guide.Location.ToCompactString(), FVector::Dist2D(Spot, Lured->GetActorLocation()) / 100.f, *Lured->GetActorLocation().ToCompactString(), OffRouteCm(*Lured) / 100.f);
-			Next(State);
+			State.Stage = 44;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 7:
@@ -538,14 +623,30 @@ namespace TutorialAmbushLakeSmoke
 				return true; // she settles (crouched)
 			}
 			UStealthLureSubsystem* Lure = World->GetSubsystem<UStealthLureSubsystem>();
+			const float ToHim = static_cast<float>(FVector::Dist2D(Medic->GetActorLocation(), Lured->GetActorLocation()));
+			if (Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active && ToHim > 1150.f)
+			{
+				// He walks his loop: she waits crouched at the lure spot (10 m off his path) until he passes within the 12 m whistle.
+				if (FMath::Fmod(State.StageTime, 5.f) < StepSeconds)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] waiting at %s: the far zombie %.1f m away at %s (on patrol %d, investigating %d)"),
+						*Medic->GetActorLocation().ToCompactString(), ToHim / 100.f, *Lured->GetActorLocation().ToCompactString(), Lured->IsOnPatrol() ? 1 : 0,
+						Lured->IsInvestigatingLure() ? 1 : 0);
+				}
+				if (State.StageTime < 130.f)
+				{
+					return true;
+				}
+			}
 			if (Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active && Lure && State.Time - State.LastShotAt > 3.f)
 			{
+				Medic->StopOperative();
 				State.LastShotAt = State.Time;
 				const bool bWhistled = Lure->Whistle(Medic);
 				UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] %s whistles (%s), the far zombie %.1f m away"), *Medic->DisplayName.ToString(),
 					bWhistled ? TEXT("ok") : TEXT("refused"), FVector::Dist(Medic->GetActorLocation(), Lured->GetActorLocation()) / 100.f);
 			}
-			if (Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active && State.StageTime < 30.f)
+			if (Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active && State.StageTime < 140.f)
 			{
 				return true;
 			}
@@ -566,6 +667,12 @@ namespace TutorialAmbushLakeSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Active && Tutorial->GetGuideView().bValid
 				&& Tutorial->GetGuideView().Guide.Id == FName(TEXT("@enemy.A4_LURE")) && FVector::Dist2D(Tutorial->GetGuideView().Location, Lured->GetActorLocation()) < 100.f,
 				FString::Printf(TEXT("the CLOSE SHOT card, its target follows him (%s)"), *UTutorialSubsystem::DescribeGuide(Tutorial->GetGuideView().Guide)));
+			if (IsDead(Perimeter))
+			{
+				State.Stage = 10; // part 1 failed: the perimeter zombie died in its skirmish
+				State.StageTime = 0.f;
+				return true;
+			}
 			// The PERIMETER zombie, shot dead for real 6 m from her, off its loop - not part 2's zombie.
 			// 6 m from her, square to her line to the far zombie, on the side away from its loop (the facts of a close shot in the open).
 			const FVector Side = FVector::CrossProduct(FVector::UpVector, (Lured->GetActorLocation() - Medic->GetActorLocation()).GetSafeNormal2D());
@@ -602,6 +709,8 @@ namespace TutorialAmbushLakeSmoke
 			}
 			Check(State, IsDead(Perimeter) && State.Probe->EventNames.Contains(FName(TEXT("EnemyKilled.Squad"))),
 				TEXT("the perimeter zombie is shot dead (EnemyKilled.Squad raised)"));
+			Check(State, World->GetSubsystem<UGameFlowSubsystem>()->GetPhase() == ECodexGamePhase::Exploration && !State.bSawWavePanel && Lured && !IsDead(Lured),
+				TEXT("its skirmish ended straight in exploration (no wave panel); the far zombie was not part of it"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A4_close_shot_far")) == ETutorialStepState::Idle,
 				FString::Printf(TEXT("PART 2: the PERIMETER zombie killed up close does not complete the close shot, nor the 'not up close' line (%s / %s)"),
 					TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_close_shot"))), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_close_shot_far")))));
@@ -670,8 +779,313 @@ namespace TutorialAmbushLakeSmoke
 				FString::Printf(TEXT("PART 2: the close shot in the open completes the card (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_close_shot")))));
 			Check(State, Tutorial->GetStepState(TEXT("A4_close_shot_far")) == ETutorialStepState::Skipped,
 				FString::Printf(TEXT("the 'not up close' line never shows (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_close_shot_far")))));
+			Check(State, World->GetSubsystem<UGameFlowSubsystem>()->GetPhase() == ECodexGamePhase::Exploration && !State.bSawWavePanel,
+				TEXT("the last skirmish ended straight in exploration - never a wave panel / post-combat"));
 			Next(State);
 			return true;
+		}
+		// --- PART 2's approach along the near container (2026-10-21 b) ---
+		case 40:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_hug_wall")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Medic = Medic ? Medic : Tutorial->GetFocusOperative(TEXT("A4_hug_wall"));
+			State.Medic = Medic;
+			Tutorial->RefreshGuideNow();
+			Check(State, Tutorial->GetStepState(TEXT("A4_hug_wall")) == ETutorialStepState::Active && Tutorial->GetGuideView().bValid
+				&& Tutorial->GetGuideView().Guide.Id == FName(TEXT("@patrol_route.A4_PERIMETER")),
+				FString::Printf(TEXT("PART 2 starts with the wall card, its target at the near container (%s)"), *UTutorialSubsystem::DescribeGuide(Tutorial->GetGuideView().Guide)));
+			if (State.Mode == EMode::SpottedPart2)
+			{
+				State.Stage = 30; // the far zombie spots her on her way to the wall
+				State.StageTime = 0.f;
+				return true;
+			}
+			// The REAL cover order at the near container's face towards the overlook.
+			const AStaticMeshActor* Container = nullptr;
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				Container = It->GetActorNameOrLabel() == TEXT("Container_A4_South") ? *It : Container;
+			}
+			FCoverSlot Slot;
+			bool bOrdered = false;
+			if (Container && Medic)
+			{
+				// Standing: crouched right behind the overlook's low cover she stood frozen against it in the failure run (the navmesh path
+				// crosses the low cover and the crouched vault did not trigger - reported).
+				Medic->SetStance(EOperativeStance::Standing);
+				const FBox Box = Container->GetComponentsBoundingBox();
+				const FVector Outside(Box.Min.X - 30.f, Box.GetCenter().Y, Box.GetCenter().Z);
+				const FVector Face = Ground(World, Outside) + FVector(0.f, 0.f, 60.f); // the ground beside the wall, not the container's roof
+				const bool bSlot = CoverTraceRules::FindCoverSlotAt(World, Face, FVector(1.f, 0.f, 0.f), Slot);
+				State.ContainerSlot = Slot;
+				const EOperativeOrderResult Result = bSlot ? Medic->OrderTakeCover(Slot, false) : EOperativeOrderResult::Refused;
+				bOrdered = Result == EOperativeOrderResult::Accepted;
+				UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] cover at the near container: face %s, slot %d, order %d"), *Face.ToCompactString(), bSlot ? 1 : 0,
+					static_cast<int32>(Result));
+			}
+			Check(State, bOrdered, TEXT("she runs into cover at the near container's wall (the real cover order)"));
+			Next(State);
+			return true;
+		}
+		case 41:
+		{
+			// A cover walk given up right after the fight (her shot's clip still holds her): the player clicks again.
+			if (!Medic->bInCover && Medic->GetVelocity().Size2D() < 5.f && State.StageTime > 2.f && State.CoverRetries < 3
+				&& Tutorial->GetStepState(TEXT("A4_hug_wall")) == ETutorialStepState::Active && FMath::Fmod(State.StageTime, 2.f) < StepSeconds)
+			{
+				++State.CoverRetries;
+				// She stands against the overlook's low cover (the navmesh path runs straight across it and no vault came): round its end
+				// first, as the player would, then the cover click again (stage 45).
+				UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] she stands still at %s short of the container (path across the overlook's low cover): round its end, click again (%d)"),
+					*Medic->GetActorLocation().ToCompactString(), State.CoverRetries);
+				if (State.CoverRetries >= 2)
+				{
+					// Still frozen against the low cover (her crowd agent off the eroded navmesh there - reported): a step back onto it.
+					Place(World, *Medic, State.CoverSpot);
+				}
+				Medic->OrderMoveTo(SmokeUtils::ClearPoint(World, Medic->GetActorLocation(), Medic->GetActorLocation() + FVector(0.f, -450.f, 0.f)), false);
+				State.Stage = 45;
+				State.StageTime = 0.f;
+				return true;
+			}
+			if ((Tutorial->GetStepState(TEXT("A4_hug_wall")) == ETutorialStepState::Active || Tutorial->GetStepState(TEXT("A4_round_corner")) != ETutorialStepState::Active)
+				&& State.StageTime < 30.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_hug_wall")) == ETutorialStepState::Completed && Medic->bInCover
+				&& Tutorial->GetStepState(TEXT("A4_round_corner")) == ETutorialStepState::Active,
+				FString::Printf(TEXT("in cover at the container (CoverEntered): the wall card completes, the round-the-corner card (%.1f s)"), State.StageTime));
+			RequestFrame(World, State, Medic->GetActorLocation(), TEXT("part2_wall_hug"), 1300.f);
+			Next(State);
+			return true;
+		}
+		case 45:
+		{
+			if (Medic->GetVelocity().Size2D() > 5.f || State.StageTime < 1.f)
+			{
+				if (State.StageTime < 6.f)
+				{
+					return true;
+				}
+			}
+			Medic->OrderTakeCover(State.ContainerSlot, false);
+			State.Stage = 41;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 42:
+		{
+			if (State.ShotAt >= 0.f || State.StageTime < 0.5f)
+			{
+				return true; // the frame first
+			}
+			// The REAL wall-following: a click on the ground beyond the container's far face (the controller's click path).
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			const AStaticMeshActor* Container = nullptr;
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				Container = It->GetActorNameOrLabel() == TEXT("Container_A4_South") ? *It : Container;
+			}
+			bool bWrap = false;
+			if (PC && Container)
+			{
+				const FBox Box = Container->GetComponentsBoundingBox();
+				bWrap = PC->TryOrderCoverWrap(Medic, Ground(World, FVector(Box.Max.X + 70.f, Box.GetCenter().Y, Box.GetCenter().Z)));
+			}
+			Check(State, bWrap && Tutorial->GetStepState(TEXT("A4_round_corner")) == ETutorialStepState::Completed,
+				FString::Printf(TEXT("she follows the container's wall round its corners (the real wall-following click) -> the card completes (%s)"),
+					TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_round_corner")))));
+			Next(State);
+			return true;
+		}
+		case 43:
+		{
+			if (Medic->IsCoverWrapping() && State.StageTime < 20.f)
+			{
+				return true; // she rounds the container in cover
+			}
+			Check(State, !Medic->IsCoverWrapping() && Medic->GetCoverWrapCount() >= 1 && Medic->bInCover,
+				FString::Printf(TEXT("she rounded the container along its wall, in cover (%d wrap(s), %.1f s)"), Medic->GetCoverWrapCount(), State.StageTime));
+			State.Stage = 6;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 44:
+		{
+			if (FVector::Dist2D(Medic->GetActorLocation(), State.LureSpot) > 150.f && State.StageTime < 25.f)
+			{
+				if (Medic->GetVelocity().Size2D() < 5.f && FMath::Fmod(State.StageTime, 2.f) < StepSeconds && State.StageTime > 1.f)
+				{
+					Medic->OrderMoveTo(State.LureSpot, false);
+				}
+				return true;
+			}
+			if (FVector::Dist2D(Medic->GetActorLocation(), State.LureSpot) > 150.f)
+			{
+				Place(World, *Medic, State.LureSpot); // the walk did not get there: put her there (the lure is the point here)
+			}
+			Medic->SetStance(EOperativeStance::Crouching);
+			State.Stage = 7;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// --- PART 1 FAILS (TutorialAmbushLakeSpottedSmoke) ---
+		case 20:
+		{
+			// She sets off towards his loop (the wire spot) - and he spots her on the way (the user's play-test).
+			if (State.StageTime < StepSeconds * 1.5f)
+			{
+				const TArray<FVector> Loop = RoutePoints(*Perimeter->AssignedPatrolRoute);
+				const FVector OnLoop = TutorialRules::NearestPointOnRoute(Loop, true, Medic->GetActorLocation());
+				Medic->SetStance(EOperativeStance::Standing);
+				Medic->OrderMoveTo(SmokeUtils::ClearPoint(World, Medic->GetActorLocation(), OnLoop + (Medic->GetActorLocation() - OnLoop).GetSafeNormal2D() * 300.f), false);
+				return true;
+			}
+			if (FVector::Dist2D(Medic->GetActorLocation(), State.CoverSpot) < 350.f && State.StageTime < 8.f)
+			{
+				return true; // on her way, clear of the overlook's low cover
+			}
+			State.BeforeKill = Medic->GetActorLocation();
+			Perimeter->BreakPatrol(EPatrolAlertCause::Sight, Medic->GetActorLocation()); // he sees her: the patrol breaks (the real reaction)
+			Next(State);
+			return true;
+		}
+		case 21:
+		{
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			if ((Tutorial->GetStepState(TEXT("A4_spotted")) != ETutorialStepState::Active || Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
+				&& State.StageTime < 5.f)
+			{
+				return true;
+			}
+			Check(State, State.Probe->EventNames.Contains(GameplayEvents::EnemyAlerted), TEXT("EnemyAlerted raised by the perimeter zombie"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Skipped, TEXT("PART 1 FAILS: the wire card is dropped"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause
+				&& Flow->IsFreePause(), TEXT("... the SPOTTED card and the FREE tactical pause"));
+			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+			Check(State, Flow->IsSkirmish() && Waves && Waves->GetAliveEnemyCount() == 1 && Lured->IsOnPatrol(),
+				FString::Printf(TEXT("... a SKIRMISH of that zombie alone (%d enemies); the far zombie keeps patrolling"), Waves ? Waves->GetAliveEnemyCount() : -1));
+			RequestFrame(World, State, (Medic->GetActorLocation() + Perimeter->GetActorLocation()) * 0.5f, TEXT("part1_spotted_pause"), 1500.f);
+			Next(State);
+			return true;
+		}
+		case 22:
+		{
+			if (State.ShotAt >= 0.f || State.StageTime < 0.5f || State.Time < State.FrameTakenAt + 0.3f)
+			{
+				return true; // the frame of the paused moment first (rendered before the posture key)
+			}
+			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			Tutorial->HandlePlayerCommand(PlayerCommands::PostureAggressive, FPlayerCommandContext());
+			Squad->SetSquadPosture(ESquadFirePosture::Aggressive); // Alt + /
+			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Completed, TEXT("AGGRESSIVE (Alt + /) completes the card"));
+			Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("Space resumes the fight"));
+			Perimeter->GetHealthComponent()->SetMaxHealth(20.f);
+			State.LastShotAt = -10.f;
+			Next(State);
+			return true;
+		}
+		case 23:
+		{
+			// The fire support kills him (2026-10-21: after the Medic-Sapper's own sniper shots she stood frozen on the next walk in this smoke - see the report).
+			AOperativeCharacter* Support = FireSupport(*Squad, Medic);
+			if (!IsDead(Perimeter) && Support)
+			{
+				FireAt(State, *Support, *Perimeter);
+				if (State.StageTime < 20.f)
+				{
+					return true;
+				}
+			}
+			State.BeforeKill = Medic->GetActorLocation();
+			Next(State);
+			return true;
+		}
+		case 24:
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			Check(State, IsDead(Perimeter), TEXT("the fire support shoots the perimeter zombie dead"));
+			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && !Flow->IsSkirmish() && !State.bSawWavePanel && Flow->GetWaveIndex() == 0,
+				TEXT("the skirmish is over: straight back to exploring - no wave cleared panel, no post-combat, no wave"));
+			Check(State, Lured && !IsDead(Lured) && Lured->IsOnPatrol() && FVector::Dist2D(Medic->GetActorLocation(), State.BeforeKill) < 300.f,
+				TEXT("... the far zombie is still there and patrolling, the squad was not teleported"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Skipped, TEXT("part 1 is over (its zombie died another way)"));
+			RequestFrame(World, State, Lured->GetActorLocation(), TEXT("part1_skirmish_over_far_zombie_patrolling"), 1800.f, 0.7f, true, Lured);
+
+			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			Next(State);
+			return true;
+		}
+		case 25:
+		{
+			if (State.ShotAt >= 0.f || State.bRestoreFollow)
+			{
+				return true;
+			}
+			State.Stage = 40; // the game goes on: part 2
+			State.StageTime = 0.f;
+			return true;
+		}
+		// --- PART 2 FAILS (TutorialAmbushLakeLureSpottedSmoke) ---
+		case 30:
+		{
+			Lured->BreakPatrol(EPatrolAlertCause::Sight, Medic->GetActorLocation());
+			Next(State);
+			return true;
+		}
+		case 31:
+		{
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			if ((Tutorial->GetStepState(TEXT("A4_spotted")) != ETutorialStepState::Active || Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
+				&& State.StageTime < 5.f)
+			{
+				return true;
+			}
+			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+			Check(State, Tutorial->GetStepState(TEXT("A4_hug_wall")) == ETutorialStepState::Skipped, TEXT("PART 2 FAILS: the wall card is dropped"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->IsFreePause(),
+				TEXT("... the SPOTTED card and the free tactical pause (the first time on this level)"));
+			Check(State, Flow->IsSkirmish() && Waves && Waves->GetAliveEnemyCount() == 1 && !IsDead(Perimeter) && Perimeter->IsOnPatrol(),
+				TEXT("... a skirmish of the far zombie alone (the perimeter zombie, alive after the wire, is not in it)"));
+			Tutorial->HandlePlayerCommand(PlayerCommands::PostureDefensive, FPlayerCommandContext());
+			Squad->SetSquadPosture(ESquadFirePosture::Defensive);
+			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Completed, TEXT("DEFENSIVE completes the card"));
+			World->GetSubsystem<UGameFlowSubsystem>()->ToggleTacticalPause();
+			Lured->GetHealthComponent()->SetMaxHealth(20.f);
+			State.LastShotAt = -10.f;
+			Next(State);
+			return true;
+		}
+		case 32:
+		{
+			AOperativeCharacter* Support = FireSupport(*Squad, Medic);
+			if (!IsDead(Lured) && Support)
+			{
+				FireAt(State, *Support, *Lured);
+				if (State.StageTime < 20.f)
+				{
+					return true;
+				}
+			}
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			Check(State, IsDead(Lured), TEXT("the fire support shoots the far zombie dead"));
+			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && !State.bSawWavePanel, TEXT("straight back to exploring - no wave panel"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_round_corner")) == ETutorialStepState::Skipped && Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Skipped
+				&& Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Idle,
+				TEXT("the stealth cards skipped themselves in the fight (no corner / lure / close-shot card) - the game goes on"));
+			return Finish(State, true);
 		}
 		case 12:
 		{
@@ -686,7 +1100,7 @@ namespace TutorialAmbushLakeSmoke
 		}
 	}
 
-	void Run(const TArray<FString>& Args, UWorld* World)
+	void RunMode(const TArray<FString>& Args, UWorld* World, EMode Mode)
 	{
 		if (!World)
 		{
@@ -694,6 +1108,7 @@ namespace TutorialAmbushLakeSmoke
 		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->Mode = Mode;
 		State->bShots = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); }) && FApp::CanEverRender();
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
@@ -701,10 +1116,35 @@ namespace TutorialAmbushLakeSmoke
 		}), StepSeconds);
 	}
 
+	void Run(const TArray<FString>& Args, UWorld* World)
+	{
+		RunMode(Args, World, EMode::Success);
+	}
+
+	void RunSpotted(const TArray<FString>& Args, UWorld* World)
+	{
+		RunMode(Args, World, EMode::SpottedPart1);
+	}
+
+	void RunLureSpotted(const TArray<FString>& Args, UWorld* World)
+	{
+		RunMode(Args, World, EMode::SpottedPart2);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.TutorialAmbushLakeSmoke"),
 		TEXT("Dev check (Demo 01 A4, 2026-10-21): the ambush in two parts on the lake layout - part 1 the perimeter zombie walks into a real wire, part 2 the far zombie is lured by a real whistle into the open and shot dead at close range; each part reacts only to its zombie. 'Shot' = rendered frames."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
+
+	static FAutoConsoleCommandWithWorldAndArgs SpottedCommand(
+		TEXT("CodexTactics.TutorialAmbushLakeSpottedSmoke"),
+		TEXT("Dev check (Demo 01 A4, 2026-10-21 b): part 1 fails - the perimeter zombie spots the squad: the SPOTTED card + free pause, a skirmish of that zombie alone, straight back to exploring, part 2 goes on. 'Shot' = rendered frames."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunSpotted));
+
+	static FAutoConsoleCommandWithWorldAndArgs LureSpottedCommand(
+		TEXT("CodexTactics.TutorialAmbushLakeLureSpottedSmoke"),
+		TEXT("Dev check (Demo 01 A4, 2026-10-21 b): part 2 fails - the far zombie spots her at the wall: the SPOTTED card + pause, the stealth cards skip, a skirmish of that zombie alone, straight back to exploring."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunLureSpotted));
 }
 
 #endif // !UE_BUILD_SHIPPING

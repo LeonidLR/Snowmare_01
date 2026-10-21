@@ -17,6 +17,8 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
 #include "NavigationSystem.h"
@@ -77,6 +79,15 @@ void UWaveSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
+	// 2026-10-21: a skirmish whose enemies are all down already (killed by the very shot that started it) ends here.
+	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->IsSkirmish() && PendingSpawns.Num() == 0)
+	{
+		CheckWaveCompletion();
+		if (!bWaveActive)
+		{
+			return;
+		}
+	}
 	// Godot _on_gorky17_combat_ended: the random events that fell during the fight run now.
 	if (!PendingRandomEvents.IsEmpty())
 	{
@@ -100,6 +111,15 @@ TStatId UWaveSubsystem::GetStatId() const
 void UWaveSubsystem::SetLevelConfig(ULevelConfigAsset* InConfig)
 {
 	LevelConfig = InConfig;
+	// 2026-10-21: "susanin_wave" (0 = never on this level, N = that wave; no key = the random wave of Initialize).
+	if (LevelConfig && LevelConfig->Config.SusaninWave >= 0)
+	{
+		SusaninRescueWave = LevelConfig->Config.SusaninWave > 0 ? LevelConfig->Config.SusaninWave : -1;
+		if (SusaninRescueWave > 0 && SusaninRescueWave == DynamicBreachWave)
+		{
+			DynamicBreachWave = -1; // one random event per wave (Godot)
+		}
+	}
 }
 
 void UWaveSubsystem::StartWave(int32 WaveIndex)
@@ -110,6 +130,12 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 
 	PendingSpawns.Empty();
 	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AEnemyCharacter>& E) { return !E.IsValid() || E->IsDying(); });
+	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->IsSkirmish())
+	{
+		// 2026-10-21: a skirmish - no wave (no flank breach, no Susanin, no wave objective: OnWaveStarted is not broadcast).
+		AdoptSkirmishEnemies();
+		return;
+	}
 	CheckDynamicFlankSpawners(WaveIndex); // Godot _start_next_wave
 
 	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->IsAmbushFight() && WaveIndex == 1)
@@ -169,6 +195,50 @@ void UWaveSubsystem::AdoptLevelEnemies()
 		Msg->PostMessage(FText::FromString(TEXT("Commander")),
 			FText::FromString(FString::Printf(TEXT("Ambush! Hostiles on the level (total: %d) - eliminate them!"), TotalWaveEnemies)));
 	}
+}
+
+bool UWaveSubsystem::AdoptEnemy(AEnemyCharacter* Enemy)
+{
+	if (!Enemy || Enemy->IsDying() || AliveEnemies.Contains(Enemy))
+	{
+		return false;
+	}
+	Enemy->OnEnemyDiedNative.AddUObject(this, &UWaveSubsystem::HandleEnemyDied);
+	AliveEnemies.Add(Enemy);
+	TotalWaveEnemies = GetAliveEnemyCount();
+	return true;
+}
+
+void UWaveSubsystem::AdoptSkirmishEnemies()
+{
+	const ULevelEncounterSubsystem* Encounter = GetWorld()->GetSubsystem<ULevelEncounterSubsystem>();
+	AdoptEnemy(Cast<AEnemyCharacter>(Encounter ? Encounter->GetLastContactSource() : nullptr));
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
+	{
+		if (Enemy && Encounter && Encounter->IsLevelEnemy(Enemy) && Enemy->HasBrokenPatrol() && !Enemy->IsOnPatrol())
+		{
+			AdoptEnemy(Enemy); // engaged: it broke its patrol (its escort / leader broke with it) and is not back on it
+		}
+	}
+	TotalWaveEnemies = GetAliveEnemyCount();
+	UE_LOG(LogCodexTactics, Display, TEXT("[Wave] skirmish: %d engaged enemies of the level (the others keep patrolling)"), TotalWaveEnemies);
+	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(TEXT("Contact!")));
+	}
+	// Nobody engaged after all (the shot that started it killed it): back to exploring on the next tick (Tick -> CheckWaveCompletion) -
+	// never from inside the flow's WaveCombat broadcast that called StartWave.
+}
+
+bool UWaveSubsystem::JoinSkirmish(AEnemyCharacter* Enemy)
+{
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (!Flow || !Flow->IsSkirmish() || !bWaveActive || !AdoptEnemy(Enemy))
+	{
+		return false;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Wave] skirmish: %s joins (%d now)"), *Enemy->GetName(), GetAliveEnemyCount());
+	return true;
 }
 
 void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
@@ -287,6 +357,19 @@ void UWaveSubsystem::CheckWaveCompletion()
 	if (bWaveActive && PendingSpawns.Num() == 0 && AliveEnemies.Num() == 0)
 	{
 		bWaveActive = false;
+
+		// 2026-10-21: a skirmish ends quietly - straight back to exploring (no wave cleared panel / post-combat, no wave XP).
+		if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->IsSkirmish())
+		{
+			CurrentWaveIndex = 0;
+			Flow->FinishSkirmish();
+			UE_LOG(LogCodexTactics, Display, TEXT("[Wave] skirmish over: back to exploration"));
+			if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(TEXT("Clear. Carry on - quietly.")));
+			}
+			return;
+		}
 
 		if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())
 		{

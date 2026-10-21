@@ -39,7 +39,9 @@
     { "_comment": "2026-10-21 (game designer: the A4 ambush in two parts, the two patrols split onto two zombies and two buildings in the map - placement kept as it is): PART 1's zombie = the one walking the closed loop round the NEAR container (Container_A4_South). Bound by its patrol route's actor label (the route keeps its old name 'Hounds' from the rev 5 layout) - no map change needed. Labels are editor data: for a cooked build give the route actor the tag 'PatrolRoute_A4_Hounds' (a selector matches labels, object names and tags).",
       "id": "A4_PERIMETER", "route": "PatrolRoute_A4_Hounds" },
     { "_comment": "PART 2's zombie = the one by the FAR container (Container_A4_North), route 'PatrolRoute_A4_Frostbitten' (old name kept).",
-      "id": "A4_LURE", "route": "PatrolRoute_A4_Frostbitten" }
+      "id": "A4_LURE", "route": "PatrolRoute_A4_Frostbitten" },
+    { "_comment": "2026-10-21: either A4 zombie (the 'spotted' card, cancelling the stealth cards when one of them engages).",
+      "id": "A4_ANY", "route": ["PatrolRoute_A4_Hounds", "PatrolRoute_A4_Frostbitten"] }
   ],
   "beats": [
     { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0",
@@ -594,6 +596,7 @@
       "action": { "type": "solo_focus" },
       "guide": "@patrol_route.A4_PERIMETER",
       "trigger": { "type": "after_step", "step": "A4_cones" },
+      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY" },
       "confine": { "volume": "VOL_A4_OVERLOOK", "free": "focus", "until": "A4_lure", "stop": true },
       "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
     },
@@ -621,15 +624,50 @@
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A4_04" } ]
     },
     {
+      "_comment": "2026-10-21 (user play-test: 'while we approach the zombie it may spot us - the attack is ruined and the PASSIVE squad will not even fire back'): when either A4 zombie ENGAGES the squad (EnemyAlerted: it saw / heard / was hit - the fight starts right after) while the squad holds fire, the game goes into the FREE tactical pause ('tactical_pause': no charge, no timer) and the card asks for DEFENSIVE or AGGRESSIVE (done on the key or when nobody is PASSIVE any more). Once per level for both parts; the stealth cards of the moment are dropped (their cancel_on), the close-shot card keeps its slot (it already says AGGRESSIVE: this card is dropped when it finishes). A failed ambush is no game over: the skirmish ('ambush_fight': 'skirmish') ends when that zombie is down and the lesson goes on.",
+      "id": "A4_spotted", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_SPOTTED",
+      "keys": ["Posture.Defensive", "Posture.Aggressive", "Time.Pause"],
+      "action": { "type": "tactical_pause" },
+      "trigger": { "type": "event", "event": "EnemyAlerted", "enemy": "A4_ANY", "requires": ["A4_tripwire"] },
+      "condition": { "stat": "squad_passive", "at_least": 1 },
+      "cancel_on": { "step": "A4_close_shot" },
+      "complete": { "commands": ["Posture.Defensive", "Posture.Aggressive"], "condition": { "stat": "squad_passive", "below": 1 }, "timeout_s": 60 }
+    },
+    {
+      "_comment": "PART 2, the approach (2026-10-21, user: 'tell the player to move TACTICALLY along the building - round corners and hug the wall'): the Medic-Sapper runs into cover at the NEAR container (CoverEntered by her; the target = the near zombie's loop round it), then follows its wall / rounds its corner in cover (the cover wall-following = Cover.Shimmy, the corner-to-corner switch = Cover.Switch / Cover.Corner, or CornerReached). Never precredited. Skipped while a fight runs (in_fight) and dropped when a zombie engages: a failed ambush is just a skirmish, the game goes on.",
+      "id": "A4_hug_wall", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_HUG_WALL",
+      "keys": ["Cover.Enter"],
+      "focus": "role:MedicSapper",
+      "guide": "@patrol_route.A4_PERIMETER",
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 0.5 },
+      "condition": { "stat": "in_fight", "below": 1 },
+      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY" },
+      "complete": { "event": "CoverEntered", "subject": "focus", "timeout_s": 90 }
+    },
+    {
+      "id": "A4_round_corner", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_ROUND_CORNER",
+      "keys": ["Cover.Shimmy", "Cover.Corner"],
+      "focus": "role:MedicSapper",
+      "guide": "@patrol_route.A4_PERIMETER",
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A4_hug_wall", "delay_s": 0.5 },
+      "condition": { "stat": "in_fight", "below": 1 },
+      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY" },
+      "complete": { "commands": ["Cover.Shimmy", "Cover.Corner", "Cover.Switch"], "event": "CornerReached", "subject": "focus", "timeout_s": 90 }
+    },
+    {
       "_comment": "PART 2 - THE LURE (2026-10-21: bound to the zombie by the FAR container, A4_LURE): she moves up to the lure spot ('@lure_spot.A4_LURE': 10 m short of his path, towards her) and whistles [5] (the noise at her: he comes to her) or throws a stone [6] (the noise where it lands: he goes there). Unlocks Stealth.* (locked since A0). Done when THAT zombie reacts to a lure - it heard it and investigates (StealthLure.Heard with 'enemy': 'A4_LURE'; the near zombie hearing it does not count; the lure needs exploration and an undetected squad). Never precredited, 180 s; killed before he was lured: the card is dropped.",
       "id": "A4_lure", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_LURE",
       "keys": ["Stealth.Whistle", "Stealth.Throw"],
       "focus": "role:MedicSapper",
       "guide": "@lure_spot.A4_LURE",
       "unlock": ["Stealth.*"],
+      "action": { "type": "set_posture", "posture": "passive" },
       "precredit": false,
-      "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 0.5 },
-      "cancel_on": { "event": "EnemyKilled", "enemy": "A4_LURE" },
+      "trigger": { "type": "after_step", "step": "A4_round_corner", "delay_s": 0.5 },
+      "condition": { "stat": "in_fight", "below": 1 },
+      "cancel_on": { "event": "Enemy*", "enemy": "A4_LURE" },
       "complete": { "event": "StealthLure.Heard", "enemy": "A4_LURE", "timeout_s": 180 }
     },
     {

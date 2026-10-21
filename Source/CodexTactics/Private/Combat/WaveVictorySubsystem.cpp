@@ -53,7 +53,9 @@ FString UWaveVictorySubsystem::GetNextButtonText() const
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const int32 Wave = Flow ? Flow->GetWaveIndex() : 1;
 	const int32 Total = Flow ? Flow->GetConfig().TotalWaves : 1;
-	return Wave >= Total ? FString(TEXT("🗺️ End combat and continue exploring"))
+	// 2026-10-21: an ambush fight that is the whole battle (bAmbushSingleFight) ends combat too - no "next wave" (it never came).
+	const bool bLast = Wave >= Total || (Flow && Flow->IsAmbushFight() && Flow->GetConfig().bAmbushSingleFight);
+	return bLast ? FString(TEXT("🗺️ End combat and continue exploring"))
 		: FString::Printf(TEXT("⚔️ Start the next wave (%d/%d)"), Wave + 1, Total);
 }
 

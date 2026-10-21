@@ -589,6 +589,10 @@ private:
 	bool ResolveGuideSpot(FName Spot, FName StepId, FVector& OutLocation) const;
 	/** Logs, once per steps load, which level enemies each "enemies" binding found (none: a warning - those steps end by timeout only). */
 	void LogEnemyBindings() const;
+	/** 2026-10-21, action "tactical_pause": real seconds left to wait for the fight before the free pause opens (0 = none pending). */
+	float LessonPauseWait = 0.f;
+	/** Opens the requested lesson pause once the fight runs in real time (UGameFlowSubsystem::EnterLessonPause). */
+	void TickLessonPause(float RealDelta);
 	/** Resolves Machine.GetGuide() in the world (nearest marker / the beacon at the volume), logs + telemetry when it changes. */
 	void RefreshGuide();
 	/** The registered volume with this id nearest to Near, null when the level has none. */

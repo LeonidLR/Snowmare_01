@@ -215,6 +215,7 @@ namespace TutorialSmoke
 		/** 2026-10-21: part 2's route (the A4_LURE binding) and part 1's zombie (on AmbushRoute, the A4_PERIMETER binding). */
 		TWeakObjectPtr<APatrolRouteActor> LureRoute;
 		TWeakObjectPtr<AEnemyCharacter> PerimeterEnemy;
+		bool bSawWallCards = false;
 		TWeakObjectPtr<AOperativeCharacter> AmbushMate;
 	};
 
@@ -2424,10 +2425,24 @@ namespace TutorialSmoke
 		}
 		case 132:
 		{
-			if (Tutorial->GetStepState(TEXT("A4_lure")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			// 2026-10-21: part 2 starts with the approach along the near container (cover, then round its corner in cover) - the moves
+			// themselves are the cover smokes' job: her cover event / the wall-follow command here.
+			if (Tutorial->GetStepState(TEXT("A4_hug_wall")) == ETutorialStepState::Active)
+			{
+				const AOperativeCharacter* Ambusher = Tutorial->GetFocusOperative(TEXT("A4_hug_wall"));
+				State.bSawWallCards = true;
+				Tutorial->NotifyEvent(GameplayEvents::CoverEntered, Ambusher ? Ambusher->GetFName() : NAME_None);
+			}
+			if (Tutorial->GetStepState(TEXT("A4_round_corner")) == ETutorialStepState::Active)
+			{
+				Tutorial->HandlePlayerCommand(PlayerCommands::CoverShimmy, FPlayerCommandContext());
+			}
+			if (Tutorial->GetStepState(TEXT("A4_lure")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
+			Check(State, State.bSawWallCards && Tutorial->GetStepState(TEXT("A4_round_corner")) == ETutorialStepState::Completed,
+				TEXT("part 2: the wall card (her cover) and the round-the-corner card (wall-follow) come before the lure"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active, FString::Printf(TEXT("part 2: the LURE card (%s)"),
 				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure")))));
 			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && !Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),

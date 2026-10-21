@@ -185,6 +185,10 @@ FText UPhaseBannersWidget::GetCombatText() const
 	if (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
 	{
 		const UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>();
+		if (Flow->IsSkirmish())
+		{
+			return FText::FromString(FString::Printf(TEXT("⚔️ CONTACT | HOSTILES: %d"), Waves ? Waves->GetAliveEnemyCount() : 0)); // 2026-10-21: no waves
+		}
 		return FText::FromString(FString::Printf(TEXT("⚔️ WAVE %d | ENEMIES LEFT: %d"), Flow->GetWaveIndex(),
 			Waves ? Waves->GetAliveEnemyCount() : 0));
 	}

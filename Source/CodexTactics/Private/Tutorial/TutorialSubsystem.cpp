@@ -473,6 +473,7 @@ void UTutorialSubsystem::Tick(float DeltaTime)
 		bInitDone = true; // the game mode read the level in StartPlay; the demo flags are applied on the first tick
 		InitFromLevel();
 	}
+	TickLessonPause(FApp::GetDeltaTime());
 	SquadBindTimer -= DeltaTime;
 	if (SquadBindTimer <= 0.f)
 	{
@@ -959,6 +960,15 @@ void UTutorialSubsystem::RunActions(const FTutorialStep& Step)
 	USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	for (const FTutorialAction& Action : Step.Actions)
 	{
+		if (Action.Type == FName(TEXT("tactical_pause")))
+		{
+			// 2026-10-21 (A4: spotted mid-lesson): the fight's free tactical pause. The card is often shown in the very call that is about to
+			// start the fight (EnemyAlerted comes first): then the pause waits for the fight (TickLessonPause, up to 3 s).
+			LessonPauseWait = 3.f;
+			TickLessonPause(0.f);
+			WriteTelemetry(TEXT("action_tactical_pause"), Step.Id, Step.Beat, 0.f);
+			continue;
+		}
 		ESquadFirePosture Posture = ESquadFirePosture::Aggressive;
 		if (Action.Type == FName(TEXT("set_posture")) && Squad && FirePostureRules::ParseName(Action.Posture, Posture))
 		{
@@ -1161,6 +1171,22 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		const AOperativeCharacter* Wounded = FindMostWoundedMember();
 		const UHealthComponent* Health = Wounded ? Wounded->HealthComponent.Get() : nullptr;
 		return Health ? 100.f * (1.f - Health->GetCurrentHealth() / FMath::Max(1.f, Health->GetMaxHealth())) : 0.f;
+	}
+	if (Stat == FName(TEXT("in_fight")))
+	{
+		// 2026-10-21: 1 while a fight runs (WaveCombat: a skirmish or a wave) - the A4 stealth cards skip themselves then.
+		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		return Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat ? 1.f : 0.f;
+	}
+	if (Stat == FName(TEXT("squad_passive")))
+	{
+		// 2026-10-21: living members that hold fire (PASSIVE) - the A4 "spotted" card asks for DEFENSIVE / AGGRESSIVE.
+		int32 Passive = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Passive += TutorialSubsystemLocal::IsLivingOrUntracked(Member) && Squad->GetEffectivePosture(Member) == ESquadFirePosture::Passive ? 1 : 0;
+		}
+		return static_cast<float>(Passive);
 	}
 	if (Stat == FName(TEXT("squad_prone")))
 	{
@@ -1761,6 +1787,17 @@ bool UTutorialSubsystem::ResolveGuideSpot(FName Spot, FName StepId, FVector& Out
 				Routes.AddUnique(Bound->AssignedPatrolRoute.Get());
 			}
 		}
+		// 2026-10-21: the routes the binding names, also once its enemy is dead and gone (A4: the wall-hug card at the near container).
+		if (const FTutorialEnemyBinding* Binding = Machine.GetData().FindEnemy(Enemy))
+		{
+			for (TActorIterator<APatrolRouteActor> It(World); It; ++It)
+			{
+				if (TutorialSubsystemLocal::TutorialActorMatchesAny(**It, Binding->Routes))
+				{
+					Routes.AddUnique(*It);
+				}
+			}
+		}
 	}
 	bool bFound = false;
 	double BestDistance = TNumericLimits<double>::Max();
@@ -1875,6 +1912,32 @@ bool UTutorialSubsystem::PassesEnemyFilterNow(const FTutorialEnemyFilter& Filter
 		*Filter.Enemy.ToString(), *SubjectId.ToString(), bBound ? 1 : 0, NearestCm / 100.f, Filter.WithinMetres, OffRouteCm / 100.f, Filter.OffRouteMetres,
 		bPasses ? TEXT("counts") : TEXT("does not count"));
 	return bPasses;
+}
+
+void UTutorialSubsystem::TickLessonPause(float RealDelta)
+{
+	if (LessonPauseWait <= 0.f)
+	{
+		return;
+	}
+	UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	if (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime)
+	{
+		LessonPauseWait = 0.f;
+		const EGameFlowResult Result = Flow->EnterLessonPause();
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: tactical_pause -> %s"), Result == EGameFlowResult::Ok ? TEXT("paused (free)") : TEXT("refused"));
+		return;
+	}
+	if (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
+	{
+		LessonPauseWait = 0.f; // already paused
+		return;
+	}
+	LessonPauseWait -= RealDelta;
+	if (LessonPauseWait <= 0.f)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: tactical_pause dropped - no fight started"));
+	}
 }
 
 void UTutorialSubsystem::LogEnemyBindings() const

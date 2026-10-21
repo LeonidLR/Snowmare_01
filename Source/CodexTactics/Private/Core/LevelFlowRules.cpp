@@ -10,6 +10,7 @@ FGameFlowConfig LevelFlowRules::ApplyLevel(const FGameFlowConfig& Base, const FL
 	{
 		Result.PreparationDuration = Level->PrepPhaseDuration;
 		Result.WaveRestDuration = Level->WaveRestDuration;
+		Result.bAmbushSkirmish = Level->bAmbushSkirmish;
 	}
 	else if (Balance)
 	{
