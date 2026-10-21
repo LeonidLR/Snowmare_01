@@ -6,6 +6,58 @@
 // Game designer 2026-10-20 (Military Zombie): per-instance clip / look variants, idle breaks (fidgets, the devour activity) and the
 // stand-still lock of the alert roar / the spawn entrance. UE-only rules (no Godot reference).
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyLookBodiesTest, "CodexTactics.Enemy.LookVariants.BodyAndSet",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnemyLookBodiesTest::RunTest(const FString&)
+{
+	// User 2026-10-21: single-slot bodies carry their own colour sets; the set is one of the PICKED body's sets.
+	int32 Body = 0;
+	int32 Set = 0;
+	EnemyAnimRules::PickLookBodyAndSet(123u, {}, Body, Set);
+	TestTrue(TEXT("no bodies -> -1 / -1"), Body == -1 && Set == -1);
+	EnemyAnimRules::PickLookBodyAndSet(123u, { 0 }, Body, Set);
+	TestTrue(TEXT("one body without sets -> body 0, set -1"), Body == 0 && Set == -1);
+	EnemyAnimRules::PickLookBodyAndSet(123u, { 5 }, Body, Set);
+	TestTrue(TEXT("one body (Hound: 5 sets) -> body 0"), Body == 0 && Set >= 0 && Set < 5);
+
+	// Military Zombie 3 x 3: the same picks as the old Meshes / MaterialSets path (a seed keeps its body and set).
+	TArray<int32> BodiesHit;
+	BodiesHit.SetNumZeroed(3);
+	TSet<int32> Pairs;
+	for (uint32 Seed = 0; Seed < 300; ++Seed)
+	{
+		EnemyAnimRules::PickLookBodyAndSet(Seed, { 3, 3, 3 }, Body, Set);
+		if (!TestTrue(TEXT("3 x 3: indices in range"), Body >= 0 && Body < 3 && Set >= 0 && Set < 3))
+		{
+			return false;
+		}
+		TestEqual(TEXT("body = PickVariantIndex(seed, body salt, 3)"), Body, EnemyAnimRules::PickVariantIndex(Seed, EnemyAnimRules::LookBodySalt, 3));
+		TestEqual(TEXT("set = PickVariantIndex(seed, set salt, 3)"), Set, EnemyAnimRules::PickVariantIndex(Seed, EnemyAnimRules::LookSetSalt, 3));
+		++BodiesHit[Body];
+		Pairs.Add(Body * 10 + Set);
+	}
+	TestEqual(TEXT("300 seeds reach all 9 body x set looks"), Pairs.Num(), 9);
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		TestTrue(FString::Printf(TEXT("body %d picked %d / 300 times"), Index, BodiesHit[Index]), BodiesHit[Index] > 50 && BodiesHit[Index] < 150);
+	}
+
+	// Uneven bodies: the set index always fits the picked body's own set count.
+	for (uint32 Seed = 0; Seed < 200; ++Seed)
+	{
+		EnemyAnimRules::PickLookBodyAndSet(Seed, { 4, 1, 0 }, Body, Set);
+		const int32 Counts[] = { 4, 1, 0 };
+		TestTrue(TEXT("set fits the picked body"), Counts[Body] == 0 ? Set == -1 : (Set >= 0 && Set < Counts[Body]));
+	}
+	int32 BodyAgain = 0;
+	int32 SetAgain = 0;
+	EnemyAnimRules::PickLookBodyAndSet(77u, { 3, 3, 3 }, Body, Set);
+	EnemyAnimRules::PickLookBodyAndSet(77u, { 3, 3, 3 }, BodyAgain, SetAgain);
+	TestTrue(TEXT("deterministic"), Body == BodyAgain && Set == SetAgain);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyAnimVariantSeedTest, "CodexTactics.Characters.EnemyAnim.VariantSeed",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

@@ -213,7 +213,8 @@ namespace SniperSmoke
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				const USkeletalMesh* Body = Member->GetMesh()->GetSkeletalMeshAsset();
-				const bool bFemale = Body && Body->GetName() == TEXT("SK_Female_soldier");
+				// the pack's body or (2026-10-21) its single-slot optimized body
+				const bool bFemale = Body && (Body->GetName() == TEXT("SK_Female_soldier") || Body->GetName() == TEXT("SK_Female_Soldier_1slot"));
 				const bool bHasSniper = Member->AvailableWeapons.ContainsByPredicate([](const UWeaponDataAsset* W) { return W && W->IsSniperRifle(); });
 				if (Member->SquadRole == EOperativeRole::MedicSapper)
 				{

@@ -1,0 +1,135 @@
+{
+ "/Game/Characters/Operatives/BP_Operative": {
+  "mesh": "/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a.SK_Post_Apo_Survivor_a",
+  "override_materials": [],
+  "skeleton": "/Game/Post_Apo_Survivor/Demo/Mannequin/Character/Mesh/UE4_Mannequin_Skeleton.UE4_Mannequin_Skeleton",
+  "anim_class": "/Game/Characters/Operatives/ABP_Operative.ABP_Operative_C",
+  "squad_outfits": [
+   {
+    "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie.M_Outfit_Hoodie",
+    "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants.M_Outfit_Pants"
+   },
+   {
+    "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie_Inst_2nd.M_Outfit_Hoodie_Inst_2nd",
+    "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants_Inst_2nd.M_Outfit_Pants_Inst_2nd"
+   },
+   {
+    "M_Outfit_Hoodie": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie_Inst_3rd.M_Outfit_Hoodie_Inst_3rd",
+    "M_Outfit_Pants": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants_Inst_3rd.M_Outfit_Pants_Inst_3rd"
+   }
+  ]
+ },
+ "/Game/Characters/Operatives/BP_Operative_FemaleSoldier": {
+  "mesh": "/Game/Female_Soldier/Mesh/SK_Female_soldier.SK_Female_Soldier",
+  "override_materials": [
+   "/Game/Characters/Operatives/Optimized/Post_Apo_Survivor_a/MI_Post_Apo_Survivor_a.MI_Post_Apo_Survivor_a"
+  ],
+  "skeleton": "/Game/Female_Soldier/Mesh/Female_Soldier_Skeleton.Female_Soldier_Skeleton",
+  "anim_class": "/Game/Characters/Operatives/ABP_Operative.ABP_Operative_C",
+  "squad_outfits": [
+   {
+    "M_Body": "/Game/Characters/Operatives/Optimized/Post_Apo_Survivor_a/MI_Post_Apo_Survivor_a.MI_Post_Apo_Survivor_a"
+   },
+   {
+    "M_Body": "/Game/Characters/Operatives/Optimized/Post_Apo_Survivor_a/MI_Post_Apo_Survivor_a_Set2.MI_Post_Apo_Survivor_a_Set2"
+   },
+   {
+    "M_Body": "/Game/Characters/Operatives/Optimized/Post_Apo_Survivor_a/MI_Post_Apo_Survivor_a_Set3.MI_Post_Apo_Survivor_a_Set3"
+   }
+  ]
+ },
+ "/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten": {
+  "mesh": "/Game/mutant_monster_2/base_mesh/SK_base_mesh.SK_base_mesh",
+  "override_materials": [],
+  "skeleton": "/Game/mutant_monster_2/base_mesh/SK_UE4_Mannequin_Skeleton.SK_UE4_Mannequin_Skeleton",
+  "anim_class": "/Game/Characters/Enemies/Frostbitten/ABP_Enemy_Frostbitten.ABP_Enemy_Frostbitten_C",
+  "look_variants": {
+   "meshes": [],
+   "material_sets": [],
+   "bodies": []
+  }
+ },
+ "/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie": {
+  "mesh": "/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1.SKM_base_mesh_set2_1",
+  "override_materials": [
+   "/Game/Characters/Enemies/Optimized/Frostbitten/MI_Frostbitten_Set4.MI_Frostbitten_Set4"
+  ],
+  "skeleton": "/Game/military_zombie_set2/Meshes/base_mesh/SK_Mannequin.SK_Mannequin",
+  "anim_class": "/Game/Characters/Enemies/MilitaryZombie/ABP_Enemy_MilitaryZombie.ABP_Enemy_MilitaryZombie_C",
+  "look_variants": {
+   "meshes": [
+    "/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1.SKM_base_mesh_set2_1",
+    "/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_2.SKM_base_mesh_set2_2",
+    "/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_3.SKM_base_mesh_set2_3"
+   ],
+   "material_sets": [
+    {
+     "M_armor_set_2": "/Game/military_zombie_set2/material/set_1/MI_armor_set_1_Inst.MI_armor_set_1_Inst",
+     "M_blouse_set_2": "/Game/military_zombie_set2/material/set_1/MI_blouse_set_1_Inst.MI_blouse_set_1_Inst",
+     "M_bodi_set_2": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+     "M_bodi_kit_set_2": "/Game/military_zombie_set2/material/set_1/MI_body_kit_set_1_Inst.MI_body_kit_set_1_Inst",
+     "M_head_set_2": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+     "helmet_set_3": "/Game/military_zombie_set2/material/set_1/MI_helmet_set_1_Inst.MI_helmet_set_1_Inst"
+    },
+    {
+     "M_armor_set_2": "/Game/military_zombie_set2/material/set_2/MI_armor_set_2_Inst.MI_armor_set_2_Inst",
+     "M_blouse_set_2": "/Game/military_zombie_set2/material/set_2/MI_blouse_set_2_Inst.MI_blouse_set_2_Inst",
+     "M_bodi_set_2": "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+     "M_bodi_kit_set_2": "/Game/military_zombie_set2/material/set_2/MI_body_kit_set_2_Inst.MI_body_kit_set_2_Inst",
+     "M_head_set_2": "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst"
+    },
+    {
+     "M_armor_set_2": "/Game/military_zombie_set2/material/set_3/MI_armor_set_3_Inst.MI_armor_set_3_Inst",
+     "M_blouse_set_2": "/Game/military_zombie_set2/material/set_3/MI_blouse_set_3_Inst.MI_blouse_set_3_Inst",
+     "M_bodi_set_2": "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+     "M_bodi_kit_set_2": "/Game/military_zombie_set2/material/set_3/MI_body_kit_set_3_Inst.MI_body_kit_set_3_Inst",
+     "M_head_set_2": "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst"
+    }
+   ],
+   "bodies": [
+    {
+     "mesh": "/Game/Characters/Enemies/Optimized/Frostbitten/SK_Frostbitten_1slot.SK_Frostbitten_1slot",
+     "sets": [
+      "/Game/Characters/Enemies/Optimized/Frostbitten/MI_Frostbitten_Set1.MI_Frostbitten_Set1",
+      "/Game/Characters/Enemies/Optimized/Frostbitten/MI_Frostbitten_Set2.MI_Frostbitten_Set2",
+      "/Game/Characters/Enemies/Optimized/Frostbitten/MI_Frostbitten_Set3.MI_Frostbitten_Set3",
+      "/Game/Characters/Enemies/Optimized/Frostbitten/MI_Frostbitten_Set4.MI_Frostbitten_Set4"
+     ]
+    }
+   ]
+  }
+ },
+ "/Game/Characters/Enemies/Hound/BP_Enemy_Hound": {
+  "mesh": "/Game/Combat_Dog/Mesh/SK_Combat_Dog.SK_Combat_Dog",
+  "override_materials": [],
+  "skeleton": "/Game/Combat_Dog/Mesh/CH_Combat_Dog.CH_Combat_Dog",
+  "anim_class": "/Game/Characters/Enemies/Hound/ABP_Enemy_Hound.ABP_Enemy_Hound_C",
+  "look_variants": {
+   "meshes": [],
+   "material_sets": [],
+   "bodies": []
+  }
+ },
+ "/Game/Characters/Enemies/Brute/BP_Enemy_Brute": {
+  "mesh": "/Game/Mutant_monster_1/Meshes/base_mesh/SK_base_mesh_1.SK_base_mesh_1",
+  "override_materials": [],
+  "skeleton": "/Game/Mutant_monster_1/Meshes/base_mesh/SK_UE4_Mannequin_Skeleton.SK_UE4_Mannequin_Skeleton",
+  "anim_class": "/Game/Characters/Enemies/Brute/ABP_Enemy_Brute.ABP_Enemy_Brute_C",
+  "look_variants": {
+   "meshes": [],
+   "material_sets": [],
+   "bodies": []
+  }
+ },
+ "/Game/Characters/Enemies/Cutter/BP_Enemy_Cutter": {
+  "mesh": "/Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh.SKM_baze_mesh",
+  "override_materials": [],
+  "skeleton": "/Game/Biochemical_Monster_2/baze_mech/ue4/SK_UE4_Mannequin_Skeleton.SK_UE4_Mannequin_Skeleton",
+  "anim_class": "/Game/Characters/Enemies/Cutter/ABP_Enemy_Cutter.ABP_Enemy_Cutter_C",
+  "look_variants": {
+   "meshes": [],
+   "material_sets": [],
+   "bodies": []
+  }
+ }
+}

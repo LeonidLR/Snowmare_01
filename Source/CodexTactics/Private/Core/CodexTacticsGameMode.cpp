@@ -87,7 +87,9 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 		{ LOCTEXT("Engineer", "Engineer"), FLinearColor::FromSRGBColor(FColor(0xFF, 0x61, 0x0F)), FVector(-280.f, -260.f, 0.f), 25.f, EOperativeRole::Engineer, 30.f, 75.f },
 		{ LOCTEXT("Medic", "Medic-Sapper"), FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33)), FVector(-280.f, 260.f, 0.f), 20.f, EOperativeRole::MedicSapper, 35.f, 85.f } };
 	// User request 2026-10-09: the Medic-Sapper is the Female Soldier (same ABP_Operative) and also carries the sniper rifle.
-	SquadRoster[2].BodyMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(TEXT("/Game/Female_Soldier/Mesh/SK_Female_soldier.SK_Female_soldier")));
+	// 2026-10-21: her single-slot optimized body (the fallback when her member Blueprint is missing).
+	SquadRoster[2].BodyMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(
+		TEXT("/Game/Characters/Operatives/Optimized/Female_Soldier/SK_Female_Soldier_1slot.SK_Female_Soldier_1slot")));
 	// User request 2026-10-11: her own Blueprint (a BP_Operative child the user dresses, e.g. a backpack). Missing -> BP_Operative + BodyMesh.
 	SquadRoster[2].MemberBlueprint = TSoftClassPtr<AOperativeCharacter>(
 		FSoftObjectPath(TEXT("/Game/Characters/Operatives/BP_Operative_FemaleSoldier.BP_Operative_FemaleSoldier_C")));

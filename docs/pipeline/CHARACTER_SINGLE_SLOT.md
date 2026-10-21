@@ -277,3 +277,25 @@ More traps (2026-10-20/21):
   Brute / Cutter / Marksman after their import; the Unreal assets are complete, a re-import needs a re-bake).
 - The smoke prestreams textures and finishes shader compilation before every still (a freshly swapped look otherwise shows
   low mips or a fallback shader).
+
+## Blueprint switch (user 2026-10-21)
+
+`Scripts/Pipeline/switch_bp_bodies.py` (headless, editor closed; `CODEX_BP_SWITCH=<batch>[:dry]`) puts the Blueprints on the
+single-slot bodies; `Scripts/Pipeline/revert_bp_switch.py` restores them from `ArtPipeline/Characters/bp_switch_revert.json`
+(the values before the first switch). Only the body mesh, OverrideMaterials (none: the 1-slot body's own slot carries the
+default set), the enemy look variants and the operatives' SquadOutfits change; skeleton, physics asset and ABP stay.
+
+- Batch 1 (`operatives_enemies1`): BP_Operative -> SK_Post_Apo_Survivor_a_1slot, SquadOutfits `M_Body` -> Set1 / Set2 / Set3
+  per squad index (today's hoodie / pants 1st, 2nd, 3rd); BP_Operative_FemaleSoldier -> SK_Female_Soldier_1slot (own empty
+  SquadOutfits: it must not inherit the parent's M_Body outfits); BP_Enemy_MilitaryZombie (3 bodies x 3 sets),
+  BP_Enemy_Hound (1 x 5), BP_Enemy_Frostbitten (1 x 4). The C++ roster fallback body of the Medic-Sapper
+  (ACodexTacticsGameMode) is the 1-slot body too.
+- Batch 2 (`enemies2`): Brute, Cutter. The Marksman waits for the user's skeleton decision; the PMC stays.
+- `FEnemyLookVariants::Bodies` (EnemyCharacter.h): each body with ITS colour sets (slot 0); picked by
+  `EnemyAnimRules::PickLookBodyAndSet` (body salt 1, then a set of that body with salt 2 = the old Meshes / MaterialSets picks).
+  They apply only when the Blueprint's mesh is one of the bodies (`UsesLookBodiesFor`): BP_Enemy_FrozenPMC_Fighter, a child of
+  BP_Enemy_Frostbitten with its own body, keeps its look. Empty Bodies = the old Meshes / MaterialSets path, unchanged. The
+  look is not saved (it follows the variant seed), so saves are unaffected.
+- Tests: `CodexTactics.Enemy.LookVariants.BodyAndSet` (pure picks), `.BlueprintBodies` (the switched Blueprints' data, the
+  PMC child untouched), `CodexTactics.Characters.EnemyAssets.MilitaryZombie` (3 x 3 one-slot bodies). In-game stills:
+  `CodexTactics.BodyLineupShots` (squad + Female, every Military Zombie / Hound / Frostbitten body x set).

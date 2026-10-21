@@ -30,6 +30,12 @@ namespace EnemyAnimRules
 		return static_cast<int32>(Hash % static_cast<uint32>(Count));
 	}
 
+	void PickLookBodyAndSet(uint32 Seed, TConstArrayView<int32> SetsPerBody, int32& OutBody, int32& OutSet)
+	{
+		OutBody = PickVariantIndex(Seed, LookBodySalt, SetsPerBody.Num());
+		OutSet = OutBody >= 0 ? PickVariantIndex(Seed, LookSetSalt, SetsPerBody[OutBody]) : -1;
+	}
+
 	bool IsCalmIdle(bool bMoving, bool bDead, bool bKnockedDown, bool bOneShotPlaying, bool bTurnBased)
 	{
 		return !bMoving && !bDead && !bKnockedDown && !bOneShotPlaying && !bTurnBased;

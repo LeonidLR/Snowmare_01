@@ -8,6 +8,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInterface.h"
 #include "Misc/PackageName.h"
 #include "UObject/UnrealType.h"
 
@@ -27,6 +29,8 @@ namespace MilitaryZombieAssetTest
 	const TCHAR* const FrostAbpClass = TEXT("/Game/Characters/Enemies/Frostbitten/ABP_Enemy_Frostbitten.ABP_Enemy_Frostbitten_C");
 	const TCHAR* const PackSkeletonPackage = TEXT("/Game/military_zombie_set2/Meshes/base_mesh/SK_Mannequin");
 	const TCHAR* const BaseMeshPackage = TEXT("/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1");
+	/** The Blueprint's body since 2026-10-21: the single-slot optimized body 1 (same skeleton as the pack's body 1). */
+	const TCHAR* const OptimizedBodyPackage = TEXT("/Game/Characters/Enemies/Optimized/MilitaryZombie_1/SK_MilitaryZombie_1_1slot");
 
 	FString ReadZombieString(const UObject& Object, const TCHAR* Name)
 	{
@@ -93,7 +97,7 @@ bool FMilitaryZombieAssetTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestEqual(TEXT("the pack's assembled body 1"), Mesh->GetPackage()->GetName(), FString(Mz::BaseMeshPackage));
+	TestEqual(TEXT("the optimized single-slot body 1"), Mesh->GetPackage()->GetName(), FString(Mz::OptimizedBodyPackage));
 	const USkeleton* Skeleton = Mesh->GetSkeleton();
 	TestTrue(TEXT("the pack's own skeleton"), Skeleton && Skeleton->GetPackage()->GetName() == Mz::PackSkeletonPackage);
 	TestTrue(TEXT("the mesh fits its skeleton (an ABP spawns on it)"), Skeleton && Skeleton->IsCompatibleMesh(Mesh, true));
@@ -152,25 +156,24 @@ bool FMilitaryZombieAssetTest::RunTest(const FString&)
 	TestTrue(TEXT("the Frostbitten itself has no extras (no change for it)"), FrostAnim->AlertAnimations.IsEmpty() && FrostAnim->EntranceAnimations.IsEmpty()
 		&& FrostAnim->IdleBreakAnimations.IsEmpty() && FrostAnim->IdleActivityAnimations.IsEmpty() && FrostAnim->WalkAnimationVariants.IsEmpty());
 
-	// Look variants: 3 assembled bodies on the same skeleton, 3 texture sets whose slots exist on the bodies.
+	// Look variants (2026-10-21): 3 single-slot optimized bodies on the pack's skeleton, each with ITS 3 colour sets
+	// (MI_MilitaryZombie_<body>_Set1..3 of M_CharacterMaster*); the old mesh x slot-name sets are empty.
 	const FEnemyLookVariants& Look = Cdo->LookVariants;
-	TestEqual(TEXT("3 bodies"), Look.Meshes.Num(), 3);
-	TestEqual(TEXT("3 texture sets"), Look.MaterialSets.Num(), 3);
-	for (const USkeletalMesh* Variant : Look.Meshes)
+	TestEqual(TEXT("3 bodies"), Look.Bodies.Num(), 3);
+	TestTrue(TEXT("no old mesh / material-set lists"), Look.Meshes.IsEmpty() && Look.MaterialSets.IsEmpty());
+	for (int32 BodyIndex = 0; BodyIndex < Look.Bodies.Num(); ++BodyIndex)
 	{
-		TestTrue(FString::Printf(TEXT("body %s on the same skeleton, fits it"), *GetNameSafe(Variant)),
-			Variant && Variant->GetSkeleton() == Skeleton && Skeleton->IsCompatibleMesh(Variant, true));
-	}
-	for (const FEnemyMaterialSet& Set : Look.MaterialSets)
-	{
-		TestTrue(TEXT("texture set has slots"), Set.SlotMaterials.Num() >= 5);
-		for (const TPair<FName, TObjectPtr<UMaterialInterface>>& Slot : Set.SlotMaterials)
+		const FEnemyLookBody& Body3 = Look.Bodies[BodyIndex];
+		const USkeletalMesh* Variant = Body3.Mesh;
+		TestTrue(FString::Printf(TEXT("body %s on the same skeleton, fits it, one slot"), *GetNameSafe(Variant)),
+			Variant && Variant->GetSkeleton() == Skeleton && Skeleton->IsCompatibleMesh(Variant, true) && Variant->GetMaterials().Num() == 1);
+		TestEqual(FString::Printf(TEXT("body %d: 3 colour sets"), BodyIndex + 1), Body3.Sets.Num(), 3);
+		for (int32 SetIndex = 0; SetIndex < Body3.Sets.Num(); ++SetIndex)
 		{
-			const bool bOnABody = Look.Meshes.ContainsByPredicate([&Slot](const USkeletalMesh* Variant)
-			{
-				return Variant && Variant->GetMaterials().ContainsByPredicate([&Slot](const FSkeletalMaterial& Material) { return Material.MaterialSlotName == Slot.Key; });
-			});
-			TestTrue(FString::Printf(TEXT("slot %s exists on a body and has a material"), *Slot.Key.ToString()), bOnABody && Slot.Value != nullptr);
+			UMaterialInterface* Set = Body3.Sets[SetIndex];
+			const FString Expected = FString::Printf(TEXT("MI_MilitaryZombie_%d_Set%d"), BodyIndex + 1, SetIndex + 1);
+			TestTrue(FString::Printf(TEXT("body %d set %d = %s of the character master (%s)"), BodyIndex + 1, SetIndex + 1, *Expected, *GetNameSafe(Set)),
+				Set && Set->GetName() == Expected && Set->GetBaseMaterial() && Set->GetBaseMaterial()->GetName().StartsWith(TEXT("M_CharacterMaster")));
 		}
 	}
 

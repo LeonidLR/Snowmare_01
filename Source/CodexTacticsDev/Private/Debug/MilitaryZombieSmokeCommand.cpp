@@ -37,6 +37,7 @@
 #include "Debug/SmokeUtils.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInterface.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
@@ -417,10 +418,22 @@ namespace MilitaryZombieSmoke
 			}
 			Meshes.Add(Look->GetLookMeshIndex());
 			MaterialSets.Add(Look->GetLookMaterialSetIndex());
+			// Single-slot bodies (2026-10-21): a body of LookVariants.Bodies and one of THAT body's colour sets on slot 0.
 			const FEnemyLookVariants& Variants = Look->LookVariants;
-			bLookOk &= Variants.Meshes.IsValidIndex(Look->GetLookMeshIndex())
-				&& Look->GetMesh()->GetSkeletalMeshAsset() == Variants.Meshes[Look->GetLookMeshIndex()]
-				&& Look->GetLookMeshIndex() == EnemyAnimRules::PickVariantIndex(Look->GetVariantSeed(), 1, Variants.Meshes.Num())
+			const int32 BodyIndex = Look->GetLookMeshIndex();
+			const FEnemyLookBody* Picked = Variants.Bodies.IsValidIndex(BodyIndex) ? &Variants.Bodies[BodyIndex] : nullptr;
+			TArray<int32> SetsPerBody;
+			for (const FEnemyLookBody& Each : Variants.Bodies)
+			{
+				SetsPerBody.Add(Each.Sets.Num());
+			}
+			int32 ExpectedBody = -1;
+			int32 ExpectedSet = -1;
+			EnemyAnimRules::PickLookBodyAndSet(Look->GetVariantSeed(), SetsPerBody, ExpectedBody, ExpectedSet);
+			bLookOk &= Picked && Look->GetMesh()->GetSkeletalMeshAsset() == Picked->Mesh
+				&& Picked->Sets.IsValidIndex(Look->GetLookMaterialSetIndex())
+				&& Look->GetMesh()->GetMaterial(0) == Picked->Sets[Look->GetLookMaterialSetIndex()]
+				&& BodyIndex == ExpectedBody && Look->GetLookMaterialSetIndex() == ExpectedSet
 				&& AnimOf(Look) != nullptr;
 			Look->Destroy();
 		}

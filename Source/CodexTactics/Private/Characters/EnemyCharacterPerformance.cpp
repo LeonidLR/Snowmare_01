@@ -21,6 +21,11 @@ uint32 AEnemyCharacter::GetVariantSeed() const
 	return CachedVariantSeed.GetValue();
 }
 
+bool AEnemyCharacter::UsesLookBodiesFor(const USkeletalMesh* CandidateMesh) const
+{
+	return CandidateMesh && LookVariants.Bodies.ContainsByPredicate([CandidateMesh](const FEnemyLookBody& Each) { return Each.Mesh == CandidateMesh; });
+}
+
 void AEnemyCharacter::ApplyLookVariants()
 {
 	// BeginPlay: the spawn point and VariantSeedOverride are final now (a deferred spawn updated the anim once before them).
@@ -30,6 +35,31 @@ void AEnemyCharacter::ApplyLookVariants()
 		Anim->RepickVariants(*this);
 	}
 	USkeletalMeshComponent* Body = GetMesh();
+	if (Body && UsesLookBodiesFor(Body->GetSkeletalMeshAsset()))
+	{
+		// Single-slot bodies, each with its own colour sets (2026-10-21): a body, then one of ITS sets.
+		TArray<int32, TInlineAllocator<8>> SetsPerBody;
+		for (const FEnemyLookBody& Each : LookVariants.Bodies)
+		{
+			SetsPerBody.Add(Each.Sets.Num());
+		}
+		EnemyAnimRules::PickLookBodyAndSet(GetVariantSeed(), SetsPerBody, LookMeshIndex, LookMaterialSetIndex);
+		const FEnemyLookBody& Picked = LookVariants.Bodies[LookMeshIndex];
+		const USkeletalMesh* Current = Body->GetSkeletalMeshAsset();
+		if (Picked.Mesh && Picked.Mesh != Current)
+		{
+			if (Current && Current->GetSkeleton() != Picked.Mesh->GetSkeleton())
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("[Look] %s: body %s is on another skeleton than the Blueprint's mesh"), *GetName(), *Picked.Mesh->GetName());
+			}
+			Body->SetSkeletalMeshAsset(Picked.Mesh);
+		}
+		if (UMaterialInterface* Set = LookMaterialSetIndex >= 0 ? Picked.Sets[LookMaterialSetIndex].Get() : nullptr)
+		{
+			Body->SetMaterial(0, Set);
+		}
+		return;
+	}
 	if (!Body || (LookVariants.Meshes.IsEmpty() && LookVariants.MaterialSets.IsEmpty()))
 	{
 		return;

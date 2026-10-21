@@ -88,9 +88,31 @@ struct CODEXTACTICS_API FEnemyMaterialSet
 };
 
 /**
+ * One body of an enemy Blueprint with ITS colour sets (user 2026-10-21, single-slot optimized bodies): every optimized body has
+ * one material slot and its own atlas, so a set only fits the body it was baked for (MI_MilitaryZombie_1_Set2 is not body 2's
+ * Set2). Sets = the material of slot 0, one per colour set.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FEnemyLookBody
+{
+	GENERATED_BODY()
+
+	/** The body (same skeleton as the Blueprint's mesh: the ABP keeps running). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Look")
+	TObjectPtr<class USkeletalMesh> Mesh;
+
+	/** Its colour sets: the slot-0 material of each (an MI of M_CharacterMaster*); empty = the mesh's own material. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Look")
+	TArray<TObjectPtr<class UMaterialInterface>> Sets;
+};
+
+/**
  * Per-instance look variants of one enemy Blueprint (game designer 2026-10-20, Military Zombie: 3 assembled bodies x 3 texture
  * sets): BeginPlay picks one mesh and one material set by the spawn seed (AEnemyCharacter::GetVariantSeed, deterministic per
  * spawn). The meshes must share the Blueprint mesh's skeleton (the ABP keeps running). Empty lists: the Blueprint's look.
+ * Bodies (2026-10-21) wins when filled and the Blueprint's mesh is one of the bodies (UsesLookBodiesFor): a body, then one of
+ * THAT body's sets (EnemyAnimRules::PickLookBodyAndSet, the same salts as Meshes / MaterialSets); Meshes / MaterialSets stay
+ * the path of the Blueprints without Bodies.
  */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FEnemyLookVariants
@@ -104,6 +126,10 @@ struct CODEXTACTICS_API FEnemyLookVariants
 	/** Material sets to pick from (one per instance, independent of the mesh); empty = the mesh's own materials. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Look")
 	TArray<FEnemyMaterialSet> MaterialSets;
+
+	/** Bodies with their own colour sets (single-slot bodies); non-empty = used instead of Meshes / MaterialSets. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Look")
+	TArray<FEnemyLookBody> Bodies;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedDynamic, AEnemyCharacter*, Enemy);
@@ -177,8 +203,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	bool IsPerforming() const { return PerformanceLockTimer > 0.f; }
 
-	/** Which look variant BeginPlay applied (-1 = the Blueprint's mesh / materials). */
+	/** Which look variant BeginPlay applied (-1 = the Blueprint's mesh / materials). With LookVariants.Bodies: the body index
+	 * and the index into THAT body's Sets. */
 	int32 GetLookMeshIndex() const { return LookMeshIndex; }
+
+	/**
+	 * LookVariants.Bodies apply to a body that is one of them: a child Blueprint (or a placed instance) that replaced the mesh
+	 * with another body keeps its own look (BP_Enemy_FrozenPMC_Fighter under BP_Enemy_Frostbitten, 2026-10-21).
+	 */
+	bool UsesLookBodiesFor(const class USkeletalMesh* CandidateMesh) const;
 	int32 GetLookMaterialSetIndex() const { return LookMaterialSetIndex; }
 
 	/** Placed in the level: play the entrance clip at BeginPlay (wave / horde spawns always play it when the ABP has one). */

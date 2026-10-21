@@ -32,6 +32,18 @@ namespace EnemyAnimRules
 	 */
 	CODEXTACTICS_API int32 PickVariantIndex(uint32 Seed, uint32 Salt, int32 Count);
 
+	/** Salts of the look picks: the body (mesh) and the colour (material) set. */
+	inline constexpr uint32 LookBodySalt = 1;
+	inline constexpr uint32 LookSetSalt = 2;
+
+	/**
+	 * Look of one enemy from bodies that each carry their own colour sets (FEnemyLookVariants::Bodies): the body by
+	 * LookBodySalt, then one of THAT body's SetsPerBody[body] sets by LookSetSalt (the same picks as the old Meshes /
+	 * MaterialSets path for equal counts, so a seed keeps its look). OutBody = -1 without bodies, OutSet = -1 when the
+	 * picked body has no sets.
+	 */
+	CODEXTACTICS_API void PickLookBodyAndSet(uint32 Seed, TConstArrayView<int32> SetsPerBody, int32& OutBody, int32& OutSet);
+
 	/**
 	 * A calm idle the anim instance may break with a fidget / activity: standing (not moving), alive, not attacking / hit /
 	 * knocked down, no one-shot of its own playing, not in the turn-based fight.
