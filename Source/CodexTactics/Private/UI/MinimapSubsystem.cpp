@@ -57,6 +57,11 @@ namespace MinimapSubsystemLocal
 		TEXT("Codex.Minimap.CapturePasses"), 4,
 		TEXT("Capture passes per floor at load (one per frame: exposure / lighting settle; the last one is kept)."));
 
+	TAutoConsoleVariable<int32> CVarTopDown(
+		TEXT("Codex.Minimap.TopDown"), 1,
+		TEXT("Minimap / full map projection: 1 = straight down, map up = the level's start camera forward (game designer 2026-10-21); ")
+		TEXT("0 = the old isometric view at the start camera's pitch. The dev command CodexTactics.MinimapRecapture applies a change."));
+
 	TAutoConsoleVariable<float> CVarExposureBias(
 		TEXT("Codex.Minimap.ExposureBias"), 0.f,
 		TEXT("Exposure compensation (stops) added to the minimap captures (the dev command CodexTactics.MinimapRecapture applies a change)."));
@@ -65,6 +70,19 @@ namespace MinimapSubsystemLocal
 	constexpr float MinimapHeaderHeight = 22.f;
 	constexpr float MinimapWalkableNormalZ = 0.7f;
 	const FName NoMinimapTag(TEXT("NoMinimap"));
+
+	/**
+	 * Object types the map's traces see as ground / geometry: static AND dynamic (movable static-mesh actors and Blueprint
+	 * pieces default to WorldDynamic - the lake's floor slab under the hut is one, 2026-10-21: with WorldStatic only, nothing
+	 * was found under its roof and the roof stayed on the map); IsSolid filters what blocks visibility.
+	 */
+	FCollisionObjectQueryParams GroundObjects()
+	{
+		FCollisionObjectQueryParams Objects;
+		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+		Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+		return Objects;
+	}
 
 	/**
 	 * Solid ground / geometry for the map: blocks visibility (object-type traces also report trigger volumes and other
@@ -98,17 +116,19 @@ namespace MinimapSubsystemLocal
 		return Actor.GetActorLocation().Z - Actor.GetSimpleCollisionHalfHeight();
 	}
 
-	/** Map facing (unit, UV space) of a world direction at World. */
-	FVector2D MapFacing(const FMinimapIsoProjection& Projection, const FVector& World, const FVector& Direction)
+	/**
+	 * Map facing of a world direction (unit, image space with square pixels: the HUD draws it as a screen direction). Before
+	 * 2026-10-21 this was the UV delta, skewed by the image's Width / Height when they differ (yaws other than 45 deg).
+	 */
+	FVector2D MapFacing(const FMinimapIsoProjection& Projection, const FVector& Direction)
 	{
-		const FVector Flat = Direction.GetSafeNormal2D();
-		if (Flat.IsNearlyZero())
-		{
-			return FVector2D::ZeroVector;
-		}
-		const FVector2D Delta = Projection.WorldToMap(World + Flat * 100.f) - Projection.WorldToMap(World);
-		return Delta.GetSafeNormal();
+		return Projection.MapDirection(Direction);
 	}
+}
+
+bool UMinimapSubsystem::IsTopDownEnabled()
+{
+	return MinimapSubsystemLocal::CVarTopDown.GetValueOnGameThread() != 0;
 }
 
 bool UMinimapSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -378,10 +398,15 @@ bool UMinimapSubsystem::MapToWorld(const FVector2D& MapUV, FVector& OutWorld) co
 	}
 	FVector Start = OnImage - Forward * Reach;
 	const FVector End = OnImage + Forward * Reach;
+	const FMinimapFloorCapture* Shown = GetCaptureInfo(DisplayedFloor);
+	if (Shown && Shown->ClipZ.IsSet() && Projection.IsTopDown())
+	{
+		Start.Z = FMath::Min(Start.Z, Shown->ClipZ.GetValue()); // what the clipped image shows starts below its clip height
+	}
 	for (int32 Step = 0; Step < 8; ++Step)
 	{
 		FHitResult Hit;
-		if (!World->LineTraceSingleByObjectType(Hit, Start, End, FCollisionObjectQueryParams(ECC_WorldStatic), Params))
+		if (!World->LineTraceSingleByObjectType(Hit, Start, End, MinimapSubsystemLocal::GroundObjects(), Params))
 		{
 			break;
 		}
@@ -517,7 +542,7 @@ void UMinimapSubsystem::SurfacesBelow(const FVector2D& XY, float TopZ, float Bot
 	{
 		Params.AddIgnoredComponent(Ignore);
 	}
-	const FCollisionObjectQueryParams Objects(ECC_WorldStatic);
+	const FCollisionObjectQueryParams Objects = MinimapSubsystemLocal::GroundObjects();
 	FVector Start(XY, TopZ);
 	const FVector End(XY, BottomZ);
 	for (int32 Step = 0; Step < 8 && Start.Z > BottomZ; ++Step)
@@ -711,6 +736,7 @@ void UMinimapSubsystem::BuildHiddenLists()
 	{
 		Captures[Floor].Hidden.Reset();
 		Captures[Floor].PlaneZ = Floor == 0 ? GroundPlaneZ : UpperFloorBases[Floor - 1];
+		Captures[Floor].ClipZ = MinimapRules::FloorClipZ(Floor, UpperFloorBases, Projection.IsTopDown(), FloorParams);
 	}
 	const float GroundMin = Area.Min.Z + 50.f;
 	TArray<float> Surfaces;
@@ -867,6 +893,10 @@ void UMinimapSubsystem::RunCapturePasses()
 		USceneCaptureComponent2D* Capture = CaptureActor->GetCaptureComponent2D();
 		Capture->TextureTarget = Info.Target.Get();
 		Capture->HiddenComponents = Info.Hidden;
+		// The height clip (top-down upper floors): the near plane of the downward ortho view at ClipZ.
+		const bool bClip = Info.ClipZ.IsSet() && Projection.IsTopDown();
+		Capture->bOverride_CustomNearClippingPlane = bClip;
+		Capture->CustomNearClippingPlane = bClip ? FMath::Max(1.f, static_cast<float>(Capture->GetComponentLocation().Z) - Info.ClipZ.GetValue()) : 0.f;
 		const double Start = FPlatformTime::Seconds();
 		Capture->CaptureScene();
 		Info.CaptureMs += (FPlatformTime::Seconds() - Start) * 1000.0;
@@ -975,15 +1005,17 @@ void UMinimapSubsystem::Rebuild()
 	const FBox Initial = ComputeArea();
 	DetectFloors(Initial);
 	float Yaw = 45.f;
-	float Pitch = -35.26f;
+	float CameraPitch = -35.26f;
 	if (const APlayerController* PC = World->GetFirstPlayerController())
 	{
 		if (const ATacticalCameraPawn* Camera = PC->GetPawn<ATacticalCameraPawn>())
 		{
 			Yaw = Camera->Config.BaseYaw; // the level's start angle (the player's rotation never changes the map)
-			Pitch = Camera->Config.Pitch;
+			CameraPitch = Camera->Config.Pitch;
 		}
 	}
+	// Straight down by default (2026-10-21): map up = the start camera's forward; Codex.Minimap.TopDown 0 = the old iso view.
+	const float Pitch = MinimapRules::CapturePitch(IsTopDownEnabled(), CameraPitch);
 	Projection = FMinimapIsoProjection::Fit(Area, Yaw, Pitch, 500.f);
 	BuildHiddenLists();
 	SetupCaptures();
@@ -1227,7 +1259,7 @@ void UMinimapSubsystem::BuildIcons(TArray<FMinimapIcon>& OutIcons) const
 		FMinimapIcon& Icon = OutIcons.AddDefaulted_GetRef();
 		Icon.Kind = EMinimapIconKind::Door;
 		Icon.World = Door.Location;
-		Icon.MapFacing = MapFacing(Projection, Door.Location, Door.Outward);
+		Icon.MapFacing = MapFacing(Projection, Door.Outward);
 		Icon.Color = FLinearColor(0.35f, 1.f, 0.45f);
 		Icon.Label = TEXT("EXIT");
 	}
@@ -1254,7 +1286,7 @@ void UMinimapSubsystem::BuildIcons(TArray<FMinimapIcon>& OutIcons) const
 		FMinimapIcon& Icon = OutIcons.AddDefaulted_GetRef();
 		Icon.Kind = EMinimapIconKind::Enemy;
 		Icon.World = Memory.bSeen ? Enemy->GetActorLocation() : Memory.Location;
-		Icon.MapFacing = Memory.bSeen ? MapFacing(Projection, Icon.World, Enemy->GetActorForwardVector()) : FVector2D::ZeroVector;
+		Icon.MapFacing = Memory.bSeen ? MapFacing(Projection, Enemy->GetActorForwardVector()) : FVector2D::ZeroVector;
 		Icon.Color = FLinearColor(1.f, 0.18f, 0.12f);
 		Icon.Alpha = Alpha;
 		Icon.Actor = Enemy;
@@ -1272,7 +1304,7 @@ void UMinimapSubsystem::BuildIcons(TArray<FMinimapIcon>& OutIcons) const
 			FMinimapIcon& Icon = OutIcons.AddDefaulted_GetRef();
 			Icon.Kind = EMinimapIconKind::Operative;
 			Icon.World = Member->GetActorLocation();
-			Icon.MapFacing = MapFacing(Projection, Icon.World, Member->GetActorForwardVector());
+			Icon.MapFacing = MapFacing(Projection, Member->GetActorForwardVector());
 			Icon.Color = Member->BodyColor;
 			Icon.bHighlight = Member == Leader;
 			Icon.bSelected = Selected.Contains(Member);

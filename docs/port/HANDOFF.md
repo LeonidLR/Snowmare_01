@@ -21,6 +21,7 @@ one-at-a-time queue, the pacing pass (breather 0.8 s, `Tutorial.Flow.Pacing`) - 
 2026-10-20 (`agents/coverswitch`): the wall-edge cover switch - in cover at a wall edge, a double-click on another cover within 8 m dashes there and arrives through the M4 pack's `std_jog_fwd[_L|_R]_to_cvr_*` run-in clip (`docs/systems/cover-and-peek.md` "Wall-edge cover switch").
 2026-10-20 (`agents/work`): corner-to-corner switch (the nearest corner of the other object, mirrored pose) and the wall-following round a cover object (click along the same object's outline -> round its corners in cover) - `docs/systems/cover-and-peek.md` "Corner to corner" / "Wall-following round a cover object".
 2026-10-21 (`agents/work`): the Demo 01 A4 ambush in two parts, each bound to ITS zombie on the user's lake layout (steps-file `"enemies"` bindings + `"enemy"` event filters, event `EnemyKilled`, guide spots `@lure_spot` / `@enemy`; smoke `TutorialAmbushLakeSmoke`) - `docs/systems/tutorial-engine.md` section 19, `docs/systems/demo01-lake.md` block 2026-10-21.
+2026-10-21 (`agents/work`): the minimap / full map is top-down (straight down at the start camera's yaw; `Codex.Minimap.TopDown 0` = the old iso view), roofs over the lake interiors left out (traces now see WorldDynamic) - `docs/design/MINIMAP.md`.
 What is waiting for the user: section 7 (open questions) and `docs/port/NEXT_STEPS.md`.
 
 ---

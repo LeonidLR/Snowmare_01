@@ -14,7 +14,8 @@ Source of the rules: the user's decisions of 2026-10-18 in `production/session-s
 | Move there | RMB on the map | The selection walks there. The order goes through the normal ground-click path (`HandleWorldHit` with no actor at the spot), so every rule applies: tutorial locks, confinement, the combat dispatch (planned in the tactical pause), the turn-based grid, double RMB = sprint. |
 
 - The corner map is a **rectangle in the top-right corner** (26 % of the screen width, 240-560 px, aspect 0.72), in the place of the message feed.
-- It is an **isometric** view at the **level's starting camera angle** (`ATacticalCameraPawn::Config.BaseYaw` / `Pitch`, 45 deg / -35.26 deg). It never rotates when the player rotates the camera.
+- It is a **top-down** view (straight down, game designer 2026-10-21: "not isometric, just straight from above") turned to the **level's starting camera yaw** (`ATacticalCameraPawn::Config.BaseYaw`, 45 deg on the lake): map up = the start camera's forward, so the map's directions match the screen's at the start. It never rotates when the player rotates the camera. With a 45 deg start yaw the level's rectangle stands on the map as a diamond (the empty corners are fog-dark).
+- `Codex.Minimap.TopDown 0` brings back the **isometric** view of 2026-10-18 (the start camera's pitch, -35.26 deg) to compare; `CodexTactics.MinimapRecapture` (dev) applies a change in a running game.
 - It shows the **floor of the selected operative**. With several floors the corner map writes `GROUND` / `FLOOR 2` / `FLOOR 3`, and the full map's title shows the same.
 - **Fog of war**: only explored areas are shown. Unexplored areas are dark: about 8 % of the level's silhouette shows through.
 - The cursor over the map never scrolls the camera at the screen edge, and nothing in the world is hovered through the map.
@@ -38,12 +39,13 @@ Source of the rules: the user's decisions of 2026-10-18 in `production/session-s
 - **What each floor's capture leaves out** (`MinimapRules::HideOnFloor`, per static-mesh component):
   - Ground: anything whose bottom stands >= 2 m above the ground under it. This covers roofs, ceilings and upper storeys, and does not depend on the terrain.
   - Floor k: anything whose bottom is >= 2 m above that floor's surface (its roof, the floors above).
-  - A building made as ONE mesh (all storeys plus the roof) cannot be cut this way. Gemini request #24 asks for a height clip.
+  - The "ground under it" is traced through static AND dynamic geometry (2026-10-21). Before, only `WorldStatic` was traced: the lake's floor slab under the hut is `WorldDynamic`, nothing was found under the hut roof, and the roof stayed on the map (it covers the whole room from straight above). The lake's three roofs (hut, base, ruin) are now left out.
+  - **Height clip (top-down only, 2026-10-21):** an upper floor's capture also draws nothing above its surface + 2 m (`MinimapRules::FloorClipZ`; the downward orthographic view's near plane, no project-wide clip plane needed). A building made as ONE mesh (all storeys plus the roof) then shows that storey's rooms, its walls cut 2 m up like a floor plan. The ground floor gets no clip, because one height cannot follow the terrain (hills, rocks and trees would be cut open). A one-mesh building's roof therefore still covers its ground floor; the lake has none.
 
 ## 3. Capture and drawing (perf)
 
 - **Once per floor at level load** (about 1 s after begin play, after the navmesh build), `UMinimapSubsystem` spawns a transient `ASceneCapture2D`:
-  - orthographic, at the start camera's yaw / pitch, set far back along the view so nothing is clipped;
+  - orthographic, straight down at the start camera's yaw (or the iso pitch with `Codex.Minimap.TopDown 0`), set far back along the view so nothing is clipped (upper floors in top-down: near plane at the floor's clip height);
   - `bCaptureEveryFrame` off, FinalColorLDR into an **sRGB RGBA8 render target**, longer side `Codex.Minimap.CaptureSize` (2048);
   - manual exposure `Codex.Minimap.ExposureBias` (0). A one-off capture has no exposure history, and auto exposure started 3+ stops too bright;
   - particles, fog, volumetric fog, motion blur, DoF and lens flares off;
@@ -82,8 +84,8 @@ The GPU cost of the 4 capture passes at load was not measured. Gemini request #2
 | Camera jump | `ATacticalCameraPawn::LookAtPoint` (holds the spot, no drift back); edge scroll off over the map |
 | Level JSON | `FLevelCombatConfig::MinimapFloorsCm` / `MinimapBoundsCm` (`LevelJsonRules`, `"minimap"`) |
 | Commands (F1 «Movement & camera») | `Map.Panel` F2, `Map.Full` Tab, `Map.Camera` LMB on map, `Map.Move` RMB on map (reported as `Order.Move`), `Map.Zoom` wheel on map; never tutorial-locked (camera-like aids) |
-| Tests | `CodexTactics.UI.Minimap.*` (9): projection round trip / fit, view mapping, footprint + clipping, floor detection / selection / cut, fog reveal + persistence, enemy fade, level JSON |
-| Smoke | `MinimapSmoke` (L_MovementTest); `MinimapSmoke Shot` stills `Saved/Screenshots/minimap_*_<map>.png`, raw capture `minimap_capture_<map>.png` |
+| Tests | `CodexTactics.UI.Minimap.*` (12): projection round trip / fit, top-down projection (axes at pitch -90, round trip, fit, the CVar's pitch), facing arrows, view mapping, footprint + clipping, floor detection / selection / cut, top-down floor clip, fog reveal + persistence, enemy fade, level JSON |
+| Smoke | `MinimapSmoke` (L_MovementTest); `MinimapSmoke Shot` stills `Saved/Screenshots/minimap_*_<map>.png`, raw capture `minimap_capture_<map>.png`; on other maps also each roofed building's interior (`minimap_interior<n>[_full]_<map>.png`); with `Codex.Minimap.TopDown 0` the names end in `_iso` |
 
 ## 5. Decisions taken (tell the user)
 
@@ -93,3 +95,4 @@ The GPU cost of the 4 capture passes at load was not measured. Gemini request #2
 - The minimap commands are **never locked** by the tutorial. They are camera-like aids, and the RMB order is an `Order.Move` that the tutorial already gates.
 - Fog **per floor**: walking the ground floor does not reveal the rooms upstairs.
 - Unexplored areas keep a faint (8 %) silhouette of the level.
+- **Top-down (2026-10-21)**: map up = the start camera's forward (not world north), so "up on the map" is "ahead on the screen" at the start. The facing arrows now use square image units (`FMinimapIsoProjection::MapDirection`); before, a non-square image skewed them (no effect at a 45 deg yaw, where the image is square). The type keeps its old name `FMinimapIsoProjection`.

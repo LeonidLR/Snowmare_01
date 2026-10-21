@@ -3,9 +3,12 @@
 //   rendered stills (any map, e.g. the lake): UnrealEditor.exe <uproject> /Game/Maps/L_Demo01_A_FrozenLake -game -RenderOffscreen
 //       -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.MinimapSmoke Shot"  -> Saved/Screenshots/minimap_hud_<map>.png, minimap_full_<map>.png,
 //       minimap_floor2_<map>.png, minimap_floor2_full_<map>.png (in Shot mode the squad is teleported instead of ordered: the tutorial
-//       may lock moves; the 2nd floor needs a runtime navmesh for the spawned box: L_MovementTest)
-//  0. the level is captured: one floor, its render target, the projection at the start camera's yaw / pitch, the panel shows the
-//     messages by default;
+//       may lock moves; the 2nd floor needs a runtime navmesh for the spawned box: L_MovementTest); on other maps the leader is
+//       then put inside each building (camera zone, up to 3): minimap_interior<n>_<map>.png (corner map zoomed in) and
+//       minimap_interior<n>_full_<map>.png (full map zoomed on him); with Codex.Minimap.TopDown 0 every still ends in "_iso"
+//  0. the level is captured: one floor, its render target, the projection straight down at the start camera's yaw (2026-10-21;
+//     Codex.Minimap.TopDown 0: iso at its pitch), the capture actor's view axes = the projection's, the panel shows the messages
+//     by default;
 //  1. F2 (the real key) switches the panel to the map and back, the session remembers it, a header click switches it too;
 //  2. the squad's icons sit at the projected positions (leader highlighted, facing arrow, the corner map centred on him);
 //  3. fog: revealed round the squad, dark 40 m away;
@@ -22,6 +25,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Camera/CameraZoneVolume.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -36,9 +40,11 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/SceneCapture2D.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Kismet/KismetRenderingLibrary.h"
 #include "GameFramework/Controller.h"
 #include "HAL/IConsoleManager.h"
@@ -79,6 +85,11 @@ namespace MinimapSmoke
 		int32 SavedFog0 = 0;
 		int32 ShotIndex = 0;
 		TArray<TWeakObjectPtr<AActor>> Spawned;
+		/** "" top-down, "_iso" for the old view (stills of both side by side). */
+		FString ShotSuffix;
+		/** Shot on a level with buildings: the interiors still to show. */
+		TArray<TWeakObjectPtr<ACameraZoneVolume>> Zones;
+		int32 ZoneIndex = 0;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -158,7 +169,7 @@ namespace MinimapSmoke
 	void Screenshot(FState& State, const TCHAR* Name)
 	{
 		// minimap_<shot>_<map>.png (e.g. minimap_hud_L_Demo01_A_FrozenLake.png)
-		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / FString::Printf(TEXT("%s_%s.png"), Name, *State.MapName);
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / FString::Printf(TEXT("%s_%s%s.png"), Name, *State.MapName, *State.ShotSuffix);
 		FScreenshotRequest::RequestScreenshot(Path, false, false);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke screenshot %s"), *Path);
 	}
@@ -208,8 +219,30 @@ namespace MinimapSmoke
 				Check(State, Minimap->GetFloorCount() == 1, FString::Printf(TEXT("L_MovementTest: one floor (%d)"), Minimap->GetFloorCount()));
 			}
 			const FMinimapIsoProjection& Projection = Minimap->GetProjection();
-			Check(State, FMath::IsNearlyEqual(Projection.YawDeg, Camera->Config.BaseYaw, 0.01f) && FMath::IsNearlyEqual(Projection.PitchDeg, Camera->Config.Pitch, 0.01f),
-				FString::Printf(TEXT("iso view at the start camera's angle (yaw %.1f pitch %.2f)"), Projection.YawDeg, Projection.PitchDeg));
+			const bool bTopDown = UMinimapSubsystem::IsTopDownEnabled();
+			State.ShotSuffix = bTopDown ? FString() : FString(TEXT("_iso"));
+			const float ExpectedPitch = MinimapRules::CapturePitch(bTopDown, Camera->Config.Pitch);
+			Check(State, FMath::IsNearlyEqual(Projection.YawDeg, Camera->Config.BaseYaw, 0.01f) && FMath::IsNearlyEqual(Projection.PitchDeg, ExpectedPitch, 0.01f)
+				&& Projection.IsTopDown() == bTopDown,
+				FString::Printf(TEXT("%s view at the start camera's yaw (yaw %.1f pitch %.2f)"), bTopDown ? TEXT("top-down") : TEXT("iso"), Projection.YawDeg, Projection.PitchDeg));
+			if (bTopDown)
+			{
+				// Map up = the start camera's forward on the ground: what is ahead on the screen is up on the map.
+				const FVector Ahead = FRotator(0.f, Camera->Config.BaseYaw, 0.f).Vector();
+				const FVector2D Up = Projection.WorldToMap(Projection.Center + Ahead * 1000.f) - Projection.WorldToMap(Projection.Center);
+				Check(State, FMath::Abs(Up.X) < 1e-5f && Up.Y < 0.f, FString::Printf(TEXT("top-down: the camera's forward is straight up the map (%s)"), *Up.ToString()));
+				Check(State, Projection.WorldToMap(Leader->GetActorLocation()).Equals(Projection.WorldToMap(Leader->GetActorLocation() + FVector(0.f, 0.f, 500.f)), 1e-5f),
+					TEXT("top-down: a point 5 m higher lands on the same map spot"));
+			}
+			if (const ASceneCapture2D* CaptureActor = Minimap->GetCaptureActor())
+			{
+				// The capture renders with its component's quaternion: at pitch -90 (gimbal) its axes must still be the projection's.
+				const FQuat Quat = CaptureActor->GetActorQuat();
+				const bool bAxes = Quat.GetForwardVector().Equals(Projection.GetForward(), 1e-3f) && Quat.GetRightVector().Equals(Projection.GetRight(), 1e-3f)
+					&& Quat.GetUpVector().Equals(Projection.GetUp(), 1e-3f);
+				Check(State, bAxes, FString::Printf(TEXT("the capture's view axes = the projection's (forward %s, up %s)"),
+					*Quat.GetForwardVector().ToCompactString(), *Quat.GetUpVector().ToCompactString()));
+			}
 			const float AspectError = FMath::Abs(Projection.GetAspect() - (Target ? static_cast<float>(Target->SizeX) / Target->SizeY : 0.f));
 			Check(State, AspectError < 0.01f, TEXT("projection aspect = the render target's (square pixels)"));
 			Camera->RotateStep(+1); // the player turns the camera: the map does not follow
@@ -257,7 +290,7 @@ namespace MinimapSmoke
 			{
 				// The raw floor capture (what the map image is cut from), for the look review.
 				UKismetRenderingLibrary::ExportRenderTarget(World, Target, FPaths::ProjectSavedDir() / TEXT("Screenshots"),
-					FString::Printf(TEXT("minimap_capture_%s.png"), *State.MapName));
+					FString::Printf(TEXT("minimap_capture_%s%s.png"), *State.MapName, *State.ShotSuffix));
 			}
 			Next(State, 83);
 			return true;
@@ -437,8 +470,33 @@ namespace MinimapSmoke
 			if (State.bShot && !State.bMovementTest)
 			{
 				// The runtime two-storey box needs flat ground and a runtime navmesh under it (L_MovementTest); elsewhere the
-				// stills of the corner map and the full map are the result.
-				return Finish(State, true);
+				// stills of the corner map and the full map, then each building's interior on its floor, are the result.
+				// Interiors = camera zones with a roof over their centre (a building-sized static mesh above head height).
+				for (TActorIterator<ACameraZoneVolume> It(World); It; ++It)
+				{
+					const FBox Box = It->GetComponentsBoundingBox(true);
+					bool bRoofed = false;
+					for (TActorIterator<AActor> Piece(World); Piece && !bRoofed; ++Piece)
+					{
+						TInlineComponentArray<UStaticMeshComponent*> Meshes(*Piece);
+						for (const UStaticMeshComponent* Mesh : Meshes)
+						{
+							const FBox Bounds = Mesh->Bounds.GetBox();
+							bRoofed |= Mesh->IsVisible() && Bounds.GetSize().GetMax() < 6000.f && Bounds.Min.Z >= Box.Min.Z + 200.f && Bounds.Min.Z <= Box.Min.Z + 1500.f
+								&& Bounds.IsInsideXY(Box.GetCenter());
+						}
+					}
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke building zone %s: %s"), *It->GetName(), bRoofed ? TEXT("roofed (interior)") : TEXT("open"));
+					if (bRoofed)
+					{
+						State.Zones.Add(*It);
+					}
+				}
+				State.Zones.Sort([](const TWeakObjectPtr<ACameraZoneVolume>& A, const TWeakObjectPtr<ACameraZoneVolume>& B) { return A->GetName() < B->GetName(); });
+				State.Zones.SetNum(FMath::Min(State.Zones.Num(), 3));
+				State.ZoneIndex = 0;
+				Next(State, 100);
+				return true;
 			}
 			// A two-storey box 9 m to the side: the ramp climbs along F from the ground to the slab's near edge (4 m up).
 			const FVector Base = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() - State.R * 900.f);
@@ -498,6 +556,16 @@ namespace MinimapSmoke
 			Check(State, !Minimap->IsHiddenOnFloor(0, Mesh(State.GroundWall)), TEXT("ground capture: the ground-floor wall kept"));
 			Check(State, Minimap->IsHiddenOnFloor(1, Mesh(State.Roof)), TEXT("2nd floor capture: the roof cut away"));
 			Check(State, !Minimap->IsHiddenOnFloor(1, Mesh(State.UpperWall)) && !Minimap->IsHiddenOnFloor(1, Mesh(State.Slab)), TEXT("2nd floor capture: its slab and walls kept"));
+			{
+				// Top-down: the 2nd floor's image is also clipped 2 m above its slab (one-mesh buildings); the ground never is.
+				const FMinimapFloorCapture* Ground = Minimap->GetCaptureInfo(0);
+				const FMinimapFloorCapture* Upper = Minimap->GetCaptureInfo(1);
+				const bool bTopDown = Minimap->GetProjection().IsTopDown();
+				const bool bClip = Ground && Upper && !Ground->ClipZ.IsSet()
+					&& (bTopDown ? Upper->ClipZ.IsSet() && FMath::IsNearlyEqual(Upper->ClipZ.GetValue(), State.SlabTop.Z + 200.f, 20.f) : !Upper->ClipZ.IsSet());
+				Check(State, bClip, FString::Printf(TEXT("height clip: ground none, 2nd floor %s"),
+					Upper && Upper->ClipZ.IsSet() ? *FString::Printf(TEXT("at %.0f (slab %.0f)"), Upper->ClipZ.GetValue(), State.SlabTop.Z) : TEXT("none (iso)")));
+			}
 			SendLeader(World, State, Squad, State.SlabTop - State.F * 150.f);
 			Next(State);
 			return true;
@@ -557,6 +625,113 @@ namespace MinimapSmoke
 			PC->FullMapKey();
 			SendLeader(World, State, Squad, State.Down);
 			Next(State, 11);
+			return true;
+		case 100: // Shot: the leader inside the next building (camera zone), its pieces logged
+		{
+			if (State.ZoneIndex >= State.Zones.Num() || !State.Zones[State.ZoneIndex].IsValid())
+			{
+				return Finish(State, true);
+			}
+			const ACameraZoneVolume* Zone = State.Zones[State.ZoneIndex].Get();
+			const FBox Box = Zone->GetComponentsBoundingBox(true);
+			// What stands over the interior and whether the ground capture leaves it out (a one-mesh building keeps its roof).
+			int32 Logged = 0;
+			for (TActorIterator<AActor> It(World); It && Logged < 40; ++It)
+			{
+				TInlineComponentArray<UStaticMeshComponent*> Meshes(*It);
+				for (const UStaticMeshComponent* Mesh : Meshes)
+				{
+					const FBox Piece = Mesh && Mesh->IsRegistered() && Mesh->IsVisible() ? Mesh->Bounds.GetBox() : FBox(ForceInit);
+					if (!Piece.IsValid || Piece.Max.X < Box.Min.X + 50.f || Piece.Min.X > Box.Max.X - 50.f || Piece.Max.Y < Box.Min.Y + 50.f
+						|| Piece.Min.Y > Box.Max.Y - 50.f || Piece.Max.Z < Box.Min.Z + 150.f || Piece.Min.Z > Box.Max.Z + 300.f)
+					{
+						continue;
+					}
+					++Logged;
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke building %s: %s / %s bottom %.0f top %.0f size %.0f x %.0f, hidden on ground %s"),
+						*Zone->GetName(), *It->GetActorNameOrLabel(), Mesh->GetStaticMesh() ? *Mesh->GetStaticMesh()->GetName() : TEXT("-"),
+						Piece.Min.Z, Piece.Max.Z, Piece.GetSize().X, Piece.GetSize().Y, Minimap->IsHiddenOnFloor(0, Mesh) ? TEXT("yes") : TEXT("no"));
+				}
+			}
+			FVector Inside(Box.GetCenter().X, Box.GetCenter().Y, Box.Min.Z + 100.f);
+			if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+			{
+				FNavLocation OnNav;
+				if (Nav->ProjectPointToNavigation(Inside, OnNav, FVector(400.f, 400.f, FMath::Max(300.f, Box.GetExtent().Z))))
+				{
+					Inside = OnNav.Location;
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke building %s: box %s - %s, the leader put at %s"), *Zone->GetName(), *Box.Min.ToCompactString(),
+				*Box.Max.ToCompactString(), *Inside.ToCompactString());
+			State.Target = Inside;
+			SendLeader(World, State, Squad, Inside);
+			Next(State, 101);
+			return true;
+		}
+		case 101:
+			if (State.StageTime < 4.f)
+			{
+				return true;
+			}
+			{
+				const FMinimapView& View = Minimap->GetPanelView();
+				Minimap->HandleWheel(View.ScreenOrigin + View.ScreenSize * 0.5f, -3.f); // the corner map zoomed in on him
+			}
+			Next(State, 102);
+			return true;
+		case 102:
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			Check(State, Minimap->GetDisplayedFloor() == Minimap->GetOperativeFloor(Leader), FString::Printf(TEXT("building %d: the map shows the leader's floor (%s)"),
+				State.ZoneIndex + 1, *MinimapRules::FloorLabel(Minimap->GetDisplayedFloor())));
+			Screenshot(State, *FString::Printf(TEXT("minimap_interior%d"), State.ZoneIndex + 1));
+			Next(State, 103);
+			return true;
+		case 103:
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			{
+				const FMinimapView& View = Minimap->GetPanelView();
+				Minimap->HandleWheel(View.ScreenOrigin + View.ScreenSize * 0.5f, +3.f);
+			}
+			PC->FullMapKey();
+			Next(State, 104);
+			return true;
+		case 104:
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			if (!State.bOrderSent)
+			{
+				State.bOrderSent = true;
+				const FMinimapView& Full = Minimap->GetFullView();
+				Minimap->HandleWheel(Full.MapToScreen(Minimap->GetProjection().WorldToMap(Leader->GetActorLocation())), -10.f);
+			}
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			Screenshot(State, *FString::Printf(TEXT("minimap_interior%d_full"), State.ZoneIndex + 1));
+			Next(State, 105);
+			return true;
+		case 105:
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			{
+				const FMinimapView& Full = Minimap->GetFullView();
+				Minimap->HandleWheel(Full.ScreenOrigin + Full.ScreenSize * 0.5f, +10.f);
+			}
+			PC->FullMapKey();
+			++State.ZoneIndex;
+			Next(State, 100);
 			return true;
 		case 11:
 		{

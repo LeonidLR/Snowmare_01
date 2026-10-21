@@ -27,6 +27,16 @@ FVector2D FMinimapIsoProjection::WorldToMap(const FVector& World) const
 	return FVector2D(0.5f + FVector::DotProduct(Delta, GetRight()) / SafeWidth, 0.5f - FVector::DotProduct(Delta, GetUp()) / SafeHeight);
 }
 
+FVector2D FMinimapIsoProjection::MapDirection(const FVector& Direction) const
+{
+	const FVector Flat = Direction.GetSafeNormal2D();
+	if (Flat.IsNearlyZero())
+	{
+		return FVector2D::ZeroVector;
+	}
+	return FVector2D(FVector::DotProduct(Flat, GetRight()), -FVector::DotProduct(Flat, GetUp())).GetSafeNormal();
+}
+
 FVector FMinimapIsoProjection::MapToImagePlane(const FVector2D& Map) const
 {
 	return Center + GetRight() * ((Map.X - 0.5f) * WidthCm) + GetUp() * ((0.5f - Map.Y) * HeightCm);
@@ -105,6 +115,16 @@ FIntPoint FMinimapIsoProjection::ChooseTextureSize(int32 MaxSide) const
 		return FIntPoint(MaxSide, FMath::Clamp(FMath::RoundToInt(MaxSide / Aspect), 64, MaxSide));
 	}
 	return FIntPoint(FMath::Clamp(FMath::RoundToInt(MaxSide * Aspect), 64, MaxSide), MaxSide);
+}
+
+float MinimapRules::CapturePitch(bool bTopDown, float CameraPitchDeg)
+{
+	if (bTopDown)
+	{
+		return FMinimapIsoProjection::TopDownPitchDeg;
+	}
+	// The iso view needs a downward pitch (a level camera configured level / upwards would see no ground).
+	return FMath::Clamp(CameraPitchDeg, -89.f, -10.f);
 }
 
 // --- FMinimapView --------------------------------------------------------------------------------------------------------
@@ -389,6 +409,15 @@ namespace MinimapRules
 			return BottomAboveGroundCm >= Params.CutClearanceCm;
 		}
 		return BottomZ >= UpperBases[Floor - 1] + Params.CutClearanceCm;
+	}
+
+	TOptional<float> FloorClipZ(int32 Floor, TConstArrayView<float> UpperBases, bool bTopDown, const FFloorParams& Params)
+	{
+		if (!bTopDown || Floor <= 0 || Floor > UpperBases.Num())
+		{
+			return TOptional<float>();
+		}
+		return UpperBases[Floor - 1] + Params.CutClearanceCm;
 	}
 
 	FString FloorLabel(int32 Floor)

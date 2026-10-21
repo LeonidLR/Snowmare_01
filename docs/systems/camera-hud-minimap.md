@@ -17,13 +17,15 @@ map (F2 / a click on its `MAP | MESSAGES` header; session memory `UMissionSessio
 `UMinimapSubsystem` (`UI/MinimapSubsystem.*`): at load (>= 1 s, navmesh built) area = level JSON `"minimap.bounds_cm"` or the navmesh bounds
 volumes; floors = `"minimap.floors_cm"` or auto (stacked walkable surfaces on a coarse grid refined round stacked columns ->
 `MinimapRules::DetectFloorBases` -> kept only with a navmesh path from the leader); per floor a hidden-component list
-(`MinimapRules::HideOnFloor`: ground = bottom >= 2 m above the ground under it, floor k = >= 2 m above its surface) and ONE capture
-(`ASceneCapture2D`, orthographic at `ATacticalCameraPawn::Config.BaseYaw / Pitch`, sRGB RGBA8 2048, manual exposure, 4 passes; pawns / markers /
-traps / runtime helpers hidden); never re-captured unless `CodexTactics.MinimapRecapture` (dev). Live: every 0.25 s each operative's floor
+(`MinimapRules::HideOnFloor`: ground = bottom >= 2 m above the ground under it, floor k = >= 2 m above its surface; traces see `WorldStatic` +
+`WorldDynamic` since 2026-10-21 - the lake hut's floor slab is dynamic and its roof stayed) and ONE capture (`ASceneCapture2D`, orthographic
+**straight down** at `ATacticalCameraPawn::Config.BaseYaw` since 2026-10-21 - map up = the start camera's forward; `Codex.Minimap.TopDown 0` = the
+old iso view at `Config.Pitch`; top-down upper floors clipped 2 m above their surface by the near plane, `MinimapRules::FloorClipZ`; sRGB RGBA8
+2048, manual exposure, 4 passes; pawns / markers / traps / runtime helpers hidden); never re-captured unless `CodexTactics.MinimapRecapture` (dev). Live: every 0.25 s each operative's floor
 (`MinimapRules::SelectFloor`: nothing walkable >= 1.1 m below = ground; band edges with hysteresis) + a 15 m fog disc on his floor
 (`FMinimapFogGrid`, 2 m cells over the image's footprint, per floor, texture upload on change), enemy memory (seen = sight system in a fight /
 clear line within 25 m exploring; last known spot fades 12 s); `BuildIcons` (squad with facing + leader frame, enemies, shown tutorial markers,
-spotted mines / wires, building doors once explored) + `GetCameraFootprint`. Input (`CodexTacticsPlayerControllerMap.cpp`): wheel over the map =
+spotted mines / wires, building doors once explored; facing arrows via `FMinimapIsoProjection::MapDirection`, square image units) + `GetCameraFootprint`. Input (`CodexTacticsPlayerControllerMap.cpp`): wheel over the map =
 map zoom, LMB = `ATacticalCameraPawn::LookAtPoint` (holds the spot until a pan / leader change / cinematic), RMB = `HandleWorldHit` with no actor at
 the resolved spot (trace along the view ignoring the floor's hidden pieces, then the navmesh); the cursor over the map: no edge scroll, no world
 hover. HUD unit `CodexTacticsHUDMinimap.cpp` (image window, fog quad clipped by `MinimapRules::ClipPolygonToRect`, footprint, icons). Save
