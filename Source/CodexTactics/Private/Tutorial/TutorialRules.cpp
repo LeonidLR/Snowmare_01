@@ -112,7 +112,7 @@ namespace TutorialRulesLocal
 	/** The plain condition stats (UTutorialSubsystem::GetConditionStat); the prefixed ones are listed by DescribeKnownStats. */
 	const TCHAR* const PlainConditionStats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
 		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max"), TEXT("squad_prone"),
-		TEXT("enemies_unseen"), TEXT("squad_passive"), TEXT("in_fight") };
+		TEXT("enemies_unseen"), TEXT("squad_passive"), TEXT("in_fight"), TEXT("quest_progress") };
 
 	/** "squad_cold_max | ... | traps_spotted.<tag> | squad_not_low_in.<volume>" for the parse error of an unknown stat. */
 	FString DescribeKnownStats()

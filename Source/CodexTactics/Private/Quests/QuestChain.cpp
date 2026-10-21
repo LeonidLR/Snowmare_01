@@ -107,4 +107,50 @@ FText FQuestChainState::GetObjective() const
 	return LOCTEXT("ObjOpening", "The gate is opening...");
 }
 
+namespace QuestSteps
+{
+	const FName CanisterTaken(TEXT("CanisterTaken"));
+	const FName FuelDrained(TEXT("FuelDrained"));
+	const FName GeneratorStarted(TEXT("GeneratorStarted"));
+	const FName GatePowered(TEXT("GatePowered"));
+}
+
+int32 FQuestChainState::GetProgress() const
+{
+	if (bIsGatePowered)
+	{
+		return 4;
+	}
+	if (bIsGeneratorRunning)
+	{
+		return 3;
+	}
+	if (bHasFuelCanister)
+	{
+		return 2;
+	}
+	return bHasEmptyCanister ? 1 : 0;
+}
+
+FName FQuestChainState::GetStepEvent(const FQuestChainState& Before, const FQuestChainState& After)
+{
+	const int32 From = Before.GetProgress();
+	const int32 To = After.GetProgress();
+	if (To <= From)
+	{
+		return NAME_None;
+	}
+	switch (To)
+	{
+	case 1:
+		return QuestSteps::CanisterTaken;
+	case 2:
+		return QuestSteps::FuelDrained;
+	case 3:
+		return QuestSteps::GeneratorStarted;
+	default:
+		return QuestSteps::GatePowered;
+	}
+}
+
 #undef LOCTEXT_NAMESPACE

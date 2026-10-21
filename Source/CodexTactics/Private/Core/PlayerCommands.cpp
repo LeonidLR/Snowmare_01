@@ -395,6 +395,11 @@ namespace GameplayEvents
 	const FName CrawlGapPassed(TEXT("CrawlGapPassed"));
 	const FName VisionConesToggled(TEXT("VisionConesToggled"));
 	const FName SquadVisionConesToggled(TEXT("SquadVisionConesToggled"));
+	const FName QuestStep(TEXT("QuestStep"));
+	const FName GeneratorDamaged(TEXT("GeneratorDamaged"));
+	const FName GeneratorDown(TEXT("GeneratorDown"));
+	const FName GeneratorRepaired(TEXT("GeneratorRepaired"));
+	const FName GateOpened(TEXT("GateOpened"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{

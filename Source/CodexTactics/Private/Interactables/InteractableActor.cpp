@@ -26,6 +26,7 @@
 #include "Engine/World.h"
 #include "Interactables/HeatSourceComponent.h"
 #include "Interactables/TurretActor.h"
+#include "Interactables/VisualMeshRules.h"
 #include "TimerManager.h"
 #include "Quests/QuestSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
@@ -65,8 +66,37 @@ AInteractableActor::AInteractableActor()
 void AInteractableActor::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
+	ApplyVisualMesh();
+}
+
+void AInteractableActor::ApplyVisualMesh()
+{
+	const FVector BoxSize = Box->GetUnscaledBoxExtent() * 2.f;
+	if (VisualMesh)
+	{
+		// 2026-10-21: an art mesh keeps its proportions at its authored place in the box (VisualMeshRules).
+		if (Mesh->GetStaticMesh() != VisualMesh)
+		{
+			Mesh->SetStaticMesh(VisualMesh);
+		}
+		AppliedVisualMesh = VisualMesh;
+		Mesh->SetRelativeTransform(VisualMeshRules::ResolveTransform(true, BoxSize, VisualMeshTransform));
+		return;
+	}
+	if (AppliedVisualMesh)
+	{
+		// VisualMesh was cleared: the class's own placeholder comes back, centred again.
+		const AInteractableActor* Archetype = Cast<AInteractableActor>(GetArchetype());
+		if (Mesh->GetStaticMesh() == AppliedVisualMesh && Archetype && Archetype->Mesh)
+		{
+			Mesh->SetStaticMesh(Archetype->Mesh->GetStaticMesh());
+		}
+		AppliedVisualMesh = nullptr;
+		Mesh->SetRelativeTransform(VisualMeshRules::ResolveTransform(false, BoxSize, FTransform::Identity));
+		return;
+	}
 	// Placeholder visual fills the collision box (engine cube is 100 cm).
-	Mesh->SetRelativeScale3D(Box->GetUnscaledBoxExtent() / 50.f);
+	Mesh->SetRelativeScale3D(VisualMeshRules::ResolveTransform(false, BoxSize, FTransform::Identity).GetScale3D());
 }
 
 void AInteractableActor::BeginPlay()
@@ -87,7 +117,7 @@ void AInteractableActor::Interact(AOperativeCharacter* User)
 {
 	if (UQuestSubsystem* Quests = GetWorld()->GetSubsystem<UQuestSubsystem>())
 	{
-		Quests->InteractWith(ObjectType, this);
+		Quests->InteractWith(ObjectType, this, User);
 	}
 }
 
@@ -431,19 +461,20 @@ FActionMenuRequest AInteractableActor::BuildActionMenu(const AOperativeCharacter
 
 	case EInteractableType::Vehicle:
 	{
-		const FText Title = LOCTEXT("VehicleTitle", "🚜 Abandoned BMP-2");
+		// 2026-10-21: the vehicle is named by the instance (the Demo 01 burnt BTR-82), "APC" otherwise (was the Godot "BMP-2").
+		const FText Title = FText::Format(LOCTEXT("VehicleTitleFmt", "🚜 {0}"), DisplayName.IsEmpty() ? LOCTEXT("VehicleDefaultName", "Abandoned APC") : DisplayName);
 		if (Quests->HasFuelCanister() || Quests->IsGeneratorRunning())
 		{
-			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("VehicleDrained", "The BMP fuel tank is already drained into the jerrycan."));
+			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("VehicleDrained", "The APC fuel tank is already drained into the jerrycan."));
 		}
 		if (Quests->HasEmptyCanister())
 		{
 			return FActionMenuRequest::MakeMenu(Title,
-				LOCTEXT("VehicleDrainDesc", "Drain diesel from the BMP tank into the jerrycan?\n(The fuel will fill the jerrycan to start the generator)"),
+				LOCTEXT("VehicleDrainDesc", "Drain diesel from the APC tank into the jerrycan?\n(The fuel will fill the jerrycan to start the generator)"),
 				LOCTEXT("VehicleDrain", "Drain diesel"), Cancel, false);
 		}
 		return FActionMenuRequest::MakeMenu(Title,
-			LOCTEXT("VehicleNoCanDesc", "The BMP fuel tank is full of diesel, but the squad has no container to drain it into."),
+			LOCTEXT("VehicleNoCanDesc", "The APC fuel tank is full of diesel, but the squad has no container to drain it into."),
 			LOCTEXT("VehicleNoCan", "Need a container"), Close, true);
 	}
 
@@ -471,7 +502,7 @@ FActionMenuRequest AInteractableActor::BuildActionMenu(const AOperativeCharacter
 				LOCTEXT("GeneratorFuel", "Refuel"), Cancel, false);
 		}
 		return FActionMenuRequest::MakeMenu(Title,
-			LOCTEXT("GeneratorDryDesc", "The generator is dry and dead. Drain diesel from the BMP into the jerrycan first."),
+			LOCTEXT("GeneratorDryDesc", "The generator is dry and dead. Drain diesel from the APC into the jerrycan first."),
 			LOCTEXT("GeneratorDry", "Needs fuel"), Close, true);
 	}
 
@@ -570,6 +601,9 @@ void AInteractableActor::TakeGeneratorDamage(float Amount)
 		return;
 	}
 	GeneratorHealth = FMath::Max(0.f, GeneratorHealth - Amount);
+	FGameplayEventContext Context;
+	Context.Target = this;
+	GameplayEvents::RaiseWithContext(this, GameplayEvents::GeneratorDamaged, Context);
 	if (GeneratorHealth <= 0.f)
 	{
 		BreakdownGenerator();
@@ -588,9 +622,17 @@ void AInteractableActor::BreakdownGenerator()
 	ATurretActor::SetAllPowered(GetWorld(), false);
 	BroadcastGeneratorState(false); // Godot EventBus.generator_state_changed
 	PostLine(LOCTEXT("Attention", "WARNING"), LOCTEXT("GeneratorDown", "⚠️ The enemy damaged the diesel generator and it stalled! Turrets are without power!"));
+	FGameplayEventContext Context;
+	Context.Target = this;
+	GameplayEvents::RaiseWithContext(this, GameplayEvents::GeneratorDown, Context);
 }
 
 void AInteractableActor::RepairGenerator()
+{
+	RepairGeneratorBy(nullptr);
+}
+
+void AInteractableActor::RepairGeneratorBy(AActor* Repairer)
 {
 	GeneratorHealth = GeneratorMaxHealth;
 	bGeneratorBroken = false;
@@ -598,11 +640,15 @@ void AInteractableActor::RepairGenerator()
 	ATurretActor::SetAllPowered(GetWorld(), true);
 	BroadcastGeneratorState(true); // Godot EventBus.generator_state_changed
 	PostLine(LOCTEXT("EngineerSpeaker", "Engineer"), LOCTEXT("GeneratorBack", "⚡ Generator restored! All turrets are powered!"));
+	FGameplayEventContext Context;
+	Context.Subject = Repairer;
+	Context.Target = this;
+	GameplayEvents::RaiseWithContext(this, GameplayEvents::GeneratorRepaired, Context);
 }
 
 void AInteractableActor::FinishGeneratorRepair(TWeakObjectPtr<AOperativeCharacter> WeakUser)
 {
-	RepairGenerator();
+	RepairGeneratorBy(WeakUser.Get());
 	PostLine(WeakUser.IsValid() ? WeakUser->DisplayName : LOCTEXT("Soldier", "Operative"),
 		LOCTEXT("GeneratorRepaired", "✅ The diesel generator is running again! Power grid restored!"));
 }

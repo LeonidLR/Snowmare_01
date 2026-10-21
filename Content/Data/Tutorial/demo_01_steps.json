@@ -55,7 +55,15 @@
         "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Attack.QuickFire", "Order.Sprint"], "lock": ["Cover.Switch"] },
     { "id": "A4", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A4",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Object.Relocate", "Object.LightBarrel", "Stance.*", "Cover.*",
-        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Attack.QuickFire", "Order.Sprint"] }
+        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Attack.QuickFire", "Order.Sprint"] },
+    { "_comment": "2026-10-21 (user flow step 14, the canister quest): started by the yard volume VOL_A7_YARD (BeatId A7, the east half of the compound yard: base, generator shed, the burnt BTR; FireOnce off). A5 / A6 (the base, the defence prep) have no steps yet: A7 unlocks everything the prep needs (objects incl. Object.Use for the quest objects, deployables, object traps, squad orders, postures, weapons, grenades) - the time controls stay locked until the fight (a wave fight drops every lock anyway).",
+      "id": "A7", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A7",
+      "unlock": ["Squad.*", "Inventory.*", "Item.*", "Loot.*", "Object.*", "Stance.*", "Cover.*", "Posture.*", "Stealth.*", "Trap.*", "Deploy.*",
+        "Attack.*", "Grenade.*", "Weapon.*", "Order.WatchSector", "Order.Sprint"] },
+    { "_comment": "2026-10-21: the horde (user flow step 15). Started by powering the blast door console (QuestStep.GatePowered): the fight starts 1 s later (combat_start button, sudden waves). No checkpoint here: a save between the console and the first wave would come back without the fight. The A8-A10 lesson cards (pause, AUTO, generator repair + guard) are still to be written.",
+      "id": "A8", "lesson": false, "checkpoint": false, "title_id": "TUT_BEAT_A8",
+      "unlock": ["Squad.*", "Inventory.*", "Item.*", "Loot.*", "Object.*", "Stance.*", "Cover.*", "Posture.*", "Stealth.*", "Trap.*", "Deploy.*",
+        "Attack.*", "Grenade.*", "Weapon.*", "Time.*", "TB.*", "Order.WatchSector", "Order.Sprint"] }
   ],
   "steps": [
     {
@@ -687,6 +695,61 @@
       "trigger": { "type": "event", "event": "EnemyKilled", "enemy": "A4_LURE", "requires": ["A4_lure"] },
       "cancel_on": { "step": "A4_close_shot" },
       "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A4_CLOSE_SHOT_FAR" } ]
+    },
+
+    {
+      "_comment": "2026-10-21 A7 (user flow step 14, the canister quest - the chain the user built on L_MovementTest: jerrycan -> diesel from the APC -> generator -> blast door console). The squad walks into the east half of the compound yard (VOL_A7_YARD starts A7): the Engineer finds the generator shed dry and the blast door dead.",
+      "id": "A7_wt_yard", "beat": "A7", "kind": "walk_talk",
+      "trigger": { "type": "beat_start", "delay_s": 0.5 },
+      "lines": [ { "speaker": "Engineer", "text_id": "WT_A7_01" }, { "speaker": "Commander", "text_id": "WT_A7_02" }, { "speaker": "Engineer", "text_id": "WT_A7_03" } ]
+    },
+    {
+      "_comment": "Objective 1: the empty jerrycan, OUTSIDE by the far A4 container (user decision 2026-10-21: it teaches following the objective marker - Marker_A7_obj_canister on it). Done on QuestStep.CanisterTaken; already taken on the way (quest_progress >= 1): completed silently. Objectives never wait for the speech (pacing rule).",
+      "id": "A7_obj_canister", "beat": "A7", "kind": "objective", "text_id": "OBJ_A7_CANISTER",
+      "trigger": { "type": "beat_start", "delay_s": 0.5 },
+      "complete": { "event": "QuestStep.CanisterTaken", "condition": { "stat": "quest_progress", "at_least": 1 } }
+    },
+    {
+      "_comment": "The objective tracker lesson: the line on the right says what to do next, the marker and the screen-edge arrow say where. Shown only while the jerrycan is still out there.",
+      "id": "A7_objective", "beat": "A7", "kind": "hint_card", "text_id": "TUT_A7_OBJECTIVE", "precredit": false,
+      "trigger": { "type": "beat_start", "delay_s": 1.0 },
+      "condition": { "stat": "quest_progress", "below": 1 },
+      "complete": { "event": "QuestStep.CanisterTaken", "timeout_s": 25 }
+    },
+    {
+      "_comment": "Objective 2: drain the diesel of the burnt-out BTR-82 in the SE corner of the yard (Marker_A7_obj_drain).",
+      "id": "A7_obj_drain", "beat": "A7", "kind": "objective", "text_id": "OBJ_A7_DRAIN",
+      "trigger": { "type": "after_step", "step": "A7_obj_canister", "delay_s": 0.5 },
+      "complete": { "event": "QuestStep.FuelDrained", "condition": { "stat": "quest_progress", "at_least": 2 } }
+    },
+    {
+      "_comment": "Objective 3: refuel and start the generator in the shed (Marker_A7_obj_generator at its door). Starting it = heat zone 4 m + turret power.",
+      "id": "A7_obj_generator", "beat": "A7", "kind": "objective", "text_id": "OBJ_A7_GENERATOR",
+      "trigger": { "type": "after_step", "step": "A7_obj_drain", "delay_s": 0.5 },
+      "complete": { "event": "QuestStep.GeneratorStarted", "condition": { "stat": "quest_progress", "at_least": 3 } }
+    },
+    {
+      "id": "A7_wt_generator", "beat": "A7", "kind": "walk_talk",
+      "trigger": { "type": "event", "event": "QuestStep.GeneratorStarted" },
+      "lines": [ { "speaker": "Engineer", "text_id": "WT_A7_04" } ]
+    },
+    {
+      "_comment": "Before the console: powering the blast door starts the horde (user decision 2026-10-21: the console starts the fight, the door opens only after the last wave while the generator runs). Prepare first.",
+      "id": "A7_prep", "beat": "A7", "kind": "hint_card", "text_id": "TUT_A7_PREP", "keys": ["Deploy.Start", "Object.Relocate"], "precredit": false,
+      "trigger": { "type": "after_step", "step": "A7_obj_generator", "delay_s": 0.5 },
+      "complete": { "event": "QuestStep.GatePowered", "timeout_s": 40 }
+    },
+    {
+      "_comment": "Objective 4: power the blast door console by the gate (Marker_A7_obj_terminal) - when the defence is ready. Done on QuestStep.GatePowered (this also starts A8).",
+      "id": "A7_obj_terminal", "beat": "A7", "kind": "objective", "text_id": "OBJ_A7_TERMINAL",
+      "trigger": { "type": "after_step", "step": "A7_obj_generator", "delay_s": 0.5 },
+      "complete": { "event": "QuestStep.GatePowered", "condition": { "stat": "quest_progress", "at_least": 4 } }
+    },
+    {
+      "_comment": "A8 starts with the console: HQ hears the power spike - the horde is coming; the door opens after the last wave while the generator runs.",
+      "id": "A8_radio_horde", "beat": "A8", "kind": "radio",
+      "trigger": { "type": "event", "event": "QuestStep.GatePowered" },
+      "lines": [ { "speaker": "HQ", "text_id": "WT_A8_01" }, { "speaker": "Commander", "text_id": "WT_A8_02" } ]
     },
 
     {

@@ -23,9 +23,12 @@ class CODEXTACTICS_API UQuestSubsystem : public UWorldSubsystem
 public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
-	/** Applies an interaction with a quest object; ObjectActor is hidden when a canister is picked up. */
+	/**
+	 * Applies an interaction with a quest object; ObjectActor is hidden when a canister is picked up. A step done raises the
+	 * gameplay events "QuestStep.<Kind>" + "QuestStep" (Subject = InstigatorActor, the operative; Target = ObjectActor).
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Quests")
-	void InteractWith(EInteractableType ObjectType, AActor* ObjectActor);
+	void InteractWith(EInteractableType ObjectType, AActor* ObjectActor, AActor* InstigatorActor = nullptr);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Quests")
 	bool HasEmptyCanister() const { return State.bHasEmptyCanister; }

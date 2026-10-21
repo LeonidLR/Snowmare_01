@@ -38,6 +38,9 @@ Modes (env CODEX_LAYOUT_MODE):
                    rings of the step A3_cover (RoleId / Label / colour: Medic-Sapper blue at Cover_A3_2_High's outer end,
                    Commander red at Cover_A3_3_Low, Engineer orange at Cover_A3_1_Low) and EDITS_5J: the four lesson mines
                    moved inside the medic's peek cone from that corner (LESSON_MINE_FRAME_OFFSETS_5J). Run after 5h.
+                   Rev 5k (2026-10-21): the canister quest in the last compound (blast door in the east wall - EDITS_5K splits
+                   Compound_Wall_E2 -, console, generator in the shed, the burnt BTR-82, the jerrycan at Container_A4_North),
+                   VOL_A7_YARD + the A7 objective markers, CombatStart, the horde's spawn points, NavMeshBounds_5k_East.
   verify           in game (-game -nullrhi): volume ids vs demo_01_steps.json, nav paths along the critical path, the bridge
                    as the only crossing, the fence (standing path refused, prone path through), actors on the ground.
                    Result: Saved/Logs/Demo01LayoutVerify.txt ("RESULT: PASS / FAIL").
@@ -137,6 +140,35 @@ LESSON_MINE_FRAME_OFFSETS_5J = (
 )
 EDITS_5J = [
     ("lesson_mines_into_medic_cone", "PMC_Mine_A3_1 / _2, PMC_Mine_A3_Peek_1 / _2: location -> inside the Medic-Sapper's peek cone of Cover_A3_2_High's outer end (LESSON_MINE_FRAME_OFFSETS_5J)"),
+]
+
+# Rev 5k (2026-10-21, user decisions on the coordinator's plan): the canister quest of the user's L_MovementTest test in the LAST
+# compound (the PMC base yard): the blast door in the NORTH part of the east wall (Compound_Wall_E2 is split around its 7 m opening;
+# the 2 m back gap south of it stays the hounds' hidden lane), the generator in GeneratorShed, the console 6 m from the door, the burnt
+# BTR-82 (static SM_East_APC_BTR82_Damaged on the Vehicle interactable - not stretched) in the SE corner, the empty jerrycan OUTSIDE at
+# Container_A4_North (it teaches following the objective marker); the A7 yard volume + one marker per objective; CombatStart; the
+# horde's spawn points (N x2, E hounds, W, the dynamic south breach); a nav bounds volume east of the old ones. No SusaninSpawn
+# (Susanin is off on this level: susanin_wave 0). Only new actors (TAG_5K) + one explicit edit (EDITS_5K).
+TAG_5K = "AutoLayout_Demo01_5k"
+FOLDER_5K = "AutoLayout_Demo01_5k"
+GATE_5K_Y = -1300.0               # the blast door's centre along the east wall
+GATE_5K_HALF = 350.0              # one leaf's width (AGateActor default): a 7 m opening
+APC_5K_MESH = "/Game/VigilanteContent/Vehicles/East_APC_BTR82/Damaged/SM_East_APC_BTR82_Damaged"
+APC_5K_BOX = (392.0, 176.0, 162.0)                 # the box half extent round the hull (mesh bounds 388 x 172 x 161, pivot on the ground)
+APC_5K_MESH_OFFSET = (-63.4, -13.3, -158.0)        # the mesh pivot relative to the box centre (bounds origin (63, 13, 157))
+VOL_A7_WEST_X = 29800.0           # VOL_A7_YARD's west edge: east of the A4 far patrol's yard waypoint (29163, -1775)
+SPAWNS_5K = (
+    ("EnemySpawn_NorthIce_1", (29500.0, 4500.0), "NORTH_ICE", {}),
+    ("EnemySpawn_NorthIce_2", (31500.0, 5000.0), "NORTH_ICE", {}),
+    ("EnemySpawn_EastGully", (34000.0, -1500.0), "EAST_GULLY", {"allowed_enemy_type": "HOUND"}),
+    ("EnemySpawn_WestShore", (26500.0, 1000.0), "WEST_SHORE", {}),
+    ("EnemySpawn_BoathouseBulkhead_Breach", (30320.0, -6300.0), "BOATHOUSE_BULKHEAD",
+     {"is_dynamic": True, "enemy_count": 3, "activation_chance": 1.0, "breach_enemy_type": "FROST_HOUND"}),
+)
+NAV_5K_CENTRE = (36000.0, -1291.0, 200.0)          # X 33900..38100, the Y / Z span of NavMeshBounds_AutoLayout
+NAV_5K_EXTENT = (2100.0, 7821.0, 500.0)
+EDITS_5K = [
+    ("east_wall_split", "Compound_Wall_E2: shortened to end at the blast door's south jamb (its north part is the new Compound_Wall_E2b, tag 5k)"),
 ]
 
 # §10.1 re-ids of the user's A1 volumes (they belong to the A3 approach now).
@@ -1129,6 +1161,7 @@ def additive():
             moved.append(a["label"])
     expected = [label for label in FIELD_MINES] if "5i" in sections else []
     expected += [label for label, _ in LESSON_MINE_FRAME_OFFSETS_5J] if "5j" in sections else []
+    expected += ["Compound_Wall_E2"] if "5k" in sections else []
     report("pre-existing actors moved / deleted: %d %s (expected by the explicit edits: %s)" % (len(moved), moved, expected))
 
 
@@ -1409,12 +1442,212 @@ def edit_lesson_mines_5j(p, anchors):
     return changes
 
 
+# ----------------------------------------------------------------------------------------------------------------------
+# Rev 5k (2026-10-21, user decisions): the canister quest of the user's L_MovementTest test, rebuilt in the LAST compound
+# (the PMC base yard), the A7 lesson's yard volume + markers, CombatStart and the horde's spawn points. Placeholder cubes
+# (no art yet) except the burnt BTR-82.
+# ----------------------------------------------------------------------------------------------------------------------
+
+def compound_parts(actors):
+    """{label: (origin, extent, actor)} of the compound / base / shed walls and the A4 far container."""
+    want = ("Compound_Wall_E1", "Compound_Wall_E2", "Compound_Wall_N", "Compound_Wall_S", "Compound_Wall_W1", "Base_Wall_S",
+            "Base_Wall_N", "Base_Wall_E", "Container_A4_North")
+    parts = {}
+    for a in actors:
+        if not isinstance(a, unreal.StaticMeshActor):
+            continue
+        label = a.get_actor_label()
+        if label in want or label.startswith("GeneratorShed_Wall_"):
+            o, e = a.get_actor_bounds(False)
+            parts[label] = (o, e, a)
+    return parts
+
+
+def shed_frame(parts):
+    """The generator shed: (x0, x1, y0, y1) of its walls' union, the wall thickness and the door side ("S" / "N" / "W" / "E": the
+    side its walls cover least)."""
+    walls = [v for k, v in parts.items() if k.startswith("GeneratorShed_Wall_")]
+    if not walls:
+        return None
+    x0 = min(o.x - e.x for o, e, _ in walls)
+    x1 = max(o.x + e.x for o, e, _ in walls)
+    y0 = min(o.y - e.y for o, e, _ in walls)
+    y1 = max(o.y + e.y for o, e, _ in walls)
+    cover = {"S": 0.0, "N": 0.0, "W": 0.0, "E": 0.0}
+    for o, e, _ in walls:
+        if e.x >= e.y:  # runs along X: the south or the north side
+            cover["S" if abs(o.y - y0) < abs(o.y - y1) else "N"] += 2 * e.x
+        else:
+            cover["W" if abs(o.x - x0) < abs(o.x - x1) else "E"] += 2 * e.y
+    door = min(cover, key=lambda side: cover[side] / ((x1 - x0) if side in "SN" else (y1 - y0)))
+    return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "door": door, "thick": min(min(e.x, e.y) for _, e, _ in walls) * 2}
+
+
+def edit_east_wall_split_5k(p, anchors):
+    """EDITS_5K: Compound_Wall_E2 (the east wall north of the 2 m back gap) ends at the blast door's south jamb; its north part
+    is the new Compound_Wall_E2b (TAG_5K). Idempotent (already shortened: unchanged). Returns the number of changes."""
+    parts = compound_parts(p.actors.get_all_level_actors())
+    if "Compound_Wall_E2" not in parts or "Compound_Wall_N" not in parts:
+        p.warnings.append("edit east_wall_split: Compound_Wall_E2 / Compound_Wall_N not in the map - not edited, review")
+        return 0
+    o, e, wall = parts["Compound_Wall_E2"]
+    y0, y1 = o.y - e.y, o.y + e.y
+    gate_lo = GATE_5K_Y - GATE_5K_HALF
+    if y1 <= gate_lo + 1.0:
+        report("EDIT east_wall_split: %s already ends at Y %.0f - unchanged" % (wall.get_actor_label(), y1))
+        return 0
+    old_len = y1 - y0
+    new_len = gate_lo - y0
+    scale = wall.get_actor_scale3d()
+    loc = wall.get_actor_location()
+    # The wall's length is its local X (yaw 90 / -90 lays it along world Y): scale it, move its centre.
+    if abs(scale.x * 100.0 - old_len) > 5.0:
+        p.warnings.append("edit east_wall_split: %s length %.0f != scale.x %.2f x 100 - not edited, review" % (wall.get_actor_label(), old_len, scale.x))
+        return 0
+    wall.set_actor_scale3d(unreal.Vector(scale.x * new_len / old_len, scale.y, scale.z))
+    wall.set_actor_location(unreal.Vector(loc.x, (y0 + gate_lo) * 0.5, loc.z), False, False)
+    report("EDIT east_wall_split: %s (%s) Y %.0f..%.0f -> %.0f..%.0f (the blast door opening Y %.0f..%.0f, Compound_Wall_E2b north of it)"
+           % (wall.get_actor_label(), wall.get_name(), y0, y1, y0, gate_lo, gate_lo, GATE_5K_Y + GATE_5K_HALF))
+    return 1
+
+
+def quest_object_5k(p, label, kind, name, x, y, extent, yaw, anchor):
+    """An AInteractableActor quest object standing on the ground (its box root at half height)."""
+    actor = p.thing(unreal.InteractableActor, label, x, y, extent[2], yaw, "Quest", anchor, label)
+    actor.set_editor_property("object_type", kind)
+    actor.set_editor_property("display_name", unreal.Text(name))
+    actor.get_editor_property("box").set_box_extent(unreal.Vector(*extent))
+    # Placeholder cube (100 cm) fills the box; mirrors AInteractableActor::OnConstruction (it does not rerun for a commandlet's edit).
+    actor.get_editor_property("mesh").set_relative_scale3d(unreal.Vector(extent[0] / 50.0, extent[1] / 50.0, extent[2] / 50.0))
+    return actor
+
+
+def build_quest_5k(p, anchors):
+    """Rev 5k: the canister quest (jerrycan -> the burnt BTR's diesel -> the generator -> the blast door console -> the paced
+    blast door), the A7 yard volume and markers, CombatStart, the horde's spawn points and the east nav bounds. Only TAG_5K actors."""
+    actors = [a for a in p.actors.get_all_level_actors() if TAG_5K not in [str(t) for t in a.tags]]
+    parts = compound_parts(actors)
+    missing = [k for k in ("Compound_Wall_E1", "Compound_Wall_E2", "Compound_Wall_N", "Compound_Wall_S", "Compound_Wall_W1", "Base_Wall_S",
+                           "Container_A4_North") if k not in parts]
+    shed = shed_frame(parts)
+    if missing or shed is None:
+        p.warnings.append("quest 5k: missing %s%s - nothing placed, review" % (missing, " + the generator shed" if shed is None else ""))
+        return
+    e2o, e2e, e2 = parts["Compound_Wall_E2"]
+    wall_x = e2o.x
+    thick = 2 * min(e2e.x, e2e.y)
+    inner_x = wall_x - thick * 0.5                        # the east wall's yard face
+    north_y = parts["Compound_Wall_N"][0].y               # the north wall's centre line (the corner)
+    south_in = parts["Compound_Wall_S"][0].y + parts["Compound_Wall_S"][1].y   # the south wall's yard face
+    north_in = north_y - parts["Compound_Wall_N"][1].y
+    west_x = parts["Compound_Wall_W1"][0].x
+    base_s = parts["Base_Wall_S"][0].y - parts["Base_Wall_S"][1].y              # the base's south face
+    wall_base_z = e2o.z - e2e.z
+    wall_h = 2 * e2e.z
+    material = e2.static_mesh_component.get_material(0)
+    gate_lo, gate_hi = GATE_5K_Y - GATE_5K_HALF, GATE_5K_Y + GATE_5K_HALF
+
+    # 1. The east wall's north stub (the rest of the old Compound_Wall_E2) and the blast door between.
+    p.block("Compound_Wall_E2b", "Compound", wall_x, (gate_hi + north_y) * 0.5, (thick, north_y - gate_hi, wall_h), base_z=wall_base_z,
+            material=material, anchor="the east wall north of the blast door (the old Compound_Wall_E2's north part)")
+    gate = p.thing(unreal.GateActor, "Gate_Compound_BlastDoor", wall_x, GATE_5K_Y, 0.0, 0.0, "Quest",
+                   "in the east wall, Y %.0f..%.0f: the exit to the road east; opens after the last wave while the generator runs" % (gate_lo, gate_hi),
+                   "GateActor")
+    gate.set_editor_property("door_size", unreal.Vector(thick, GATE_5K_HALF, 400.0))
+    gate.set_editor_property("open_distance", GATE_5K_HALF)
+
+    # 2. The console by the door: 6 m along the wall (towards the north corner), 1.5 m into the yard (the L_MovementTest pattern).
+    terminal_x, terminal_y = inner_x - 150.0, GATE_5K_Y + 600.0
+    quest_object_5k(p, "Quest_GateTerminal", unreal.InteractableType.GATE_TERMINAL, "Blast door console", terminal_x, terminal_y,
+                    (30.0, 30.0, 90.0), 180.0, "the console: 6 m north of the door's centre, 1.5 m off the wall")
+
+    # 3. The generator in the shed, its back to the wall opposite the door (the door faces the yard).
+    gx, gy = (shed["x0"] + shed["x1"]) * 0.5, (shed["y0"] + shed["y1"]) * 0.5
+    inner = shed["thick"] + 30.0
+    if shed["door"] == "S":
+        gy, door_xy = shed["y1"] - inner - 60.0, (gx, shed["y0"] - 90.0)
+    elif shed["door"] == "N":
+        gy, door_xy = shed["y0"] + inner + 60.0, (gx, shed["y1"] + 90.0)
+    elif shed["door"] == "W":
+        gx, door_xy = shed["x1"] - inner - 80.0, (shed["x0"] - 90.0, gy)
+    else:
+        gx, door_xy = shed["x0"] + inner + 80.0, (shed["x1"] + 90.0, gy)
+    quest_object_5k(p, "Quest_Generator", unreal.InteractableType.GENERATOR, "Backup Diesel Generator", gx, gy, (80.0, 60.0, 70.0), 0.0,
+                    "in the generator shed (door %s), its back to the far wall" % shed["door"])
+
+    # 4. The burnt BTR-82 in the SE corner: the art mesh on the Vehicle interactable (not stretched; the box is its collision).
+    apc_x = inner_x - 350.0 - APC_5K_BOX[0]
+    apc_y = (south_in + base_s) * 0.5
+    apc = quest_object_5k(p, "Quest_APC", unreal.InteractableType.VEHICLE, "Burnt-out BTR-82", apc_x, apc_y, APC_5K_BOX, 0.0,
+                          "SE corner of the yard: 3.5 m from the east wall, midway between the south wall and the base")
+    mesh = unreal.load_asset(APC_5K_MESH)
+    if mesh:
+        art = unreal.Transform(unreal.Vector(*APC_5K_MESH_OFFSET), unreal.Rotator(0, 0, 0), unreal.Vector(1, 1, 1))
+        apc.set_editor_property("visual_mesh", mesh)
+        apc.set_editor_property("visual_mesh_transform", art)
+        # What AInteractableActor::OnConstruction does with VisualMesh (the art mesh at its own transform, not stretched).
+        visual = apc.get_editor_property("mesh")
+        visual.set_static_mesh(mesh)
+        visual.set_relative_transform(art, False, False)
+    else:
+        p.warnings.append("quest 5k: %s not found - the APC keeps the placeholder cube, review" % APC_5K_MESH)
+
+    # 5. The empty jerrycan OUTSIDE, 1 m past the north (+Y) end of the far A4 container (the lesson: follow the marker).
+    co, ce, _ = parts["Container_A4_North"]
+    if ce.y >= ce.x:
+        can_x, can_y = co.x, co.y + ce.y + 100.0
+    else:
+        can_x, can_y = co.x + ce.x + 100.0, co.y
+    quest_object_5k(p, "Quest_Canister", unreal.InteractableType.CANISTER, "Empty jerrycan", can_x, can_y, (25.0, 20.0, 35.0), 0.0,
+                    "1 m past the end of Container_A4_North (outside the compound)")
+
+    # 6. The A7 lesson: the yard volume that starts the beat (the east half of the yard, clear of the A4 far patrol's yard waypoint;
+    #    Fire Once off: an entry refused during the A4 confinement does not use it up) and one marker per objective.
+    x0 = VOL_A7_WEST_X
+    vol = p.volume("VOL_A7_YARD", (x0 + inner_x) * 0.5, (south_in + north_in) * 0.5, ((inner_x - x0) * 0.5, (north_in - south_in) * 0.5, 200.0),
+                   beat="A7", anchor="the east half of the compound yard (base, generator shed, BTR): starts the A7 canister quest")
+    vol.set_editor_property("fire_once", False)
+    p.marker("A7_obj_canister", can_x, can_y, 90.0, anchor="the jerrycan")
+    p.marker("A7_obj_drain", apc_x - APC_5K_BOX[0] - 90.0, apc_y, 120.0, anchor="the BTR's west end")
+    p.marker("A7_obj_generator", door_xy[0], door_xy[1], 90.0, anchor="the generator shed's door")
+    p.marker("A7_obj_terminal", terminal_x - 110.0, terminal_y, 80.0, anchor="in front of the console")
+
+    # 7. «Start Battle» puts the squad here (UMissionSubsystem CombatStart), facing the main (west) gate.
+    start = p.thing(unreal.TargetPoint, "CombatStart", (west_x + inner_x) * 0.5 - 600.0, (south_in + north_in) * 0.5, 0.0, 180.0, "Quest",
+                    "the yard centre, facing the west gate")
+    start.set_editor_property("tags", [TAG_5K, "CombatStart"])
+
+    # 8. The horde: N x2 (the ice), E (the hidden lane: hounds only, through the 2 m back gap to the generator), W (the shore path
+    #    behind the squad's way in), the dynamic south breach (BOATHOUSE_BULKHEAD, 3 hounds, always on its random wave).
+    yard_centre = ((west_x + inner_x) * 0.5, (south_in + north_in) * 0.5)
+    for label, (x, y), lane, extra in SPAWNS_5K:
+        yaw = math.degrees(math.atan2(yard_centre[1] - y, yard_centre[0] - x))
+        point = p.thing(unreal.EnemySpawnPoint, label, x, y, 100.0, yaw, "Spawns", "lane %s" % lane, lane)
+        point.set_editor_property("spawn_lane", lane)
+        point.set_editor_property("tags", [TAG_5K, "EnemySpawnPoint"])
+        for key, value in extra.items():
+            # Enum values are names in the table (the module also loads under the system python, without unreal).
+            if key == "allowed_enemy_type":
+                value = getattr(unreal.EnemySpawnFilter, value)
+            elif key == "breach_enemy_type":
+                value = getattr(unreal.EnemyArchetype, value)
+            point.set_editor_property(key, value)
+
+    # 9. The nav bounds east of the old ones (the east spawn and the road past the blast door).
+    nav = p.spawn(unreal.NavMeshBoundsVolume, "NavMeshBounds_5k_East", unreal.Vector(*NAV_5K_CENTRE), 0.0, "Navigation",
+                  "east of NavMeshBounds_AutoLayout (X > 34319): the east spawn lane and the road past the blast door")
+    nav.set_actor_scale3d(unreal.Vector(NAV_5K_EXTENT[0] / 100.0, NAV_5K_EXTENT[1] / 100.0, NAV_5K_EXTENT[2] / 100.0))
+    report("quest 5k: gate (%.0f, %.0f), console (%.0f, %.0f), generator (%.0f, %.0f) door %s, BTR (%.0f, %.0f), jerrycan (%.0f, %.0f), "
+           "VOL_A7_YARD X %.0f..%.0f" % (wall_x, GATE_5K_Y, terminal_x, terminal_y, gx, gy, shed["door"], apc_x, apc_y, can_x, can_y, x0, inner_x))
+
+
 # The additive sections: name -> tag / folder / explicit edits of pre-existing actors / builders (CODEX_LAYOUT_SECTIONS).
 SECTIONS = {
     "5d": {"tag": TAG_5D, "folder": FOLDER_5D, "edits": [edit_hut_crate_heat_packs], "builders": SECTIONS_5D},
     "5h": {"tag": TAG_5H, "folder": FOLDER_5H, "edits": [], "builders": [build_peek_mines_5h]},
     "5i": {"tag": TAG_5I, "folder": FOLDER_5I, "edits": [edit_field_mines_5i, edit_peek_mines_require_step_5i], "builders": []},
     "5j": {"tag": TAG_5J, "folder": FOLDER_5J, "edits": [edit_lesson_mines_5j], "builders": [build_role_spots_5j]},
+    "5k": {"tag": TAG_5K, "folder": FOLDER_5K, "edits": [edit_east_wall_split_5k], "builders": [build_quest_5k]},
 }
 
 

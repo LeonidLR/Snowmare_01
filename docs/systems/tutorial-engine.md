@@ -260,6 +260,7 @@ neither comparator: error. Stats (`UTutorialSubsystem::GetConditionStat`, "livin
 | `enemies_unseen` | living enemies no operative sees now (0 while the squad's sight is off) |
 | `squad_passive` | 2026-10-21: living members whose effective fire posture is PASSIVE |
 | `in_fight` | 2026-10-21: 1 while a fight runs (phase WaveCombat: a skirmish or a wave), else 0 |
+| `quest_progress` | 2026-10-21: how far the checkpoint quest chain got (`FQuestChainState::GetProgress`): 0 nothing, 1 the empty canister, 2 the canister full of diesel, 3 the generator running, 4 the gate console powered (Demo 01 A7: an objective of a step already done completes silently) |
 | `traps_spotted.<tag>` | traps with `SpotEventTag` = tag the squad knows of (spotted or dealt with) |
 | `squad_not_low_in.<volume>` | living members NOT crouched / prone within 3 m of that volume's box (`below 1` = all are down there) |
 | `squad_not_across.<volume>` | living members NOT across the bridge (`ABridgeCrossingVolume`) nearest to that volume: still on the volume's side of the span's middle, or on the span (`BridgeRules::IsAcrossFrom`); `below 1` = the whole squad is on the far side, however it got there. No bridge / no such volume: every living member counts. |
@@ -534,6 +535,8 @@ coordinates), `PartsBoundToTheirZombie` (each part ignores the other zombie: tri
 the lure; no provider), `LureSchema`, `TrapThenLure`, `OneOperative`; smokes `TutorialSmoke` stages 130-136 (tagged routes on the movement
 test map) and `TutorialAmbushLakeSmoke` (the user's lake layout, real wire / whistle / shots).
 
+
+2026-10-21 b (Demo 01 A7): quest events for steps - `QuestStep.<CanisterTaken|FuelDrained|GeneratorStarted|GatePowered>` (then `QuestStep`; subject = the operative), `GeneratorDamaged` / `GeneratorDown` / `GeneratorRepaired` (subject = the repairer) / `GateOpened` (`GameplayEvents`); stat `quest_progress`. Beats A7 (from `VOL_A7_YARD`) and A8 (from `QuestStep.GatePowered`, no checkpoint) in `demo_01_steps.json`; tests `CodexTactics.Tutorial.QuestLesson.*`.
 ## History
 
 The notes below are the revision-by-revision record the reference above was distilled from (moved verbatim from the old `docs/port/HANDOFF.md` in the

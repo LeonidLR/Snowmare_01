@@ -13,6 +13,7 @@ class AOperativeCharacter;
 class UBoxComponent;
 struct FOverheadLabel;
 class UHeatSourceComponent;
+class UStaticMesh;
 class UStaticMeshComponent;
 
 /** Which Godot texts a trap uses (interactable.gd / barricade.gd / mine.gd). */
@@ -284,11 +285,33 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Interactables")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
+	/**
+	 * 2026-10-21: an art mesh for this object (the burnt BTR-82 of the Demo 01 siphon quest). Set: Mesh shows it at
+	 * VisualMeshTransform relative to the collision box, NOT stretched to the box (VisualMeshRules). Empty: the class's
+	 * placeholder (the engine cube) filling the box, as before. The box stays the collision / navmesh / click shape either way.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Interactables|Visual")
+	TObjectPtr<UStaticMesh> VisualMesh;
+
+	/** Where VisualMesh sits relative to the box centre (location cm, rotation, scale); unused without VisualMesh. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Interactables|Visual")
+	FTransform VisualMeshTransform;
+
 	/** Warm zone, used by generators. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Interactables")
 	TObjectPtr<UHeatSourceComponent> HeatSource;
 
 private:
+	/** The art mesh OnConstruction last put on Mesh (so clearing VisualMesh brings the class's placeholder back). */
+	UPROPERTY()
+	TObjectPtr<UStaticMesh> AppliedVisualMesh;
+
+	/** Applies VisualMesh / the placeholder fit (OnConstruction). */
+	void ApplyVisualMesh();
+
+	/** The generator repair with its gameplay event (Subject = Repairer, may be null). */
+	void RepairGeneratorBy(AActor* Repairer);
+
 	void StartDisarmPickupClip();
 	void FinishDisarmPickup();
 	/** Posts the defusal success line now or keeps it (bDeferDefusalSuccessLine). */

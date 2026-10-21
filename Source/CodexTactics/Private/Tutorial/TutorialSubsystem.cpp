@@ -33,6 +33,7 @@
 #include "Subsystems/CodexEventBus.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "TimerManager.h"
+#include "Quests/QuestSubsystem.h"
 #include "Tutorial/TutorialMarkerActor.h"
 #include "Tutorial/TutorialTriggerVolume.h"
 #include "UI/DialogueRules.h"
@@ -1099,6 +1100,12 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 	if (!Squad)
 	{
 		return 0.f;
+	}
+	if (Stat == FName(TEXT("quest_progress")))
+	{
+		// 2026-10-21 (Demo 01 A7): how far the checkpoint quest chain got (FQuestChainState::GetProgress: 0 .. 4 = gate powered).
+		const UQuestSubsystem* Quests = GetWorld()->GetSubsystem<UQuestSubsystem>();
+		return Quests ? static_cast<float>(Quests->GetState().GetProgress()) : 0.f;
 	}
 	if (Stat == FName(TEXT("squad_solo")))
 	{
