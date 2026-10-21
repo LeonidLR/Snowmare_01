@@ -491,6 +491,20 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName VisionConesToggled;
 	/** The player toggled the squad's vision cones ("SquadVisionConesToggled.On" / ".Off" are raised too). */
 	extern CODEXTACTICS_API const FName SquadVisionConesToggled;
+	/**
+	 * 2026-10-21 (Demo 01 A7): a step of the checkpoint quest chain was done (UQuestSubsystem::InteractWith). Subject = the operative,
+	 * Target = the quest object, Kind = the step (QuestSteps: "CanisterTaken" / "FuelDrained" / "GeneratorStarted" / "GatePowered");
+	 * also raised as "QuestStep.<Kind>" ("QuestStep.FuelDrained"), the specific one first.
+	 */
+	extern CODEXTACTICS_API const FName QuestStep;
+	/** A running generator took enemy damage (Target = the generator; one event per hit). */
+	extern CODEXTACTICS_API const FName GeneratorDamaged;
+	/** The generator broke down at 0 HP: heat off, turrets unpowered, the paced blast door stops (Target = the generator). */
+	extern CODEXTACTICS_API const FName GeneratorDown;
+	/** A damaged / broken generator was repaired (Subject = the repairer, none for a scripted repair; Target = the generator). */
+	extern CODEXTACTICS_API const FName GeneratorRepaired;
+	/** The blast gate's leaves started to slide fully open (Target = the gate): the instant terminal, the final wave cleared, «Start Battle». */
+	extern CODEXTACTICS_API const FName GateOpened;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);

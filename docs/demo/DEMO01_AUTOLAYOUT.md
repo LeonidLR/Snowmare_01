@@ -408,3 +408,34 @@ $env:CODEX_LAYOUT_MODE = "additive"; $env:CODEX_LAYOUT_SECTIONS = "5j"
 & "$ue\UnrealEditor-Cmd.exe" "$p\CodexTactics.uproject" -run=pythonscript "-script=$p\Scripts\Editor\build_demo01_lake_layout.py" -unattended -nullrhi -nosplash
 Get-Content "$p\Saved\Logs\Demo01Layout5j.txt"
 ```
+
+## 12. Rev 5k: the canister quest in the last compound (2026-10-21, additive section `5k`)
+
+User decisions 2026-10-21 (all of the coordinator's recommendations). Run in the agents worktree only (`CODEX_LAYOUT_MODE=additive`,
+`CODEX_LAYOUT_SECTIONS=5k`, commandlet); positions are read from the user's latest map (b81d90a: the compound walls, the shed, the base,
+`Container_A4_North`). Report `Saved/Logs/Demo01Layout5k.txt`; dumps `Saved/LayoutDumps/L_Demo01_A_FrozenLake_5k_before/after_*.json`
+(before / after: the 18 adds, the `Compound_Wall_E2` split, the generated navmesh actors dropped - nothing else moved).
+
+| Actor | Class | Settings | Position | Why |
+|---|---|---|---|---|
+| Compound_Wall_E2 (EDIT, `EDITS_5K`) | StaticMeshActor | shortened, Y -2390..-1650 (was ..-490) | X 32320 | the blast door's south jamb |
+| Compound_Wall_E2b | StaticMeshActor (graybox) | 40 cm x 4.6 m x 2.5 m, E2's material | (32320, -720) | the wall north of the door |
+| Gate_Compound_BlastDoor | GateActor | 2 leaves 3.5 m (DoorSize 40 x 350 x 400), OpenDistance 350 | (32320, -1300), yaw 0 | the exit to the road east; paced by the generator + the waves (level JSON) |
+| Quest_GateTerminal | InteractableActor GateTerminal "Blast door console" | box 30 x 30 x 90 | (32150, -700) | 6 m north of the door, 1.5 m off the wall (L_MovementTest pattern) |
+| Quest_Generator | InteractableActor Generator | box 80 x 60 x 70, 200 HP | (30320, -745) | in GeneratorShed, its back to the north wall, door south |
+| Quest_APC | InteractableActor Vehicle "Burnt-out BTR-82" | box 392 x 176 x 162; `VisualMesh` SM_East_APC_BTR82_Damaged at (-63.4, -13.3, -158) | (31558, -3940) | SE corner: 3.5 m from the east wall, midway between the south wall and the base |
+| Quest_Canister | InteractableActor Canister "Empty jerrycan" | box 25 x 20 x 35 | (27520, -1960) | OUTSIDE, 1 m past the north end of Container_A4_North (follow the marker) |
+| VOL_A7_YARD | TutorialTriggerVolume | Beat A7, Leader, Fire Once off, 25 x 39.6 m | (31050, -2490) | the east half of the yard (west edge X 29800: clear of the A4 far patrol's yard waypoint) |
+| Marker_A7_obj_canister / _drain / _generator / _terminal | TutorialMarkerActor | step ids of the four A7 objectives | the jerrycan / the BTR's west end / the shed door / in front of the console | |
+| CombatStart | TargetPoint (tag CombatStart) | yaw 180 | (29710, -2490) | «Start Battle»: the squad in the yard facing the west gate |
+| EnemySpawn_NorthIce_1 / _2 | EnemySpawnPoint NORTH_ICE | | (29500, 4500) / (31500, 5000) | 50-55 m north of the north wall |
+| EnemySpawn_EastGully | EnemySpawnPoint EAST_GULLY, hounds only | | (34000, -1500) | the hidden lane: through the 2 m back gap to the generator (48 m path) |
+| EnemySpawn_WestShore | EnemySpawnPoint WEST_SHORE | | (26500, 1000) | behind the squad's way in |
+| EnemySpawn_BoathouseBulkhead_Breach | EnemySpawnPoint, dynamic | 3 hounds, chance 1.0 | (30320, -6300) | the south breach (its wave is random 1-3) |
+| NavMeshBounds_5k_East | NavMeshBoundsVolume | X 33900..38100, the AutoLayout bounds' Y / Z | (36000, -1291, 200) | the east spawn and the road past the door |
+
+No SusaninSpawn: Susanin is off on the lake (`susanin_wave: 0`). Verified by `LakeQuestSmoke` (navmesh paths, the full chain, wave 1 on the lanes, the
+paced door). Frames (rendered `Shot` run, north at the BOTTOM of the top views, +X to the right): `Saved/Screenshots/LakeQuest/01_compound_top.png`,
+`02_take_jerrycan.png`, `03_drain_diesel.png`, `04_refuel_generator.png`, `05_blast_door_console.png`, `06_gate_progress.png`,
+`07_generator_down_repair.png`, `08_compound_top_door_open.png`. After any run of this section open the map in the editor and save it (TRAPS: the A4
+ambush smokes need the editor-built navmesh).

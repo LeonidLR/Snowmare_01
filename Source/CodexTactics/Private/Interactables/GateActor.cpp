@@ -12,6 +12,8 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/InteractableActor.h"
+#include "Interactables/VisualMeshRules.h"
+#include "Core/PlayerCommands.h"
 #include "Quests/QuestSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/OverheadLabel.h"
@@ -58,6 +60,7 @@ AGateActor::AGateActor()
 	};
 	LeftDoor = MakeDoor(TEXT("LeftDoor"), TEXT("LeftDoorMesh"), LeftDoorMesh);
 	RightDoor = MakeDoor(TEXT("RightDoor"), TEXT("RightDoorMesh"), RightDoorMesh);
+	PlaceholderLeafMesh = CubeMesh.Succeeded() ? CubeMesh.Object : nullptr;
 
 	// Warning beacon: placeholder engine shapes; BeaconMaterial / the mesh are the slots for the final look (TANDEM request 19).
 	BeaconPivot = CreateDefaultSubobject<USceneComponent>(TEXT("BeaconPivot"));
@@ -94,8 +97,7 @@ void AGateActor::OnConstruction(const FTransform& Transform)
 	}
 	LeftDoor->SetRelativeLocation(FVector(0.f, -Extent.Y, Extent.Z));
 	RightDoor->SetRelativeLocation(FVector(0.f, Extent.Y, Extent.Z));
-	LeftDoorMesh->SetRelativeScale3D(DoorSize / 100.f);
-	RightDoorMesh->SetRelativeScale3D(DoorSize / 100.f);
+	ApplyLeafMeshes();
 
 	BeaconPivot->SetRelativeLocation(BeaconOffset);
 	if (BeaconMaterial)
@@ -105,6 +107,23 @@ void AGateActor::OnConstruction(const FTransform& Transform)
 	BeaconLight->SetLightColor(BeaconColor);
 	BeaconLight->SetIntensity(BeaconIntensity);
 	BeaconLight->SetAttenuationRadius(BeaconRadius);
+}
+
+void AGateActor::ApplyLeafMeshes()
+{
+	// 2026-10-21: the cube stretched to DoorSize, or an art leaf at its authored place (mirrored on the right; VisualMeshRules).
+	UStaticMesh* Shown = LeafMesh ? LeafMesh.Get() : PlaceholderLeafMesh.Get();
+	const FTransform Left = VisualMeshRules::ResolveTransform(LeafMesh != nullptr, DoorSize, LeafMeshTransform);
+	const FTransform Right = LeafMesh ? VisualMeshRules::MirrorAcrossY(Left) : Left;
+	for (UStaticMeshComponent* LeafComponent : { LeftDoorMesh.Get(), RightDoorMesh.Get() })
+	{
+		if (Shown && LeafComponent->GetStaticMesh() != Shown)
+		{
+			LeafComponent->SetStaticMesh(Shown);
+		}
+	}
+	LeftDoorMesh->SetRelativeTransform(Left);
+	RightDoorMesh->SetRelativeTransform(Right);
 }
 
 void AGateActor::BeginPlay()
@@ -183,6 +202,9 @@ void AGateActor::OpenGate()
 	bOpening = true;
 	SetActorTickEnabled(true);
 	SetStatus(EGateProgressStatus::Opening);
+	FGameplayEventContext Context;
+	Context.Target = this;
+	GameplayEvents::RaiseWithContext(this, GameplayEvents::GateOpened, Context); // 2026-10-21: the tutorial / smokes follow the door
 }
 
 void AGateActor::UnlockProgress()

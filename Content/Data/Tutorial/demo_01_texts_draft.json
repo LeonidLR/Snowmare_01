@@ -374,6 +374,50 @@
     "TUT_MEDKIT": {
       "title": "MEDKIT",
       "text": "{focus} is wounded. Select him ({key:Select.Member}) and press H to use his medkit - or open the inventory ({key:Inventory.Open}) and click Medkit. No medkit left? Select a teammate, open the inventory and drag a medkit onto {focus}, or loot one from a crate."
+    },
+    "TUT_BEAT_A7": {
+      "title": "POWER FOR THE DOOR"
+    },
+    "TUT_BEAT_A8": {
+      "title": "THE HORDE"
+    },
+    "WT_A7_01": {
+      "text": "Generator shed's dry. And that blast door on the east wall is dead without power."
+    },
+    "WT_A7_02": {
+      "text": "Then we make power. Fuel, and something to carry it in."
+    },
+    "WT_A7_03": {
+      "text": "Saw an empty jerrycan out by the far container. And the burnt-out BTR in the corner still has diesel in its tank."
+    },
+    "OBJ_A7_CANISTER": {
+      "text": "Find the empty jerrycan - follow the marker"
+    },
+    "TUT_A7_OBJECTIVE": {
+      "title": "OBJECTIVES",
+      "text": "The objective list on the right says what to do next; the marker and the arrow at the screen edge show where. Follow it to the jerrycan, then click it to take it."
+    },
+    "OBJ_A7_DRAIN": {
+      "text": "Drain diesel from the burnt-out BTR in the yard into the jerrycan"
+    },
+    "OBJ_A7_GENERATOR": {
+      "text": "Refuel and start the generator in the shed"
+    },
+    "WT_A7_04": {
+      "text": "She's running. Heat and power - and the turret can draw from her now. Keep the dogs off her."
+    },
+    "TUT_A7_PREP": {
+      "title": "THE CONSOLE STARTS THE FIGHT",
+      "text": "Power to the blast door makes noise - the lake will come for you, and the door opens only after the last wave, while the generator runs. Prepare first: set up the turret, mines and barricades from the supply ({key:Deploy.Start}), push barrels and barricades into place, put someone on the high ground. Then use the console by the door."
+    },
+    "OBJ_A7_TERMINAL": {
+      "text": "When the defence is ready: power the blast door console (it starts the horde)"
+    },
+    "WT_A8_01": {
+      "text": "Cold Silence, we see a power spike on your grid... and movement on the ice. They heard it. Hold until that door opens."
+    },
+    "WT_A8_02": {
+      "text": "Here they come. Keep the generator alive - no power, no door."
     }
   }
 }

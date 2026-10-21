@@ -15,6 +15,8 @@
 
 ## Interaction / world objects, quest chain, blast gate (old §5)
 
+- **Art meshes and quest events (2026-10-21, Demo 01 lake quest):** `AInteractableActor::VisualMesh` + `VisualMeshTransform` - an art mesh shown at its own transform relative to the collision box (never stretched; empty = the class placeholder filling the box, as before; clearing it brings the placeholder back), `AGateActor::LeafMesh` + `LeafMeshTransform` for the left leaf, the right one mirrored (`VisualMeshRules`, tests `CodexTactics.Interactables.VisualMesh.*`); the box stays the collision / navmesh / click shape. The vehicle menu title is the object's `DisplayName` ("Abandoned APC" without one; the BMP-2 wording is gone). `UQuestSubsystem::InteractWith(Type, Object, Instigator)` raises `QuestStep.<Kind>` + `QuestStep` for a step done; the generator raises `GeneratorDamaged` / `GeneratorDown` / `GeneratorRepaired`, the gate `GateOpened` (when the leaves start to slide). Smoke `LakeQuestSmoke` on the lake.
+
 **Interaction / world objects**
 - `Interactables/InteractionSubsystem` — click → approach → `BuildActionMenu` → menu or feed line; confirm /
   relocate / trap / cancel. Mine "approaching defuser" mark. Godot `main.gd _trigger_menu_for_object`,

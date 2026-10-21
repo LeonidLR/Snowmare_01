@@ -104,7 +104,7 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	{
 		AddError(TEXT("demo file warning: ") + Warning);
 	}
-	TestEqual(TEXT("A0..A4 (rev 5)"), Data.Beats.Num(), 5);
+	TestEqual(TEXT("A0..A4 (rev 5) + A7 / A8 (the canister quest and the horde, 2026-10-21)"), Data.Beats.Num(), 7);
 	TestEqual(TEXT("start beat"), Data.StartBeat, FName(TEXT("A0")));
 	// A0 camera lesson is STAGED (2026-10-12; MMB drag added 2026-10-13): pan -> MMB drag -> Q/E -> mouse -> zoom, each after the previous,
 	// no timeout; then the movement lesson (rev 5c 2026-10-13): click to walk (rev 5e: the run is taught after the heat pack, A1_sprint).

@@ -32,7 +32,7 @@
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke",
-    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke"
+    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -61,6 +61,7 @@
     "InteriorExitSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "PeekMinesSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "CoverSwitchLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "_why": "2026-10-21: the cover switch between two buildings in a row (the A3 gap rocks) on the lake layout" },
+    "LakeQuestSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A7 canister quest in the lake's last compound (layout 5k): navmesh paths, jerrycan -> BTR -> generator -> console, wave 1 on the lake lanes, the paced blast door" },
     "TutorialAmbushLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A4 ambush in two parts on the lake layout (the placed zombies walk their routes: a loop into the wire, a whistle)" },
     "TutorialAmbushLakeSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 1 fails: spotted -> pause + posture card, a skirmish, back to exploring" },
     "TutorialAmbushLakeLureSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 2 fails: spotted at the wall -> pause + posture card, a skirmish, back to exploring" },
@@ -122,7 +123,7 @@
       "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
         "Source/**/Debug/TutorialSmoke*", "Source/**/Debug/TutorialAmbushLake*", "Content/Data/Tutorial/**"],
       "tests": ["CodexTactics.Tutorial", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke", "PeekMinesSmoke"]
+      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke", "PeekMinesSmoke", "LakeQuestSmoke"]
     },
     {
       "name": "sniper",
@@ -212,7 +213,7 @@
       "name": "interactables-core",
       "globs": ["Source/**/Interactables/Interact*", "Source/**/Interactables/ActionMenu*", "Source/**/UI/ActionMenu*", "Source/**/Interactables/VaultNavigation*", "Source/**/Interactables/Gate*"],
       "tests": ["CodexTactics.Quests", "CodexTactics.Characters.Vault"],
-      "smokes": ["QuestChainSmoke", "GateGeneratorSmoke", "VaultSmoke", "DeployableSmoke"]
+      "smokes": ["QuestChainSmoke", "GateGeneratorSmoke", "VaultSmoke", "DeployableSmoke", "LakeQuestSmoke"]
     },
     {
       "name": "narrative-dialogue",
@@ -221,16 +222,23 @@
       "smokes": ["NarrativeSmoke", "DialogueSmoke"]
     },
     {
+      "name": "lake-quest",
+      "_comment": "2026-10-21: the Demo 01 canister quest in the lake's last compound (layout section 5k, the A7 beat, the BTR's art mesh on the Vehicle interactable).",
+      "globs": ["Source/**/Debug/LakeQuestSmoke*", "Source/**/Interactables/VisualMesh*", "Scripts/Editor/build_demo01_lake_layout.py", "Content/Maps/L_Demo01_A_FrozenLake.umap", "Content/Data/LevelJson/L_Demo01_A_FrozenLake.json"],
+      "tests": ["CodexTactics.Quests", "CodexTactics.Interactables.VisualMesh", "CodexTactics.Tutorial.QuestLesson"],
+      "smokes": ["LakeQuestSmoke", "TutorialAmbushLakeSmoke", "SaveCoverageLakeSmoke"]
+    },
+    {
       "name": "quests",
       "globs": ["Source/**/Quests/Quest*"],
       "tests": ["CodexTactics.Quests"],
-      "smokes": ["QuestChainSmoke", "MissionSmoke", "GateGeneratorSmoke"]
+      "smokes": ["QuestChainSmoke", "MissionSmoke", "GateGeneratorSmoke", "LakeQuestSmoke"]
     },
     {
       "name": "blast-gate",
       "globs": ["Source/**/Quests/GateProgress*", "Source/**/Interactables/Gate*", "Source/**/Debug/GateGeneratorSmoke*", "Source/**/Debug/QuestChainSmoke*"],
       "tests": ["CodexTactics.Quests", "CodexTactics.LevelJson"],
-      "smokes": ["GateGeneratorSmoke", "QuestChainSmoke", "SaveRoundTripSmoke", "VictorySmoke", "MissionSmoke", "MainMenuSmoke"]
+      "smokes": ["GateGeneratorSmoke", "QuestChainSmoke", "SaveRoundTripSmoke", "VictorySmoke", "MissionSmoke", "MainMenuSmoke", "LakeQuestSmoke"]
     },
     {
       "name": "grenades",

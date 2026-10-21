@@ -8,6 +8,7 @@
 class UBoxComponent;
 class UMaterialInterface;
 class USpotLightComponent;
+class UStaticMesh;
 class UStaticMeshComponent;
 struct FOverheadLabel;
 
@@ -145,7 +146,26 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Gate")
 	TObjectPtr<UBoxComponent> RightDoor;
 
+	/**
+	 * 2026-10-21: an art mesh for the LEFT leaf (the right one shows it mirrored across the gate's centre line). Set: it sits at
+	 * LeafMeshTransform relative to the leaf box, never stretched (VisualMeshRules); empty: the engine cube filling DoorSize, as
+	 * before. The leaf boxes stay the collision / navmesh shape.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate|Visual")
+	TObjectPtr<UStaticMesh> LeafMesh;
+
+	/** Where LeafMesh sits relative to the left leaf box centre; the right leaf uses its mirror image. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate|Visual")
+	FTransform LeafMeshTransform;
+
 private:
+	/** The cube or LeafMesh on both leaves (OnConstruction). */
+	void ApplyLeafMeshes();
+
+	/** The engine cube the leaves show without LeafMesh. */
+	UPROPERTY()
+	TObjectPtr<UStaticMesh> PlaceholderLeafMesh;
+
 	UFUNCTION()
 	void HandleGateOpened();
 

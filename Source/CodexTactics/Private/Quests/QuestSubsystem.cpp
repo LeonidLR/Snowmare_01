@@ -1,4 +1,5 @@
 #include "Quests/QuestSubsystem.h"
+#include "Core/PlayerCommands.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -13,9 +14,10 @@ bool UQuestSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) con
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
 }
 
-void UQuestSubsystem::InteractWith(EInteractableType ObjectType, AActor* ObjectActor)
+void UQuestSubsystem::InteractWith(EInteractableType ObjectType, AActor* ObjectActor, AActor* InstigatorActor)
 {
 	const FText ObjectiveBefore = GetObjective();
+	const FQuestChainState StateBefore = State;
 	FQuestInteractionResult Result = State.Interact(ObjectType);
 	// User request 2026-10-11: a gate paced by the generator and the waves does not "swing open" at the terminal.
 	if (const AGateActor* Gate = AGateActor::FindLevelGate(GetWorld()); Gate && Gate->UsesGeneratorPacing())
@@ -56,6 +58,18 @@ void UQuestSubsystem::InteractWith(EInteractableType ObjectType, AActor* ObjectA
 	if (!ObjectiveAfter.EqualTo(ObjectiveBefore))
 	{
 		OnObjectiveChanged.Broadcast(ObjectiveAfter);
+	}
+
+	// 2026-10-21 (Demo 01 A7): the tutorial follows the chain ("QuestStep.FuelDrained" first, then "QuestStep").
+	const FName Step = FQuestChainState::GetStepEvent(StateBefore, State);
+	if (!Step.IsNone())
+	{
+		FGameplayEventContext Context;
+		Context.Subject = InstigatorActor;
+		Context.Target = ObjectActor;
+		Context.Kind = Step;
+		GameplayEvents::RaiseWithContext(this, FName(*(GameplayEvents::QuestStep.ToString() + TEXT(".") + Step.ToString())), Context);
+		GameplayEvents::RaiseWithContext(this, GameplayEvents::QuestStep, Context);
 	}
 }
 
