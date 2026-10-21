@@ -5,6 +5,7 @@
 #include "Misc/AutomationTest.h"
 #include "Core/PlayerCommands.h"
 #include "Tactics/CoverSwitchRules.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Tutorial/TutorialRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -279,6 +280,27 @@ bool FCoverSwitchCornerToCornerTest::RunTest(const FString&)
 		-FMath::Cos(FMath::DegreesToRadians(40.f))), Protected));
 	TestEqual(TEXT("Arrival facing: no edge within the reach -> the fallback"), static_cast<int32>(CoverSwitchRules::ArrivalFacing(Arrived, 100.f, ECoverFacing::Left)),
 		static_cast<int32>(ECoverFacing::Left));
+	return true;
+}
+
+COVER_SWITCH_TEST(FCoverSwitchCoplanarBuildingsTest, "CoplanarBuildingsAreTwoWalls")
+bool FCoverSwitchCoplanarBuildingsTest::RunTest(const FString&)
+{
+	using namespace CoverSwitchTestUtil;
+	// User bug 2026-10-21: two buildings in a row, their fronts in one plane with a gap - he stands at A's end (its right edge, +Y, 50 cm away).
+	const FCoverSlot AtEnd = MakeSwitchSlot(FVector::ZeroVector, 300.f, 50.f);
+	const FCoverSlot OtherBuilding = MakeSwitchSlot(FVector(0.f, 360.f, 0.f), 60.f, 240.f);
+	TestFalse(TEXT("The other building's front, 2.5 m past A's end, in A's plane: another wall"), CoverTraceRules::IsSameWall(AtEnd, OtherBuilding));
+	const FCoverSlot SlightlyBack = MakeSwitchSlot(FVector(-30.f, 360.f, 0.f), 60.f, 240.f);
+	TestFalse(TEXT("... 30 cm back (within the plane tolerance): another wall"), CoverTraceRules::IsSameWall(AtEnd, SlightlyBack));
+	TestEqual(TEXT("... so a click there is the switch (not a shimmy along his wall)"),
+		static_cast<int32>(CoverSwitchRules::Evaluate(true, false, AtEnd, OtherBuilding, CoverTraceRules::IsSameWall(AtEnd, OtherBuilding))),
+		static_cast<int32>(ECoverSwitchVerdict::Switch));
+	TestTrue(TEXT("A point on his own wall before its end: the same wall (the shimmy)"), CoverTraceRules::IsSameWall(AtEnd, MakeSwitchSlot(FVector(0.f, 40.f, 0.f), 340.f, 10.f)));
+	// A long wall of pieces butting against each other: no exposed edge between them - one wall.
+	const FCoverSlot PieceA = MakeSwitchSlot(FVector::ZeroVector, 300.f, -1.f);
+	const FCoverSlot PieceB = MakeSwitchSlot(FVector(0.f, 360.f, 0.f), -1.f, 240.f);
+	TestTrue(TEXT("Wall pieces butting together: one wall"), CoverTraceRules::IsSameWall(PieceA, PieceB));
 	return true;
 }
 

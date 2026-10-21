@@ -164,6 +164,16 @@
   151 cm forward, 336 cm across, the clip takes over 1.1 m out, its body 69 cm off the runner).
 - **Preview:** the hover ghost stands at that corner slot in the mirrored pose (`ACoverGhostActor::ShowForFacing`); the HUD draws the dash's
   **navmesh path** (`FindPathToLocationSynchronously`, `GetCoverPreviewPath`; diagonal when nothing is in the way) instead of the straight line.
+- **Two buildings in a row (user bug 2026-10-21, insistent: "I still can't dash from the edge of one building to the edge of the other -
+  to the wall facing the SAME way, on the other building"):** root cause - `CoverTraceRules::IsSameWall` judged only the normal and the plane
+  (within 40 cm), so two buildings whose same-facing faces lie in one plane (the lake's A3 gap rocks: both west faces at X 21870, a 3 m gap)
+  counted as ONE wall: the hover offered no switch ("his own wall"), the click was a shimmy along his wall. Now a slot that lies more than
+  `SameWallEdgeToleranceCm` 15 past an exposed edge of the other (either way) is another wall; pieces butting together (no exposed edge between
+  them) stay one wall. Proved on the lake: `CoverSwitchLakeSmoke` with the old rule -> "same wall 1, verdict his own wall", with the new one ->
+  the ghost on the south rock's west face at its north corner (28 cm in), mirrored, the double-click a sprint dash (630 cm/s) through
+  `std_sprint_fwd_R_to_cvr_std_idle_R`, in cover there at the corner. `CoverSwitchSmoke` stage 11: B moved into A's plane (0 / 30 cm back /
+  30 cm forward, gaps 2.5 / 2.5 / 3.5 m), hover near the edge and in the middle -> the front-face corner ghost, the double-click -> there.
+  Test `CodexTactics.Tactics.CoverSwitch.CoplanarBuildingsAreTwoWalls`.
 - **Second playtest pass (user 2026-10-21):** (1) "only the walking animation - I want to click and he quickly moves from one edge to the
   other": ANY confirm of a switchable ghost is now the switch - the double-click and the slow second click alike
   (`CoverSwitchRules::IsSwitchConfirm`) - a sprint (725 cm/s) arriving through the pack's **sprint** run-ins

@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke",
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke"
   ],
   "smokeDefaults": {
@@ -58,6 +58,7 @@
     "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "InteriorExitSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "PeekMinesSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
+    "CoverSwitchLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "_why": "2026-10-21: the cover switch between two buildings in a row (the A3 gap rocks) on the lake layout" },
     "TutorialAmbushLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A4 ambush in two parts on the lake layout (the placed zombies walk their routes: a loop into the wire, a whistle)" },
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" },
@@ -513,7 +514,7 @@
       "name": "cover-switch",
       "globs": ["Source/**/Tactics/CoverSwitch*", "Source/**/Debug/CoverSwitchSmoke*", "Source/**/Characters/OperativeCharacterCoverEntry*", "Scripts/Editor/measure_cover_switch_clips.py"],
       "tests": ["CodexTactics.Tactics.CoverSwitch", "CodexTactics.Tactics.Cover"],
-      "smokes": ["CoverSwitchSmoke", "CornerEntrySmoke", "CoverSmoke", "GroupCoverSmoke"]
+      "smokes": ["CoverSwitchSmoke", "CoverSwitchLakeSmoke", "CornerEntrySmoke", "CoverSmoke", "GroupCoverSmoke"]
     },
     {
       "name": "cover-wrap",

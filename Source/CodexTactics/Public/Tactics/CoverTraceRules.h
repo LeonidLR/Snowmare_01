@@ -65,7 +65,13 @@ namespace CoverTraceRules
 	 */
 	CODEXTACTICS_API float RefineEdgeDistance(float HitCm, float MissCm, TFunctionRef<bool(float)> WallAt, int32 Iterations);
 
-	/** The two slots lie on one wall (parallel, same plane) — a click there is a shimmy, not a new cover. */
+	/** A point this far past an exposed edge (the edge is refined within ~2.5 cm) is past the wall's end, cm (IsSameWall). */
+	inline constexpr float SameWallEdgeToleranceCm = 15.f;
+
+	/**
+	 * The two slots lie on one wall (parallel, same plane, and neither lies past an exposed edge of the other: 2026-10-21, two buildings
+	 * in a row with a gap are two walls) — a click there is a shimmy, not a new cover.
+	 */
 	CODEXTACTICS_API bool IsSameWall(const FCoverSlot& A, const FCoverSlot& B, const FCoverTraceConfig& Config = FCoverTraceConfig());
 
 	/** Signed distance of Point along A's wall tangent (positive = to the operative's right), cm. */
