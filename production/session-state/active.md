@@ -14,6 +14,16 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-21 — character single-slot roll-out DONE (main 6225283 pushed)
+
+- From 2026-10-20 the user dropped Gemini: shaders / materials / VFX / perf are ours.
+- Pipeline `Scripts/Pipeline/` (docs/pipeline/CHARACTER_SINGLE_SLOT.md): clean -> reduce (Decimate) -> atlas (UVPackmaster 4) -> bake -> export -> review -> `run_unreal_import.ps1` (editor closed, content snapshot guard) -> `OptimizedCharacterSmoke` -> `cleanup_intermediates.ps1`.
+- All 11 bodies imported under `/Game/Characters/{Operatives,Enemies}/Optimized/<Asset>/` with every colour set as its own MI: Post_Apo_Survivor_a (3 sets), Female_Soldier, FrozenPMC (default + 5), MilitaryZombie_1-3 (3 each), Brute, Cutter, Marksman, Hound (5), Frostbitten (4, M_CharacterMaster_Subsurface). Budgets: operatives 50k / 4K, enemies 20k / 2K, Hound 10k, Brute 25k.
+- NOT done (user's call): switching any BP_* / roster to the optimized meshes.
+- Today also: cover corner-to-corner + wall-following (819348f) and hovered = committed fix (38080cd); HasEnemiesWithin counts sight-hidden enemies (c2c1701).
+- Incident 2026-10-20: my worktree removal emptied untracked Content/Characters/Mannequins + Content/VFX/SnowTracks through nested junctions; restored (template copy / regenerated). Memory updated (recursive junction scan).
+- Open: M_CombatFeedback lacks bUsedWithSkeletalMesh (hit flash may not show in a packaged build) - asked the user whether to fix.
+
 ## Checkpoint 2026-10-19 (end of day) — REPORT FOR THE MORNING
 Main pushed. Final verification on main: full unity build OK, unity clashes 0, 545/545 unit tests, 12 smokes green
 (incl. the new SaveCoverage / SaveCoverageLake).
