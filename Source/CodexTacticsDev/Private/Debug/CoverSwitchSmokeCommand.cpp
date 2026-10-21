@@ -22,10 +22,13 @@
 //    B's NEAR corner on its front face in the mirrored pose (facing right) + the dash path; a double-click on B's SIDE face (the face
 //    towards him) still dashes diagonally to that front-face corner and he arrives facing right (mirrored), at the corner.
 //    Shot mode adds cover_corner_switch_preview.png / _dash / _settled;
+//    (2026-10-21: a click on B's FAR end of the front face - the face under the cursor decides, see 10);
 // 10 the committed target is the hovered ghost (user bug 2026-10-20: "the ghost is right, I click it again - he ends round the corner"),
 //    through the controller's click path (HandleWorldHit, the real double-click timing): from A's end, hover B's near edge - its END face
 //    (towards A) and its front face near the edge - then click: the first click starts no order and its ghost stays where the hover ghost
-//    stood (same corner, same pose); a double-click / a slow second click commits exactly that slot and side (switch / ordinary run).
+//    stood (same corner, same pose); a double-click / a slow second click commits exactly that slot and side. 2026-10-21 (user): any
+//    confirm is the quick dash (sprint speed, the pack's sprint run-in), and the hovered FACE decides - B's end face towards him -> a slot on
+//    that face where the cursor is (the perpendicular move), B's front face -> its near corner in the mirrored pose.
 
 #include "CoreMinimal.h"
 
@@ -97,6 +100,16 @@ namespace CoverSwitchSmoke
 		float SwitchSeenAt = -1.f;
 		/** 10: the click case (0 end face double, 1 front face double, 2 front face slow), its hit, the hovered ghost. */
 		int32 ClickCase = 0;
+		/** The face the click case expects to end on (its normal) and whether the run-in clip may be the ordinary entry. */
+		FVector ExpectNormal = FVector::ZeroVector;
+		bool bAnyEntry = false;
+		/** The fastest the operative moved out of cover on the current dash, cm/s. */
+		float MaxDashSpeed = 0.f;
+		/** Shot mode, stage 10: the end-face hover still taken; the sprint dash / arrival stills taken; when the run-in was seen. */
+		bool bEndFaceShot = false;
+		bool bSprintDashShot = false;
+		bool bSprintArrivalShot = false;
+		float SprintEntrySeenAt = -1.f;
 		FHitResult ClickHit;
 		FVector HoverAt = FVector::ZeroVector;
 		ECoverFacing HoverFacing = ECoverFacing::Right;
@@ -260,6 +273,8 @@ namespace CoverSwitchSmoke
 		State.SwitchCountBefore = Op->GetCoverSwitchCount();
 		State.StartDistance = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), Target.WorldLocation));
 		State.SwitchSeenAt = -1.f;
+		State.MaxDashSpeed = 0.f;
+		State.bAnyEntry = false;
 		PC->ShowCoverPreview(Op, Target);
 		PC->ConfirmCoverPreview(bDoubleClick);
 	}
@@ -270,6 +285,10 @@ namespace CoverSwitchSmoke
 		State.bSawSprint |= Op->IsSprinting();
 		State.bSawOutOfCover |= !Op->bInCover && Op->GetVelocity().Size2D() > 100.f;
 		State.bSawSwitchEntry |= Op->IsCoverSwitchEntry();
+		if (!Op->bInCover)
+		{
+			State.MaxDashSpeed = FMath::Max(State.MaxDashSpeed, static_cast<float>(Op->GetVelocity().Size2D()));
+		}
 		if (const UOperativeAnimInstance* Anim = AnimOf(Op))
 		{
 			FString Clip;
@@ -301,15 +320,21 @@ namespace CoverSwitchSmoke
 		Check(State, State.bSawOutOfCover, FString::Printf(TEXT("%s: out of cover on the way (exposed)"), Label));
 		if (State.bExpectSwitch)
 		{
+			// 2026-10-21: the quick dash - a sprint all the way to the run-in.
+			Check(State, State.MaxDashSpeed >= 600.f, FString::Printf(TEXT("%s: a sprint dash, not a walk (top speed %.0f cm/s)"), Label, State.MaxDashSpeed));
+		}
+		if (State.bExpectSwitch && !State.bAnyEntry)
+		{
+			// The approach / ending as expected (named by the jog clip), from the pack's SPRINT set (user 2026-10-21: the fast move).
 			const FString Played = Anim ? Anim->GetLastCoverSwitchClip() : FString();
 			Check(State, bSwitched && State.bSawSwitchEntry, FString::Printf(TEXT("%s: arrived through the switch run-in (count %d -> %d)"), Label,
 				State.SwitchCountBefore, Op->GetCoverSwitchCount()));
-			Check(State, Played == State.ExpectedClip && Anim->GetCoverClipLog().Contains(Played),
+			Check(State, Played.Replace(TEXT("_sprint_"), TEXT("_jog_")) == State.ExpectedClip && Played.Contains(TEXT("_sprint_")) && Anim->GetCoverClipLog().Contains(Played),
 				FString::Printf(TEXT("%s: the run-in clip %s (expected %s), started at %.2f s, the clip body %.0f cm off the runner"), Label, *Played,
 					*State.ExpectedClip, Anim ? Anim->GetLastCoverSwitchStartSeconds() : -1.f, Op->GetLastCoverSwitchMismatchCm()));
 			Check(State, Anim && Anim->GetLastCoverSwitchStartSeconds() > 0.2f, FString::Printf(TEXT("%s: only the last metres of the clip played"), Label));
 		}
-		else
+		else if (!State.bExpectSwitch)
 		{
 			Check(State, !bSwitched && !State.bSawSwitchEntry, FString::Printf(TEXT("%s: the ordinary cover order - no run-in clip"), Label));
 		}
@@ -522,11 +547,11 @@ namespace CoverSwitchSmoke
 			{
 				return true;
 			}
-			// 3: a slow second click from A's end: the ordinary cover order.
+			// 3: a slow second click from A's end: the quick dash too (user 2026-10-21).
 			Check(State, Op->EvaluateCoverSwitch(State.SlotB) == ECoverSwitchVerdict::Switch, TEXT("3: at A's end again"));
-			Confirm(PC, Op, State, State.SlotB, false, false, FString());
-			Check(State, !PC->WasLastCoverConfirmSwitch() && Op->HasPendingCover() && !Op->HasPendingCoverSwitch(),
-				TEXT("3: a single (slow) confirm is the ordinary cover order"));
+			Confirm(PC, Op, State, State.SlotB, false, true, TEXT("anim_M4_std_jog_fwd_L_to_cvr_std_idle_L"));
+			Check(State, PC->WasLastCoverConfirmSwitch() && Op->HasPendingCoverSwitch(),
+				TEXT("3: a slow second click on a switchable ghost is the switch too (the quick dash)"));
 			Next(State, 7);
 			return true;
 		}
@@ -700,11 +725,32 @@ namespace CoverSwitchSmoke
 			World->LineTraceSingleByChannel(State.ClickHit, Start, Start + Along * 500.f, ECC_Visibility, Params);
 			// The hover: its ghost.
 			const bool bHover = State.ClickHit.GetActor() == State.Walls[1].Get() && PC->UpdateCoverSwitchHover(Op, &State.ClickHit) && PC->IsCoverSwitchHoverShown();
+			if (State.bShot && State.ClickCase == 0 && !State.bEndFaceShot)
+			{
+				// Shot mode: the end-face hover (ghost on the face under the cursor + the dash path), then on (stage 31 -> back here).
+				PC->bFreezeCoverHoverForTesting = true;
+				PlaceCamera(World, State, FVector(-250.f, 330.f, 800.f), FVector(380.f, 450.f, 0.f), true);
+				Next(State, 31);
+				return true;
+			}
 			const ACoverGhostActor* HoverGhost = PC->GetCoverSwitchGhost();
 			State.HoverAt = HoverGhost ? HoverGhost->GetSlot().WorldLocation : FVector::ZeroVector;
 			State.HoverFacing = HoverGhost ? HoverGhost->GetShownFacing() : ECoverFacing::Left;
-			Check(State, bHover && FMath::Abs(AlongR(State, State.HoverAt) - 607.f) < 25.f && State.HoverFacing == ECoverFacing::Right,
-				FString::Printf(TEXT("10 (%s): the hover ghost at B's near corner on its front face (R %.0f), mirrored (facing right)"), CaseName, AlongR(State, State.HoverAt)));
+			const FVector HoverNormal = HoverGhost ? HoverGhost->GetSlot().WallNormal : FVector::ZeroVector;
+			if (State.ClickCase == 0)
+			{
+				// The end face towards him: the perpendicular move - a slot on THAT face where the cursor is.
+				State.ExpectNormal = -State.R;
+				Check(State, bHover && FVector::DotProduct(HoverNormal, -State.R) > 0.9f && FMath::Abs(AlongF(State, State.HoverAt) - (NearFaceBC + 20.f)) < 30.f,
+					FString::Printf(TEXT("10 (%s): the hover ghost on B's END face where the cursor is (F %.0f, R %.0f) - the perpendicular move"), CaseName,
+						AlongF(State, State.HoverAt), AlongR(State, State.HoverAt)));
+			}
+			else
+			{
+				State.ExpectNormal = -State.F;
+				Check(State, bHover && FMath::Abs(AlongR(State, State.HoverAt) - 607.f) < 25.f && State.HoverFacing == ECoverFacing::Right,
+					FString::Printf(TEXT("10 (%s): the hover ghost at B's near corner on its front face (R %.0f), mirrored (facing right)"), CaseName, AlongR(State, State.HoverAt)));
+			}
 			// The first click: a preview only - no order, and its ghost where the hover ghost stood.
 			PC->HandleWorldHit(State.ClickHit);
 			const ACoverGhostActor* ClickGhost = PC->GetCoverPreviewGhost();
@@ -721,6 +767,8 @@ namespace CoverSwitchSmoke
 			}
 			State.Target = State.SlotB;
 			State.bExpectSwitch = true;
+			State.bAnyEntry = State.ClickCase == 0; // the end face: the run-in clip only when one fits that approach
+			State.MaxDashSpeed = 0.f;
 			State.ExpectedClip = TEXT("anim_M4_std_jog_fwd_L_to_cvr_std_idle_L");
 			State.bSawSprint = State.bSawOutOfCover = State.bSawSwitchEntry = false;
 			State.SwitchCountBefore = Op->GetCoverSwitchCount();
@@ -732,6 +780,22 @@ namespace CoverSwitchSmoke
 			Next(State, 29);
 			return true;
 		}
+		case 31: // Shot mode: the end-face hover still
+		{
+			if (State.StageTime >= 0.4f && !State.bEndFaceShot)
+			{
+				RequestShot(State, TEXT("cover_switch_endface_preview"));
+				State.bEndFaceShot = true;
+			}
+			if (State.StageTime >= 0.8f)
+			{
+				PC->bFreezeCoverHoverForTesting = false;
+				PlaceCamera(World, State, FVector(-120.f, 250.f, 260.f), FVector(400.f, 560.f, 90.f), false);
+				Next(State, 27);
+				State.StageTime = 5.f;
+			}
+			return true;
+		}
 		case 28:
 		{
 			if (State.StageTime < 0.6f)
@@ -739,28 +803,49 @@ namespace CoverSwitchSmoke
 				return true;
 			}
 			State.Target = State.SlotB;
-			State.bExpectSwitch = false;
+			State.bExpectSwitch = true;
+			State.bAnyEntry = false;
+			State.MaxDashSpeed = 0.f;
+			State.ExpectedClip = TEXT("anim_M4_std_jog_fwd_L_to_cvr_std_idle_L");
 			State.bSawSprint = State.bSawOutOfCover = State.bSawSwitchEntry = false;
 			State.SwitchCountBefore = Op->GetCoverSwitchCount();
 			State.StartDistance = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), State.HoverAt));
 			PC->HandleWorldHit(State.ClickHit);
-			Check(State, !PC->WasLastCoverConfirmSwitch() && Op->HasPendingCover() && FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, State.HoverAt) < 5.f,
-				FString::Printf(TEXT("10 (slow second click): the ordinary cover order to the hovered slot (%.0f cm off it), no switch"),
+			Check(State, PC->WasLastCoverConfirmSwitch() && Op->HasPendingCoverSwitch() && FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, State.HoverAt) < 5.f,
+				FString::Printf(TEXT("10 (slow second click): the quick dash to the hovered slot too (%.0f cm off it)"),
 					FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, State.HoverAt)));
 			Next(State, 29);
 			return true;
 		}
 		case 29:
 		{
+			if (State.bShot && State.ClickCase == 1)
+			{
+				// Shot mode: the sprint dash mid-way and the sprint run-in at the front-face corner.
+				if (!State.bSprintDashShot && !Op->bInCover && Op->GetVelocity().Size2D() > 600.f)
+				{
+					RequestShot(State, TEXT("cover_switch_sprint_dash"));
+					State.bSprintDashShot = true;
+				}
+				if (!State.bSprintArrivalShot && Op->IsCoverSwitchEntry())
+				{
+					State.SprintEntrySeenAt = State.SprintEntrySeenAt < 0.f ? State.StageTime : State.SprintEntrySeenAt;
+					if (State.StageTime - State.SprintEntrySeenAt >= 0.2f)
+					{
+						RequestShot(State, TEXT("cover_switch_sprint_arrival"));
+						State.bSprintArrivalShot = true;
+					}
+				}
+			}
 			if (!CheckArrival(State, Op, TEXT("10 (hovered = committed)")))
 			{
 				return true;
 			}
 			const FCoverSlot& Arrived = Op->GetCoverSlot();
-			Check(State, FVector::Dist2D(Arrived.WorldLocation, State.HoverAt) < 10.f && FVector::DotProduct(Arrived.WallNormal, -State.F) > 0.9f
+			Check(State, FVector::Dist2D(Arrived.WorldLocation, State.HoverAt) < 10.f && FVector::DotProduct(Arrived.WallNormal, State.ExpectNormal) > 0.9f
 				&& Op->CoverFacing == State.HoverFacing,
-				FString::Printf(TEXT("10 case %d: in cover exactly where the ghost stood (%.0f cm off, front face %d), facing as it did"), State.ClickCase,
-					FVector::Dist2D(Arrived.WorldLocation, State.HoverAt), FVector::DotProduct(Arrived.WallNormal, -State.F) > 0.9f ? 1 : 0));
+				FString::Printf(TEXT("10 case %d: in cover exactly where the ghost stood (%.0f cm off, the expected face %d), facing as it did"), State.ClickCase,
+					FVector::Dist2D(Arrived.WorldLocation, State.HoverAt), FVector::DotProduct(Arrived.WallNormal, State.ExpectNormal) > 0.9f ? 1 : 0));
 			ResetSquad(Squad, State, FVector2D(0.f, 100.f));
 			Op->OrderTakeCover(State.SlotAEnd, false);
 			++State.ClickCase;
@@ -881,12 +966,11 @@ namespace CoverSwitchSmoke
 		{
 			PC->bFreezeCoverHoverForTesting = false;
 			PC->UpdateCoverSwitchHover(nullptr, nullptr);
-			// The double-click on B's SIDE face (the 40 cm face towards him, at R 550).
+			// The double-click on B's FRONT face at its FAR end (R 820): still its near corner (2026-10-21: the end face is the perpendicular move, 10).
 			FCoverSlot Side;
-			const FVector SidePoint = State.P + State.F * (NearFaceBC + 20.f) + State.R * 550.f;
-			const bool bSide = CoverTraceRules::FindCoverSlotAt(World, FVector(SidePoint.X, SidePoint.Y, State.GroundZ + 90.f), State.R, Side)
-				&& Side.WallActor.Get() == State.Walls[1].Get() && FVector::DotProduct(Side.WallNormal, -State.R) > 0.9f;
-			Check(State, bSide, TEXT("9: a slot on B's side face (facing A)"));
+			const bool bSide = FindSlot(World, State, NearFaceBC, 820.f, 90.f, Side) && Side.WallActor.Get() == State.Walls[1].Get()
+				&& FVector::DotProduct(Side.WallNormal, -State.F) > 0.9f;
+			Check(State, bSide, TEXT("9: a slot at B's front face's far end"));
 			if (!bSide)
 			{
 				Next(State, 26);
@@ -894,7 +978,7 @@ namespace CoverSwitchSmoke
 			}
 			State.DashStart = Op->GetActorLocation();
 			Confirm(PC, Op, State, Side, true, true, TEXT("anim_M4_std_jog_fwd_L_to_cvr_std_idle_L"));
-			Check(State, PC->WasLastCoverConfirmSwitch(), TEXT("9: the double-click on the side face is the switch"));
+			Check(State, PC->WasLastCoverConfirmSwitch(), TEXT("9: the double-click on the far end is the switch"));
 			if (State.bShot)
 			{
 				PlaceCamera(World, State, FVector(-120.f, 250.f, 260.f), FVector(400.f, 560.f, 90.f), false);
@@ -915,7 +999,7 @@ namespace CoverSwitchSmoke
 			}
 			const FCoverSlot& Arrived = Op->GetCoverSlot();
 			Check(State, FVector::DotProduct(Arrived.WallNormal, -State.F) > 0.9f && FMath::Abs(AlongR(State, Arrived.WorldLocation) - 607.f) < 25.f,
-				FString::Printf(TEXT("9: on B's FRONT face at its near corner (R %.0f), not on the clicked side face"), AlongR(State, Arrived.WorldLocation)));
+				FString::Printf(TEXT("9: on B's front face at its NEAR corner (R %.0f), not at the clicked far end"), AlongR(State, Arrived.WorldLocation)));
 			Check(State, Op->CoverFacing == CoverSwitchRules::MirrorFacing(State.FacingBefore) && Op->bAtCoverCorner,
 				FString::Printf(TEXT("9: arrived in the mirrored pose - facing %s (was %s at A), at the corner"), Op->CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"),
 					State.FacingBefore == ECoverFacing::Left ? TEXT("left") : TEXT("right")));

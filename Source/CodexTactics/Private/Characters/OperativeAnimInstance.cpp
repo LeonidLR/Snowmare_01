@@ -132,9 +132,13 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 		Fill(CoverStandToCrouch, *Stand(TEXT("cvr_stand_idle_L_to_cvr_crch_idle_L")), *Stand(TEXT("cvr_stand_idle_R_to_cvr_crch_idle_R")));
 		// Wall-edge cover switch (game designer 2026-10-20): the run-in transitions, index = approach * 2 + end side
 		// (CoverSwitchRules::ClipArrayIndex; the names come from CoverSwitchRules::ClipName).
-		for (int32 CrouchIndex = 0; CrouchIndex < 2; ++CrouchIndex)
+		for (int32 SetIndex = 0; SetIndex < 4; ++SetIndex)
 		{
-			TArray<TObjectPtr<UAnimSequenceBase>>& Clips = CrouchIndex == 1 ? CoverCrouchSwitchEnter : CoverStandSwitchEnter;
+			// 0 / 1: the jog run-ins standing / crouched, 2 / 3: the sprint ones (2026-10-21).
+			const int32 CrouchIndex = SetIndex % 2;
+			const bool bSprintSet = SetIndex >= 2;
+			TArray<TObjectPtr<UAnimSequenceBase>>& Clips = bSprintSet ? (CrouchIndex == 1 ? CoverCrouchSwitchSprintEnter : CoverStandSwitchSprintEnter)
+				: (CrouchIndex == 1 ? CoverCrouchSwitchEnter : CoverStandSwitchEnter);
 			Clips.SetNum(CoverSwitchRules::ClipCount);
 			for (const ECoverSwitchApproach Approach : { ECoverSwitchApproach::Front, ECoverSwitchApproach::FromPackL, ECoverSwitchApproach::FromPackR })
 			{
@@ -143,7 +147,7 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 					const int32 Index = CoverSwitchRules::ClipArrayIndex(Approach, End);
 					if (!Clips[Index])
 					{
-						const FString Name = CoverSwitchRules::ClipName(Approach, End, CrouchIndex == 1);
+						const FString Name = CoverSwitchRules::ClipName(Approach, End, CrouchIndex == 1, bSprintSet);
 						const FString Path = FString::Printf(TEXT("/Game/M4_Cover_Pack/Animations/%s/%s.%s"), CrouchIndex == 1 ? TEXT("crouch") : TEXT("stand"), *Name, *Name);
 						Clips[Index] = LoadObject<UAnimSequenceBase>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
 					}
@@ -1364,11 +1368,11 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		CoverLoopClip.Reset();
 	}
 	else if (bEntered && Operative.IsCoverSwitchEntry()
-		&& GetCoverSwitchClip(bIsCrouching, Operative.GetCoverSwitchApproach(), CoverFacing))
+		&& GetCoverSwitchClip(bIsCrouching, Operative.GetCoverSwitchApproach(), CoverFacing, Operative.IsCoverSwitchSprintClip()))
 	{
 		// Wall-edge cover switch (game designer 2026-10-20): the pack's run-in transition from where its body meets the runner
-		// (the operative picked the clip and its start for this facing when he entered; the mesh offset carries the body from there).
-		UAnimSequenceBase* Switch = GetCoverSwitchClip(bIsCrouching, Operative.GetCoverSwitchApproach(), CoverFacing);
+		// (the operative picked the clip - jog or sprint set - and its start for this facing when he entered; the mesh offset carries the body).
+		UAnimSequenceBase* Switch = GetCoverSwitchClip(bIsCrouching, Operative.GetCoverSwitchApproach(), CoverFacing, Operative.IsCoverSwitchSprintClip());
 		const float StartAt = FMath::Clamp(Operative.GetCoverSwitchStartSeconds(), 0.f, FMath::Max(Switch->GetPlayLength() - 0.1f, 0.f));
 		FAlphaBlendArgs BlendIn(FMath::Max(CoverSwitchBlendSeconds, 0.f));
 		BlendIn.BlendOption = EAlphaBlendOption::HermiteCubic;
@@ -1599,18 +1603,19 @@ bool UOperativeAnimInstance::HasCoverSwitchClips(bool bCrouch) const
 	return (bCrouch ? CoverCrouchSwitchEnter : CoverStandSwitchEnter).ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; });
 }
 
-UAnimSequenceBase* UOperativeAnimInstance::GetCoverSwitchClip(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing) const
+UAnimSequenceBase* UOperativeAnimInstance::GetCoverSwitchClip(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, bool bSprint) const
 {
-	const TArray<TObjectPtr<UAnimSequenceBase>>& Clips = bCrouch ? CoverCrouchSwitchEnter : CoverStandSwitchEnter;
+	const TArray<TObjectPtr<UAnimSequenceBase>>& Clips = bSprint ? (bCrouch ? CoverCrouchSwitchSprintEnter : CoverStandSwitchSprintEnter)
+		: (bCrouch ? CoverCrouchSwitchEnter : CoverStandSwitchEnter);
 	const int32 Index = CoverSwitchRules::ClipArrayIndex(Approach, ArrivalFacing);
 	return Clips.IsValidIndex(Index) ? Clips[Index].Get() : nullptr;
 }
 
 bool UOperativeAnimInstance::GetCoverSwitchTrack(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, float MeshWorldYaw,
-	FCoverSwitchTrack& OutTrack) const
+	FCoverSwitchTrack& OutTrack, bool bSprint) const
 {
 	OutTrack = FCoverSwitchTrack();
-	const UAnimSequenceBase* Clip = GetCoverSwitchClip(bCrouch, Approach, ArrivalFacing);
+	const UAnimSequenceBase* Clip = GetCoverSwitchClip(bCrouch, Approach, ArrivalFacing, bSprint);
 	if (!Clip || Clip->GetPlayLength() <= 0.f)
 	{
 		return false;

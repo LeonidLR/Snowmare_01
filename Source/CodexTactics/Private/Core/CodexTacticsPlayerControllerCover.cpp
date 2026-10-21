@@ -506,7 +506,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	const ECombatOrderDispatch Dispatch = Flow ? FCombatTimeModeRules::GetOrderDispatch(Flow->GetPhase(), Flow->GetCombatMode(),
 		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
 	// Wall-edge cover switch (game designer 2026-10-20): a DOUBLE-click on another cover while he stands at a wall edge, within range;
-	// a single / slow confirm, or a double-click from anywhere else, stays the ordinary cover order (CoverSwitchRules::IsSwitchConfirm).
+	// 2026-10-21: a slow second click on a switchable ghost is the switch too (the quick dash); from anywhere else the ordinary cover order.
 	// Locked by the tutorial: the ordinary cover order (TutorialRules::ResolveLockedCommand degrades Cover.Switch to Cover.Enter).
 	const UTutorialSubsystem* SwitchTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
 	LastCoverSwitchVerdict = Operative->EvaluateCoverSwitch(Slot);

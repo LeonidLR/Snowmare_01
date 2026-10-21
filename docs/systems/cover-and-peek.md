@@ -164,6 +164,19 @@
   151 cm forward, 336 cm across, the clip takes over 1.1 m out, its body 69 cm off the runner).
 - **Preview:** the hover ghost stands at that corner slot in the mirrored pose (`ACoverGhostActor::ShowForFacing`); the HUD draws the dash's
   **navmesh path** (`FindPathToLocationSynchronously`, `GetCoverPreviewPath`; diagonal when nothing is in the way) instead of the straight line.
+- **Second playtest pass (user 2026-10-21):** (1) "only the walking animation - I want to click and he quickly moves from one edge to the
+  other": ANY confirm of a switchable ghost is now the switch - the double-click and the slow second click alike
+  (`CoverSwitchRules::IsSwitchConfirm`) - a sprint (725 cm/s) arriving through the pack's **sprint** run-ins
+  (`UOperativeAnimInstance::CoverStandSwitchSprintEnter` / `CoverCrouchSwitchSprintEnter`, `std_sprint_fwd[_L|_R]_to_cvr_{std|crch}_idle_*`,
+  loaded from the pack like the jog set). Measured 2026-10-21 (root bone): the sprint run-ins come in at 960-1015 cm/s and are still after
+  0.97-1.27 s, 0.58-0.80 s left from 2 m out; the jog ones 400-530 cm/s, 0.83-1.02 s left - the jog ending is what read as a walk.
+  `TryEnterCoverSwitchFromRun` fits both sets (tracks 0-2 jog, 3-5 sprint, `FCoverSwitchClipStart::Track`); a runner >= 500 cm/s prefers the
+  sprint set by `CoverSwitchSprintPreferenceCm` 60 (BP_Operative -> CodexTactics|Cover|Switch). In `CoverSwitchSmoke` every dash ends through a
+  sprint run-in from 0.63-0.73 s (top speed 679-725 cm/s, through `HandleWorldHit` in stage 10). (2) "bring the perpendicular move back": the
+  HOVERED face decides (`CoverSwitchRules::UsesCornerTarget`): a face on the protected side (normal within 60 deg of his wall's) -> its nearest
+  corner in the mirrored pose; any other face (the end face towards him, the back) -> the slot on that face where the cursor is (on a high
+  wall the corner he would walk to right after entering, as before the second pass), facing its nearest exposed edge within the reach. Hovered
+  ghost == committed target in both (stage 10 case 0: B's end face -> the end-face slot, 0 cm off the ghost).
 - **Hovered = committed (user bug 2026-10-20: "the ghost is right, I click the point again - he ends on the OTHER side of that corner"):** the
   first click's ghost stood at the CLICKED slot (B's end face) and a slow second click was the ordinary cover order to that slot - round the
   corner. Now a switchable preview resolves once in `ShowCoverPreview` (`CoverPreviewResolvedSlot` / `CoverPreviewArrivalFacing`), the click
