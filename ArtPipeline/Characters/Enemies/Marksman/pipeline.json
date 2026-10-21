@@ -2,9 +2,9 @@
   "category": "enemy",
   "target_tris": 20000,
   "res": 2048,
-  "keep_weights": "head=1.0,bodi=1.0",
-  "texel_weights": "head=1.6,bodi=1.0",
+  "keep_weights": "head=1.0,bodi=1.0,lambert4|rifle=1.0",
+  "texel_weights": "head=1.6,bodi=1.0,lambert4|rifle=1.2",
   "hidden_exclude": "head|skin",
   "hair_regex": "",
-  "notes": "Hair: kept (enemies: visible hair stays, user 2026-10-20; hair under a helmet goes with the hidden test)."
+  "notes": "Hair: kept (enemies: visible hair stays, user 2026-10-20; hair under a helmet goes with the hidden test). 2026-10-21: rebuilt from SKM_baze_mesh1 (the pack body WITH the rifle, slot lambert4 = MI_rifle_set_N); Set N = head / bodi / rifle set N (the pack mesh itself shows rifle set 5 on body set 1)."
 }

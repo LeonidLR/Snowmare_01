@@ -93,7 +93,7 @@ namespace OptimizedCharacterSmoke
 			TEXT("/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie.BP_Enemy_MilitaryZombie_C"), 20000, 3 },
 		{ TEXT("Brute"), EKind::Enemy, TEXT("/Game/Mutant_monster_1/Meshes/base_mesh/SK_base_mesh_1.SK_base_mesh_1"),
 			TEXT("/Game/Characters/Enemies/Brute/BP_Enemy_Brute.BP_Enemy_Brute_C"), 25000, 0 },
-		{ TEXT("Marksman"), EKind::Enemy, TEXT("/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh.SKM_baze_mesh"),
+		{ TEXT("Marksman"), EKind::Enemy, TEXT("/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh1.SKM_baze_mesh1"), // with the rifle (2026-10-21)
 			TEXT("/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman.BP_Enemy_Marksman_C"), 20000, 0 },
 		{ TEXT("Cutter"), EKind::Enemy, TEXT("/Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh.SKM_baze_mesh"),
 			TEXT("/Game/Characters/Enemies/Cutter/BP_Enemy_Cutter.BP_Enemy_Cutter_C"), 20000, 0 },

@@ -54,6 +54,7 @@ namespace BodyLineupShots
 		{ TEXT("frostbitten"), TEXT("/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten.BP_Enemy_Frostbitten_C"), 4, 150.f },
 		{ TEXT("brutes"), TEXT("/Game/Characters/Enemies/Brute/BP_Enemy_Brute.BP_Enemy_Brute_C"), 4, 430.f },
 		{ TEXT("cutters"), TEXT("/Game/Characters/Enemies/Cutter/BP_Enemy_Cutter.BP_Enemy_Cutter_C"), 4, 170.f },
+		{ TEXT("marksmen"), TEXT("/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman.BP_Enemy_Marksman_C"), 5, 190.f },
 	};
 
 	struct FRunner

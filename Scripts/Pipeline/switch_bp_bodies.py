@@ -62,6 +62,18 @@ BATCHES = {
             "default": body(ENS, "Cutter", ["_Set3"]),
             "bodies": [body(ENS, "Cutter", ["_Set1", "_Set2", "_Set3", "_Set4"])]}),
     ],
+    # Marksman (user 2026-10-21): first the pack body WITH the rifle (SKM_baze_mesh1, same UE4 skeleton / physics / ABP),
+    # then the single-slot body rebuilt from it with its 5 colour sets
+    "marksman_rifle": [
+        ("/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman", {
+            "default": {"mesh": a("/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh1"),
+                        "sets": [a("/Game/Biochemical_Monster_1/materials/MI_head_set_1_Inst")]}}),
+    ],
+    "marksman": [
+        ("/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman", {
+            "default": body(ENS, "Marksman", ["_Set1"]),
+            "bodies": [body(ENS, "Marksman", ["_Set1", "_Set2", "_Set3", "_Set4", "_Set5"])]}),
+    ],
 }
 
 

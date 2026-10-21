@@ -1,18 +1,18 @@
 {
-  "mesh": "/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh.SKM_baze_mesh",
-  "name": "SKM_baze_mesh",
+  "mesh": "/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh1.SKM_baze_mesh1",
+  "name": "SKM_baze_mesh1",
   "skeleton": "/Game/Biochemical_Monster_1/baze_mech/ue4/SK_UE4_Mannequin_Skeleton.SK_UE4_Mannequin_Skeleton",
   "physics_asset": "/Game/Biochemical_Monster_1/baze_mech/ue4/PA_Mannequin_baze_mesh_PhysicsAsset.PA_Mannequin_baze_mesh_PhysicsAsset",
   "bounds_extent": [
-    73.120849609375,
-    26.260150909423828,
+    91.47593688964844,
+    28.983043670654297,
     91.19638061523438
   ],
   "lods": [
     {
       "lod": 0,
-      "num_verts": 10200,
-      "num_sections": 2
+      "num_verts": 15013,
+      "num_sections": 3
     }
   ],
   "slots": [
@@ -27,6 +27,12 @@
       "slot_name": "T_bodi",
       "imported_slot_name": "T_bodi",
       "material": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
+    },
+    {
+      "index": 2,
+      "slot_name": "lambert4",
+      "imported_slot_name": "lambert4",
+      "material": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_5_Inst.MI_rifle_set_5_Inst"
     }
   ],
   "materials": {
@@ -50,6 +56,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_head_set_1.M_head_set_1",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -166,6 +174,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_bodi_set_1.M_bodi_set_1",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -262,6 +272,248 @@
         }
       }
     },
+    "/Game/Biochemical_Monster_1/materials/MI_rifle_set_5_Inst.MI_rifle_set_5_Inst": {
+      "path": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_5_Inst.MI_rifle_set_5_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "Em": 80.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Normal.T_Rifle_Normal",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Emissive.T_Rifle_Emissive",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_BaseColor.T_Rifle_BaseColor",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Biochemical_Monster_1/materials/M_rifle_set_5.M_rifle_set_5",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {
+        "Em": 80.0,
+        "RefractionDepthBias": 0.0
+      },
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_BaseColor.T_Rifle_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Normal.T_Rifle_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "emissive_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Em",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Emissive.T_Rifle_Emissive",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        }
+      }
+    },
+    "/Game/Biochemical_Monster_1/materials/MI_rifle_set_1_Inst.MI_rifle_set_1_Inst": {
+      "path": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_1_Inst.MI_rifle_set_1_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "Em": 70.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Normal.T_Rifle_Normal",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Emissive.T_Rifle_Emissive",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_BaseColor.T_Rifle_BaseColor",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Biochemical_Monster_1/materials/M_rifle_set_1.M_rifle_set_1",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {
+        "Em": 70.0,
+        "RefractionDepthBias": 0.0
+      },
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_BaseColor.T_Rifle_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Normal.T_Rifle_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "emissive_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Em",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Emissive.T_Rifle_Emissive",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        }
+      }
+    },
     "/Game/Biochemical_Monster_1/materials/MI_head_set_2_Inst.MI_head_set_2_Inst": {
       "path": "/Game/Biochemical_Monster_1/materials/MI_head_set_2_Inst.MI_head_set_2_Inst",
       "class": "MaterialInstanceConstant",
@@ -282,6 +534,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_head_set_2.M_head_set_2",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -398,6 +652,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_bodi_set_2.M_bodi_set_2",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -494,6 +750,127 @@
         }
       }
     },
+    "/Game/Biochemical_Monster_1/materials/MI_rifle_set_2_Inst.MI_rifle_set_2_Inst": {
+      "path": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_2_Inst.MI_rifle_set_2_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "Em": 60.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Normal.T_Rifle_Normal",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Emissive.T_Rifle_Emissive",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_BaseColor.T_Rifle_BaseColor",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Biochemical_Monster_1/materials/M_rifle_set_2.M_rifle_set_2",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {
+        "Em": 60.0,
+        "RefractionDepthBias": 0.0
+      },
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_BaseColor.T_Rifle_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Normal.T_Rifle_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "emissive_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Em",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Emissive.T_Rifle_Emissive",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        }
+      }
+    },
     "/Game/Biochemical_Monster_1/materials/MI_head_set_3_Inst.MI_head_set_3_Inst": {
       "path": "/Game/Biochemical_Monster_1/materials/MI_head_set_3_Inst.MI_head_set_3_Inst",
       "class": "MaterialInstanceConstant",
@@ -514,6 +891,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_head_set_3.M_head_set_3",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -630,6 +1009,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_bodi_set_3.M_bodi_set_3",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -726,6 +1107,127 @@
         }
       }
     },
+    "/Game/Biochemical_Monster_1/materials/MI_rifle_set_3_Inst.MI_rifle_set_3_Inst": {
+      "path": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_3_Inst.MI_rifle_set_3_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "Em": 65.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Normal.T_Rifle_Normal",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Emissive.T_Rifle_Emissive",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_BaseColor.T_Rifle_BaseColor",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Biochemical_Monster_1/materials/M_rifle_set_3.M_rifle_set_3",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {
+        "Em": 65.0,
+        "RefractionDepthBias": 0.0
+      },
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_BaseColor.T_Rifle_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Normal.T_Rifle_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "emissive_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Em",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Emissive.T_Rifle_Emissive",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        }
+      }
+    },
     "/Game/Biochemical_Monster_1/materials/MI_head_set_4_Inst.MI_head_set_4_Inst": {
       "path": "/Game/Biochemical_Monster_1/materials/MI_head_set_4_Inst.MI_head_set_4_Inst",
       "class": "MaterialInstanceConstant",
@@ -746,6 +1248,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_head_set_4.M_head_set_4",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -862,6 +1366,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_bodi_set_4.M_bodi_set_4",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -958,6 +1464,127 @@
         }
       }
     },
+    "/Game/Biochemical_Monster_1/materials/MI_rifle_set_4_Inst.MI_rifle_set_4_Inst": {
+      "path": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_4_Inst.MI_rifle_set_4_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "maxRough": 1.0,
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "Em": 50.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Normal.T_Rifle_Normal",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Emissive.T_Rifle_Emissive",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_BaseColor.T_Rifle_BaseColor",
+        "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Biochemical_Monster_1/materials/M_rifle_set_4.M_rifle_set_4",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {
+        "Em": 50.0,
+        "RefractionDepthBias": 0.0
+      },
+      "static_switch_params": {},
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_BaseColor.T_Rifle_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Normal.T_Rifle_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "const_alpha": 0.5,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "emissive_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Em",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Emissive.T_Rifle_Emissive",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        }
+      }
+    },
     "/Game/Biochemical_Monster_1/materials/MI_head_set_5_Inst.MI_head_set_5_Inst": {
       "path": "/Game/Biochemical_Monster_1/materials/MI_head_set_5_Inst.MI_head_set_5_Inst",
       "class": "MaterialInstanceConstant",
@@ -978,6 +1605,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_head_set_5.M_head_set_5",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -1094,6 +1723,8 @@
       "base_material": "/Game/Biochemical_Monster_1/materials/M_bodi_set_5.M_bodi_set_5",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
+      "shading_model": "MSM_DEFAULT_LIT",
+      "scalar_overrides": {},
       "static_switch_params": {},
       "graph": {
         "base_color": {
@@ -1192,6 +1823,226 @@
     }
   },
   "textures": {
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_BaseColor.T_Rifle_BaseColor": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_BaseColor.T_Rifle_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Emissive.T_Rifle_Emissive": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Emissive.T_Rifle_Emissive",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Normal.T_Rifle_Normal": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Normal.T_Rifle_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_BaseColor.T_Rifle_BaseColor": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_BaseColor.T_Rifle_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Emissive.T_Rifle_Emissive": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Emissive.T_Rifle_Emissive",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Normal.T_Rifle_Normal": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Normal.T_Rifle_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_BaseColor.T_Rifle_BaseColor": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_BaseColor.T_Rifle_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Emissive.T_Rifle_Emissive": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Emissive.T_Rifle_Emissive",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Normal.T_Rifle_Normal": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Normal.T_Rifle_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_BaseColor.T_Rifle_BaseColor": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_BaseColor.T_Rifle_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Emissive.T_Rifle_Emissive": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Emissive.T_Rifle_Emissive",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Normal.T_Rifle_Normal": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Normal.T_Rifle_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_BaseColor.T_Rifle_BaseColor": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_BaseColor.T_Rifle_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Emissive.T_Rifle_Emissive": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Emissive.T_Rifle_Emissive",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Normal.T_Rifle_Normal": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Normal.T_Rifle_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": {
+      "path": "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
     "/Game/Biochemical_Monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor": {
       "path": "/Game/Biochemical_Monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor",
       "class": "Texture2D",
@@ -1635,15 +2486,28 @@
   },
   "morph_targets": [],
   "referencers": [
-    "/Game/Biochemical_Monster_1/Demo/Mannequin/Animations/ThirdPersonIdle",
-    "/Game/Biochemical_Monster_1/Demo/Mannequin/Animations/ThirdPersonJump_End",
-    "/Game/Biochemical_Monster_1/Demo/Mannequin/Animations/ThirdPersonJump_Loop",
-    "/Game/Biochemical_Monster_1/Demo/Mannequin/Animations/ThirdPersonJump_Start",
-    "/Game/Biochemical_Monster_1/Demo/Mannequin/Animations/ThirdPersonRun",
-    "/Game/Biochemical_Monster_1/Demo/Mannequin/Animations/ThirdPersonWalk",
-    "/Game/Biochemical_Monster_1/Demo/Mannequin/Animations/ThirdPerson_Jump",
     "/Game/Biochemical_Monster_1/Maps/ThirdPersonExampleMap",
-    "/Game/Biochemical_Monster_1/baze_mech/ue4/PA_Mannequin_baze_mesh_PhysicsAsset",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_attack_1",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_attack_2",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_attack_3",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_attack_4",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_death",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_idle_1",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_idle_1_tu_2",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_idle_2",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_idle_2_tu_1",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_idle_3",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_jump",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_run",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_run_2",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_run_atak_1",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_walking",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_walking_2",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_walking_Right",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_walking_atak_1",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_walking_back_1",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_walking_back_2",
+    "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_walking_left",
     "/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman"
   ],
   "skeleton_animations": [
@@ -1677,8 +2541,28 @@
     "/Game/Biochemical_Monster_1/animation/anim_ue4/anim_walking_left.anim_walking_left"
   ],
   "exports": {
-    "mesh_fbx": "01_Source/SKM_baze_mesh.fbx",
+    "mesh_fbx": "01_Source/SKM_baze_mesh1.fbx",
     "textures": {
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_BaseColor.T_Rifle_BaseColor": "02_Textures_Source/T_Rifle_BaseColor__set_1.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Emissive.T_Rifle_Emissive": "02_Textures_Source/T_Rifle_Emissive__set_1.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Normal.T_Rifle_Normal": "02_Textures_Source/T_Rifle_Normal__set_1.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "02_Textures_Source/T_Rifle_OcclusionRoughnessMetallic__set_1.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_BaseColor.T_Rifle_BaseColor": "02_Textures_Source/T_Rifle_BaseColor__set_2.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Emissive.T_Rifle_Emissive": "02_Textures_Source/T_Rifle_Emissive__set_2.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Normal.T_Rifle_Normal": "02_Textures_Source/T_Rifle_Normal__set_2.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "02_Textures_Source/T_Rifle_OcclusionRoughnessMetallic__set_2.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_BaseColor.T_Rifle_BaseColor": "02_Textures_Source/T_Rifle_BaseColor__set_3.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Emissive.T_Rifle_Emissive": "02_Textures_Source/T_Rifle_Emissive__set_3.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Normal.T_Rifle_Normal": "02_Textures_Source/T_Rifle_Normal__set_3.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "02_Textures_Source/T_Rifle_OcclusionRoughnessMetallic__set_3.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_BaseColor.T_Rifle_BaseColor": "02_Textures_Source/T_Rifle_BaseColor__set_4.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Emissive.T_Rifle_Emissive": "02_Textures_Source/T_Rifle_Emissive__set_4.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Normal.T_Rifle_Normal": "02_Textures_Source/T_Rifle_Normal__set_4.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "02_Textures_Source/T_Rifle_OcclusionRoughnessMetallic__set_4.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_BaseColor.T_Rifle_BaseColor": "02_Textures_Source/T_Rifle_BaseColor__set_5.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Emissive.T_Rifle_Emissive": "02_Textures_Source/T_Rifle_Emissive__set_5.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Normal.T_Rifle_Normal": "02_Textures_Source/T_Rifle_Normal__set_5.png",
+      "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "02_Textures_Source/T_Rifle_OcclusionRoughnessMetallic__set_5.png",
       "/Game/Biochemical_Monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor": "02_Textures_Source/T_bodi_BaseColor__set_1.png",
       "/Game/Biochemical_Monster_1/texture/set_1/T_bodi_Emissive.T_bodi_Emissive": "02_Textures_Source/T_bodi_Emissive__set_1.png",
       "/Game/Biochemical_Monster_1/texture/set_1/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal__set_1.png",
@@ -1725,14 +2609,16 @@
   "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
   "lod0_section_material_slots": [
     0,
-    1
+    1,
+    2
   ],
   "variants": [
     {
       "name": "Set1",
       "slots": {
         "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_1_Inst.MI_head_set_1_Inst",
-        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+        "lambert4": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_1_Inst.MI_rifle_set_1_Inst"
       },
       "unknown_slots": []
     },
@@ -1740,7 +2626,8 @@
       "name": "Set2",
       "slots": {
         "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_2_Inst.MI_head_set_2_Inst",
-        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst"
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+        "lambert4": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_2_Inst.MI_rifle_set_2_Inst"
       },
       "unknown_slots": []
     },
@@ -1748,7 +2635,8 @@
       "name": "Set3",
       "slots": {
         "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_3_Inst.MI_head_set_3_Inst",
-        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst"
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+        "lambert4": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_3_Inst.MI_rifle_set_3_Inst"
       },
       "unknown_slots": []
     },
@@ -1756,7 +2644,8 @@
       "name": "Set4",
       "slots": {
         "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_4_Inst.MI_head_set_4_Inst",
-        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst"
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+        "lambert4": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_4_Inst.MI_rifle_set_4_Inst"
       },
       "unknown_slots": []
     },
@@ -1764,12 +2653,33 @@
       "name": "Set5",
       "slots": {
         "T_head": "/Game/Biochemical_Monster_1/materials/MI_head_set_5_Inst.MI_head_set_5_Inst",
-        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_5_Inst.MI_bodi_set_5_Inst"
+        "T_bodi": "/Game/Biochemical_Monster_1/materials/MI_bodi_set_5_Inst.MI_bodi_set_5_Inst",
+        "lambert4": "/Game/Biochemical_Monster_1/materials/MI_rifle_set_5_Inst.MI_rifle_set_5_Inst"
       },
       "unknown_slots": []
     }
   ],
   "texture_files": {
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_BaseColor.T_Rifle_BaseColor": "T_Rifle_BaseColor__set_1",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Emissive.T_Rifle_Emissive": "T_Rifle_Emissive__set_1",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_Normal.T_Rifle_Normal": "T_Rifle_Normal__set_1",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_1/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "T_Rifle_OcclusionRoughnessMetallic__set_1",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_BaseColor.T_Rifle_BaseColor": "T_Rifle_BaseColor__set_2",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Emissive.T_Rifle_Emissive": "T_Rifle_Emissive__set_2",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_Normal.T_Rifle_Normal": "T_Rifle_Normal__set_2",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_2/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "T_Rifle_OcclusionRoughnessMetallic__set_2",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_BaseColor.T_Rifle_BaseColor": "T_Rifle_BaseColor__set_3",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Emissive.T_Rifle_Emissive": "T_Rifle_Emissive__set_3",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_Normal.T_Rifle_Normal": "T_Rifle_Normal__set_3",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_3/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "T_Rifle_OcclusionRoughnessMetallic__set_3",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_BaseColor.T_Rifle_BaseColor": "T_Rifle_BaseColor__set_4",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Emissive.T_Rifle_Emissive": "T_Rifle_Emissive__set_4",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_Normal.T_Rifle_Normal": "T_Rifle_Normal__set_4",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_4/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "T_Rifle_OcclusionRoughnessMetallic__set_4",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_BaseColor.T_Rifle_BaseColor": "T_Rifle_BaseColor__set_5",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Emissive.T_Rifle_Emissive": "T_Rifle_Emissive__set_5",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_Normal.T_Rifle_Normal": "T_Rifle_Normal__set_5",
+    "/Game/Biochemical_Monster_1/texture/Rifle/set_5/T_Rifle_OcclusionRoughnessMetallic.T_Rifle_OcclusionRoughnessMetallic": "T_Rifle_OcclusionRoughnessMetallic__set_5",
     "/Game/Biochemical_Monster_1/texture/set_1/T_bodi_BaseColor.T_bodi_BaseColor": "T_bodi_BaseColor__set_1",
     "/Game/Biochemical_Monster_1/texture/set_1/T_bodi_Emissive.T_bodi_Emissive": "T_bodi_Emissive__set_1",
     "/Game/Biochemical_Monster_1/texture/set_1/T_bodi_Normal.T_bodi_Normal": "T_bodi_Normal__set_1",
@@ -1817,10 +2727,14 @@
     ],
     "T_bodi": [
       "T_bodi"
+    ],
+    "lambert4": [
+      "lambert4"
     ]
   },
   "lod0_section_triangles": {
     "T_head": 9482,
-    "T_bodi": 8510
+    "T_bodi": 8510,
+    "lambert4": 8063
   }
 }

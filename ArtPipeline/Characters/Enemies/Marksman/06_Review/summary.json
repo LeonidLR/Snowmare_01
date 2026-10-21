@@ -1,12 +1,13 @@
 {
   "asset": "SKM_baze_mesh",
   "source": {
-    "slots": 2,
-    "triangles": 17992,
-    "vertices": 10200,
+    "slots": 3,
+    "triangles": 26055,
+    "vertices": 15013,
     "triangles_per_slot": {
       "T_head": 9482,
-      "T_bodi": 8510
+      "T_bodi": 8510,
+      "lambert4": 8063
     },
     "bones": 67,
     "uv_maps": [
@@ -15,28 +16,32 @@
     "material_warnings": []
   },
   "stage_times": {
-    "source": "2026-10-20 23:53:26",
-    "clean": "2026-10-20 23:53:27",
-    "reduce": "2026-10-20 23:53:35",
-    "atlas": "2026-10-20 23:54:49",
-    "bake": "2026-10-20 23:57:42",
-    "export": "2026-10-20 23:57:46",
-    "review": "2026-10-20 23:59:30",
-    "qa": "2026-10-20 23:59:30"
+    "source": "2026-10-21 07:46:27",
+    "clean": "2026-10-21 07:46:31",
+    "reduce": "2026-10-21 07:46:35",
+    "atlas": "2026-10-21 07:47:46",
+    "bake": "2026-10-21 07:50:09",
+    "export": "2026-10-21 07:50:13",
+    "review": "2026-10-21 07:51:36",
+    "qa": "2026-10-21 07:51:36"
   },
   "clean": {
     "hair_slots": [],
     "hair_triangles_removed": 0,
     "transparent_slots": [],
     "transparent_triangles_removed": 0,
-    "hidden_triangles_removed": 0,
-    "hidden_triangles_by_slot": {},
-    "triangles_after": 17992,
+    "hidden_triangles_removed": 334,
+    "hidden_triangles_by_slot": {
+      "lambert4": 18,
+      "T_bodi": 316
+    },
+    "triangles_after": 25721,
     "triangles_after_per_slot": {
       "T_head": 9482,
-      "T_bodi": 8510
+      "T_bodi": 8194,
+      "lambert4": 8045
     },
-    "vertices_after": 10200,
+    "vertices_after": 14863,
     "hidden_method": {
       "rays_sphere": 80,
       "samples_per_triangle": 4,
@@ -50,98 +55,162 @@
       "poses": [
         {
           "pose": "rest",
-          "still_hidden": 1,
-          "seconds": 0.2
+          "still_hidden": 849,
+          "seconds": 0.6
         },
         {
           "pose": "crouch_deep",
-          "still_hidden": 0,
-          "seconds": 0.0
+          "still_hidden": 831,
+          "seconds": 0.3
+        },
+        {
+          "pose": "kneel_aim",
+          "still_hidden": 828,
+          "seconds": 0.3
+        },
+        {
+          "pose": "arms_up",
+          "still_hidden": 824,
+          "seconds": 0.3
+        },
+        {
+          "pose": "arms_hug",
+          "still_hidden": 823,
+          "seconds": 0.3
+        },
+        {
+          "pose": "twist_bend",
+          "still_hidden": 823,
+          "seconds": 0.3
+        },
+        {
+          "pose": "twist_bend_other",
+          "still_hidden": 823,
+          "seconds": 0.3
+        },
+        {
+          "pose": "prone_look_up",
+          "still_hidden": 819,
+          "seconds": 0.3
+        },
+        {
+          "pose": "lunge_spread",
+          "still_hidden": 819,
+          "seconds": 0.3
+        },
+        {
+          "pose": "sit_reach",
+          "still_hidden": 817,
+          "seconds": 0.3
         }
       ]
     }
   },
   "reduce": {
     "target_tris": 20000,
-    "triangles_before": 17992,
-    "triangles_after": 17992,
-    "vertices_welded": 9102,
-    "vertices_after": 9102,
+    "triangles_before": 25721,
+    "triangles_after": 19969,
+    "vertices_welded": 13132,
+    "vertices_after": 10258,
     "per_material": {
       "T_head": {
         "before": 9482,
-        "budget": 9482,
-        "after": 9482,
+        "budget": 7373,
+        "after": 7358,
         "keep_weight": 1.0,
-        "ratio": 1.0,
-        "passes": []
+        "ratio": 0.776,
+        "passes": [
+          0.778
+        ]
       },
       "T_bodi": {
-        "before": 8510,
-        "budget": 8510,
-        "after": 8510,
+        "before": 8194,
+        "budget": 6371,
+        "after": 6356,
         "keep_weight": 1.0,
-        "ratio": 1.0,
-        "passes": []
+        "ratio": 0.776,
+        "passes": [
+          0.778
+        ]
+      },
+      "lambert4": {
+        "before": 8045,
+        "budget": 6256,
+        "after": 6255,
+        "keep_weight": 1.0,
+        "ratio": 0.778,
+        "passes": [
+          0.778
+        ]
       }
     },
-    "g": 1.0,
+    "g": 0.7776,
     "protect_factor": 2.0,
     "protection": {
-      "uv_seam_edges": 1045,
-      "open_border_edges": 188,
+      "uv_seam_edges": 1566,
+      "open_border_edges": 497,
       "material_border_edges": 30,
-      "joint_blend_vertices": 3067
+      "joint_blend_vertices": 3040
     },
     "degenerate_faces": 0,
     "non_manifold_edges": 0,
     "unweighted_vertices": 0,
     "sharp_angle": 60.0,
-    "authored_normals_restored_loops": 53976,
-    "seconds": 1.5,
-    "decimate_seconds": 0.0
+    "authored_normals_restored_loops": 0,
+    "seconds": 1.0,
+    "decimate_seconds": 0.1
   },
   "atlas": {
     "source_blend": "reduce",
     "packer": "uvpackmaster4",
-    "packer_note": "UVPackmaster result {'PASS_THROUGH', 'FINISHED'} retcode 0 (UVPackmaster Engine: 4.1.0 PRO)",
-    "pack_seconds": 64.1,
+    "packer_note": "UVPackmaster result {'FINISHED', 'PASS_THROUGH'} retcode 0 (UVPackmaster Engine: 4.1.0 PRO)",
+    "pack_seconds": 64.7,
     "resolution": 2048,
     "margin_px": 8,
     "border_px": 2,
     "rotation_step": 90,
-    "islands": 37,
-    "clusters": 5,
-    "down_facing_clusters": 3,
+    "islands": 80,
+    "clusters": 13,
+    "down_facing_clusters": 4,
     "mirrored_stacked_clusters_rot180": {
-      "T_head": 1
+      "T_head": 1,
+      "T_bodi": 1,
+      "lambert4": 1
     },
-    "mirrored_stacked_faces": 9445,
-    "uv_area_sum": 0.7418,
+    "mirrored_stacked_faces": 19251,
+    "uv_area_sum": 0.7574,
     "loops_out_of_0_1": 0,
     "texel_density": {
       "T_head": {
-        "atlas_px_per_cm": 13.4,
-        "source_px_per_cm": 36.08,
-        "ratio": 0.371,
+        "atlas_px_per_cm": 12.33,
+        "source_px_per_cm": 36.09,
+        "ratio": 0.342,
         "weight": 1.6,
         "source_res": 4096
       },
       "T_bodi": {
-        "atlas_px_per_cm": 8.37,
+        "atlas_px_per_cm": 7.71,
         "source_px_per_cm": 22.28,
-        "ratio": 0.376,
+        "ratio": 0.346,
         "weight": 1.0,
+        "source_res": 4096
+      },
+      "lambert4": {
+        "atlas_px_per_cm": 9.24,
+        "source_px_per_cm": 45.39,
+        "ratio": 0.204,
+        "weight": 1.2,
         "source_res": 4096
       }
     },
     "cross_material_overlap_px_1k": 0,
-    "covered_px_1k": 751666,
+    "covered_px_1k": 771981,
     "cross_material_overlap_percent": 0.0,
     "layout_image": "06_Review/atlas_layout.png",
     "layout_legend": {
       "T_head": "#f25454",
-      "T_bodi": "#54f2f2"
+      "T_bodi": "#54f254",
+      "lambert4": "#5454f2"
     },
     "note": "coverage % is measured on the baked mask in blender_bake.py"
   },
@@ -154,7 +223,7 @@
     "orm_resolution": 1024,
     "cage_extrusion_cm": 0.6,
     "max_ray_cm": 3.0,
-    "ray_miss_percent": 0.0,
+    "ray_miss_percent": 0.005,
     "variants": {
       "Set1": {
         "outputs": {
@@ -164,12 +233,13 @@
           "Sheen": "T_Marksman_Set1_Sheen.png",
           "Emissive": "T_Marksman_Set1_Emissive.png"
         },
-        "emissive_glow_percent": 8.771,
+        "emissive_glow_percent": 7.49,
         "emissive_written": true,
-        "emissive_strength": 1.0,
+        "emissive_strength": 68.141,
         "masked": false,
         "two_sided": false,
-        "overlay_percent": null
+        "overlay_percent": null,
+        "subsurface": false
       },
       "Set2": {
         "outputs": {
@@ -179,12 +249,13 @@
           "Sheen": "T_Marksman_Set2_Sheen.png",
           "Emissive": "T_Marksman_Set2_Emissive.png"
         },
-        "emissive_glow_percent": 8.771,
+        "emissive_glow_percent": 7.49,
         "emissive_written": true,
-        "emissive_strength": 1.0,
+        "emissive_strength": 58.407,
         "masked": false,
         "two_sided": false,
-        "overlay_percent": null
+        "overlay_percent": null,
+        "subsurface": false
       },
       "Set3": {
         "outputs": {
@@ -194,12 +265,13 @@
           "Sheen": "T_Marksman_Set3_Sheen.png",
           "Emissive": "T_Marksman_Set3_Emissive.png"
         },
-        "emissive_glow_percent": 8.757,
+        "emissive_glow_percent": 7.484,
         "emissive_written": true,
-        "emissive_strength": 1.0,
+        "emissive_strength": 63.274,
         "masked": false,
         "two_sided": false,
-        "overlay_percent": null
+        "overlay_percent": null,
+        "subsurface": false
       },
       "Set4": {
         "outputs": {
@@ -209,12 +281,13 @@
           "Sheen": "T_Marksman_Set4_Sheen.png",
           "Emissive": "T_Marksman_Set4_Emissive.png"
         },
-        "emissive_glow_percent": 8.778,
+        "emissive_glow_percent": 7.504,
         "emissive_written": true,
-        "emissive_strength": 1.0,
+        "emissive_strength": 48.672,
         "masked": false,
         "two_sided": false,
-        "overlay_percent": null
+        "overlay_percent": null,
+        "subsurface": false
       },
       "Set5": {
         "outputs": {
@@ -224,46 +297,44 @@
           "Sheen": "T_Marksman_Set5_Sheen.png",
           "Emissive": "T_Marksman_Set5_Emissive.png"
         },
-        "emissive_glow_percent": 8.771,
+        "emissive_glow_percent": 7.425,
         "emissive_written": true,
-        "emissive_strength": 1.0,
+        "emissive_strength": 77.876,
         "masked": false,
         "two_sided": false,
-        "overlay_percent": null
+        "overlay_percent": null,
+        "subsurface": false
       }
     },
-    "self_baked_slots": [
-      "T_head__Set5",
-      "T_bodi__Set5"
-    ],
-    "normal_back_facing_clamped_percent": 0.011,
-    "atlas_coverage_percent": 71.68,
+    "self_baked_slots": [],
+    "normal_back_facing_clamped_percent": 2.264,
+    "atlas_coverage_percent": 73.62,
     "seconds": {
-      "coverage": 0.8,
-      "hit": 1.7,
-      "base_color": 2.9,
-      "normal": 4.3,
-      "ao": 1.7,
-      "roughness": 1.6,
-      "metallic": 1.6,
-      "emissive_probe": 1.4,
-      "emissive": 1.4,
-      "sheen": 0.9
+      "coverage": 0.6,
+      "hit": 1.4,
+      "base_color": 3.9,
+      "normal": 5.7,
+      "ao": 2.4,
+      "roughness": 2.4,
+      "metallic": 2.4,
+      "emissive_probe": 2.1,
+      "emissive": 2.1,
+      "sheen": 1.2
     },
     "orm_channel_stats": {
       "ao": {
-        "min": 0.004,
-        "mean": 0.839,
+        "min": 0.003,
+        "mean": 0.818,
         "max": 1.0
       },
       "roughness": {
-        "min": 0.022,
-        "mean": 0.409,
+        "min": 0.023,
+        "mean": 0.402,
         "max": 1.0
       },
       "metallic": {
         "min": 0.0,
-        "mean": 0.064,
+        "mean": 0.128,
         "max": 1.0
       }
     },
@@ -289,8 +360,8 @@
       "uv_maps": [
         "UV_Atlas"
       ],
-      "triangles": 17992,
-      "vertices": 9102,
+      "triangles": 19969,
+      "vertices": 10258,
       "vertex_groups": 48,
       "shape_keys": 0,
       "custom_normals": true,
@@ -313,12 +384,12 @@
         [
           0.0,
           1.0,
-          -2.832769343193999e-16,
+          0.0,
           0.0
         ],
         [
           0.0,
-          2.832769343193999e-16,
+          0.0,
           1.0,
           0.0
         ],
@@ -330,6 +401,8 @@
         ]
       ],
       "source_armature_identity": true,
+      "root_transform_in_root_bone": false,
+      "export_armature_identity": true,
       "leaf_bones": [],
       "ok": true
     }
@@ -345,44 +418,80 @@
     ],
     "views": {
       "front34": {
-        "rgb_rmse_0_255": 3.96,
-        "mean_delta_e76": 1.03,
-        "p95_delta_e76": 2.83,
-        "silhouette_iou": 1.0,
-        "pixels_compared": 109646,
+        "rgb_rmse_0_255": 12.93,
+        "mean_delta_e76": 2.25,
+        "p95_delta_e76": 7.94,
+        "silhouette_iou": 0.9981,
+        "pixels_compared": 99099,
         "image": "compare_front34.png"
       },
       "back34": {
-        "rgb_rmse_0_255": 3.58,
-        "mean_delta_e76": 0.97,
-        "p95_delta_e76": 2.67,
-        "silhouette_iou": 1.0,
-        "pixels_compared": 105335,
+        "rgb_rmse_0_255": 20.26,
+        "mean_delta_e76": 3.36,
+        "p95_delta_e76": 19.78,
+        "silhouette_iou": 0.9987,
+        "pixels_compared": 91284,
         "image": "compare_back34.png"
       },
       "tactical": {
-        "rgb_rmse_0_255": 3.34,
-        "mean_delta_e76": 1.0,
-        "p95_delta_e76": 2.71,
-        "silhouette_iou": 1.0,
-        "pixels_compared": 84031,
+        "rgb_rmse_0_255": 36.01,
+        "mean_delta_e76": 5.47,
+        "p95_delta_e76": 37.54,
+        "silhouette_iou": 0.9987,
+        "pixels_compared": 79960,
         "image": "compare_tactical.png"
       },
       "face": {
-        "rgb_rmse_0_255": 6.36,
-        "mean_delta_e76": 1.71,
-        "p95_delta_e76": 5.31,
-        "silhouette_iou": 1.0,
-        "pixels_compared": 603655,
+        "rgb_rmse_0_255": 8.42,
+        "mean_delta_e76": 2.47,
+        "p95_delta_e76": 8.03,
+        "silhouette_iou": 0.9997,
+        "pixels_compared": 603734,
         "image": "compare_face.png"
       }
     },
     "texture_memory": {
-      "before_mb": 533.3,
+      "before_mb": 800.0,
       "after_mb": 10.7,
       "after_without_optional_mb": 9.3,
-      "before_textures": 8,
+      "before_textures": 12,
       "before_detail": {
+        "T_Rifle_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "base_color"
+        },
+        "T_Rifle_Emissive": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "emissive"
+        },
+        "T_Rifle_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_Rifle_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
         "T_bodi_BaseColor": {
           "size": [
             4096,
@@ -504,27 +613,28 @@
     "resolution": 1024
   },
   "qa": {
-    "slots_before": 2,
+    "slots_before": 3,
     "slots_after": 1,
-    "triangles_before": 17992,
-    "triangles_after": 17992,
-    "triangles_removed_hidden": 0,
+    "triangles_before": 26055,
+    "triangles_after": 19969,
+    "triangles_removed_hidden": 334,
     "triangles_removed_hair": 0,
-    "triangles_removed_check_by_position": 0,
-    "atlas_coverage_percent": 71.68,
-    "texture_memory_before_mb": 533.3,
+    "triangles_removed_check_by_position": 334,
+    "atlas_coverage_percent": 73.62,
+    "texture_memory_before_mb": 800.0,
     "texture_memory_after_mb": 10.7,
-    "hidden_in_all_poses_before_safety_ring": 0,
+    "hidden_in_all_poses_before_safety_ring": 817,
     "bake_warnings": [],
     "emissive_texel_fraction": null,
     "cross_material_overlap_percent": 0.0,
     "export_roundtrip_ok": true,
-    "worst_view_mean_delta_e": 1.71,
-    "min_silhouette_iou": 1.0,
+    "worst_view_mean_delta_e": 5.47,
+    "min_silhouette_iou": 0.9981,
     "triangles_per_material_after": {
-      "T_head": 9482,
-      "T_bodi": 8510
+      "T_head": 7358,
+      "T_bodi": 6356,
+      "lambert4": 6255
     },
-    "ray_miss_percent": 0.0
+    "ray_miss_percent": 0.005
   }
 }

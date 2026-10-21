@@ -14,11 +14,20 @@
     "T_bodi": {
       "slot_index": 1,
       "decision": "keep",
-      "reason": "opaque; 0 of 8510 triangles hidden in every test pose and removed",
+      "reason": "opaque; 316 of 8510 triangles hidden in every test pose and removed",
       "blend_mode": "BLEND_OPAQUE",
       "two_sided": false,
       "triangles": 8510,
-      "hidden_triangles_removed": 0
+      "hidden_triangles_removed": 316
+    },
+    "lambert4": {
+      "slot_index": 2,
+      "decision": "keep",
+      "reason": "opaque; 18 of 8063 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 8063,
+      "hidden_triangles_removed": 18
     }
   }
 }

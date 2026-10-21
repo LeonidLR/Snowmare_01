@@ -27,6 +27,7 @@ namespace EnemyLookBodiesTest
 		{ TEXT("/Game/Characters/Enemies/Hound/BP_Enemy_Hound.BP_Enemy_Hound_C"), 1, 5, true },
 		{ TEXT("/Game/Characters/Enemies/Brute/BP_Enemy_Brute.BP_Enemy_Brute_C"), 1, 4, true },
 		{ TEXT("/Game/Characters/Enemies/Cutter/BP_Enemy_Cutter.BP_Enemy_Cutter_C"), 1, 4, true },
+		{ TEXT("/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman.BP_Enemy_Marksman_C"), 1, 5, true },
 		// a child of BP_Enemy_Frostbitten with its own (unswitched) body: the inherited bodies are not its own
 		{ TEXT("/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/BP_Enemy_FrozenPMC_Fighter.BP_Enemy_FrozenPMC_Fighter_C"), 1, 4, false },
 	};

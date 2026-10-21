@@ -131,5 +131,16 @@
    "material_sets": [],
    "bodies": []
   }
+ },
+ "/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman": {
+  "mesh": "/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh.SKM_baze_mesh",
+  "override_materials": [],
+  "skeleton": "/Game/Biochemical_Monster_1/baze_mech/ue4/SK_UE4_Mannequin_Skeleton.SK_UE4_Mannequin_Skeleton",
+  "anim_class": "/Game/Characters/Enemies/Marksman/ABP_Enemy_Marksman.ABP_Enemy_Marksman_C",
+  "look_variants": {
+   "meshes": [],
+   "material_sets": [],
+   "bodies": []
+  }
  }
 }

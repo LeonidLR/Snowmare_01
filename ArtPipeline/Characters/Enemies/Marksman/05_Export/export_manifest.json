@@ -46,8 +46,8 @@
     "uv_maps": [
       "UV_Atlas"
     ],
-    "triangles": 17992,
-    "vertices": 9102,
+    "triangles": 19969,
+    "vertices": 10258,
     "vertex_groups": 48,
     "shape_keys": 0,
     "custom_normals": true,
@@ -70,12 +70,12 @@
       [
         0.0,
         1.0,
-        -2.832769343193999e-16,
+        0.0,
         0.0
       ],
       [
         0.0,
-        2.832769343193999e-16,
+        0.0,
         1.0,
         0.0
       ],
@@ -87,6 +87,8 @@
       ]
     ],
     "source_armature_identity": true,
+    "root_transform_in_root_bone": false,
+    "export_armature_identity": true,
     "leaf_bones": [],
     "ok": true
   },
