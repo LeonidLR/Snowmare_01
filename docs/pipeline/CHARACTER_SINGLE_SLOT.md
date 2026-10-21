@@ -201,7 +201,7 @@ variants of one body: one reduced mesh + one atlas, one texture set + MI per var
 | done | Enemies/MilitaryZombie_2 | .../SKM_base_mesh_set2_2 | BP_Enemy_MilitaryZombie (body 2) | 51 559 | 5 | 20k | imported 19 953 tris; 3 texture sets; the mohawk stays (masked, user 2026-10-20) |
 | done | Enemies/MilitaryZombie_3 | .../SKM_base_mesh_set2_3 | BP_Enemy_MilitaryZombie (body 3) | 19 591 | 2 | 20k | imported 19 591 tris (no reduction); 3 texture sets |
 | done | Enemies/Brute | /Game/Mutant_monster_1/Meshes/base_mesh/SK_base_mesh_1 | BP_Enemy_Brute | 25 186 | 2 | 25k | imported 25 186 tris (no reduction), Set2 (own) + Set1, 3, 4 |
-| done | Enemies/Marksman | /Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Marksman | 17 992 | 2 | 20k | imported 17 992 tris, Set1-5, Emissive (the pack glows) |
+| done | Enemies/Marksman | /Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Marksman | 17 992 | 2 | 20k | rebuilt 2026-10-21 from SKM_baze_mesh1 (with the rifle): 19 969 tris, Set1-5, Emissive |
 | done | Enemies/Cutter | /Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Cutter | 28 592 | 2 | 20k | imported 19 950 tris, Set3 (own) + Set1, 2, 4 |
 | done | Enemies/Hound | /Game/Combat_Dog/Mesh/SK_Combat_Dog | BP_Enemy_Hound | 13 904 | 1 | 10k | imported 9 999 tris, Set1-5; biped root Bip001 (root transform moved into the root bone) |
 | done | Enemies/Frostbitten | /Game/mutant_monster_2/base_mesh/SK_base_mesh | BP_Enemy_Frostbitten | 24 142 | 1 | 20k | imported 20 000 tris, Set4 (own) + Set1-3; Subsurface pack material -> M_CharacterMaster_Subsurface (user 2026-10-21) |
@@ -290,7 +290,18 @@ default set), the enemy look variants and the operatives' SquadOutfits change; s
   SquadOutfits: it must not inherit the parent's M_Body outfits); BP_Enemy_MilitaryZombie (3 bodies x 3 sets),
   BP_Enemy_Hound (1 x 5), BP_Enemy_Frostbitten (1 x 4). The C++ roster fallback body of the Medic-Sapper
   (ACodexTacticsGameMode) is the 1-slot body too.
-- Batch 2 (`enemies2`): Brute, Cutter. The Marksman waits for the user's skeleton decision; the PMC stays.
+- Batch 2 (`enemies2`): Brute, Cutter. The PMC stays on its pack body.
+- Marksman (user 2026-10-21): the Blueprint's body was the pack's `ue4/SKM_baze_mesh` WITHOUT the rifle (the rifle is the third
+  slot `lambert4` of `ue4/SKM_baze_mesh1`, same skeleton); batch `marksman_rifle` put it on SKM_baze_mesh1, the optimized body was
+  rebuilt from it (26 055 -> 19 969 tris, the rifle 8 045 -> 6 255, Set N = head / body / rifle set N), batch `marksman` puts
+  the Blueprint on SK_Marksman_1slot with 5 sets. Floating (10-15 cm) / sinking: `CodexTactics.MarksmanFeetProbe Clips`
+  measures every ABP clip on the body (feet / lowest skinned vertex vs the reference pose; `Modes=proposed PelvisMode=...` tries
+  retargeting modes in memory). The pack's own clips carry other leg bone lengths than the skeleton's reference pose, so
+  `Scripts/Pipeline/marksman_anim_fix.py` (revert: `CODEX_MARKSMAN_FIX=revert`, data in
+  `ArtPipeline/Characters/marksman_anim_revert.json`) sets every bone of `Biochemical_Monster_1/baze_mech/ue4/SK_UE4_Mannequin_Skeleton`
+  to Animation (standing / walking / attacking / crouching within 3 cm) and replaces the 4 Manny death clips of
+  ABP_Enemy_Marksman (they sank 10-38 cm) with the pack's own `anim_ue4/anim_death` (-3.5 cm, rifle included). Prone (Crawl)
+  stays (-4..-7 cm: arms / rifle at the ground). The skeleton is also used by the pack's unused demo ThirdPersonCharacter.
 - `FEnemyLookVariants::Bodies` (EnemyCharacter.h): each body with ITS colour sets (slot 0); picked by
   `EnemyAnimRules::PickLookBodyAndSet` (body salt 1, then a set of that body with salt 2 = the old Meshes / MaterialSets picks).
   They apply only when the Blueprint's mesh is one of the bodies (`UsesLookBodiesFor`): BP_Enemy_FrozenPMC_Fighter, a child of
