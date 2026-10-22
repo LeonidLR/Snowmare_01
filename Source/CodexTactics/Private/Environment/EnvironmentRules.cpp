@@ -353,6 +353,60 @@ namespace EnvironmentRules
 		return Result;
 	}
 
+	float GetColdWeatherMultiplier(const FEnvironmentConfig& Config, EWeatherState Weather)
+	{
+		float Multiplier = 1.f;
+		switch (Weather)
+		{
+		case EWeatherState::Clear:
+			Multiplier = Config.ColdMultClear;
+			break;
+		case EWeatherState::Overcast:
+			Multiplier = Config.ColdMultOvercast;
+			break;
+		case EWeatherState::Snowfall:
+			Multiplier = Config.ColdMultSnowfall;
+			break;
+		case EWeatherState::Blizzard:
+			Multiplier = Config.ColdMultBlizzard;
+			break;
+		}
+		// Same floor as the UPROPERTY ClampMin; a JSON value is not clamped by the editor.
+		return FMath::Max(0.f, Multiplier);
+	}
+
+	float GetColdPhaseMultiplier(const FEnvironmentConfig& Config, ETimeOfDayPhase Phase)
+	{
+		float Multiplier = 1.f;
+		switch (Phase)
+		{
+		case ETimeOfDayPhase::EarlyMorning:
+			Multiplier = Config.ColdMultEarlyMorning;
+			break;
+		case ETimeOfDayPhase::Midday:
+			Multiplier = Config.ColdMultMidday;
+			break;
+		case ETimeOfDayPhase::Afternoon:
+			Multiplier = Config.ColdMultAfternoon;
+			break;
+		case ETimeOfDayPhase::Night:
+			Multiplier = Config.ColdMultNight;
+			break;
+		}
+		return FMath::Max(0.f, Multiplier);
+	}
+
+	float GetBlendedColdWeatherMultiplier(const FEnvironmentConfig& Config, const FEnvironmentState& State)
+	{
+		return FMath::Lerp(GetColdWeatherMultiplier(Config, State.Weather), GetColdWeatherMultiplier(Config, State.NextWeather),
+			GetTransitionBlend(Config, State));
+	}
+
+	bool ShouldApplyCold(const FEnvironmentConfig& Config, bool bLocked)
+	{
+		return !bLocked || Config.bColdOnLockedLevels;
+	}
+
 	FString WeatherToString(EWeatherState Weather)
 	{
 		switch (Weather)

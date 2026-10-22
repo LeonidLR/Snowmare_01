@@ -13,6 +13,9 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/HeatSourceComponent.h"
 #include "Data/TacticalHeatTuning.h"
+#include "Data/EnvironmentTuning.h"
+#include "Environment/EnvironmentRules.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Survival/TacticalHeatRules.h"
 #include "Survival/WarmIdleRules.h"
 #include "UI/GameMessageSubsystem.h"
@@ -183,6 +186,19 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 		{
 			Environment.ZoneMultiplier = It->GetColdMultiplier();
 			break;
+		}
+	}
+	// Environment phase 2 (docs/systems/environment-weather.md §4.3): the weather (blended through a transition) and the time of day
+	// scale the open-air cold. A locked level (Demo 01 tutorial, cold_rate_mult tuned without weather) keeps 1 / 1 unless
+	// bColdOnLockedLevels; no environment (menus, tests) -> 1 / 1.
+	const UEnvironmentSubsystem* EnvironmentSubsystem = UEnvironmentSubsystem::Get(this);
+	if (EnvironmentSubsystem && EnvironmentSubsystem->IsInitialised())
+	{
+		const FEnvironmentConfig& EnvironmentConfig = EnvironmentTuning::Get();
+		if (EnvironmentRules::ShouldApplyCold(EnvironmentConfig, EnvironmentSubsystem->IsLocked()))
+		{
+			Environment.WeatherMultiplier = EnvironmentRules::GetBlendedColdWeatherMultiplier(EnvironmentConfig, EnvironmentSubsystem->GetStateRef());
+			Environment.PhaseMultiplier = EnvironmentRules::GetColdPhaseMultiplier(EnvironmentConfig, EnvironmentSubsystem->GetPhase());
 		}
 	}
 

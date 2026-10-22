@@ -79,4 +79,24 @@ namespace EnvironmentRules
 
 	/** "EarlyMorning" / "Midday" / "Afternoon" / "Night". */
 	CODEXTACTICS_API FString PhaseToString(ETimeOfDayPhase Phase);
+
+	// --- Phase 2: cold (design §4.3; FColdEnvironment::WeatherMultiplier / PhaseMultiplier, combined by ColdRules::StepCold) ---
+
+	/** Open-air cold multiplier of Weather (Config.ColdMult{Clear,Overcast,Snowfall,Blizzard}; negative clamps to 0). */
+	CODEXTACTICS_API float GetColdWeatherMultiplier(const FEnvironmentConfig& Config, EWeatherState Weather);
+
+	/** Open-air cold multiplier of Phase (Config.ColdMult{EarlyMorning,Midday,Afternoon,Night}; negative clamps to 0). */
+	CODEXTACTICS_API float GetColdPhaseMultiplier(const FEnvironmentConfig& Config, ETimeOfDayPhase Phase);
+
+	/**
+	 * The weather cold multiplier in force: State.Weather's, lerped toward State.NextWeather's by GetTransitionBlend (the cold rises /
+	 * falls smoothly through a transition; a locked state never blends).
+	 */
+	CODEXTACTICS_API float GetBlendedColdWeatherMultiplier(const FEnvironmentConfig& Config, const FEnvironmentState& State);
+
+	/**
+	 * The weather / phase cold multipliers apply on this level: always on a running (unlocked) level; on a LOCKED one (Demo 01 tutorial,
+	 * its cold_rate_mult was tuned without weather) only with Config.bColdOnLockedLevels. False -> the cold uses 1 / 1.
+	 */
+	CODEXTACTICS_API bool ShouldApplyCold(const FEnvironmentConfig& Config, bool bLocked);
 }

@@ -14,6 +14,9 @@
 #include "Characters/SquadSubsystem.h"
 #include "Combat/EnemySpawnPoint.h"
 #include "Data/EnemyArchetypeAsset.h"
+#include "Data/EnvironmentTuning.h"
+#include "Environment/EnvironmentRosterRules.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -129,6 +132,7 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 	SpawnTimer = 0.0f;
 
 	PendingSpawns.Empty();
+	CurrentWaveSpawns.Reset();
 	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AEnemyCharacter>& E) { return !E.IsValid() || E->IsDying(); });
 	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->IsSkirmish())
 	{
@@ -146,35 +150,110 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 	}
 	if (LevelConfig && LevelConfig->Config.Waves.IsValidIndex(WaveIndex - 1))
 	{
-		SpawnLevelWave(LevelConfig->Config.Waves[WaveIndex - 1]);
+		// Environment phase 2b: the roster is resolved ONCE here, at the wave start (scripted, sudden and horde-intro waves all start
+		// here), from the written wave - a copy, the level config stays as written.
+		FWaveDefinition Def = LevelConfig->Config.Waves[WaveIndex - 1];
+		Def.Spawns = ResolveRoster(Def.Spawns, WaveIndex);
+		CurrentWaveSpawns = Def.Spawns;
+		SpawnLevelWave(Def);
 		OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
 		return;
 	}
-	// Godot _start_next_wave without a level wave: balance-driven counts, the whole wave at once.
+	// Godot _start_next_wave without a level wave: balance-driven counts, the whole wave at once (phase 2b: under the roster too).
 	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
 	FRandomStream Random(FMath::Rand());
 	const FFallbackWaveCounts Counts = FallbackWaveRules::Compute(GameMode ? GameMode->GameBalanceConfig.LoadSynchronous() : nullptr,
 		WaveIndex, Random);
-	auto SpawnType = [this](EEnemyArchetype Type, int32 Count)
+	TArray<FEnemySpawnEntry> Fallback;
+	auto AddFallback = [&Fallback](EEnemyArchetype Type, int32 Count)
 	{
-		for (int32 Index = 0; Index < Count; ++Index)
-		{
-			SpawnEnemy(Type, FindFreeSpawnSpot(GetSpawnLocationForLane(FString(), Type)));
-		}
+		FEnemySpawnEntry& Entry = Fallback.AddDefaulted_GetRef();
+		Entry.EnemyType = Type;
+		Entry.Count = Count;
+		Entry.SpawnLane = FString();
 	};
-	SpawnType(EEnemyArchetype::FrostHound, Counts.Hounds);
-	SpawnType(EEnemyArchetype::Spitter, Counts.Spitters);
-	SpawnType(EEnemyArchetype::Brute, Counts.Brutes);
+	AddFallback(EEnemyArchetype::FrostHound, Counts.Hounds);
+	AddFallback(EEnemyArchetype::Spitter, Counts.Spitters);
+	AddFallback(EEnemyArchetype::Brute, Counts.Brutes);
+	CurrentWaveSpawns = ResolveRoster(Fallback, WaveIndex);
+	TMap<EEnemyArchetype, int32> Spawned;
+	for (const FEnemySpawnEntry& Entry : CurrentWaveSpawns)
+	{
+		for (int32 Index = 0; Index < Entry.Count; ++Index)
+		{
+			SpawnEnemy(Entry.EnemyType, FindFreeSpawnSpot(GetSpawnLocationForLane(Entry.SpawnLane, Entry.EnemyType)));
+		}
+		Spawned.FindOrAdd(Entry.EnemyType) += FMath::Max(0, Entry.Count);
+	}
 	TotalWaveEnemies = GetAliveEnemyCount();
 
 	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
+		const int32 Cutters = Spawned.FindRef(EEnemyArchetype::Cutter);
+		const FString CutterPart = Cutters > 0 ? FString::Printf(TEXT("🐺 Cutter: %d, "), Cutters) : FString();
 		Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(FString::Printf(
-			TEXT("Wave %d: enemies advancing (Total: %d | 🐺 Hounds: %d, 🏹 Spitters: %d, ❄️ Brutes: %d)!"),
-			CurrentWaveIndex, Counts.Total(), Counts.Hounds, Counts.Spitters, Counts.Brutes)));
+			TEXT("Wave %d: enemies advancing (Total: %d | %s🐺 Hounds: %d, 🏹 Spitters: %d, ❄️ Brutes: %d)!"),
+			CurrentWaveIndex, GetCurrentWaveSpawnTotal(), *CutterPart, Spawned.FindRef(EEnemyArchetype::FrostHound),
+			Spawned.FindRef(EEnemyArchetype::Spitter), Spawned.FindRef(EEnemyArchetype::Brute))));
 	}
 
 	OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
+}
+
+int32 UWaveSubsystem::GetCurrentWaveSpawnTotal() const
+{
+	int32 Total = 0;
+	for (const FEnemySpawnEntry& Entry : CurrentWaveSpawns)
+	{
+		Total += FMath::Max(0, Entry.Count);
+	}
+	return Total;
+}
+
+TArray<FEnemySpawnEntry> UWaveSubsystem::ResolveRoster(const TArray<FEnemySpawnEntry>& Spawns, int32 WaveIndex) const
+{
+	const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(this);
+	if (!Environment || !Environment->IsInitialised())
+	{
+		return Spawns;
+	}
+	const FString Conditions = FString::Printf(TEXT("%s / %s"),
+		*StaticEnum<EWeatherState>()->GetNameStringByValue(static_cast<int64>(Environment->GetWeather())),
+		*StaticEnum<ETimeOfDayPhase>()->GetNameStringByValue(static_cast<int64>(Environment->GetPhase())));
+	if (Environment->IsLocked())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] roster wave %d (%s): locked level - the wave stays as written"), WaveIndex, *Conditions);
+		return Spawns;
+	}
+	auto Total = [](const TArray<FEnemySpawnEntry>& Entries)
+	{
+		int32 Sum = 0;
+		for (const FEnemySpawnEntry& Entry : Entries)
+		{
+			Sum += FMath::Max(0, Entry.Count);
+		}
+		return Sum;
+	};
+	const FEnvironmentRosterConfig& Roster = EnvironmentTuning::Get().Roster;
+	TArray<FString> Log;
+	TArray<FEnemySpawnEntry> Resolved = EnvironmentRosterRules::ResolveSpawns(Roster, Spawns, Environment->GetWeather(), Environment->GetPhase(), &Log);
+	// Display (console + file) only when the roster changed: an unchanged wave logs quietly - a Display line at the wave start shifted
+	// the frame timing of the horde-intro flyover smoke (HordeIntroSmoke) on -FORCELOGFLUSH runs.
+	if (Log.Num() > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] roster wave %d (%s)%s: %d -> %d enemies, %d change(s)"), WaveIndex, *Conditions,
+			Roster.bEnabled ? TEXT("") : TEXT(" disabled"), Total(Spawns), Total(Resolved), Log.Num());
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Log, TEXT("[Env] roster wave %d (%s)%s: %d enemies, unchanged"), WaveIndex, *Conditions,
+			Roster.bEnabled ? TEXT("") : TEXT(" disabled"), Total(Spawns));
+	}
+	for (const FString& Line : Log)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env]   %s"), *Line);
+	}
+	return Resolved;
 }
 
 void UWaveSubsystem::AdoptLevelEnemies()

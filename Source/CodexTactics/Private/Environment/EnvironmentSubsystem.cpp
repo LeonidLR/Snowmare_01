@@ -52,6 +52,51 @@ namespace
 		State.bLocked = bLocked;
 		return State;
 	}
+
+	/**
+	 * Command-line start conditions of an UNLOCKED level: -EnvWeather=<name> / -EnvHour=<h> / -EnvSeed=<n> set them; a smoke
+	 * (-ExecCmds=CodexTactics.*) or a bot run (-CodexBot) without them starts NEUTRAL (Clear at 15:00 = Afternoon: cold x1, the roster
+	 * as written), so the wave / cold smokes stay deterministic; -EnvRandom keeps the procedural start there.
+	 */
+	void ApplyCommandLineStart(FEnvironmentLevelSettings& Level)
+	{
+		const TCHAR* CommandLine = FCommandLine::Get();
+		FString WeatherName;
+		if (FParse::Value(CommandLine, TEXT("-EnvWeather="), WeatherName))
+		{
+			EWeatherState Weather;
+			if (EnvironmentRules::WeatherFromString(WeatherName, Weather))
+			{
+				Level.bHasWeather = true;
+				Level.Weather = Weather;
+			}
+		}
+		float Hour = 0.f;
+		if (FParse::Value(CommandLine, TEXT("-EnvHour="), Hour))
+		{
+			Level.bHasStartHour = true;
+			Level.StartHour = Hour;
+		}
+		FParse::Value(CommandLine, TEXT("-EnvSeed="), Level.Seed);
+		const bool bAutomated = FString(CommandLine).Contains(TEXT("-ExecCmds=CodexTactics.")) || FParse::Param(CommandLine, TEXT("CodexBot"));
+		if (bAutomated && !FParse::Param(CommandLine, TEXT("EnvRandom")))
+		{
+			if (!Level.bHasWeather)
+			{
+				Level.bHasWeather = true;
+				Level.Weather = EWeatherState::Clear;
+			}
+			if (!Level.bHasStartHour)
+			{
+				Level.bHasStartHour = true;
+				Level.StartHour = 15.f;
+			}
+			if (Level.Seed == 0)
+			{
+				Level.Seed = 1;
+			}
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -148,7 +193,14 @@ void UEnvironmentSubsystem::Resolve()
 {
 	const UEnvironmentCarrySubsystem* Carry = UEnvironmentCarrySubsystem::Get(this);
 	const TOptional<FEnvironmentState> Carried = Carry ? Carry->GetCarriedState() : TOptional<FEnvironmentState>();
-	State = ResolveInitialState(GetConfig(), LevelSettings, Carried, MakeRandomSeed());
+	FEnvironmentLevelSettings StartSettings = LevelSettings;
+	if (!StartSettings.bLocked)
+	{
+		ApplyCommandLineStart(StartSettings);
+	}
+	// RandomSeedIfNeeded 0: a random seed is drawn (FMath::Rand) ONLY when the start needs one, so a fixed start (smokes, the bot, a
+	// level seed) leaves the global random sequence of -FixedSeed runs untouched.
+	State = ResolveInitialState(GetConfig(), StartSettings, Carried, 0);
 	if (Carried.IsSet() && !LevelSettings.bLocked)
 	{
 		UE_LOG(LogCodexTactics, Log, TEXT("[Env] continuing the previous level's environment (hour %.2f, %s)"), Carried->Hour,

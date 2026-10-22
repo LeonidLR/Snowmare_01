@@ -46,6 +46,10 @@ struct CODEXTACTICS_API FEnemySpawnEntry
 	/** custom_stats.attack_cooldown in s (0 = the type's own). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
 	float CustomAttackCooldown = 0.0f;
+
+	/** "environment_lock": true - the weather / time-of-day roster never changes this entry (Wave Editor row lock; EnvironmentRosterRules). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
+	bool bEnvironmentLocked = false;
 };
 
 USTRUCT(BlueprintType)

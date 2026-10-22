@@ -3,6 +3,8 @@
 // The commander stands in the open: cold must accumulate (Godot 0.88 %/s for fortitude 15). Then cold is forced
 // to 75 % (Freezing tier -> speed x0.45) and to 100 % (frostbite collapse prone, weapon frozen, cannot shoot).
 // Before that (user decision 2026-10-01, not in Godot): a sprint at 40 % cold warms him up; at 65 % he cannot sprint.
+// Environment phase 2 (first, instant): Blizzard at night must raise his open-air cold rate over Clear at midday (the multipliers come
+// from UEnvironmentSubsystem through GatherEnvironment); the environment state is restored afterwards.
 
 #include "CoreMinimal.h"
 
@@ -14,6 +16,9 @@
 #include "UI/FrostVignetteWidget.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Data/EnvironmentTuning.h"
+#include "Environment/EnvironmentRules.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -34,6 +39,7 @@ namespace ColdSmoke
 		float SprintStartCold = 0.f;
 		bool bFreezingOk = false;
 		bool bVignetteHiddenWhenWarm = false;
+		bool bEnvironmentOk = false;
 	};
 
 	/** 1 = the HUD frost vignette is up, 0 = hidden, -1 = no HUD. */
@@ -49,12 +55,63 @@ namespace ColdSmoke
 		return Hud->GetFrostVignette()->IsShown() ? 1 : 0;
 	}
 
+	/**
+	 * Environment phase 2: the leader's open-air cold rate (1 s from 0 %, standing, no heat / preparation / sprint) at Clear midday
+	 * and at Blizzard night, read through GatherEnvironment; the night storm must be clearly colder and the multipliers must match the
+	 * tuning. Restores the environment state.
+	 */
+	bool CheckEnvironmentCold(UWorld* World, UColdSurvivalComponent* Cold)
+	{
+		UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World);
+		if (!Environment || !Environment->IsInitialised())
+		{
+			UE_LOG(LogCodexTactics, Error, TEXT("Smoke environment cold: no initialised UEnvironmentSubsystem"));
+			return false;
+		}
+		if (Environment->IsLocked() && !EnvironmentTuning::Get().bColdOnLockedLevels)
+		{
+			UE_LOG(LogCodexTactics, Error, TEXT("Smoke environment cold: the level is locked (cold multipliers off); run on L_MovementTest"));
+			return false;
+		}
+		const FEnvironmentState Saved = Environment->GetState();
+		auto Sample = [Cold](float& OutWeather, float& OutPhase)
+		{
+			FColdEnvironment Open = Cold->GatherEnvironment();
+			Open.bWarm = false;
+			Open.bPreparation = false;
+			Open.bSprinting = false;
+			OutWeather = Open.WeatherMultiplier;
+			OutPhase = Open.PhaseMultiplier;
+			return ColdRules::StepCold(Cold->Config, 0.f, 1.f, Open, EOperativeStance::Standing, Cold->Fortitude);
+		};
+
+		float ClearWeather = 0.f, ClearPhase = 0.f, StormWeather = 0.f, StormPhase = 0.f;
+		Environment->SetHour(12.f);
+		Environment->ForceWeather(EWeatherState::Clear, true);
+		const float ClearMidday = Sample(ClearWeather, ClearPhase);
+		Environment->SetHour(23.f);
+		Environment->ForceWeather(EWeatherState::Blizzard, true);
+		const float BlizzardNight = Sample(StormWeather, StormPhase);
+		Environment->SetState(Saved);
+
+		const FEnvironmentConfig& Tuning = EnvironmentTuning::Get();
+		const bool bMultipliersOk = FMath::IsNearlyEqual(ClearWeather, EnvironmentRules::GetColdWeatherMultiplier(Tuning, EWeatherState::Clear), 0.001f)
+			&& FMath::IsNearlyEqual(ClearPhase, EnvironmentRules::GetColdPhaseMultiplier(Tuning, ETimeOfDayPhase::Midday), 0.001f)
+			&& FMath::IsNearlyEqual(StormWeather, EnvironmentRules::GetColdWeatherMultiplier(Tuning, EWeatherState::Blizzard), 0.001f)
+			&& FMath::IsNearlyEqual(StormPhase, EnvironmentRules::GetColdPhaseMultiplier(Tuning, ETimeOfDayPhase::Night), 0.001f);
+		const bool bRises = ClearMidday > 0.f && BlizzardNight > ClearMidday * 1.5f;
+		UE_LOG(LogCodexTactics, Display,
+			TEXT("Smoke environment cold: Clear midday %.3f %%/s (weather %.2f phase %.2f), Blizzard night %.3f %%/s (weather %.2f phase %.2f), x%.2f"),
+			ClearMidday, ClearWeather, ClearPhase, BlizzardNight, StormWeather, StormPhase, ClearMidday > 0.f ? BlizzardNight / ClearMidday : 0.f);
+		return bMultipliersOk && bRises;
+	}
+
 	void Finish(bool bFrostbiteOk, const FState& State)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke accumulate=%d sprint=%d freezing=%d frostbite=%d"),
-			State.bAccumulateOk ? 1 : 0, State.bSprintOk ? 1 : 0, State.bFreezingOk ? 1 : 0, bFrostbiteOk ? 1 : 0);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke accumulate=%d sprint=%d freezing=%d frostbite=%d environment=%d"),
+			State.bAccumulateOk ? 1 : 0, State.bSprintOk ? 1 : 0, State.bFreezingOk ? 1 : 0, bFrostbiteOk ? 1 : 0, State.bEnvironmentOk ? 1 : 0);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"),
-			State.bAccumulateOk && State.bSprintOk && State.bFreezingOk && bFrostbiteOk ? TEXT("PASS") : TEXT("FAIL"));
+			State.bAccumulateOk && State.bSprintOk && State.bFreezingOk && bFrostbiteOk && State.bEnvironmentOk ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("ColdSmoke"));
 	}
 
@@ -138,6 +195,10 @@ namespace ColdSmoke
 			return;
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
+		if (UColdSurvivalComponent* Cold = Leader->ColdSurvival.Get())
+		{
+			State->bEnvironmentOk = CheckEnvironmentCold(World, Cold);
+		}
 		State->StartCold = Leader->ColdLevel;
 
 		TWeakObjectPtr<UWorld> WeakWorld(World);

@@ -95,8 +95,13 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Cold")
 	FOnColdTierChanged OnTierChanged;
 
-private:
+	/**
+	 * The environment of the owner's next cold step: heat, preparation, wave / camera zone, level rate, weather and time of day
+	 * (UEnvironmentSubsystem), elevation, sprint, cover, heat-pack buffer. Public for headless checks (ColdSmoke).
+	 */
 	FColdEnvironment GatherEnvironment() const;
+
+private:
 	void ApplyTierEffects(EColdTier NewTier);
 
 	TWeakObjectPtr<AOperativeCharacter> Operative;

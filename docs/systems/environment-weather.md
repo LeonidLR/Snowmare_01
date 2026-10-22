@@ -1,7 +1,7 @@
-# Environment: day cycle, procedural weather, cold and enemy roster (phase 1 implemented: clock + weather core)
+# Environment: day cycle, procedural weather, cold and enemy roster (phases 1-2 implemented: clock, weather, cold, roster)
 
 > Design of the time-of-day + weather system and how it drives cold and the enemy roster. Status 2026-10-22: phase 1 (clock, weather ladder,
-> carry-over, tutorial lock, events, console) implemented - see §8; cold coupling, roster, visuals are phases 2-6.
+> carry-over, tutorial lock, events, console) and phase 2 (cold multipliers, roster by conditions) implemented - see §8 / §9; visuals are phases 3-4.
 > Visual base = the user's own `WeatherSystem_01 5.4` project (`BP_DynamivSky`, `NS_SnowStorm`, `MPC_WeatherSettings`, `MF_SnowyWeatherBlend`, sky sphere
 > materials, `S_*` preset structs, `DA_Snowy` / `DA_Sunny`), migrated and stripped of rain / lightning / puddles. **No Ultra Dynamic Sky / Weather** (user decision 2026-10-22).
 >
@@ -148,6 +148,31 @@ Key files:
 - Not yet: save keys + `RestoreOrder` (phase 5; hook = `GetStateRef` / `SetState`), cold multipliers / roster (phase 2), visuals (phase 3-4). A quick restart
   continues the carried clock (expected).
 - Built by the model router split (2026-10-22): rules + tests Opus, tuning + JSON Sonnet, subsystem Fable, contract headers + review the main session.
+
+## 9. Implementation - phase 2 (2026-10-22): cold and the enemy roster
+
+- Config (`FEnvironmentConfig`, `environment.json`): `cold_mult_clear / _overcast / _snowfall / _blizzard` 1 / 1 / 1.25 / 2.5,
+  `cold_mult_early_morning / _midday / _afternoon / _night` 1.15 / 0.9 / 1.0 / 1.3, `cold_on_locked_levels` false; block `"roster"` (enabled, half_below 2.0,
+  all_below 1.4, bonus_above 2.7, bonus_multiplier 1.5, pairs MARKSMAN -> 2 FROSTBITTEN / SPITTER -> 1 CUTTER, bonus_types HOUND, `suitability` = the Jev
+  6 x 16 table per type -> weather -> [EarlyMorning, Midday, Afternoon, Night]; a malformed row is rejected with a warning).
+- Cold (`ColdRules`, `UColdSurvivalComponent::GatherEnvironment`): `FColdEnvironment::WeatherMultiplier` (blended Weather -> NextWeather through a
+  transition, `EnvironmentRules::GetBlendedColdWeatherMultiplier`) and `PhaseMultiplier` (steps at a phase boundary). Open air =
+  `ColdRules::CombineZoneWeather(Zone, Weather)` x Phase x the old factors: closed 0; zone <= 1 (shelter, standard, a wave `cold_drain_mult` <= 1) -> zone x
+  weather; zone > 1 (Blizzard camera zone 2.5, a harsh wave drain) -> max(zone, weather) - a storm is never counted twice. Warming, preparation, sprint
+  warm-up, scripted shocks unscaled. A locked level (Demo 01) keeps 1 / 1 (`EnvironmentRules::ShouldApplyCold`). Numbers: clear midday 0.79 %/s vs
+  blizzard night 2.86 %/s for the commander in the open (x3.6; 100 % in ~35 s) - to be checked in a play-test.
+- Roster (`EnvironmentRosterRules::ResolveSpawns`, hook `UWaveSubsystem::StartWave` on a copy of the wave definition; every wave start path incl. sudden
+  start / horde intro / fallback waves): only when the environment is initialised and the level is NOT locked; skirmish / ambush adoption, flank breach
+  packs and map-placed enemies never change; `"environment_lock": true` on a spawn entry (schema, Wave Editor `types.ts`, no UI yet) keeps it as
+  written; types without a suitability row (bosses) never change. A load mid-wave restarts the wave from Preparation and resolves it once again.
+  `UWaveSubsystem::GetCurrentWaveSpawns / GetCurrentWaveSpawnTotal` give the resolved roster (LevelWaveSmoke / HordeIntroSmoke count against it).
+  Log: `[Env] roster wave N (Weather / Phase): A -> B enemies, K change(s)` + one line per change.
+- Automated runs: a smoke (`-ExecCmds=CodexTactics.*`) or a bot run (`-CodexBot`) on an unlocked level starts NEUTRAL - Clear at 15:00 (cold x1, roster as
+  written), seed 1 - unless `-EnvWeather=<name>` / `-EnvHour=<h>` / `-EnvSeed=<n>` set the start or `-EnvRandom` keeps it procedural.
+- Tests: `CodexTactics.Environment.Cold.*` (8), `.Roster.*` (12), `.Tuning.*` (6). Smokes: `ColdSmoke` (new first stage: clear midday vs blizzard night),
+  `EnvironmentRosterSmoke` (blizzard night: no marksmen, frostbitten x2, hounds x1.5; clear midday as written).
+- Not yet: the elevated-wind rule scaled by the weather wind, Wave Editor roster preview / lock UI (phase 5), per-level roster matrix and custom presets.
+- Router split: cold Opus, roster Opus, tuning Sonnet; contract, automated-run neutral start, review the main session.
 
 ## 7. Open questions
 

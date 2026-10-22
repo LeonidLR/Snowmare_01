@@ -58,7 +58,8 @@
                   "description": "Линия / фланг появления на карте" 
                 },
                 "spawn_delay_sec": { "type": "number", "default": 1.0, "description": "Интервал между появлением единиц" },
-                "initial_delay_sec": { "type": "number", "default": 0.0, "description": "Задержка перед первой группой" }
+                "initial_delay_sec": { "type": "number", "default": 0.0, "description": "Задержка перед первой группой" },
+                "environment_lock": { "type": "boolean", "default": false, "description": "Weather / time-of-day roster never changes this entry (Wave Editor row lock; EnvironmentRosterRules)" }
               }
             }
           },

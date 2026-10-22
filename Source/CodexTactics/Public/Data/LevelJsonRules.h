@@ -45,7 +45,10 @@ namespace LevelJsonRules
 	 */
 	CODEXTACTICS_API FEnvironmentLevelSettings ParseEnvironmentSettings(const FJsonObject& Environment, FString* OutError = nullptr);
 
-	/** Parses a level JSON text; false + OutError on invalid JSON or an unknown enemy type. */
+	/**
+	 * Parses a level JSON text; false + OutError on invalid JSON or an unknown enemy type. A spawn entry's "environment_lock": true
+	 * sets FEnemySpawnEntry::bEnvironmentLocked (the weather / time-of-day roster leaves it as written).
+	 */
 	CODEXTACTICS_API bool ParseLevel(const FString& Json, const FString& FallbackId, FLevelCombatConfig& OutConfig, FString& OutError);
 
 	/** Loads and parses GetLevelsDirectory() / FileName. */

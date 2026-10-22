@@ -9,7 +9,10 @@ class FJsonObject;
  * Day cycle + weather tuning (UE-only, no Godot reference; design: docs/systems/environment-weather.md): the file
  * Content/Data/Environment/environment.json, read over the FEnvironmentConfig defaults. Keys are the snake_case names of
  * FEnvironmentConfig (early_morning_start_hour, midday_real_seconds, weather_dwell_phase_fraction, start_weight_clear, ...;
- * hours = game clock, seconds = REAL seconds). A missing key keeps the default (the design value). Unreal is the master copy.
+ * hours = game clock, seconds = REAL seconds; phase 2: cold_mult_*, cold_on_locked_levels, and the nested "roster" object
+ * with pairs / bonus_types / suitability tables keyed by level-JSON enemy type names: "HOUND", "SPITTER", ...).
+ * A missing key keeps the default (the design value); a roster list that is present replaces the default list, a suitability
+ * row without all four weathers (4 scores each) or with an unknown type is skipped with a warning. Unreal is the master copy.
  * Console: CodexTactics.DumpEnvironment.
  */
 namespace EnvironmentTuning
