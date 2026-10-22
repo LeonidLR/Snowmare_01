@@ -91,7 +91,9 @@ void UMissionSubsystem::StartMission(EMissionStartMode Mode)
 	ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
 	const ULevelConfigAsset* Level = GameMode ? GameMode->PeekLevelConfig() : nullptr;
 	const bool bDemoLevel = Level && Level->Config.Demo.bDemo;
-	const bool bDemoIntroOff = !MissionRules::ShouldOpenIntroDialogue(false, bDemoLevel, bDemoLevel && Level->Config.Demo.bIntroDialogue);
+	// 2026-10-22 d: a level JSON "intro_dialogue": false (Frozen Factory) drops it on any level.
+	const bool bDemoIntroOff = !MissionRules::ShouldOpenIntroDialogue(false, bDemoLevel, bDemoLevel && Level->Config.Demo.bIntroDialogue)
+		|| (Level && !Level->Config.bIntroDialogue);
 	const UDialogueSequenceAsset* Intro = bHeadlessStart || bDemoIntroOff ? nullptr : LoadDialogue(&ACodexTacticsGameMode::DialogueMissionStart);
 	if (Intro && Dialogue)
 	{
@@ -99,7 +101,7 @@ void UMissionSubsystem::StartMission(EMissionStartMode Mode)
 	}
 	else if (bDemoIntroOff)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Mission start: the intro briefing is off on this demo level"));
+		UE_LOG(LogCodexTactics, Display, TEXT("Mission start: the intro briefing is off on this level (level JSON intro_dialogue)"));
 	}
 	else
 	{

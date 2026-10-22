@@ -66,7 +66,9 @@ Factory" `L_Demo01_B_FrozenFactory`; `UCampaignSubsystem`, `CampaignRules`). Wit
 to the stat-points screen (`UPointsReviewWidget`: live portrait `AOperativePortraitCapture` + `UProfileDialogWidget` in review mode, "Continue >") when
 somebody alive has unspent points, else straight to the next level; the squad is carried (`CampaignCarry`: progression + kit, full health, the fallen stay
 behind); the next level starts behind a black screen with its title that fades in (level JSON `start_fade_seconds`, 1.5 s on any campaign arrival). Titles
-also on the save slots' level column. NEW GAME still opens `NewGameLevel`. Details: [demo01-lake](demo01-lake.md) block 2026-10-22 d.
+also on the save slots' level column. NEW GAME starts the campaign at its first level ("0.0 Frozen Dam", user decision 2026-10-22 e;
+`UCodexFrontendSubsystem::GetNewGameLevel`; `NewGameLevel` is the fallback without a campaign file, `NewGameLevelOverride` lets a smoke open another level). A
+level JSON `"intro_dialogue": false` (top level) drops the start briefing on any level (Frozen Factory). Details: [demo01-lake](demo01-lake.md) block 2026-10-22 d.
 
 ## Narrative pipeline (old §6)
 

@@ -2,7 +2,7 @@
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "L_Demo01_B_FrozenFactory",
   "level_name": "0.1 Frozen Factory",
-  "description": "DRAFT (2026-10-22). Campaign level 0.1, a copy of the first test map L_MovementTest (the checkpoint, the canister / generator / terminal quest, the blast gate) with the lake's last compound and its open blast door recreated behind the squad's start (set dressing). Started from L_MovementTest's level file (level_01_outpost.json) without the tutorial; ONE small wave only as the minimal valid config (an empty wave list falls back to 10 built-in waves) - the real encounter design is to come.",
+  "description": "DRAFT (2026-10-22). Campaign level 0.1, a copy of the first test map L_MovementTest (the checkpoint, the canister / generator / terminal quest, the blast gate) with the lake's last compound and its open blast door recreated behind the squad's start (set dressing). Started from L_MovementTest's level file (level_01_outpost.json) without the tutorial and without its intro briefing (intro_dialogue false, user 2026-10-22), cold x0.4 like the lake (user 2026-10-22); ONE small wave only as the minimal valid config (an empty wave list falls back to 10 built-in waves) - the real encounter design is to come.",
   "prep_phase_duration": 60,
   "wave_rest_duration": 20,
   "gate_open_mode": "generator_waves",
@@ -11,6 +11,8 @@
   "gate_full_open_after_wave": 0,
   "gate_exit": "off",
   "start_fade_seconds": 2.0,
+  "cold_rate_mult": 0.4,
+  "intro_dialogue": false,
   "waves": [
     {
       "wave_index": 1,

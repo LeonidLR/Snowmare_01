@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "UObject/SoftObjectPath.h"
 #include "CodexFrontendSubsystem.generated.h"
 
 /**
@@ -17,9 +18,21 @@ class CODEXTACTICS_API UCodexFrontendSubsystem : public UGameInstanceSubsystem
 public:
 	static UCodexFrontendSubsystem* Get(const UObject* WorldContext);
 
-	/** NEW GAME: opens the campaign level at its start (UCodexFrontendSettings::NewGameLevel); its intro runs. */
+	/**
+	 * NEW GAME: opens the campaign's first level (user decision 2026-10-22: "0.0 Frozen Dam", Content/Data/Campaign/campaign.json;
+	 * GetNewGameLevel) at its start; its intro runs.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Frontend")
 	void StartNewGame();
+
+	/**
+	 * The level NEW GAME opens: NewGameLevelOverride (smokes) > the campaign's first level > UCodexFrontendSettings::NewGameLevel
+	 * (the fallback without a campaign file).
+	 */
+	FSoftObjectPath GetNewGameLevel() const;
+
+	/** Smokes / dev: NEW GAME opens this level instead (e.g. L_MovementTest for the checks of its intro); empty = the campaign. */
+	FSoftObjectPath NewGameLevelOverride;
 
 	/** CONTINUE: loads the newest save (false without one). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Frontend")

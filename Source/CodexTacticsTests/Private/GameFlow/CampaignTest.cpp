@@ -102,6 +102,8 @@ bool FCampaignDataFileTest::RunTest(const FString&)
 	LevelJsonRules::LoadLevel(TEXT("L_Demo01_B_FrozenFactory.json"), Factory, Error);
 	TestTrue(TEXT("the factory: no tutorial, no gate exit, a 2 s start fade, one wave"), !Factory.Demo.bDemo && !Factory.Demo.bTutorial
 		&& !Factory.GateExit.bEnabled && FMath::IsNearlyEqual(Factory.StartFadeSeconds, 2.f) && Factory.Waves.Num() == 1);
+	TestTrue(TEXT("the factory (user 2026-10-22): the lake's cold x0.4, no MovementTest intro briefing"), FMath::IsNearlyEqual(Factory.ColdRateMult, 0.4f)
+		&& !Factory.bIntroDialogue);
 	return true;
 }
 
@@ -143,7 +145,9 @@ bool FCampaignTimingTest::RunTest(const FString&)
 		TEXT("a"), Level, Error));
 	TestTrue(TEXT("... read"), FMath::IsNearlyEqual(Level.StartFadeSeconds, 2.5f) && FMath::IsNearlyEqual(Level.GateExit.NextLevelSeconds, 4.f));
 	TestTrue(TEXT("defaults"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"a"})"), TEXT("a"), Level, Error) && Level.StartFadeSeconds == 0.f
-		&& FMath::IsNearlyEqual(Level.GateExit.NextLevelSeconds, 3.f));
+		&& FMath::IsNearlyEqual(Level.GateExit.NextLevelSeconds, 3.f) && Level.bIntroDialogue);
+	TestTrue(TEXT("\"intro_dialogue\": false"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"a","intro_dialogue":false})"), TEXT("a"), Level, Error)
+		&& !Level.bIntroDialogue);
 
 	TestEqual(TEXT("the level's start fade"), CampaignRules::ResolveStartFadeSeconds(2.f, false), 2.f);
 	TestEqual(TEXT("a campaign arrival fades in anyway"), CampaignRules::ResolveStartFadeSeconds(0.f, true), CampaignRules::ArrivalFadeSeconds);

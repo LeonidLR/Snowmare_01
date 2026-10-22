@@ -244,6 +244,13 @@ bool FVehicleFadeGroupTest::RunTest(const FString&)
 	TestTrue(TEXT("a straggler 30 m away: no wait"), VehicleCombatRules::ShouldStartGroupFade(0.5f, { VehicleCombatRules::EstimateArrivalSeconds(3000.f, 350.f) }, Config));
 	TestTrue(TEXT("waited the max: go"), VehicleCombatRules::ShouldStartGroupFade(Config.GroupWaitSeconds, { 0.5f }, Config));
 	TestEqual(TEXT("a standing walker counts at the floor speed"), VehicleCombatRules::EstimateArrivalSeconds(300.f, 0.f, 150.f, 1.f), 2.f, 0.01f);
+	// 2026-10-22 (VehicleSmoke): a mate just setting off out of cover (1.05 m/s of a 7.25 m/s top speed) 10.8 m away is no straggler.
+	const float SettingOff = VehicleCombatRules::EstimateWalkerSpeed(105.f, 725.f, true);
+	TestEqual(TEXT("moving: at least the cruise share of the top speed"), SettingOff, 725.f * VehicleCombatRules::WalkerCruiseFraction, 0.01f);
+	TestFalse(TEXT("... so the first one at the door waits for her: one fade"),
+		VehicleCombatRules::ShouldStartGroupFade(0.5f, { VehicleCombatRules::EstimateArrivalSeconds(1080.f, SettingOff) }, Config));
+	TestEqual(TEXT("a fast walker keeps his own speed"), VehicleCombatRules::EstimateWalkerSpeed(700.f, 725.f, true), 700.f, 0.01f);
+	TestEqual(TEXT("standing: his velocity (the floor applies later)"), VehicleCombatRules::EstimateWalkerSpeed(0.f, 725.f, false), 0.f, 0.01f);
 	return true;
 }
 

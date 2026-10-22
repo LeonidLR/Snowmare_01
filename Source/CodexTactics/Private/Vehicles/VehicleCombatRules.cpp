@@ -296,4 +296,10 @@ namespace VehicleCombatRules
 	{
 		return FMath::Max(0.f, DistanceCm) * FMath::Max(1.f, PathFactor) / FMath::Max(FMath::Max(1.f, MinSpeedCmS), SpeedCmS);
 	}
+
+	float EstimateWalkerSpeed(float VelocityCmS, float MaxSpeedCmS, bool bMoving)
+	{
+		const float Velocity = FMath::Max(0.f, VelocityCmS);
+		return bMoving ? FMath::Max(Velocity, FMath::Max(0.f, MaxSpeedCmS) * WalkerCruiseFraction) : Velocity;
+	}
 }

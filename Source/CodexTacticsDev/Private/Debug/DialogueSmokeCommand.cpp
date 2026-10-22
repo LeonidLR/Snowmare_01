@@ -91,6 +91,8 @@ namespace DialogueSmoke
 				return true;
 			}
 			State.StartWorld = World;
+			// The MovementTest intro briefing is what this check needs: NEW GAME itself starts the campaign at the lake since 2026-10-22.
+			UCodexFrontendSubsystem::Get(World)->NewGameLevelOverride = FSoftObjectPath(TEXT("/Game/Maps/L_MovementTest.L_MovementTest"));
 			UCodexFrontendSubsystem::Get(World)->StartNewGame();
 			Next(State);
 			State.Stage = 0;

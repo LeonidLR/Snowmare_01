@@ -281,6 +281,10 @@ namespace PhoneShots
 			}
 			if (UCodexMainMenuScreen* Menu = Top<UCodexMainMenuScreen>(World, CodexUITags::Layer_Menu))
 			{
+				if (UCodexFrontendSubsystem* Frontend = UCodexFrontendSubsystem::Get(World))
+				{
+					Frontend->NewGameLevelOverride = FSoftObjectPath(TEXT("/Game/Maps/L_MovementTest.L_MovementTest")); // the shots show the MovementTest mission
+				}
 				Menu->ActivateMenuEntry(ECodexMainMenuEntry::NewGame);
 			}
 			return 5;

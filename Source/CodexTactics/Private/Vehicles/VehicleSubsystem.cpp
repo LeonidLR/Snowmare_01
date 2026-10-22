@@ -1044,8 +1044,9 @@ void UVehicleSubsystem::UpdateBoarding(float DeltaTime)
 			else if (Pending.ClimbLeft < 0.f)
 			{
 				const float Distance = FVector::Dist2D(Pending.Operative->GetActorLocation(), Vehicle->GetEntryPointWorld(Pending.Entry));
-				Walkers.Add(VehicleCombatRules::EstimateArrivalSeconds(FMath::Max(0.f, Distance - Vehicle->CrewConfig.EntryReachCm),
-					Pending.Operative->GetVelocity().Size2D()));
+				const float Speed = VehicleCombatRules::EstimateWalkerSpeed(Pending.Operative->GetVelocity().Size2D(), Pending.Operative->GetMaxSpeed(),
+					Pending.Operative->IsMoving());
+				Walkers.Add(VehicleCombatRules::EstimateArrivalSeconds(FMath::Max(0.f, Distance - Vehicle->CrewConfig.EntryReachCm), Speed));
 			}
 		}
 		if (ReadyWait < 0.f)
@@ -1067,6 +1068,12 @@ void UVehicleSubsystem::UpdateBoarding(float DeltaTime)
 		}
 		if (VehicleCombatRules::ShouldStartGroupFade(ReadyWait, Walkers, Vehicle->FadeConfig))
 		{
+			FString Etas;
+			for (const float Eta : Walkers)
+			{
+				Etas += FString::Printf(TEXT(" %.1f"), Eta);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] group fade after %.1f s at the door; walkers' ETA:%s"), ReadyWait, Etas.IsEmpty() ? TEXT(" none") : *Etas);
 			for (FPendingBoard& Pending : Boarding)
 			{
 				if (Pending.Vehicle.Get() == Vehicle && Pending.bReady && !Pending.bFadeQueued)

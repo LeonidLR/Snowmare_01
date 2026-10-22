@@ -305,6 +305,13 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (ClampMin = "0"))
 	float StartFadeSeconds = 0.f;
+	/**
+	 * "intro_dialogue" (top level, 2026-10-22 d, UE-only): false = the mission start plays no intro briefing window and no radio
+	 * line on this level (user decision: Frozen Factory, a copy of L_MovementTest, drops the MovementTest briefing). Default true; a
+	 * "demo" block's own "intro_dialogue" still applies to demo levels.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	bool bIntroDialogue = true;
 	/** "demo": demo game-mode flags (Panic off, vision cones, tutorial, demo HUD preset). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FDemoModeSettings Demo;
