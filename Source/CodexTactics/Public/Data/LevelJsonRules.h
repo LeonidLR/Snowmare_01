@@ -39,6 +39,12 @@ namespace LevelJsonRules
 	 */
 	CODEXTACTICS_API FDemoModeSettings ParseDemoSettings(const FJsonObject& Demo);
 
+	/**
+	 * The level JSON "environment" object (UE-only, 2026-10-22): {"locked": true, "start_hour": 23, "weather": "Snowfall", "seed": 7};
+	 * absent keys keep the procedural default, an unknown weather name is ignored (bHasWeather false) and reported in OutError.
+	 */
+	CODEXTACTICS_API FEnvironmentLevelSettings ParseEnvironmentSettings(const FJsonObject& Environment, FString* OutError = nullptr);
+
 	/** Parses a level JSON text; false + OutError on invalid JSON or an unknown enemy type. */
 	CODEXTACTICS_API bool ParseLevel(const FString& Json, const FString& FallbackId, FLevelCombatConfig& OutConfig, FString& OutError);
 

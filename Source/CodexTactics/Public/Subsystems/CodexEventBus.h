@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Core/PlayerCommands.h"
+#include "Environment/EnvironmentTypes.h"
 #include "CodexEventBus.generated.h"
 
 class AOperativeCharacter;
@@ -19,6 +20,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexSoldierReasonEvent, AOperativ
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexPlayerCommandEvent, FName, CommandId, const FPlayerCommandContext&, Context);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexGameplayEvent, FName, EventName, AActor*, Subject);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexGameplayEventDetailed, FName, EventName, const FGameplayEventContext&, Context);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexTimeOfDayPhaseEvent, ETimeOfDayPhase, OldPhase, ETimeOfDayPhase, NewPhase);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexWeatherEvent, EWeatherState, From, EWeatherState, To);
 
 /**
  * Global game events for Blueprints, audio, VFX and UI hooks: the Godot EventBus signals the game actually emits.
@@ -104,4 +107,16 @@ public:
 	/** The same events with their details when the emitter has them (GameplayEvents::RaiseWithContext: cover kind, wall, ids). */
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
 	FCodexGameplayEventDetailed OnGameplayEventDetailed;
+
+	/** The day cycle entered a new phase (UEnvironmentSubsystem; also after a load / SetHour; docs/systems/environment-weather.md). */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
+	FCodexTimeOfDayPhaseEvent OnTimeOfDayPhaseChanged;
+
+	/** The weather blend From -> To began (the last WeatherTransitionSeconds of a dwell). */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
+	FCodexWeatherEvent OnWeatherTransitionStarted;
+
+	/** The weather in force changed OldWeather -> NewWeather (end of the blend, an instant force or a load). */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
+	FCodexWeatherEvent OnWeatherChanged;
 };

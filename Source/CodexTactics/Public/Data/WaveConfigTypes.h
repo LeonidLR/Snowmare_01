@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Data/CombatTypes.h"
+#include "Environment/EnvironmentTypes.h"
 #include "Quests/GateProgressRules.h"
 #include "WaveConfigTypes.generated.h"
 
@@ -305,6 +306,12 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	/** "minimap": {"bounds_cm": [min_x, min_y, max_x, max_y]}: the mapped area; invalid = the navmesh bounds volumes. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FBox2D MinimapBoundsCm = FBox2D(ForceInit);
+	/**
+	 * "environment": {"locked": bool, "start_hour": h, "weather": "Clear|Overcast|Snowfall|Blizzard", "seed": n} (UE-only, 2026-10-22,
+	 * docs/systems/environment-weather.md): the day cycle / weather start of this level (UEnvironmentSubsystem::ResolveInitialState).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FEnvironmentLevelSettings Environment;
 };
 
 UCLASS(BlueprintType)

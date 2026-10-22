@@ -11,6 +11,7 @@
   "susanin_wave": 0,
   "cold_rate_mult": 0.4,
   "gate_open_mode": "generator_waves",
+  "environment": { "locked": true, "start_hour": 23, "weather": "Snowfall" },
   "demo": {
     "panic": false,
     "tutorial": true,

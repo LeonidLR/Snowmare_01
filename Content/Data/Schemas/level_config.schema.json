@@ -20,6 +20,16 @@
     "gate_full_open_after_wave": { "type": "integer", "minimum": 0, "default": 0, "description": "UE: the wave whose clearing opens the door fully; 0 = the level's last wave" },
     "horde": { "type": "object", "description": "UE: переопределения horde.json для уровня (trigger_seconds, repeats, repeat_seconds, count, count_increase_per_repeat, composition, min_distance_m, max_distance_m, cluster_radius_m, prefer_out_of_sight, spawn_samples, apply_wave_modifiers, warning_seconds, warning_sound)" },
     "minimap": { "type": "object", "description": "UE (2026-10-18, docs/design/MINIMAP.md): floors_cm = world Z (cm) of each UPPER floor's walking surface (absent = auto-detected); bounds_cm = [min_x, min_y, max_x, max_y] of the mapped area (absent = the navmesh bounds volumes)" },
+    "environment": {
+      "type": "object",
+      "description": "UE (2026-10-22, docs/systems/environment-weather.md): the day cycle / weather start of this level. locked: clock and weather never move (Demo 01 tutorial: Night + Snowfall); start_hour / weather: used when the level is locked or when there is no previous level to continue (every later level CONTINUES the time and weather where the previous one ended); seed: fixed weather RNG seed for a fresh start (0 / absent = random)",
+      "properties": {
+        "locked": { "type": "boolean", "default": false },
+        "start_hour": { "type": "number", "minimum": 0, "maximum": 24 },
+        "weather": { "type": "string", "enum": ["Clear", "Overcast", "Snowfall", "Blizzard"] },
+        "seed": { "type": "integer" }
+      }
+    },
     "waves": {
       "type": "array",
       "description": "Список последовательных боевых волн",

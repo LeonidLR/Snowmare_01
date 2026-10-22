@@ -3,6 +3,7 @@
 #include "Core/MissionSessionSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "UI/Frontend/CodexFrontendPlayerController.h"
@@ -39,6 +40,11 @@ void UCodexFrontendSubsystem::StartNewGame()
 		Session->PendingLoadDirectory.Reset();
 		Session->bQuickRestart = false;
 		Session->LastMode = EMissionStartMode::None;
+	}
+	// A fresh run starts at the default hour with a random weather: forget the previous run's end state (environment-weather.md, decision 17).
+	if (UEnvironmentCarrySubsystem* Carry = GetGameInstance()->GetSubsystem<UEnvironmentCarrySubsystem>())
+	{
+		Carry->Clear();
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Frontend: NEW GAME"));
 	OpenLevel(UCodexFrontendSettings::Get().NewGameLevel.ToSoftObjectPath());

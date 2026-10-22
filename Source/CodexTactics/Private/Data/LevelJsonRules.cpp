@@ -1,4 +1,6 @@
 #include "Data/LevelJsonRules.h"
+#include "CodexTactics.h"
+#include "Environment/EnvironmentRules.h"
 #include "GameFlow/LevelEncounterRules.h"
 #include "Quests/GateProgressRules.h"
 
@@ -114,6 +116,41 @@ FDemoModeSettings LevelJsonRules::ParseDemoSettings(const FJsonObject& Demo)
 	return Settings;
 }
 
+FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonObject& Environment, FString* OutError)
+{
+	FEnvironmentLevelSettings Settings;
+	bool bLocked = false;
+	if (Environment.TryGetBoolField(TEXT("locked"), bLocked))
+	{
+		Settings.bLocked = bLocked;
+	}
+	double Number = 0.0;
+	if (Environment.TryGetNumberField(TEXT("start_hour"), Number))
+	{
+		Settings.bHasStartHour = true;
+		Settings.StartHour = FMath::Clamp(static_cast<float>(Number), 0.f, 24.f);
+	}
+	FString WeatherName;
+	if (Environment.TryGetStringField(TEXT("weather"), WeatherName))
+	{
+		EWeatherState Weather = EWeatherState::Overcast;
+		if (EnvironmentRules::WeatherFromString(WeatherName, Weather))
+		{
+			Settings.bHasWeather = true;
+			Settings.Weather = Weather;
+		}
+		else if (OutError)
+		{
+			*OutError = FString::Printf(TEXT("environment.weather: unknown weather '%s' (Clear / Overcast / Snowfall / Blizzard); ignored"), *WeatherName);
+		}
+	}
+	if (Environment.TryGetNumberField(TEXT("seed"), Number))
+	{
+		Settings.Seed = FMath::RoundToInt(Number);
+	}
+	return Settings;
+}
+
 bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, FLevelCombatConfig& OutConfig, FString& OutError)
 {
 	TSharedPtr<FJsonObject> Root;
@@ -204,6 +241,17 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	if (const TSharedPtr<FJsonObject> Demo = LevelJsonObject(Root, TEXT("demo")))
 	{
 		Config.Demo = ParseDemoSettings(*Demo);
+	}
+
+	// UE-only (environment 2026-10-22): the day cycle / weather start of this level.
+	if (const TSharedPtr<FJsonObject> Environment = LevelJsonObject(Root, TEXT("environment")))
+	{
+		FString EnvironmentWarning;
+		Config.Environment = ParseEnvironmentSettings(*Environment, &EnvironmentWarning);
+		if (!EnvironmentWarning.IsEmpty())
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Level JSON %s: %s"), *Config.LevelId, *EnvironmentWarning);
+		}
 	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Waves = nullptr;

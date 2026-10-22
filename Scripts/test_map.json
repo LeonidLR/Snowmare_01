@@ -32,7 +32,8 @@
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
-    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke"
+    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke",
+    "EnvironmentSmoke", "EnvironmentLakeSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -61,6 +62,7 @@
     "InteriorExitSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "PeekMinesSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "CoverSwitchLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "_why": "2026-10-21: the cover switch between two buildings in a row (the A3 gap rocks) on the lake layout" },
+    "EnvironmentLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "_why": "2026-10-22: the Demo 01 lake is locked at hour 23 + Snowfall (environment block); the clock stays put at ClockScale 20" },
     "LakeQuestSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A7 canister quest in the lake's last compound (layout 5k): navmesh paths, jerrycan -> BTR -> generator -> console, wave 1 on the lake lanes, the paced blast door" },
     "TutorialAmbushLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A4 ambush in two parts on the lake layout (the placed zombies walk their routes: a loop into the wire, a whistle)" },
     "TutorialAmbushLakeSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 1 fails: spotted -> pause + posture card, a skirmish, back to exploring" },
@@ -601,6 +603,25 @@
       "globs": ["Source/**/UI/Frontend/**", "Source/CodexTacticsTests/Private/UI/Frontend*", "Source/**/Debug/Frontend*", "Source/CodexTacticsEditor/Private/FrontendWidget*", "Content/UI/Frontend/**", "Content/Maps/L_MainMenu.umap", "Scripts/Editor/create_frontend_assets.py"],
       "tests": ["CodexTactics.UI.Frontend", "CodexTactics.Mission"],
       "smokes": ["FrontendSmoke", "MainMenuSmoke", "PauseMenuSmoke", "DialogueSmoke", "ControlsScreenSmoke"]
+    },
+    {
+      "name": "environment",
+      "_comment": "2026-10-22: day cycle + procedural weather (docs/systems/environment-weather.md): UEnvironmentSubsystem, EnvironmentRules, the level JSON environment block, the event-bus delegates.",
+      "globs": ["Source/**/Environment/**", "Source/**/Debug/EnvironmentCommands*", "Source/**/Debug/EnvironmentSmoke*", "Source/CodexTacticsTests/Private/Environment/**", "Source/**/Subsystems/CodexEventBus*"],
+      "tests": ["CodexTactics.Environment", "CodexTactics.LevelJson"],
+      "smokes": ["EnvironmentSmoke", "EnvironmentLakeSmoke", "EventBusSmoke"]
+    },
+    {
+      "name": "environment-tuning",
+      "globs": ["Source/**/Data/EnvironmentTuning*", "Content/Data/Environment/**"],
+      "tests": ["CodexTactics.Environment"],
+      "smokes": []
+    },
+    {
+      "name": "environment-rules",
+      "globs": ["Source/**/Environment/EnvironmentRules*", "Source/**/Environment/EnvironmentTypes*", "Source/CodexTacticsTests/Private/Environment/**"],
+      "tests": ["CodexTactics.Environment"],
+      "smokes": []
     }
   ]
 }

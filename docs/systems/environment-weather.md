@@ -1,6 +1,7 @@
-# Environment: day cycle, procedural weather, cold and enemy roster (DESIGN, not implemented yet)
+# Environment: day cycle, procedural weather, cold and enemy roster (phase 1 implemented: clock + weather core)
 
-> Design of the time-of-day + weather system and how it drives cold and the enemy roster. Status 2026-10-22: user decisions recorded, no code yet.
+> Design of the time-of-day + weather system and how it drives cold and the enemy roster. Status 2026-10-22: phase 1 (clock, weather ladder,
+> carry-over, tutorial lock, events, console) implemented - see §8; cold coupling, roster, visuals are phases 2-6.
 > Visual base = the user's own `WeatherSystem_01 5.4` project (`BP_DynamivSky`, `NS_SnowStorm`, `MPC_WeatherSettings`, `MF_SnowyWeatherBlend`, sky sphere
 > materials, `S_*` preset structs, `DA_Snowy` / `DA_Sunny`), migrated and stripped of rain / lightning / puddles. **No Ultra Dynamic Sky / Weather** (user decision 2026-10-22).
 >
@@ -34,6 +35,9 @@ Third round (2026-10-22, confirmed):
 13. **Roster version 2 approved**: the Jev-seeded suitability table + thresholds 2.0 / 1.4 / 2.7 (§4.2). A clear night keeps the marksmen.
 14. **HOUND x1.5 in hunting weather** (overcast night, snowfall, blizzard) - approved.
 15. **A weather state lasts 3:45** (75 % of a 5:00 phase) - confirmed.
+17. **The next level continues the time and weather where the previous level (e.g. the tutorial) ended**; only a fresh run starts
+    at the default hour with a random start weather.
+18. **Bosses do not depend on time of day / weather** (never substituted). CryoDrone is not an enemy in the game now - out of scope.
 16. **Demo 01 tutorial waves are locked "as written"**: under its fixed Night + Snowfall the waves are mostly hounds and frostbitten, maybe a few zombies.
 
 ## 2. Day cycle
@@ -112,11 +116,42 @@ the Blizzard camera zone); phase Night 1.3, EarlyMorning 1.15, Midday 0.9, After
 5. Level JSON `"environment"` + Wave Editor tab (seed, start hour, weights, roster preview), save keys + `RestoreOrder`.
 6. Further gameplay effects (sight, accuracy, scent), night darkness + flares, wind ambience, HUD clock / weather indicator.
 
+## 8. Implementation - phase 1 (2026-10-22)
+
+Key files:
+- `Public/Environment/EnvironmentTypes.h` - `ETimeOfDayPhase`, `EWeatherState` (ladder order), `FEnvironmentConfig`, `FEnvironmentState` (saved / carried),
+  `FWeatherStepResult`, `FEnvironmentLevelSettings`.
+- `Public/Environment/EnvironmentRules.h` / `.cpp` - pure logic: phase from hour, per-phase clock rate (`AdvanceClock` crosses any number of phase
+  boundaries), `ShouldAdvance` (frozen in the tactical pause, turn-based combat, world-AI pause - same as `TacticalHeatRules::ShouldAdvanceRealTime`),
+  the ladder (`PickStartWeather`, `PickNextWeather` = always a neighbour), dwell = 75 % of the phase it started in, the blend in its last
+  `weather_transition_seconds` (45), `StepWeather` (deterministic from `FEnvironmentState::RandomSeed`; leftover seconds carry; a huge step changes
+  weather one rung at a time; `OldWeather` = the state that ended last).
+- `Public/Data/EnvironmentTuning.h` / `.cpp` + `Content/Data/Environment/environment.json` (17 snake_case keys of `FEnvironmentConfig`, Unreal is master;
+  values clamped like the UPROPERTY meta). Console `CodexTactics.DumpEnvironment`.
+- `Public/Environment/EnvironmentSubsystem.h` / `.cpp`:
+  - `UEnvironmentSubsystem` (`UTickableWorldSubsystem`, Game / PIE) - initialised at `OnWorldBeginPlay` only when the world has
+    `ACodexTacticsGameMode` (menus never run a clock); reads `PeekLevelConfig()->Config.Environment`; `ResolveInitialState` (pure, static): locked level ->
+    its hour / weather, `bLocked`; else the carried state of the previous level continues exactly (unlocked); else fresh (level `start_hour` / `weather` /
+    `seed` or `default_start_hour` 6 + weighted random weather). Tick: hour first (`AdvanceClock`), then `StepWeather`, x `ClockScale` (debug).
+    API: `GetState` / `GetStateRef`, `GetHour`, `GetPhase`, `GetWeather`, `GetNextWeather`, `GetTransitionBlend`, `IsLocked`, `CanAdvance`,
+    `SetState` (load, phase 5), `ForceWeather(Weather, bInstant)`, `SetHour`, `SetClockScale`, `RestartWeatherSequence(Seed)`, `ApplyLevelSettings`;
+    native delegates `OnPhaseChanged`, `OnWeatherTransitionStarted`, `OnWeatherChanged`, `OnStateSet` (resync for the future presenter).
+  - `UEnvironmentCarrySubsystem` (`UGameInstanceSubsystem`) - the end state of a level (written in `Deinitialize`, also from the locked tutorial) for the
+    next level; `UCodexFrontendSubsystem::StartNewGame` clears it (a new game starts fresh).
+- Event bus (`UCodexEventBus`): `OnTimeOfDayPhaseChanged(Old, New)`, `OnWeatherTransitionStarted(From, To)`, `OnWeatherChanged(Old, New)`.
+- Level JSON `"environment": { "locked", "start_hour", "weather", "seed" }` -> `FLevelCombatConfig::Environment` (`LevelJsonRules::ParseEnvironmentSettings`;
+  unknown weather = ignored + warning; schema `level_config.schema.json`). `L_Demo01_A_FrozenLake.json`: locked, 23:00, Snowfall.
+- Console (`CodexTacticsDev/Private/Debug/EnvironmentCommands.cpp`): `Codex.Env.Dump`, `Codex.Env.SetWeather <name> [instant]` (debug: may skip rungs),
+  `Codex.Env.SetHour <h>`, `Codex.Env.ClockScale <x>`, `Codex.Env.Seed <n>`.
+- Tests: `CodexTactics.Environment.Rules.*` (14), `.Tuning.*` (4), `.Level.*` / `.Carry.*` (3). Smokes: `CodexTactics.EnvironmentSmoke`
+  (L_MovementTest), `CodexTactics.EnvironmentLakeSmoke` (L_Demo01_A_FrozenLake, locked).
+- Not yet: save keys + `RestoreOrder` (phase 5; hook = `GetStateRef` / `SetState`), cold multipliers / roster (phase 2), visuals (phase 3-4). A quick restart
+  continues the carried clock (expected).
+- Built by the model router split (2026-10-22): rules + tests Opus, tuning + JSON Sonnet, subsystem Fable, contract headers + review the main session.
+
 ## 7. Open questions
 
 - Start weights, up / down weights, phase bias on the weather.
-- CryoDrone / bosses in pairs later?
-- Next level after the tutorial: continue the previous end state or a random start?
 - Does weather lower sight ranges / accuracy / hound scent for both sides.
 - Which "zombie" body the tutorial's few zombies use (FROSTBITTEN on the Military Zombie / FrozenPMC body?).
 - Footprints: the old decal notify or the existing RT `SnowTracks`; volumetric clouds or the 2D sky sphere only.

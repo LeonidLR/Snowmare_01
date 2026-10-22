@@ -1,0 +1,20 @@
+{
+  "_comment": "Day cycle + procedural weather tuning (UE-only; docs/systems/environment-weather.md, Data/EnvironmentTuning, struct FEnvironmentConfig). Unreal is the master copy. *_hour = game clock hours (0..24); *_real_seconds and weather_transition_seconds = REAL seconds; weather_dwell_phase_fraction = share of the real duration of the phase a weather state started in; start_weight_* = relative weights of the random start weather; *_step_up_chance = 0..1 chance to step UP the ladder (else down). A missing key keeps the code default. Console: CodexTactics.DumpEnvironment.",
+  "early_morning_start_hour": 5,
+  "midday_start_hour": 10,
+  "afternoon_start_hour": 14,
+  "night_start_hour": 18,
+  "early_morning_real_seconds": 300,
+  "midday_real_seconds": 300,
+  "afternoon_real_seconds": 300,
+  "night_real_seconds": 300,
+  "default_start_hour": 6,
+  "weather_dwell_phase_fraction": 0.75,
+  "weather_transition_seconds": 45,
+  "start_weight_clear": 0.3,
+  "start_weight_overcast": 0.3,
+  "start_weight_snowfall": 0.25,
+  "start_weight_blizzard": 0.15,
+  "overcast_step_up_chance": 0.5,
+  "snowfall_step_up_chance": 0.5
+}
