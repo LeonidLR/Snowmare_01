@@ -237,16 +237,15 @@ as `false` with a warning. Same component and states; `EnemyAIController` picks 
 Forbidden (user decision): the grid never registers a ladder link; `TurnArenaRules` sees no ladder moves. A fight that
 starts while an operative is on a ladder (user decision 2026-10-22): he **finishes the climb to the top at normal speed** -
 no abort, no speed-up, orders to him are buffered until he is off. Real time / tactical pause: he simply takes part once
-off the ladder. Turn-based: the grid forms without him (default: the entry does not wait); he joins the turn order on the
+off the ladder. Turn-based: the grid forms without him (the entry does not wait - user decision); he joins the turn order on the
 top floor once `ExitTop` ends, on the next round, and has no turn-based action while on the ladder. A climber who was
-going DOWN when the fight started also continues to his end at normal speed (default: the user's rule names the top -
-confirm, see open question 3b). Enemies on a ladder behave the same.
+going DOWN when the fight started continues to the bottom at normal speed (user decision 2026-10-22). Enemies on a ladder behave the same.
 
 ### 7.7 Damage, knockdown, death on the ladder
 Damage applies; hit-reaction clips do not play. **Knockdown (user decision 2026-10-22): he falls to the bottom.**
 `AbortClimb(Knockdown)`: the climb montage stops, the actor leaves the hang line 20 cm (away from the rungs), `MOVE_Falling`
 with the own collision on; on landing the knockdown that caused the fall plays by the normal rules (`UKnockdownComponent`,
-`AM_Knocked_Back`, the normal get-up and immunity) plus **fall damage** (default, to confirm): fall height `H` = root Z at the
+`AM_Knocked_Back`, the normal get-up and immunity) plus **fall damage** (user decision 2026-10-22): fall height `H` = root Z at the
 drop - landing Z; `FallDamage = clamp((H - 100 cm) * 0.1 HP/cm, 0, 40)` (`LadderFallSafeHeightCm` 100, `LadderFallDamagePerCm`
 0.1, `LadderFallDamageMax` 40): a full 7-rung ladder (~2.55 m) = ~16 HP, 4 m = 30 HP, against 120-150 HP operatives; it
 can kill (a knocked-down operative at low HP). Enemies use the same rule. Death: `AbortClimb(Death)` without the end placement - the body leaves the hang line 20 cm, falls (`MOVE_Falling`)
@@ -292,15 +291,15 @@ schedules them with the user.
 5. **Content + polish** - ladders placed in the levels by the designer, `docs/systems/ladders.md` (the system doc replaces this
    design doc's status section), smokes registered in `Scripts/test_map.json`, bot run.
 
-## 10. Open questions (each changes gameplay; decisions of 2026-10-22 kept for the record)
+## 10. Decisions (all questions closed 2026-10-22; kept for the record)
 
 1. ~~**Short ladders.**~~ **Decided 2026-10-22:** fewer than 7 rungs = not climbable (decoration, no nav link, flagged by
    validation) - sections 1, 3.3, 3.4.
 2. ~~**Knockdown on a ladder.**~~ **Decided 2026-10-22:** he falls to the bottom, lands knocked down + fall damage (7.7).
-   Still to confirm: the fall-damage numbers (safe 1 m, 0.1 HP/cm, max 40).
+   Fall damage confirmed: safe 1 m, 0.1 HP per cm above it, max 40.
 3. ~~**Fight starts mid-climb.**~~ **Decided 2026-10-22:** he finishes to the top at normal speed, joins once off (7.6).
-   3b, to confirm: a climber going DOWN when the fight starts - default: continues to the bottom at normal speed. And the
-   turn-based default: the grid forms without him and he joins on the next round (instead of the entry waiting).
+   Confirmed: a climber going DOWN when the fight starts continues to the bottom at normal speed; turn-based: the grid
+   forms without him and he joins on the next round once off the ladder (the entry does not wait).
 4. ~~**Which enemies climb.**~~ **Decided 2026-10-22:** non-mutants only - PMC mercenaries (future), zombified PMC /
    zombified humans (`BP_Enemy_FrozenPMC_Fighter`, and - decided the same day - the Military Zombie
    `BP_Enemy_MilitaryZombie`), the Marksman; mutants never.
