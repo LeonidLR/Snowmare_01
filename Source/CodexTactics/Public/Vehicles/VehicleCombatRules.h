@@ -435,4 +435,14 @@ namespace VehicleCombatRules
 	 * the speed floored at MinSpeedCmS (just set off / blocked).
 	 */
 	CODEXTACTICS_API float EstimateArrivalSeconds(float DistanceCm, float SpeedCmS, float MinSpeedCmS = 150.f, float PathFactor = 1.8f);
+
+	/** The share of his top speed a walker who is moving is assumed to cover the way at (he is still accelerating / turning). */
+	constexpr float WalkerCruiseFraction = 0.6f;
+
+	/**
+	 * 2026-10-22 (VehicleSmoke: the Medic-Sapper set off from the group cover at ~1 m/s, the estimate made her a 13 s straggler and the
+	 * squad got two fades): the speed a walker's ETA uses - while he moves, at least WalkerCruiseFraction of his top speed (the momentary
+	 * velocity of somebody just setting off / turning out of cover undersells him); standing, his velocity (EstimateArrivalSeconds floors it).
+	 */
+	CODEXTACTICS_API float EstimateWalkerSpeed(float VelocityCmS, float MaxSpeedCmS, bool bMoving);
 }

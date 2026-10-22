@@ -6,6 +6,7 @@
 #include "Environment/EnvironmentSubsystem.h"
 #include "GameFlow/CampaignSubsystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/PackageName.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "UI/Frontend/CodexFrontendPlayerController.h"
 #include "UI/Frontend/CodexFrontendSettings.h"
@@ -52,8 +53,27 @@ void UCodexFrontendSubsystem::StartNewGame()
 	{
 		Campaign->Clear();
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("Frontend: NEW GAME"));
-	OpenLevel(UCodexFrontendSettings::Get().NewGameLevel.ToSoftObjectPath());
+	const FSoftObjectPath Level = GetNewGameLevel();
+	UE_LOG(LogCodexTactics, Display, TEXT("Frontend: NEW GAME -> %s"), *Level.ToString());
+	OpenLevel(Level);
+}
+
+FSoftObjectPath UCodexFrontendSubsystem::GetNewGameLevel() const
+{
+	if (!NewGameLevelOverride.IsNull())
+	{
+		return NewGameLevelOverride;
+	}
+	// User decision 2026-10-22: a new game starts the campaign at its first level ("0.0 Frozen Dam").
+	if (UCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UCampaignSubsystem>())
+	{
+		const FString First = Campaign->GetFirstLevelMap();
+		if (!First.IsEmpty())
+		{
+			return FSoftObjectPath(FString::Printf(TEXT("%s.%s"), *First, *FPackageName::GetShortName(First)));
+		}
+	}
+	return UCodexFrontendSettings::Get().NewGameLevel.ToSoftObjectPath();
 }
 
 bool UCodexFrontendSubsystem::ContinueLatest()

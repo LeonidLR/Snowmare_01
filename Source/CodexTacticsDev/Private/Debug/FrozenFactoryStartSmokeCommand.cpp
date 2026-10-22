@@ -19,7 +19,12 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Containers/Ticker.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Core/MissionRules.h"
 #include "Core/MissionSubsystem.h"
+#include "Data/WaveConfigTypes.h"
+#include "UI/DialogueSubsystem.h"
+#include "UI/GameMessageSubsystem.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -154,6 +159,19 @@ namespace FrozenFactoryStartSmoke
 			Check(State, Flow && Flow->GetConfig().TotalWaves == 1 && !ConstExit->GetConfig().bEnabled,
 				FString::Printf(TEXT("the factory's level JSON: 1 wave, no gate exit (%d waves)"), Flow ? Flow->GetConfig().TotalWaves : -1));
 			Check(State, Squad->GetMembers().Num() == 3, FString::Printf(TEXT("the squad spawned (%d)"), Squad->GetMembers().Num()));
+			// User decisions 2026-10-22: the lake's cold x0.4, and no MovementTest briefing (neither the window nor its radio line).
+			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
+			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+			Check(State, Level && FMath::IsNearlyEqual(Level->Config.ColdRateMult, 0.4f) && !Level->Config.bIntroDialogue,
+				FString::Printf(TEXT("the factory's level JSON: cold x%.2f, intro briefing off"), Level ? Level->Config.ColdRateMult : -1.f));
+			const UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
+			const FString IntroRadio = MissionRules::GetModeRadio(EMissionStartMode::Game).ToString();
+			const bool bIntroLine = Messages && Messages->GetHistory().ContainsByPredicate([&IntroRadio](const FGameMessage& Message)
+			{
+				return Message.Text.ToString() == IntroRadio;
+			});
+			const UDialogueSubsystem* Dialogue = World->GetSubsystem<UDialogueSubsystem>();
+			Check(State, !bIntroLine && !(Dialogue && Dialogue->IsDialogueOpen()), TEXT("no MovementTest intro briefing (no window, no radio line)"));
 			Next(State);
 			return true;
 		}

@@ -169,3 +169,10 @@ damaged / disabled hull; action bar REPAIR [Y]. Command `Vehicle.Repair`; events
    infantry unchanged) + `Vehicle` (200 / 300, step 40, `bCanFly=True` so no ground pawn ever picks it). Keep the order (the nav areas
    address the agents by index 0 / 1). Opening an old map shows no change except the tag rule above.
 
+**Group boarding fade fix (2026-10-22 e).** `VehicleSmoke` failed "squad boarding = ONE fade (2)": the Medic-Sapper set off from the group cover
+at ~1 m/s (accelerating / turning out of cover) 10.8 m from her door, the arrival estimate used that momentary speed (13 s, beyond the 8 s group wait) and
+the first two went in without her. A source bisect (today's content with the source of 8de6b30, the last passing run of 2026-10-21) fails too, so no
+source commit after 2026-10-21 broke it - the last pass was a main-checkout run with the content of that day; the estimate was fragile. Now
+`VehicleCombatRules::EstimateWalkerSpeed`: a MOVING walker counts at least `WalkerCruiseFraction` (0.6) of his top speed; a standing one keeps his
+velocity (the 150 cm/s floor applies). Log line per group fade: `[Vehicle] group fade after N s at the door; walkers' ETA: ...`. Test
+`CodexTactics.Vehicle.Fade.GroupBoarding` (+ the setting-off case).

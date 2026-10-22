@@ -167,6 +167,8 @@ export interface LevelConfig {
   gate_exit?: 'off' | 'auto' | '+x' | '-x' | { outward?: 'auto' | '+x' | '-x'; fade_seconds?: number; return_to_menu_seconds?: number; next_level_seconds?: number };
   /** UE (2026-10-22 b): the level starts behind a black screen with its campaign title fading in over this many seconds; 0 / absent = none. */
   start_fade_seconds?: number;
+  /** UE (2026-10-22 d): false = no intro briefing at the mission start of this level (default true). */
+  intro_dialogue?: boolean;
   waves: WaveConfig[];
 }
 
