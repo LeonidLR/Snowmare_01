@@ -40,6 +40,8 @@ namespace VaultNavigation
 {
 	const FName VaultTag(TEXT("Vault"));
 	const FName RelocatingTag(TEXT("CodexRelocating"));
+	/** Name of the vault area component MakeVaultable adds (FindVaultNavModifier). */
+	static const FName VaultNavModifierName(TEXT("VaultNavModifier"));
 
 	bool IsVaultable(const AActor* Actor)
 	{
@@ -115,6 +117,24 @@ namespace VaultNavigation
 		return false;
 	}
 
+	UNavModifierComponent* FindVaultNavModifier(const AActor* Actor)
+	{
+		if (!Actor)
+		{
+			return nullptr;
+		}
+		TArray<UNavModifierComponent*> Modifiers;
+		Actor->GetComponents<UNavModifierComponent>(Modifiers);
+		for (UNavModifierComponent* Modifier : Modifiers)
+		{
+			if (Modifier && Modifier->GetFName() == VaultNavModifierName)
+			{
+				return Modifier;
+			}
+		}
+		return nullptr;
+	}
+
 	void MakeVaultable(AActor* Actor)
 	{
 		if (!Actor || Actor->FindComponentByClass<UNavModifierComponent>())
@@ -127,7 +147,7 @@ namespace VaultNavigation
 		{
 			Primitive->SetCanEverAffectNavigation(false);
 		}
-		UNavModifierComponent* Modifier = NewObject<UNavModifierComponent>(Actor, TEXT("VaultNavModifier"));
+		UNavModifierComponent* Modifier = NewObject<UNavModifierComponent>(Actor, VaultNavModifierName);
 		Modifier->SetAreaClass(UNavArea_Vault::StaticClass());
 		Modifier->RegisterComponent();
 	}

@@ -847,10 +847,24 @@ void URelocationSubsystem::SetObjectCarried(AInteractableActor& Object, bool bCa
 {
 	// A carried object must not block the worker or rebuild the NavMesh every frame.
 	Object.Box->SetCollisionEnabled(bCarried ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
-	Object.Box->SetCanEverAffectNavigation(!bCarried);
 	// A vaultable barricade marks its spot with a «vault» nav area the squad's filter avoids: carried along in front of the
 	// worker it blocked his own path, so the push crawled (bug 2026-10-08, PauseBarrelOrderSmoke: 28 s for 5 m).
-	if (UNavModifierComponent* Modifier = Object.FindComponentByClass<UNavModifierComponent>())
+	UNavModifierComponent* VaultArea = VaultNavigation::FindVaultNavModifier(&Object);
+	// Bug 2026-10-22 (game designer, Demo 01 lake: "vaulted over the moved barricade, cannot vault back, walks around"): setting the
+	// object down made its box cut the navmesh again, although VaultNavigation::MakeVaultable had taken every shape of a vaultable
+	// object off the navmesh - the moved barricade became a hole in the navmesh (with the vault area on top of it), the paths
+	// across it were gone and only a vault the leader happened to start on his own crossed it. A vault-made object keeps its
+	// shapes off the navmesh; only its vault area moves with it.
+	Object.Box->SetCanEverAffectNavigation(!bCarried && !VaultArea);
+	if (VaultArea)
+	{
+		VaultArea->SetCanEverAffectNavigation(!bCarried);
+		if (!bCarried)
+		{
+			VaultArea->RefreshNavigationModifiers(); // its bounds were cached at the old spot
+		}
+	}
+	else if (UNavModifierComponent* Modifier = Object.FindComponentByClass<UNavModifierComponent>())
 	{
 		Modifier->SetCanEverAffectNavigation(!bCarried);
 	}

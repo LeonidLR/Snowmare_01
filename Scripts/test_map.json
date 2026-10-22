@@ -32,7 +32,7 @@
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
-    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke"
+    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -61,6 +61,7 @@
     "InteriorExitSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "PeekMinesSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "CoverSwitchLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "_why": "2026-10-21: the cover switch between two buildings in a row (the A3 gap rocks) on the lake layout" },
+    "TurnArenaLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-22: the turn-based grid only on open, level ground in the compound (never in the shed / base building)" },
     "LakeQuestSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A7 canister quest in the lake's last compound (layout 5k): navmesh paths, jerrycan -> BTR -> generator -> console, wave 1 on the lake lanes, the paced blast door" },
     "TutorialAmbushLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A4 ambush in two parts on the lake layout (the placed zombies walk their routes: a loop into the wire, a whistle)" },
     "TutorialAmbushLakeSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 1 fails: spotted -> pause + posture card, a skirmish, back to exploring" },
@@ -79,6 +80,36 @@
   },
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe"],
   "rules": [
+    {
+      "name": "designer-2026-10-22-vault-back",
+      "globs": ["Source/**/Interactables/VaultNavigation*", "Source/**/Interactables/RelocationSubsystem*", "Source/**/Interactables/BarricadeActor*", "Source/**/Debug/BarricadeVaultBackSmoke*"],
+      "tests": ["CodexTactics.Interactables"],
+      "smokes": ["BarricadeVaultBackSmoke", "VaultSmoke", "RelocationSmoke", "PauseBarrelOrderSmoke", "TurnBasedBarricadeSmoke"]
+    },
+    {
+      "name": "designer-2026-10-22-heat-fear",
+      "globs": ["Source/**/Characters/EnemyCharacterBehavior*", "Source/**/Characters/EnemyAIRules*", "Source/**/Interactables/HeatSourceComponent*", "Source/**/Debug/HeatFearWallSmoke*"],
+      "tests": ["CodexTactics.Characters.EnemyAI"],
+      "smokes": ["HeatFearWallSmoke", "TacticalHeatSmoke", "EnemyAISmoke", "BarrelSmoke"]
+    },
+    {
+      "name": "designer-2026-10-22-turn-arena",
+      "globs": ["Source/**/Tactics/TurnArenaRules*", "Source/**/Tactics/TurnBasedCombatArena*", "Source/**/Tactics/TurnBasedCombatSubsystem*", "Source/**/Core/CodexTacticsPlayerControllerTime*", "Source/**/Debug/TurnArenaLakeSmoke*"],
+      "tests": ["CodexTactics.Tactics.TurnArena", "CodexTactics.Combat.TimeMode"],
+      "smokes": ["TurnArenaLakeSmoke", "TurnBasedSmoke", "CombatFlowSmoke", "TurnWalkSmoke", "QuickFireSmoke"]
+    },
+    {
+      "name": "user-2026-10-22-retreat-facing",
+      "globs": ["Source/**/Characters/ThreatFacingRules*", "Source/**/Characters/OperativeCharacterAim*", "Source/**/Debug/RetreatFacingSmoke*"],
+      "tests": ["CodexTactics.Squad.ThreatFacing"],
+      "smokes": ["RetreatFacingSmoke", "FacingSmoke", "PostureSmoke", "CoverSmoke"]
+    },
+    {
+      "name": "designer-2026-10-22-post-fight-hold",
+      "globs": ["Source/**/Combat/WaveVictorySubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/SquadSubsystem.*"],
+      "tests": ["CodexTactics.Squad.Orders"],
+      "smokes": ["VictorySmoke", "TutorialAmbushLakeSpottedSmoke", "CombatFlowSmoke", "MovementSmoke"]
+    },
     {
       "name": "optimized-character",
       "globs": ["Source/**/Debug/OptimizedCharacterSmoke*", "Content/Characters/Operatives/Optimized/**", "Content/Characters/Materials/**"],

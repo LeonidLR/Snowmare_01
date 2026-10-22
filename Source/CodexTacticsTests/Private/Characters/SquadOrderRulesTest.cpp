@@ -139,4 +139,22 @@ bool FSquadOrderStandToSprintTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_ORDER_TEST(FSquadOrderPostFightHoldTest, "PostFightHold")
+bool FSquadOrderPostFightHoldTest::RunTest(const FString&)
+{
+	// Game designer play-test 2026-10-22: "when a fight ends the operatives must stay where they were".
+	using namespace SquadOrderRules;
+	TestTrue(TEXT("Last wave / ambush fight -> PostCombat: hold"), ArmsPostFightHold(ECodexGamePhase::WaveCleared, ECodexGamePhase::PostCombat));
+	TestTrue(TEXT("PostCombat -> Exploration: hold"), ArmsPostFightHold(ECodexGamePhase::PostCombat, ECodexGamePhase::Exploration));
+	TestTrue(TEXT("Skirmish over (WaveCombat -> Exploration): hold"), ArmsPostFightHold(ECodexGamePhase::WaveCombat, ECodexGamePhase::Exploration));
+	TestFalse(TEXT("Exploring on: no hold"), ArmsPostFightHold(ECodexGamePhase::Exploration, ECodexGamePhase::Exploration));
+	TestFalse(TEXT("A fight starting: no hold"), ArmsPostFightHold(ECodexGamePhase::Exploration, ECodexGamePhase::WaveCombat));
+	TestFalse(TEXT("Next wave (WaveCleared -> WaveCombat): no hold"), ArmsPostFightHold(ECodexGamePhase::WaveCleared, ECodexGamePhase::WaveCombat));
+	TestFalse(TEXT("Cutscene -> Exploration (no fight): no hold"), ArmsPostFightHold(ECodexGamePhase::Cutscene, ECodexGamePhase::Exploration));
+	TestTrue(TEXT("Leader standing: the hold stays"), KeepsPostFightHold(true, false));
+	TestFalse(TEXT("Leader moves: the formation follows again"), KeepsPostFightHold(true, true));
+	TestFalse(TEXT("No hold armed: nothing held"), KeepsPostFightHold(false, false));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

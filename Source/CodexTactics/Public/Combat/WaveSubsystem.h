@@ -57,6 +57,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Wave")
 	int32 GetRemainingSpawnCount() const { return PendingSpawns.Num(); }
 
+	/** The living enemies of the current fight (the wave's / the adopted ones; never the level's other enemies). */
+	TArray<AEnemyCharacter*> GetAliveEnemies() const;
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Wave")
 	int32 GetCurrentWaveIndex() const { return CurrentWaveIndex; }
 

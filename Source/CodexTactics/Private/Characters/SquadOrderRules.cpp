@@ -52,4 +52,16 @@ namespace SquadOrderRules
 	{
 		return JoiningCount > 0;
 	}
+
+	bool ArmsPostFightHold(ECodexGamePhase Previous, ECodexGamePhase Phase)
+	{
+		const bool bFromFight = Previous == ECodexGamePhase::WaveCombat || Previous == ECodexGamePhase::WaveCleared
+			|| Previous == ECodexGamePhase::PostCombat;
+		return Phase == ECodexGamePhase::PostCombat || (Phase == ECodexGamePhase::Exploration && bFromFight);
+	}
+
+	bool KeepsPostFightHold(bool bHold, bool bLeaderMoving)
+	{
+		return bHold && !bLeaderMoving;
+	}
 }

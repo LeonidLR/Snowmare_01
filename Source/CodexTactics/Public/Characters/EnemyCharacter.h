@@ -885,6 +885,11 @@ protected:
 	bool FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius) const;
 	/** Location inside a burning barrel's / active heat zone's fear radius (the heat of Candidate itself excluded). */
 	bool IsInFearZone(const FVector& Location, const AActor* Candidate) const;
+	/**
+	 * 2026-10-22: nothing solid between the heat source at SourceLocation (owned by SourceOwner) and the point Location (EnemyAIRules::
+	 * FeelsHeat): a visibility trace at EnemyAIRules::HeatLineHeightCm, pawns and IgnoreActor passed through.
+	 */
+	bool HasClearHeatLine(const FVector& SourceLocation, const AActor* SourceOwner, const FVector& Location, const AActor* IgnoreActor) const;
 	/** Barricade / turret in the way within 2.2 m (Godot _find_blocking_barricade). */
 	AActor* FindBlockingObstacle(const AActor* Target) const;
 	/** Godot _attack_barricade (brutes hit twice as hard) and melee on turrets / the generator. */

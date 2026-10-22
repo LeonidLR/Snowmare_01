@@ -127,6 +127,17 @@ namespace EnemyAIRules
 	CODEXTACTICS_API float MeleeApproachAcceptance(float AttackRangeCm, float HeightDifferenceCm, float SelfRadiusCm, float GoalRadiusCm,
 		float MarginCm = 15.f);
 
+	/**
+	 * Heat / fire fear through walls (game designer play-test 2026-10-22, every enemy type): an enemy feels a burning barrel / a
+	 * running generator / a fire only within its fear reach AND with a clear line between the source and it (no wall, building
+	 * or other solid obstacle in between - the sight-trace rule; low cover under the line does not block). Distance2D and
+	 * ReachCm in cm.
+	 */
+	CODEXTACTICS_API bool FeelsHeat(float Distance2DCm, float ReachCm, bool bLineClear);
+
+	/** Height above the higher of the two ends at which the heat line is traced (above a 60 cm barricade), cm. */
+	constexpr float HeatLineHeightCm = 100.f;
+
 	/** Godot fire fear steering: away from the fire, bent 0.5 towards the side of the target (when there is one). */
 	CODEXTACTICS_API FVector FleeDirection(const FVector& Enemy, const FVector& Fire, const FVector* Target);
 

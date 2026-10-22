@@ -1,5 +1,6 @@
 #include "Combat/HordeIntroRules.h"
 
+#include "Camera/TacticalCameraRules.h"
 #include "HAL/IConsoleManager.h"
 
 namespace
@@ -211,6 +212,206 @@ bool HordeIntroRules::ShouldTrigger(float SecondsSinceSpawn, bool bMassFormed, c
 		return true;
 	}
 	return SecondsSinceSpawn >= Config.MinDelaySeconds && bMassFormed;
+}
+
+bool HordeIntroRules::ShouldTriggerSpawned(float SecondsSinceSpawn, bool bMassFormed, bool bAllSpawned, int32 LiveEnemies,
+	const FHordeIntroConfig& Config)
+{
+	const bool bGraceOver = SecondsSinceSpawn >= Config.MaxWaitSeconds + FMath::Max(0.f, Config.SpawnGraceSeconds);
+	if ((!bAllSpawned || LiveEnemies <= 0) && !bGraceOver)
+	{
+		return false;
+	}
+	return ShouldTrigger(SecondsSinceSpawn, bMassFormed, Config);
+}
+
+TArray<int32> HordeIntroRules::MainCluster(const TArray<FVector>& Points, float RadiusCm)
+{
+	TArray<int32> Result;
+	if (Points.IsEmpty())
+	{
+		return Result;
+	}
+	const float RadiusSq = FMath::Square(FMath::Max(1.f, RadiusCm));
+	int32 Best = 0;
+	int32 BestCount = -1;
+	for (int32 Index = 0; Index < Points.Num(); ++Index)
+	{
+		int32 Count = 0;
+		for (const FVector& Other : Points)
+		{
+			Count += FVector::DistSquared2D(Points[Index], Other) <= RadiusSq ? 1 : 0;
+		}
+		if (Count > BestCount)
+		{
+			BestCount = Count;
+			Best = Index;
+		}
+	}
+	TArray<int32> Seed;
+	for (int32 Index = 0; Index < Points.Num(); ++Index)
+	{
+		if (FVector::DistSquared2D(Points[Best], Points[Index]) <= RadiusSq)
+		{
+			Seed.Add(Index);
+		}
+	}
+	const FVector Centre = CentreOf(Points, Seed);
+	for (int32 Index = 0; Index < Points.Num(); ++Index)
+	{
+		if (FVector::DistSquared2D(Centre, Points[Index]) <= RadiusSq)
+		{
+			Result.Add(Index);
+		}
+	}
+	return Result.IsEmpty() ? Seed : Result;
+}
+
+FVector HordeIntroRules::CentreOf(const TArray<FVector>& Points, const TArray<int32>& Indices)
+{
+	FVector Sum = FVector::ZeroVector;
+	int32 Count = 0;
+	if (Indices.IsEmpty())
+	{
+		for (const FVector& Point : Points)
+		{
+			Sum += Point;
+			++Count;
+		}
+	}
+	else
+	{
+		for (const int32 Index : Indices)
+		{
+			if (Points.IsValidIndex(Index))
+			{
+				Sum += Points[Index];
+				++Count;
+			}
+		}
+	}
+	return Count > 0 ? Sum / Count : FVector::ZeroVector;
+}
+
+FHordeFrameView HordeIntroRules::ViewAt(const FVector& Focus, float YawDeg, float PitchDeg, float Distance, float VerticalFovDeg, float Aspect)
+{
+	FHordeFrameView View;
+	View.Location = Focus + TacticalCameraRules::ComputeViewOffset(YawDeg, PitchDeg, Distance);
+	View.Rotation = FRotator(PitchDeg, YawDeg, 0.f);
+	View.VerticalFovDeg = VerticalFovDeg;
+	View.Aspect = Aspect;
+	return View;
+}
+
+FHordeFramePoint HordeIntroRules::Project(const FHordeFrameView& View, const FVector& Point)
+{
+	FHordeFramePoint Out;
+	const FVector Local = View.Rotation.UnrotateVector(Point - View.Location);
+	Out.Depth = Local.X;
+	if (Local.X <= 1.f)
+	{
+		Out.X = Out.Y = 10.f; // behind the camera: never in the frame
+		return Out;
+	}
+	const float TanV = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(View.VerticalFovDeg, 1.f, 170.f) * 0.5f));
+	const float TanH = TanV * FMath::Max(0.1f, View.Aspect);
+	Out.X = Local.Y / (Local.X * TanH);
+	Out.Y = Local.Z / (Local.X * TanV);
+	return Out;
+}
+
+bool HordeIntroRules::IsInFrame(const FHordeFrameView& View, const FVector& Point, float Margin)
+{
+	const FHordeFramePoint Projected = Project(View, Point);
+	const float Limit = 1.f - FMath::Clamp(Margin, 0.f, 0.45f) * 2.f;
+	return Projected.Depth > 1.f && FMath::Abs(Projected.X) <= Limit && FMath::Abs(Projected.Y) <= Limit;
+}
+
+float HordeIntroRules::ScreenHeightFraction(const FHordeFrameView& View, const FVector& Feet, float HeightCm)
+{
+	const FHordeFramePoint Bottom = Project(View, Feet);
+	const FHordeFramePoint Top = Project(View, Feet + FVector(0.f, 0.f, HeightCm));
+	if (Bottom.Depth <= 1.f || Top.Depth <= 1.f)
+	{
+		return 0.f;
+	}
+	return FMath::Abs(Top.Y - Bottom.Y) * 0.5f; // the frame spans -1..1
+}
+
+namespace
+{
+	/** Every Feet point and its head (FramedBodyHeightCm above) inside the view with the margin. */
+	bool HordeIntroHoldsAll(const FHordeFrameView& View, const TArray<FVector>& Feet, const FHordeIntroConfig& Config)
+	{
+		for (const FVector& Point : Feet)
+		{
+			if (!HordeIntroRules::IsInFrame(View, Point, Config.WideFrameMargin)
+				|| !HordeIntroRules::IsInFrame(View, Point + FVector(0.f, 0.f, Config.FramedBodyHeightCm), Config.WideFrameMargin))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
+float HordeIntroRules::FrameDistance(const FVector& Focus, const TArray<FVector>& Feet, float YawDeg, float PitchDeg, float VerticalFovDeg,
+	float Aspect, const FHordeIntroConfig& Config)
+{
+	const float MinDistance = FMath::Max(100.f, Config.WideMinDistance);
+	const float MaxDistance = FMath::Max(MinDistance, Config.WideMaxDistance);
+	auto Holds = [&](float Distance)
+	{
+		return HordeIntroHoldsAll(ViewAt(Focus, YawDeg, PitchDeg, Distance, VerticalFovDeg, Aspect), Feet, Config);
+	};
+	if (Holds(MinDistance))
+	{
+		return MinDistance;
+	}
+	if (!Holds(MaxDistance))
+	{
+		return MaxDistance;
+	}
+	float Low = MinDistance;
+	float High = MaxDistance;
+	for (int32 Step = 0; Step < 24 && High - Low > 10.f; ++Step)
+	{
+		const float Mid = (Low + High) * 0.5f;
+		if (Holds(Mid))
+		{
+			High = Mid;
+		}
+		else
+		{
+			Low = Mid;
+		}
+	}
+	return High;
+}
+
+HordeIntroRules::FWideFrame HordeIntroRules::FrameWide(const FVector& SquadCentre, const TArray<FVector>& ClusterFeet, float YawDeg,
+	float PitchDeg, float VerticalFovDeg, float Aspect, const FHordeIntroConfig& Config)
+{
+	FWideFrame Frame;
+	if (ClusterFeet.IsEmpty())
+	{
+		Frame.Focus = SquadCentre;
+		Frame.Distance = FMath::Max(100.f, Config.WideMinDistance);
+		return Frame;
+	}
+	const FVector Centre = CentreOf(ClusterFeet, TArray<int32>());
+	const FVector Biased = WideFocus(SquadCentre, Centre, Config);
+	const float BiasedDistance = FrameDistance(Biased, ClusterFeet, YawDeg, PitchDeg, VerticalFovDeg, Aspect, Config);
+	if (HordeIntroHoldsAll(ViewAt(Biased, YawDeg, PitchDeg, BiasedDistance, VerticalFovDeg, Aspect), ClusterFeet, Config))
+	{
+		Frame.Focus = Biased;
+		Frame.Distance = BiasedDistance;
+		Frame.bBiased = true;
+		return Frame;
+	}
+	Frame.Focus = Centre;
+	Frame.Distance = FrameDistance(Centre, ClusterFeet, YawDeg, PitchDeg, VerticalFovDeg, Aspect, Config);
+	return Frame;
 }
 
 FVector HordeIntroRules::WideFocus(const FVector& SquadCentre, const FVector& HordeCentre, const FHordeIntroConfig& Config)

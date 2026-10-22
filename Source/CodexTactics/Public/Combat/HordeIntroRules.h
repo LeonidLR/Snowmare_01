@@ -50,17 +50,49 @@ struct CODEXTACTICS_API FHordeIntroConfig
 	/** Wide shot distance = clamp(span * WideSpanScale + WidePaddingCm, WideMinDistance, WideMaxDistance), cm. */
 	float WideSpanScale = 0.9f;
 	float WidePaddingCm = 800.f;
-	float WideMinDistance = 2000.f;
-	float WideMaxDistance = 4000.f;
+	float WideMinDistance = 1500.f;
+	float WideMaxDistance = 4500.f;
 	/** Shots look at the horde from the squad's side (the onslaught comes at the camera), turned this much aside, deg. */
 	float ViewSideDegrees = 25.f;
 	/** Camera distance of a per-type tracking shot (close, the runner fills the frame), cm. */
 	float TypeShotDistance = 700.f;
 	/** At most this many per-type shots in one flyover. */
 	int32 MaxTypeShots = 6;
+	/**
+	 * Framing (game designer play-test 2026-10-22: "the fly-in sometimes shows nothing - too far or not close enough"): the wide
+	 * shot frames the main cluster of the WAVE's enemies (never the level's other enemies far away) - the points within this
+	 * radius of the densest one, cm.
+	 */
+	float WideClusterRadiusCm = 1500.f;
+	/** Share of the frame kept free round the framed enemies (each side), 0..0.45. */
+	float WideFrameMargin = 0.12f;
+	/** Height of an enemy the frame must hold (feet + this), cm. */
+	float FramedBodyHeightCm = 160.f;
+	/**
+	 * Waiting for the spawn: the trigger waits while the wave still has queued spawns (the camera would fly to nobody), at most
+	 * this long past MaxWaitSeconds, game s.
+	 */
+	float SpawnGraceSeconds = 6.f;
 	/** The «HORDE INCOMING» alert stays at least this long (real s), fading in / out over AlertFadeSeconds. */
 	float AlertSeconds = 3.f;
 	float AlertFadeSeconds = 0.5f;
+};
+
+/** A camera view for the framing rules: where it stands, where it looks, its vertical field of view and aspect. */
+struct FHordeFrameView
+{
+	FVector Location = FVector::ZeroVector;
+	FRotator Rotation = FRotator::ZeroRotator;
+	float VerticalFovDeg = 30.f;
+	float Aspect = 16.f / 9.f;
+};
+
+/** Where a world point lands in a view: X / Y in -1..1 inside the frame (Y up), Depth cm in front of the camera. */
+struct FHordeFramePoint
+{
+	float X = 0.f;
+	float Y = 0.f;
+	float Depth = 0.f;
 };
 
 /** One shot of the flyover. */
@@ -139,6 +171,13 @@ namespace HordeIntroRules
 	CODEXTACTICS_API bool IsMassFormed(float MassRunningSeconds, const FHordeIntroConfig& Config);
 
 	/**
+	 * Waiting for the spawn (2026-10-22): no trigger while the wave still has queued spawns or nobody of it lives yet, unless
+	 * SpawnGraceSeconds past MaxWaitSeconds are over; then ShouldTrigger.
+	 */
+	CODEXTACTICS_API bool ShouldTriggerSpawned(float SecondsSinceSpawn, bool bMassFormed, bool bAllSpawned, int32 LiveEnemies,
+		const FHordeIntroConfig& Config);
+
+	/**
 	 * The flyover starts now: the mass has formed (latched — packs fanning out to flank later do not undo it) and
 	 * MinDelaySeconds have passed since the spawn, or MaxWaitSeconds are over (game seconds since the spawn).
 	 */
@@ -162,6 +201,51 @@ namespace HordeIntroRules
 	 * the nearest one; -1 without candidates.
 	 */
 	CODEXTACTICS_API int32 PickRunningRepresentative(const TArray<FHordeMover>& Candidates, const FVector& SquadCentre, float MinSpeed);
+
+	/**
+	 * The main cluster of Points: the point with the most others within RadiusCm (ties: the first), then every point within
+	 * RadiusCm of that group's centre. Indices into Points; empty without points.
+	 */
+	CODEXTACTICS_API TArray<int32> MainCluster(const TArray<FVector>& Points, float RadiusCm);
+
+	/** Centre of the Points at Indices (all of them with empty Indices); zero without points. */
+	CODEXTACTICS_API FVector CentreOf(const TArray<FVector>& Points, const TArray<int32>& Indices);
+
+	/** The tactical camera's view at Focus from Distance (TacticalCameraRules::ComputeViewOffset, the camera's fixed pitch). */
+	CODEXTACTICS_API FHordeFrameView ViewAt(const FVector& Focus, float YawDeg, float PitchDeg, float Distance, float VerticalFovDeg, float Aspect);
+
+	/** Point projected into View. */
+	CODEXTACTICS_API FHordeFramePoint Project(const FHordeFrameView& View, const FVector& Point);
+
+	/** Point lies inside View's frame shrunk by Margin (0..0.45 of the half frame each side) and in front of the camera. */
+	CODEXTACTICS_API bool IsInFrame(const FHordeFrameView& View, const FVector& Point, float Margin);
+
+	/** Share of the frame height an upright HeightCm body at Feet fills in View (0 behind the camera). */
+	CODEXTACTICS_API float ScreenHeightFraction(const FHordeFrameView& View, const FVector& Feet, float HeightCm);
+
+	/**
+	 * Shortest camera distance in [WideMinDistance, WideMaxDistance] at which every point of Feet (and FramedBodyHeightCm above
+	 * it) is inside the frame with WideFrameMargin, looking at Focus from YawDeg / PitchDeg; WideMaxDistance when even that
+	 * cannot hold them.
+	 */
+	CODEXTACTICS_API float FrameDistance(const FVector& Focus, const TArray<FVector>& Feet, float YawDeg, float PitchDeg, float VerticalFovDeg,
+		float Aspect, const FHordeIntroConfig& Config);
+
+	/** The wide shot: focus and distance (FrameWide). */
+	struct FWideFrame
+	{
+		FVector Focus = FVector::ZeroVector;
+		float Distance = 0.f;
+		/** The squad-biased focus held the cluster (false: the focus moved onto the cluster itself). */
+		bool bBiased = false;
+	};
+
+	/**
+	 * Wide shot framing: the focus between the squad and the cluster (WideFocusBias) when the cluster fits the frame from there
+	 * within WideMaxDistance; else the cluster's own centre. Distance by FrameDistance.
+	 */
+	CODEXTACTICS_API FWideFrame FrameWide(const FVector& SquadCentre, const TArray<FVector>& ClusterFeet, float YawDeg, float PitchDeg,
+		float VerticalFovDeg, float Aspect, const FHordeIntroConfig& Config);
 
 	/** Alert opacity Seconds after it appeared while it stays ShowSeconds (fades in / out over AlertFadeSeconds). */
 	CODEXTACTICS_API float AlertAlpha(float Seconds, float ShowSeconds, const FHordeIntroConfig& Config);

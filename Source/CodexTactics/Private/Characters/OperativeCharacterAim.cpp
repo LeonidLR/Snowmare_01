@@ -7,6 +7,9 @@
 
 #include "Characters/AimOffsetRules.h"
 #include "Characters/FacingRules.h"
+#include "Characters/ThreatFacingRules.h"
+#include "Characters/EnemyCharacter.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacterInternal.h"
 #include "Combat/HealthComponent.h"
@@ -90,9 +93,19 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
 	AActor* Target = CurrentCombatTarget.Get();
 	// A quick fire order (Ctrl + click on a point) turns him to its point itself (RunQuickFire): no pull back to the combat target meanwhile.
+	// User request 2026-10-22: the fight's memory of whom he fought (ThreatFacingRules) lasts for the wave fight (pause / turn-based included).
+	if (!Flow || Flow->GetPhase() != ECodexGamePhase::WaveCombat)
+	{
+		bFoughtThisFight = false;
+		LastThreat.Reset();
+	}
+	bTurningToThreat = false;
 	if (bRealTimeFight && !bQuickFireActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
 		bFacingCombatTarget = true;
+		LastThreat = Target;
+		LastThreatLocation = Target->GetActorLocation();
+		bFoughtThisFight = true;
 		const float Yaw = (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
 		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Yaw, 0.f), DeltaTime, 12.f));
 	}
@@ -127,6 +140,27 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	{
 		// Every frame (it used to step only with the formation repath, every 0.2 s, and looked jerky).
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, IdleFacingYaw, TurnSpeed, DeltaTime), 0.f));
+	}
+	else if (!bFacingCombatTarget && !bFacingWall)
+	{
+		// User request 2026-10-22: after the retreat at a run he does not stand with his back to the enemies chasing him - he turns
+		// to the one he was fighting (its last seen spot), or the nearest live enemy; the fire posture then picks targets as usual.
+		ThreatFacingRules::FFacts Facts;
+		Facts.bRealTimeFight = bRealTimeFight;
+		Facts.bStanding = GetVelocity().SizeSquared2D() < 10.f * 10.f && !bHasMoveOrder;
+		Facts.bInCover = bInCover || bHasPendingCover;
+		Facts.bFacingCombatTarget = bFacingCombatTarget;
+		Facts.bExplicitFacing = bExplicitFacing || bHasIdleFacing || bQuickFireActive;
+		Facts.bGridOwnsFacing = bGridOwnsFacing;
+		Facts.bFoughtThisFight = bFoughtThisFight;
+		FVector Threat;
+		Facts.bHasThreat = Facts.bRealTimeFight && Facts.bFoughtThisFight && FindThreatPoint(Threat);
+		if (ThreatFacingRules::ShouldTurnToThreat(Facts))
+		{
+			bTurningToThreat = true;
+			const float ThreatYaw = (Threat - GetActorLocation()).Rotation().Yaw;
+			SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, ThreatYaw, TurnSpeed, DeltaTime), 0.f));
+		}
 	}
 
 	// Barrel vs body yaw in the current aim pose (the rifle is held across the chest); 0 when not aiming.
@@ -223,6 +257,32 @@ float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) 
 	}
 	const float Error = AimOffsetRules::YawToTarget(GetStanceAimOrigin(), GetStanceAimBaseDirection(), TargetLocation, 180.f);
 	return AimOffsetRules::ResidualAimError(Error, GetAppliedAimYaw());
+}
+
+bool AOperativeCharacter::FindThreatPoint(FVector& OutPoint) const
+{
+	// The last target alive: the spot he last saw it at while it hides from the squad's sight, its live spot while seen.
+	const AActor* Last = LastThreat.Get();
+	const UHealthComponent* LastHealth = IsValid(Last) ? Last->FindComponentByClass<UHealthComponent>() : nullptr;
+	const bool bLastAlive = IsValid(Last) && (!LastHealth || LastHealth->IsAlive());
+	const FVector LastSpot = bLastAlive && OperativeCharacterInternal::IsLiveEnemy(Last) ? Last->GetActorLocation() : LastThreatLocation;
+	bool bNearest = false;
+	FVector Nearest = FVector::ZeroVector;
+	if (!bLastAlive)
+	{
+		float Best = FMath::Square(ThreatFacingRules::ThreatMemoryRangeCm);
+		for (const AActor* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
+		{
+			const float DistSq = Enemy ? FVector::DistSquared2D(Enemy->GetActorLocation(), GetActorLocation()) : Best;
+			if (DistSq < Best && OperativeCharacterInternal::IsLiveEnemy(Enemy))
+			{
+				Best = DistSq;
+				Nearest = Enemy->GetActorLocation();
+				bNearest = true;
+			}
+		}
+	}
+	return ThreatFacingRules::PickThreatPoint(bLastAlive, LastSpot, bNearest, Nearest, OutPoint);
 }
 
 void AOperativeCharacter::FaceAimAt(const FVector& TargetLocation)

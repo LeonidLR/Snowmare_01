@@ -87,6 +87,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool AreFollowersHolding() const { return bFollowersHolding; }
 
+	/**
+	 * Game designer play-test 2026-10-22: after a fight that returns to exploring the followers keep the spots they fought from
+	 * until the leader moves (SquadOrderRules::ArmsPostFightHold / KeepsPostFightHold).
+	 */
+	bool IsPostFightHoldActive() const { return bPostFightHold; }
+
 	/** Toggles solo scout mode (Godot main.gd toggle_solo_mode on B key). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void ToggleSoloMode();
@@ -328,6 +334,9 @@ private:
 	/** Operatives with a deferred planned shot -> seconds of real-time fight since the release. */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, float> DeferredShots;
 	ECodexCombatMode LastCombatMode = ECodexCombatMode::None;
+	ECodexGamePhase LastPhase = ECodexGamePhase::Exploration;
+	/** The fight just ended: the formation leaves the followers where they stand until the leader moves. */
+	bool bPostFightHold = false;
 
 	ESquadFirePosture SquadPosture = FirePostureRules::DefaultPosture;
 	bool bSquadProvoked = false;
