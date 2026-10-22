@@ -237,8 +237,18 @@ TArray<FEnemySpawnEntry> UWaveSubsystem::ResolveRoster(const TArray<FEnemySpawnE
 	const FEnvironmentRosterConfig& Roster = EnvironmentTuning::Get().Roster;
 	TArray<FString> Log;
 	TArray<FEnemySpawnEntry> Resolved = EnvironmentRosterRules::ResolveSpawns(Roster, Spawns, Environment->GetWeather(), Environment->GetPhase(), &Log);
-	UE_LOG(LogCodexTactics, Display, TEXT("[Env] roster wave %d (%s)%s: %d -> %d enemies, %d change(s)"), WaveIndex, *Conditions,
-		Roster.bEnabled ? TEXT("") : TEXT(" disabled"), Total(Spawns), Total(Resolved), Log.Num());
+	// Display (console + file) only when the roster changed: an unchanged wave logs quietly - a Display line at the wave start shifted
+	// the frame timing of the horde-intro flyover smoke (HordeIntroSmoke) on -FORCELOGFLUSH runs.
+	if (Log.Num() > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] roster wave %d (%s)%s: %d -> %d enemies, %d change(s)"), WaveIndex, *Conditions,
+			Roster.bEnabled ? TEXT("") : TEXT(" disabled"), Total(Spawns), Total(Resolved), Log.Num());
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Log, TEXT("[Env] roster wave %d (%s)%s: %d enemies, unchanged"), WaveIndex, *Conditions,
+			Roster.bEnabled ? TEXT("") : TEXT(" disabled"), Total(Spawns));
+	}
 	for (const FString& Line : Log)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Env]   %s"), *Line);
