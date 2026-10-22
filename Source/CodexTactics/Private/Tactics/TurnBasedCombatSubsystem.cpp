@@ -161,7 +161,17 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	BurningBarrels.Reset();
 	Movers.Reset();
 
-	const FVector Center = Leader->GetActorLocation();
+	// The grid on flat, open ground holding the squad (TurnArenaRules, game designer 2026-10-22: never inside / across a building).
+	// The player's entry (Space hold) is refused without such ground; a direct entry (smokes, scripted) falls back to the grid
+	// round the leader as before.
+	FindTurnArena(ActiveArena);
+	if (!ActiveArena.bFound)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Turn-based combat without a valid arena (%s): the grid round the leader"),
+			TurnArenaRules::FaultName(ActiveArena.LeaderFault));
+	}
+	const FVector Center = ActiveArena.bFound ? FVector(ActiveArena.Centre.X, ActiveArena.Centre.Y, Leader->GetActorLocation().Z)
+		: Leader->GetActorLocation();
 	const float HalfExtent = TurnGridCells * TurnCellSize * 0.5f;
 	auto OnGrid = [&Center, HalfExtent](const AActor* Actor)
 	{
@@ -227,7 +237,11 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(TurnGridFloor), false);
 	Params.AddIgnoredActors(Ignore);
 	FHitResult FloorHit;
-	if (World->LineTraceSingleByChannel(FloorHit, Center + FVector(0.f, 0.f, 50.f), Center - FVector(0.f, 0.f, 2000.f), ECC_Visibility, Params))
+	if (ActiveArena.bFound)
+	{
+		GroundZ = ActiveArena.GroundZ;
+	}
+	else if (World->LineTraceSingleByChannel(FloorHit, Center + FVector(0.f, 0.f, 50.f), Center - FVector(0.f, 0.f, 2000.f), ECC_Visibility, Params))
 	{
 		GroundZ = FloorHit.ImpactPoint.Z;
 	}
@@ -252,6 +266,10 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	Grid->Setup(FVector(Center.X, Center.Y, GroundZ), FIntPoint(TurnGridCells, TurnGridCells), TurnCellSize, GroundZ);
 	Grid->DiagonalAPCost = Balance.DiagonalAPCost;
 	BakeObstacles(Ignore);
+	for (const FIntPoint& Cell : ActiveArena.BlockedBorder)
+	{
+		Grid->SetOccupant(Cell, nullptr, EGorkyOccupantType::Obstacle); // a wall / slope on the arena's outer ring
+	}
 
 	for (AActor* Barricade : GridBarricades)
 	{
@@ -529,7 +547,9 @@ void UTurnBasedCombatSubsystem::BakeObstacles(const TArray<AActor*>& Ignore)
 		for (int32 Y = 0; Y < TurnGridCells; ++Y)
 		{
 			const FVector Probe = Grid->GridToWorld(FIntPoint(X, Y)) + FVector(0.f, 0.f, 90.f);
-			if (GetWorld()->OverlapAnyTestByChannel(Probe, FQuat::Identity, ECC_WorldStatic, Box, Params))
+			// BLOCKING overlaps only (bug 2026-10-22, Demo 01 lake: the yard's tutorial trigger volume overlaps everything, so every cell
+			// under it became an obstacle - the operatives on the grid could not move anywhere).
+			if (GetWorld()->OverlapBlockingTestByChannel(Probe, FQuat::Identity, ECC_WorldStatic, Box, Params))
 			{
 				Grid->SetOccupant(FIntPoint(X, Y), nullptr, EGorkyOccupantType::Obstacle);
 			}

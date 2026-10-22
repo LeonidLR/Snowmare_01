@@ -96,6 +96,11 @@ public:
 	int32 GetCurrentShotIndex() const { return IsFlyoverActive() ? CurrentShot : INDEX_NONE; }
 	/** The actor the running shot frames (the wide-shot anchor, a representative, the leader). */
 	AActor* GetCurrentShotTarget() const { return ShotTarget.Get(); }
+	/** The enemies the horde intro films (the fight's own; GatherEnemies). */
+	TArray<AEnemyCharacter*> GetFilmedEnemies() const { TArray<AEnemyCharacter*> Out; GatherEnemies(Out); return Out; }
+	/** Last wide framing: the wave's live enemies and those in its main cluster. */
+	int32 GetWideEnemyCount() const { return WideEnemyCount; }
+	int32 GetWideClusterCount() const { return WideClusterCount; }
 	/** Every started shot of this world, "wide@<anchor>", "type:FrostHound@<enemy>", "return@<leader>". */
 	const TArray<FString>& GetShotLog() const { return ShotLog; }
 	const TSet<EEnemyArchetype>& GetShownTypes() const { return ShownTypes; }
@@ -122,6 +127,8 @@ private:
 	void OpenPause(bool bFlyover);
 	void StartShot(int32 Index);
 	void UpdateWideAnchor();
+	/** Frames the main cluster of the wave (HordeIntroRules::FrameWide); bNewYaw picks the shot's yaw (else WideYaw stays). */
+	HordeIntroRules::FWideFrame ComputeWideFrame(bool bNewYaw);
 	void ApplyFlyoverDilation();
 	/** Ends the flyover; bSnapBack puts the camera on the leader at once (a skip), else the return glide already ran. */
 	void EndFlyover(bool bSnapBack, bool bSkipped, const TCHAR* Why);
@@ -164,6 +171,11 @@ private:
 	/** Moving focus point of the wide shot (on the running mass). */
 	UPROPERTY(Transient)
 	TObjectPtr<AActor> WideAnchor;
+	/** Yaw of the running wide shot, deg. */
+	float WideYaw = 0.f;
+	/** Last framing: the wave's live enemies / those in its main cluster (log, smokes). */
+	int32 WideEnemyCount = 0;
+	int32 WideClusterCount = 0;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UHordeAlertWidget> AlertWidget;

@@ -295,6 +295,19 @@ void UWaveSubsystem::ProcessPendingSpawns(float DeltaTime)
 	}
 }
 
+TArray<AEnemyCharacter*> UWaveSubsystem::GetAliveEnemies() const
+{
+	TArray<AEnemyCharacter*> Result;
+	for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : AliveEnemies)
+	{
+		if (Enemy.IsValid() && !Enemy->IsDying())
+		{
+			Result.Add(Enemy.Get());
+		}
+	}
+	return Result;
+}
+
 AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation)
 {
 	UWorld* World = GetWorld();

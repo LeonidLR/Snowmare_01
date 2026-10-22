@@ -8,6 +8,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "Tactics/ExposedZones.h"
 #include "Tactics/Gorky17Types.h"
+#include "Tactics/TurnArenaRules.h"
 #include "Tactics/TurnBasedRules.h"
 #include "TurnBasedCombatSubsystem.generated.h"
 
@@ -19,6 +20,23 @@ class ABarricadeActor;
 class ATurnGridOverlayActor;
 class UGorkyGridManager;
 class UWeaponDataAsset;
+
+/** Where the next turn-based fight would be laid out (UTurnBasedCombatSubsystem::FindTurnArena). */
+struct CODEXTACTICS_API FTurnArenaChoice
+{
+	bool bFound = false;
+	/** Grid centre (XY) and its median ground height. */
+	FVector Centre = FVector::ZeroVector;
+	float GroundZ = 0.f;
+	/** Offset of the chosen centre from the leader, cells. */
+	FIntPoint Offset = FIntPoint::ZeroValue;
+	/** Border cells of the chosen grid that become obstacles. */
+	TArray<FIntPoint> BlockedBorder;
+	/** Why the grid round the leader himself is refused (None when it is valid). */
+	ETurnArenaFault LeaderFault = ETurnArenaFault::None;
+	FIntPoint LeaderFaultCell = FIntPoint(-1, -1);
+	int32 Tried = 0;
+};
 
 /** Whose part of the round is running. */
 UENUM(BlueprintType)
@@ -232,6 +250,17 @@ public:
 	 */
 	int32 ApplySquadHit(AActor* Victim, float Amount, const FString& Source);
 	UGorkyGridManager* GetGrid() const { return Grid; }
+
+	/**
+	 * Game designer rule (2026-09-30, repeated 2026-10-22 after the lake grid inside the base building): the turn-based grid only
+	 * on flat, open, navigable ground holding the whole squad (TurnArenaRules). Samples the cells round the leader and picks the
+	 * nearest valid grid centre (engaged enemies inside break ties). false: none - the fight must not switch to turn-based.
+	 */
+	bool FindTurnArena(FTurnArenaChoice& OutChoice) const;
+	/** The feed line that refuses turn-based combat for Fault. */
+	static FText DescribeArenaFault(ETurnArenaFault Fault);
+	/** The arena of the running fight (valid while IsActive; bFound false = laid round the leader without a valid arena). */
+	const FTurnArenaChoice& GetActiveArena() const { return ActiveArena; }
 	int32 GetEnemyCount() const { return Enemies.Num(); }
 
 	/** The grid overlay actor of the fight (tests). */
@@ -383,6 +412,7 @@ public:
 	FOnTurnBasedStateChanged OnStateChanged;
 
 private:
+	FTurnArenaChoice ActiveArena;
 	/** A relocated object gliding to its new transform (Godot tween, visual only). */
 	struct FObjectGlide
 	{

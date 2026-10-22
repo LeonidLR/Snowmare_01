@@ -85,3 +85,20 @@ other zombie keeps patrolling), `AmbushSmoke`, `PatrolAmbushSmoke`, `LevelWaveSm
   WideMinDistance 2000, WideMaxDistance 4000, WideFocusBias 0.8, ViewSideDegrees 25, AlertSeconds 3. Each wave logs a
   `[HordeIntro] N s: ... moving, mean ... cm/s, ... % running at the squad` trace for tuning.
 
+### Fight over: the squad stays put; horde fly-in framing (game designer play-test 2026-10-22)
+
+- **No return to the preparation spots.** `UWaveVictorySubsystem::StartPostCombatSequence` no longer teleports the squad (Godot
+  `_return_squad_to_prep_stations`; deviation by the designer: "when a fight ends the operatives must stay where they were"). Orders dropped,
+  enemies removed, deployables recovered, the commander becomes the leader as before; the stations are still recorded (save games). After
+  PostCombat / a skirmish ending in Exploration `USquadSubsystem` holds the followers (stance, cover) until the leader moves
+  (`SquadOrderRules::ArmsPostFightHold` / `KeepsPostFightHold`, `IsPostFightHoldActive`). Smokes: `VictorySmoke` (scattered squad stays 3 s later),
+  the TutorialAmbushLake skirmishes.
+- **Horde fly-in frames the wave.** `UHordeIntroSubsystem::GatherEnemies` = the fight's own enemies (`UWaveSubsystem::GetAliveEnemies`; the level's
+  patrols / parked enemies never count). The wide shot frames the main cluster (`HordeIntroRules::MainCluster`, `WideClusterRadiusCm` 15 m) at the
+  shortest distance that holds every runner's feet and head in the tactical camera's frustum (`FrameDistance` / `FrameWide`, `WideFrameMargin` 0.12,
+  `FramedBodyHeightCm` 160, `WideMinDistance` 15 m .. `WideMaxDistance` 45 m; the squad-side focus when the cluster still fits from there, else the
+  cluster's centre), the yaw fixed per shot, focus + distance follow the running cluster (`ATacticalCameraPawn::SetCinematicDistance`). Type shots
+  prefer visible runners of the wave. The trigger waits while the wave has queued spawns or nobody alive (`ShouldTriggerSpawned`, `SpawnGraceSeconds`
+  6). Checks: `CodexTactics.Combat.HordeIntro.Framing.WaveClusterInTheFrustum`, `.Trigger.WaitsForTheSpawn`; `HordeIntroSmoke` (a parked level hound
+  60 m away is never filmed; per wide shot the main cluster in frame, >= 60 % of the wave, none hidden, the smallest >= 2.5 % of the frame height; per
+  type shot the runner in frame >= 12 %).

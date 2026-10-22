@@ -40,6 +40,7 @@ namespace VictorySmoke
 		int32 Wave = 0;
 		int32 TurretsBefore = 0;
 		TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> Stations;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> EndSpots;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -192,10 +193,16 @@ namespace VictorySmoke
 				if (State.Wave >= Total)
 				{
 					Check(State, Text.Contains(TEXT("TOTAL VICTORY")) && Text.Contains(TEXT("End combat")), TEXT("last wave: full victory"));
-					// Scatter the squad and leave a turret: the post-combat sequence brings them back.
+					// Scatter the squad and leave a turret. Game designer 2026-10-22: the squad must STAY where the fight ended (no
+					// teleport back to the preparation spots, the followers not walked to the formation).
 					for (AOperativeCharacter* Member : Squad->GetMembers())
 					{
 						Member->TeleportTo(Member->GetActorLocation() + FVector(300.f, 0.f, 0.f), Member->GetActorRotation(), false, true);
+					}
+					State.EndSpots.Reset();
+					for (AOperativeCharacter* Member : Squad->GetMembers())
+					{
+						State.EndSpots.Add(Member, Member->GetActorLocation());
 					}
 					Squad->SetLeader(Squad->GetMembers()[2]);
 					FActorSpawnParameters Params;
@@ -220,13 +227,21 @@ namespace VictorySmoke
 		{
 			Check(State, Flow->GetPhase() == ECodexGamePhase::PostCombat || Flow->GetPhase() == ECodexGamePhase::Exploration,
 				TEXT("after the last wave: post-combat"));
-			bool bBack = true;
+			if (State.StageTime < 3.f)
+			{
+				return true; // give the formation time to (wrongly) walk them
+			}
+			bool bStayed = true;
+			float MaxMoved = 0.f;
 			for (const AOperativeCharacter* Member : Squad->GetMembers())
 			{
-				const FVector* Station = State.Stations.Find(const_cast<AOperativeCharacter*>(Member));
-				bBack &= Station && FVector::Dist2D(*Station, Member->GetActorLocation()) < 50.f;
+				const FVector* Spot = State.EndSpots.Find(const_cast<AOperativeCharacter*>(Member));
+				const float Moved = Spot ? FVector::Dist2D(*Spot, Member->GetActorLocation()) : 99999.f;
+				MaxMoved = FMath::Max(MaxMoved, Moved);
+				bStayed &= Moved < 50.f;
 			}
-			Check(State, bBack, TEXT("squad back at the preparation spots"));
+			Check(State, bStayed, FString::Printf(TEXT("the squad stays where the fight ended, 3 s later (max %.0f cm moved; no teleport to the prep spots)"), MaxMoved));
+			Check(State, Squad->IsPostFightHoldActive(), TEXT("the followers hold their spots until the leader moves"));
 			Check(State, Squad->GetLeader() && Squad->GetLeader()->SquadRole == EOperativeRole::Commander, TEXT("the commander leads"));
 			int32 Enemies = 0;
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)

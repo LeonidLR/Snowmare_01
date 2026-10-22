@@ -5,6 +5,8 @@
 #include "NavFilters/NavigationQueryFilter.h"
 #include "VaultNavigation.generated.h"
 
+class UNavModifierComponent;
+
 /**
  * Navmesh area over a vaultable obstacle: operatives path across it (and vault on the way), enemies do not
  * (UNavFilter_NoVault; Godot enemies never vault — they smash barricades).
@@ -58,4 +60,7 @@ namespace VaultNavigation
 	 * it instead (enemies still go round). Called from BeginPlay of barricades and for tagged level actors.
 	 */
 	CODEXTACTICS_API void MakeVaultable(AActor* Actor);
+
+	/** The vault area MakeVaultable added to Actor (named "VaultNavModifier"); null for an actor that was never made vaultable. */
+	CODEXTACTICS_API UNavModifierComponent* FindVaultNavModifier(const AActor* Actor);
 }

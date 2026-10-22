@@ -14,6 +14,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
@@ -142,23 +143,16 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 		return;
 	}
 
-	// User decision 2026-09-30: only on flat ground — no fight started up on a platform or down in a pit.
+	// User decision 2026-09-30 + game designer 2026-10-22: only on flat, OPEN ground holding the squad (no platform, pit, building,
+	// walls in the middle - barrels, barricades and turrets are fine): UTurnBasedCombatSubsystem::FindTurnArena searches such a grid
+	// round the squad; none -> refused with the reason (never a grid inside a building with the squad stuck outside).
 	if (Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
 	{
-		TArray<float> Feet;
-		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		const UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+		FTurnArenaChoice Arena;
+		if (TurnBased && !TurnBased->FindTurnArena(Arena))
 		{
-			if (Member->HealthComponent && Member->HealthComponent->IsAlive())
-			{
-				Feet.Add(Member->GetActorLocation().Z - Member->GetSimpleCollisionHalfHeight());
-			}
-		}
-		float Ground = 0.f;
-		const TArray<float> Samples = CombatQueries::SampleGroundHeights(GetWorld(), Squad->GetLeader()->GetActorLocation(), 1050.f);
-		if (!CombatQueries::IsSquadOnFlatGround(Samples, Feet, 50.f, Ground))
-		{
-			PostHeadquarters(LOCTEXT("TurnBasedNotFlat",
-				"⚠️ Turn-based combat can only start on level ground - not on high ground or in a pit!"));
+			PostHeadquarters(UTurnBasedCombatSubsystem::DescribeArenaFault(Arena.LeaderFault));
 			return;
 		}
 	}

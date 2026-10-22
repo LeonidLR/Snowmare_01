@@ -238,6 +238,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	}
 	LastMoveDestination = Destination;
 	ClearIdleFacing();
+	bExplicitFacing = false; // a new move: no ordered facing any more (ThreatFacingRules may turn him after it)
 	AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
 	if (!AIController)
 	{
@@ -406,6 +407,7 @@ void AOperativeCharacter::SetFacingPoint(const FVector& Point)
 {
 	StopOperative();
 	ClearIdleFacing(); // an ordered facing is not undone by a parked follower's stale idle facing (it turned him back right after the disarm menu opened)
+	bExplicitFacing = true; // nor by the turn to the last threat (ThreatFacingRules)
 	const FVector Direction = (Point - GetActorLocation()).GetSafeNormal2D();
 	if (!Direction.IsNearlyZero())
 	{

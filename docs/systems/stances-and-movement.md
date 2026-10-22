@@ -28,3 +28,12 @@
   `CornerAim` (corner hold / aim / peek / snap, open shot), `Sniper`; shared helpers `OperativeCharacterInternal.h`.
   Net: `CodexTactics.Characters.OperativeUnits.*` + the per-file rules `operative-*-units` in `Scripts/test_map.json`.
 
+### Moved barricades are vaulted both ways (game designer play-test 2026-10-22)
+
+"I moved the barricade and set it in one place; the operative vaulted over it, but cannot vault back and walks around." Cause:
+`URelocationSubsystem::SetObjectCarried(false)` made the barricade's box affect the navmesh again when it was put down, although
+`VaultNavigation::MakeVaultable` keeps every shape of a vaultable object off the navmesh (only its `UNavArea_Vault` modifier marks it): the moved
+barricade cut a hole into the navmesh, paths across it vanished. Fix: a vault-made object (`VaultNavigation::FindVaultNavModifier`) keeps its box
+off the navmesh; its vault area is switched back on and refreshed at the new spot. Check: `BarricadeVaultBackSmoke` (two 6 m walls with a 3.2 m
+gap; a barricade pushed into it by a mate with the real push task, then a freshly placed one: box off the navmesh, the path straight through both
+ways ~7 m, the leader vaults over and back).

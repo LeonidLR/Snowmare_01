@@ -569,6 +569,19 @@ void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatM
 		DeferredShots.Reset();
 	}
 	LastCombatMode = CombatMode;
+	// Game designer play-test 2026-10-22: the fight is over -> nobody is walked or snapped anywhere; the followers keep the spots
+	// they fought from (stance, cover) until the leader moves.
+	if (Phase != LastPhase && SquadOrderRules::ArmsPostFightHold(LastPhase, Phase))
+	{
+		bPostFightHold = true;
+		for (FFollowerState& Follower : Followers)
+		{
+			Follower.bParked = true;
+			Follower.RepathTimeRemaining = 0.f;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Squad: the fight is over - the followers hold their spots until the leader moves"));
+	}
+	LastPhase = Phase;
 }
 
 void USquadSubsystem::HandleTacticalPauseReleased()
@@ -832,6 +845,11 @@ void USquadSubsystem::Tick(float DeltaTime)
 	}
 
 	const bool bLeaderMoving = LeaderRef->IsMoving();
+	bPostFightHold = SquadOrderRules::KeepsPostFightHold(bPostFightHold, bLeaderMoving);
+	if (bPostFightHold)
+	{
+		return;
+	}
 	const float TimeSeconds = GetWorld()->GetTimeSeconds();
 	for (FFollowerState& Follower : Followers)
 	{

@@ -106,6 +106,8 @@ public:
 	 * of the moment the lock began (bSnapYaw: at once).
 	 */
 	void SetCinematicYaw(float Yaw);
+	/** While locked: the cinematic zooms to Distance (cm), smoothed like the wheel zoom (a running glide keeps its own distance). */
+	void SetCinematicDistance(float Distance);
 	void RestorePlayerYaw(bool bSnapYaw);
 	float GetCurrentYaw() const { return CurrentYaw; }
 
