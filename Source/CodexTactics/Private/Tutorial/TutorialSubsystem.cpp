@@ -1101,6 +1101,17 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 	{
 		return 0.f;
 	}
+	if (Stat == FName(TEXT("tactical_pause")))
+	{
+		// 2026-10-22 (the pause lesson): 1 while the fight is in the tactical pause.
+		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		return Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause ? 1.f : 0.f;
+	}
+	if (const FName Binding = TutorialRules::ParseAllDeadStat(Stat); !Binding.IsNone())
+	{
+		// 2026-10-22 (game designer: both A4 zombies dead, the wire card still up): 1 once every enemy of that binding is dead.
+		return AreBoundEnemiesDead(Binding) ? 1.f : 0.f;
+	}
 	if (Stat == FName(TEXT("quest_progress")))
 	{
 		// 2026-10-21 (Demo 01 A7): how far the checkpoint quest chain got (FQuestChainState::GetProgress: 0 .. 4 = gate powered).
@@ -1858,6 +1869,33 @@ TArray<AEnemyCharacter*> UTutorialSubsystem::FindBoundEnemies(FName BindingId) c
 	return Out;
 }
 
+bool UTutorialSubsystem::AreBoundEnemiesDead(FName BindingId) const
+{
+	const FTutorialEnemyBinding* Binding = Machine.GetData().FindEnemy(BindingId);
+	const UWorld* World = GetWorld();
+	if (!Binding || !World)
+	{
+		return false;
+	}
+	const TArray<AEnemyCharacter*> Bound = FindBoundEnemies(BindingId);
+	if (!Bound.IsEmpty())
+	{
+		EnemyBindingsSeen.Add(BindingId);
+		for (const AEnemyCharacter* Enemy : Bound)
+		{
+			const UHealthComponent* Health = Enemy->GetHealthComponent();
+			if (!Enemy->IsDying() && (!Health || Health->IsAlive()))
+			{
+				return false; // one of them still lives
+			}
+		}
+		return true; // every one is dying / dead (a dying enemy's kill is raised at once: HandleDied)
+	}
+	// Found earlier in this level (or before the save this game was loaded from - a save drops dead enemies), gone now: dead and removed.
+	// Never found: the binding matches nothing in this level (a map without it) - nothing says it is dead.
+	return EnemyBindingsSeen.Contains(BindingId);
+}
+
 bool UTutorialSubsystem::IsEnemyBound(const AEnemyCharacter& Enemy, FName BindingId) const
 {
 	const FTutorialEnemyBinding* Binding = Machine.GetData().FindEnemy(BindingId);
@@ -1956,6 +1994,10 @@ void UTutorialSubsystem::LogEnemyBindings() const
 		{
 			const APatrolRouteActor* Route = Enemy->AssignedPatrolRoute.Get();
 			Names.Add(FString::Printf(TEXT("%s (route %s)"), *Enemy->GetName(), Route ? *Route->GetName() : TEXT("-")));
+		}
+		if (!Names.IsEmpty())
+		{
+			EnemyBindingsSeen.Add(Binding.Id); // 2026-10-22: "all_dead.<binding>" - it had enemies here
 		}
 		if (Names.IsEmpty())
 		{
@@ -2111,8 +2153,8 @@ FTutorialCardView UTutorialSubsystem::BuildCardView(FName StepId, bool bDone) co
 			return In.Replace(TEXT("{progress}"), *FString::FromInt(FMath::Min(Machine.GetProgress(StepId), Step->Complete.Count)))
 				.Replace(TEXT("{count}"), *FString::FromInt(Step->Complete.Count));
 		};
-		View.Title = FText::FromString(Progress(ResolveFocusToken(Text.Title, StepId)));
-		View.Body = FText::FromString(PlayerCommands::ResolveKeyTokens(Progress(ResolveFocusToken(Text.Text, StepId))));
+		View.Title = FText::FromString(ResolvePauseTokens(Progress(ResolveFocusToken(Text.Title, StepId))));
+		View.Body = FText::FromString(PlayerCommands::ResolveKeyTokens(ResolvePauseTokens(Progress(ResolveFocusToken(Text.Text, StepId)))));
 	}
 	if (AOperativeCharacter* Focus = GetFocusOperative(StepId))
 	{
@@ -2128,6 +2170,14 @@ FTutorialCardView UTutorialSubsystem::BuildCardView(FName StepId, bool bDone) co
 		View.Progress = FText::FromString(FString::Printf(TEXT("%d / %d"), Index, Count));
 	}
 	return View;
+}
+
+FString UTutorialSubsystem::ResolvePauseTokens(const FString& Text) const
+{
+	// 2026-10-22: the pause lesson names the fight's real limits ({pause_charges} / {pause_seconds} / {pause_cooldown}).
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const FGameFlowConfig Config = Flow ? Flow->GetConfig() : FGameFlowConfig();
+	return TutorialRules::ResolvePauseTokens(Text, Config.TacticalPauseMaxCharges, Config.TacticalPauseDuration, Config.TacticalPauseCooldown);
 }
 
 FTutorialCardView UTutorialSubsystem::GetCardView() const
@@ -2490,6 +2540,15 @@ TSharedPtr<FJsonObject> UTutorialSubsystem::CaptureSaveState() const
 	}
 	Object->SetArrayField(TEXT("lock_hints"), Hints);
 	Object->SetBoolField(TEXT("skipped"), bSkipped); // rev 5i: SKIP TUTORIAL stays skipped after a load
+	// 2026-10-22: the enemy bindings that had enemies in this level ("all_dead.<binding>": dead ones are not in the save's world).
+	TArray<FName> SeenBindings = EnemyBindingsSeen.Array();
+	SeenBindings.Sort(FNameLexicalLess());
+	TArray<TSharedPtr<FJsonValue>> Seen;
+	for (const FName Binding : SeenBindings)
+	{
+		Seen.Add(MakeShared<FJsonValueString>(Binding.ToString()));
+	}
+	Object->SetArrayField(TEXT("enemy_bindings_seen"), Seen);
 	// 2026-10-20: the current navigation target (informational: it is derived from the progress + "route" on load).
 	Object->SetStringField(TEXT("guide"), DescribeGuide(GuideView.Guide));
 	return Object;
@@ -2526,6 +2585,18 @@ void UTutorialSubsystem::RestoreSaveState(const FJsonObject& Object)
 	}
 	bool bSavedSkipped = false;
 	bSkipped = Object.TryGetBoolField(TEXT("skipped"), bSavedSkipped) && bSavedSkipped;
+	const TArray<TSharedPtr<FJsonValue>>* SeenList = nullptr;
+	if (Object.TryGetArrayField(TEXT("enemy_bindings_seen"), SeenList))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *SeenList)
+		{
+			FString Binding;
+			if (Value.IsValid() && Value->TryGetString(Binding) && !Binding.IsEmpty())
+			{
+				EnemyBindingsSeen.Add(FName(*Binding)); // 2026-10-22: a zombie killed before the save stays dead for the lessons
+			}
+		}
+	}
 	LockHintFamilies.Reset();
 	const TArray<TSharedPtr<FJsonValue>>* Hints = nullptr;
 	if (Object.TryGetArrayField(TEXT("lock_hints"), Hints))

@@ -45,6 +45,14 @@ public:
 	/** Godot _trigger_menu_for_object: opens Target's action menu for the leader at once (no walk-up). */
 	void OpenMenuNow(AInteractableActor* Target);
 
+	/**
+	 * Game designer 2026-10-22 (a failed defuse: "clicking the mine again does nothing - I have to walk away and come back"): the live,
+	 * known trap (a spotted mine / PMC wire - UsesDisarmApproach, not awaiting its pickup) Worker stands at the disarm spot of whose
+	 * charge / wire line lies nearest to Point, within TrapApproachRules::RetryClickRadiusCm (TrapApproachRules::IsRetryClick); nullptr
+	 * when none or when bPicksAnotherMember. The controller takes such a click as a click on the trap.
+	 */
+	AInteractableActor* FindRetryTrapAt(const FVector& Point, const AOperativeCharacter& Worker, bool bPicksAnotherMember) const;
+
 	/** Confirm button: runs the object's action with the current leader. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void ConfirmActionMenu();

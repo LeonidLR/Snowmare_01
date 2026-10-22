@@ -1708,9 +1708,10 @@ namespace TutorialSmoke
 			// (queued behind the field's cards for minutes). A wire spotted now: the disarm is free at once and a feed line says how.
 			Check(State, Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire), TEXT("A2: the tripwire disarm is not taught yet"));
 			Tutorial->NotifyEvent(TEXT("TripwireSpotted"), Leader->GetFName());
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire) && !Tutorial->IsCommandLocked(PlayerCommands::DisarmMine)
+			// 2026-10-22: the wire lines are beat-less (any PMC wire met first, in any beat): the beat stays A2, only the wire disarm is freed.
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire) && Tutorial->GetCurrentBeat() == FName(TEXT("A2"))
 				&& Tutorial->GetStepState(TEXT("A3_wire_spotted")) == ETutorialStepState::Completed && CountMessages(World, TEXT("Click the wire and choose Disarm")) == 1,
-				FString::Printf(TEXT("a wire spotted: disarm unlocked at once (beat %s), the 'how to disarm' feed line posted"), *Tutorial->GetCurrentBeat().ToString()));
+				FString::Printf(TEXT("a wire spotted: disarm unlocked at once (beat %s, not moved), the 'how to disarm' feed line posted"), *Tutorial->GetCurrentBeat().ToString()));
 			State.Stage = 100;
 			State.StageTime = 0.f;
 			return true;
@@ -2214,10 +2215,10 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A3_posture")) == ETutorialStepState::Active, FString::Printf(TEXT("the POSTURE card is up (%s)"),
 				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A3_posture")))));
 			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A3_posture_radio"))) || Tutorial->GetStepState(TEXT("A3_posture_radio")) == ETutorialStepState::Completed,
-				TEXT("the Commander's 'Hold your fire' radio plays with it"));
+				TEXT("the Commander's 'nobody shoots first' radio plays with it"));
 			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::PosturePassive) && !Tutorial->IsCommandLocked(PlayerCommands::PostureAggressive),
 				TEXT("the card unlocks , . /"));
-			Tap(PC, State, EKeys::Comma); // the real key: the selected operative (the leader) goes Passive
+			Tap(PC, State, EKeys::Period); // 2026-10-22: the real key of the lesson - the selected operative (the leader) goes DEFENSIVE
 			Next(State);
 			return true;
 		}
@@ -2227,9 +2228,9 @@ namespace TutorialSmoke
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A3_posture")) == ETutorialStepState::Completed && Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Passive,
-				TEXT("',' (Posture.Passive): the leader is PASSIVE, the card completes"));
-			Squad->SetSquadPosture(ESquadFirePosture::Passive); // the rest of the lesson runs with the whole squad Passive (Alt + ,)
+			Check(State, Tutorial->GetStepState(TEXT("A3_posture")) == ETutorialStepState::Completed && Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Defensive,
+				TEXT("'.' (Posture.Defensive): the leader is DEFENSIVE, the card completes"));
+			Squad->SetSquadPosture(ESquadFirePosture::Defensive); // the rest of the lesson runs with the whole squad Defensive (Alt + .)
 			State.Stage = 104;
 			State.StageTime = 0.f;
 			return true;

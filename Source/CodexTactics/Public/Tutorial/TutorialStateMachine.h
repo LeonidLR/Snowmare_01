@@ -247,6 +247,8 @@ private:
 		float DelayLeft = 0.f;
 		int32 TriggerHits = 0;
 		bool bEverFinished = false;
+		/** 2026-10-22: the step was on screen (Active) at least once since the steps loaded (stat "step_shown.<id>"; not saved). */
+		bool bEverShown = false;
 		/** Subjects already counted by a distinct_operatives completion. */
 		TSet<FName> CountedSubjects;
 		/** Every subject whose event / volume entry counted for this step (distinct_from of other steps). */
@@ -298,8 +300,12 @@ private:
 	void DropEarlierBeatCard(int32 Index);
 	/** Completes the step and marks its transition as precredited (the player had already done the lesson). */
 	void FinishPrecredited(int32 Index);
-	/** Rev 5e "cancel_on": a step named in the step's cancel list has finished already. */
+	/** Rev 5e "cancel_on": a step named in the step's cancel list has finished already (2026-10-22: or its "condition" holds). */
 	bool IsCancelDue(int32 Index) const;
+	/** 2026-10-22: the step's "cancel_on" "condition" clauses all hold now (none: false). */
+	bool IsCancelConditionMet(int32 Index) const;
+	/** 2026-10-22: cancels every running step whose "cancel_on" "condition" holds (polled every tick). */
+	void PollCancelConditions();
 	/** Rev 5e: drops a running step as Skipped and marks its transition bCancelled (FTutorialCancelOn). */
 	void CancelStep(int32 Index);
 	/** Rev 5e: cancels every running step whose "cancel_on" matches (a finished step / an event / a volume entry). */

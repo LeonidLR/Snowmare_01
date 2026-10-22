@@ -12,6 +12,7 @@
 #include "UI/CodexTacticsHUD.h"
 #include "UI/ProfileDialogWidget.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Interactables/InteractableActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -52,9 +53,11 @@ AOperativeCharacter* ACodexTacticsPlayerController::FindClickedMember(const FHit
 		return HitOperative;
 	}
 	// 2. Proximity check around cursor impact point (not with a group selected: a click next to one of them is the
-	// group's move order — only a click on an operative's body picks him).
+	// group's move order — only a click on an operative's body picks him). 2026-10-22 (game designer: a failed defuse - "clicking the
+	// mine again does nothing"): not on a world object either - a click ON a mine / wire / crate means it, even with an operative
+	// working right next to it.
 	AOperativeCharacter* Closest = nullptr;
-	if (!Squad->HasMultiSelection())
+	if (!Squad->HasMultiSelection() && !Cast<AInteractableActor>(HitActor))
 	{
 		float ClosestDist = SelectRadius;
 		for (AOperativeCharacter* Member : Members)

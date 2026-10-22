@@ -3,6 +3,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HordeIntroRules.h"
+#include "Core/PlayerCommands.h"
 #include "GameFlow/PauseOrderRules.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -83,9 +84,21 @@ void UGameFlowSubsystem::HandleStateChanged(ECodexGamePhase Phase, ECodexCombatM
 		Machine.IsFreePause() ? TEXT(" [free pause: sudden horde]") : (Machine.IsAwaitingHordeIntro() ? TEXT(" [sudden horde: intro armed]") : TEXT("")));
 	const ECodexGamePhase OldPhase = LastBroadcastPhase;
 	LastBroadcastPhase = Phase;
+	const ECodexCombatMode OldMode = LastBroadcastMode;
+	LastBroadcastMode = CombatMode;
 	OnBeforeGameFlowChanged.Broadcast(OldPhase, Phase, CombatMode);
 	ApplyTimeDilation();
 	OnGameFlowChanged.Broadcast(Phase, CombatMode);
+	// 2026-10-22 (the tutorial's pause lesson): the edges of the tactical pause as gameplay events (".Free" first for a free pause).
+	const bool bPausedNow = CombatMode == ECodexCombatMode::TacticalPause;
+	if (bPausedNow != (OldMode == ECodexCombatMode::TacticalPause))
+	{
+		if (bPausedNow && Machine.IsFreePause())
+		{
+			GameplayEvents::Raise(this, FName(*(GameplayEvents::TacticalPauseStarted.ToString() + TEXT(".Free"))));
+		}
+		GameplayEvents::Raise(this, bPausedNow ? GameplayEvents::TacticalPauseStarted : GameplayEvents::TacticalPauseEnded);
+	}
 }
 
 void UGameFlowSubsystem::HandlePauseReleased()

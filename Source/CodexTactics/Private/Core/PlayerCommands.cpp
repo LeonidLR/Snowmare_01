@@ -400,6 +400,8 @@ namespace GameplayEvents
 	const FName GeneratorDown(TEXT("GeneratorDown"));
 	const FName GeneratorRepaired(TEXT("GeneratorRepaired"));
 	const FName GateOpened(TEXT("GateOpened"));
+	const FName TacticalPauseStarted(TEXT("TacticalPauseStarted"));
+	const FName TacticalPauseEnded(TEXT("TacticalPauseEnded"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{

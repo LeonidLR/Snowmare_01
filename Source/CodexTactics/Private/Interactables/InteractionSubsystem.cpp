@@ -13,6 +13,8 @@
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/RelocationSubsystem.h"
+#include "Interactables/TrapApproachRules.h"
+#include "EngineUtils.h"
 #include "Interactables/UseOrderRules.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
@@ -598,6 +600,28 @@ void UInteractionSubsystem::CloseStaleWindows()
 	{
 		CloseLootDialog(); // the crate was destroyed under the open window
 	}
+}
+
+AInteractableActor* UInteractionSubsystem::FindRetryTrapAt(const FVector& Point, const AOperativeCharacter& Worker, bool bPicksAnotherMember) const
+{
+	AInteractableActor* Best = nullptr;
+	float BestCm = TNumericLimits<float>::Max();
+	for (TActorIterator<AInteractableActor> It(GetWorld()); It; ++It)
+	{
+		AInteractableActor* Trap = *It;
+		if (!Trap->UsesDisarmApproach() || Trap->IsAwaitingPickup())
+		{
+			continue; // not a live, known trap with a disarm spot (hidden, tripped, disarmed, a crate)
+		}
+		const float ClickCm = static_cast<float>(FVector::Dist2D(Point, Trap->GetDisarmFocusPoint(Point)));
+		const bool bAtSpot = Trap->IsInInteractionReach(Worker.GetActorLocation(), Worker.IsMoving());
+		if (TrapApproachRules::IsRetryClick(bAtSpot, ClickCm, bPicksAnotherMember) && ClickCm < BestCm)
+		{
+			Best = Trap;
+			BestCm = ClickCm;
+		}
+	}
+	return Best;
 }
 
 void UInteractionSubsystem::OpenMenuNow(AInteractableActor* Target)

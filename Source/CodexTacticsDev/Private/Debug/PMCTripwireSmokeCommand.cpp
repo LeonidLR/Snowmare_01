@@ -20,6 +20,11 @@
 //     the action menu «Disarm» opens, confirming it disarms the wire (TripwireDisarmed, +2 grenades); the label says "click to disarm";
 //  7b. 2026-10-15 (game designer): the walk-up ends <= 0.9 m from the wire line, facing it; after the success a standing disarmer stands
 //     up and plays the pickup clip on the full body, a crouched one on the upper body (stays crouched), a prone one none;
+//  7c. 2026-10-22 (game designer: "a failed disarm - clicking it again does nothing, I have to walk away and come back"): the engineer at
+//     80 % cold walks up by the real click, the first attempt only warns; a click on HIS OWN BODY over the wire, then one on the wire
+//     itself, reopen the Disarm menu at once (no walk away, he does not move, still the leader); warm again, the confirm disarms it;
+//  7d. 2026-10-22: a PMC wire placed VISIBLE (Hidden Until Spotted off) is noticed like a hidden one: the crouched Medic-Sapper within
+//     the spot range raises TripwireSpotted once (the tutorial's wire card), the squad holds;
 //  8. save / load: a hidden wire and a spotted wire saved; after revealing the first and removing the second the load
 //     restores both (hidden / spotted, armed, PMC).
 // Saves go to Saved/SmokeSaves/PMCTripwire (exclusive in Scripts/test_map.json).
@@ -36,6 +41,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -89,6 +95,8 @@ namespace PMCTripwireSmoke
 		bool bCheckedWorking = false;
 		/** 2026-10-15 disarm walk-up / pickup passes. */
 		bool bRequested = false;
+		/** 2026-10-22: the retry / visible-wire stages (7c, 7d). */
+		bool bRetryStep = false;
 		int32 PickupsBeforeProne = 0;
 		TStrongObjectPtr<UEventBusProbe> Probe;
 		/** Rev 2026-10-19: the disarmed wire waiting for the pickup grab (seen when / its delay / what it must not have done yet). */
@@ -164,7 +172,7 @@ namespace PMCTripwireSmoke
 	}
 
 	/** A PMC wire as a level designer places it: actor at Centre, anchors 1.5 m either side along R (the viewport handles). */
-	ATripwireActor* SpawnWire(UWorld* World, const FState& State, const FVector& Centre)
+	ATripwireActor* SpawnWire(UWorld* World, const FState& State, const FVector& Centre, bool bHidden = true)
 	{
 		const FTransform Transform(State.R.Rotation(), Centre + FVector(0.f, 0.f, 5.f));
 		APMCTripwireActor* Wire = World->SpawnActorDeferred<APMCTripwireActor>(APMCTripwireActor::StaticClass(), Transform, nullptr, nullptr,
@@ -173,6 +181,7 @@ namespace PMCTripwireSmoke
 		{
 			Wire->AnchorA = FVector(-150.f, 0.f, 0.f);
 			Wire->AnchorB = FVector(150.f, 0.f, 0.f);
+			Wire->bHiddenUntilSpotted = bHidden; // 2026-10-22: a wire placed visible (7d)
 			Wire->FinishSpawning(Transform);
 		}
 		return Wire;
@@ -842,6 +851,166 @@ namespace PMCTripwireSmoke
 				FString::Printf(TEXT("prone disarmer: disarmed, NO pickup clip (prone clip later; %d clips before, %d after)"), State.PickupsBeforeProne,
 					Anim ? Anim->GetInteractionClipLog().Num() : -1));
 			State.Engineer->SetStance(EOperativeStance::Standing);
+			State.Stage = 33;
+			State.Time = 0.f;
+			return true;
+		}
+		// --- 7c. 2026-10-22: a failed (warning) attempt, then a click right at the wire reopens the menu at once ---
+		case 33:
+		{
+			if (State.Time < 0.5f)
+			{
+				return true;
+			}
+			ParkSquad(Squad, State);
+			ATripwireActor* Wire = SpawnWire(World, State, State.Centre);
+			State.Wire = Wire;
+			AOperativeCharacter* Engineer = State.Engineer.Get();
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			if (!Wire || !Engineer || !PC)
+			{
+				Check(State, false, TEXT("retry: wire / engineer / controller"));
+				return Finish(State);
+			}
+			Wire->Reveal();
+			Wire->DefusalRollForTesting = 0.f; // a good roll: only the danger rule (80 % cold) makes the first attempt a warning
+			Wire->DefusalExplosionRollForTesting = 99.f;
+			State.Cold.Add(Engineer, 80.f);
+			Engineer->ColdLevel = 80.f;
+			Engineer->SetStance(EOperativeStance::Standing);
+			Place(Engineer, State.Centre - State.F * 350.f);
+			Squad->SetLeader(Engineer);
+			FHitResult GroundHit;
+			GroundHit.ImpactPoint = GroundHit.Location = State.Centre - State.F * 25.f + State.R * 40.f;
+			GroundHit.ImpactNormal = GroundHit.Normal = FVector::UpVector;
+			GroundHit.bBlockingHit = true;
+			PC->HandleWorldHit(GroundHit); // the real click: he walks up
+			State.Stage = 34;
+			State.Time = 0.f;
+			return true;
+		}
+		case 34:
+		{
+			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
+			ATripwireActor* Wire = State.Wire.Get();
+			if (!State.bRetryStep)
+			{
+				if (Wire && Interactions && !Interactions->IsActionMenuOpen() && State.Time < 10.f)
+				{
+					return true;
+				}
+				Check(State, Wire && Interactions && Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Wire,
+					TEXT("retry: the cold engineer walked up, the Disarm menu opened"));
+				if (Interactions && Interactions->IsActionMenuOpen())
+				{
+					Interactions->ConfirmActionMenu();
+				}
+				State.bRetryStep = true;
+				State.Time = 0.f;
+				return true;
+			}
+			if (Wire && (Wire->IsDisarming() || !Wire->bDefusalWarned) && State.Time < 8.f)
+			{
+				return true;
+			}
+			Check(State, Wire && Wire->IsArmed() && !Wire->IsTripped() && Wire->bDefusalWarned && !Wire->IsDisarming(),
+				FString::Printf(TEXT("retry: at 80 %% cold the first attempt only WARNS (%.1f s), the wire stays armed"), State.Time));
+			State.bRetryStep = false;
+			State.Stage = 35;
+			State.Time = 0.f;
+			return true;
+		}
+		case 35:
+		{
+			if (State.Time < 0.5f)
+			{
+				return true;
+			}
+			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
+			ATripwireActor* Wire = State.Wire.Get();
+			AOperativeCharacter* Engineer = State.Engineer.Get();
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			if (!Wire || !Engineer || !PC || !Interactions)
+			{
+				Check(State, false, TEXT("retry: wire / engineer / controller after the warning"));
+				return Finish(State);
+			}
+			const FVector Before = Engineer->GetActorLocation();
+			const FVector Focus = Wire->GetDisarmFocusPoint(Before);
+			// The cursor on the wire right in front of him lands on his own body (he crouches ~70 cm from it).
+			FHitResult BodyHit(Engineer, Engineer->GetCapsuleComponent(), Focus, FVector::UpVector);
+			BodyHit.bBlockingHit = true;
+			PC->HandleWorldHit(BodyHit);
+			Check(State, Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Wire && Squad->GetLeader() == Engineer,
+				TEXT("retry: a click on his own body over the wire reopens the Disarm menu at once (not a re-selection)"));
+			Interactions->CancelActionMenu();
+			// The wire itself under the cursor: it used to pick him by the 1.2 m select radius.
+			FHitResult WireHit(Wire, Wire->Box.Get(), Focus, FVector::UpVector);
+			WireHit.bBlockingHit = true;
+			PC->HandleWorldHit(WireHit);
+			Check(State, Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Wire,
+				TEXT("retry: a click on the wire next to him opens its menu (no walk away and back)"));
+			Check(State, FVector::Dist2D(Engineer->GetActorLocation(), Before) < 20.f,
+				FString::Printf(TEXT("retry: he did not have to move (%.0f cm)"), FVector::Dist2D(Engineer->GetActorLocation(), Before)));
+			// Warm again: the second attempt (warned already, a good roll) disarms it.
+			State.Cold.Remove(Engineer);
+			Engineer->ColdLevel = 0.f;
+			State.MedicGrenades = Engineer->GrenadesCount;
+			Interactions->ConfirmActionMenu();
+			Check(State, Wire->IsDisarming(), TEXT("retry: Disarm confirmed again - he works on it"));
+			State.Stage = 36;
+			State.Time = 0.f;
+			return true;
+		}
+		case 36:
+		{
+			if (State.Wire.IsValid() && State.Time < 9.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Engineer = State.Engineer.Get();
+			Check(State, !State.Wire.IsValid() && Engineer && Engineer->GrenadesCount == State.MedicGrenades + 2,
+				FString::Printf(TEXT("retry: the second attempt disarmed it (%.1f s, +%d grenades)"), State.Time, Engineer ? Engineer->GrenadesCount - State.MedicGrenades : -1));
+			Engineer->SetStance(EOperativeStance::Standing);
+			// --- 7d. a PMC wire placed VISIBLE: noticed like a hidden one ---
+			ParkSquad(Squad, State);
+			ATripwireActor* Visible = SpawnWire(World, State, State.Centre, /*bHidden*/ false);
+			State.Wire = Visible;
+			State.MedicGrenades = State.Probe->CountEvent(GameplayEvents::TripwireSpotted); // reused: the spot events so far
+			Check(State, Visible && Visible->IsSpotted() && IsClickable(Visible), TEXT("visible wire: drawn and clickable from the start"));
+			AOperativeCharacter* Medic = State.Medic.Get();
+			Medic->SetStance(EOperativeStance::Crouching);
+			Place(Medic, State.Centre - State.F * 520.f); // within her 6 m spot range of the wire line
+			State.Stage = 37;
+			State.Time = 0.f;
+			return true;
+		}
+		case 37:
+		{
+			const int32 Spotted = State.Probe->CountEvent(GameplayEvents::TripwireSpotted) - State.MedicGrenades;
+			if (!State.bRetryStep)
+			{
+				if (Spotted == 0 && State.Time < 3.f)
+				{
+					return true;
+				}
+				Check(State, Spotted == 1 && State.Probe->CountEvent(GameplayEvents::TripwireSpotted, State.Medic->GetFName()) >= 1,
+					FString::Printf(TEXT("visible wire: the crouched Medic-Sapper within 6 m NOTICES it - TripwireSpotted raised once (%d) - the tutorial's wire card"), Spotted));
+				State.bRetryStep = true;
+				State.Time = 0.f;
+				return true;
+			}
+			if (State.Time < 1.5f)
+			{
+				return true; // a second scan must not raise it again
+			}
+			State.bRetryStep = false;
+			Check(State, State.Probe->CountEvent(GameplayEvents::TripwireSpotted) - State.MedicGrenades == 1, TEXT("visible wire: noticed only once"));
+			if (ATripwireActor* Visible = State.Wire.Get())
+			{
+				Visible->Destroy();
+			}
+			State.Medic->SetStance(EOperativeStance::Standing);
 			State.Stage = 25;
 			State.Time = 0.f;
 			return true;

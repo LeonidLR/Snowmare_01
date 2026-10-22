@@ -84,8 +84,9 @@ bool FTutorialAmbushPostureSchemaTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("%s: a card with the three posture keys"), Id), Card->Kind == ETutorialStepKind::HintCard
 			&& Card->Keys.Contains(PlayerCommands::PosturePassive.ToString()) && Card->Keys.Contains(PlayerCommands::PostureDefensive.ToString())
 			&& Card->Keys.Contains(PlayerCommands::PostureAggressive.ToString()));
-		TestTrue(FString::Printf(TEXT("%s: unlocks Posture.*, done on Posture.Passive, never precredited"), Id), Card->Unlock.Contains(TEXT("Posture.*"))
-			&& Card->Complete.Commands.Contains(PlayerCommands::PosturePassive.ToString()) && !Card->bPrecredit);
+		// 2026-10-22 (game designer): the squad goes DEFENSIVE, not PASSIVE.
+		TestTrue(FString::Printf(TEXT("%s: unlocks Posture.*, done on Posture.Defensive (only), never precredited"), Id), Card->Unlock.Contains(TEXT("Posture.*"))
+			&& Card->Complete.Commands.Num() == 1 && Card->Complete.Commands.Contains(PlayerCommands::PostureDefensive.ToString()) && !Card->bPrecredit);
 	}
 	const FTutorialStep* A3Card = Data.FindStep(TEXT("A3_posture"));
 	TestTrue(TEXT("A3_posture: beat-less (never dropped by the overlook), after the wire lesson, requires the cover field"), A3Card && A3Card->Beat.IsNone()
@@ -95,7 +96,7 @@ bool FTutorialAmbushPostureSchemaTest::RunTest(const FString&)
 	TestTrue(TEXT("A4_posture: the overlook twin, cancelled by the A3 card"), A4Card && A4Card->Beat == FName(TEXT("A4"))
 		&& A4Card->Trigger.Type == ETutorialTriggerType::BeatStart && A4Card->CancelOn.Steps.Contains(TEXT("A3_posture")));
 	const FTutorialStep* Radio = Data.FindStep(TEXT("A3_posture_radio"));
-	TestTrue(TEXT("the Commander's 'Hold your fire' radio"), Radio && Radio->Kind == ETutorialStepKind::Radio && Radio->Lines.Num() == 1
+	TestTrue(TEXT("the Commander's 'nobody shoots first' radio"), Radio && Radio->Kind == ETutorialStepKind::Radio && Radio->Lines.Num() == 1
 		&& Radio->Lines[0].Speaker == TEXT("Commander") && Radio->Lines[0].TextId == FName(TEXT("WT_A3_POSTURE")));
 
 	// The action is validated.
@@ -137,10 +138,10 @@ bool FTutorialAmbushPostureAfterDisarmTest::RunTest(const FString&)
 	Settle(Machine);
 	TestEqual(TEXT("A4 start: the A3 posture card is NOT dropped"), Machine.GetState(TEXT("A3_posture")), ETutorialStepState::Active);
 	TestNotEqual(TEXT("... its A4 twin is not shown"), Machine.GetState(TEXT("A4_posture")), ETutorialStepState::Active);
-	Machine.HandleCommand(PlayerCommands::PostureDefensive);
-	TestEqual(TEXT("Defensive is not what it asks for"), Machine.GetState(TEXT("A3_posture")), ETutorialStepState::Active);
 	Machine.HandleCommand(PlayerCommands::PosturePassive);
-	TestEqual(TEXT("Posture.Passive completes it"), Machine.GetState(TEXT("A3_posture")), ETutorialStepState::Completed);
+	TestEqual(TEXT("2026-10-22: Passive is not what it asks for any more"), Machine.GetState(TEXT("A3_posture")), ETutorialStepState::Active);
+	Machine.HandleCommand(PlayerCommands::PostureDefensive);
+	TestEqual(TEXT("Posture.Defensive completes it"), Machine.GetState(TEXT("A3_posture")), ETutorialStepState::Completed);
 	Settle(Machine);
 	TestEqual(TEXT("the A4 twin is cancelled (never shown)"), Machine.GetState(TEXT("A4_posture")), ETutorialStepState::Skipped);
 	// The radio lines are played by the runtime (here: finished by hand) - the twin radio is dropped when they are done.
@@ -171,8 +172,8 @@ bool FTutorialAmbushPostureFallbackTest::RunTest(const FString&)
 	TestEqual(TEXT("then the posture card at the overlook"), Machine.GetState(TEXT("A4_posture")), ETutorialStepState::Active);
 	TestTrue(TEXT("it unlocks , . /"), PostureFree(Machine));
 	TestNotEqual(TEXT("the tripwire card waits behind it"), Machine.GetState(TEXT("A4_tripwire")), ETutorialStepState::Active);
-	Machine.HandleCommand(PlayerCommands::PosturePassive);
-	TestEqual(TEXT("done on Posture.Passive"), Machine.GetState(TEXT("A4_posture")), ETutorialStepState::Completed);
+	Machine.HandleCommand(PlayerCommands::PostureDefensive);
+	TestEqual(TEXT("done on Posture.Defensive"), Machine.GetState(TEXT("A4_posture")), ETutorialStepState::Completed);
 	Settle(Machine);
 	TestEqual(TEXT("the tripwire card follows"), Machine.GetState(TEXT("A4_tripwire")), ETutorialStepState::Active);
 	// The wire spotted later after all: no second posture lesson.
@@ -308,7 +309,7 @@ namespace TutorialAmbushTestData
 		Settle(Machine);
 		Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
 		Settle(Machine);
-		Machine.HandleCommand(PlayerCommands::PosturePassive); // the overlook posture card (no wire in this run)
+		Machine.HandleCommand(PlayerCommands::PostureDefensive); // the overlook posture card (no wire in this run)
 		Settle(Machine);
 		Machine.HandleCommand(PlayerCommands::DeployTripwire);
 		Settle(Machine);
@@ -333,7 +334,7 @@ bool FTutorialAmbushLureFlowTest::RunTest(const FString&)
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
 	Settle(Machine);
-	Machine.HandleCommand(PlayerCommands::PosturePassive); // the overlook posture card (no wire in this run)
+	Machine.HandleCommand(PlayerCommands::PostureDefensive); // the overlook posture card (no wire in this run)
 	Settle(Machine);
 	TestEqual(TEXT("the tripwire card"), Machine.GetState(TEXT("A4_tripwire")), ETutorialStepState::Active);
 	TestTrue(TEXT("the lure is locked before its lesson"), Machine.IsCommandLocked(PlayerCommands::StealthWhistle) && Machine.IsCommandLocked(PlayerCommands::StealthThrow));
@@ -659,7 +660,7 @@ bool FTutorialAmbushOneOperativeTest::RunTest(const FString&)
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
 	Settle(Machine);
-	Machine.HandleCommand(PlayerCommands::PosturePassive);
+	Machine.HandleCommand(PlayerCommands::PostureDefensive);
 	Settle(Machine);
 	FTutorialConfineView Held;
 	TestTrue(TEXT("the wire card holds the squad at the overlook, the Medic-Sapper free"), Machine.GetState(TEXT("A4_tripwire")) == ETutorialStepState::Active
@@ -736,7 +737,7 @@ bool FTutorialAmbushHiddenCardTest::RunTest(const FString&)
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
 	Settle(Machine);
-	Machine.HandleCommand(PlayerCommands::PosturePassive);
+	Machine.HandleCommand(PlayerCommands::PostureDefensive);
 	Settle(Machine);
 	TestEqual(TEXT("standing: no card"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Idle);
 	Unseen = 0.f;
@@ -774,9 +775,9 @@ bool FTutorialAmbushSpottedTest::RunTest(const FString&)
 		&& Card->Complete.Commands.Contains(PlayerCommands::PostureDefensive.ToString()) && Card->Complete.Commands.Contains(PlayerCommands::PostureAggressive.ToString())
 		&& Card->Conditions.Num() == 1 && Card->Conditions[0].Stat == FName(TEXT("squad_passive")) && Card->bOnce);
 	const FTutorialStep* Lure = Data.FindStep(TEXT("A4_lure"));
-	TestTrue(TEXT("the lure card sets the squad PASSIVE again"), Lure && Lure->Actions.ContainsByPredicate([](const FTutorialAction& Action)
+	TestTrue(TEXT("2026-10-22: the lure card keeps the squad DEFENSIVE (no longer PASSIVE)"), Lure && Lure->Actions.ContainsByPredicate([](const FTutorialAction& Action)
 	{
-		return Action.Type == FName(TEXT("set_posture")) && Action.Posture == TEXT("passive");
+		return Action.Type == FName(TEXT("set_posture")) && Action.Posture == TEXT("defensive");
 	}));
 	TestTrue(TEXT("known: action tactical_pause, stats squad_passive / in_fight"), TutorialRules::IsKnownAction(TEXT("tactical_pause"))
 		&& TutorialRules::IsKnownStat(TEXT("squad_passive")) && TutorialRules::IsKnownStat(TEXT("in_fight")));
@@ -800,7 +801,7 @@ bool FTutorialAmbushSpottedTest::RunTest(const FString&)
 		Settle(Machine);
 		Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
 		Settle(Machine);
-		Machine.HandleCommand(PlayerCommands::PosturePassive);
+		Machine.HandleCommand(PlayerCommands::PostureDefensive);
 		Settle(Machine);
 		TestEqual(TEXT("the wire card"), Machine.GetState(TEXT("A4_tripwire")), ETutorialStepState::Active);
 		Machine.HandleEvent(GameplayEvents::EnemyAlerted, TEXT("Engineer"));

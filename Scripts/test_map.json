@@ -31,7 +31,7 @@
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
-    "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke",
+    "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke"
   ],
   "smokeDefaults": {
@@ -65,6 +65,7 @@
     "TutorialAmbushLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A4 ambush in two parts on the lake layout (the placed zombies walk their routes: a loop into the wire, a whistle)" },
     "TutorialAmbushLakeSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 1 fails: spotted -> pause + posture card, a skirmish, back to exploring" },
     "TutorialAmbushLakeLureSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 2 fails: spotted at the wall -> pause + posture card, a skirmish, back to exploring" },
+    "TutorialAmbushLakeEarlyKillSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-22: the first PMC wire -> the tripwire card; both A4 zombies killed early -> every bound step closes (no stale target); A7 -> PREPARE THE GROUND" },
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" },
     "VisionConeSmoke": { "map": "/Game/Maps/L_PatrolTest" },
@@ -123,7 +124,7 @@
       "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
         "Source/**/Debug/TutorialSmoke*", "Source/**/Debug/TutorialAmbushLake*", "Content/Data/Tutorial/**"],
       "tests": ["CodexTactics.Tutorial", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke", "PeekMinesSmoke", "LakeQuestSmoke"]
+      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke", "PeekMinesSmoke", "LakeQuestSmoke"]
     },
     {
       "name": "sniper",
