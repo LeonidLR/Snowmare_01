@@ -118,7 +118,7 @@ the Blizzard camera zone); phase Night 1.3, EarlyMorning 1.15, Midday 0.9, After
    `IsLandScapeBlend` / `CanAnimateSnowCoverage`) driven by the MPC scalar `SnowAmount` (old: `SnowCoverageAnimationTimeline`,
    `S_SnowyWeatherSettings.FullSnowCoverageTime` / `ShouldAnimateSnowCoverageInRuntime`). New: `SnowAmount` becomes AUTHORITATIVE STATE in
    `UEnvironmentSubsystem` (saved + carried to the next level, deterministic): it accumulates while it snows (Snowfall, Blizzard faster), holds
-   under Overcast and recedes slowly under Clear (rates in `environment.json`, OPEN: whether it ever recedes), and the presenter only writes it
+   under Overcast and Clear - it NEVER recedes (user decision 2026-10-22: «stops growing» in clear weather; rates in `environment.json`), and the presenter only writes it
    to `MPC_Environment` each tick. Wire `MF_SnowyWeatherBlend` into the project master materials (`M_Landscape_Master`, props / buildings,
    the characters' master, vehicles), with a per-material mask so roofs and the tops of objects whiten first and interiors / under cover
    stay clean; `FrostAmount` (Clear frost) uses the same chain with a frost texture. Tests: accumulation rules (pure), save / carry; smoke +
