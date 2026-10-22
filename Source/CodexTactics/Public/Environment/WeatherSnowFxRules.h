@@ -14,7 +14,7 @@ struct CODEXTACTICS_API FWeatherSnowFxTuning
 
 	/** Flakes per second at intensity 1 over the whole spawn volume of NS_Weather_Snow; scaled by intensity^SpawnRateExponent. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snow", meta = (ClampMin = "0"))
-	float SpawnRateAtFull = 24000.f;
+	float SpawnRateAtFull = 12000.f;
 
 	/** >1 keeps calm snowfall sparse and the blizzard dense (Snowfall 0.6 -> 0.36 of the blizzard rate at 2). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snow", meta = (ClampMin = "0.1"))

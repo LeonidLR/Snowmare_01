@@ -353,13 +353,31 @@ pieces with their own files; this part is the state, the save, the MPC and the w
   view focus (`ATacticalCameraPawn::GetViewCentre`, else a ground trace along the view) moved UPWIND by `UpwindOffsetAtFullWind x wind^2`
   (40 m in a blizzard: flakes cross the view instead of being born in it); intensity smoothed (0.35 / s up, 0.25 / s down), under 0.02 a soft
   `Deactivate` (the flakes in the air land); never loads / spawns without a renderer (`FApp::CanEverRender`); visuals off = immediate off + hidden.
-  Mapping in `WeatherSnowFxRules` (`FWeatherSnowFxTuning`, editable on the component): spawn rate 24000 x intensity^2 (Snowfall 0.6 -> 8640 / s,
-  Blizzard 24000 / s), opacity 0.7..1, drift from intensity 0.4 up to opacity 0.65, drift size 250..500. Tests `CodexTactics.Environment.SnowFx.*` (3).
+  Mapping in `WeatherSnowFxRules` (`FWeatherSnowFxTuning`, editable on the component): spawn rate 12000 x intensity^2 (Snowfall 0.6 -> 4320 / s,
+  Blizzard 12000 / s; was 24000 until the cost measurement below), opacity 0.7..1, drift from intensity 0.4 up to opacity 0.65, drift size 250..500. Tests `CodexTactics.Environment.SnowFx.*` (3).
 - Stills / clips: `CodexTactics.EnvironmentShots snow` (`Saved/Screenshots/Environment/snow/`, the lake: Snowfall 12:00, Blizzard 12:00 + 40 m,
   Snowfall 23:00, Clear 12:00 off; 10 s clips per snowing weather, 15 fps).
 - Tune by hand (NS_Weather_Snow / MI_Weather_Snowflake): flake size / life, cylinder radius / height (keep `UpwindOffsetAtFullWind` in step),
   the `Multiply_Float001.B` wind speed constants, the drift spawn rate, MI `NearFadeStart` / `NearFadeLength` / `Softness` / `Brightness`;
-  density per weather on the presenter's `SnowFx` component (`Tuning`). GPU cost: up to ~180k flakes alive in a blizzard (24000 / s x 7.5 s).
+  density per weather on the presenter's `SnowFx` component (`Tuning`). GPU cost: up to ~90k flakes alive in a blizzard (12000 / s x 7.5 s), see Cost.
+
+- Cost (2026-10-22, `CodexTactics.EnvironmentShots snowperf`, 1920x1080 offscreen, -fps=60, ~3 s average after a 9 s settle; GPU ms from the RHI, stills in
+  `Saved/Screenshots/Environment/snowperf/<map>_<snowfall|blizzard|off>[_far].png`, the 24000 / s stills in `snowperf/before/`). "off" = Blizzard weather with the
+  snow Niagara system hidden (isolates the FX). Camera 26 m = the default tactical distance, 40 m = max zoom. Noise about +-0.2 ms.
+
+  | Scene | Camera | off | Snowfall 24k / 12k | Blizzard 24k / 12k | Blizzard delta 24k / 12k |
+  |---|---|---|---|---|---|
+  | Frozen Lake (A) | 26 m | 6.86 / 6.68 | 6.95 / 6.90 | 7.15 / 7.04 | +0.29 / +0.36 |
+  | Frozen Lake (A) | 40 m | 7.38 / 7.39 | 8.17 / 7.99 | 8.03 / 7.69 | +0.65 / +0.30 |
+  | L_MovementTest wave 2 (57 enemies) | 26 m | 6.35 / 6.28 | 6.56 / 6.47 | 7.04 / 6.55 | +0.69 / +0.27 |
+  | L_MovementTest wave 2 (57 enemies) | 40 m | 6.23 / 6.50 | 7.80 / 7.26 | 7.37 / 7.04 | +1.14 / +0.54 |
+  | Frozen Factory (B, level 0.1) | 26 m | 7.47 / 7.38 | 7.61 / 7.53 | 7.99 / 7.56 | +0.52 / +0.18 |
+  | Frozen Factory (B, level 0.1) | 40 m | 7.72 / 7.52 | 9.14 / 8.67 | 8.87 / 8.30 | +1.15 / +0.78 |
+
+  Render / game thread and draws are unchanged by the snow (+-2 draws: the flakes + drift emitters; game thread 3-4 ms on the levels, 13-14 ms in the wave).
+  The budget is <= ~0.8 ms GPU in a blizzard at 1080p: at 24000 / s the max zoom exceeded it (+1.1 ms on the factory and the wave), so `SpawnRateAtFull` went to
+  12000 (about 90k flakes alive; Snowfall 4320 / s, the ratio Blizzard : Snowfall stays 2.8 : 1, the stills show the blizzard clearly heavier). Re-measure after
+  touching the spawn rate, flake size / life or the MI.
 
 ### 12.c Snow overlay on world meshes and the campaign restart rule (2026-10-22)
 

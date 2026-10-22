@@ -20,6 +20,10 @@
 // UI removed); timelapse_<map>/frame_NNNN.png at 10 fps (encode: ffmpeg -y -framerate 10 -i frame_%04d.png -vf scale=960:-2 -c:v libx264
 // -pix_fmt yuv420p -crf 26 out.mp4).
 //
+// Mode "snowperf" (falling snow cost): -ExecCmds="CodexTactics.EnvironmentShots snowperf" -> log lines "[SnowFxPerf]" (GPU / render / game ms, draws)
+// and stills Saved/Screenshots/Environment/snowperf/<map>_<state>[_far].png for snow FX off / Snowfall / Blizzard at the default and the max zoom
+// (MovementTest: wave 2 is started first).
+//
 // Mode "snowcover" (environment phase 4c, the gradual snow cover overlay - docs/systems/environment-weather.md section 12):
 //   -ExecCmds="CodexTactics.EnvironmentShots snowcover [nomovie] [noperf]"   on the map it was started on (the lake: add -LevelJson=...)
 // Output (Saved/Screenshots/Environment/snowcover/): <map>_snow_000 / _035 / _070 / _100.png - Clear 12:00, a wide shot over the biggest
@@ -1159,6 +1163,213 @@ namespace EnvironmentShots
 		}
 	}
 
+	// --- Mode "snowperf": GPU / frame cost of the falling snow (NS_Weather_Snow) off vs Snowfall vs Blizzard ---
+
+	namespace SnowPerf
+	{
+		constexpr int32 WarmupFrames = 150;
+		constexpr int32 SettleFrames = 540;      // 9 s at -fps=60: the smoothed intensity rises and the flakes fill the view volume (7.5 s life)
+		constexpr int32 MeasureFrames = 180;     // ~3 s at -fps=60
+		constexpr int32 PerfMaxFrames = 24000;
+		constexpr int32 WaveIndex = 2;
+
+		struct FCase
+		{
+			const TCHAR* Name;
+			EWeatherState Weather;
+			bool bFx;
+		};
+
+		// "off" keeps the Blizzard weather (sky / fog / post) and only hides the Niagara system, so the A/B isolates the snow FX.
+		const FCase Cases[] = {
+			{ TEXT("snowfall"), EWeatherState::Snowfall, true }, { TEXT("blizzard"), EWeatherState::Blizzard, true }, { TEXT("off"), EWeatherState::Blizzard, false },
+		};
+		const float Distances[] = { Snow::ViewDistance, Snow::FarDistance };
+
+		enum class EStep : uint8 { Warmup, Setup, Settle, Measure, Write, Done };
+
+		struct FSample
+		{
+			double Gpu = 0.0;
+			double Render = 0.0;
+			double Game = 0.0;
+			double Draws = 0.0;
+			double Prims = 0.0;
+			int32 Count = 0;
+		};
+
+		struct FPerfRunner
+		{
+			EStep Step = EStep::Warmup;
+			int32 Frame = 0;
+			int32 StepFrame = 0;
+			int32 Index = 0; // distance-major: Index / Cases.Num = distance, Index % Cases.Num = case
+			bool bWave = false;
+			FString MapName;
+			FString Dir;
+			FSample Sample;
+			TArray<FString> Report;
+			FDelegateHandle EndFrameHandle;
+		};
+
+		TSharedPtr<FPerfRunner> PRunner;
+
+		void Finish()
+		{
+			for (const FString& Line : PRunner->Report)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[SnowFxPerf] %s"), *Line);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots snowperf: done -> %s"), *PRunner->Dir);
+			FCoreDelegates::OnEndFrame.Remove(PRunner->EndFrameHandle);
+			UDebugDrawService::Unregister(Runner->DrawHandle);
+			FPlatformMisc::RequestExit(false, TEXT("EnvironmentShots"));
+		}
+
+		void Tick()
+		{
+			FPerfRunner& S = *PRunner;
+			++S.Frame;
+			++S.StepFrame;
+			UWorld* World = FrontendSmokeUtils::FindGameWorld();
+			if (S.Frame > PerfMaxFrames)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots snowperf: timeout in step %d"), static_cast<int32>(S.Step));
+				Finish();
+				return;
+			}
+			UEnvironmentSubsystem* Environment = World ? UEnvironmentSubsystem::Get(World) : nullptr;
+			USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+			if (!World || !Environment || !Environment->IsInitialised() || !Squad || !Squad->GetLeader())
+			{
+				return;
+			}
+			Runner->World = World;
+			KeepSquadSafe(World);
+			UWidgetLayoutLibrary::RemoveAllWidgets(World);
+			AWeatherPresenterActor* Presenter = AWeatherPresenterActor::Find(World);
+			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+			const int32 CaseCount = static_cast<int32>(UE_ARRAY_COUNT(Cases));
+			const FCase& Case = Cases[S.Index % CaseCount];
+			const float Distance = Distances[FMath::Min(S.Index / CaseCount, static_cast<int32>(UE_ARRAY_COUNT(Distances)) - 1)];
+
+			switch (S.Step)
+			{
+			case EStep::Warmup:
+				if (S.StepFrame >= WarmupFrames && Presenter && Presenter->IsApplying() && Snow::ShadersPending() == 0)
+				{
+					S.MapName = World->GetMapName();
+					S.MapName.RemoveFromStart(World->StreamingLevelsPrefix);
+					if (S.MapName.Contains(TEXT("MovementTest")))
+					{
+						SmokeUtils::PlaceSquadAtTestStart(World);
+					}
+					if (const APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+					{
+						Snow::FxRunner->ViewYaw = PC->PlayerCameraManager ? PC->PlayerCameraManager->GetCameraRotation().Yaw : Snow::FxRunner->ViewYaw;
+					}
+					if (S.MapName.Contains(TEXT("MovementTest")) && Waves)
+					{
+						SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f);
+						Waves->ClearAllEnemies();
+						Waves->StartWave(WaveIndex);
+						S.bWave = true;
+						S.MapName += FString::Printf(TEXT("_wave%d"), WaveIndex);
+						UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots snowperf: wave %d started (%d alive)"), WaveIndex, Waves->GetAliveEnemyCount());
+					}
+					Environment->SetClockScale(0.f);
+					Environment->SetHour(12.f);
+					S.Step = EStep::Setup;
+					S.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Setup:
+				Environment->ForceWeather(Case.Weather, true);
+				Environment->SetHour(12.f);
+				if (UWeatherSnowFxComponent* SnowFx = Presenter ? Presenter->GetSnowFx() : nullptr)
+				{
+					SnowFx->SetVisualsEnabled(Case.bFx);
+				}
+				Snow::ViewSquad(World, Distance);
+				S.Sample = FSample();
+				S.Step = EStep::Settle;
+				S.StepFrame = 0;
+				break;
+
+			case EStep::Settle:
+				Snow::ViewSquad(World, Distance);
+				// The settle time counts once the snow runs (the first use loads and compiles NS_Weather_Snow in an editor build).
+				if (Case.bFx && !Snow::IsSnowFxActive(Presenter) && S.StepFrame < SettleFrames * 4)
+				{
+					S.StepFrame = FMath::Min(S.StepFrame, 1);
+				}
+				if (S.StepFrame >= SettleFrames && Snow::ShadersPending() == 0)
+				{
+					S.Step = EStep::Measure;
+					S.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Measure:
+			{
+				Snow::ViewSquad(World, Distance);
+				FSample& Sample = S.Sample;
+				Sample.Gpu += FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles(0));
+				Sample.Render += FPlatformTime::ToMilliseconds(GRenderThreadTime);
+				Sample.Game += FPlatformTime::ToMilliseconds(GGameThreadTime);
+				Sample.Draws += GNumDrawCallsRHI[0];
+				Sample.Prims += GNumPrimitivesDrawnRHI[0];
+				++Sample.Count;
+				if (S.StepFrame >= MeasureFrames)
+				{
+					const double N = FMath::Max(Sample.Count, 1);
+					const FString Tag = FString::Printf(TEXT("%s%s"), Case.Name, Distance > Snow::ViewDistance ? TEXT("_far") : TEXT(""));
+					const FString Alive = S.bWave && Waves ? FString::Printf(TEXT(", %d enemies alive"), Waves->GetAliveEnemyCount()) : FString();
+					S.Report.Add(FString::Printf(TEXT("%s | %s | camera %.0f m | GPU %.2f ms | render %.2f ms | game %.2f ms | draws %.0f | prims %.0f%s"), *S.MapName, Case.Name,
+						Distance / 100.f, Sample.Gpu / N, Sample.Render / N, Sample.Game / N, Sample.Draws / N, Sample.Prims / N, *Alive));
+					Capture(S.Dir / FString::Printf(TEXT("%s_%s.png"), *S.MapName, *Tag));
+					S.Step = EStep::Write;
+					S.StepFrame = 0;
+				}
+				break;
+			}
+
+			case EStep::Write:
+				Snow::ViewSquad(World, Distance);
+				if (S.StepFrame >= 10)
+				{
+					++S.Index;
+					S.Step = S.Index < CaseCount * static_cast<int32>(UE_ARRAY_COUNT(Distances)) ? EStep::Setup : EStep::Done;
+					S.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Done:
+				if (S.StepFrame >= 10)
+				{
+					Finish();
+				}
+				break;
+			}
+		}
+
+		void Run()
+		{
+			Runner = MakeShared<FRunner>();
+			Snow::FxRunner = MakeShared<Snow::FSnowFxRunner>();
+			PRunner = MakeShared<FPerfRunner>();
+			PRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / TEXT("snowperf"));
+			FPaths::CollapseRelativeDirectories(PRunner->Dir);
+			IFileManager::Get().MakeDirectory(*PRunner->Dir, true);
+			Runner->Dir = PRunner->Dir;
+			Runner->DrawHandle = UDebugDrawService::Register(TEXT("Game"), FDebugDrawDelegate::CreateStatic(&OnDraw));
+			PRunner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
+			UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots snowperf: %d cases x %d camera distances -> %s"), static_cast<int32>(UE_ARRAY_COUNT(Cases)),
+				static_cast<int32>(UE_ARRAY_COUNT(Distances)), *PRunner->Dir);
+		}
+	}
+
 	// --- Mode "snowcover": the gradual snow cover overlay (environment phase 4c) ---
 
 	namespace SnowCover
@@ -1642,6 +1853,11 @@ namespace EnvironmentShots
 			SnowCover::Run(Args);
 			return;
 		}
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("snowperf"), ESearchCase::IgnoreCase))
+		{
+			SnowPerf::Run();
+			return;
+		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("snow"), ESearchCase::IgnoreCase))
 		{
 			Snow::Run();
@@ -1664,7 +1880,7 @@ namespace EnvironmentShots
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.EnvironmentShots"),
-		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse]': the weather presenter stills (+ a day at x60) into Environment/visuals; 'snowcover [nomovie] [noperf]': the snow cover overlay stills, movie and perf A/B into Environment/snowcover; 'snow': the falling snow stills + 10 s clips into Environment/snow; needs rendering, then exits."),
+		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse]': the weather presenter stills (+ a day at x60) into Environment/visuals; 'snowcover [nomovie] [noperf]': the snow cover overlay stills, movie and perf A/B into Environment/snowcover; 'snowperf': the falling snow GPU cost off / Snowfall / Blizzard at 2 camera distances into Environment/snowperf; 'snow': the falling snow stills + 10 s clips into Environment/snow; needs rendering, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
