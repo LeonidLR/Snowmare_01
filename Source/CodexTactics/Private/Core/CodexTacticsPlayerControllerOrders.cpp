@@ -260,6 +260,22 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		return;
 	}
 
+	// Game designer 2026-10-22 ("a failed defuse - clicking the mine again does nothing, I have to walk away and come back"): he works
+	// ~60 cm from the charge, so the click on the mine / wire in front of him hits his own body or picks him by the select radius. A click
+	// at a live trap he stands at (not picking another operative) is the trap: the disarm menu reopens at once.
+	if (!Cast<AInteractableActor>(Hit.GetActor()) && !IsAttackModifierDown())
+	{
+		const AOperativeCharacter* Picked = FindClickedMember(Hit);
+		if (UInteractionSubsystem* RetryInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>(); RetryInteractions && (!Picked || Picked == Leader))
+		{
+			if (AInteractableActor* Trap = RetryInteractions->FindRetryTrapAt(Hit.ImpactPoint, *Leader, Picked && Picked != Leader))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Click at %s, who stands at it: taken as a click on the trap (retry)"), *Trap->GetName());
+				Hit = FHitResult(Trap, Trap->Box.Get(), Hit.ImpactPoint, Hit.ImpactNormal);
+			}
+		}
+	}
+
 	// Action bar "MOVE": the clicked object is picked up for relocation.
 	if (bRelocateSelectMode)
 	{

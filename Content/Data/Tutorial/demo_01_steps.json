@@ -525,7 +525,8 @@
     },
     {
       "_comment": "Rev 5e (user bug 2026-10-14: 'the tripwire cannot be disarmed'): the disarm stayed LOCKED until the wire card SHOWED, and the card queued behind the cover / peek / mine cards of the field for minutes (the 'Not yet' line comes once per family: later refusals were silent). Now beat A3 (VOL_A3_APPROACH) unlocks Trap.DisarmMine / Trap.DisarmTripwire / Attack.TargetedShot, and a feed line says how at the moment a wire / mine is spotted (a feed never waits for a slot). The cards stay as the longer explanation. Rev 5h: a spotted trap switches the squad to Solo, so these lines also free Squad.Solo / Squad.Regroup (B) in case a trap is met before the hut lesson.",
-      "id": "A3_wire_spotted", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_WIRE_SPOTTED",
+      "_comment2": "2026-10-22 (game designer play-test: 'a tripwire between two buildings - no explanation, we walked on'): BEAT-LESS (any PMC wire the squad meets first, in any beat - a beat A3 step would also START A3 when the wire is met earlier). A wire placed VISIBLE in the map (Hidden Until Spotted off) raises TripwireSpotted too, the first time an operative comes within its spot range (ATripwireActor::RevealBy).",
+      "id": "A3_wire_spotted", "kind": "feed", "text_id": "TUT_A3_WIRE_SPOTTED",
       "unlock": ["Trap.DisarmTripwire", "Squad.Solo", "Squad.Regroup"],
       "trigger": { "type": "event", "event": "TripwireSpotted" },
       "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A3_WIRE_SPOTTED" } ]
@@ -537,15 +538,18 @@
       "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A3_MINE_SPOTTED" } ]
     },
     {
-      "id": "A3_wire", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_WIRE",
-      "keys": ["Stance.Prone", "Trap.DisarmTripwire"],
+      "_comment": "2026-10-22 (game designer play-test: the wire between two buildings got NO explanation): the card was PRECREDITED and never shown - it completed on Stance.Prone, and the A3 fence crawl had already put Stance.Prone into the command history. Now: BEAT-LESS (the first PMC wire met in any beat), never precredited, done when a wire is disarmed (or the disarm is ordered), else after 45 s (gone round / crawled under). Explains what it is (two grenades at shin height), going round, the disarm (click it; crouched work; the Medic-Sapper is best; in cover he steps out by himself) and the crawl under it.",
+      "id": "A3_wire", "kind": "hint_card", "text_id": "TUT_A3_WIRE",
+      "keys": ["Trap.DisarmTripwire", "Stance.Prone"],
       "unlock": ["Trap.DisarmTripwire", "Stance.*"],
+      "precredit": false,
       "trigger": { "type": "event", "event": "TripwireSpotted" },
-      "complete": { "commands": ["Trap.DisarmTripwire", "Stance.Prone", "Stance.Squad.Prone"], "timeout_s": 40 }
+      "complete": { "commands": ["Trap.DisarmTripwire"], "event": "TripwireDisarmed", "timeout_s": 45 }
     },
 
     {
-      "_comment": "2026-10-19 (game designer play-test): THE POSTURE LESSON right after the trap disarm lesson (A3_wire finished - disarmed, prone, timed out or skipped): the Commander's radio 'Hold your fire' + the card with the three postures and their keys; it unlocks Posture.* (locked since A0) and completes on Posture.Passive (, or Alt + ,) - the stealth part of the complex. BEAT-LESS on purpose: a later beat never drops it (the overlook is only 13 m past the wire). 'requires' A3_cover: a wire spotted before the cover field (the player wandered off) does not arm it. Its A4 twins (A4_posture_radio / A4_posture) teach it at the overlook when the wire was never spotted; whichever pair finishes first cancels the other (cancel_on both ways).",
+      "_comment2": "2026-10-22 (game designer play-test: 'the tutorial keeps telling me to go PASSIVE before we even reach the zombies'): the squad goes DEFENSIVE instead - it never shoots first (no fire on an enemy that has not spotted it: FirePostureRules::MayAutoFireInExploration / MayAutoFireAt), so the stealth approach and the lure still work, but it returns fire when attacked. The card completes on Posture.Defensive (. or Alt + .); the radio says 'nobody shoots first'.",
+      "_comment": "2026-10-19 (game designer play-test): THE POSTURE LESSON right after the trap disarm lesson (A3_wire finished - disarmed, timed out or skipped): the Commander's radio + the card with the three postures and their keys; it unlocks Posture.* (locked since A0) and completes on Posture.Defensive since 2026-10-22 (was Posture.Passive) - the stealth part of the complex. BEAT-LESS on purpose: a later beat never drops it (the overlook is only 13 m past the wire). 'requires' A3_cover: a wire spotted before the cover field (the player wandered off) does not arm it. Its A4 twins (A4_posture_radio / A4_posture) teach it at the overlook when the wire was never spotted; whichever pair finishes first cancels the other (cancel_on both ways).",
       "id": "A3_posture_radio", "kind": "radio",
       "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 0.5 },
       "cancel_on": { "step": "A4_posture_radio" },
@@ -558,7 +562,7 @@
       "precredit": false,
       "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 0.5 },
       "cancel_on": { "step": "A4_posture" },
-      "complete": { "commands": ["Posture.Passive"] }
+      "complete": { "commands": ["Posture.Defensive"] }
     },
 
     {
@@ -592,7 +596,7 @@
       "precredit": false,
       "trigger": { "type": "beat_start", "delay_s": 1 },
       "cancel_on": { "step": "A3_posture" },
-      "complete": { "commands": ["Posture.Passive"] }
+      "complete": { "commands": ["Posture.Defensive"] }
     },
     {
       "_comment": "PART 1 - THE TRIPWIRE (2026-10-21: bound to the zombie on the loop round the NEAR container, A4_PERIMETER). 2026-10-20 (game designer: 'two stay in place, one sets up the ambush'): done by ONE operative - the MEDIC-SAPPER (traps are her job; a fixed role reads clearer than 'whoever you select first', and the cards can name her; dead / missing: the leader). When the card is triggered the squad is STOPPED and held at the overlook ('confine' with 'free': 'focus': she alone may move anywhere; the others' orders outside are refused with 'Hold here - <Name> handles it.'); when it shows the squad switches to Solo with her selected ('solo_focus'). The hold ends when the lure (part 2) is heard (until A4_lure), when a fight starts, the tutorial is switched off / skipped. The current target is the nearest point of THAT zombie's loop ('@patrol_route.A4_PERIMETER': where the wire goes).",
@@ -604,7 +608,8 @@
       "action": { "type": "solo_focus" },
       "guide": "@patrol_route.A4_PERIMETER",
       "trigger": { "type": "after_step", "step": "A4_cones" },
-      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY" },
+      "_comment2": "2026-10-22 (game designer play-test, both A4 zombies dead and the wire card / its target still up): dropped once its zombie is dead, killed any way ('cancel_on' 'condition' all_dead.A4_PERIMETER; already dead when it becomes due: never shown).",
+      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY", "condition": { "stat": "all_dead.A4_PERIMETER", "at_least": 1 } },
       "confine": { "volume": "VOL_A4_OVERLOOK", "free": "focus", "until": "A4_lure", "stop": true },
       "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
     },
@@ -623,7 +628,7 @@
       "focus": "role:MedicSapper",
       "guide": "VOL_A4_OVERLOOK",
       "trigger": { "type": "after_step", "step": "A4_tripwire" },
-      "cancel_on": { "event": "EnemyKilled", "enemy": "A4_PERIMETER" },
+      "cancel_on": { "event": "EnemyKilled", "enemy": "A4_PERIMETER", "condition": { "stat": "all_dead.A4_PERIMETER", "at_least": 1 } },
       "complete": { "event": "TripwireTriggered.Enemy", "enemy": "A4_PERIMETER", "timeout_s": 240 }
     },
     {
@@ -636,9 +641,11 @@
       "id": "A4_spotted", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_SPOTTED",
       "keys": ["Posture.Defensive", "Posture.Aggressive", "Time.Pause"],
       "action": { "type": "tactical_pause" },
+      "precredit": false,
       "trigger": { "type": "event", "event": "EnemyAlerted", "enemy": "A4_ANY", "requires": ["A4_tripwire"] },
       "condition": { "stat": "squad_passive", "at_least": 1 },
-      "cancel_on": { "step": "A4_close_shot" },
+      "_comment2": "2026-10-22: with the DEFENSIVE posture lesson nobody is PASSIVE as a rule, so this card (and its lesson pause) only comes when the player chose PASSIVE himself - a DEFENSIVE squad fires back anyway. Dropped when both zombies are dead. Never precredited: the DEFENSIVE key of the posture lesson is in the command history.",
+      "cancel_on": { "step": "A4_close_shot", "condition": { "stat": "all_dead.A4_ANY", "at_least": 1 } },
       "complete": { "commands": ["Posture.Defensive", "Posture.Aggressive"], "condition": { "stat": "squad_passive", "below": 1 }, "timeout_s": 60 }
     },
     {
@@ -650,7 +657,7 @@
       "precredit": false,
       "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 0.5 },
       "condition": { "stat": "in_fight", "below": 1 },
-      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY" },
+      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY", "condition": { "stat": "all_dead.A4_LURE", "at_least": 1 } },
       "complete": { "event": "CoverEntered", "subject": "focus", "timeout_s": 90 }
     },
     {
@@ -661,21 +668,22 @@
       "precredit": false,
       "trigger": { "type": "after_step", "step": "A4_hug_wall", "delay_s": 0.5 },
       "condition": { "stat": "in_fight", "below": 1 },
-      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY" },
+      "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY", "condition": { "stat": "all_dead.A4_LURE", "at_least": 1 } },
       "complete": { "commands": ["Cover.Shimmy", "Cover.Corner", "Cover.Switch"], "event": "CornerReached", "subject": "focus", "timeout_s": 90 }
     },
     {
+      "_comment2": "2026-10-22: the lure card keeps the squad DEFENSIVE (was PASSIVE): a DEFENSIVE squad does not open fire on the zombie walking up to the noise while it has not spotted them (FirePostureRules), and fires back when it attacks. Part 2's steps (wall, corner, lure, close shot) are dropped once THAT zombie is dead, killed any way (cancel_on condition all_dead.A4_LURE).",
       "_comment": "PART 2 - THE LURE (2026-10-21: bound to the zombie by the FAR container, A4_LURE): she moves up to the lure spot ('@lure_spot.A4_LURE': 10 m short of his path, towards her) and whistles [5] (the noise at her: he comes to her) or throws a stone [6] (the noise where it lands: he goes there). Unlocks Stealth.* (locked since A0). Done when THAT zombie reacts to a lure - it heard it and investigates (StealthLure.Heard with 'enemy': 'A4_LURE'; the near zombie hearing it does not count; the lure needs exploration and an undetected squad). Never precredited, 180 s; killed before he was lured: the card is dropped.",
       "id": "A4_lure", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_LURE",
       "keys": ["Stealth.Whistle", "Stealth.Throw"],
       "focus": "role:MedicSapper",
       "guide": "@lure_spot.A4_LURE",
       "unlock": ["Stealth.*"],
-      "action": { "type": "set_posture", "posture": "passive" },
+      "action": { "type": "set_posture", "posture": "defensive" },
       "precredit": false,
       "trigger": { "type": "after_step", "step": "A4_round_corner", "delay_s": 0.5 },
       "condition": { "stat": "in_fight", "below": 1 },
-      "cancel_on": { "event": "Enemy*", "enemy": "A4_LURE" },
+      "cancel_on": { "event": "Enemy*", "enemy": "A4_LURE", "condition": { "stat": "all_dead.A4_LURE", "at_least": 1 } },
       "complete": { "event": "StealthLure.Heard", "enemy": "A4_LURE", "timeout_s": 180 }
     },
     {
@@ -686,13 +694,15 @@
       "precredit": false,
       "guide": "@enemy.A4_LURE",
       "trigger": { "type": "event", "event": "StealthLure.Heard", "enemy": "A4_LURE", "requires": ["A4_lure"] },
-      "cancel_on": { "step": "A4_close_shot_far" },
+      "cancel_on": { "step": "A4_close_shot_far", "condition": { "stat": "all_dead.A4_LURE", "at_least": 1 } },
       "complete": { "event": "EnemyKilled.Squad", "enemy": "A4_LURE", "within_m": 10, "off_route_m": 4, "timeout_s": 120 }
     },
     {
       "_comment": "2026-10-21: the far zombie died, but not by a close shot in the open (shot from far away, on his beat, by a trap): one feed line, and the close-shot card is dropped. In the good case EnemyKilled.Squad completes the card first (the game raises EnemyKilled.<Kind> before EnemyKilled) and this line is cancelled.",
       "id": "A4_close_shot_far", "beat": "A4", "kind": "feed", "text_id": "TUT_A4_CLOSE_SHOT_FAR",
+      "_comment2": "2026-10-22: only when the lure lesson was ON SCREEN (stat step_shown.A4_lure): when both zombies die at once (a grenade, a skirmish), the part 2 chain is triggered and dropped silently - this line would wrongly say 'not up close'.",
       "trigger": { "type": "event", "event": "EnemyKilled", "enemy": "A4_LURE", "requires": ["A4_lure"] },
+      "condition": { "stat": "step_shown.A4_lure", "at_least": 1 },
       "cancel_on": { "step": "A4_close_shot" },
       "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A4_CLOSE_SHOT_FAR" } ]
     },
@@ -740,6 +750,14 @@
       "complete": { "event": "QuestStep.GatePowered", "timeout_s": 40 }
     },
     {
+      "_comment": "2026-10-22 (game designer play-test): the horde preparation names the traps - tripwires on the approaches (the Medic-Sapper, two grenades each), the PMC mines disarmed on the A3 field (deployable: they go into the kit) and the two spare barricades placed by the compound. The lake has NO loose mines lying around to pick up (TutorialAmbushLakeEarlyKillSmoke lists the level's traps); the EXPLORE_AND_COLLECT loadout starts the squad without mines. After the console card, only while the console is not powered yet; dropped when it is.",
+      "id": "A7_traps", "beat": "A7", "kind": "hint_card", "text_id": "TUT_A7_TRAPS", "keys": ["Inventory.Open", "Deploy.Start"], "precredit": false,
+      "trigger": { "type": "after_step", "step": "A7_prep", "delay_s": 0.5 },
+      "condition": { "stat": "quest_progress", "below": 4 },
+      "cancel_on": { "event": "QuestStep.GatePowered" },
+      "complete": { "commands": ["Deploy.Tripwire", "Deploy.Mine"], "timeout_s": 40 }
+    },
+    {
       "_comment": "Objective 4: power the blast door console by the gate (Marker_A7_obj_terminal) - when the defence is ready. Done on QuestStep.GatePowered (this also starts A8).",
       "id": "A7_obj_terminal", "beat": "A7", "kind": "objective", "text_id": "OBJ_A7_TERMINAL",
       "trigger": { "type": "after_step", "step": "A7_obj_generator", "delay_s": 0.5 },
@@ -752,6 +770,26 @@
       "lines": [ { "speaker": "HQ", "text_id": "WT_A8_01" }, { "speaker": "Commander", "text_id": "WT_A8_02" } ]
     },
 
+    {
+      "_comment": "2026-10-22 (game designer play-test: 'the tactical pause is not explained'): THE TACTICAL PAUSE LESSON in two cards, the first time the game goes into the tactical pause in any fight (BEAT-LESS: the horde's free pause at the console, the A4 lesson pause, Space) - event TacticalPauseStarted (UGameFlowSubsystem). Card 1: time stops, give each operative his order (they queue). Done after two orders in the pause (move / cover / shot / interact), else 40 s; dropped when the pause ends first (TacticalPauseEnded).",
+      "id": "X_pause", "kind": "hint_card", "text_id": "TUT_PAUSE_ORDERS",
+      "keys": ["Select.Member", "Order.Move", "Cover.Enter", "Attack.TargetedShot"],
+      "unlock": ["Time.*"],
+      "precredit": false,
+      "trigger": { "type": "event", "event": "TacticalPauseStarted", "delay_s": 0.3 },
+      "cancel_on": { "event": "TacticalPauseEnded" },
+      "complete": { "commands": ["Order.Move", "Order.Sprint", "Order.Interact", "Cover.Enter", "Attack.TargetedShot", "Attack.QuickFire", "Attack.Priority", "Grenade.Throw"],
+        "count": 2, "timeout_s": 40 }
+    },
+    {
+      "_comment": "Card 2: Space resumes - every queued order starts at once; the limits ({pause_charges} pauses per wave, {pause_seconds} s each, {pause_cooldown} s recharge, the horde's free pause, hold Space = turn-based). Only while the pause still holds (condition tactical_pause); done on the resume (Time.Resume / the pause ended any way), else 60 s.",
+      "id": "X_pause_resume", "kind": "hint_card", "text_id": "TUT_PAUSE_RESUME",
+      "keys": ["Time.Resume", "Time.TurnBased"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "X_pause", "delay_s": 0.5 },
+      "condition": { "stat": "tactical_pause", "at_least": 1 },
+      "complete": { "commands": ["Time.Resume", "Time.TurnBased"], "condition": { "stat": "tactical_pause", "below": 1 }, "timeout_s": 60 }
+    },
     {
       "_comment": "Rev 2026-10-19 (game designer play-test): the MEDKIT lesson the first time an operative is badly hurt - a mine / tripwire blast, frostbite, a lesson down (the guard leaves him at 1 HP). No beat: it can come in any beat (never dropped by a later beat), once. Trigger: the most wounded living member lost at least 30 % of his health = below 70 % (stat squad_injury_max, data). Focus = that operative (the {focus} name, a WOUNDED line over him). Unlocks what it teaches (the progressive locks must not block it). The real input: select him and press H (his own medkit), or the inventory [I] Medkit line; a mate's medkit: drag it onto him in the inventory (Item.Give), then H. Completes when a medkit heals THAT operative (ItemUsed.MEDKIT with him as the subject - H / the drawer line, or a mate's field aid). Every operative carries 1 medkit (BP default MedkitsCount, the level loadout does not change it; the hut crate holds none).",
       "id": "X_medkit", "kind": "hint_card", "text_id": "TUT_MEDKIT",

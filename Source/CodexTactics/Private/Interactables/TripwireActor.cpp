@@ -329,7 +329,9 @@ void ATripwireActor::RevealByPeek(AOperativeCharacter* Spotter)
 
 void ATripwireActor::RevealBy(AOperativeCharacter* Spotter, bool bByPeek)
 {
-	if (!IsConcealed())
+	// 2026-10-22 (game designer: "a wire between two buildings - no explanation, we walked on"): a PMC wire placed VISIBLE (Hidden Until
+	// Spotted off) is noticed the same way the first time an operative comes within the spot range - the squad holds, TripwireSpotted.
+	if (!IsHostile() || bSpotted)
 	{
 		return;
 	}
@@ -407,9 +409,9 @@ void ATripwireActor::Tick(float DeltaSeconds)
 		}
 		return;
 	}
-	if (IsConcealed())
+	if (IsHostile() && !bSpotted)
 	{
-		ScanForSpotters();
+		ScanForSpotters(); // hidden: reveals it; placed visible (2026-10-22): the squad notices it all the same
 	}
 	const FVector2D A(WireA.X, WireA.Y);
 	const FVector2D B(WireB.X, WireB.Y);

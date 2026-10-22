@@ -584,6 +584,12 @@ const TSet<FName>* FTutorialStateMachine::GetContributors(FName StepId) const
 
 float FTutorialStateMachine::ReadStat(FName Stat) const
 {
+	// 2026-10-22: "step_shown.<id>" is the machine's own: 1 once that step was on screen (a silently skipped one never was).
+	if (const FName Shown = TutorialRules::ParseStepShownStat(Stat); !Shown.IsNone())
+	{
+		const int32 ShownIndex = IndexOf(Shown);
+		return Runtime.IsValidIndex(ShownIndex) && Runtime[ShownIndex].bEverShown ? 1.f : 0.f;
+	}
 	return StatProvider ? StatProvider(Stat) : 0.f;
 }
 
@@ -673,6 +679,7 @@ void FTutorialStateMachine::SetState(int32 Index, ETutorialStepState NewState, b
 	Transition.ActiveSeconds = State.State == ETutorialStepState::Active ? State.StateSeconds : 0.f;
 	State.State = NewState;
 	State.StateSeconds = 0.f;
+	State.bEverShown |= NewState == ETutorialStepState::Active;
 }
 
 void FTutorialStateMachine::Fire(int32 Index, bool bForce)
@@ -773,7 +780,25 @@ bool FTutorialStateMachine::IsCancelDue(int32 Index) const
 			return true;
 		}
 	}
-	return false;
+	return IsCancelConditionMet(Index);
+}
+
+bool FTutorialStateMachine::IsCancelConditionMet(int32 Index) const
+{
+	const TArray<FTutorialCondition>& Clauses = Data.Steps[Index].CancelOn.Conditions;
+	return !Clauses.IsEmpty() && TutorialRules::IsConditionMet(Clauses, [this](FName Stat) { return ReadStat(Stat); });
+}
+
+void FTutorialStateMachine::PollCancelConditions()
+{
+	// 2026-10-22: "cancel_on": { "condition": ... } - the moment a lesson is about is gone (its zombie is dead): dropped at once.
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		if (TutorialRules::IsRunning(Runtime[Index].State) && IsCancelConditionMet(Index))
+		{
+			CancelStep(Index);
+		}
+	}
 }
 
 void FTutorialStateMachine::CancelStep(int32 Index)
@@ -1358,6 +1383,7 @@ void FTutorialStateMachine::Tick(float DeltaSeconds)
 		}
 	}
 	PollConditionTriggers();
+	PollCancelConditions();
 	PollConditionCompletions();
 	PollBeyond();
 	PumpQueues();

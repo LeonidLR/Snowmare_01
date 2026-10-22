@@ -79,6 +79,21 @@
   wire; a detonated mine) or its `bTrapped` changed since the window opened; Cancel always closes (it used to do nothing once the wire was gone).
   `OnActionMenuChanged(false)` is broadcast exactly once per window (the HUD hides `UActionMenuWidget`). A loot dialog whose crate was destroyed closes the same way.
 
+## Retry after a failed disarm; a visible PMC wire is noticed (game designer 2026-10-22)
+
+- **Retry at once:** after a warning / slip the operative still crouches ~60-70 cm from the charge / the wire, so the cursor on the trap landed on
+  his own body or picked him by the 1.2 m click-select radius (`ACodexTacticsPlayerController::FindClickedMember`): he was re-selected and the
+  player had to walk away and come back. Now (1) a click ON a world object never picks an operative by proximity (only a direct body hit), and
+  (2) `HandleWorldHit` takes a click at a live, known trap (`UsesDisarmApproach`, not awaiting its pickup) that the selected operative stands
+  at (`IsInInteractionReach`) as a click on that trap - his own body or the ground within `TrapApproachRules::RetryClickRadiusCm` (1.2 m) of the
+  charge / wire line, not another operative, not Ctrl (`TrapApproachRules::IsRetryClick`, `UInteractionSubsystem::FindRetryTrapAt`). Mines and
+  PMC wires alike; nothing else changed (the mine's defuser lease keeps it quiet, the warned / failed state stays on the object). Tests
+  `CodexTactics.Interactables.TrapApproach.RetryClick`; smokes `DeployableSmoke` (mine: warning -> body click and mine click reopen the menu, she
+  does not move, the second attempt disarms) and `PMCTripwireSmoke` stage 7c (the same for a wire).
+- **A PMC wire placed visible** (`bHiddenUntilSpotted` off) used to raise nothing - no hold, no `TripwireSpotted`, no tutorial card. Now it is
+  noticed like a hidden one the first time an operative comes within its spot range (`ATripwireActor::RevealBy` / `Tick`: hostile and not yet
+  `bSpotted`): the squad holds, the feed line, `TripwireSpotted` + `TrapSpotted` once; `bSpotted` is saved as before. `PMCTripwireSmoke` stage 7d.
+
 ## How to place a PMC tripwire (old §6)
 
 ### How to place a PMC tripwire (Demo 01 G3, 2026-10-12)

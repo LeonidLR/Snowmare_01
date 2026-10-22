@@ -260,6 +260,9 @@ neither comparator: error. Stats (`UTutorialSubsystem::GetConditionStat`, "livin
 | `enemies_unseen` | living enemies no operative sees now (0 while the squad's sight is off) |
 | `squad_passive` | 2026-10-21: living members whose effective fire posture is PASSIVE |
 | `in_fight` | 2026-10-21: 1 while a fight runs (phase WaveCombat: a skirmish or a wave), else 0 |
+| `all_dead.<binding>` | 2026-10-22: 1 once every enemy of that `enemies` binding is dead (section 20) |
+| `step_shown.<step>` | 2026-10-22: 1 once that step was on screen (the machine's own stat, section 20) |
+| `tactical_pause` | 2026-10-22: 1 while the fight is in the tactical pause |
 | `quest_progress` | 2026-10-21: how far the checkpoint quest chain got (`FQuestChainState::GetProgress`): 0 nothing, 1 the empty canister, 2 the canister full of diesel, 3 the generator running, 4 the gate console powered (Demo 01 A7: an objective of a step already done completes silently) |
 | `traps_spotted.<tag>` | traps with `SpotEventTag` = tag the squad knows of (spotted or dealt with) |
 | `squad_not_low_in.<volume>` | living members NOT crouched / prone within 3 m of that volume's box (`below 1` = all are down there) |
@@ -286,7 +289,7 @@ A role's ring hides once an operative of that role counted. A level with no role
 
 ### 11. `"cancel_on"` - drop a step when its moment is over
 
-`{ "step": id | [ids], "event": pattern, "volume": id | [ids] }` (any of them; none: warning; unknown / own step id: error; 2026-10-21: `enemy` /
+`{ "step": id | [ids], "event": pattern, "volume": id | [ids], "condition": clauses }` (any of them; none: warning; 2026-10-22: `condition` = cancelled while / as soon as the clauses hold, section 20; unknown / own step id: error; 2026-10-21: `enemy` /
 `within_m` / `off_route_m` next to `event` = only that bound enemy's event cancels, section 19). A running step is
 cancelled (Skipped, `bCancelled`, no breather) when a listed step finishes, the event happens or a squad member enters a listed volume. Waiting /
 Queued: never played later. Shown: a radio / walk_talk lets the line on screen run out and drops the rest; other kinds hide at once. If a listed step
@@ -327,7 +330,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 
 | Feature | Behaviour |
 |---|---|
-| Texts | `FNarrativeManifest::GetTutorialText`: manifest `"tutorial"` (`title_en`, `text_en`, `radio_en`, `speaker_en`) -> a one-line `sequences` entry -> `demo_01_texts_draft.json` -> `[EN missing: <id>]`. Tokens: `{key:<CommandId>}` (all texts: its key cap), `{focus}` (card title / body, feed lines), `{progress}` / `{count}` (card title / body: counted so far / `complete.count`). |
+| Texts | `FNarrativeManifest::GetTutorialText`: manifest `"tutorial"` (`title_en`, `text_en`, `radio_en`, `speaker_en`) -> a one-line `sequences` entry -> `demo_01_texts_draft.json` -> `[EN missing: <id>]`. Tokens: `{key:<CommandId>}` (all texts: its key cap), `{focus}` (card title / body, feed lines), `{progress}` / `{count}` (card title / body: counted so far / `complete.count`), `{pause_charges}` / `{pause_seconds}` / `{pause_cooldown}` (2026-10-22, card title / body: the fight's tactical pause limits). |
 | Markers | `ATutorialMarkerActor`: with `StepId` shown while that step is Active, else with `BeatId` while that beat is current, and always while it is the current navigation target (section 17); role spots see section 10; `Label` drawn by the overlay; `Screen Edge Pointer` = it may carry the edge arrow when it is the current target. Hidden while the tutorial is inactive. The runtime guide beacon (`bRuntimeGuide`) is spawned by the subsystem, never placed. |
 | Current target | Section 17: ONE edge arrow (small chevron + "42 m" from the leader, `UTutorialOverlayWidget`), ONE highlighted minimap icon (`UMinimapSubsystem::BuildIcons`, `bHighlight` on an Objective icon), telemetry event `guide` when it changes. |
 | Tutorial ON / OFF | `Codex.Tutorial.Enabled` + `Saved/Tutorial/profile.json` (player setting). OFF hides everything, stops counting and unlocks everything; ON again does not re-lock. |
@@ -350,6 +353,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | `confines` | `[{step, released, passed}]` | the confinement in force holds again; a released one stays released (an older save's `holder` is ignored) |
 | `enabled` | the player setting | informational (the setting lives in `profile.json`) |
 | `volumes_fired`, `lock_hints`, `skipped` | subsystem | used-up volumes (by actor name), families that already got the "Not yet" line, SKIP TUTORIAL |
+| `enemy_bindings_seen` | the `enemies` bindings that had enemies in this level (2026-10-22) | merged back: a bound zombie killed before the save stays dead for `all_dead.<binding>` |
 | `route` | the furthest place reached (a volume id; 2026-10-20) | the route progress (its key is recomputed from the volume; an older save: the saved beat's start) - the current target follows from it and the finished steps |
 | `guide` | the current target (`markers:<step>` / `volume:<id>`) | informational only (it is derived again after the load; `SaveCoverageLakeSmoke` dumps it as `tutorial.guide`) |
 
@@ -535,6 +539,21 @@ coordinates), `PartsBoundToTheirZombie` (each part ignores the other zombie: tri
 the lure; no provider), `LureSchema`, `TrapThenLure`, `OneOperative`; smokes `TutorialSmoke` stages 130-136 (tagged routes on the movement
 test map) and `TutorialAmbushLakeSmoke` (the user's lake layout, real wire / whistle / shots).
 
+
+### 20. The 2026-10-22 additions (game designer play-test)
+
+| Feature | Detail |
+|---|---|
+| `"cancel_on": { "condition": ... }` | Clauses (the condition syntax, AND) polled every tick for running steps (Waiting / Queued / Active): all hold -> cancelled (Skipped, `bCancelled`, no breather); already true when the step becomes due -> cancelled at once (never shown). Combines (OR) with `step` / `event` / `volume`. `FTutorialStateMachine::PollCancelConditions`. |
+| stat `all_dead.<binding>` | 1 once every enemy of that `enemies` binding is dead (killed any way; a dying enemy counts as dead - its kill is raised at once), else 0. A binding that never matched an enemy in the level stays 0 (a map without it: the old timeouts). The bindings that had enemies are saved (`enemy_bindings_seen`), so a zombie killed before a save stays dead for the lessons after the load. Unknown binding: parse error. `UTutorialSubsystem::AreBoundEnemiesDead`. |
+| stat `step_shown.<step>` | Answered by the machine itself: 1 once that step was on screen (Active) since the steps loaded - a step triggered and then skipped / cancelled silently never was. Not saved. Unknown step: parse error. |
+| stat `tactical_pause` | 1 while the fight is in the tactical pause. |
+| events `TacticalPauseStarted` (+ `.Free` first for a free pause) / `TacticalPauseEnded` | `UGameFlowSubsystem::HandleStateChanged` on the edges of the combat mode `TacticalPause` (Space, the horde's free pause, the lesson pause, the grid's own end). |
+| card tokens `{pause_charges}` / `{pause_seconds}` / `{pause_cooldown}` | The fight's `FGameFlowConfig` (`TacticalPauseMaxCharges` / `TacticalPauseDuration` / `TacticalPauseCooldown`), `TutorialRules::ResolvePauseTokens`. |
+
+Demo use: the pause lesson `X_pause` / `X_pause_resume`, the A4 steps bound to a zombie (`cancel_on` `all_dead.*`), `A4_close_shot_far`
+(`step_shown.A4_lure`), the beat-less never-precredited wire card `A3_wire`, the DEFENSIVE posture lesson, `A7_traps` - [demo01-lake](demo01-lake.md)
+block 2026-10-22. Tests `CodexTactics.Tutorial.CancelOnCondition.*`, `PauseLesson.TwoCards`, `AmbushLesson.BothZombiesDeadEarly`.
 
 2026-10-21 b (Demo 01 A7): quest events for steps - `QuestStep.<CanisterTaken|FuelDrained|GeneratorStarted|GatePowered>` (then `QuestStep`; subject = the operative), `GeneratorDamaged` / `GeneratorDown` / `GeneratorRepaired` (subject = the repairer) / `GateOpened` (`GameplayEvents`); stat `quest_progress`. Beats A7 (from `VOL_A7_YARD`) and A8 (from `QuestStep.GatePowered`, no checkpoint) in `demo_01_steps.json`; tests `CodexTactics.Tutorial.QuestLesson.*`.
 ## History

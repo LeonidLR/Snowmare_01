@@ -50,3 +50,8 @@ bool TrapApproachRules::UpdateDefuserLease(bool bHasLease, bool bIsApproachingDe
 	}
 	return bHasLease || (bIsApproachingDefuser && DistanceCm <= TriggerRadiusCm);
 }
+
+bool TrapApproachRules::IsRetryClick(bool bLeaderAtDisarmSpot, float ClickToTrapCm, bool bPicksAnotherMember, float RadiusCm)
+{
+	return bLeaderAtDisarmSpot && !bPicksAnotherMember && ClickToTrapCm >= 0.f && ClickToTrapCm <= FMath::Max(0.f, RadiusCm);
+}

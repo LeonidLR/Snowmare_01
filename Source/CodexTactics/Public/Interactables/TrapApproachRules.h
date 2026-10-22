@@ -56,4 +56,14 @@ namespace TrapApproachRules
 	 */
 	CODEXTACTICS_API bool UpdateDefuserLease(bool bHasLease, bool bIsApproachingDefuser, float DistanceCm, float TriggerRadiusCm,
 		float ExitMarginCm = DefuserLeaseExitMarginCm);
+
+	/**
+	 * Game designer 2026-10-22 ("a failed defuse - clicking the mine again does nothing, I have to walk away and come back"): the
+	 * operative works ~60 cm from the charge, so a click on the mine / the wire right in front of him landed on his own body or picked
+	 * him by the 1.2 m click-select radius - re-selecting himself instead of re-ordering the disarm. A world click is taken as a click on
+	 * a live, known trap when the selected operative stands at its disarm spot (bLeaderAtDisarmSpot), the click is within RadiusCm of the
+	 * trap (ClickToTrapCm: to the charge / the wire line) and it picks no OTHER squad member (his own body, or nobody, is fine).
+	 */
+	inline constexpr float RetryClickRadiusCm = 120.f;
+	CODEXTACTICS_API bool IsRetryClick(bool bLeaderAtDisarmSpot, float ClickToTrapCm, bool bPicksAnotherMember, float RadiusCm = RetryClickRadiusCm);
 }

@@ -188,6 +188,27 @@ namespace TutorialRules
 	 */
 	CODEXTACTICS_API FName ParseNotAcrossStat(FName Stat);
 
+	/**
+	 * 2026-10-22: "all_dead.<BindingId>" -> BindingId (else NAME_None): the condition stat that is 1 once EVERY level enemy of that
+	 * "enemies" binding is dead, killed any way ({"stat": "all_dead.A4_PERIMETER", "at_least": 1} = the zombie the lesson is about is
+	 * dead), else 0. A binding that never matched an enemy in the level (a map without it) stays 0: its steps keep their old timeouts.
+	 * A binding id the file does not declare: a parse error.
+	 */
+	CODEXTACTICS_API FName ParseAllDeadStat(FName Stat);
+
+	/**
+	 * 2026-10-22: "step_shown.<StepId>" -> StepId (else NAME_None): the condition stat (answered by the state machine itself) that is 1
+	 * once that step was on screen since the steps loaded - a step triggered and then skipped silently never was. A step id the file does
+	 * not declare: a parse error.
+	 */
+	CODEXTACTICS_API FName ParseStepShownStat(FName Stat);
+
+	/**
+	 * 2026-10-22 (the tactical pause lesson): card text tokens {pause_charges} / {pause_seconds} / {pause_cooldown} -> the fight's
+	 * tactical pause charges per wave, the seconds a pause lasts and the recharge seconds once they are spent (FGameFlowConfig).
+	 */
+	CODEXTACTICS_API FString ResolvePauseTokens(const FString& Text, int32 MaxCharges, float PauseSeconds, float CooldownSeconds);
+
 	// --- The current navigation target (2026-10-20) ---------------------------------------------------------------------
 
 	/**

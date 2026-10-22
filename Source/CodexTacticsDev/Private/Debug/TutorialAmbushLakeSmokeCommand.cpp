@@ -30,6 +30,13 @@
 //     teleported, the far zombie still there and patrolling) -> part 2 goes on (wall, corner, lure, close shot).
 //   CodexTactics.TutorialAmbushLakeLureSpottedSmoke = PART 2 FAILS: after the wire, the far zombie spots her at the wall card: the SPOTTED
 //     card + pause (first time on the level), the corner / lure cards skip themselves, a skirmish of the far zombie alone, killed -> exploring.
+// 2026-10-22 (game designer play-test): the posture lesson asks for DEFENSIVE (the squad is DEFENSIVE through the lessons; the SPOTTED
+// runs set PASSIVE themselves - the card only comes for a PASSIVE squad); the SPOTTED run also shows the TACTICAL PAUSE lesson (card 1:
+// time stops / orders, two orders; card 2: resume and the limits; Space) - rendered frames of both cards.
+//   CodexTactics.TutorialAmbushLakeEarlyKillSmoke = the lake's PMC wires and mines listed (what the horde prep can use); the first PMC wire
+//     the squad meets: the TRIPWIRE card shows (beat-less, not precredited by the fence crawl's prone history); at the overlook BOTH zombies
+//     are killed while the wire card is up -> every A4 step bound to them closes (wire card, wait, wall, corner, lure), the hold is released,
+//     the current target leaves the dead zombie's loop (no stale beacon); A7: the generator runs -> the console card -> PREPARE THE GROUND.
 
 #include "CoreMinimal.h"
 
@@ -54,6 +61,8 @@
 #include "Core/SaveGameSubsystem.h"
 #include "Debug/EventBusProbe.h"
 #include "Debug/SmokeUtils.h"
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -63,6 +72,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/ProximityMineActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TripwireActor.h"
 #include "Misc/App.h"
@@ -87,7 +97,9 @@ namespace TutorialAmbushLakeSmoke
 		/** Part 1 fails: the perimeter zombie spots the squad at the wire card. */
 		SpottedPart1,
 		/** Part 2 fails: the far zombie spots her at the wall card. */
-		SpottedPart2
+		SpottedPart2,
+		/** 2026-10-22: the wire card on the first PMC wire; both zombies killed early; the horde prep card. */
+		EarlyKill
 	};
 
 	struct FState
@@ -122,6 +134,8 @@ namespace TutorialAmbushLakeSmoke
 		bool bPart1Shot = false;
 		bool bOpenShot = false;
 		float LastShotAt = -10.f;
+		/** 2026-10-22 (EarlyKill): the level's PMC wire the squad meets first. */
+		TWeakObjectPtr<ATripwireActor> PmcWire;
 		TStrongObjectPtr<UEventBusProbe> Probe;
 	};
 
@@ -361,8 +375,17 @@ namespace TutorialAmbushLakeSmoke
 		// Cards that queue in between (the overlook posture twin behind the wire card, the out-of-sight card): the player does what they ask.
 		if (Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Active)
 		{
-			Tutorial->HandlePlayerCommand(PlayerCommands::PosturePassive, FPlayerCommandContext());
-			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			if (State.Mode == EMode::SpottedPart1 || State.Mode == EMode::SpottedPart2)
+			{
+				// The SPOTTED runs play a player who keeps the squad PASSIVE (the card's condition): he skips the posture card.
+				Tutorial->SkipStep(TEXT("A4_posture"));
+			}
+			else
+			{
+				Tutorial->HandlePlayerCommand(PlayerCommands::PostureDefensive, FPlayerCommandContext()); // 2026-10-22: DEFENSIVE, not PASSIVE
+				Squad->SetSquadPosture(ESquadFirePosture::Defensive);
+				Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Completed, TEXT("2026-10-22: DEFENSIVE (Alt + .) completes the posture card"));
+			}
 		}
 		if (Tutorial->GetStepState(TEXT("A4_hidden")) == ETutorialStepState::Active)
 		{
@@ -430,7 +453,7 @@ namespace TutorialAmbushLakeSmoke
 			Deafen(*Perimeter);
 			Deafen(*Lured);
 			Perimeter->GetHealthComponent()->SetMaxHealth(1000.f); // it survives the wire (140 damage): shot later (the negative check of part 2)
-			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			Squad->SetSquadPosture(ESquadFirePosture::Defensive); // 2026-10-22: the lessons keep the squad DEFENSIVE
 			// Behind the overlook's low cover (inside VOL_A4_OVERLOOK), crouched.
 			const ATutorialTriggerVolume* Overlook = nullptr;
 			for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
@@ -474,8 +497,9 @@ namespace TutorialAmbushLakeSmoke
 			}
 			if (Posture == ETutorialStepState::Active)
 			{
-				Tutorial->HandlePlayerCommand(PlayerCommands::PosturePassive, FPlayerCommandContext());
-				Squad->SetSquadPosture(ESquadFirePosture::Passive);
+				Tutorial->HandlePlayerCommand(PlayerCommands::PostureDefensive, FPlayerCommandContext());
+				Squad->SetSquadPosture(ESquadFirePosture::Defensive);
+				Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Completed, TEXT("2026-10-22: DEFENSIVE (Alt + .) completes the posture card"));
 			}
 			Next(State);
 			return true;
@@ -507,6 +531,12 @@ namespace TutorialAmbushLakeSmoke
 			if (State.Mode == EMode::SpottedPart1)
 			{
 				State.Stage = 20; // the perimeter zombie spots her before the wire is rigged
+				State.StageTime = 0.f;
+				return true;
+			}
+			if (State.Mode == EMode::EarlyKill)
+			{
+				State.Stage = 70; // both zombies die before the wire is rigged
 				State.StageTime = 0.f;
 				return true;
 			}
@@ -596,7 +626,7 @@ namespace TutorialAmbushLakeSmoke
 			Check(State, Guide.bValid && Guide.Guide.Id == FName(TEXT("@lure_spot.A4_LURE")) && FromFarRoute > 900.f && FromFarRoute < 1100.f,
 				FString::Printf(TEXT("the current target is the lure spot 10 m short of the FAR zombie's path (%s, %.1f m from it)"),
 					*UTutorialSubsystem::DescribeGuide(Guide.Guide), FromFarRoute / 100.f));
-			Check(State, Squad->GetEffectivePosture(Medic) == ESquadFirePosture::Passive, TEXT("the lure card sets the squad PASSIVE again"));
+			Check(State, Squad->GetEffectivePosture(Medic) == ESquadFirePosture::Defensive, TEXT("2026-10-22: the lure card keeps the squad DEFENSIVE (not PASSIVE)"));
 			if (!IsDead(Perimeter))
 			{
 				// The perimeter zombie (alive: it survived the wire) hears a lure: not part 2's zombie.
@@ -950,6 +980,7 @@ namespace TutorialAmbushLakeSmoke
 				return true; // on her way, clear of the overlook's low cover
 			}
 			State.BeforeKill = Medic->GetActorLocation();
+			Squad->SetSquadPosture(ESquadFirePosture::Passive); // 2026-10-22: the SPOTTED card is for a squad the player made PASSIVE
 			Perimeter->BreakPatrol(EPatrolAlertCause::Sight, Medic->GetActorLocation()); // he sees her: the patrol breaks (the real reaction)
 			Next(State);
 			return true;
@@ -979,14 +1010,70 @@ namespace TutorialAmbushLakeSmoke
 			{
 				return true; // the frame of the paused moment first (rendered before the posture key)
 			}
-			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 			Tutorial->HandlePlayerCommand(PlayerCommands::PostureAggressive, FPlayerCommandContext());
 			Squad->SetSquadPosture(ESquadFirePosture::Aggressive); // Alt + /
 			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Completed, TEXT("AGGRESSIVE (Alt + /) completes the card"));
+			State.Stage = 50; // 2026-10-22: the tactical pause lesson before Space
+			State.StageTime = 0.f;
+			return true;
+		}
+		// --- 2026-10-22: the TACTICAL PAUSE lesson (the first pause of the level) ---
+		case 50:
+		{
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			if (Tutorial->GetStepState(TEXT("X_pause")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			const FTutorialCardView Card = Tutorial->GetCardView();
+			Check(State, Tutorial->GetStepState(TEXT("X_pause")) == ETutorialStepState::Active && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause
+				&& Card.Title.ToString().Contains(TEXT("TACTICAL PAUSE")), FString::Printf(TEXT("PAUSE LESSON 1/2 in the pause: '%s' (%.1f s after the spotted card)"),
+					*Card.Title.ToString(), State.StageTime));
+			RequestFrame(World, State, Medic->GetActorLocation(), TEXT("pause_lesson_1_orders"), 1500.f, 0.6f, true);
+			Next(State);
+			return true;
+		}
+		case 51:
+		{
+			if (State.ShotAt >= 0.f || State.Time < State.FrameTakenAt + 0.4f)
+			{
+				return true;
+			}
+			// Two orders in the pause (the real reports: a move, a targeted shot) -> card 2.
+			Tutorial->HandlePlayerCommand(PlayerCommands::Move, FPlayerCommandContext());
+			Tutorial->HandlePlayerCommand(PlayerCommands::TargetedShot, FPlayerCommandContext());
+			Check(State, Tutorial->GetStepState(TEXT("X_pause")) == ETutorialStepState::Completed, TEXT("two orders in the pause complete card 1"));
+			Next(State);
+			return true;
+		}
+		case 52:
+		{
+			if (Tutorial->GetStepState(TEXT("X_pause_resume")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			const FTutorialCardView Card = Tutorial->GetCardView();
+			const FString Body = Card.Body.ToString();
+			Check(State, Tutorial->GetStepState(TEXT("X_pause_resume")) == ETutorialStepState::Active && Body.Contains(TEXT("pauses per wave"))
+				&& !Body.Contains(TEXT("{pause_")), FString::Printf(TEXT("PAUSE LESSON 2/2: resume + the limits, tokens resolved ('%s')"), *Body.Left(160)));
+			RequestFrame(World, State, Medic->GetActorLocation(), TEXT("pause_lesson_2_resume"), 1500.f, 0.6f, true);
+			Next(State);
+			return true;
+		}
+		case 53:
+		{
+			if (State.ShotAt >= 0.f || State.Time < State.FrameTakenAt + 0.4f)
+			{
+				return true;
+			}
+			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 			Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("Space resumes the fight"));
+			Tutorial->HandlePlayerCommand(PlayerCommands::PauseRelease, FPlayerCommandContext()); // what the controller reports for the Space tap
+			Check(State, Tutorial->GetStepState(TEXT("X_pause_resume")) == ETutorialStepState::Completed, TEXT("the resume (Space) completes card 2"));
 			Perimeter->GetHealthComponent()->SetMaxHealth(20.f);
 			State.LastShotAt = -10.f;
-			Next(State);
+			State.Stage = 23;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 23:
@@ -1020,7 +1107,7 @@ namespace TutorialAmbushLakeSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Skipped, TEXT("part 1 is over (its zombie died another way)"));
 			RequestFrame(World, State, Lured->GetActorLocation(), TEXT("part1_skirmish_over_far_zombie_patrolling"), 1800.f, 0.7f, true, Lured);
 
-			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			Squad->SetSquadPosture(ESquadFirePosture::Defensive); // 2026-10-22: back to the lesson posture
 			Next(State);
 			return true;
 		}
@@ -1034,9 +1121,222 @@ namespace TutorialAmbushLakeSmoke
 			State.StageTime = 0.f;
 			return true;
 		}
+		// --- 2026-10-22: TutorialAmbushLakeEarlyKillSmoke ---
+		case 60:
+		{
+			// The level's traps (what the wire card meets, what the horde prep can use) and the squad's kit, for the report.
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			FNavLocation OnNav;
+			if ((!Tutorial->GetMachine().IsLoaded() || Squad->GetMembers().Num() < 3
+				|| !(Nav && Nav->ProjectPointToNavigation(Leader->GetActorLocation(), OnNav, FVector(60.f, 60.f, 200.f)))) && State.StageTime < 120.f)
+			{
+				return true;
+			}
+			if (USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>())
+			{
+				Saves->bCheckpointsEnabled = false;
+			}
+			ATripwireActor* First = nullptr;
+			for (TActorIterator<ATripwireActor> It(World); It; ++It)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] level wire %s at %s: %s, hidden until spotted %d, spotted %d, armed %d, %.0f m from the squad"), *It->GetName(),
+					*It->GetActorLocation().ToCompactString(), It->IsHostile() ? TEXT("PMC") : TEXT("squad"), It->bHiddenUntilSpotted ? 1 : 0, It->IsSpotted() ? 1 : 0,
+					It->IsArmed() ? 1 : 0, FVector::Dist2D(It->GetActorLocation(), Leader->GetActorLocation()) / 100.f);
+				if (It->IsHostile() && It->IsArmed() && (!First || FVector::Dist2D(It->GetActorLocation(), Leader->GetActorLocation())
+					< FVector::Dist2D(First->GetActorLocation(), Leader->GetActorLocation())))
+				{
+					First = *It;
+				}
+			}
+			int32 PickupMines = 0;
+			for (TActorIterator<AProximityMineActor> It(World); It; ++It)
+			{
+				PickupMines += !It->bTrapped && It->bDeployable ? 1 : 0;
+				UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] level mine %s at %s: live %d, revealed %d, deployable (into the kit when disarmed / picked up) %d, squad's %d, spot step '%s', tag '%s'"),
+					*It->GetName(), *It->GetActorLocation().ToCompactString(), It->bTrapped ? 1 : 0, It->IsRevealed() ? 1 : 0, It->bDeployable ? 1 : 0,
+					It->bPlacedBySquad ? 1 : 0, *It->SpotRequiresStep.ToString(), *It->SpotEventTag.ToString());
+			}
+			int32 OtherDeployables = 0;
+			for (TActorIterator<ADeployableActor> It(World); It; ++It)
+			{
+				if (!It->IsA<AProximityMineActor>())
+				{
+					++OtherDeployables;
+					UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] level deployable %s (%s) at %s"), *It->GetName(), *It->GetClass()->GetName(), *It->GetActorLocation().ToCompactString());
+				}
+			}
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] kit %s: mines %d, grenades %d, barricades %d, turrets %d"), *Member->DisplayName.ToString(), Member->MinesCount,
+					Member->GrenadesCount, Member->BarricadesCount, Member->TurretsCount);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] lake traps: %d mine(s) lying around to pick up (not live), %d other deployable(s) placed"), PickupMines, OtherDeployables);
+			Check(State, First != nullptr, TEXT("the lake has a PMC wire"));
+			if (!First)
+			{
+				return Finish(State, false);
+			}
+			State.PmcWire = First;
+			// Medic-Sapper crouched 4 m from the wire's middle, on the squad's side: she spots / notices it (6 m).
+			AOperativeCharacter* Spotter = nullptr;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Spotter = Member->SquadRole == EOperativeRole::MedicSapper ? Member : Spotter;
+			}
+			const FVector Mid = First->GetActorLocation();
+			const FVector Away = (Leader->GetActorLocation() - Mid).GetSafeNormal2D();
+			const FVector Spot = SmokeUtils::FreeSpot(World, Ground(World, Mid + Away * 400.f), Spotter);
+			if (Spotter)
+			{
+				Spotter->SetStance(EOperativeStance::Crouching);
+				Place(World, *Spotter, Spot);
+			}
+			Next(State);
+			return true;
+		}
+		case 61:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_wire")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			const FTutorialCardView Card = Tutorial->GetCardView();
+			Check(State, Tutorial->GetStepState(TEXT("A3_wire")) == ETutorialStepState::Active && Card.Title.ToString().Contains(TEXT("TRIPWIRE"))
+				&& Card.Body.ToString().Contains(TEXT("grenade")), FString::Printf(TEXT("the first PMC wire met: the TRIPWIRE card shows ('%s', beat %s, %.1f s)"),
+					*Card.Title.ToString(), *Tutorial->GetCurrentBeat().ToString(), State.StageTime));
+			if (ATripwireActor* Wire = State.PmcWire.Get())
+			{
+				AOperativeCharacter* Spotter = nullptr;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					Spotter = Member->SquadRole == EOperativeRole::MedicSapper ? Member : Spotter;
+				}
+				RequestFrame(World, State, Wire->GetActorLocation(), TEXT("tripwire_card"), 1300.f, 1.2f, true, Spotter); // the camera on her, the wire in front
+			}
+			Next(State);
+			return true;
+		}
+		case 62:
+		{
+			if (State.ShotAt >= 0.f || State.Time < State.FrameTakenAt + 0.4f)
+			{
+				return true;
+			}
+			Tutorial->SkipStep(TEXT("A3_wire")); // gone round it: on to the overlook
+			Squad->ExitSoloMode();
+			State.Stage = 0;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 70:
+		{
+			// Both zombies die while the wire card is up (shot from the overlook, a mine - any way).
+			for (AEnemyCharacter* Zombie : { Perimeter, Lured })
+			{
+				FDamageSpec Spec;
+				Spec.Amount = 100000.f;
+				Spec.ArmorPenetration = 1.f;
+				Zombie->GetHealthComponent()->TakeDamage(Spec);
+			}
+			Next(State);
+			return true;
+		}
+		case 71:
+		{
+			if (TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A4_tripwire"))) && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, IsDead(Perimeter) && IsDead(Lured), TEXT("both A4 zombies are dead"));
+			for (const TCHAR* Id : { TEXT("A4_tripwire"), TEXT("A4_trap_wait"), TEXT("A4_hug_wall"), TEXT("A4_round_corner"), TEXT("A4_lure") })
+			{
+				Check(State, Tutorial->GetStepState(Id) == ETutorialStepState::Skipped, FString::Printf(TEXT("both dead: %s closed (%s)"), Id,
+					TutorialRules::StateName(Tutorial->GetStepState(Id))));
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_close_shot")) == ETutorialStepState::Idle && Tutorial->GetStepState(TEXT("A4_spotted")) != ETutorialStepState::Active,
+				TEXT("... no close-shot / spotted card"));
+			Check(State, !Tutorial->IsConfining(), TEXT("... the squad is no longer held at the overlook"));
+			Tutorial->RefreshGuideNow();
+			const FTutorialGuideView& Guide = Tutorial->GetGuideView();
+			const FString GuideName = UTutorialSubsystem::DescribeGuide(Guide.Guide);
+			Check(State, !Guide.Guide.Id.ToString().StartsWith(TEXT("@")), FString::Printf(TEXT("... the current target is no longer the dead zombie's loop (%s)"), *GuideName));
+			const FTutorialCardView Card = Tutorial->GetCardView();
+			const TArray<FName> ZombieCards = { TEXT("A4_tripwire"), TEXT("A4_hug_wall"), TEXT("A4_round_corner"), TEXT("A4_lure"), TEXT("A4_close_shot"), TEXT("A4_spotted") };
+			Check(State, !Card.bVisible || !ZombieCards.Contains(Card.StepId), FString::Printf(TEXT("... no card about the dead zombies on screen (%s)"),
+				Card.bVisible ? *Card.StepId.ToString() : TEXT("none")));
+			// The save remembers that these bindings had their zombies here (a load must not bring the lessons back for the dead).
+			const TSharedPtr<FJsonObject> Saved = Tutorial->CaptureSaveState();
+			const TArray<TSharedPtr<FJsonValue>>* Seen = nullptr;
+			TArray<FString> SeenNames;
+			if (Saved.IsValid() && Saved->TryGetArrayField(TEXT("enemy_bindings_seen"), Seen))
+			{
+				for (const TSharedPtr<FJsonValue>& Value : *Seen)
+				{
+					SeenNames.Add(Value->AsString());
+				}
+			}
+			Check(State, SeenNames.Contains(TEXT("A4_PERIMETER")) && SeenNames.Contains(TEXT("A4_LURE")),
+				FString::Printf(TEXT("... the save's tutorial section keeps enemy_bindings_seen (%s)"), *FString::Join(SeenNames, TEXT(", "))));
+			RequestFrame(World, State, State.CoverSpot, TEXT("both_zombies_dead_no_stale_marker"), 2200.f);
+			Next(State);
+			return true;
+		}
+		case 72:
+		{
+			if (State.ShotAt >= 0.f || State.Time < State.FrameTakenAt + 0.4f)
+			{
+				return true;
+			}
+			// On to the compound: the yard starts A7; the quest steps up to the generator (the events the quest raises).
+			ATutorialTriggerVolume* Yard = nullptr;
+			for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+			{
+				Yard = It->GetEffectiveVolumeId() == FName(TEXT("VOL_A7_YARD")) ? *It : Yard;
+			}
+			Check(State, Yard != nullptr, TEXT("the yard volume (A7)"));
+			if (!Yard)
+			{
+				return Finish(State, false);
+			}
+			Tutorial->NotifyVolumeEntered(Yard, Leader);
+			for (const TCHAR* Kind : { TEXT("CanisterTaken"), TEXT("FuelDrained"), TEXT("GeneratorStarted") })
+			{
+				Tutorial->NotifyEvent(FName(*(FString(TEXT("QuestStep.")) + Kind)), Leader->GetFName());
+				Tutorial->NotifyEvent(GameplayEvents::QuestStep, Leader->GetFName());
+			}
+			Next(State);
+			return true;
+		}
+		case 73:
+		{
+			if (Tutorial->GetStepState(TEXT("A7_prep")) != ETutorialStepState::Active && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A7")) && Tutorial->GetStepState(TEXT("A7_prep")) == ETutorialStepState::Active,
+				FString::Printf(TEXT("A7: the generator runs -> the console card (beat %s)"), *Tutorial->GetCurrentBeat().ToString()));
+			Tutorial->SkipStep(TEXT("A7_prep"));
+			Next(State);
+			return true;
+		}
+		case 74:
+		{
+			if (Tutorial->GetStepState(TEXT("A7_traps")) != ETutorialStepState::Active && State.StageTime < 5.f)
+			{
+				return true;
+			}
+			const FTutorialCardView Card = Tutorial->GetCardView();
+			Check(State, Tutorial->GetStepState(TEXT("A7_traps")) == ETutorialStepState::Active && Card.Title.ToString().Contains(TEXT("PREPARE THE GROUND")),
+				FString::Printf(TEXT("then the horde prep hint: '%s'"), *Card.Title.ToString()));
+			RequestFrame(World, State, Leader->GetActorLocation(), TEXT("a7_prepare_the_ground"), 1800.f);
+			State.Stage = 12; // the last frame, then finish
+			State.StageTime = 0.f;
+			return true;
+		}
 		// --- PART 2 FAILS (TutorialAmbushLakeLureSpottedSmoke) ---
 		case 30:
 		{
+			Squad->SetSquadPosture(ESquadFirePosture::Passive); // 2026-10-22: the SPOTTED card is for a squad the player made PASSIVE
 			Lured->BreakPatrol(EPatrolAlertCause::Sight, Medic->GetActorLocation());
 			Next(State);
 			return true;
@@ -1089,9 +1389,9 @@ namespace TutorialAmbushLakeSmoke
 		}
 		case 12:
 		{
-			if (State.ShotAt >= 0.f || State.StageTime < 0.5f)
+			if (State.ShotAt >= 0.f || State.StageTime < 0.5f || State.Time < State.FrameTakenAt + 0.5f)
 			{
-				return true; // the last frame
+				return true; // the last frame (rendered before the exit)
 			}
 			return Finish(State, true);
 		}
@@ -1109,6 +1409,7 @@ namespace TutorialAmbushLakeSmoke
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->Mode = Mode;
+		State->Stage = Mode == EMode::EarlyKill ? 60 : 0; // 2026-10-22: the wire card first
 		State->bShots = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); }) && FApp::CanEverRender();
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
@@ -1131,6 +1432,11 @@ namespace TutorialAmbushLakeSmoke
 		RunMode(Args, World, EMode::SpottedPart2);
 	}
 
+	void RunEarlyKill(const TArray<FString>& Args, UWorld* World)
+	{
+		RunMode(Args, World, EMode::EarlyKill);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.TutorialAmbushLakeSmoke"),
 		TEXT("Dev check (Demo 01 A4, 2026-10-21): the ambush in two parts on the lake layout - part 1 the perimeter zombie walks into a real wire, part 2 the far zombie is lured by a real whistle into the open and shot dead at close range; each part reacts only to its zombie. 'Shot' = rendered frames."),
@@ -1145,6 +1451,11 @@ namespace TutorialAmbushLakeSmoke
 		TEXT("CodexTactics.TutorialAmbushLakeLureSpottedSmoke"),
 		TEXT("Dev check (Demo 01 A4, 2026-10-21 b): part 2 fails - the far zombie spots her at the wall: the SPOTTED card + pause, the stealth cards skip, a skirmish of that zombie alone, straight back to exploring."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunLureSpotted));
+
+	static FAutoConsoleCommandWithWorldAndArgs EarlyKillCommand(
+		TEXT("CodexTactics.TutorialAmbushLakeEarlyKillSmoke"),
+		TEXT("Dev check (Demo 01, 2026-10-22): the first PMC wire shows the TRIPWIRE card; both A4 zombies killed while the wire card is up close every A4 step bound to them (no stale target); A7 shows PREPARE THE GROUND after the console card. 'Shot' = rendered frames."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunEarlyKill));
 }
 
 #endif // !UE_BUILD_SHIPPING

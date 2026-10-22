@@ -22,7 +22,8 @@ placed-enemy fights of the lake (A4, the A5 base) are skirmishes; the A6 scripte
 
 Also (every level): the victory panel's button of a single ambush fight (`bAmbushSingleFight`, "level" mode) reads "End combat and continue
 exploring" (it was "Start the next wave (2/3)" while it led to PostCombat anyway). The tutorial's lesson pause: `FGameFlowStateMachine::EnterLessonPause`
-= RealTime -> the FREE tactical pause (no charge, no timer) in any wave fight (`UTutorialSubsystem` action `tactical_pause`).
+= RealTime -> the FREE tactical pause (no charge, no timer) in any wave fight (`UTutorialSubsystem` action `tactical_pause`). 2026-10-22: the edges of the
+tactical pause are gameplay events `TacticalPauseStarted` (+ `.Free` first) / `TacticalPauseEnded` (`UGameFlowSubsystem::HandleStateChanged`) - the tutorial's pause lesson.
 Data: `Content/Data/LevelJson/L_Demo01_A_FrozenLake.json` (`"ambush_fight": "skirmish"`, `"susanin_wave": 0`), schema
 `Content/Data/Schemas/level_config.schema.json`, Wave Editor `types.ts`. Tests `CodexTactics.GameFlow.Skirmish.LevelJson / Flow`; smokes
 `TutorialAmbushLakeSmoke` / `TutorialAmbushLakeSpottedSmoke` / `TutorialAmbushLakeLureSpottedSmoke` (each fight ends straight in exploration, the

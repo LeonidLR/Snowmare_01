@@ -233,8 +233,14 @@ struct CODEXTACTICS_API FTutorialCancelOn
 	TArray<FName> Volumes;
 	/** "enemy" / "within_m" / "off_route_m" next to "event" (2026-10-21): only that enemy's event cancels. */
 	FTutorialEnemyFilter EnemyFilter;
+	/**
+	 * "condition" (2026-10-22, game designer: "both A4 zombies are dead, yet the wire card still asks for the wire"): world-state clauses
+	 * (the step "condition" syntax, AND) polled while the step runs - when all hold it is cancelled; already true when it becomes due:
+	 * cancelled at once (e.g. {"stat": "all_dead.A4_PERIMETER", "at_least": 1} = the zombie the lesson is about is dead, killed any way).
+	 */
+	TArray<FTutorialCondition> Conditions;
 
-	bool IsSet() const { return Steps.Num() > 0 || !Event.IsEmpty() || Volumes.Num() > 0; }
+	bool IsSet() const { return Steps.Num() > 0 || !Event.IsEmpty() || Volumes.Num() > 0 || Conditions.Num() > 0; }
 };
 
 /**

@@ -505,6 +505,14 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName GeneratorRepaired;
 	/** The blast gate's leaves started to slide fully open (Target = the gate): the instant terminal, the final wave cleared, «Start Battle». */
 	extern CODEXTACTICS_API const FName GateOpened;
+	/**
+	 * "TacticalPauseStarted" (2026-10-22, the tutorial's pause lesson): the fight went into the tactical pause - Space, the free pause of a
+	 * sudden horde wave, the tutorial's lesson pause, the grid's own end (UGameFlowSubsystem). Also "TacticalPauseStarted.Free" FIRST when
+	 * the pause is a free one (no charge, no timer).
+	 */
+	extern CODEXTACTICS_API const FName TacticalPauseStarted;
+	/** "TacticalPauseEnded" (2026-10-22): the tactical pause is over (resumed, timed out, turn-based entered, the fight ended). */
+	extern CODEXTACTICS_API const FName TacticalPauseEnded;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);

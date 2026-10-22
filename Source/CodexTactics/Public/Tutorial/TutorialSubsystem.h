@@ -396,6 +396,13 @@ public:
 	bool IsEnemyBound(const AEnemyCharacter& Enemy, FName BindingId) const;
 
 	/**
+	 * 2026-10-22 (stat "all_dead.<binding>"): every enemy of the binding is dead - the ones it finds are all dying / dead, or it found one
+	 * earlier in this level (at the steps load, a stat poll, or before the save this game was loaded from: "enemy_bindings_seen") and none
+	 * is left. False when the binding never matched an enemy here (a map without it) or is unknown.
+	 */
+	bool AreBoundEnemiesDead(FName BindingId) const;
+
+	/**
 	 * The "enemy" filter of an event now: the subject (an enemy of the world by object name) is bound, a living operative stands within
 	 * "within_m" and it stands at least "off_route_m" from its patrol route (TutorialRules::PassesEnemyFilter). The state machine asks it.
 	 */
@@ -591,6 +598,10 @@ private:
 	void LogEnemyBindings() const;
 	/** 2026-10-21, action "tactical_pause": real seconds left to wait for the fight before the free pause opens (0 = none pending). */
 	float LessonPauseWait = 0.f;
+	/** 2026-10-22: "enemies" bindings that found an enemy in this level at least once (AreBoundEnemiesDead). */
+	mutable TSet<FName> EnemyBindingsSeen;
+	/** 2026-10-22: {pause_charges} / {pause_seconds} / {pause_cooldown} of a card text from the fight's config. */
+	FString ResolvePauseTokens(const FString& Text) const;
 	/** Opens the requested lesson pause once the fight runs in real time (UGameFlowSubsystem::EnterLessonPause). */
 	void TickLessonPause(float RealDelta);
 	/** Resolves Machine.GetGuide() in the world (nearest marker / the beacon at the volume), logs + telemetry when it changes. */

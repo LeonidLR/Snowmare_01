@@ -9,6 +9,10 @@
 // Rev 2026-10-19 (game designer: "the mine disappeared first, then he bent down"): after the success the mine STAYS (harmless, no
 // menu) while the pickup clip plays and goes only at its grab moment (~0.44 s into the standing clip that starts low); the kit and
 // the feed lines ("disarmed the mine", "picked up") come at the grab, not before.
+// 2026-10-22 (game designer: "a failed defuse with the warning - clicking the mine again does not select it, I have to walk away and come
+// back"): her first attempt (luck 0, 80 % cold: dangerous) only WARNS; then a click on her own body over the mine (the cursor on the
+// mine lands on her) and a click on the mine itself reopen the Defuse menu at once - she does not move, she stays the leader - and the
+// confirmed second attempt disarms it.
 
 #include "CoreMinimal.h"
 
@@ -17,6 +21,8 @@
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Components/CapsuleComponent.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Components/BoxComponent.h"
@@ -37,7 +43,7 @@ namespace DeployableSmoke
 	constexpr float StepSeconds = 0.25f;
 	constexpr float Timeout = 70.f;
 
-	enum class EPhase : uint8 { PickUpMenu, PickUpWait, DeployWait, MineSpot, DefuseMenu, DefuseWait, Trap, Blast, Done };
+	enum class EPhase : uint8 { PickUpMenu, PickUpWait, DeployWait, MineSpot, DefuseMenu, RetryWarn, DefuseWait, Trap, Blast, Done };
 
 	struct FState
 	{
@@ -66,6 +72,9 @@ namespace DeployableSmoke
 		float PickupDelay = 0.f;
 		int32 MinesBefore = 0;
 		int32 FeedBefore = 0;
+		/** 2026-10-22: the warning attempt happened and the clicks right at the mine reopened its menu. */
+		bool bRetryTried = false;
+		bool bRetry = false;
 	};
 
 	/** A feed line containing Needle was posted after the first Since lines. */
@@ -112,11 +121,11 @@ namespace DeployableSmoke
 
 	void Finish(FState& State)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke pickUp=%d deploy=%d spotted=%d defused=%d trap=%d blast=%d approach=%d lease=%d pickupClip=%d"), State.bPickUp ? 1 : 0,
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke pickUp=%d deploy=%d spotted=%d defused=%d trap=%d blast=%d approach=%d lease=%d pickupClip=%d retry=%d"), State.bPickUp ? 1 : 0,
 			State.bDeploy ? 1 : 0, State.bSpotted ? 1 : 0, State.bDefused ? 1 : 0, State.bTrap ? 1 : 0, State.bBlast ? 1 : 0, State.bApproach ? 1 : 0,
-			State.bLease ? 1 : 0, State.bPickup ? 1 : 0);
+			State.bLease ? 1 : 0, State.bPickup ? 1 : 0, State.bRetry ? 1 : 0);
 		const bool bPass = State.bPickUp && State.bDeploy && State.bSpotted && State.bDefused && State.bTrap && State.bBlast && State.bApproach
-			&& State.bLease && State.bPickup;
+			&& State.bLease && State.bPickup && State.bRetry;
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bPass ? TEXT("PASS") : TEXT("FAIL"));
 		State.Phase = EPhase::Done;
 		FPlatformMisc::RequestExit(false, TEXT("DeployableSmoke"));
@@ -239,6 +248,17 @@ namespace DeployableSmoke
 				}
 				return true;
 			}
+			if (Interactions->IsActionMenuOpen() && State.bLease && !State.bRetryTried)
+			{
+				// 2026-10-22: the first attempt with numb fingers and no luck - dangerous: only the warning.
+				State.bRetryTried = true;
+				Medic->Luck = 0.f;
+				Medic->ColdLevel = 80.f;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine: a dangerous first attempt (luck 0, 80 %% cold): %s"), *State.Mine->DescribeDefusal(Medic).ToString());
+				Interactions->ConfirmActionMenu();
+				Enter(State, EPhase::RetryWarn);
+				return true;
+			}
 			if (Interactions->IsActionMenuOpen() && State.bLease)
 			{
 				// Dismantling crouches the defuser (Godot): luck 100 keeps the odds at 99 %, failures are retried. She stays STANDING
@@ -257,6 +277,45 @@ namespace DeployableSmoke
 				Enter(State, EPhase::Trap); // blew up on the way
 			}
 			return true;
+
+		case EPhase::RetryWarn:
+		{
+			if (State.PhaseTime < 2.f)
+			{
+				return true; // the 1.1 s crouched work
+			}
+			AProximityMineActor* Mine = State.Mine.Get();
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			const bool bWarned = Mine && Mine->bDefusalWarned && Mine->bTrapped && Medic->HealthComponent->GetCurrentHealth() >= Medic->HealthComponent->GetMaxHealth();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine retry: the first attempt only warned=%d (mine %s)"), bWarned ? 1 : 0, Mine ? TEXT("there") : TEXT("GONE"));
+			if (!Mine || !PC)
+			{
+				Enter(State, EPhase::Trap);
+				return true;
+			}
+			// Warm and lucky again for the second attempt; a fixed good roll (the warned mine has no second warning).
+			Medic->ColdLevel = 0.f;
+			Medic->Luck = 100.f;
+			Mine->DefusalRollForTesting = 0.f;
+			const FVector Before = Medic->GetActorLocation();
+			// The cursor on the mine right in front of her lands on her own body.
+			FHitResult BodyHit(Medic, Medic->GetCapsuleComponent(), Mine->GetActorLocation(), FVector::UpVector);
+			BodyHit.bBlockingHit = true;
+			PC->HandleWorldHit(BodyHit);
+			const bool bBodyClick = Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Mine && Squad->GetLeader() == Medic;
+			Interactions->CancelActionMenu();
+			// The mine itself under the cursor (it used to pick her by the 1.2 m select radius).
+			FHitResult MineHit(Mine, Mine->Box.Get(), Mine->GetActorLocation(), FVector::UpVector);
+			MineHit.bBlockingHit = true;
+			PC->HandleWorldHit(MineHit);
+			const bool bMineClick = Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Mine;
+			const float Moved = static_cast<float>(FVector::Dist2D(Medic->GetActorLocation(), Before));
+			State.bRetry = bWarned && bBodyClick && bMineClick && Moved < 20.f && State.Mine.IsValid();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine retry: body click reopens the menu=%d, mine click=%d, moved %.0f cm, still the leader=%d: %s"), bBodyClick ? 1 : 0,
+				bMineClick ? 1 : 0, Moved, Squad->GetLeader() == Medic ? 1 : 0, State.bRetry ? TEXT("ok") : TEXT("WRONG"));
+			Enter(State, EPhase::DefuseMenu); // the menu is open: the second attempt (the usual path)
+			return true;
+		}
 
 		case EPhase::DefuseWait:
 			if (State.Mine.IsValid() && State.Mine->IsAwaitingPickup())

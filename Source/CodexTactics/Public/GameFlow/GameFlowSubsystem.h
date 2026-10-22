@@ -188,6 +188,8 @@ private:
 	FGameFlowStateMachine Machine;
 	/** Phase of the last broadcast (the "old" phase of OnBeforeGameFlowChanged). */
 	ECodexGamePhase LastBroadcastPhase = ECodexGamePhase::Exploration;
+	/** 2026-10-22: the combat sub-mode last broadcast (the TacticalPauseStarted / TacticalPauseEnded gameplay events on its edges). */
+	ECodexCombatMode LastBroadcastMode = ECodexCombatMode::None;
 	FDelegateHandle StateChangedHandle;
 	FDelegateHandle PauseReleasedHandle;
 };

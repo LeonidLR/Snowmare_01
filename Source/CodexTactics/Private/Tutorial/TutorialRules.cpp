@@ -112,7 +112,7 @@ namespace TutorialRulesLocal
 	/** The plain condition stats (UTutorialSubsystem::GetConditionStat); the prefixed ones are listed by DescribeKnownStats. */
 	const TCHAR* const PlainConditionStats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
 		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max"), TEXT("squad_prone"),
-		TEXT("enemies_unseen"), TEXT("squad_passive"), TEXT("in_fight"), TEXT("quest_progress") };
+		TEXT("enemies_unseen"), TEXT("squad_passive"), TEXT("in_fight"), TEXT("quest_progress"), TEXT("tactical_pause") };
 
 	/** "squad_cold_max | ... | traps_spotted.<tag> | squad_not_low_in.<volume>" for the parse error of an unknown stat. */
 	FString DescribeKnownStats()
@@ -125,6 +125,8 @@ namespace TutorialRulesLocal
 		Names.Add(TEXT("traps_spotted.<tag>"));
 		Names.Add(TEXT("squad_not_low_in.<volume>"));
 		Names.Add(TEXT("squad_not_across.<volume>"));
+		Names.Add(TEXT("all_dead.<enemy binding>"));
+		Names.Add(TEXT("step_shown.<step>"));
 		return FString::Join(Names, TEXT(" | "));
 	}
 
@@ -623,8 +625,13 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		if (Object->TryGetObjectField(TEXT("cancel_on"), CancelObject))
 		{
 			const TSharedPtr<FJsonObject> Cancel = *CancelObject;
-			WarnUnknownKeys(Cancel, { TEXT("step"), TEXT("event"), TEXT("volume"), TEXT("enemy"), TEXT("within_m"), TEXT("off_route_m") }, Where + TEXT(" cancel_on"),
-				OutWarnings);
+			WarnUnknownKeys(Cancel, { TEXT("step"), TEXT("event"), TEXT("volume"), TEXT("enemy"), TEXT("within_m"), TEXT("off_route_m"), TEXT("condition") },
+				Where + TEXT(" cancel_on"), OutWarnings);
+			// 2026-10-22: "condition" - world-state clauses; the step is cancelled while (or as soon as) they all hold.
+			if (!ParseConditions(Cancel, Where + TEXT(" cancel_on"), Step.CancelOn.Conditions, OutWarnings, OutError))
+			{
+				return false;
+			}
 			for (const FString& Other : JsonStrings(Cancel, TEXT("step")))
 			{
 				Step.CancelOn.Steps.AddUnique(FName(*Other));
@@ -640,7 +647,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			}
 			if (!Step.CancelOn.IsSet())
 			{
-				OutWarnings.Add(Where + TEXT(": \"cancel_on\" names no step / event / volume"));
+				OutWarnings.Add(Where + TEXT(": \"cancel_on\" names no step / event / volume / condition"));
 			}
 		}
 		// Rev 5i: "confine": { "volume", "allow", "until", "stop", "span", "stance", "exit": { "stance", "through" } } (FTutorialConfine).
@@ -770,6 +777,25 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			|| !CheckStepReferences(OutData, Step, Step.Trigger.Requires, TEXT("trigger \"requires\""), /*bSelfAllowed*/ true, OutError))
 		{
 			return false;
+		}
+		// 2026-10-22: "all_dead.<binding>" must name a binding of the file, "step_shown.<step>" a step (any condition list of the step).
+		for (const TArray<FTutorialCondition>* Clauses : { &Step.Conditions, &Step.Complete.Conditions, &Step.Beyond, &Step.CancelOn.Conditions })
+		{
+			for (const FTutorialCondition& Clause : *Clauses)
+			{
+				const FName Binding = TutorialRules::ParseAllDeadStat(Clause.Stat);
+				if (!Binding.IsNone() && !OutData.FindEnemy(Binding))
+				{
+					OutError = FString::Printf(TEXT("step %s: condition stat \"%s\" names no \"enemies\" binding"), *Step.Id.ToString(), *Clause.Stat.ToString());
+					return false;
+				}
+				const FName ShownStep = TutorialRules::ParseStepShownStat(Clause.Stat);
+				if (!ShownStep.IsNone() && !OutData.FindStep(ShownStep))
+				{
+					OutError = FString::Printf(TEXT("step %s: condition stat \"%s\" names no step"), *Step.Id.ToString(), *Clause.Stat.ToString());
+					return false;
+				}
+			}
 		}
 		if (Step.Trigger.Type == ETutorialTriggerType::FirstUse && Step.Trigger.Command.IsEmpty())
 		{
@@ -1130,6 +1156,31 @@ FName TutorialRules::ParseNotAcrossStat(FName Stat)
 	return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
 }
 
+FName TutorialRules::ParseStepShownStat(FName Stat)
+{
+	static const FString Prefix(TEXT("step_shown."));
+	const FString Name = Stat.ToString();
+	return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
+}
+
+FName TutorialRules::ParseAllDeadStat(FName Stat)
+{
+	static const FString Prefix(TEXT("all_dead."));
+	const FString Name = Stat.ToString();
+	return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
+}
+
+FString TutorialRules::ResolvePauseTokens(const FString& Text, int32 MaxCharges, float PauseSeconds, float CooldownSeconds)
+{
+	if (!Text.Contains(TEXT("{pause_")))
+	{
+		return Text;
+	}
+	return Text.Replace(TEXT("{pause_charges}"), *FString::FromInt(FMath::Max(0, MaxCharges)))
+		.Replace(TEXT("{pause_seconds}"), *FString::FromInt(FMath::RoundToInt(FMath::Max(0.f, PauseSeconds))))
+		.Replace(TEXT("{pause_cooldown}"), *FString::FromInt(FMath::RoundToInt(FMath::Max(0.f, CooldownSeconds))));
+}
+
 bool TutorialRules::ComputeEdgePointer(const FVector2D& ViewSize, const FVector2D& Projected, bool bProjected, float Margin, FVector2D& OutTip,
 	FVector2D& OutDirection)
 {
@@ -1331,7 +1382,8 @@ FString TutorialRules::FormatKeys(const TArray<FString>& Keys)
 bool TutorialRules::IsKnownStat(FName Stat)
 {
 	// Rev 5h: "traps_spotted.<SpotEventTag>" counts the spotted traps of a tagged group (TrapSpotRules::ParseSpottedStatTag).
-	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone() || !ParseNotLowInStat(Stat).IsNone() || !ParseNotAcrossStat(Stat).IsNone())
+	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone() || !ParseNotLowInStat(Stat).IsNone() || !ParseNotAcrossStat(Stat).IsNone()
+		|| !ParseAllDeadStat(Stat).IsNone() || !ParseStepShownStat(Stat).IsNone())
 	{
 		return true;
 	}
