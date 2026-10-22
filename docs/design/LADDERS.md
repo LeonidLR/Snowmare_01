@@ -15,7 +15,7 @@
 | Question | Decision |
 |---|---|
 | Turn-based combat | Ladders are **forbidden** for now: no grid move uses a ladder (see 7.6 for a fight that starts mid-climb). |
-| Who climbs | The operatives and **non-mutant enemies**: PMC mercenaries (humans, not in the game yet), zombified PMC / zombified humans (`BP_Enemy_FrozenPMC_Fighter`), the Marksman. **Mutants never**: Brute, Cutter, Frostbitten, Hound, Spitter (and the Cryo Drone). The Military Zombie (a zombified soldier) is a candidate - open question 4. |
+| Who climbs | The operatives and **non-mutant enemies**: PMC mercenaries (humans, not in the game yet), zombified PMC / zombified humans (`BP_Enemy_FrozenPMC_Fighter`, the Military Zombie `BP_Enemy_MilitaryZombie`), the Marksman. **Mutants never**: Brute, Cutter, Frostbitten, Hound, Spitter (and the Cryo Drone). |
 | Wall behind the ladder | Optional: a **free-standing ladder** (no wall) is allowed. |
 | Knockdown on a ladder | The climber **falls to the bottom**: the fall, then the knockdown on landing plus fall damage (7.7; the damage numbers are a default). |
 | A fight starts mid-climb | The operative **finishes the climb to the top at normal speed** (no abort, no speed-up); the fight / turn-based entry does not use the ladder - he joins once off it (7.6). |
@@ -228,9 +228,9 @@ allows ladder). The lease = per-ladder occupancy (one climber; operatives and en
 
 ### 7.5 Enemies that climb
 `AEnemyCharacter::bCanClimbLadders` (class default false; true on `AMarksmanEnemyCharacter`, `BP_Enemy_FrozenPMC_Fighter`,
-later zombified humans and the future PMC mercenaries; never on a mutant: Brute, Cutter, Frostbitten, Hound, Spitter, Cryo
+`BP_Enemy_MilitaryZombie`, later zombified humans and the future PMC mercenaries; never on a mutant: Brute, Cutter, Frostbitten, Hound, Spitter, Cryo
 Drone). The archetype is not enough: `BP_Enemy_FrozenPMC_Fighter` and the Military Zombie are both Frostbitten variants,
-so the flag is set per Blueprint (the Military Zombie waits for open question 4). It also needs ladder clips usable on that body's skeleton (retargeted copies); a class without them is treated
+so the flag is set per Blueprint. It also needs ladder clips usable on that body's skeleton (retargeted copies); a class without them is treated
 as `false` with a warning. Same component and states; `EnemyAIController` picks the climbing filter.
 
 ### 7.6 Turn-based
@@ -271,7 +271,7 @@ mesh rows in the `DT_LadderTypes` DataTable; clip-derived numbers (pitch, root d
 | `LadderGeneratorSmoke` | metal / wood, 3 heights, free-standing: ISM counts, bounds, no navmesh cut, link points on the navmesh, validation errors on a bad placement; a 5-rung ladder: no link, flagged as decoration |
 | `LadderClimbSmoke` (L_MovementTest, spawned platform 2.55 m + ladder) | click on the platform: path through the link, up / down / IntoFromTop / ClimbOut end on the link points (+-5 cm), 3 operatives queue, prone -> stands, carrying refused, death mid-climb drops the body, a knockdown mid-climb -> falls, lands knocked down with the fall damage, save mid-climb -> loads at the end, a fight starting mid-climb: he finishes to the top at normal speed, TB grid without him, he joins on the next round |
 | `LadderAnimSmoke [Shot]` | slot weights, all gated layers at 0, hand / ball -> rung distance per frame on the operative body (< 4 cm with IK), rendered frames |
-| `LadderEnemySmoke` | a marksman and the Frozen PMC Fighter path through a ladder, a hound / frostbitten / brute path around it |
+| `LadderEnemySmoke` | a marksman, the Frozen PMC Fighter and the Military Zombie path through a ladder, a hound / frostbitten / brute path around it |
 
 ## 9. Phase plan
 
@@ -302,5 +302,5 @@ schedules them with the user.
    3b, to confirm: a climber going DOWN when the fight starts - default: continues to the bottom at normal speed. And the
    turn-based default: the grid forms without him and he joins on the next round (instead of the entry waiting).
 4. ~~**Which enemies climb.**~~ **Decided 2026-10-22:** non-mutants only - PMC mercenaries (future), zombified PMC /
-   zombified humans (`BP_Enemy_FrozenPMC_Fighter`), the Marksman; mutants never. Still to ask: **the Military Zombie**
-   (`BP_Enemy_MilitaryZombie`, a zombified soldier) - climbs or not?
+   zombified humans (`BP_Enemy_FrozenPMC_Fighter`, and - decided the same day - the Military Zombie
+   `BP_Enemy_MilitaryZombie`), the Marksman; mutants never.
