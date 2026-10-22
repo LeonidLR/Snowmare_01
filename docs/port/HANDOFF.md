@@ -131,6 +131,7 @@ One doc per system in [docs/systems/](../systems/README.md); each starts with a 
 | [sight-and-vision-cones](../systems/sight-and-vision-cones.md) | Squad sight (symmetric, also while exploring), peek sight from the leaned-out eye, occluded vision cones, how to switch cones on. |
 | [enemy-ai-and-perception](../systems/enemy-ai-and-perception.md) | Enemy registry (no actor iterators in hot paths), pack flanking detour; parity notes for enemy AI live in KNOWN_GAPS. |
 | [stealth-lure-and-scent](../systems/stealth-lure-and-scent.md) | Whistle / stone lures, enemy investigation and re-target rules, hearing round walls, hound scent (sniff, follow, detect), tutorial locks. |
+| [environment-weather](../systems/environment-weather.md) | DESIGN (not implemented): day cycle, procedural weather, cold / enemy roster coupling. |
 | [survival-cold-heat](../systems/survival-cold-heat.md) | Cold accumulation / tiers, mobile and tactical heat (campfire, stove, flares, heat packs, fire puddle), weather idle poses and the squad gathering at the fire. |
 | [interactables-traps-loot](../systems/interactables-traps-loot.md) | Interaction menus, barrels, relocation, deployables (barricade / mine / turret), loot crates, generator, quest chain and gate, spotted-trap Solo, PMC tripwire how-to. |
 | [waves-horde-encounters](../systems/waves-horde-encounters.md) | Phases (Exploration -> Preparation -> WaveCombat -> ...), sudden horde start, horde intro flyover, level enemies / guard posts / ambush start, wave data. |
