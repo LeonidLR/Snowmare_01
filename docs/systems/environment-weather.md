@@ -113,7 +113,7 @@ the Blizzard camera zone); phase Night 1.3, EarlyMorning 1.15, Midday 0.9, After
    event-bus delegates, console `Codex.Env.SetWeather / SetHour / Seed / ClockScale`, unit tests `CodexTactics.Environment.*`.
 2. Cold coupling + turn-based clock step + roster substitution at spawn (tests, `ColdSmoke` / wave smoke extensions).
 3. Migration (`/Game/Environment/Weather/`), presenter, 4 presets, day curves, `WeatherSmoke` + stills.
-4. Niagara layers for the tactical camera, MPC / snow / frost in the master materials, Storm idle clips in Blizzard.
+4. Niagara layers for the tactical camera, MPC / snow / frost in the master materials, Storm idle clips in Blizzard (the walking storm upper body is done 2026-10-22: animation-setup "Blizzard walk").
    **Gradual snow cover (user requirement 2026-10-22, «objects are gradually covered with snow»):** port the WeatherSystem_01 shader
    chain - `MF_SnowyWeatherBlend` (snow layer over any base material by the world-up normal, Megascans `Fresh_Snow`, inputs
    `IsLandScapeBlend` / `CanAnimateSnowCoverage`) driven by the MPC scalar `SnowAmount` (old: `SnowCoverageAnimationTimeline`,

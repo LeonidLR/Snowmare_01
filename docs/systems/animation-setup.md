@@ -5,7 +5,7 @@
 >
 > Key files:
 > - `Characters/OperativeAnimInstance`, `EnemyAnimInstance`, `Scripts/Editor/setup_operative_*animation.py`, `setup_enemy_animation.py`, `create_frozen_pmc_fighter.py`, `create_military_zombie.py`, `UOperativeAnimGraphLibrary`
-> - Smokes `AimOffsetSmoke`, `GrenadeAnimSmoke`, `SniperSmoke`, `WarmIdleSmoke`, `DeathCamSmoke`; weather idles / warming rules: [survival-cold-heat](survival-cold-heat.md)
+> - Smokes `AimOffsetSmoke`, `GrenadeAnimSmoke`, `SniperSmoke`, `WarmIdleSmoke`, `DeathCamSmoke`, `BlizzardWalkSmoke` (storm upper body in a blizzard); weather idles / warming rules: [survival-cold-heat](survival-cold-heat.md)
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
@@ -276,6 +276,42 @@ LootSmoke, DeployableSmoke, PMCTripwireSmoke, WarmIdleSmoke (rows in §3). Rende
 ... /Game/Maps/L_MovementTest -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -benchmark -fps=30 -ExecCmds="CodexTactics.InteractionAnimShots"`)
 -> `Saved/Screenshots/anim_chest_open(_2).png`, `anim_chest_search(_2).png`, `anim_pickup_crouched_upper(_2).png`, `anim_pickup_standing.png`.
 
+
+## Blizzard walk: the storm upper body (game designer 2026-10-22)
+
+**Request:** "in a blizzard the operatives walk with the arms stretched out - the storm clips of the freezing set, on the UPPER BODY."
+**Clips:** `/Game/90+_Weather_Animations/Animations/NEW_version/Storm` (24: `AS_{He,She}_Storm_{1,2}_{1Start,2Loop,3Tranzit,4Loop,5Tranzit,6End}`;
+OLD_version `storm-1..3_*` are older takes). Measured read-only by `Scripts/Editor/measure_storm_clips.py` (`Saved/Logs/measure_storm_clips.txt`): all storm clips
+stand in place (no root motion; the loops' feet do not move, Start / End take one step), so there is no walk cycle to take the legs from - which is fine, the
+designer wants the upper body. Storm_1 loops hold both hands before the face (pack: He 54 / 47 cm in front of spine_03, 45 / 27 cm above it; She 42 / 58, 46 / 44);
+Storm_2 crouches lower (pelvis He 85, She 76 cm) and one hand hangs back in its 2Loop -> **Storm_1 loops + transits** are used (Start / End not needed: the layer
+blends 0.3 s while he walks).
+**Retarget:** as the cold idles (survival-cold-heat "Weather idle poses"): the pack's UE5 Manny skeleton -> IK retarget with the M4 pack's `RTG_UE5Manny_UE4Manny`
+("Blend to Source" off in memory, never saved) by `Scripts/Editor/setup_operative_storm_animation.py` -> `/Game/Characters/Operatives/Anims/Weather/Storm/Male/AS_He_Storm_1_*`
+(SK_Post_Apo_Survivor_a) and `.../Storm/Female/AS_She_Storm_1_*` (SK_Female_soldier), 8 clips, posture error (head / hands vs pelvis) <= 13 cm
+(`Saved/Logs/setup_operative_storm_animation.txt`). Only the copies are saved (re-run: `CODEX_RESET_STORM_CLIPS=1`; `CODEX_STORM_DRYRUN=1` measures only).
+**ABP: nothing changed.** `UOperativeAnimInstance` (`OperativeAnimInstanceBlizzardWalk.cpp`) loads the copies by path into the empty class defaults
+`BlizzardWalkMale` / `BlizzardWalkFemale` (`FWarmIdleClipSet`; assign own clips there to override) and plays them as dynamic montages on `UpperBodySlot`
+("Fire" = the graph's Layered blend per bone from spine_01, the path the grenade / hit / crouched interaction clips use): the legs keep the locomotion. Loop A
+x 2-4 (`BlizzardWalkLoopsMin/Max`) -> 3Tranzit -> loop B -> 5Tranzit ... (the weather idles' `WarmIdleRules::NextClipStep`), the first loop random (two operatives
+side by side do not mirror). Blend in / out `BlizzardWalkBlendSeconds` 0.3, out `BlizzardWalkInterruptBlendSeconds` 0.15 when the rifle is needed. While it
+shows: weapon hidden (`bHideWeaponInBlizzardWalk`, the clips hold both hands before the face; it shows again as the pose blends out), left-hand IK and aim
+offset off. Graph hooks: `bBlizzardWalkActive`, `BlizzardAmount`.
+**Gate (pure `Characters/BlizzardWalkRules`, tests `CodexTactics.Characters.BlizzardWalk.*`):** blizzard amount = (weather == Blizzard ? 1 - blend : 0) + (next ==
+Blizzard ? blend : 0) from `UEnvironmentSubsystem` (`GetWeather` / `GetNextWeather` / `GetTransitionBlend`, per frame) - on at >= 0.5, off below 0.35, so the 45 s
+transition starts / ends it half-way (phase 4's `GetWeatherAmount` can replace the formula; the rule takes the amount). Off: indoors (a Closed / Shelter camera zone -
+`ACameraZoneVolume::IsShelteredLocation`, shared with the campfire's indoor noise - or a heat source's warm zone; checked every 0.25 s), dead / knocked down,
+crouched / prone, not walking (starts above `BlizzardWalkStartSpeed` 40, keeps it down to `BlizzardWalkStopSpeed` 20 cm/s), sprinting or faster than
+`BlizzardWalkMaxSpeed` 450 (walk 220 / jog: on), aiming / a shot's aim hold / a held combat target (`GetAimTargetPoint`) / reloading, in cover / vaulting / carrying,
+another upper-body clip (fire, reload, hit, grenade, crouched interaction, working device, `LeftHandIKBlockSeconds`), a full-body clip (weather idle, stance
+transition, sniper pose, knockdown, vault). `GetBlizzardWalkBlock()` names the reason.
+**Check:** `CodexTactics.BlizzardWalkSmoke` (L_MovementTest, own lane via FindClearArena, weather forced by `ForceWeather(..., instant)`): Clear -> 0; Blizzard ->
+weight > 0.8 in 0.25 s, both hands > 25 cm before the chest and > 15 cm above it (measured 36 / 50 and 30 / 24 cm; the rifle walk holds hand_l 55 cm out on the
+handguard at chest height, so "further forward than the normal walk" is not the measure for the left hand - the pose RAISES the hands +18 cm), feet still swing,
+no full-body clip; a shot -> 0 in 0.05 s and stays 0 during the aim hold, back after it; a Closed zone over the lane -> 0; stop -> 0; Clear -> 0; crouch-walk -> 0.
+`CodexTactics.BlizzardWalkSmoke clip` (rendered, `-RenderOffscreen -benchmark -fps=30`) writes ~10 s of frames to `Saved/Screenshots/BlizzardWalk/`.
+**Eyeball in PIE:** the storm pose with the weapon hidden reads as "shielding the face"; if the user prefers the rifle kept, untick `bHideWeaponInBlizzardWalk`
+(the rifle then follows hand_r up to the face) or give the rifle a back socket later.
 
 ## Frozen PMC Fighter: the Frostbitten's animation on the Cyberpunk_Explorer_A body (game designer 2026-10-20)
 

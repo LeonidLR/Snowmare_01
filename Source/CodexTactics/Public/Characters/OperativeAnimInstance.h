@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
+#include "Characters/BlizzardWalkRules.h"
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
@@ -1254,6 +1255,75 @@ public:
 	/** The operative anim instance of Actor's mesh, or nullptr. */
 	static UOperativeAnimInstance* Of(const AActor* Actor);
 
+	// --- Blizzard walk (game designer 2026-10-22; Characters/BlizzardWalkRules, OperativeAnimInstanceBlizzardWalk.cpp). Outdoors in a
+	// blizzard a walking / jogging operative shields himself against the wind: the pack's Storm_1 loops (arms stretched out in front of
+	// the face) play on UpperBodySlot (the graph's layered blend from spine_01), the legs keep the locomotion. No graph change.
+
+	/** Play the storm upper body while walking in a blizzard (untick: never). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk")
+	bool bUseBlizzardWalk = true;
+
+	/**
+	 * The storm upper-body clips (LoopA / TransitAB / LoopB / TransitBA; Start / End unused), male (AS_He_*, recruits too) / female.
+	 * Empty = the Claude-owned retargeted copies /Game/Characters/Operatives/Anims/Weather/Storm/{Male,Female}/AS_*_Storm_1_* loaded at
+	 * start (Scripts/Editor/setup_operative_storm_animation.py).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk")
+	FWarmIdleClipSet BlizzardWalkMale;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk")
+	FWarmIdleClipSet BlizzardWalkFemale;
+
+	/** Blend in / out of the storm upper body, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk", meta = (ClampMin = "0"))
+	float BlizzardWalkBlendSeconds = 0.3f;
+
+	/** Blend-out when the rifle is needed (aim, a shot, reload, hit, grenade, cover...), s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk", meta = (ClampMin = "0"))
+	float BlizzardWalkInterruptBlendSeconds = 0.15f;
+
+	/** Starts above this ground speed, cm/s; keeps it down to BlizzardWalkStopSpeed; off above BlizzardWalkMaxSpeed (a run / sprint). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk", meta = (ClampMin = "0"))
+	float BlizzardWalkStartSpeed = 40.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk", meta = (ClampMin = "0"))
+	float BlizzardWalkStopSpeed = 20.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk", meta = (ClampMin = "0"))
+	float BlizzardWalkMaxSpeed = 450.f;
+
+	/** Loops of a loop clip before the transit to the other one (random in the range). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk", meta = (ClampMin = "1"))
+	int32 BlizzardWalkLoopsMin = 2;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk", meta = (ClampMin = "1"))
+	int32 BlizzardWalkLoopsMax = 4;
+
+	/** Hide the weapon while the storm pose holds both hands in front of the face (it shows again as the pose blends out). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk")
+	bool bHideWeaponInBlizzardWalk = true;
+
+	/** The storm upper body plays (graph hook). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk")
+	bool bBlizzardWalkActive = false;
+
+	/** 0..1 blizzard share of the current weather (BlizzardWalkRules::GetBlizzardAmount). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk")
+	float BlizzardAmount = 0.f;
+
+	/** Why the layer is off now (smokes / logs). */
+	EBlizzardWalkBlock GetBlizzardWalkBlock() const { return BlizzardWalkBlock; }
+	/** The storm montages' blend weight on UpperBodySlot now (0..1; the layer's real weight, smokes). */
+	float GetBlizzardWalkWeight() const;
+	/** The storm clip playing now (nullptr = none). */
+	UAnimSequenceBase* GetBlizzardWalkClip() const { return BlizzardWalkClip.Get(); }
+	/** Indoors (a Closed / Shelter zone or a heat source's warm zone) at the last check. */
+	bool IsBlizzardSheltered() const { return bBlizzardSheltered; }
+	/** The storm clip set for this body (female / male, either as fallback), or nullptr. */
+	const FWarmIdleClipSet* GetBlizzardWalkClipSet() const;
+	/** Smokes: storm clips started (capped). */
+	const TArray<FString>& GetBlizzardWalkClipLog() const { return BlizzardWalkClipLog; }
+
 	// --- Rifle_2 locomotion (ABP_Operative_Rifle2, Scripts/Editor/setup_operative_rifle2_animation.py; RifleLocomotionRules) ---
 
 	/** Runs the Idle / Turn / Start / Walk / Stop machine below (set on ABP_Operative_Rifle2's defaults). */
@@ -1513,6 +1583,27 @@ private:
 	bool bWarmWeaponHidden = false;
 	bool bWarmWeaponWasVisible = true;
 	TOptional<bool> bWarmFemaleCached;
+
+	// Blizzard walk layer (OperativeAnimInstanceBlizzardWalk.cpp).
+	/** Loads the Claude-owned storm copies into empty clip sets (NativeInitializeAnimation). */
+	void LoadDefaultBlizzardWalkClips();
+	void UpdateBlizzardWalkLayer(const AOperativeCharacter& Operative);
+	bool PlayBlizzardWalkClip(EWarmClipStep Step, float BlendIn);
+	void StopBlizzardWalk(float BlendOut);
+	/** Another montage than the storm one on UpperBodySlot (fire, reload, hit, grenade, interaction, working device). */
+	bool HasOtherUpperBodyMontage() const;
+	EBlizzardWalkBlock BlizzardWalkBlock = EBlizzardWalkBlock::NoBlizzard;
+	EWarmClipStep BlizzardWalkStep = EWarmClipStep::None;
+	int32 BlizzardWalkLoopsDone = 0;
+	int32 BlizzardWalkLoopsTarget = 2;
+	TWeakObjectPtr<UAnimMontage> BlizzardWalkMontage;
+	TWeakObjectPtr<UAnimSequenceBase> BlizzardWalkClip;
+	TArray<FString> BlizzardWalkClipLog;
+	/** The shelter check is a zone scan: every BlizzardShelterCheckSeconds of game time, not every frame. */
+	bool bBlizzardSheltered = false;
+	double BlizzardShelterCheckTime = -1.0;
+	/** The weapon is hidden for the storm pose. */
+	bool bBlizzardWeaponHidden = false;
 
 	// Rifle_2 machine.
 	void EnterRifleLocoState(ERifleLocoState NewState, UAnimSequence* Clip);

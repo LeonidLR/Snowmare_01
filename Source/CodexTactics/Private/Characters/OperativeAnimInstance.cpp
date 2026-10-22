@@ -95,6 +95,8 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 	}
 	// Interaction clips + the cold idle variant (game designer 2026-10-15): Claude-owned montages / the pack clip when unset.
 	LoadDefaultInteractionClips();
+	// Blizzard walk (game designer 2026-10-22): the retargeted storm upper-body clips when the class defaults are empty.
+	LoadDefaultBlizzardWalkClips();
 	// Corner-ready pose (user rule 2026-10-06): until setup_operative_cover_animation.py assigns it, take the M4 pack's
 	// look-at idles when the pack is in the project and the other cover clips come from it.
 	if (bUseNativeCoverClips && (CoverStandIdle.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; })))
@@ -954,6 +956,7 @@ void UOperativeAnimInstance::UpdateState()
 		bIsWeaponFrozen = Cold->IsWeaponFrozen();
 	}
 	UpdateInteractionLayer(*Operative); // before the weather / sniper layers: an interaction clip keeps both off
+	UpdateBlizzardWalkLayer(*Operative); // before the weather idle: it applies the storm pose's weapon hiding too
 	UpdateWarmIdleLayer(*Operative); // before the sniper layer: a weather pose keeps the sniper idle off
 	UpdateSniperLayer(*Operative);
 	UpdateLeftHandIK(*Operative, StateDeltaSeconds);
@@ -1026,7 +1029,8 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	// A grenade throw / hit reaction plays on the upper body: it frees the left hand only while it actually shows — under a
 	// full-body cover clip it is invisible (user PIE 2026-10-07: every hound bite blocked the IK for the hit clip's length
 	// while the cover fire stance kept the rifle up, so the left hand let go of it).
-	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f;
+	// The blizzard walk's storm pose holds both hands in front of the face (game designer 2026-10-22).
+	State.bUpperBodyAction = (LeftHandIKBlockSeconds > 0.f || bBlizzardWalkActive) && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f;
 	State.bVaulting = bIsVaulting || bIsClimbing; // a ladder frees both hands (LADDERS.md 6.1)
 	State.bDead = bIsDead || bKnockedDown; // Sprint 14: no IK / aim offset while knocked down
 	State.bProne = bIsProne && !bSniperPose; // the prone sniper aim holds the rifle with both hands (crawl clips do not)
@@ -1103,7 +1107,7 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	// A grenade throw / hit reaction plays on the upper body: it frees the left hand only while it actually shows — under a
 	// full-body cover clip it is invisible (user PIE 2026-10-07: every hound bite blocked the IK for the hit clip's length
 	// while the cover fire stance kept the rifle up, so the left hand let go of it).
-	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f; // grenade throw / hit reaction windows (shared with the left-hand IK)
+	State.bUpperBodyAction = (LeftHandIKBlockSeconds > 0.f || bBlizzardWalkActive) && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f; // grenade throw / hit reaction windows (shared with the left-hand IK), the storm pose
 	State.bVaulting = bIsVaulting || bIsClimbing;
 	State.bSprinting = bIsSprinting;
 	State.bProne = bIsProne;
