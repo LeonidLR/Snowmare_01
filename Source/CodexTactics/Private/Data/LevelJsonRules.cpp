@@ -149,6 +149,11 @@ FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonOb
 	{
 		Settings.Seed = FMath::RoundToInt(Number);
 	}
+	bool bVisuals = true;
+	if (Environment.TryGetBoolField(TEXT("visuals"), bVisuals))
+	{
+		Settings.bVisuals = bVisuals;
+	}
 	return Settings;
 }
 

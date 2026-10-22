@@ -331,7 +331,7 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FBox2D MinimapBoundsCm = FBox2D(ForceInit);
 	/**
-	 * "environment": {"locked": bool, "start_hour": h, "weather": "Clear|Overcast|Snowfall|Blizzard", "seed": n} (UE-only, 2026-10-22,
+	 * "environment": {"locked": bool, "start_hour": h, "weather": "Clear|Overcast|Snowfall|Blizzard", "seed": n, "visuals": bool} (UE-only, 2026-10-22,
 	 * docs/systems/environment-weather.md): the day cycle / weather start of this level (UEnvironmentSubsystem::ResolveInitialState).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")

@@ -1,7 +1,7 @@
-# Environment: day cycle, procedural weather, cold and enemy roster (phases 1-2 implemented: clock, weather, cold, roster)
+# Environment: day cycle, procedural weather, cold and enemy roster (phases 1-3 implemented: clock, weather, cold, roster, visual presenter)
 
 > Design of the time-of-day + weather system and how it drives cold and the enemy roster. Status 2026-10-22: phase 1 (clock, weather ladder,
-> carry-over, tutorial lock, events, console) and phase 2 (cold multipliers, roster by conditions) implemented - see §8 / §9; visuals are phases 3-4.
+> carry-over, tutorial lock, events, console) and phase 2 (cold multipliers, roster by conditions) implemented - see §8 / §9; phase 3 visual presenter (lights / fog / post by hour + weather) §11; Niagara / snow cover phase 4.
 > Visual base = the user's own `WeatherSystem_01 5.4` project (`BP_DynamivSky`, `NS_SnowStorm`, `MPC_WeatherSettings`, `MF_SnowyWeatherBlend`, sky sphere
 > materials, `S_*` preset structs, `DA_Snowy` / `DA_Sunny`), migrated and stripped of rain / lightning / puddles. **No Ultra Dynamic Sky / Weather** (user decision 2026-10-22).
 >
@@ -190,3 +190,87 @@ Key files:
 - Does weather lower sight ranges / accuracy / hound scent for both sides.
 - Which "zombie" body the tutorial's few zombies use (FROSTBITTEN on the Military Zombie / FrozenPMC body?).
 - Footprints: the old decal notify or the existing RT `SnowTracks`; volumetric clouds or the 2D sky sphere only.
+
+## 10. Migrated assets (phase 3)
+
+Source: the old project `WeatherSystem_01 5.4` (read-only; only copied from). Script: `Scripts/Editor/migrate_weather_assets.py` (re-runnable:
+`python Scripts/Editor/migrate_weather_assets.py stage`, then the editor commandlet `-run=pythonscript -script=...` under the build lock; it renames the
+staged assets with reference fixup, fixes up the redirectors of the temporary folders only, deletes them, saves only the moved assets and verifies that
+every asset loads and references nothing outside `/Game/Environment/Weather` except engine content). Result: 37 assets, 78.8 MB, no missing refs; after the user dropped the volumetric clouds (2026-10-22) **32 assets, ~55 MB** remain.
+
+**Closure method.** A read-only scan of the `.uasset` name tables for `/Game/` packages, followed transitively from the KEEP set (no editor, nothing saved).
+The closure is clean: no rain, lightning, footprint or example asset is pulled in by the KEEP set.
+
+| Group | New path (`/Game/Environment/Weather/...`) | Role |
+|---|---|---|
+| Sky | `Sky/SM_SkySphere`, `Sky/M_DynSkySphere`, `Sky/MI_DynSkySphere` | Sky sphere mesh, dynamic sky material (clouds, moon, stars) and its instance |
+| Sky | `Sky/Textures/T_Sky_Clouds_M`, `T_MoonNASA_1K`, `T_Sky_Stars` | Cloud layer, moon, stars textures of the sky sphere |
+| Snow | `Snow/Materials/MF_SnowyWeatherBlend` | Snow cover blend over a material (reads `MPC_WeatherSettings`) |
+| Snow | `Snow/Materials/MF_LandscapeLayerProcessed`, `MF_ComputeLandscapeUV`, `MF_TextureBombingVoronoi` | Helpers `MF_SnowyWeatherBlend` calls |
+| Snow | `Snow/Textures/T_Fresh_Snow_ugkieimdy_2K_D`, `_N`, `T_FreshSnow_ugkieimdy_2K_ORDp` (Megascans Fresh Snow, 40 MB) | Snow albedo / normal / ORD |
+| Snow | `Snow/Niagara/NS_SnowStorm`, `FollowCameraTemplate` | Falling snow / blizzard system (follows the camera) and its template |
+| Snow | `Snow/Niagara/M_SnowSmokeMaster_Add`, `M_SnowSmokeMaster_Add_Inst`, `T_Smoke_SubUV` | Snow particle material, instance and sub-UV smoke sheet |
+| MPC | `MPC/MPC_WeatherSettings` | Old parameter collection; **becomes `MPC_Environment` later** (name kept for now, rain parameters to be removed) |
+| Common | `Common/Textures/T_TilingNoisePacked` (sky sphere + snow blend), `T_VoronoiNoise_Packed` (landscape layer helper) | Shared noise textures |
+| Reference | `Reference/BP_WeatheDataAsset_Base`, `DA_Snowy`, `DA_Sunny`, `S_SkyAtmosphereSettings`, `S_DirectionalLightSettings`, `S_SkyLightSettings`, `S_ExponentialHeightFogSettings`, `S_SnowyWeatherSettings`, `EWeatherType` | Old preset data assets, kept only as a look reference (the C++ presenter replaces them; `EWeatherType` still has a rain entry as a plain enum value, no rain assets) |
+
+**Not migrated (and why).**
+- Volumetric clouds (`M_VolumetricClouds_Master` + MI, `T_PackedCloudMasks`, `T_VolumeNoiseShape128`, `VT_PerlinWorley_Balanced`, and the cloud-only
+  `MF_MavroVar` / `T_MacroVariation`): migrated first, then removed - user decision 2026-10-22: «volumetric clouds are not visible» from the tactical
+  camera; the presenter disables the map's `AVolumetricCloud` at runtime (restored when the visuals are off).
+- `BP_DynamivSky` (+ the "(1)" copy): drags rain and lightning (`NS_Raindrops`, `NS_Lightning`, `PPM_RainDropsOnScreen`, `DA_Rainy`); the C++ `AWeatherPresenterActor` replaces it.
+- Rain: `NS_Raindrops`, `NS_PuddleSplashes`, `MLiquidMaster`, `MI_Raindrops` / `MI_TainSplashes` / `MI_PuddleSplash_01`, `PPM(I)_RainDropsOnScreen`, `T_RainDropsPacked`
+  and `Textures/Liquid`, `MF_GenerateRainyWeatherPuddles`, `PM_Puddle_01`, `DA_Rainy`, `S_RainyWeatherSettings` - no rain in the game (decision 5).
+- Lightning: `NS_Lightning`, `M_Lightning_Master`, `MI_LightningBolt_01`, `Textures/Lightning`.
+- Footprints (`NS_LeftFoot` / `NS_RightFoot`, `M_FootPrint_Master`, `Textures/Footprints`) - decided later (open question).
+- Landscape automaterial (`M_LandscapeAutomaterial`, `MI_Weather_LandscapeAutomaterial`), `Examples`, Houdini / Gaea / ONECOURSESOLUTION / ThirdPerson / StarterContent / MSPresets / other Megascans / maps, `Textures/Clouds/2D/T_Sky_Blue`, unused 3D cloud noises.
+
+**Known issue (pre-existing in the old project).** UE 5.8 logs "Some expression in Material Function `MF_ComputeLandscapeUV` failed to load correctly"
+(the same line is in the old project's own log). `MF_LandscapeLayerProcessed` / `MF_SnowyWeatherBlend` call it, so a material using the snow blend may fail to
+translate until that function is repaired in the editor (phase 3 presenter work).
+
+## 11. Implementation - phase 3 (2026-10-22): the visual presenter
+
+Visual only: nothing in gameplay reads the lighting; the presenter never changes the state, the clock or the RNG (the wave / horde smokes keep
+their timing). Works under `-nullrhi` (component values only; the sky recapture is skipped).
+
+Key files:
+- `Public/Environment/WeatherVisualTypes.h` - `FWeatherVisualPreset` (per weather: sun intensity x / tint / temperature offset / source angle,
+  moon x, sky light x, Rayleigh / Mie x, fog density / falloff / colour / brightness x / start distance / max opacity, volumetric fog on + extinction,
+  exposure bias / saturation / tint; phase-4 data SnowIntensity / FrostAmount / WindStrength), `FEnvironmentDayCurves` (dawn 6 / dusk 18, sun max
+  elevation 52, night depth 35, yaw sweep, moon 28-55 deg, moon colour, `FRuntimeFloatCurve`s by hour: sun intensity, sun temperature, moon
+  intensity, sky light, fog brightness, exposure bias; night tint / saturation - defaults built in the C++ constructor), `FWeatherVisualFrame`.
+  Intensities are MULTIPLIERS of the values authored in the map (each map keeps its exposure balance); fog numbers and post values are absolute.
+- `Public/Environment/EnvironmentVisualRules.h` / `.cpp` - pure: `GetDefaultPreset` (the 4 C++ fallbacks), `LerpPresets`, `EvalHourCurve`,
+  `GetSunElevation` / `GetSunYaw` (the old BP_DynamivSky MapRangeUnclamped arc: max x sin(pi t) between dawn and dusk, below the horizon at night),
+  `GetMoonElevation` / `GetMoonYaw`, `GetNightAmount`, `ComputeFrame` (hour curves x the preset blended Weather -> NextWeather by `GetTransitionBlend`).
+- `Public/Environment/WeatherPresetAsset.h` - `UWeatherPresetAsset : UPrimaryDataAsset` (Weather, Visual, phase-4 `NiagaraLayers` soft refs,
+  `ResetToDefaults()` CallInEditor). Instances `/Game/Environment/Weather/Presets/DA_Weather_Clear / _Overcast / _Snowfall / _Blizzard`
+  (`Scripts/Editor/create_weather_presets.py`, new assets only, started from the C++ defaults; the user tunes them in the editor).
+- `Public/Environment/WeatherPresenterActor.h` / `.cpp` - `AWeatherPresenterActor` (Blueprintable): spawned by `UEnvironmentSubsystem` at the
+  end of `InitialiseFromWorld` (`SpawnForWorld`; never placed in a map; a game world with the project's game mode only). Adopts the map's
+  `ADirectionalLight` (sun = the atmosphere sun light 0, else the brightest), a second directional light as the moon (atmosphere index 1 / "Moon"
+  in the name) else its own `MoonLight` component (Movable, atmosphere light index 1), `ASkyAtmosphere`, `ASkyLight`, `AExponentialHeightFog`,
+  an unbound `APostProcessVolume` else its own unbound `PostProcess` component. Records the authored values (`FWeatherAuthoredLighting`) and
+  drives them at `ApplyRateHz` 20 + at once on `OnStateSet`. A Static / Stationary sun: warning, not rotated (Stationary still re-lit). Sky
+  light: real-time capture -> nothing; else `RecaptureSky` at most every `SkyRecaptureInterval` 2 s when the look moved. The first application
+  waits (max `MinimapHoldSeconds` 4 s) for the minimap captures, so the minimap keeps the authored lighting. Presets: soft refs
+  `PresetClear / _Overcast / _Snowfall / _Blizzard` (default paths above), C++ defaults when an asset is missing. `OnEnvironmentApplied(Frame)` /
+  `OnEnvironmentVisualsRestored()` BlueprintImplementableEvents for the user's `BP_WeatherPresenter`. `EnvironmentParameters` (MPC soft ref) = phase 4.
+- **Volumetric clouds (user decision 2026-10-22): not visible from the tactical camera** - the presenter hides the map's `AVolumetricCloud`
+  (actor hidden, component invisible + deactivated) while the visuals run and restores it when they are off; presets carry no cloud values;
+  overcast / snow skies come from light, sky light, fog and post-process (later the sky sphere). Nothing references `/Game/Environment/Weather/Clouds`.
+- `Public/Environment/EnvironmentVisualSettings.h` - Project Settings > Game > Codex Environment Visuals: `bSpawnPresenter`, `PresenterClass`
+  (default `/Game/Environment/Weather/BP_WeatherPresenter`, used once that BP exists; C++ class otherwise). Defaults in C++, no .ini written.
+- Level JSON `"environment": { ..., "visuals": false }` (`FEnvironmentLevelSettings::bVisuals`, default true; schema) -> no presenter, the
+  authored lighting stays. Console variable `Codex.Env.Visuals 0|1` (runtime module): 0 restores every authored value, 1 applies again.
+- Adopted on both test maps: sun `DirectionalLight` (Movable, authored 6 lux), `SkyAtmosphere`, `SkyLight` (real-time capture), `ExponentialHeightFog`
+  (density 0.0436, inscattering black = lit by the sky atmosphere), 1 `VolumetricCloud` (switched off); moon and post-process own (no PPV in the maps).
+- Look (stills `Saved/Screenshots/Environment/visuals/`): Clear = crisp cold light, hard shadows, low fog; Overcast = flat grey, soft shadows;
+  Snowfall = fog from ~18 m, short visibility; Blizzard = dense white-grey, weak light; night = moonlit blue (moon 0.22 x the sun, sky light x2.2,
+  -1.2 EV, cold tint) - the squad stays readable as dark figures with moon shadows. Dawn on the lake snow is still warm-pink (atmosphere at low
+  sun) - tune `DayCurves` / the Clear preset if needed.
+- Tests `CodexTactics.Environment.Visuals.*` (4): SunArc, PresetLerp, CurveDefaults (monotonic dawn / dusk, readable night floor), LevelJson.
+  Smokes `CodexTactics.WeatherSmoke` (L_MovementTest) and `CodexTactics.WeatherLakeSmoke` (lake + `-LevelJson`). Stills / timelapse:
+  `CodexTactics.EnvironmentShots visuals [timelapse]` (`docs/systems/build-test-smokes.md`).
+- Not yet (phase 4): Niagara layers / User parameters, MPC_Environment writes, snow cover, the sky sphere, the user's `BP_WeatherPresenter`.

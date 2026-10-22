@@ -40,7 +40,8 @@ namespace LevelJsonRules
 	CODEXTACTICS_API FDemoModeSettings ParseDemoSettings(const FJsonObject& Demo);
 
 	/**
-	 * The level JSON "environment" object (UE-only, 2026-10-22): {"locked": true, "start_hour": 23, "weather": "Snowfall", "seed": 7};
+	 * The level JSON "environment" object (UE-only, 2026-10-22): {"locked": true, "start_hour": 23, "weather": "Snowfall", "seed": 7,
+	 * "visuals": false} ("visuals" phase 3, default true: false keeps the map's authored lighting, no weather presenter);
 	 * absent keys keep the procedural default, an unknown weather name is ignored (bHasWeather false) and reported in OutError.
 	 */
 	CODEXTACTICS_API FEnvironmentLevelSettings ParseEnvironmentSettings(const FJsonObject& Environment, FString* OutError = nullptr);

@@ -78,6 +78,9 @@ public:
 	/** The level's "environment" block arrived (normally read at OnWorldBeginPlay): re-resolves the start state unless the clock already ran. */
 	void ApplyLevelSettings(const FEnvironmentLevelSettings& Settings);
 
+	/** The level's "environment" block in force (FEnvironmentLevelSettings::bVisuals gates the weather presenter). */
+	const FEnvironmentLevelSettings& GetLevelSettings() const { return LevelSettings; }
+
 	/** The tuning in force (EnvironmentTuning::Get). */
 	const FEnvironmentConfig& GetConfig() const;
 

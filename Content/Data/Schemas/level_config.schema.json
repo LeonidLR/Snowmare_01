@@ -30,7 +30,8 @@
         "locked": { "type": "boolean", "default": false },
         "start_hour": { "type": "number", "minimum": 0, "maximum": 24 },
         "weather": { "type": "string", "enum": ["Clear", "Overcast", "Snowfall", "Blizzard"] },
-        "seed": { "type": "integer" }
+        "seed": { "type": "integer" },
+        "visuals": { "type": "boolean", "default": true, "description": "Environment phase 3: the weather presenter drives the lighting (sun / moon / sky light / fog / post-process by hour and weather; volumetric clouds off); false = the map's authored lighting stays" }
       }
     },
     "waves": {
