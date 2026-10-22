@@ -120,7 +120,7 @@ void UOperativeAnimInstance::UpdateSniperLayer(const AOperativeCharacter& Operat
 {
 	bSniperWeapon = Operative.IsSniperWeaponEquipped();
 	const bool bStill = Speed < SniperStillSpeed;
-	const bool bEligible = bSniperWeapon && bUseSniperClips && !bInCover && !bIsDead && !bKnockedDown && !bIsVaulting && !bIsSprinting
+	const bool bEligible = bSniperWeapon && bUseSniperClips && !bInCover && !bIsDead && !bKnockedDown && !bIsVaulting && !bIsClimbing && !bIsSprinting
 		&& !Operative.bCarrying && bStill && !IsThrowingGrenade() && !bWarmIdleActive
 		&& !IsInteractionClipActive(); // a crate / pickup clip owns the body (OperativeAnimInstanceInteraction.cpp)
 	const UAnimMontage* OneShot = SniperOneShotMontage.Get();

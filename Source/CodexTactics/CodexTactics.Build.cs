@@ -27,6 +27,6 @@ public class CodexTactics : ModuleRules
 			"ProceduralMeshComponent"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "RenderCore" }); // RenderCore: GWhiteTexture for the minimap canvas triangles
+		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "RenderCore", "AnimationCore" }); // RenderCore: GWhiteTexture for the minimap canvas triangles; AnimationCore: the ladder rung IK (TwoBoneIK)
 	}
 }

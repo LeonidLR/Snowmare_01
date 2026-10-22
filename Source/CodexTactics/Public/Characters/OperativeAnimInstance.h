@@ -6,6 +6,7 @@
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "Survival/ColdRules.h"
 #include "Survival/WarmIdleRules.h"
 #include "Tactics/CoverSwitchRules.h"
@@ -162,8 +163,13 @@ struct CODEXTACTICS_API FOperativeAnimInstanceProxy : public FAnimInstanceProxy
 
 	virtual void PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds) override;
 	virtual bool Evaluate(FPoseContext& Output) override;
+	/** Graph instances: the graph, then the ladder rung IK (LADDERS.md 6.2) on hands / feet - no ABP node needed. */
+	virtual bool Evaluate_WithRoot(FPoseContext& Output, FAnimNode_Base* InRootNode) override;
 
 private:
+	/** Two-bone IK of the hands / feet onto their rungs (component space, after the whole graph). */
+	void ApplyLadderIK(FPoseContext& Output) const;
+	FLadderIKFrame LadderIK;
 	TStaticArray<FOperativeClipState, static_cast<int32>(EOperativeClip::Count)> Clips;
 	bool bUseNative = true;
 };
@@ -525,6 +531,16 @@ public:
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	float PronePlayRate = 1.f;
+
+	/**
+	 * On a ladder (docs/design/LADDERS.md 6.1; the climb clips play on FullBodySlot from ULadderClimbComponent): no aim, no left-hand IK,
+	 * no aim offset, no sniper / interaction / weather / hit / grenade / reload clips, no cold layer. The rung IK runs natively.
+	 */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
+	bool bIsClimbing = false;
+
+	/** The rung IK frame copied from the climb this update (the proxy applies it). */
+	FLadderIKFrame LadderIKFrame;
 
 	/** Vaulting over an obstacle (Godot "Vault" state). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")

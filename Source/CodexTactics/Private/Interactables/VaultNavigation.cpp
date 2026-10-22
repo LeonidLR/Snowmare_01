@@ -5,6 +5,7 @@
 #include "GameFramework/Actor.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/InteractableActor.h"
+#include "Ladders/LadderNavigation.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -34,6 +35,10 @@ UNavFilter_NoVault::UNavFilter_NoVault()
 	FNavigationFilterArea& Crawl = Areas.AddDefaulted_GetRef();
 	Crawl.AreaClass = UNavArea_CrawlOnly::StaticClass();
 	Crawl.bIsExcluded = true;
+	// Ladders (docs/design/LADDERS.md 7.4): no enemy climbs yet (the climbing humans of 7.5 get their own filter later).
+	FNavigationFilterArea& Ladder = Areas.AddDefaulted_GetRef();
+	Ladder.AreaClass = UNavArea_Ladder::StaticClass();
+	Ladder.bIsExcluded = true;
 }
 
 namespace VaultNavigation

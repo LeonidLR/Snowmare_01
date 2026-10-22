@@ -21,6 +21,7 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interactables/RadiusRingSubsystem.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UObject/ConstructorHelpers.h"
@@ -102,6 +103,7 @@ AOperativeCharacter::AOperativeCharacter()
 	PanicComponent = CreateDefaultSubobject<UPanicComponent>(TEXT("PanicComponent"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	KnockdownComponent = CreateDefaultSubobject<UKnockdownComponent>(TEXT("KnockdownComponent")); // AM_* montages on FullBody
+	LadderClimb = CreateDefaultSubobject<ULadderClimbComponent>(TEXT("LadderClimb")); // docs/design/LADDERS.md
 	HealthComponent->MaxHealth = 100.0f;
 	HealthComponent->BaseArmorReduction = 0.10f;
 
@@ -286,6 +288,10 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	if (bVaulting)
 	{
 		UpdateVault(DeltaTime);
+	}
+	else if (IsClimbingLadder())
+	{
+		// on a ladder: ULadderClimbComponent moves and turns him; no cover, facing or shooting (LADDERS.md 7.2)
 	}
 	else if (UpdateObstacleStepOff(DeltaTime))
 	{

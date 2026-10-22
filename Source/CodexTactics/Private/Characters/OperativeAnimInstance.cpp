@@ -26,6 +26,8 @@ namespace
 #include "Engine/World.h"
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
+#include "BonePose.h"
+#include "TwoBoneIK.h"
 #include "Characters/ColdAnimationRules.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
@@ -186,7 +188,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (bUseRifle2Locomotion)
 	{
 		const AOperativeCharacter* Rifle2Owner = Cast<AOperativeCharacter>(TryGetPawnOwner());
-		UpdateRifle2Locomotion(DeltaSeconds, Rifle2Owner && Rifle2Owner->IsMoving(), Speed, Direction,
+		UpdateRifle2Locomotion(DeltaSeconds, Rifle2Owner && Rifle2Owner->IsMoving() && !bIsClimbing, Speed, Direction,
 			Rifle2Owner ? Rifle2Owner->GetActorRotation().Yaw : 0.f);
 	}
 	if (CVarAnimTrace.GetValueOnGameThread() > 0 && (Speed > 0.f || TryGetPawnOwner() && TryGetPawnOwner()->GetVelocity().SizeSquared2D() > 0.f))
@@ -416,15 +418,15 @@ void UOperativeAnimInstance::UpdateColdLayer(float DeltaSeconds)
 		ColdMoveBlend = FMath::Clamp(Speed / ColdWalkFullSpeed, 0.f, 1.f);
 	}
 	const bool bHasPose = ColdIdleAnimation && ColdWalkAnimation;
-	const bool bEligible = bHasPose && Stance == EOperativeStance::Standing && !bIsAiming && !bIsSprinting && !bIsReloading && !bIsDead;
+	const bool bEligible = bHasPose && Stance == EOperativeStance::Standing && !bIsAiming && !bIsSprinting && !bIsReloading && !bIsDead && !bIsClimbing;
 	ColdVisualWeight = ColdAnimationRules::StepWeight(ColdVisualWeight, ColdVisualTier, bEligible, DeltaSeconds);
 }
 
 void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
 {
-	if (Shooter && Shooter->IsKnockedDown())
+	if (Shooter && (Shooter->IsKnockedDown() || Shooter->IsClimbingLadder()))
 	{
-		return; // Sprint 14: no fire clip over the knockdown
+		return; // Sprint 14: no fire clip over the knockdown (nor over the climb)
 	}
 	AimTimer = AimHoldAfterShot;
 	// Sniper rifle (user request 2026-10-09): the stance's shot + the bolt while rounds remain, full body.
@@ -668,7 +670,8 @@ void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealt
 	Context.SecondsSinceLast = static_cast<float>(Now - LastHitReactionTime);
 	Context.bInCover = Operative->bInCover;
 	// Knocked down: the knockdown clip owns the body; a throw / reload / stance change keeps its clip.
-	Context.bBusy = Operative->IsKnockedDown() || IsThrowingGrenade() || Operative->bIsReloading || IsPlayingStanceTransition() || Operative->IsVaulting();
+	Context.bBusy = Operative->IsKnockedDown() || IsThrowingGrenade() || Operative->bIsReloading || IsPlayingStanceTransition() || Operative->IsVaulting()
+		|| Operative->IsClimbingLadder(); // on a ladder: damage applies, no hit clip (LADDERS.md 7.7)
 	if (!HitReactionRules::ShouldReact(Settings, Context))
 	{
 		return;
@@ -722,7 +725,7 @@ void UOperativeAnimInstance::HandleGrenadeThrow()
 	// Godot play_grenade_throw: prone / crouch / run / walk by the stance and speed. Godot released the grenade at 70 % of
 	// the clip (get_grenade_throw_duration); the measured per-clip release time replaces that (GrenadeThrow*ReleaseSeconds).
 	AOperativeCharacter* Operative = BoundOperative.Get();
-	if (!Operative || Operative->IsKnockedDown())
+	if (!Operative || Operative->IsKnockedDown() || Operative->IsClimbingLadder())
 	{
 		return;
 	}
@@ -868,7 +871,7 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	{
 		Reload = nullptr; // never stop the sniper clips at the reload's end
 	}
-	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown)
+	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown && !bIsClimbing)
 	{
 		const float Duration = FMath::Max(0.1f, Operative->ReloadTimer);
 		PlaySlotAnimationAsDynamicMontage(Reload, ReloadSlot, 0.2f, 0.2f, Reload->GetPlayLength() / Duration);
@@ -912,6 +915,14 @@ void UOperativeAnimInstance::UpdateState()
 		Direction = 0.f;
 	}
 	UpdateVaultClip(*Operative);
+	// On a ladder the climb moves the actor directly and owns the full body (LADDERS.md 6.1).
+	bIsClimbing = Operative->IsClimbingLadder();
+	LadderIKFrame = bIsClimbing && Operative->LadderClimb ? Operative->LadderClimb->GetIKFrame() : FLadderIKFrame();
+	if (bIsClimbing)
+	{
+		Speed = 0.f;
+		Direction = 0.f;
+	}
 	// Sprint 12 cover state (the shimmy moves sideways: the blend-space direction already strafes).
 	bInCover = Operative->bInCover;
 	CoverHeight = Operative->CurrentCoverHeight;
@@ -1016,7 +1027,7 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	// full-body cover clip it is invisible (user PIE 2026-10-07: every hound bite blocked the IK for the hit clip's length
 	// while the cover fire stance kept the rifle up, so the left hand let go of it).
 	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f;
-	State.bVaulting = bIsVaulting;
+	State.bVaulting = bIsVaulting || bIsClimbing; // a ladder frees both hands (LADDERS.md 6.1)
 	State.bDead = bIsDead || bKnockedDown; // Sprint 14: no IK / aim offset while knocked down
 	State.bProne = bIsProne && !bSniperPose; // the prone sniper aim holds the rifle with both hands (crawl clips do not)
 	// Every pose where the right hand holds the rifle keeps the IK (cover idle / look-around / shimmy / enter / switches
@@ -1093,7 +1104,7 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	// full-body cover clip it is invisible (user PIE 2026-10-07: every hound bite blocked the IK for the hit clip's length
 	// while the cover fire stance kept the rifle up, so the left hand let go of it).
 	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f; // grenade throw / hit reaction windows (shared with the left-hand IK)
-	State.bVaulting = bIsVaulting;
+	State.bVaulting = bIsVaulting || bIsClimbing;
 	State.bSprinting = bIsSprinting;
 	State.bProne = bIsProne;
 	State.bTurnBasedSuppressed = bAimOffsetTurnBasedOff;
@@ -1171,6 +1182,7 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	FAnimInstanceProxy::PreUpdate(InAnimInstance, DeltaSeconds);
 	const UOperativeAnimInstance* Instance = CastChecked<UOperativeAnimInstance>(InAnimInstance);
 	bUseNative = Instance->bUseNativeLocomotion;
+	LadderIK = Instance->LadderIKFrame;
 	for (int32 Index = 0; Index < Slot(EOperativeClip::Count); ++Index)
 	{
 		Clips[Index].Sequence = Instance->GetClip(static_cast<EOperativeClip>(Index));
@@ -1225,6 +1237,103 @@ bool FOperativeAnimInstanceProxy::Evaluate(FPoseContext& Output)
 	FAnimationPoseData OutputData(Output);
 	FAnimationRuntime::BlendPosesTogether(Poses, Curves, Attributes, Weights, OutputData);
 	return true;
+}
+
+// --- Ladder rung IK (docs/design/LADDERS.md 6.2): applied after the whole graph, no ABP node ---------------------------------
+
+namespace OperativeLadderIK
+{
+	struct FChain
+	{
+		const TCHAR* Root;
+		const TCHAR* Joint;
+		const TCHAR* End;
+		/** The contact bone (ball of the foot); null = the end bone itself (the wrist). */
+		const TCHAR* Contact;
+	};
+
+	// ELadderLimb order: HandL, HandR, FootL, FootR (UE4 mannequin names; the UE5 Manny shares them).
+	const FChain Chains[] = {
+		{ TEXT("upperarm_l"), TEXT("lowerarm_l"), TEXT("hand_l"), nullptr },
+		{ TEXT("upperarm_r"), TEXT("lowerarm_r"), TEXT("hand_r"), nullptr },
+		{ TEXT("thigh_l"), TEXT("calf_l"), TEXT("foot_l"), TEXT("ball_l") },
+		{ TEXT("thigh_r"), TEXT("calf_r"), TEXT("foot_r"), TEXT("ball_r") },
+	};
+
+	FCompactPoseBoneIndex Find(const FBoneContainer& Bones, const TCHAR* Name)
+	{
+		const int32 MeshIndex = Name ? Bones.GetPoseBoneIndexForBoneName(FName(Name)) : INDEX_NONE;
+		return MeshIndex == INDEX_NONE ? FCompactPoseBoneIndex(INDEX_NONE) : Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
+	}
+}
+
+bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimNode_Base* InRootNode)
+{
+	if (bUseNative || !HasRootNode())
+	{
+		return Evaluate(Output);
+	}
+	if (!LadderIK.bActive || InRootNode != GetRootNode())
+	{
+		return false; // the graph alone
+	}
+	EvaluateAnimationNode_WithRoot(Output, InRootNode);
+	ApplyLadderIK(Output);
+	return true;
+}
+
+void FOperativeAnimInstanceProxy::ApplyLadderIK(FPoseContext& Output) const
+{
+	using namespace OperativeLadderIK;
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	const FTransform& Component = GetComponentTransform();
+	FCSPose<FCompactPose> Pose;
+	Pose.InitPose(Output.Pose);
+	TArray<FBoneTransform> Changed;
+	for (int32 Limb = 0; Limb < static_cast<int32>(ELadderLimb::Count); ++Limb)
+	{
+		const float Alpha = FMath::Clamp(LadderIK.Alpha[Limb], 0.f, 1.f);
+		if (Alpha <= 0.001f)
+		{
+			continue;
+		}
+		const FChain& Chain = Chains[Limb];
+		const FCompactPoseBoneIndex RootIndex = Find(Bones, Chain.Root);
+		const FCompactPoseBoneIndex JointIndex = Find(Bones, Chain.Joint);
+		const FCompactPoseBoneIndex EndIndex = Find(Bones, Chain.End);
+		const FCompactPoseBoneIndex ContactIndex = Chain.Contact ? Find(Bones, Chain.Contact) : EndIndex;
+		if (RootIndex == INDEX_NONE || JointIndex == INDEX_NONE || EndIndex == INDEX_NONE || ContactIndex == INDEX_NONE)
+		{
+			continue;
+		}
+		FTransform Root = Pose.GetComponentSpaceTransform(RootIndex);
+		FTransform Joint = Pose.GetComponentSpaceTransform(JointIndex);
+		FTransform End = Pose.GetComponentSpaceTransform(EndIndex);
+		const FVector Contact = Pose.GetComponentSpaceTransform(ContactIndex).GetLocation();
+		// The grip point: the rung's centre + the limb's offset (towards the climber / up), at the limb's own spot across the rung.
+		const bool bFoot = Limb >= static_cast<int32>(ELadderLimb::FootL);
+		const FVector2D Offset = bFoot ? LadderIK.FootOffset : LadderIK.HandOffset;
+		const FVector Rung = LadderIK.RungCentre[Limb];
+		const float Across = FMath::Clamp(static_cast<float>(FVector::DotProduct(Component.TransformPosition(Contact) - Rung, LadderIK.Across)),
+			-LadderIK.HalfWidth, LadderIK.HalfWidth);
+		const FVector TargetWorld = Rung + LadderIK.Across * Across + LadderIK.Outward * Offset.X + FVector::UpVector * Offset.Y;
+		// The end bone goes where the contact bone lands on the target (the foot keeps its orientation).
+		const FVector EndTarget = Component.InverseTransformPosition(TargetWorld) - (Contact - End.GetLocation());
+		const FVector Effector = FMath::Lerp(End.GetLocation(), EndTarget, Alpha);
+		// Pole: the elbow / knee keeps the side it bends to in the clip.
+		const FVector Pole = Joint.GetLocation() + (Joint.GetLocation() - (Root.GetLocation() + End.GetLocation()) * 0.5);
+		AnimationCore::SolveTwoBoneIK(Root, Joint, End, Pole, Effector, false, 1.0, 1.0);
+		Changed.Add(FBoneTransform(RootIndex, Root));
+		Changed.Add(FBoneTransform(JointIndex, Joint));
+		Changed.Add(FBoneTransform(EndIndex, End));
+	}
+	if (Changed.IsEmpty())
+	{
+		return;
+	}
+	Changed.Sort(FCompareBoneTransformIndex());
+	Pose.LocalBlendCSBoneTransforms(Changed, 1.f);
+	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(Pose), Output.Pose);
 }
 
 // --- Tactical cover baseline (Sprint 12) ------------------------------------------------------------------------
