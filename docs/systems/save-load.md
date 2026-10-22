@@ -125,6 +125,15 @@ cannot exist in a save because saves are refused in combat), **GAP** (open; list
 | camera zoom / yaw / pan, full map open, HUD drawer, banners, feed history, roof cutaway, exit arrows, camera zones | DERIVED | UI; the camera snaps to the restored leader |
 | dialogue window in progress | SAVE REFUSED (v3) | `ESaveBlockReason::Dialogue` ("Saving is disabled during a conversation"): its trigger would be saved as used and the talk never finish |
 
+## Level-to-level carry (campaign, 2026-10-22 d) - not a save
+
+`UCampaignSubsystem` (GameInstance) carries the squad from a level left through the gate exit to the next campaign level (`CampaignCarry::Capture / Apply`,
+the same per-operative fields as `SaveOperative`: level, EXP, unspent points, max health / luck / accuracy / fortitude, item counts by their save keys, bonus
+items, ammo per weapon, extra ammo, the weapon in hands; full health on arrival, no cold / frostbite / orders / cover; the killed in action stay behind).
+It is applied in `ACodexTacticsGameMode::SpawnSquad` on the arrival map only, kept until NEW GAME or the next transition (a restart of the arrival level
+brings the squad back as it arrived) and is NOT written into save files: a save made on the arrival level holds the operatives' values itself, and a load
+applies them over the spawned squad as before. Details: [demo01-lake](demo01-lake.md) block 2026-10-22 d.
+
 ## How to add saved state for a new feature
 
 1. **Decide the verdict first** (write it into the inventory above): SAVED, or DERIVED with the reason (combat-only, recomputed, cosmetic). Saves are only

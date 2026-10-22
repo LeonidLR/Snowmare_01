@@ -18,7 +18,7 @@ enum class EGateExitSide : uint8
 /**
  * Level end through the fully opened blast gate (game designer 2026-10-22: "after the fight, if we go through the fully opened
  * gate, do a fade and that's the end of the level"). Level JSON "gate_exit": "off" (default) | "auto" | "+x" | "-x", or an
- * object {"outward": "auto", "fade_seconds": 2, "return_to_menu_seconds": 6}. UE-only (no Godot reference: the Godot gate
+ * object {"outward": "auto", "fade_seconds": 2, "return_to_menu_seconds": 6, "next_level_seconds": 3}. UE-only (no Godot reference: the Godot gate
  * only let the squad into the checkpoint).
  */
 USTRUCT(BlueprintType)
@@ -56,6 +56,13 @@ struct CODEXTACTICS_API FGateExitConfig
 	/** Real seconds on the black screen before the main menu opens; 0 = stay (headless checks never leave). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gate Exit", meta = (ClampMin = "0"))
 	float ReturnToMenuSeconds = 6.f;
+
+	/**
+	 * 2026-10-22 b (campaign): real seconds on the black screen before the stat-points screen / the NEXT level of the campaign
+	 * (Content/Data/Campaign/campaign.json) opens; 0 = stay. Only used when the campaign has a level after this one.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gate Exit", meta = (ClampMin = "0"))
+	float NextLevelSeconds = 3.f;
 };
 
 /** The exit line of a gate on the ground plane: the door plane, its outward normal, the doorway's half width. */
@@ -131,4 +138,10 @@ namespace GateExitRules
 
 	/** The main menu opens now (ReturnToMenuSeconds after the black screen; never when 0 or in a headless check). */
 	CODEXTACTICS_API bool ShouldReturnToMenu(float ElapsedSeconds, const FGateExitConfig& Config, bool bHeadless);
+
+	/**
+	 * The black screen ends now (2026-10-22 b): with a next campaign level NextLevelSeconds after the screen is black (the points
+	 * screen or the next level follows), else ShouldReturnToMenu. Never when the delay is 0 or in a headless check.
+	 */
+	CODEXTACTICS_API bool ShouldLeaveLevel(float ElapsedSeconds, const FGateExitConfig& Config, bool bHasNextLevel, bool bHeadless);
 }

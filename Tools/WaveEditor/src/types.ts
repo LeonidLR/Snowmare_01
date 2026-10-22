@@ -164,7 +164,9 @@ export interface LevelConfig {
   /** UE: the wave whose clearing opens the door fully; 0 = the last wave. */
   gate_full_open_after_wave?: number;
   /** UE (2026-10-22): the level ends with a fade once every living operative has left through the fully opened gate; default 'off'. */
-  gate_exit?: 'off' | 'auto' | '+x' | '-x' | { outward?: 'auto' | '+x' | '-x'; fade_seconds?: number; return_to_menu_seconds?: number };
+  gate_exit?: 'off' | 'auto' | '+x' | '-x' | { outward?: 'auto' | '+x' | '-x'; fade_seconds?: number; return_to_menu_seconds?: number; next_level_seconds?: number };
+  /** UE (2026-10-22 b): the level starts behind a black screen with its campaign title fading in over this many seconds; 0 / absent = none. */
+  start_fade_seconds?: number;
   waves: WaveConfig[];
 }
 

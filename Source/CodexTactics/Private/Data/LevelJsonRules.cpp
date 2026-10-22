@@ -209,6 +209,7 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 			ExitSide = LevelJsonString(Exit, TEXT("outward"), TEXT("auto"));
 			Config.GateExit.FadeSeconds = FMath::Max(0.1f, LevelJsonNumber(Exit, TEXT("fade_seconds"), Config.GateExit.FadeSeconds));
 			Config.GateExit.ReturnToMenuSeconds = FMath::Max(0.f, LevelJsonNumber(Exit, TEXT("return_to_menu_seconds"), Config.GateExit.ReturnToMenuSeconds));
+			Config.GateExit.NextLevelSeconds = FMath::Max(0.f, LevelJsonNumber(Exit, TEXT("next_level_seconds"), Config.GateExit.NextLevelSeconds));
 		}
 		else
 		{
@@ -220,6 +221,9 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 			return false;
 		}
 	}
+
+	// 2026-10-22 b (campaign): the level starts behind a black screen that fades in over this many real seconds (0 = no fade).
+	Config.StartFadeSeconds = FMath::Max(0.f, LevelJsonNumber(Root, TEXT("start_fade_seconds"), 0.f));
 
 	// UE-only (APC P2): the turret's shells for this map.
 	if (const TSharedPtr<FJsonObject> Vehicle = LevelJsonObject(Root, TEXT("vehicle")))

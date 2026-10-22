@@ -1,6 +1,8 @@
 #include "Core/CodexTacticsGameMode.h"
 #include "Core/LoadoutRules.h"
 #include "Data/LevelJsonRules.h"
+#include "GameFlow/CampaignCarry.h"
+#include "GameFlow/CampaignSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "Characters/OperativeBalance.h"
@@ -157,6 +159,13 @@ ULevelConfigAsset* ACodexTacticsGameMode::LoadLevelConfig()
 	FString CommandLineJson;
 	FParse::Value(FCommandLine::Get(), TEXT("LevelJson="), CommandLineJson);
 	const FString MapName = GetWorld() ? GetWorld()->GetMapName() : FString();
+	// 2026-10-22 b: a level reached through the campaign reads its own file - the -LevelJson= of the run was meant for the first map.
+	const UCampaignSubsystem* Campaign = UCampaignSubsystem::Get(this);
+	if (Campaign && Campaign->GetCarryFor(GetWorld()) && !CommandLineJson.IsEmpty())
+	{
+		UE_LOG(LogCodexTactics, Log, TEXT("Level JSON: -LevelJson=%s ignored on the campaign arrival map %s"), *CommandLineJson, *MapName);
+		CommandLineJson.Reset();
+	}
 	const FString JsonFile = LevelJsonRules::ResolveLevelJsonFile(MapName, LevelJsonFile, CommandLineJson);
 	if (!JsonFile.IsEmpty())
 	{
@@ -191,9 +200,20 @@ void ACodexTacticsGameMode::SpawnSquad()
 	{
 		return;
 	}
+	// 2026-10-22 b: the squad that left the previous campaign level (UCampaignSubsystem): its progression and kit, the fallen stay behind.
+	const UCampaignSubsystem* Campaign = UCampaignSubsystem::Get(this);
+	const FCampaignSquadCarry* Carry = Campaign ? Campaign->GetCarryFor(World) : nullptr;
 	if (TActorIterator<AOperativeCharacter>(World))
 	{
-		return; // the level places its own squad
+		// The level places its own squad: the carry goes onto the placed operatives.
+		for (TActorIterator<AOperativeCharacter> It(World); It && Carry; ++It)
+		{
+			if (const FCarriedOperative* Carried = It->bRecruited ? CampaignCarry::FindFor(*Carry, It->SquadRole, It->SquadIndex) : nullptr)
+			{
+				CampaignCarry::Apply(**It, *Carried);
+			}
+		}
+		return;
 	}
 
 	const AActor* Start = UGameplayStatics::GetActorOfClass(World, APlayerStart::StaticClass());
@@ -203,7 +223,18 @@ void ACodexTacticsGameMode::SpawnSquad()
 	for (int32 Index = 0; Index < SquadRoster.Num(); ++Index)
 	{
 		const FSquadMemberSpawn& Entry = SquadRoster[Index];
-		SpawnOperative(Entry, Index, StartTransform.GetLocation() + Facing.RotateVector(Entry.Offset), Facing);
+		if (Carry && !CampaignCarry::ShouldSpawn(*Carry, Entry.Role, Index))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Campaign: %s fell on %s - not spawned"), *Entry.DisplayName.ToString(), *Carry->FromMap);
+			continue;
+		}
+		AOperativeCharacter* Operative = SpawnOperative(Entry, Index, StartTransform.GetLocation() + Facing.RotateVector(Entry.Offset), Facing);
+		if (const FCarriedOperative* Carried = Operative && Carry ? CampaignCarry::FindFor(*Carry, Entry.Role, Index) : nullptr)
+		{
+			CampaignCarry::Apply(*Operative, *Carried);
+			UE_LOG(LogCodexTactics, Display, TEXT("Campaign: %s arrives from %s - level %d, EXP %d, %d unspent points"), *Entry.DisplayName.ToString(),
+				*Carry->FromMap, Operative->Level, Operative->CurrentExp, Operative->UnspentStatPoints);
+		}
 	}
 }
 

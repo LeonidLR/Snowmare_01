@@ -61,6 +61,12 @@ operative death (reason hypothermia at cold ≥ 99 else wounds, HQ radio line, G
 input off, `OnMissionComplete`, `IsMissionComplete`; a later death no longer fails the mission) - called by `ULevelExitSubsystem` when every
 living operative has left through the fully opened gate (level JSON `"gate_exit"`), which then fades the screen to black with "MISSION COMPLETE"
 and opens the main menu 6 s later (not in headless checks). Details: [demo01-lake](demo01-lake.md) block 2026-10-22 c.
+**Campaign (2026-10-22 d, UE-only):** `Content/Data/Campaign/campaign.json` orders the levels ("0.0 Frozen Dam" `L_Demo01_A_FrozenLake` -> "0.1 Frozen
+Factory" `L_Demo01_B_FrozenFactory`; `UCampaignSubsystem`, `CampaignRules`). With a next level the black exit screen leads (3 s, `gate_exit.next_level_seconds`)
+to the stat-points screen (`UPointsReviewWidget`: live portrait `AOperativePortraitCapture` + `UProfileDialogWidget` in review mode, "Continue >") when
+somebody alive has unspent points, else straight to the next level; the squad is carried (`CampaignCarry`: progression + kit, full health, the fallen stay
+behind); the next level starts behind a black screen with its title that fades in (level JSON `start_fade_seconds`, 1.5 s on any campaign arrival). Titles
+also on the save slots' level column. NEW GAME still opens `NewGameLevel`. Details: [demo01-lake](demo01-lake.md) block 2026-10-22 d.
 
 ## Narrative pipeline (old §6)
 

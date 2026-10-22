@@ -38,8 +38,19 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 
-	/** The first gate of the level (nullptr without one). */
+	/** The first gate of the level that is not set dressing (nullptr without one): the quest chain's / the exit's gate. */
 	static AGateActor* FindLevelGate(const UWorld* World);
+
+	/**
+	 * 2026-10-22 b: static set dressing - the gate stands fully open from the start (leaves slid apart in the editor too, no collision,
+	 * no navmesh block, no beacon), ignores the quest chain / the terminal / saves and is never the level's gate (FindLevelGate skips
+	 * it). Used for the lake compound's open blast door recreated behind the squad's start on L_Demo01_B_FrozenFactory.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Gate")
+	bool bSetDressing = false;
+
+	/** The level's JSON ends the level through this gate ("gate_exit" on): its HQ lines send the squad OUT, not in. */
+	bool IsExitGate() const;
 
 	/** Opens fully now, whatever the progress (the instant mode, «Start Battle», the final wave cleared). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Gate")
@@ -161,6 +172,9 @@ public:
 private:
 	/** The cube or LeafMesh on both leaves (OnConstruction). */
 	void ApplyLeafMeshes();
+
+	/** bSetDressing: leaves open, no collision / navmesh, open status, beacon off. */
+	void ApplySetDressingOpen();
 
 	/** The engine cube the leaves show without LeafMesh. */
 	UPROPERTY()

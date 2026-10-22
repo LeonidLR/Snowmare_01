@@ -107,6 +107,42 @@ void AGateActor::OnConstruction(const FTransform& Transform)
 	BeaconLight->SetLightColor(BeaconColor);
 	BeaconLight->SetIntensity(BeaconIntensity);
 	BeaconLight->SetAttenuationRadius(BeaconRadius);
+	if (bSetDressing)
+	{
+		ApplySetDressingOpen(); // shown open in the editor too
+	}
+}
+
+void AGateActor::ApplySetDressingOpen()
+{
+	const float HalfWidth = DoorSize.Y * 0.5f;
+	FVector Left = LeftDoor->GetRelativeLocation();
+	FVector Right = RightDoor->GetRelativeLocation();
+	Left.Y = -HalfWidth - OpenDistance;
+	Right.Y = HalfWidth + OpenDistance;
+	LeftDoor->SetRelativeLocation(Left);
+	RightDoor->SetRelativeLocation(Right);
+	LeftTargetY = Left.Y;
+	RightTargetY = Right.Y;
+	for (UBoxComponent* Door : { LeftDoor.Get(), RightDoor.Get() })
+	{
+		Door->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Door->SetCanEverAffectNavigation(false);
+	}
+	bOpening = false;
+	bOpen = true;
+	Progress = 1.f;
+	Status = EGateProgressStatus::Open;
+	bBeaconSpinning = false;
+	BeaconLight->SetVisibility(false);
+}
+
+bool AGateActor::IsExitGate() const
+{
+	const UWorld* World = GetWorld();
+	const ACodexTacticsGameMode* GameMode = World ? World->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr;
+	const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+	return !bSetDressing && Level && Level->Config.GateExit.bEnabled;
 }
 
 void AGateActor::ApplyLeafMeshes()
@@ -131,6 +167,12 @@ void AGateActor::BeginPlay()
 	Super::BeginPlay();
 	LeftMeshRest = LeftDoorMesh->GetRelativeLocation();
 	RightMeshRest = RightDoorMesh->GetRelativeLocation();
+	if (bSetDressing)
+	{
+		ApplySetDressingOpen();
+		SetActorTickEnabled(false);
+		return; // inert: no quest chain, no terminal, no beacon
+	}
 	if (UQuestSubsystem* Quests = GetWorld()->GetSubsystem<UQuestSubsystem>())
 	{
 		Quests->OnGateOpened.AddDynamic(this, &AGateActor::HandleGateOpened);
@@ -143,7 +185,10 @@ AGateActor* AGateActor::FindLevelGate(const UWorld* World)
 	{
 		for (TActorIterator<AGateActor> It(const_cast<UWorld*>(World)); It; ++It)
 		{
-			return *It;
+			if (!It->bSetDressing)
+			{
+				return *It;
+			}
 		}
 	}
 	return nullptr;
@@ -191,7 +236,7 @@ bool AGateActor::IsGeneratorPowering() const
 
 void AGateActor::OpenGate()
 {
-	if (bOpening || bOpen)
+	if (bOpening || bOpen || bSetDressing)
 	{
 		return;
 	}
@@ -209,7 +254,7 @@ void AGateActor::OpenGate()
 
 void AGateActor::UnlockProgress()
 {
-	if (bOpen || bOpening || bProgressUnlocked)
+	if (bOpen || bOpening || bProgressUnlocked || bSetDressing)
 	{
 		return;
 	}
@@ -220,6 +265,11 @@ void AGateActor::UnlockProgress()
 
 void AGateActor::RestoreOpen(bool bInOpen)
 {
+	if (bSetDressing)
+	{
+		ApplySetDressingOpen(); // always open, whatever a save says
+		return;
+	}
 	const float HalfWidth = DoorSize.Y * 0.5f;
 	const float Offset = bInOpen ? OpenDistance : 0.f;
 	FVector Left = LeftDoor->GetRelativeLocation();
@@ -248,6 +298,10 @@ void AGateActor::RestoreOpen(bool bInOpen)
 
 void AGateActor::RestoreProgress(bool bUnlocked, float InProgress, bool bInFinalWaveCleared)
 {
+	if (bSetDressing)
+	{
+		return;
+	}
 	bFinalWaveCleared = bInFinalWaveCleared;
 	bProgressUnlocked = bUnlocked && UsesGeneratorPacing();
 	if (bOpen)
@@ -314,7 +368,7 @@ void AGateActor::SetStatus(EGateProgressStatus NewStatus)
 		*UEnum::GetValueAsString(NewStatus), *GetStatusText());
 	FText Speaker;
 	FText Text;
-	if (GateProgressRules::GetRadioLine(Previous, NewStatus, bFinalWaveCleared, Speaker, Text))
+	if (GateProgressRules::GetRadioLine(Previous, NewStatus, bFinalWaveCleared, Speaker, Text, IsExitGate()))
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -411,7 +465,7 @@ bool AGateActor::ShouldShowStatus() const
 
 FString AGateActor::GetStatusText() const
 {
-	return GateProgressRules::GetStatusText(Status, Progress);
+	return GateProgressRules::GetStatusText(Status, Progress, IsExitGate());
 }
 
 bool AGateActor::GetOverheadLabel(FOverheadLabel& OutLabel) const

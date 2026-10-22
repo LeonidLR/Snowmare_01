@@ -36,6 +36,10 @@ namespace SmokeUtils
 		{
 			for (TActorIterator<AGateActor> It(const_cast<UWorld*>(World)); It; ++It)
 			{
+				if (It->bSetDressing)
+				{
+					continue; // 2026-10-22 b: the open lake door behind the Frozen Factory start is no layout anchor
+				}
 				const float Yaw = It->GetActorRotation().Yaw - 90.f;
 				const FRotator LayoutRotation(0.f, Yaw, 0.f);
 				const FVector Gate = It->GetActorLocation();

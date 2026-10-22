@@ -150,3 +150,12 @@ bool GateExitRules::ShouldReturnToMenu(float ElapsedSeconds, const FGateExitConf
 {
 	return !bHeadless && Config.ReturnToMenuSeconds > 0.f && ElapsedSeconds >= FMath::Max(0.1f, Config.FadeSeconds) + Config.ReturnToMenuSeconds;
 }
+
+bool GateExitRules::ShouldLeaveLevel(float ElapsedSeconds, const FGateExitConfig& Config, bool bHasNextLevel, bool bHeadless)
+{
+	if (!bHasNextLevel)
+	{
+		return ShouldReturnToMenu(ElapsedSeconds, Config, bHeadless);
+	}
+	return !bHeadless && Config.NextLevelSeconds > 0.f && ElapsedSeconds >= FMath::Max(0.1f, Config.FadeSeconds) + Config.NextLevelSeconds;
+}

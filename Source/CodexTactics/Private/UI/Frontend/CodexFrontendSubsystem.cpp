@@ -4,6 +4,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Environment/EnvironmentSubsystem.h"
+#include "GameFlow/CampaignSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "UI/Frontend/CodexFrontendPlayerController.h"
@@ -45,6 +46,11 @@ void UCodexFrontendSubsystem::StartNewGame()
 	if (UEnvironmentCarrySubsystem* Carry = GetGameInstance()->GetSubsystem<UEnvironmentCarrySubsystem>())
 	{
 		Carry->Clear();
+	}
+	// 2026-10-22 b: and the squad carried between campaign levels (a fresh run starts with the roster's squad).
+	if (UCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UCampaignSubsystem>())
+	{
+		Campaign->Clear();
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Frontend: NEW GAME"));
 	OpenLevel(UCodexFrontendSettings::Get().NewGameLevel.ToSoftObjectPath());

@@ -41,6 +41,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Profile")
 	void SwitchMember(int32 Direction);
 
+	/**
+	 * 2026-10-22 b (game designer: "after the black screen a menu with the character's image and the points that can be added"): the
+	 * stat-points screen after a level exit (UPointsReviewWidget embeds this dialog). Shows only Members (in order), < Prev / Next >
+	 * page through them, the close button reads "Continue >" and broadcasts OnReviewContinue instead of closing.
+	 */
+	void OpenReview(const TArray<AOperativeCharacter*>& Members);
+
+	bool IsReviewMode() const { return bReviewMode; }
+
+	/** Members of the review (0 outside it) and the shown one's 1-based place among them. */
+	int32 GetReviewCount() const { return ReviewMembers.Num(); }
+	int32 GetReviewPosition() const;
+
+	/** "Continue >" was clicked in the review. */
+	FSimpleMulticastDelegate OnReviewContinue;
+
+	/** The close button's label ("Close [P]" / "Continue >"). */
+	FString GetCloseButtonText() const;
+
 	/** A - (Direction < 0) or + click on a stat row. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Profile")
 	void ClickStat(EProgressStat Stat, int32 Direction);
@@ -76,6 +95,18 @@ private:
 	UFUNCTION() void HandleClose();
 
 	TWeakObjectPtr<AOperativeCharacter> Member;
+
+	bool bReviewMode = false;
+	TArray<TWeakObjectPtr<AOperativeCharacter>> ReviewMembers;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> CloseLabel;
+
+	UPROPERTY()
+	TObjectPtr<UWidget> PrevButtonBox;
+
+	UPROPERTY()
+	TObjectPtr<UWidget> NextButtonBox;
 
 	UPROPERTY()
 	TObjectPtr<UWidget> Panel;
