@@ -248,9 +248,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UVictoryPanelWidget> VictoryPanel;
 
-	/** Godot wave-clear victory: the profile of the first member with free points opens. */
-	UFUNCTION()
-	void HandleWaveCleared(int32 WaveIndex);
+	// 2026-10-22 (game designer: "don't stop for level-up points, mark the card instead"): the Godot wave-clear auto-open of the
+	// profile (HandleWaveCleared) is gone - unspent points show as a badge on the squad slot (UActionBarWidget), spent any time.
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPhaseBannersWidget> PhaseBanners;

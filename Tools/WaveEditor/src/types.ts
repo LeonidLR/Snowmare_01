@@ -161,6 +161,8 @@ export interface LevelConfig {
   gate_max_progress_before_final?: number;
   /** UE: the wave whose clearing opens the door fully; 0 = the last wave. */
   gate_full_open_after_wave?: number;
+  /** UE (2026-10-22): the level ends with a fade once every living operative has left through the fully opened gate; default 'off'. */
+  gate_exit?: 'off' | 'auto' | '+x' | '-x' | { outward?: 'auto' | '+x' | '-x'; fade_seconds?: number; return_to_menu_seconds?: number };
   waves: WaveConfig[];
 }
 

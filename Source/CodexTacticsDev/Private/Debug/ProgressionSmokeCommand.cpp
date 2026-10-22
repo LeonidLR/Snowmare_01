@@ -17,9 +17,12 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "UI/ActionBarWidget.h"
 #include "UI/CodexTacticsHUD.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/ProfileDialogWidget.h"
@@ -38,6 +41,19 @@ namespace ProgressionSmoke
 		int32 KillReward = 0;
 		TWeakObjectPtr<AEnemyCharacter> Hound;
 	};
+
+	/** The action bar slot showing Member (roster order), INDEX_NONE without. */
+	int32 SlotOf(const UActionBarWidget& Bar, const AOperativeCharacter* Member)
+	{
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			if (Bar.GetSlotMember(Index) == Member)
+			{
+				return Index;
+			}
+		}
+		return INDEX_NONE;
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -76,6 +92,15 @@ namespace ProgressionSmoke
 		{
 		case 0:
 		{
+			// 2026-10-22 (game designer: "don't stop for level-up points during a fight"): the level-up comes MID-FIGHT.
+			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			SmokeUtils::StartWaveFight(Flow);
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->SetActorTickEnabled(false); // the wave stays alive (the fight goes on), nobody attacks
+				SmokeUtils::ParkEnemyFarAway(*It);
+			}
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("a wave fight runs (real time)"));
 			// Level-up: 260 EXP at level 1 -> level 2 with 10 EXP, +3 points, full heal, floating text and radio line.
 			Check(State, Leader->Level == 1 && Leader->CurrentExp == 0 && Leader->UnspentStatPoints == 0 && Leader->GetNextLevelExp() == 250,
 				TEXT("fresh operative: level 1, 0 / 250 EXP"));
@@ -83,6 +108,20 @@ namespace ProgressionSmoke
 			Leader->AddExp(260);
 			Check(State, Leader->Level == 2 && Leader->CurrentExp == 10 && Leader->UnspentStatPoints == 3,
 				FString::Printf(TEXT("+260 EXP: level %d, %d EXP, %d points"), Leader->Level, Leader->CurrentExp, Leader->UnspentStatPoints));
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime
+				&& FMath::IsNearlyEqual(UGameplayStatics::GetGlobalTimeDilation(World), 1.f) && !Profile->IsOpen(),
+				TEXT("level-up mid-fight: no pause, no modal - the fight runs on in real time, the profile stays shut"));
+			if (UActionBarWidget* Bar = Hud->GetActionBar())
+			{
+				Bar->Refresh();
+				const int32 Slot = SlotOf(*Bar, Leader);
+				Check(State, Bar->IsSlotBadgeShown(Slot) && Bar->GetSlotBadgeText(Slot) == TEXT("+3"),
+					FString::Printf(TEXT("his squad card shows the gold badge \"%s\" (slot %d)"), *Bar->GetSlotBadgeText(Slot), Slot));
+			}
+			else
+			{
+				Check(State, false, TEXT("the action bar"));
+			}
 			Check(State, FMath::IsNearlyEqual(Leader->HealthComponent->GetCurrentHealth(), Leader->HealthComponent->GetMaxHealth()),
 				TEXT("level-up heals fully"));
 			const UFloatingTextSubsystem* Floating = World->GetSubsystem<UFloatingTextSubsystem>();
@@ -150,10 +189,32 @@ namespace ProgressionSmoke
 			PC->ProfilePressed();
 			Check(State, !Profile->IsOpen(), TEXT("P closes it"));
 
-			// Wave cleared: the first member with free points gets his profile opened.
+			// 2026-10-22: a cleared wave no longer opens the profile (Godot did) - the points wait on the card.
 			Second->AddExp(Second->GetNextLevelExp());
 			World->GetSubsystem<UWaveSubsystem>()->OnWaveCleared.Broadcast(1);
-			Check(State, Profile->IsOpen() && Profile->GetMember() == Second, TEXT("wave cleared: profile of the member with points"));
+			Check(State, !Profile->IsOpen(), TEXT("wave cleared: nothing opens by itself (no modal)"));
+			UActionBarWidget* Bar = Hud->GetActionBar();
+			if (!Bar)
+			{
+				Check(State, false, TEXT("the action bar"));
+				return Finish(State, false);
+			}
+			Bar->Refresh();
+			const int32 SecondSlot = SlotOf(*Bar, Second);
+			const int32 LeaderSlot = SlotOf(*Bar, Leader);
+			Check(State, Bar->IsSlotBadgeShown(SecondSlot) && Bar->GetSlotBadgeText(SecondSlot) == TEXT("+3") && !Bar->IsSlotBadgeShown(LeaderSlot),
+				FString::Printf(TEXT("the badge marks only the member with points (slot %d \"%s\"; spent slot %d hidden)"), SecondSlot,
+					*Bar->GetSlotBadgeText(SecondSlot), LeaderSlot));
+			// Later, when it suits the player: the badge opens his profile, the points go in, the badge goes.
+			Squad->SetLeader(Leader);
+			Bar->OpenSlotProfile(SecondSlot);
+			Check(State, Profile->IsOpen() && Profile->GetMember() == Second && Squad->GetLeader() == Leader,
+				TEXT("a click on the badge opens HIS profile (the leader stays)"));
+			Profile->ClickStat(EProgressStat::Luck, 1);
+			Profile->ClickStat(EProgressStat::Accuracy, 1);
+			Profile->ClickStat(EProgressStat::Fortitude, 1);
+			Bar->Refresh();
+			Check(State, Second->UnspentStatPoints == 0 && !Bar->IsSlotBadgeShown(SecondSlot), TEXT("points spent: the badge is gone"));
 			Profile->Close();
 			return Finish(State, true);
 		}

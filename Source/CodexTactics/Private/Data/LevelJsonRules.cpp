@@ -2,6 +2,7 @@
 #include "CodexTactics.h"
 #include "Environment/EnvironmentRules.h"
 #include "GameFlow/LevelEncounterRules.h"
+#include "Quests/GateExitRules.h"
 #include "Quests/GateProgressRules.h"
 
 #include "Dom/JsonObject.h"
@@ -199,6 +200,26 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	Config.Gate.ProgressPerSecond = FMath::Max(0.f, LevelJsonNumber(Root, TEXT("gate_progress_per_second"), Config.Gate.ProgressPerSecond));
 	Config.Gate.MaxProgressBeforeFinal = FMath::Clamp(LevelJsonNumber(Root, TEXT("gate_max_progress_before_final"), Config.Gate.MaxProgressBeforeFinal), 0.f, 0.99f);
 	Config.Gate.FullOpenAfterWave = FMath::Max(0, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("gate_full_open_after_wave"), static_cast<float>(Config.Gate.FullOpenAfterWave))));
+	// Game designer 2026-10-22: the level ends through the fully opened gate (GateExitRules): "gate_exit": "off" | "auto" | "+x" | "-x",
+	// or {"outward": ..., "fade_seconds": s, "return_to_menu_seconds": s}.
+	{
+		FString ExitSide;
+		if (const TSharedPtr<FJsonObject> Exit = LevelJsonObject(Root, TEXT("gate_exit")))
+		{
+			ExitSide = LevelJsonString(Exit, TEXT("outward"), TEXT("auto"));
+			Config.GateExit.FadeSeconds = FMath::Max(0.1f, LevelJsonNumber(Exit, TEXT("fade_seconds"), Config.GateExit.FadeSeconds));
+			Config.GateExit.ReturnToMenuSeconds = FMath::Max(0.f, LevelJsonNumber(Exit, TEXT("return_to_menu_seconds"), Config.GateExit.ReturnToMenuSeconds));
+		}
+		else
+		{
+			ExitSide = LevelJsonString(Root, TEXT("gate_exit"), TEXT("off"));
+		}
+		if (!GateExitRules::ParseSide(ExitSide, Config.GateExit.bEnabled, Config.GateExit.Side))
+		{
+			OutError = FString::Printf(TEXT("unknown gate_exit '%s' (off | auto | +x | -x)"), *ExitSide);
+			return false;
+		}
+	}
 
 	// UE-only (APC P2): the turret's shells for this map.
 	if (const TSharedPtr<FJsonObject> Vehicle = LevelJsonObject(Root, TEXT("vehicle")))

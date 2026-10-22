@@ -4,6 +4,7 @@
 #include "Engine/DataAsset.h"
 #include "Data/CombatTypes.h"
 #include "Environment/EnvironmentTypes.h"
+#include "Quests/GateExitRules.h"
 #include "Quests/GateProgressRules.h"
 #include "WaveConfigTypes.generated.h"
 
@@ -288,6 +289,12 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FGateProgressConfig Gate;
+	/**
+	 * "gate_exit" (game designer 2026-10-22, UE-only): the level ends with a fade to black once every living operative has left
+	 * through the fully opened blast gate (GateExitRules, ULevelExitSubsystem). Off by default.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FGateExitConfig GateExit;
 	/** "demo": demo game-mode flags (Panic off, vision cones, tutorial, demo HUD preset). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FDemoModeSettings Demo;

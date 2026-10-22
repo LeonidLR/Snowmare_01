@@ -57,6 +57,10 @@ objectives, preparation / wave «ОБОРОНА: Отразить волну N! 
 operative death (reason hypothermia at cold ≥ 99 else wounds, HQ radio line, GameOver = time stop), `RestartMission`
 (reload level; «Начать заново» and Ctrl + X). Godot `main.gd update_objective`, `_trigger_game_over`,
 `_restart_current_test_mode`.
+**Mission complete (2026-10-22, UE-only):** `UMissionSubsystem::CompleteMission` (once; HQ "All operatives are out...", the player's
+input off, `OnMissionComplete`, `IsMissionComplete`; a later death no longer fails the mission) - called by `ULevelExitSubsystem` when every
+living operative has left through the fully opened gate (level JSON `"gate_exit"`), which then fades the screen to black with "MISSION COMPLETE"
+and opens the main menu 6 s later (not in headless checks). Details: [demo01-lake](demo01-lake.md) block 2026-10-22 c.
 
 ## Narrative pipeline (old §6)
 

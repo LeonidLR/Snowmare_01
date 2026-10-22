@@ -57,4 +57,13 @@ namespace ProgressionRules
 
 	/** Profile line "Shred: -N%": fortitude x 1.5, clamped to [0, 50]. */
 	CODEXTACTICS_API int32 FortitudeCutPercent(float Fortitude);
+
+	/**
+	 * 2026-10-22 (game designer: "don't stop for level-up points, mark the operative's card"): the badge on the squad slot - "+N"
+	 * while N > 0 points are unspent, empty otherwise. Nothing opens or pauses on a level-up; the points wait.
+	 */
+	CODEXTACTICS_API FString GetUnspentBadgeText(int32 UnspentPoints);
+
+	/** Feed line of a level-up (no modal): "NEW LEVEL N! +3 attribute points - spend them any time (the + on his card or [P])". */
+	CODEXTACTICS_API FString GetLevelUpMessage(int32 NewLevel);
 }

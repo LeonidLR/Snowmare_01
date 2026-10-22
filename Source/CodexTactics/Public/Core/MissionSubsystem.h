@@ -12,6 +12,7 @@ class UDialogueSequenceAsset;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionObjectiveChanged, const FText&, Objective);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionFailed, const FText&, Reason);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMissionComplete);
 
 /**
  * Mission-level state: the start mode, the objective banner text, mission failure and restart.
@@ -66,6 +67,20 @@ public:
 	FText GetFailureReason() const { return FailureReason; }
 
 	/**
+	 * 2026-10-22 (game designer: the level ends through the fully opened gate): the mission is accomplished - HQ line, the
+	 * player's input is off (the squad finishes its walk out), OnMissionComplete fires (once); a later death no longer fails it.
+	 * ULevelExitSubsystem runs the fade to black.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Mission")
+	void CompleteMission();
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
+	bool IsMissionComplete() const { return bMissionComplete; }
+
+	/** The level was started by a headless check (-ExecCmds / -NoMainMenu / -CodexBot without a frontend start). */
+	bool IsHeadlessStart() const { return bHeadlessStart; }
+
+	/**
 	 * Reloads the current level (Godot reload_current_scene). bQuick (Ctrl + X) starts the same mode again; "Restart"
 	 * starts the level fresh in "Game" mode.
 	 */
@@ -77,6 +92,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Mission")
 	FOnMissionFailed OnMissionFailed;
+
+	/** The mission is accomplished (the squad left through the gate); fires once. */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Mission")
+	FOnMissionComplete OnMissionComplete;
 
 
 private:
@@ -108,4 +127,5 @@ private:
 	ECodexGamePhase LastPhase = ECodexGamePhase::Exploration;
 	bool bCombatFinished = false;
 	bool bMissionFailed = false;
+	bool bMissionComplete = false;
 };

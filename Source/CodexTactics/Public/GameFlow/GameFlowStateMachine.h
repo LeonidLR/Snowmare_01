@@ -122,8 +122,13 @@ public:
 	 * the combat zone can be triggered again (the next skirmish). WrongPhase when not in a skirmish.
 	 */
 	EGameFlowResult FinishSkirmish();
-	/** WaveCombat (any sub-mode) -> WaveCleared. */
+	/**
+	 * WaveCombat (any sub-mode) -> WaveCleared (the victory panel); the fight's last wave / a single ambush fight goes straight to
+	 * PostCombat unless Config.bVictoryPanelAfterLastWave (game designer 2026-10-22: no end-of-fight button).
+	 */
 	EGameFlowResult NotifyWaveCleared();
+	/** The current wave is the fight's last: the level's final wave, or an ambush fight that is the whole battle. */
+	bool IsFinalFight() const;
 	/**
 	 * WaveCleared -> Preparation for the next wave (a sudden next wave: WaveCombat at once, awaiting its horde intro), or
 	 * PostCombat after the last wave.

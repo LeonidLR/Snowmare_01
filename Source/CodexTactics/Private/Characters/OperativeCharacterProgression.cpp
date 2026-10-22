@@ -22,7 +22,8 @@ void AOperativeCharacter::AddExp(int32 Amount)
 	const int32 Gained = ProgressionRules::AddExp(Level, CurrentExp, Amount);
 	for (int32 NewLevel = FirstLevel + 1; NewLevel <= FirstLevel + Gained; ++NewLevel)
 	{
-		// Godot _on_level_up: +3 points, full heal, floating "⭐ LEVEL N!", radio line.
+		// Godot _on_level_up: +3 points, full heal, floating "⭐ LEVEL N!", radio line. 2026-10-22: never a modal / pause - the points
+		// wait (badge on his squad slot) until the player spends them.
 		UnspentStatPoints += ProgressionRules::PointsPerLevel;
 		if (HealthComponent)
 		{
@@ -31,8 +32,7 @@ void AOperativeCharacter::AddExp(int32 Amount)
 		UFloatingTextSubsystem::SpawnAboveOperative(this, FString::Printf(TEXT("⭐ LEVEL %d!"), NewLevel), FLinearColor(1.f, 0.85f, 0.1f));
 		if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
 		{
-			Messages->PostMessage(DisplayName, FText::FromString(FString::Printf(
-				TEXT("⭐ NEW LEVEL %d! +3 attribute points to assign!"), NewLevel)));
+			Messages->PostMessage(DisplayName, FText::FromString(ProgressionRules::GetLevelUpMessage(NewLevel)));
 		}
 		UE_LOG(LogCodexTactics, Log, TEXT("%s reached level %d"), *DisplayName.ToString(), NewLevel);
 	}

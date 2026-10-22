@@ -15,6 +15,7 @@
 #include "UI/DialogueSubsystem.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Quests/QuestSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
@@ -258,9 +259,9 @@ void UMissionSubsystem::HandleWaveStarted(int32 WaveIndex, int32 TotalEnemies)
 
 void UMissionSubsystem::TriggerMissionFailed(AOperativeCharacter* FallenOperative)
 {
-	if (bMissionFailed)
+	if (bMissionFailed || bMissionComplete)
 	{
-		return;
+		return; // 2026-10-22: the squad is already out (the fade runs) - nothing can fail it any more
 	}
 	bMissionFailed = true;
 	const FText Name = FallenOperative ? FallenOperative->DisplayName : LOCTEXT("Soldier", "Soldier");
@@ -275,6 +276,22 @@ void UMissionSubsystem::TriggerMissionFailed(AOperativeCharacter* FallenOperativ
 		Flow->TriggerGameOver(); // GameOver stops world time
 	}
 	OnMissionFailed.Broadcast(FailureReason);
+}
+
+void UMissionSubsystem::CompleteMission()
+{
+	if (bMissionComplete || bMissionFailed)
+	{
+		return;
+	}
+	bMissionComplete = true;
+	PostRadio(LOCTEXT("HQ", "HQ"), MissionRules::GetMissionCompleteRadio());
+	UE_LOG(LogCodexTactics, Display, TEXT("Mission complete: the squad left the level"));
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		PC->DisableInput(PC); // the squad finishes its walk out under the fade; no more orders
+	}
+	OnMissionComplete.Broadcast();
 }
 
 void UMissionSubsystem::RestartMission(bool bQuick)

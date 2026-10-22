@@ -125,7 +125,8 @@ void UWaveVictorySubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexC
 		// Godot _end_cutscene_and_start_pause: initial_prep_station = where each operative stands now.
 		RecordPrepStations(true);
 	}
-	else if (Phase == ECodexGamePhase::WaveCleared && Flow)
+	// Game designer 2026-10-22: the fight's end skips the panel (WaveCombat -> PostCombat) - the wave-cleared line still comes.
+	if (Flow && (Phase == ECodexGamePhase::WaveCleared || (Phase == ECodexGamePhase::PostCombat && Previous == ECodexGamePhase::WaveCombat)))
 	{
 		const int32 Wave = Flow->GetWaveIndex();
 		const int32 Total = Flow->GetConfig().TotalWaves;
@@ -143,7 +144,7 @@ void UWaveVictorySubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexC
 			}
 		}
 	}
-	else if (Phase == ECodexGamePhase::PostCombat)
+	if (Phase == ECodexGamePhase::PostCombat)
 	{
 		StartPostCombatSequence();
 	}
