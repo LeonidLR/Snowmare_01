@@ -30,6 +30,7 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TripwireActor.h"
+#include "Ladders/LadderActor.h"
 #include "Components/BoxComponent.h"
 #include "Misc/App.h"
 #include "UI/GameMessageSubsystem.h"
@@ -211,6 +212,16 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	if (!Leader)
 	{
 		return;
+	}
+	// Ladders (docs/design/LADDERS.md 7.1): a click on a climbable ladder (its click proxy) = a move to the link point at its other end
+	// (the path then runs through the ladder's nav link); a decoration ladder has no proxy collision.
+	if (const ALadderActor* Ladder = Cast<ALadderActor>(Hit.GetActor()); Ladder && Ladder->IsClimbable())
+	{
+		const bool bLeaderAbove = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight() > (Ladder->GetFloorZ() + Ladder->GetTopWorldZ()) * 0.5f;
+		const FVector Target = bLeaderAbove ? Ladder->GetBottomLinkWorld() + Ladder->GetOutward() * 60.f : Ladder->GetTopLinkWorld() - Ladder->GetOutward() * 60.f;
+		Hit = FHitResult(nullptr, nullptr, Target, FVector::UpVector);
+		Hit.bBlockingHit = true;
+		UE_LOG(LogCodexTactics, Display, TEXT("Click on ladder %s: a move to its %s end"), *Ladder->GetName(), bLeaderAbove ? TEXT("bottom") : TEXT("top"));
 	}
 
 	// Rev 5g (user request 2026-10-14): an EXIT arrow at a door of the building whose interior camera shows - the squad (Solo: the

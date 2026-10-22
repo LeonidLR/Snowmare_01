@@ -24,6 +24,8 @@ public class CodexTacticsEditor : ModuleRules
 			"Niagara",
 			"NiagaraCore",
 			"NiagaraEditor",
+			"NavigationSystem",
+			"BSPUtils",
 			"CodexTactics"
 		});
 	}

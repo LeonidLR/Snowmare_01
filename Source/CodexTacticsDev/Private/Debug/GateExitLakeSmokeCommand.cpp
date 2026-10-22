@@ -370,7 +370,7 @@ namespace GateExitLakeSmoke
 		{
 			Dressing = It->bSetDressing ? *It : Dressing;
 		}
-		Check(State, Dressing && Dressing->IsOpen() && AGateActor::FindLevelGate(World) != Dressing, TEXT("the lake's open blast door stands behind the start (set dressing, not the level's gate)"));
+		Check(State, Dressing && !Dressing->IsOpen() && AGateActor::FindLevelGate(World) != Dressing, TEXT("the lake's blast door stands CLOSED behind the start (set dressing, not the level's gate; user decision 2026-10-22: no way back)"));
 		if (!Dressing)
 		{
 			return Finish(State, false);

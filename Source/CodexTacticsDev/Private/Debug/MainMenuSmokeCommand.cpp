@@ -107,6 +107,7 @@ namespace MainMenuSmoke
 			IFileManager::Get().DeleteDirectory(*State.SaveDir, false, true);
 			Frontend->SaveDirectoryOverride = State.SaveDir; // empty: no saves
 			Frontend->bQuitDisabled = true;
+			Frontend->NewGameLevelOverride = FSoftObjectPath(TEXT("/Game/Maps/L_MovementTest.L_MovementTest")); // the checks below run the MovementTest mission (NEW GAME = the campaign since 2026-10-22)
 			Next(State, FrontendSmokeUtils::EnsureFrontend(World) ? 1 : 100);
 			return true;
 		case 100: // waiting for the frontend map

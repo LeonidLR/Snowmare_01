@@ -36,9 +36,9 @@ float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativ
 
 void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 {
-	if (Stance == NewStance || IsKnockedDown())
+	if (Stance == NewStance || IsKnockedDown() || IsClimbingLadder())
 	{
-		return; // knocked down: he gets up standing (the get-up clip)
+		return; // knocked down: he gets up standing (the get-up clip); on a ladder: standing until he is off it
 	}
 	// Godot: a frostbitten operative physically cannot get up from the snow.
 	if (ColdSurvival && ColdSurvival->IsFrostbitten() && NewStance != EOperativeStance::Prone)
@@ -88,7 +88,7 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 EProneEntry AOperativeCharacter::DropProne()
 {
 	const float Speed = static_cast<float>(GetVelocity().Size2D());
-	const bool bBlocked = bInCover || bHasPendingCover || bCarrying || bVaulting || IsKnockedDown() || VehicleQueries::IsMounted(this);
+	const bool bBlocked = bInCover || bHasPendingCover || bCarrying || bVaulting || IsKnockedDown() || IsClimbingLadder() || VehicleQueries::IsMounted(this);
 	EProneEntry Entry = OperativeMovementRules::DecideProneEntry(MovementConfig, Stance, Speed, bSprinting, bHasMoveOrder, bBlocked);
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 	const EProneDive Dive = Entry == EProneEntry::DiveFromRun ? EProneDive::FromRun : Entry == EProneEntry::DiveFromWalk ? EProneDive::FromWalk : EProneDive::None;

@@ -4,7 +4,7 @@
 > (NotebookLM notes of a Udemy ladder course, not in the repo), audited with the user's spec-auditor checklist on 2026-10-22
 > (~30 % ready as written: a direct-control shooter design on the UE5 Manny rig). This document is that spec **rewritten for
 > Snowmare**: click-to-move squad on the navmesh, independent tactical camera, `AOperativeCharacter` / `UOperativeAnimInstance`,
-> turn-based grid. Nothing is implemented yet - section 9 is the phase plan.
+> turn-based grid. Section 9 is the phase plan; section 11 is what is implemented (2026-10-22 e).
 >
 > Related: [stances-and-movement](../systems/stances-and-movement.md) (vault = the closest precedent), [animation-setup](../systems/animation-setup.md),
 > [camera-hud-minimap](../systems/camera-hud-minimap.md), [combat-and-fire](../systems/combat-and-fire.md) (turn-based arena),
@@ -290,6 +290,34 @@ schedules them with the user.
    climbers (retargeted clips per enemy skeleton). Checks: `LadderEnemySmoke`, the TB / save parts of `LadderClimbSmoke`.
 5. **Content + polish** - ladders placed in the levels by the designer, `docs/systems/ladders.md` (the system doc replaces this
    design doc's status section), smokes registered in `Scripts/test_map.json`, bot run.
+
+## 11. Status (2026-10-22 e, branch `ladder/work`)
+
+Implemented (phases 1-3, part of 4), checked by `CodexTactics.Ladder.*` (5 unit tests) and `LadderClimbSmoke`:
+
+| Design point | Where |
+|---|---|
+| Generator 3.1-3.4: rails tiled from the mesh bounds (guards), rungs at the pitch, brackets only with a wall (auto trace), grab bars, Visibility-only click proxy, smart link both ways in `UNavArea_Ladder`, < 7 rungs / no top exit = decoration (link off), editor validation text (red error / amber decoration) | `ALadderActor`, `LadderRules` |
+| Nav-link driven climb, no W / S axis (2, 7.1): the path's link callback (`OnMoveReachedLink`) or the component's own corridor poll hands over; the path resumes at the other end; a click on the ladder = a move to its other end; a new order mid-climb runs after the climb | `ULadderClimbComponent::NotifyLinkReached / ResumePath`, `ACodexTacticsPlayerController::HandleWorldHit`, `AOperativeCharacter::RequestMove` |
+| One state machine 5.1 (`LadderRules::Transition` is the table), odd rung counts start on the half loop | `ULadderClimbComponent`, `LadderRules::BottomPos` |
+| Montages in place, positioned every tick (paused), the actor on each clip's extracted root track scaled per axis to the exact target (4.1); rung-index snapping `Floor + k * Pitch` at every loop boundary | `ULadderClimbComponent::TickLoop / TickWarpClip`, `LadderRules::Advance / HeightAt` |
+| Own collision off only for EnterTop / ExitTop, end-fit (`FindTeleportSpot`); the wall / ladder never touched | `BeginEnterTop`, `BeginExitTop`, `FinishClimb` |
+| Facing 5.4: always wall-facing on the ladder; AlignTop pre-turns to face the drop, IntoFromTop starts with blend-in 0 and the clip's own 180 deg turn | `StartEntry`, `BeginEnterTop` |
+| One interrupt path 5.3 (montage end delegate with bInterrupted, death, knockdown, EndPlay, timeouts 2x + 1 s); snapshot / restore of movement mode, rotation flags, braking, gravity, root motion mode, weapon | `AbortClimb`, `TakeSnapshot / RestoreSnapshot` |
+| Refusals 5.2 (turn-based, carrying, mounted, knocked down, dead, decoration, no clips); leased -> queue; prone / crouched -> stands up first | `LadderRules::CanStartClimb` |
+| ABP gates 6.1: `UOperativeAnimInstance::bIsClimbing` zeroes left-hand IK and aim offset, blocks the sniper FullBody layer, interaction clips, weather idles, hit reactions, grenade / reload / fire clips, the cold layer; the rifle is hidden | `OperativeAnimInstance*.cpp` |
+| Rung IK 6.2: hands / feet two-bone IK onto their rung grip, grip windows measured from the up loop (LadderClipShots CONTACT lines) instead of authored curves, applied natively after the graph in `FOperativeAnimInstanceProxy::Evaluate_WithRoot` - **no ABP node / asset change** | `LadderRules::LimbGrip`, `FOperativeAnimInstanceProxy::ApplyLadderIK` |
+| 7.4: enemies' `UNavFilter_NoVault` excludes the ladder area; the lease is per ladder | `VaultNavigation.cpp`, `ALadderActor::TryLease` |
+| 7.7: knockdown on the ladder -> drop 20 cm off the hang line, fall, fall damage clamp((H - 100) * 0.1, 0, 40), then the knockdown on landing; death -> the same fall | `DropForKnockdown`, `TickDropping`, `UKnockdownComponent::StartKnockdown` hook |
+| 7.8: a save mid-climb stores the end he heads to | `AOperativeCharacter::GetSaveLocation` |
+
+Content: `Scripts/Editor/place_factory_test_ladders.py` puts a 4 m block with a ladder on its face and a free-standing ladder up to a 2.9 m deck on four posts next
+to the Frozen Factory start (tag `FrozenFactory_Ladders`). The ladders draw with the engine's basic shapes (graybox steel); `FLadderMeshData` takes the course meshes later.
+
+Not done yet: enemy climbers 7.5 (filter `UNavFilter_NoVaultLadder`, per-skeleton clips), camera Z smoothing / roof cutaway / minimap floor rules 7.3, the turn-based
+details of 7.6 (the climb goes on, but the grid entry does not yet hold him out explicitly), turning back mid-climb for a new order (he finishes first), the
+`DT_LadderTypes` table + the course meshes import, `ULadderClimbProfile` asset (the clip numbers are extracted from the clips at load instead), `LadderGeneratorSmoke`,
+`LadderAnimSmoke`, `LadderEnemySmoke`, the queue of several operatives on one ladder in a smoke.
 
 ## 10. Decisions (all questions closed 2026-10-22; kept for the record)
 

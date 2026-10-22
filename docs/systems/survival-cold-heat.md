@@ -59,7 +59,7 @@ mate, 1 AP in turn-based), the flare reveal (`IsRevealedByFlare`, used by `UTact
 ### Weather idle poses: cold idle, hand warming, sitting at the fire (user request 2026-10-12)
 
 **Pack:** `/Game/90+_Weather_Animations` (untracked pack in the MAIN folder, junction in agents). NEW_version/Cold = 35 clips
-(Hot 35 / Storm 24 / OLD_version 52 are for the later weather + day/night work). Sets (`AS_He_*` male, `AS_She_*` female): `Cold_1`
+(Hot 35 / OLD_version 52 are for the later weather + day/night work; Storm_1 is the blizzard walk's upper body since 2026-10-22: animation-setup "Blizzard walk"). Sets (`AS_He_*` male, `AS_She_*` female): `Cold_1`
 (standing, shivering), `Cold_Fire_1` (standing, hands out to a fire), `Cold_Fire_2` (sitting on the ground at a fire) - measured, loop
 pelvis He 92 / 92 / 13 cm, She 96 / 95 / 35 cm. Each set: 1Start, 2Loop, 3Tranzit, 4Loop, 5Tranzit, 6End; exceptions: She Cold_Fire_1/2
 name the second loop `5Loop`, **She Cold_1 has no 6End** (the pose blends out). No clip has root motion.

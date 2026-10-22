@@ -114,6 +114,12 @@ namespace FrontendSmoke
 			IFileManager::Get().DeleteDirectory(*State.SaveDir, false, true);
 			Frontend->SaveDirectoryOverride = State.SaveDir;
 			Frontend->bQuitDisabled = true;
+			// User decision 2026-10-22: NEW GAME starts the campaign at "0.0 Frozen Dam"; this check walks the frontend through the
+			// MovementTest level (its intro briefing, save in exploration, a wave fight), so it points NEW GAME there.
+			Frontend->NewGameLevelOverride.Reset();
+			Check(State, Frontend->GetNewGameLevel().GetLongPackageName() == TEXT("/Game/Maps/L_Demo01_A_FrozenLake"),
+				FString::Printf(TEXT("NEW GAME starts the campaign at 0.0 Frozen Dam (%s)"), *Frontend->GetNewGameLevel().ToString()));
+			Frontend->NewGameLevelOverride = FSoftObjectPath(TEXT("/Game/Maps/L_MovementTest.L_MovementTest"));
 			if (FrontendSmokeUtils::EnsureFrontend(World))
 			{
 				Next(State);

@@ -157,7 +157,7 @@ void UOperativeAnimInstance::SetWarmWeaponHidden(bool bHidden)
 void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Operative)
 {
 	// An interaction clip (crate, pickup) owns the body too (OperativeAnimInstanceInteraction.cpp).
-	const bool bBodyTaken = bIsDead || bKnockedDown || bInCover || bIsVaulting || Operative.bCarrying || IsInteractionClipActive();
+	const bool bBodyTaken = bIsDead || bKnockedDown || bInCover || bIsVaulting || bIsClimbing || Operative.bCarrying || IsInteractionClipActive();
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	const bool bMovingNow = Speed > WarmIdleStillSpeed;
 	UAnimMontage* Montage = WarmMontage.Get();
@@ -256,5 +256,6 @@ void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Oper
 
 	bWarmIdleActive = WarmActivePose != EWarmIdlePose::None;
 	WarmIdlePose = WarmActivePose;
-	SetWarmWeaponHidden(!bIsDead && ((bHideWeaponInWarmIdle && bWarmIdleActive) || (bHideWeaponInInteraction && IsInteractionClipActive())));
+	SetWarmWeaponHidden(!bIsDead && ((bHideWeaponInWarmIdle && bWarmIdleActive) || (bHideWeaponInInteraction && IsInteractionClipActive())
+		|| bBlizzardWeaponHidden));
 }

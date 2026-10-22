@@ -3,7 +3,8 @@
 //   Scripts/smoke_parallel.ps1 -Commands FrozenFactoryStartSmoke   (map /Game/Maps/L_Demo01_B_FrozenFactory, Scripts/test_map.json)
 //  1. the level starts behind a black screen with its title "0.1 Frozen Factory" that fades in (level JSON "start_fade_seconds": 2; black
 //     during the hold, never brighter later, clear by the end of hold + fade); the factory's own level JSON (1 wave, no gate exit);
-//  2. the lake compound's open blast door (AGateActor, set dressing: open, inert, not the level's gate - that is Gate_Checkpoint) and its
+//  2. the lake compound's blast door, CLOSED (user decision 2026-10-22: no way back; AGateActor set dressing, inert, not the level's gate -
+//     that is Gate_Checkpoint; its shut leaves block pawns and the navmesh) and its
 //     walls stand behind the start; the three operatives spawned just OUTSIDE the doorway (1.5..12 m beyond its plane, within its width
 //     + slack), facing away from it into the factory, on the navmesh;
 //  3. the start camera frames the door and the compound wall behind the squad (the door, its two leaves and the east wall pieces inside the
@@ -15,11 +16,17 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Camera/PlayerCameraManager.h"
+#include "Components/BoxComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Containers/Ticker.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Core/MissionRules.h"
 #include "Core/MissionSubsystem.h"
+#include "Data/WaveConfigTypes.h"
+#include "UI/DialogueSubsystem.h"
+#include "UI/GameMessageSubsystem.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -30,6 +37,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Interactables/GateActor.h"
 #include "Kismet/GameplayStatics.h"
+#include "NavigationPath.h"
 #include "NavigationSystem.h"
 
 namespace FrozenFactoryStartSmoke
@@ -154,6 +162,19 @@ namespace FrozenFactoryStartSmoke
 			Check(State, Flow && Flow->GetConfig().TotalWaves == 1 && !ConstExit->GetConfig().bEnabled,
 				FString::Printf(TEXT("the factory's level JSON: 1 wave, no gate exit (%d waves)"), Flow ? Flow->GetConfig().TotalWaves : -1));
 			Check(State, Squad->GetMembers().Num() == 3, FString::Printf(TEXT("the squad spawned (%d)"), Squad->GetMembers().Num()));
+			// User decisions 2026-10-22: the lake's cold x0.4, and no MovementTest briefing (neither the window nor its radio line).
+			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
+			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+			Check(State, Level && FMath::IsNearlyEqual(Level->Config.ColdRateMult, 0.4f) && !Level->Config.bIntroDialogue,
+				FString::Printf(TEXT("the factory's level JSON: cold x%.2f, intro briefing off"), Level ? Level->Config.ColdRateMult : -1.f));
+			const UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
+			const FString IntroRadio = MissionRules::GetModeRadio(EMissionStartMode::Game).ToString();
+			const bool bIntroLine = Messages && Messages->GetHistory().ContainsByPredicate([&IntroRadio](const FGameMessage& Message)
+			{
+				return Message.Text.ToString() == IntroRadio;
+			});
+			const UDialogueSubsystem* Dialogue = World->GetSubsystem<UDialogueSubsystem>();
+			Check(State, !bIntroLine && !(Dialogue && Dialogue->IsDialogueOpen()), TEXT("no MovementTest intro briefing (no window, no radio line)"));
 			Next(State);
 			return true;
 		}
@@ -175,8 +196,39 @@ namespace FrozenFactoryStartSmoke
 				}
 			}
 			AGateActor* LevelGate = AGateActor::FindLevelGate(World);
-			Check(State, DressingCount == 1 && Dressing && Dressing->IsOpen() && !Dressing->IsOpening() && !Dressing->IsBeaconSpinning(),
-				FString::Printf(TEXT("one open, inert set-dressing blast door (%d)"), DressingCount));
+			Check(State, DressingCount == 1 && Dressing && !Dressing->IsOpen() && !Dressing->IsOpening() && !Dressing->IsBeaconSpinning(),
+				FString::Printf(TEXT("one CLOSED, inert set-dressing blast door (%d; user decision 2026-10-22: no way back)"), DressingCount));
+			if (Dressing)
+			{
+				// The shut leaves block: a pawn trace through the doorway hits the gate, and no full navmesh path leads back into the compound.
+				const FVector Door = Dressing->GetActorLocation() + FVector(0.f, 0.f, 100.f);
+				const FVector Out = Dressing->GetActorForwardVector().GetSafeNormal2D();
+				// Across the doorway at three spots (not on the seam between the leaves): a pawn trace hits the gate, the navmesh raycast is blocked.
+				const FVector Side = Dressing->GetActorRightVector().GetSafeNormal2D();
+				const float LeafWidth = Dressing->DoorSize.Y;
+				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				FHitResult Hit;
+				bool bBlocked = true;
+				bool bNoWayIn = Nav != nullptr;
+				for (const float Share : { -0.6f, 0.2f, 0.6f })
+				{
+					const FVector Across = Door + Side * (LeafWidth * Share);
+					bBlocked &= World->LineTraceSingleByChannel(Hit, Across + Out * 200.f, Across - Out * 200.f, ECC_Pawn) && Hit.GetActor() == Dressing;
+					FVector NavHit;
+					const FVector Ground(Across.X, Across.Y, Dressing->GetActorLocation().Z);
+					bNoWayIn &= Nav && Nav->NavigationRaycast(World, Ground + Out * 250.f, Ground - Out * 250.f, NavHit);
+				}
+				TArray<UBoxComponent*> Leaves;
+				Dressing->GetComponents<UBoxComponent>(Leaves);
+				for (const UBoxComponent* Leaf : Leaves)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[FactoryStart] door leaf %s at %s (relative %s), extent %s, collision %d, nav %d; trace hit %s"), *Leaf->GetName(),
+						*Leaf->GetComponentLocation().ToCompactString(), *Leaf->GetRelativeLocation().ToCompactString(), *Leaf->GetScaledBoxExtent().ToCompactString(),
+						static_cast<int32>(Leaf->GetCollisionEnabled()), Leaf->CanEverAffectNavigation() ? 1 : 0, *GetNameSafe(Hit.GetActor()));
+				}
+				Check(State, bBlocked && bNoWayIn, FString::Printf(TEXT("the closed door blocks the doorway (pawn traces hit it: %d) and the navmesh (nav raycasts through the doorway blocked: %d)"),
+					bBlocked ? 1 : 0, bNoWayIn ? 1 : 0));
+			}
 			Check(State, LevelGate && LevelGate != Dressing && !LevelGate->IsOpen() && LevelGate->GetActorNameOrLabel().Contains(TEXT("Gate_Checkpoint")),
 				FString::Printf(TEXT("the level's gate is the factory's own: %s"), LevelGate ? *LevelGate->GetActorNameOrLabel() : TEXT("none")));
 			if (!Dressing)
@@ -225,15 +277,13 @@ namespace FrozenFactoryStartSmoke
 			const FRotator View = Camera->GetCameraRotation();
 			const float Fov = Camera->GetFOVAngle();
 			const FVector DoorTop = Door + FVector(0.f, 0.f, 200.f);
-			const FVector LeafL = Door - Along * (HalfWidth * 1.5f) + FVector(0.f, 0.f, 200.f);
-			const FVector LeafR = Door + Along * (HalfWidth * 1.5f) + FVector(0.f, 0.f, 200.f);
 			int32 WallsInView = 0;
 			for (const FVector& Point : WallPoints)
 			{
 				WallsInView += InFrustum(Eye, View, Fov, Point) ? 1 : 0;
 			}
-			Check(State, InFrustum(Eye, View, Fov, DoorTop) && InFrustum(Eye, View, Fov, LeafL) && InFrustum(Eye, View, Fov, LeafR) && WallsInView >= 1,
-				FString::Printf(TEXT("the start camera frames the open door, both leaves and the wall beside it (%d / %d wall pieces; eye %s, view %s, fov %.0f)"),
+			Check(State, InFrustum(Eye, View, Fov, DoorTop) && InFrustum(Eye, View, Fov, Door - Along * (HalfWidth * 0.5f) + FVector(0.f, 0.f, 200.f)) && InFrustum(Eye, View, Fov, Door + Along * (HalfWidth * 0.5f) + FVector(0.f, 0.f, 200.f)) && WallsInView >= 1,
+				FString::Printf(TEXT("the start camera frames the closed door, both leaves and the wall beside it (%d / %d wall pieces; eye %s, view %s, fov %.0f)"),
 					WallsInView, WallPoints.Num(), *Eye.ToCompactString(), *View.ToCompactString(), Fov));
 			const AOperativeCharacter* Leader = Squad->GetLeader();
 			Check(State, Leader && FVector::DotProduct((Door - Leader->GetActorLocation()).GetSafeNormal2D(), Leader->GetActorForwardVector().GetSafeNormal2D()) < -0.5f,

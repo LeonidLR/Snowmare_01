@@ -180,7 +180,7 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 	using namespace SquadAutonomyRules;
 	const FSquadROE& ROE = SquadROE::Get();
 	State.MoveCooldown = FMath::Max(0.f, State.MoveCooldown - Elapsed);
-	if (Operative.IsPanicking() || Operative.IsRaging() || Operative.bCarrying || Operative.IsVaulting())
+	if (Operative.IsPanicking() || Operative.IsRaging() || Operative.bCarrying || Operative.IsVaulting() || Operative.IsClimbingLadder())
 	{
 		return; // broken nerves or busy hands: the autonomy does not command him
 	}

@@ -15,6 +15,7 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/Character.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "UI/GameMessageSubsystem.h"
 
 UKnockdownComponent::UKnockdownComponent()
@@ -105,7 +106,9 @@ bool UKnockdownComponent::CanFallNow() const
 	if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Owner))
 	{
 		// Already lying in the snow (prone) or mid-vault: nothing to knock over.
-		return Operative->GetStance() != EOperativeStance::Prone && !Operative->IsVaulting();
+		// Falling off a ladder: the knockdown comes on landing (ULadderClimbComponent, LADDERS.md 7.7).
+		return Operative->GetStance() != EOperativeStance::Prone && !Operative->IsVaulting()
+			&& !(Operative->LadderClimb && Operative->LadderClimb->IsDropping());
 	}
 	if (const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Owner))
 	{
@@ -188,6 +191,11 @@ bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdo
 {
 	const FKnockdownConfig& Config = KnockdownRules::GetConfig();
 	const EKnockdownDirection Side = Direction == EKnockdownDirection::None ? EKnockdownDirection::Back : Direction;
+	// Knocked down on a ladder (user decision 2026-10-22): he falls to the bottom; this knockdown plays on landing, with fall damage.
+	if (ULadderClimbComponent* Ladder = GetOwner() ? GetOwner()->FindComponentByClass<ULadderClimbComponent>() : nullptr; Ladder && Ladder->IsClimbing())
+	{
+		return Ladder->DropForKnockdown(Side, Cause);
+	}
 	const UAnimSequenceBase* Fall = LoadClip(Side == EKnockdownDirection::Front ? KnockedFrontClip : KnockedBackClip);
 	const UAnimSequenceBase* GetUp = LoadClip(Side == EKnockdownDirection::Front ? ReviveFrontClip : ReviveBackClip);
 	const EKnockdownPhase Old = State.Phase;

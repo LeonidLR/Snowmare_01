@@ -194,7 +194,7 @@ void UOperativeAnimInstance::UpdateInteractionLayer(const AOperativeCharacter& O
 	}
 	const bool bWrongStance = Stance == EOperativeStance::Prone
 		|| (InteractionLayer == EInteractionAnimLayer::FullBody && Stance != EOperativeStance::Standing);
-	if (bIsDead || bKnockedDown || Operative.bInCover || bIsVaulting || Operative.bCarrying || Speed > InteractionStillSpeed || bWrongStance)
+	if (bIsDead || bKnockedDown || Operative.bInCover || bIsVaulting || bIsClimbing || Operative.bCarrying || Speed > InteractionStillSpeed || bWrongStance)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[InteractionAnim] %s: %s cut (speed %.0f, stance %d)"), *Operative.DisplayName.ToString(),
 			InteractionAnimName(InteractionAnim), Speed, static_cast<int32>(Stance));

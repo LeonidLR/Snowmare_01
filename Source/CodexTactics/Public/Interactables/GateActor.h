@@ -49,6 +49,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Gate")
 	bool bSetDressing = false;
 
+	/**
+	 * Set dressing only: the leaves stand open (no collision, no navmesh block). Off (default; user decision 2026-10-22 for the Frozen Factory
+	 * start: "no way back, don't confuse the player"): CLOSED - leaves shut, blocking pawns and the navmesh, still inert.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Gate", meta = (EditCondition = "bSetDressing"))
+	bool bSetDressingOpen = false;
+
 	/** The level's JSON ends the level through this gate ("gate_exit" on): its HQ lines send the squad OUT, not in. */
 	bool IsExitGate() const;
 
@@ -173,7 +180,7 @@ private:
 	/** The cube or LeafMesh on both leaves (OnConstruction). */
 	void ApplyLeafMeshes();
 
-	/** bSetDressing: leaves open, no collision / navmesh, open status, beacon off. */
+	/** bSetDressing: leaves open (bSetDressingOpen: no collision / navmesh, open status) or shut (blocking, the navmesh cut), beacon off. */
 	void ApplySetDressingOpen();
 
 	/** The engine cube the leaves show without LeafMesh. */
