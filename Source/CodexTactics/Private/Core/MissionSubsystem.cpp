@@ -14,6 +14,7 @@
 #include "Data/DialogueSequenceAsset.h"
 #include "UI/DialogueSubsystem.h"
 #include "Engine/World.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -306,6 +307,11 @@ void UMissionSubsystem::RestartMission(bool bQuick)
 	if (UMissionSessionSubsystem* Session = World->GetGameInstance() ? World->GetGameInstance()->GetSubsystem<UMissionSessionSubsystem>() : nullptr)
 	{
 		Session->bQuickRestart = bQuick;
+	}
+	// The failed attempt's end state must not leak into the next attempt: the level is entered with the environment it arrived with.
+	if (UEnvironmentCarrySubsystem* EnvCarry = UEnvironmentCarrySubsystem::Get(World))
+	{
+		EnvCarry->RestoreEntryState();
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Mission restart%s"), bQuick ? TEXT(" (quick)") : TEXT(""));
 	UGameplayStatics::OpenLevel(World, FName(*UGameplayStatics::GetCurrentLevelName(World, true)));

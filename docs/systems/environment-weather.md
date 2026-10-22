@@ -360,3 +360,18 @@ pieces with their own files; this part is the state, the save, the MPC and the w
 - Tune by hand (NS_Weather_Snow / MI_Weather_Snowflake): flake size / life, cylinder radius / height (keep `UpwindOffsetAtFullWind` in step),
   the `Multiply_Float001.B` wind speed constants, the drift spawn rate, MI `NearFadeStart` / `NearFadeLength` / `Softness` / `Brightness`;
   density per weather on the presenter's `SnowFx` component (`Tuning`). GPU cost: up to ~180k flakes alive in a blizzard (24000 / s x 7.5 s).
+
+### 12.c Snow overlay on world meshes and the campaign restart rule (2026-10-22)
+
+**Snow overlay (`M_SnowOverlay`)**
+- The material is TRANSLUCENT: masked overlays are invisible in UE 5.8 (drawn under the own mesh). A tiny WPO push toward the camera prevents z-fighting.
+- The mask is world-up against a threshold driven by `SnowAmount` plus noise, so the snow creeps down the sides.
+- Targets: outdoor `UStaticMeshComponent`s within 60 m of the view focus, nearest first, capped by CVar `Codex.Env.SnowOverlayMax` (250). `Codex.Env.SnowOverlay 0/1` switches the feature.
+- Skipped: ISM / HISM / foliage / pawns / landscape / the overlay's own components / tag `NoSnow` / translucent meshes / radius < 35 cm / wider than 60 m / flat slabs > 20 m / meshes under a roof (an upward trace) / meshes inside Closed or Shelter `ACameraZoneVolume`s (the zone's own roof counts as outside).
+- Nanite meshes are skipped (the overlay is not drawn on Nanite); `Codex.Env.SnowOverlayNanite 1` switches them to the fallback mesh.
+- Cost: +0.3 ms GPU / +18 draws on a building view, ~0 in a wave fight. The set is rescanned every 3 s or on camera move.
+
+**Campaign restart rule**
+- The environment carry (`UEnvironmentCarrySubsystem`) holds the END state of the level just left. `UEnvironmentSubsystem::Resolve` records the state the level was ENTERED with (`RecordEntryState`; unset = fresh start).
+- Every restart of the level (Ctrl + X, the mission-failed Restart button; both go through `UMissionSubsystem::RestartMission`) calls `RestoreEntryState` BEFORE `OpenLevel`: the carry is set back to the entry state (or cleared when the level was entered fresh). Snow cover and time of day therefore no longer accumulate across failed attempts.
+- NEW GAME (`Clear`) forgets both. Test `CodexTactics.GameFlow.Campaign.EnvironmentRestore` (0.40 / 09:00 -> end 0.80 / 14:00 -> restart -> 0.40 / 09:00).

@@ -33,12 +33,35 @@ public:
 
 	void SetCarriedState(const FEnvironmentState& State) { Carried = State; }
 
+	/**
+	 * Remembers the carried state the current level was ENTERED with (unset = it started fresh). Written by UEnvironmentSubsystem when
+	 * it resolves the start state, before the level's own clock changes anything.
+	 */
+	void RecordEntryState(const TOptional<FEnvironmentState>& Entry) { EntryState = Entry; bEntryRecorded = true; }
+
+	/**
+	 * Restart of the current level: puts the entry state back as the carried state (Clear when the level was entered without one) so the
+	 * failed attempt's end state does not accumulate (snow cover, time of day). No-op before any level recorded an entry.
+	 * @return true when the carry was reset
+	 */
+	bool RestoreEntryState()
+	{
+		if (!bEntryRecorded)
+		{
+			return false;
+		}
+		Carried = EntryState;
+		return true;
+	}
+
 	/** Forgets the previous level's end state: the next level starts fresh (NEW GAME). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
-	void Clear() { Carried.Reset(); }
+	void Clear() { Carried.Reset(); EntryState.Reset(); bEntryRecorded = false; }
 
 private:
 	TOptional<FEnvironmentState> Carried;
+	TOptional<FEnvironmentState> EntryState;
+	bool bEntryRecorded = false;
 };
 
 /**

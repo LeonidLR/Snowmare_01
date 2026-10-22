@@ -202,8 +202,13 @@ void UEnvironmentSubsystem::InitialiseFromWorld(UWorld& World)
 
 void UEnvironmentSubsystem::Resolve()
 {
-	const UEnvironmentCarrySubsystem* Carry = UEnvironmentCarrySubsystem::Get(this);
+	UEnvironmentCarrySubsystem* Carry = UEnvironmentCarrySubsystem::Get(this);
 	const TOptional<FEnvironmentState> Carried = Carry ? Carry->GetCarriedState() : TOptional<FEnvironmentState>();
+	if (Carry)
+	{
+		// What this level is entered with: a restart (UMissionSubsystem::RestartMission) puts exactly this back.
+		Carry->RecordEntryState(Carried);
+	}
 	FEnvironmentLevelSettings StartSettings = LevelSettings;
 	if (!StartSettings.bLocked)
 	{
