@@ -21,6 +21,8 @@ public class CodexTacticsEditor : ModuleRules
 			"UMG",
 			"UMGEditor",
 			"CommonUI",
+			"NavigationSystem",
+			"BSPUtils",
 			"CodexTactics"
 		});
 	}

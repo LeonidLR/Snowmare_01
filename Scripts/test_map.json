@@ -273,6 +273,13 @@
       "smokes": ["FrozenFactoryStartSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "ProgressionSmoke", "SaveRoundTripSmoke", "MovementSmoke"]
     },
     {
+      "name": "navmesh-bake",
+      "_comment": "2026-10-22: headless navmesh bake (-run=CodexTacticsEditor.CodexBuildNav, Scripts/bake_navmesh.ps1) releases the editor AsyncLoadLock 0x20 that blocks every commandlet build. The tool changes no map by itself: bake a map, then run that map's smokes.",
+      "globs": ["Source/CodexTacticsEditor/Private/NavBake*", "Source/CodexTacticsEditor/Private/CodexBuildNavCommandlet*", "Source/CodexTacticsEditor/Private/CodexTacticsEditorModule.cpp", "Scripts/bake_navmesh.ps1"],
+      "tests": ["CodexTactics.Editor.Navigation", "CodexTactics.Editor.BlueprintTools"],
+      "smokes": []
+    },
+    {
       "name": "lake-quest",
       "_comment": "2026-10-21: the Demo 01 canister quest in the lake's last compound (layout section 5k, the A7 beat, the BTR's art mesh on the Vehicle interactable).",
       "globs": ["Source/**/Debug/LakeQuestSmoke*", "Source/**/Interactables/VisualMesh*", "Scripts/Editor/build_demo01_lake_layout.py", "Content/Maps/L_Demo01_A_FrozenLake.umap", "Content/Data/LevelJson/L_Demo01_A_FrozenLake.json"],
