@@ -1,0 +1,8 @@
+{
+  "_comment": "Campaign level order (game designer 2026-10-22: the lake is the first tutorial level, the second is Frozen Factory). Read at runtime by UCampaignSubsystem (CampaignRules::ParseCampaign): after the gate exit's black screen the NEXT level opens (stat-points screen first when somebody has unspent points) and the squad is carried over (CampaignCarry). title = the player-facing name (mission complete, level start card, save slots). docs/systems/demo01-lake.md block 2026-10-22 d.",
+  "campaign_id": "demo01",
+  "levels": [
+    { "id": "0.0", "map": "/Game/Maps/L_Demo01_A_FrozenLake", "title": "0.0 Frozen Dam" },
+    { "id": "0.1", "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "title": "0.1 Frozen Factory" }
+  ]
+}

@@ -182,11 +182,7 @@ namespace
 
 	AGateActor* SaveFindGate(UWorld* World)
 	{
-		for (TActorIterator<AGateActor> It(World); It; ++It)
-		{
-			return *It;
-		}
-		return nullptr;
+		return AGateActor::FindLevelGate(World); // 2026-10-22 b: never a set-dressing gate
 	}
 
 	template <typename EnumType>

@@ -230,6 +230,26 @@ bool FGateProgressLevelJsonTest::RunTest(const FString&)
 	return true;
 }
 
+// Game designer 2026-10-22 b: the lake's blast door is the way OUT (level JSON "gate_exit"): its opening line sends the squad out;
+// every other level keeps "Get the squad inside!".
+GATE_TEST(FGateProgressExitLineTest, "ExitLine")
+bool FGateProgressExitLineTest::RunTest(const FString&)
+{
+	FText Speaker;
+	FText Text;
+	TestTrue(TEXT("exit gate: the opening line"), GateProgressRules::GetRadioLine(EGateProgressStatus::HoldingForWave, EGateProgressStatus::Opening, true,
+		Speaker, Text, true));
+	TestTrue(TEXT("... sends everyone out"), Text.ToString().EndsWith(TEXT("Gate's open - everyone out!")) && !Text.ToString().Contains(TEXT("inside")));
+	TestTrue(TEXT("other gates: the opening line"), GateProgressRules::GetRadioLine(EGateProgressStatus::HoldingForWave, EGateProgressStatus::Opening, true,
+		Speaker, Text, false));
+	TestTrue(TEXT("... still sends the squad inside"), Text.ToString().EndsWith(TEXT("Get the squad inside!")));
+	TestTrue(TEXT("the HUD line of an exit gate"), GateProgressRules::GetStatusText(EGateProgressStatus::Opening, 1.f, true).Contains(TEXT("EVERYONE OUT")));
+	TestTrue(TEXT("the HUD line of another gate"), GateProgressRules::GetStatusText(EGateProgressStatus::Opening, 1.f, false).Contains(TEXT("GET INSIDE")));
+	TestEqual(TEXT("other statuses do not change"), GateProgressRules::GetStatusText(EGateProgressStatus::NoPower, 0.5f, true),
+		GateProgressRules::GetStatusText(EGateProgressStatus::NoPower, 0.5f, false));
+	return true;
+}
+
 #undef GATE_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

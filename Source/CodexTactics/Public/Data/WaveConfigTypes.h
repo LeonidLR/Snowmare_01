@@ -299,6 +299,12 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FGateExitConfig GateExit;
+	/**
+	 * "start_fade_seconds" (2026-10-22 b, UE-only): the level starts on a black screen with its campaign title that fades in over
+	 * this many real seconds (ULevelExitSubsystem); 0 (default) = no fade. A campaign arrival always fades in (1.5 s when 0).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (ClampMin = "0"))
+	float StartFadeSeconds = 0.f;
 	/** "demo": demo game-mode flags (Panic off, vision cones, tutorial, demo HUD preset). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FDemoModeSettings Demo;

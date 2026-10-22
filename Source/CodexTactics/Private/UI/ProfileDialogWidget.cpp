@@ -215,6 +215,9 @@ void UProfileDialogWidget::BuildDefaultLayout()
 	Nav->AddChildToHorizontalBox(Prev.Value)->SetPadding(FMargin(4.f, 0.f));
 	Nav->AddChildToHorizontalBox(CloseButton.Value)->SetPadding(FMargin(4.f, 0.f));
 	Nav->AddChildToHorizontalBox(Next.Value)->SetPadding(FMargin(4.f, 0.f));
+	CloseLabel = Cast<UTextBlock>(CloseButton.Key->GetChildAt(0));
+	PrevButtonBox = Prev.Value;
+	NextButtonBox = Next.Value;
 	Prev.Key->OnClicked.AddDynamic(this, &UProfileDialogWidget::HandlePrev);
 	CloseButton.Key->OnClicked.AddDynamic(this, &UProfileDialogWidget::HandleClose);
 	Next.Key->OnClicked.AddDynamic(this, &UProfileDialogWidget::HandleNext);
@@ -264,8 +267,41 @@ void UProfileDialogWidget::Open(AOperativeCharacter* InMember)
 		return;
 	}
 	Member = InMember;
+	bReviewMode = false;
+	ReviewMembers.Reset();
 	Panel->SetVisibility(ESlateVisibility::Visible);
 	Refresh();
+}
+
+void UProfileDialogWidget::OpenReview(const TArray<AOperativeCharacter*>& Members)
+{
+	ReviewMembers.Reset();
+	for (AOperativeCharacter* Operative : Members)
+	{
+		if (Operative)
+		{
+			ReviewMembers.Add(Operative);
+		}
+	}
+	if (ReviewMembers.IsEmpty() || !Panel)
+	{
+		return;
+	}
+	bReviewMode = true;
+	Member = ReviewMembers[0];
+	Panel->SetVisibility(ESlateVisibility::Visible);
+	Refresh();
+}
+
+int32 UProfileDialogWidget::GetReviewPosition() const
+{
+	const int32 Index = ReviewMembers.IndexOfByKey(Member);
+	return Index == INDEX_NONE ? 0 : Index + 1;
+}
+
+FString UProfileDialogWidget::GetCloseButtonText() const
+{
+	return CloseLabel ? CloseLabel->GetText().ToString() : FString();
 }
 
 void UProfileDialogWidget::Close()
@@ -280,7 +316,21 @@ void UProfileDialogWidget::Close()
 void UProfileDialogWidget::SwitchMember(int32 Direction)
 {
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-	const TArray<AOperativeCharacter*> Members = Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>();
+	TArray<AOperativeCharacter*> Members;
+	if (bReviewMode)
+	{
+		for (const TWeakObjectPtr<AOperativeCharacter>& Reviewed : ReviewMembers)
+		{
+			if (Reviewed.IsValid())
+			{
+				Members.Add(Reviewed.Get());
+			}
+		}
+	}
+	else if (Squad)
+	{
+		Members = Squad->GetMembers();
+	}
 	if (Members.IsEmpty())
 	{
 		return;
@@ -397,7 +447,21 @@ void UProfileDialogWidget::Refresh()
 	}
 	if (LevelText)
 	{
-		LevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), Operative->Level)));
+		LevelText->SetText(FText::FromString(bReviewMode && ReviewMembers.Num() > 1
+			? FString::Printf(TEXT("Level: %d   (%d / %d)"), Operative->Level, GetReviewPosition(), ReviewMembers.Num())
+			: FString::Printf(TEXT("Level: %d"), Operative->Level)));
+	}
+	if (CloseLabel)
+	{
+		CloseLabel->SetText(bReviewMode ? LOCTEXT("ReviewContinue", "Continue >") : LOCTEXT("Close", "Close [P]"));
+	}
+	const ESlateVisibility PageVisibility = !bReviewMode || ReviewMembers.Num() > 1 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+	for (UWidget* PageButton : { PrevButtonBox.Get(), NextButtonBox.Get() })
+	{
+		if (PageButton && PageButton->GetVisibility() != PageVisibility)
+		{
+			PageButton->SetVisibility(PageVisibility);
+		}
 	}
 	if (UnspentText)
 	{
@@ -442,6 +506,14 @@ void UProfileDialogWidget::HandleMinusFortitude() { ClickStat(EProgressStat::For
 void UProfileDialogWidget::HandlePlusFortitude() { ClickStat(EProgressStat::Fortitude, 1); }
 void UProfileDialogWidget::HandlePrev() { SwitchMember(-1); }
 void UProfileDialogWidget::HandleNext() { SwitchMember(1); }
-void UProfileDialogWidget::HandleClose() { Close(); }
+void UProfileDialogWidget::HandleClose()
+{
+	if (bReviewMode)
+	{
+		OnReviewContinue.Broadcast(); // the points screen goes on to the next level
+		return;
+	}
+	Close();
+}
 
 #undef LOCTEXT_NAMESPACE

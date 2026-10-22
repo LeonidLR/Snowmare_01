@@ -1,0 +1,30 @@
+{
+  "$schema": "../Schemas/level_config.schema.json",
+  "level_id": "L_Demo01_B_FrozenFactory",
+  "level_name": "0.1 Frozen Factory",
+  "description": "DRAFT (2026-10-22). Campaign level 0.1, a copy of the first test map L_MovementTest (the checkpoint, the canister / generator / terminal quest, the blast gate) with the lake's last compound and its open blast door recreated behind the squad's start (set dressing). Started from L_MovementTest's level file (level_01_outpost.json) without the tutorial; ONE small wave only as the minimal valid config (an empty wave list falls back to 10 built-in waves) - the real encounter design is to come.",
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "gate_open_mode": "generator_waves",
+  "gate_progress_per_second": 0.004,
+  "gate_max_progress_before_final": 0.9,
+  "gate_full_open_after_wave": 0,
+  "gate_exit": "off",
+  "start_fade_seconds": 2.0,
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 8,
+      "spawns": [
+        { "enemy_type": "HOUND", "count": 6, "spawn_lane": "ANY", "spawn_delay_sec": 1, "initial_delay_sec": 0 },
+        { "enemy_type": "FROSTBITTEN", "count": 4, "spawn_lane": "ANY", "spawn_delay_sec": 1, "initial_delay_sec": 0 }
+      ],
+      "wave_modifiers": { "enemy_hp_mult": 1, "enemy_damage_mult": 1, "enemy_speed_mult": 1, "cold_drain_mult": 1 }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  }
+}

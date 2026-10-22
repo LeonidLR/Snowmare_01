@@ -1,7 +1,7 @@
 {
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "L_Demo01_A_FrozenLake",
-  "level_name": "Demo 01 A: Frozen Lake",
+  "level_name": "0.0 Frozen Dam",
   "description": "DRAFT. Demo 01 location A (docs/demo/DEMO01_BEAT_SHEET.md): a gentle level that teaches the basics; the lake fight starts only from the console (combat_start button), 3 sudden waves on lanes NORTH_ICE / EAST_GULLY / WEST_SHORE. Wave 2 flank breach (dynamic point BOATHOUSE_BULKHEAD) is map-side (no JSON key yet: breach_wave); the Susanin rescue is OFF here (susanin_wave 0, user 2026-10-21). Fights with the placed patrols / guards are skirmishes (ambush_fight, user 2026-10-21): no waves, straight back to exploration. Lane names must match the spawn points' SpawnLane exactly.",
   "prep_phase_duration": 60,
   "wave_rest_duration": 20,

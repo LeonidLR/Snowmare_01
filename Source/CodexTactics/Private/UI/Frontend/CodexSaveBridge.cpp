@@ -4,6 +4,7 @@
 #include "Core/SaveGameRules.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Engine/World.h"
+#include "GameFlow/CampaignSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/PackageName.h"
 #include "UI/Frontend/CodexFrontendSettings.h"
@@ -25,6 +26,7 @@ USaveGameSubsystem* CodexSaveBridge::GetSaves(const UWorld* World)
 TArray<FCodexSaveSlotView> CodexSaveBridge::ListSlots(const UWorld* World)
 {
 	TArray<FCodexSaveSlotView> Views;
+	UCampaignSubsystem* Campaign = UCampaignSubsystem::Get(World);
 	if (const USaveGameSubsystem* Saves = GetSaves(World))
 	{
 		for (const FSaveSlotInfo& Info : Saves->GetAllSaves())
@@ -43,7 +45,9 @@ TArray<FCodexSaveSlotView> CodexSaveBridge::ListSlots(const UWorld* World)
 			}
 			View.Title = Info.SaveType == TEXT("manual") ? Title : (Title.IsEmpty() ? View.Kind : FString::Printf(TEXT("%s - %s"), *View.Kind, *Title));
 			View.DateTime = Info.DateTime;
-			const FString Map = Info.MapName.IsEmpty() ? FString() : FPackageName::GetShortName(Info.MapName);
+			FString Map = Info.MapName.IsEmpty() ? FString() : FPackageName::GetShortName(Info.MapName);
+			// 2026-10-22 b: a campaign level shows its title ("0.0 Frozen Dam") instead of the map name.
+			Map = Campaign && !Map.IsEmpty() ? Campaign->GetLevelTitle(Map, Map) : Map;
 			View.Level = Map.IsEmpty() ? Info.StageName : FString::Printf(TEXT("%s - %s"), *Map, *Info.StageName);
 			if (!Info.bMapAvailable)
 			{

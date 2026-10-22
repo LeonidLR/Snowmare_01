@@ -125,7 +125,7 @@ bool GateProgressRules::ShouldShowStatus(EGateProgressStatus Status)
 	return Status != EGateProgressStatus::Locked && Status != EGateProgressStatus::Open;
 }
 
-FString GateProgressRules::GetStatusText(EGateProgressStatus Status, float Progress)
+FString GateProgressRules::GetStatusText(EGateProgressStatus Status, float Progress, bool bExitGate)
 {
 	const int32 Percent = FMath::FloorToInt(FMath::Clamp(Progress, 0.f, 1.f) * 100.f + KINDA_SMALL_NUMBER);
 	switch (Status)
@@ -141,14 +141,16 @@ FString GateProgressRules::GetStatusText(EGateProgressStatus Status, float Progr
 	case EGateProgressStatus::NoPower:
 		return FString::Printf(TEXT("BLAST DOOR %d%% — GENERATOR OFFLINE"), Percent);
 	case EGateProgressStatus::Opening:
-		return TEXT("BLAST DOOR OPENING — GET INSIDE");
+		// 2026-10-22 b: the gate the level is left through (level JSON "gate_exit") sends the squad out.
+		return bExitGate ? TEXT("BLAST DOOR OPENING — EVERYONE OUT") : TEXT("BLAST DOOR OPENING — GET INSIDE");
 	case EGateProgressStatus::Open:
 	default:
 		return TEXT("BLAST DOOR OPEN");
 	}
 }
 
-bool GateProgressRules::GetRadioLine(EGateProgressStatus Previous, EGateProgressStatus Next, bool bFinalWaveCleared, FText& OutSpeaker, FText& OutText)
+bool GateProgressRules::GetRadioLine(EGateProgressStatus Previous, EGateProgressStatus Next, bool bFinalWaveCleared, FText& OutSpeaker, FText& OutText,
+	bool bExitGate)
 {
 	if (Previous == Next || Next == EGateProgressStatus::Locked || Next == EGateProgressStatus::Open)
 	{
@@ -172,7 +174,9 @@ bool GateProgressRules::GetRadioLine(EGateProgressStatus Previous, EGateProgress
 			: LOCTEXT("NoPower", "The generator is down and the blast door has stopped! Engineer, get it running again!");
 		return true;
 	case EGateProgressStatus::Opening:
-		OutText = LOCTEXT("Opening", "Voltage has stabilized - the blast door is opening! Get the squad inside!");
+		// Game designer 2026-10-22 b: on the gate the level is left through (the lake) the line sends the squad out.
+		OutText = bExitGate ? LOCTEXT("OpeningExit", "Voltage has stabilized - the blast door is opening! Gate's open - everyone out!")
+			: LOCTEXT("Opening", "Voltage has stabilized - the blast door is opening! Get the squad inside!");
 		return true;
 	case EGateProgressStatus::Advancing:
 	case EGateProgressStatus::Idle:

@@ -135,10 +135,11 @@ namespace GateProgressRules
 	CODEXTACTICS_API bool ShouldShowStatus(EGateProgressStatus Status);
 
 	/** HUD / world label line, e.g. "BLAST DOOR 37% — GENERATOR OFFLINE". */
-	CODEXTACTICS_API FString GetStatusText(EGateProgressStatus Status, float Progress);
+	CODEXTACTICS_API FString GetStatusText(EGateProgressStatus Status, float Progress, bool bExitGate = false);
 
 	/** HQ radio line for a status change; false = nothing to say. bFinalWaveCleared picks the "last wave, no power" line. */
-	CODEXTACTICS_API bool GetRadioLine(EGateProgressStatus Previous, EGateProgressStatus Next, bool bFinalWaveCleared, FText& OutSpeaker, FText& OutText);
+	CODEXTACTICS_API bool GetRadioLine(EGateProgressStatus Previous, EGateProgressStatus Next, bool bFinalWaveCleared, FText& OutSpeaker, FText& OutText,
+		bool bExitGate = false);
 
 	/** Objective while the paced door is powered but not open yet. */
 	CODEXTACTICS_API FText GetHoldObjective();
