@@ -37,6 +37,7 @@ Third round (2026-10-22, confirmed):
 15. **A weather state lasts 3:45** (75 % of a 5:00 phase) - confirmed.
 17. **The next level continues the time and weather where the previous level (e.g. the tutorial) ended**; only a fresh run starts
     at the default hour with a random start weather.
+19. **The Demo 01 tutorial SHOWS its night + snowfall** (weather visuals on for the lake, user decision 2026-10-22; `"visuals": false` stays available per level).
 18. **Bosses do not depend on time of day / weather** (never substituted). CryoDrone is not an enemy in the game now - out of scope.
 16. **Demo 01 tutorial waves are locked "as written"**: under its fixed Night + Snowfall the waves are mostly hounds and frostbitten, maybe a few zombies.
 
