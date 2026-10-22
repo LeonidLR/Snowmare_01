@@ -15,8 +15,11 @@
 | Question | Decision |
 |---|---|
 | Turn-based combat | Ladders are **forbidden** for now: no grid move uses a ladder (see 7.6 for a fight that starts mid-climb). |
-| Who climbs | The operatives, and **human enemies: PMC and marksmen**. Hounds and mutants never. |
+| Who climbs | The operatives and **non-mutant enemies**: PMC mercenaries (humans, not in the game yet), zombified PMC / zombified humans (`BP_Enemy_FrozenPMC_Fighter`), the Marksman. **Mutants never**: Brute, Cutter, Frostbitten, Hound, Spitter (and the Cryo Drone). The Military Zombie (a zombified soldier) is a candidate - open question 4. |
 | Wall behind the ladder | Optional: a **free-standing ladder** (no wall) is allowed. |
+| Knockdown on a ladder | The climber **falls to the bottom**: the fall, then the knockdown on landing plus fall damage (7.7; the damage numbers are a default). |
+| A fight starts mid-climb | The operative **finishes the climb to the top at normal speed** (no abort, no speed-up); the fight / turn-based entry does not use the ladder - he joins once off it (7.6). |
+| Short ladders (< 7 rungs) | **Not climbable**: decoration only - no nav link, no climb order; the generator flags them in validation (3.4). |
 
 ## 2. What changed against the course spec (audit trail)
 
@@ -79,14 +82,15 @@ All numbers are from the Fixed clips (section 4) and must be re-measured on the 
 - **Click proxy** `UBoxComponent` around the rungs: Visibility = Block, everything else Ignore; hover = hand cursor, click =
   "climb" order (7.1). No overlap triggers for the logic: positions are computed from the anchor points.
 - **Nav link**: a `UNavLinkCustomComponent` (smart link) bottom point <-> top point, both directions, area
-  `UNavArea_Ladder` (new; cost = climb time). No link when `bTopExit` is false.
+  `UNavArea_Ladder` (new; cost = climb time). No link when `bTopExit` is false or `RungCount < MinClimbableRungs` (a decoration ladder, 3.4).
 
 ### 3.4 Validation (editor only; `CallInEditor Validate` + on construction)
 
 Traces: floor under the bottom link point (<= 20 cm); a top floor at `TopZ +- TopTolerance` under the top link point when
 `bTopExit`; capsule fit (standing capsule sweep) at both link points and along the hang line; wall within 25 cm behind the
-rung plane (optional: none -> free-standing, no brackets). `RungCount < MinRungsForClimbOut` (7, section 4) with
-`bTopExit` = error (see open question 1). Errors: an editor-only text (`bHiddenInGame`) + the material parameter
+rung plane (optional: none -> free-standing, no brackets). `RungCount < MinClimbableRungs` (7, section 4;
+user decision 2026-10-22) = a **decoration ladder**: no nav link, the click proxy gives no climb order, nothing climbs it;
+validation flags it with a warning (amber editor text "Decoration: < 7 rungs, not climbable", not the red error). Errors: an editor-only text (`bHiddenInGame`) + the material parameter
 `ErrorGlow` (1 = red emissive) on the rung material instance; the map check also lists them. Nothing of this runs in a
 packaged game.
 
@@ -106,7 +110,8 @@ Derived facts:
 - **Pitch 36.4 cm**, first rung 36.4 cm above the floor; hand wrists ~46 cm and the balls ~50 cm in front of the root ->
   rung plane at **48 cm** (`HangStandoff`). The ladder centre runs ~7 cm to the climber's right of the root (`HangLateral`).
 - **ClimbOut needs 7 rungs** below the platform (`7 * 36.4 = 254.8`; the clip rises 261 - the 6 cm rest is warped away):
-  the shortest ladder with a top exit is ~2.55 m. **IntoFromTop** lands 5 rungs below the platform.
+  the shortest climbable ladder is ~2.55 m (7 rungs); shorter ones are decoration (user decision, section 1).
+  **IntoFromTop** lands 5 rungs below the platform.
 - **No down loop** (the up loop reversed) and **no bottom-entry clip** (the loop's start pose IS the "foot on the floor"
   pose: the bottom entry is a blend into it, the bottom exit a blend out of it).
 - The course's "fix" adds only ~1.1 cm per loop (72.7 vs 71.6): rung snapping makes it irrelevant.
@@ -158,12 +163,12 @@ does); prone / crouched -> **stands up first** (not a refusal); the ladder lease
 
 ### 5.3 The interrupt path `AbortClimb(EReason)`
 
-One function for: montage interrupted (`bInterrupted`), death, knockdown request, save load, turn-based start (7.6),
+One function for: montage interrupted (`bInterrupted`), death, knockdown request (-> the fall, 7.7), save load,
 cinematic lock, possession change, `EndPlay`, the lease lost. It: stops the climb montage, clears every timer handle owned by
 the component (member `FTimerHandle`s only), turns the own collision back on, restores the snapshot (movement mode, rotation
 flags, braking, gravity, stance, weapon visibility, `PathFollowingComponent` resume or abort), releases the lease, and
 places the actor at the **nearest valid end** (bottom link point if k <= RungCount / 2 else top link point; a capsule sweep
-picks the other end if blocked) - except death, which drops the body (section 7.7). Deadlock rule: every state has a
+picks the other end if blocked) - except death and knockdown, which drop the climber (section 7.7). A fight / turn-based start is NOT an abort (7.6). Deadlock rule: every state has a
 timeout of `2 x` its expected length -> `AbortClimb(Timeout)` with a warning log.
 
 ### 5.4 Facing rules (normalised)
@@ -222,19 +227,29 @@ the enemies' default `UNavFilter_NoVault` **excludes** it; a climbing enemy uses
 allows ladder). The lease = per-ladder occupancy (one climber; operatives and enemies share it).
 
 ### 7.5 Enemies that climb
-`AEnemyCharacter::bCanClimbLadders` (class default; true on `AMarksmanEnemyCharacter` and the PMC Blueprint(s), false
-elsewhere - the archetype is not enough: `BP_Enemy_FrozenPMC_Fighter` and the Military Zombie are both Frostbitten
-variants). It also needs ladder clips usable on that body's skeleton (retargeted copies); a class without them is treated
+`AEnemyCharacter::bCanClimbLadders` (class default false; true on `AMarksmanEnemyCharacter`, `BP_Enemy_FrozenPMC_Fighter`,
+later zombified humans and the future PMC mercenaries; never on a mutant: Brute, Cutter, Frostbitten, Hound, Spitter, Cryo
+Drone). The archetype is not enough: `BP_Enemy_FrozenPMC_Fighter` and the Military Zombie are both Frostbitten variants,
+so the flag is set per Blueprint (the Military Zombie waits for open question 4). It also needs ladder clips usable on that body's skeleton (retargeted copies); a class without them is treated
 as `false` with a warning. Same component and states; `EnemyAIController` picks the climbing filter.
 
 ### 7.6 Turn-based
 Forbidden (user decision): the grid never registers a ladder link; `TurnArenaRules` sees no ladder moves. A fight that
-starts while someone is on a ladder: the climber finishes to the end he was heading to before the grid forms (entry waits,
-at most the remaining clip time, <= ~4 s) - open question 3.
+starts while an operative is on a ladder (user decision 2026-10-22): he **finishes the climb to the top at normal speed** -
+no abort, no speed-up, orders to him are buffered until he is off. Real time / tactical pause: he simply takes part once
+off the ladder. Turn-based: the grid forms without him (default: the entry does not wait); he joins the turn order on the
+top floor once `ExitTop` ends, on the next round, and has no turn-based action while on the ladder. A climber who was
+going DOWN when the fight started also continues to his end at normal speed (default: the user's rule names the top -
+confirm, see open question 3b). Enemies on a ladder behave the same.
 
 ### 7.7 Damage, knockdown, death on the ladder
-Damage applies; hit-reaction clips do not play. Knockdown: open question 2 (proposed: no knockdown on a ladder, the blow is
-plain damage). Death: `AbortClimb(Death)` without the end placement - the body leaves the hang line 20 cm, falls (`MOVE_Falling`)
+Damage applies; hit-reaction clips do not play. **Knockdown (user decision 2026-10-22): he falls to the bottom.**
+`AbortClimb(Knockdown)`: the climb montage stops, the actor leaves the hang line 20 cm (away from the rungs), `MOVE_Falling`
+with the own collision on; on landing the knockdown that caused the fall plays by the normal rules (`UKnockdownComponent`,
+`AM_Knocked_Back`, the normal get-up and immunity) plus **fall damage** (default, to confirm): fall height `H` = root Z at the
+drop - landing Z; `FallDamage = clamp((H - 100 cm) * 0.1 HP/cm, 0, 40)` (`LadderFallSafeHeightCm` 100, `LadderFallDamagePerCm`
+0.1, `LadderFallDamageMax` 40): a full 7-rung ladder (~2.55 m) = ~16 HP, 4 m = 30 HP, against 120-150 HP operatives; it
+can kill (a knocked-down operative at low HP). Enemies use the same rule. Death: `AbortClimb(Death)` without the end placement - the body leaves the hang line 20 cm, falls (`MOVE_Falling`)
 and plays the knockdown death fall (`UKnockdownComponent::PlayDeathFall`) on landing.
 
 ### 7.8 Save / load
@@ -253,10 +268,10 @@ mesh rows in the `DT_LadderTypes` DataTable; clip-derived numbers (pitch, root d
 |---|---|
 | `CodexTactics.Ladder.Rules.*` (unit) | quantisation, rail tiling + guards, anchor points, yaw / pre-turn, rung snapping, loop-phase limb targets, order direction mid-climb, nearest-end choice |
 | `CodexTactics.Ladder.Climb.*` (unit) | state table: every transition, every abort reason restores the snapshot, timeouts |
-| `LadderGeneratorSmoke` | metal / wood, 3 heights, free-standing: ISM counts, bounds, no navmesh cut, link points on the navmesh, validation errors on a bad placement |
-| `LadderClimbSmoke` (L_MovementTest, spawned platform 2.55 m + ladder) | click on the platform: path through the link, up / down / IntoFromTop / ClimbOut end on the link points (+-5 cm), 3 operatives queue, prone -> stands, carrying refused, death mid-climb drops the body, save mid-climb -> loads at the end, TB start mid-climb waits |
+| `LadderGeneratorSmoke` | metal / wood, 3 heights, free-standing: ISM counts, bounds, no navmesh cut, link points on the navmesh, validation errors on a bad placement; a 5-rung ladder: no link, flagged as decoration |
+| `LadderClimbSmoke` (L_MovementTest, spawned platform 2.55 m + ladder) | click on the platform: path through the link, up / down / IntoFromTop / ClimbOut end on the link points (+-5 cm), 3 operatives queue, prone -> stands, carrying refused, death mid-climb drops the body, a knockdown mid-climb -> falls, lands knocked down with the fall damage, save mid-climb -> loads at the end, a fight starting mid-climb: he finishes to the top at normal speed, TB grid without him, he joins on the next round |
 | `LadderAnimSmoke [Shot]` | slot weights, all gated layers at 0, hand / ball -> rung distance per frame on the operative body (< 4 cm with IK), rendered frames |
-| `LadderEnemySmoke` | a marksman paths through a ladder, a hound / frostbitten paths around it |
+| `LadderEnemySmoke` | a marksman and the Frozen PMC Fighter path through a ladder, a hound / frostbitten / brute path around it |
 
 ## 9. Phase plan
 
@@ -277,12 +292,15 @@ schedules them with the user.
 5. **Content + polish** - ladders placed in the levels by the designer, `docs/systems/ladders.md` (the system doc replaces this
    design doc's status section), smokes registered in `Scripts/test_map.json`, bot run.
 
-## 10. Open questions (each changes gameplay)
+## 10. Open questions (each changes gameplay; decisions of 2026-10-22 kept for the record)
 
-1. **Short ladders.** ClimbOut needs 7 rungs (~2.55 m). Ladders to lower ledges: forbid a top exit below 7 rungs (editor
-   error), or get / make a short climb-out clip?
-2. **Knockdown on a ladder.** Proposed: no knockdown while climbing (the blow is plain damage); alternative: he falls off.
-3. **Fight starts mid-climb.** Proposed: turn-based entry waits for the climber to reach the end; alternative: the climb is
-   reversed to the start end, or the entry is refused while anyone is on a ladder.
-4. **Which enemy Blueprints climb.** Marksman and `BP_Enemy_FrozenPMC_Fighter` - any other PMC body? (the Military Zombie is
-   treated as a mutant: no.)
+1. ~~**Short ladders.**~~ **Decided 2026-10-22:** fewer than 7 rungs = not climbable (decoration, no nav link, flagged by
+   validation) - sections 1, 3.3, 3.4.
+2. ~~**Knockdown on a ladder.**~~ **Decided 2026-10-22:** he falls to the bottom, lands knocked down + fall damage (7.7).
+   Still to confirm: the fall-damage numbers (safe 1 m, 0.1 HP/cm, max 40).
+3. ~~**Fight starts mid-climb.**~~ **Decided 2026-10-22:** he finishes to the top at normal speed, joins once off (7.6).
+   3b, to confirm: a climber going DOWN when the fight starts - default: continues to the bottom at normal speed. And the
+   turn-based default: the grid forms without him and he joins on the next round (instead of the entry waiting).
+4. ~~**Which enemies climb.**~~ **Decided 2026-10-22:** non-mutants only - PMC mercenaries (future), zombified PMC /
+   zombified humans (`BP_Enemy_FrozenPMC_Fighter`), the Marksman; mutants never. Still to ask: **the Military Zombie**
+   (`BP_Enemy_MilitaryZombie`, a zombified soldier) - climbs or not?
