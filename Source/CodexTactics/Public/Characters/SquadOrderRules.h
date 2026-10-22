@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameFlow/GameFlowTypes.h"
 
 /**
  * Who owns an operative's movement: his own order or the squad formation (rev 5g, game designer play-test 2026-10-14, UE-only;
@@ -123,4 +124,14 @@ namespace SquadOrderRules
 	 * single cover order of the direct-order operative.
 	 */
 	CODEXTACTICS_API bool IsGroupCoverOrder(int32 JoiningCount);
+
+	/**
+	 * Game designer play-test 2026-10-22 ("when a fight ends the operatives must stay where they were"): the phase change that
+	 * ends a fight and returns to exploring (PostCombat after the last wave / an ambush fight, or a skirmish straight back to
+	 * Exploration) arms the post-fight hold - the formation does not walk the followers to their slots.
+	 */
+	CODEXTACTICS_API bool ArmsPostFightHold(ECodexGamePhase Previous, ECodexGamePhase Phase);
+
+	/** The post-fight hold stays until the leader moves (the player's first move order); then the formation follows as usual. */
+	CODEXTACTICS_API bool KeepsPostFightHold(bool bHold, bool bLeaderMoving);
 }

@@ -9,6 +9,7 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/WaveSubsystem.h"
 #include "Engine/TargetPoint.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -260,7 +261,10 @@ void UHordeIntroSubsystem::TickWaiting(float RealDelta, float GameDelta)
 		TriggerRunningFraction = Fraction;
 		UE_LOG(LogCodexTactics, Display, TEXT("[HordeIntro] the running mass formed at %.2f game s (%.0f %% run at the squad)"), GameSinceSpawn, Fraction * 100.f);
 	}
-	if (!HordeIntroRules::ShouldTrigger(GameSinceSpawn, bMassFormed, Config))
+	// 2026-10-22: never fly to a wave that has not spawned yet (queued spawns, or nobody alive) - up to SpawnGraceSeconds longer.
+	const UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>();
+	const bool bAllSpawned = !Waves || Waves->GetRemainingSpawnCount() == 0;
+	if (!HordeIntroRules::ShouldTriggerSpawned(GameSinceSpawn, bMassFormed, bAllSpawned, Movers.Num(), Config))
 	{
 		return;
 	}
@@ -373,29 +377,20 @@ void UHordeIntroSubsystem::StartShot(int32 Index)
 			Params.ObjectFlags |= RF_Transient;
 			WideAnchor = GetWorld()->SpawnActor<ATargetPoint>(Squad, FRotator::ZeroRotator, Params);
 		}
-		UpdateWideAnchor();
-		TArray<AEnemyCharacter*> Enemies;
-		GatherEnemies(Enemies);
-		TArray<FVector> Points;
-		for (const AEnemyCharacter* Enemy : Enemies)
-		{
-			if (HordeIntroRules::IsRunningAtSquad(MoverOf(*Enemy), Squad, Config.MassMinSpeed))
-			{
-				Points.Add(Enemy->GetActorLocation());
-			}
-		}
-		if (Points.IsEmpty())
-		{
-			for (const AEnemyCharacter* Enemy : Enemies)
-			{
-				Points.Add(Enemy->GetActorLocation());
-			}
-		}
+		// Game designer play-test 2026-10-22 ("sometimes the fly-in shows nothing"): the shot frames the main cluster of the WAVE's
+		// enemies (the level's other enemies far away pulled the old mass centre into empty ground) at the distance that really
+		// holds them in the camera's frustum (the old span-based distance was too far for a tight pack and too close for a spread
+		// one), the yaw fixed for the shot.
+		const HordeIntroRules::FWideFrame Frame = ComputeWideFrame(true);
 		Target = WideAnchor;
 		if (Target)
 		{
-			Camera->SetCinematicYaw(HordeIntroRules::ViewYawAt(Squad, MassCentre(Enemies), Config.ViewSideDegrees));
-			Camera->SmoothFocusOnTarget(Target, Config.ShotBlendSeconds, HordeIntroRules::WideDistance(Target->GetActorLocation(), Points, Config));
+			WideAnchor->SetActorLocation(Frame.Focus);
+			Camera->SetCinematicYaw(WideYaw);
+			Camera->SmoothFocusOnTarget(Target, Config.ShotBlendSeconds, Frame.Distance);
+			UE_LOG(LogCodexTactics, Display, TEXT("[HordeIntro] wide frame: %d of %d wave enemies in the main cluster, focus %s (%s), %.0f m"),
+				WideClusterCount, WideEnemyCount, *Frame.Focus.ToCompactString(), Frame.bBiased ? TEXT("towards the squad") : TEXT("on the cluster"),
+				Frame.Distance / 100.f);
 		}
 		break;
 	}
@@ -407,10 +402,21 @@ void UHordeIntroSubsystem::StartShot(int32 Index)
 		TArray<FHordeMover> Candidates;
 		for (AEnemyCharacter* Enemy : Enemies)
 		{
-			if (Enemy->GetArchetype() == Shot.Archetype)
+			if (Enemy->GetArchetype() == Shot.Archetype && !Enemy->IsHidden())
 			{
 				OfType.Add(Enemy);
 				Candidates.Add(MoverOf(*Enemy));
+			}
+		}
+		if (OfType.IsEmpty())
+		{
+			for (AEnemyCharacter* Enemy : Enemies)
+			{
+				if (Enemy->GetArchetype() == Shot.Archetype)
+				{
+					OfType.Add(Enemy);
+					Candidates.Add(MoverOf(*Enemy));
+				}
 			}
 		}
 		const int32 Pick = HordeIntroRules::PickRunningRepresentative(Candidates, Squad, Config.MassMinSpeed);
@@ -448,16 +454,47 @@ void UHordeIntroSubsystem::StartShot(int32 Index)
 		FlyoverSeconds, Target ? Target->GetVelocity().Size2D() : 0.f);
 }
 
+HordeIntroRules::FWideFrame UHordeIntroSubsystem::ComputeWideFrame(bool bNewYaw)
+{
+	TArray<AEnemyCharacter*> Enemies;
+	GatherEnemies(Enemies);
+	TArray<FVector> Feet;
+	for (const AEnemyCharacter* Enemy : Enemies)
+	{
+		Feet.Add(Enemy->GetActorLocation() - FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight()));
+	}
+	TArray<FVector> Cluster;
+	for (const int32 Index : HordeIntroRules::MainCluster(Feet, Config.WideClusterRadiusCm))
+	{
+		Cluster.Add(Feet[Index]);
+	}
+	WideEnemyCount = Feet.Num();
+	WideClusterCount = Cluster.Num();
+	const FVector Squad = SquadCentre();
+	if (bNewYaw)
+	{
+		WideYaw = HordeIntroRules::ViewYawAt(Squad, Cluster.IsEmpty() ? Squad : HordeIntroRules::CentreOf(Cluster, TArray<int32>()),
+			Config.ViewSideDegrees);
+	}
+	const ATacticalCameraPawn* Camera = GetCamera();
+	const float Pitch = Camera ? Camera->Config.Pitch : -35.26f;
+	const float VerticalFov = Camera ? Camera->Config.VerticalFov : 30.f;
+	return HordeIntroRules::FrameWide(Squad, Cluster, WideYaw, Pitch, VerticalFov, 16.f / 9.f, Config);
+}
+
 void UHordeIntroSubsystem::UpdateWideAnchor()
 {
 	if (!WideAnchor)
 	{
 		return;
 	}
-	TArray<AEnemyCharacter*> Enemies;
-	GatherEnemies(Enemies);
-	const FVector Squad = SquadCentre();
-	WideAnchor->SetActorLocation(Enemies.IsEmpty() ? Squad : HordeIntroRules::WideFocus(Squad, MassCentre(Enemies), Config));
+	// The pack keeps running: the frame follows its main cluster (focus and distance), the yaw of the shot stays.
+	const HordeIntroRules::FWideFrame Frame = ComputeWideFrame(false);
+	WideAnchor->SetActorLocation(Frame.Focus);
+	if (ATacticalCameraPawn* Camera = GetCamera())
+	{
+		Camera->SetCinematicDistance(Frame.Distance);
+	}
 }
 
 void UHordeIntroSubsystem::EndFlyover(bool bSnapBack, bool bSkipped, const TCHAR* Why)
@@ -602,6 +639,22 @@ FVector UHordeIntroSubsystem::SquadCentre() const
 void UHordeIntroSubsystem::GatherEnemies(TArray<AEnemyCharacter*>& OutEnemies) const
 {
 	OutEnemies.Reset();
+	// 2026-10-22: the fight's own enemies (the wave); the level's other enemies (patrols elsewhere on the lake, parked ones) are
+	// never part of the horde intro. Every registered enemy only when the fight has none (a test spawn outside a wave).
+	if (const UWaveSubsystem* Waves = GetWorld() ? GetWorld()->GetSubsystem<UWaveSubsystem>() : nullptr)
+	{
+		for (AEnemyCharacter* Enemy : Waves->GetAliveEnemies())
+		{
+			if (IsValid(Enemy) && !Enemy->IsDying() && (!Enemy->GetHealthComponent() || Enemy->GetHealthComponent()->IsAlive()))
+			{
+				OutEnemies.Add(Enemy);
+			}
+		}
+		if (!OutEnemies.IsEmpty())
+		{
+			return;
+		}
+	}
 	for (AEnemyCharacter* Registered : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
 		AEnemyCharacter* Enemy = Registered;

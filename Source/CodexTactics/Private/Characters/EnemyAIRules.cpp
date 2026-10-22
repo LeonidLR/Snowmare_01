@@ -206,6 +206,11 @@ float EnemyAIRules::MeleeApproachAcceptance(float AttackRangeCm, float HeightDif
 	return FMath::Clamp(FMath::FloorToFloat(Inside / 5.f) * 5.f, 0.f, FMath::Max(0.f, AttackRangeCm * 0.5f));
 }
 
+bool EnemyAIRules::FeelsHeat(float Distance2DCm, float ReachCm, bool bLineClear)
+{
+	return Distance2DCm < ReachCm && bLineClear;
+}
+
 FVector EnemyAIRules::FleeDirection(const FVector& Enemy, const FVector& Fire, const FVector* Target)
 {
 	FVector Away = FVector(Enemy.X - Fire.X, Enemy.Y - Fire.Y, 0.f).GetSafeNormal();

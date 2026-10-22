@@ -162,14 +162,16 @@ void UWaveVictorySubsystem::StartPostCombatSequence()
 		It->Destroy();
 	}
 
-	// The squad back at its preparation spots, orders dropped; the commander leads the exploration formation.
+	// Orders dropped; the commander leads the exploration formation. Game designer play-test 2026-10-22 (deviation from Godot
+	// _return_squad_to_prep_stations): nobody is teleported back to the preparation spots - the squad stays exactly where the
+	// fight ended (stance and cover kept; USquadSubsystem holds the followers there until the leader moves). The stations are
+	// still recorded (save games carry them).
 	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 	RecordPrepStations(false);
 	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 	{
 		Member->StopOperative();
 		Member->ClearPlannedTargetedShots();
-		Member->TeleportTo(GetPrepStation(Member), Member->GetActorRotation(), false, true);
 	}
 	if (Squad)
 	{
@@ -183,7 +185,7 @@ void UWaveVictorySubsystem::StartPostCombatSequence()
 		}
 	}
 	RecoverDeployables();
-	UE_LOG(LogCodexTactics, Log, TEXT("Post-combat: squad returned, deployables recovered"));
+	UE_LOG(LogCodexTactics, Log, TEXT("Post-combat: the squad stays where the fight ended, deployables recovered"));
 }
 
 void UWaveVictorySubsystem::RecoverDeployables()

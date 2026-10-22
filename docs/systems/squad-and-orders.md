@@ -79,3 +79,18 @@
   mode defaults (balance assets, `LevelJsonFile`, enemy classes) are editable in the same Class Defaults. No map overrides the
   game mode; code reads it through `GetAuthGameMode<ACodexTacticsGameMode>()` (works for the child).
 
+### After a retreat: face the enemy again (user request 2026-10-22)
+
+`ThreatFacingRules` (pure, `CodexTactics.Squad.ThreatFacing.*`), applied in `AOperativeCharacter::UpdateCombatFacing`: in a real-time wave fight
+an operative who stands (no move order, no velocity), has no combat target in his sights (it fell out of his sight while he ran), has no facing of
+his own (cover / pending cover, an idle facing set by a group cover or a warm spot, `SetFacingPoint` - `bExplicitFacing` until his next move -,
+a quick fire) and is not on the turn-based grid turns at his stance turn rate to the enemy he last fought (its last seen spot while it is hidden from
+the squad, its live spot while seen), else to the nearest live enemy within 30 m; nobody left - no turn. The memory lasts for the wave fight
+(cleared outside WaveCombat). Exploration is unchanged. `IsTurningToThreat()` for smokes / debugging. Smoke `RetreatFacingSmoke` (two operatives
+firing at a pack of three, a 26 m sprint back: backs to the pack while running, then the turn drives the facing back within 30 deg and both fire
+again; a facing order is kept).
+
+### Post-fight hold
+
+See [waves-horde-encounters](waves-horde-encounters.md) "Fight over: the squad stays put": after a fight the followers keep their spots until the
+leader moves.

@@ -484,20 +484,56 @@ AActor* AEnemyCharacter::FindTarget() const
 	return Nearest;
 }
 
+bool AEnemyCharacter::HasClearHeatLine(const FVector& SourceLocation, const AActor* SourceOwner, const FVector& Location, const AActor* IgnoreActor) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return true;
+	}
+	const float LineZ = FMath::Max(SourceLocation.Z, Location.Z) + EnemyAIRules::HeatLineHeightCm;
+	const FVector Start(SourceLocation.X, SourceLocation.Y, LineZ);
+	const FVector End(Location.X, Location.Y, FMath::Max(Location.Z + EnemyAIRules::HeatLineHeightCm, LineZ - 150.f));
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(EnemyHeatLine), false, this);
+	Params.AddIgnoredActor(SourceOwner);
+	Params.AddIgnoredActor(IgnoreActor);
+	for (int32 Attempt = 0; Attempt < 4; ++Attempt)
+	{
+		FHitResult Hit;
+		if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
+		{
+			return true;
+		}
+		AActor* HitActor = Hit.GetActor();
+		if (!HitActor || !HitActor->IsA<APawn>())
+		{
+			return false; // a wall / building / vehicle between the heat and him
+		}
+		Params.AddIgnoredActor(HitActor); // people do not shield the heat
+	}
+	return true;
+}
+
 bool AEnemyCharacter::IsInFearZone(const FVector& Location, const AActor* Candidate) const
 {
 	UWorld* World = GetWorld();
 	for (TActorIterator<ABarrelActor> It(World); It; ++It)
 	{
-		if (It->IsBurning() && FVector::Dist2D(Location, It->GetActorLocation()) < AIConfig.FireFearRadius)
+		if (It->IsBurning() && EnemyAIRules::FeelsHeat(FVector::Dist2D(Location, It->GetActorLocation()), AIConfig.FireFearRadius,
+			FVector::Dist2D(Location, It->GetActorLocation()) >= AIConfig.FireFearRadius || HasClearHeatLine(It->GetActorLocation(), *It, Location, Candidate)))
 		{
 			return true;
 		}
 	}
 	for (const TWeakObjectPtr<UHeatSourceComponent>& Source : UHeatSourceComponent::GetAllSources())
 	{
-		if (Source.IsValid() && Source->GetWorld() == World && Source->IsHeatActive() && Source->GetOwner() != Candidate
-			&& FVector::Dist2D(Location, Source->GetComponentLocation()) < FMath::Max(AIConfig.FireFearRadius, Source->Radius))
+		if (!Source.IsValid() || Source->GetWorld() != World || !Source->IsHeatActive() || Source->GetOwner() == Candidate)
+		{
+			continue;
+		}
+		const float Distance = FVector::Dist2D(Location, Source->GetComponentLocation());
+		const float Reach = FMath::Max(AIConfig.FireFearRadius, Source->Radius);
+		if (EnemyAIRules::FeelsHeat(Distance, Reach, Distance >= Reach || HasClearHeatLine(Source->GetComponentLocation(), Source->GetOwner(), Location, Candidate)))
 		{
 			return true;
 		}
@@ -511,10 +547,12 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	float BestMargin = TNumericLimits<float>::Max();
 	bool bFound = false;
-	auto Consider = [&](const FVector& Location, float Radius)
+	auto Consider = [&](const FVector& Location, float Radius, const AActor* SourceOwner)
 	{
 		const float Distance = FVector::Dist2D(Feet, Location);
-		if (Distance < Radius + Extra && Distance - Radius < BestMargin)
+		// 2026-10-22: two walls between the generator and a hound outside the perimeter - no fear (EnemyAIRules::FeelsHeat).
+		if (Distance < Radius + Extra && Distance - Radius < BestMargin
+			&& EnemyAIRules::FeelsHeat(Distance, Radius + Extra, HasClearHeatLine(Location, SourceOwner, Feet, nullptr)))
 		{
 			BestMargin = Distance - Radius;
 			OutFire = Location;
@@ -526,7 +564,7 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 	{
 		if (It->IsBurning())
 		{
-			Consider(It->GetActorLocation(), AIConfig.FireFearRadius);
+			Consider(It->GetActorLocation(), AIConfig.FireFearRadius, *It);
 		}
 	}
 	const AActor* OwnTarget = CurrentTarget.Get();
@@ -536,7 +574,7 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 		// generator first; otherwise they froze at its edge).
 		if (Source.IsValid() && Source->GetWorld() == World && Source->IsHeatActive() && Source->GetOwner() != OwnTarget)
 		{
-			Consider(Source->GetComponentLocation(), FMath::Max(AIConfig.FireFearRadius, Source->Radius));
+			Consider(Source->GetComponentLocation(), FMath::Max(AIConfig.FireFearRadius, Source->Radius), Source->GetOwner());
 		}
 	}
 	return bFound;
@@ -551,7 +589,7 @@ bool AEnemyCharacter::FindNearestFire(FVector& OutFire) const
 	for (TActorIterator<ABarrelActor> It(World); It; ++It)
 	{
 		const float Distance = FVector::Dist(Feet, It->GetActorLocation());
-		if (It->IsBurning() && Distance < MinDistance)
+		if (It->IsBurning() && Distance < MinDistance && HasClearHeatLine(It->GetActorLocation(), *It, Feet, nullptr))
 		{
 			MinDistance = Distance;
 			OutFire = It->GetActorLocation();
@@ -565,7 +603,8 @@ bool AEnemyCharacter::FindNearestFire(FVector& OutFire) const
 			continue;
 		}
 		const float Distance = FVector::Dist(Feet, Source->GetComponentLocation());
-		if (Distance < FMath::Max(AIConfig.FireFearRadius, Source->Radius) && Distance < MinDistance)
+		if (Distance < FMath::Max(AIConfig.FireFearRadius, Source->Radius) && Distance < MinDistance
+			&& HasClearHeatLine(Source->GetComponentLocation(), Source->GetOwner(), Feet, nullptr))
 		{
 			MinDistance = Distance;
 			OutFire = Source->GetComponentLocation();

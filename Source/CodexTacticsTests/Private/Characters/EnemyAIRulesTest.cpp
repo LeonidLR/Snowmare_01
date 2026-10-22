@@ -194,4 +194,18 @@ bool FEnemyVariantBodyTest::RunTest(const FString&)
 	return true;
 }
 
+// Game designer play-test 2026-10-22: hounds outside the lake perimeter said they feared the running generator's heat through
+// two walls. Every enemy type feels a heat source only with a clear line to it (AEnemyCharacter::HasClearHeatLine).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyHeatLineTest, "CodexTactics.Characters.EnemyAI.HeatFearNeedsClearLine",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnemyHeatLineTest::RunTest(const FString&)
+{
+	TestTrue(TEXT("in the open, 3 m from the generator (reach 6 m): fear"), EnemyAIRules::FeelsHeat(300.f, 600.f, true));
+	TestFalse(TEXT("3 m away, two walls in between: no fear"), EnemyAIRules::FeelsHeat(300.f, 600.f, false));
+	TestFalse(TEXT("in the open but 7 m away: no fear"), EnemyAIRules::FeelsHeat(700.f, 600.f, true));
+	TestTrue(TEXT("the line is traced above a 60 cm barricade"), EnemyAIRules::HeatLineHeightCm > 60.f);
+	return true;
+}
+
 #endif

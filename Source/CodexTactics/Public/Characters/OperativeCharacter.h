@@ -1779,6 +1779,14 @@ public:
 	 * the leader faces); cleared by any move.
 	 */
 	void SetIdleFacingYaw(float Yaw) { IdleFacingYaw = Yaw; bHasIdleFacing = true; }
+
+	/**
+	 * User request 2026-10-22 (ThreatFacingRules): standing after a retreat in a real-time fight with no target in his sights, he turns
+	 * to the enemy he was fighting (or the nearest live one). True while that turn drives his facing.
+	 */
+	bool IsTurningToThreat() const { return bTurningToThreat; }
+	/** World time of his last shot (any target / point), s. */
+	double GetLastShotTime() const { return LastShotTime; }
 	void ClearIdleFacing() { bHasIdleFacing = false; }
 
 	/** Current barrel-to-body yaw correction, degrees. */
@@ -1937,6 +1945,14 @@ private:
 	FVector SmoothedVelocity = FVector::ZeroVector;
 	float IdleFacingYaw = 0.f;
 	bool bHasIdleFacing = false;
+	/** ThreatFacingRules: the enemy he last faced in this fight and where he last saw it; a facing order of his own (SetFacingPoint). */
+	TWeakObjectPtr<AActor> LastThreat;
+	FVector LastThreatLocation = FVector::ZeroVector;
+	bool bFoughtThisFight = false;
+	bool bExplicitFacing = false;
+	bool bTurningToThreat = false;
+	/** The point ThreatFacingRules turns him to now; false: nothing to face. */
+	bool FindThreatPoint(FVector& OutPoint) const;
 	TWeakObjectPtr<AActor> PendingFlankTarget;
 	float TargetSwitchTimer = 0.f;
 

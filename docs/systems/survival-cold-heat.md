@@ -123,3 +123,11 @@ same at the gas stove; an order to one follower, a guard (T), solo mode keep tha
 exactly where the later stages put the squad. Not a BP value: the smoke now removes puddles and heals the squad between stages (`ResetBodies`, logs the HP),
 and `UHealthComponent::Die` logs `[Health] <actor> died (source '...', max HP ..) at ..` (no more silent deaths).
 
+### Heat fear needs a clear line (game designer play-test 2026-10-22, every enemy type)
+
+Hounds outside the lake perimeter "feared the heat" of the running generator through two walls. `AEnemyCharacter::FindNearestFireZone`,
+`IsInFearZone` and `FindNearestFire` now count a burning barrel / heat source only with a clear line between the source and the enemy
+(`HasClearHeatLine`: a visibility trace `EnemyAIRules::HeatLineHeightCm` (1 m) above the higher end, the source's owner and pawns pass through, a
+60 cm barricade under the line does not block; rule `EnemyAIRules::FeelsHeat`). Blocked = no flight, no "FEAR OF FIRE!", no detour. The operatives'
+warming is unchanged (distance only). Checks: `CodexTactics.Characters.EnemyAI.HeatFearNeedsClearLine`, `HeatFearWallSmoke` (a hound 3.5 m from a
+6 m heat behind two 3 m walls: no fear; in the open: fear at once; a frostbitten behind one wall: none, the wall removed: fear).

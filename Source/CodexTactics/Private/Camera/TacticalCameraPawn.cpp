@@ -193,6 +193,14 @@ void ATacticalCameraPawn::SetCinematicYaw(float Yaw)
 	}
 }
 
+void ATacticalCameraPawn::SetCinematicDistance(float Distance)
+{
+	if (bCinematicLock && Distance > 0.f && !bSmoothFocusing)
+	{
+		TargetDistance = Distance;
+	}
+}
+
 void ATacticalCameraPawn::RestorePlayerYaw(bool bSnapYaw)
 {
 	TargetYaw = PreCinematicYaw;

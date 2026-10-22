@@ -365,4 +365,74 @@ bool FHordeIntroFreePauseRadiusTest::RunTest(const FString&)
 	return true;
 }
 
+HORDEINTRO_TEST(FHordeIntroFrustumFramingTest, "Framing.WaveClusterInTheFrustum")
+bool FHordeIntroFrustumFramingTest::RunTest(const FString&)
+{
+	// Game designer play-test 2026-10-22: "the fly-in sometimes shows nothing - too far or not close enough".
+	const FHordeIntroConfig Config;
+	const float Pitch = -35.26f;
+	const float Fov = 30.f;
+	const float Aspect = 16.f / 9.f;
+	// A pack of five within 8 m, 40 m from the squad, and one straggler 60 m off to the side (or a level enemy far away).
+	TArray<FVector> Points = { FVector(4000.f, 0.f, 0.f), FVector(4300.f, 300.f, 0.f), FVector(4200.f, -400.f, 0.f), FVector(4600.f, 100.f, 0.f),
+		FVector(3900.f, -200.f, 0.f), FVector(4000.f, 6000.f, 0.f) };
+	const TArray<int32> Cluster = HordeIntroRules::MainCluster(Points, Config.WideClusterRadiusCm);
+	TestEqual(TEXT("the main cluster: the five of the pack"), Cluster.Num(), 5);
+	TestFalse(TEXT("... not the straggler 60 m away"), Cluster.Contains(5));
+	TestTrue(TEXT("no points: no cluster"), HordeIntroRules::MainCluster(TArray<FVector>(), 1000.f).IsEmpty());
+	TArray<FVector> Feet;
+	for (const int32 Index : Cluster)
+	{
+		Feet.Add(Points[Index]);
+	}
+	const FVector Squad = FVector::ZeroVector;
+	const float Yaw = HordeIntroRules::ViewYawAt(Squad, HordeIntroRules::CentreOf(Feet, TArray<int32>()), Config.ViewSideDegrees);
+	const HordeIntroRules::FWideFrame Frame = HordeIntroRules::FrameWide(Squad, Feet, Yaw, Pitch, Fov, Aspect, Config);
+	const FHordeFrameView View = HordeIntroRules::ViewAt(Frame.Focus, Yaw, Pitch, Frame.Distance, Fov, Aspect);
+	bool bAllIn = true;
+	float MinFraction = 1.f;
+	for (const FVector& Point : Feet)
+	{
+		bAllIn &= HordeIntroRules::IsInFrame(View, Point, 0.f) && HordeIntroRules::IsInFrame(View, Point + FVector(0.f, 0.f, 160.f), 0.f);
+		MinFraction = FMath::Min(MinFraction, HordeIntroRules::ScreenHeightFraction(View, Point, 100.f));
+	}
+	TestTrue(TEXT("every runner of the pack (feet and head) is in the frame"), bAllIn);
+	TestTrue(TEXT("... within the wide distances"), Frame.Distance >= Config.WideMinDistance && Frame.Distance <= Config.WideMaxDistance);
+	TestTrue(FString::Printf(TEXT("... a 1 m hound fills >= 2.5 %% of the frame height (%.1f %%)"), MinFraction * 100.f), MinFraction >= 0.025f);
+	// A tight pack close to the squad: the biased focus holds it at a short distance.
+	const TArray<FVector> Close = { FVector(1500.f, 0.f, 0.f), FVector(1600.f, 150.f, 0.f), FVector(1450.f, -120.f, 0.f) };
+	const float CloseYaw = HordeIntroRules::ViewYawAt(Squad, HordeIntroRules::CentreOf(Close, TArray<int32>()), Config.ViewSideDegrees);
+	const HordeIntroRules::FWideFrame Near = HordeIntroRules::FrameWide(Squad, Close, CloseYaw, Pitch, Fov, Aspect, Config);
+	TestTrue(TEXT("a tight pack near the squad: the squad-side focus, the shortest distance that holds it"), Near.bBiased && Near.Distance < 2500.f);
+	// FrameDistance is the shortest that holds: a little closer drops a runner (unless already at the minimum).
+	const float D = HordeIntroRules::FrameDistance(Frame.Focus, Feet, Yaw, Pitch, Fov, Aspect, Config);
+	TestEqual(TEXT("FrameDistance = the frame's distance"), D, Frame.Distance, 1.f);
+	if (D > Config.WideMinDistance + 50.f)
+	{
+		const FHordeFrameView Closer = HordeIntroRules::ViewAt(Frame.Focus, Yaw, Pitch, D - 150.f, Fov, Aspect);
+		bool bCloserHolds = true;
+		for (const FVector& Point : Feet)
+		{
+			bCloserHolds &= HordeIntroRules::IsInFrame(Closer, Point, Config.WideFrameMargin)
+				&& HordeIntroRules::IsInFrame(Closer, Point + FVector(0.f, 0.f, Config.FramedBodyHeightCm), Config.WideFrameMargin);
+		}
+		TestFalse(TEXT("... 1.5 m closer it no longer holds them all (not too far)"), bCloserHolds);
+	}
+	// Behind the camera is never in the frame.
+	TestFalse(TEXT("a point behind the camera"), HordeIntroRules::IsInFrame(View, View.Location - View.Rotation.Vector() * 500.f, 0.f));
+	return true;
+}
+
+HORDEINTRO_TEST(FHordeIntroWaitSpawnTest, "Trigger.WaitsForTheSpawn")
+bool FHordeIntroWaitSpawnTest::RunTest(const FString&)
+{
+	const FHordeIntroConfig Config;
+	TestFalse(TEXT("queued spawns: no flyover to nobody"), HordeIntroRules::ShouldTriggerSpawned(Config.MaxWaitSeconds, true, false, 3, Config));
+	TestFalse(TEXT("nobody alive yet: wait"), HordeIntroRules::ShouldTriggerSpawned(Config.MaxWaitSeconds + 1.f, false, true, 0, Config));
+	TestTrue(TEXT("all spawned + the mass: as before"), HordeIntroRules::ShouldTriggerSpawned(Config.MinDelaySeconds, true, true, 4, Config));
+	TestTrue(TEXT("the grace is over: the flyover anyway"),
+		HordeIntroRules::ShouldTriggerSpawned(Config.MaxWaitSeconds + Config.SpawnGraceSeconds, false, false, 0, Config));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

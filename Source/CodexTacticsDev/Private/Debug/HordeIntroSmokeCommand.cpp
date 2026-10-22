@@ -14,6 +14,9 @@
 //    (simulated key) skips it during a type shot: camera at once on the leader, unlocked, the free pause at 0.02, no menu;
 // 5. wave 3 before its trigger: a click is a normal click (no pause), Esc opens the free pause at once (no flyover);
 // 6. a load resumes wave 3 (RestoreForLoad): it comes suddenly again; known types only: wide shot + return; a click skips.
+// Framing (game designer play-test 2026-10-22, "the fly-in sometimes shows nothing"): a level hound parked 60 m away (NOT part
+// of the wave, like the lake's patrols) must not pull the frame; every settled wide shot holds the wave's main cluster in the
+// camera frustum (feet and heads), visible, each at least 2.5 % of the frame height; a type shot holds its runner, >= 12 %.
 
 #include "CoreMinimal.h"
 
@@ -73,6 +76,8 @@ namespace HordeIntroSmoke
 		int32 SubStep = 0;
 		int32 StartedBefore = 0;
 		TWeakObjectPtr<UPhaseBannersWidget> Banners;
+		/** A level enemy far away, not in the wave (the lake's patrols): the flyover must ignore it. */
+		TWeakObjectPtr<AEnemyCharacter> Decoy;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -123,12 +128,64 @@ namespace HordeIntroSmoke
 		TArray<EEnemyArchetype> Types;
 		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 		{
-			if (!It->IsDying())
+			if (!It->IsDying() && It->IsActorTickEnabled()) // the parked decoy is no part of the horde
 			{
 				Types.AddUnique(It->GetArchetype());
 			}
 		}
 		return Types;
+	}
+
+	FVector EnemyFeet(const AEnemyCharacter* Enemy)
+	{
+		return Enemy->GetActorLocation() - FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight());
+	}
+
+	/** The real camera's view (the pawn's transform is the view: TacticalCameraPawn places itself there each tick). */
+	FHordeFrameView CameraView(const ATacticalCameraPawn& Camera)
+	{
+		FHordeFrameView View;
+		View.Location = Camera.GetActorLocation();
+		View.Rotation = Camera.GetActorRotation();
+		View.VerticalFovDeg = Camera.Config.VerticalFov;
+		View.Aspect = 16.f / 9.f;
+		return View;
+	}
+
+	/** Wide shot framing check: the wave's main cluster in the frustum, visible, big enough; the decoy never filmed. */
+	void VerifyWideFrame(FState& State, const UHordeIntroSubsystem& Intro, const ATacticalCameraPawn& Camera, const FString& Label)
+	{
+		const FHordeIntroConfig Config = HordeIntroRules::GetConfig();
+		const TArray<AEnemyCharacter*> Filmed = Intro.GetFilmedEnemies();
+		Check(State, !Filmed.Contains(State.Decoy.Get()), FString::Printf(TEXT("%s: the level hound 60 m away is not part of the horde intro"), *Label));
+		TArray<FVector> Feet;
+		for (const AEnemyCharacter* Enemy : Filmed)
+		{
+			Feet.Add(EnemyFeet(Enemy));
+		}
+		const TArray<int32> Cluster = HordeIntroRules::MainCluster(Feet, Config.WideClusterRadiusCm);
+		const FHordeFrameView View = CameraView(Camera);
+		int32 InFrame = 0;
+		int32 ClusterIn = 0;
+		int32 Hidden = 0;
+		float MinFraction = 1.f;
+		for (int32 Index = 0; Index < Filmed.Num(); ++Index)
+		{
+			const bool bIn = HordeIntroRules::IsInFrame(View, Feet[Index], 0.f)
+				&& HordeIntroRules::IsInFrame(View, Feet[Index] + FVector(0.f, 0.f, Filmed[Index]->GetSimpleCollisionHalfHeight() * 2.f), 0.f);
+			InFrame += bIn ? 1 : 0;
+			if (Cluster.Contains(Index))
+			{
+				ClusterIn += bIn ? 1 : 0;
+				Hidden += Filmed[Index]->IsHidden() ? 1 : 0;
+				MinFraction = FMath::Min(MinFraction, HordeIntroRules::ScreenHeightFraction(View, Feet[Index], Filmed[Index]->GetSimpleCollisionHalfHeight() * 2.f));
+			}
+		}
+		Check(State, !Filmed.IsEmpty() && !Cluster.IsEmpty() && ClusterIn == Cluster.Num() && Hidden == 0 && InFrame * 10 >= Filmed.Num() * 6,
+			FString::Printf(TEXT("%s: the wave in the frustum - main cluster %d / %d in frame, %d / %d of the wave, %d hidden"), *Label,
+				ClusterIn, Cluster.Num(), InFrame, Filmed.Num(), Hidden));
+		Check(State, MinFraction >= 0.025f, FString::Printf(TEXT("%s: big enough - the smallest framed enemy fills %.1f %% of the frame height (camera %.0f m)"),
+			*Label, MinFraction * 100.f, Camera.GetCurrentDistance() / 100.f));
 	}
 
 	/** Checks the running shot once its glide is over: the camera frames what the shot is about. */
@@ -156,6 +213,7 @@ namespace HordeIntroSmoke
 				&& Camera.GetCurrentDistance() <= Config.WideMaxDistance + 50.f,
 				FString::Printf(TEXT("%s: camera on the running mass at %.0f m (yaw %.0f)"), *Label, Camera.GetCurrentDistance() / 100.f,
 					Camera.GetCurrentYaw()));
+			VerifyWideFrame(State, Intro, Camera, Label);
 			break;
 		case EHordeIntroShotKind::Type:
 		{
@@ -167,6 +225,15 @@ namespace HordeIntroSmoke
 				FString::Printf(TEXT("%s: camera tracks %s close at %.1f m"), *Label, Enemy ? *Enemy->GetName() : TEXT("-"),
 					Camera.GetCurrentDistance() / 100.f));
 			Check(State, Speed > 50.f, FString::Printf(TEXT("%s: the tracked one moves (%.0f cm/s)"), *Label, Speed));
+			if (Enemy)
+			{
+				const FHordeFrameView View = CameraView(Camera);
+				const float Height = Enemy->GetSimpleCollisionHalfHeight() * 2.f;
+				const float Fraction = HordeIntroRules::ScreenHeightFraction(View, EnemyFeet(Enemy), Height);
+				Check(State, Enemy != State.Decoy.Get() && HordeIntroRules::IsInFrame(View, EnemyFeet(Enemy), 0.05f)
+					&& HordeIntroRules::IsInFrame(View, EnemyFeet(Enemy) + FVector(0.f, 0.f, Height), 0.05f) && Fraction >= 0.12f,
+					FString::Printf(TEXT("%s: the runner in the frustum, a wave enemy, %.0f %% of the frame height"), *Label, Fraction * 100.f));
+			}
 			break;
 		}
 		default:
@@ -264,6 +331,29 @@ namespace HordeIntroSmoke
 				State.PhasesSeen.Add(NewPhase);
 			});
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("exploration before the horde"));
+			if (const ACodexTacticsGameMode* DecoyMode = World->GetAuthGameMode<ACodexTacticsGameMode>())
+			{
+				// A level hound 60 m behind the squad, parked (not part of any wave): the lake's patrols during its horde.
+				const TSoftClassPtr<AEnemyCharacter>* Soft = DecoyMode->EnemyClasses.Find(EEnemyArchetype::FrostHound);
+				UClass* DecoyClass = Soft ? Soft->LoadSynchronous() : nullptr;
+				const FVector DecoyAt = SmokeUtils::FreeSpot(World, Leader->GetActorLocation() - Leader->GetActorForwardVector() * 6000.f, Leader);
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				AEnemyCharacter* Decoy = nullptr;
+				{
+					const AEnemyCharacter::FScopedSpawnArchetype Scope(EEnemyArchetype::FrostHound);
+					Decoy = World->SpawnActor<AEnemyCharacter>(DecoyClass ? DecoyClass : AEnemyCharacter::StaticClass(), DecoyAt, FRotator::ZeroRotator, Params);
+				}
+				if (Decoy)
+				{
+					Decoy->InitializeArchetype(EEnemyArchetype::FrostHound);
+					Decoy->SetActorTickEnabled(false);
+					Decoy->CustomTimeDilation = 0.f;
+					State.Decoy = Decoy;
+				}
+				Check(State, State.Decoy.IsValid(), FString::Printf(TEXT("a parked level hound %.0f m away (not in the wave)"),
+					Decoy ? FVector::Dist2D(Decoy->GetActorLocation(), Leader->GetActorLocation()) / 100.f : -1.f));
+			}
 			Check(State, Flow->TriggerCombatZone() == EGameFlowResult::Ok, TEXT("combat zone triggered"));
 			Check(State, State.PhasesSeen.Num() == 1 && State.PhasesSeen[0] == ECodexGamePhase::WaveCombat,
 				FString::Printf(TEXT("straight into the wave: %d phase change(s), no cutscene / preparation"), State.PhasesSeen.Num()));
@@ -338,6 +428,10 @@ namespace HordeIntroSmoke
 				{
 					Check(State, Intro->GetShownTypes().Contains(Type), FString::Printf(TEXT("type %s marked shown"),
 						*StaticEnum<EEnemyArchetype>()->GetNameStringByValue(static_cast<int64>(Type))));
+				}
+				if (AEnemyCharacter* Decoy = State.Decoy.Get())
+				{
+					Decoy->Destroy(); // the later waves count every enemy of the map
 				}
 			}
 			Next(State);
