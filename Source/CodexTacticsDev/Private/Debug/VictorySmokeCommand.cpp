@@ -148,8 +148,33 @@ namespace VictorySmoke
 			Next();
 			return true;
 		case 1:
+		{
 			// Each wave: start, kill everything, the panel appears; the button goes on. A horde wave comes suddenly in the
 			// horde intro (user decisions 2026-10-11): dismissed here, the fight stays in real time.
+			// The last wave (game designer 2026-10-22): no panel, no button - its end goes straight to post-combat, so the squad is
+			// scattered and a turret left BEFORE its enemies die; the squad must STAY where the fight ended (no teleport back to the
+			// preparation spots, the followers not walked to the formation).
+			auto PrepareLastWave = [&State, World, Squad]()
+			{
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					Member->TeleportTo(Member->GetActorLocation() + FVector(300.f, 0.f, 0.f), Member->GetActorRotation(), false, true);
+				}
+				State.EndSpots.Reset();
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					State.EndSpots.Add(Member, Member->GetActorLocation());
+				}
+				Squad->SetLeader(Squad->GetMembers()[2]);
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				World->SpawnActor<ATurretActor>(SmokeUtils::LevelPoint(World, FVector(1500.f, -1500.f, 60.f)), FRotator::ZeroRotator, Params);
+				State.TurretsBefore = 0;
+				for (const AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					State.TurretsBefore += Member->TurretsCount;
+				}
+			};
 			if (Flow->GetPhase() == ECodexGamePhase::WaveCombat && (Flow->IsAwaitingHordeIntro() || Flow->IsFreePause()))
 			{
 				Check(State, Flow->GetPauseCharges() == Flow->GetConfig().TacticalPauseMaxCharges,
@@ -157,6 +182,10 @@ namespace VictorySmoke
 						Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges));
 				SmokeUtils::ReleaseHordeIntroPause(Flow);
 				State.Wave = Flow->GetWaveIndex();
+				if (State.Wave >= Total)
+				{
+					PrepareLastWave();
+				}
 				KillAll(World);
 				return true;
 			}
@@ -164,7 +193,29 @@ namespace VictorySmoke
 			{
 				Flow->FinishPreparation();
 				State.Wave = Flow->GetWaveIndex();
+				if (State.Wave >= Total)
+				{
+					PrepareLastWave();
+				}
 				KillAll(World);
+				return true;
+			}
+			if (Flow->GetPhase() == ECodexGamePhase::PostCombat && State.Wave >= Total)
+			{
+				Check(State, !Panel->IsShown(), TEXT("last wave: no victory panel, no \"End combat and continue exploring\" button - straight to post-combat"));
+				// Nobody was teleported back to his preparation spot when the fight ended; from here on nobody moves.
+				float MaxJump = 0.f;
+				for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FVector>& Spot : State.EndSpots)
+				{
+					MaxJump = FMath::Max(MaxJump, Spot.Key.IsValid() ? FVector::Dist2D(Spot.Value, Spot.Key->GetActorLocation()) : 99999.f);
+				}
+				Check(State, MaxJump < 200.f, FString::Printf(TEXT("the fight's end teleports nobody (max %.0f cm from where they stood)"), MaxJump));
+				State.EndSpots.Reset();
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					State.EndSpots.Add(Member, Member->GetActorLocation());
+				}
+				Next();
 				return true;
 			}
 			if (Flow->GetPhase() == ECodexGamePhase::WaveCombat)
@@ -192,29 +243,8 @@ namespace VictorySmoke
 				}
 				if (State.Wave >= Total)
 				{
-					Check(State, Text.Contains(TEXT("TOTAL VICTORY")) && Text.Contains(TEXT("End combat")), TEXT("last wave: full victory"));
-					// Scatter the squad and leave a turret. Game designer 2026-10-22: the squad must STAY where the fight ended (no
-					// teleport back to the preparation spots, the followers not walked to the formation).
-					for (AOperativeCharacter* Member : Squad->GetMembers())
-					{
-						Member->TeleportTo(Member->GetActorLocation() + FVector(300.f, 0.f, 0.f), Member->GetActorRotation(), false, true);
-					}
-					State.EndSpots.Reset();
-					for (AOperativeCharacter* Member : Squad->GetMembers())
-					{
-						State.EndSpots.Add(Member, Member->GetActorLocation());
-					}
-					Squad->SetLeader(Squad->GetMembers()[2]);
-					FActorSpawnParameters Params;
-					Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-					World->SpawnActor<ATurretActor>(SmokeUtils::LevelPoint(World, FVector(1500.f, -1500.f, 60.f)), FRotator::ZeroRotator, Params);
-					for (const AOperativeCharacter* Member : Squad->GetMembers())
-					{
-						State.TurretsBefore += Member->TurretsCount;
-					}
-					Panel->PressNext();
-					Next();
-					return true;
+					Check(State, false, TEXT("the last wave must not stop on the victory panel (2026-10-22)"));
+					return Finish(State, false);
 				}
 				Panel->PressNext();
 				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro() && Flow->GetWaveIndex() == State.Wave + 1
@@ -223,6 +253,7 @@ namespace VictorySmoke
 				return true;
 			}
 			return true;
+		}
 		case 2:
 		{
 			Check(State, Flow->GetPhase() == ECodexGamePhase::PostCombat || Flow->GetPhase() == ECodexGamePhase::Exploration,

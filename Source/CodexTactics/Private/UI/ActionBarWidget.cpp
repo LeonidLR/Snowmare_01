@@ -13,6 +13,8 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
@@ -69,6 +71,8 @@ namespace
 
 	/** Godot role tags (second line of the slot label; the shape names were placeholder art; slot 4 is Ivan). */
 	const TCHAR* const BarRoleTags[] = { TEXT("CMD"), TEXT("ENG"), TEXT("MED"), TEXT("IVAN") };
+	/** 2026-10-22: the unspent-points badge (the level-up star's gold). */
+	const FLinearColor BarBadgeGold = ACodexTacticsHUD::GodotColor(1.f, 0.82f, 0.15f);
 
 	UProgressBar* BarMakeProgress(UWidgetTree* Tree, const FLinearColor& Fill, const FLinearColor& Back)
 	{
@@ -216,7 +220,12 @@ void UActionBarWidget::BuildDefaultLayout()
 		USizeBox* Size = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		Size->SetWidthOverride(74.f);
 		Size->SetHeightOverride(40.f);
-		Size->AddChild(SquadSlot.Frame);
+		// 2026-10-22: the slot and, over its top-right corner, the gold unspent-points badge (game designer: mark the card, no modal).
+		UOverlay* SlotStack = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
+		Size->AddChild(SlotStack);
+		UOverlaySlot* SlotFrameSlot = SlotStack->AddChildToOverlay(SquadSlot.Frame);
+		SlotFrameSlot->SetHorizontalAlignment(HAlign_Fill);
+		SlotFrameSlot->SetVerticalAlignment(VAlign_Fill);
 		Column->AddChildToVerticalBox(Size)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 
 		SquadSlot.Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
@@ -224,6 +233,22 @@ void UActionBarWidget::BuildDefaultLayout()
 		SquadSlot.Label = MakeText(NAME_None, 11, BarTextColor);
 		SquadSlot.Button->AddChild(SquadSlot.Label);
 		SquadSlot.Frame->SetContent(SquadSlot.Button);
+
+		SquadSlot.Badge = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
+		CodexButtonFocus::Disable(SquadSlot.Badge);
+		SquadSlot.Badge->SetBackgroundColor(BarBadgeGold);
+		SquadSlot.BadgeText = MakeText(NAME_None, 9, BarDarkText);
+		SquadSlot.BadgeText->SetJustification(ETextJustify::Center);
+		SquadSlot.Badge->AddChild(SquadSlot.BadgeText);
+		USizeBox* BadgeSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		BadgeSize->SetMinDesiredWidth(24.f);
+		BadgeSize->SetHeightOverride(17.f);
+		BadgeSize->AddChild(SquadSlot.Badge);
+		UOverlaySlot* BadgeSlot = SlotStack->AddChildToOverlay(BadgeSize);
+		BadgeSlot->SetHorizontalAlignment(HAlign_Right);
+		BadgeSlot->SetVerticalAlignment(VAlign_Top);
+		BadgeSlot->SetPadding(FMargin(0.f, -7.f, -6.f, 0.f));
+		SquadSlot.Badge->SetVisibility(ESlateVisibility::Collapsed);
 
 		SquadSlot.HealthBar = BarMakeProgress(WidgetTree, BarHealthFill, BarHealthBack);
 		SquadSlot.ColdBar = BarMakeProgress(WidgetTree, BarColdFill, BarColdBack);
@@ -281,6 +306,10 @@ void UActionBarWidget::BuildDefaultLayout()
 	Slots[1].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot1);
 	Slots[2].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot2);
 	Slots[3].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot3); // the recruit (Susanin)
+	Slots[0].Badge->OnClicked.AddDynamic(this, &UActionBarWidget::HandleBadge0);
+	Slots[1].Badge->OnClicked.AddDynamic(this, &UActionBarWidget::HandleBadge1);
+	Slots[2].Badge->OnClicked.AddDynamic(this, &UActionBarWidget::HandleBadge2);
+	Slots[3].Badge->OnClicked.AddDynamic(this, &UActionBarWidget::HandleBadge3);
 }
 
 void UActionBarWidget::NativeOnInitialized()
@@ -485,6 +514,19 @@ void UActionBarWidget::Refresh()
 		SquadSlot.Button->SetIsEnabled(Member != nullptr);
 		SquadSlot.HealthBar->SetVisibility(Member ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
 		SquadSlot.ColdBar->SetVisibility(Member ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		// 2026-10-22: unspent attribute points wait on the card (gold "+N"), never a modal; a click on it opens his profile.
+		const FString Badge = Member ? ProgressionRules::GetUnspentBadgeText(Member->UnspentStatPoints) : FString();
+		const ESlateVisibility BadgeVisibility = Badge.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible;
+		if (SquadSlot.Badge && SquadSlot.Badge->GetVisibility() != BadgeVisibility)
+		{
+			SquadSlot.Badge->SetVisibility(BadgeVisibility);
+		}
+		if (!Badge.IsEmpty())
+		{
+			ActionBarDirty::SetText(SquadSlot.BadgeText, FText::FromString(Badge));
+			SetToolTipIfChanged(SquadSlot.Badge, FText::Format(LOCTEXT("BadgeTip", "{0}: {1} unspent attribute points - click to assign them (profile [P]) whenever you like"),
+				Member->DisplayName, Member->UnspentStatPoints));
+		}
 		if (!Member)
 		{
 			ActionBarDirty::SetText(SquadSlot.Label, GetSlotText(Index));
@@ -661,6 +703,27 @@ AOperativeCharacter* UActionBarWidget::GetSlotMember(int32 Index) const
 	TArray<AOperativeCharacter*> Members = Squad->GetMembers();
 	Members.Sort([](const AOperativeCharacter& A, const AOperativeCharacter& B) { return A.SquadIndex < B.SquadIndex; });
 	return Members.IsValidIndex(Index) ? Members[Index] : nullptr;
+}
+
+bool UActionBarWidget::IsSlotBadgeShown(int32 Index) const
+{
+	return Slots.IsValidIndex(Index) && Slots[Index].Badge && Slots[Index].Badge->GetVisibility() != ESlateVisibility::Collapsed;
+}
+
+FString UActionBarWidget::GetSlotBadgeText(int32 Index) const
+{
+	return Slots.IsValidIndex(Index) && Slots[Index].BadgeText ? Slots[Index].BadgeText->GetText().ToString() : FString();
+}
+
+void UActionBarWidget::OpenSlotProfile(int32 Index)
+{
+	AOperativeCharacter* Member = GetSlotMember(Index);
+	const APlayerController* PC = GetOwningPlayer();
+	ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+	if (Member && Hud)
+	{
+		Hud->OpenProfileDialog(Member);
+	}
 }
 
 ETransferRequestOutcome UActionBarWidget::HandleTransferDropOnSlot(int32 Index, AOperativeCharacter* Sender, ETransferItem Item)

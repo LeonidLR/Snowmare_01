@@ -82,9 +82,9 @@ bool FSkirmishFlowTest::RunTest(const FString&)
 	Level.StartAmbushCombat();
 	TestFalse(TEXT("ambush_fight level: no skirmish"), Level.IsSkirmish());
 	TestEqual(TEXT("... FinishSkirmish refused"), Level.FinishSkirmish(), EGameFlowResult::WrongPhase);
-	TestEqual(TEXT("... the wave cleared panel"), Level.NotifyWaveCleared(), EGameFlowResult::Ok);
-	TestEqual(TEXT("... single fight: PostCombat, not the next wave"), Level.AdvanceAfterWave(), EGameFlowResult::Ok);
-	TestEqual(TEXT("... PostCombat"), Level.GetPhase(), ECodexGamePhase::PostCombat);
+	// 2026-10-22: no victory panel at the end of the fight - the single fight goes straight to PostCombat, not the next wave.
+	TestEqual(TEXT("... its enemies are down"), Level.NotifyWaveCleared(), EGameFlowResult::Ok);
+	TestEqual(TEXT("... single fight: PostCombat"), Level.GetPhase(), ECodexGamePhase::PostCombat);
 	return true;
 }
 

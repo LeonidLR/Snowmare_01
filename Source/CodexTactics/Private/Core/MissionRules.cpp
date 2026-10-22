@@ -124,4 +124,24 @@ FText MissionRules::GetMemberLostRadio(const FText& OperativeName)
 	return FText::Format(LOCTEXT("MemberLost", "{0} is down - KIA. Search the remains to recover supplies and gear."), OperativeName);
 }
 
+FText MissionRules::GetGateExitObjective(int32 Out, int32 Required)
+{
+	return FText::Format(LOCTEXT("GateExitObjective", "EXIT: take the squad out through the blast door ({0}/{1} out)"), Out, Required);
+}
+
+FText MissionRules::GetGateExitOpenRadio()
+{
+	return LOCTEXT("GateExitOpen", "The blast door is wide open - that's our way out. Everybody through!");
+}
+
+FText MissionRules::GetMissionCompleteRadio()
+{
+	return LOCTEXT("MissionCompleteRadio", "All operatives are out. Good work, squad - mission complete.");
+}
+
+FText MissionRules::GetMissionCompleteTitle()
+{
+	return LOCTEXT("MissionCompleteTitle", "MISSION COMPLETE");
+}
+
 #undef LOCTEXT_NAMESPACE

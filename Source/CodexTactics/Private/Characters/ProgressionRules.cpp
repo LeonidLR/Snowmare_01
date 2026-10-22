@@ -78,3 +78,13 @@ int32 ProgressionRules::FortitudeCutPercent(float Fortitude)
 {
 	return static_cast<int32>(FMath::Clamp(Fortitude * 1.5f, 0.f, 50.f));
 }
+
+FString ProgressionRules::GetUnspentBadgeText(int32 UnspentPoints)
+{
+	return UnspentPoints > 0 ? FString::Printf(TEXT("+%d"), UnspentPoints) : FString();
+}
+
+FString ProgressionRules::GetLevelUpMessage(int32 NewLevel)
+{
+	return FString::Printf(TEXT("⭐ NEW LEVEL %d! +%d attribute points - spend them any time (the gold + on his card or [P])."), NewLevel, PointsPerLevel);
+}

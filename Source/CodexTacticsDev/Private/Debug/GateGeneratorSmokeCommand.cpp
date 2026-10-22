@@ -361,7 +361,8 @@ namespace GateGeneratorSmoke
 				KillAll(World);
 				return true;
 			}
-			if (Flow->GetPhase() != ECodexGamePhase::WaveCleared || State.StageTime < 1.f)
+			// 2026-10-22: the last wave goes straight to PostCombat (no victory panel / button).
+			if (Flow->GetPhase() != ECodexGamePhase::PostCombat || State.StageTime < 1.f)
 			{
 				return true;
 			}
@@ -386,7 +387,7 @@ namespace GateGeneratorSmoke
 					FString::Printf(TEXT("generator back after the last wave: the door opens (\"%s\")"), *Gate->GetStatusText()));
 				Check(State, FeedHas(World, State.FeedMark, TEXT("blast door is opening")), TEXT("HQ: «the blast door is opening! Get the squad inside»"));
 				Check(State, Gate->IsOpening() ? Gate->IsBeaconSpinning() : !Gate->IsBeaconSpinning(), TEXT("final opening: the beacon spins while the leaves slide"));
-				Victory->ContinueAfterWave(); // the victory panel's button: post-combat (the world runs again)
+				Victory->ContinueAfterWave(); // a no-op since 2026-10-22: the last wave is already in post-combat (the world runs)
 				return true;
 			}
 			if (!Gate->IsOpen())

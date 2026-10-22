@@ -677,7 +677,8 @@ namespace HordeIntroSmoke
 			// A load resumes wave 3 in its preparation: it comes suddenly again on the next flow tick.
 			if (State.SubStep == 0)
 			{
-				if (Flow->GetPhase() != ECodexGamePhase::WaveCleared)
+				// The last wave cleared: post-combat at once since 2026-10-22 (no victory panel), the panel on longer levels.
+				if (Flow->GetPhase() != ECodexGamePhase::WaveCleared && Flow->GetPhase() != ECodexGamePhase::PostCombat)
 				{
 					return State.StageTime < 5.f || Finish(State, false);
 				}

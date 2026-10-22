@@ -161,6 +161,15 @@ struct CODEXTACTICS_API FGameFlowConfig
 	bool bAmbushSkirmish = false;
 
 	/**
+	 * The victory panel after the fight's LAST wave (or a single ambush fight) with its "End combat and continue exploring" button
+	 * (Godot _on_wave_cleared, time stopped until the click). Off by default (game designer 2026-10-22: "after a fight ends, remove
+	 * the 'End combat and continue exploring' button - it's not needed"): the end of the fight goes straight to PostCombat (the
+	 * world runs on, the squad stays put). The panel between waves ("Start the next wave (N/M)") is unchanged.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Victory")
+	bool bVictoryPanelAfterLastWave = false;
+
+	/**
 	 * Horde waves start suddenly (user decision 2026-10-11, UE-only): no pre-combat cutscene, no preparation / rest
 	 * countdown — the wave spawns at once and the fight opens in a FREE, untimed tactical pause (no charge spent) while
 	 * UHordeIntroSubsystem flies the camera over the new enemy types. False restores the old start (cutscene ->

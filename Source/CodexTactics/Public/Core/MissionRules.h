@@ -77,4 +77,16 @@ namespace MissionRules
 
 	/** HQ line when a non-commander member is killed (the fight goes on). */
 	CODEXTACTICS_API FText GetMemberLostRadio(const FText& OperativeName);
+
+	/** 2026-10-22 level exit through the open gate: "EXIT: take the squad out through the blast door (Out / Required out)". */
+	CODEXTACTICS_API FText GetGateExitObjective(int32 Out, int32 Required);
+
+	/** Commander line when the gate exit opens (the level can be left now). */
+	CODEXTACTICS_API FText GetGateExitOpenRadio();
+
+	/** HQ line when the last living operative is out (the fade begins). */
+	CODEXTACTICS_API FText GetMissionCompleteRadio();
+
+	/** Title on the black screen at the end of the level. */
+	CODEXTACTICS_API FText GetMissionCompleteTitle();
 }

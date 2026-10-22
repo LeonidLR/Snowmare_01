@@ -148,8 +148,8 @@ bool FGameFlowLastWaveToPostCombatTest::RunTest(const FString&)
 	Machine.NotifyWaveCleared();
 	Machine.AdvanceAfterWave();
 	Machine.FinishPreparation();
-	Machine.NotifyWaveCleared();
-	TestEqual(TEXT("Advance after last wave"), Machine.AdvanceAfterWave(), EGameFlowResult::Ok);
+	// 2026-10-22: the last wave goes straight to PostCombat (no victory panel / button; FightEndFlowTest).
+	TestEqual(TEXT("Last wave cleared"), Machine.NotifyWaveCleared(), EGameFlowResult::Ok);
 	TestEqual(TEXT("Phase"), Machine.GetPhase(), ECodexGamePhase::PostCombat);
 	TestEqual(TEXT("Finish post-combat"), Machine.FinishPostCombat(), EGameFlowResult::Ok);
 	TestEqual(TEXT("Back to exploration"), Machine.GetPhase(), ECodexGamePhase::Exploration);

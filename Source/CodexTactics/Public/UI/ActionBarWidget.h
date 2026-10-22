@@ -35,6 +35,13 @@ struct FActionBarSquadSlot
 
 	UPROPERTY()
 	TObjectPtr<UProgressBar> ColdBar;
+
+	/** 2026-10-22: gold "+N" badge in the slot's top-right corner while the operative has unspent points; a click opens his profile. */
+	UPROPERTY()
+	TObjectPtr<UButton> Badge;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> BadgeText;
 };
 
 /**
@@ -83,6 +90,13 @@ public:
 
 	/** Squad member shown in slot Index (roster order), null for an empty slot. */
 	AOperativeCharacter* GetSlotMember(int32 Index) const;
+
+	/** 2026-10-22: the unspent-points badge of slot Index is shown, and its text ("+3"); smokes. */
+	bool IsSlotBadgeShown(int32 Index) const;
+	FString GetSlotBadgeText(int32 Index) const;
+
+	/** The badge's click: the profile of slot Index's operative opens (to spend his points; the leader stays). */
+	void OpenSlotProfile(int32 Index);
 
 	/** Stealth lure buttons (smokes): the WHISTLE / THROW label and whether it is enabled. */
 	FText GetStealthButtonText(bool bThrow) const;
@@ -241,6 +255,18 @@ private:
 	void HandleSlot3();
 
 	void SelectSlot(int32 Index);
+
+	UFUNCTION()
+	void HandleBadge0() { OpenSlotProfile(0); }
+
+	UFUNCTION()
+	void HandleBadge1() { OpenSlotProfile(1); }
+
+	UFUNCTION()
+	void HandleBadge2() { OpenSlotProfile(2); }
+
+	UFUNCTION()
+	void HandleBadge3() { OpenSlotProfile(3); }
 
 	UPROPERTY()
 	TObjectPtr<UButton> RelocateButton;

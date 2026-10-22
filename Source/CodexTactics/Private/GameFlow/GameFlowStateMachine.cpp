@@ -214,8 +214,19 @@ EGameFlowResult FGameFlowStateMachine::NotifyWaveCleared()
 	PauseTimeRemaining = 0.f;
 	bFreePause = false;
 	bAwaitingHordeIntro = false;
+	// Game designer 2026-10-22: no panel / button when the whole fight is over - straight to PostCombat (the world keeps running).
+	if (IsFinalFight() && !Config.bVictoryPanelAfterLastWave)
+	{
+		SetState(ECodexGamePhase::PostCombat, ECodexCombatMode::None);
+		return EGameFlowResult::Ok;
+	}
 	SetState(ECodexGamePhase::WaveCleared, ECodexCombatMode::None);
 	return EGameFlowResult::Ok;
+}
+
+bool FGameFlowStateMachine::IsFinalFight() const
+{
+	return WaveIndex >= Config.TotalWaves || (bAmbushFight && Config.bAmbushSingleFight);
 }
 
 EGameFlowResult FGameFlowStateMachine::AdvanceAfterWave()
@@ -224,7 +235,7 @@ EGameFlowResult FGameFlowStateMachine::AdvanceAfterWave()
 	{
 		return EGameFlowResult::WrongPhase;
 	}
-	if (WaveIndex >= Config.TotalWaves || (bAmbushFight && Config.bAmbushSingleFight))
+	if (IsFinalFight())
 	{
 		SetState(ECodexGamePhase::PostCombat, ECodexCombatMode::None);
 		return EGameFlowResult::Ok;

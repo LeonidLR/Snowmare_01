@@ -323,10 +323,6 @@ void ACodexTacticsHUD::BeginPlay()
 		Interactions->OnActionMenuChanged.AddDynamic(this, &ACodexTacticsHUD::HandleActionMenuChanged);
 		Interactions->OnLootDialogChanged.AddDynamic(this, &ACodexTacticsHUD::HandleLootDialogChanged);
 	}
-	if (UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>())
-	{
-		Waves->OnWaveCleared.AddDynamic(this, &ACodexTacticsHUD::HandleWaveCleared);
-	}
 }
 
 void ACodexTacticsHUD::ToggleProfileDialog()
@@ -350,19 +346,6 @@ void ACodexTacticsHUD::OpenProfileDialog(AOperativeCharacter* Member)
 	if (ProfileDialog)
 	{
 		ProfileDialog->Open(Member);
-	}
-}
-
-void ACodexTacticsHUD::HandleWaveCleared(int32 WaveIndex)
-{
-	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
-	{
-		if (Member->UnspentStatPoints > 0)
-		{
-			OpenProfileDialog(Member);
-			return;
-		}
 	}
 }
 
@@ -1272,6 +1255,10 @@ FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative
 	if (SquadSystem)
 	{
 		Line += FString::Printf(TEXT("  fire: %s"), *FirePostureRules::GetShortLabel(SquadSystem->GetEffectivePosture(&Operative)));
+	}
+	if (Operative.UnspentStatPoints > 0)
+	{
+		Line += FString::Printf(TEXT("  [%s points: P]"), *ProgressionRules::GetUnspentBadgeText(Operative.UnspentStatPoints)); // 2026-10-22
 	}
 	if (Operative.TacticalAnchor.Defense.IsActive())
 	{
