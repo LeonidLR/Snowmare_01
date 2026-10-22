@@ -132,20 +132,7 @@ void ACampfireActor::RestoreHeatState(bool bBurning, bool bBurntOut, float TimeL
 
 bool ACampfireActor::IsIndoors() const
 {
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return false;
-	}
-	for (TActorIterator<ACameraZoneVolume> It(World); It; ++It)
-	{
-		if ((It->Environment == ECameraZoneEnvironment::Closed || It->Environment == ECameraZoneEnvironment::Shelter)
-			&& It->ContainsLocation(GetActorLocation()))
-		{
-			return true;
-		}
-	}
-	return false;
+	return ACameraZoneVolume::IsShelteredLocation(GetWorld(), GetActorLocation());
 }
 
 int32 ACampfireActor::AlertPatrols()

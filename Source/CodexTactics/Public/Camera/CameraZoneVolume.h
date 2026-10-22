@@ -67,6 +67,12 @@ public:
 	/** True if Location is inside the zone box (with Godot's +1 m vertical tolerance). */
 	bool ContainsLocation(const FVector& Location) const;
 
+	/**
+	 * Indoors: Location is inside a Closed (heated room / bunker) or Shelter (half-open) zone. Shared by the campfire's indoor
+	 * noise and the blizzard walk (no storm pose under a roof).
+	 */
+	static bool IsShelteredLocation(const UWorld* World, const FVector& Location);
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Camera")
 	bool IsZoneActive() const { return ActiveExplorer.IsValid(); }
 

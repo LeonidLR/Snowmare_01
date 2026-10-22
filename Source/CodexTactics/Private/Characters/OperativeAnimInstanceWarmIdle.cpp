@@ -256,5 +256,6 @@ void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Oper
 
 	bWarmIdleActive = WarmActivePose != EWarmIdlePose::None;
 	WarmIdlePose = WarmActivePose;
-	SetWarmWeaponHidden(!bIsDead && ((bHideWeaponInWarmIdle && bWarmIdleActive) || (bHideWeaponInInteraction && IsInteractionClipActive())));
+	SetWarmWeaponHidden(!bIsDead && ((bHideWeaponInWarmIdle && bWarmIdleActive) || (bHideWeaponInInteraction && IsInteractionClipActive())
+		|| bBlizzardWeaponHidden));
 }

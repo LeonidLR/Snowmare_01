@@ -8,6 +8,7 @@
 #include "Combat/HordeIntroSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -84,6 +85,23 @@ bool ACameraZoneVolume::ContainsLocation(const FVector& Location) const
 	return FMath::Abs(LocalWorldScaled.X) <= ScaledExtent.X
 		&& FMath::Abs(LocalWorldScaled.Y) <= ScaledExtent.Y
 		&& FMath::Abs(LocalWorldScaled.Z) <= ScaledExtent.Z + VerticalTolerance;
+}
+
+bool ACameraZoneVolume::IsShelteredLocation(const UWorld* World, const FVector& Location)
+{
+	if (!World)
+	{
+		return false;
+	}
+	for (TActorIterator<ACameraZoneVolume> It(const_cast<UWorld*>(World)); It; ++It)
+	{
+		if ((It->Environment == ECameraZoneEnvironment::Closed || It->Environment == ECameraZoneEnvironment::Shelter)
+			&& It->ContainsLocation(Location))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void ACameraZoneVolume::Tick(float DeltaSeconds)
