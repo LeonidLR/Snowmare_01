@@ -26,6 +26,8 @@
 #include "Data/WeaponDataAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/GameInstance.h"
+#include "Environment/EnvironmentRules.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -1104,6 +1106,12 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	{
 		GameState->SetObjectField(TEXT("kill_stats"), SaveKillStats(Victory->GetKillStats()));
 	}
+	// Environment (2026-10-22, docs/systems/environment-weather.md §12): the whole day cycle / weather / snow cover state, so a load
+	// continues the same hour, weather, blend, dwell, RNG and the snow lying on the ground (a reopened level re-resolved them).
+	if (const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World); Environment && Environment->IsInitialised())
+	{
+		GameState->SetObjectField(TEXT("environment"), EnvironmentRules::StateToSaveJson(Environment->GetStateRef()));
+	}
 
 	TSharedRef<FJsonObject> QuestState = MakeShared<FJsonObject>();
 	const FQuestChainState Chain = Quests ? Quests->GetState() : FQuestChainState();
@@ -1449,20 +1457,22 @@ namespace
 	 * GetRestoreOrder lists the same names (guard test CodexTactics.Save.Policy.RestoreOrder). Why this order:
 	 *  1 Reset         - nothing of the pre-load world carries over: crews out of the vehicles, walks to objects / use orders / the loot
 	 *                    window and every carry / placement cancelled (the objects get their saved places in World).
-	 *  2 SquadTransfer - the hand-over counts: the tutorial's conditions ("heat_packs_given") read them.
-	 *  3 Tutorial      - progress, used-up volumes, locks, skipped: BEFORE the squad is placed, so a teleport into a volume meets its saved
+	 *  2 Environment   - the day cycle / weather / snow cover (game_state.environment) BEFORE anything that samples it: a wave start
+	 *                    resolves its roster from the weather, the cold reads the weather / phase multipliers.
+	 *  3 SquadTransfer - the hand-over counts: the tutorial's conditions ("heat_packs_given") read them.
+	 *  4 Tutorial      - progress, used-up volumes, locks, skipped: BEFORE the squad is placed, so a teleport into a volume meets its saved
 	 *                    fired flag (no stale beat start, no checkpoint written over the slot being loaded) and the locks are up first.
-	 *  4 Squad         - Susanin (a recruited one takes his squad entry), every operative (transient state reset, stance, place, stats,
+	 *  5 Squad         - Susanin (a recruited one takes his squad entry), every operative (transient state reset, stance, place, stats,
 	 *                    items, weapon), the leader.
-	 *  5 GameState     - flow phase / wave / preparation time, Solo + trap Solo (followers hold), postures, Commander Mode, formation.
-	 *  6 Quests        - the chain (a powered gate starts opening; World snaps the gate right after).
-	 *  7 World         - crates, piles, loose heat sources, gates + the paced creep, dialogue triggers, every interactable (matched by
+	 *  6 GameState     - flow phase / wave / preparation time, Solo + trap Solo (followers hold), postures, Commander Mode, formation.
+	 *  7 Quests        - the chain (a powered gate starts opening; World snaps the gate right after).
+	 *  8 World         - crates, piles, loose heat sources, gates + the paced creep, dialogue triggers, every interactable (matched by
 	 *                    name / recreated / removed).
-	 *  8 Vehicles      - transforms, hull, shells, crews back in their seats (needs the operatives of 4 and the ground of 7).
-	 *  9 Enemies       - patrol routes (a missing runtime route is rebuilt), living enemies (matched / recreated / removed; dead stay
+	 *  9 Vehicles      - transforms, hull, shells, crews back in their seats (needs the operatives of 5 and the ground of 8).
+	 * 10 Enemies       - patrol routes (a missing runtime route is rebuilt), living enemies (matched / recreated / removed; dead stay
 	 *                    dead), then patrol / search snapshots once everybody exists (an escort needs its leader).
-	 * 10 Stealth       - the lure cooldowns per operative (needs the squad).
-	 * 11 UI            - minimap fog + panel choice (cosmetic, last).
+	 * 11 Stealth       - the lure cooldowns per operative (needs the squad).
+	 * 12 UI            - minimap fog + panel choice (cosmetic, last).
 	 */
 	struct FSaveRestoreStepEntry
 	{
@@ -1473,7 +1483,7 @@ namespace
 
 const TArray<FName>& SaveRestoreStepNames()
 {
-	static const TArray<FName> Names = { TEXT("Reset"), TEXT("SquadTransfer"), TEXT("Tutorial"), TEXT("Squad"), TEXT("GameState"), TEXT("Quests"),
+	static const TArray<FName> Names = { TEXT("Reset"), TEXT("Environment"), TEXT("SquadTransfer"), TEXT("Tutorial"), TEXT("Squad"), TEXT("GameState"), TEXT("Quests"),
 		TEXT("World"), TEXT("Vehicles"), TEXT("Enemies"), TEXT("Stealth"), TEXT("UI") };
 	return Names;
 }
@@ -1488,6 +1498,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 	// One table, in GetRestoreOrder's order (the names are checked against it in the unit test, so both stay one list).
 	static const FSaveRestoreStepEntry Steps[] = {
 		{ TEXT("Reset"), &USaveGameSubsystem::RestoreReset },
+		{ TEXT("Environment"), &USaveGameSubsystem::RestoreEnvironment },
 		{ TEXT("SquadTransfer"), &USaveGameSubsystem::RestoreSquadTransfer },
 		{ TEXT("Tutorial"), &USaveGameSubsystem::RestoreTutorial },
 		{ TEXT("Squad"), &USaveGameSubsystem::RestoreSquad },
@@ -1499,7 +1510,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 		{ TEXT("Stealth"), &USaveGameSubsystem::RestoreStealth },
 		{ TEXT("UI"), &USaveGameSubsystem::RestoreUI },
 	};
-	static_assert(UE_ARRAY_COUNT(Steps) == 11, "keep the step table, SaveRestoreStepNames and the header comment in step");
+	static_assert(UE_ARRAY_COUNT(Steps) == 12, "keep the step table, SaveRestoreStepNames and the header comment in step");
 
 	FSaveRestoreContext Context;
 	Context.World = GetWorld();
@@ -1531,6 +1542,23 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 }
 
 // --- Restore steps (GetRestoreOrder) ---
+
+void USaveGameSubsystem::RestoreEnvironment(FSaveRestoreContext& Context)
+{
+	// Optional key (saves before 2026-10-22 have none: the level keeps the environment it resolved - carried or fresh).
+	const TSharedPtr<FJsonObject>* GameState = nullptr;
+	const TSharedPtr<FJsonObject>* Saved = nullptr;
+	UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(Context.World);
+	if (!Environment || !Environment->IsInitialised() || !Context.Data->TryGetObjectField(TEXT("game_state"), GameState) || !GameState
+		|| !GameState->IsValid() || !(*GameState)->TryGetObjectField(TEXT("environment"), Saved) || !Saved || !Saved->IsValid())
+	{
+		return;
+	}
+	FEnvironmentState State = EnvironmentRules::StateFromSaveJson(**Saved, Environment->GetStateRef());
+	// The lock belongs to the level (its JSON), not to the file: the reopened level decides whether the clock may run.
+	State.bLocked = Environment->IsLocked();
+	Environment->SetState(State);
+}
 
 void USaveGameSubsystem::RestoreReset(FSaveRestoreContext& Context)
 {

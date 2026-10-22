@@ -8,8 +8,12 @@
 //   2. SetHour 12 -> the sun is above the horizon (rotation pitch < 0), lit, the moon hidden; SetHour 23 -> the sun hidden below the
 //      horizon, the moon lit above it;
 //   3. ForceWeather Clear / Blizzard (instant) -> the fog density follows the presets, Blizzard > Clear, volumetric fog on in Blizzard;
-//   4. Codex.Env.Visuals 0 -> every authored value is back (sun, moon, fog, post-process off, clouds as authored); 1 -> applied again.
-// WeatherLakeSmoke: the Demo 01 lake locked at 23:00 Snowfall -> night (sun hidden, moon lit, full night grade) + the Snowfall fog.
+//   S. phase 4 snow cover: the presenter has its snow components and MPC_Environment; a forced Blizzard at ClockScale 20 raises
+//      FEnvironmentState::SnowAmount by the Blizzard rate, a forced Clear holds it (never recedes), the MPC SnowAmount equals the state;
+//   4. Codex.Env.Visuals 0 -> every authored value is back (sun, moon, fog, post-process off, clouds as authored, MPC SnowAmount 0);
+//      1 -> applied again.
+// WeatherLakeSmoke: the Demo 01 lake locked at 23:00 Snowfall -> night (sun hidden, moon lit, full night grade) + the Snowfall fog,
+// snow cover 0.6 (level JSON "snow_cover") in the state and the MPC.
 // Both print "[WeatherSmoke] PASS/FAIL ..." and "Smoke RESULT: PASS|FAIL", then exit.
 
 #include "CoreMinimal.h"
@@ -29,7 +33,10 @@
 #include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
 #include "Environment/WeatherPresenterActor.h"
+#include "Environment/WeatherSnowFxComponent.h"
+#include "Environment/WeatherSnowOverlayComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Materials/MaterialParameterCollection.h"
 
 namespace WeatherSmoke
 {
@@ -38,10 +45,18 @@ namespace WeatherSmoke
 	constexpr float ApplyTimeoutSeconds = 12.f;
 	/** Game seconds after a Codex.Env.Visuals toggle (the presenter polls it every frame). */
 	constexpr float ToggleSettleSeconds = 0.25f;
+	/** Debug clock speed and game seconds of the snow cover stages (x20: 1.5 s = 30 design seconds of Blizzard). */
+	constexpr float SnowClockScale = 20.f;
+	constexpr float SnowGrowSeconds = 1.5f;
+	constexpr float SnowHoldSeconds = 1.f;
+	const FName MpcSnowAmount(TEXT("SnowAmount"));
+	const FName MpcIsSnowing(TEXT("IsSnowing"));
 
 	enum class EStage : uint8
 	{
 		WaitApplying,
+		SnowGrow,
+		SnowHold,
 		VisualsOff,
 		VisualsOn,
 	};
@@ -55,6 +70,9 @@ namespace WeatherSmoke
 		float TotalTime = 0.f;
 		int32 Failures = 0;
 		float BlizzardFogDensity = 0.f;
+		float SnowStart = 0.f;
+		float SnowAdvancedStart = 0.f;
+		float SnowHeld = 0.f;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -198,6 +216,87 @@ namespace WeatherSmoke
 			FString::Printf(TEXT("3 Blizzard noon sun x%.2f < Clear noon x%.2f"), Presenter.GetLastFrame().SunIntensityScale, Noon.SunIntensityScale));
 	}
 
+	/** The MPC_Environment SnowAmount right after an application equals the state (skipped with a FAIL when the MPC is missing). */
+	void CheckMpcSnow(FState& State, AWeatherPresenterActor& Presenter, float Expected, const TCHAR* Label)
+	{
+		Presenter.ApplyNow();
+		float Value = -1.f;
+		const bool bRead = Presenter.GetEnvironmentScalar(MpcSnowAmount, Value);
+		Check(State, bRead && FMath::IsNearlyEqual(Value, Expected, 1.e-4f),
+			FString::Printf(TEXT("%s MPC_Environment.SnowAmount %.4f = %.4f (read %d)"), Label, Value, Expected, bRead ? 1 : 0));
+	}
+
+	/** Stage S (start): components + MPC, then a forced Blizzard at x20. */
+	void StartSnowCover(FState& State, UEnvironmentSubsystem& Env, AWeatherPresenterActor& Presenter)
+	{
+		Check(State, Presenter.GetSnowFx() != nullptr && Presenter.GetSnowOverlay() != nullptr, TEXT("S the presenter has its snow fx + snow overlay components"));
+		Check(State, Presenter.GetEnvironmentCollection() != nullptr, TEXT("S MPC_Environment loaded"));
+		if (const UMaterialParameterCollection* Collection = Presenter.GetEnvironmentCollection())
+		{
+			// Created by Scripts/Editor/create_environment_mpc.py (its ids are not readable from Python): every parameter present, ids valid + distinct.
+			TSet<FGuid> Ids;
+			int32 Found = 0;
+			for (const TCHAR* Name : { TEXT("SnowAmount"), TEXT("FrostAmount"), TEXT("WindStrength"), TEXT("IsSnowing") })
+			{
+				if (const FCollectionScalarParameter* Param = Collection->GetScalarParameterByName(FName(Name)))
+				{
+					++Found;
+					Ids.Add(Param->Id);
+				}
+			}
+			if (const FCollectionVectorParameter* Param = Collection->GetVectorParameterByName(FName(TEXT("WindDirection"))))
+			{
+				++Found;
+				Ids.Add(Param->Id);
+			}
+			Check(State, Found == 5 && Ids.Num() == 5 && !Ids.Contains(FGuid()),
+				FString::Printf(TEXT("S MPC_Environment: 4 scalars + WindDirection, distinct valid ids (%d found, %d ids)"), Found, Ids.Num()));
+		}
+		Check(State, Env.GetSnowAmount() >= 0.f && Env.GetSnowAmount() <= 1.f,
+			FString::Printf(TEXT("S start snow cover %.3f (neutral start: snow_cover_start %.2f)"), Env.GetSnowAmount(), Env.GetConfig().SnowCoverStart));
+		Env.ForceWeather(EWeatherState::Blizzard, true);
+		if (Env.GetSnowAmount() > 0.8f)
+		{
+			Env.SetSnowAmount(0.3f); // room to grow
+		}
+		State.SnowStart = Env.GetSnowAmount();
+		State.SnowAdvancedStart = Env.GetAdvancedSeconds();
+		Env.SetClockScale(SnowClockScale);
+	}
+
+	/** Stage S (grow): the cover rose by the Blizzard rate x the game seconds that ran. */
+	void CheckSnowGrew(FState& State, UEnvironmentSubsystem& Env, AWeatherPresenterActor& Presenter)
+	{
+		const float Ran = Env.GetAdvancedSeconds() - State.SnowAdvancedStart;
+		const float Expected = FMath::Min(1.f, State.SnowStart + Ran * EnvironmentRules::GetSnowCoverRate(Env.GetConfig(), EWeatherState::Blizzard));
+		const float Now = Env.GetSnowAmount();
+		Check(State, Env.GetWeather() == EWeatherState::Blizzard && Ran > 10.f, FString::Printf(TEXT("S Blizzard ran %.1f design s at x%.0f"), Ran, SnowClockScale));
+		Check(State, Now > State.SnowStart + 0.05f, FString::Printf(TEXT("S Blizzard: the snow cover rose %.3f -> %.3f"), State.SnowStart, Now));
+		Check(State, FMath::IsNearlyEqual(Now, Expected, 0.01f), FString::Printf(TEXT("S the rise follows the Blizzard rate (%.3f, expected %.3f)"), Now, Expected));
+		CheckMpcSnow(State, Presenter, Now, TEXT("S Blizzard:"));
+		float Snowing = -1.f;
+		const bool bSnowingRead = Presenter.GetEnvironmentScalar(MpcIsSnowing, Snowing); // read before the message is formatted
+		Check(State, bSnowingRead && Snowing > 0.99f, FString::Printf(TEXT("S Blizzard: MPC IsSnowing %.2f"), Snowing));
+		Env.ForceWeather(EWeatherState::Clear, true);
+		State.SnowHeld = Env.GetSnowAmount();
+		State.SnowAdvancedStart = Env.GetAdvancedSeconds();
+	}
+
+	/** Stage S (hold): Clear never takes the snow away. */
+	void CheckSnowHeld(FState& State, UEnvironmentSubsystem& Env, AWeatherPresenterActor& Presenter)
+	{
+		const float Ran = Env.GetAdvancedSeconds() - State.SnowAdvancedStart;
+		Check(State, Env.GetWeather() == EWeatherState::Clear && Ran > 5.f && Env.GetSnowAmount() == State.SnowHeld,
+			FString::Printf(TEXT("S Clear: the cover holds at %.3f over %.1f design s (now %.3f)"), State.SnowHeld, Ran, Env.GetSnowAmount()));
+		CheckMpcSnow(State, Presenter, Env.GetSnowAmount(), TEXT("S Clear:"));
+		float Snowing = -1.f;
+		const bool bSnowingRead = Presenter.GetEnvironmentScalar(MpcIsSnowing, Snowing);
+		Check(State, bSnowingRead && Snowing < 0.01f, FString::Printf(TEXT("S Clear: MPC IsSnowing %.2f"), Snowing));
+		Env.SetClockScale(0.f);
+		// Back to the Blizzard look the visuals-on check of stage 4 expects.
+		Env.ForceWeather(EWeatherState::Blizzard, true);
+	}
+
 	/** Stage 4a: Codex.Env.Visuals 0 restored the authored values. */
 	void CheckRestored(FState& State, const UWorld& World, const AWeatherPresenterActor& Presenter)
 	{
@@ -231,6 +330,10 @@ namespace WeatherSmoke
 			bCloudsAuthored &= !It->IsHidden();
 		}
 		Check(State, Presenter.GetCloudCount() == 0 || bCloudsAuthored, TEXT("4 the volumetric clouds are back as authored"));
+		float Snow = -1.f;
+		const bool bSnowRead = Presenter.GetEnvironmentScalar(MpcSnowAmount, Snow);
+		Check(State, !Presenter.GetEnvironmentCollection() || (bSnowRead && Snow == 0.f),
+			FString::Printf(TEXT("4 MPC_Environment.SnowAmount back to 0 (%.3f)"), Snow));
 	}
 
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
@@ -266,10 +369,31 @@ namespace WeatherSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("[WeatherSmoke] start: %s; first application after %.2f game s"), *Env->Describe(), State.TotalTime);
 			CheckAdoption(State, *World, *Presenter);
 			CheckHoursAndWeather(State, *Env, *Presenter);
-			AWeatherPresenterActor::SetVisualsEnabled(false);
-			NextStage(State, EStage::VisualsOff);
+			StartSnowCover(State, *Env, *Presenter);
+			NextStage(State, EStage::SnowGrow);
 			return true;
 		}
+		case EStage::SnowGrow:
+			if (State.StageTime >= SnowGrowSeconds)
+			{
+				if (AWeatherPresenterActor* Presenter = AWeatherPresenterActor::Find(World))
+				{
+					CheckSnowGrew(State, *Env, *Presenter);
+				}
+				NextStage(State, EStage::SnowHold);
+			}
+			return true;
+		case EStage::SnowHold:
+			if (State.StageTime >= SnowHoldSeconds)
+			{
+				if (AWeatherPresenterActor* Presenter = AWeatherPresenterActor::Find(World))
+				{
+					CheckSnowHeld(State, *Env, *Presenter);
+				}
+				AWeatherPresenterActor::SetVisualsEnabled(false);
+				NextStage(State, EStage::VisualsOff);
+			}
+			return true;
 		case EStage::VisualsOff:
 			if (State.StageTime >= ToggleSettleSeconds)
 			{
@@ -362,6 +486,8 @@ namespace WeatherLakeSmoke
 			FString::Printf(TEXT("L3 Snowfall fog %.4f (> Clear %.4f)"), Fog, Presenter->GetPreset(EWeatherState::Clear).FogDensity));
 		Check(State, Presenter->GetAdoptedPostProcess() || Presenter->GetOwnPostProcess()->bEnabled, TEXT("L3 the night / snowfall grade is applied (post-process on)"));
 		Check(State, Presenter->GetCloudCount() == 0 || CloudsOff(*World), FString::Printf(TEXT("L3 volumetric clouds off (%d)"), Presenter->GetCloudCount()));
+		Check(State, FMath::IsNearlyEqual(Env->GetSnowAmount(), 0.6f, 1.e-4f), FString::Printf(TEXT("L4 the lake starts with snow cover 0.6 (%.3f)"), Env->GetSnowAmount()));
+		CheckMpcSnow(State, *Presenter, Env->GetSnowAmount(), TEXT("L4 lake:"));
 		Finish(State, TEXT("WeatherLakeSmoke"));
 		return false;
 	}

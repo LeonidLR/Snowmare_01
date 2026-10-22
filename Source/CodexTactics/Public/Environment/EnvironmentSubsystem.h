@@ -7,6 +7,7 @@
 #include "EnvironmentSubsystem.generated.h"
 
 class ACodexTacticsGameMode;
+class AWeatherPresenterActor;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnEnvironmentPhaseChangedNative, ETimeOfDayPhase /*OldPhase*/, ETimeOfDayPhase /*NewPhase*/);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnEnvironmentWeatherNative, EWeatherState /*From*/, EWeatherState /*To*/);
@@ -48,8 +49,10 @@ private:
  * hour / weather; else the previous level's end state (UEnvironmentCarrySubsystem); else fresh (level start_hour / weather /
  * seed, DefaultStartHour, PickStartWeather). Tuning: Content/Data/Environment/environment.json (EnvironmentTuning).
  * Broadcasts: the native delegates below and UCodexEventBus OnTimeOfDayPhaseChanged / OnWeatherTransitionStarted /
- * OnWeatherChanged. Save / load: SetState (the save keys are phase 5, docs/systems/save-load.md).
- * Console (CodexTacticsDev): Codex.Env.Dump / SetWeather / SetHour / ClockScale / Seed.
+ * OnWeatherChanged. Phase 4: the snow cover (FEnvironmentState::SnowAmount) grows after the weather step (EnvironmentRules::StepSnowCover).
+ * Save / load: the whole state under "game_state.environment" (USaveGameSubsystem restore step "Environment" -> SetState;
+ * docs/systems/save-load.md).
+ * Console (CodexTacticsDev): Codex.Env.Dump / SetWeather / SetHour / ClockScale / Seed / SnowCover.
  */
 UCLASS()
 class CODEXTACTICS_API UEnvironmentSubsystem : public UTickableWorldSubsystem
@@ -141,6 +144,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
 	void SetHour(float Hour);
 
+	/**
+	 * Wind 0..1 in force (e.g. the operatives' blizzard walk layer): the WindStrength of the weather presets blended Weather -> NextWeather
+	 * by GetTransitionBlend (EnvironmentVisualRules::GetBlendedWindStrength). Presets: the presenter's (DA_Weather_* assets) when this
+	 * world has one, else the C++ defaults (EnvironmentVisualRules::GetDefaultPreset) - also with the visuals off. 0 when not initialised.
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	float GetWindStrength() const;
+
+	/**
+	 * How much of Weather is in force now, 0..1 (EnvironmentRules::GetWeatherAmount): 1 for the current weather outside a transition,
+	 * 1 - blend for it and the blend for NextWeather while blending, else 0. 0 when not initialised.
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	float GetWeatherAmount(EWeatherState Weather) const;
+
+	/** Phase 4: persistent snow cover 0..1 (FEnvironmentState::SnowAmount; grows while it snows, never recedes). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	float GetSnowAmount() const { return State.SnowAmount; }
+
+	/** Debug (console Codex.Env.SnowCover): sets the snow cover (clamped 0..1; may lower it, unlike the weather); broadcasts OnStateSet. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
+	void SetSnowAmount(float Amount);
+
 	/** Debug speed-up of the clock and the weather (1 = design speed; clamped to >= 0). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
 	void SetClockScale(float Scale);
@@ -179,4 +205,6 @@ private:
 	bool bInitialised = false;
 	bool bClockRan = false;
 	bool bHandedOver = false;
+	/** The presenter spawned for this world (GetWindStrength reads its presets; weak: it may be destroyed first). */
+	TWeakObjectPtr<AWeatherPresenterActor> Presenter;
 };

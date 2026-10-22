@@ -9,7 +9,7 @@
 #include "HAL/IConsoleManager.h"
 
 // Dev console of the day cycle / weather (docs/systems/environment-weather.md, phase 1): Codex.Env.Dump / SetWeather / SetHour /
-// ClockScale / Seed. Not smokes (nothing is verified); test_map.json lists them under nonSmokeDebugCommands.
+// ClockScale / Seed / SnowCover. Not smokes (nothing is verified); test_map.json lists them under nonSmokeDebugCommands.
 namespace EnvironmentCommands
 {
 	UEnvironmentSubsystem* Env(const UWorld* World, const TCHAR* Command)
@@ -83,6 +83,24 @@ namespace EnvironmentCommands
 			Environment->RestartWeatherSequence(FCString::Atoi(*Args[0]));
 		}
 	}
+
+	void SnowCover(const TArray<FString>& Args, UWorld* World)
+	{
+		if (Args.Num() < 1 || !Args[0].IsNumeric())
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Codex.Env.SnowCover <0..1>: sets the persistent snow cover (debug; may lower it)"));
+			return;
+		}
+		if (UEnvironmentSubsystem* Environment = Env(World, TEXT("Codex.Env.SnowCover")))
+		{
+			Environment->SetSnowAmount(FCString::Atof(*Args[0]));
+			UE_LOG(LogCodexTactics, Display, TEXT("Codex.Env.SnowCover: %s"), *Environment->Describe());
+		}
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs CommandSnowCover(TEXT("Codex.Env.SnowCover"),
+		TEXT("Codex.Env.SnowCover <0..1>: sets the persistent snow cover (FEnvironmentState::SnowAmount; it then grows while it snows, never recedes)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&SnowCover));
 
 	static FAutoConsoleCommandWithWorldAndArgs CommandDump(TEXT("Codex.Env.Dump"),
 		TEXT("Logs the environment state: hour, phase, weather -> next, blend, dwell, seed, locked, clock scale."),

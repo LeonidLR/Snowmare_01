@@ -30,7 +30,8 @@
         "start_hour": { "type": "number", "minimum": 0, "maximum": 24 },
         "weather": { "type": "string", "enum": ["Clear", "Overcast", "Snowfall", "Blizzard"] },
         "seed": { "type": "integer" },
-        "visuals": { "type": "boolean", "default": true, "description": "Environment phase 3: the weather presenter drives the lighting (sun / moon / sky light / fog / post-process by hour and weather; volumetric clouds off); false = the map's authored lighting stays" }
+        "visuals": { "type": "boolean", "default": true, "description": "Environment phase 3: the weather presenter drives the lighting (sun / moon / sky light / fog / post-process by hour and weather; volumetric clouds off); false = the map's authored lighting stays" },
+        "snow_cover": { "type": "number", "minimum": 0, "maximum": 1, "description": "Environment phase 4: the start snow cover (0 bare .. 1 fully white) when the level is locked or starts fresh (no previous level to continue); absent = environment.json snow_cover_start. It grows while it snows and never recedes" }
       }
     },
     "waves": {

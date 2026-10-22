@@ -21,6 +21,9 @@ public class CodexTacticsEditor : ModuleRules
 			"UMG",
 			"UMGEditor",
 			"CommonUI",
+			"Niagara",
+			"NiagaraCore",
+			"NiagaraEditor",
 			"CodexTactics"
 		});
 	}

@@ -1,4 +1,4 @@
-# Environment: day cycle, procedural weather, cold and enemy roster (phases 1-3 implemented: clock, weather, cold, roster, visual presenter)
+# Environment: day cycle, procedural weather, cold and enemy roster (phases 1-3 implemented: clock, weather, cold, roster, visual presenter; phase 4a: snow cover state, MPC, presenter wiring)
 
 > Design of the time-of-day + weather system and how it drives cold and the enemy roster. Status 2026-10-22: phase 1 (clock, weather ladder,
 > carry-over, tutorial lock, events, console) and phase 2 (cold multipliers, roster by conditions) implemented - see §8 / §9; phase 3 visual presenter (lights / fog / post by hour + weather) §11; Niagara / snow cover phase 4.
@@ -275,3 +275,88 @@ Key files:
   Smokes `CodexTactics.WeatherSmoke` (L_MovementTest) and `CodexTactics.WeatherLakeSmoke` (lake + `-LevelJson`). Stills / timelapse:
   `CodexTactics.EnvironmentShots visuals [timelapse]` (`docs/systems/build-test-smokes.md`).
 - Not yet (phase 4): Niagara layers / User parameters, MPC_Environment writes, snow cover, the sky sphere, the user's `BP_WeatherPresenter`.
+
+## 12. Implementation - phase 4a (2026-10-22): snow cover state, MPC_Environment, presenter wiring
+
+Falling snow (`UWeatherSnowFxComponent`, `NS_Weather_Snow`) and the overlay material (`UWeatherSnowOverlayComponent`, `M_SnowOverlay`) are separate
+pieces with their own files; this part is the state, the save, the MPC and the wiring.
+
+- **State.** `FEnvironmentState::SnowAmount` (0..1) is authoritative state in `UEnvironmentSubsystem`. `EnvironmentRules::StepSnowCover(Config, State, Dt)`
+  runs in the tick right after `StepWeather`. It grows only while it snows: `snow_cover_rate_snowfall` (1/480 per real second, bare to full in ~8 min)
+  and `snow_cover_rate_blizzard` (1/180, ~3 min), blended Weather -> NextWeather by `GetTransitionBlend`. It holds in Clear / Overcast and **never
+  decreases** (user decision 2026-10-22). It is clamped to [0, 1], and a negative rate from a hand-edited JSON cannot lower it. It is frozen whenever
+  the clock is frozen (tactical pause, turn-based, world-AI pause) and on a locked level.
+- **Start.** A fresh run starts at `snow_cover_start` (0.35, the arctic ground already has old snow). A locked or fresh level may set
+  `"environment": {"snow_cover": 0..1}` (`FEnvironmentLevelSettings::bHasSnowCover / SnowCover`, schema). The Demo 01 lake is 0.6 (snowy night, locked:
+  it stays 0.6 there). The next level CONTINUES the carried value (`UEnvironmentCarrySubsystem`, the carried cover wins over the level's).
+  `RestartWeatherSequence` keeps the cover. Command line `-EnvSnow=<0..1>` (unlocked levels). Smokes and bot runs start neutral with 0.35.
+- **Save** (closes the phase-5 save item for the whole state): `game_state.environment` = {hour, weather, next_weather, weather_elapsed,
+  weather_dwell, seed, locked, snow_amount} (`EnvironmentRules::StateToSaveJson / StateFromSaveJson`, every key optional). It is restored by the new
+  restore step **2 "Environment"** (right after Reset, before anything that samples the weather: a wave start resolves its roster from it, the cold
+  reads it) through `SetState`. The level keeps its own lock. Save files without the key keep the level's resolved state.
+- **MPC.** The new asset `/Game/Environment/Weather/MPC/MPC_Environment` (`Scripts/Editor/create_environment_mpc.py`, editor commandlet, new
+  asset only) has scalars `SnowAmount`, `FrostAmount`, `WindStrength`, `IsSnowing` and the vector `WindDirection` (xyz direction, w strength).
+  `MPC_WeatherSettings` is untouched. The presenter writes the MPC every time it applies (`UMaterialParameterCollectionInstance`): SnowAmount =
+  the state, FrostAmount / WindStrength = the blended preset, IsSnowing = `ComputeIsSnowing` (blended SnowIntensity / 0.25, clamped). With the
+  visuals off all values are 0.
+- **Presenter wiring** (`AWeatherPresenterActor`): it creates the `SnowFx` and `SnowOverlay` components, with the default soft refs
+  `/Game/Environment/Weather/Snow/Niagara/NS_Weather_Snow` and `/Game/Environment/Weather/Snow/Materials/M_SnowOverlay`. Each time it applies
+  it calls `ApplySnowFx(blended SnowIntensity, WindStrength, wind direction, dt)` and `ApplySnowCover(SnowAmount, blended FrostAmount)`. It
+  calls `RefreshTargets` when it starts and every `TargetRefreshInterval` (5 s). `SetVisualsEnabled` follows the visuals toggle (off at
+  BeginPlay until the first application, off with `Codex.Env.Visuals 0` / EndPlay). The wind direction (`ComputeWindDirection`) drifts
+  slowly: `WindBaseYaw` 35 +- `WindDriftDegrees` 25 over `WindDriftPeriodSeconds` 180. It is visual only and uses the world time.
+- **API for the animation layer** (BlueprintPure on `UEnvironmentSubsystem`):
+  - `GetWindStrength()`: the blended preset WindStrength. It takes the presenter's presets (DA_Weather_*) when the world has a presenter,
+    else the C++ defaults; 0 before the environment is initialised. Helper: `EnvironmentVisualRules::GetBlendedWindStrength`.
+  - `GetWeatherAmount(Weather)`: 1 - blend for Weather, the blend for NextWeather, else 0; the four amounts sum to 1. Helper:
+    `EnvironmentRules::GetWeatherAmount`.
+  - Also `GetSnowAmount()` and the debug setter `SetSnowAmount`.
+- **Console:** `Codex.Env.SnowCover <0..1>` sets the cover (debug; it may lower it). `Describe()` / `Codex.Env.Dump` print `snow`.
+- **Tests:** `CodexTactics.Environment.SnowCover.*` (11): RatesPerWeather, Blend, NeverRecedes, ClampAtOne, Freeze, Carry, SaveRoundTrip,
+  LevelJson (incl. the shipped lake 0.6), Tuning (keys + the shipped values), PresenterParams, WindAndWeatherAmount; `Save.Policy.RestoreOrder` (12 steps).
+- **Smokes:**
+  - `WeatherSmoke`, stage S: the components exist; MPC_Environment has its 5 parameters with distinct ids; a forced Blizzard at x20 raises
+    the cover by the Blizzard rate; a forced Clear holds it; the MPC SnowAmount equals the state; IsSnowing is 1 / 0; with the visuals off
+    the MPC goes back to 0.
+  - `WeatherLakeSmoke`: the lake starts at 0.6 (state and MPC).
+  - `EnvironmentSmoke`: Clear holds the cover; the AI pause freezes it under Blizzard; it grows again after the pause.
+  - `EnvironmentLakeSmoke`: 0.6, locked, never grows.
+  - `SaveCoverageSmoke` (live `env.*` dump + 0.73 cover / 16:30) and `SaveRoundTripSmoke` (mutation) prove the save.
+- **Campaign hook (after the merge of origin/main):** the env carry already rides on world teardown (`UEnvironmentSubsystem::Deinitialize`
+  -> `UEnvironmentCarrySubsystem::SetCarriedState`), so a campaign transition carries the cover with no extra call. Where the campaign
+  clears / applies its own carry it should treat the environment carry the same way:
+  - `UCampaignSubsystem::Clear` (NEW GAME) together with `UEnvironmentCarrySubsystem::Clear` (already done in `UCodexFrontendSubsystem::StartNewGame`).
+  - A campaign restart of the arrival level (`UCampaignSubsystem` keeps the squad as it arrived) should also keep the environment it
+    arrived with: snapshot the carried `FEnvironmentState` in `UCampaignSubsystem::CaptureSquad` (`UEnvironmentCarrySubsystem::GetCarriedState`)
+    and give it back on a restart (`UEnvironmentCarrySubsystem::SetCarriedState`). Otherwise a restart continues the state the failed attempt
+    ended with (the snow keeps growing over retries).
+- Not yet: `MF_SnowyWeatherBlend` in the project master materials (the overlay covers outdoor meshes for now), the frost texture chain, Storm idle clips.
+
+### 12.b Falling snow for the tactical camera (phase 4b, 2026-10-22)
+
+- Asset `/Game/Environment/Weather/Snow/Niagara/NS_Weather_Snow` = a retuned copy of the migrated `NS_SnowStorm` (left untouched), built by
+  `Scripts/Editor/create_weather_snow_fx.py` (editor commandlet; `CODEX_SNOWFX_MODE=dump` writes the stacks to `Saved/Logs/weather_snow_fx_dump.txt`)
+  through the C++ editor helper `UNiagaraAuthoringLibrary` (`Source/CodexTacticsEditor/Private/NiagaraAuthoringLibrary.*`: dump, rapid-iteration
+  constants, user parameters add / rename, link / dynamic-input / clear module inputs, renderer properties, fixed bounds, compile - UE 5.8 has no
+  Python API for Niagara stacks). Re-running the script deletes and rebuilds the asset: tune either there (constants at the top) or by hand.
+- Flakes (`SnowFlakes`, GPU): spawn in a cylinder standing on the SYSTEM (`ShapeLocation.Shape Origin = Engine.Owner.Position`; the old
+  camera-relative `NMS_CameraProperties` is disabled), radius 30 m, ground to 28 m (above the camera at max zoom), 8-18 cm sprites, 6-9 s life,
+  depth-buffer collision kills them on the ground, off screen they live 30 s (the wind carries them in). Material `MI_Weather_Snowflake`
+  (`M_Weather_Snowflake`: translucent unlit, particle colour x soft disk x a fade within 3-12 m of the camera, so no flake blots the view).
+  Wind: `WindForce.Wind Speed = User.WindDirection`, `Wind Speed Scale = WindStrength^2 x 1100` (turbulence kept).
+- Ground drift (`SnowSmoke`, CPU): a 2.5 m band on the ground (r 26 m), 14-24 puffs/s, 8-12 s, size `User.DriftSpriteSize` x random 1.2-2.5,
+  opacity random 0..`User.DriftOpacity`, wind `WindStrength^2 x 1200`.
+- Contract User parameters: `SpawnRate` (was Snow_SpawnRate), `Opacity` (was Max_Snow_Opacity; `Min_Snow_Opacity` 0.5 stays the low end),
+  `DriftOpacity` (was Max_SnowSmoke_Opacity; `Min_SnowSmoke_Opacity` 0), `DriftSpriteSize` (was SnowSmoke_SpriteSize), new `WeatherIntensity`
+  (exposed, not read by the graph), `WindStrength`, `WindDirection`.
+- `UWeatherSnowFxComponent` (presenter-owned): lazy async load, own `UNiagaraComponent` (no auto-destroy, not pooled), each tick placed on the
+  view focus (`ATacticalCameraPawn::GetViewCentre`, else a ground trace along the view) moved UPWIND by `UpwindOffsetAtFullWind x wind^2`
+  (40 m in a blizzard: flakes cross the view instead of being born in it); intensity smoothed (0.35 / s up, 0.25 / s down), under 0.02 a soft
+  `Deactivate` (the flakes in the air land); never loads / spawns without a renderer (`FApp::CanEverRender`); visuals off = immediate off + hidden.
+  Mapping in `WeatherSnowFxRules` (`FWeatherSnowFxTuning`, editable on the component): spawn rate 24000 x intensity^2 (Snowfall 0.6 -> 8640 / s,
+  Blizzard 24000 / s), opacity 0.7..1, drift from intensity 0.4 up to opacity 0.65, drift size 250..500. Tests `CodexTactics.Environment.SnowFx.*` (3).
+- Stills / clips: `CodexTactics.EnvironmentShots snow` (`Saved/Screenshots/Environment/snow/`, the lake: Snowfall 12:00, Blizzard 12:00 + 40 m,
+  Snowfall 23:00, Clear 12:00 off; 10 s clips per snowing weather, 15 fps).
+- Tune by hand (NS_Weather_Snow / MI_Weather_Snowflake): flake size / life, cylinder radius / height (keep `UpwindOffsetAtFullWind` in step),
+  the `Multiply_Float001.B` wind speed constants, the drift spawn rate, MI `NearFadeStart` / `NearFadeLength` / `Softness` / `Brightness`;
+  density per weather on the presenter's `SnowFx` component (`Tuning`). GPU cost: up to ~180k flakes alive in a blizzard (24000 / s x 7.5 s).

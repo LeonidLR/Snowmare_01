@@ -16,16 +16,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSaveRestoreOrderTest, "CodexTactics.Save.Polic
 bool FSaveRestoreOrderTest::RunTest(const FString&)
 {
 	// The documented order (docs/systems/save-load.md "Restore order"): a change here is a change there.
-	const TArray<FName> Expected = { TEXT("Reset"), TEXT("SquadTransfer"), TEXT("Tutorial"), TEXT("Squad"), TEXT("GameState"), TEXT("Quests"),
+	const TArray<FName> Expected = { TEXT("Reset"), TEXT("Environment"), TEXT("SquadTransfer"), TEXT("Tutorial"), TEXT("Squad"), TEXT("GameState"), TEXT("Quests"),
 		TEXT("World"), TEXT("Vehicles"), TEXT("Enemies"), TEXT("Stealth"), TEXT("UI") };
 	const TArray<FName> Order = USaveGameSubsystem::GetRestoreOrder();
-	TestEqual(TEXT("11 restore steps"), Order.Num(), Expected.Num());
+	TestEqual(TEXT("12 restore steps"), Order.Num(), Expected.Num());
 	for (int32 Index = 0; Index < Expected.Num() && Index < Order.Num(); ++Index)
 	{
 		TestEqual(FString::Printf(TEXT("step %d"), Index + 1), Order[Index].ToString(), Expected[Index].ToString());
 	}
 	// The invariants behind the order.
 	auto IndexOf = [&Order](const TCHAR* Name) { return Order.IndexOfByKey(FName(Name)); };
+	TestTrue(TEXT("the environment right after the reset, before the game state (a wave start resolves its roster from the weather, the cold reads it)"),
+		IndexOf(TEXT("Environment")) == IndexOf(TEXT("Reset")) + 1 && IndexOf(TEXT("Environment")) < IndexOf(TEXT("GameState")) && IndexOf(TEXT("Environment")) < IndexOf(TEXT("Squad")));
 	TestTrue(TEXT("the hand-over counts before the tutorial (its conditions read them)"), IndexOf(TEXT("SquadTransfer")) < IndexOf(TEXT("Tutorial")));
 	TestTrue(TEXT("the tutorial before the squad is placed (a teleport into a volume meets its saved fired flag)"), IndexOf(TEXT("Tutorial")) < IndexOf(TEXT("Squad")));
 	TestTrue(TEXT("the squad before its state (leader, Solo, postures act on restored operatives)"), IndexOf(TEXT("Squad")) < IndexOf(TEXT("GameState")));

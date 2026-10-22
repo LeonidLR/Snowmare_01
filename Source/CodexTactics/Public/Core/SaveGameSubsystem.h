@@ -141,6 +141,7 @@ private:
 	void ApplySaveData(const TSharedRef<FJsonObject>& Data);
 	// The restore steps, in GetRestoreOrder (see the table at the top of SaveGameSubsystem.cpp).
 	void RestoreReset(FSaveRestoreContext& Context);
+	void RestoreEnvironment(FSaveRestoreContext& Context);
 	void RestoreSquadTransfer(FSaveRestoreContext& Context);
 	void RestoreTutorial(FSaveRestoreContext& Context);
 	void RestoreSquad(FSaveRestoreContext& Context);

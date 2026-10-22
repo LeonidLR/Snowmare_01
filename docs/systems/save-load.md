@@ -2,7 +2,7 @@
 
 > `USaveGameSubsystem` writes JSON slots (`Saved/SaveGames/<slot>.json`, format **version 3** since the audit of 2026-10-19); saving is only allowed
 > outside combat and outside the modal dialogue window. Every load reopens the level and applies the save to the fresh world in one explicit
-> **restore order** (11 steps, `USaveGameSubsystem::GetRestoreOrder`). The **state inventory** below says, per owner, what is saved, what is
+> **restore order** (12 steps, `USaveGameSubsystem::GetRestoreOrder`). The **state inventory** below says, per owner, what is saved, what is
 > derived on purpose and what is still open. Old audit (2026-10-08): `docs/port/save_audit.md`.
 >
 > Key files:
@@ -27,19 +27,20 @@ true and `WriteSave` refuses every save (a beat start fired by a restored step o
 | # | Step | What it restores | Why here |
 |---|---|---|---|
 | 1 | `Reset` | crews out of the vehicles (`PrepareForLoad`), walks to objects / use orders / the loot window cancelled, every carry / placement cancelled | nothing of the pre-load world may carry over; the objects get their saved places in `World` |
-| 2 | `SquadTransfer` | the hand-over counts (`squad_transfer.handed_over`) | the tutorial's conditions (`heat_packs_given`) read them |
-| 3 | `Tutorial` | progress, used-up volumes, locks, lock hints, skipped | BEFORE the squad is placed: a teleport into a volume meets its saved fired flag (no stale beat start, no checkpoint over the slot) and the locks are up before any restored order |
-| 4 | `Squad` | Susanin (rescue / recruited / his record), every operative: `ResetTransientStateForLoad`, stance, place, stats, items, weapon, cold flags, F-key deployable, cover fire mode, **killed in action** (`ApplyKilledInAction`), the leader | the state steps below act on restored operatives |
-| 5 | `GameState` | flow phase / wave / preparation left / ambush kind, event waves + breach + cold drain, kill statistics, leader, Solo + trap Solo (followers hold), postures, Commander Mode, formation; THEN the standing orders of every operative (`ApplyOperativeOrders`: defense line, cover slot, prep station) | `SetAutonomousSquadCombat` / `RefreshFormation` would undo an anchor or a cover set before them |
-| 6 | `Quests` | the quest chain | a powered gate starts opening; `World` snaps the gate right after |
-| 7 | `World` | crates (level ones matched by name, runtime ones - remains - recreated / removed), piles, loose heat sources, gates + the paced creep, dialogue triggers, every interactable (matched by name + class / dynamic ones recreated / removed) | the ground everything else stands on |
-| 8 | `Vehicles` | transforms, hull, shells, crews back in their seats | needs the operatives (4) and the world (7) |
-| 9 | `Enemies` | routes (a missing runtime route rebuilt), living enemies (matched / recreated / removed - dead stay dead), then every patrol / search / scent snapshot once everybody exists | an escort needs its leader; the search sweep needs the world |
-| 10 | `Stealth` | lure cooldowns per operative | needs the squad |
-| 11 | `UI` | minimap fog + panel | cosmetic, last |
+| 2 | `Environment` | the day cycle / weather / snow cover (`game_state.environment` -> `UEnvironmentSubsystem::SetState`; the level keeps its own lock; 2026-10-22) | before anything that samples it: a wave start resolves its roster from the weather, the cold reads the weather / phase multipliers |
+| 3 | `SquadTransfer` | the hand-over counts (`squad_transfer.handed_over`) | the tutorial's conditions (`heat_packs_given`) read them |
+| 4 | `Tutorial` | progress, used-up volumes, locks, lock hints, skipped | BEFORE the squad is placed: a teleport into a volume meets its saved fired flag (no stale beat start, no checkpoint over the slot) and the locks are up before any restored order |
+| 5 | `Squad` | Susanin (rescue / recruited / his record), every operative: `ResetTransientStateForLoad`, stance, place, stats, items, weapon, cold flags, F-key deployable, cover fire mode, **killed in action** (`ApplyKilledInAction`), the leader | the state steps below act on restored operatives |
+| 6 | `GameState` | flow phase / wave / preparation left / ambush kind, event waves + breach + cold drain, kill statistics, leader, Solo + trap Solo (followers hold), postures, Commander Mode, formation; THEN the standing orders of every operative (`ApplyOperativeOrders`: defense line, cover slot, prep station) | `SetAutonomousSquadCombat` / `RefreshFormation` would undo an anchor or a cover set before them |
+| 7 | `Quests` | the quest chain | a powered gate starts opening; `World` snaps the gate right after |
+| 8 | `World` | crates (level ones matched by name, runtime ones - remains - recreated / removed), piles, loose heat sources, gates + the paced creep, dialogue triggers, every interactable (matched by name + class / dynamic ones recreated / removed) | the ground everything else stands on |
+| 9 | `Vehicles` | transforms, hull, shells, crews back in their seats | needs the operatives (5) and the world (8) |
+| 10 | `Enemies` | routes (a missing runtime route rebuilt), living enemies (matched / recreated / removed - dead stay dead), then every patrol / search / scent snapshot once everybody exists | an escort needs its leader; the search sweep needs the world |
+| 11 | `Stealth` | lure cooldowns per operative | needs the squad |
+| 12 | `UI` | minimap fog + panel | cosmetic, last |
 
 Out of band: the pending-load flag (`UMissionSessionSubsystem::PendingLoadSlot`) is consumed BEFORE `LoadGame` runs; the load cover hides the level's own
-start until step 11 is done; `OnSaveApplied` fires after the steps (smokes dump the world there).
+start until step 12 is done; `OnSaveApplied` fires after the steps (smokes dump the world there).
 
 ## State inventory (audit 2026-10-19)
 
@@ -89,6 +90,7 @@ cannot exist in a save because saves are refused in combat), **GAP** (open; list
 | pause charges / cooldown, turn-based uses, free pause, horde clocks, horde intro, turn-based grid state, wave spawns | DERIVED | combat-only / full outside combat |
 | mission intro seen, objective text, `bCombatFinished`, feed / floating-text history, run telemetry | DERIVED | a loaded save starts without the intro; the objective is recomputed; telemetry counts the run from the load (analytics only) |
 | encounter "ambush started" counter, console overrides | DERIVED | the fight itself is in the phase / combat unlocked |
+| **environment**: hour, weather, next weather, blend position (elapsed / dwell), weather RNG state, locked, **snow cover** (2026-10-22) | SAVED | `game_state.environment` {hour, weather, next_weather, weather_elapsed, weather_dwell, seed, locked, snow_amount} (`EnvironmentRules::StateToSaveJson / StateFromSaveJson`) -> restore step 2; the debug clock scale is DERIVED (1) |
 
 ### Enemies and AI
 
@@ -143,9 +145,9 @@ applies them over the spawned squad as before. Details: [demo01-lake](demo01-lak
    float texts; see `UColdSurvivalComponent::RestoreColdState`). Keep the JSON building in `SaveGameSubsystem.cpp`.
 3. **Write the keys** in the matching section of `BuildSaveData` (`squad[]` entry via `SaveOperative`, `game_state`, `world_state.<section>`, `objects.<name>`
    via `SaveObject`, `enemies[]` via `SaveEnemy` / `FEnemyPatrolSnapshot`). Every key is OPTIONAL: older saves must load without it.
-4. **Restore in the step that has its dependencies** (`GetRestoreOrder` table above): a per-operative value in `ApplyOperative` (step 4), a standing order in
-   `ApplyOperativeOrders` (end of step 5, after Solo / Commander Mode / formation), world objects in step 7, enemy state in the snapshot (step 9), a per-squad
-   subsystem after the squad (10), UI last (11). Read with `SaveInt / SaveFloat / SaveBool / SaveString / LoadVector / LoadEnumName` (missing key = the fallback
+4. **Restore in the step that has its dependencies** (`GetRestoreOrder` table above): global state that later steps sample (the environment) in step 2, a per-operative value in `ApplyOperative` (step 5), a standing order in
+   `ApplyOperativeOrders` (end of step 6, after Solo / Commander Mode / formation), world objects in step 8, enemy state in the snapshot (step 10), a per-squad
+   subsystem after the squad (11), UI last (12). Read with `SaveInt / SaveFloat / SaveBool / SaveString / LoadVector / LoadEnumName` (missing key = the fallback
    you pass), never `GetXField` on a key that may be absent. A new ordered concern = a new row in the step table + the names list + the RestoreOrder test.
 5. **Order inside a step**: ApplyOperative resets transient state and sets the stance BEFORE the teleport; anything that `RefreshFormation` /
    `SetAutonomousSquadCombat` / `SetSquadPosture` would undo goes AFTER them.

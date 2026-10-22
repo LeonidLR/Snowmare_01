@@ -24,6 +24,8 @@ public class CodexTacticsDev : ModuleRules
 			"SlateCore",
 			"CommonUI",
 			"Json",
+			"RHI",        // EnvironmentShots snowcover perf A/B: GNumDrawCallsRHI / RHIGetGPUFrameCycles
+			"RenderCore", // ... GRenderThreadTime / GGameThreadTime
 			"CodexTactics"
 		});
 	}

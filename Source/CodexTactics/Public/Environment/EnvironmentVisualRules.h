@@ -18,6 +18,9 @@ namespace EnvironmentVisualRules
 	/** A -> B by Alpha (clamped 0..1): numbers and colours lerp, bVolumetricFog switches at Alpha 0.5. */
 	CODEXTACTICS_API FWeatherVisualPreset LerpPresets(const FWeatherVisualPreset& A, const FWeatherVisualPreset& B, float Alpha);
 
+	/** Wind 0..1 in force: From.WindStrength lerped toward To.WindStrength by Blend (clamped; the same blend LerpPresets uses). */
+	CODEXTACTICS_API float GetBlendedWindStrength(const FWeatherVisualPreset& From, const FWeatherVisualPreset& To, float Blend);
+
 	/** Curve value at Hour (wrapped into [0, 24)); Default when the curve has no keys. */
 	CODEXTACTICS_API float EvalHourCurve(const FRuntimeFloatCurve& Curve, float Hour, float Default = 0.f);
 

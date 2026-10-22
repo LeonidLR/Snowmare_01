@@ -175,6 +175,11 @@ FWeatherVisualPreset EnvironmentVisualRules::GetDefaultPreset(EWeatherState Weat
 	return P;
 }
 
+float EnvironmentVisualRules::GetBlendedWindStrength(const FWeatherVisualPreset& From, const FWeatherVisualPreset& To, float Blend)
+{
+	return FMath::Clamp(FMath::Lerp(From.WindStrength, To.WindStrength, FMath::Clamp(Blend, 0.f, 1.f)), 0.f, 1.f);
+}
+
 FWeatherVisualPreset EnvironmentVisualRules::LerpPresets(const FWeatherVisualPreset& A, const FWeatherVisualPreset& B, float Alpha)
 {
 	const float T = FMath::Clamp(Alpha, 0.f, 1.f);

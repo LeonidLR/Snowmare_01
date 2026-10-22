@@ -38,6 +38,8 @@
 #include "Data/WeaponDataAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
+#include "Environment/EnvironmentRules.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -253,6 +255,19 @@ namespace SaveCoverageSmoke
 			Out.Add(TEXT("waves.susanin_wave"), Num(Waves->GetSusaninRescueWave()));
 			Out.Add(TEXT("waves.breach_triggered"), Flag(Waves->IsDynamicBreachTriggered()));
 			Out.Add(TEXT("waves.cold_drain"), Num(Waves->GetColdDrainMultiplier()));
+		}
+		if (const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World); Environment && Environment->IsInitialised())
+		{
+			// game_state.environment (2026-10-22): the day cycle, the weather and the persistent snow cover.
+			const FEnvironmentState& Env = Environment->GetStateRef();
+			Out.Add(TEXT("env.hour"), Num(Env.Hour));
+			Out.Add(TEXT("env.weather"), EnvironmentRules::WeatherToString(Env.Weather));
+			Out.Add(TEXT("env.next_weather"), EnvironmentRules::WeatherToString(Env.NextWeather));
+			Out.Add(TEXT("env.weather_elapsed"), Num(Env.WeatherElapsedSeconds));
+			Out.Add(TEXT("env.weather_dwell"), Num(Env.WeatherDwellSeconds));
+			Out.Add(TEXT("env.seed"), FString::FromInt(Env.RandomSeed));
+			Out.Add(TEXT("env.locked"), Flag(Env.bLocked));
+			Out.Add(TEXT("env.snow"), FString::Printf(TEXT("%.3f"), Env.SnowAmount));
 		}
 		if (const UWaveVictorySubsystem* Victory = World->GetSubsystem<UWaveVictorySubsystem>())
 		{
@@ -537,6 +552,16 @@ namespace SaveCoverageSmoke
 		// The mission's event waves, the breach done, the rest's cold drain, kills so far (gaps: re-rolled / 1.0 / zero).
 		Waves->RestoreRandomEvents(3, 2, true);
 		Waves->RestoreColdDrainMultiplier(1.7f);
+		// The environment (gap until 2026-10-22: a reopened level re-resolved it - the snow cover back to its start value). The lake is
+		// locked (its fixed night): only the snow there.
+		if (UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World))
+		{
+			Environment->SetSnowAmount(0.73f);
+			if (!State.bLake)
+			{
+				Environment->SetHour(16.5f);
+			}
+		}
 		Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Commander"));
 		Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Commander"));
 		Victory->RegisterEnemyKill(EEnemyArchetype::Brute, TEXT("Turret"));
@@ -727,6 +752,10 @@ namespace SaveCoverageSmoke
 			const UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
 			Check(State, Waves && Waves->GetDynamicBreachWave() == 3 && Waves->GetSusaninRescueWave() == 2 && Waves->IsDynamicBreachTriggered()
 				&& FMath::IsNearlyEqual(Waves->GetColdDrainMultiplier(), 1.7f), TEXT("event waves 3 / 2, breach done, cold drain 1.7"));
+			const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World);
+			Check(State, Environment && FMath::IsNearlyEqual(Environment->GetSnowAmount(), 0.73f, 1.e-3f) && (State.bLake || FMath::Abs(Environment->GetHour() - 16.5f) < 0.5f),
+				FString::Printf(TEXT("the environment back: snow cover 0.73 (%.3f), hour ~16.5 (%.2f)"), Environment ? Environment->GetSnowAmount() : -1.f,
+				Environment ? Environment->GetHour() : -1.f));
 			const UWaveVictorySubsystem* Victory = World->GetSubsystem<UWaveVictorySubsystem>();
 			Check(State, Victory && Victory->GetKillStats().GetTotal() == 3 && Victory->GetKillStats().Commander.TurretKills == 1, TEXT("kill statistics back"));
 			if (!State.BarrelName.IsEmpty())

@@ -41,7 +41,8 @@ namespace LevelJsonRules
 
 	/**
 	 * The level JSON "environment" object (UE-only, 2026-10-22): {"locked": true, "start_hour": 23, "weather": "Snowfall", "seed": 7,
-	 * "visuals": false} ("visuals" phase 3, default true: false keeps the map's authored lighting, no weather presenter);
+	 * "visuals": false, "snow_cover": 0.6} ("visuals" phase 3, default true: false keeps the map's authored lighting, no weather presenter;
+	 * "snow_cover" phase 4: the start snow cover 0..1 of a locked / fresh level, clamped);
 	 * absent keys keep the procedural default, an unknown weather name is ignored (bHasWeather false) and reported in OutError.
 	 */
 	CODEXTACTICS_API FEnvironmentLevelSettings ParseEnvironmentSettings(const FJsonObject& Environment, FString* OutError = nullptr);
