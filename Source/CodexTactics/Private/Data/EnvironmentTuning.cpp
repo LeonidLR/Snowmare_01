@@ -50,7 +50,11 @@ namespace EnvironmentTuning
 		{ TEXT("cold_mult_early_morning"), &FEnvironmentConfig::ColdMultEarlyMorning, 0.f, BIG_NUMBER },
 		{ TEXT("cold_mult_midday"), &FEnvironmentConfig::ColdMultMidday, 0.f, BIG_NUMBER },
 		{ TEXT("cold_mult_afternoon"), &FEnvironmentConfig::ColdMultAfternoon, 0.f, BIG_NUMBER },
-		{ TEXT("cold_mult_night"), &FEnvironmentConfig::ColdMultNight, 0.f, BIG_NUMBER } };
+		{ TEXT("cold_mult_night"), &FEnvironmentConfig::ColdMultNight, 0.f, BIG_NUMBER },
+		// Phase 4: persistent snow cover (per REAL second while it snows; it never recedes).
+		{ TEXT("snow_cover_rate_snowfall"), &FEnvironmentConfig::SnowCoverRateSnowfall, 0.f, BIG_NUMBER },
+		{ TEXT("snow_cover_rate_blizzard"), &FEnvironmentConfig::SnowCoverRateBlizzard, 0.f, BIG_NUMBER },
+		{ TEXT("snow_cover_start"), &FEnvironmentConfig::SnowCoverStart, 0.f, 1.f } };
 
 	static const TCHAR* ColdOnLockedKey = TEXT("cold_on_locked_levels");
 

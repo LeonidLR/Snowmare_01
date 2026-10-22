@@ -4,6 +4,7 @@
 #include "Environment/EnvironmentTypes.h"
 #include "GameFlow/GameFlowTypes.h"
 
+class FJsonObject;
 struct FRandomStream;
 
 /**
@@ -61,8 +62,15 @@ namespace EnvironmentRules
 	CODEXTACTICS_API float GetTransitionBlend(const FEnvironmentConfig& Config, const FEnvironmentState& State);
 
 	/**
+	 * How much of Weather is in force now, 0..1: State.Weather -> 1 - blend (1 outside a transition), State.NextWeather -> the blend,
+	 * any other weather 0 (the amounts of all four always sum to 1).
+	 */
+	CODEXTACTICS_API float GetWeatherAmount(const FEnvironmentConfig& Config, const FEnvironmentState& State, EWeatherState Weather);
+
+	/**
 	 * A fresh state: Hour, Weather, a rolled NextWeather and dwell for the phase of Hour, the RNG seeded with Seed
 	 * (0 -> a random seed). Weather is the level's / the random start weather (the caller picks it, e.g. PickStartWeather).
+	 * SnowAmount = Config.SnowCoverStart (the caller applies a level's "snow_cover", GetInitialSnowCover).
 	 */
 	CODEXTACTICS_API FEnvironmentState MakeInitialState(const FEnvironmentConfig& Config, float Hour, EWeatherState Weather, int32 Seed);
 
@@ -99,4 +107,34 @@ namespace EnvironmentRules
 	 * its cold_rate_mult was tuned without weather) only with Config.bColdOnLockedLevels. False -> the cold uses 1 / 1.
 	 */
 	CODEXTACTICS_API bool ShouldApplyCold(const FEnvironmentConfig& Config, bool bLocked);
+
+	// --- Phase 4: persistent snow cover (FEnvironmentState::SnowAmount; design §6 / §12) ---
+
+	/** Snow cover gained per real second in Weather: Snowfall / Blizzard their rates, Clear / Overcast 0 (negative clamps to 0). */
+	CODEXTACTICS_API float GetSnowCoverRate(const FEnvironmentConfig& Config, EWeatherState Weather);
+
+	/** The rate in force: State.Weather's lerped toward State.NextWeather's by GetTransitionBlend (a locked state never blends). */
+	CODEXTACTICS_API float GetBlendedSnowCoverRate(const FEnvironmentConfig& Config, const FEnvironmentState& State);
+
+	/**
+	 * Advances State.SnowAmount by DeltaSeconds of running clock at GetBlendedSnowCoverRate, clamped to [0, 1]. It NEVER decreases (user
+	 * decision 2026-10-22: in clear weather the snow only stops growing). A locked state (Demo 01) never changes. Called by the
+	 * subsystem after StepWeather, only while EnvironmentRules::ShouldAdvance (frozen in the tactical pause / turn-based / AI pause).
+	 * Returns the cover gained in this step.
+	 */
+	CODEXTACTICS_API float StepSnowCover(const FEnvironmentConfig& Config, FEnvironmentState& State, float DeltaSeconds);
+
+	/** The start snow cover of a fresh / locked level: the level's "snow_cover" when present, else Config.SnowCoverStart; clamped 0..1. */
+	CODEXTACTICS_API float GetInitialSnowCover(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level);
+
+	// --- Save (docs/systems/save-load.md, key "game_state.environment") ---
+
+	/** The whole state as the save object: hour, weather, next_weather, weather_elapsed, weather_dwell, seed, locked, snow_amount. */
+	CODEXTACTICS_API TSharedRef<FJsonObject> StateToSaveJson(const FEnvironmentState& State);
+
+	/**
+	 * The state of a save object over Fallback: every key is optional (a missing / mistyped key keeps Fallback's value; an unknown weather
+	 * name too); the hour is wrapped into [0, 24), the snow cover clamped to [0, 1], dwell / elapsed to >= 0.
+	 */
+	CODEXTACTICS_API FEnvironmentState StateFromSaveJson(const FJsonObject& Json, const FEnvironmentState& Fallback);
 }

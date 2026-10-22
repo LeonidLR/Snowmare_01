@@ -10,8 +10,9 @@
 //      ForceWeather(neighbour, instant) -> OnWeatherChanged; ForceWeather(neighbour, blend) -> OnWeatherTransitionStarted,
 //      the blend rises and the weather in force flips only at its end (OnWeatherChanged);
 //   5. ladder: at a high ClockScale three weather changes in a row, every pair (and every blend) between neighbours.
-// EnvironmentLakeSmoke (Demo 01 lake, "environment": locked, start_hour 23, Snowfall): hour 23 (Night) + Snowfall, and
-// neither moves with ClockScale 20 and ~2 s of ticking.
+// EnvironmentLakeSmoke (Demo 01 lake, "environment": locked, start_hour 23, Snowfall, snow_cover 0.6): hour 23 (Night) + Snowfall +
+// snow cover 0.6, and none of them moves with ClockScale 20 and ~2 s of ticking.
+// Phase 4 snow cover in EnvironmentSmoke: the neutral start (Clear) holds the cover while the clock runs (2), the AI pause freezes it (3).
 // Both print "[EnvSmoke] PASS/FAIL ..." lines and the usual "Smoke RESULT: PASS|FAIL", then exit.
 
 #include "CoreMinimal.h"
@@ -71,6 +72,7 @@ namespace EnvironmentSmoke
 		float StartHour = 0.f;
 		float StartAdvanced = 0.f;
 		float StartElapsed = 0.f;
+		float StartSnow = 0.f;
 		EWeatherState BlendFrom = EWeatherState::Clear;
 		EWeatherState BlendTo = EWeatherState::Overcast;
 		float MaxBlend = 0.f;
@@ -186,6 +188,12 @@ namespace EnvironmentSmoke
 			FString::Printf(TEXT("2 the hour moved forward by %s h"), *Hours(ForwardHours(State.StartHour, Env.GetHour()))));
 		Check(State, Env.GetStateRef().WeatherElapsedSeconds > State.StartElapsed || Env.GetStateRef().WeatherElapsedSeconds < State.StartElapsed - 1.f,
 			FString::Printf(TEXT("2 weather dwell grew (%.1f -> %.1f s)"), State.StartElapsed, Env.GetStateRef().WeatherElapsedSeconds));
+		const FEnvironmentState& Now = Env.GetStateRef();
+		if (EnvironmentRules::GetSnowCoverRate(Config, Now.Weather) == 0.f && EnvironmentRules::GetSnowCoverRate(Config, Now.NextWeather) == 0.f)
+		{
+			Check(State, Now.SnowAmount == State.StartSnow, FString::Printf(TEXT("2 %s: the snow cover holds at %.3f (never recedes, no growth)"),
+				*EnvironmentRules::WeatherToString(Now.Weather), Now.SnowAmount));
+		}
 	}
 
 	/** Stage 4, instant part: events fired by SetHour and ForceWeather(instant). Leaves a blend toward BlendTo running. */
@@ -337,6 +345,7 @@ namespace EnvironmentSmoke
 			State.StartHour = Env->GetHour();
 			State.StartAdvanced = Env->GetAdvancedSeconds();
 			State.StartElapsed = Env->GetStateRef().WeatherElapsedSeconds;
+			State.StartSnow = Env->GetSnowAmount();
 			Env->SetClockScale(DebugClockScale);
 			NextStage(State, EStage::Clock);
 			break;
@@ -347,6 +356,9 @@ namespace EnvironmentSmoke
 				CheckClockRan(State, *Env);
 				// 3. the world AI pause freezes the clock.
 				AIPause->AddPauseBlocker(PauseReason);
+				// A snowing weather so a frozen cover means the pause, not the weather.
+				Env->ForceWeather(EWeatherState::Blizzard, true);
+				State.StartSnow = Env->GetSnowAmount();
 				State.StartHour = Env->GetHour();
 				State.StartAdvanced = Env->GetAdvancedSeconds();
 				State.StartElapsed = Env->GetStateRef().WeatherElapsedSeconds;
@@ -361,6 +373,7 @@ namespace EnvironmentSmoke
 				Check(State, FMath::IsNearlyEqual(Env->GetHour(), State.StartHour, 1.e-4f) && Env->GetAdvancedSeconds() == State.StartAdvanced,
 					FString::Printf(TEXT("3 the hour is frozen at %s over %.2f s of pause (x%.0f)"), *Hours(Env->GetHour()), State.StageTime, Env->GetClockScale()));
 				Check(State, Env->GetStateRef().WeatherElapsedSeconds == State.StartElapsed, TEXT("3 the weather dwell is frozen"));
+				Check(State, Env->GetSnowAmount() == State.StartSnow, FString::Printf(TEXT("3 the snow cover is frozen (%.3f)"), Env->GetSnowAmount()));
 				AIPause->RemovePauseBlocker(PauseReason);
 				Check(State, !AIPause->IsWorldAIPaused() && Env->CanAdvance(), TEXT("3 pause released: the environment may advance again"));
 				NextStage(State, EStage::Resumed);
@@ -377,6 +390,8 @@ namespace EnvironmentSmoke
 				Check(State, SameHour(Env->GetHour(), EnvironmentRules::AdvanceClock(Env->GetConfig(), State.StartHour, RanSeconds)),
 					TEXT("3 the resumed hour follows AdvanceClock"));
 				Check(State, Env->GetStateRef().WeatherElapsedSeconds != State.StartElapsed, TEXT("3 the weather dwell resumed"));
+				Check(State, Env->GetSnowAmount() > State.StartSnow || Env->GetSnowAmount() >= 1.f,
+					FString::Printf(TEXT("3 Blizzard after the pause: the snow cover grows again (%.3f -> %.3f)"), State.StartSnow, Env->GetSnowAmount()));
 				RunEventChecks(State, *Env);
 				NextStage(State, EStage::Blend);
 			}
@@ -465,6 +480,7 @@ namespace EnvironmentLakeSmoke
 			Check(State, Env->GetPhase() == ETimeOfDayPhase::Night && EnvironmentRules::GetPhase(Config, Env->GetHour()) == ETimeOfDayPhase::Night,
 				FString::Printf(TEXT("L1 phase %s is Night"), *EnvironmentRules::PhaseToString(Env->GetPhase())));
 			Check(State, Env->GetWeather() == EWeatherState::Snowfall, FString::Printf(TEXT("L1 weather %s is Snowfall"), *EnvironmentRules::WeatherToString(Env->GetWeather())));
+			Check(State, FMath::IsNearlyEqual(Env->GetSnowAmount(), 0.6f, 1.e-4f), FString::Printf(TEXT("L1 snow cover %.3f is 0.6 (level JSON snow_cover)"), Env->GetSnowAmount()));
 			Check(State, !Env->CanAdvance(), TEXT("L1 a locked level may not advance"));
 			Lake.StartHour = Env->GetHour();
 			State.StartAdvanced = Env->GetAdvancedSeconds();
@@ -479,6 +495,7 @@ namespace EnvironmentLakeSmoke
 		Check(State, Env->GetWeather() == EWeatherState::Snowfall && Env->GetStateRef().WeatherElapsedSeconds == State.StartElapsed,
 			TEXT("L2 weather still Snowfall, its dwell did not grow"));
 		Check(State, Env->GetPhase() == ETimeOfDayPhase::Night && Env->IsLocked(), TEXT("L2 still Night and locked"));
+		Check(State, FMath::IsNearlyEqual(Env->GetSnowAmount(), 0.6f, 1.e-4f), FString::Printf(TEXT("L2 snow cover still 0.6 (%.3f): a locked level never grows it"), Env->GetSnowAmount()));
 		Env->SetClockScale(1.f);
 		Finish(State, World);
 		return false;

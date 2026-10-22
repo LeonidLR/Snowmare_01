@@ -41,6 +41,7 @@
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -772,6 +773,12 @@ namespace SaveRoundTripSmoke
 		if (AEnemyCharacter* Searcher = State.Searcher.Get())
 		{
 			Searcher->GetHealthComponent()->Heal(1000.f);
+		}
+		// The environment (game_state.environment): a deeper snow cover and another hour after the save.
+		if (UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World))
+		{
+			Environment->SetSnowAmount(FMath::Min(1.f, Environment->GetSnowAmount() + 0.25f));
+			Environment->SetHour(Environment->GetHour() + 1.f);
 		}
 		AEnemyCharacter* Extra = Waves->SpawnEnemy(EEnemyArchetype::FrostHound, Commander->GetActorLocation() + FVector(1500.f, 0.f, 0.f));
 		const FString ExtraName = Extra ? Extra->GetName() : FString();

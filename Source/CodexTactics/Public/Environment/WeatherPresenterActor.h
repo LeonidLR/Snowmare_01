@@ -16,6 +16,8 @@ class UDirectionalLightComponent;
 class UMaterialParameterCollection;
 class UPostProcessComponent;
 class UWeatherPresetAsset;
+class UWeatherSnowFxComponent;
+class UWeatherSnowOverlayComponent;
 struct FEnvironmentState;
 
 /** The values the map authored on the adopted actors (recorded at adoption, written back when the visuals turn off). */
@@ -76,6 +78,10 @@ struct FWeatherCloudAuthored
  * decision 2026-10-22: the tactical camera never sees it). Visual only: no gameplay reads any of it; smokes stay deterministic.
  * Off -> every authored value is restored: level JSON "environment": {"visuals": false} (never spawned) or the console variable
  * Codex.Env.Visuals 0. Reference (design only): WeatherSystem_01 BP_DynamivSky.
+ * Phase 4 (§12): every application also drives the falling snow (UWeatherSnowFxComponent: blended SnowIntensity, WindStrength, a slowly
+ * drifting wind direction), the gradual snow cover on objects (UWeatherSnowOverlayComponent: FEnvironmentState::SnowAmount + blended
+ * FrostAmount; targets re-scanned every TargetRefreshInterval) and MPC_Environment (scalars SnowAmount / FrostAmount / WindStrength /
+ * IsSnowing, vector WindDirection); visuals off -> both components off and the MPC values back to 0 (the authored look).
  */
 UCLASS(Blueprintable)
 class CODEXTACTICS_API AWeatherPresenterActor : public AActor
@@ -146,9 +152,45 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets")
 	TSoftObjectPtr<UWeatherPresetAsset> PresetBlizzard;
 
-	/** Phase 4: MPC_Environment (SnowAmount / FrostAmount / WindStrength / IsSnowing); not written yet. */
+	/**
+	 * Phase 4: MPC_Environment, written every application: scalars SnowAmount (persistent cover), FrostAmount, WindStrength, IsSnowing
+	 * (0..1, ComputeIsSnowing), vector WindDirection (xyz direction, w strength). Missing asset -> nothing written.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
 	TSoftObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
+
+	/** Seconds between re-scans of the snow overlay's target meshes (streaming / spawned props) while the visuals run. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Phase4", meta = (ClampMin = "0.5"))
+	float TargetRefreshInterval = 5.f;
+
+	/** The wind blows from this world yaw (degrees) on average... */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Phase4")
+	float WindBaseYaw = 35.f;
+
+	/** ...and drifts this many degrees either way... */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Phase4", meta = (ClampMin = "0", ClampMax = "180"))
+	float WindDriftDegrees = 25.f;
+
+	/** ...over this period (game seconds). Visual only (never read by gameplay). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Phase4", meta = (ClampMin = "1"))
+	float WindDriftPeriodSeconds = 180.f;
+
+	/** Horizontal unit wind direction at TimeSeconds: BaseYaw + DriftDegrees x sin(2 pi t / Period) (pure; tests). */
+	static FVector ComputeWindDirection(float TimeSeconds, float BaseYaw, float DriftDegrees, float PeriodSeconds);
+
+	/** MPC IsSnowing 0..1 from the blended preset SnowIntensity: smooth, 1 from SnowIntensity 0.25 up (any real snowfall). */
+	static float ComputeIsSnowing(float SnowIntensity);
+
+	/** The loaded MPC_Environment (null when the asset is missing). */
+	UMaterialParameterCollection* GetEnvironmentCollection() const { return LoadedParameters; }
+
+	/** The value this world's MPC_Environment instance holds for a scalar (false without the collection / parameter). */
+	bool GetEnvironmentScalar(FName Name, float& OutValue) const;
+
+	UWeatherSnowFxComponent* GetSnowFx() const { return SnowFx; }
+	UWeatherSnowOverlayComponent* GetSnowOverlay() const { return SnowOverlay; }
+	/** The wind direction of the last application. */
+	const FVector& GetLastWindDirection() const { return LastWindDirection; }
 
 	/** Updates per second while the clock runs (plus one at every OnStateSet). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather", meta = (ClampMin = "1", ClampMax = "120"))
@@ -190,6 +232,14 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather")
 	TObjectPtr<UPostProcessComponent> PostProcess;
 
+	/** Phase 4: the falling snow (Niagara, follows the tactical view; NS_Weather_Snow by default). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
+	TObjectPtr<UWeatherSnowFxComponent> SnowFx;
+
+	/** Phase 4: the gradual snow cover on outdoor meshes (overlay material M_SnowOverlay by default). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
+	TObjectPtr<UWeatherSnowOverlayComponent> SnowOverlay;
+
 private:
 	void LoadPresets();
 	void Adopt();
@@ -203,6 +253,10 @@ private:
 	void ApplySky(const FWeatherVisualFrame& Frame);
 	void ApplyFog(const FWeatherVisualFrame& Frame);
 	void ApplyPostProcess(const FWeatherVisualFrame& Frame);
+	/** Phase 4: falling snow, snow cover, MPC_Environment. */
+	void ApplySnow(const FWeatherVisualFrame& Frame, float SnowAmount);
+	void WriteParameters(float SnowAmount, float FrostAmount, float WindStrength, float IsSnowing, const FVector& WindDirection);
+	void SetSnowVisualsEnabled(bool bEnabled);
 	void SetCloudsOff(bool bOff);
 	void RestoreAuthored();
 	void RecaptureSkyIfNeeded(const FWeatherVisualFrame& Frame, bool bForce);
@@ -220,6 +274,7 @@ private:
 
 	UPROPERTY(Transient) FWeatherAuthoredLighting Authored;
 	UPROPERTY(Transient) FWeatherVisualFrame LastFrame;
+	UPROPERTY(Transient) TObjectPtr<UMaterialParameterCollection> LoadedParameters;
 
 	FWeatherVisualPreset Presets[4];
 	bool bPresetFromAsset[4] = { false, false, false, false };
@@ -231,6 +286,9 @@ private:
 	float LastRecaptureSunElevation = -1000.f;
 	EWeatherState LastRecaptureWeather = EWeatherState::Clear;
 	int32 ApplyCount = 0;
+	FVector LastWindDirection = FVector::ForwardVector;
+	float LastSnowApplyTime = -1.f;
+	float SinceTargetRefresh = 0.f;
 	bool bAdopted = false;
 	bool bApplying = false;
 	bool bDirty = true;

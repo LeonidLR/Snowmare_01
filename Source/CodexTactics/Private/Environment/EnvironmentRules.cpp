@@ -1,4 +1,5 @@
 #include "Environment/EnvironmentRules.h"
+#include "Dom/JsonObject.h"
 #include "Math/RandomStream.h"
 
 // UE-only (no Godot reference). Design: docs/systems/environment-weather.md (user decisions 2026-10-22).
@@ -282,6 +283,20 @@ namespace EnvironmentRules
 		return FMath::Clamp((State.WeatherElapsedSeconds - (Dwell - Transition)) / Transition, 0.f, 1.f);
 	}
 
+	float GetWeatherAmount(const FEnvironmentConfig& Config, const FEnvironmentState& State, EWeatherState Weather)
+	{
+		if (State.Weather == State.NextWeather)
+		{
+			return Weather == State.Weather ? 1.f : 0.f; // degenerate (never rolled): one weather, fully
+		}
+		const float Blend = GetTransitionBlend(Config, State);
+		if (Weather == State.Weather)
+		{
+			return 1.f - Blend;
+		}
+		return Weather == State.NextWeather ? Blend : 0.f;
+	}
+
 	FEnvironmentState MakeInitialState(const FEnvironmentConfig& Config, float Hour, EWeatherState Weather, int32 Seed)
 	{
 		int32 ActualSeed = Seed;
@@ -299,6 +314,7 @@ namespace EnvironmentRules
 		State.Hour = WrapHour(Hour);
 		State.Weather = Weather;
 		State.bLocked = false;
+		State.SnowAmount = FMath::Clamp(Config.SnowCoverStart, 0.f, 1.f);
 		FRandomStream Random(ActualSeed);
 		BeginDwell(Config, State, Random);
 		return State;
@@ -405,6 +421,97 @@ namespace EnvironmentRules
 	bool ShouldApplyCold(const FEnvironmentConfig& Config, bool bLocked)
 	{
 		return !bLocked || Config.bColdOnLockedLevels;
+	}
+
+	float GetSnowCoverRate(const FEnvironmentConfig& Config, EWeatherState Weather)
+	{
+		switch (Weather)
+		{
+		case EWeatherState::Snowfall:
+			return FMath::Max(0.f, Config.SnowCoverRateSnowfall);
+		case EWeatherState::Blizzard:
+			return FMath::Max(0.f, Config.SnowCoverRateBlizzard);
+		default:
+			return 0.f; // Clear / Overcast: the cover holds (never recedes).
+		}
+	}
+
+	float GetBlendedSnowCoverRate(const FEnvironmentConfig& Config, const FEnvironmentState& State)
+	{
+		return FMath::Lerp(GetSnowCoverRate(Config, State.Weather), GetSnowCoverRate(Config, State.NextWeather), GetTransitionBlend(Config, State));
+	}
+
+	float StepSnowCover(const FEnvironmentConfig& Config, FEnvironmentState& State, float DeltaSeconds)
+	{
+		const float Before = FMath::Clamp(State.SnowAmount, 0.f, 1.f);
+		if (State.bLocked || DeltaSeconds <= 0.f)
+		{
+			return 0.f;
+		}
+		// Max(Before, ...): never below what was there, even with a broken (negative) rate.
+		State.SnowAmount = FMath::Clamp(Before + GetBlendedSnowCoverRate(Config, State) * DeltaSeconds, Before, 1.f);
+		return State.SnowAmount - Before;
+	}
+
+	float GetInitialSnowCover(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level)
+	{
+		return FMath::Clamp(Level.bHasSnowCover ? Level.SnowCover : Config.SnowCoverStart, 0.f, 1.f);
+	}
+
+	TSharedRef<FJsonObject> StateToSaveJson(const FEnvironmentState& State)
+	{
+		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+		Json->SetNumberField(TEXT("hour"), State.Hour);
+		Json->SetStringField(TEXT("weather"), WeatherToString(State.Weather));
+		Json->SetStringField(TEXT("next_weather"), WeatherToString(State.NextWeather));
+		Json->SetNumberField(TEXT("weather_elapsed"), State.WeatherElapsedSeconds);
+		Json->SetNumberField(TEXT("weather_dwell"), State.WeatherDwellSeconds);
+		Json->SetNumberField(TEXT("seed"), State.RandomSeed);
+		Json->SetBoolField(TEXT("locked"), State.bLocked);
+		Json->SetNumberField(TEXT("snow_amount"), State.SnowAmount);
+		return Json;
+	}
+
+	FEnvironmentState StateFromSaveJson(const FJsonObject& Json, const FEnvironmentState& Fallback)
+	{
+		FEnvironmentState State = Fallback;
+		double Number = 0.0;
+		if (Json.TryGetNumberField(TEXT("hour"), Number))
+		{
+			State.Hour = WrapHour(static_cast<float>(Number));
+		}
+		FString Name;
+		EWeatherState Weather = EWeatherState::Overcast;
+		if (Json.TryGetStringField(TEXT("weather"), Name) && WeatherFromString(Name, Weather))
+		{
+			State.Weather = Weather;
+		}
+		if (Json.TryGetStringField(TEXT("next_weather"), Name) && WeatherFromString(Name, Weather))
+		{
+			State.NextWeather = Weather;
+		}
+		if (Json.TryGetNumberField(TEXT("weather_elapsed"), Number))
+		{
+			State.WeatherElapsedSeconds = FMath::Max(0.f, static_cast<float>(Number));
+		}
+		if (Json.TryGetNumberField(TEXT("weather_dwell"), Number))
+		{
+			State.WeatherDwellSeconds = FMath::Max(0.f, static_cast<float>(Number));
+		}
+		if (Json.TryGetNumberField(TEXT("seed"), Number))
+		{
+			State.RandomSeed = static_cast<int32>(Number);
+		}
+		bool bLocked = false;
+		if (Json.TryGetBoolField(TEXT("locked"), bLocked))
+		{
+			State.bLocked = bLocked;
+		}
+		if (Json.TryGetNumberField(TEXT("snow_amount"), Number))
+		{
+			State.SnowAmount = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
+		}
+		return State;
 	}
 
 	FString WeatherToString(EWeatherState Weather)

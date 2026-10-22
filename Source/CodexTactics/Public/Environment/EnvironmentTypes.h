@@ -201,6 +201,20 @@ struct CODEXTACTICS_API FEnvironmentConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold")
 	bool bColdOnLockedLevels = false;
 
+	// --- Phase 4: persistent snow cover (FEnvironmentState::SnowAmount; design §6 / §12; user decision 2026-10-22: it NEVER recedes) ---
+
+	/** Snow cover gained per REAL second of running clock while it snows (Snowfall): 1 / 480 -> bare to full in ~8 real minutes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SnowCover", meta = (ClampMin = "0"))
+	float SnowCoverRateSnowfall = 1.f / 480.f;
+
+	/** Snow cover gained per REAL second in a Blizzard: 1 / 180 -> bare to full in ~3 real minutes. Clear / Overcast: 0 (it holds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SnowCover", meta = (ClampMin = "0"))
+	float SnowCoverRateBlizzard = 1.f / 180.f;
+
+	/** Snow cover of a fresh run (0..1): arctic ground already carries old snow. A level JSON "snow_cover" overrides it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SnowCover", meta = (ClampMin = "0", ClampMax = "1"))
+	float SnowCoverStart = 0.35f;
+
 	// --- Phase 2: enemy roster by conditions (design §4.2; defaults filled by EnvironmentTuning from environment.json) ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
@@ -243,6 +257,14 @@ struct CODEXTACTICS_API FEnvironmentState
 	/** Locked (Demo 01 tutorial: Night + Snowfall): neither the clock nor the weather moves. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
 	bool bLocked = false;
+
+	/**
+	 * Phase 4: persistent snow cover on the ground / objects, 0 (bare) .. 1 (fully white). Grows only while it snows
+	 * (EnvironmentRules::StepSnowCover), holds in Clear / Overcast and NEVER decreases (user decision 2026-10-22); saved and carried to
+	 * the next level with the rest of the state. The presenter writes it to MPC_Environment.SnowAmount (visual only).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
+	float SnowAmount = 0.f;
 };
 
 /** What one weather step of EnvironmentRules::StepWeather did. */
@@ -293,4 +315,11 @@ struct CODEXTACTICS_API FEnvironmentLevelSettings
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
 	bool bVisuals = true;
+
+	/** Phase 4: "snow_cover" present (0..1): the start snow cover when the level is locked or starts fresh (else snow_cover_start). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	bool bHasSnowCover = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
+	float SnowCover = 0.35f;
 };

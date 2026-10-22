@@ -18,9 +18,15 @@
 #include "Environment/EnvironmentVisualRules.h"
 #include "Environment/EnvironmentVisualSettings.h"
 #include "Environment/WeatherPresetAsset.h"
+#include "Environment/WeatherSnowFxComponent.h"
+#include "Environment/WeatherSnowOverlayComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialParameterCollection.h"
+#include "Materials/MaterialParameterCollectionInstance.h"
 #include "Misc/App.h"
 #include "Misc/PackageName.h"
+#include "NiagaraSystem.h"
 #include "UI/MinimapSubsystem.h"
 
 namespace WeatherPresenterLocal
@@ -37,6 +43,17 @@ namespace WeatherPresenterLocal
 		TEXT("/Game/Environment/Weather/Presets/DA_Weather_Snowfall.DA_Weather_Snowfall"),
 		TEXT("/Game/Environment/Weather/Presets/DA_Weather_Blizzard.DA_Weather_Blizzard"),
 	};
+
+	const TCHAR* EnvironmentCollectionPath = TEXT("/Game/Environment/Weather/MPC/MPC_Environment.MPC_Environment");
+	const TCHAR* SnowSystemPath = TEXT("/Game/Environment/Weather/Snow/Niagara/NS_Weather_Snow.NS_Weather_Snow");
+	const TCHAR* SnowOverlayPath = TEXT("/Game/Environment/Weather/Snow/Materials/M_SnowOverlay.M_SnowOverlay");
+
+	// MPC_Environment parameter names (Scripts/Editor/create_environment_mpc.py).
+	const FName ParamSnowAmount(TEXT("SnowAmount"));
+	const FName ParamFrostAmount(TEXT("FrostAmount"));
+	const FName ParamWindStrength(TEXT("WindStrength"));
+	const FName ParamIsSnowing(TEXT("IsSnowing"));
+	const FName ParamWindDirection(TEXT("WindDirection"));
 
 	/** The soft reference names an existing package (checked first: loading a missing one logs warnings). */
 	bool PackageExists(const FSoftObjectPath& Path)
@@ -102,6 +119,37 @@ AWeatherPresenterActor::AWeatherPresenterActor()
 		*Refs[Index] = TSoftObjectPtr<UWeatherPresetAsset>(FSoftObjectPath(WeatherPresenterLocal::PresetPaths[Index]));
 		Presets[Index] = EnvironmentVisualRules::GetDefaultPreset(static_cast<EWeatherState>(Index));
 	}
+
+	// Phase 4: falling snow + gradual snow cover (separate components; the presenter only feeds them) and the MPC.
+	SnowFx = CreateDefaultSubobject<UWeatherSnowFxComponent>(TEXT("SnowFx"));
+	SnowFx->SetupAttachment(Root);
+	SnowFx->SnowSystem = TSoftObjectPtr<UNiagaraSystem>(FSoftObjectPath(WeatherPresenterLocal::SnowSystemPath));
+	SnowOverlay = CreateDefaultSubobject<UWeatherSnowOverlayComponent>(TEXT("SnowOverlay"));
+	SnowOverlay->OverlayMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(WeatherPresenterLocal::SnowOverlayPath));
+	EnvironmentParameters = TSoftObjectPtr<UMaterialParameterCollection>(FSoftObjectPath(WeatherPresenterLocal::EnvironmentCollectionPath));
+}
+
+FVector AWeatherPresenterActor::ComputeWindDirection(float TimeSeconds, float BaseYaw, float DriftDegrees, float PeriodSeconds)
+{
+	const float Period = FMath::Max(1.f, PeriodSeconds);
+	const float Yaw = BaseYaw + FMath::Clamp(DriftDegrees, 0.f, 180.f) * FMath::Sin(UE_TWO_PI * FMath::Fmod(TimeSeconds, Period) / Period);
+	return FRotator(0.f, Yaw, 0.f).Vector();
+}
+
+float AWeatherPresenterActor::ComputeIsSnowing(float SnowIntensity)
+{
+	return FMath::Clamp(SnowIntensity / 0.25f, 0.f, 1.f);
+}
+
+bool AWeatherPresenterActor::GetEnvironmentScalar(FName Name, float& OutValue) const
+{
+	UWorld* World = GetWorld();
+	if (!World || !LoadedParameters)
+	{
+		return false;
+	}
+	const UMaterialParameterCollectionInstance* Instance = World->GetParameterCollectionInstance(LoadedParameters);
+	return Instance && Instance->GetScalarParameterValue(Name, OutValue);
 }
 
 AWeatherPresenterActor* AWeatherPresenterActor::Find(const UWorld* World)
@@ -204,6 +252,16 @@ void AWeatherPresenterActor::BeginPlay()
 	Super::BeginPlay();
 	StartTime = GetWorld()->GetTimeSeconds();
 	LoadPresets();
+	if (WeatherPresenterLocal::PackageExists(EnvironmentParameters.ToSoftObjectPath()))
+	{
+		LoadedParameters = EnvironmentParameters.LoadSynchronous();
+	}
+	if (!LoadedParameters)
+	{
+		UE_LOG(LogCodexTactics, Log, TEXT("[EnvVisuals] %s missing: MPC_Environment is not written"), *EnvironmentParameters.ToString());
+	}
+	// Nothing of the snow shows until the presenter starts applying (minimap hold, visuals toggle).
+	SetSnowVisualsEnabled(false);
 	Adopt();
 	if (UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(this))
 	{
@@ -452,6 +510,15 @@ void AWeatherPresenterActor::Tick(float DeltaSeconds)
 	{
 		Apply();
 	}
+	SinceTargetRefresh += DeltaSeconds;
+	if (SinceTargetRefresh >= FMath::Max(0.5f, TargetRefreshInterval))
+	{
+		SinceTargetRefresh = 0.f;
+		if (SnowOverlay)
+		{
+			SnowOverlay->RefreshTargets();
+		}
+	}
 }
 
 void AWeatherPresenterActor::HandleStateSet(const FEnvironmentState& /*State*/)
@@ -479,6 +546,13 @@ void AWeatherPresenterActor::StartApplying()
 		PostProcess->bEnabled = true;
 	}
 	SetCloudsOff(bDisableVolumetricClouds);
+	SetSnowVisualsEnabled(true);
+	if (SnowOverlay)
+	{
+		SnowOverlay->RefreshTargets();
+	}
+	SinceTargetRefresh = 0.f;
+	LastSnowApplyTime = -1.f;
 	Apply();
 	RecaptureSkyIfNeeded(LastFrame, true);
 	UE_LOG(LogCodexTactics, Log, TEXT("[EnvVisuals] applying: %s"), *DescribeAdopted());
@@ -508,6 +582,7 @@ void AWeatherPresenterActor::Apply()
 	ApplySky(Frame);
 	ApplyFog(Frame);
 	ApplyPostProcess(Frame);
+	ApplySnow(Frame, Environment->GetSnowAmount());
 	RecaptureSkyIfNeeded(Frame, false);
 	LastFrame = Frame;
 	++ApplyCount;
@@ -602,6 +677,57 @@ void AWeatherPresenterActor::ApplyPostProcess(const FWeatherVisualFrame& Frame)
 	Settings.SceneColorTint = BaseTint * Frame.ColorTint;
 }
 
+void AWeatherPresenterActor::ApplySnow(const FWeatherVisualFrame& Frame, float SnowAmount)
+{
+	const float Now = GetWorld()->GetTimeSeconds();
+	const float Delta = LastSnowApplyTime < 0.f ? 0.f : FMath::Max(0.f, Now - LastSnowApplyTime);
+	LastSnowApplyTime = Now;
+	const FWeatherVisualPreset& P = Frame.Preset;
+	LastWindDirection = ComputeWindDirection(Now, WindBaseYaw, WindDriftDegrees, WindDriftPeriodSeconds);
+	if (SnowFx)
+	{
+		SnowFx->ApplySnowFx(FMath::Clamp(P.SnowIntensity, 0.f, 1.f), FMath::Clamp(P.WindStrength, 0.f, 1.f), LastWindDirection, Delta);
+	}
+	if (SnowOverlay)
+	{
+		SnowOverlay->ApplySnowCover(FMath::Clamp(SnowAmount, 0.f, 1.f), FMath::Clamp(P.FrostAmount, 0.f, 1.f));
+	}
+	WriteParameters(SnowAmount, P.FrostAmount, P.WindStrength, ComputeIsSnowing(P.SnowIntensity), LastWindDirection);
+}
+
+void AWeatherPresenterActor::WriteParameters(float SnowAmount, float FrostAmount, float WindStrength, float IsSnowing, const FVector& WindDirection)
+{
+	UWorld* World = GetWorld();
+	UMaterialParameterCollectionInstance* Instance = World && LoadedParameters ? World->GetParameterCollectionInstance(LoadedParameters) : nullptr;
+	if (!Instance)
+	{
+		return;
+	}
+	const float Wind = FMath::Clamp(WindStrength, 0.f, 1.f);
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamSnowAmount, FMath::Clamp(SnowAmount, 0.f, 1.f));
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamFrostAmount, FMath::Clamp(FrostAmount, 0.f, 1.f));
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamWindStrength, Wind);
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamIsSnowing, FMath::Clamp(IsSnowing, 0.f, 1.f));
+	Instance->SetVectorParameterValue(WeatherPresenterLocal::ParamWindDirection, FLinearColor(WindDirection.X, WindDirection.Y, WindDirection.Z, Wind));
+}
+
+void AWeatherPresenterActor::SetSnowVisualsEnabled(bool bEnabled)
+{
+	if (SnowFx)
+	{
+		SnowFx->SetVisualsEnabled(bEnabled);
+	}
+	if (SnowOverlay)
+	{
+		SnowOverlay->SetVisualsEnabled(bEnabled);
+	}
+	if (!bEnabled)
+	{
+		// The authored look: no weather snow / frost / wind in the materials.
+		WriteParameters(0.f, 0.f, 0.f, 0.f, LastWindDirection);
+	}
+}
+
 void AWeatherPresenterActor::SetCloudsOff(bool bOff)
 {
 	if (bCloudsOff == bOff)
@@ -688,6 +814,7 @@ void AWeatherPresenterActor::RestoreAuthored()
 	}
 	PostProcess->bEnabled = false;
 	SetCloudsOff(false);
+	SetSnowVisualsEnabled(false);
 	RecaptureSkyIfNeeded(LastFrame, true);
 }
 

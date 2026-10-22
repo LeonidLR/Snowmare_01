@@ -154,6 +154,12 @@ FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonOb
 	{
 		Settings.bVisuals = bVisuals;
 	}
+	// Phase 4: the start snow cover of a locked / fresh level (0..1).
+	if (Environment.TryGetNumberField(TEXT("snow_cover"), Number))
+	{
+		Settings.bHasSnowCover = true;
+		Settings.SnowCover = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
+	}
 	return Settings;
 }
 

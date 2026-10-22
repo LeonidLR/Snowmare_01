@@ -4,6 +4,8 @@
 #include "Data/LevelJsonRules.h"
 #include "Data/WaveConfigTypes.h"
 #include "GameFlow/CampaignCarry.h"
+#include "Engine/GameInstance.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "GameFlow/CampaignRules.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
@@ -233,6 +235,43 @@ bool FCampaignCarryMatchingTest::RunTest(const FString&)
 	TestFalse(TEXT("the fallen stay behind"), CampaignCarry::ShouldSpawn(Carry, EOperativeRole::Engineer, 1));
 	TestTrue(TEXT("the living come along"), CampaignCarry::ShouldSpawn(Carry, EOperativeRole::Commander, 0) && CampaignCarry::ShouldSpawn(Carry, EOperativeRole::MedicSapper, 2));
 	TestTrue(TEXT("a roster row with no record spawns fresh"), CampaignCarry::ShouldSpawn(Carry, EOperativeRole::Recruit, 9));
+	return true;
+}
+
+// A restart of a campaign level must bring the environment carry back to what the level was entered with (no snow / time accumulation
+// across failed attempts).
+CAMPAIGN_TEST(FCampaignEnvironmentRestoreTest, "EnvironmentRestore")
+bool FCampaignEnvironmentRestoreTest::RunTest(const FString& Parameters)
+{
+	UEnvironmentCarrySubsystem* Carry = NewObject<UEnvironmentCarrySubsystem>(NewObject<UGameInstance>(GetTransientPackage()));
+	TestFalse(TEXT("nothing recorded: restore is a no-op"), Carry->RestoreEntryState());
+
+	FEnvironmentState Entry;
+	Entry.SnowAmount = 0.40f;
+	Entry.Hour = 9.f;
+	Carry->SetCarriedState(Entry);
+	Carry->RecordEntryState(Carry->GetCarriedState());
+
+	FEnvironmentState End = Entry;
+	End.SnowAmount = 0.80f;
+	End.Hour = 14.f;
+	Carry->SetCarriedState(End); // the failed attempt ends: UEnvironmentSubsystem::Deinitialize
+	TestTrue(TEXT("end state carried"), Carry->GetCarriedState().IsSet() && FMath::IsNearlyEqual(Carry->GetCarriedState()->SnowAmount, 0.80f));
+
+	TestTrue(TEXT("restart restores"), Carry->RestoreEntryState());
+	TestTrue(TEXT("entry state is back"), Carry->GetCarriedState().IsSet());
+	if (Carry->GetCarriedState().IsSet())
+	{
+		TestTrue(TEXT("snow 0.40"), FMath::IsNearlyEqual(Carry->GetCarriedState()->SnowAmount, 0.40f));
+		TestTrue(TEXT("hour 9"), FMath::IsNearlyEqual(Carry->GetCarriedState()->Hour, 9.f));
+	}
+
+	// A level entered fresh (nothing carried) goes back to fresh.
+	Carry->Clear();
+	Carry->RecordEntryState(TOptional<FEnvironmentState>());
+	Carry->SetCarriedState(End);
+	TestTrue(TEXT("restores"), Carry->RestoreEntryState());
+	TestFalse(TEXT("fresh entry: carry unset again"), Carry->GetCarriedState().IsSet());
 	return true;
 }
 

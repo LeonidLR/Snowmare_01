@@ -8,6 +8,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Environment/EnvironmentRules.h"
+#include "Environment/EnvironmentVisualRules.h"
 #include "Environment/WeatherPresenterActor.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Math/RandomStream.h"
@@ -51,6 +52,7 @@ namespace
 		const EWeatherState Weather = Level.bHasWeather ? Level.Weather : DrawStartWeather(Config, Seed);
 		FEnvironmentState State = EnvironmentRules::MakeInitialState(Config, Hour, Weather, Seed);
 		State.bLocked = bLocked;
+		State.SnowAmount = EnvironmentRules::GetInitialSnowCover(Config, Level);
 		return State;
 	}
 
@@ -79,6 +81,12 @@ namespace
 			Level.StartHour = Hour;
 		}
 		FParse::Value(CommandLine, TEXT("-EnvSeed="), Level.Seed);
+		float Snow = 0.f;
+		if (FParse::Value(CommandLine, TEXT("-EnvSnow="), Snow))
+		{
+			Level.bHasSnowCover = true;
+			Level.SnowCover = FMath::Clamp(Snow, 0.f, 1.f);
+		}
 		const bool bAutomated = FString(CommandLine).Contains(TEXT("-ExecCmds=CodexTactics.")) || FParse::Param(CommandLine, TEXT("CodexBot"));
 		if (bAutomated && !FParse::Param(CommandLine, TEXT("EnvRandom")))
 		{
@@ -189,13 +197,18 @@ void UEnvironmentSubsystem::InitialiseFromWorld(UWorld& World)
 	UE_LOG(LogCodexTactics, Display, TEXT("[Env] %s start: %s"), *World.GetMapName(), *Describe());
 	OnStateSet.Broadcast(State);
 	// Phase 3: the visual presenter (never placed in a map; visual only, never read by gameplay).
-	AWeatherPresenterActor::SpawnForWorld(World, LevelSettings.bVisuals);
+	Presenter = AWeatherPresenterActor::SpawnForWorld(World, LevelSettings.bVisuals);
 }
 
 void UEnvironmentSubsystem::Resolve()
 {
-	const UEnvironmentCarrySubsystem* Carry = UEnvironmentCarrySubsystem::Get(this);
+	UEnvironmentCarrySubsystem* Carry = UEnvironmentCarrySubsystem::Get(this);
 	const TOptional<FEnvironmentState> Carried = Carry ? Carry->GetCarriedState() : TOptional<FEnvironmentState>();
+	if (Carry)
+	{
+		// What this level is entered with: a restart (UMissionSubsystem::RestartMission) puts exactly this back.
+		Carry->RecordEntryState(Carried);
+	}
 	FEnvironmentLevelSettings StartSettings = LevelSettings;
 	if (!StartSettings.bLocked)
 	{
@@ -267,6 +280,8 @@ void UEnvironmentSubsystem::Tick(float DeltaTime)
 	// The hour first: a dwell that ends in this step is rolled for the phase the clock is in now.
 	State.Hour = EnvironmentRules::AdvanceClock(Config, State.Hour, Delta);
 	const FWeatherStepResult Step = EnvironmentRules::StepWeather(Config, State, Delta);
+	// Phase 4: the snow cover grows with the weather now in force (blended); it never recedes.
+	EnvironmentRules::StepSnowCover(Config, State, Delta);
 	bClockRan = true;
 	AdvancedSeconds += Delta;
 
@@ -290,6 +305,7 @@ void UEnvironmentSubsystem::SetState(const FEnvironmentState& NewState)
 	const FEnvironmentState Old = State;
 	State = NewState;
 	State.Hour = WrapHour(State.Hour);
+	State.SnowAmount = FMath::Clamp(State.SnowAmount, 0.f, 1.f);
 	bInitialised = true;
 	UE_LOG(LogCodexTactics, Log, TEXT("[Env] state set: %s"), *Describe());
 	BroadcastDifferences(Old, true);
@@ -350,16 +366,43 @@ void UEnvironmentSubsystem::RestartWeatherSequence(int32 Seed)
 	const FEnvironmentState Old = State;
 	State = EnvironmentRules::MakeInitialState(Config, State.Hour, DrawStartWeather(Config, Seed), Seed);
 	State.bLocked = Old.bLocked;
+	State.SnowAmount = Old.SnowAmount; // a new weather sequence never clears the snow already lying
 	UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather sequence restarted with seed %d: %s"), Seed, *Describe());
 	BroadcastDifferences(Old, true);
 }
 
+float UEnvironmentSubsystem::GetWindStrength() const
+{
+	if (!bInitialised)
+	{
+		return 0.f;
+	}
+	if (const AWeatherPresenterActor* Visuals = Presenter.Get())
+	{
+		return EnvironmentVisualRules::GetBlendedWindStrength(Visuals->GetPreset(State.Weather), Visuals->GetPreset(State.NextWeather), GetTransitionBlend());
+	}
+	return EnvironmentVisualRules::GetBlendedWindStrength(EnvironmentVisualRules::GetDefaultPreset(State.Weather),
+		EnvironmentVisualRules::GetDefaultPreset(State.NextWeather), GetTransitionBlend());
+}
+
+float UEnvironmentSubsystem::GetWeatherAmount(EWeatherState Weather) const
+{
+	return bInitialised ? EnvironmentRules::GetWeatherAmount(GetConfig(), State, Weather) : 0.f;
+}
+
+void UEnvironmentSubsystem::SetSnowAmount(float Amount)
+{
+	State.SnowAmount = FMath::Clamp(Amount, 0.f, 1.f);
+	UE_LOG(LogCodexTactics, Log, TEXT("[Env] snow cover set to %.3f"), State.SnowAmount);
+	OnStateSet.Broadcast(State);
+}
+
 FString UEnvironmentSubsystem::Describe() const
 {
-	return FString::Printf(TEXT("hour %.2f (%s), weather %s -> %s, blend %.2f, dwell %.0f/%.0f s, seed %d%s, clock x%.2f%s"),
+	return FString::Printf(TEXT("hour %.2f (%s), weather %s -> %s, blend %.2f, dwell %.0f/%.0f s, seed %d%s, snow %.3f, clock x%.2f%s"),
 		State.Hour, *EnvironmentRules::PhaseToString(GetPhase()), *EnvironmentRules::WeatherToString(State.Weather),
 		*EnvironmentRules::WeatherToString(State.NextWeather), GetTransitionBlend(), State.WeatherElapsedSeconds, State.WeatherDwellSeconds,
-		State.RandomSeed, State.bLocked ? TEXT(", LOCKED") : TEXT(""), ClockScale, bInitialised ? TEXT("") : TEXT(" (not initialised)"));
+		State.RandomSeed, State.bLocked ? TEXT(", LOCKED") : TEXT(""), State.SnowAmount, ClockScale, bInitialised ? TEXT("") : TEXT(" (not initialised)"));
 }
 
 void UEnvironmentSubsystem::BroadcastDifferences(const FEnvironmentState& Old, bool bStateSet)
