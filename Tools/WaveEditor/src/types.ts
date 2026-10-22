@@ -16,6 +16,8 @@ export interface EnemySpawn {
   spawn_delay_sec: number;
   initial_delay_sec: number;
   custom_stats?: EnemyCustomStats;
+  /** Weather / time-of-day roster never changes this entry (EnvironmentRosterRules; Wave Editor row lock, no UI yet). */
+  environment_lock?: boolean;
 }
 
 export interface WaveModifiers {

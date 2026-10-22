@@ -70,6 +70,14 @@ public:
 	int32 GetTotalWaveEnemies() const { return TotalWaveEnemies; }
 
 	/**
+	 * Environment phase 2b: the spawn entries the current wave started with, AFTER the weather / time-of-day roster
+	 * (EnvironmentRosterRules, resolved once in StartWave from the level's written wave; empty for an ambush / skirmish fight).
+	 */
+	const TArray<FEnemySpawnEntry>& GetCurrentWaveSpawns() const { return CurrentWaveSpawns; }
+	/** Enemies the current wave's resolved entries ask for (sum of GetCurrentWaveSpawns counts). */
+	int32 GetCurrentWaveSpawnTotal() const;
+
+	/**
 	 * Cold drain multiplier of the current level wave (Godot wave_modifiers.cold_drain_mult written to every operative's
 	 * cold_rate_modifier); camera zones override it while an operative is inside. 1 without a level wave.
 	 */
@@ -154,6 +162,8 @@ private:
 
 	TArray<TWeakObjectPtr<AEnemyCharacter>> AliveEnemies;
 	TArray<FEnemySpawnEntry> PendingSpawns;
+	/** The current wave's entries after the roster (see GetCurrentWaveSpawns). */
+	TArray<FEnemySpawnEntry> CurrentWaveSpawns;
 
 	int32 CurrentWaveIndex = 0;
 	int32 TotalWaveEnemies = 0;
@@ -170,6 +180,14 @@ private:
 
 	bool IsTurnBased() const;
 	void SpawnBreachPack(const AEnemySpawnPoint& Point);
+
+	/**
+	 * Environment phase 2b: Spawns under the current time of day + weather (EnvironmentRosterRules::ResolveSpawns with
+	 * EnvironmentTuning::Get().Roster), logged with [Env]. Unchanged when the environment is not initialised or LOCKED (the Demo 01
+	 * tutorial waves stay as written, user decision 16). Always resolved from the WRITTEN entries (the level config is never changed),
+	 * so a wave started again after a save load is resolved afresh, never twice.
+	 */
+	TArray<FEnemySpawnEntry> ResolveRoster(const TArray<FEnemySpawnEntry>& Spawns, int32 WaveIndex) const;
 
 	/** Godot _spawn_custom_json_wave: every enemy of the wave at once, modifiers applied, radio line with counts. */
 	void SpawnLevelWave(const FWaveDefinition& Def);

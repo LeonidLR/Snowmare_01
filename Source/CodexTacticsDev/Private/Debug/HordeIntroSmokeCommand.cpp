@@ -363,9 +363,12 @@ namespace HordeIntroSmoke
 			Check(State, Intro->GetStage() == EHordeIntroStage::Waiting && !Camera->IsCinematicLocked(), TEXT("intro waits, camera free"));
 			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
-			const int32 Expected = Level && Level->Config.Waves.Num() > 0 ? Level->Config.Waves[0].GetTotalEnemyCount() : -1;
+			// Environment phase 2b: the written wave under the weather / time-of-day roster (resolved at the wave start).
+			const int32 Written = Level && Level->Config.Waves.Num() > 0 ? Level->Config.Waves[0].GetTotalEnemyCount() : -1;
+			const int32 Expected = Waves->GetCurrentWaveSpawns().Num() > 0 ? Waves->GetCurrentWaveSpawnTotal() : Written;
 			Check(State, Waves->GetAliveEnemyCount() > 0 && Waves->GetAliveEnemyCount() == Expected && Waves->GetRemainingSpawnCount() == 0,
-				FString::Printf(TEXT("the whole wave spawned at once: %d alive (level wave 1: %d)"), Waves->GetAliveEnemyCount(), Expected));
+				FString::Printf(TEXT("the whole wave spawned at once: %d alive (level wave 1: %d after the roster, %d written)"),
+					Waves->GetAliveEnemyCount(), Expected, Written));
 			Check(State, Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges, TEXT("charges 3/3"));
 			if (const USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>())
 			{

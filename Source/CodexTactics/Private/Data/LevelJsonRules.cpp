@@ -299,6 +299,9 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 					Entry.CustomSpeed = LevelJsonNumber(Stats, TEXT("speed"), 0.f);
 					Entry.CustomAttackRange = LevelJsonNumber(Stats, TEXT("attack_range"), 0.f);
 					Entry.CustomAttackCooldown = LevelJsonNumber(Stats, TEXT("attack_cooldown"), 0.f);
+					// Environment phase 2b: a Wave Editor row lock keeps the entry as written under any weather / time of day.
+					bool bEnvironmentLock = false;
+					Entry.bEnvironmentLocked = Spawn->TryGetBoolField(TEXT("environment_lock"), bEnvironmentLock) && bEnvironmentLock;
 					Definition.Spawns.Add(Entry);
 				}
 			}

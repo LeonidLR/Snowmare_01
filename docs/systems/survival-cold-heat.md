@@ -2,6 +2,8 @@
 
 > `UColdSurvivalComponent` + `ColdRules` port Godot's cold system; every heat source warms through `UHeatSourceComponent`. Sprint 15 added mobile and
 > tactical heat (data in `tactical_heat.json`). The weather idle poses (cold idle, hand warming, sitting at the fire) are driven by `WarmIdleRules`.
+> Since 2026-10-22 the open-air cold also scales with the weather and the time of day (`FColdEnvironment::WeatherMultiplier` / `PhaseMultiplier`,
+> `ColdRules::CombineZoneWeather`; numbers in `Content/Data/Environment/environment.json`): see [environment-weather](environment-weather.md) §9.
 >
 > Key files:
 > - `Survival/ColdRules`, `ColdSurvivalComponent`, `TacticalHeatRules`, `WarmIdleRules`, `Interactables/HeatSourceComponent`, `Interactables/ACampfireActor`

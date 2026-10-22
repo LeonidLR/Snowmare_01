@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/CombatTypes.h"
 #include "EnvironmentTypes.generated.h"
 
 // Environment: day cycle + procedural weather (UE-only, no Godot reference). Design: docs/systems/environment-weather.md
@@ -28,6 +29,76 @@ enum class EWeatherState : uint8
 	Overcast,
 	Snowfall,
 	Blizzard
+};
+
+/** Phase 2: one pair of the roster (design §4.2): the good-conditions form From becomes Ratio x To when From's suitability is low. */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FEnvironmentRosterPair
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	EEnemyArchetype From = EEnemyArchetype::Marksman;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	EEnemyArchetype To = EEnemyArchetype::Frostbitten;
+
+	/** Enemies of To per substituted From (MARKSMAN -> 2 FROSTBITTEN, SPITTER -> 1 CUTTER). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster", meta = (ClampMin = "1"))
+	int32 Ratio = 1;
+};
+
+/**
+ * Phase 2: how well one enemy type suits each of the 16 time-of-day x weather cells, 0 (useless) .. 4 (ideal).
+ * Seeded from Jev (Scripts/Tools/jev_roster_matrix.py, roster v2 approved by the user 2026-10-22).
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FEnvironmentSuitabilityRow
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	EEnemyArchetype Type = EEnemyArchetype::Marksman;
+
+	/** 16 scores, index = int32(EWeatherState) * 4 + int32(ETimeOfDayPhase). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	TArray<float> Scores;
+};
+
+/**
+ * Phase 2: the roster rule (user-approved v2): a pair's From with suitability < AllBelow -> every one swaps, < HalfBelow -> half
+ * (round half up per spawn entry); a BonusTypes type with suitability > BonusAbove -> count x BonusMultiplier (round half up).
+ * Types without a row (bosses, future types) never change. Map-placed enemies never change; a locked level (Demo 01) keeps its waves.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FEnvironmentRosterConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	bool bEnabled = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster", meta = (ClampMin = "0", ClampMax = "4"))
+	float HalfBelow = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster", meta = (ClampMin = "0", ClampMax = "4"))
+	float AllBelow = 1.4f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster", meta = (ClampMin = "0", ClampMax = "4"))
+	float BonusAbove = 2.7f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster", meta = (ClampMin = "1"))
+	float BonusMultiplier = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	TArray<FEnvironmentRosterPair> Pairs;
+
+	/** "Hunting weather" reinforcements (HOUND). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	TArray<EEnemyArchetype> BonusTypes;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	TArray<FEnvironmentSuitabilityRow> Suitability;
 };
 
 /** Tuning of the day cycle and the weather ladder (environment.json; snake_case keys of these fields). */
@@ -97,6 +168,43 @@ struct CODEXTACTICS_API FEnvironmentConfig
 	/** Chance that Snowfall steps UP to Blizzard (else down to Overcast). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather", meta = (ClampMin = "0", ClampMax = "1"))
 	float SnowfallStepUpChance = 0.5f;
+
+	// --- Phase 2: cold (FColdEnvironment::WeatherMultiplier / PhaseMultiplier; design §4.3) ---
+	// Open-air cold x weather (blended through a transition) x phase. The weather multiplier applies to zones up to "Standard" (closed 0,
+	// shelter 0.5 x weather); a hand-placed Blizzard camera zone (x2.5) already models a storm: max(zone, weather), never zone x weather.
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultClear = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultOvercast = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultSnowfall = 1.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultBlizzard = 2.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultEarlyMorning = 1.15f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultMidday = 0.9f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultAfternoon = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultNight = 1.3f;
+
+	/** Weather / phase cold multipliers on a LOCKED level (Demo 01 tutorial; its cold_rate_mult 0.4 was tuned without weather). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold")
+	bool bColdOnLockedLevels = false;
+
+	// --- Phase 2: enemy roster by conditions (design §4.2; defaults filled by EnvironmentTuning from environment.json) ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	FEnvironmentRosterConfig Roster;
 };
 
 /**

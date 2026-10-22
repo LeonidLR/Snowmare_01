@@ -155,12 +155,31 @@ struct CODEXTACTICS_API FColdEnvironment
 	 * Preparation / closed-zone warming without a heat source is not scaled.
 	 */
 	float HeatWarmthMultiplier = 1.f;
+	/**
+	 * Environment phase 2 (docs/systems/environment-weather.md §4.3): the weather's open-air cold multiplier (blended through a
+	 * transition; EnvironmentRules::GetBlendedColdWeatherMultiplier). Combined with ZoneMultiplier by ColdRules::CombineZoneWeather.
+	 * 1 = no weather effect (no environment subsystem, or a locked level such as the Demo 01 tutorial).
+	 */
+	float WeatherMultiplier = 1.f;
+	/**
+	 * Environment phase 2: the time-of-day open-air cold multiplier (EnvironmentRules::GetColdPhaseMultiplier; Night 1.3, Midday 0.9).
+	 * Scales the accumulation only; warming, preparation, the sprint warm-up and scripted cold shocks are not scaled. 1 = none.
+	 */
+	float PhaseMultiplier = 1.f;
 };
 
 /** Pure cold formulas. Godot reference: Scenes/movements/player.gd `_process_cold_system`, `_shoot_at_target`. */
 namespace ColdRules
 {
 	CODEXTACTICS_API float GetStanceMultiplier(const FColdConfig& Config, EOperativeStance Stance);
+
+	/**
+	 * Environment phase 2 (UE-only, EnvironmentTypes.h FEnvironmentConfig cold contract): the zone and the weather multipliers of the
+	 * open-air cold. A closed zone (<= 0) stays 0; a zone up to "standard" (shelter 0.5, open 1) -> Zone x Weather; a zone above 1
+	 * (a hand-placed Blizzard camera zone 2.5 already models a storm, or a wave's cold_drain_mult) -> max(Zone, Weather), never the
+	 * product. Weather < 0 counts as 0. With Weather 1 the result is Zone (Godot parity).
+	 */
+	CODEXTACTICS_API float CombineZoneWeather(float Zone, float Weather);
 
 	/** Cold level after DeltaSeconds, clamped to [0, 100]. */
 	CODEXTACTICS_API float StepCold(const FColdConfig& Config, float Cold, float DeltaSeconds, const FColdEnvironment& Environment,

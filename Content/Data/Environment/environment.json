@@ -1,5 +1,5 @@
 {
-  "_comment": "Day cycle + procedural weather tuning (UE-only; docs/systems/environment-weather.md, Data/EnvironmentTuning, struct FEnvironmentConfig). Unreal is the master copy. *_hour = game clock hours (0..24); *_real_seconds and weather_transition_seconds = REAL seconds; weather_dwell_phase_fraction = share of the real duration of the phase a weather state started in; start_weight_* = relative weights of the random start weather; *_step_up_chance = 0..1 chance to step UP the ladder (else down). A missing key keeps the code default. Console: CodexTactics.DumpEnvironment.",
+  "_comment": "Day cycle + procedural weather tuning (UE-only; docs/systems/environment-weather.md, Data/EnvironmentTuning, struct FEnvironmentConfig). Unreal is the master copy. *_hour = game clock hours (0..24); *_real_seconds and weather_transition_seconds = REAL seconds; weather_dwell_phase_fraction = share of the real duration of the phase a weather state started in; start_weight_* = relative weights of the random start weather; *_step_up_chance = 0..1 chance to step UP the ladder (else down). Cold (phase 2): open-air cold is multiplied by cold_mult_<weather> x cold_mult_<phase> (the weather part is blended through a transition); the weather multiplier applies to zones up to Standard, and a hand-placed Blizzard camera zone already models a storm, so the zone gets max(zone, weather) and never zone x weather; cold_on_locked_levels = false keeps the locked Demo 01 tutorial free of these multipliers. Roster (phase 2): per spawn entry, a pair's 'from' type whose suitability (0..4, 16 scores per type, order = weather Clear/Overcast/Snowfall/Blizzard, each [EarlyMorning, Midday, Afternoon, Night]) is below all_below is swapped entirely, below half_below by half, into 'ratio' x the 'to' type, and a bonus_types type above bonus_above gets count x bonus_multiplier; types without a suitability row (bosses) never change. A missing key keeps the code default. Console: CodexTactics.DumpEnvironment.",
   "early_morning_start_hour": 5,
   "midday_start_hour": 10,
   "afternoon_start_hour": 14,
@@ -16,5 +16,64 @@
   "start_weight_snowfall": 0.25,
   "start_weight_blizzard": 0.15,
   "overcast_step_up_chance": 0.5,
-  "snowfall_step_up_chance": 0.5
+  "snowfall_step_up_chance": 0.5,
+  "cold_mult_clear": 1.0,
+  "cold_mult_overcast": 1.0,
+  "cold_mult_snowfall": 1.25,
+  "cold_mult_blizzard": 2.5,
+  "cold_mult_early_morning": 1.15,
+  "cold_mult_midday": 0.9,
+  "cold_mult_afternoon": 1.0,
+  "cold_mult_night": 1.3,
+  "cold_on_locked_levels": false,
+  "roster": {
+    "enabled": true,
+    "half_below": 2.0,
+    "all_below": 1.4,
+    "bonus_above": 2.7,
+    "bonus_multiplier": 1.5,
+    "pairs": [
+      { "from": "MARKSMAN", "to": "FROSTBITTEN", "ratio": 2 },
+      { "from": "SPITTER", "to": "CUTTER", "ratio": 1 }
+    ],
+    "bonus_types": ["HOUND"],
+    "suitability": {
+      "HOUND": {
+        "Clear": [2.33, 2.22, 2.4, 2.43],
+        "Overcast": [2.44, 2.3, 2.38, 2.75],
+        "Snowfall": [2.73, 2.78, 2.77, 2.98],
+        "Blizzard": [2.98, 3.09, 3.1, 3.16]
+      },
+      "SPITTER": {
+        "Clear": [3.33, 3.43, 3.31, 2.99],
+        "Overcast": [2.39, 2.59, 2.38, 2.0],
+        "Snowfall": [1.87, 1.96, 1.89, 1.81],
+        "Blizzard": [1.05, 1.01, 1.1, 1.09]
+      },
+      "BRUTE": {
+        "Clear": [2.51, 2.47, 2.46, 2.29],
+        "Overcast": [2.34, 2.35, 2.25, 2.23],
+        "Snowfall": [2.3, 2.19, 2.23, 2.09],
+        "Blizzard": [2.06, 2.11, 2.12, 2.04]
+      },
+      "FROSTBITTEN": {
+        "Clear": [2.75, 2.6, 2.74, 2.69],
+        "Overcast": [2.7, 2.41, 2.5, 2.66],
+        "Snowfall": [3.06, 2.78, 2.87, 2.8],
+        "Blizzard": [3.01, 2.83, 3.15, 2.97]
+      },
+      "CUTTER": {
+        "Clear": [2.94, 2.96, 2.96, 2.66],
+        "Overcast": [2.44, 2.61, 2.5, 2.58],
+        "Snowfall": [2.65, 2.51, 2.58, 2.72],
+        "Blizzard": [2.39, 2.52, 2.57, 2.57]
+      },
+      "MARKSMAN": {
+        "Clear": [3.71, 3.87, 3.72, 3.16],
+        "Overcast": [2.4, 2.69, 2.3, 1.89],
+        "Snowfall": [1.43, 1.53, 1.46, 1.77],
+        "Blizzard": [0.42, 0.39, 0.41, 0.41]
+      }
+    }
+  }
 }

@@ -15,6 +15,17 @@ namespace ColdRules
 		}
 	}
 
+	float CombineZoneWeather(float Zone, float Weather)
+	{
+		if (Zone <= 0.f)
+		{
+			return 0.f; // closed zone: immune whatever the weather
+		}
+		const float SafeWeather = FMath::Max(0.f, Weather);
+		// A storm zone already models the gale: the weather may raise it to its own level but never multiplies it.
+		return Zone <= 1.f ? Zone * SafeWeather : FMath::Max(Zone, SafeWeather);
+	}
+
 	float StepCold(const FColdConfig& Config, float Cold, float DeltaSeconds, const FColdEnvironment& Environment,
 		EOperativeStance Stance, float Fortitude)
 	{
@@ -34,7 +45,10 @@ namespace ColdRules
 		const float FortitudeCut = FMath::Clamp(Fortitude * Config.FortitudeCutPerPoint, 0.f, Config.MaxFortitudeCut);
 		const float Wind = (Environment.bElevated ? Config.ElevatedWindMultiplier : 1.f)
 			* (Environment.bInCover ? FMath::Clamp(Config.CoverWindChillMultiplier, 0.f, 1.f) : 1.f); // Sprint 12 shelter
-		const float Rate = Environment.ZoneMultiplier * FMath::Max(0.f, Environment.LevelMultiplier) * GetStanceMultiplier(Config, Stance) * Wind
+		// Environment phase 2: the zone combined with the weather, then the time of day (both 1 without an environment -> Godot parity).
+		const float ZoneWeather = CombineZoneWeather(Environment.ZoneMultiplier, Environment.WeatherMultiplier)
+			* FMath::Max(0.f, Environment.PhaseMultiplier);
+		const float Rate = ZoneWeather * FMath::Max(0.f, Environment.LevelMultiplier) * GetStanceMultiplier(Config, Stance) * Wind
 			* FMath::Clamp(Environment.AccumulationMultiplier, 0.f, 1.f); // Sprint 15 heat-pack buffer
 		return FMath::Min(100.f, Cold + Config.AccumulationRate * (1.f - FortitudeCut) * Rate * DeltaSeconds);
 	}

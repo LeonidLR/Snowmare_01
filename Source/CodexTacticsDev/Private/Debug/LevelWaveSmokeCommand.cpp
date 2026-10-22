@@ -160,9 +160,12 @@ namespace LevelWaveSmoke
 			// The wave 1 size comes from the level data (edited in the Wave Editor).
 			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
-			const int32 Expected = Level && Level->Config.Waves.Num() > 0 ? Level->Config.Waves[0].GetTotalEnemyCount() : 12;
+			// Environment phase 2b: the written wave under the weather / time-of-day roster (resolved at the wave start).
+			const int32 Written = Level && Level->Config.Waves.Num() > 0 ? Level->Config.Waves[0].GetTotalEnemyCount() : 12;
+			const int32 Expected = Waves->GetCurrentWaveSpawns().Num() > 0 ? Waves->GetCurrentWaveSpawnTotal() : Written;
 			Check(State, Waves->GetAliveEnemyCount() == Expected && Waves->GetRemainingSpawnCount() == 0,
-				FString::Printf(TEXT("whole wave at once: alive %d, queued %d"), Waves->GetAliveEnemyCount(), Waves->GetRemainingSpawnCount()));
+				FString::Printf(TEXT("whole wave at once: alive %d (wave %d, written %d), queued %d"), Waves->GetAliveEnemyCount(), Expected, Written,
+					Waves->GetRemainingSpawnCount()));
 			const float ColdMult = Level && Level->Config.Waves.Num() > 0 ? Level->Config.Waves[0].Modifiers.ColdDrainMult : 1.1f;
 			Check(State, FMath::IsNearlyEqual(Waves->GetColdDrainMultiplier(), ColdMult),
 				FString::Printf(TEXT("cold drain multiplier %.2f"), Waves->GetColdDrainMultiplier()));
