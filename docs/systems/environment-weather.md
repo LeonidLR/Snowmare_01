@@ -22,20 +22,28 @@
    scopes); dark night + blizzard -> on the same location the frostbitten appear INSTEAD of the marksmen.
 7. **The look of every weather state is tuned by the user in Niagara** (and presets) without code changes.
 
+Second round (2026-10-22, later):
+8. **Turn-based combat freezes the clock and the weather** at its start; rounds add no time (0 minutes per round).
+9. **A weather state lasts 75 % of a time-of-day phase** (interpreted as 3:45 of a 5:00 phase - asked the user to confirm vs 75 % of the whole day).
+10. **Map-placed enemies never change.** Enemies never affect the weather; the weather and the user's Wave Editor settings shape the waves.
+11. **Demo 01 tutorial: fixed Night + Snowfall** - the only fixed place in the game; everywhere else time and weather run procedurally.
+12. Roster rules: proposed as pairs / visibility bands / presets with custom presets (studio-review page `docs/design/roster-by-weather.html`,
+    artifact https://claude.ai/artifact/5ueXAfXNHXx2Ks87emiErq) - awaiting the user's review.
+
 ## 2. Day cycle
 
 - Each phase has a game-hour range and a **real duration** (defaults: 5 min each = 20 min/day). The clock speed is per phase
   (`game hours of the phase / real seconds of the phase`), so the long night (11 game hours) still lasts ~5 real minutes.
 - Default ranges (tunable): EarlyMorning 05-10, Midday 10-14, Afternoon 14-18, Night 18-05.
-- The clock runs in exploration and real-time combat, stops in the tactical pause / dialogue / cutscene / menus; in turn-based combat each round adds a fixed
-  number of game minutes (OPEN). A level sets the start hour (default: early morning).
+- The clock runs in exploration and real-time combat, stops in the tactical pause / dialogue / cutscene / menus and for the whole turn-based combat
+  (clock AND weather frozen from its start, decision 8). A level sets the start hour (default: early morning); Demo 01 is locked to Night.
 - Visuals: sun / moon pitch, light intensity / colour temperature, sky tint, stars / moon visibility come from curves over the hour (data, the old
   `HandleSunMoonRotation` / `HandleNightSettings` logic moved to C++ curves).
 
 ## 3. Procedural weather
 
 - **Start state**: weighted random (tunable weights) from a run seed; the seed is logged and can be fixed (smokes, bot, a tutorial level can lock the weather).
-- **Dwell time**: each state lasts a random time in its own `[min, max]` real seconds (proposal: Clear 4-8 min, Overcast 3-6, Snowfall 3-6, Blizzard 2-4).
+- **Dwell time**: 75 % of a phase's real duration (3:45 at 5:00 phases), the blend included; weather changes therefore drift against the phase changes.
 - **Next state**: only a neighbour on the ladder (`EnvironmentRules::PickNextWeather(Current, Rng)`): ends are forced (Clear -> Overcast, Blizzard -> Snowfall),
   middle states pick up / down by tunable weights (optionally biased by the phase, e.g. worse weather more likely at night - OPEN).
 - **Transition**: a blend of `transition_seconds` (proposal 60-90 s) between the two presets; while blending, the gameplay values (cold, visibility) interpolate too.
@@ -48,11 +56,19 @@
 `Visibility = PhaseLight(phase) x WeatherClarity(weather)` in 0..1 (proposal: light Midday 1.0, Afternoon 0.9, EarlyMorning 0.7, Night 0.25;
 clarity Clear 1.0, Overcast 0.8, Snowfall 0.5, Blizzard 0.2). One number feeds the enemy roster and (later, OPEN) sight ranges / accuracy.
 
-### 4.2 Enemy roster by conditions
+### 4.2 Enemy roster by conditions (proposal, see the studio-review page)
+- Visibility bands: Long >= 0.60 ("Long sight", as written), Mid 0.35-0.59 ("Grey day": 50 % MARKSMAN -> 2 FROSTBITTEN), Close 0.15-0.34
+  ("White veil": all MARKSMAN -> 2 FROSTBITTEN, 50 % SPITTER -> CUTTER), Blind < 0.15 ("White dark": all MARKSMAN -> 2 FROSTBITTEN, all SPITTER -> CUTTER);
+  overlay "Night hunt" HOUND x1.5 in the Night phase; BRUTE never changes.
+- Pairs: MARKSMAN / FROSTBITTEN (1 -> 2), SPITTER / CUTTER (1 -> 1). Custom presets = the same rule kinds (substitute from -> to with share and ratio,
+  count multiplier, ban), assignable per cell for a level or per wave. Priority: Wave Editor row lock > wave preset > level matrix > global matrix, then
+  wave modifiers and `max_simultaneous_enemies`. Conditions are sampled once at wave start.
+
+Earlier draft notes:
 - Spawn entries keep their `enemy_type`; a **substitution table** in `environment.json` swaps a type when the conditions match, at spawn time:
   `{ "from": "MARKSMAN", "to": "FROSTBITTEN", "when": { "visibility_below": 0.3 } }` (night + blizzard, also night + snowfall with the default numbers);
   `{ "type": "MARKSMAN", "allowed_when": { "visibility_at_least": 0.6 } }`-style gates for types that only appear in good conditions.
-- Applies to wave / runtime spawns. Already spawned enemies never change when the weather changes. Map-placed enemies: OPEN (default: unchanged).
+- Applies to wave / runtime spawns. Already spawned enemies never change when the weather changes. Map-placed enemies never change (decision 10).
 - Wave Editor shows the effective roster for each phase x weather combination.
 - Roster today: HOUND, SPITTER, BRUTE, FROSTBITTEN, MARKSMAN, CUTTER. Only MARKSMAN -> FROSTBITTEN is a user rule so far; other pairs are OPEN.
 
@@ -84,10 +100,10 @@ the Blizzard camera zone); phase Night 1.3, EarlyMorning 1.15, Midday 0.9, After
 
 ## 7. Open questions
 
-- Game minutes per turn-based round.
-- Dwell times, start weights, up / down weights, phase bias on the weather.
-- More substitution / gating rules beyond MARKSMAN -> FROSTBITTEN (e.g. hounds at night?).
-- Map-placed enemies: swap by conditions or keep as placed.
-- Does weather lower sight ranges / accuracy for both sides.
-- Tutorial (Demo 01): fixed weather / time or procedural.
+- 75 % of a phase (3:45) or 75 % of the day (15 min)?
+- Start weights, up / down weights, phase bias on the weather.
+- Roster proposal (pairs, bands, night hounds x1.5) - user review pending; CryoDrone / bosses in pairs later?
+- Next level after the tutorial: continue the previous end state or a random start?
+- Does weather lower sight ranges / accuracy / hound scent for both sides.
+- Demo 01 waves locked "as written" under its fixed Night + Snowfall (= "White dark")?
 - Footprints: the old decal notify or the existing RT `SnowTracks`; volumetric clouds or the 2D sky sphere only.
