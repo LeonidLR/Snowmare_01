@@ -28,7 +28,13 @@ Second round (2026-10-22, later):
 10. **Map-placed enemies never change.** Enemies never affect the weather; the weather and the user's Wave Editor settings shape the waves.
 11. **Demo 01 tutorial: fixed Night + Snowfall** - the only fixed place in the game; everywhere else time and weather run procedurally.
 12. Roster rules: proposed as pairs / visibility bands / presets with custom presets (studio-review page `docs/design/roster-by-weather.html`,
-    artifact https://claude.ai/artifact/5ueXAfXNHXx2Ks87emiErq) - awaiting the user's review.
+    artifact https://claude.ai/artifact/5ueXAfXNHXx2Ks87emiErq).
+
+Third round (2026-10-22, confirmed):
+13. **Roster version 2 approved**: the Jev-seeded suitability table + thresholds 2.0 / 1.4 / 2.7 (§4.2). A clear night keeps the marksmen.
+14. **HOUND x1.5 in hunting weather** (overcast night, snowfall, blizzard) - approved.
+15. **A weather state lasts 3:45** (75 % of a 5:00 phase) - confirmed.
+16. **Demo 01 tutorial waves are locked "as written"**: under its fixed Night + Snowfall the waves are mostly hounds and frostbitten, maybe a few zombies.
 
 ## 2. Day cycle
 
@@ -63,7 +69,7 @@ clarity Clear 1.0, Overcast 0.8, Snowfall 0.5, Blizzard 0.2). One number feeds t
   snowfall 1.8-2.0, blizzard 1.0-1.1; HOUND / FROSTBITTEN rise with worse weather to ~3.0-3.2; BRUTE / CUTTER flat). Jev's replacement picks had
   low confidence (0.15-0.41), so the user's pairs stay. Proposed rule replacing the visibility bands: a **suitability table** (6 types x 16 cells,
   seeded from Jev, in `environment.json`) + thresholds: < 2.0 -> 50 % of the pair swaps, < 1.4 -> all, HOUND > 2.7 -> x1.5 (overcast night,
-  snowfall, blizzard). Custom presets = a copy of the table with edited cells / thresholds + extra rules. Pending the user's review.
+  snowfall, blizzard). Custom presets = a copy of the table with edited cells / thresholds + extra rules. **Approved by the user (decision 13).**
 - Version 1 (superseded by version 2 if approved):
 - Visibility bands: Long >= 0.60 ("Long sight", as written), Mid 0.35-0.59 ("Grey day": 50 % MARKSMAN -> 2 FROSTBITTEN), Close 0.15-0.34
   ("White veil": all MARKSMAN -> 2 FROSTBITTEN, 50 % SPITTER -> CUTTER), Blind < 0.15 ("White dark": all MARKSMAN -> 2 FROSTBITTEN, all SPITTER -> CUTTER);
@@ -108,10 +114,9 @@ the Blizzard camera zone); phase Night 1.3, EarlyMorning 1.15, Midday 0.9, After
 
 ## 7. Open questions
 
-- 75 % of a phase (3:45) or 75 % of the day (15 min)?
 - Start weights, up / down weights, phase bias on the weather.
-- Roster proposal (pairs, bands, night hounds x1.5) - user review pending; CryoDrone / bosses in pairs later?
+- CryoDrone / bosses in pairs later?
 - Next level after the tutorial: continue the previous end state or a random start?
 - Does weather lower sight ranges / accuracy / hound scent for both sides.
-- Demo 01 waves locked "as written" under its fixed Night + Snowfall (= "White dark")?
+- Which "zombie" body the tutorial's few zombies use (FROSTBITTEN on the Military Zombie / FrozenPMC body?).
 - Footprints: the old decal notify or the existing RT `SnowTracks`; volumetric clouds or the 2D sky sphere only.
