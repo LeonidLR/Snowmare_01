@@ -638,6 +638,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Knockdown")
 	bool IsKnockedDown() const;
 
+	// --- Ladders (docs/design/LADDERS.md; cluster OperativeCharacterLadder.cpp) ---
+
+	/** The ladder climb: a path through a ladder's nav link hands him over to it at the link (no climb input). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
+	TObjectPtr<class ULadderClimbComponent> LadderClimb;
+
+	/** On a ladder (moving onto / off it, or falling off it): no fire, no aim, no facing, no cover, no stance change. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Ladder")
+	bool IsClimbingLadder() const;
+
+	/** The climb ended at the other end: the path goes on to Destination (like the vault's resume). */
+	void ResumeMoveAfterLadder(const FVector& Destination);
+
+	/** Where a save puts him: on a ladder, the link point of the end he is heading to (LADDERS.md 7.8). */
+	FVector GetSaveLocation() const;
+
 	/** Max speed / turn rate from the stance, sprint, wounds and carrying (SpeedOverride >= 0 replaces the speed). */
 	void ApplyMovementParams(float SpeedOverride = -1.f);
 

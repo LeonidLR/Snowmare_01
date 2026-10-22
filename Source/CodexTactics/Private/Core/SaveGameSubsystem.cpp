@@ -308,7 +308,7 @@ namespace
 		Soldier->SetStringField(TEXT("node_name"), UEnum::GetValueAsString(Member->SquadRole));
 		Soldier->SetStringField(TEXT("character_name"), Member->DisplayName.ToString());
 		Soldier->SetBoolField(TEXT("is_leader"), Squad && Squad->GetLeader() == Member);
-		Soldier->SetArrayField(TEXT("pos"), SaveVector(Member->GetActorLocation()));
+		Soldier->SetArrayField(TEXT("pos"), SaveVector(Member->GetSaveLocation())); // on a ladder: the end he heads to (LADDERS.md 7.8)
 		Soldier->SetNumberField(TEXT("rot_y"), Member->GetActorRotation().Yaw);
 		const float Current = Member->HealthComponent ? Member->HealthComponent->GetCurrentHealth() : 0.f;
 		const float Max = Member->HealthComponent ? Member->HealthComponent->GetMaxHealth() : 100.f;

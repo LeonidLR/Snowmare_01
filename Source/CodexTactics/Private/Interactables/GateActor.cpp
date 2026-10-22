@@ -109,30 +109,32 @@ void AGateActor::OnConstruction(const FTransform& Transform)
 	BeaconLight->SetAttenuationRadius(BeaconRadius);
 	if (bSetDressing)
 	{
-		ApplySetDressingOpen(); // shown open in the editor too
+		ApplySetDressingOpen(); // shown as dressed (open / shut) in the editor too
 	}
 }
 
 void AGateActor::ApplySetDressingOpen()
 {
 	const float HalfWidth = DoorSize.Y * 0.5f;
+	const float Offset = bSetDressingOpen ? OpenDistance : 0.f;
 	FVector Left = LeftDoor->GetRelativeLocation();
 	FVector Right = RightDoor->GetRelativeLocation();
-	Left.Y = -HalfWidth - OpenDistance;
-	Right.Y = HalfWidth + OpenDistance;
+	Left.Y = -HalfWidth - Offset;
+	Right.Y = HalfWidth + Offset;
 	LeftDoor->SetRelativeLocation(Left);
 	RightDoor->SetRelativeLocation(Right);
 	LeftTargetY = Left.Y;
 	RightTargetY = Right.Y;
 	for (UBoxComponent* Door : { LeftDoor.Get(), RightDoor.Get() })
 	{
-		Door->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Door->SetCanEverAffectNavigation(false);
+		// Closed set dressing (2026-10-22): the shut leaves block pawns and cut the navmesh - nobody walks back in.
+		Door->SetCollisionEnabled(bSetDressingOpen ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
+		Door->SetCanEverAffectNavigation(!bSetDressingOpen);
 	}
 	bOpening = false;
-	bOpen = true;
-	Progress = 1.f;
-	Status = EGateProgressStatus::Open;
+	bOpen = bSetDressingOpen;
+	Progress = bSetDressingOpen ? 1.f : 0.f;
+	Status = bSetDressingOpen ? EGateProgressStatus::Open : EGateProgressStatus::Locked;
 	bBeaconSpinning = false;
 	BeaconLight->SetVisibility(false);
 }

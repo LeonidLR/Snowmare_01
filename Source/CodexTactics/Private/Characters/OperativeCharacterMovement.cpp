@@ -19,6 +19,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TripwireRules.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "Level/CrawlGapActor.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
@@ -218,6 +219,19 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	if (VehicleQueries::IsMounted(this))
 	{
 		return EOperativeOrderResult::Refused; // APC P1: aboard he rides (Y gets him out)
+	}
+	// Ladders (LADDERS.md 7.1): a new order mid-climb - he finishes the climb, then walks there; queued at a busy ladder: the
+	// new order replaces the wait.
+	if (LadderClimb && LadderClimb->IsOnLadder())
+	{
+		LadderClimb->SetPendingDestination(InDestination);
+		LastMoveDestination = InDestination;
+		bHasMoveOrder = true;
+		return EOperativeOrderResult::Accepted;
+	}
+	if (LadderClimb && LadderClimb->IsQueued())
+	{
+		LadderClimb->AbortClimb(ELadderAbortReason::None);
 	}
 	// Rev 5i (game designer 2026-10-15): a tutorial confinement keeps the squad in its area. Own orders are judged (cover orders,
 	// shimmies, replays of deferred orders reach this without OrderMoveTo's check); formation moves are pulled into the area.

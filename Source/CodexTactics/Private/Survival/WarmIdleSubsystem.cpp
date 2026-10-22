@@ -464,7 +464,7 @@ void UWarmIdleSubsystem::Evaluate(float DeltaSeconds)
 		Input.bFrostbitten = Cold && Cold->IsFrostbitten();
 		Input.bInCover = Operative->bInCover;
 		Input.bCarrying = Operative->bCarrying;
-		Input.bVaulting = Operative->IsVaulting();
+		Input.bVaulting = Operative->IsVaulting() || Operative->IsClimbingLadder();
 		Input.bBusy = IsBusy(*Operative);
 		Input.bMoving = bMoving || bOrdered;
 		Input.bThreat = IsThreatened(*Operative, Now, bExploration);
@@ -696,7 +696,7 @@ bool UWarmIdleSubsystem::GetFollowerPullTarget(AOperativeCharacter& Follower, co
 	Free.bFrostbitten = Cold && Cold->IsFrostbitten();
 	Free.bInCover = Follower.bInCover;
 	Free.bCarrying = Follower.bCarrying;
-	Free.bVaulting = Follower.IsVaulting();
+	Free.bVaulting = Follower.IsVaulting() || Follower.IsClimbingLadder();
 	Free.bBusy = IsBusy(Follower);
 	Free.bThreat = IsThreatened(Follower, World->GetTimeSeconds(), Free.bExploration);
 	Free.Stance = Follower.GetStance();

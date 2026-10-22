@@ -423,7 +423,7 @@ AOperativeCharacter* URelocationSubsystem::PickPreparationWorker(AOperativeChara
 	{
 		const bool bBusy = DeployTasks.ContainsByPredicate([Member](const FDeployTask& Task) { return Task.Worker.Get() == Member; });
 		Positions.Add(Member->GetActorLocation());
-		Available.Add(Member->HealthComponent && Member->HealthComponent->IsAlive() && !Member->bCarrying && !Member->IsVaulting()
+		Available.Add(Member->HealthComponent && Member->HealthComponent->IsAlive() && !Member->bCarrying && !Member->IsVaulting() && !Member->IsClimbingLadder()
 			&& !Member->IsPanicking() && !Member->IsRaging() && !bBusy);
 	}
 	const int32 Index = RelocationRules::ChooseNearestWorker(Positions, Available, GroundPoint);
