@@ -8,6 +8,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Environment/EnvironmentRules.h"
+#include "Environment/WeatherPresenterActor.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Math/RandomStream.h"
 #include "Subsystems/CodexEventBus.h"
@@ -187,6 +188,8 @@ void UEnvironmentSubsystem::InitialiseFromWorld(UWorld& World)
 	bInitialised = true;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Env] %s start: %s"), *World.GetMapName(), *Describe());
 	OnStateSet.Broadcast(State);
+	// Phase 3: the visual presenter (never placed in a map; visual only, never read by gameplay).
+	AWeatherPresenterActor::SpawnForWorld(World, LevelSettings.bVisuals);
 }
 
 void UEnvironmentSubsystem::Resolve()

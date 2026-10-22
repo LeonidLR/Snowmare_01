@@ -286,4 +286,11 @@ struct CODEXTACTICS_API FEnvironmentLevelSettings
 	/** "seed" present: fixed weather RNG seed for a fresh start (smokes, the bot); 0 = random. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
 	int32 Seed = 0;
+
+	/**
+	 * "visuals" (phase 3, default true): the weather presenter (AWeatherPresenterActor) drives this level's lighting from the day cycle
+	 * and the weather; false = it is not spawned and the map's authored lighting stays.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	bool bVisuals = true;
 };

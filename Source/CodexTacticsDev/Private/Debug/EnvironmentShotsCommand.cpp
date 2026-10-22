@@ -11,6 +11,14 @@
 //   wave_blizzard_night.png        wave 2 started under Blizzard at 23:00 (no marksmen, frostbitten, more hounds), wide shot
 // The overlay is drawn on the debug canvas (UDebugDrawService "Game"), enemy tags (M marksman, F frostbitten, H hound, ...) are
 // projected by it too. The game is driven only from inside the engine; the squad is made safe so nothing disturbs the shots.
+//
+// Mode "visuals" (environment phase 3, the weather presenter - docs/systems/environment-weather.md section 11):
+//   -ExecCmds="CodexTactics.EnvironmentShots visuals"            on the map it was started on (the lake: add -LevelJson=L_Demo01_A_FrozenLake.json)
+//   -ExecCmds="CodexTactics.EnvironmentShots visuals timelapse"  the same + a full day at x60 (unlocks a locked level for it)
+// Output (Saved/Screenshots/Environment/visuals/): <map>_<weather>_<hhmm>.png from ONE tactical camera view on the squad leader for
+// Clear 07:00, Clear 12:00, Overcast 15:00, Snowfall 17:30, Blizzard 12:00, Clear 23:00, Snowfall 23:00 (a small label only, the game
+// UI removed); timelapse_<map>/frame_NNNN.png at 10 fps (encode: ffmpeg -y -framerate 10 -i frame_%04d.png -vf scale=960:-2 -c:v libx264
+// -pix_fmt yuv420p -crf 26 out.mp4).
 
 #include "CoreMinimal.h"
 
@@ -31,6 +39,8 @@
 #include "Debug/FrontendSmokeUtils.h"
 #include "Debug/SmokeUtils.h"
 #include "Debug/DebugDrawService.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Environment/WeatherPresenterActor.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
@@ -604,8 +614,257 @@ namespace EnvironmentShots
 		}
 	}
 
+	// --- Mode "visuals": the weather presenter's look (environment phase 3) ---
+
+	namespace Visuals
+	{
+		constexpr int32 SettleFrames = 90;       // 3 s at -fps=30: eye adaptation settles
+		constexpr int32 WarmupFrames = 150;      // the level start (fades, the presenter's minimap hold)
+		constexpr int32 DayFrames = 630;         // a 1200 s day at x60 = 20 s = 600 frames, + margin
+		constexpr float DayStartHour = 5.f;
+		constexpr int32 DaySeed = 11;
+
+		struct FShot
+		{
+			EWeatherState Weather;
+			float Hour;
+		};
+
+		const FShot Shots[] = {
+			{ EWeatherState::Clear, 7.f }, { EWeatherState::Clear, 12.f }, { EWeatherState::Overcast, 15.f }, { EWeatherState::Snowfall, 17.5f },
+			{ EWeatherState::Blizzard, 12.f }, { EWeatherState::Clear, 23.f }, { EWeatherState::Snowfall, 23.f },
+		};
+
+		enum class EStep : uint8 { Warmup, Setup, Settle, Write, DaySetup, Day, Done };
+
+		struct FVisualsRunner
+		{
+			EStep Step = EStep::Warmup;
+			int32 Frame = 0;
+			int32 StepFrame = 0;
+			int32 ShotIndex = 0;
+			int32 ClipCount = 0;
+			bool bTimelapse = false;
+			FString MapName;
+			FString Dir;
+			FDelegateHandle EndFrameHandle;
+		};
+
+		TSharedPtr<FVisualsRunner> VRunner;
+
+		/** Camera yaw of the tactical view (taken from the game camera once), pitch and distance of the fixed still camera. */
+		float ViewYaw = 45.f;
+		constexpr float ViewPitch = -52.f;
+		constexpr float ViewDistance = 2600.f;
+		constexpr float ViewFov = 60.f;
+
+		/**
+		 * The same tactical view on the squad leader for every still: an own camera actor (a level script / tutorial camera can neither
+		 * move nor replace it), re-aimed every frame so a walking squad stays framed.
+		 */
+		void ViewSquad(UWorld* World)
+		{
+			APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+			USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+			if (!PC || !Squad || !Squad->GetLeader())
+			{
+				return;
+			}
+			if (AHUD* Hud = PC->GetHUD())
+			{
+				Hud->bShowHUD = false;
+			}
+			const FVector Focus = Squad->GetLeader()->GetActorLocation();
+			const FRotator Rotation(ViewPitch, ViewYaw, 0.f);
+			const FVector Eye = Focus - Rotation.Vector() * ViewDistance;
+			if (!Runner->Camera.IsValid())
+			{
+				Runner->Camera = World->SpawnActor<ACameraActor>(Eye, Rotation);
+			}
+			if (ACameraActor* Camera = Runner->Camera.Get())
+			{
+				Camera->SetActorLocationAndRotation(Eye, Rotation);
+				Camera->GetCameraComponent()->SetFieldOfView(ViewFov);
+				Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+				if (PC->GetViewTarget() != Camera)
+				{
+					PC->SetViewTarget(Camera);
+				}
+			}
+		}
+
+		FString HourTag(float Hour)
+		{
+			const int32 Total = FMath::RoundToInt(FMath::Fmod(Hour, 24.f) * 60.f);
+			return FString::Printf(TEXT("%02d%02d"), Total / 60, Total % 60);
+		}
+
+		void Label(UEnvironmentSubsystem& Environment, bool bWithBlend)
+		{
+			FRunner& R = *Runner;
+			R.Lines.Reset();
+			FString Text = FString::Printf(TEXT("%s - %s %s"), *VRunner->MapName, *EnvironmentRules::WeatherToString(Environment.GetWeather()),
+				*HourText(Environment.GetHour()));
+			if (bWithBlend && Environment.GetTransitionBlend() > 0.f)
+			{
+				Text += FString::Printf(TEXT(" -> %s %.0f%%"), *EnvironmentRules::WeatherToString(Environment.GetNextWeather()), Environment.GetTransitionBlend() * 100.f);
+			}
+			R.Lines.Add({ Text, FLinearColor(1.f, 0.9f, 0.3f) });
+		}
+
+		void Finish()
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: done (%d stills, %d timelapse frames) -> %s"), VRunner->ShotIndex,
+				VRunner->ClipCount, *VRunner->Dir);
+			FCoreDelegates::OnEndFrame.Remove(VRunner->EndFrameHandle);
+			UDebugDrawService::Unregister(Runner->DrawHandle);
+			FPlatformMisc::RequestExit(false, TEXT("EnvironmentShots"));
+		}
+
+		void Tick()
+		{
+			FVisualsRunner& V = *VRunner;
+			++V.Frame;
+			++V.StepFrame;
+			UWorld* World = FrontendSmokeUtils::FindGameWorld();
+			if (V.Frame > MaxFrames)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: timeout in step %d"), static_cast<int32>(V.Step));
+				Finish();
+				return;
+			}
+			UEnvironmentSubsystem* Environment = World ? UEnvironmentSubsystem::Get(World) : nullptr;
+			USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+			if (!World || !Environment || !Environment->IsInitialised() || !Squad || !Squad->GetLeader())
+			{
+				return;
+			}
+			Runner->World = World;
+			KeepSquadSafe(World);
+			UWidgetLayoutLibrary::RemoveAllWidgets(World);
+			const AWeatherPresenterActor* Presenter = AWeatherPresenterActor::Find(World);
+
+			switch (V.Step)
+			{
+			case EStep::Warmup:
+				if (V.StepFrame >= WarmupFrames && Presenter && Presenter->IsApplying())
+				{
+					V.MapName = World->GetMapName();
+					V.MapName.RemoveFromStart(World->StreamingLevelsPrefix);
+					if (V.MapName.Contains(TEXT("MovementTest")))
+					{
+						SmokeUtils::PlaceSquadAtTestStart(World);
+					}
+					if (const APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+					{
+						ViewYaw = PC->PlayerCameraManager ? PC->PlayerCameraManager->GetCameraRotation().Yaw : ViewYaw;
+					}
+					UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: %s, view yaw %.0f, presenter: %s"), *V.MapName, ViewYaw,
+						*Presenter->DescribeAdopted());
+					V.Step = EStep::Setup;
+					V.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Setup:
+			{
+				const FShot& Shot = Shots[V.ShotIndex];
+				Environment->SetClockScale(0.f);
+				Environment->ForceWeather(Shot.Weather, true);
+				Environment->SetHour(Shot.Hour);
+				ViewSquad(World);
+				Label(*Environment, false);
+				V.Step = EStep::Settle;
+				V.StepFrame = 0;
+				break;
+			}
+
+			case EStep::Settle:
+				ViewSquad(World);
+				if (V.StepFrame >= SettleFrames)
+				{
+					const FShot& Shot = Shots[V.ShotIndex];
+					const FString File = FString::Printf(TEXT("%s_%s_%s.png"), *V.MapName, *EnvironmentRules::WeatherToString(Shot.Weather), *HourTag(Shot.Hour));
+					Capture(V.Dir / File);
+					UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: %s (%s)"), *File, *Environment->Describe());
+					V.Step = EStep::Write;
+					V.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Write:
+				if (V.StepFrame >= 10)
+				{
+					++V.ShotIndex;
+					V.Step = V.ShotIndex < UE_ARRAY_COUNT(Shots) ? EStep::Setup : (V.bTimelapse ? EStep::DaySetup : EStep::Done);
+					V.StepFrame = 0;
+				}
+				break;
+
+			case EStep::DaySetup:
+			{
+				// A locked level (the lake) is unlocked for the timelapse only (this run exits afterwards).
+				Environment->RestartWeatherSequence(DaySeed);
+				FEnvironmentState State = Environment->GetState();
+				State.bLocked = false;
+				State.Hour = DayStartHour;
+				Environment->SetState(State);
+				Environment->ForceWeather(EWeatherState::Clear, true);
+				Environment->SetClockScale(TimelapseClockScale);
+				ViewSquad(World);
+				UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: timelapse start - %s"), *Environment->Describe());
+				V.Step = EStep::Day;
+				V.StepFrame = 0;
+				break;
+			}
+
+			case EStep::Day:
+				ViewSquad(World);
+				Label(*Environment, true);
+				if (V.StepFrame % TimelapseEvery == 0 && V.StepFrame <= DayFrames)
+				{
+					Capture(V.Dir / (TEXT("timelapse_") + V.MapName) / FString::Printf(TEXT("frame_%04d.png"), V.ClipCount++));
+				}
+				if (V.StepFrame > DayFrames + 3)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: timelapse end - %s"), *Environment->Describe());
+					V.Step = EStep::Done;
+					V.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Done:
+				if (V.StepFrame >= 10)
+				{
+					Finish();
+				}
+				break;
+			}
+		}
+
+		void Run(bool bTimelapse)
+		{
+			Runner = MakeShared<FRunner>();
+			VRunner = MakeShared<FVisualsRunner>();
+			VRunner->bTimelapse = bTimelapse;
+			VRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / TEXT("visuals"));
+			FPaths::CollapseRelativeDirectories(VRunner->Dir);
+			IFileManager::Get().MakeDirectory(*VRunner->Dir, true);
+			Runner->Dir = VRunner->Dir;
+			Runner->DrawHandle = UDebugDrawService::Register(TEXT("Game"), FDebugDrawDelegate::CreateStatic(&OnDraw));
+			VRunner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
+			UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: %d stills%s -> %s"), static_cast<int32>(UE_ARRAY_COUNT(Shots)),
+				bTimelapse ? TEXT(" + timelapse") : TEXT(""), *VRunner->Dir);
+		}
+	}
+
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("visuals"), ESearchCase::IgnoreCase))
+		{
+			Visuals::Run(Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("timelapse"), ESearchCase::IgnoreCase); }));
+			return;
+		}
 		Runner = MakeShared<FRunner>();
 		Runner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment"));
 		FPaths::CollapseRelativeDirectories(Runner->Dir);
@@ -618,7 +877,7 @@ namespace EnvironmentShots
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.EnvironmentShots"),
-		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); needs rendering, then exits."),
+		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse]': the weather presenter stills (+ a day at x60) into Environment/visuals; needs rendering, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

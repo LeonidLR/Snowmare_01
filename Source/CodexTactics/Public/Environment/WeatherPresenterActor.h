@@ -1,0 +1,241 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/Scene.h"
+#include "Environment/WeatherVisualTypes.h"
+#include "GameFramework/Actor.h"
+#include "WeatherPresenterActor.generated.h"
+
+class ADirectionalLight;
+class AExponentialHeightFog;
+class APostProcessVolume;
+class ASkyAtmosphere;
+class ASkyLight;
+class AVolumetricCloud;
+class UDirectionalLightComponent;
+class UMaterialParameterCollection;
+class UPostProcessComponent;
+class UWeatherPresetAsset;
+struct FEnvironmentState;
+
+/** The values the map authored on the adopted actors (recorded at adoption, written back when the visuals turn off). */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FWeatherAuthoredLighting
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Sun") FRotator SunRotation = FRotator::ZeroRotator;
+	UPROPERTY(BlueprintReadOnly, Category = "Sun") float SunIntensity = 10.f;
+	UPROPERTY(BlueprintReadOnly, Category = "Sun") FLinearColor SunColor = FLinearColor::White;
+	UPROPERTY(BlueprintReadOnly, Category = "Sun") bool bSunUseTemperature = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Sun") float SunTemperature = 6500.f;
+	UPROPERTY(BlueprintReadOnly, Category = "Sun") float SunSourceAngle = 0.5357f;
+	UPROPERTY(BlueprintReadOnly, Category = "Sun") bool bSunVisible = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Moon") FRotator MoonRotation = FRotator::ZeroRotator;
+	UPROPERTY(BlueprintReadOnly, Category = "Moon") float MoonIntensity = 0.f;
+	UPROPERTY(BlueprintReadOnly, Category = "Moon") FLinearColor MoonColor = FLinearColor::White;
+	UPROPERTY(BlueprintReadOnly, Category = "Moon") bool bMoonVisible = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Sky") float RayleighScatteringScale = 1.f;
+	UPROPERTY(BlueprintReadOnly, Category = "Sky") float MieScatteringScale = 1.f;
+	UPROPERTY(BlueprintReadOnly, Category = "Sky") float SkyLightIntensity = 1.f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Fog") float FogDensity = 0.02f;
+	UPROPERTY(BlueprintReadOnly, Category = "Fog") float FogHeightFalloff = 0.2f;
+	UPROPERTY(BlueprintReadOnly, Category = "Fog") FLinearColor FogInscattering = FLinearColor(0.447f, 0.638f, 1.f);
+	UPROPERTY(BlueprintReadOnly, Category = "Fog") float FogStartDistance = 0.f;
+	UPROPERTY(BlueprintReadOnly, Category = "Fog") float FogMaxOpacity = 1.f;
+	UPROPERTY(BlueprintReadOnly, Category = "Fog") bool bVolumetricFog = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Fog") float VolumetricFogExtinctionScale = 1.f;
+
+	/** The adopted unbound post-process volume's settings (unused when the presenter's own component is used). */
+	UPROPERTY(BlueprintReadOnly, Category = "PostProcess") FPostProcessSettings PostSettings;
+};
+
+/** The authored state of one AVolumetricCloud the presenter switched off. */
+USTRUCT()
+struct FWeatherCloudAuthored
+{
+	GENERATED_BODY()
+
+	UPROPERTY() TWeakObjectPtr<AVolumetricCloud> Cloud;
+	bool bHiddenInGame = false;
+	bool bComponentVisible = true;
+	bool bComponentActive = true;
+};
+
+/**
+ * The VISUAL presenter of the day cycle + weather (environment phase 3, UE-only; docs/systems/environment-weather.md §5 / §10).
+ * Spawned by UEnvironmentSubsystem into a game world that has none (never placed in a map; UEnvironmentVisualSettings::PresenterClass
+ * may name the user's BP_WeatherPresenter). ADOPTS the map's lighting actors - the sun (ADirectionalLight), ASkyAtmosphere, ASkyLight,
+ * AExponentialHeightFog, an unbound APostProcessVolume - records their authored values and drives them, throttled (ApplyRateHz) and
+ * at once on UEnvironmentSubsystem::OnStateSet, from the hour curves (DayCurves) x the preset of the weather blended toward the next
+ * one (DA_Weather_* soft refs, C++ fallbacks). Missing actors are skipped; the moon (a second directional light) and the post-process
+ * are the presenter's own components unless the map has them. The map's AVolumetricCloud is switched OFF while the visuals run (user
+ * decision 2026-10-22: the tactical camera never sees it). Visual only: no gameplay reads any of it; smokes stay deterministic.
+ * Off -> every authored value is restored: level JSON "environment": {"visuals": false} (never spawned) or the console variable
+ * Codex.Env.Visuals 0. Reference (design only): WeatherSystem_01 BP_DynamivSky.
+ */
+UCLASS(Blueprintable)
+class CODEXTACTICS_API AWeatherPresenterActor : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	AWeatherPresenterActor();
+
+	/**
+	 * Spawns the presenter into World unless one exists, the settings disable it or bLevelVisuals is false (the level's
+	 * "environment": {"visuals": false}). Returns the presenter in World (null when none).
+	 */
+	static AWeatherPresenterActor* SpawnForWorld(UWorld& World, bool bLevelVisuals);
+
+	/** The presenter of World (null without one). */
+	static AWeatherPresenterActor* Find(const UWorld* World);
+
+	/** Codex.Env.Visuals (1 = the presenters drive the lighting, 0 = authored lighting). */
+	static bool AreVisualsEnabled();
+	static void SetVisualsEnabled(bool bEnabled);
+
+	/** The presenter currently drives the adopted actors (false = their authored values are in place). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	bool IsApplying() const { return bApplying; }
+
+	/** Recomputes and applies the frame now (no-op while not applying). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
+	void ApplyNow();
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	const FWeatherVisualFrame& GetLastFrame() const { return LastFrame; }
+
+	const FWeatherAuthoredLighting& GetAuthored() const { return Authored; }
+	int32 GetApplyCount() const { return ApplyCount; }
+
+	/** The preset in force for Weather (asset when loaded, else the C++ default). */
+	const FWeatherVisualPreset& GetPreset(EWeatherState Weather) const;
+	bool IsPresetFromAsset(EWeatherState Weather) const;
+
+	ADirectionalLight* GetSun() const { return Sun; }
+	ASkyAtmosphere* GetSkyAtmosphere() const { return SkyAtmosphere; }
+	ASkyLight* GetSkyLight() const { return SkyLight; }
+	AExponentialHeightFog* GetHeightFog() const { return HeightFog; }
+	APostProcessVolume* GetAdoptedPostProcess() const { return AdoptedPostProcess; }
+	int32 GetCloudCount() const { return Clouds.Num(); }
+	/** The moon light in use: the map's second directional light when adopted, else the presenter's own MoonLight. */
+	UDirectionalLightComponent* GetActiveMoon() const;
+	bool IsMoonOwn() const { return AdoptedMoon == nullptr; }
+	UPostProcessComponent* GetOwnPostProcess() const { return PostProcess; }
+
+	/** "sun DirectionalLight, sky ..., moon own, clouds 1 off" for logs / smokes. */
+	FString DescribeAdopted() const;
+
+	/** Hour curves of the sun / moon / sky light / fog / exposure (defaults in C++; a BP subclass may retune them). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Day")
+	FEnvironmentDayCurves DayCurves;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets")
+	TSoftObjectPtr<UWeatherPresetAsset> PresetClear;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets")
+	TSoftObjectPtr<UWeatherPresetAsset> PresetOvercast;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets")
+	TSoftObjectPtr<UWeatherPresetAsset> PresetSnowfall;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets")
+	TSoftObjectPtr<UWeatherPresetAsset> PresetBlizzard;
+
+	/** Phase 4: MPC_Environment (SnowAmount / FrostAmount / WindStrength / IsSnowing); not written yet. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
+	TSoftObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
+
+	/** Updates per second while the clock runs (plus one at every OnStateSet). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather", meta = (ClampMin = "1", ClampMax = "120"))
+	float ApplyRateHz = 20.f;
+
+	/** A sky light without real-time capture is recaptured at most this often (seconds), only when the look changed. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather", meta = (ClampMin = "0.25"))
+	float SkyRecaptureInterval = 2.f;
+
+	/** The first application waits (at most this long) for the minimap's captures, so the minimap shows the authored lighting. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather", meta = (ClampMin = "0"))
+	float MinimapHoldSeconds = 4.f;
+
+	/** Switch the map's AVolumetricCloud off while the visuals run (user decision 2026-10-22: invisible from the tactical camera). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather")
+	bool bDisableVolumetricClouds = true;
+
+	/** After every application: the frame that was applied (art tweaks in the BP subclass). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Environment")
+	void OnEnvironmentApplied(const FWeatherVisualFrame& Frame);
+
+	/** The authored lighting was restored (visuals turned off). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Environment")
+	void OnEnvironmentVisualsRestored();
+
+protected:
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void Tick(float DeltaSeconds) override;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<USceneComponent> Root;
+
+	/** The moon when the map has no second directional light (Movable, atmosphere light index 1, hidden by day). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<UDirectionalLightComponent> MoonLight;
+
+	/** Unbound post-process (exposure / saturation / tint) when the map has no unbound post-process volume. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<UPostProcessComponent> PostProcess;
+
+private:
+	void LoadPresets();
+	void Adopt();
+	/** Whether the presenter should drive the lighting now (console variable, the level's "visuals", the environment initialised). */
+	bool WantsToApply() const;
+	void StartApplying();
+	void StopApplying();
+	void Apply();
+	void ApplySun(const FWeatherVisualFrame& Frame);
+	void ApplyMoon(const FWeatherVisualFrame& Frame);
+	void ApplySky(const FWeatherVisualFrame& Frame);
+	void ApplyFog(const FWeatherVisualFrame& Frame);
+	void ApplyPostProcess(const FWeatherVisualFrame& Frame);
+	void SetCloudsOff(bool bOff);
+	void RestoreAuthored();
+	void RecaptureSkyIfNeeded(const FWeatherVisualFrame& Frame, bool bForce);
+	/** The minimap captures are done (or the hold timed out): the first application may run. */
+	bool IsMinimapHoldOver() const;
+	void HandleStateSet(const FEnvironmentState& State);
+
+	UPROPERTY(Transient) TObjectPtr<ADirectionalLight> Sun;
+	UPROPERTY(Transient) TObjectPtr<ADirectionalLight> AdoptedMoon;
+	UPROPERTY(Transient) TObjectPtr<ASkyAtmosphere> SkyAtmosphere;
+	UPROPERTY(Transient) TObjectPtr<ASkyLight> SkyLight;
+	UPROPERTY(Transient) TObjectPtr<AExponentialHeightFog> HeightFog;
+	UPROPERTY(Transient) TObjectPtr<APostProcessVolume> AdoptedPostProcess;
+	UPROPERTY(Transient) TArray<FWeatherCloudAuthored> Clouds;
+
+	UPROPERTY(Transient) FWeatherAuthoredLighting Authored;
+	UPROPERTY(Transient) FWeatherVisualFrame LastFrame;
+
+	FWeatherVisualPreset Presets[4];
+	bool bPresetFromAsset[4] = { false, false, false, false };
+
+	FDelegateHandle StateSetHandle;
+	float SinceApply = 0.f;
+	float StartTime = -1.f;
+	float LastRecaptureTime = -1000.f;
+	float LastRecaptureSunElevation = -1000.f;
+	EWeatherState LastRecaptureWeather = EWeatherState::Clear;
+	int32 ApplyCount = 0;
+	bool bAdopted = false;
+	bool bApplying = false;
+	bool bDirty = true;
+	bool bCloudsOff = false;
+	bool bSunMovable = false;
+	bool bSunAdjustable = false;
+	bool bSkyLightAdjustable = false;
+};
