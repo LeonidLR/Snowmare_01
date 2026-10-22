@@ -260,6 +260,11 @@ mesh rows in the `DT_LadderTypes` DataTable; clip-derived numbers (pitch, root d
 
 ## 9. Phase plan
 
+**Scheduling rule (2026-10-22):** ladder work lives on branch `ladder/work` (worktree `CodexTactics-ladder`). Phase 1 may
+start there; the later phases that touch shared code or assets - the `AOperativeCharacter` Ladder cluster, the nav link /
+filters, the `UOperativeAnimInstance` gates, `ABP_Operative` and map edits - start only after the orchestrator session
+schedules them with the user.
+
 1. **Generator** - `ALadderActor`, `FLadderMeshData` + `DT_LadderTypes` (import script for the course meshes), `LadderRules`,
    validation, nav link + `UNavArea_Ladder` (no climbing yet: paths are built, the climb is a placeholder teleport).
    Checks: `Ladder.Rules.*`, `LadderGeneratorSmoke`.
