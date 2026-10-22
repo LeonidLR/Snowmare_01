@@ -14,6 +14,15 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-22 night — main b14c8ed pushed (morning report)
+
+- Parallel sessions protocol in force (memory parallel-sessions-protocol): weather (CodexTactics-agents2 / env/phase1), ladders spec owner (reviews), my agents in CodexTactics-agents / CodexTactics-ladder. Only I merge into main.
+- Today merged: tutorial play-test fixes (pause lesson, mine retry, DEFENSIVE, tripwire card, dead-zombie lessons close), squad stays put after fights, barricade vault both ways, horde intro framing, heat fear needs a clear line, TB arena only on flat open ground, face the enemy after a retreat, gate exit -> fade -> points screen -> 0.1 Frozen Factory (campaign.json, carry-over, NEW GAME = 0.0 Frozen Dam), no end-of-fight button, level-up "+N" badge, weather phases 2-3, ladder design + clips + climbing (nav link, rung snap, C++ hand / foot IK, fall on knockdown), test ladders + closed set-dressing gate on Frozen Factory, blizzard upper-body walk, headless navmesh bake (Scripts/bake_navmesh.ps1; factory baked 126 / 95 tiles).
+- Weather phase 4 (falling snow + object snow overlay) running in env/phase1; then landscape snow (steps 1-3) + interactive snow (step 5) - waits for the user's "да" in the weather chat.
+- Ladders still open: climbing enemies (FrozenPMC, Military Zombie, Marksman), camera / roof cutaway / minimap on ladders, TB exclusion, turn back mid-climb, DT_LadderTypes + course meshes.
+- Review for the user: AGateActor::bSetDressingOpen default false (all set-dressing gates closed); blizzard pose hides the rifle (bHideWeaponInBlizzardWalk).
+- Known: FrozenFactoryStartSmoke fade timing is real-time sensitive (3.3 s vs 3.1 tolerance once); test.ps1 -CheckMap lists unregistered dev commands BodyLineupShots / LadderClipShots / MarksmanFeetProbe / EnvironmentShots.
+
 ## Checkpoint 2026-10-21 evening — NEXT SESSION START HERE
 
 - main 429b60f is LOCAL ONLY (ahead of origin by 2: the compound quest merge). NOT pushed on purpose: the quest's layout
