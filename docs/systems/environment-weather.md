@@ -57,6 +57,14 @@ Second round (2026-10-22, later):
 clarity Clear 1.0, Overcast 0.8, Snowfall 0.5, Blizzard 0.2). One number feeds the enemy roster and (later, OPEN) sight ranges / accuracy.
 
 ### 4.2 Enemy roster by conditions (proposal, see the studio-review page)
+- **Version 2 (Jev review, 2026-10-22):** `Scripts/Tools/jev_roster_matrix.py` asked Jev (128 questions) to score how each of the 6 types
+  suits each of the 16 cells (0 useless .. 4 ideal) and what should replace MARKSMAN / SPITTER. Finding: the WEATHER dominates, not the night
+  (MARKSMAN: clear day 3.7-3.9, clear night 3.2, overcast 2.3-2.7, overcast night 1.9, snowfall 1.4-1.8, blizzard 0.4; SPITTER clear 3.0-3.4,
+  snowfall 1.8-2.0, blizzard 1.0-1.1; HOUND / FROSTBITTEN rise with worse weather to ~3.0-3.2; BRUTE / CUTTER flat). Jev's replacement picks had
+  low confidence (0.15-0.41), so the user's pairs stay. Proposed rule replacing the visibility bands: a **suitability table** (6 types x 16 cells,
+  seeded from Jev, in `environment.json`) + thresholds: < 2.0 -> 50 % of the pair swaps, < 1.4 -> all, HOUND > 2.7 -> x1.5 (overcast night,
+  snowfall, blizzard). Custom presets = a copy of the table with edited cells / thresholds + extra rules. Pending the user's review.
+- Version 1 (superseded by version 2 if approved):
 - Visibility bands: Long >= 0.60 ("Long sight", as written), Mid 0.35-0.59 ("Grey day": 50 % MARKSMAN -> 2 FROSTBITTEN), Close 0.15-0.34
   ("White veil": all MARKSMAN -> 2 FROSTBITTEN, 50 % SPITTER -> CUTTER), Blind < 0.15 ("White dark": all MARKSMAN -> 2 FROSTBITTEN, all SPITTER -> CUTTER);
   overlay "Night hunt" HOUND x1.5 in the Night phase; BRUTE never changes.

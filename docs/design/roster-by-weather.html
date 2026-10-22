@@ -100,6 +100,9 @@ table.plain { border-collapse: collapse; width: 100%; min-width: 560px; font-siz
 .plain th, .plain td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 .plain th { font: 700 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .tbl-wrap { overflow-x: auto; }
+.heat td.sc { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: center; background: color-mix(in srgb, var(--accent) var(--p), var(--paper)); }
+.heat td.sc.hi { color: var(--paper); font-weight: 700; }
+.heat tr.first td { border-top: 2px solid var(--ink); }
 
 .layers { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: l; }
 .layers li { counter-increment: l; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; }
@@ -120,7 +123,7 @@ ol.q { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
   <header class="col">
     <div class="eyebrow">CodexTactics · дизайн-разбор · 22.10.2026</div>
     <h1>Состав по погоде</h1>
-    <p class="lede">Как время суток и погода решают, какие враги выходят на карту. Внутри: правила, интерактивная матрица 4×4, пресеты и разбор в формате обсуждения студии.</p>
+    <p class="lede">Как время суток и погода решают, какие враги выходят на карту. Внутри: правила, проверка Jev по всем 16 комбинациям, интерактивная матрица 4×4, пресеты и разбор в формате обсуждения студии.</p>
   </header>
 
   <section>
@@ -163,8 +166,22 @@ ol.q { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
   </section>
 
   <section>
-    <h2>Видимость: одна цифра на клетку</h2>
-    <p class="col">Видимость = свет фазы × прозрачность погоды. Свет: утро 0.70, день 1.00, после полудня 0.85, ночь 0.25. Прозрачность: ясно 1.0, пасмурно 0.8, снегопад 0.5, буран 0.2. Цифра попадает в одну из четырёх полос, и у каждой полосы свой пресет состава.</p>
+    <div class="eyebrow">Версия 2 · после проверки Jev</div>
+    <h2>Что сказал Jev</h2>
+    <p class="col">Мы задали Jev (TypeSafe System One) 128 вопросов: для каждой из 16 клеток «погода × время суток» он оценил, насколько условия подходят каждому из шести типов врагов (0 — «бесполезен здесь», 4 — «идеальная охота»), и выбрал, кем заменить снайпера и плеваку. Скрипт: <code>Scripts/Tools/jev_roster_matrix.py</code>.</p>
+    <div class="verdict col"><b>Главный вывод: решает погода, а не ночь.</b> Первая версия считала видимость как «свет × погода» и убирала снайперов любой ночью. Jev с этим не согласен: ясной морозной ночью снайпер по-прежнему силён (3.2 из 4), а в снегопад слаб даже днём (1.4–1.5). Гончие и промёрзшие крепнут с ухудшением погоды, громила и прыгун почти не зависят от условий.</div>
+    <div class="tbl-wrap"><table class="plain heat" id="heat"><thead><tr><th>Погода</th><th>Время</th><th>HOUND</th><th>SPITTER</th><th>BRUTE</th><th>FROSTB.</th><th>CUTTER</th><th>MARKSMAN</th></tr></thead><tbody></tbody></table></div>
+    <p class="col muted">Чем насыщеннее клетка, тем лучше условия для врага. Выбор замены у Jev неуверенный (уверенность 0.15–0.41, голоса разбросаны между гончей, прыгуном и плевакой), поэтому пары оставляем ваши: снайпер → промёрзшие, плевака → прыгун. Оценки пригодности, наоборот, устойчивые и плавные — на них и строим правила.</p>
+  </section>
+
+  <section>
+    <h2>Правило: таблица пригодности + три порога</h2>
+    <p class="col">Оценки Jev становятся данными — <b>таблицей пригодности</b> (6 типов × 16 клеток) в <code>environment.json</code>. Код применяет к ней три порога:</p>
+    <div class="presets">
+      <div class="preset" style="--c: var(--b-mid)"><h3>Ниже 2.0 — половина</h3><div class="when">слабые условия</div><ul><li>50 % MARKSMAN → FROSTBITTEN ×2</li><li>50 % SPITTER → CUTTER</li></ul></div>
+      <div class="preset" style="--c: var(--b-blind)"><h3>Ниже 1.4 — все</h3><div class="when">бесполезен в этих условиях</div><ul><li>Все MARKSMAN → FROSTBITTEN ×2</li><li>Все SPITTER → CUTTER</li></ul></div>
+      <div class="preset" style="--c: var(--ink)"><h3>Выше 2.7 — подкрепление</h3><div class="when">охотничья погода</div><ul><li>HOUND ×1.5</li><li>Пасмурная ночь, снегопад, буран</li></ul></div>
+    </div>
     <div class="mx-wrap">
       <table class="mx" id="mx"><thead><tr><th></th><th>Утро</th><th>День</th><th>После полудня</th><th>Ночь</th></tr></thead><tbody></tbody></table>
     </div>
@@ -176,29 +193,17 @@ ol.q { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
   </section>
 
   <section>
-    <h2>Пары врагов: дневная и ночная форма</h2>
-    <p class="col">Вместо длинного списка правил — две пары. У каждой пары есть форма для хорошей видимости и форма для плохой. Wave Editor пишет любую из двух, пресет приводит её к форме, подходящей условиям.</p>
+    <h2>Пары врагов</h2>
     <div class="tbl-wrap"><table class="plain">
-      <thead><tr><th>Пара</th><th>Хорошая видимость</th><th>Плохая видимость</th><th>Курс замены</th><th>Почему</th></tr></thead>
+      <thead><tr><th>Пара</th><th>Хорошие условия</th><th>Плохие условия</th><th>Курс</th><th>Почему</th></tr></thead>
       <tbody>
-        <tr><td><b>Глаз / Толпа</b></td><td>MARKSMAN — 45 м обзор, оптика, 35 м выстрел</td><td>FROSTBITTEN — ближний бой, берёт числом</td><td class="mono">1 → 2</td><td>Снайперу нужен прицел. В белой тьме его заменяет то, что в холоде живёт.</td></tr>
-        <tr><td><b>Артиллерия / Прыгун</b></td><td>SPITTER — держит 12–15 м, ледяные лужи</td><td>CUTTER — рывок 3.5–9 м, 6.2 м/с</td><td class="mono">1 → 1</td><td>Плевок на дистанции бесполезен, если цель не видно. Прыгун сокращает дистанцию сам.</td></tr>
-        <tr><td><b>HOUND</b> (вне пар)</td><td colspan="2">Не зависит от видимости — идёт по запаху</td><td class="mono">ночь ×1.5</td><td>Ночная охота стаей: ночью гончих больше.</td></tr>
-        <tr><td><b>BRUTE</b> (вне пар)</td><td colspan="2">Всепогодный якорь, не меняется</td><td class="mono">—</td><td>Одна предсказуемая величина в каждой волне, по ней игрок читает сложность.</td></tr>
+        <tr><td><b>Глаз / Толпа</b></td><td>MARKSMAN — 45 м обзор, оптика, 35 м выстрел</td><td>FROSTBITTEN — ближний бой, берёт числом</td><td class="mono">1 → 2</td><td>Снайперу нужен прицел. В снегу его заменяет то, что в холоде живёт.</td></tr>
+        <tr><td><b>Артиллерия / Прыгун</b></td><td>SPITTER — держит 12–15 м, ледяные лужи</td><td>CUTTER — рывок 3.5–9 м, 6.2 м/с</td><td class="mono">1 → 1</td><td>Плевок вслепую бесполезен. Прыгун сокращает дистанцию сам.</td></tr>
+        <tr><td><b>HOUND</b></td><td colspan="2">Идёт по запаху, сильнее в плохую погоду и тёмной ночью</td><td class="mono">×1.5</td><td>Охотничья погода: подкрепление стаей.</td></tr>
+        <tr><td><b>BRUTE</b></td><td colspan="2">Всепогодный якорь, не меняется</td><td class="mono">—</td><td>Одна предсказуемая величина в каждой волне.</td></tr>
       </tbody>
     </table></div>
-  </section>
-
-  <section>
-    <h2>Четыре встроенных пресета и ночная надстройка</h2>
-    <div class="presets">
-      <div class="preset" style="--c: var(--b-long)"><h3>Дальний взгляд</h3><div class="when">видимость ≥ 0.60</div><ul><li>Состав как в Wave Editor</li><li>Снайперы разрешены</li></ul></div>
-      <div class="preset" style="--c: var(--b-mid)"><h3>Серый день</h3><div class="when">0.35 – 0.59</div><ul><li>50 % MARKSMAN → FROSTBITTEN ×2</li><li>SPITTER без изменений</li></ul></div>
-      <div class="preset" style="--c: var(--b-close)"><h3>Белая пелена</h3><div class="when">0.15 – 0.34</div><ul><li>Все MARKSMAN → FROSTBITTEN ×2</li><li>50 % SPITTER → CUTTER</li></ul></div>
-      <div class="preset" style="--c: var(--b-blind)"><h3>Белая тьма</h3><div class="when">&lt; 0.15</div><ul><li>Все MARKSMAN → FROSTBITTEN ×2</li><li>Все SPITTER → CUTTER</li></ul></div>
-      <div class="preset" style="--c: var(--ink)"><h3>Ночная охота</h3><div class="when">надстройка: фаза «ночь»</div><ul><li>HOUND ×1.5</li><li>Ложится поверх любого пресета</li></ul></div>
-    </div>
-    <p class="col">Свои пресеты: в Wave Editor на вкладке «Окружение» создаётся пресет из тех же трёх видов правил — <b>замена</b> (из → в, доля, курс), <b>множитель количества</b> для типа, <b>запрет</b> типа. Его можно поставить в любую клетку матрицы для уровня или на одну волну.</p>
+    <p class="col"><b>Пресеты.</b> Встроенный пресет — это таблица Jev с порогами 2.0 / 1.4 / 2.7. Свой пресет в Wave Editor — копия, в которой вы правите отдельные клетки таблицы или пороги (например, «снайперы и в снегопад» — поднять их оценку в снегопад до 2.0), а также добавляете свои замены, множители и запреты. Пресет ставится на уровень или на одну волну.</p>
   </section>
 
   <section>
@@ -216,13 +221,13 @@ ol.q { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
   <section>
     <h2>Обсуждение студии</h2>
     <div class="room col">
-      <div class="voice"><div class="who">Геймдиректор<small>видение</small></div><div>Игрок должен научиться читать небо. Увидел ясное утро — жди снайперов, держись укрытий. Опустилась ночь с бураном — снайперов не будет, но будет толпа в упор. Если связь нельзя объяснить одной фразой, она не работает. Отсюда пары, а не таблица на сорок строк.</div></div>
-      <div class="voice"><div class="who">Боевой дизайнер<small>баланс</small></div><div>Замена 1 → 2 для снайпера держит угрозу примерно ровной: 80 HP и 45 урона на дистанции против двух по 60 HP в ближнем бою. Ночная охота добавляет гончих, поэтому ночь в среднем тяжелее. Это намеренно: ночь опаснее, и холод ночью ×1.3. Но цифры курсов — первые прикидки, их проверит бот.</div></div>
+      <div class="voice"><div class="who">Геймдиректор<small>видение</small></div><div>Игрок должен научиться читать небо. Увидел ясное утро — жди снайперов, держись укрытий. Пошёл снег — снайперов станет вдвое меньше, а в буран не будет вовсе, зато будет толпа в упор. Если связь нельзя объяснить одной фразой, она не работает. Отсюда пары, а не таблица на сорок строк.</div></div>
+      <div class="voice"><div class="who">Боевой дизайнер<small>баланс</small></div><div>Замена 1 → 2 для снайпера держит угрозу примерно ровной: 80 HP и 45 урона на дистанции против двух по 60 HP в ближнем бою. Охотничья погода добавляет гончих, поэтому снегопад и буран в среднем тяжелее. Это намеренно: там же сильнее и холод. Но цифры курсов — первые прикидки, их проверит бот.</div></div>
       <div class="voice"><div class="who">Программист ИИ<small>реализация</small></div><div>Замена делается до спавна: волна разворачивается в список типов, пресет его переписывает, дальше обычный спавн. Новых врагов не нужно, ИИ не меняется. Всё детерминировано от зерна прогона, поэтому бот и смоуки воспроизводят состав.</div></div>
       <div class="voice"><div class="who">Дизайнер уровней<small>Wave Editor</small></div><div>Мне нужно видеть результат, а не формулу. В редакторе у волны будет превью: та же матрица 4×4, и в каждой клетке итоговый состав. И замок на строку — иначе обучающая волна со снайпером ночью превратится в толпу, и урок сломается.</div></div>
-      <div class="voice"><div class="who">Тех-арт / VFX<small>Niagara</small></div><div>Полосы видимости совпадают с тем, что игрок видит: в «Белой тьме» туман и снег закрывают дальность так, что снайперу действительно нечего делать. Значения тумана и плотности снега в пресетах погоды подгоняем под эти же пороги.</div></div>
-      <div class="voice"><div class="who">QA / баланс<small>бот</small></div><div>Прогон бота на 16 клеток × N волн с фиксированным зерном. Метрика — потери отряда по клеткам: если «Белая тьма» убивает вдвое чаще «Дальнего взгляда», правим курсы, а не правила.</div></div>
-      <div class="verdict"><b>Итог.</b> Две пары, четыре полосы видимости, ночная надстройка, слои приоритета с замком в Wave Editor. Расставленные на карте враги не меняются. Условия фиксируются на старте волны и при начале пошагового боя.</div>
+      <div class="voice"><div class="who">Тех-арт / VFX<small>Niagara</small></div><div>Правила должны совпадать с тем, что игрок видит: в буран туман и снег закрывают дальность так, что снайперу действительно нечего делать, а ясной ночью луна и снег дают достаточно света для прицела. Значения тумана и плотности снега в пресетах погоды подгоняем под эту же таблицу.</div></div>
+      <div class="voice"><div class="who">QA / баланс<small>бот</small></div><div>Прогон бота на 16 клеток × N волн с фиксированным зерном. Метрика — потери отряда по клеткам: если буран убивает вдвое чаще ясного дня, правим курсы и пороги, а не правила. Jev даёт стартовую таблицу, бот её проверяет.</div></div>
+      <div class="verdict"><b>Итог (с поправкой Jev).</b> Две пары, таблица пригодности от Jev с порогами 2.0 / 1.4 / 2.7, слои приоритета с замком в Wave Editor. Расставленные на карте враги не меняются. Условия фиксируются на старте волны и при начале пошагового боя.</div>
     </div>
   </section>
 
@@ -231,76 +236,84 @@ ol.q { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
     <ol class="q col">
       <li>«75 % от времени суток» я понял как 75 % <b>одной фазы</b> (3:45). Если имелось в виду 75 % <b>целых суток</b> (15 минут), погода за сессию будет меняться один раз.</li>
       <li>Следующий уровень после туториала: продолжает время и погоду с того места, где закончился предыдущий, или стартует случайно?</li>
-      <li>Ночью гончие ×1.5 — принимаем? В буран ветер рвёт запах: ослаблять ли нюх гончих (это уже геймплей, не состав)?</li>
+      <li>Гончие ×1.5 в охотничью погоду (пасмурная ночь, снегопад, буран) — принимаем? Ясной ночью снайперы остаются — согласны с Jev?</li>
       <li>CryoDrone и будущие боссы: включать ли их в пары, когда они появятся в данных?</li>
-      <li>В туториале (ночь + снегопад = «Белая тьма») волны должны быть под замком, чтобы состав был как написан?</li>
+      <li>В туториале (ночь + снегопад: половина снайперов и плевак заменяется, гончие ×1.5) волны должны быть под замком, чтобы состав был как написан?</li>
     </ol>
   </section>
 </main>
 
 <script>
 (function () {
-  var phases = [["m","Утро",0.70],["d","День",1.00],["a","После полудня",0.85],["n","Ночь",0.25]];
-  var weathers = [["clear","Ясно",1.0],["over","Пасмурно",0.8],["snow","Снегопад",0.5],["bliz","Буран",0.2]];
-  var bands = [
-    {id:"long", name:"Дальний взгляд", min:0.6, rules:[]},
-    {id:"mid", name:"Серый день", min:0.35, rules:[{from:"MARKSMAN",to:"FROSTBITTEN",share:0.5,ratio:2}]},
-    {id:"close", name:"Белая пелена", min:0.15, rules:[{from:"MARKSMAN",to:"FROSTBITTEN",share:1,ratio:2},{from:"SPITTER",to:"CUTTER",share:0.5,ratio:1}]},
-    {id:"blind", name:"Белая тьма", min:-1, rules:[{from:"MARKSMAN",to:"FROSTBITTEN",share:1,ratio:2},{from:"SPITTER",to:"CUTTER",share:1,ratio:1}]}
-  ];
-  var order = ["HOUND","SPITTER","CUTTER","MARKSMAN","FROSTBITTEN","BRUTE"];
+  var JEV = [["Clear","EarlyMorning",{"HOUND":2.33,"SPITTER":3.33,"BRUTE":2.51,"FROSTBITTEN":2.75,"CUTTER":2.94,"MARKSMAN":3.71}],["Clear","Midday",{"HOUND":2.22,"SPITTER":3.43,"BRUTE":2.47,"FROSTBITTEN":2.6,"CUTTER":2.96,"MARKSMAN":3.87}],["Clear","Afternoon",{"HOUND":2.4,"SPITTER":3.31,"BRUTE":2.46,"FROSTBITTEN":2.74,"CUTTER":2.96,"MARKSMAN":3.72}],["Clear","Night",{"HOUND":2.43,"SPITTER":2.99,"BRUTE":2.29,"FROSTBITTEN":2.69,"CUTTER":2.66,"MARKSMAN":3.16}],["Overcast","EarlyMorning",{"HOUND":2.44,"SPITTER":2.39,"BRUTE":2.34,"FROSTBITTEN":2.7,"CUTTER":2.44,"MARKSMAN":2.4}],["Overcast","Midday",{"HOUND":2.3,"SPITTER":2.59,"BRUTE":2.35,"FROSTBITTEN":2.41,"CUTTER":2.61,"MARKSMAN":2.69}],["Overcast","Afternoon",{"HOUND":2.38,"SPITTER":2.38,"BRUTE":2.25,"FROSTBITTEN":2.5,"CUTTER":2.5,"MARKSMAN":2.3}],["Overcast","Night",{"HOUND":2.75,"SPITTER":2.0,"BRUTE":2.23,"FROSTBITTEN":2.66,"CUTTER":2.58,"MARKSMAN":1.89}],["Snowfall","EarlyMorning",{"HOUND":2.73,"SPITTER":1.87,"BRUTE":2.3,"FROSTBITTEN":3.06,"CUTTER":2.65,"MARKSMAN":1.43}],["Snowfall","Midday",{"HOUND":2.78,"SPITTER":1.96,"BRUTE":2.19,"FROSTBITTEN":2.78,"CUTTER":2.51,"MARKSMAN":1.53}],["Snowfall","Afternoon",{"HOUND":2.77,"SPITTER":1.89,"BRUTE":2.23,"FROSTBITTEN":2.87,"CUTTER":2.58,"MARKSMAN":1.46}],["Snowfall","Night",{"HOUND":2.98,"SPITTER":1.81,"BRUTE":2.09,"FROSTBITTEN":2.8,"CUTTER":2.72,"MARKSMAN":1.77}],["Blizzard","EarlyMorning",{"HOUND":2.98,"SPITTER":1.05,"BRUTE":2.06,"FROSTBITTEN":3.01,"CUTTER":2.39,"MARKSMAN":0.42}],["Blizzard","Midday",{"HOUND":3.09,"SPITTER":1.01,"BRUTE":2.11,"FROSTBITTEN":2.83,"CUTTER":2.52,"MARKSMAN":0.39}],["Blizzard","Afternoon",{"HOUND":3.1,"SPITTER":1.1,"BRUTE":2.12,"FROSTBITTEN":3.15,"CUTTER":2.57,"MARKSMAN":0.41}],["Blizzard","Night",{"HOUND":3.16,"SPITTER":1.09,"BRUTE":2.04,"FROSTBITTEN":2.97,"CUTTER":2.57,"MARKSMAN":0.41}]];
+  var W = {Clear:"Ясно", Overcast:"Пасмурно", Snowfall:"Снегопад", Blizzard:"Буран"};
+  var P = {EarlyMorning:"Утро", Midday:"День", Afternoon:"После полудня", Night:"Ночь"};
+  var phases = ["EarlyMorning","Midday","Afternoon","Night"], weathers = ["Clear","Overcast","Snowfall","Blizzard"];
+  var order = ["HOUND","SPITTER","CUTTER","MARKSMAN","FROSTBITTEN","BRUTE"], cols = ["HOUND","SPITTER","BRUTE","FROSTBITTEN","CUTTER","MARKSMAN"];
+  var PAIRS = [{from:"MARKSMAN",to:"FROSTBITTEN",ratio:2},{from:"SPITTER",to:"CUTTER",ratio:1}];
+  var HALF = 2.0, ALL = 1.4, BONUS = 2.7;
   var base = {HOUND:3, SPITTER:2, MARKSMAN:2, FROSTBITTEN:4, BRUTE:1};
-  function bandOf(v){ for (var i=0;i<bands.length;i++) if (v >= bands[i].min - 1e-9) return bands[i]; return bands[3]; }
-  function resolve(v, night){
-    var b = bandOf(v), r = {}, log = [];
+  function suit(w, p){ for (var i=0;i<JEV.length;i++) if (JEV[i][0]===w && JEV[i][1]===p) return JEV[i][2]; }
+  function resolve(sc){
+    var r = {}, log = [], tier = 0;
     Object.keys(base).forEach(function(k){ r[k] = base[k]; });
-    b.rules.forEach(function(rule){
-      var have = r[rule.from] || 0, moved = Math.floor(have * rule.share + 0.5);
+    PAIRS.forEach(function(pr){
+      var s = sc[pr.from], share = s < ALL ? 1 : s < HALF ? 0.5 : 0;
+      if (!share) return;
+      tier += share === 1 ? 2 : 1;
+      var have = r[pr.from] || 0, moved = Math.floor(have * share + 0.5);
       if (!moved) return;
-      r[rule.from] = have - moved;
-      r[rule.to] = (r[rule.to] || 0) + moved * rule.ratio;
-      log.push(moved + " " + rule.from + " → " + moved * rule.ratio + " " + rule.to);
+      r[pr.from] = have - moved; r[pr.to] = (r[pr.to] || 0) + moved * pr.ratio;
+      log.push(pr.from + " " + s.toFixed(1) + (share === 1 ? " < 1.4: " : " < 2.0: ") + moved + " → " + moved * pr.ratio + " " + pr.to);
     });
-    if (night && r.HOUND) { var h = Math.floor(r.HOUND * 1.5 + 0.5); log.push("Ночная охота: HOUND " + r.HOUND + " → " + h); r.HOUND = h; }
-    return {band:b, roster:r, log:log};
+    if (sc.HOUND > BONUS && r.HOUND) { var h = Math.floor(r.HOUND * 1.5 + 0.5); log.push("HOUND " + sc.HOUND.toFixed(1) + " > 2.7: " + r.HOUND + " → " + h); r.HOUND = h; }
+    var cls = tier === 0 ? "long" : tier <= 1 ? "mid" : tier <= 2 ? "close" : "blind";
+    var name = tier === 0 ? "Как написано" : tier <= 1 ? "Частичная замена" : tier <= 2 ? "Половина замен" : "Полная замена";
+    return {roster:r, log:log, cls:cls, name:name};
   }
   function list(el, roster, ref){
-    el.innerHTML = "";
-    var total = 0;
+    el.innerHTML = ""; var total = 0;
     order.forEach(function(k){
       var n = roster[k] || 0, was = ref ? (ref[k] || 0) : n;
-      if (!n && !was) return;
-      total += n;
-      var li = document.createElement("li");
-      var a = document.createElement("span"); a.textContent = k;
-      var b = document.createElement("span"); b.className = "n" + (n !== was ? " chg" : "");
-      b.textContent = (n !== was ? was + " → " : "") + n;
+      if (!n && !was) return; total += n;
+      var li = document.createElement("li"), a = document.createElement("span"), b = document.createElement("span");
+      a.textContent = k; b.className = "n" + (n !== was ? " chg" : ""); b.textContent = (n !== was ? was + " → " : "") + n;
       li.appendChild(a); li.appendChild(b); el.appendChild(li);
     });
     var li = document.createElement("li"); li.innerHTML = "<b>Всего</b><b class='n'>" + total + "</b>"; el.appendChild(li);
   }
+  var hb = document.querySelector("#heat tbody");
+  JEV.forEach(function(row, i){
+    var tr = document.createElement("tr"); if (i % 4 === 0 && i) tr.className = "first";
+    tr.innerHTML = "<td>" + (i % 4 === 0 ? "<b>" + W[row[0]] + "</b>" : "") + "</td><td>" + P[row[1]] + "</td>";
+    cols.forEach(function(k){
+      var v = row[2][k], td = document.createElement("td");
+      td.className = "sc" + (v >= 3 ? " hi" : ""); td.style.setProperty("--p", Math.round(v / 4 * 85) + "%"); td.textContent = v.toFixed(1);
+      tr.appendChild(td);
+    });
+    hb.appendChild(tr);
+  });
   var tbody = document.querySelector("#mx tbody"), cells = [];
   weathers.forEach(function(w){
-    var tr = document.createElement("tr"), th = document.createElement("th"); th.textContent = w[1]; tr.appendChild(th);
+    var tr = document.createElement("tr"), th = document.createElement("th"); th.textContent = W[w]; tr.appendChild(th);
     phases.forEach(function(p){
-      var v = p[2] * w[2], res = resolve(v, p[0] === "n");
-      var td = document.createElement("td"), btn = document.createElement("button");
-      btn.type = "button"; btn.className = "cell " + res.band.id; btn.setAttribute("aria-pressed","false");
-      btn.innerHTML = "<span class='v'>" + v.toFixed(2) + "</span><span class='band'>" + res.band.name + "</span>" + (p[0]==="n" ? "<span class='tag'>+ ночная охота</span>" : "");
-      btn.addEventListener("click", function(){ select(btn, w, p, v, res); });
-      td.appendChild(btn); tr.appendChild(td); cells.push({btn:btn,w:w,p:p,v:v,res:res});
+      var sc = suit(w, p), res = resolve(sc), td = document.createElement("td"), btn = document.createElement("button");
+      btn.type = "button"; btn.className = "cell " + res.cls; btn.setAttribute("aria-pressed","false");
+      btn.innerHTML = "<span class='band'>" + res.name + "</span><span class='tag'>снайпер " + sc.MARKSMAN.toFixed(1) + " · плевака " + sc.SPITTER.toFixed(1) + "</span>" + (sc.HOUND > BONUS ? "<span class='tag'>+ гончие ×1.5</span>" : "");
+      btn.addEventListener("click", function(){ select(btn, w, p, res); });
+      td.appendChild(btn); tr.appendChild(td); cells.push({btn:btn, w:w, p:p, res:res});
     });
     tbody.appendChild(tr);
   });
-  function select(btn, w, p, v, res){
+  function select(btn, w, p, res){
     cells.forEach(function(c){ c.btn.setAttribute("aria-pressed", c.btn === btn ? "true" : "false"); });
-    document.getElementById("res-title").textContent = "На карте: " + w[1].toLowerCase() + ", " + p[1].toLowerCase() + " (" + res.band.name + ")";
+    document.getElementById("res-title").textContent = "На карте: " + W[w].toLowerCase() + ", " + P[p].toLowerCase();
     list(document.getElementById("out"), res.roster, base);
     var log = document.getElementById("log"); log.innerHTML = "";
     (res.log.length ? res.log : ["Без замен"]).forEach(function(t){ var li = document.createElement("li"); li.textContent = t; log.appendChild(li); });
   }
   list(document.getElementById("base"), base, null);
-  var start = cells.filter(function(c){ return c.w[0]==="bliz" && c.p[0]==="n"; })[0];
-  select(start.btn, start.w, start.p, start.v, start.res);
+  var start = cells.filter(function(c){ return c.w === "Blizzard" && c.p === "Night"; })[0];
+  select(start.btn, start.w, start.p, start.res);
 })();
 </script>
