@@ -9,6 +9,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/KnockdownComponent.h"
+#include "Core/ActorLabelTag.h"
 #include "Core/DemoModeSubsystem.h"
 #include "Core/MissionSessionSubsystem.h"
 #include "Core/SaveGameRules.h"
@@ -183,14 +184,10 @@ namespace TutorialSubsystemLocal
 		return Points;
 	}
 
-	/** An actor's label in editor builds (the "enemies" selectors), empty in cooked builds. */
+	/** An actor's label (the "enemies" / route selectors); a packaged game reads the cook's label tag (ActorLabelTag). */
 	FString TutorialActorLabel(const AActor& Actor)
 	{
-#if WITH_EDITOR
-		return Actor.GetActorLabel(false);
-#else
-		return FString();
-#endif
+		return ActorLabelTag::GetLabel(Actor);
 	}
 
 	/** Actor matches any of the "enemies" selectors (label, object name, tag). */
