@@ -7,7 +7,10 @@
 //     ClimbUp -> ExitTop -> standing on the roof; a click on the ground -> AlignTop -> EnterTop (IntoFromTop) -> ClimbDown -> ExitBottom ->
 //     on the ground. Never below the floor, standing on the roof / ground after each leg; while climbing the gates hold (bIsClimbing, left-hand
 //     IK 0, aim offset 0, the FullBody slot owns the body, the weapon hidden) and the gripping hands are within 3 cm of their rung grip;
-//  3. a knockdown on the way down (feet ~2 m up): he falls to the bottom, lands knocked down, fall damage = clamp((H - 100) * 0.1, 0, 40).
+//  3. a knockdown on the way down (feet ~2 m up): he falls to the bottom, lands knocked down, fall damage = clamp((H - 100) * 0.1, 0, 40);
+//  4. turn-based (LADDERS.md 7.6, user decision 2026-10-22): the fight starts while he climbs the free-standing ladder and a Military Zombie
+//     climbs the wall ladder - the grid forms without both, they finish the climb at normal speed (he does not walk on to his click), the
+//     zombie is held once off, and on the next round both join (he on the deck, the zombie on the grid or in stasis).
 // 'Clip' (rendered: UnrealEditor.exe <uproject> /Game/Maps/L_Demo01_B_FrozenFactory -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound
 // -benchmark -fps=30 -ExecCmds="CodexTactics.LadderClimbSmoke Clip"): the two ladders up and down filmed by a camera that follows the climber
 // -> Saved/Screenshots/Ladder/frames/f_NNNN.png (in-engine frames only). Godot: none (UE-only system).
@@ -18,12 +21,21 @@
 
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "AIController.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
+#include "EngineUtils.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "SmokeUtils.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Combat/WaveSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
@@ -102,6 +114,13 @@ namespace LadderClimbSmoke
 		FVector CameraEye = FVector::ZeroVector;
 		FVector CameraLook = FVector::ZeroVector;
 		bool bCameraPlaced = false;
+		// Turn-based (stage 4+).
+		TWeakObjectPtr<AEnemyCharacter> Zombie;
+		TWeakObjectPtr<AEnemyCharacter> Hound;
+		float TurnBasedAt = -1.f;
+		float LeaderOffAt = -1.f;
+		bool bZombieHeldSeen = false;
+		bool bZombieOrdered = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -443,6 +462,209 @@ namespace LadderClimbSmoke
 		}
 	}
 
+	const TCHAR* const ZombiePath = TEXT("/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie.BP_Enemy_MilitaryZombie_C");
+
+	float FeetOver(const ACharacter& Character, float LevelZ)
+	{
+		return static_cast<float>(Character.GetActorLocation().Z) - Character.GetCapsuleComponent()->GetScaledCapsuleHalfHeight() - LevelZ;
+	}
+
+	/** Stage 4: he is up again after the knockdown leg; a zombie (its AI off) is sent up the wall ladder, he clicks the free deck. */
+	bool StepTurnBasedStart(FState& State, UWorld* World)
+	{
+		AOperativeCharacter* Leader = State.Leader.Get();
+		ALadderActor* Wall = State.Wall.Get();
+		ALadderActor* Free = State.Free.Get();
+		if (!Leader || !Wall || !Free)
+		{
+			return Finish(State, false);
+		}
+		if (State.StageTime < 1.f || Leader->IsKnockedDown() || Leader->IsMoving())
+		{
+			return true;
+		}
+		UClass* Class = LoadClass<AEnemyCharacter>(nullptr, ZombiePath);
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		const FVector Spot = SmokeUtils::FreeSpot(World, Wall->GetBottomLinkWorld() + Wall->GetOutward() * 200.f, Leader);
+		AEnemyCharacter* Zombie = Class ? World->SpawnActor<AEnemyCharacter>(Class, Spot + FVector(0.f, 0.f, 10.f), FRotator::ZeroRotator, Params) : nullptr;
+		Check(State, Zombie != nullptr, TEXT("turn-based part: a Military Zombie spawned by the wall ladder"));
+		if (!Zombie)
+		{
+			return Finish(State, false);
+		}
+		// Its AI off (the smoke sends it up) and unseen by the squad until the fight (no real-time shots at it).
+		Zombie->SetActorTickEnabled(false);
+		if (UEnemyRegistrySubsystem* Registry = World->GetSubsystem<UEnemyRegistrySubsystem>())
+		{
+			Registry->UnregisterEnemy(Zombie);
+		}
+		Zombie->Tags.Remove(FName(TEXT("Enemy")));
+		State.Zombie = Zombie; // sent up the wall ladder once he is on his (stage 5): both climb when the fight starts
+		State.Goal = Free->GetTopLinkWorld() - Free->GetOutward() * 100.f;
+		Check(State, ClickAt(World, State.Goal), TEXT("turn-based part: click on the free-standing ladder's deck"));
+		State.Stage = 5;
+		State.StageTime = 0.f;
+		return true;
+	}
+
+	/** Stage 5: both on their ladders (feet > 60 cm up) -> the fight starts. */
+	bool StepTurnBasedEntry(FState& State, UWorld* World)
+	{
+		AOperativeCharacter* Leader = State.Leader.Get();
+		AEnemyCharacter* Zombie = State.Zombie.Get();
+		ALadderActor* Free = State.Free.Get();
+		ALadderActor* Wall = State.Wall.Get();
+		const ULadderClimbComponent* Climb = Leader ? Leader->LadderClimb.Get() : nullptr;
+		const ULadderClimbComponent* ZombieClimb = Zombie ? Zombie->LadderClimb.Get() : nullptr;
+		if (!Leader || !Zombie || !Climb || !ZombieClimb || !Free || !Wall)
+		{
+			return Finish(State, false);
+		}
+		if (Climb->IsClimbing() && !State.bZombieOrdered)
+		{
+			State.bZombieOrdered = true;
+			if (AAIController* Controller = Cast<AAIController>(Zombie->GetController()))
+			{
+				Controller->MoveToLocation(Wall->GetTopLinkWorld() - Wall->GetOutward() * 100.f, 30.f, false, true);
+			}
+		}
+		const bool bLeaderUp = Climb->IsClimbing() && FeetOver(*Leader, Free->GetFloorZ()) > 20.f;
+		const bool bZombieUp = ZombieClimb->IsClimbing() && FeetOver(*Zombie, Wall->GetFloorZ()) > 20.f;
+		if (!bLeaderUp || !bZombieUp)
+		{
+			if (State.StageTime > 60.f)
+			{
+				Check(State, false, FString::Printf(TEXT("turn-based part: both on their ladders (leader state %d, zombie state %d)"), static_cast<int32>(Climb->GetState()),
+					static_cast<int32>(ZombieClimb->GetState())));
+				return Finish(State, false);
+			}
+			return true;
+		}
+		UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+		UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+		SmokeUtils::StartWaveFight(Flow);
+		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+		{
+			if (*It != Zombie)
+			{
+				It->Destroy(); // the fight is ours: the zombie on the ladder and one hound on the ground
+			}
+		}
+		const FVector HoundSpot = SmokeUtils::FreeSpot(World, Free->GetBottomLinkWorld() + Free->GetOutward() * 600.f, Leader);
+		State.Hound = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound, HoundSpot + FVector(0.f, 0.f, 20.f));
+		const EGameFlowResult Result = Flow ? Flow->RequestEnterTurnBased(true) : EGameFlowResult::WrongPhase;
+		const bool bActive = Result == EGameFlowResult::Ok && TurnBased && TurnBased->IsActive();
+		Check(State, bActive, TEXT("turn-based part: the fight starts while he and the zombie climb"));
+		if (!bActive)
+		{
+			return Finish(State, false);
+		}
+		State.TurnBasedAt = State.StageTime;
+		Check(State, !TurnBased->GetUnitState(Leader) && TurnBased->GetLadderSquadWaiting() == 1 && Climb->IsClimbing(),
+			FString::Printf(TEXT("the grid forms without him (on the grid %d, waiting on ladders %d, still climbing %d)"), TurnBased->GetUnitState(Leader) ? 1 : 0,
+				TurnBased->GetLadderSquadWaiting(), Climb->IsClimbing() ? 1 : 0));
+		Check(State, !TurnBased->GetUnitState(Zombie) && !Zombie->IsTurnBasedHeld() && TurnBased->GetLadderEnemiesWaiting() == 1 && ZombieClimb->IsClimbing(),
+			FString::Printf(TEXT("... and without the climbing zombie (on the grid %d, held %d, waiting %d)"), TurnBased->GetUnitState(Zombie) ? 1 : 0,
+				Zombie->IsTurnBasedHeld() ? 1 : 0, TurnBased->GetLadderEnemiesWaiting()));
+		Check(State, State.Hound.IsValid() && TurnBased->GetUnitState(State.Hound.Get()) != nullptr && TurnBased->GetSquadCount() >= 1,
+			FString::Printf(TEXT("the hound and the other %d operatives are on the grid"), TurnBased->GetSquadCount()));
+		State.Stage = 6;
+		State.StageTime = 0.f;
+		return true;
+	}
+
+	/** Stage 6: both finish their climbs at normal speed; he stays on the deck, the zombie is held once off. */
+	bool StepTurnBasedClimbOff(FState& State, UWorld* World)
+	{
+		AOperativeCharacter* Leader = State.Leader.Get();
+		AEnemyCharacter* Zombie = State.Zombie.Get();
+		ALadderActor* Free = State.Free.Get();
+		ALadderActor* Wall = State.Wall.Get();
+		UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+		if (!Leader || !Zombie || !Free || !Wall || !TurnBased || !TurnBased->IsActive())
+		{
+			Check(State, false, TEXT("turn-based part: the fight runs on"));
+			return Finish(State, false);
+		}
+		const ULadderClimbComponent* Climb = Leader->LadderClimb.Get();
+		const ULadderClimbComponent* ZombieClimb = Zombie->LadderClimb.Get();
+		if (Climb->GetState() != ELadderClimbState::None && State.StageTime > 0.f)
+		{
+			State.LeaderOffAt = -1.f;
+		}
+		else if (State.LeaderOffAt < 0.f)
+		{
+			State.LeaderOffAt = State.StageTime;
+		}
+		State.bZombieHeldSeen |= ZombieClimb->GetState() == ELadderClimbState::None && Zombie->IsTurnBasedHeld();
+		const bool bBothOff = State.LeaderOffAt >= 0.f && ZombieClimb->GetState() == ELadderClimbState::None;
+		if (!bBothOff || State.StageTime - State.LeaderOffAt < 1.5f)
+		{
+			if (State.StageTime > 60.f)
+			{
+				Check(State, false, FString::Printf(TEXT("turn-based part: both off their ladders in time (leader state %d, zombie state %d)"),
+					static_cast<int32>(Climb->GetState()), static_cast<int32>(ZombieClimb->GetState())));
+				return Finish(State, false);
+			}
+			return true;
+		}
+		// Normal speed: the climb's own clip time (no speed-up, no abort).
+		Check(State, Climb->ClimbPlayRate == 1.f && Climb->GetLastAbort() == ELadderAbortReason::None && Climb->GetClimbsUp() >= 1 && State.LeaderOffAt < 30.f,
+			FString::Printf(TEXT("he finished the climb to the top at normal speed in %.1f s (no abort)"), State.LeaderOffAt));
+		Check(State, FMath::Abs(FeetOver(*Leader, Free->GetTopWorldZ())) < 15.f && !Leader->IsMoving() && FVector::Dist2D(Leader->GetActorLocation(), Free->GetTopExitWorld()) < 80.f
+			&& !TurnBased->GetUnitState(Leader),
+			FString::Printf(TEXT("he stays on the deck where the ladder left him (feet %.0f cm off the deck, %.0f cm from the ladder head, moving %d, on the grid %d)"),
+				FeetOver(*Leader, Free->GetTopWorldZ()), FVector::Dist2D(Leader->GetActorLocation(), Free->GetTopExitWorld()), Leader->IsMoving() ? 1 : 0,
+				TurnBased->GetUnitState(Leader) ? 1 : 0));
+		Check(State, State.bZombieHeldSeen && Zombie->IsTurnBasedHeld() && !Zombie->IsActorTickEnabled() && FMath::Abs(FeetOver(*Zombie, Wall->GetTopWorldZ())) < 15.f,
+			FString::Printf(TEXT("the zombie finished its climb onto the roof and is held at once (held %d, feet %.0f cm off the roof)"), Zombie->IsTurnBasedHeld() ? 1 : 0,
+				FeetOver(*Zombie, Wall->GetTopWorldZ())));
+		if (TurnBased->GetPhase() == ETurnPhase::Squad)
+		{
+			TurnBased->PassSquadTurn();
+		}
+		State.Stage = 7;
+		State.StageTime = 0.f;
+		return true;
+	}
+
+	/** Stage 7: the next round - both join. */
+	bool StepTurnBasedJoin(FState& State, UWorld* World)
+	{
+		AOperativeCharacter* Leader = State.Leader.Get();
+		AEnemyCharacter* Zombie = State.Zombie.Get();
+		ALadderActor* Free = State.Free.Get();
+		UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+		if (!TurnBased || !TurnBased->IsActive() || !Leader || !Free)
+		{
+			Check(State, false, TEXT("turn-based part: the fight runs on to the next round"));
+			return Finish(State, false);
+		}
+		if (TurnBased->GetRound() < 2 || TurnBased->GetPhase() != ETurnPhase::Squad)
+		{
+			if (State.StageTime > 120.f)
+			{
+				Check(State, false, FString::Printf(TEXT("turn-based part: round 2 (round %d, phase %d)"), TurnBased->GetRound(), static_cast<int32>(TurnBased->GetPhase())));
+				return Finish(State, false);
+			}
+			// A squad turn of the others in round 1 that is still open: pass it.
+			if (TurnBased->GetPhase() == ETurnPhase::Squad && TurnBased->GetRound() < 2)
+			{
+				TurnBased->PassSquadTurn();
+			}
+			return true;
+		}
+		Check(State, TurnBased->GetUnitState(Leader) != nullptr && TurnBased->GetLadderSquadWaiting() == 0 && FMath::Abs(FeetOver(*Leader, Free->GetTopWorldZ())) < 15.f,
+			FString::Printf(TEXT("round %d: he joins the grid on the deck (on the grid %d, feet %.0f cm off the deck)"), TurnBased->GetRound(),
+				TurnBased->GetUnitState(Leader) ? 1 : 0, FeetOver(*Leader, Free->GetTopWorldZ())));
+		const bool bZombieIn = Zombie && (TurnBased->GetUnitState(Zombie) != nullptr || TurnBased->GetStasisMeshCount() > 0);
+		Check(State, bZombieIn && TurnBased->GetLadderEnemiesWaiting() == 0 && Zombie->IsTurnBasedHeld(),
+			FString::Printf(TEXT("round %d: the zombie joins (on the grid %d, else in stasis; waiting %d)"), TurnBased->GetRound(),
+				Zombie && TurnBased->GetUnitState(Zombie) ? 1 : 0, TurnBased->GetLadderEnemiesWaiting()));
+		return Finish(State, true);
+	}
+
 	bool Step(TSharedRef<FState> StateRef)
 	{
 		FState& State = *StateRef;
@@ -453,7 +675,7 @@ namespace LadderClimbSmoke
 		{
 			return false;
 		}
-		if (State.Time > 420.f)
+		if (State.Time > 700.f)
 		{
 			Check(State, false, FString::Printf(TEXT("time out in stage %d"), State.Stage));
 			return Finish(State, false);
@@ -565,7 +787,13 @@ namespace LadderClimbSmoke
 			++State.Leg;
 			if (!State.Legs.IsValidIndex(State.Leg))
 			{
-				return Finish(State, true);
+				if (State.bClip)
+				{
+					return Finish(State, true);
+				}
+				State.Stage = 4; // the turn-based part
+				State.StageTime = 0.f;
+				return true;
 			}
 			State.Stage = 3;
 			State.StageTime = 0.f;
@@ -580,6 +808,14 @@ namespace LadderClimbSmoke
 			State.Stage = 2;
 			State.StageTime = 0.f;
 			return true;
+		case 4:
+			return StepTurnBasedStart(State, World);
+		case 5:
+			return StepTurnBasedEntry(State, World);
+		case 6:
+			return StepTurnBasedClimbOff(State, World);
+		case 7:
+			return StepTurnBasedJoin(State, World);
 		default:
 			return Finish(State, false);
 		}

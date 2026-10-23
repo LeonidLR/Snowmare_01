@@ -493,6 +493,7 @@ void ULadderClimbComponent::StartEntry()
 		return;
 	}
 	LastRefusal = ELadderRefusal::None;
+	LastAbort = ELadderAbortReason::None; // this climb's own
 
 	// Take the body over: the path ends here (it resumes at the other end), Flying, root motion ignored, the weapon hidden.
 	{

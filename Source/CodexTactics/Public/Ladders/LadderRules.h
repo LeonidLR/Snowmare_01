@@ -171,6 +171,12 @@ namespace LadderRules
 	 */
 	CODEXTACTICS_API bool EnemyMayClimb(bool bClassClimbs, bool bHasClips, bool bLadderAllowsEnemies);
 
+	/**
+	 * Turn-based (LADDERS.md 7.6): a climber who joins the grid off his ladder stays where it left him when he stands on an upper floor
+	 * (feet more than ToleranceCm over the grid's ground - the one-level grid would snap him over a roof's edge); else he takes a cell.
+	 */
+	CODEXTACTICS_API bool JoinsOnUpperFloor(float FeetZ, float GridGroundZ, float ToleranceCm = 60.f);
+
 	/** Abort placement: the top end when the climber is above half way (Rung > RungCount / 2), else the bottom. */
 	CODEXTACTICS_API bool NearestEndIsTop(int32 Rung, int32 RungCount);
 

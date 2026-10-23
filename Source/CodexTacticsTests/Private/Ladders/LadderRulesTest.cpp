@@ -131,6 +131,11 @@ bool FLadderRefusalTest::RunTest(const FString&)
 	TestFalse(TEXT("a climbing class without clips for its body paths around"), EnemyMayClimb(true, false, true));
 	TestFalse(TEXT("a squad-only ladder (bAllowEnemies off)"), EnemyMayClimb(true, true, false));
 
+	// Turn-based (LADDERS.md 7.6): a climber joins on the roof where the ladder left him, on the ground floor on a cell.
+	TestTrue(TEXT("off a 2.9 m deck: joins up there"), JoinsOnUpperFloor(291.f, 0.f));
+	TestFalse(TEXT("off at the foot: takes a cell"), JoinsOnUpperFloor(2.f, 0.f));
+	TestFalse(TEXT("a step of 40 cm is the same floor"), JoinsOnUpperFloor(140.f, 100.f));
+
 	const FFallDamage Rule;
 	TestTrue(TEXT("a fall under 1 m: no damage"), FallDamage(90.f, Rule) == 0.f);
 	TestTrue(TEXT("a full 7-rung ladder (254.8 cm): ~15.5 HP"), FMath::IsNearlyEqual(FallDamage(254.8f, Rule), 15.48f, 0.01f));

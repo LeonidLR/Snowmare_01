@@ -292,6 +292,11 @@ namespace LadderRules
 		return bClassClimbs && bHasClips && bLadderAllowsEnemies;
 	}
 
+	bool JoinsOnUpperFloor(float FeetZ, float GridGroundZ, float ToleranceCm)
+	{
+		return FeetZ > GridGroundZ + ToleranceCm;
+	}
+
 	bool NearestEndIsTop(int32 Rung, int32 RungCount)
 	{
 		return Rung * 2 > RungCount;
