@@ -144,7 +144,7 @@ namespace LadderRules
 		float Alpha = 0.f;
 	};
 
-	/** The grip of Limb at the up loop's normalised time (0..1): rung offset and IK alpha (2-frame fades). */
+	/** The grip of Limb at the up loop's normalised time (0..1): rung offset and IK alpha (eased 5-frame = ~0.17 s fades). */
 	CODEXTACTICS_API FLimbGrip LimbGrip(ELadderLimb Limb, float NormalizedTime);
 
 	// --- Entry, interrupts, falls ---------------------------------------------------------------------------------------

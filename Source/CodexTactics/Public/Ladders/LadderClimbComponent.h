@@ -84,6 +84,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "10"))
 	float AlignTurnRate = 540.f;
 
+	/**
+	 * Going down from the top (user feedback 2026-10-23: "he goes down with his BACK to the ladder for the first seconds"): he walks to the
+	 * ladder head, turns in place until he faces the ladder (back to the drop), and climbs down backwards - the ClimbOutTop clip played in
+	 * reverse (its body faces the ladder throughout). Off = the old IntoFromTop clip, whose 180 deg turn runs while the body already sinks.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
+	bool bDescendFacingLadder = true;
+
+	/** The turn in place at the ladder head before going down: at least this long, s (feet planted). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0.1"))
+	float TopTurnMinSeconds = 0.5f;
+
 	/** Blend between the loop and the top clips, s (IntoFromTop always starts with blend-in 0). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0"))
 	float ClipBlendSeconds = 0.2f;
@@ -168,6 +180,9 @@ public:
 	ELadderAbortReason GetLastAbort() const { return LastAbort; }
 	float GetLoopLength() const { return LoopLength; }
 
+	/** The align glide's walking speed now (the legs walk it; 0 = standing / turning), cm/s. */
+	float GetAlignWalkSpeed() const { return AlignWalkSpeed; }
+
 private:
 	/** The clip's root track in the climber frame (X forward to the wall, Y right, Z up), from its first frame, at 30 Hz. */
 	struct FRootTrack
@@ -201,6 +216,8 @@ private:
 	void PollLinks();
 
 	void BeginEnterTop();
+	/** The ClimbOutTop warp between the hang pose on rung Rung and the platform: its scale and where it ends on top (capsule centres). */
+	void TopWarp(int32 Rung, FVector& OutHang, FVector& OutTop, FVector& OutScale) const;
 	void BeginExitTop();
 	void BeginLoop(bool bUp);
 	void BeginExitBottom();
@@ -268,6 +285,14 @@ private:
 	FVector WarpScale = FVector::OneVector;
 	float WarpYaw = 0.f;
 	float ClipTime = 0.f;
+	/** The warped clip plays backwards (ClimbOutTop going down). */
+	bool bWarpReverse = false;
+	/** AlignTop: walk to the ladder head (0), then the turn in place (1). */
+	int32 AlignPhase = 0;
+	float AlignPhaseStart = 0.f;
+	float WalkSeconds = 0.f;
+	float TurnSeconds = 0.f;
+	float AlignWalkSpeed = 0.f;
 
 	/** Snapshot restored on every exit (LADDERS.md 2: movement mode, rotation flags, braking, gravity, root motion, weapon). */
 	struct FSnapshot

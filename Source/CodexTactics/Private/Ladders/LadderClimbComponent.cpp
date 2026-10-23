@@ -258,6 +258,7 @@ void ULadderClimbComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	StateTime += DeltaTime;
+	AlignWalkSpeed = 0.f; // TickAlignTop sets it while he walks to the ladder head
 	if (bEntryPending)
 	{
 		StartEntry();
@@ -519,14 +520,32 @@ void ULadderClimbComponent::StartEntry()
 		GlideTo = Target->GetHangWorldLocation(FeetZ) + FVector(0.f, 0.f, HalfHeight);
 		GlideToYaw = Target->GetClimberYaw();
 	}
+	else if (bDescendFacingLadder)
+	{
+		// User feedback 2026-10-23: he walks to the ladder head (where ClimbOutTop ends), turns in place until he faces the ladder - his back
+		// to the drop - and only then climbs down (ClimbOutTop backwards: the body faces the ladder the whole way).
+		FVector Hang, Top, Scale;
+		TopWarp(LadderRules::ClimbOutStart(Contract, Rungs).Rung, Hang, Top, Scale);
+		GlideTo = Top;
+		GlideToYaw = Target->GetClimberYaw();
+	}
 	else
 	{
-		// Facing the drop (pre-turn when needed, 5.4): the IntoFromTop clip turns the body itself, the root never rotates.
+		// The old way: facing the drop (pre-turn when needed, 5.4); the IntoFromTop clip turns the body itself while it sinks.
 		GlideTo = Target->GetTopLinkWorld() + FVector(0.f, 0.f, HalfHeight);
 		GlideToYaw = Target->GetActorRotation().Yaw;
 	}
 	const float Turn = FMath::Abs(FMath::FindDeltaAngleDegrees(GlideFromYaw, GlideToYaw));
 	GlideSeconds = FMath::Max3(AlignMinSeconds, static_cast<float>(FVector::Dist(GlideFrom, GlideTo)) / AlignSpeed, Turn / AlignTurnRate);
+	if (!bGoingUp && bDescendFacingLadder)
+	{
+		// Two phases at the top: the walk to the ladder head (facing the way he walks), then the turn in place (feet planted).
+		const float Walk = static_cast<float>(FVector::Dist2D(GlideFrom, GlideTo));
+		WalkSeconds = Walk > 5.f ? Walk / AlignSpeed : 0.f;
+		const float WalkYaw = Walk > 10.f ? (GlideTo - GlideFrom).GetSafeNormal2D().Rotation().Yaw : GlideFromYaw;
+		TurnSeconds = FMath::Max(TopTurnMinSeconds, FMath::Abs(FMath::FindDeltaAngleDegrees(WalkYaw, GlideToYaw)) / 360.f);
+		GlideSeconds = WalkSeconds + TurnSeconds;
+	}
 	if (bGoingUp)
 	{
 		// The loop's start pose blends in while he steps onto the bottom rungs.
@@ -565,6 +584,27 @@ void ULadderClimbComponent::TickAlignBottom(float DeltaTime)
 
 void ULadderClimbComponent::TickAlignTop(float DeltaTime)
 {
+	if (bDescendFacingLadder)
+	{
+		// Phase 1: walk to the ladder head facing the way he walks; phase 2: turn in place to face the ladder (back to the drop).
+		const float Walk = static_cast<float>(FVector::Dist2D(GlideFrom, GlideTo));
+		const float WalkYaw = Walk > 10.f ? (GlideTo - GlideFrom).GetSafeNormal2D().Rotation().Yaw : GlideFromYaw;
+		if (StateTime < WalkSeconds)
+		{
+			const float Alpha = FMath::Clamp(StateTime / FMath::Max(WalkSeconds, 0.01f), 0.f, 1.f);
+			const float TurnIn = FMath::Clamp(StateTime / 0.2f, 0.f, 1.f);
+			PlaceAt(FMath::Lerp(GlideFrom, GlideTo, Alpha), GlideFromYaw + FMath::FindDeltaAngleDegrees(GlideFromYaw, WalkYaw) * TurnIn);
+			AlignWalkSpeed = Walk / FMath::Max(WalkSeconds, 0.01f);
+			return;
+		}
+		const float Alpha = FMath::Clamp((StateTime - WalkSeconds) / FMath::Max(TurnSeconds, 0.01f), 0.f, 1.f);
+		PlaceAt(GlideTo, WalkYaw + FMath::FindDeltaAngleDegrees(WalkYaw, GlideToYaw) * FMath::SmoothStep(0.f, 1.f, Alpha));
+		if (Alpha >= 1.f)
+		{
+			BeginEnterTop();
+		}
+		return;
+	}
 	const float Alpha = FMath::Clamp(StateTime / FMath::Max(GlideSeconds, 0.01f), 0.f, 1.f);
 	const float Smooth = FMath::SmoothStep(0.f, 1.f, Alpha);
 	PlaceAt(FMath::Lerp(GlideFrom, GlideTo, Smooth), GlideFromYaw + FMath::FindDeltaAngleDegrees(GlideFromYaw, GlideToYaw) * Smooth);
@@ -583,10 +623,25 @@ void ULadderClimbComponent::BeginEnterTop()
 		AbortClimb(ELadderAbortReason::LeaseLost);
 		return;
 	}
-	// Wall-facing from here on (5.4): the clip's first frame still shows the body facing the drop - blend-in 0, nothing pops.
 	WarpYaw = Target->GetClimberYaw();
 	PlaceAt(GlideTo, WarpYaw);
 	Character->SetActorEnableCollision(false);
+	if (bDescendFacingLadder)
+	{
+		// Facing the ladder, back to the drop: ClimbOutTop backwards from its last frame (he stands there now) down to the hang pose.
+		FVector Hang, Top, Scale;
+		TopWarp(LadderRules::ClimbOutStart(Target->GetContract(), Target->GetRungCount()).Rung, Hang, Top, Scale);
+		WarpTrack = &ClimbOutTrack;
+		WarpStart = Hang;
+		WarpScale = Scale;
+		bWarpReverse = true;
+		ClipTime = ClimbOutTrack.Length;
+		PlayClip(LoadedClimbOut, FMath::Max(0.f, ClimbOutTrack.Length - 0.001f), ClipBlendSeconds);
+		Fire(ELadderClimbEvent::AlignDone, ClimbOutTrack.Length / ClimbPlayRate);
+		return;
+	}
+	// The old way, wall-facing from here on (5.4): the clip's first frame still shows the body facing the drop - blend-in 0, nothing pops.
+	bWarpReverse = false;
 	const LadderRules::FClipContract Contract = Target->GetContract();
 	const LadderRules::FLoopPos Landing = LadderRules::IntoFromTopEnd(Contract, Target->GetRungCount());
 	const FVector End = Target->GetHangWorldLocation(LadderRules::HeightAt(Landing, 0.f, Contract.Pitch)) + FVector(0.f, 0.f, GetHalfHeight());
@@ -607,11 +662,11 @@ void ULadderClimbComponent::TickWarpClip(float DeltaTime)
 		AbortClimb(ELadderAbortReason::Timeout);
 		return;
 	}
-	ClipTime += DeltaTime * ClimbPlayRate;
-	const float Time = FMath::Min(ClipTime, WarpTrack->Length);
+	ClipTime += (bWarpReverse ? -1.f : 1.f) * DeltaTime * ClimbPlayRate;
+	const float Time = FMath::Clamp(ClipTime, 0.f, WarpTrack->Length);
 	PlaceAt(WarpStart + FRotator(0.f, WarpYaw, 0.f).RotateVector(WarpTrack->Sample(Time) * WarpScale), WarpYaw);
 	SetClipTime(Time);
-	if (ClipTime < WarpTrack->Length)
+	if (bWarpReverse ? ClipTime > 0.f : ClipTime < WarpTrack->Length)
 	{
 		return;
 	}
@@ -629,7 +684,9 @@ void ULadderClimbComponent::TickWarpClip(float DeltaTime)
 		const ALadderActor* Target = Ladder.Get();
 		const LadderRules::FClipContract Contract = Target ? Target->GetContract() : LadderRules::FClipContract();
 		const int32 Rungs = Target ? Target->GetRungCount() : 0;
-		LoopPos = LadderRules::IntoFromTopEnd(Contract, Rungs);
+		// The loop's start pose: ClimbOutRungs below the platform after the reversed ClimbOutTop, IntoFromTopRungs after IntoFromTop.
+		LoopPos = bWarpReverse ? LadderRules::ClimbOutStart(Contract, Rungs) : LadderRules::IntoFromTopEnd(Contract, Rungs);
+		bWarpReverse = false;
 		TargetPos = LadderRules::BottomPos(LadderRules::ClimbOutStart(Contract, Rungs).Rung, LoopLength);
 		PlayClip(LoadedUpLoop, LoopPos.Time, ClipBlendSeconds);
 		BeginLoop(false);
@@ -670,6 +727,26 @@ void ULadderClimbComponent::TickLoop(float DeltaTime)
 	}
 }
 
+void ULadderClimbComponent::TopWarp(int32 Rung, FVector& OutHang, FVector& OutTop, FVector& OutScale) const
+{
+	const ALadderActor* Target = Ladder.Get();
+	OutScale = FVector::OneVector;
+	if (!Target)
+	{
+		OutHang = OutTop = GetOwner() ? GetOwner()->GetActorLocation() : FVector::ZeroVector;
+		return;
+	}
+	const FVector Up(0.f, 0.f, GetHalfHeight());
+	const LadderRules::FClipContract Contract = Target->GetContract();
+	OutHang = Target->GetHangWorldLocation(LadderRules::HeightAt(LadderRules::FLoopPos{ Rung, 0.f }, 0.f, Contract.Pitch)) + Up;
+	const FRotator Facing(0.f, Target->GetClimberYaw(), 0.f);
+	const FVector Delta = Facing.UnrotateVector(Target->GetTopExitWorld() + Up - OutHang);
+	const FVector ClipEnd = ClimbOutTrack.End();
+	// Forward / up scaled onto the exit point, the clip's own sideways step kept.
+	OutScale = FVector(FMath::Abs(ClipEnd.X) > 1.f ? Delta.X / ClipEnd.X : 1.f, 1.f, FMath::Abs(ClipEnd.Z) > 1.f ? Delta.Z / ClipEnd.Z : 1.f);
+	OutTop = OutHang + Facing.RotateVector(ClipEnd * OutScale);
+}
+
 void ULadderClimbComponent::BeginExitTop()
 {
 	ALadderActor* Target = Ladder.Get();
@@ -681,6 +758,7 @@ void ULadderClimbComponent::BeginExitTop()
 	}
 	// Over the edge with his own collision off (the platform / wall keep theirs, like the vault).
 	Character->SetActorEnableCollision(false);
+	bWarpReverse = false;
 	WarpYaw = Target->GetClimberYaw();
 	WarpTrack = &ClimbOutTrack;
 	WarpStart = Character->GetActorLocation();

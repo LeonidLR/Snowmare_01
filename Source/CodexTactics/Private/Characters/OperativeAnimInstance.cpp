@@ -190,7 +190,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (bUseRifle2Locomotion)
 	{
 		const AOperativeCharacter* Rifle2Owner = Cast<AOperativeCharacter>(TryGetPawnOwner());
-		UpdateRifle2Locomotion(DeltaSeconds, Rifle2Owner && Rifle2Owner->IsMoving() && !bIsClimbing, Speed, Direction,
+		UpdateRifle2Locomotion(DeltaSeconds, Rifle2Owner && (bIsClimbing ? Speed > 1.f : Rifle2Owner->IsMoving()), Speed, Direction,
 			Rifle2Owner ? Rifle2Owner->GetActorRotation().Yaw : 0.f);
 	}
 	if (CVarAnimTrace.GetValueOnGameThread() > 0 && (Speed > 0.f || TryGetPawnOwner() && TryGetPawnOwner()->GetVelocity().SizeSquared2D() > 0.f))
@@ -922,7 +922,8 @@ void UOperativeAnimInstance::UpdateState()
 	LadderIKFrame = bIsClimbing && Operative->LadderClimb ? Operative->LadderClimb->GetIKFrame() : FLadderIKFrame();
 	if (bIsClimbing)
 	{
-		Speed = 0.f;
+		// Standing / turning on the ladder head (the turn-in-place clips follow the actor's yaw), or walking up to it.
+		Speed = Operative->LadderClimb ? Operative->LadderClimb->GetAlignWalkSpeed() : 0.f;
 		Direction = 0.f;
 	}
 	// Sprint 12 cover state (the shimmy moves sideways: the blend-space direction already strafes).
@@ -1271,6 +1272,11 @@ namespace OperativeLadderIK
 	}
 }
 
+FVector UOperativeAnimInstance::GetLadderKneeIKOffset(int32 Side) const
+{
+	return GetProxyOnGameThread<FOperativeAnimInstanceProxy>().GetKneeIKOffset(Side);
+}
+
 bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimNode_Base* InRootNode)
 {
 	if (bUseNative || !HasRootNode())
@@ -1279,6 +1285,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	}
 	if (!LadderIK.bActive || InRootNode != GetRootNode())
 	{
+		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
 	}
 	EvaluateAnimationNode_WithRoot(Output, InRootNode);
@@ -1294,6 +1301,7 @@ void FOperativeAnimInstanceProxy::ApplyLadderIK(FPoseContext& Output) const
 	FCSPose<FCompactPose> Pose;
 	Pose.InitPose(Output.Pose);
 	TArray<FBoneTransform> Changed;
+	KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 	for (int32 Limb = 0; Limb < static_cast<int32>(ELadderLimb::Count); ++Limb)
 	{
 		const float Alpha = FMath::Clamp(LadderIK.Alpha[Limb], 0.f, 1.f);
@@ -1323,10 +1331,45 @@ void FOperativeAnimInstanceProxy::ApplyLadderIK(FPoseContext& Output) const
 		const FVector TargetWorld = Rung + LadderIK.Across * Across + LadderIK.Outward * Offset.X + FVector::UpVector * Offset.Y;
 		// The end bone goes where the contact bone lands on the target (the foot keeps its orientation).
 		const FVector EndTarget = Component.InverseTransformPosition(TargetWorld) - (Contact - End.GetLocation());
-		const FVector Effector = FMath::Lerp(End.GetLocation(), EndTarget, Alpha);
-		// Pole: the elbow / knee keeps the side it bends to in the clip.
-		const FVector Pole = Joint.GetLocation() + (Joint.GetLocation() - (Root.GetLocation() + End.GetLocation()) * 0.5);
-		AnimationCore::SolveTwoBoneIK(Root, Joint, End, Pole, Effector, false, 1.0, 1.0);
+		const FVector RootP = Root.GetLocation();
+		const FVector JointP = Joint.GetLocation();
+		const FVector EndP = End.GetLocation();
+		FVector Effector = FMath::Lerp(EndP, EndTarget, Alpha);
+		// Pole (user report 2026-10-23: "the right knee jumps and bends unnaturally"): the clip straightens each leg fully while it stands on
+		// a rung, so the knee's offset from the hip-ankle line vanishes and a pole taken from it flips the bend plane. The pole is the clip's
+		// own bend direction while the limb is bent, faded into a fixed one as it straightens: knees forward to the ladder and a little out to
+		// their side (as in the clip), elbows back to the climber, out and down.
+		const FVector LineDir = (EndP - RootP).GetSafeNormal();
+		const FVector Bend = (JointP - RootP) - LineDir * FVector::DotProduct(JointP - RootP, LineDir);
+		const FVector Inward = Component.InverseTransformVectorNoScale(-LadderIK.Outward).GetSafeNormal();
+		const FVector ClimberRight = Component.InverseTransformVectorNoScale(FVector::CrossProduct(FVector::UpVector, -LadderIK.Outward)).GetSafeNormal();
+		const FVector UpCS = Component.InverseTransformVectorNoScale(FVector::UpVector).GetSafeNormal();
+		const float Side = (Limb == static_cast<int32>(ELadderLimb::HandL) || Limb == static_cast<int32>(ELadderLimb::FootL)) ? -1.f : 1.f;
+		FVector Fixed = bFoot ? Inward + ClimberRight * (Side * 0.7f) : -Inward + ClimberRight * (Side * 0.6f) - UpCS * 0.6f;
+		Fixed = (Fixed - LineDir * FVector::DotProduct(Fixed, LineDir)).GetSafeNormal();
+		const float Trust = FMath::Clamp(static_cast<float>(Bend.Size()) / 8.f, 0.f, 1.f);
+		FVector PoleDir = (Bend.GetSafeNormal() * Trust + Fixed * (1.f - Trust)).GetSafeNormal();
+		if (PoleDir.IsNearlyZero())
+		{
+			PoleDir = Fixed;
+		}
+		if (bFoot && FVector::DotProduct(PoleDir, Inward) < 0.2f)
+		{
+			PoleDir = (PoleDir + Inward * (0.2f - FVector::DotProduct(PoleDir, Inward))).GetSafeNormal(); // a knee never bends away from the ladder
+		}
+		// Reach: never past 98.5 % of the limb at full IK (a fully straight limb has no bend plane and would snap), faded with the alpha so the
+		// IK hands back to the clip's own (possibly straight) leg without a knee pop.
+		const double Reach = (JointP - RootP).Size() + (EndP - JointP).Size();
+		const double MaxReach = Reach * (1.0 - 0.015 * Alpha);
+		if ((Effector - RootP).Size() > MaxReach)
+		{
+			Effector = RootP + (Effector - RootP).GetSafeNormal() * MaxReach;
+		}
+		AnimationCore::SolveTwoBoneIK(Root, Joint, End, JointP + PoleDir * 40.0, Effector, false, 1.0, 1.0);
+		if (bFoot)
+		{
+			KneeIKOffset[Limb == static_cast<int32>(ELadderLimb::FootL) ? 0 : 1] = Joint.GetLocation() - JointP;
+		}
 		Changed.Add(FBoneTransform(RootIndex, Root));
 		Changed.Add(FBoneTransform(JointIndex, Joint));
 		Changed.Add(FBoneTransform(EndIndex, End));
