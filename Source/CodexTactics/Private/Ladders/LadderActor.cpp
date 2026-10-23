@@ -185,12 +185,78 @@ float ALadderActor::GetClimberYaw() const
 
 bool ALadderActor::TryLease(AActor* Climber)
 {
-	if (!Climber || IsLeasedByOther(Climber))
+	if (!Climber || IsBusyFor(Climber))
 	{
 		return false;
 	}
 	LeaseHolder = Climber;
+	LeaveQueue(Climber);
 	return true;
+}
+
+bool ALadderActor::IsWaitingHere(const AActor* Climber) const
+{
+	const ULadderClimbComponent* Climb = Climber ? Climber->FindComponentByClass<ULadderClimbComponent>() : nullptr;
+	return Climb && Climb->IsQueued() && Climb->GetLadder() == this;
+}
+
+void ALadderActor::JoinQueue(AActor* Climber)
+{
+	if (Climber && !Waiting.Contains(Climber))
+	{
+		Waiting.Add(Climber);
+	}
+}
+
+void ALadderActor::LeaveQueue(AActor* Climber)
+{
+	Waiting.RemoveAll([Climber](const TWeakObjectPtr<AActor>& Entry) { return !Entry.IsValid() || Entry.Get() == Climber; });
+}
+
+int32 ALadderActor::GetQueueIndex(const AActor* Climber) const
+{
+	int32 Index = 0;
+	for (const TWeakObjectPtr<AActor>& Entry : Waiting)
+	{
+		const AActor* Waiter = Entry.Get();
+		if (!Waiter || !IsWaitingHere(Waiter))
+		{
+			continue; // left without leaving the list (killed, re-ordered): skipped
+		}
+		if (Waiter == Climber)
+		{
+			return Index;
+		}
+		++Index;
+	}
+	return INDEX_NONE;
+}
+
+int32 ALadderActor::GetQueueLength() const
+{
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AActor>& Entry : Waiting)
+	{
+		Count += Entry.IsValid() && IsWaitingHere(Entry.Get()) ? 1 : 0;
+	}
+	return Count;
+}
+
+bool ALadderActor::IsBusyFor(const AActor* Climber) const
+{
+	if (IsLeasedByOther(Climber))
+	{
+		return true;
+	}
+	for (const TWeakObjectPtr<AActor>& Entry : Waiting)
+	{
+		const AActor* Waiter = Entry.Get();
+		if (Waiter && IsWaitingHere(Waiter))
+		{
+			return Waiter != Climber; // the first live waiter goes next
+		}
+	}
+	return false;
 }
 
 void ALadderActor::ReleaseLease(AActor* Climber)

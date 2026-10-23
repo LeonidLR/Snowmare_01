@@ -649,7 +649,7 @@ public:
 	bool IsClimbingLadder() const;
 
 	/** The climb ended at the other end: the path goes on to Destination (like the vault's resume). */
-	void ResumeMoveAfterLadder(const FVector& Destination);
+	void ResumeMoveAfterLadder(const FVector& Destination, bool bOwnOrder = false);
 
 	/** Where a save puts him: on a ladder, the link point of the end he is heading to (LADDERS.md 7.8). */
 	FVector GetSaveLocation() const;
