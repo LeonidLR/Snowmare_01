@@ -1328,6 +1328,8 @@ public:
 	bool IsBlizzardSheltered() const { return bBlizzardSheltered; }
 	/** The storm clip set for this body (female / male, either as fallback), or nullptr. */
 	const FWarmIdleClipSet* GetBlizzardWalkClipSet() const;
+	/** Smokes: the loop a storm pose starts with (None = random, as in the game); the random pick made the pose checks flaky. */
+	EWarmClipStep BlizzardWalkFirstStepForTesting = EWarmClipStep::None;
 	/** Smokes: storm clips started (capped). */
 	const TArray<FString>& GetBlizzardWalkClipLog() const { return BlizzardWalkClipLog; }
 
