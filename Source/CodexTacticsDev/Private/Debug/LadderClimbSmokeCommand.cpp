@@ -78,6 +78,21 @@ namespace LadderClimbSmoke
 		float KnockFeetZ = -1.f;
 		float DoneAt = -1.f;
 		FVector Goal = FVector::ZeroVector;
+		// Descent facing (user feedback 2026-10-23): once the pelvis is 10 cm below its standing height on top, he faces the ladder.
+		float MinActorFacing = 2.f;
+		float MinBodyFacing = 2.f;
+		int32 FacingSamples = 0;
+		// Knees on the loop (user report 2026-10-23), per frame, [0] left, [1] right.
+		float MinKneeAngle[2] = { 360.f, 360.f };
+		float MaxKneeJump[2] = { 0.f, 0.f };
+		float MinKneeForward[2] = { 1e6f, 1e6f };
+		int32 KneeSamples = 0;
+		FVector LastKnee[2];
+		FVector PrevKnee[2];
+		int32 KneeHistory = 0;
+		bool bHasLastKnee = false;
+		float MaxKneeJumpTime[2] = { 0.f, 0.f };
+		bool bNoIK = false;
 		// Clip.
 		bool bRecording = false;
 		int32 FrameCount = 0;
@@ -100,7 +115,10 @@ namespace LadderClimbSmoke
 		if (State.FrameHandle.IsValid())
 		{
 			FCoreDelegates::OnEndFrame.Remove(State.FrameHandle);
-			UE_LOG(LogCodexTactics, Display, TEXT("[LadderClimb] clip: %d frames in %s"), State.FrameCount, *State.FrameDir);
+			if (State.bClip)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[LadderClimb] clip: %d frames in %s"), State.FrameCount, *State.FrameDir);
+			}
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("LadderClimbSmoke"));
@@ -169,6 +187,16 @@ namespace LadderClimbSmoke
 		State.bGatesChecked = false;
 		State.KnockFeetZ = -1.f;
 		State.DoneAt = -1.f;
+		State.MinActorFacing = State.MinBodyFacing = 2.f;
+		State.FacingSamples = 0;
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			State.MinKneeAngle[Side] = 360.f;
+			State.MaxKneeJump[Side] = 0.f;
+			State.MinKneeForward[Side] = 1e6f;
+		}
+		State.KneeSamples = 0;
+		State.bHasLastKnee = false;
 		// Up: the roof's middle, a metre beyond the top link point; down: the ground 2.5 m out from the bottom link.
 		State.Goal = Leg.bUp ? Ladder->GetTopLinkWorld() - Ladder->GetOutward() * 100.f : Ladder->GetBottomLinkWorld() + Ladder->GetOutward() * 250.f;
 		const bool bOrdered = ClickAt(World, State.Goal);
@@ -213,8 +241,8 @@ namespace LadderClimbSmoke
 					FString::Printf(TEXT("leg %d: climbing gates - bIsClimbing %d, left-hand IK %.2f, aim offset %.2f, FullBody slot %.2f, weapon hidden %d"), State.Leg,
 						Anim->bIsClimbing ? 1 : 0, Anim->LeftHandIKAlpha, Anim->AimOffsetAlpha, SlotWeight, Leader->WeaponMesh && !Leader->WeaponMesh->IsVisible() ? 1 : 0));
 			}
-			// The knockdown leg: on the way down, feet ~2 m up.
-			if (Leg.bKnockdown && State.KnockFeetZ < 0.f && ClimbState == ELadderClimbState::ClimbDown && FeetOverFloor > 150.f)
+			// The knockdown leg: on the way down, feet > 1.2 m up (the loop starts 7 rungs below the platform since the descent faces the ladder).
+			if (Leg.bKnockdown && State.KnockFeetZ < 0.f && ClimbState == ELadderClimbState::ClimbDown && FeetOverFloor > 120.f)
 			{
 				State.KnockFeetZ = FeetOverFloor;
 				State.HealthBefore = Leader->HealthComponent ? Leader->HealthComponent->GetCurrentHealth() : 0.f;
@@ -273,13 +301,92 @@ namespace LadderClimbSmoke
 		Check(State, State.MinFeetOverFloor > -10.f, FString::Printf(TEXT("leg %d: never below the ladder's floor on the ladder (min feet %.1f cm)"), State.Leg, State.MinFeetOverFloor));
 		Check(State, State.HandSamples > 10 && State.MaxHandError <= 3.f, FString::Printf(TEXT("leg %d: gripping hands within 3 cm of their rung grip (max %.2f cm, %d samples)"),
 			State.Leg, State.MaxHandError, State.HandSamples));
+		UE_LOG(LogCodexTactics, Display, TEXT("[LadderClimb] leg %d facing: actor %.2f body %.2f"), State.Leg, State.MinActorFacing, State.MinBodyFacing);
+		if (!Leg.bUp)
+		{
+			Check(State, State.FacingSamples > 10 && State.MinActorFacing > 0.9f && State.MinBodyFacing > 0.6f /* the loop pose holds the hips ~42 deg turned (0.74 with no IK) */,
+				FString::Printf(TEXT("leg %d: going down he faces the ladder once the pelvis is 10 cm below his standing height on top (actor %.2f, body %.2f, %d frames)"),
+					State.Leg, State.MinActorFacing, State.MinBodyFacing, State.FacingSamples));
+		}
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			Check(State, State.KneeSamples > 10 && State.MinKneeAngle[Side] >= 60.f && State.MaxKneeJump[Side] <= 4.f && State.MinKneeForward[Side] > 0.f,
+				FString::Printf(TEXT("leg %d: %s knee on the loop - angle >= 60 deg (min %.0f; the clip's own 75), the IK never jumps it > 4 cm per frame (its correction changes max %.1f cm), bent towards the ladder (min %.1f cm), %d frames (max jump at rung*100+t %.2f)"),
+					State.Leg, Side == 0 ? TEXT("left") : TEXT("right"), State.MinKneeAngle[Side], State.MaxKneeJump[Side], State.MinKneeForward[Side], State.KneeSamples, State.MaxKneeJumpTime[Side]));
+		}
 		Check(State, Climb->GetLastRefusal() == ELadderRefusal::None && !Ladder->GetLeaseHolder(), TEXT("no refusal, the ladder's lease released"));
 		return true;
+	}
+
+	/** Every frame: the descent facing and the knees on the loop (user reports 2026-10-23). */
+	void SampleFrame(FState& State)
+	{
+		const AOperativeCharacter* Leader = State.Leader.Get();
+		const ALadderActor* Ladder = LegLadder(State);
+		const ULadderClimbComponent* Climb = Leader ? Leader->LadderClimb.Get() : nullptr;
+		const USkeletalMeshComponent* Mesh = Leader ? Leader->GetMesh() : nullptr;
+		if (!Climb || !Ladder || !Mesh || State.Stage != 2 || Climb->GetLadder() != Ladder)
+		{
+			State.bHasLastKnee = false;
+			return;
+		}
+		const ELadderClimbState S = Climb->GetState();
+		const FVector Inward = -Ladder->GetOutward();
+		// Facing on the way down: below the standing pelvis on top (- 10 cm) the actor and the body (hips) face the ladder.
+		const bool bDown = S == ELadderClimbState::EnterTop || S == ELadderClimbState::ClimbDown || S == ELadderClimbState::ExitBottom
+			|| S == ELadderClimbState::ClimbUp || S == ELadderClimbState::ExitTop; // the way up too: the clips' own baseline
+		if (bDown && Mesh->GetBoneLocation(TEXT("pelvis")).Z < Ladder->GetTopWorldZ() + 85.f)
+		{
+			const FVector Hips = Mesh->GetBoneLocation(TEXT("thigh_r")) - Mesh->GetBoneLocation(TEXT("thigh_l"));
+			const FVector Body = FVector::CrossProduct(Hips, FVector::UpVector).GetSafeNormal2D();
+			State.MinActorFacing = FMath::Min(State.MinActorFacing, static_cast<float>(FVector::DotProduct(Leader->GetActorForwardVector().GetSafeNormal2D(), Inward)));
+			State.MinBodyFacing = FMath::Min(State.MinBodyFacing, static_cast<float>(FVector::DotProduct(Body, Inward)));
+			++State.FacingSamples;
+		}
+		// Knees on the loop.
+		if (S != ELadderClimbState::ClimbUp && S != ELadderClimbState::ClimbDown)
+		{
+			State.bHasLastKnee = false;
+			return;
+		}
+		const TCHAR* Hip[2] = { TEXT("thigh_l"), TEXT("thigh_r") };
+		const TCHAR* Knee[2] = { TEXT("calf_l"), TEXT("calf_r") };
+		const TCHAR* Ankle[2] = { TEXT("foot_l"), TEXT("foot_r") };
+		const FTransform Actor = Leader->GetActorTransform();
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			const FVector H = Mesh->GetBoneLocation(Hip[Side]);
+			const FVector K = Mesh->GetBoneLocation(Knee[Side]);
+			const FVector A = Mesh->GetBoneLocation(Ankle[Side]);
+			const float Angle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct((H - K).GetSafeNormal(), (A - K).GetSafeNormal())), -1.f, 1.f)));
+			State.MinKneeAngle[Side] = FMath::Min(State.MinKneeAngle[Side], Angle);
+			if (Angle < 165.f)
+			{
+				State.MinKneeForward[Side] = FMath::Min(State.MinKneeForward[Side], static_cast<float>(FVector::DotProduct(K - (H + A) * 0.5f, Inward)));
+			}
+			const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Mesh->GetAnimInstance());
+			const FVector Local = Anim ? Anim->GetLadderKneeIKOffset(Side) : FVector::ZeroVector;
+			if (State.bHasLastKnee)
+			{
+				const float Jump = static_cast<float>(FVector::Dist(Local, State.LastKnee[Side]));
+				if (Jump > State.MaxKneeJump[Side])
+				{
+					State.MaxKneeJump[Side] = Jump;
+					State.MaxKneeJumpTime[Side] = Climb->GetLoopPos().Time + Climb->GetLoopPos().Rung * 100.f;
+				}
+			}
+			State.PrevKnee[Side] = State.LastKnee[Side];
+			State.LastKnee[Side] = Local;
+		}
+		State.KneeHistory = State.bHasLastKnee ? State.KneeHistory + 1 : 1;
+		State.bHasLastKnee = true;
+		++State.KneeSamples;
 	}
 
 	/** Clip: a camera beside the ladder of the current leg, following the climber (smoothed), one frame per rendered frame. */
 	void OnEndFrame(TSharedRef<FState> State)
 	{
+		SampleFrame(*State);
 		UWorld* World = State->World.Get();
 		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 		const AOperativeCharacter* Leader = State->Leader.Get();
@@ -327,10 +434,10 @@ namespace LadderClimbSmoke
 				Hud->bShowHUD = false;
 			}
 		}
-		// Jump cuts keep the video short: the long walks between the ladders (frames only within 4.5 m of the leg's ladder) and the
+		// Jump cuts keep the video short: the long walks between the ladders (frames only within 3 m of the leg's ladder) and the
 		// standing still between the legs are left out.
 		const bool bStill = !Leader->IsClimbingLadder() && Leader->GetVelocity().Size2D() < 5.f && State->FrameCount > 15;
-		if ((FVector::Dist2D(Leader->GetActorLocation(), Ladder->GetBottomLinkWorld()) < 450.f || Leader->IsClimbingLadder()) && !bStill)
+		if ((FVector::Dist2D(Leader->GetActorLocation(), Ladder->GetBottomLinkWorld()) < 300.f || Leader->IsClimbingLadder()) && !bStill)
 		{
 			FScreenshotRequest::RequestScreenshot(State->FrameDir / FString::Printf(TEXT("f_%04d.png"), State->FrameCount++), /*bShowUI*/ false, false);
 		}
@@ -363,6 +470,10 @@ namespace LadderClimbSmoke
 				return true;
 			}
 			State.Leader = Squad->GetLeader();
+			if (State.bNoIK && State.Leader->LadderClimb)
+			{
+				State.Leader->LadderClimb->bRungIK = false; // diagnostics: the clips' own limbs
+			}
 			// Headless: no frame is rendered, so the bones must be refreshed every tick to measure the hands (rung IK).
 			State.Leader->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 			Squad->EnterSoloMode();
@@ -482,14 +593,16 @@ namespace LadderClimbSmoke
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->World = World;
+		State->bNoIK = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("NoIK"), ESearchCase::IgnoreCase); });
 		State->bClip = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Clip"), ESearchCase::IgnoreCase); }) && FApp::CanEverRender();
 		if (State->bClip)
 		{
 			State->FrameDir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("Ladder") / TEXT("frames"));
 			IFileManager::Get().DeleteDirectory(*State->FrameDir, false, true);
 			IFileManager::Get().MakeDirectory(*State->FrameDir, true);
-			State->FrameHandle = FCoreDelegates::OnEndFrame.AddLambda([State]() { OnEndFrame(State); });
 		}
+		// Every frame: the facing / knee samples, and (Clip) the camera and the recording.
+		State->FrameHandle = FCoreDelegates::OnEndFrame.AddLambda([State]() { OnEndFrame(State); });
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
 		{
 			return Step(State);

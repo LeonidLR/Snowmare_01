@@ -10,6 +10,14 @@
 > [camera-hud-minimap](../systems/camera-hud-minimap.md), [combat-and-fire](../systems/combat-and-fire.md) (turn-based arena),
 > [save-load](../systems/save-load.md). Clip renders in UE: dev command `CodexTactics.LadderClipShots` (session ladder-clips-ue, 2026-10-22).
 
+> **Changed 2026-10-23 (user feedback on the first video):** going down, the climber must never have his back to the rungs while the body
+> sinks below the roof. The IntoFromTop clip's 180 deg turn runs while the body already drops (measured: side-on at 0.5 s with the root 33 cm down,
+> the turn done only at 2.47 s with the root 138 cm down), so it is no longer used by default (`bDescendFacingLadder`). Now: he walks to the
+> ladder head (where ClimbOutTop ends), **turns in place** (>= 0.5 s, feet planted, the locomotion's turn-in-place) until he faces the ladder
+> with his back to the drop, and climbs down backwards = **ClimbOutTop played in reverse** (its body faces the ladder within +-14 deg the whole
+> clip), landing in the loop pose 7 rungs below the platform; the loop goes on down from there. Sections 4.1 / 5.1 / 5.4 below describe the
+> old IntoFromTop way (kept behind the flag).
+
 ## 1. User decisions (2026-10-22)
 
 | Question | Decision |
@@ -302,11 +310,11 @@ Implemented (phases 1-3, part of 4), checked by `CodexTactics.Ladder.*` (5 unit 
 | One state machine 5.1 (`LadderRules::Transition` is the table), odd rung counts start on the half loop | `ULadderClimbComponent`, `LadderRules::BottomPos` |
 | Montages in place, positioned every tick (paused), the actor on each clip's extracted root track scaled per axis to the exact target (4.1); rung-index snapping `Floor + k * Pitch` at every loop boundary | `ULadderClimbComponent::TickLoop / TickWarpClip`, `LadderRules::Advance / HeightAt` |
 | Own collision off only for EnterTop / ExitTop, end-fit (`FindTeleportSpot`); the wall / ladder never touched | `BeginEnterTop`, `BeginExitTop`, `FinishClimb` |
-| Facing 5.4: always wall-facing on the ladder; AlignTop pre-turns to face the drop, IntoFromTop starts with blend-in 0 and the clip's own 180 deg turn | `StartEntry`, `BeginEnterTop` |
+| Facing 5.4 (changed 2026-10-23): always wall-facing on the ladder; going down he walks to the ladder head, turns in place to face the ladder (back to the drop), then ClimbOutTop backwards - never his back to the rungs below the roof (IntoFromTop + its in-clip turn only with `bDescendFacingLadder` off) | `StartEntry`, `TickAlignTop`, `BeginEnterTop`, `TopWarp` |
 | One interrupt path 5.3 (montage end delegate with bInterrupted, death, knockdown, EndPlay, timeouts 2x + 1 s); snapshot / restore of movement mode, rotation flags, braking, gravity, root motion mode, weapon | `AbortClimb`, `TakeSnapshot / RestoreSnapshot` |
 | Refusals 5.2 (turn-based, carrying, mounted, knocked down, dead, decoration, no clips); leased -> queue; prone / crouched -> stands up first | `LadderRules::CanStartClimb` |
 | ABP gates 6.1: `UOperativeAnimInstance::bIsClimbing` zeroes left-hand IK and aim offset, blocks the sniper FullBody layer, interaction clips, weather idles, hit reactions, grenade / reload / fire clips, the cold layer; the rifle is hidden | `OperativeAnimInstance*.cpp` |
-| Rung IK 6.2: hands / feet two-bone IK onto their rung grip, grip windows measured from the up loop (LadderClipShots CONTACT lines) instead of authored curves, applied natively after the graph in `FOperativeAnimInstanceProxy::Evaluate_WithRoot` - **no ABP node / asset change** | `LadderRules::LimbGrip`, `FOperativeAnimInstanceProxy::ApplyLadderIK` |
+| Rung IK 6.2: hands / feet two-bone IK onto their rung grip, grip windows measured from the up loop (LadderClipShots CONTACT lines) instead of authored curves, applied natively after the graph in `FOperativeAnimInstanceProxy::Evaluate_WithRoot` - **no ABP node / asset change**. 2026-10-23 (user: "the right knee jumps"): the clip straightens each leg on its rung, so the knee pole is the clip's own bend faded into a fixed one (knees forward to the ladder and out to their side, elbows back / out / down), knees never bend away from the ladder, the reach is clamped to 98.5 % scaled by the alpha (the IK hands back to a straight clip leg without a pop), grips fade over 5 eased frames | `LadderRules::LimbGrip`, `FOperativeAnimInstanceProxy::ApplyLadderIK` |
 | 7.4: enemies' `UNavFilter_NoVault` excludes the ladder area; the lease is per ladder | `VaultNavigation.cpp`, `ALadderActor::TryLease` |
 | 7.7: knockdown on the ladder -> drop 20 cm off the hang line, fall, fall damage clamp((H - 100) * 0.1, 0, 40), then the knockdown on landing; death -> the same fall | `DropForKnockdown`, `TickDropping`, `UKnockdownComponent::StartKnockdown` hook |
 | 7.8: a save mid-climb stores the end he heads to | `AOperativeCharacter::GetSaveLocation` |

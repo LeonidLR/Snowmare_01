@@ -218,7 +218,8 @@ namespace LadderRules
 			{ 1, 34.f, 50.f },
 		};
 		constexpr float LastFrame = 53.f;
-		constexpr float FadeFrames = 2.f;
+		/** A grip fades in / out over 5 frames (~0.17 s, eased): no foot / hand pops at the contact window edges (user report 2026-10-23). */
+		constexpr float FadeFrames = 5.f;
 	}
 
 	FLimbGrip LimbGrip(ELadderLimb Limb, float NormalizedTime)
@@ -235,12 +236,12 @@ namespace LadderRules
 		if (Frame < Mid)
 		{
 			Grip.RungOffset = Window.StartRung;
-			Grip.Alpha = FMath::Clamp((Window.ReleaseFrame - Frame) / FadeFrames, 0.f, 1.f);
+			Grip.Alpha = FMath::SmoothStep(0.f, 1.f, FMath::Clamp((Window.ReleaseFrame - Frame) / FadeFrames, 0.f, 1.f));
 		}
 		else
 		{
 			Grip.RungOffset = Window.StartRung + 2;
-			Grip.Alpha = FMath::Clamp((Frame - (Window.GripFrame - FadeFrames)) / FadeFrames, 0.f, 1.f);
+			Grip.Alpha = FMath::SmoothStep(0.f, 1.f, FMath::Clamp((Frame - (Window.GripFrame - FadeFrames)) / FadeFrames, 0.f, 1.f));
 		}
 		return Grip;
 	}
