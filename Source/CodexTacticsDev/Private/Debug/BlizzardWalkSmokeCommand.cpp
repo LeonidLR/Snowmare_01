@@ -278,6 +278,9 @@ namespace BlizzardWalkSmoke
 			{
 				return Finish(State);
 			}
+			// The storm pose starts with a random loop in the game; the hand-height checks are written for loop A (4Loop's left hand is
+			// lower), so the smoke pins it instead of passing or failing with the dice.
+			Anim->BlizzardWalkFirstStepForTesting = EWarmClipStep::LoopA;
 			Squad->SetFollowersHolding(true);
 			TArray<const AActor*> Ignore;
 			for (AOperativeCharacter* Member : Squad->GetMembers())

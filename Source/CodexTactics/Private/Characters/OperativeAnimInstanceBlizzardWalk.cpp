@@ -227,7 +227,8 @@ void UOperativeAnimInstance::UpdateBlizzardWalkLayer(const AOperativeCharacter& 
 		BlizzardWalkLoopsDone = 0;
 		BlizzardWalkLoopsTarget = FMath::RandRange(FMath::Max(1, BlizzardWalkLoopsMin), FMath::Max(BlizzardWalkLoopsMin, BlizzardWalkLoopsMax));
 		// Either loop to start with (two operatives side by side do not mirror each other).
-		const EWarmClipStep First = FMath::RandBool() ? EWarmClipStep::LoopA : EWarmClipStep::LoopB;
+		const EWarmClipStep First = BlizzardWalkFirstStepForTesting != EWarmClipStep::None ? BlizzardWalkFirstStepForTesting
+			: FMath::RandBool() ? EWarmClipStep::LoopA : EWarmClipStep::LoopB;
 		if (PlayBlizzardWalkClip(First, BlizzardWalkBlendSeconds) || PlayBlizzardWalkClip(EWarmClipStep::LoopA, BlizzardWalkBlendSeconds))
 		{
 			UE_LOG(LogCodexTactics, Verbose, TEXT("[BlizzardWalk] %s: on (%s)"), *Operative.DisplayName.ToString(),
