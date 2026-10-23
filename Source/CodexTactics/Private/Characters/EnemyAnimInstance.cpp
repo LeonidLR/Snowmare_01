@@ -6,6 +6,8 @@
 #include "Combat/KnockdownComponent.h"
 #include "Combat/HealthComponent.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Animation/AnimNodeBase.h"
+#include "Ladders/LadderPoseIK.h"
 
 namespace
 {
@@ -17,6 +19,31 @@ namespace
 	{
 		return Clips.IsValidIndex(Index) ? Clips[Index].Get() : nullptr;
 	}
+}
+
+FAnimInstanceProxy* UEnemyAnimInstance::CreateAnimInstanceProxy()
+{
+	return new FEnemyAnimInstanceProxy(this);
+}
+
+void FEnemyAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds)
+{
+	FAnimInstanceProxy::PreUpdate(InAnimInstance, DeltaSeconds);
+	// Game thread: the climb's rung grips for this frame (LADDERS.md 6.2), inactive off the ladder.
+	const AEnemyCharacter* Enemy = InAnimInstance ? Cast<AEnemyCharacter>(InAnimInstance->TryGetPawnOwner()) : nullptr;
+	const ULadderClimbComponent* Climb = Enemy ? Enemy->LadderClimb.Get() : nullptr;
+	LadderIK = Climb && Climb->IsClimbing() ? Climb->GetIKFrame() : FLadderIKFrame();
+}
+
+bool FEnemyAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimNode_Base* InRootNode)
+{
+	if (!LadderIK.bActive || !HasRootNode() || InRootNode != GetRootNode())
+	{
+		return false; // the graph alone
+	}
+	EvaluateAnimationNode_WithRoot(Output, InRootNode);
+	LadderPoseIK::Apply(Output, GetComponentTransform(), LadderIK, KneeIKOffset);
+	return true;
 }
 
 void UEnemyAnimInstance::NativeInitializeAnimation()
@@ -48,9 +75,10 @@ void UEnemyAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		Speed = TacticalSpeed;
 		Direction = 0.f;
 	}
-	// Godot force_idle_animation: entering the turn-based fight cuts a running attack / hit clip.
+	// Godot force_idle_animation: entering the turn-based fight cuts a running attack / hit clip (not the climb: LADDERS.md 7.6).
+	bIsClimbing = Enemy->IsClimbingLadder();
 	const bool bTurnBased = TurnBased && TurnBased->IsActive();
-	if (bTurnBased && !bWasTurnBased && !Enemy->IsDying())
+	if (bTurnBased && !bWasTurnBased && !Enemy->IsDying() && !bIsClimbing)
 	{
 		StopSlotAnimation(0.2f, OneShotSlot);
 	}
@@ -93,7 +121,7 @@ float UEnemyAnimInstance::NotifyAttack()
 	bIsAttacking = true;
 	UAnimSequenceBase* Clip = PickClip(AttackAnimations, AttackVariant);
 	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
-	if (bIsDead || bIsJumping || !Clip || (Owner && Owner->IsKnockedDown()))
+	if (bIsDead || bIsJumping || !Clip || (Owner && (Owner->IsKnockedDown() || Owner->IsClimbingLadder())))
 	{
 		return 0.f;
 	}
@@ -107,7 +135,8 @@ void UEnemyAnimInstance::NotifyHit()
 	HitTimer = HitHoldTime;
 	bIsHit = true;
 	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
-	if (!bIsDead && !bIsJumping && !(Owner && Owner->IsKnockedDown())) // knocked down: the knockdown clip owns the body
+	// Knocked down: the knockdown clip owns the body; on a ladder: the climb clip (damage applies, no hit clip - LADDERS.md 7.7).
+	if (!bIsDead && !bIsJumping && !(Owner && (Owner->IsKnockedDown() || Owner->IsClimbingLadder())))
 	{
 		// Moving: the upper body flinches, the legs keep running (no sliding full-body hit; TANDEM request 1).
 		UAnimSequenceBase* Clip = PickClip(HitAnimations, HitVariant);
@@ -278,7 +307,7 @@ float UEnemyAnimInstance::NotifyAlert()
 {
 	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
 	UAnimSequenceBase* Clip = EnemyAnimExtrasLocal::RandomClipOf(AlertAnimations);
-	if (!Clip || bIsDead || bIsJumping || (Owner && (Owner->IsKnockedDown() || Owner->IsDying())))
+	if (!Clip || bIsDead || bIsJumping || (Owner && (Owner->IsKnockedDown() || Owner->IsDying() || Owner->IsLadderBusy())))
 	{
 		return 0.f;
 	}
@@ -291,7 +320,7 @@ float UEnemyAnimInstance::NotifyEntrance()
 {
 	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
 	UAnimSequenceBase* Clip = EnemyAnimExtrasLocal::RandomClipOf(EntranceAnimations);
-	if (!Clip || bIsDead || (Owner && (Owner->IsKnockedDown() || Owner->IsDying())))
+	if (!Clip || bIsDead || (Owner && (Owner->IsKnockedDown() || Owner->IsDying() || Owner->IsLadderBusy())))
 	{
 		return 0.f;
 	}

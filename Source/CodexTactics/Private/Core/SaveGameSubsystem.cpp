@@ -828,7 +828,7 @@ namespace
 		Entry->SetBoolField(TEXT("level_enemy"), bLevelEnemy);
 		Entry->SetStringField(TEXT("class"), Enemy->GetClass()->GetPathName());
 		Entry->SetStringField(TEXT("archetype"), SaveEnumName(Enemy->GetArchetype()));
-		Entry->SetArrayField(TEXT("pos"), SaveVector(Enemy->GetActorLocation()));
+		Entry->SetArrayField(TEXT("pos"), SaveVector(Enemy->GetSaveLocation())); // mid-climb: the end of the ladder it heads to (LADDERS.md 7.8)
 		Entry->SetNumberField(TEXT("rot_y"), Enemy->GetActorRotation().Yaw);
 		const UHealthComponent* Health = Enemy->GetHealthComponent();
 		Entry->SetNumberField(TEXT("health"), Health ? Health->GetCurrentHealth() : 0.f);

@@ -18,8 +18,15 @@ namespace LadderRules
 	{
 		/** Rung pitch: the up loop climbs exactly two rungs. */
 		float Pitch = 36.4f;
-		/** ClimbOutTop starts with the feet this many rungs below the platform (7 x 36.4 = 254.8, the clip rises 261). */
-		int32 ClimbOutRungs = 7;
+		/**
+		 * ClimbOutTop starts with the feet this many rungs below the platform. Re-measured 2026-10-23 (user bug "at the very end he sinks
+		 * halfway into the object"): the clip steps onto a top 5 rungs up (its left foot planted at 184 cm from 2.4 s, 5 x 36.4 = 182), then
+		 * lifts the whole body ~74 cm more in its last 0.43 s (root and feet alike - the course's "fix"); that lift is taken out of the root
+		 * track (ClimbOutLiftStart), so the root rises 185 cm, not 261, and the feet stay on the platform.
+		 */
+		int32 ClimbOutRungs = 5;
+		/** From this clip time the ClimbOutTop's feet rise only with the clip's own lift (both planted / stepping up): removed from the track, s. */
+		float ClimbOutLiftStart = 2.8f;
 		/** IntoFromTop lands the loop pose this many rungs below the platform. */
 		int32 IntoFromTopRungs = 5;
 		/** Fewer rungs = a decoration ladder (user decision 2026-10-22). */
@@ -164,6 +171,18 @@ namespace LadderRules
 
 	/** Why he may not start the climb now (None = go; Leased / MustStand = wait at the link). */
 	CODEXTACTICS_API ELadderRefusal CanStartClimb(const FEntryContext& Context);
+
+	/**
+	 * An enemy may climb (LADDERS.md 7.5, user decision 2026-10-22): its class climbs (the non-mutant humans), its body has the clips
+	 * (else a warning and it paths around) and the ladder admits enemies (ALadderActor::bAllowEnemies). Mutants never.
+	 */
+	CODEXTACTICS_API bool EnemyMayClimb(bool bClassClimbs, bool bHasClips, bool bLadderAllowsEnemies);
+
+	/**
+	 * Turn-based (LADDERS.md 7.6): a climber who joins the grid off his ladder stays where it left him when he stands on an upper floor
+	 * (feet more than ToleranceCm over the grid's ground - the one-level grid would snap him over a roof's edge); else he takes a cell.
+	 */
+	CODEXTACTICS_API bool JoinsOnUpperFloor(float FeetZ, float GridGroundZ, float ToleranceCm = 60.f);
 
 	/** Abort placement: the top end when the climber is above half way (Rung > RungCount / 2), else the bottom. */
 	CODEXTACTICS_API bool NearestEndIsTop(int32 Rung, int32 RungCount);

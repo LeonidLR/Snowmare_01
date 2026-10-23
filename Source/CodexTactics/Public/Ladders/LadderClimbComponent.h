@@ -62,9 +62,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	TSoftObjectPtr<UAnimSequence> IntoFromTopClip;
 
-	/** The anim graph's full-body slot. */
+	/** The anim graph's full-body slot (an enemy's UEnemyAnimInstance::OneShotSlot is used on an enemy body). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	FName MontageSlot = TEXT("FullBody");
+
+	/** A climbing enemy waits this long at a leased ladder, then its AI decides afresh (it may queue again), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0.5"))
+	float EnemyQueueSeconds = 6.f;
 
 	// --- Tunables (LADDERS.md 7.9) ---
 
@@ -129,6 +133,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder IK")
 	bool bRungIK = true;
 
+	/**
+	 * This body's offset from the clips' hang line on the loop, cm: X away from the rungs (towards the climber), Y up. Zero for the
+	 * Manny-proportioned bodies the clips were made on; a body whose arms cannot reach the hand rungs (the Marksman's short torso) hangs
+	 * a little higher / closer. Faded in with the rung IK on the loop, out at the transitions.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder IK")
+	FVector2D BodyHangOffset = FVector2D::ZeroVector;
+
 	// --- API ---
 
 	/**
@@ -149,6 +161,15 @@ public:
 
 	ELadderClimbState GetState() const { return State; }
 
+	/** Loads the clips (once) and extracts their root tracks; false when one is missing (that body cannot climb). */
+	bool EnsureClips() { return LoadClips(); }
+
+	/** The climb owns the body: any state but None, or an entry pending for the next tick (the owner's AI waits). */
+	bool IsBusy() const { return State != ELadderClimbState::None || bEntryPending; }
+
+	/** The slot the climb clips play on for this body. */
+	FName GetClipSlot() const;
+
 	/** On the ladder or moving onto / off it, or falling off it (not None / Queue). */
 	bool IsOnLadder() const { return LadderRules::IsOnLadderState(State); }
 
@@ -164,6 +185,12 @@ public:
 
 	/** Where a save taken now puts him: the link point of the end he is heading to (7.8); his location when not climbing. */
 	FVector GetSaveLocation() const;
+
+	/**
+	 * The floor he counts on for the roof cutaway / minimap (LADDERS.md 7.3): on the ladder (or falling off it) the spot where the climb
+	 * started - the floor he left - until ExitTop / ExitBottom ends; his location otherwise.
+	 */
+	FVector GetFloorReferenceLocation() const;
 
 	/** Rung IK for the anim instance (game thread). */
 	const FLadderIKFrame& GetIKFrame() const { return IKFrame; }
@@ -196,6 +223,11 @@ private:
 
 	bool LoadClips();
 	FRootTrack ExtractTrack(UAnimSequence* Clip) const;
+	/**
+	 * Takes the clip's own lift of its last part out of Track (the ClimbOutTop's feet rise with the body after LiftStart although they stand
+	 * on the top): from LiftStart the smaller of the two feet's rise is subtracted from the root's height. Returns the lift removed at the end.
+	 */
+	float RemoveClipLift(UAnimSequence* Clip, FRootTrack& Track, float LiftStart) const;
 	/** The up loop's rise share at Time (0..1). */
 	float LoopFraction(float Time) const;
 
@@ -219,6 +251,14 @@ private:
 	/** The ClimbOutTop warp between the hang pose on rung Rung and the platform: its scale and where it ends on top (capsule centres). */
 	void TopWarp(int32 Rung, FVector& OutHang, FVector& OutTop, FVector& OutScale) const;
 	void BeginExitTop();
+	/** The platform's edge behind the rung plane at the ladder's top, cm (a trace towards the wall); -1 = none found. */
+	float MeasureTopEdge() const;
+	/**
+	 * On ClimbOutTop (both ways) the knees / feet swing over the platform's edge while still a little under its top (the clip's ladder stood
+	 * further off its ledge): pushes him off the wall just enough that no leg bone below the top is past the edge (a few cm, released smoothly).
+	 * Base = where the root track puts him. Returns the push, cm.
+	 */
+	float EdgePushFor(const FVector& Base, float DeltaTime);
 	void BeginLoop(bool bUp);
 	void BeginExitBottom();
 	void FinishClimb();
@@ -251,9 +291,13 @@ private:
 	TWeakObjectPtr<ALadderActor> PendingLadder;
 	bool bPendingUp = true;
 	float QueueRetry = 0.f;
+	/** Time spent in Queue (an enemy gives up after EnemyQueueSeconds). */
+	float QueueSeconds = 0.f;
 
 	FVector PendingDestination = FVector::ZeroVector;
 	bool bHasPendingDestination = false;
+	/** The actor location when the climb took the body (GetFloorReferenceLocation). */
+	FVector ClimbStartLocation = FVector::ZeroVector;
 
 	LadderRules::FLoopPos LoopPos;
 	LadderRules::FLoopPos TargetPos;
@@ -287,6 +331,17 @@ private:
 	float ClipTime = 0.f;
 	/** The warped clip plays backwards (ClimbOutTop going down). */
 	bool bWarpReverse = false;
+	/** EdgePushFor: the edge measured at the top transition, the push (cm, away from the wall) and its release spring. */
+	float TopEdgeCm = -1.f;
+	float EdgePush = 0.f;
+	float EdgePushVelocity = 0.f;
+	float MaxEdgePush = 0.f;
+
+public:
+	/** The largest edge push of the last climb (smokes), cm. */
+	float GetMaxEdgePush() const { return MaxEdgePush; }
+
+private:
 	/** AlignTop: walk to the ladder head (0), then the turn in place (1). */
 	int32 AlignPhase = 0;
 	float AlignPhaseStart = 0.f;
@@ -309,6 +364,10 @@ private:
 
 	/** Knockdown drop. */
 	float DropFeetZ = 0.f;
+	/** A body without collision (a killed enemy's capsule is switched off) falls by code onto this floor. */
+	float DropFloorZ = 0.f;
+	float DropSpeed = 0.f;
+	bool bDropFloorFound = false;
 	bool bKnockdownOnLanding = false;
 	EKnockdownDirection DropDirection = EKnockdownDirection::Back;
 	EKnockdownCause DropCause = EKnockdownCause::None;

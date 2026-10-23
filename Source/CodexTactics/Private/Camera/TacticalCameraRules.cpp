@@ -76,6 +76,17 @@ namespace TacticalCameraRules
 		return 1.f - FMath::Pow(1.f - Clamped, 3.f);
 	}
 
+	float SpringDamp(float Current, float& Velocity, float Target, float HalfLife, float DeltaSeconds)
+	{
+		// Critically damped spring (exact solution over the step): y = 2 ln2 / half-life.
+		const float Y = 2.f * 0.69314718f / FMath::Max(HalfLife, 0.001f);
+		const float J0 = Current - Target;
+		const float J1 = Velocity + J0 * Y;
+		const float Decay = FMath::Exp(-Y * FMath::Max(DeltaSeconds, 0.f));
+		Velocity = Decay * (Velocity - J1 * Y * DeltaSeconds);
+		return Decay * (J0 + J1 * DeltaSeconds) + Target;
+	}
+
 	FVector FollowWithDeadzone(const FVector& Focus, const FVector& Target, float Deadzone, float Speed, float DeltaSeconds)
 	{
 		FVector Result = Focus;

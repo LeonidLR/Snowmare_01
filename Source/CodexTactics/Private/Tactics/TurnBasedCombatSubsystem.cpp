@@ -48,6 +48,7 @@
 #include "Data/WeaponTuning.h"
 #include "Characters/EnemyTacticsRules.h"
 #include "Tactics/TurnClickRules.h"
+#include "Ladders/LadderRules.h"
 #include "Tactics/TurnGridOverlayActor.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
@@ -160,6 +161,9 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	Turrets.Reset();
 	BurningBarrels.Reset();
 	Movers.Reset();
+	LadderSquad.Reset();
+	LadderEnemies.Reset();
+	LadderEnemiesOff.Reset();
 
 	// The grid on flat, open ground holding the squad (TurnArenaRules, game designer 2026-10-22: never inside / across a building).
 	// The player's entry (Space hold) is refused without such ground; a direct entry (smokes, scripted) falls back to the grid
@@ -185,8 +189,9 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	{
 		if (!IsDead(Member))
 		{
-			Squad.Add(Member);
 			Ignore.Add(Member);
+			// On a ladder (LADDERS.md 7.6, user decision 2026-10-22): the grid forms without him; he finishes the climb and joins next round.
+			(Member->IsClimbingLadder() ? LadderSquad : Squad).Add(Member);
 		}
 	}
 	TArray<AEnemyCharacter*> LivingEnemies;
@@ -195,6 +200,11 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		Ignore.Add(*It);
 		if (!It->IsDying() && !IsDead(*It))
 		{
+			if (It->IsClimbingLadder())
+			{
+				LadderEnemies.Add(*It); // the same for an enemy on a ladder: not frozen, not on the grid until it is off
+				continue;
+			}
 			LivingEnemies.Add(*It);
 		}
 	}
@@ -313,24 +323,11 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		return Dir.IsNearlyZero() ? Fallback : FGorky17Utils::VectorToFacing(FIntPoint(FMath::RoundToInt(Dir.X), FMath::RoundToInt(Dir.Y)));
 	};
 
-	for (const TWeakObjectPtr<AOperativeCharacter>& Weak : Squad)
+	for (const TWeakObjectPtr<AOperativeCharacter>& Weak : TArray<TWeakObjectPtr<AOperativeCharacter>>(Squad))
 	{
 		AOperativeCharacter* Member = Weak.Get();
-		const FIntPoint Cell = Grid->FindNearestFreeCell(Grid->WorldToGrid(Member->GetActorLocation()));
-		Grid->SetOccupant(Cell, Member, EGorkyOccupantType::Squad);
-		Member->StopOperative();
-		PlaceOnCell(Member, Cell);
-		FTurnUnitState& State = States.Add(Member);
-		State.Actor = Member;
-		State.GridPos = Cell;
-		State.bSquad = true;
-		State.MaxAP = State.AP = Balance.SquadMaxAP;
-		State.Armor = 5.f;
-		State.BaseDamage = Balance.SquadBaseDamage;
-		State.Stance = Member->GetStance();
 		// Godot: the squad faces the enemies (SOUTH on its map).
-		State.Facing = GridEnemies.IsEmpty() ? EGorkyFacing::South : FacingTowards(Member->GetActorLocation(), EnemyCentroid, EGorkyFacing::South);
-		AlignFacing(Member, State.Facing);
+		AddSquadUnit(Member, GridEnemies.IsEmpty() ? EGorkyFacing::South : FacingTowards(Member->GetActorLocation(), EnemyCentroid, EGorkyFacing::South), false);
 	}
 	TMap<EEnemyArchetype, int32> TypeCounts;
 	for (AEnemyCharacter* Enemy : GridEnemies)
@@ -340,19 +337,7 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		{
 			Anim->SetIdleVariation(TypeCounts.FindOrAdd(Enemy->GetArchetype())++);
 		}
-		const FIntPoint Cell = Grid->FindNearestFreeCell(Grid->WorldToGrid(Enemy->GetActorLocation()));
-		Grid->SetOccupant(Cell, Enemy, EGorkyOccupantType::Enemy);
-		PlaceOnCell(Enemy, Cell);
-		Enemies.Add(Enemy);
-		FTurnUnitState& State = States.Add(Enemy);
-		State.Actor = Enemy;
-		State.GridPos = Cell;
-		const FEnemyTurnProfile TurnProfile = TurnProfileOf(Enemy);
-		State.MaxAP = State.AP = EnemyTurnRules::MaxAP(TurnProfile, Balance.EnemyMaxAP);
-		State.Armor = 3.f;
-		State.BaseDamage = EnemyTurnRules::BaseDamage(TurnProfile, Balance.EnemyBaseDamage);
-		State.Facing = FacingTowards(Enemy->GetActorLocation(), Center, EGorkyFacing::North);
-		AlignFacing(Enemy, State.Facing);
+		AddGridEnemy(Enemy, FacingTowards(Enemy->GetActorLocation(), Center, EGorkyFacing::North));
 	}
 
 	// Godot start_combat: zones_manager.setup + evaluate_wave_roster (the grid's enemies).
@@ -396,8 +381,8 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	Round = 1;
 	ContactHitsThisFight = 0;
 	GuardCorrections = 0;
-	UE_LOG(LogCodexTactics, Display, TEXT("Turn-based combat: %d operatives, %d enemies, %d barrels, %d mines, %d turrets"),
-		Squad.Num(), Enemies.Num(), GridBarrels.Num(), GridMines.Num(), GridTurrets.Num());
+	UE_LOG(LogCodexTactics, Display, TEXT("Turn-based combat: %d operatives, %d enemies, %d barrels, %d mines, %d turrets; on ladders (join next round): %d operatives, %d enemies"),
+		Squad.Num(), Enemies.Num(), GridBarrels.Num(), GridMines.Num(), GridTurrets.Num(), LadderSquad.Num(), LadderEnemies.Num());
 	StartPlayerTurn();
 }
 
@@ -430,6 +415,9 @@ void UTurnBasedCombatSubsystem::EndCombat(bool bVictory, bool bLeaveFlow)
 	Squad.Reset();
 	Enemies.Reset();
 	Turrets.Reset();
+	LadderSquad.Reset();
+	LadderEnemies.Reset();
+	LadderEnemiesOff.Reset();
 	EnemyQueue.Reset();
 	TurretQueue.Reset();
 	BurningBarrels.Reset();
@@ -469,6 +457,10 @@ void UTurnBasedCombatSubsystem::FreezeWorld(const TSet<AActor*>& OnGrid)
 	HeldAnchors.Reset();
 	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 	{
+		if (LadderEnemies.Contains(*It))
+		{
+			continue; // on a ladder: it finishes the climb first (LADDERS.md 7.6), then HoldLadderEnemiesOff holds it
+		}
 		if (AController* Controller = It->GetController())
 		{
 			Controller->StopMovement();
@@ -479,20 +471,9 @@ void UTurnBasedCombatSubsystem::FreezeWorld(const TSet<AActor*>& OnGrid)
 		It->SetTurnBasedHeld(true);
 		HeldAnchors.Add(*It, It->GetActorLocation());
 		// Godot: enemies outside the fight turn dark and translucent until it ends.
-		if (!OnGrid.Contains(*It) && StasisMaterial)
+		if (!OnGrid.Contains(*It))
 		{
-			TArray<UMeshComponent*> Meshes;
-			It->GetComponents<UMeshComponent>(Meshes);
-			for (UMeshComponent* Mesh : Meshes)
-			{
-				FTurnStasisMesh& Entry = StasisMeshes.AddDefaulted_GetRef();
-				Entry.Mesh = Mesh;
-				for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); ++Slot)
-				{
-					Entry.Materials.Add(Mesh->GetMaterial(Slot));
-					Mesh->SetMaterial(Slot, StasisMaterial);
-				}
-			}
+			ApplyStasis(*It);
 		}
 	}
 	for (TActorIterator<ATurretActor> It(World); It; ++It)
@@ -503,6 +484,173 @@ void UTurnBasedCombatSubsystem::FreezeWorld(const TSet<AActor*>& OnGrid)
 	{
 		Freeze(*It);
 	}
+}
+
+void UTurnBasedCombatSubsystem::ApplyStasis(AEnemyCharacter* Enemy)
+{
+	if (!Enemy || !StasisMaterial)
+	{
+		return;
+	}
+	TArray<UMeshComponent*> Meshes;
+	Enemy->GetComponents<UMeshComponent>(Meshes);
+	for (UMeshComponent* Mesh : Meshes)
+	{
+		FTurnStasisMesh& Entry = StasisMeshes.AddDefaulted_GetRef();
+		Entry.Mesh = Mesh;
+		for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); ++Slot)
+		{
+			Entry.Materials.Add(Mesh->GetMaterial(Slot));
+			Mesh->SetMaterial(Slot, StasisMaterial);
+		}
+	}
+}
+
+void UTurnBasedCombatSubsystem::AddSquadUnit(AOperativeCharacter* Member, EGorkyFacing Facing, bool bKeepPlace)
+{
+	if (!Member || !Grid)
+	{
+		return;
+	}
+	Squad.AddUnique(Member);
+	FIntPoint Cell = Grid->WorldToGrid(Member->GetActorLocation());
+	// A climber joining on an upper floor stays where the ladder left him (the grid is one level: no snap to a cell centre, which could
+	// put him over the roof's edge); the cell under him is only taken while it is free ground (a roof over a building stays an obstacle).
+	const bool bKeep = bKeepPlace && Grid->IsValidCell(Cell);
+	if (!bKeep)
+	{
+		Cell = Grid->FindNearestFreeCell(Cell);
+	}
+	if (!bKeep || !Grid->IsCellOccupied(Cell))
+	{
+		Grid->SetOccupant(Cell, Member, EGorkyOccupantType::Squad);
+	}
+	Member->StopOperative();
+	if (!bKeep)
+	{
+		PlaceOnCell(Member, Cell);
+	}
+	FTurnUnitState& State = States.Add(Member);
+	State.Actor = Member;
+	State.GridPos = Cell;
+	State.bSquad = true;
+	State.MaxAP = State.AP = Balance.SquadMaxAP;
+	State.Armor = 5.f;
+	State.BaseDamage = Balance.SquadBaseDamage;
+	State.Stance = Member->GetStance();
+	State.Facing = Facing;
+	AlignFacing(Member, State.Facing);
+}
+
+void UTurnBasedCombatSubsystem::AddGridEnemy(AEnemyCharacter* Enemy, EGorkyFacing Facing)
+{
+	if (!Enemy || !Grid)
+	{
+		return;
+	}
+	const FIntPoint Cell = Grid->FindNearestFreeCell(Grid->WorldToGrid(Enemy->GetActorLocation()));
+	Grid->SetOccupant(Cell, Enemy, EGorkyOccupantType::Enemy);
+	PlaceOnCell(Enemy, Cell);
+	Enemies.AddUnique(Enemy);
+	FTurnUnitState& State = States.Add(Enemy);
+	State.Actor = Enemy;
+	State.GridPos = Cell;
+	const FEnemyTurnProfile TurnProfile = TurnProfileOf(Enemy);
+	State.MaxAP = State.AP = EnemyTurnRules::MaxAP(TurnProfile, Balance.EnemyMaxAP);
+	State.Armor = 3.f;
+	State.BaseDamage = EnemyTurnRules::BaseDamage(TurnProfile, Balance.EnemyBaseDamage);
+	State.Facing = Facing;
+	AlignFacing(Enemy, State.Facing);
+}
+
+void UTurnBasedCombatSubsystem::HoldLadderEnemiesOff()
+{
+	for (int32 Index = LadderEnemies.Num() - 1; Index >= 0; --Index)
+	{
+		AEnemyCharacter* Enemy = LadderEnemies[Index].Get();
+		if (Enemy && !Enemy->IsDying() && !IsDead(Enemy) && Enemy->IsClimbingLadder())
+		{
+			continue; // still climbing (normal speed, no hold)
+		}
+		LadderEnemies.RemoveAt(Index);
+		if (!Enemy || Enemy->IsDying() || IsDead(Enemy))
+		{
+			continue;
+		}
+		// Off the ladder: held at once like every enemy of the fight (no real-time AI until the grid takes it next round).
+		if (AController* Controller = Enemy->GetController())
+		{
+			Controller->StopMovement();
+		}
+		if (Enemy->IsActorTickEnabled())
+		{
+			Enemy->SetActorTickEnabled(false);
+			FrozenActors.Add(Enemy);
+		}
+		Enemy->SetTurnBasedHeld(true);
+		HeldAnchors.Add(Enemy, Enemy->GetActorLocation());
+		LadderEnemiesOff.Add(Enemy);
+		UE_LOG(LogCodexTactics, Display, TEXT("[TurnBased] %s is off its ladder: held, joins next round"), *Enemy->GetName());
+	}
+}
+
+void UTurnBasedCombatSubsystem::JoinLadderClimbers()
+{
+	if (!Grid)
+	{
+		return;
+	}
+	HoldLadderEnemiesOff();
+	FVector EnemyCentroid = FVector::ZeroVector;
+	int32 EnemyCount = 0;
+	for (const TWeakObjectPtr<AActor>& Weak : Enemies)
+	{
+		if (const AActor* Enemy = Weak.Get())
+		{
+			EnemyCentroid += Enemy->GetActorLocation();
+			++EnemyCount;
+		}
+	}
+	EnemyCentroid = EnemyCount > 0 ? EnemyCentroid / EnemyCount : Grid->OriginWorld;
+	for (int32 Index = LadderSquad.Num() - 1; Index >= 0; --Index)
+	{
+		AOperativeCharacter* Member = LadderSquad[Index].Get();
+		if (Member && !IsDead(Member) && Member->IsClimbingLadder())
+		{
+			continue; // still on the ladder: the round after he is off
+		}
+		LadderSquad.RemoveAt(Index);
+		if (!Member || IsDead(Member))
+		{
+			continue;
+		}
+		const FVector Dir = (EnemyCentroid - Member->GetActorLocation()).GetSafeNormal2D();
+		const EGorkyFacing Facing = Dir.IsNearlyZero() ? EGorkyFacing::South
+			: FGorky17Utils::VectorToFacing(FIntPoint(FMath::RoundToInt(Dir.X), FMath::RoundToInt(Dir.Y)));
+		// Off the ladder on an upper floor (the roof he climbed to): he stays up there; on the ground floor he takes a cell like everyone.
+		const float FeetZ = static_cast<float>(Member->GetActorLocation().Z) - Member->GetSimpleCollisionHalfHeight();
+		AddSquadUnit(Member, Facing, LadderRules::JoinsOnUpperFloor(FeetZ, Grid->GroundZ));
+		Log(FString::Printf(TEXT("%s is off the ladder and joins the fight"), *NameOf(Member)));
+		UE_LOG(LogCodexTactics, Display, TEXT("[TurnBased] %s joins the grid off his ladder (round %d)"), *Member->GetName(), Round);
+	}
+	for (const TWeakObjectPtr<AEnemyCharacter>& Weak : LadderEnemiesOff)
+	{
+		AEnemyCharacter* Enemy = Weak.Get();
+		if (!Enemy || Enemy->IsDying() || IsDead(Enemy))
+		{
+			continue;
+		}
+		if (TurnClickRules::IsInsideGrid(Enemy->GetActorLocation(), Grid->OriginWorld, TurnGridCells, TurnCellSize))
+		{
+			AddGridEnemy(Enemy, EGorkyFacing::North);
+			UE_LOG(LogCodexTactics, Display, TEXT("[TurnBased] %s joins the grid off its ladder (round %d)"), *Enemy->GetName(), Round);
+		}
+		else
+		{
+			ApplyStasis(Enemy); // outside the fight, as the others outside it
+		}
+	}
+	LadderEnemiesOff.Reset();
 }
 
 void UTurnBasedCombatSubsystem::RestoreWorld()
@@ -1038,6 +1186,10 @@ bool UTurnBasedCombatSubsystem::GetUpActiveUnit()
 
 void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 {
+	if (IsActive() && LadderEnemies.Num() > 0)
+	{
+		HoldLadderEnemiesOff();
+	}
 	UpdatePendingShot(DeltaTime);
 	UpdateKnockedDownTurn();
 	// The relocation hologram goes with the relocation (it ends in many places: confirm, cancel, turn end, combat end).
@@ -1282,10 +1434,19 @@ void UTurnBasedCombatSubsystem::StartPlayerTurn()
 		}
 	}
 
+	// LADDERS.md 7.6: the climbers that are off their ladder join from this round.
+	if (Round > 1)
+	{
+		JoinLadderClimbers();
+	}
 	Squad.RemoveAll([this](const TWeakObjectPtr<AOperativeCharacter>& Member) { return IsDead(Member.Get()); });
 	if (Squad.IsEmpty())
 	{
-		CheckBattleEnd();
+		if (!CheckBattleEnd())
+		{
+			// The whole squad is still on ladders: no squad turn this round, the enemies act (they join the round after).
+			EndSquadPhase();
+		}
 		return;
 	}
 	ActiveIndex = FMath::Clamp(ActiveIndex, 0, Squad.Num() - 1);
@@ -4417,12 +4578,24 @@ bool UTurnBasedCombatSubsystem::CheckBattleEnd()
 		return true;
 	}
 	Enemies.RemoveAll([](const TWeakObjectPtr<AActor>& Weak) { return !Weak.IsValid(); });
-	if (Enemies.IsEmpty())
+	// Climbers on their way off a ladder still count (LADDERS.md 7.6: they join next round).
+	const auto Living = [this](const auto& List)
+	{
+		for (const auto& Weak : List)
+		{
+			if (Weak.IsValid() && !IsDead(Weak.Get()))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	if (Enemies.IsEmpty() && !Living(LadderEnemies) && !Living(LadderEnemiesOff))
 	{
 		EndCombat(true, true);
 		return true;
 	}
-	if (Squad.IsEmpty())
+	if (Squad.IsEmpty() && !Living(LadderSquad))
 	{
 		EndCombat(false, true);
 		return true;

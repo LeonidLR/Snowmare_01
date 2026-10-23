@@ -266,6 +266,12 @@ public:
 	/** The grid overlay actor of the fight (tests). */
 	const ATurnGridOverlayActor* GetOverlay() const { return Overlay; }
 	int32 GetSquadCount() const { return Squad.Num(); }
+	/**
+	 * Climbers kept out of the grid (docs/design/LADDERS.md 7.6, user decision 2026-10-22): an operative / enemy on a ladder when the fight
+	 * starts finishes the climb at normal speed and joins on the next round once off it. Operatives still waiting / enemies still waiting.
+	 */
+	int32 GetLadderSquadWaiting() const { return LadderSquad.Num(); }
+	int32 GetLadderEnemiesWaiting() const { return LadderEnemies.Num() + LadderEnemiesOff.Num(); }
 	/** Meshes currently shown with the stasis material (enemies outside the fight). */
 	int32 GetStasisMeshCount() const { return StasisMeshes.Num(); }
 	/** How many times the held-enemy guard put an enemy back this fight (MarksmanCloseShotSmoke: 0 once the cause is fixed). */
@@ -472,6 +478,16 @@ private:
 	void EndCombat(bool bVictory, bool bLeaveFlow);
 	void FreezeWorld(const TSet<AActor*>& OnGrid);
 	void RestoreWorld();
+	/** The stasis look of an enemy outside the fight. */
+	void ApplyStasis(AEnemyCharacter* Enemy);
+	/** An operative's grid unit (cell, AP, facing); bKeepPlace = left where he stands (a climber joining on an upper floor). */
+	void AddSquadUnit(AOperativeCharacter* Member, EGorkyFacing Facing, bool bKeepPlace);
+	/** An enemy's grid unit (cell, AP by its profile, facing). */
+	void AddGridEnemy(AEnemyCharacter* Enemy, EGorkyFacing Facing);
+	/** LADDERS.md 7.6: an enemy that climbed off its ladder is held at once (no real-time AI during the fight); Tick. */
+	void HoldLadderEnemiesOff();
+	/** LADDERS.md 7.6: the climbers that are off their ladder join the grid (a new round); enemies outside the grid go into stasis. */
+	void JoinLadderClimbers();
 	void BakeObstacles(const TArray<AActor*>& Ignore);
 	void PlaceOnCell(AActor* Actor, const FIntPoint& Cell) const;
 	void AlignFacing(AActor* Actor, EGorkyFacing Facing) const;
@@ -589,6 +605,10 @@ private:
 	TArray<TWeakObjectPtr<AActor>> FrozenActors;
 	/** Every enemy held by this fight (AEnemyCharacter::SetTurnBasedHeld) with its place when frozen (stasis anchor; grid units use their cell). */
 	TMap<TWeakObjectPtr<AEnemyCharacter>, FVector> HeldAnchors;
+	/** On a ladder when the fight started (LADDERS.md 7.6): operatives waiting to join, enemies still climbing / held off it. */
+	TArray<TWeakObjectPtr<AOperativeCharacter>> LadderSquad;
+	TArray<TWeakObjectPtr<AEnemyCharacter>> LadderEnemies;
+	TArray<TWeakObjectPtr<AEnemyCharacter>> LadderEnemiesOff;
 	/** Puts back a held enemy pushed off its cell / place (or outside the grid) — the guard of the 2026-10-06 bug fix. */
 	void EnforceHeldEnemies();
 	TArray<FMover> Movers;

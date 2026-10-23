@@ -53,7 +53,7 @@ bool FLadderRungMathTest::RunTest(const FString&)
 	using namespace LadderRules;
 	const FClipContract Clip;
 	constexpr float L = 1.767f;
-	TestTrue(TEXT("ClimbOut starts 7 rungs below the platform"), ClimbOutStart(Clip, 11) == FLoopPos{ 4, 0.f });
+	TestTrue(TEXT("ClimbOut starts 5 rungs below the platform (re-measured 2026-10-23: the clip steps onto a top 182 cm up)"), ClimbOutStart(Clip, 11) == FLoopPos{ 6, 0.f });
 	TestTrue(TEXT("IntoFromTop lands 5 rungs below the platform"), IntoFromTopEnd(Clip, 11) == FLoopPos{ 6, 0.f });
 	TestTrue(TEXT("even target: start at the floor, loop start"), BottomPos(4, L) == FLoopPos{ 0, 0.f });
 	TestTrue(TEXT("odd target: the one-rung remainder is the first half of the loop"), BottomPos(1, L) == FLoopPos{ -1, L * 0.5f });
@@ -124,6 +124,17 @@ bool FLadderRefusalTest::RunTest(const FString&)
 	TestTrue(TEXT("no clips for the body"), With([](FEntryContext& C) { C.bHasClips = false; }) == ELadderRefusal::NoClips);
 	TestTrue(TEXT("leased: he queues"), With([](FEntryContext& C) { C.bLeasedByOther = true; }) == ELadderRefusal::Leased);
 	TestTrue(TEXT("prone / crouched: he stands up first"), With([](FEntryContext& C) { C.bStanding = false; }) == ELadderRefusal::MustStand);
+
+	// Enemies (LADDERS.md 7.5): the climbing humans with clips on a ladder open to enemies; mutants never.
+	TestTrue(TEXT("a zombified PMC / marksman with clips on an open ladder climbs"), EnemyMayClimb(true, true, true));
+	TestFalse(TEXT("a mutant never climbs"), EnemyMayClimb(false, true, true));
+	TestFalse(TEXT("a climbing class without clips for its body paths around"), EnemyMayClimb(true, false, true));
+	TestFalse(TEXT("a squad-only ladder (bAllowEnemies off)"), EnemyMayClimb(true, true, false));
+
+	// Turn-based (LADDERS.md 7.6): a climber joins on the roof where the ladder left him, on the ground floor on a cell.
+	TestTrue(TEXT("off a 2.9 m deck: joins up there"), JoinsOnUpperFloor(291.f, 0.f));
+	TestFalse(TEXT("off at the foot: takes a cell"), JoinsOnUpperFloor(2.f, 0.f));
+	TestFalse(TEXT("a step of 40 cm is the same floor"), JoinsOnUpperFloor(140.f, 100.f));
 
 	const FFallDamage Rule;
 	TestTrue(TEXT("a fall under 1 m: no damage"), FallDamage(90.f, Rule) == 0.f);

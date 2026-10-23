@@ -1,4 +1,5 @@
 #include "Camera/TacticalCameraPawn.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "Core/PlayerCommands.h"
 #include "Camera/CameraComponent.h"
 #include "Characters/OperativeCharacter.h"
@@ -443,13 +444,38 @@ void ATacticalCameraPawn::UpdateRotation(float RealDelta)
 
 FVector ATacticalCameraPawn::ComputeFocus(float RealDelta)
 {
-	const FVector TargetLocation = FollowTarget->GetActorLocation();
+	FVector TargetLocation = FollowTarget->GetActorLocation();
+	TargetLocation.Z = SmoothLadderZ(TargetLocation.Z, RealDelta);
 	// Godot: a turn-based target that is not the leader (an enemy on its turn) sits exactly in the centre.
 	if (IsTurnBased() && IsFollowingLeader())
 	{
 		return TacticalCameraRules::FollowWithDeadzone(Focus, TargetLocation, Config.TacticalDeadzone, Config.TacticalFollowSpeed, RealDelta);
 	}
 	return TargetLocation;
+}
+
+float ATacticalCameraPawn::SmoothLadderZ(float TargetZ, float RealDelta)
+{
+	const ULadderClimbComponent* Climb = FollowTarget.IsValid() ? FollowTarget->FindComponentByClass<ULadderClimbComponent>() : nullptr;
+	const bool bClimbing = Climb && Climb->IsClimbing();
+	if (!bClimbing && !bLadderZSmoothing)
+	{
+		return TargetZ;
+	}
+	if (!bLadderZSmoothing)
+	{
+		// From where the view is now: no jump when the climb starts.
+		bLadderZSmoothing = true;
+		LadderZ = bInitialized ? static_cast<float>(Focus.Z) : TargetZ;
+		LadderZVelocity = 0.f;
+	}
+	LadderZ = TacticalCameraRules::SpringDamp(LadderZ, LadderZVelocity, TargetZ, Config.LadderZHalfLife, RealDelta);
+	if (!bClimbing && FMath::Abs(LadderZ - TargetZ) < 1.f && FMath::Abs(LadderZVelocity) < 5.f)
+	{
+		bLadderZSmoothing = false; // settled on the floor he climbed to: the plain follow again
+		return TargetZ;
+	}
+	return LadderZ;
 }
 
 bool ATacticalCameraPawn::IsFollowingLeader() const

@@ -16,6 +16,11 @@ void AOperativeCharacter::ResumeMoveAfterLadder(const FVector& Destination)
 	RequestMove(Destination);
 }
 
+FVector AOperativeCharacter::GetFloorReferenceLocation() const
+{
+	return LadderClimb ? LadderClimb->GetFloorReferenceLocation() : GetActorLocation();
+}
+
 FVector AOperativeCharacter::GetSaveLocation() const
 {
 	return LadderClimb && LadderClimb->IsOnLadder() ? LadderClimb->GetSaveLocation() : GetActorLocation();

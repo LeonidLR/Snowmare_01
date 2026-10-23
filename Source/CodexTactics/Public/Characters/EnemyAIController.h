@@ -41,6 +41,13 @@ public:
 	/** Forgets the last throttled move: the next ask is issued at once (turn-based hold, world AI pause). */
 	void ResetRepathState();
 
+	/**
+	 * The nav filter of the pawn (docs/design/LADDERS.md 7.4 / 7.5): UNavFilter_NoVaultLadder for a climbing enemy
+	 * (AEnemyCharacter::CanClimbLadders - the ladder links open), else UNavFilter_NoVault (closed). On possession and after the
+	 * enemy's BeginPlay checked its clips.
+	 */
+	void RefreshNavigationFilter();
+
 	/** What the path following does with the last throttled move. */
 	ERepathFollowState GetRepathFollowState() const;
 

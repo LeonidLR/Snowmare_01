@@ -76,7 +76,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "1"))
 	float WallSearchCm = 25.f;
 
-	/** Humans that may climb (LADDERS.md 7.5) may use this ladder (no enemy climbs yet). */
+	/** The climbing enemies (AEnemyCharacter::bCanClimbLadders, LADDERS.md 7.5) may use this ladder; off = the squad only. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	bool bAllowEnemies = true;
 

@@ -262,6 +262,7 @@ def ensure_bp(mesh, sets):
     cdo.set_editor_property("display_name_override", DISPLAY_NAME)
     cdo.set_editor_property("override_knockdown_clip_folder", True)
     cdo.set_editor_property("knockdown_clip_folder", "")
+    cdo.set_editor_property("can_climb_ladders", True)  # a zombified human climbs ladders (docs/design/LADDERS.md 7.5)
     variants = unreal.EnemyLookVariants()
     variants.set_editor_property("meshes", [library.load_asset(p) for p in BODY_MESHES])
     variants.set_editor_property("material_sets", sets)
