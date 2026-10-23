@@ -22,7 +22,8 @@ class UPointsReviewWidget;
  * After the black screen (2026-10-22 b, the campaign - Content/Data/Campaign/campaign.json): with a NEXT level, NextLevelSeconds
  * later the stat-points screen (UPointsReviewWidget) when somebody alive has unspent points ("Continue >" goes on; points may stay
  * unspent), then the squad is handed over (UCampaignSubsystem::CaptureSquad) and the next level opens; without a next level the
- * main menu opens ReturnToMenuSeconds later. Headless checks never leave on their own (SetLeaveInHeadless).
+ * main menu opens ReturnToMenuSeconds later. Automated checks (UMissionSubsystem::IsAutomatedRun - not a run from a loaded save, bug
+ * 2026-10-23) never leave on their own (SetLeaveInHeadless).
  * Also the level START (2026-10-22 b): a black screen with the campaign title that fades in (level JSON "start_fade_seconds", or a
  * campaign arrival). UE-only (the Godot gate only let the squad into the checkpoint).
  */

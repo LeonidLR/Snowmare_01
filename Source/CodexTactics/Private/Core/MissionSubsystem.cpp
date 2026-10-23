@@ -60,6 +60,7 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	const EMissionStartMode AutoMode = bPendingLoad ? EMissionStartMode::Game
 		: MissionRules::GetAutoStartMode(bQuick, Session ? Session->LastMode : EMissionStartMode::None);
 	bHeadlessStart = MissionRules::ShouldSkipIntro(bHeadlessCommandLine, Session && Session->bFrontendStart, bQuick, bPendingLoad);
+	bAutomatedRun = MissionRules::IsAutomatedRun(bHeadlessCommandLine, Session && Session->bFrontendStart, bQuick);
 	if (Session)
 	{
 		Session->bQuickRestart = false;

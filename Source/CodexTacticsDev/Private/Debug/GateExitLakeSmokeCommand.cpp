@@ -22,6 +22,11 @@
 //     lake door (set dressing) facing away from it, with the carried level / EXP / points / stats / kit and full health; the start fades
 //     in from black with "0.1 Frozen Factory".
 //  CodexTactics.GateExitLakeNoPointsSmoke: the same run with no unspent points -> no points screen, the factory opens at once.
+//  CodexTactics.GateExitLakeKiaSmoke / GateExitLakeKiaNoPointsSmoke (bug 2026-10-23, "two crossed the gate line - the third was dead - and the
+//  level got stuck on the black screen"): the Engineer is killed in the yard before the fight; the two living cross (the first, then the
+//  second), the black screen leaves to the points screen (Commander + Medic-Sapper) / the factory at once; the fallen is handed over as
+//  killed in action and is not spawned on the factory. (The designer's real cause - a save loaded in editor play counted as a headless
+//  check - is the rule test CodexTactics.Mission.Rules.StartModeAndMenu: MissionRules::IsAutomatedRun.)
 
 #include "CoreMinimal.h"
 
@@ -39,6 +44,7 @@
 #include "UI/PointsReviewWidget.h"
 #include "UI/ProfileDialogWidget.h"
 #include "CodexTactics.h"
+#include "Combat/DeathCinematicSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Combat/WaveVictorySubsystem.h"
@@ -110,6 +116,11 @@ namespace GateExitLakeSmoke
 		bool bClip = false;
 		/** GateExitLakeNoPointsSmoke: nobody has points left -> the next level at once. */
 		bool bNoPoints = false;
+		/** GateExitLakeKia*Smoke: the Engineer falls before the fight; two living operatives leave. */
+		bool bKia = false;
+		bool bKiaDone = false;
+		/** The living operatives that must cross. */
+		int32 Living = 3;
 		/** 'Shot': one rendered frame of the points screen. */
 		bool bShot = false;
 		bool bShotTaken = false;
@@ -162,7 +173,7 @@ namespace GateExitLakeSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("[GateExit] clip: %d frames in %s"), State.FrameCount, *State.FrameDir);
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
-		FPlatformMisc::RequestExit(false, State.bNoPoints ? TEXT("GateExitLakeNoPointsSmoke") : TEXT("GateExitLakeSmoke"));
+		FPlatformMisc::RequestExit(false, TEXT("GateExitLakeSmoke"));
 		return false;
 	}
 
@@ -299,9 +310,11 @@ namespace GateExitLakeSmoke
 		Check(State, Continue && Screen->HasContinued() && Exit->IsTravelRequested(), TEXT("\"Continue >\" (points left unspent) opens the next level"));
 		const UCampaignSubsystem* Campaign = UCampaignSubsystem::Get(World);
 		const FCampaignSquadCarry* Carry = Campaign ? &Campaign->GetCarry() : nullptr;
-		Check(State, Carry && Carry->ToMap == TEXT("L_Demo01_B_FrozenFactory") && Carry->FromMap == TEXT("L_Demo01_A_FrozenLake") && Carry->Members.Num() == 3,
-			FString::Printf(TEXT("the squad handed over: %s -> %s, %d operatives"), Carry ? *Carry->FromMap : TEXT("-"), Carry ? *Carry->ToMap : TEXT("-"),
-				Carry ? Carry->Members.Num() : 0));
+		const int32 Fallen = Carry ? Carry->Members.FilterByPredicate([](const FCarriedOperative& Member) { return Member.bKilledInAction; }).Num() : -1;
+		Check(State, Carry && Carry->ToMap == TEXT("L_Demo01_B_FrozenFactory") && Carry->FromMap == TEXT("L_Demo01_A_FrozenLake") && Carry->Members.Num() == 3
+			&& Fallen == 3 - State.Living,
+			FString::Printf(TEXT("the squad handed over: %s -> %s, %d operatives (%d killed in action)"), Carry ? *Carry->FromMap : TEXT("-"), Carry ? *Carry->ToMap : TEXT("-"),
+				Carry ? Carry->Members.Num() : 0, Fallen));
 		Next(State, EStage::Travel);
 		return true;
 	}
@@ -325,13 +338,15 @@ namespace GateExitLakeSmoke
 				Check(State, false, TEXT("the next level (L_Demo01_B_FrozenFactory) opened"));
 				return Finish(State, false);
 			}
-			if (!Squad || !Exit || Squad->GetMembers().Num() < 3 || !Exit->IsStartFadeResolved())
+			if (!Squad || !Exit || Squad->GetMembers().Num() < State.Living || !Exit->IsStartFadeResolved())
 			{
 				return true;
 			}
 			State.FirstArrivalFade = Exit->GetStartFadeAlpha();
 			State.FirstArrivalRealTime = World->GetRealTimeSeconds();
 			Check(State, true, FString::Printf(TEXT("the next level opened: %s (%.1f s after Continue)"), *World->GetMapName(), State.StageTime));
+			Check(State, Squad->GetMembers().Num() == State.Living && (!State.bKia || !FindRole(Squad, EOperativeRole::Engineer)),
+				FString::Printf(TEXT("the factory squad: %d living operatives%s"), Squad->GetMembers().Num(), State.bKia ? TEXT(" (the fallen Engineer stays behind)") : TEXT("")));
 			Next(State, EStage::Arrival);
 			return true;
 		}
@@ -494,7 +509,7 @@ namespace GateExitLakeSmoke
 		{
 			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 			FNavLocation Probe;
-			if ((Squad->GetMembers().Num() < 3 || !(Nav && Nav->ProjectPointToNavigation(Leader->GetActorLocation(), Probe, FVector(60.f, 60.f, 200.f))))
+			if ((Squad->GetMembers().Num() < State.Living || !(Nav && Nav->ProjectPointToNavigation(Leader->GetActorLocation(), Probe, FVector(60.f, 60.f, 200.f))))
 				&& State.StageTime < 120.f)
 			{
 				return true;
@@ -502,6 +517,31 @@ namespace GateExitLakeSmoke
 			if (State.StageTime < 3.f)
 			{
 				return true; // the far end's navmesh builds a moment longer
+			}
+			if (State.bKia && !State.bKiaDone)
+			{
+				State.bKiaDone = true;
+				if (UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>())
+				{
+					Tutorial->SkipTutorial(); // a lesson beat would down him instead of killing him
+				}
+				AOperativeCharacter* Engineer = FindRole(Squad, EOperativeRole::Engineer);
+				if (Engineer && Engineer->HealthComponent)
+				{
+					FDamageSpec Spec;
+					Spec.Amount = 100000.f;
+					Spec.AttackerSource = TEXT("smoke");
+					Engineer->HealthComponent->TakeDamage(Spec);
+				}
+				State.Living = Squad->GetMembers().Num();
+				Check(State, Engineer && Engineer->IsKilledInAction() && State.Living == 2 && !Mission->IsMissionFailed(),
+					FString::Printf(TEXT("[KIA] the Engineer is killed in action in the yard: %d living, the mission goes on"), State.Living));
+				State.StageTime = 0.f;
+				return true;
+			}
+			if (const UDeathCinematicSubsystem* DeathCam = World->GetSubsystem<UDeathCinematicSubsystem>(); DeathCam && DeathCam->IsActive() && State.StageTime < 20.f)
+			{
+				return true;
 			}
 			if (USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>())
 			{
@@ -613,7 +653,7 @@ namespace GateExitLakeSmoke
 			const FVector GateX = Gate->GetActorForwardVector().GetSafeNormal2D();
 			Check(State, FVector::DotProduct(Line.Outward, GateX) > 0.9f, FString::Printf(TEXT("out = the road (the gate's +X, away from the yard): %s"),
 				*Line.Outward.ToCompactString()));
-			Check(State, Mission->GetObjective().ToString().Contains(TEXT("0/3")), FString::Printf(TEXT("objective: \"%s\""), *Mission->GetObjective().ToString()));
+			Check(State, Mission->GetObjective().ToString().Contains(FString::Printf(TEXT("0/%d"), State.Living)), FString::Printf(TEXT("objective: \"%s\""), *Mission->GetObjective().ToString()));
 			Next(State, EStage::Position);
 			return true;
 		}
@@ -630,19 +670,21 @@ namespace GateExitLakeSmoke
 			// 8 m inside, spread along the wall; the commander first.
 			const float Lateral[] = { -170.f, 170.f, 0.f };
 			const float Back[] = { 800.f, 820.f, 1000.f };
+			const int32 Last = Members.Num() - 1; // the one who holds inside (guard) until the others are out
 			for (int32 Index = 0; Index < Members.Num() && Index < 3; ++Index)
 			{
 				AOperativeCharacter* Member = Members[Index];
-				const FVector Spot = OnNav(World, Line.Origin - Line.Outward * Back[Index] + Line.Along * Lateral[Index]);
+				const int32 Place = Index == Last ? 2 : Index;
+				const FVector Spot = OnNav(World, Line.Origin - Line.Outward * Back[Place] + Line.Along * Lateral[Place]);
 				Member->StopOperative();
 				Member->TeleportTo(Spot + FVector(0.f, 0.f, 95.f), Line.Outward.Rotation(), false, true);
 				State.Order.Add(Member);
 				// 7 m out, on the far side of the doorway from the review camera.
 				const float OutLateral[] = { -260.f, -40.f, -150.f };
-				State.OutTargets.Add(OnNav(World, Line.Origin + Line.Outward * 700.f + Line.Along * OutLateral[Index]));
+				State.OutTargets.Add(OnNav(World, Line.Origin + Line.Outward * 700.f + Line.Along * OutLateral[Place]));
 			}
 			Squad->SetLeader(Members[0]);
-			Squad->ToggleGuard(Members[2]); // the third holds his spot inside
+			Squad->ToggleGuard(Members[Last]); // the last holds his spot inside
 			// 2026-10-22 b: what the squad carries out - points on the Commander (3) and the Medic-Sapper (2), none on the Engineer
 			// (no points at all in the NoPoints run), a level / EXP / kit marker each, the Commander wounded (he arrives healed).
 			for (int32 Index = 0; Index < Members.Num() && Index < 3; ++Index)
@@ -674,7 +716,8 @@ namespace GateExitLakeSmoke
 					*State.Order[Index]->GetActorLocation().ToCompactString(), *State.OutTargets[Index].ToCompactString(),
 					GateExitRules::SignedDistance(Line, State.OutTargets[Index]));
 			}
-			Check(State, State.Order.Num() == 3 && Exit->GetRequiredCount() == 3, FString::Printf(TEXT("three living operatives must cross (%d)"), Exit->GetRequiredCount()));
+			Check(State, State.Order.Num() == State.Living && Exit->GetRequiredCount() == State.Living,
+				FString::Printf(TEXT("%d living operatives must cross (%d)"), State.Living, Exit->GetRequiredCount()));
 			if (State.bClip)
 			{
 				State.bRecording = true;
@@ -688,26 +731,40 @@ namespace GateExitLakeSmoke
 			{
 				return true; // the establishing shot: the open door, the squad inside
 			}
-			AOperativeCharacter* First = State.Order[0].Get();
-			AOperativeCharacter* Second = State.Order[1].Get();
-			AOperativeCharacter* Third = State.Order[2].Get();
-			if (!First || !Second || !Third)
+			// All but the last run out first (two of three; with the Engineer fallen: one of two).
+			const int32 Last = State.Order.Num() - 1;
+			AOperativeCharacter* Third = Last > 0 ? State.Order[Last].Get() : nullptr;
+			bool bAll = Third != nullptr;
+			for (int32 Index = 0; Index < Last; ++Index)
 			{
-				Check(State, false, TEXT("the three operatives"));
+				bAll &= State.Order[Index].IsValid();
+			}
+			if (!bAll)
+			{
+				Check(State, false, TEXT("the living operatives"));
 				return Finish(State, false);
 			}
 			if (!State.bFirstTwoOrdered)
 			{
 				State.bFirstTwoOrdered = true;
-				Check(State, First->OrderMoveTo(State.OutTargets[0], true) == EOperativeOrderResult::Accepted
-					&& Second->OrderMoveTo(State.OutTargets[1], true) == EOperativeOrderResult::Accepted, TEXT("the leader and the second run out"));
+				bool bOrdered = true;
+				for (int32 Index = 0; Index < Last; ++Index)
+				{
+					bOrdered &= State.Order[Index]->OrderMoveTo(State.OutTargets[Index], true) == EOperativeOrderResult::Accepted;
+				}
+				Check(State, bOrdered, Last == 1 ? TEXT("the leader runs out") : TEXT("the leader and the second run out"));
 				return true;
 			}
-			if (Exit->GetCrossedCount() == 1 && Mission->GetObjective().ToString().Contains(TEXT("1/3")))
+			if (Exit->GetCrossedCount() == 1 && Mission->GetObjective().ToString().Contains(FString::Printf(TEXT("1/%d"), State.Living)))
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("[GateExit] objective \"%s\""), *Mission->GetObjective().ToString());
 			}
-			if (!(Exit->HasCrossed(First) && Exit->HasCrossed(Second)))
+			bool bFirstOut = true;
+			for (int32 Index = 0; Index < Last; ++Index)
+			{
+				bFirstOut &= Exit->HasCrossed(State.Order[Index].Get());
+			}
+			if (!bFirstOut)
 			{
 				return true;
 			}
@@ -715,22 +772,23 @@ namespace GateExitLakeSmoke
 			{
 				State.TwoOutAt = State.StageTime;
 			}
-			const bool bHolding = !Exit->HasCrossed(Third) && !Exit->IsExiting() && Exit->GetCrossedCount() == 2 && Exit->GetRequiredCount() == 3;
+			const bool bHolding = !Exit->HasCrossed(Third) && !Exit->IsExiting() && Exit->GetCrossedCount() == Last && Exit->GetRequiredCount() == State.Living;
 			State.bSawTwoOutNoFade |= bHolding;
 			if (State.StageTime < State.TwoOutAt + 0.8f)
 			{
 				return true;
 			}
-			Check(State, State.bSawTwoOutNoFade && !Exit->IsExiting() && !Mission->IsMissionComplete() && Mission->GetObjective().ToString().Contains(TEXT("2/3")),
-				FString::Printf(TEXT("two of three out, the third inside: no fade, mission not over (\"%s\")"), *Mission->GetObjective().ToString()));
+			Check(State, State.bSawTwoOutNoFade && !Exit->IsExiting() && !Mission->IsMissionComplete()
+				&& Mission->GetObjective().ToString().Contains(FString::Printf(TEXT("%d/%d"), Last, State.Living)),
+				FString::Printf(TEXT("%d of %d out, the last inside: no fade, mission not over (\"%s\")"), Last, State.Living, *Mission->GetObjective().ToString()));
 			Squad->ToggleGuard(Third);
-			Check(State, Third->OrderMoveTo(State.OutTargets[2], true) == EOperativeOrderResult::Accepted, TEXT("the third runs out"));
+			Check(State, Third->OrderMoveTo(State.OutTargets[Last], true) == EOperativeOrderResult::Accepted, TEXT("the last runs out"));
 			Next(State, EStage::Third);
 			return true;
 		}
 		case EStage::Third:
 		{
-			AOperativeCharacter* Third = State.Order[2].Get();
+			AOperativeCharacter* Third = State.Order.Num() > 0 ? State.Order.Last().Get() : nullptr;
 			if (!Exit->IsExiting())
 			{
 				if (Third && Exit->HasCrossed(Third))
@@ -740,11 +798,12 @@ namespace GateExitLakeSmoke
 				}
 				return true;
 			}
-			Check(State, Third && Exit->HasCrossed(Third) && Exit->GetCrossedCount() == 3 && Exit->GetRequiredCount() == 3,
-				FString::Printf(TEXT("the fade starts when the third crosses (%d / %d out, %.1f s after his order)"), Exit->GetCrossedCount(),
+			Check(State, Third && Exit->HasCrossed(Third) && Exit->GetCrossedCount() == State.Living && Exit->GetRequiredCount() == State.Living,
+				FString::Printf(TEXT("the fade starts when the last crosses (%d / %d out, %.1f s after his order)"), Exit->GetCrossedCount(),
 					Exit->GetRequiredCount(), State.StageTime));
-			Check(State, Mission->IsMissionComplete() && !Mission->IsMissionFailed() && Mission->GetObjective().ToString().Contains(TEXT("3/3")),
-				TEXT("the mission is complete (3/3 out)"));
+			const FString AllOut = FString::Printf(TEXT("%d/%d"), State.Living, State.Living);
+			Check(State, Mission->IsMissionComplete() && !Mission->IsMissionFailed() && Mission->GetObjective().ToString().Contains(AllOut),
+				FString::Printf(TEXT("the mission is complete (%s out)"), *AllOut));
 			Next(State, EStage::Fade);
 			return true;
 		}
@@ -766,8 +825,8 @@ namespace GateExitLakeSmoke
 				return true;
 			}
 			Check(State, Exit->GetTitleAlpha() >= 1.f && Exit->GetFadeAlpha() >= 1.f, TEXT("black screen, \"MISSION COMPLETE\" shown"));
-			Check(State, Mission->IsHeadlessStart() && World->GetName().Contains(TEXT("FrozenLake")) && !Exit->HasLeaveDecision(),
-				TEXT("a headless check stays on the black screen (no menu travel)"));
+			Check(State, Mission->IsAutomatedRun() && World->GetName().Contains(TEXT("FrozenLake")) && !Exit->HasLeaveDecision(),
+				TEXT("a headless check (an automated run) stays on the black screen (no menu travel)"));
 			Check(State, Exit->GetNextLevelMap().EndsWith(TEXT("L_Demo01_B_FrozenFactory")), FString::Printf(TEXT("the campaign's next level: %s"),
 				*Exit->GetNextLevelMap()));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
@@ -805,7 +864,7 @@ namespace GateExitLakeSmoke
 		}
 	}
 
-	void RunWith(const TArray<FString>& Args, UWorld* World, bool bNoPoints)
+	void RunWith(const TArray<FString>& Args, UWorld* World, bool bNoPoints, bool bKia = false)
 	{
 		if (!World)
 		{
@@ -815,6 +874,7 @@ namespace GateExitLakeSmoke
 		State->World = World;
 		State->GameInstance = World->GetGameInstance();
 		State->bNoPoints = bNoPoints;
+		State->bKia = bKia;
 		State->bShot = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); });
 		State->bClip = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Clip"), ESearchCase::IgnoreCase); }) && FApp::CanEverRender();
 		if (State->bClip)
@@ -839,6 +899,27 @@ namespace GateExitLakeSmoke
 	{
 		RunWith(Args, World, true);
 	}
+
+	void RunKia(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, false, true);
+	}
+
+	void RunKiaNoPoints(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, true);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs KiaCommand(
+		TEXT("CodexTactics.GateExitLakeKiaSmoke"),
+		TEXT("Dev check (bug 2026-10-23): GateExitLakeSmoke with the Engineer killed in action - the two living cross, the black screen leaves to the "
+			"stat-points screen and the next campaign level (the fallen stays behind)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunKia));
+
+	static FAutoConsoleCommandWithWorldAndArgs KiaNoPointsCommand(
+		TEXT("CodexTactics.GateExitLakeKiaNoPointsSmoke"),
+		TEXT("Dev check (bug 2026-10-23): GateExitLakeKiaSmoke with no unspent points - the next campaign level opens at once after the black screen."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunKiaNoPoints));
 
 	static FAutoConsoleCommandWithWorldAndArgs NoPointsCommand(
 		TEXT("CodexTactics.GateExitLakeNoPointsSmoke"),

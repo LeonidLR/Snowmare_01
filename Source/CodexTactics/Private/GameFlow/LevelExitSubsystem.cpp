@@ -150,7 +150,9 @@ void ULevelExitSubsystem::Tick(float DeltaTime)
 	{
 		ExitElapsed += FMath::Min(static_cast<float>(FApp::GetDeltaTime()), LevelExitSubsystemLocal::MaxExitStepSeconds);
 		const UMissionSubsystem* Mission = World->GetSubsystem<UMissionSubsystem>();
-		const bool bHeadless = (!Mission || Mission->IsHeadlessStart()) && !bLeaveInHeadless;
+		// Bug 2026-10-23: only an automated check stays on the black screen - a run that started from a loaded save (the intro skipped,
+		// IsHeadlessStart) leaves like any other.
+		const bool bHeadless = (!Mission || Mission->IsAutomatedRun()) && !bLeaveInHeadless;
 		if (!bLeaveDecided && GateExitRules::ShouldLeaveLevel(ExitElapsed, ArmedConfig, !NextLevelMap.IsEmpty(), bHeadless))
 		{
 			Leave();
@@ -378,7 +380,7 @@ void ULevelExitSubsystem::TravelToNextLevel()
 		Session->PendingLoadSlot.Reset();
 		Session->PendingLoadDirectory.Reset();
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[LevelExit] opening the next level %s (%s)"), *NextLevelMap, *NextLevelTitle);
+	UE_LOG(LogCodexTactics, Display, TEXT("[LevelExit] opening the next level %s (%s) from %s"), *NextLevelMap, *NextLevelTitle, *World->GetMapName());
 	UGameplayStatics::OpenLevel(World, FName(*NextLevelMap));
 }
 

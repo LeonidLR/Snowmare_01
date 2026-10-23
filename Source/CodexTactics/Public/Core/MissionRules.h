@@ -37,6 +37,14 @@ namespace MissionRules
 	CODEXTACTICS_API bool ShouldSkipIntro(bool bHeadlessCommandLine, bool bFrontendStart, bool bQuickRestart, bool bPendingLoad);
 
 	/**
+	 * An automated run (a headless check: -ExecCmds / -NoMainMenu / -CodexBot, not started by the frontend nor by Ctrl + X) - its level
+	 * exit stays on the black screen (ULevelExitSubsystem::SetLeaveInHeadless). Bug 2026-10-23 (game designer, editor play): a loaded
+	 * save also skips the intro (ShouldSkipIntro), and the exit took that for a headless check - after the gate line the game stayed on
+	 * the black "MISSION COMPLETE" screen for good. A save load never makes a run automated.
+	 */
+	CODEXTACTICS_API bool IsAutomatedRun(bool bHeadlessCommandLine, bool bFrontendStart, bool bQuickRestart);
+
+	/**
 	 * Whether the mission-start briefing window opens: not on a headless start, and not on a demo level whose "demo"
 	 * object sets "intro_dialogue": false (bDemoLevel = the level JSON has a "demo" object).
 	 */

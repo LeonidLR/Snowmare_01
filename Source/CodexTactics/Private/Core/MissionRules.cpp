@@ -39,6 +39,11 @@ bool MissionRules::ShouldSkipIntro(bool bHeadlessCommandLine, bool bFrontendStar
 	return bPendingLoad || (bHeadlessCommandLine && !bFrontendStart && !bQuickRestart);
 }
 
+bool MissionRules::IsAutomatedRun(bool bHeadlessCommandLine, bool bFrontendStart, bool bQuickRestart)
+{
+	return bHeadlessCommandLine && !bFrontendStart && !bQuickRestart;
+}
+
 bool MissionRules::ShouldOpenIntroDialogue(bool bHeadlessStart, bool bDemoLevel, bool bDemoIntroDialogue)
 {
 	return !bHeadlessStart && (!bDemoLevel || bDemoIntroDialogue);
