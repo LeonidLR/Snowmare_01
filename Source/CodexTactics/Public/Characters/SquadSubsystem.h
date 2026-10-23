@@ -89,7 +89,7 @@ public:
 
 	/**
 	 * Game designer play-test 2026-10-22: after a fight that returns to exploring the followers keep the spots they fought from
-	 * until the leader moves (SquadOrderRules::ArmsPostFightHold / KeepsPostFightHold).
+	 * until the leader moves or the player orders Regroup (B; bug 2026-10-23) - SquadOrderRules::ArmsPostFightHold / KeepsPostFightHold.
 	 */
 	bool IsPostFightHoldActive() const { return bPostFightHold; }
 
@@ -220,7 +220,10 @@ public:
 	/** Operatives whose planned targeted shot could not fire on the pause release and is being retried (smokes). */
 	int32 GetDeferredShotCount() const { return DeferredShots.Num(); }
 
-	/** True while formation following is on (exploration only; from preparation on, operatives act individually). */
+	/**
+	 * True while formation following is on: exploration and after the final fight (PostCombat, bug 2026-10-23; SquadOrderRules::IsFormationPhase).
+	 * From preparation to the fight's end the operatives act individually.
+	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsFormationActive() const;
 
@@ -315,6 +318,12 @@ private:
 	void UpdateSlotSwap(float DeltaTime);
 	void UpdateFollower(FFollowerState& Follower, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime, float TimeSeconds);
 	bool IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, const FVector& SlotLocation) const;
+	/**
+	 * Bug 2026-10-23: a formation slot off the navmesh (inside a wall, the generator, a fallen mate's remains crate) was unreachable
+	 * for good - while the leader stood still the follower never came back. Returns Slot when it lies on the navmesh, else the
+	 * nearest candidate round the leader that does (SquadFormation::ComputeFallbackSlots), else Slot.
+	 */
+	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot) const;
 
 	TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 	TWeakObjectPtr<AOperativeCharacter> Leader;

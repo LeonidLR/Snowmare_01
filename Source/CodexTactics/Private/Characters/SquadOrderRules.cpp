@@ -60,8 +60,13 @@ namespace SquadOrderRules
 		return Phase == ECodexGamePhase::PostCombat || (Phase == ECodexGamePhase::Exploration && bFromFight);
 	}
 
-	bool KeepsPostFightHold(bool bHold, bool bLeaderMoving)
+	bool KeepsPostFightHold(bool bHold, bool bLeaderMoving, bool bRegroup)
 	{
-		return bHold && !bLeaderMoving;
+		return bHold && !bLeaderMoving && !bRegroup;
+	}
+
+	bool IsFormationPhase(ECodexGamePhase Phase, bool bPostCombatFormation)
+	{
+		return Phase == ECodexGamePhase::Exploration || (bPostCombatFormation && Phase == ECodexGamePhase::PostCombat);
 	}
 }
