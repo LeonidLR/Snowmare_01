@@ -35,7 +35,15 @@
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 
+#include "HAL/IConsoleManager.h"
+
 #define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
+
+namespace
+{
+	TAutoConsoleVariable<int32> CVarGroupCoverLeaderPriority(TEXT("Codex.GroupCover.LeaderPriority"), 1,
+		TEXT("1 (default): in a group cover order the others wait ~1.6 m off the wall until the leader has taken his cover (game designer 2026-10-23); 0: the old rule (everybody runs straight into his slot)."));
+}
 
 // --- Tactical cover (Sprint 12) ---------------------------------------------------------------------------------
 
@@ -753,6 +761,22 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>();
 	const bool bNeighbours = !ChosenSlots.IsEmpty();
 	const float FaceYaw = (-Normal).Rotation().Yaw;
+	// Leader priority (game designer 2026-10-23): the others wait off the wall until the leader has taken his cover, then take theirs
+	// (a slot taken meanwhile -> a spare of this order: the free probed slots nobody was given, then the unused prone spots).
+	const bool bLeaderPriority = !bPlan && CVarGroupCoverLeaderPriority.GetValueOnGameThread() != 0;
+	const TSharedRef<FGroupCoverSpares> Spares = MakeShared<FGroupCoverSpares>();
+	Spares->FaceYaw = FaceYaw;
+	for (const float Offset : Free)
+	{
+		const int32 Side = Offset < 0.f ? -1 : 1;
+		const int32 K = FMath::RoundToInt(FMath::Abs(Offset) / Config.SlotSpacingCm);
+		const FCoverSlot* Found = ProbeSlots.Find(Side * 1000 + K);
+		if (Found && !Chosen.Contains(Offset))
+		{
+			Spares->Slots.Add(*Found);
+			Spares->SlotUsed.Add(false);
+		}
+	}
 	// Into a slot: the same order as the single one (OrderTakeCover / the planned walk + SetPendingCover), always a run.
 	// The wall-edge cover switch (2026-10-20): the direct order's leader dashes in through the run-in clip, the others follow the
 	// group cover rules at that wall.
@@ -773,6 +797,14 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 			{
 				Feedback->SpawnWaypointMarker(Planned);
 			}
+		}
+		else if (!bPrimary && bLeaderPriority && Squad->OrderGroupCoverWait(Member, MemberSlot, Direct, bNeighbours, Spares))
+		{
+			if (Feedback)
+			{
+				Feedback->SpawnMovePing(MemberSlot.WorldLocation, false);
+			}
+			return true; // into the slot once the leader is in cover (USquadSubsystem::UpdateGroupCoverWait)
 		}
 		else
 		{
@@ -872,6 +904,11 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: no place at that cover (refused / unreachable)"), *Member->DisplayName.ToString());
 		}
+	}
+	for (int32 Index = 0; Index < ProneSpots.Num(); ++Index)
+	{
+		Spares->ProneSpots.Add(ProneSpots[Index]);
+		Spares->ProneUsed.Add(ProneUsed.IsValidIndex(Index) && ProneUsed[Index]);
 	}
 	LastGroupCoverSlots = InSlots;
 	LastGroupCoverProne = Prone;

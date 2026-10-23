@@ -62,6 +62,19 @@
   follows). Ended by a new order to him (his `MoveOrderSerial` changed), Regroup, a stance change, being moved > 2.5 m, turn-based combat.
   Solo's "followers crouch" on a leader switch / Solo on skips him. Log `[GroupCover] ...`.
 - **Running:** every member runs (`OrderTakeCover(..., true)` / the prone run), as any cover order (a double-click confirm runs too).
+- **Leader priority (game designer 2026-10-23: "the soldier running to the wall can be delayed and the two others reach the wall first; then he
+  doesn't take cover at all, or goes past the edge because his mates took his place - the other two wait until he has taken cover").** In real
+  time (not a planned pause order) a slot member does not run straight into his slot: `USquadSubsystem::OrderGroupCoverWait` runs him to his
+  wait point `GroupCoverRules::ComputeWaitPoint` (`WaitStandOffCm` 160 straight out from his slot, on the navmesh; 70 % of it as a fallback;
+  none -> straight into the slot as before), where he waits facing the cover (his own order: the formation leaves him alone). `UpdateGroupCoverWait`
+  releases him (`GroupCoverRules::ShouldReleaseToSlot`) once the leader is in cover; when the leader's cover order failed / was cancelled or
+  he is down `LeaderFailGraceSeconds` 4 s later; never later than `MaxWaitSeconds` 15 s. On release a slot taken meanwhile
+  (`IsGroupCoverPointTaken`: another operative in / going to a slot there, or a body) -> the nearest free spare slot of the same wall
+  (`PickFreeSlot` over the order's unused probed slots), else an unused prone spot behind the cover - never standing in the open, never past
+  the wall's end. Dropped by a new order to him, Regroup, turn-based. The prone members are unchanged (their spots are behind the wall, not on
+  his slot). Console `Codex.GroupCover.LeaderPriority` (0 = the old rule). Test `CodexTactics.Tactics.GroupCover.LeaderPriority`; smoke
+  `GroupCoverPrioritySmoke` (the leader slowed to a quarter: the others wait >= 1.2 m off the wall, never in cover / on his slot before him;
+  he takes the clicked slot, then they take theirs, nobody past the ends; a cancelled leader order releases them after 4 s).
 - **Tactical pause:** planned like the single cover order: each slot member `SetPendingCover` + `PlanMove`, each prone member a planned
   walk (`Planned` phase -> `Moving` on the release, dropped if re-planned elsewhere); waypoint markers. Feed "[PLAN] Group into cover ...".
 - **Turn-based:** unchanged - only the active unit (the grid preview / walk); `OrderGroupCover` refuses there, a prone order is dropped

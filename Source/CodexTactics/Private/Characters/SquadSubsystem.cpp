@@ -511,6 +511,7 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 					Operative->LeaveCoverToMove(TEXT("regroup"));
 				}
 				DropGroupCoverProne(Operative, TEXT("regroup")); // ... and one lying behind a cover after a group cover order
+				DropGroupCoverWait(Operative, TEXT("regroup")); // ... and one waiting off the wall for the leader (2026-10-23)
 				Operative->SetStance(LeaderRef->GetStance());
 				// Bug 2026-10-20: the copied stance is the squad's - crouched after the Solo guard crouch, he stands up to sprint with the
 				// leader (UpdateFollower; Solo on / off again used to be the only cure).
@@ -761,6 +762,8 @@ bool USquadSubsystem::IsOnOwnOrder(const AOperativeCharacter* Operative) const
 	{
 		Facts.bObjectTask = Relocation->HasActiveTask(Operative);
 	}
+	// Group cover leader priority (2026-10-23): waiting off the wall for the leader is his order too (the formation leaves him alone).
+	Facts.bObjectTask |= IsWaitingForGroupCoverLeader(Operative);
 	return SquadOrderRules::IsOnOwnOrder(Facts);
 }
 
@@ -821,6 +824,7 @@ void USquadSubsystem::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	RetryPlannedShots(DeltaTime);
 	UpdateGroupCoverProne(DeltaTime); // fights too (the formation is off there, a prone order still lies down on arrival)
+	UpdateGroupCoverWait(DeltaTime); // group cover leader priority (2026-10-23)
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (!LeaderRef)

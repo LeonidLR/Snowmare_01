@@ -33,7 +33,7 @@
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke",
-    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke"
+    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GroupCoverPrioritySmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -608,9 +608,9 @@
     },
     {
       "name": "group-cover",
-      "globs": ["Source/**/Tactics/GroupCover*", "Source/**/Characters/SquadSubsystemGroupCover*", "Source/**/Debug/GroupCoverSmoke*"],
+      "globs": ["Source/**/Tactics/GroupCover*", "Source/**/Characters/SquadSubsystemGroupCover*", "Source/**/Debug/GroupCoverSmoke*", "Source/**/Debug/GroupCoverPrioritySmoke*"],
       "tests": ["CodexTactics.Tactics.GroupCover", "CodexTactics.Squad.Orders"],
-      "smokes": ["GroupCoverSmoke", "CoverSmoke", "GroupSelectSmoke", "SoloRejoinSmoke"]
+      "smokes": ["GroupCoverPrioritySmoke", "GroupCoverSmoke", "CoverSmoke", "GroupSelectSmoke", "SoloRejoinSmoke"]
     },
     {
       "name": "cover-switch",
