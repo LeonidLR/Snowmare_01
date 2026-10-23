@@ -1,5 +1,6 @@
 #include "Characters/SquadSubsystem.h"
 #include "Survival/WarmIdleSubsystem.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadOrderRules.h"
@@ -490,6 +491,13 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 		{
 			if (AOperativeCharacter* Operative = Follower.Operative.Get())
 			{
+				// 2026-10-23 ("lock_in_place"): an operative the tutorial holds at his spot (stacked on the hut door) stays there - his wall,
+				// his stance; the formation leaves him alone (RequestMove refuses its moves) until the lesson releases him.
+				if (UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>(); Tutorial && Tutorial->IsHeldInPlace(*Operative))
+				{
+					Tutorial->ReportPlaceLockRefusal(Operative);
+					continue;
+				}
 				// Rev 5g: Regroup ends a follower's own move order - everybody comes back to the leader (a use / object task
 				// still finishes first, SquadOrderRules).
 				Operative->ReleaseOwnMoveOrder();

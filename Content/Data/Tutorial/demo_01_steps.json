@@ -277,12 +277,15 @@
       "_comment_switch": "2026-10-20: the wall-edge cover switch (double-click another cover from a wall edge, Cover.Switch) stays locked until the A3 cover field (A3_cover unlocks Cover.*); a locked double-click is the ordinary cover order.",
       "lock": ["Cover.Switch"],
       "trigger": { "type": "after_step", "step": "A1_select" },
+      "_comment_lock": "2026-10-23 (game designer play-test: 'I place one at the wall - he's fixed; otherwise a stray click moves him back'): the operative who completes this card is LOCKED at the door - move / cover / shimmy / wrap / regroup orders for him are refused with TUT_A1_HUT_HOLD until the third is inside (A1_hut_enter finished; also a later beat, SKIP TUTORIAL, tutorial off, a fight).",
+      "lock_in_place": { "until": "A1_hut_enter", "text_id": "TUT_A1_HUT_HOLD" },
       "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_L", "distinct_from": ["A1_hut_stack_r", "A1_hut_enter"] }
     },
     {
       "id": "A1_hut_stack_r", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_STACK_R",
       "keys": ["Select.Member", "Cover.Enter"],
       "trigger": { "type": "after_step", "step": "A1_select" },
+      "lock_in_place": { "until": "A1_hut_enter", "text_id": "TUT_A1_HUT_HOLD" },
       "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_R", "distinct_from": ["A1_hut_stack_l", "A1_hut_enter"] }
     },
     {

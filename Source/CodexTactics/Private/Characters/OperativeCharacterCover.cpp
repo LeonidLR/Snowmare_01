@@ -330,6 +330,11 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	{
 		return EOperativeOrderResult::Accepted; // already there
 	}
+	// 2026-10-23: a place lock refuses the side-step before anything changes (a prone one would get up first).
+	if (!UTutorialSubsystem::CheckHeldInPlace(this, this, Target.WorldLocation))
+	{
+		return EOperativeOrderResult::Refused;
+	}
 	if (Stance == EOperativeStance::Prone)
 	{
 		// Rev 2026-10-19 (user bug: a prone operative in cover, ordered to the corner, crawled BACKWARDS at twice the crawl speed - the

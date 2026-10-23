@@ -463,7 +463,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		const FString Where = TEXT("step ") + Id;
 		WarnUnknownKeys(Object, { TEXT("id"), TEXT("beat"), TEXT("kind"), TEXT("text_id"), TEXT("keys"), TEXT("trigger"), TEXT("complete"),
 			TEXT("once"), TEXT("skippable"), TEXT("blocking"), TEXT("lines"), TEXT("condition"), TEXT("lock"), TEXT("unlock"), TEXT("action"),
-			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on"), TEXT("confine"), TEXT("guide"), TEXT("beyond") }, Where, OutWarnings);
+			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on"), TEXT("confine"), TEXT("guide"), TEXT("beyond"), TEXT("lock_in_place") }, Where, OutWarnings);
 		FTutorialStep Step;
 		Step.Id = FName(*Id);
 		Step.Beat = FName(*JsonString(Object, TEXT("beat")));
@@ -700,6 +700,32 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 				Step.Confine.ThroughEvent = JsonString(*ExitObject, TEXT("through"));
 			}
 		}
+		// 2026-10-23: "lock_in_place": true | { "until": step, "text_id": id } - the operatives who complete the step are held where they
+		// stand (FTutorialPlaceLock; "until" is checked with the other step references below).
+		if (const TSharedPtr<FJsonValue> LockValue = Object->TryGetField(TEXT("lock_in_place")); LockValue.IsValid())
+		{
+			if (LockValue->Type == EJson::Boolean)
+			{
+				Step.LockInPlace.bEnabled = LockValue->AsBool();
+			}
+			else if (LockValue->Type == EJson::Object)
+			{
+				const TSharedPtr<FJsonObject> LockObject = LockValue->AsObject();
+				WarnUnknownKeys(LockObject, { TEXT("until"), TEXT("text_id") }, Where + TEXT(" lock_in_place"), OutWarnings);
+				Step.LockInPlace.bEnabled = true;
+				Step.LockInPlace.Until = FName(*JsonString(LockObject, TEXT("until")));
+				Step.LockInPlace.TextId = FName(*JsonString(LockObject, TEXT("text_id")));
+			}
+			else
+			{
+				OutError = Where + TEXT(": \"lock_in_place\" must be true / false or { \"until\": <step>, \"text_id\": <text> }");
+				return false;
+			}
+			if (Step.LockInPlace.IsSet() && Step.Complete.Event.IsEmpty() && Step.Complete.Volume.IsNone())
+			{
+				OutWarnings.Add(Where + TEXT(": \"lock_in_place\" without a completion \"event\" / \"volume\" - nobody completes it in person, nobody is locked"));
+			}
+		}
 		Step.Focus = FName(*JsonString(Object, TEXT("focus")));
 		if (!Step.Focus.IsNone() && !IsKnownFocus(Step.Focus))
 		{
@@ -771,9 +797,11 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			return false;
 		}
 		const TArray<FName> ConfineUntil = Step.Confine.Until.IsNone() ? TArray<FName>() : TArray<FName>{ Step.Confine.Until };
+		const TArray<FName> PlaceLockUntil = Step.LockInPlace.Until.IsNone() ? TArray<FName>() : TArray<FName>{ Step.LockInPlace.Until };
 		if (!CheckStepReferences(OutData, Step, Step.Complete.DistinctFrom, TEXT("complete \"distinct_from\""), /*bSelfAllowed*/ false, OutError)
 			|| !CheckStepReferences(OutData, Step, Step.CancelOn.Steps, TEXT("\"cancel_on\""), /*bSelfAllowed*/ false, OutError)
 			|| !CheckStepReferences(OutData, Step, ConfineUntil, TEXT("\"confine\" \"until\""), /*bSelfAllowed*/ true, OutError)
+			|| !CheckStepReferences(OutData, Step, PlaceLockUntil, TEXT("\"lock_in_place\" \"until\""), /*bSelfAllowed*/ false, OutError)
 			|| !CheckStepReferences(OutData, Step, Step.Trigger.Requires, TEXT("trigger \"requires\""), /*bSelfAllowed*/ true, OutError))
 		{
 			return false;
@@ -1052,6 +1080,17 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 	Object->SetArrayField(TEXT("confines"), Confines);
 	// 2026-10-20: the furthest place reached on the route (the current navigation target is derived from it).
 	Object->SetStringField(TEXT("route"), Progress.RouteVolume.IsNone() ? FString() : Progress.RouteVolume.ToString());
+	// 2026-10-23: the operatives held in place by a "lock_in_place" step.
+	TArray<TSharedPtr<FJsonValue>> PlaceLocks;
+	for (const FTutorialPlaceLockState& Lock : Progress.PlaceLocks)
+	{
+		const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+		Entry->SetStringField(TEXT("operative"), Lock.Operative.ToString());
+		Entry->SetStringField(TEXT("step"), Lock.Step.ToString());
+		Entry->SetStringField(TEXT("until"), Lock.Until.IsNone() ? FString() : Lock.Until.ToString());
+		PlaceLocks.Add(MakeShared<FJsonValueObject>(Entry));
+	}
+	Object->SetArrayField(TEXT("place_locks"), PlaceLocks);
 	return Object;
 }
 
@@ -1138,6 +1177,25 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 	if (Object.TryGetStringField(TEXT("route"), Route) && !Route.IsEmpty())
 	{
 		OutProgress.RouteVolume = FName(*Route); // an older save without it: the route starts at the saved beat's start
+	}
+	const TArray<TSharedPtr<FJsonValue>>* PlaceLocks = nullptr;
+	if (Object.TryGetArrayField(TEXT("place_locks"), PlaceLocks))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *PlaceLocks)
+		{
+			const TSharedPtr<FJsonObject> Entry = Value.IsValid() ? Value->AsObject() : nullptr;
+			const FString Operative = JsonString(Entry, TEXT("operative"));
+			const FString Step = JsonString(Entry, TEXT("step"));
+			if (Operative.IsEmpty() || Step.IsEmpty())
+			{
+				continue;
+			}
+			FTutorialPlaceLockState& Stored = OutProgress.PlaceLocks.AddDefaulted_GetRef();
+			Stored.Operative = FName(*Operative);
+			Stored.Step = FName(*Step);
+			const FString Until = JsonString(Entry, TEXT("until"));
+			Stored.Until = Until.IsEmpty() ? NAME_None : FName(*Until);
+		}
 	}
 	return true;
 }
@@ -1311,8 +1369,30 @@ const TCHAR* TutorialRules::ConfineVerdictName(ETutorialConfineVerdict Verdict)
 	case ETutorialConfineVerdict::Stance: return TEXT("stance");
 	case ETutorialConfineVerdict::ExitStance: return TEXT("exit_stance");
 	case ETutorialConfineVerdict::HeldBack: return TEXT("held_back");
+	case ETutorialConfineVerdict::LockedInPlace: return TEXT("locked_in_place");
 	default: return TEXT("?");
 	}
+}
+
+bool TutorialRules::IsPlaceLockedMove(bool bLocked, const FVector& OperativeLocation, const FVector& Destination)
+{
+	return bLocked && FVector::DistSquared2D(OperativeLocation, Destination) > FMath::Square(PlaceLockToleranceCm);
+}
+
+TArray<FTutorialPlaceLockState> TutorialRules::FilterPlaceLocks(const FTutorialStepsData& Data, const TArray<FTutorialPlaceLockState>& Saved)
+{
+	TArray<FTutorialPlaceLockState> Out;
+	for (const FTutorialPlaceLockState& Lock : Saved)
+	{
+		const FTutorialStep* Step = Data.FindStep(Lock.Step);
+		if (Lock.Operative.IsNone() || !Step || !Step->LockInPlace.IsSet() || (!Lock.Until.IsNone() && !Data.FindStep(Lock.Until)))
+		{
+			continue; // the steps file changed since the save: that lock no longer exists
+		}
+		Out.RemoveAll([&Lock](const FTutorialPlaceLockState& Other) { return Other.Operative == Lock.Operative; });
+		Out.Add(Lock);
+	}
+	return Out;
 }
 
 FString TutorialRules::GetCommandFamily(FName CommandId)
