@@ -297,6 +297,41 @@ bool FMovementCrowdOvershootFinishTest::RunTest(const FString&)
 	return true;
 }
 
+MOVEMENT_TEST(FFormationFallbackSlotsTest, "Formation.FallbackSlotsRoundTheLeader")
+bool FFormationFallbackSlotsTest::RunTest(const FString&)
+{
+	// Bug 2026-10-23: a slot off the navmesh (a wall, a fallen mate's remains) - the substitutes round the leader, nearest first.
+	const FVector Leader(1000.f, 500.f, 50.f);
+	const FVector Slot(700.f, 500.f, 60.f); // 3 m behind
+	const TArray<FVector> Candidates = SquadFormation::ComputeFallbackSlots(Leader, Slot, 150.f);
+	TestEqual(TEXT("11 turns at full distance (+-30..+-150, 180 deg) + 12 at 60 % (0..180 deg)"), Candidates.Num(), 23);
+	bool bNoSlot = true;
+	bool bOrdered = true;
+	bool bKeepsZ = true;
+	bool bDistances = true;
+	for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+	{
+		const float FromLeader = FVector::Dist2D(Candidates[Index], Leader);
+		bNoSlot &= FVector::Dist2D(Candidates[Index], Slot) > 1.f;
+		bOrdered &= Index == 0 || FVector::Dist2D(Candidates[Index - 1], Slot) <= FVector::Dist2D(Candidates[Index], Slot) + 0.01f;
+		bKeepsZ &= FMath::IsNearlyEqual(Candidates[Index].Z, 60.f);
+		bDistances &= FMath::IsNearlyEqual(FromLeader, 300.f, 0.5f) || FMath::IsNearlyEqual(FromLeader, 180.f, 0.5f);
+	}
+	TestTrue(TEXT("The slot itself is not a candidate"), bNoSlot);
+	TestTrue(TEXT("Nearest to the slot first"), bOrdered);
+	TestTrue(TEXT("Z of the slot"), bKeepsZ);
+	TestTrue(TEXT("At the slot's distance or 60 % of it"), bDistances);
+	TestTrue(TEXT("First: 60 % straight behind (the nearest)"), Candidates.Num() > 0 && Candidates[0].Equals(FVector(820.f, 500.f, 60.f), 0.5f));
+	const TArray<FVector> Close = SquadFormation::ComputeFallbackSlots(Leader, FVector(1050.f, 500.f, 50.f), 150.f);
+	bool bMin = true;
+	for (const FVector& Candidate : Close)
+	{
+		bMin &= FVector::Dist2D(Candidate, Leader) >= 149.5f;
+	}
+	TestTrue(TEXT("Never closer to the leader than MinRadius"), bMin && Close.Num() > 0);
+	return true;
+}
+
 #undef MOVEMENT_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

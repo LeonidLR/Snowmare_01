@@ -132,6 +132,19 @@ namespace SquadOrderRules
 	 */
 	CODEXTACTICS_API bool ArmsPostFightHold(ECodexGamePhase Previous, ECodexGamePhase Phase);
 
-	/** The post-fight hold stays until the leader moves (the player's first move order); then the formation follows as usual. */
-	CODEXTACTICS_API bool KeepsPostFightHold(bool bHold, bool bLeaderMoving);
+	/**
+	 * The post-fight hold stays until the leader moves (the player's first move order); then the formation follows as usual.
+	 * Bug 2026-10-23 (lake, after the horde: "even pressing B he does not return to the formation"): Regroup (B / Solo off) is an
+	 * order to come back - it ends the hold at once (bRegroup).
+	 */
+	CODEXTACTICS_API bool KeepsPostFightHold(bool bHold, bool bLeaderMoving, bool bRegroup = false);
+
+	/**
+	 * The exploration formation runs (followers walk to their slots, Solo / Regroup, group cover, the post-fight hold): while exploring
+	 * and after the final fight. Bug 2026-10-23: PostCombat lasts until the level ends (nothing returns the flow to Exploration), and
+	 * the formation was off there - after the horde no follower ever walked again, B toggled Solo without effect. Godot
+	 * _return_squad_to_prep_stations cleared every member's is_tactical_mode at the fight's end (the formation followed again).
+	 * bPostCombatFormation false = the old rule (console Codex.Squad.PostCombatFormation 0, A/B).
+	 */
+	CODEXTACTICS_API bool IsFormationPhase(ECodexGamePhase Phase, bool bPostCombatFormation = true);
 }
