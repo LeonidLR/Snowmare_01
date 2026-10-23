@@ -1004,6 +1004,7 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-23 e (Claude, `ladder/work`): ladders - turning back mid-climb (`Ladders/*`, `OperativeCharacterMovement.cpp` RequestMove's ladder branch). No asset change.
 - 2026-10-23 c (Claude, `ladder/work`): ladders x camera / roof cutaway / minimap (LADDERS.md 7.3) - `TacticalCameraPawn` / `TacticalCameraRules`, `RoofCutawaySubsystem`, `MinimapSubsystem` / `MinimapRules`, `CameraZoneVolume` (each: a climber-only branch). Data: `Content/Data/LevelJson/L_Demo01_B_FrozenFactory.json` minimap floor 400 cm. No asset change.
 - 2026-10-23 b (Claude, `ladder/work`): ladders x turn-based (LADDERS.md 7.6) - `TurnBasedCombatSubsystem.*` (climbers out of the grid, join next round; helpers factored out of StartCombat / FreezeWorld, behaviour of the existing entry unchanged). No asset change.
 - 2026-10-23 (Claude, `ladder/work`, worktree `../CodexTactics-ladder`): climbing enemies (LADDERS.md 7.5) - `EnemyCharacterLadder.cpp`, enemy AI controller / anim instance / knockdown / save hooks, `Ladders/LadderPoseIK.*` (the operative's rung IK moved there). Assets: `BP_Enemy_FrozenPMC_Fighter` + `BP_Enemy_MilitaryZombie` class default `bCanClimbLadders = True` only (scripted, backup in `Saved/Backups/enemy_ladder_*`); no ABP / skeleton / clip / map change.

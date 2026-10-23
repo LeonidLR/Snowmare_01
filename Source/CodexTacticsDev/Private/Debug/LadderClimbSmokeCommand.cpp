@@ -11,6 +11,8 @@
 //     Each leg also (LADDERS.md 7.3): the camera height never pumps or jumps while he climbs (spring-smoothed focus Z: at most one
 //     reversal of its vertical motion, <= 3 cm per frame), the floor reference of the roof cutaway / minimap stays the spot the climb
 //     started from until he is off, the minimap floor does not change mid-ladder;
+//  3b. turning back (2026-10-23): climbing up the wall ladder (2 rungs up) a click on the ground turns him round at the next rung and he
+//     climbs back down (no ExitTop); climbing down the free ladder a click on the deck turns him round and he climbs back up;
 //  4. turn-based (LADDERS.md 7.6, user decision 2026-10-22): the fight starts while he climbs the free-standing ladder and a Military Zombie
 //     climbs the wall ladder - the grid forms without both, they finish the climb at normal speed (he does not walk on to his click), the
 //     zombie is held once off, and on the next round both join (he on the deck, the zombie on the grid or in stasis).
@@ -70,6 +72,8 @@ namespace LadderClimbSmoke
 		bool bWall = true;
 		bool bUp = true;
 		bool bKnockdown = false;
+		/** A click on the other level mid-climb: he turns round and ends where he started. */
+		bool bReverse = false;
 	};
 
 	struct FState
@@ -152,6 +156,9 @@ namespace LadderClimbSmoke
 		int32 FloorAtClimbStart = -1;
 		int32 FloorChangesOnLadder = 0;
 		int32 FloorAfter = -1;
+		// Turning back (per leg).
+		float ReverseClickAt = -1.f;
+		float ReverseDoneAt = -1.f;
 		// Turn-based (stage 4+).
 		TWeakObjectPtr<AEnemyCharacter> Zombie;
 		TWeakObjectPtr<AEnemyCharacter> Hound;
@@ -290,6 +297,7 @@ namespace LadderClimbSmoke
 		State.MaxInside = 0.f;
 		State.MinCapsuleAfter = 1e6f;
 		State.MaxCapsuleAfter = -1e6f;
+		State.ReverseClickAt = State.ReverseDoneAt = -1.f;
 		State.bCamSampled = false;
 		State.CamMaxStep = 0.f;
 		State.CamReversals = State.BodyReversals = 0;
@@ -352,6 +360,20 @@ namespace LadderClimbSmoke
 					static_cast<int32>(Climb->GetState())));
 			}
 		}
+		// Turning back: two rungs into the climb, a click on the level he came from.
+		if (Leg.bReverse && State.ReverseClickAt < 0.f && Climb->GetLadder() == Ladder
+			&& ((Leg.bUp && ClimbState == ELadderClimbState::ClimbUp && Climb->GetLoopPos().Rung >= 2)
+				|| (!Leg.bUp && ClimbState == ELadderClimbState::ClimbDown && Climb->GetLoopPos().Rung <= 1)))
+		{
+			State.Goal = Leg.bUp ? Ladder->GetBottomLinkWorld() + Ladder->GetOutward() * 250.f : Ladder->GetTopLinkWorld() - Ladder->GetOutward() * 100.f;
+			State.ReverseClickAt = State.StageTime;
+			Check(State, ClickAt(World, State.Goal), FString::Printf(TEXT("leg %d: mid-climb (rung %d) a click back on the %s"), State.Leg, Climb->GetLoopPos().Rung,
+				Leg.bUp ? TEXT("ground") : TEXT("deck")));
+		}
+		if (State.ReverseClickAt >= 0.f && State.ReverseDoneAt < 0.f && Climb->GetReversals() > 0)
+		{
+			State.ReverseDoneAt = State.StageTime;
+		}
 		if (State.StageTime > 60.f)
 		{
 			Check(State, false, FString::Printf(TEXT("leg %d timed out in state %d at %s (moving %d, %.0f cm from the goal)"), State.Leg,
@@ -359,8 +381,9 @@ namespace LadderClimbSmoke
 				FVector::Dist2D(Leader->GetActorLocation(), State.Goal)));
 			return true;
 		}
+		const bool bEndUp = Leg.bReverse ? !Leg.bUp : Leg.bUp; // the level he ends on
 		const bool bExitSeen = Leg.bKnockdown ? (State.SeenStates & (1u << static_cast<uint32>(ELadderClimbState::Dropping))) != 0
-			: Leg.bUp ? (State.SeenStates & (1u << static_cast<uint32>(ELadderClimbState::ExitTop))) != 0
+			: bEndUp ? (State.SeenStates & (1u << static_cast<uint32>(ELadderClimbState::ExitTop))) != 0
 			: (State.SeenStates & (1u << static_cast<uint32>(ELadderClimbState::ExitBottom))) != 0;
 		if (!bExitSeen || ClimbState != ELadderClimbState::None || Leader->GetVelocity().Size2D() > 10.f || Leader->IsMoving())
 		{
@@ -388,16 +411,31 @@ namespace LadderClimbSmoke
 			Check(State, Leader->IsKnockedDown(), TEXT("he lies knocked down after the landing (the knockdown that caused the fall)"));
 			return true;
 		}
-		const bool bStates = Leg.bUp
+		const bool bStates = Leg.bReverse
+			? (Leg.bUp ? Seen(ELadderClimbState::AlignBottom) && Seen(ELadderClimbState::ClimbUp) && Seen(ELadderClimbState::ClimbDown) && Seen(ELadderClimbState::ExitBottom)
+					&& !Seen(ELadderClimbState::ExitTop)
+				: Seen(ELadderClimbState::AlignTop) && Seen(ELadderClimbState::EnterTop) && Seen(ELadderClimbState::ClimbDown) && Seen(ELadderClimbState::ClimbUp)
+					&& Seen(ELadderClimbState::ExitTop) && !Seen(ELadderClimbState::ExitBottom))
+			: Leg.bUp
 			? Seen(ELadderClimbState::AlignBottom) && Seen(ELadderClimbState::ClimbUp) && Seen(ELadderClimbState::ExitTop)
 			: Seen(ELadderClimbState::AlignTop) && Seen(ELadderClimbState::EnterTop) && Seen(ELadderClimbState::ClimbDown) && Seen(ELadderClimbState::ExitBottom);
-		Check(State, bStates, FString::Printf(TEXT("leg %d (%s, %s): the climb ran %s (states seen 0x%x)"), State.Leg, Name, Leg.bUp ? TEXT("up") : TEXT("down"),
-			Leg.bUp ? TEXT("AlignBottom -> ClimbUp -> ExitTop") : TEXT("AlignTop -> EnterTop -> ClimbDown -> ExitBottom"), State.SeenStates));
-		const float LevelZ = Leg.bUp ? Ladder->GetTopWorldZ() : Ladder->GetFloorZ();
+		Check(State, bStates, FString::Printf(TEXT("leg %d (%s, %s%s): the climb ran %s (states seen 0x%x)"), State.Leg, Name, Leg.bUp ? TEXT("up") : TEXT("down"),
+			Leg.bReverse ? TEXT(", turned back") : TEXT(""),
+			Leg.bReverse ? (Leg.bUp ? TEXT("AlignBottom -> ClimbUp -> ClimbDown -> ExitBottom") : TEXT("AlignTop -> EnterTop -> ClimbDown -> ClimbUp -> ExitTop"))
+				: Leg.bUp ? TEXT("AlignBottom -> ClimbUp -> ExitTop") : TEXT("AlignTop -> EnterTop -> ClimbDown -> ExitBottom"), State.SeenStates));
+		if (Leg.bReverse)
+		{
+			// At the next rung: within half a loop of clip time (+ a frame) of the click.
+			const float Latency = State.ReverseDoneAt - State.ReverseClickAt;
+			Check(State, State.ReverseClickAt >= 0.f && State.ReverseDoneAt >= 0.f && Climb->GetReversals() == 1 && Latency <= Climb->GetLoopLength() * 0.5f + 0.1f,
+				FString::Printf(TEXT("leg %d: he turned round at the next rung, %.2f s after the click (half a loop %.2f s), once (%d)"), State.Leg, Latency,
+					Climb->GetLoopLength() * 0.5f, Climb->GetReversals()));
+		}
+		const float LevelZ = bEndUp ? Ladder->GetTopWorldZ() : Ladder->GetFloorZ();
 		const float FeetOverLevel = static_cast<float>(Leader->GetActorLocation().Z) - HalfHeight - LevelZ;
 		Check(State, Leader->GetCharacterMovement()->IsMovingOnGround() && FMath::Abs(FeetOverLevel) < 15.f
 			&& FVector::Dist2D(Leader->GetActorLocation(), State.Goal) < 150.f,
-			FString::Printf(TEXT("leg %d: standing %s at the click (feet %.0f cm off the level, %.0f cm from the goal)"), State.Leg, Leg.bUp ? TEXT("on the roof") : TEXT("on the ground"),
+			FString::Printf(TEXT("leg %d: standing %s at the click (feet %.0f cm off the level, %.0f cm from the goal)"), State.Leg, bEndUp ? TEXT("on the roof") : TEXT("on the ground"),
 				FeetOverLevel, FVector::Dist2D(Leader->GetActorLocation(), State.Goal)));
 		Check(State, State.MinFeetOverFloor > -10.f, FString::Printf(TEXT("leg %d: never below the ladder's floor on the ladder (min feet %.1f cm)"), State.Leg, State.MinFeetOverFloor));
 		Check(State, State.HandSamples > 10 && State.MaxHandError <= 3.f, FString::Printf(TEXT("leg %d: gripping hands within 3 cm of their rung grip (max %.2f cm, %d samples)"),
@@ -418,7 +456,7 @@ namespace LadderClimbSmoke
 		// The climb out on top / the start down (user bug 2026-10-23): no leg inside the platform, standing on it after the exit.
 		Check(State, State.MaxInside <= 3.f, FString::Printf(TEXT("leg %d: no leg / foot inside the platform on ClimbOutTop (max %.1f cm; pushed off the wall at most %.1f cm)"), State.Leg,
 			State.MaxInside, Climb->GetMaxEdgePush()));
-		if (Leg.bUp)
+		if (bEndUp)
 		{
 			// The standing feet on flat ground measured the same way (start of the leg): the same sole height on the top = no sink.
 			Check(State, State.TopSamples > 10 && State.MinFootOverTop >= State.StandingFoot - 3.f && State.MinCapsuleAfter >= -3.f && State.MaxCapsuleAfter <= 3.f,
@@ -429,12 +467,12 @@ namespace LadderClimbSmoke
 		{
 			const UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>();
 			const int32 FloorNow = Minimap ? Minimap->GetOperativeFloor(Leader) : -1;
-			Check(State, State.CamSamples > 20 && State.CamReversals <= 1 && State.CamMaxStep <= 3.f,
+			Check(State, State.CamSamples > 20 && State.CamReversals <= (Leg.bReverse ? 2 : 1) && State.CamMaxStep <= 3.f,
 				FString::Printf(TEXT("leg %d: the camera height follows the climb smoothly (%d reversals of its vertical motion - the body's own: %d; max %.2f cm per frame, %d frames)"),
 					State.Leg, State.CamReversals, State.BodyReversals, State.CamMaxStep, State.CamSamples));
 			// The level JSON's minimap floor at 400 cm (2026-10-23): the wall ladder's roof is floor 1 (the free ladder's 2.9 m deck stays
 			// under the band: floor 0).
-			const int32 FloorExpected = Minimap && Minimap->GetFloorCount() > 1 && Leg.bUp && Leg.bWall ? 1 : 0;
+			const int32 FloorExpected = Minimap && Minimap->GetFloorCount() > 1 && bEndUp && Leg.bWall ? 1 : 0;
 			Check(State, State.bFloorRefSet && State.FloorRefDrift < 1.f && State.FloorChangesOnLadder == 0 && FloorNow == FloorExpected
 				&& FVector::Dist(Leader->GetFloorReferenceLocation(), Leader->GetActorLocation()) < 1.f,
 				FString::Printf(TEXT("leg %d: on the ladder the roof cutaway / minimap count him on the floor he left (reference drift %.1f cm, minimap floor %d at the start, %d changes mid-ladder; %d now, expected %d, of %d floors); off it, where he stands"),
@@ -988,6 +1026,12 @@ namespace LadderClimbSmoke
 					TEXT("a 5-rung ladder is decoration: not climbable, its nav link off"));
 			}
 			State.Legs = { { true, true }, { true, false }, { false, true }, { false, false } };
+			if (!State.bClip)
+			{
+				// Turning back mid-climb: up the wall ladder and back down first; on the deck, down the free ladder and back up.
+				State.Legs.Insert({ true, true, false, true }, 0);
+				State.Legs.Insert({ false, false, false, true }, 4);
+			}
 			if (!State.bClip)
 			{
 				State.Legs.Add({ true, true });

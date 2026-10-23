@@ -157,6 +157,18 @@ public:
 
 	/** A new order mid-climb: he finishes the climb, then walks there (7.1). */
 	void SetPendingDestination(const FVector& Destination);
+
+	/**
+	 * A new order while he is on the ladder (2026-10-23): walked to after the climb; when the other end serves it better (the shorter
+	 * navmesh way from the two link points) and he is on the loop, he turns round at the next rung and climbs back. An order that agrees
+	 * with his way again cancels a pending turn-round.
+	 */
+	void HandleNewOrder(const FVector& Destination);
+
+	/** A turn-round is waiting for the next rung (smokes). */
+	bool IsReversePending() const { return bReversePending; }
+	/** Turn-rounds in this climb (smokes). */
+	int32 GetReversals() const { return Reversals; }
 	void ClearPendingDestination() { bHasPendingDestination = false; }
 
 	ELadderClimbState GetState() const { return State; }
@@ -296,6 +308,12 @@ private:
 
 	FVector PendingDestination = FVector::ZeroVector;
 	bool bHasPendingDestination = false;
+	/** HandleNewOrder: turn round at ReverseAt (the next rung boundary). */
+	bool bReversePending = false;
+	LadderRules::FLoopPos ReverseAt;
+	int32 Reversals = 0;
+	/** The navmesh path length from Point to Destination, cm; -1 when there is no full path. */
+	float PathLengthFrom(const FVector& Point, const FVector& Destination) const;
 	/** The actor location when the climb took the body (GetFloorReferenceLocation). */
 	FVector ClimbStartLocation = FVector::ZeroVector;
 

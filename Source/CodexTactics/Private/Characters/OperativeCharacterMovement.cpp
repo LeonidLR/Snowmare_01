@@ -220,11 +220,12 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	{
 		return EOperativeOrderResult::Refused; // APC P1: aboard he rides (Y gets him out)
 	}
-	// Ladders (LADDERS.md 7.1): a new order mid-climb - he finishes the climb, then walks there; queued at a busy ladder: the
+	// Ladders (LADDERS.md 7.1): a new order mid-climb - he walks there after the climb (turning round at the next rung when the goal
+	// lies behind him, 2026-10-23); queued at a busy ladder: the
 	// new order replaces the wait.
 	if (LadderClimb && LadderClimb->IsOnLadder())
 	{
-		LadderClimb->SetPendingDestination(InDestination);
+		LadderClimb->HandleNewOrder(InDestination); // the walk after the climb; a goal behind him turns him round at the next rung
 		LastMoveDestination = InDestination;
 		bHasMoveOrder = true;
 		return EOperativeOrderResult::Accepted;
