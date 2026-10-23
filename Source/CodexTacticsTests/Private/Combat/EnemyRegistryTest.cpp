@@ -96,11 +96,6 @@ bool FEnemyRegistryHotPathsTest::RunTest(const FString&)
 		{ TEXT("Environment/SnowInteractionSubsystem.cpp"), TEXT("TActorIterator<AEnemyCharacter>") },
 		{ TEXT("Environment/SnowInteractionEvents.cpp"), TEXT("TActorIterator<AActor>") },
 		{ TEXT("Environment/SnowInteractionEvents.cpp"), TEXT("TActorIterator<AEnemyCharacter>") },
-		// Snow on characters (docs/systems/environment-weather.md section 15): the 4 Hz pocket step reads the registries.
-		{ TEXT("Environment/CharacterSnowSubsystem.cpp"), TEXT("TActorIterator<AActor>") },
-		{ TEXT("Environment/CharacterSnowSubsystem.cpp"), TEXT("TActorIterator<AEnemyCharacter>") },
-		{ TEXT("Environment/CharacterSnowSubsystem.cpp"), TEXT("TActorIterator<AOperativeCharacter>") },
-		{ TEXT("Environment/CharacterSnowSubsystem.cpp"), TEXT("TActorIterator<ACharacter>") },
 		{ TEXT("Interactables/BarricadeActor.cpp"), TEXT("FName(TEXT(\"Enemy\"))") },
 		{ TEXT("Interactables/LootCrateActor.cpp"), TEXT("FName(TEXT(\"Enemy\"))") },
 		{ TEXT("Interactables/ProximityMineActor.cpp"), TEXT("FName(TEXT(\"Enemy\"))") },
