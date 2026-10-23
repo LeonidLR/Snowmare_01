@@ -125,6 +125,12 @@ bool FLadderRefusalTest::RunTest(const FString&)
 	TestTrue(TEXT("leased: he queues"), With([](FEntryContext& C) { C.bLeasedByOther = true; }) == ELadderRefusal::Leased);
 	TestTrue(TEXT("prone / crouched: he stands up first"), With([](FEntryContext& C) { C.bStanding = false; }) == ELadderRefusal::MustStand);
 
+	// Enemies (LADDERS.md 7.5): the climbing humans with clips on a ladder open to enemies; mutants never.
+	TestTrue(TEXT("a zombified PMC / marksman with clips on an open ladder climbs"), EnemyMayClimb(true, true, true));
+	TestFalse(TEXT("a mutant never climbs"), EnemyMayClimb(false, true, true));
+	TestFalse(TEXT("a climbing class without clips for its body paths around"), EnemyMayClimb(true, false, true));
+	TestFalse(TEXT("a squad-only ladder (bAllowEnemies off)"), EnemyMayClimb(true, true, false));
+
 	const FFallDamage Rule;
 	TestTrue(TEXT("a fall under 1 m: no damage"), FallDamage(90.f, Rule) == 0.f);
 	TestTrue(TEXT("a full 7-rung ladder (254.8 cm): ~15.5 HP"), FMath::IsNearlyEqual(FallDamage(254.8f, Rule), 15.48f, 0.01f));

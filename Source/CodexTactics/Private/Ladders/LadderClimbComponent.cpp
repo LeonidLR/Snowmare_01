@@ -6,6 +6,8 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
+#include "Characters/EnemyAnimInstance.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
@@ -181,6 +183,13 @@ float ULadderClimbComponent::LoopFraction(float Time) const
 	return FMath::Lerp(LoopRise[Low], LoopRise[High], Index - Low);
 }
 
+FName ULadderClimbComponent::GetClipSlot() const
+{
+	// An enemy body plays its one-shots on its own full-body slot (the Frostbitten graph's DefaultSlot), not the operatives' FullBody.
+	const UEnemyAnimInstance* EnemyAnim = Cast<UEnemyAnimInstance>(GetAnimInstance());
+	return EnemyAnim ? EnemyAnim->OneShotSlot : MontageSlot;
+}
+
 UAnimMontage* ULadderClimbComponent::PlayClip(UAnimSequence* Clip, float Time, float BlendIn)
 {
 	UAnimInstance* Anim = GetAnimInstance();
@@ -189,10 +198,11 @@ UAnimMontage* ULadderClimbComponent::PlayClip(UAnimSequence* Clip, float Time, f
 		return nullptr;
 	}
 	CurrentMontage = nullptr; // the montage it replaces ends as "interrupted": not an interrupt of the climb
-	UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage(Clip, MontageSlot, BlendIn, ExitBlendSeconds, 1.f, 1);
+	const FName Slot = GetClipSlot();
+	UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage(Clip, Slot, BlendIn, ExitBlendSeconds, 1.f, 1);
 	if (!Montage || Anim->Montage_Play(Montage, 1.f, EMontagePlayReturnType::MontageLength, Time, /*bStopAllMontages*/ true) <= 0.f)
 	{
-		UE_LOG(LogCodexTactics, Warning, TEXT("[Ladder] %s: could not play %s on slot %s"), *GetNameSafe(GetOwner()), *Clip->GetName(), *MontageSlot.ToString());
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Ladder] %s: could not play %s on slot %s"), *GetNameSafe(GetOwner()), *Clip->GetName(), *Slot.ToString());
 		return nullptr;
 	}
 	// The component sets the position every tick (the root track it follows is sampled at the same time).
@@ -272,6 +282,16 @@ void ULadderClimbComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 		break;
 	case ELadderClimbState::Queue:
 		QueueRetry -= DeltaTime;
+		QueueSeconds += DeltaTime;
+		if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetOwner()); Enemy && QueueSeconds > EnemyQueueSeconds)
+		{
+			// An enemy does not wait for ever: its AI decides afresh (the target may have moved; it may queue again).
+			UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s stops waiting for %s after %.1f s"), *Enemy->GetName(), *GetNameSafe(Ladder.Get()), QueueSeconds);
+			const FVector Destination = bHasPendingDestination ? PendingDestination : Enemy->GetActorLocation();
+			AbortClimb(ELadderAbortReason::None);
+			Enemy->ResumeMoveAfterLadder(Destination);
+			break;
+		}
 		if (QueueRetry <= 0.f)
 		{
 			QueueRetry = 0.25f;
@@ -418,15 +438,16 @@ void ULadderClimbComponent::StartEntry()
 	Ladder = Target;
 	bGoingUp = bPendingUp;
 	AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Character);
+	AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Character);
 	const UHealthComponent* Health = Character->FindComponentByClass<UHealthComponent>();
 	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
 	LadderRules::FEntryContext Context;
-	Context.bDead = Health && !Health->IsAlive();
-	Context.bClimbable = Target->IsClimbable();
+	Context.bDead = (Health && !Health->IsAlive()) || (Enemy && Enemy->IsDying());
+	Context.bClimbable = Target->IsClimbable() && (!Enemy || LadderRules::EnemyMayClimb(Enemy->bCanClimbLadders, Enemy->CanClimbLadders(), Target->bAllowEnemies));
 	Context.bHasClips = LoadClips();
-	Context.bTurnBased = TurnBased && TurnBased->IsActive();
+	Context.bTurnBased = (TurnBased && TurnBased->IsActive()) || (Enemy && Enemy->IsTurnBasedHeld());
 	Context.bMounted = VehicleQueries::IsMounted(Character);
-	Context.bKnockedDown = Operative && Operative->IsKnockedDown();
+	Context.bKnockedDown = (Operative && Operative->IsKnockedDown()) || (Enemy && Enemy->IsKnockedDown());
 	Context.bCarrying = Operative && Operative->bCarrying;
 	Context.bLeasedByOther = Target->IsLeasedByOther(Character);
 	Context.bStanding = !Operative || Operative->GetStance() == EOperativeStance::Standing;
@@ -438,6 +459,7 @@ void ULadderClimbComponent::StartEntry()
 		// He waits at the link: the ladder is busy, or he stands up first (prone / crouched is not a refusal).
 		if (!bWasQueued)
 		{
+			QueueSeconds = 0.f;
 			if (Operative)
 			{
 				const FVector Keep = PendingDestination;
@@ -506,6 +528,10 @@ void ULadderClimbComponent::StartEntry()
 	{
 		Operative->WeaponMesh->SetVisibility(false, true);
 	}
+	if (Enemy)
+	{
+		Enemy->OnLadderClimbStarted();
+	}
 
 	const LadderRules::FClipContract Contract = Target->GetContract();
 	const int32 Rungs = Target->GetRungCount();
@@ -565,7 +591,11 @@ void ULadderClimbComponent::PlaceAt(const FVector& CapsuleCentre, float Yaw)
 {
 	if (ACharacter* Character = GetCharacter())
 	{
-		Character->SetActorLocationAndRotation(CapsuleCentre, FRotator(0.f, Yaw, 0.f), false, nullptr, ETeleportType::None);
+		// The body's own hang offset (BodyHangOffset), faded with the rung IK: full on the loop, none at the ends.
+		const ALadderActor* Target = Ladder.Get();
+		const FVector BodyOffset = Target && IKWeight > 0.f
+			? (Target->GetOutward() * BodyHangOffset.X + FVector::UpVector * BodyHangOffset.Y) * IKWeight : FVector::ZeroVector;
+		Character->SetActorLocationAndRotation(CapsuleCentre + BodyOffset, FRotator(0.f, Yaw, 0.f), false, nullptr, ETeleportType::None);
 		Character->GetCharacterMovement()->Velocity = FVector::ZeroVector;
 	}
 }
@@ -833,11 +863,22 @@ void ULadderClimbComponent::FinishClimb()
 
 void ULadderClimbComponent::ResumePath()
 {
-	AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetOwner());
-	const bool bGo = bHasPendingDestination && Operative && FVector::Dist2D(PendingDestination, Operative->GetActorLocation()) > 60.f;
 	const FVector Destination = PendingDestination;
+	const bool bHadDestination = bHasPendingDestination;
 	bHasPendingDestination = false;
-	if (bGo)
+	// Turn-based (LADDERS.md 7.6): the fight started while he climbed - he stays where the ladder left him and joins its next round.
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	if (TurnBased && TurnBased->IsActive())
+	{
+		return;
+	}
+	if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetOwner()))
+	{
+		Enemy->ResumeMoveAfterLadder(bHadDestination ? Destination : Enemy->GetActorLocation());
+		return;
+	}
+	AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetOwner());
+	if (bHadDestination && Operative && FVector::Dist2D(Destination, Operative->GetActorLocation()) > 60.f)
 	{
 		Operative->ResumeMoveAfterLadder(Destination);
 	}
@@ -877,10 +918,19 @@ void ULadderClimbComponent::AbortClimb(ELadderAbortReason Reason)
 	{
 		// He falls to the bottom (7.7): off the hang line, his collision on, gravity.
 		DropFeetZ = Character->GetActorLocation().Z - GetHalfHeight();
+		DropSpeed = 0.f;
+		bDropFloorFound = false;
 		RestoreSnapshot(true);
 		if (Target)
 		{
 			Character->SetActorLocation(Character->GetActorLocation() + Target->GetOutward() * DropAwayCm, false, nullptr, ETeleportType::None);
+			// The floor below (a killed enemy's capsule has no collision: it falls by code onto it, see TickDropping).
+			FHitResult Floor;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(LadderDropFloor), false, Character);
+			const FVector From = Character->GetActorLocation();
+			const bool bHit = GetWorld()->LineTraceSingleByChannel(Floor, From, From - FVector(0.f, 0.f, 5000.f), ECC_Visibility, Params);
+			DropFloorZ = bHit ? static_cast<float>(Floor.ImpactPoint.Z) : Target->GetFloorZ();
+			bDropFloorFound = true;
 		}
 		Fire(ELadderClimbEvent::Drop, 6.f);
 		return;
@@ -925,7 +975,22 @@ void ULadderClimbComponent::TickDropping(float DeltaTime)
 		Enter(ELadderClimbState::None, 0.f);
 		return;
 	}
-	if (!Character->GetCharacterMovement()->IsMovingOnGround() && StateTime < 6.f)
+	const UCapsuleComponent* Capsule = Character->GetCapsuleComponent();
+	if (bDropFloorFound && Capsule && Capsule->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
+	{
+		// No collision to land with (a killed enemy): the fall by code, gravity onto the floor found at the drop.
+		Character->GetCharacterMovement()->DisableMovement();
+		DropSpeed += 980.f * DeltaTime;
+		const float FeetZ = static_cast<float>(Character->GetActorLocation().Z) - GetHalfHeight();
+		const float NewFeetZ = FMath::Max(DropFloorZ, FeetZ - DropSpeed * DeltaTime);
+		Character->SetActorLocation(FVector(Character->GetActorLocation().X, Character->GetActorLocation().Y, NewFeetZ + GetHalfHeight()), false, nullptr,
+			ETeleportType::TeleportPhysics);
+		if (NewFeetZ > DropFloorZ + 0.5f && StateTime < 6.f)
+		{
+			return;
+		}
+	}
+	else if (!Character->GetCharacterMovement()->IsMovingOnGround() && StateTime < 6.f)
 	{
 		return;
 	}

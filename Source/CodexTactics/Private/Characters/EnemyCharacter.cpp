@@ -21,6 +21,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/VisionConeComponent.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
 AEnemyCharacter::AEnemyCharacter()
@@ -43,6 +44,8 @@ AEnemyCharacter::AEnemyCharacter()
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	KnockdownComponent = CreateDefaultSubobject<UKnockdownComponent>(TEXT("KnockdownComponent"));
 	KnockdownComponent->bCanBeKnockedDown = false; // ConfigureKnockdown by archetype
+	// Ladders (docs/design/LADDERS.md 7.5): every enemy carries the climb; it ticks only on a climbing class (BeginPlay).
+	LadderClimb = CreateDefaultSubobject<ULadderClimbComponent>(TEXT("LadderClimb"));
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
@@ -85,6 +88,7 @@ void AEnemyCharacter::BeginPlay()
 	ResolvePlacedArchetype();
 	ApplyArchetypeDefaults();
 	ConfigureKnockdown();
+	InitLadderClimb();
 	InitPatrol();
 	// User request 2026-10-11: placed in the map without a route -> guards its post until it perceives the squad.
 	TryStartGuardPost();
@@ -114,8 +118,12 @@ void AEnemyCharacter::Tick(float DeltaTime)
 	const float MaxSpeed = GetCharacterMovement() ? GetCharacterMovement()->MaxWalkSpeed : 0.f;
 	RunUpSeconds = MaxSpeed > 0.f && GetVelocity().Size2D() >= MaxSpeed * 0.7f ? RunUpSeconds + DeltaTime : FMath::Max(0.f, RunUpSeconds - DeltaTime * 2.f);
 	SecondsSinceHoundPounce += DeltaTime;
-	TickBehavior(DeltaTime);
-	UpdateMovementFacing(DeltaTime);
+	// On a ladder / waiting for one (LADDERS.md 7.5): ULadderClimbComponent moves and turns the body, the AI waits.
+	if (!IsLadderBusy())
+	{
+		TickBehavior(DeltaTime);
+		UpdateMovementFacing(DeltaTime);
+	}
 	UpdateVisionCone(DeltaTime);
 }
 

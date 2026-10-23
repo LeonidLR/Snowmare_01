@@ -287,6 +287,11 @@ namespace LadderRules
 		return ELadderRefusal::None;
 	}
 
+	bool EnemyMayClimb(bool bClassClimbs, bool bHasClips, bool bLadderAllowsEnemies)
+	{
+		return bClassClimbs && bHasClips && bLadderAllowsEnemies;
+	}
+
 	bool NearestEndIsTop(int32 Rung, int32 RungCount)
 	{
 		return Rung * 2 > RungCount;

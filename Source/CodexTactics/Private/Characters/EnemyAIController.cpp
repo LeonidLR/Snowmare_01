@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/VaultNavigation.h"
+#include "Ladders/LadderNavigation.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 
@@ -39,7 +40,14 @@ void AEnemyAIController::OnPossess(APawn* InPawn)
 		Crowd->SetCrowdSeparationWeight(2.0f);
 		Crowd->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::Medium);
 	}
+	RefreshNavigationFilter();
 	ResetRepathState();
+}
+
+void AEnemyAIController::RefreshNavigationFilter()
+{
+	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetPawn());
+	DefaultNavigationFilterClass = Enemy && Enemy->CanClimbLadders() ? UNavFilter_NoVaultLadder::StaticClass() : UNavFilter_NoVault::StaticClass();
 }
 
 FPathFollowingRequestResult AEnemyAIController::MoveTo(const FAIMoveRequest& MoveRequest, FNavPathSharedPtr* OutPath)

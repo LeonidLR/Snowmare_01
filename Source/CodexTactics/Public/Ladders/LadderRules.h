@@ -165,6 +165,12 @@ namespace LadderRules
 	/** Why he may not start the climb now (None = go; Leased / MustStand = wait at the link). */
 	CODEXTACTICS_API ELadderRefusal CanStartClimb(const FEntryContext& Context);
 
+	/**
+	 * An enemy may climb (LADDERS.md 7.5, user decision 2026-10-22): its class climbs (the non-mutant humans), its body has the clips
+	 * (else a warning and it paths around) and the ladder admits enemies (ALadderActor::bAllowEnemies). Mutants never.
+	 */
+	CODEXTACTICS_API bool EnemyMayClimb(bool bClassClimbs, bool bHasClips, bool bLadderAllowsEnemies);
+
 	/** Abort placement: the top end when the climber is above half way (Rung > RungCount / 2), else the bottom. */
 	CODEXTACTICS_API bool NearestEndIsTop(int32 Rung, int32 RungCount);
 

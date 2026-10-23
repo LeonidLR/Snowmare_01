@@ -62,9 +62,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	TSoftObjectPtr<UAnimSequence> IntoFromTopClip;
 
-	/** The anim graph's full-body slot. */
+	/** The anim graph's full-body slot (an enemy's UEnemyAnimInstance::OneShotSlot is used on an enemy body). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	FName MontageSlot = TEXT("FullBody");
+
+	/** A climbing enemy waits this long at a leased ladder, then its AI decides afresh (it may queue again), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0.5"))
+	float EnemyQueueSeconds = 6.f;
 
 	// --- Tunables (LADDERS.md 7.9) ---
 
@@ -129,6 +133,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder IK")
 	bool bRungIK = true;
 
+	/**
+	 * This body's offset from the clips' hang line on the loop, cm: X away from the rungs (towards the climber), Y up. Zero for the
+	 * Manny-proportioned bodies the clips were made on; a body whose arms cannot reach the hand rungs (the Marksman's short torso) hangs
+	 * a little higher / closer. Faded in with the rung IK on the loop, out at the transitions.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder IK")
+	FVector2D BodyHangOffset = FVector2D::ZeroVector;
+
 	// --- API ---
 
 	/**
@@ -148,6 +160,15 @@ public:
 	void ClearPendingDestination() { bHasPendingDestination = false; }
 
 	ELadderClimbState GetState() const { return State; }
+
+	/** Loads the clips (once) and extracts their root tracks; false when one is missing (that body cannot climb). */
+	bool EnsureClips() { return LoadClips(); }
+
+	/** The climb owns the body: any state but None, or an entry pending for the next tick (the owner's AI waits). */
+	bool IsBusy() const { return State != ELadderClimbState::None || bEntryPending; }
+
+	/** The slot the climb clips play on for this body. */
+	FName GetClipSlot() const;
 
 	/** On the ladder or moving onto / off it, or falling off it (not None / Queue). */
 	bool IsOnLadder() const { return LadderRules::IsOnLadderState(State); }
@@ -251,6 +272,8 @@ private:
 	TWeakObjectPtr<ALadderActor> PendingLadder;
 	bool bPendingUp = true;
 	float QueueRetry = 0.f;
+	/** Time spent in Queue (an enemy gives up after EnemyQueueSeconds). */
+	float QueueSeconds = 0.f;
 
 	FVector PendingDestination = FVector::ZeroVector;
 	bool bHasPendingDestination = false;
@@ -309,6 +332,10 @@ private:
 
 	/** Knockdown drop. */
 	float DropFeetZ = 0.f;
+	/** A body without collision (a killed enemy's capsule is switched off) falls by code onto this floor. */
+	float DropFloorZ = 0.f;
+	float DropSpeed = 0.f;
+	bool bDropFloorFound = false;
 	bool bKnockdownOnLanding = false;
 	EKnockdownDirection DropDirection = EKnockdownDirection::Back;
 	EKnockdownCause DropCause = EKnockdownCause::None;

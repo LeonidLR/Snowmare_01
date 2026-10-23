@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimInstanceProxy.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "EnemyAnimInstance.generated.h"
 
 class UAnimSequenceBase;
@@ -19,6 +21,23 @@ struct CODEXTACTICS_API FEnemyLocomotionVariant
 	/** Ground speed of Clip at rate 1, cm/s (speed-matched play rate); <= 0 = the ABP's WalkClipSpeed / RunClipSpeed. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy Clips")
 	float GroundSpeed = 0.f;
+};
+
+/**
+ * Proxy of the enemy anim instances: the graph, then on a ladder the rung IK of the hands / feet (docs/design/LADDERS.md 6.2 / 7.5:
+ * the climbing enemies grip the rungs like the operatives, LadderPoseIK) - no ABP node needed. Off the ladder the graph alone.
+ */
+struct CODEXTACTICS_API FEnemyAnimInstanceProxy : public FAnimInstanceProxy
+{
+	FEnemyAnimInstanceProxy() = default;
+	explicit FEnemyAnimInstanceProxy(UAnimInstance* Instance) : FAnimInstanceProxy(Instance) {}
+
+	virtual void PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds) override;
+	virtual bool Evaluate_WithRoot(FPoseContext& Output, FAnimNode_Base* InRootNode) override;
+
+private:
+	FLadderIKFrame LadderIK;
+	FVector KneeIKOffset[2] = { FVector::ZeroVector, FVector::ZeroVector };
 };
 
 /**
@@ -40,6 +59,8 @@ class CODEXTACTICS_API UEnemyAnimInstance : public UAnimInstance
 public:
 	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
+	/** FEnemyAnimInstanceProxy: the rung IK on a ladder. */
+	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override;
 
 	/**
 	 * Called by AEnemyCharacter when it bites / is hit / dies (also usable from Blueprints).
@@ -308,6 +329,13 @@ public:
 	/** Playing an idle break (a fidget idle or the calm activity). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Enemy State")
 	bool bIsIdleBreak = false;
+
+	/**
+	 * On a ladder (docs/design/LADDERS.md 7.5; the climb clips play on OneShotSlot from ULadderClimbComponent): no hit / attack /
+	 * roar / entrance clip and no turn-based slot stop may take the slot (it would interrupt the climb).
+	 */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Enemy State")
+	bool bIsClimbing = false;
 
 protected:
 	/** Plays Clip on OneShotSlot; bHold keeps the last frame (death). Returns the montage (nullptr without a clip). */

@@ -284,6 +284,41 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	bool IsTurnBasedHeld() const { return bTurnBasedHeld; }
 
+	// --- Ladders (docs/design/LADDERS.md 7.5, user decision 2026-10-22: non-mutant humans climb, mutants never) ---
+
+	/**
+	 * This enemy class climbs ladders: the zombified PMC (BP_Enemy_FrozenPMC_Fighter), the Military Zombie, the Marksman (class
+	 * default here) and the future PMC mercenaries; never a mutant (Brute, Cutter, Frostbitten, Hound, Spitter, Cryo Drone). A
+	 * climber paths with UNavFilter_NoVaultLadder (the ladder links open) and climbs with LadderClimb; a non-climber's filter keeps
+	 * the links closed (it paths around or stops short). Treated as false, with a warning, when the clips cannot load.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy|Ladder")
+	bool bCanClimbLadders = false;
+
+	/** The climb (the operatives' component and clips; ticks only on a climbing class). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Enemy|Ladder")
+	TObjectPtr<class ULadderClimbComponent> LadderClimb;
+
+	/** bCanClimbLadders and the clips are there (the AI controller's nav filter follows it). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy|Ladder")
+	bool CanClimbLadders() const;
+
+	/** On a ladder (moving onto / off it, climbing, falling off it). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy|Ladder")
+	bool IsClimbingLadder() const;
+
+	/** The climb owns the body: on the ladder or waiting at its foot / head for it (the AI is suspended). */
+	bool IsLadderBusy() const;
+
+	/** The climb is over: the AI asks for its move afresh and walks on to Destination (the path's goal before the ladder). */
+	void ResumeMoveAfterLadder(const FVector& Destination);
+
+	/** Hook: the climb took the body (the marksman drops his aim). */
+	virtual void OnLadderClimbStarted() {}
+
+	/** Where a save taken now puts it: the end of the ladder it heads to while climbing (LADDERS.md 7.8), else its location. */
+	FVector GetSaveLocation() const;
+
 	/**
 	 * Horde member (UHordeSubsystem, user request 2026-10-06): it knows where every operative is (no sight / hearing
 	 * needed — UTacticalSightSubsystem::GetBelief answers «perceived»), goes straight for the squad and never falls back.
@@ -737,6 +772,10 @@ protected:
 	bool bHeldByAIPause = false;
 	/** See SetTurnBasedHeld. */
 	bool bTurnBasedHeld = false;
+	/** bCanClimbLadders but the ladder clips did not load (BeginPlay): treated as a non-climber. */
+	bool bLadderClipsMissing = false;
+	/** BeginPlay: the climb ticks on a climbing class with clips; the controller's nav filter follows (EnemyCharacterLadder.cpp). */
+	void InitLadderClimb();
 	/** Subclass hook of SetTurnBasedHeld (the marksman cancels his get-up / aim). */
 	virtual void OnTurnBasedHeldChanged(bool bHeld) {}
 	/** Breaks the patrol of its leader and of every enemy escorting it. */

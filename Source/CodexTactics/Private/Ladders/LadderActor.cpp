@@ -365,6 +365,8 @@ void ALadderActor::UpdateNavLink()
 	}
 	const LadderRules::FClipContract Contract = GetContract();
 	NavLink->SetLinkData(LadderRules::BottomLinkLocal(Contract), LadderRules::TopLinkLocal(Contract, RungCount), ENavLinkDirection::BothWays);
+	// The climbing enemies' filter opens UNavArea_Ladder only: a ladder closed to the enemies gets the squad-only area (7.5).
+	NavLink->SetEnabledArea(bAllowEnemies ? UNavArea_Ladder::StaticClass() : UNavArea_LadderSquadOnly::StaticClass());
 	// A decoration ladder (< 7 rungs / no top exit): the link is off (its disabled area is Null - nothing paths over it).
 	NavLink->SetEnabled(IsClimbable());
 }

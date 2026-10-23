@@ -33,7 +33,7 @@
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke",
-    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "BlizzardWalkSmoke"
+    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -68,6 +68,7 @@
     "GateExitLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "2026-10-22: the lake ends through the fully opened blast door - the last wave goes straight to post-combat, two of three out = no fade, the third out = fade to black + mission complete; 2026-10-22 b: then the stat-points screen -> Continue -> the factory (campaign 0.1) with the carried squad" },
     "GateExitLakeNoPointsSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "2026-10-22 b: the lake exit with no unspent points - no points screen, the factory opens at once with the carried squad" },
     "FrozenFactoryStartSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 300, "_why": "2026-10-22 b: campaign level 0.1 starts with a fade-in, the squad just outside the lake compound's blast door (set dressing; CLOSED and blocking since 2026-10-22 e), facing away, the door in the start camera" },
+    "LadderEnemySmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.5): the Marksman, the Frozen PMC Fighter and the Military Zombie climb the factory's test ladders through their nav links (knockdown / death on the way down drop them); the Hound, the Frostbitten and the Brute never take a ladder" },
     "LadderClimbSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-22 e (docs/design/LADDERS.md): the factory's two test ladders (against a wall / free-standing) up and down by real clicks through their nav links, rung IK, gates, a decoration ladder, a knockdown mid-climb -> the fall with fall damage" },
     "LakeQuestSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A7 canister quest in the lake's last compound (layout 5k): navmesh paths, jerrycan -> BTR -> generator -> console, wave 1 on the lake lanes, the paced blast door" },
     "TutorialAmbushLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A4 ambush in two parts on the lake layout (the placed zombies walk their routes: a loop into the wire, a whistle)" },
@@ -92,7 +93,10 @@
       "globs": [
         "Source/**/Ladders/**",
         "Source/**/Characters/OperativeCharacterLadder*",
+        "Source/**/Characters/EnemyCharacterLadder*",
         "Source/**/Debug/LadderClimbSmoke*",
+        "Source/**/Debug/LadderEnemySmoke*",
+        "Scripts/Editor/setup_enemy_ladder_climbing.py",
         "Source/**/Debug/LadderClipShots*",
         "Scripts/Editor/place_factory_test_ladders.py",
         "Content/Maps/L_Demo01_B_FrozenFactory.umap"
@@ -102,6 +106,7 @@
       ],
       "smokes": [
         "LadderClimbSmoke",
+        "LadderEnemySmoke",
         "FrozenFactoryStartSmoke",
         "MovementSmoke",
         "VaultSmoke",

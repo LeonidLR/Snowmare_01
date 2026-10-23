@@ -37,6 +37,10 @@ AMarksmanEnemyCharacter::AMarksmanEnemyCharacter()
 	Archetype = EEnemyArchetype::Marksman;
 	EnemyDisplayName = TEXT("Marksman");
 	bFearsFire = false;
+	bCanClimbLadders = true; // a human (LADDERS.md 7.5)
+	// His short torso (BM1 skeleton: spine_01 + spine_04 + spine_05 = 33 cm) leaves the hands ~8 cm under the clips' rungs: he hangs a bit
+	// higher and closer (LadderEnemySmoke measures the gripping hands / feet).
+	LadderClimb->BodyHangOffset = FVector2D(-4.f, 6.f);
 
 	AimBeam = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("AimBeam"));
 	AimBeam->SetupAttachment(RootComponent);
@@ -501,6 +505,13 @@ void AMarksmanEnemyCharacter::OnTurnBasedHeldChanged(bool bHeld)
 		CancelAim();
 		bHolding = false;
 	}
+}
+
+void AMarksmanEnemyCharacter::OnLadderClimbStarted()
+{
+	GetWorldTimerManager().ClearTimer(RiseTimerHandle);
+	CancelAim();
+	bHolding = false;
 }
 
 void AMarksmanEnemyCharacter::MoveTo(const FVector& Goal, bool bSprint)

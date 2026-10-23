@@ -310,6 +310,7 @@ def ensure_bp(pmc_mesh):
     cdo.set_editor_property("display_name_override", DISPLAY_NAME)
     cdo.set_editor_property("override_knockdown_clip_folder", True)
     cdo.set_editor_property("knockdown_clip_folder", "")
+    cdo.set_editor_property("can_climb_ladders", True)  # a zombified human climbs ladders (docs/design/LADDERS.md 7.5)
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
     library.save_loaded_asset(bp, False)
     say("BP: mesh %s, anim %s, capsule 40/90, mesh z -90 yaw -90 scale 1, name \"%s\", knockdown clips /Game/Animations_KnockDown"
