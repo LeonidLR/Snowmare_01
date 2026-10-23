@@ -53,7 +53,7 @@ bool FLadderRungMathTest::RunTest(const FString&)
 	using namespace LadderRules;
 	const FClipContract Clip;
 	constexpr float L = 1.767f;
-	TestTrue(TEXT("ClimbOut starts 7 rungs below the platform"), ClimbOutStart(Clip, 11) == FLoopPos{ 4, 0.f });
+	TestTrue(TEXT("ClimbOut starts 5 rungs below the platform (re-measured 2026-10-23: the clip steps onto a top 182 cm up)"), ClimbOutStart(Clip, 11) == FLoopPos{ 6, 0.f });
 	TestTrue(TEXT("IntoFromTop lands 5 rungs below the platform"), IntoFromTopEnd(Clip, 11) == FLoopPos{ 6, 0.f });
 	TestTrue(TEXT("even target: start at the floor, loop start"), BottomPos(4, L) == FLoopPos{ 0, 0.f });
 	TestTrue(TEXT("odd target: the one-rung remainder is the first half of the loop"), BottomPos(1, L) == FLoopPos{ -1, L * 0.5f });

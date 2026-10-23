@@ -119,6 +119,23 @@ namespace LadderClimbSmoke
 		FVector CameraEye = FVector::ZeroVector;
 		FVector CameraLook = FVector::ZeroVector;
 		bool bCameraPlaced = false;
+		// The climb out on top (user bug 2026-10-23 "at the very end he sinks halfway into the object"): the lowest foot bone over the
+		// real top surface (a trace under him) from 0.5 s before ExitTop ends until 1 s after, and the capsule bottom over it.
+		float ExitTopTime = 0.f;
+		float OffTopTime = -1.f;
+		float MinFootOverTop = 1e6f;
+		float MaxFootOverTop = -1e6f;
+		float MinCapsuleOverTop = 1e6f;
+		float MaxCapsuleOverTop = -1e6f;
+		int32 TopSamples = 0;
+		int32 TopLogCount = 0;
+		float MaxInside = 0.f;
+		/** The lowest foot (sole estimate) over the ground when he stands on flat ground at the start of the leg. */
+		float StandingFoot = 0.f;
+		/** When the lowest foot was measured: ExitTop time, or 100 + the time after it. */
+		float MinFootAt = 0.f;
+		float MinCapsuleAfter = 1e6f;
+		float MaxCapsuleAfter = -1e6f;
 		// Camera / floors on the ladder (7.3), per leg.
 		float CamLastZ = 0.f;
 		float CamLastStep = 0.f;
@@ -237,6 +254,42 @@ namespace LadderClimbSmoke
 		}
 		State.KneeSamples = 0;
 		State.bHasLastKnee = false;
+		{
+			// Where the platform's edge stands behind the rung plane (the ladder's top edge: a trace at TopZ - 5 cm towards the wall).
+			FHitResult Edge;
+			FCollisionQueryParams EdgeParams(SCENE_QUERY_STAT(LadderSmokeEdge), false, Leader);
+			EdgeParams.AddIgnoredActor(Ladder);
+			const FVector From = Ladder->GetActorLocation() + FVector(0.f, 0.f, Ladder->GetTopWorldZ() - Ladder->GetFloorZ() - 5.f) + Ladder->GetOutward() * 60.f;
+			const bool bEdge = World->LineTraceSingleByChannel(Edge, From, From - Ladder->GetOutward() * 200.f, ECC_Visibility, EdgeParams);
+			UE_LOG(LogCodexTactics, Display, TEXT("[LadderClimb] leg %d: the platform's edge %.1f cm behind the rung plane (%s)"), State.Leg,
+				bEdge ? static_cast<float>(FVector::DotProduct(Edge.ImpactPoint - Ladder->GetActorLocation(), -Ladder->GetOutward())) : -1.f, *GetNameSafe(Edge.GetActor()));
+		}
+		if (const USkeletalMeshComponent* Body = Leader ? Leader->GetMesh() : nullptr)
+		{
+			float Lowest = 1e6f;
+			FCollisionQueryParams FootParams(SCENE_QUERY_STAT(LadderSmokeStandFoot), false, Leader);
+			FootParams.AddIgnoredActor(Ladder);
+			for (const TPair<const TCHAR*, float> Bone : { TPair<const TCHAR*, float>(TEXT("ball_l"), 2.f), TPair<const TCHAR*, float>(TEXT("ball_r"), 2.f),
+				TPair<const TCHAR*, float>(TEXT("foot_l"), 7.f), TPair<const TCHAR*, float>(TEXT("foot_r"), 7.f) })
+			{
+				const FVector P = Body->GetBoneLocation(Bone.Key);
+				FHitResult Ground;
+				if (World->LineTraceSingleByChannel(Ground, P + FVector(0.f, 0.f, 50.f), P - FVector(0.f, 0.f, 200.f), ECC_Visibility, FootParams))
+				{
+					Lowest = FMath::Min(Lowest, static_cast<float>(P.Z - Ground.ImpactPoint.Z) - Bone.Value);
+				}
+			}
+			State.StandingFoot = Lowest < 1e5f ? Lowest : 0.f;
+		}
+		State.ExitTopTime = 0.f;
+		State.OffTopTime = -1.f;
+		State.MinFootOverTop = State.MinCapsuleOverTop = 1e6f;
+		State.MaxFootOverTop = State.MaxCapsuleOverTop = -1e6f;
+		State.TopSamples = 0;
+		State.TopLogCount = 0;
+		State.MaxInside = 0.f;
+		State.MinCapsuleAfter = 1e6f;
+		State.MaxCapsuleAfter = -1e6f;
 		State.bCamSampled = false;
 		State.CamMaxStep = 0.f;
 		State.CamReversals = State.BodyReversals = 0;
@@ -362,6 +415,16 @@ namespace LadderClimbSmoke
 				FString::Printf(TEXT("leg %d: %s knee on the loop - angle >= 60 deg (min %.0f; the clip's own 75), the IK never jumps it > 4 cm per frame (its correction changes max %.1f cm), bent towards the ladder (min %.1f cm), %d frames (max jump at rung*100+t %.2f)"),
 					State.Leg, Side == 0 ? TEXT("left") : TEXT("right"), State.MinKneeAngle[Side], State.MaxKneeJump[Side], State.MinKneeForward[Side], State.KneeSamples, State.MaxKneeJumpTime[Side]));
 		}
+		// The climb out on top / the start down (user bug 2026-10-23): no leg inside the platform, standing on it after the exit.
+		Check(State, State.MaxInside <= 3.f, FString::Printf(TEXT("leg %d: no leg / foot inside the platform on ClimbOutTop (max %.1f cm; pushed off the wall at most %.1f cm)"), State.Leg,
+			State.MaxInside, Climb->GetMaxEdgePush()));
+		if (Leg.bUp)
+		{
+			// The standing feet on flat ground measured the same way (start of the leg): the same sole height on the top = no sink.
+			Check(State, State.TopSamples > 10 && State.MinFootOverTop >= State.StandingFoot - 3.f && State.MinCapsuleAfter >= -3.f && State.MaxCapsuleAfter <= 3.f,
+				FString::Printf(TEXT("leg %d: he lands ON the top - the lowest foot from 0.5 s before the end on: %.1f cm over the surface under it (standing on flat ground: %.1f, -3 cm allowed); the capsule bottom on the floor after (%.1f..%.1f cm); lowest at %.2f"),
+					State.Leg, State.MinFootOverTop, State.StandingFoot, State.MinCapsuleAfter, State.MaxCapsuleAfter, State.MinFootAt));
+		}
 		if (!State.bClip)
 		{
 			const UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>();
@@ -395,6 +458,104 @@ namespace LadderClimbSmoke
 		}
 		const ELadderClimbState S = Climb->GetState();
 		const FVector Inward = -Ladder->GetOutward();
+		// The climb out on top (user bug 2026-10-23): every frame of ExitTop and 1 s after it, each foot / leg / pelvis bone against the
+		// platform under it (a trace down at the bone's XY from above the top): how deep a bone is inside the platform, and, over the
+		// last 0.5 s and after, how far the lowest foot is above the surface it stands on.
+		{
+			const float Delta = 1.f / 60.f;
+			const bool bExitTop = S == ELadderClimbState::ExitTop;
+			if (bExitTop)
+			{
+				State.ExitTopTime += Delta;
+				State.OffTopTime = -1.f;
+			}
+			else if (S == ELadderClimbState::None && State.ExitTopTime > 0.f)
+			{
+				State.OffTopTime = State.OffTopTime < 0.f ? 0.f : State.OffTopTime + Delta;
+			}
+			const bool bAfter = State.OffTopTime >= 0.f && State.OffTopTime <= 1.f;
+			UWorld* World = Leader->GetWorld();
+			if ((bExitTop || bAfter) && World)
+			{
+				FCollisionQueryParams Params(SCENE_QUERY_STAT(LadderSmokeTop), false, Leader);
+				Params.AddIgnoredActor(Ladder); // its click proxy blocks Visibility
+				const float TopZ = Ladder->GetTopWorldZ();
+				float Inside = 0.f;
+				const TCHAR* InsideBone = TEXT("-");
+				float InsidePast = 0.f;
+				float LowestFoot = 1e6f;
+				// Each bone with how far over the sole / its skin it sits (ball 2, ankle 7, knee 8, hip / pelvis 10 cm).
+				struct FBoneSkin { const TCHAR* Name; float OverSole; };
+				const FBoneSkin Bones[] = { { TEXT("ball_l"), 2.f }, { TEXT("ball_r"), 2.f }, { TEXT("foot_l"), 7.f }, { TEXT("foot_r"), 7.f }, { TEXT("calf_l"), 8.f },
+					{ TEXT("calf_r"), 8.f }, { TEXT("thigh_l"), 10.f }, { TEXT("thigh_r"), 10.f }, { TEXT("pelvis"), 10.f } };
+				for (const FBoneSkin& Skin : Bones)
+				{
+					const TCHAR* Bone = Skin.Name;
+					const FVector P = Mesh->GetBoneLocation(Bone);
+					FHitResult Hit;
+					if (!World->LineTraceSingleByChannel(Hit, FVector(P.X, P.Y, TopZ + 100.f), FVector(P.X, P.Y, TopZ - 600.f), ECC_Visibility, Params))
+					{
+						continue;
+					}
+					const float Over = static_cast<float>(P.Z - Hit.ImpactPoint.Z) - Skin.OverSole; // the sole / skin over the surface under it
+					// Inside the geometry: the bone's centre overlaps a blocking surface; how deep = the nearer of the top surface above it and the
+					// face in front of it (towards the ladder) - a thin deck the feet stand under does not count.
+					if (World->OverlapBlockingTestByChannel(P, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(0.5f), Params))
+					{
+						FHitResult Above, Face;
+						const FVector Out = Ladder->GetOutward();
+						// (Each trace runs 2 cm past the bone: a sphere just touching the surface from outside has no surface before its centre.)
+						const float Vertical = World->LineTraceSingleByChannel(Above, P + FVector(0.f, 0.f, 150.f), P - FVector(0.f, 0.f, 2.f), ECC_Visibility, Params)
+							? static_cast<float>(Above.ImpactPoint.Z - P.Z) : 0.f;
+						const float Horizontal = World->LineTraceSingleByChannel(Face, P + Out * 150.f, P - Out * 2.f, ECC_Visibility, Params)
+							? static_cast<float>(FVector::DotProduct(Face.ImpactPoint - P, Out)) : 0.f;
+						// A knee / hip / pelvis joint centre sits a few cm inside its skin (kneeling on the edge puts the knee centre that deep).
+						const float Depth = FMath::Max(0.f, FMath::Min(Vertical, Horizontal) - (Skin.OverSole >= 8.f ? 4.f : 0.f));
+						if (Depth > Inside)
+						{
+							Inside = Depth;
+							InsideBone = Bone;
+							InsidePast = static_cast<float>(FVector::DotProduct(P - Ladder->GetActorLocation(), -Out));
+						}
+					}
+					if (FCString::Strncmp(Bone, TEXT("ball"), 4) == 0 || FCString::Strncmp(Bone, TEXT("foot"), 4) == 0)
+					{
+						LowestFoot = FMath::Min(LowestFoot, Over);
+					}
+				}
+				// During the clip, and after it while he stands (the walk on to the click is the locomotion's own business).
+				if (bExitTop || Leader->GetVelocity().Size2D() < 20.f)
+				{
+					State.MaxInside = FMath::Max(State.MaxInside, Inside);
+				}
+				const float ExitLength = 3.233f; // ClimbOutTop's length (the clip log)
+				// The last 0.5 s of the clip, and after it while he still stands there (a walk on to the click has its own lower heel strike).
+				if ((bExitTop && State.ExitTopTime > ExitLength - 0.5f) || (bAfter && Leader->GetVelocity().Size2D() < 20.f))
+				{
+					if (LowestFoot < State.MinFootOverTop)
+					{
+						State.MinFootAt = State.OffTopTime >= 0.f ? 100.f + State.OffTopTime : State.ExitTopTime;
+					}
+					State.MinFootOverTop = FMath::Min(State.MinFootOverTop, LowestFoot);
+					State.MaxFootOverTop = FMath::Max(State.MaxFootOverTop, LowestFoot);
+					const float Capsule = static_cast<float>(Leader->GetActorLocation().Z - Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) - TopZ;
+					State.MinCapsuleOverTop = FMath::Min(State.MinCapsuleOverTop, Capsule);
+					State.MaxCapsuleOverTop = FMath::Max(State.MaxCapsuleOverTop, Capsule);
+					if (bAfter && State.OffTopTime > 0.1f)
+					{
+						State.MinCapsuleAfter = FMath::Min(State.MinCapsuleAfter, Capsule);
+						State.MaxCapsuleAfter = FMath::Max(State.MaxCapsuleAfter, Capsule);
+					}
+					++State.TopSamples;
+				}
+				if (Inside > 3.f)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[LadderClimb] top exit t %.2f / off %.2f: %s %.1f cm inside the platform (%.1f cm past the rung plane); lowest foot %.1f cm over the surface under it; capsule bottom %.1f over the top"),
+						State.ExitTopTime, State.OffTopTime, InsideBone, Inside, InsidePast, LowestFoot,
+						static_cast<float>(Leader->GetActorLocation().Z - Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) - TopZ);
+				}
+			}
+		}
 		// Camera height and the floor reference while he climbs (7.3).
 		if (Climb->IsClimbing() && !State.bClip)
 		{

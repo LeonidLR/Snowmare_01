@@ -10,6 +10,17 @@
 > [camera-hud-minimap](../systems/camera-hud-minimap.md), [combat-and-fire](../systems/combat-and-fire.md) (turn-based arena),
 > [save-load](../systems/save-load.md). Clip renders in UE: dev command `CodexTactics.LadderClipShots` (session ladder-clips-ue, 2026-10-22).
 
+> **Fixed 2026-10-23 b (user bug "at the very end he sinks halfway INTO the object he climbed onto"):** measured per frame (LadderClimbSmoke):
+> the legs were up to 120 cm inside the roof / deck over the last ~1.5 s of ClimbOutTop. Cause, in the clip itself (bones sampled offline): it
+> steps onto a top **5 rungs** up (left ball planted at 184 cm from 2.4 s; 5 x 36.4 = 182) and then lifts the whole body ~73 cm more in its last
+> 0.43 s (feet and root alike) - with 7 rungs below the platform the feet planted on an invisible step 72 cm inside the block, then popped up.
+> Now: `FClipContract::ClimbOutRungs` = 5, the clip's own lift (from `ClimbOutLiftStart` 2.8 s: the smaller rise of the two balls) is taken out of
+> its root track at load (`ULadderClimbComponent::RemoveClipLift`), the exit ends 2.15 cm over the top (the walking floor gap: no snap, no sunk
+> feet), and while a knee / foot swings over the platform's edge just under its top (the clip's ladder stood further off its ledge) the climber is
+> pushed off the wall just enough (`EdgePushFor`, edge measured by a trace, <= 25 cm, faded out over the clip's last 0.3 s). Measured: no leg bone
+> more than 2.1 cm inside the platform (operative, both test ladders, up and down) / 0.9-1.5 cm (enemies), the lowest foot on the top within
+> 0.3 cm of its standing height, the capsule bottom 2.1 cm over the floor. The 7-rung minimum of a climbable ladder (user decision) is unchanged.
+
 > **Changed 2026-10-23 (user feedback on the first video):** going down, the climber must never have his back to the rungs while the body
 > sinks below the roof. The IntoFromTop clip's 180 deg turn runs while the body already drops (measured: side-on at 0.5 s with the root 33 cm down,
 > the turn done only at 2.47 s with the root 138 cm down), so it is no longer used by default (`bDescendFacingLadder`). Now: he walks to the

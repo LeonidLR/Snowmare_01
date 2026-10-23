@@ -99,6 +99,10 @@ namespace LadderEnemySmoke
 		int32 FootSamples = 0;
 		float MinFeetOverFloor = 1e6f;
 		float MaxFeetOverFloor = -1e6f;
+		// The climb out on top / the start down (user bug 2026-10-23: legs inside the platform): the deepest leg bone inside it.
+		float MaxInside = 0.f;
+		const TCHAR* MaxInsideBone = TEXT("-");
+		float EnterTopTime = 0.f;
 		// Ending.
 		float EndFeetZ = -1.f;
 		float HealthBefore = 0.f;
@@ -176,6 +180,56 @@ namespace LadderEnemySmoke
 		State.MinFeetOverFloor = 1e6f;
 		State.MaxFeetOverFloor = -1e6f;
 		State.EndFeetZ = -1.f;
+		State.MaxInside = 0.f;
+		State.MaxInsideBone = TEXT("-");
+	}
+
+	/** On ClimbOutTop (both ways): how deep any leg bone is inside the platform (an overlap, its depth to the top / the face in front). */
+	void SampleTop(FState& State, const AEnemyCharacter& Enemy, const ALadderActor& Ladder)
+	{
+		UWorld* World = Enemy.GetWorld();
+		const USkeletalMeshComponent* Mesh = Enemy.GetMesh();
+		if (!World || !Mesh)
+		{
+			return;
+		}
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(LadderEnemyTop), false, &Enemy);
+		Params.AddIgnoredActor(&Ladder);
+		const FVector Out = Ladder.GetOutward();
+		for (const TCHAR* Bone : { TEXT("ball_l"), TEXT("ball_r"), TEXT("foot_l"), TEXT("foot_r"), TEXT("calf_l"), TEXT("calf_r"), TEXT("thigh_l"), TEXT("thigh_r") })
+		{
+			if (Mesh->GetBoneIndex(FName(Bone)) == INDEX_NONE)
+			{
+				continue;
+			}
+			const FVector P = Mesh->GetBoneLocation(FName(Bone));
+			// The platform's top part only (60 cm): lower down a knee touching the wall face behind a wall ladder is the loop pose (wall 10 cm
+			// behind the rungs), not the climb out.
+			if (P.Z < Ladder.GetTopWorldZ() - 60.f
+				|| !World->OverlapBlockingTestByChannel(P, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(0.5f), Params))
+			{
+				continue;
+			}
+			FHitResult Above, Face;
+			const float Vertical = World->LineTraceSingleByChannel(Above, P + FVector(0.f, 0.f, 150.f), P - FVector(0.f, 0.f, 2.f), ECC_Visibility, Params)
+				? static_cast<float>(Above.ImpactPoint.Z - P.Z) : 0.f;
+			const float Horizontal = World->LineTraceSingleByChannel(Face, P + Out * 150.f, P - Out * 2.f, ECC_Visibility, Params)
+				? static_cast<float>(FVector::DotProduct(Face.ImpactPoint - P, Out)) : 0.f;
+			// A knee / hip joint centre sits ~4 cm inside its skin: a knee kneeling on the edge (the clip does, going down) has its centre that deep.
+			const bool bJoint = FCString::Strncmp(Bone, TEXT("calf"), 4) == 0 || FCString::Strncmp(Bone, TEXT("thigh"), 5) == 0;
+			const float Depth = FMath::Max(0.f, FMath::Min(Vertical, Horizontal) - (bJoint ? 4.f : 0.f));
+			if (Depth > State.MaxInside)
+			{
+				State.MaxInside = Depth;
+				State.MaxInsideBone = Bone;
+			}
+			if (Depth > 3.f)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[LadderEnemy] %s %.1f cm inside (vertical %.1f, horizontal %.1f): %.1f cm under the top, %.1f cm past the rung plane, climb state %d, push %.1f"), Bone, Depth,
+					Vertical, Horizontal, Ladder.GetTopWorldZ() - P.Z, FVector::DotProduct(P - Ladder.GetActorLocation(), -Out), static_cast<int32>(Enemy.LadderClimb->GetState()),
+					Enemy.LadderClimb->GetMaxEdgePush());
+			}
+		}
 	}
 
 	void Order(FState& State, const FVector& Goal)
@@ -320,6 +374,12 @@ namespace LadderEnemySmoke
 		{
 			SampleBody(State, *Enemy, *Climb, *Ladder);
 		}
+		// (Not the first 0.3 s down: the clip blends in from the body's own idle - a hunched / crouched one kneels on the floor.)
+		State.EnterTopTime = ClimbState == ELadderClimbState::EnterTop ? State.EnterTopTime + StepSeconds : 0.f;
+		if (ClimbState == ELadderClimbState::ExitTop || (ClimbState == ELadderClimbState::EnterTop && State.EnterTopTime > 0.3f))
+		{
+			SampleTop(State, *Enemy, *Ladder);
+		}
 		// The endings on the way down: feet > 1.2 m up.
 		if (State.Leg == 1 && Run.Ending != EEnding::Down && State.EndFeetZ < 0.f && ClimbState == ELadderClimbState::ClimbDown && FeetOverFloor > 120.f)
 		{
@@ -392,6 +452,9 @@ namespace LadderEnemySmoke
 			FString::Printf(TEXT("%s standing %s at the goal (feet %.0f cm off the level, %.0f cm from the goal)"), Run.Name, bUp ? TEXT("on the roof") : TEXT("on the ground"),
 				FeetOverLevel, FVector::Dist2D(Enemy->GetActorLocation(), State.Goal)));
 		Check(State, State.MinFeetOverFloor > -10.f, FString::Printf(TEXT("%s never below the ladder's floor (min feet %.1f cm)"), Run.Name, State.MinFeetOverFloor));
+		Check(State, State.MaxInside <= 3.f && (!bUp || FMath::Abs(FeetOverLevel) <= 3.f),
+			FString::Printf(TEXT("%s: no leg inside the platform on ClimbOutTop (max %.1f cm, %s; pushed off the wall at most %.1f cm)%s"), Run.Name, State.MaxInside,
+				State.MaxInsideBone, Climb->GetMaxEdgePush(), bUp ? *FString::Printf(TEXT(", the capsule bottom %.1f cm over the roof"), FeetOverLevel) : TEXT("")));
 		const float MeanHand = State.HandSamples > 0 ? State.HandErrorSum / State.HandSamples : 1e6f;
 		UE_LOG(LogCodexTactics, Display, TEXT("[LadderEnemy] %s %s body: slot weight min %.2f, pelvis %.0f..%.0f cm over the feet, gripping hands to their grip mean %.1f / max %.1f cm (%d samples; mean error %.1f out, %.1f up); gripping feet max %.1f cm (%d samples; mean error %.1f out, %.1f up)"),
 			Run.Name, bUp ? TEXT("up") : TEXT("down"), State.MinSlotWeight, State.MinPelvisOverFeet, State.MaxPelvisOverFeet, MeanHand, State.MaxHandError, State.HandSamples,

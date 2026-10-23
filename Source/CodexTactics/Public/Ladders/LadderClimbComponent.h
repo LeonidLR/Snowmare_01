@@ -223,6 +223,11 @@ private:
 
 	bool LoadClips();
 	FRootTrack ExtractTrack(UAnimSequence* Clip) const;
+	/**
+	 * Takes the clip's own lift of its last part out of Track (the ClimbOutTop's feet rise with the body after LiftStart although they stand
+	 * on the top): from LiftStart the smaller of the two feet's rise is subtracted from the root's height. Returns the lift removed at the end.
+	 */
+	float RemoveClipLift(UAnimSequence* Clip, FRootTrack& Track, float LiftStart) const;
 	/** The up loop's rise share at Time (0..1). */
 	float LoopFraction(float Time) const;
 
@@ -246,6 +251,14 @@ private:
 	/** The ClimbOutTop warp between the hang pose on rung Rung and the platform: its scale and where it ends on top (capsule centres). */
 	void TopWarp(int32 Rung, FVector& OutHang, FVector& OutTop, FVector& OutScale) const;
 	void BeginExitTop();
+	/** The platform's edge behind the rung plane at the ladder's top, cm (a trace towards the wall); -1 = none found. */
+	float MeasureTopEdge() const;
+	/**
+	 * On ClimbOutTop (both ways) the knees / feet swing over the platform's edge while still a little under its top (the clip's ladder stood
+	 * further off its ledge): pushes him off the wall just enough that no leg bone below the top is past the edge (a few cm, released smoothly).
+	 * Base = where the root track puts him. Returns the push, cm.
+	 */
+	float EdgePushFor(const FVector& Base, float DeltaTime);
 	void BeginLoop(bool bUp);
 	void BeginExitBottom();
 	void FinishClimb();
@@ -318,6 +331,17 @@ private:
 	float ClipTime = 0.f;
 	/** The warped clip plays backwards (ClimbOutTop going down). */
 	bool bWarpReverse = false;
+	/** EdgePushFor: the edge measured at the top transition, the push (cm, away from the wall) and its release spring. */
+	float TopEdgeCm = -1.f;
+	float EdgePush = 0.f;
+	float EdgePushVelocity = 0.f;
+	float MaxEdgePush = 0.f;
+
+public:
+	/** The largest edge push of the last climb (smokes), cm. */
+	float GetMaxEdgePush() const { return MaxEdgePush; }
+
+private:
 	/** AlignTop: walk to the ladder head (0), then the turn in place (1). */
 	int32 AlignPhase = 0;
 	float AlignPhaseStart = 0.f;
