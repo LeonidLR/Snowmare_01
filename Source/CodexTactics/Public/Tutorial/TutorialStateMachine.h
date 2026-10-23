@@ -226,6 +226,11 @@ public:
 	bool GetActiveConfine(FTutorialConfineView& Out) const;
 	/** Ends the confinement in force (the tutorial was switched off / skipped, a fight started). False when none held. */
 	bool ReleaseConfines();
+	/**
+	 * 2026-10-23 ("free": "first"): OperativeId takes the lesson of the confinement in force - from now on he alone moves freely. False
+	 * when there is no such confinement or someone already took it.
+	 */
+	bool ClaimConfineFree(FName OperativeId);
 	/** Changes whenever a confinement starts or ends (the runtime stops the squad when one starts). */
 	int32 GetConfineSerial() const { return ConfineSerial; }
 
@@ -390,6 +395,8 @@ private:
 		int32 Owner = INDEX_NONE;
 		bool bReleased = false;
 		TArray<FName> Passed;
+		/** "free": "first" - the operative who took the lesson. */
+		FName Free;
 	};
 	TArray<FConfineRuntime> Confines;
 	int32 ConfineSerial = 0;

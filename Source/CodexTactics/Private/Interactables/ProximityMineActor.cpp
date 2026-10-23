@@ -291,6 +291,7 @@ void AProximityMineActor::Detonate()
 	bDetonated = true;
 	bTrapped = false;
 	UE_LOG(LogCodexTactics, Display, TEXT("%s detonated"), *GetName());
+	const AEnemyCharacter::FScopedSquadTrapBlast SquadTrap(bPlacedBySquad); // 2026-10-23: "EnemyKilled.SquadTrap"
 	ApplyBlast(ExplosionDamage, ExplosionDamage * DeployableRules::SquadDamageScale, ExplosionRadius, 0.50f, EDamageType::Explosive,
 		LOCTEXT("Source", "Mine"), LOCTEXT("SquadHit", "💥 Argh! Hit by the mine blast (-{0} HP)!"));
 	// Sprint 11: the blast is heard — patrols within 20 m break off.

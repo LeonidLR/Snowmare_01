@@ -308,6 +308,22 @@ namespace TutorialRules
 	 */
 	CODEXTACTICS_API bool IsPlaceLockedMove(bool bLocked, const FVector& OperativeLocation, const FVector& Destination);
 
+	/** 2026-10-23: "squad_not_in_cover_at.<volume>" -> the volume id (living members NOT in cover at / within 3 m of it); else none. */
+	CODEXTACTICS_API FName ParseNotInCoverAtStat(FName Stat);
+
+	/** 2026-10-23: distance between two positions along a route (cm of arc); LoopLength > 0 = a closed loop (the shorter way round). */
+	CODEXTACTICS_API float RouteArcDistance(float ArcA, float ArcB, float LoopLength);
+
+	/**
+	 * 2026-10-23 (the dormant A4 zombie wakes out of sight): the route sample to wake an enemy at - hidden from every operative (Hidden[i])
+	 * and, among those, the farthest along the route from the nearest operative (SampleArcs / OperativeArcs = arc positions, cm;
+	 * LoopLength > 0 = closed loop). No hidden sample: the farthest one. INDEX_NONE without samples.
+	 */
+	CODEXTACTICS_API int32 ChooseHiddenRoutePoint(const TArray<float>& SampleArcs, const TArray<bool>& Hidden, const TArray<float>& OperativeArcs, float LoopLength);
+
+	/** 2026-10-23: card / feed text token "{if:<stat>:<text>}" -> <text> when that condition stat is at least 1, else removed. */
+	CODEXTACTICS_API FString ResolveIfStatTokens(const FString& Text, TFunctionRef<float(FName)> Stat);
+
 	/** 2026-10-23: the place locks of a save that still apply to these steps (unknown steps dropped, one entry per operative - the latest). */
 	CODEXTACTICS_API TArray<FTutorialPlaceLockState> FilterPlaceLocks(const FTutorialStepsData& Data, const TArray<FTutorialPlaceLockState>& Saved);
 }

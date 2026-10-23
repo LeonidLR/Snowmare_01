@@ -22,6 +22,17 @@ locked on Demo 01 until the safety unlock-all - a wave / horde fight or the tuto
 
 ## Decision blocks, newest first (old §6 «Tutorial» section)
 
+**Demo 01 2026-10-23 b (game designer redesign of the A4 part 1: "zombie #1 spots the squad while they run to the cover").** (1) Zombie #1
+(binding `A4_PERIMETER`, the Military Zombie on `PatrolRoute_A4_Hounds` round `Container_A4_South`) does not exist from the level start (no
+sight, hearing, collision, rendering, AI; the placed actor stays in the map) until all living operatives are in cover at the overlook
+(`VOL_A4_OVERLOOK`). (2) Then it wakes BEHIND the building: the point of its loop hidden from every operative and farthest along the loop
+from them, patrolling on from there. (3) The card "TAKE HIM QUIETLY": Solo, ANY one operative (the first one the player sends out of the
+overlook; the other two are held in cover) rigs a tripwire or plants a mine on his route - the mine is named only when the squad carries one
+(from the A3 PMC mines). Part 1 is done when he is KILLED by the squad's tripwire or mine (`EnemyKilled.SquadTrap`). In Solo the selected
+operative rigs his own wire (the Medic-Sapper no longer runs out for it). (4) Spotted: the existing SPOTTED card / skirmish, the lesson goes
+on. (5) Save / load keeps the dormant / woken state and the wake point; SKIP TUTORIAL / tutorial off: the zombie is simply there as placed.
+Part 2 now selects the Medic-Sapper itself (Solo) and holds the other two. Engine: [tutorial-engine](tutorial-engine.md) section 22.
+
 **Demo 01 2026-10-23 (game designer play-test: "all the markers - discs with a pole stuck in them - must be HOLOGRAPHIC, ORANGE"; "when
 soldiers are ordered right up to the wall of the fisherman's hut they must be LOCKED there").** (1) Every tutorial marker of the lake (26:
 the placed step / beat markers, the A3 role spots, the runtime guide beacon of the volumes / lure spot / `@enemy`) wears the orange hologram

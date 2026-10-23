@@ -168,6 +168,7 @@ bool FTutorialAmbushPostureFallbackTest::RunTest(const FString&)
 	Settle(Machine);
 	TestEqual(TEXT("the cone card first"), Machine.GetState(TEXT("A4_cones")), ETutorialStepState::Active);
 	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Machine.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER")); // 2026-10-23: zombie #1 wakes (the squad in cover at the overlook)
 	Settle(Machine);
 	TestEqual(TEXT("then the posture card at the overlook"), Machine.GetState(TEXT("A4_posture")), ETutorialStepState::Active);
 	TestTrue(TEXT("it unlocks , . /"), PostureFree(Machine));
@@ -220,9 +221,9 @@ bool FTutorialAmbushLureSchemaTest::RunTest(const FString&)
 	const FTutorialStep* Wire = Data.FindStep(TEXT("A4_tripwire"));
 	TestTrue(TEXT("part 1: the wire spot is on the PERIMETER zombie's loop"), Wire && Wire->Guide == FName(TEXT("@patrol_route.A4_PERIMETER")));
 	const FTutorialStep* Wait = Data.FindStep(TEXT("A4_trap_wait"));
-	TestTrue(TEXT("part 1: the objective after the wire card, done when THE PERIMETER zombie walks into a wire"), Wait && Wait->Kind == ETutorialStepKind::Objective
+	TestTrue(TEXT("part 1: the objective after the wire card, done when THE PERIMETER zombie is killed by a squad trap (2026-10-23)"), Wait && Wait->Kind == ETutorialStepKind::Objective
 		&& Wait->Beat == FName(TEXT("A4")) && Wait->Trigger.Type == ETutorialTriggerType::AfterStep && Wait->Trigger.Step == FName(TEXT("A4_tripwire"))
-		&& Wait->Complete.Event == GameplayEvents::TripwireTriggeredByEnemy.ToString() && Wait->Complete.EnemyFilter.Enemy == FName(TEXT("A4_PERIMETER"))
+		&& Wait->Complete.Event == TEXT("EnemyKilled.SquadTrap") && Wait->Complete.EnemyFilter.Enemy == FName(TEXT("A4_PERIMETER"))
 		&& Wait->Complete.TimeoutSeconds > 0.f && Wait->CancelOn.Event == GameplayEvents::EnemyKilled.ToString()
 		&& Wait->CancelOn.EnemyFilter.Enemy == FName(TEXT("A4_PERIMETER")));
 	const FTutorialStep* Line = Data.FindStep(TEXT("A4_wt_trap"));
@@ -308,6 +309,7 @@ namespace TutorialAmbushTestData
 		Machine.StartBeat(TEXT("A4"));
 		Settle(Machine);
 		Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+		Machine.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER")); // 2026-10-23: zombie #1 wakes (the squad in cover at the overlook)
 		Settle(Machine);
 		Machine.HandleCommand(PlayerCommands::PostureDefensive); // the overlook posture card (no wire in this run)
 		Settle(Machine);
@@ -333,6 +335,7 @@ bool FTutorialAmbushLureFlowTest::RunTest(const FString&)
 	Machine.StartBeat(TEXT("A4"));
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Machine.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER")); // 2026-10-23: zombie #1 wakes (the squad in cover at the overlook)
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::PostureDefensive); // the overlook posture card (no wire in this run)
 	Settle(Machine);
@@ -343,7 +346,7 @@ bool FTutorialAmbushLureFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("part 1: wait for the perimeter zombie"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
 	Machine.HandleEvent(TEXT("TripwireTriggered"), TEXT("Engineer")); // an operative tripping a wire is no ambush
 	TestEqual(TEXT("a wire tripped by the squad does not count"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
-	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+	Machine.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 	TestEqual(TEXT("the perimeter zombie walked into the wire: part 1 done"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Completed);
 	TestTrue(TEXT("the 'that's one' line"), Machine.GetState(TEXT("A4_wt_trap")) != ETutorialStepState::Idle);
 	Settle(Machine);
@@ -402,7 +405,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 	ToTheWait(Machine);
 	TestEqual(TEXT("part 1 waits"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
 	// The FAR zombie walks into a wire: not part 1's zombie.
-	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z2"));
+	Machine.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z2"));
 	Settle(Machine);
 	TestEqual(TEXT("the far zombie tripping a wire does not complete part 1"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
 	TestEqual(TEXT("... no 'that's one' line"), Machine.GetState(TEXT("A4_wt_trap")), ETutorialStepState::Idle);
@@ -410,9 +413,9 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 	Machine.HandleEvent(GameplayEvents::EnemyKilled, TEXT("Z2"));
 	TestEqual(TEXT("the far zombie killed does not end part 1 either"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
 	// An unknown enemy (a hound passing by): nothing.
-	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("BP_Enemy_Hound_C_7"));
+	Machine.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("BP_Enemy_Hound_C_7"));
 	TestEqual(TEXT("an unbound enemy does not count"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
-	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+	Machine.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 	TestEqual(TEXT("the perimeter zombie: part 1 done"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Completed);
 	Settle(Machine);
 	TestEqual(TEXT("part 2 starts with the wall card"), Machine.GetState(TEXT("A4_hug_wall")), ETutorialStepState::Active);
@@ -441,7 +444,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 		Zombies.Install(Trap);
 		Trap.Load(Data);
 		ToTheWait(Trap);
-		Trap.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+		Trap.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 		Settle(Trap);
 		PassTheWall(Trap);
 		Trap.HandleEvent(GameplayEvents::LureHeard, TEXT("Z2"));
@@ -460,7 +463,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 		Zombies.Install(Shot);
 		Shot.Load(Data);
 		ToTheWait(Shot);
-		Shot.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+		Shot.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 		Settle(Shot);
 		PassTheWall(Shot);
 		Shot.HandleEvent(GameplayEvents::LureHeard, TEXT("Z2"));
@@ -480,7 +483,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 		Zombies.Install(Early);
 		Early.Load(Data);
 		ToTheWait(Early);
-		Early.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+		Early.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 		Settle(Early);
 		PassTheWall(Early);
 		TestEqual(TEXT("the lure card is up"), Early.GetState(TEXT("A4_lure")), ETutorialStepState::Active);
@@ -510,7 +513,7 @@ bool FTutorialAmbushPartsBoundTest::RunTest(const FString&)
 		FTutorialStateMachine Bare;
 		Bare.Load(Data);
 		ToTheWait(Bare);
-		Bare.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+		Bare.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 		TestEqual(TEXT("no provider: the bound wait does not complete"), Bare.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
 	}
 	return true;
@@ -615,8 +618,9 @@ bool FTutorialAmbushEnemyBindingSchemaTest::RunTest(const FString&)
 	return true;
 }
 
-// 2026-10-20 (game designer: "two stay in place, one sets up the ambush"): the Medic-Sapper alone; the other two held at the overlook
-// until the lure is done; her targets are the wire spot on the patrol route, then the overlook.
+// 2026-10-20 (game designer: "two stay in place, one sets up the ambush"): one operative alone; the other two held at the overlook; the
+// targets are the wire spot on the patrol route, then the overlook. 2026-10-23 (the redesign of part 1): ANY one operative takes part 1
+// (confine "free": "first" - the first sent out of the overlook), held until part 1 is over; part 2 (the Medic-Sapper) holds them again.
 TUTORIAL_AMBUSH_TEST(FTutorialAmbushOneOperativeTest, "OneOperative")
 bool FTutorialAmbushOneOperativeTest::RunTest(const FString&)
 {
@@ -627,10 +631,13 @@ bool FTutorialAmbushOneOperativeTest::RunTest(const FString&)
 		return false;
 	}
 	const FTutorialStep* Wire = Data.FindStep(TEXT("A4_tripwire"));
-	TestTrue(TEXT("the wire card: the Medic-Sapper, Solo with her selected, held at the overlook, the wire spot as the target"), Wire
-		&& TutorialRules::ParseRoleFocus(Wire->Focus) == FName(TEXT("MedicSapper")) && Wire->Confine.bFreeFocus && Wire->Confine.Volume == FName(TEXT("VOL_A4_OVERLOOK"))
-		&& Wire->Confine.Until == FName(TEXT("A4_lure")) && Wire->Actions.ContainsByPredicate([](const FTutorialAction& Action) { return Action.Type == FName(TEXT("solo_focus")); })
-		&& Wire->Guide == FName(TEXT("@patrol_route.A4_PERIMETER")));
+	TestTrue(TEXT("the wire card: any ONE operative (free: first, no role focus, no forced selection), held at the overlook until part 1 is over, the wire spot as the target"), Wire
+		&& Wire->Focus.IsNone() && Wire->Confine.bFreeFirst && !Wire->Confine.bFreeFocus && Wire->Confine.Volume == FName(TEXT("VOL_A4_OVERLOOK"))
+		&& Wire->Confine.Until == FName(TEXT("A4_trap_wait")) && Wire->Actions.IsEmpty() && Wire->Guide == FName(TEXT("@patrol_route.A4_PERIMETER"))
+		&& Wire->Complete.Commands.Contains(PlayerCommands::DeployTripwire.ToString()) && Wire->Complete.Commands.Contains(PlayerCommands::DeployMine.ToString()));
+	const FTutorialStep* Wall = Data.FindStep(TEXT("A4_hug_wall"));
+	TestTrue(TEXT("part 2 holds the other two for the Medic-Sapper (free: focus) until the lure"), Wall && Wall->Confine.bFreeFocus
+		&& Wall->Confine.Until == FName(TEXT("A4_lure")));
 	TestTrue(TEXT("role focus parse"), TutorialRules::ParseRoleFocus(TEXT("role:Engineer")) == FName(TEXT("Engineer")) && TutorialRules::ParseRoleFocus(TEXT("role:Nobody")).IsNone()
 		&& !TutorialRules::IsKnownFocus(TEXT("role:Nobody")) && TutorialRules::IsKnownFocus(TEXT("role:MedicSapper")));
 
@@ -659,12 +666,26 @@ bool FTutorialAmbushOneOperativeTest::RunTest(const FString&)
 	Machine.HandleVolume(TEXT("VOL_A4_OVERLOOK"), NAME_None, TEXT("A4"), TEXT("Medic"));
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Machine.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER")); // 2026-10-23: zombie #1 wakes (the squad in cover at the overlook)
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::PostureDefensive);
 	Settle(Machine);
 	FTutorialConfineView Held;
-	TestTrue(TEXT("the wire card holds the squad at the overlook, the Medic-Sapper free"), Machine.GetState(TEXT("A4_tripwire")) == ETutorialStepState::Active
-		&& Machine.GetActiveConfine(Held) && Held.Owner == FName(TEXT("A4_tripwire")) && Held.FreeOperative == FName(TEXT("Medic")));
+	TestTrue(TEXT("the wire card holds the squad at the overlook, nobody took the job yet"), Machine.GetState(TEXT("A4_tripwire")) == ETutorialStepState::Active
+		&& Machine.GetActiveConfine(Held) && Held.Owner == FName(TEXT("A4_tripwire")) && Held.FreeOperative.IsNone());
+	TestEqual(TEXT("free: first - anyone may be the one"), TutorialRules::JudgeConfinedMove(Held, TEXT("Engineer"), TEXT("stand"), false), ETutorialConfineVerdict::Allowed);
+	TestTrue(TEXT("the Engineer takes it"), Machine.ClaimConfineFree(TEXT("Engineer")) && !Machine.ClaimConfineFree(TEXT("Medic")));
+	Machine.GetActiveConfine(Held);
+	TestTrue(TEXT("... he is free, the Medic-Sapper is held now"), Held.FreeOperative == FName(TEXT("Engineer"))
+		&& TutorialRules::JudgeConfinedMove(Held, TEXT("Engineer"), TEXT("stand"), false) == ETutorialConfineVerdict::Allowed
+		&& TutorialRules::JudgeConfinedMove(Held, TEXT("Medic"), TEXT("stand"), false) == ETutorialConfineVerdict::HeldBack);
+	FTutorialProgress SavedHold;
+	TutorialRules::LoadProgress(*TutorialRules::SaveProgress(Machine.ExportProgress(), true), SavedHold);
+	FTutorialStateMachine Reloaded;
+	Reloaded.Load(Data);
+	Reloaded.ImportProgress(SavedHold);
+	FTutorialConfineView ReloadedHeld;
+	TestTrue(TEXT("who took the job survives a save"), Reloaded.GetActiveConfine(ReloadedHeld) && ReloadedHeld.FreeOperative == FName(TEXT("Engineer")));
 	FTutorialGuide Guide = Machine.GetGuide();
 	TestTrue(TEXT("her target: the wire spot on the PERIMETER zombie's loop"), Guide.Kind == ETutorialGuideKind::Spot && Guide.Id == FName(TEXT("@patrol_route.A4_PERIMETER")));
 	bRouteInLevel = false;
@@ -674,7 +695,7 @@ bool FTutorialAmbushOneOperativeTest::RunTest(const FString&)
 	Settle(Machine);
 	TestTrue(TEXT("part 1 waits - still held"), Machine.GetState(TEXT("A4_trap_wait")) == ETutorialStepState::Active && Machine.IsConfined());
 	TestEqual(TEXT("the wait: back to the overlook"), Machine.GetGuide().Id, FName(TEXT("VOL_A4_OVERLOOK")));
-	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+	Machine.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 	Settle(Machine);
 	TestTrue(TEXT("part 2: the wall card - her target at the near container (the perimeter loop)"), Machine.GetState(TEXT("A4_hug_wall")) == ETutorialStepState::Active
 		&& Machine.GetGuide().Id == FName(TEXT("@patrol_route.A4_PERIMETER")));
@@ -693,6 +714,7 @@ bool FTutorialAmbushOneOperativeTest::RunTest(const FString&)
 	Fight.StartBeat(TEXT("A4"));
 	Settle(Fight);
 	Fight.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Fight.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER")); // 2026-10-23: zombie #1 wakes (the squad in cover at the overlook)
 	Settle(Fight);
 	TestTrue(TEXT("held"), Fight.IsConfined());
 	TestTrue(TEXT("a fight: released"), Fight.ReleaseConfines() && !Fight.IsConfined());
@@ -736,6 +758,7 @@ bool FTutorialAmbushHiddenCardTest::RunTest(const FString&)
 	Machine.StartBeat(TEXT("A4"));
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Machine.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER")); // 2026-10-23: zombie #1 wakes (the squad in cover at the overlook)
 	Settle(Machine);
 	Machine.HandleCommand(PlayerCommands::PostureDefensive);
 	Settle(Machine);
@@ -800,6 +823,7 @@ bool FTutorialAmbushSpottedTest::RunTest(const FString&)
 		Machine.StartBeat(TEXT("A4"));
 		Settle(Machine);
 		Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+		Machine.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER")); // 2026-10-23: zombie #1 wakes (the squad in cover at the overlook)
 		Settle(Machine);
 		Machine.HandleCommand(PlayerCommands::PostureDefensive);
 		Settle(Machine);
@@ -837,7 +861,7 @@ bool FTutorialAmbushSpottedTest::RunTest(const FString&)
 		Install(Machine);
 		Machine.Load(Data);
 		ToTheWait(Machine);
-		Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+		Machine.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 		Settle(Machine);
 		TestEqual(TEXT("the wall card"), Machine.GetState(TEXT("A4_hug_wall")), ETutorialStepState::Active);
 		Stats.Add(TEXT("in_fight"), 1.f);
@@ -860,7 +884,7 @@ bool FTutorialAmbushSpottedTest::RunTest(const FString&)
 		Install(Machine);
 		Machine.Load(Data);
 		ToTheWait(Machine);
-		Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("Z1"));
+		Machine.HandleEvent(TEXT("EnemyKilled.SquadTrap"), TEXT("Z1"));
 		Settle(Machine);
 		PassTheWall(Machine);
 		Machine.HandleEvent(GameplayEvents::LureHeard, TEXT("Z2"));

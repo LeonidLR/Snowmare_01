@@ -65,6 +65,7 @@ namespace TutorialPass1022
 		Machine.StartBeat(TEXT("A4"));
 		Run(Machine);
 		Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+		Machine.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER")); // 2026-10-23: zombie #1 wakes (the squad in cover at the overlook)
 		Run(Machine);
 		Machine.HandleCommand(PlayerCommands::PostureDefensive);
 		Run(Machine);

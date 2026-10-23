@@ -515,6 +515,7 @@ void ATripwireActor::Detonate()
 {
 	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s: paired F-1 blast"), *GetName());
 	bTrapped = false;
+	const AEnemyCharacter::FScopedSquadTrapBlast SquadTrap(Faction == ETripwireFaction::Squad); // 2026-10-23: "EnemyKilled.SquadTrap"
 	ApplyBlast(BlastDamage, BlastDamage * SquadDamageShare, BlastRadiusCm,
 		TripwireRules::ArmorPenetration, EDamageType::Explosive, LOCTEXT("Source", "F-1 Tripwire"),
 		LOCTEXT("SquadLine", "💥 Tripwire blast! -{0} HP"), EStatusEffect::Stagger, TripwireRules::StaggerSeconds);

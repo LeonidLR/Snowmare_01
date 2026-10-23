@@ -37,7 +37,9 @@
   "start_beat": "A0",
   "enemies": [
     { "_comment": "2026-10-21 (game designer: the A4 ambush in two parts, the two patrols split onto two zombies and two buildings in the map - placement kept as it is): PART 1's zombie = the one walking the closed loop round the NEAR container (Container_A4_South). Bound by its patrol route's actor label (the route keeps its old name 'Hounds' from the rev 5 layout) - no map change needed. Labels are editor data: for a cooked build give the route actor the tag 'PatrolRoute_A4_Hounds' (a selector matches labels, object names and tags).",
-      "id": "A4_PERIMETER", "route": "PatrolRoute_A4_Hounds" },
+      "_comment_dormant": "2026-10-23 (game designer: 'today zombie #1 spots the squad while they run to the cover'): DORMANT from the level start - out of the game (hidden, no collision, no AI / senses) until the whole squad is in cover at the overlook; then it wakes at the point of its own loop hidden from every operative and farthest along the loop from them, patrolling on from there ('EnemyWoke' starts the lesson). Tutorial off / SKIP TUTORIAL: it is there as placed.",
+      "id": "A4_PERIMETER", "route": "PatrolRoute_A4_Hounds",
+      "dormant": { "until": [ { "stat": "squad_not_in_cover_at.VOL_A4_OVERLOOK", "below": 1 } ], "spawn": "hidden_on_route" } },
     { "_comment": "PART 2's zombie = the one by the FAR container (Container_A4_North), route 'PatrolRoute_A4_Frostbitten' (old name kept).",
       "id": "A4_LURE", "route": "PatrolRoute_A4_Frostbitten" },
     { "_comment": "2026-10-21: either A4 zombie (the 'spotted' card, cancelling the stealth cards when one of them engages).",
@@ -604,17 +606,16 @@
     {
       "_comment": "PART 1 - THE TRIPWIRE (2026-10-21: bound to the zombie on the loop round the NEAR container, A4_PERIMETER). 2026-10-20 (game designer: 'two stay in place, one sets up the ambush'): done by ONE operative - the MEDIC-SAPPER (traps are her job; a fixed role reads clearer than 'whoever you select first', and the cards can name her; dead / missing: the leader). When the card is triggered the squad is STOPPED and held at the overlook ('confine' with 'free': 'focus': she alone may move anywhere; the others' orders outside are refused with 'Hold here - <Name> handles it.'); when it shows the squad switches to Solo with her selected ('solo_focus'). The hold ends when the lure (part 2) is heard (until A4_lure), when a fight starts, the tutorial is switched off / skipped. The current target is the nearest point of THAT zombie's loop ('@patrol_route.A4_PERIMETER': where the wire goes).",
       "id": "A4_tripwire", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_TRIPWIRE",
-      "keys": ["Inventory.Open", "Deploy.Tripwire"],
-      "focus": "role:MedicSapper",
-      "unlock": ["Deploy.Tripwire", "Squad.Solo"],
+      "_comment_quiet": "2026-10-23 (game designer redesign of part 1): the card comes when zombie #1 WAKES behind its container (the squad is in cover at the overlook - the binding's 'dormant'); take him QUIETLY, ALONE: ANY one operative in Solo rigs a tripwire or plants a mine on his loop ('confine' 'free': 'first' - the first one sent out of the overlook takes the job, the other two are held in cover); the mine is named only when the squad carries one ({if:squad_mines:...}, from disarming the A3 PMC mines). Done when the trap is placed; the kill by it completes A4_trap_wait.",
+      "keys": ["Squad.Solo", "Deploy.Tripwire"],
+      "unlock": ["Deploy.Tripwire", "Deploy.Mine", "Squad.Solo"],
       "precredit": false,
-      "action": { "type": "solo_focus" },
       "guide": "@patrol_route.A4_PERIMETER",
-      "trigger": { "type": "after_step", "step": "A4_cones" },
+      "trigger": { "type": "event", "event": "EnemyWoke.A4_PERIMETER" },
       "_comment2": "2026-10-22 (game designer play-test, both A4 zombies dead and the wire card / its target still up): dropped once its zombie is dead, killed any way ('cancel_on' 'condition' all_dead.A4_PERIMETER; already dead when it becomes due: never shown).",
       "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY", "condition": { "stat": "all_dead.A4_PERIMETER", "at_least": 1 } },
-      "confine": { "volume": "VOL_A4_OVERLOOK", "free": "focus", "until": "A4_lure", "stop": true },
-      "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
+      "confine": { "volume": "VOL_A4_OVERLOOK", "free": "first", "until": "A4_trap_wait", "stop": true },
+      "complete": { "commands": ["Deploy.Tripwire", "Deploy.Mine"], "timeout_s": 120 }
     },
     {
       "_comment": "2026-10-19 b (game designer play-test): SYMMETRIC SIGHT - prone behind cover the patrols cannot see the squad, and the squad cannot see them either (an enemy no operative sees from his eye height is hidden: no plate, no cone, not targetable, no fire; a last-known silhouette fades). The card shows the first time someone lies prone while an enemy is out of the squad's sight (condition: squad_prone >= 1 AND enemies_unseen >= 1; 'requires' A4_cones = only from the overlook on, never in A3 where nobody is out there). Done when he rises / crouches / peeks round the cover, or after 20 s.",
@@ -628,15 +629,15 @@
     {
       "_comment": "PART 1, the wait: the wire is rigged, now wait until THE PERIMETER ZOMBIE walks into it (event TripwireTriggered.Enemy with 'enemy': 'A4_PERIMETER' - the far zombie pulling a pin does not count; the squad's own wire or a PMC one). 240 s at most: part 2 follows either way. Killed another way (shot, a mine): part 1 is over at once ('cancel_on' its EnemyKilled).",
       "id": "A4_trap_wait", "beat": "A4", "kind": "objective", "text_id": "OBJ_A4_TRAP",
-      "focus": "role:MedicSapper",
+      "_comment_quiet": "2026-10-23: done when zombie #1 is KILLED BY A SQUAD-PLACED tripwire or mine (EnemyKilled.SquadTrap, raised before EnemyKilled); killed another way: cancelled (part 2 follows either way).",
       "guide": "VOL_A4_OVERLOOK",
       "trigger": { "type": "after_step", "step": "A4_tripwire" },
       "cancel_on": { "event": "EnemyKilled", "enemy": "A4_PERIMETER", "condition": { "stat": "all_dead.A4_PERIMETER", "at_least": 1 } },
-      "complete": { "event": "TripwireTriggered.Enemy", "enemy": "A4_PERIMETER", "timeout_s": 240 }
+      "complete": { "event": "EnemyKilled.SquadTrap", "enemy": "A4_PERIMETER", "timeout_s": 240 }
     },
     {
       "id": "A4_wt_trap", "beat": "A4", "kind": "walk_talk",
-      "trigger": { "type": "event", "event": "TripwireTriggered.Enemy", "enemy": "A4_PERIMETER", "requires": ["A4_tripwire"] },
+      "trigger": { "type": "event", "event": "EnemyKilled.SquadTrap", "enemy": "A4_PERIMETER", "requires": ["A4_tripwire"] },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A4_04" } ]
     },
     {
@@ -661,6 +662,9 @@
       "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 0.5 },
       "condition": { "stat": "in_fight", "below": 1 },
       "cancel_on": { "event": "EnemyAlerted", "enemy": "A4_ANY", "condition": { "stat": "all_dead.A4_LURE", "at_least": 1 } },
+      "_comment_hold": "2026-10-23: part 2 holds the other two at the overlook while the Medic-Sapper does it and selects her in Solo (part 1's hold and its Solo selection were the wire card's until the redesign; part 1 is ANY operative's now).",
+      "action": { "type": "solo_focus" },
+      "confine": { "volume": "VOL_A4_OVERLOOK", "free": "focus", "until": "A4_lure" },
       "complete": { "event": "CoverEntered", "subject": "focus", "timeout_s": 90 }
     },
     {
