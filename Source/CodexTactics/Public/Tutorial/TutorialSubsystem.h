@@ -459,6 +459,27 @@ public:
 	/** Move orders refused by a confinement since the steps were loaded (smokes). */
 	int32 GetConfinedRefusalCount() const { return ConfinedRefusals; }
 
+	// --- Lock in place (2026-10-23, game designer: "the one I placed at the hut wall stays there") ---------------------
+
+	/** The tutorial is active and Operative is held where he stands by a "lock_in_place" step (FTutorialPlaceLock). */
+	bool IsHeldInPlace(const AOperativeCharacter& Operative) const;
+	/** The tutorial is active and some operative is held in place. */
+	bool IsHoldingInPlace() const;
+	/**
+	 * Is an order moving Operative to Destination refused by his place lock? (TutorialRules::IsPlaceLockedMove: locked and farther than
+	 * PlaceLockToleranceCm.) No line is posted - formation moves ask this quietly.
+	 */
+	bool IsMoveHeldInPlace(const AOperativeCharacter& Operative, const FVector& Destination) const;
+	/** An order for a locked operative was refused: the step's line ("Hold this position - stack on the door.", one per second), "Tutorial.HeldInPlace". */
+	void ReportPlaceLockRefusal(const AOperativeCharacter* Operative);
+	/**
+	 * The place-lock choke point for orders that change something before they reach CheckConfinedOrder (the shimmy gets up from prone
+	 * first, the regroup leaves cover): true when the order may go ahead; false = refused (the line is posted).
+	 */
+	static bool CheckHeldInPlace(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination);
+	/** Orders refused by a place lock since the steps were loaded (smokes). */
+	int32 GetPlaceLockRefusalCount() const { return PlaceLockRefusals; }
+
 	// --- Markers / save ---------------------------------------------------------------------------------------------
 
 	void RegisterMarker(ATutorialMarkerActor* Marker);
@@ -575,6 +596,13 @@ private:
 	TMap<uint8, double> ConfineLineTimes;
 	/** A confinement started / ended: a start stops the walks that would leave the area (or the whole squad with "stop"). */
 	void HandleConfineChanged();
+	/** 2026-10-23: the place-lock serial last seen, the operatives held when it was seen, the refusals so far, the last line time. */
+	int32 SeenPlaceLockSerial = 0;
+	TArray<FName> SeenPlaceLocked;
+	int32 PlaceLockRefusals = 0;
+	double PlaceLockLineTime = -1.0e9;
+	/** An operative was locked in place / released: log, telemetry, a floating "HOLDING POSITION" over the newly locked. */
+	void HandlePlaceLocksChanged();
 	/** 2026-10-20: the current navigation target (RefreshGuide, every RefreshMarkers) and the beacon shown at a volume target. */
 	FTutorialGuideView GuideView;
 	TWeakObjectPtr<ATutorialMarkerActor> GuideBeacon;

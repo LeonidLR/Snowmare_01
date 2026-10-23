@@ -293,6 +293,21 @@ namespace TutorialRules
 	CODEXTACTICS_API ETutorialConfineVerdict JudgeConfinedMove(const FTutorialConfineView& Confine, FName OperativeId, FName OperativeStance,
 		bool bDestinationInside);
 
-	/** "allowed" / "outside" / "stance" / "exit_stance" / "not_your_turn" (logs, telemetry). */
+	/** "allowed" / "outside" / "stance" / "exit_stance" / "held_back" / "locked_in_place" (logs, telemetry). */
 	CODEXTACTICS_API const TCHAR* ConfineVerdictName(ETutorialConfineVerdict Verdict);
+
+	/**
+	 * 2026-10-23 ("lock_in_place"): an order closer than this to where a locked operative stands is no move at all (a cover order for the
+	 * slot he already holds, a re-issued walk to his own feet) and is let through; anything farther is refused, cm (2D).
+	 */
+	constexpr float PlaceLockToleranceCm = 30.f;
+
+	/**
+	 * 2026-10-23: is an order for an operative refused because a "lock_in_place" step holds him (bLocked)? Refused when he is locked and
+	 * the destination lies farther than PlaceLockToleranceCm (2D) from where he stands; never when he is not locked.
+	 */
+	CODEXTACTICS_API bool IsPlaceLockedMove(bool bLocked, const FVector& OperativeLocation, const FVector& Destination);
+
+	/** 2026-10-23: the place locks of a save that still apply to these steps (unknown steps dropped, one entry per operative - the latest). */
+	CODEXTACTICS_API TArray<FTutorialPlaceLockState> FilterPlaceLocks(const FTutorialStepsData& Data, const TArray<FTutorialPlaceLockState>& Saved);
 }

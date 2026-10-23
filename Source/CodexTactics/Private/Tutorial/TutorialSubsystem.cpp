@@ -362,6 +362,8 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 	}
 	LockedRefusals = 0;
 	ConfinedRefusals = 0;
+	PlaceLockRefusals = 0;
+	PlaceLockLineTime = -1.0e9;
 	LastCardDoneAt = -1.0;
 	NoInstructionRun = NoInstructionTotal = MaxNextInstructionSeconds = 0.f;
 	ConfineLineTimes.Reset();
@@ -894,6 +896,10 @@ void UTutorialSubsystem::ProcessTransitions()
 	{
 		HandleConfineChanged(); // rev 5i: a confinement started / ended
 	}
+	if (Machine.GetPlaceLockSerial() != SeenPlaceLockSerial)
+	{
+		HandlePlaceLocksChanged(); // 2026-10-23: an operative locked in place / released
+	}
 	RefreshMarkers();
 }
 
@@ -1327,6 +1333,14 @@ void UTutorialSubsystem::UnlockAllCommands(const TCHAR* Reason)
 		WriteTelemetry(TEXT("confine_released"), NAME_None, Machine.GetCurrentBeat(), 0.f);
 		SeenConfineSerial = Machine.GetConfineSerial();
 	}
+	// 2026-10-23: nobody is held at his spot in a fight / with the tutorial off.
+	if (Machine.ReleasePlaceLocks())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: place locks released (%s)"), Reason);
+		WriteTelemetry(TEXT("place_lock_released"), NAME_None, Machine.GetCurrentBeat(), 0.f);
+		SeenPlaceLockSerial = Machine.GetPlaceLockSerial();
+		SeenPlaceLocked.Reset();
+	}
 }
 
 // --- Confine (rev 5i) -----------------------------------------------------------------------------------------------
@@ -1468,6 +1482,11 @@ bool UTutorialSubsystem::ClampIntoConfinement(FVector& InOutDestination) const
 
 ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination)
 {
+	// 2026-10-23: an operative locked at his spot of the lesson goes nowhere, inside the area or not.
+	if (IsMoveHeldInPlace(Operative, Destination))
+	{
+		return ETutorialConfineVerdict::LockedInPlace;
+	}
 	FTutorialConfineView Confine;
 	if (!IsTutorialActive() || !Machine.GetActiveConfine(Confine))
 	{
@@ -1483,6 +1502,11 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 {
 	if (Verdict == ETutorialConfineVerdict::Allowed)
 	{
+		return;
+	}
+	if (Verdict == ETutorialConfineVerdict::LockedInPlace)
+	{
+		ReportPlaceLockRefusal(Operative);
 		return;
 	}
 	++ConfinedRefusals;
@@ -1526,7 +1550,7 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 bool UTutorialSubsystem::CheckConfinedOrder(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination)
 {
 	UTutorialSubsystem* Tutorial = TutorialSubsystemLocal::FindTutorialFor(WorldContext);
-	if (!Tutorial || !Operative || !Tutorial->IsConfining())
+	if (!Tutorial || !Operative || (!Tutorial->IsConfining() && !Tutorial->IsHoldingInPlace()))
 	{
 		return true;
 	}
@@ -1537,6 +1561,91 @@ bool UTutorialSubsystem::CheckConfinedOrder(const UObject* WorldContext, const A
 	}
 	Tutorial->ReportConfinedRefusal(Verdict, Operative);
 	return false;
+}
+
+bool UTutorialSubsystem::IsHeldInPlace(const AOperativeCharacter& Operative) const
+{
+	return IsTutorialActive() && Machine.IsLockedInPlace(Operative.GetFName());
+}
+
+bool UTutorialSubsystem::IsHoldingInPlace() const
+{
+	return IsTutorialActive() && !Machine.GetPlaceLocks().IsEmpty();
+}
+
+bool UTutorialSubsystem::IsMoveHeldInPlace(const AOperativeCharacter& Operative, const FVector& Destination) const
+{
+	return TutorialRules::IsPlaceLockedMove(IsHeldInPlace(Operative), Operative.GetActorLocation(), Destination);
+}
+
+void UTutorialSubsystem::ReportPlaceLockRefusal(const AOperativeCharacter* Operative)
+{
+	++PlaceLockRefusals;
+	FName StepId;
+	Machine.IsLockedInPlace(Operative ? Operative->GetFName() : NAME_None, &StepId);
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: order for %s refused - held in place by %s"), Operative ? *Operative->DisplayName.ToString() : TEXT("?"),
+		*StepId.ToString());
+	WriteTelemetry(TEXT("place_lock_refused"), StepId, Machine.GetCurrentBeat(), 0.f);
+	GameplayEvents::Raise(this, FName(TEXT("Tutorial.HeldInPlace")));
+	const double Now = FPlatformTime::Seconds();
+	if (Now - PlaceLockLineTime < 1.0)
+	{
+		return; // a group order refused for each locked member: one line
+	}
+	PlaceLockLineTime = Now;
+	const FTutorialStep* Step = Machine.GetData().FindStep(StepId);
+	const FText Line = Step && !Step->LockInPlace.TextId.IsNone() ? GetTutorialText(Step->LockInPlace.TextId)
+		: LOCTEXT("PlaceLockHold", "Hold this position.");
+	PostTrainingLine(Operative ? FText::Format(LOCTEXT("PlaceLockHoldNamed", "{0}: {1}"), Operative->DisplayName, Line) : Line);
+}
+
+bool UTutorialSubsystem::CheckHeldInPlace(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination)
+{
+	UTutorialSubsystem* Tutorial = TutorialSubsystemLocal::FindTutorialFor(WorldContext);
+	if (!Tutorial || !Operative || !Tutorial->IsMoveHeldInPlace(*Operative, Destination))
+	{
+		return true;
+	}
+	Tutorial->ReportPlaceLockRefusal(Operative);
+	return false;
+}
+
+void UTutorialSubsystem::HandlePlaceLocksChanged()
+{
+	SeenPlaceLockSerial = Machine.GetPlaceLockSerial();
+	TArray<FName> Now;
+	for (const FTutorialPlaceLockState& Lock : Machine.GetPlaceLocks())
+	{
+		Now.Add(Lock.Operative);
+	}
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	for (const FTutorialPlaceLockState& Lock : Machine.GetPlaceLocks())
+	{
+		if (SeenPlaceLocked.Contains(Lock.Operative))
+		{
+			continue;
+		}
+		AOperativeCharacter* Held = nullptr;
+		for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			Held = Member && Member->GetFName() == Lock.Operative ? Member : Held;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s held in place by %s (until %s)"), Held ? *Held->DisplayName.ToString() : *Lock.Operative.ToString(),
+			*Lock.Step.ToString(), Lock.Until.IsNone() ? TEXT("the next beat") : *Lock.Until.ToString());
+		WriteTelemetry(TEXT("place_locked"), Lock.Step, Machine.GetCurrentBeat(), 0.f);
+		if (Held && IsTutorialActive())
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(Held, TEXT("HOLDING POSITION"), FLinearColor(1.f, 0.42f, 0.05f));
+		}
+	}
+	for (const FName Was : SeenPlaceLocked)
+	{
+		if (!Now.Contains(Was))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s released from his place"), *Was.ToString());
+		}
+	}
+	SeenPlaceLocked = MoveTemp(Now);
 }
 
 void UTutorialSubsystem::HandleConfineChanged()
