@@ -66,8 +66,10 @@ function Start-SmokeProcess([string]$Name, [string]$Suffix) {
     Remove-Item $log -ErrorAction SilentlyContinue # a stale log must never pass for this run's result
     $extra = (Get-Option $Name "extra" "") + " " + (Get-ClockArgs $Name)
     $map = Get-Option $Name "map" $Map
+    # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
+    $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })
     # Start-Process takes one argument string: quote the paths (the project path has a space).
-    $gameArgs = "`"$Project`" $map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=CodexTactics.$Name`" `"-abslog=$log`" $extra"
+    $gameArgs = "`"$Project`" $map -game $rhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=CodexTactics.$Name`" `"-abslog=$log`" $extra"
     $proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $gameArgs -WindowStyle Hidden -PassThru
     return [pscustomobject]@{ Name = $Name; Suffix = $Suffix; Proc = $proc; Log = $log; Started = Get-Date; Timeout = [int](Get-Option $Name "timeout" $TimeoutSeconds) }
 }

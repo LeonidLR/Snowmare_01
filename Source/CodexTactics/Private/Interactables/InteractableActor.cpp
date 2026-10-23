@@ -398,6 +398,7 @@ void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase
 	UKnockdownComponent::NotifyExplosion(GetWorld(), Center);
 	// Patrols within the trap alert radius (20 m) go searching around the blast.
 	AEnemyCharacter::AlertPatrolsNearTrap(GetWorld(), Center);
+	GameplayEvents::RaiseExplosion(this, GameplayEvents::GetExplosionKind(this), Center, Radius, this); // visual listeners only (snow crater)
 	ReceiveExploded(Radius);
 }
 

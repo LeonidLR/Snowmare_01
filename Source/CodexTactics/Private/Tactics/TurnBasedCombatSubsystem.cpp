@@ -4421,6 +4421,7 @@ void UTurnBasedCombatSubsystem::DetonateBarrel(const FIntPoint& Cell, AActor* Ba
 	if (Barrel)
 	{
 		UKnockdownComponent::NotifyExplosion(GetWorld(), Barrel->GetActorLocation());
+		GameplayEvents::RaiseExplosion(this, GameplayEvents::ExplosionKinds::Barrel, Barrel->GetActorLocation(), 0.f, Barrel); // visual listeners only (snow crater)
 	}
 	// The barrel stays on its cell as an obstacle and burns for 3 rounds.
 	if (ABarrelActor* BarrelActor = Cast<ABarrelActor>(Barrel))
@@ -4454,6 +4455,7 @@ void UTurnBasedCombatSubsystem::DetonateMine(const FIntPoint& Cell, AActor* Mine
 	PlaceOnCell(Victim, Cell);
 	const bool bSquadMember = State->bSquad;
 	ApplyBlast(Victim, bSquadMember, Damage, TEXT("Mine"));
+	GameplayEvents::RaiseExplosion(this, GameplayEvents::ExplosionKinds::Mine, Victim->GetActorLocation(), 0.f); // visual listeners only (snow crater)
 	if (!IsActive())
 	{
 		return; // the blast ended the fight (mission failed / wave cleared): the states are gone

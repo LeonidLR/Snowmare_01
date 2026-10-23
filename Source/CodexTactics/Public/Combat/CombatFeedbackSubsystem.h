@@ -9,6 +9,13 @@
 class ACombatFeedbackActor;
 
 /**
+ * A shot tracer was drawn (Start = the muzzle, End = where the tracer ends). bHit: false from SpawnTracer / SpawnTurretTracer, which do
+ * not know the outcome (a hit ends on the target, a miss beside it): listeners classify the end point themselves. Visual listeners only
+ * (USnowInteractionSubsystem bullet dents, interactive snow phase 3).
+ */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnTracerSpawned, const FVector& /*Start*/, const FVector& /*End*/, bool /*bHit*/);
+
+/**
  * Visual combat feedback: shot tracers with a muzzle flash, planned-order markers of the tactical pause and the
  * Ctrl + click target flash. Markers are cleared whenever the combat mode changes (pause start / release).
  * Godot reference: player.gd `_spawn_muzzle_tracer`, deployables/turret.gd `_spawn_muzzle_tracer`,
@@ -68,6 +75,9 @@ public:
 
 	/** Godot default tracer colour (weapon_tracer_color / rifle_m16.tres). */
 	static FLinearColor DefaultTracerColor() { return FLinearColor(0.2f, 1.f, 0.4f); }
+
+	/** Broadcast by SpawnTracer / SpawnTurretTracer (native, visual listeners only). */
+	FOnTracerSpawned OnTracerSpawned;
 
 private:
 	int32 DamageFlashCount = 0;
