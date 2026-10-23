@@ -56,6 +56,13 @@ bool FMissionStartModeTest::RunTest(const FString&)
 	TestTrue(TEXT("Ctrl + X plays the intro again"), !ShouldSkipIntro(true, false, true, false));
 	TestTrue(TEXT("A pending save load skips the intro"), ShouldSkipIntro(false, true, false, true));
 	TestTrue(TEXT("Editor play (not headless) plays the intro"), !ShouldSkipIntro(false, false, false, false));
+	// Bug 2026-10-23: the level exit stayed on the black screen after a save load in editor play (a skipped intro is no headless check).
+	TestFalse(TEXT("Editor play is not an automated run"), IsAutomatedRun(false, false, false));
+	TestTrue(TEXT("A loaded save in editor play skips the intro..."), ShouldSkipIntro(false, false, false, true));
+	TestFalse(TEXT("... but is no automated run (the level exit leaves)"), IsAutomatedRun(false, false, false));
+	TestTrue(TEXT("A headless check is an automated run"), IsAutomatedRun(true, false, false));
+	TestFalse(TEXT("The frontend's NEW GAME in a headless check plays like a game"), IsAutomatedRun(true, true, false));
+	TestFalse(TEXT("Ctrl + X in a headless check plays like a game"), IsAutomatedRun(true, false, true));
 	TestEqual(TEXT("Game objective"), GetModeObjective(EMissionStartMode::Game).ToString(),
 		FString(TEXT("Explore the checkpoint and find a way to open the blast gates")));
 	TestTrue(TEXT("Combat sets no objective itself"), GetModeObjective(EMissionStartMode::Combat).IsEmpty());

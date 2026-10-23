@@ -270,4 +270,39 @@ namespace GroupCoverRules
 		}
 		return Plan;
 	}
+
+	bool ShouldReleaseToSlot(const FGroupCoverWaitFacts& Facts, const FGroupCoverConfig& Config)
+	{
+		if (Facts.bLeaderInCover || Facts.WaitSeconds >= Config.MaxWaitSeconds)
+		{
+			return true;
+		}
+		const bool bLeaderLost = Facts.bLeaderDown || !Facts.bLeaderGoingToCover;
+		return bLeaderLost && Facts.LeaderIdleSeconds >= Config.LeaderFailGraceSeconds;
+	}
+
+	FVector ComputeWaitPoint(const FVector& SlotLocation, const FVector& WallNormal, const FGroupCoverConfig& Config)
+	{
+		return SlotLocation + WallNormal.GetSafeNormal2D() * Config.WaitStandOffCm;
+	}
+
+	int32 PickFreeSlot(const TArray<FVector2D>& Candidates, const TArray<bool>& Taken, const FVector2D& Preferred)
+	{
+		int32 Best = INDEX_NONE;
+		double BestDistance = TNumericLimits<double>::Max();
+		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+		{
+			if (Taken.IsValidIndex(Index) && Taken[Index])
+			{
+				continue;
+			}
+			const double Distance = FVector2D::DistSquared(Candidates[Index], Preferred);
+			if (Distance < BestDistance)
+			{
+				BestDistance = Distance;
+				Best = Index;
+			}
+		}
+		return Best;
+	}
 }

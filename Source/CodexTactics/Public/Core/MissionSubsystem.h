@@ -81,6 +81,12 @@ public:
 	bool IsHeadlessStart() const { return bHeadlessStart; }
 
 	/**
+	 * An automated (headless check) run - MissionRules::IsAutomatedRun; unlike IsHeadlessStart a loaded save never counts (bug 2026-10-23:
+	 * the level exit stayed on the black screen after a save load in editor play).
+	 */
+	bool IsAutomatedRun() const { return bAutomatedRun; }
+
+	/**
 	 * Reloads the current level (Godot reload_current_scene). bQuick (Ctrl + X) starts the same mode again; "Restart"
 	 * starts the level fresh in "Game" mode.
 	 */
@@ -123,6 +129,8 @@ private:
 	bool bMissionWorld = false;
 	/** Headless checks (menu skipped by the command line) get the radio line instead of the blocking intro dialogue. */
 	bool bHeadlessStart = false;
+	/** IsAutomatedRun. */
+	bool bAutomatedRun = false;
 	FText FailureReason;
 	ECodexGamePhase LastPhase = ECodexGamePhase::Exploration;
 	bool bCombatFinished = false;

@@ -180,6 +180,47 @@ bool FGroupCoverNoCrossingTest::RunTest(const FString&)
 	return true;
 }
 
+GROUP_COVER_TEST(FGroupCoverLeaderPriorityTest, "LeaderPriority")
+bool FGroupCoverLeaderPriorityTest::RunTest(const FString&)
+{
+	// Game designer 2026-10-23: the others wait off the wall until the leader has taken his cover.
+	using namespace GroupCoverRules;
+	const FGroupCoverConfig Config;
+	FGroupCoverWaitFacts Facts;
+	Facts.bLeaderGoingToCover = true;
+	Facts.WaitSeconds = 3.f;
+	TestFalse(TEXT("The leader still running to his cover: they wait"), ShouldReleaseToSlot(Facts, Config));
+	Facts.bLeaderInCover = true;
+	TestTrue(TEXT("The leader in cover: into the slots"), ShouldReleaseToSlot(Facts, Config));
+	Facts = FGroupCoverWaitFacts();
+	Facts.bLeaderGoingToCover = true;
+	Facts.WaitSeconds = Config.MaxWaitSeconds;
+	TestTrue(TEXT("Never longer than MaxWaitSeconds"), ShouldReleaseToSlot(Facts, Config));
+	Facts = FGroupCoverWaitFacts();
+	Facts.WaitSeconds = 6.f;
+	Facts.LeaderIdleSeconds = 1.f;
+	TestFalse(TEXT("The leader's order failed / cancelled: a grace first"), ShouldReleaseToSlot(Facts, Config));
+	Facts.LeaderIdleSeconds = Config.LeaderFailGraceSeconds;
+	TestTrue(TEXT("... then into the slots"), ShouldReleaseToSlot(Facts, Config));
+	Facts = FGroupCoverWaitFacts();
+	Facts.bLeaderGoingToCover = true;
+	Facts.bLeaderDown = true;
+	Facts.LeaderIdleSeconds = Config.LeaderFailGraceSeconds + 0.1f;
+	Facts.WaitSeconds = 5.f;
+	TestTrue(TEXT("The leader knocked down: into the slots after the grace"), ShouldReleaseToSlot(Facts, Config));
+
+	const FVector Wait = ComputeWaitPoint(FVector(100.f, 200.f, 50.f), FVector(0.f, -2.f, 0.3f), Config);
+	TestTrue(TEXT("Wait point: straight out from the slot along the flat normal"), Wait.Equals(FVector(100.f, 200.f - Config.WaitStandOffCm, 50.f), 0.01f));
+	TestTrue(TEXT("1.5-2 m out"), Config.WaitStandOffCm >= 150.f && Config.WaitStandOffCm <= 200.f);
+
+	const TArray<FVector2D> Spares = { FVector2D(0.f, 300.f), FVector2D(0.f, -300.f), FVector2D(0.f, 400.f) };
+	TestEqual(TEXT("The nearest free spare slot"), PickFreeSlot(Spares, { false, false, false }, FVector2D(0.f, 250.f)), 0);
+	TestEqual(TEXT("A taken spare is skipped"), PickFreeSlot(Spares, { true, false, false }, FVector2D(0.f, 250.f)), 2);
+	TestEqual(TEXT("All taken: none (prone behind the cover)"), PickFreeSlot(Spares, { true, true, true }, FVector2D(0.f, 250.f)), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("No spares: none"), PickFreeSlot({}, {}, FVector2D::ZeroVector), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
 #undef GROUP_COVER_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -220,6 +220,7 @@ void ACodexTacticsGameMode::SpawnSquad()
 	const FTransform StartTransform = Start ? Start->GetActorTransform() : FTransform::Identity;
 	const FRotator Facing(0.f, StartTransform.Rotator().Yaw, 0.f);
 
+	int32 Spawned = 0;
 	for (int32 Index = 0; Index < SquadRoster.Num(); ++Index)
 	{
 		const FSquadMemberSpawn& Entry = SquadRoster[Index];
@@ -228,7 +229,10 @@ void ACodexTacticsGameMode::SpawnSquad()
 			UE_LOG(LogCodexTactics, Display, TEXT("Campaign: %s fell on %s - not spawned"), *Entry.DisplayName.ToString(), *Carry->FromMap);
 			continue;
 		}
-		AOperativeCharacter* Operative = SpawnOperative(Entry, Index, StartTransform.GetLocation() + Facing.RotateVector(Entry.Offset), Facing);
+		// Bug 2026-10-23: with a fallen mate the living close up on the roster's first spawn spots (the formation's slots), else a follower
+		// spawned on the fallen one's spot walks across the start to his slot while the level fades in.
+		const FVector Offset = SquadRoster[Spawned++].Offset;
+		AOperativeCharacter* Operative = SpawnOperative(Entry, Index, StartTransform.GetLocation() + Facing.RotateVector(Offset), Facing);
 		if (const FCarriedOperative* Carried = Operative && Carry ? CampaignCarry::FindFor(*Carry, Entry.Role, Index) : nullptr)
 		{
 			CampaignCarry::Apply(*Operative, *Carried);
