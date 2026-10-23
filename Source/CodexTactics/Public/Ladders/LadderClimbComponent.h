@@ -186,6 +186,12 @@ public:
 	/** Where a save taken now puts him: the link point of the end he is heading to (7.8); his location when not climbing. */
 	FVector GetSaveLocation() const;
 
+	/**
+	 * The floor he counts on for the roof cutaway / minimap (LADDERS.md 7.3): on the ladder (or falling off it) the spot where the climb
+	 * started - the floor he left - until ExitTop / ExitBottom ends; his location otherwise.
+	 */
+	FVector GetFloorReferenceLocation() const;
+
 	/** Rung IK for the anim instance (game thread). */
 	const FLadderIKFrame& GetIKFrame() const { return IKFrame; }
 
@@ -277,6 +283,8 @@ private:
 
 	FVector PendingDestination = FVector::ZeroVector;
 	bool bHasPendingDestination = false;
+	/** The actor location when the climb took the body (GetFloorReferenceLocation). */
+	FVector ClimbStartLocation = FVector::ZeroVector;
 
 	LadderRules::FLoopPos LoopPos;
 	LadderRules::FLoopPos TargetPos;

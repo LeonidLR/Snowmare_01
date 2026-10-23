@@ -13,6 +13,7 @@
   "start_fade_seconds": 2.0,
   "cold_rate_mult": 0.4,
   "intro_dialogue": false,
+  "minimap": { "floors_cm": [400] },
   "waves": [
     {
       "wave_index": 1,

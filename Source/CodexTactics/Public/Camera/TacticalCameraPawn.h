@@ -173,6 +173,12 @@ private:
 	TWeakObjectPtr<AActor> FollowTarget;
 	FVector Focus = FVector::ZeroVector;
 	bool bInitialized = false;
+	/** The focus height smoothed while the followed character climbs a ladder (LADDERS.md 7.3; Config.LadderZHalfLife). */
+	bool bLadderZSmoothing = false;
+	float LadderZ = 0.f;
+	float LadderZVelocity = 0.f;
+	/** The smoothed focus Z for a climbing follow target (passes TargetZ through otherwise; releases once settled off the ladder). */
+	float SmoothLadderZ(float TargetZ, float RealDelta);
 
 	float CurrentYaw = 0.f;
 	float TargetYaw = 0.f;

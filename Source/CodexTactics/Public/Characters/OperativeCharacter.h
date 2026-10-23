@@ -654,6 +654,12 @@ public:
 	/** Where a save puts him: on a ladder, the link point of the end he is heading to (LADDERS.md 7.8). */
 	FVector GetSaveLocation() const;
 
+	/**
+	 * Where he counts for the floor-dependent views (roof cutaway, minimap floor; LADDERS.md 7.3): on a ladder the spot the climb started
+	 * from (the floor he left) until he is off it - no flicker mid-ladder; his location otherwise.
+	 */
+	FVector GetFloorReferenceLocation() const;
+
 	/** Max speed / turn rate from the stance, sprint, wounds and carrying (SpeedOverride >= 0 replaces the speed). */
 	void ApplyMovementParams(float SpeedOverride = -1.f);
 

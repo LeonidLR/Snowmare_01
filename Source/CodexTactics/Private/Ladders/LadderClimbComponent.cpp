@@ -538,6 +538,7 @@ void ULadderClimbComponent::StartEntry()
 	const int32 Rungs = Target->GetRungCount();
 	const float HalfHeight = GetHalfHeight();
 	GlideFrom = Character->GetActorLocation();
+	ClimbStartLocation = GlideFrom;
 	GlideFromYaw = Character->GetActorRotation().Yaw;
 	if (bGoingUp)
 	{
@@ -1035,6 +1036,12 @@ FVector ULadderClimbComponent::GetSaveLocation() const
 	}
 	const bool bTop = bGoingUp && State != ELadderClimbState::Dropping;
 	return (bTop ? Target->GetTopLinkWorld() : Target->GetBottomLinkWorld()) + FVector(0.f, 0.f, GetHalfHeight() + 2.f);
+}
+
+FVector ULadderClimbComponent::GetFloorReferenceLocation() const
+{
+	const AActor* Owner = GetOwner();
+	return IsOnLadder() ? ClimbStartLocation : (Owner ? Owner->GetActorLocation() : FVector::ZeroVector);
 }
 
 // --- Snapshot ----------------------------------------------------------------------------------------------------------

@@ -8,6 +8,9 @@
 //     on the ground. Never below the floor, standing on the roof / ground after each leg; while climbing the gates hold (bIsClimbing, left-hand
 //     IK 0, aim offset 0, the FullBody slot owns the body, the weapon hidden) and the gripping hands are within 3 cm of their rung grip;
 //  3. a knockdown on the way down (feet ~2 m up): he falls to the bottom, lands knocked down, fall damage = clamp((H - 100) * 0.1, 0, 40);
+//     Each leg also (LADDERS.md 7.3): the camera height never pumps or jumps while he climbs (spring-smoothed focus Z: at most one
+//     reversal of its vertical motion, <= 3 cm per frame), the floor reference of the roof cutaway / minimap stays the spot the climb
+//     started from until he is off, the minimap floor does not change mid-ladder;
 //  4. turn-based (LADDERS.md 7.6, user decision 2026-10-22): the fight starts while he climbs the free-standing ladder and a Military Zombie
 //     climbs the wall ladder - the grid forms without both, they finish the climb at normal speed (he does not walk on to his click), the
 //     zombie is held once off, and on the next round both join (he on the deck, the zombie on the grid or in stasis).
@@ -22,6 +25,8 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "AIController.h"
+#include "Camera/TacticalCameraPawn.h"
+#include "UI/MinimapSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
@@ -114,6 +119,22 @@ namespace LadderClimbSmoke
 		FVector CameraEye = FVector::ZeroVector;
 		FVector CameraLook = FVector::ZeroVector;
 		bool bCameraPlaced = false;
+		// Camera / floors on the ladder (7.3), per leg.
+		float CamLastZ = 0.f;
+		float CamLastStep = 0.f;
+		bool bCamSampled = false;
+		float CamMaxStep = 0.f;
+		int32 CamReversals = 0;
+		int32 BodyReversals = 0;
+		float BodyLastZ = 0.f;
+		float BodyLastStep = 0.f;
+		int32 CamSamples = 0;
+		FVector FloorRef = FVector::ZeroVector;
+		bool bFloorRefSet = false;
+		float FloorRefDrift = 0.f;
+		int32 FloorAtClimbStart = -1;
+		int32 FloorChangesOnLadder = 0;
+		int32 FloorAfter = -1;
 		// Turn-based (stage 4+).
 		TWeakObjectPtr<AEnemyCharacter> Zombie;
 		TWeakObjectPtr<AEnemyCharacter> Hound;
@@ -216,6 +237,14 @@ namespace LadderClimbSmoke
 		}
 		State.KneeSamples = 0;
 		State.bHasLastKnee = false;
+		State.bCamSampled = false;
+		State.CamMaxStep = 0.f;
+		State.CamReversals = State.BodyReversals = 0;
+		State.CamSamples = 0;
+		State.bFloorRefSet = false;
+		State.FloorRefDrift = 0.f;
+		State.FloorAtClimbStart = -1;
+		State.FloorChangesOnLadder = 0;
 		// Up: the roof's middle, a metre beyond the top link point; down: the ground 2.5 m out from the bottom link.
 		State.Goal = Leg.bUp ? Ladder->GetTopLinkWorld() - Ladder->GetOutward() * 100.f : Ladder->GetBottomLinkWorld() + Ladder->GetOutward() * 250.f;
 		const bool bOrdered = ClickAt(World, State.Goal);
@@ -333,6 +362,21 @@ namespace LadderClimbSmoke
 				FString::Printf(TEXT("leg %d: %s knee on the loop - angle >= 60 deg (min %.0f; the clip's own 75), the IK never jumps it > 4 cm per frame (its correction changes max %.1f cm), bent towards the ladder (min %.1f cm), %d frames (max jump at rung*100+t %.2f)"),
 					State.Leg, Side == 0 ? TEXT("left") : TEXT("right"), State.MinKneeAngle[Side], State.MaxKneeJump[Side], State.MinKneeForward[Side], State.KneeSamples, State.MaxKneeJumpTime[Side]));
 		}
+		if (!State.bClip)
+		{
+			const UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>();
+			const int32 FloorNow = Minimap ? Minimap->GetOperativeFloor(Leader) : -1;
+			Check(State, State.CamSamples > 20 && State.CamReversals <= 1 && State.CamMaxStep <= 3.f,
+				FString::Printf(TEXT("leg %d: the camera height follows the climb smoothly (%d reversals of its vertical motion - the body's own: %d; max %.2f cm per frame, %d frames)"),
+					State.Leg, State.CamReversals, State.BodyReversals, State.CamMaxStep, State.CamSamples));
+			// The level JSON's minimap floor at 400 cm (2026-10-23): the wall ladder's roof is floor 1 (the free ladder's 2.9 m deck stays
+			// under the band: floor 0).
+			const int32 FloorExpected = Minimap && Minimap->GetFloorCount() > 1 && Leg.bUp && Leg.bWall ? 1 : 0;
+			Check(State, State.bFloorRefSet && State.FloorRefDrift < 1.f && State.FloorChangesOnLadder == 0 && FloorNow == FloorExpected
+				&& FVector::Dist(Leader->GetFloorReferenceLocation(), Leader->GetActorLocation()) < 1.f,
+				FString::Printf(TEXT("leg %d: on the ladder the roof cutaway / minimap count him on the floor he left (reference drift %.1f cm, minimap floor %d at the start, %d changes mid-ladder; %d now, expected %d, of %d floors); off it, where he stands"),
+					State.Leg, State.FloorRefDrift, State.FloorAtClimbStart, State.FloorChangesOnLadder, FloorNow, FloorExpected, Minimap ? Minimap->GetFloorCount() : 0));
+		}
 		Check(State, Climb->GetLastRefusal() == ELadderRefusal::None && !Ladder->GetLeaseHolder(), TEXT("no refusal, the ladder's lease released"));
 		return true;
 	}
@@ -351,6 +395,52 @@ namespace LadderClimbSmoke
 		}
 		const ELadderClimbState S = Climb->GetState();
 		const FVector Inward = -Ladder->GetOutward();
+		// Camera height and the floor reference while he climbs (7.3).
+		if (Climb->IsClimbing() && !State.bClip)
+		{
+			UWorld* World = Leader->GetWorld();
+			const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const ATacticalCameraPawn* Cam = PC ? Cast<ATacticalCameraPawn>(PC->GetPawn()) : nullptr;
+			if (Cam)
+			{
+				const float CamZ = static_cast<float>(Cam->GetActorLocation().Z);
+				const float BodyZ = static_cast<float>(Leader->GetActorLocation().Z);
+				if (State.bCamSampled)
+				{
+					const float Step = CamZ - State.CamLastZ;
+					const float BodyStep = BodyZ - State.BodyLastZ;
+					State.CamMaxStep = FMath::Max(State.CamMaxStep, FMath::Abs(Step));
+					// A reversal: the vertical motion changes sign (dead band 0.02 cm per frame).
+					State.CamReversals += (FMath::Abs(Step) > 0.02f && FMath::Abs(State.CamLastStep) > 0.02f && Step * State.CamLastStep < 0.f) ? 1 : 0;
+					State.BodyReversals += (FMath::Abs(BodyStep) > 0.02f && FMath::Abs(State.BodyLastStep) > 0.02f && BodyStep * State.BodyLastStep < 0.f) ? 1 : 0;
+					if (FMath::Abs(Step) > 0.02f)
+					{
+						State.CamLastStep = Step;
+					}
+					if (FMath::Abs(BodyStep) > 0.02f)
+					{
+						State.BodyLastStep = BodyStep;
+					}
+					++State.CamSamples;
+				}
+				State.CamLastZ = CamZ;
+				State.BodyLastZ = BodyZ;
+				State.bCamSampled = true;
+			}
+			const FVector Ref = Leader->GetFloorReferenceLocation();
+			if (!State.bFloorRefSet)
+			{
+				State.FloorRef = Ref;
+				State.bFloorRefSet = true;
+			}
+			State.FloorRefDrift = FMath::Max(State.FloorRefDrift, static_cast<float>(FVector::Dist(Ref, State.FloorRef)));
+			if (const UMinimapSubsystem* Minimap = World ? World->GetSubsystem<UMinimapSubsystem>() : nullptr)
+			{
+				const int32 Floor = Minimap->GetOperativeFloor(Leader);
+				State.FloorChangesOnLadder += State.FloorAtClimbStart >= 0 && Floor != State.FloorAtClimbStart ? 1 : 0;
+				State.FloorAtClimbStart = State.FloorAtClimbStart >= 0 ? State.FloorAtClimbStart : Floor;
+			}
+		}
 		// Facing on the way down: below the standing pelvis on top (- 10 cm) the actor and the body (hips) face the ladder.
 		const bool bDown = S == ELadderClimbState::EnterTop || S == ELadderClimbState::ClimbDown || S == ELadderClimbState::ExitBottom
 			|| S == ELadderClimbState::ClimbUp || S == ELadderClimbState::ExitTop; // the way up too: the clips' own baseline

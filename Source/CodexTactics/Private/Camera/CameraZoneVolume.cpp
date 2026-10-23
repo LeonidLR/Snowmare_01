@@ -113,7 +113,8 @@ void ACameraZoneVolume::Tick(float DeltaSeconds)
 	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 
-	const bool bLeaderInside = Leader && ContainsLocation(Leader->GetActorLocation());
+	// On a ladder he is outside both floors' zones until he is off it (LADDERS.md 7.3).
+	const bool bLeaderInside = Leader && !Leader->IsClimbingLadder() && ContainsLocation(Leader->GetActorLocation());
 	const bool bShouldBeActive = CameraZoneRules::ShouldBeActive(bEnableCameraSwitch, bLeaderInside);
 
 	if (IsZoneActive() && (!bShouldBeActive || ActiveExplorer.Get() != Leader))

@@ -1092,7 +1092,9 @@ void UMinimapSubsystem::UpdateTick()
 		const float Feet = MinimapSubsystemLocal::FeetZ(*Member);
 		const FVector2D XY(Member->GetActorLocation());
 		const int32 Previous = OperativeFloors.FindRef(Member);
-		const int32 Floor = UpperFloorBases.IsEmpty() ? 0 : MinimapRules::SelectFloor(Feet, HeightAboveLowest(XY, Feet), UpperFloorBases, Previous, FloorParams);
+		const int32 Selected = UpperFloorBases.IsEmpty() ? 0 : MinimapRules::SelectFloor(Feet, HeightAboveLowest(XY, Feet), UpperFloorBases, Previous, FloorParams);
+		// LADDERS.md 7.3: on a ladder the floor he climbed from until he is off it (the floor switches once he stands on the roof).
+		const int32 Floor = MinimapRules::FloorWithLadder(Member->IsClimbingLadder() && OperativeFloors.Contains(Member), Previous, Selected);
 		OperativeFloors.Add(Member, Floor);
 		Fog.RevealDisc(Floor, XY, RevealRadiusCm);
 	}
