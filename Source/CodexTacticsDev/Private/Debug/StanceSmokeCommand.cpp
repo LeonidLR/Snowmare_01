@@ -30,6 +30,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "NavigationSystem.h"
 #include "Containers/Ticker.h"
+#include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "TimerManager.h"
@@ -550,7 +551,7 @@ namespace StanceSmoke
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->StartFeetZ = FeetZ(Leader);
-		const bool bBlueprint = Leader->GetClass()->ClassGeneratedBy != nullptr;
+		const bool bBlueprint = Cast<UBlueprintGeneratedClass>(Leader->GetClass()) != nullptr;
 		const UAnimInstance* Anim = Leader->GetMesh()->GetAnimInstance();
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke operative class=%s blueprint=%d placeholder=%d mesh=%s anim=%s weapon=%s"),
 			*Leader->GetClass()->GetName(), bBlueprint ? 1 : 0, Leader->UsesPlaceholderBody() ? 1 : 0,
