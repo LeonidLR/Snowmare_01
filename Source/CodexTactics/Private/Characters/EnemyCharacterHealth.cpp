@@ -106,6 +106,12 @@ int32& AEnemyCharacter::TrapBlastDepth()
 	return Depth;
 }
 
+int32& AEnemyCharacter::SquadTrapBlastDepth()
+{
+	static int32 SquadDepth = 0;
+	return SquadDepth;
+}
+
 void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 {
 	if (bIsDying)
@@ -173,6 +179,11 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 					}
 				}
 			}
+		}
+		if (Context.Kind == FName(TEXT("Trap")) && IsSquadTrapBlastInProgress())
+		{
+			// 2026-10-23: the squad's own tripwire / mine (the A4 lesson "take him quietly").
+			GameplayEvents::RaiseWithContext(this, FName(*(GameplayEvents::EnemyKilled.ToString() + TEXT(".SquadTrap"))), Context);
 		}
 		GameplayEvents::RaiseWithContext(this, FName(*(GameplayEvents::EnemyKilled.ToString() + TEXT(".") + Context.Kind.ToString())), Context);
 		GameplayEvents::RaiseWithContext(this, GameplayEvents::EnemyKilled, Context);

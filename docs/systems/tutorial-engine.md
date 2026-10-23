@@ -70,7 +70,7 @@ Every way a step finishes without being played normally reaches the runtime as o
 | `start_beat` | beat id | none | Started when the steps load (fresh start / RESET). Unknown id: warning, ignored. None: no beat runs until a step / volume starts one. |
 | `beats` | array | [] | Beat objects (below), in story order: the file order IS the beat order. |
 | `steps` | array | **required** | Step objects; their file order also orders the route (section 9) and the "n / m" card counter. |
-| `enemies` | array | [] | 2026-10-21: enemy bindings `{ "id", "route", "actor" }` - the level enemies a lesson is about (section 19). |
+| `enemies` | array | [] | 2026-10-21: enemy bindings `{ "id", "route", "actor" }` - the level enemies a lesson is about (section 19); 2026-10-23: `"dormant"` (section 22). |
 | `_anything` | any | - | Keys starting with `_` are comments at every level (never warned). |
 
 Beat object:
@@ -593,6 +593,27 @@ the blue and dims slightly under it, so it stays a copper orange at night. Cost 
 +0.01 to +0.11 ms median, inside the frame noise. Shapes, sizes, the bob and the show / hide rules are unchanged. `ATutorialMarkerActor::IsHologram()` (smokes),
 `ApplyLegacyLookForComparison()` (shots only). Rendered check + comparison `CodexTactics.HoloMarkerShots` (lake, Clear 13:00 / Snowfall
 23:00, `Saved/Screenshots/HoloMarker/`), cost line `[HoloMarkerPerf]`.
+
+### 22. Dormant enemies, `"free": "first"`, squad-trap kills (2026-10-23, the A4 part 1 redesign)
+
+Game designer: "zombie #1 spots the squad while they run to the cover" -> it does not exist until the squad is in cover; then "take him
+QUIETLY, ALONE, with a TRIPWIRE or a MINE - any one operative, in Solo, the other two stay in cover".
+
+| Feature | Detail |
+|---|---|
+| binding `"dormant": { "until": [clauses], "spawn": "hidden_on_route" \| "in_place" }` | (`FTutorialDormant`, `Tutorial/TutorialSubsystemDormant.cpp`) From the steps' load, with the tutorial active, the bound enemies are kept out of the game every tick: parked 500 m under where they were placed, hidden, no collision, actor tick off (no AI, no senses), movement off. When the clauses hold: woken - `hidden_on_route` = the sample of its own patrol route (every metre, straight between the waypoints, closed while `bIsLoop`) hidden from every living operative (traces from each one's eye for his stance - 165 / 110 / 35 cm - to the enemy's chest 130 cm and knees 50 cm, blocked; beyond 60 m = hidden) and farthest along the route from the nearest operative (`TutorialRules::ChooseHiddenRoutePoint`; none hidden: the farthest), patrolling on to the next waypoint; `in_place` = where it was placed. Events `EnemyWoke.<binding>` then `EnemyWoke` (subject = the enemy). Tutorial OFF / SKIP TUTORIAL: woken in place at once (as if never dormant). RESET TUTORIAL: dormant again. Saved: `"dormant_enemies": { <binding>: { "woken", "spawn": [x, y, z], "homes": { <actor>: [x, y, z, yaw] } } }`; a load puts a not-woken binding back to sleep (its saved position is the parked one). `until` missing / unknown `spawn`: parse error. Dev / smokes: `WakeDormantBinding`, `IsEnemyDormant`, `IsBindingAwake`, `GetWakeSpawn`. |
+| stat `squad_not_in_cover_at.<volume>` | Living members NOT in cover (`bInCover`) inside that volume's box or within 3 m of it (0 = everybody is in cover there). |
+| stat `squad_mines` | Mines the living members carry. |
+| text token `{if:<stat>:<text>}` | Card title / body: `<text>` when the stat is >= 1, else removed (`TutorialRules::ResolveIfStatTokens`; no nested braces inside). |
+| confine `"free": "first"` | Nobody free yet: the SELECTED operative (`USquadSubsystem::GetLeader`) first ordered outside the area takes the lesson (`FTutorialStateMachine::ClaimConfineFree`, saved as `confines[].free`); another one's walk outside before that is refused ("Hold here - follow the training."); afterwards the others are held like `"focus"` ("Hold here - <Name> handles it."). |
+| event `EnemyKilled.SquadTrap` | Raised before `EnemyKilled.Trap` / `EnemyKilled` when the blast of a SQUAD trap kills (`AEnemyCharacter::FScopedSquadTrapBlast` round the blast of a squad `ATripwireActor` / a `bPlacedBySquad` mine). |
+| Solo tripwire | `URelocationSubsystem`: in Solo the selected operative rigs his own wire (out of Solo the Medic-Sapper still takes the job when free, Sprint 09-B). |
+
+Demo: binding `A4_PERIMETER` dormant until `squad_not_in_cover_at.VOL_A4_OVERLOOK below 1`; `A4_tripwire` ("TAKE HIM QUIETLY", triggered by
+`EnemyWoke.A4_PERIMETER`, no role focus, unlocks the wire, the mine and Solo, confine `free: first` until `A4_trap_wait`, done on
+`Deploy.Tripwire` / `Deploy.Mine`); `A4_trap_wait` done on `EnemyKilled.SquadTrap` of `A4_PERIMETER`; part 2 (`A4_hug_wall`) selects the
+Medic-Sapper (`solo_focus`) and holds the other two (`free: focus` until `A4_lure`). Spotted: the existing SPOTTED / skirmish path.
+Tests `CodexTactics.Tutorial.A4Quiet.*`, smokes `TutorialAmbushLakeSmoke` (tripwire by the Engineer), `TutorialAmbushLakeMineSmoke`.
 
 ## History
 

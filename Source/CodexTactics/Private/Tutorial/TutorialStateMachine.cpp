@@ -1543,6 +1543,7 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 			Saved.Owner = Data.Steps[Confine.Owner].Id;
 			Saved.bReleased = Confine.bReleased;
 			Saved.Passed = Confine.Passed;
+			Saved.Free = Confine.Free;
 		}
 	}
 	return Progress;
@@ -1593,6 +1594,7 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 			Confine.Owner = Owner;
 			Confine.bReleased = Saved.bReleased;
 			Confine.Passed = Saved.Passed;
+			Confine.Free = Saved.Free;
 		}
 	}
 	++ConfineSerial;
@@ -1714,6 +1716,17 @@ void FTutorialStateMachine::ReleaseConfinesUntil(int32 FinishedIndex)
 	}
 }
 
+bool FTutorialStateMachine::ClaimConfineFree(FName OperativeId)
+{
+	const int32 Active = FindActiveConfine();
+	if (Active == INDEX_NONE || OperativeId.IsNone() || !Data.Steps[Confines[Active].Owner].Confine.bFreeFirst || !Confines[Active].Free.IsNone())
+	{
+		return false;
+	}
+	Confines[Active].Free = OperativeId;
+	return true;
+}
+
 bool FTutorialStateMachine::ReleaseConfines()
 {
 	bool bReleased = false;
@@ -1753,6 +1766,10 @@ bool FTutorialStateMachine::GetActiveConfine(FTutorialConfineView& Out) const
 	if (Owner.Confine.bFreeFocus && FocusSubjectProvider)
 	{
 		Out.FreeOperative = FocusSubjectProvider(Owner.Id); // 2026-10-20: the operative who does the lesson alone
+	}
+	else if (Owner.Confine.bFreeFirst)
+	{
+		Out.FreeOperative = Confine.Free; // 2026-10-23: the one who took it (none yet: the first ordered outside will)
 	}
 	return true;
 }

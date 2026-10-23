@@ -1289,9 +1289,10 @@ void URelocationSubsystem::ConfirmTripwirePoint(const FVector& GroundPoint)
 		return;
 	}
 	const bool bBOnObject = HasAnchorObject(Point);
-	// Rigged by the medic-sapper when he is there and free (Sprint 09-B), else by the one who opened it.
+	// Rigged by the medic-sapper when he is there and free (Sprint 09-B), else by the one who opened it. 2026-10-23 (game designer, the A4
+	// lesson "send ONE operative in Solo"): in Solo the selected operative rigs it himself - the others stay where they are.
 	AOperativeCharacter* Rigger = Worker;
-	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>(); Squad && !Squad->IsSoloMode())
 	{
 		for (AOperativeCharacter* Member : Squad->GetMembers())
 		{

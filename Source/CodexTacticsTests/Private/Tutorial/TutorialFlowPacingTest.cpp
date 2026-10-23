@@ -179,9 +179,16 @@ namespace TutorialFlowTestData
 		float WalkStartedAt = -1.f;
 		FName WalkingTo;
 		float Now = 0.f;
+		bool bPerimeterAwake = false;
 		for (; Now < 1500.f; Now += FlowTick)
 		{
 			Machine.Tick(FlowTick);
+			// 2026-10-23: at the overlook the squad goes into cover at once -> the dormant zombie #1 wakes behind its container.
+			if (!bPerimeterAwake && Machine.GetCurrentBeat() == FName(TEXT("A4")))
+			{
+				bPerimeterAwake = true;
+				Machine.HandleEvent(TEXT("EnemyWoke.A4_PERIMETER"));
+			}
 			for (const FTutorialTransition& Transition : Machine.ConsumeTransitions())
 			{
 				const FTutorialStep* Step = Data.FindStep(Transition.StepId);

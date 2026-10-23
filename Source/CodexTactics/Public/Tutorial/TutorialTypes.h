@@ -128,11 +128,34 @@ struct CODEXTACTICS_API FTutorialEnemyFilter
  * builds), object name or actor tag; "actor" = the enemy itself by the same three. JSON:
  *   "enemies": [ { "id": "A4_PERIMETER", "route": ["PatrolRoute_A4_Hounds", "PatrolRouteActor_1"] } ]
  */
+/**
+ * "dormant" of an enemy binding (2026-10-23, game designer: the A4 zombie #1 spotted the squad while it ran to the overlook cover): the
+ * bound enemies do not exist for the game from the level start - hidden, no collision, no AI, no senses, parked out of the world - until
+ * the "until" clauses hold (e.g. the whole squad in cover at the overlook); then they are woken at "spawn": "hidden_on_route" = the point
+ * of their own patrol route hidden from every living operative (sight traces from each one's eye for his stance) and farthest along the
+ * route from them (none hidden: the farthest), patrolling on from there; "in_place" = where they were placed. Woken: the gameplay events
+ * "EnemyWoke.<binding>" and "EnemyWoke" (subject = the enemy). Tutorial off / SKIP TUTORIAL: woken in place at once.
+ * The runtime keeps the state and the spawn point in the save ("dormant_enemies"). JSON:
+ *   "dormant": { "until": [ { "stat": "squad_not_in_cover_at.VOL_A4_OVERLOOK", "below": 1 } ], "spawn": "hidden_on_route" }
+ */
+struct CODEXTACTICS_API FTutorialDormant
+{
+	bool bEnabled = false;
+	TArray<FTutorialCondition> Until;
+	/** "hidden_on_route" (default) | "in_place". */
+	FName Spawn;
+
+	bool IsSet() const { return bEnabled; }
+	bool SpawnsHidden() const { return Spawn != FName(TEXT("in_place")); }
+};
+
 struct CODEXTACTICS_API FTutorialEnemyBinding
 {
 	FName Id;
 	TArray<FString> Routes;
 	TArray<FString> Actors;
+	/** 2026-10-23: dormant until a condition holds (FTutorialDormant). */
+	FTutorialDormant Dormant;
 };
 
 struct CODEXTACTICS_API FTutorialTrigger
@@ -283,6 +306,11 @@ struct CODEXTACTICS_API FTutorialConfine
 	 * anywhere, the others stay in the area ("Hold here - <Name> handles it.").
 	 */
 	bool bFreeFocus = false;
+	/**
+	 * "free": "first" (2026-10-23, game designer: "any ONE operative, in Solo, the other two stay in cover"): the first operative ordered
+	 * outside the area becomes the free one (FTutorialConfineView::FreeOperative, saved); after that the others are held like "focus".
+	 */
+	bool bFreeFirst = false;
 
 	bool IsSet() const { return !Volume.IsNone(); }
 	bool HasExit() const { return !ExitStance.IsNone() || !ThroughEvent.IsEmpty(); }
@@ -326,6 +354,8 @@ struct CODEXTACTICS_API FTutorialConfineProgress
 	FName Owner;
 	bool bReleased = false;
 	TArray<FName> Passed;
+	/** 2026-10-23 ("free": "first"): the operative who took the lesson ("free"). */
+	FName Free;
 };
 
 /**

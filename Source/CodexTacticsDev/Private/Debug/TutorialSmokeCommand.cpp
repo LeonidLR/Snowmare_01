@@ -2414,15 +2414,9 @@ namespace TutorialSmoke
 		// (StealthLure.Heard completes it), then the reminder card asks for AGGRESSIVE (/).
 		case 130:
 		{
-			if (Tutorial->GetStepState(TEXT("A4_tripwire")) != ETutorialStepState::Active && State.StageTime < 8.f)
-			{
-				return true;
-			}
-			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::DeployTripwire),
-				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
-			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
-				TEXT("the lure is still locked"));
-			// 2026-10-21: part 1's zombie walks the AmbushRoute (senses off, parked: only its events matter here).
+			// 2026-10-23: part 1's zombie is DORMANT until the squad is in cover at the overlook (its binding's "dormant"); here it is spawned
+			// on the AmbushRoute and woken in place at once (the cover condition and the hidden spawn: TutorialAmbushLakeSmoke) - the card
+			// "TAKE HIM QUIETLY" follows its EnemyWoke.A4_PERIMETER.
 			if (!State.PerimeterEnemy.IsValid())
 			{
 				const FVector RouteStart = State.AmbushRoute.IsValid() ? State.AmbushRoute->GetActorLocation() : Leader->GetActorLocation();
@@ -2442,43 +2436,64 @@ namespace TutorialSmoke
 					Zombie->SetActorTickEnabled(false);
 				}
 				State.PerimeterEnemy = Zombie;
+				Check(State, Zombie && !Tutorial->IsBindingAwake(TEXT("A4_PERIMETER")) && Tutorial->WakeDormantBinding(TEXT("A4_PERIMETER"), false, TEXT("smoke"))
+					&& Tutorial->IsBindingAwake(TEXT("A4_PERIMETER")), TEXT("2026-10-23: part 1's binding is dormant, woken (EnemyWoke.A4_PERIMETER)"));
 			}
-			// 2026-10-20 (game designer): the ambush is done by ONE operative - the Medic-Sapper; Solo with her selected, the others held.
+			if (Tutorial->GetStepState(TEXT("A4_tripwire")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
-				AOperativeCharacter* Ambusher = Tutorial->GetFocusOperative(TEXT("A4_tripwire"));
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::DeployTripwire),
+				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
+				TEXT("the lure is still locked"));
+			// 2026-10-23 (game designer): part 1 by ANY one operative - the first sent off the overlook takes it (confine "free": "first"),
+			// the others are held; the Engineer here (neither the Commander nor the Medic-Sapper).
+			{
+				AOperativeCharacter* Ambusher = nullptr;
 				AOperativeCharacter* Mate = nullptr;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (Member && Member->SquadRole == EOperativeRole::Engineer)
+					{
+						Ambusher = Member;
+					}
+				}
 				for (AOperativeCharacter* Member : Squad->GetMembers())
 				{
 					Mate = Mate ? Mate : (Member != Ambusher ? Member : nullptr);
 				}
-				Check(State, Ambusher && Ambusher->SquadRole == EOperativeRole::MedicSapper && Squad->IsSoloMode() && Squad->GetLeader() == Ambusher
-					&& Tutorial->IsConfining() && Tutorial->GetCardView().Title.ToString().Contains(Ambusher->DisplayName.ToString().ToUpper()),
-					FString::Printf(TEXT("ambush: the Medic-Sapper alone (%s), Solo on with her selected, the squad held, the card names her ('%s')"),
-						Ambusher ? *Ambusher->DisplayName.ToString() : TEXT("-"), *Tutorial->GetCardView().Title.ToString()));
+				Check(State, Ambusher && Tutorial->IsConfining() && Tutorial->GetCardView().Title.ToString().Contains(TEXT("QUIETLY")),
+					FString::Printf(TEXT("ambush: TAKE HIM QUIETLY, the squad held at the overlook ('%s')"), *Tutorial->GetCardView().Title.ToString()));
+				if (Ambusher)
+				{
+					Squad->EnterSoloMode(); // the player: Solo, the Engineer selected
+					Squad->SetLeader(Ambusher);
+				}
 				Tutorial->RefreshGuideNow();
 				const FTutorialGuideView& Guide = Tutorial->GetGuideView();
 				const APatrolRouteActor* Route = State.AmbushRoute.Get();
-				// 2026-10-21: the spot is on the PERIMETER zombie's route only ("@patrol_route.A4_PERIMETER"), nearest to her.
+				// 2026-10-21: the spot is on the PERIMETER zombie's route only ("@patrol_route.A4_PERIMETER"), nearest to the leader (no focus).
 				FVector Nearest = FVector::ZeroVector;
-				if (Route && Ambusher)
+				if (Route && Squad->GetLeader())
 				{
 					TArray<FVector> Points;
 					for (int32 Index = 0; Index < Route->GetNumberOfWaypoints(); ++Index)
 					{
 						Points.Add(Route->GetWaypointWorldLocation(Index));
 					}
-					Nearest = TutorialRules::NearestPointOnRoute(Points, Route->bIsLoop, Ambusher->GetActorLocation());
+					Nearest = TutorialRules::NearestPointOnRoute(Points, Route->bIsLoop, Squad->GetLeader()->GetActorLocation());
 				}
 				Check(State, Guide.bValid && Guide.Guide.Kind == ETutorialGuideKind::Spot && Guide.Guide.Id == FName(TEXT("@patrol_route.A4_PERIMETER")) && Route
 					&& FVector::Dist2D(Guide.Location, Nearest) < 50.f,
 					FString::Printf(TEXT("ambush: the current target is the wire spot on the perimeter zombie's route nearest to her (%s, %.0f cm from it)"),
 						*UTutorialSubsystem::DescribeGuide(Guide.Guide), FVector::Dist2D(Guide.Location, Nearest)));
 				const FVector Far = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 1000.f);
+				Check(State, Ambusher && UTutorialSubsystem::CheckConfinedOrder(World, Ambusher, Far) && Ambusher->OrderMoveTo(Far, false) != EOperativeOrderResult::Refused,
+					TEXT("ambush: the first one sent off the overlook (the Engineer) takes the job"));
 				const int32 LinesBefore = CountMessages(World, TEXT("handles it"));
 				Check(State, Mate && Mate->OrderMoveTo(Far, false) == EOperativeOrderResult::Refused && CountMessages(World, TEXT("handles it")) == LinesBefore + 1,
-					FString::Printf(TEXT("ambush: %s's order off the overlook is refused ('Hold here - <Name> handles it.')"), Mate ? *Mate->DisplayName.ToString() : TEXT("-")));
-				Check(State, Ambusher && UTutorialSubsystem::CheckConfinedOrder(World, Ambusher, Far) && Ambusher->OrderMoveTo(Far, false) != EOperativeOrderResult::Refused,
-					TEXT("ambush: the Medic-Sapper may go anywhere"));
+					FString::Printf(TEXT("ambush: then %s's order off the overlook is refused ('Hold here - <Name> handles it.')"), Mate ? *Mate->DisplayName.ToString() : TEXT("-")));
 				if (Ambusher)
 				{
 					Ambusher->StopOperative();
@@ -2531,17 +2546,18 @@ namespace TutorialSmoke
 			Check(State, Guard && Tutorial->IsEnemyBound(*Guard, TEXT("A4_LURE")) && State.PerimeterEnemy.IsValid()
 				&& Tutorial->IsEnemyBound(*State.PerimeterEnemy, TEXT("A4_PERIMETER")) && !Tutorial->IsEnemyBound(*Guard, TEXT("A4_PERIMETER")),
 				TEXT("bindings: the guard is A4_LURE (its route's tag), the perimeter zombie A4_PERIMETER"));
+			// 2026-10-23: part 1 is done when ITS zombie is killed by a squad trap (EnemyKilled.SquadTrap; the real blast: TutorialAmbushLakeSmoke).
 			if (Guard)
 			{
-				Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), Guard->GetFName());
+				Tutorial->NotifyEvent(TEXT("EnemyKilled.SquadTrap"), Guard->GetFName());
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A4_wt_trap")) == ETutorialStepState::Idle,
-				TEXT("part 1: the FAR zombie tripping a wire does not complete it (no 'that's one' line)"));
+				TEXT("part 1: the FAR zombie killed by a squad trap does not complete it (no 'that's one' line)"));
 			if (AEnemyCharacter* Zombie = State.PerimeterEnemy.Get())
 			{
-				Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), Zombie->GetFName()); // the perimeter zombie walked into it
+				Tutorial->NotifyEvent(TEXT("EnemyKilled.SquadTrap"), Zombie->GetFName()); // the perimeter zombie killed by the squad's trap
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed, TEXT("part 1: the perimeter zombie pulled the pin -> the objective is done"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed, TEXT("part 1: the perimeter zombie killed by the squad's trap -> the objective is done"));
 			Next(State);
 			return true;
 		}

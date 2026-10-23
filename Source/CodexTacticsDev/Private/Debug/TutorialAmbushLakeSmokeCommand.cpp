@@ -33,6 +33,12 @@
 // 2026-10-22 (game designer play-test): the posture lesson asks for DEFENSIVE (the squad is DEFENSIVE through the lessons; the SPOTTED
 // runs set PASSIVE themselves - the card only comes for a PASSIVE squad); the SPOTTED run also shows the TACTICAL PAUSE lesson (card 1:
 // time stops / orders, two orders; card 2: resume and the limits; Space) - rendered frames of both cards.
+// 2026-10-23 (game designer redesign of part 1, "zombie #1 spots the squad while they run to the cover"): the perimeter zombie is DORMANT
+// from the level start (hidden, no collision, no AI tick) while the squad approaches; only when all three are IN COVER behind the
+// overlook's low cover (real cover orders) does it wake - on its own loop, hidden from every operative (sight traces from each one's eye),
+// patrolling; the card TAKE HIM QUIETLY: ANY one operative (the Engineer here, Solo, selected) rigs the wire (the others held: "Hold here
+// - <Name> handles it."); the zombie walks into it and DIES by the squad's trap (EnemyKilled.SquadTrap) -> part 1 done.
+//   CodexTactics.TutorialAmbushLakeMineSmoke = the same with a MINE (the Engineer carries one: the card names it) planted on the loop.
 //   CodexTactics.TutorialAmbushLakeEarlyKillSmoke = the lake's PMC wires and mines listed (what the horde prep can use); the first PMC wire
 //     the squad meets: the TRIPWIRE card shows (beat-less, not precredited by the fence crawl's prone history); at the overlook BOTH zombies
 //     are killed while the wire card is up -> every A4 step bound to them closes (wire card, wait, wall, corner, lure), the hold is released,
@@ -99,7 +105,9 @@ namespace TutorialAmbushLakeSmoke
 		/** Part 2 fails: the far zombie spots her at the wall card. */
 		SpottedPart2,
 		/** 2026-10-22: the wire card on the first PMC wire; both zombies killed early; the horde prep card. */
-		EarlyKill
+		EarlyKill,
+		/** 2026-10-23: part 1 by a MINE the Engineer plants on the loop. */
+		MineKill
 	};
 
 	struct FState
@@ -127,7 +135,11 @@ namespace TutorialAmbushLakeSmoke
 		TWeakObjectPtr<AEnemyCharacter> Perimeter;
 		TWeakObjectPtr<AEnemyCharacter> Lured;
 		TWeakObjectPtr<AOperativeCharacter> Medic;
+		/** 2026-10-23: the operative who takes part 1 (any one: the Engineer here). */
+		TWeakObjectPtr<AOperativeCharacter> Rigger;
 		TWeakObjectPtr<ATripwireActor> Wire;
+		/** 2026-10-23 (MineKill): the squad's mine on the loop. */
+		TWeakObjectPtr<AProximityMineActor> Mine;
 		FVector WireA = FVector::ZeroVector;
 		FVector WireB = FVector::ZeroVector;
 		FVector CoverSpot = FVector::ZeroVector;
@@ -280,6 +292,16 @@ namespace TutorialAmbushLakeSmoke
 			}
 		}
 		return nullptr;
+	}
+
+	/** 2026-10-23: the tutorial save's "dormant_enemies" entry of a binding (null when missing). */
+	TSharedPtr<FJsonObject> SavedDormant(const UTutorialSubsystem& Tutorial, FName Binding)
+	{
+		const TSharedPtr<FJsonObject> Saved = Tutorial.CaptureSaveState();
+		const TSharedPtr<FJsonObject>* Dormant = nullptr;
+		const TSharedPtr<FJsonObject>* Entry = nullptr;
+		return Saved.IsValid() && Saved->TryGetObjectField(TEXT("dormant_enemies"), Dormant) && (*Dormant)->TryGetObjectField(Binding.ToString(), Entry)
+			? *Entry : nullptr;
 	}
 
 	float NearestOperativeCm(const USquadSubsystem& Squad, const AActor& To)
@@ -452,7 +474,23 @@ namespace TutorialAmbushLakeSmoke
 				TEXT("part 2: the zombie's route passes the other building (Container_A4_North within 8 m)"));
 			Deafen(*Perimeter);
 			Deafen(*Lured);
-			Perimeter->GetHealthComponent()->SetMaxHealth(1000.f); // it survives the wire (140 damage): shot later (the negative check of part 2)
+			// 2026-10-23: part 1 is done when the squad's trap KILLS it - a little under the Military Zombie's 60 HP so the blast's falloff
+			// (it walks on during the 1.5 s fuse) cannot leave it standing in the check.
+			Perimeter->GetHealthComponent()->SetMaxHealth(40.f);
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member && Member->SquadRole == EOperativeRole::Engineer)
+				{
+					State.Rigger = Member;
+					Member->MinesCount = State.Mode == EMode::MineKill ? 1 : 0; // the mine comes from the A3 PMC mines (here: given)
+					Member->GrenadesCount = FMath::Max(Member->GrenadesCount, 2);
+				}
+				if (Member && Member->SquadRole == EOperativeRole::MedicSapper)
+				{
+					State.Medic = Member;
+					Member->MinesCount = 0;
+				}
+			}
 			Squad->SetSquadPosture(ESquadFirePosture::Defensive); // 2026-10-22: the lessons keep the squad DEFENSIVE
 			// Behind the overlook's low cover (inside VOL_A4_OVERLOOK), crouched.
 			const ATutorialTriggerVolume* Overlook = nullptr;
@@ -484,6 +522,21 @@ namespace TutorialAmbushLakeSmoke
 			}
 			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A4")) && Tutorial->GetStepState(TEXT("A4_cones")) == ETutorialStepState::Active,
 				FString::Printf(TEXT("the overlook starts A4: the cone card (beat %s)"), *Tutorial->GetCurrentBeat().ToString()));
+			Check(State, Tutorial->IsEnemyDormant(*Perimeter) && !Tutorial->IsBindingAwake(PerimeterBinding) && Perimeter->IsHidden() && !Perimeter->IsActorTickEnabled()
+				&& !Perimeter->GetActorEnableCollision() && FVector::Dist2D(Perimeter->GetActorLocation(), Leader->GetActorLocation()) > 0.f
+				&& Perimeter->GetActorLocation().Z < Leader->GetActorLocation().Z - 10000.f,
+				FString::Printf(TEXT("2026-10-23: zombie #1 is DORMANT while the squad approaches - not visible, no collision, no AI tick, out of the level (z %.0f)"),
+					Perimeter->GetActorLocation().Z));
+			{
+				const TSharedPtr<FJsonObject> Saved = SavedDormant(*Tutorial, PerimeterBinding);
+				bool bWoken = true;
+				const TSharedPtr<FJsonObject>* Homes = nullptr;
+				Check(State, Saved.IsValid() && Saved->TryGetBoolField(TEXT("woken"), bWoken) && !bWoken && Saved->TryGetObjectField(TEXT("homes"), Homes)
+					&& (*Homes)->HasField(Perimeter->GetName()), TEXT("the save keeps zombie #1 dormant (dormant_enemies: not woken, where it was placed)"));
+			}
+			Check(State, !Tutorial->IsEnemyDormant(*Lured) && Lured->GetActorLocation().Z > Leader->GetActorLocation().Z - 1000.f,
+				FString::Printf(TEXT("zombie #2 is there as placed (dormant %d, hidden %d, z %.0f, leader z %.0f)"), Tutorial->IsEnemyDormant(*Lured) ? 1 : 0,
+					Lured->IsHidden() ? 1 : 0, Lured->GetActorLocation().Z, Leader->GetActorLocation().Z));
 			Tutorial->HandlePlayerCommand(PlayerCommands::ToggleVisionCones, FPlayerCommandContext());
 			Next(State);
 			return true;
@@ -501,7 +554,109 @@ namespace TutorialAmbushLakeSmoke
 				Squad->SetSquadPosture(ESquadFirePosture::Defensive);
 				Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Completed, TEXT("2026-10-22: DEFENSIVE (Alt + .) completes the posture card"));
 			}
+			Check(State, Tutorial->IsEnemyDormant(*Perimeter) && Perimeter->IsHidden() && Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Idle,
+				TEXT("2026-10-23: at the overlook, not in cover yet: zombie #1 still dormant, no part 1 card"));
+			State.Stage = 90;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 90:
+		{
+			// 2026-10-23: every operative into cover behind the overlook's low cover (the REAL cover order at its nearest face).
+			const AStaticMeshActor* LowCover = nullptr;
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				LowCover = It->GetActorNameOrLabel() == TEXT("Overlook_LowCover") ? *It : LowCover;
+			}
+			Check(State, LowCover != nullptr, TEXT("the overlook's low cover (Overlook_LowCover)"));
+			if (!LowCover)
+			{
+				return Finish(State, false);
+			}
+			const FBox Box = LowCover->GetComponentsBoundingBox();
+			int32 Ordered = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				const FVector At = Member->GetActorLocation();
+				FVector Face = Box.GetClosestPointTo(At);
+				const FVector Dir = (Face - At).GetSafeNormal2D();
+				Face = Ground(World, Face - Dir * 5.f) + FVector(0.f, 0.f, 40.f) + Dir * 5.f;
+				FCoverSlot Slot;
+				const bool bSlot = CoverTraceRules::FindCoverSlotAt(World, Face, Dir, Slot);
+				const EOperativeOrderResult Result = bSlot ? Member->OrderTakeCover(Slot, false) : EOperativeOrderResult::Refused;
+				Ordered += Result == EOperativeOrderResult::Accepted ? 1 : 0;
+				UE_LOG(LogCodexTactics, Display, TEXT("[AmbushLake] %s into cover at the low cover: face %s, slot %d, order %d"), *Member->DisplayName.ToString(),
+					*Face.ToCompactString(), bSlot ? 1 : 0, static_cast<int32>(Result));
+			}
+			Check(State, Ordered == Squad->GetMembers().Num(), FString::Printf(TEXT("all three ordered into cover at the low cover (%d)"), Ordered));
 			Next(State);
+			return true;
+		}
+		case 91:
+		{
+			int32 InCover = 0;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				InCover += Member->bInCover && !Member->IsMoving() ? 1 : 0;
+			}
+			if (InCover < Squad->GetMembers().Num())
+			{
+				if (InCover > 0 && Tutorial->IsBindingAwake(PerimeterBinding))
+				{
+					Check(State, false, FString::Printf(TEXT("zombie #1 woke with only %d of 3 in cover"), InCover));
+					return Finish(State, false);
+				}
+				if (State.StageTime < 30.f)
+				{
+					return true;
+				}
+			}
+			if (!Tutorial->IsBindingAwake(PerimeterBinding) && State.StageTime < 32.f)
+			{
+				return true;
+			}
+			Check(State, InCover == Squad->GetMembers().Num() && Tutorial->IsBindingAwake(PerimeterBinding),
+				FString::Printf(TEXT("all three in cover at the overlook -> zombie #1 wakes (%d in cover, %.1f s)"), InCover, State.StageTime));
+			FVector Spawn = FVector::ZeroVector;
+			const bool bSpawn = Tutorial->GetWakeSpawn(PerimeterBinding, Spawn);
+			Check(State, !Perimeter->IsHidden() && Perimeter->IsActorTickEnabled() && Perimeter->GetActorEnableCollision() && Perimeter->IsOnPatrol()
+				&& bSpawn && FVector::Dist2D(Perimeter->GetActorLocation(), Spawn) < 300.f && OffRouteCm(*Perimeter) < 150.f,
+				FString::Printf(TEXT("... visible, its AI on, patrolling from %s on its own loop (%.0f cm off it)"), *Spawn.ToCompactString(), OffRouteCm(*Perimeter)));
+			// Hidden from every operative: each one's eye (his stance) to the zombie's chest and knees at the wake point is blocked.
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(AmbushLakeWakeSight), false);
+			Params.AddIgnoredActor(Perimeter);
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Params.AddIgnoredActor(Member);
+			}
+			int32 SeenBy = 0;
+			FString Seers;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				const float EyeZ = Member->GetStance() == EOperativeStance::Prone ? 35.f : Member->GetStance() == EOperativeStance::Crouching ? 110.f : 165.f;
+				const FVector Eye = Member->GetActorLocation() - FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight() - EyeZ);
+				for (const float Height : { 130.f, 50.f })
+				{
+					if (!World->LineTraceTestByChannel(Eye, Spawn + FVector(0.f, 0.f, Height), ECC_Visibility, Params))
+					{
+						++SeenBy;
+						Seers += Member->DisplayName.ToString() + TEXT(" ");
+					}
+				}
+			}
+			Check(State, bSpawn && SeenBy == 0, FString::Printf(TEXT("... the wake point is hidden from every operative (seen by: %s)"), Seers.IsEmpty() ? TEXT("nobody") : *Seers));
+			Check(State, State.Probe->EventNames.Contains(FName(TEXT("EnemyWoke.A4_PERIMETER"))), TEXT("... EnemyWoke.A4_PERIMETER raised"));
+			{
+				const TSharedPtr<FJsonObject> Saved = SavedDormant(*Tutorial, PerimeterBinding);
+				bool bWoken = false;
+				const TArray<TSharedPtr<FJsonValue>>* SavedSpawn = nullptr;
+				Check(State, Saved.IsValid() && Saved->TryGetBoolField(TEXT("woken"), bWoken) && bWoken && Saved->TryGetArrayField(TEXT("spawn"), SavedSpawn)
+					&& SavedSpawn->Num() == 3 && FMath::IsNearlyEqual((*SavedSpawn)[0]->AsNumber(), Spawn.X, 1.0) && FMath::IsNearlyEqual((*SavedSpawn)[1]->AsNumber(), Spawn.Y, 1.0),
+					TEXT("... the save keeps it awake and where it woke (dormant_enemies)"));
+			}
+			RequestFrame(World, State, Spawn, TEXT("part1_zombie_wakes_hidden"), 2200.f);
+			State.Stage = 3;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 3:
@@ -510,23 +665,29 @@ namespace TutorialAmbushLakeSmoke
 			{
 				return true;
 			}
-			Medic = Tutorial->GetFocusOperative(TEXT("A4_tripwire"));
-			State.Medic = Medic;
-			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Active && Medic && Medic->SquadRole == EOperativeRole::MedicSapper
-				&& Squad->IsSoloMode() && Squad->GetLeader() == Medic && Tutorial->IsConfining(),
-				TEXT("PART 1: the tripwire card - the Medic-Sapper alone (Solo, selected), the other two held"));
-			if (!Medic || !Perimeter->AssignedPatrolRoute)
+			// 2026-10-23: ANY one operative takes part 1 (Solo, selected) - the Engineer here; the Spotted / EarlyKill runs keep her.
+			AOperativeCharacter* Rigger = State.Mode == EMode::Success || State.Mode == EMode::MineKill ? State.Rigger.Get() : Medic;
+			State.Rigger = Rigger;
+			const FString Body = Tutorial->GetCardView().Body.ToString();
+			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Active && Tutorial->IsConfining()
+				&& Tutorial->GetCardView().Title.ToString().Contains(TEXT("QUIETLY")),
+				FString::Printf(TEXT("PART 1: TAKE HIM QUIETLY - the squad held at the overlook ('%s')"), *Tutorial->GetCardView().Title.ToString()));
+			Check(State, State.Mode == EMode::MineKill ? Body.Contains(TEXT("plant a mine")) : !Body.Contains(TEXT("mine")),
+				FString::Printf(TEXT("the card names the mine only when the squad carries one (%s)"), State.Mode == EMode::MineKill ? TEXT("1 mine") : TEXT("none")));
+			if (!Rigger || !Medic || !Perimeter->AssignedPatrolRoute)
 			{
 				return Finish(State, false);
 			}
+			Squad->EnterSoloMode();
+			Squad->SetLeader(Rigger);
 			const TArray<FVector> Loop = RoutePoints(*Perimeter->AssignedPatrolRoute);
-			const FVector OnLoop = TutorialRules::NearestPointOnRoute(Loop, Perimeter->AssignedPatrolRoute->bIsLoop, Medic->GetActorLocation());
+			const FVector OnLoop = TutorialRules::NearestPointOnRoute(Loop, Perimeter->AssignedPatrolRoute->bIsLoop, Rigger->GetActorLocation());
 			Tutorial->RefreshGuideNow();
 			const FTutorialGuideView& Guide = Tutorial->GetGuideView();
 			const APatrolRouteActor* FarRoute = Lured->AssignedPatrolRoute.Get();
 			const float FromFarRoute = FarRoute ? TutorialRules::DistanceToRoute2D(RoutePoints(*FarRoute), FarRoute->bIsLoop, Guide.Location) : -1.f;
 			Check(State, Guide.bValid && Guide.Guide.Id == FName(TEXT("@patrol_route.A4_PERIMETER")) && FVector::Dist2D(Guide.Location, OnLoop) < 50.f && FromFarRoute > 500.f,
-				FString::Printf(TEXT("the current target is on the PERIMETER zombie's loop (%s at %s, %.0f cm from the loop point nearest to her, %.1f m from the far route)"),
+				FString::Printf(TEXT("the current target is on the PERIMETER zombie's loop (%s at %s, %.0f cm from the loop point nearest to the one selected, %.1f m from the far route)"),
 					*UTutorialSubsystem::DescribeGuide(Guide.Guide), *Guide.Location.ToCompactString(), FVector::Dist2D(Guide.Location, OnLoop), FromFarRoute / 100.f));
 			if (State.Mode == EMode::SpottedPart1)
 			{
@@ -547,46 +708,82 @@ namespace TutorialAmbushLakeSmoke
 			const FVector Across = FVector::CrossProduct(FVector::UpVector, (LegB - LegA).GetSafeNormal2D());
 			State.WireA = Ground(World, Mid + Across * 150.f);
 			State.WireB = Ground(World, Mid - Across * 150.f);
-			Medic->GrenadesCount = FMath::Max(Medic->GrenadesCount, 2);
 			URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>();
-			Check(State, Relocation && Relocation->StartTripwirePlacement(Medic) && Relocation->IsPlacingTripwire(), TEXT("she opens the tripwire placement"));
+			if (State.Mode == EMode::MineKill)
+			{
+				// 2026-10-23: the mine on his path (the leg's middle), the REAL placement (F, a click).
+				Check(State, Relocation && Relocation->StartDeployPlacement(EDeployableType::Mine, Rigger), TEXT("the Engineer opens the mine placement"));
+				if (Relocation)
+				{
+					const FVector MinePoint = Ground(World, Mid);
+					Relocation->UpdatePreview(MinePoint);
+					Relocation->ConfirmPlacement(MinePoint); // 1: the position
+					Relocation->UpdatePreview(MinePoint);
+					Relocation->ConfirmPlacement(MinePoint); // 2: deploy
+					Check(State, Relocation->GetActiveDeployCount() == 1, FString::Printf(TEXT("a click on his loop at %s: he goes to plant it"), *Mid.ToCompactString()));
+				}
+				Next(State);
+				return true;
+			}
+			Rigger->GrenadesCount = FMath::Max(Rigger->GrenadesCount, 2);
+			Check(State, Relocation && Relocation->StartTripwirePlacement(Rigger) && Relocation->IsPlacingTripwire(),
+				FString::Printf(TEXT("%s opens the tripwire placement"), *Rigger->DisplayName.ToString()));
 			if (Relocation)
 			{
 				Relocation->UpdatePreview(State.WireA);
 				Relocation->ConfirmPlacement(State.WireA);
 				Relocation->UpdatePreview(State.WireB);
 				Relocation->ConfirmPlacement(State.WireB);
-				Check(State, Relocation->GetTripwireTaskCount() == 1, FString::Printf(TEXT("two clicks across his loop at %s: she goes to rig it"), *Mid.ToCompactString()));
+				Check(State, Relocation->GetTripwireTaskCount() == 1, FString::Printf(TEXT("two clicks across his loop at %s: he goes to rig it"), *Mid.ToCompactString()));
 			}
 			Next(State);
 			return true;
 		}
 		case 4:
 		{
-			ATripwireActor* Wire = FindSquadWire(World);
-			if ((!Wire || !Wire->IsArmed()) && State.StageTime < 45.f)
+			AOperativeCharacter* Rigger = State.Rigger.Get();
+			ATripwireActor* Wire = State.Mode == EMode::MineKill ? nullptr : FindSquadWire(World);
+			AProximityMineActor* Mine = nullptr;
+			for (TActorIterator<AProximityMineActor> It(World); It && State.Mode == EMode::MineKill; ++It)
+			{
+				Mine = It->bPlacedBySquad ? *It : Mine;
+			}
+			const bool bArmed = State.Mode == EMode::MineKill ? Mine && Mine->IsArmedNow() : Wire && Wire->IsArmed();
+			if (!bArmed && State.StageTime < 45.f)
 			{
 				return true;
 			}
 			State.Wire = Wire;
-			Check(State, Wire && Wire->IsArmed(), FString::Printf(TEXT("the wire is rigged and armed (%.1f s)"), State.StageTime));
+			State.Mine = Mine;
+			Check(State, bArmed, FString::Printf(TEXT("the %s is placed and armed (%.1f s)"), State.Mode == EMode::MineKill ? TEXT("mine") : TEXT("wire"), State.StageTime));
 			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Active,
-				TEXT("the card completes, the objective 'wait until the zombie on the loop walks into the wire' shows"));
-			if (!Wire)
+				TEXT("the card completes, the objective 'wait until the zombie walks into your trap' shows"));
+			if (!bArmed || !Rigger)
 			{
 				return Finish(State, false);
 			}
-			// She goes back behind the low cover (the real order); the far zombie "pulls a pin" - not part 1's zombie.
-			Medic->OrderMoveTo(State.CoverSpot + FVector(0.f, -240.f, 0.f), false);
-			Tutorial->NotifyEvent(GameplayEvents::TripwireTriggeredByEnemy, Lured->GetFName());
+			// The one who went out took the job: the others are held at the overlook.
+			FTutorialConfineView Hold;
+			Check(State, Tutorial->GetMachine().GetActiveConfine(Hold) && Hold.FreeOperative == Rigger->GetFName(),
+				FString::Printf(TEXT("2026-10-23: %s took part 1 (confine free: first)"), *Rigger->DisplayName.ToString()));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member && Member != Rigger)
+				{
+					const FVector Far = Member->GetActorLocation() + (Member->GetActorLocation() - Perimeter->GetActorLocation()).GetSafeNormal2D() * -1500.f;
+					Check(State, !UTutorialSubsystem::CheckConfinedOrder(World, Member, Far), FString::Printf(TEXT("... %s may not leave the overlook"), *Member->DisplayName.ToString()));
+				}
+			}
+			// He goes back behind the low cover (the real order); the far zombie "killed by a squad trap" - not part 1's zombie.
+			Rigger->OrderMoveTo(State.CoverSpot + FVector(0.f, -240.f, 0.f), false);
+			Tutorial->NotifyEvent(TEXT("EnemyKilled.SquadTrap"), Lured->GetFName());
 			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A4_wt_trap")) == ETutorialStepState::Idle,
-				TEXT("PART 1: the FAR zombie's TripwireTriggered.Enemy does not complete it (no 'that's one' line)"));
+				TEXT("PART 1: the FAR zombie's EnemyKilled.SquadTrap does not complete it (no 'that's one' line)"));
 			Next(State);
 			return true;
 		}
 		case 5:
 		{
-			ATripwireActor* Wire = State.Wire.Get();
 			const FVector WireMid = (State.WireA + State.WireB) * 0.5f;
 			if (!State.bPart1Shot && FVector::Dist2D(Perimeter->GetActorLocation(), WireMid) < 700.f)
 			{
@@ -597,16 +794,17 @@ namespace TutorialAmbushLakeSmoke
 			{
 				return true;
 			}
-			Check(State, Wire && Wire->IsTripped() && Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed,
-				FString::Printf(TEXT("PART 1: the perimeter zombie walked its loop into the wire -> the objective is done (%.1f s, %s)"), State.StageTime,
-					TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_trap_wait")))));
+			Check(State, IsDead(Perimeter) && Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed,
+				FString::Printf(TEXT("PART 1: the perimeter zombie walked its loop into the %s and died -> the objective is done (%.1f s, %s)"),
+					State.Mode == EMode::MineKill ? TEXT("mine") : TEXT("wire"), State.StageTime, TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_trap_wait")))));
 			Check(State, Tutorial->GetStepState(TEXT("A4_wt_trap")) != ETutorialStepState::Idle, TEXT("'That's one. The other one is still by the far container.'"));
-			int32 PerimeterTrips = 0;
+			int32 SquadTrapKills = 0;
 			for (int32 Index = 0; Index < State.Probe->EventNames.Num(); ++Index)
 			{
-				PerimeterTrips += State.Probe->EventNames[Index] == GameplayEvents::TripwireTriggeredByEnemy && State.Probe->EventSubjects[Index] == Perimeter->GetFName() ? 1 : 0;
+				SquadTrapKills += State.Probe->EventNames[Index] == FName(TEXT("EnemyKilled.SquadTrap")) && State.Probe->EventSubjects[Index] == Perimeter->GetFName() ? 1 : 0;
 			}
-			Check(State, PerimeterTrips == 1, FString::Printf(TEXT("the pin was pulled by %s (part 1's zombie)"), *Perimeter->GetName()));
+			Check(State, SquadTrapKills == 1, FString::Printf(TEXT("EnemyKilled.SquadTrap for %s (part 1's zombie, killed by the squad's %s)"), *Perimeter->GetName(),
+				State.Mode == EMode::MineKill ? TEXT("mine") : TEXT("wire")));
 			State.Stage = 40;
 			State.StageTime = 0.f;
 			return true;
@@ -1353,8 +1551,8 @@ namespace TutorialAmbushLakeSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A4_hug_wall")) == ETutorialStepState::Skipped, TEXT("PART 2 FAILS: the wall card is dropped"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->IsFreePause(),
 				TEXT("... the SPOTTED card and the free tactical pause (the first time on this level)"));
-			Check(State, Flow->IsSkirmish() && Waves && Waves->GetAliveEnemyCount() == 1 && !IsDead(Perimeter) && Perimeter->IsOnPatrol(),
-				TEXT("... a skirmish of the far zombie alone (the perimeter zombie, alive after the wire, is not in it)"));
+			Check(State, Flow->IsSkirmish() && Waves && Waves->GetAliveEnemyCount() == 1 && (IsDead(Perimeter) || Perimeter->IsOnPatrol()),
+				TEXT("... a skirmish of the far zombie alone (the perimeter zombie died in the trap - 2026-10-23 - or patrols on)"));
 			Tutorial->HandlePlayerCommand(PlayerCommands::PostureDefensive, FPlayerCommandContext());
 			Squad->SetSquadPosture(ESquadFirePosture::Defensive);
 			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Completed, TEXT("DEFENSIVE completes the card"));
@@ -1436,6 +1634,16 @@ namespace TutorialAmbushLakeSmoke
 	{
 		RunMode(Args, World, EMode::EarlyKill);
 	}
+
+	void RunMine(const TArray<FString>& Args, UWorld* World)
+	{
+		RunMode(Args, World, EMode::MineKill);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs MineCommand(
+		TEXT("CodexTactics.TutorialAmbushLakeMineSmoke"),
+		TEXT("Dev check (Demo 01 A4, 2026-10-23): part 1 by a MINE - zombie #1 dormant until the squad is in cover at the overlook, wakes hidden on its loop, the Engineer (carrying a mine: the card names it) plants it on the loop, the zombie dies in it (EnemyKilled.SquadTrap); part 2 as usual."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunMine));
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.TutorialAmbushLakeSmoke"),

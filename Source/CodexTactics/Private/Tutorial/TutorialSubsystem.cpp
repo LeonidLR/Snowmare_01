@@ -483,6 +483,7 @@ void UTutorialSubsystem::Tick(float DeltaTime)
 		SquadBindTimer = 1.f;
 		BindSquadMembers();
 	}
+	TickDormantEnemies(); // 2026-10-23: also with the tutorial off (wakes them in place)
 	if (!IsTutorialActive())
 	{
 		return;
@@ -760,6 +761,11 @@ void UTutorialSubsystem::ResetTutorial()
 {
 	bSkipped = false; // rev 5i: RESET TUTORIAL starts a skipped tutorial again
 	Machine.ResetProgress();
+	for (TPair<FName, FDormantBindingState>& Dormant : DormantBindings)
+	{
+		Dormant.Value.bWoken = false; // 2026-10-23: from the start again - the dormant enemies sleep until their condition
+		Dormant.Value.bHasSpawn = false;
+	}
 	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
 	ClearOverlayState();
@@ -1189,6 +1195,36 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		}
 		return static_cast<float>(NotLow);
 	}
+	if (const FName CoverVolume = TutorialRules::ParseNotInCoverAtStat(Stat); !CoverVolume.IsNone())
+	{
+		// 2026-10-23 (the dormant A4 zombie wakes when the squad is in cover at the overlook): the living members NOT in cover (settled,
+		// not mid-shimmy) inside that volume's box or within 3 m of it (0 = everybody is in cover there).
+		const TArray<const ATutorialTriggerVolume*> CoverVolumes = FindVolumes(CoverVolume);
+		int32 NotInCover = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (!TutorialSubsystemLocal::IsLivingOrUntracked(Member))
+			{
+				continue;
+			}
+			const bool bThere = CoverVolumes.ContainsByPredicate([Member](const ATutorialTriggerVolume* Volume)
+			{
+				return TutorialConfineLocal::IsInsideBox(*Volume->Box, Member->GetActorLocation(), TutorialConfineLocal::NearVolumeCm, TutorialConfineLocal::AreaMarginZCm);
+			});
+			NotInCover += Member->bInCover && bThere ? 0 : 1;
+		}
+		return static_cast<float>(NotInCover);
+	}
+	if (Stat == FName(TEXT("squad_mines")))
+	{
+		// 2026-10-23: mines the living members carry (the A4 card offers the mine only then).
+		int32 Mines = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Mines += TutorialSubsystemLocal::IsLivingOrUntracked(Member) ? Member->MinesCount : 0;
+		}
+		return static_cast<float>(Mines);
+	}
 	if (Stat == FName(TEXT("squad_injury_max")))
 	{
 		// Rev 2026-10-19: the medkit lesson - the share of health the most wounded living member has lost, % (0 = all healthy / none alive).
@@ -1535,8 +1571,15 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 		break;
 	case ETutorialConfineVerdict::HeldBack:
 	{
-		// 2026-10-20: the A4 ambush - one operative does it, the others hold.
-		const AOperativeCharacter* Free = GetFocusOperative(Confine.Owner);
+		// 2026-10-20: the A4 ambush - one operative does it, the others hold (2026-10-23 "first": the one who took it).
+		const AOperativeCharacter* Free = Confine.Spec.bFreeFocus ? GetFocusOperative(Confine.Owner) : nullptr;
+		if (const USquadSubsystem* Squad = !Free && GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+		{
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Free = Member && Member->GetFName() == Confine.FreeOperative ? Member : Free;
+			}
+		}
 		Line = FText::Format(LOCTEXT("ConfineHeldBack", "Hold here - {0} handles it."), Free ? Free->DisplayName : LOCTEXT("ConfineHeldBackSomeone", "the other one"));
 		break;
 	}
@@ -1557,6 +1600,25 @@ bool UTutorialSubsystem::CheckConfinedOrder(const UObject* WorldContext, const A
 	const ETutorialConfineVerdict Verdict = Tutorial->JudgeMove(*Operative, Destination);
 	if (Verdict == ETutorialConfineVerdict::Allowed)
 	{
+		// 2026-10-23 ("free": "first"): the SELECTED operative (the one the player orders) first sent outside the area takes the lesson -
+		// the others are held from now on. Anyone else's walk outside before that (a task, autonomy) is refused like a held one.
+		FTutorialConfineView Confine;
+		if (Tutorial->IsConfining() && Tutorial->Machine.GetActiveConfine(Confine) && Confine.Spec.bFreeFirst && Confine.FreeOperative.IsNone()
+			&& !Tutorial->IsInsideConfinement(Destination))
+		{
+			const USquadSubsystem* Squad = Tutorial->GetWorld() ? Tutorial->GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+			if (!Squad || Squad->GetLeader() != Operative)
+			{
+				Tutorial->ReportConfinedRefusal(ETutorialConfineVerdict::Outside, Operative);
+				return false;
+			}
+			if (Tutorial->Machine.ClaimConfineFree(Operative->GetFName()))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s takes the lesson of %s alone (the others hold the area)"), *Operative->DisplayName.ToString(),
+					*Confine.Owner.ToString());
+				Tutorial->WriteTelemetry(TEXT("confine_free_taken"), Confine.Owner, Tutorial->Machine.GetCurrentBeat(), 0.f);
+			}
+		}
 		return true;
 	}
 	Tutorial->ReportConfinedRefusal(Verdict, Operative);
@@ -2286,7 +2348,10 @@ FString UTutorialSubsystem::ResolvePauseTokens(const FString& Text) const
 	// 2026-10-22: the pause lesson names the fight's real limits ({pause_charges} / {pause_seconds} / {pause_cooldown}).
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	const FGameFlowConfig Config = Flow ? Flow->GetConfig() : FGameFlowConfig();
-	return TutorialRules::ResolvePauseTokens(Text, Config.TacticalPauseMaxCharges, Config.TacticalPauseDuration, Config.TacticalPauseCooldown);
+	// 2026-10-23: "{if:<stat>:<text>}" (the A4 card names the mine only when the squad carries one).
+	return TutorialRules::ResolveIfStatTokens(
+		TutorialRules::ResolvePauseTokens(Text, Config.TacticalPauseMaxCharges, Config.TacticalPauseDuration, Config.TacticalPauseCooldown),
+		[this](FName Stat) { return GetConditionStat(Stat); });
 }
 
 FTutorialCardView UTutorialSubsystem::GetCardView() const
@@ -2649,6 +2714,7 @@ TSharedPtr<FJsonObject> UTutorialSubsystem::CaptureSaveState() const
 	}
 	Object->SetArrayField(TEXT("lock_hints"), Hints);
 	Object->SetBoolField(TEXT("skipped"), bSkipped); // rev 5i: SKIP TUTORIAL stays skipped after a load
+	SaveDormantEnemies(*Object); // 2026-10-23: dormant / woken enemies and where they woke
 	// 2026-10-22: the enemy bindings that had enemies in this level ("all_dead.<binding>": dead ones are not in the save's world).
 	TArray<FName> SeenBindings = EnemyBindingsSeen.Array();
 	SeenBindings.Sort(FNameLexicalLess());
@@ -2694,6 +2760,7 @@ void UTutorialSubsystem::RestoreSaveState(const FJsonObject& Object)
 	}
 	bool bSavedSkipped = false;
 	bSkipped = Object.TryGetBoolField(TEXT("skipped"), bSavedSkipped) && bSavedSkipped;
+	LoadDormantEnemies(Object);
 	const TArray<TSharedPtr<FJsonValue>>* SeenList = nullptr;
 	if (Object.TryGetArrayField(TEXT("enemy_bindings_seen"), SeenList))
 	{

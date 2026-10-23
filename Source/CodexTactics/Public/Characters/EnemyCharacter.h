@@ -548,6 +548,24 @@ public:
 		FScopedTrapBlast& operator=(const FScopedTrapBlast&) = delete;
 	};
 
+	/** 2026-10-23: nesting depth of FScopedSquadTrapBlast (game thread only). */
+	static int32& SquadTrapBlastDepth();
+	/** True while a trap the SQUAD placed (its tripwire, its mine) blasts: a kill raises "EnemyKilled.SquadTrap" too. */
+	static bool IsSquadTrapBlastInProgress() { return SquadTrapBlastDepth() > 0; }
+
+	/**
+	 * 2026-10-23 (the A4 lesson "take him quietly with a tripwire or a mine"): wraps the blast of a squad-placed trap; an enemy it kills
+	 * raises "EnemyKilled.SquadTrap" before "EnemyKilled.Trap" / "EnemyKilled". Inactive (bActive false): nothing.
+	 */
+	struct FScopedSquadTrapBlast
+	{
+		explicit FScopedSquadTrapBlast(bool bInActive) : bActive(bInActive) { SquadTrapBlastDepth() += bActive ? 1 : 0; }
+		~FScopedSquadTrapBlast() { SquadTrapBlastDepth() -= bActive ? 1 : 0; }
+		FScopedSquadTrapBlast(const FScopedSquadTrapBlast&) = delete;
+		FScopedSquadTrapBlast& operator=(const FScopedSquadTrapBlast&) = delete;
+		bool bActive = false;
+	};
+
 	/** Index of the waypoint it walks to / waits at (smokes, debugging). */
 	int32 GetPatrolWaypointIndex() const { return PatrolWaypointIndex; }
 
