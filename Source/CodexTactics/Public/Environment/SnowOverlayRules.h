@@ -3,8 +3,9 @@
 #include "CoreMinimal.h"
 
 /**
- * Pure rules of the gradual snow cover overlay (environment phase 4c, docs/systems/environment-weather.md §6 / §12): which static
- * meshes get the M_SnowOverlay overlay material and in which order. UE-only (no Godot reference). Tested in
+ * Pure rules of the gradual snow cover overlay (environment phase 4c / 4d, docs/systems/environment-weather.md §6 / §12.c / §12.d):
+ * which static meshes get the M_SnowOverlay overlay material (objects), which get M_SnowGroundOverlay (the ground slabs) and in which
+ * order, plus the interior-zone rectangles the ground material keeps bare. UE-only (no Godot reference). Tested in
  * CodexTactics.Environment.SnowOverlay.*; used by UWeatherSnowOverlayComponent.
  */
 namespace SnowOverlayRules
@@ -43,6 +44,10 @@ namespace SnowOverlayRules
 		float FootprintCm = 0.f;
 		/** Height of the bounds (full), cm. */
 		float HeightCm = 0.f;
+		/** Narrowest horizontal extent of the bounds (full width), cm; 0 = unknown (taken as FootprintCm). A long fence is wide but not ground. */
+		float MinWidthCm = 0.f;
+		/** The mesh asset is a floor template (SM_Template_Map_Floor, IsFloorTemplateMeshName): ground whatever its size. */
+		bool bFloorTemplate = false;
 	};
 
 	/** Thresholds of the filter. */
@@ -56,6 +61,10 @@ namespace SnowOverlayRules
 		float GroundMinFootprintCm = 2000.f;
 		/** ... "flat" = height below this share of the footprint. */
 		float GroundMaxHeightShare = 0.05f;
+		/** Meshes wider than MaxFootprintCm (and floor templates) are ground when their height stays below this share of the footprint (a sky dome is not). */
+		float GroundWideMaxHeightShare = 0.25f;
+		/** Ground is wide in BOTH directions: a narrower mesh (a long low fence, a wall run) is no ground, cm. */
+		float GroundMinWidthCm = 300.f;
 		/** Nanite meshes may take part: the caller switches them to their fallback mesh while they hold the overlay (Codex.Env.SnowOverlayNanite). */
 		bool bAllowNaniteFallback = false;
 	};
@@ -77,7 +86,9 @@ namespace SnowOverlayRules
 		TooLarge,
 		Ground,
 		Interior,
-		Covered
+		Covered,
+		/** ClassifyGround only: the mesh is no ground slab (an object, a fence, a sky dome). */
+		NotGround
 	};
 
 	/** The verdict for one mesh (cheap checks first; Interior / Covered come last - they need world queries the caller does lazily). */
@@ -85,6 +96,49 @@ namespace SnowOverlayRules
 
 	/** Classify(...) == Accept. */
 	CODEXTACTICS_API bool IsTarget(const FSnowTargetTraits& Traits, const FSnowTargetConfig& Config);
+
+	/**
+	 * The mesh is GROUND (gets M_SnowGroundOverlay, not M_SnowOverlay): wide in both directions (MinWidthCm >= GroundMinWidthCm) and
+	 * either a floor template, a flat slab (>= GroundMinFootprintCm, height < GroundMaxHeightShare x footprint) or wider than
+	 * MaxFootprintCm and still low (height < GroundWideMaxHeightShare x footprint). Classify returns Ground for these.
+	 */
+	CODEXTACTICS_API bool IsGroundShape(const FSnowTargetTraits& Traits, const FSnowTargetConfig& Config);
+
+	/**
+	 * The verdict for the GROUND overlay: the same checks as Classify (static mesh, not instanced / pawn / landscape / hidden / own overlay /
+	 * NoSnow / translucent / Nanite without the fallback), then NotGround unless IsGroundShape, then Interior, Covered, Accept.
+	 */
+	CODEXTACTICS_API ESnowTargetVerdict ClassifyGround(const FSnowTargetTraits& Traits, const FSnowTargetConfig& Config);
+
+	/** A floor template mesh asset by name (SM_Template_Map_Floor and copies of it). */
+	CODEXTACTICS_API bool IsFloorTemplateMeshName(const FString& MeshName);
+
+	/**
+	 * Points (world XY) at which a ground slab's cover is traced: the centre and the four quarter points of its bounds. A slab is big, so
+	 * one trace at its centre would let a single building on it decide for the whole floor.
+	 */
+	CODEXTACTICS_API TArray<FVector2D> GroundCoverSamplePoints(const FVector2D& BoundsMin, const FVector2D& BoundsMax);
+
+	/** A ground slab is under cover when most of its sample points are (an indoor floor, not a field with one hut on it). */
+	CODEXTACTICS_API bool IsGroundCovered(int32 CoveredSamples, int32 Samples);
+
+	/** Squared horizontal distance from Point to the box [BoxMin, BoxMax] (0 inside): ground slabs are ordered by their nearest edge. */
+	CODEXTACTICS_API double DistanceSqToBox2D(const FVector& Point, const FVector& BoxMin, const FVector& BoxMax);
+
+	/** Interior rectangles the ground material keeps bare (M_SnowGroundOverlay parameters Zone<i>A / Zone<i>B). */
+	constexpr int32 GroundZoneCount = 6;
+
+	/**
+	 * Packs an interior zone box (ZoneTransform without scale, ZoneHalfExtent) into the ground material's two vectors:
+	 * A = (centre X, centre Y, half extent X, half extent Y), B = (cos yaw, sin yaw, top Z, bottom Z).
+	 */
+	CODEXTACTICS_API void MakeGroundZoneParams(const FTransform& ZoneTransform, const FVector& ZoneHalfExtent, FLinearColor& OutA, FLinearColor& OutB);
+
+	/**
+	 * The ground material's interior mask at Point (1 = bare), the same maths as its "Interior zones" HLSL: inside the rotated rectangle
+	 * with a SoftCm edge, between the zone's bottom - 1 m and its top. A.Z <= 0 = an unused slot (0).
+	 */
+	CODEXTACTICS_API float GroundZoneMask(const FVector& Point, const FLinearColor& A, const FLinearColor& B, float SoftCm);
 
 	/** "Accept", "Covered", ... for logs. */
 	CODEXTACTICS_API const TCHAR* VerdictToString(ESnowTargetVerdict Verdict);

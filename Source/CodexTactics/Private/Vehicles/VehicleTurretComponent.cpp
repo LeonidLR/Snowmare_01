@@ -427,6 +427,7 @@ void UVehicleTurretComponent::FireCannon(AEnemyCharacter* Target, AOperativeChar
 		const float Damage = VehicleCombatRules::GetCannonDamage(FVector::Dist(Victim->GetActorLocation(), Impact), bDirect, Config);
 		ApplyHit(Victim, Damage, EDamageType::Explosive, Penetration, Gunner, EVehicleTurretWeapon::Cannon);
 	}
+	GameplayEvents::RaiseExplosion(this, GameplayEvents::ExplosionKinds::Cannon, Impact, Config.CannonSplashRadiusCm, GetOwner()); // visual listeners only (snow crater)
 	if (NoiseTimer <= 0.f)
 	{
 		NoiseTimer = 1.f;

@@ -1,6 +1,9 @@
 #include "Core/PlayerCommands.h"
 #include "CodexTactics.h"
 #include "GameFramework/Actor.h"
+#include "Interactables/BarrelActor.h"
+#include "Interactables/ProximityMineActor.h"
+#include "Interactables/TripwireActor.h"
 #include "Subsystems/CodexEventBus.h"
 
 namespace PlayerCommands
@@ -402,6 +405,17 @@ namespace GameplayEvents
 	const FName GateOpened(TEXT("GateOpened"));
 	const FName TacticalPauseStarted(TEXT("TacticalPauseStarted"));
 	const FName TacticalPauseEnded(TEXT("TacticalPauseEnded"));
+	const FName Explosion(TEXT("Explosion"));
+
+	namespace ExplosionKinds
+	{
+		const FName Grenade(TEXT("Grenade"));
+		const FName Barrel(TEXT("Barrel"));
+		const FName Mine(TEXT("Mine"));
+		const FName Tripwire(TEXT("Tripwire"));
+		const FName Cannon(TEXT("Cannon"));
+		const FName Trap(TEXT("Trap"));
+	}
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{
@@ -474,6 +488,33 @@ namespace GameplayEvents
 		}
 		RaiseWithContext(WorldContext, ItemGiven, Context);
 		RaiseWithContext(WorldContext, FName(*(ItemGiven.ToString() + TEXT(".") + ItemKind.ToString())), Context);
+	}
+
+	void RaiseExplosion(const UObject* WorldContext, FName Kind, const FVector& Location, float Radius, AActor* Source)
+	{
+		FGameplayEventContext Context;
+		Context.Subject = Source;
+		Context.Kind = Kind;
+		Context.Location = Location;
+		Context.Radius = FMath::Max(Radius, 0.f);
+		RaiseWithContext(WorldContext, Explosion, Context);
+	}
+
+	FName GetExplosionKind(const AActor* Source)
+	{
+		if (Source && Source->IsA<ABarrelActor>())
+		{
+			return ExplosionKinds::Barrel;
+		}
+		if (Source && Source->IsA<AProximityMineActor>())
+		{
+			return ExplosionKinds::Mine;
+		}
+		if (Source && Source->IsA<ATripwireActor>())
+		{
+			return ExplosionKinds::Tripwire;
+		}
+		return ExplosionKinds::Trap;
 	}
 }
 

@@ -73,6 +73,10 @@ struct CODEXTACTICS_API FGameplayEventContext
 	/** World point (the cover slot), zero when none. */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Events")
 	FVector Location = FVector::ZeroVector;
+
+	/** A radius around Location (cm; GameplayEvents::Explosion: the blast radius), 0 when none. */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Events")
+	float Radius = 0.f;
 };
 
 /**
@@ -513,6 +517,25 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName TacticalPauseStarted;
 	/** "TacticalPauseEnded" (2026-10-22): the tactical pause is over (resumed, timed out, turn-based entered, the fight ended). */
 	extern CODEXTACTICS_API const FName TacticalPauseEnded;
+	/**
+	 * "Explosion" (2026-10-23, interactive snow phase 3 - docs/design/INTERACTIVE_SNOW.md §5): something blew up. Kind = ExplosionKinds
+	 * ("Grenade" / "Barrel" / "Mine" / "Tripwire" / "Cannon" / "Trap"), Location = the blast centre, Radius = the blast radius (cm, 0 when
+	 * unknown), Subject = the exploding actor (grenade, barrel, mine, ...; the vehicle for a cannon shell). Raised once per blast by
+	 * RaiseExplosion; listeners are visual only (USnowInteractionSubsystem craters).
+	 */
+	extern CODEXTACTICS_API const FName Explosion;
+
+	/** GameplayEvents::Explosion kinds (FGameplayEventContext::Kind). */
+	namespace ExplosionKinds
+	{
+		extern CODEXTACTICS_API const FName Grenade;
+		extern CODEXTACTICS_API const FName Barrel;
+		extern CODEXTACTICS_API const FName Mine;
+		extern CODEXTACTICS_API const FName Tripwire;
+		extern CODEXTACTICS_API const FName Cannon;
+		/** A trapped object / barricade / crate / turret charge (AInteractableActor::DetonateTrap and the like). */
+		extern CODEXTACTICS_API const FName Trap;
+	}
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);
@@ -528,4 +551,13 @@ namespace GameplayEvents
 
 	/** "ItemGiven" and "ItemGiven.<ItemKind>" for Count > 0 units of ItemKind handed from Giver to Recipient. */
 	CODEXTACTICS_API void RaiseItemGiven(const UObject* WorldContext, AActor* Giver, AActor* Recipient, FName ItemKind, int32 Count);
+
+	/**
+	 * "Explosion" (Kind = ExplosionKinds::*, Location = the centre, Radius cm or 0, Subject = Source). Broadcast only: no gameplay
+	 * reads it (the snow craters of USnowInteractionSubsystem).
+	 */
+	CODEXTACTICS_API void RaiseExplosion(const UObject* WorldContext, FName Kind, const FVector& Location, float Radius, AActor* Source = nullptr);
+
+	/** The ExplosionKinds of an exploding interactable: a fuel barrel, a proximity mine, a tripwire, else Trap. */
+	CODEXTACTICS_API FName GetExplosionKind(const AActor* Source);
 }

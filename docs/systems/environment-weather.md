@@ -385,7 +385,7 @@ pieces with their own files; this part is the state, the save, the MPC and the w
 - The material is TRANSLUCENT: masked overlays are invisible in UE 5.8 (drawn under the own mesh). A tiny WPO push toward the camera prevents z-fighting.
 - The mask is world-up against a threshold driven by `SnowAmount` plus noise, so the snow creeps down the sides.
 - Targets: outdoor `UStaticMeshComponent`s within 60 m of the view focus, nearest first, capped by CVar `Codex.Env.SnowOverlayMax` (250). `Codex.Env.SnowOverlay 0/1` switches the feature.
-- Skipped: ISM / HISM / foliage / pawns / landscape / the overlay's own components / tag `NoSnow` / translucent meshes / radius < 35 cm / wider than 60 m / flat slabs > 20 m / meshes under a roof (an upward trace) / meshes inside Closed or Shelter `ACameraZoneVolume`s (the zone's own roof counts as outside).
+- Skipped: ISM / HISM / foliage / pawns / landscape / the overlay's own components / tag `NoSnow` / translucent meshes / radius < 35 cm / wider than 60 m / flat slabs > 20 m (low, wide ones and floor templates take the ground overlay instead, §12.d) / meshes under a roof (an upward trace) / meshes inside Closed or Shelter `ACameraZoneVolume`s (the zone's own roof counts as outside).
 - Nanite meshes are skipped (the overlay is not drawn on Nanite); `Codex.Env.SnowOverlayNanite 1` switches them to the fallback mesh.
 - Cost: +0.3 ms GPU / +18 draws on a building view, ~0 in a wave fight. The set is rescanned every 3 s or on camera move.
 
@@ -393,3 +393,358 @@ pieces with their own files; this part is the state, the save, the MPC and the w
 - The environment carry (`UEnvironmentCarrySubsystem`) holds the END state of the level just left. `UEnvironmentSubsystem::Resolve` records the state the level was ENTERED with (`RecordEntryState`; unset = fresh start).
 - Every restart of the level (Ctrl + X, the mission-failed Restart button; both go through `UMissionSubsystem::RestartMission`) calls `RestoreEntryState` BEFORE `OpenLevel`: the carry is set back to the entry state (or cleared when the level was entered fresh). Snow cover and time of day therefore no longer accumulate across failed attempts.
 - NEW GAME (`Clear`) forgets both. Test `CodexTactics.GameFlow.Campaign.EnvironmentRestore` (0.40 / 09:00 -> end 0.80 / 14:00 -> restart -> 0.40 / 09:00).
+
+### 12.d Snow on the ground: the ground overlay M_SnowGroundOverlay (phase 4d, 2026-10-23)
+
+User decision 2026-10-23: «meanwhile dust the current floors». The levels have no landscape yet (the lake: `SM_Template_Map_Floor` slabs with
+the engine `MI_ProcGrid`; MovementTest / Frozen Factory: engine-cube floors with `WorldGridMaterial`), so the floors get a second overlay
+material. No map, config or existing material is changed.
+
+**Material** (`Scripts/Editor/create_snow_ground_material.py`, editor commandlet, own assets only, rebuilt in place on a re-run):
+`/Game/Environment/Weather/Snow/Materials/M_SnowGroundOverlay` + `MI_SnowGroundOverlay`.
+- Translucent, Surface ForwardShading, world-space normal, the camera-ward WPO nudge of M_SnowOverlay (0.5 cm + 0.0005 x distance).
+  Masked overlays are invisible in UE 5.8.
+- Snow dust: Fresh Snow albedo / normal / ORD projected from above (world XY, 3 m), upward faces only (`UpMin` 0.55).
+- Coverage = `MPC_Environment.SnowAmount` against a two-scale noise field from `T_TilingNoisePacked` (24 m macro, 5.2 m mid). Each channel
+  is normalised by the texture's measured statistics (R 0.31 +- 0.175, G 0.50 +- 0.19, B 0.42 +- 0.21), so the field is ~N(0.5, 0.2).
+  - Threshold `lerp(1.05, 0, SnowAmount^0.7)`: 0.35 ~ 40 % in patches, 0.7 ~ 90 %, 1 ~ 99 %.
+  - Soft edges (`EdgeSoft` 0.11). A light cover is thin (`ThinOpacity` 0.4) and speckled by a 37 cm grain.
+  - From 0.4 up, a thin film (`FilmOpacity` 0.4) covers the bare spots, so they never read as black holes.
+  - Wind-swept thinner spots stay (`BareSpots` 0.3), so the cover is never a white sheet.
+- Albedo: lifted by gamma 0.6, so the snow is brighter than the grey floor. Detail flattens beyond 22 m (no far moire). Macro shading +-8 %.
+- `FreshSnow` (MPC): brighter and rougher. `FrostAmount`: a smoother crust with more glints. Sparkle = rare fine-noise points with a
+  sharper highlight, fading out over 15-45 m.
+- Interior zones: up to 6 rectangles (`Zone<i>A` = centre XY + half extent, `Zone<i>B` = cos / sin yaw, top Z, bottom Z), written by the
+  component into its dynamic instance. Pixels inside the nearest closed / shelter camera zones stay bare (40 cm soft edge, from the zone
+  bottom - 1 m to its top).
+- Interactive snow (`docs/design/INTERACTIVE_SNOW.md` contract, **wired**). The material reads `RT_SnowInteraction` (RG16F 2048²) at
+  UV = (WorldXY - origin) x invSize from `MPC_Environment.SnowTrackWindow`, only where w > 0.5 and inside the window (2 m edge fade).
+  - Height cm = G(1-R)·`MaxBermCm` 3 - R·`MaxDepthCm` 8 (R, G saturated).
+  - Three samples (centre, +x, +y texel) in one custom node with one sampler: the height plus a finite-difference normal.
+  - Compacted (R) = x0.8 colour, roughness -0.25, a slight occlusion in the print, and a thin dusting shows the ground through a print.
+  - Berm (G) = x1.06, roughness +0.08.
+  - Bump-offset parallax on the snow UVs (`ParallaxScale` 0.6).
+  - An empty RT or w = 0 gives the plain dust.
+  - The script compiles the track part only when the RT and the MPC vector exist. Otherwise it logs "track read PENDING".
+    `CODEX_GROUND_TRACK_DRYRUN=1` compiles it against stand-ins.
+- Stats (SM6, `MaterialEditingLibrary.get_statistics`):
+  - With the track read: VS 367 / PS 2057 instructions, 7 samplers. 9 texture samples: 3 noise + 3 snow + 3 RT in the custom node.
+    The noise and snow samples share one wrap sampler (`SSM_Wrap_WorldGroupSettings`).
+  - Without the track read: PS 1979, 6 samplers.
+  - For scale: M_SnowOverlay PS 1883, WorldGridMaterial PS 225. The forward-lit translucency base dominates.
+
+**Ground mode** (`UWeatherSnowOverlayComponent`, `SnowOverlayRules`):
+- A mesh is ground (`IsGroundShape`) when it is wide in both directions (narrow side >= `GroundMinWidthCm` 3 m: a 134 m low fence is not
+  ground) and one of these holds:
+  - it is a floor template (`IsFloorTemplateMeshName`: `Template_Map_Floor`) and low (height < 25 % of the footprint);
+  - it is a flat slab >= 20 m (height < 5 %);
+  - it is wider than 60 m and low (< 25 %; a sky dome stays `TooLarge`).
+- `Classify` returns `Ground` for these. They no longer get M_SnowOverlay and become ground candidates instead.
+- `ClassifyGround`: the same checks as the objects (instanced, pawn, landscape, hidden, own overlay, `NoSnow` tag, translucent-only, Nanite
+  unless `Codex.Env.SnowOverlayNanite 1`), then `NotGround`, `Interior` (the slab inside a zone), `Covered` and `Accept`.
+  - A slab is covered when MOST of its 5 sample points (the centre + 4 quarter points, `GroundCoverSamplePoints` / `IsGroundCovered`)
+    have a roof above. One hut on a field does not decide for the whole floor.
+- Ordered by the nearest EDGE to the view focus (`DistanceSqToBox2D`) within the 60 m radius. Cap `Codex.Env.SnowGroundMax` (32), switch
+  `Codex.Env.SnowGround 0/1` (the object overlay keeps `Codex.Env.SnowOverlay` / `SnowOverlayMax`).
+- One `UMaterialInstanceDynamic` of `GroundMaterial` (default `MI_SnowGroundOverlay`) per world holds the zone rectangles; it goes on every
+  ground slab.
+- Restored exactly like the objects: visuals off / snow + frost 0 / CVar 0 / EndPlay set the overlay back to none where it is still ours,
+  and give the Nanite fallback back.
+- Log line `[Env] snow ground: N slab(s) of M ground candidate(s) ...` next to the object line.
+- Meshes per map (tactical start view):
+
+  | Map | Ground slabs | Object meshes | Notes |
+  |---|---|---|---|
+  | Lake | 1 (of 2) | 3-4 | Floor2's edge is beyond 60 m; TooLarge 4 = sky sphere, 2 low fences, 1 more |
+  | Frozen Factory | 3 | 20 | |
+  | MovementTest | 2 | 22-26 | wave 2 view |
+
+- Known limit: roofs that are not a camera zone (a hut, the factory's open platform) do not hide the ground snow under them.
+
+**Tests** `CodexTactics.Environment.SnowOverlay.*` (+3, 7 total):
+- `GroundClassify`: the shipped floors are ground. Crate, low fence, wall, 18 m roof, sky dome, building and stood-up template are not.
+  The same rules as the objects apply, Nanite with the fallback, thresholds, template names.
+- `GroundCover`: the sample points, the majority rule, the nearest-edge distance and order.
+- `GroundZones`: the C++ mirror of the material's zone HLSL (a turned shelter, the soft edge, the top / bottom bounds, an unused slot).
+- `Filter`: the old "80 m mesh = TooLarge" case is now a sky dome (wide AND tall); an 80 m low mesh is `Ground`.
+
+**Stills / movie / cost** (`CodexTactics.EnvironmentShots grounddust [nomovie] [noperf] [notracks]`, run on the map it starts on; the lake
+with `-LevelJson=L_Demo01_A_FrozenLake.json`). The run uses 1920x1080 offscreen, `-benchmark -fps=30`, Clear 12:00 and the tactical camera's
+numbers (pitch -35.26, vertical FOV 30, 26 m) on the squad leader.
+- Output `Saved/Screenshots/Environment/grounddust/`:
+  - `<map>_ground_000/035/070/100.png`;
+  - `movie_<map>/` (0 -> 1 in 10 s, 15 fps; `grounddust_<map>.mp4`);
+  - `<map>_tracks_loop[_close].png` (the leader walks a 4.5 m loop, the squad follows);
+  - `L_MovementTest_wave2_ground_070.png`;
+  - `grounddust_sheet.png`.
+- GPU A/B at SnowAmount 0.7 (`Codex.Env.SnowGround` 0 vs 1, the object overlay on in both; off / on / off / on, 150 frames each after
+  60 frames of settling; log `[GroundDustPerf]`):
+
+  | Scene | Camera | Ground off | Ground on | Delta | Draws |
+  |---|---|---|---|---|---|
+  | Frozen Lake (A), 1 slab | 26 m | 5.67 | 6.37 | +0.70 | +2 |
+  | Frozen Lake (A) | 40 m | 6.34 | 7.05 | +0.72 | +2 |
+  | Frozen Factory (B), 3 slabs | 26 m | 5.97 | 6.52 | +0.55 | +2 |
+  | Frozen Factory (B) | 40 m | 6.60 | 7.12 | +0.52 | +2 |
+  | MovementTest wave 2 (57 enemies), 2 slabs | 26 m | 5.84 | 6.34 | +0.50 | +3..+15 (enemies vary) |
+  | MovementTest wave 2 | 40 m | 6.24 | 6.69 | +0.45 | ~0 |
+
+  - The cost is one forward-lit translucent pass over the visible floor (~0.45-0.7 ms at 1080p). Render and game thread are unchanged.
+  - Cheaper options if needed: `TLM_Surface` (translucency-volume lighting: loses the sharp character shadows on the snow), or a DBuffer
+    snow decal on the floors (deferred lighting, needs the characters to not receive decals). Both change the look; not done.
+- Smokes after the change: WeatherSmoke, WeatherLakeSmoke, HordeIntroSmoke, MinimapSmoke, FrozenFactoryStartSmoke all PASS (they run
+  without a renderer, so the overlay itself is covered by the stills above).
+
+## 13. Landscape material fix + snow functions (2026-10-23)
+
+User approval 2026-10-23 («Давай», weather chat): fix the existing `M_Landscape_Master` graph and add the snow / interactive-snow functions so the
+material is ready for a future terrain. No map used the material then (no level has a landscape yet).
+
+**What was broken (SM6, as found)** - 2 compile errors, the default material would have been used in game:
+- `(Node Multiply) Arithmetic between types float2 and float3`: the slope mask read `PixelNormalWS.rgb` (acos of a float3) and the ice mask
+  `WorldPosition.rgb` (a per-channel SmoothStep), so both masks were float3; the old track sample `RT_SnowTracks.rg` (float2) was multiplied by
+  `1 - slope` (float3).
+- `(Node PixelNormalWS) Invalid node used in vertex shader input`: the World Position Offset track depth (`TrackMaxWPODepth`) read the
+  PixelNormalWS slope mask.
+
+**What was fixed (the user's graph and intent kept)**
+- Slope mask: `PixelNormalWS.z` -> clamp -> acos -> degrees -> SmoothStep `RockSlopeMinAngle` / `RockSlopeMaxAngle` (scalar).
+- Ice mask: `WorldPosition.z` -> SmoothStep `IceMaxHeight` -> `IceMinHeight` (scalar; ice below -100..-250 cm).
+- The old track sample reads `RT_SnowTracks.r` only (a scalar mask), then the old track nodes are taken out of use (below).
+- The landscape WPO is disconnected (useless at landscape vertex density, invalidates VSM). The `04_SnowTracks` parameters (`TrackCenterLocation`,
+  `TrackAreaSize`, `TrackIndentColor`, `TrackRoughnessDrop`, `TrackMaxWPODepth`, `RT_SnowTracks`) and their nodes stay in the graph, unused (the
+  user may delete them); every other parameter keeps its name, default and group. The interactive window replaces `TrackCenterLocation` /
+  `TrackAreaSize` (below).
+
+**Snow functions** (`/Game/Environment/Weather/Snow/Materials/`, built by the script; all neutral at 0):
+- `MF_SnowPowder` (group `08_SnowPowder`: `PowderTiling` 900 cm, `PowderUpMin` 0.6, `PowderContrast` 3, `PowderStrength` 1): powder on the bare layers =
+  `SnowAmount` x world up (vertex normal; the up threshold sinks from 0.97 to `PowderUpMin` as the cover grows) x (rock + ice) x noise patches
+  (`T_TilingNoisePacked`, shared wrap sampler), lerping toward the existing `SnowBaseColor` / `SnowRoughness`. Also outputs `SnowWeight`
+  (snow layer + powder) for the next two.
+- `MF_SnowSurface` (group `09_SnowSurface`: `FreshBrightness` 0.06, `FreshRoughness` 0.9, `FreshNormalStrength` 0.1, `MicroTiling` 140 cm,
+  `FrostRoughness` 0.3, `FrostOnBare` 0.35, `GlintTiling` 25 cm, `GlintThreshold` 0.46, `GlintParallax` 0.6, `GlintStrength` 1, `GlintEmissive` 1.5):
+  MPC `FreshSnow` (written by the interactive-snow subsystem; rises while it snows) = brighter, rougher, a micro normal; `FrostAmount` = lower
+  roughness + a view-dependent glint (two lookups of the same noise, one shifted by the camera vector; specular 0.5 -> 1, roughness -> 0.05, a small
+  emissive x the glint); fresh powder hides most of the rime.
+- `MF_SnowInteraction` (group `07_SnowInteraction`: `MaxDepthCm` 20, `MaxBermCm` 6 (the §14 contract), `EdgeFadeCm` 200, `NormalSampleCm` 8,
+  `TrackNormalStrength` 0.25, `CompactDarken` 0.12, `CompactRoughness` 0.45, `CompactAO` 0.25, `BermBrighten` 0.06, `BermRoughness` 0.9,
+  `BumpOffsetScale` 1, `CrushTiling` 18 cm, `CrushStrength` 0.1): reads `RT_SnowInteraction` through `MPC_Environment.SnowTrackWindow`
+  (origin = the window's min corner, 1/size, enabled; §14); height = `G·(1−saturate(R))·MaxBermCm − saturate(R)·MaxDepthCm`; normals from 3 RT
+  samples (one shared clamp sampler); bump offset (the crushed-snow detail inside a print is looked up where the view ray meets the lowered
+  surface); compacted = darker / smoother / AO, berm = brighter / rougher; 2 m edge fade; a disabled window (`.w` 0) = exactly no effect.
+- In the master: MPC `SnowAmount`, `FrostAmount`, `FreshSnow`, `SnowTrackWindow`; texture object parameters `SnowNoiseTexture`
+  (`10_SnowTextures`) and `SnowInteractionRT` (`07_SnowInteraction`, default `RT_SnowInteraction`). Outputs: BaseColor / Roughness / Normal / AO
+  from `MF_SnowInteraction`, Specular / Emissive from `MF_SnowSurface`. Everything that feeds the Normal output is vertex-normal based (a second
+  rock mask from `VertexNormalWS` with the same angles): PixelNormalWS may not feed Normal. The base layers keep the PixelNormalWS slope mask.
+- `MI_Landscape_Master`: its `RT_SnowTracks` override now points at `RT_SnowInteraction` (the old 1024² RGBA16F `RT_SnowTracks` is no longer loaded
+  through the MI; nothing draws into it).
+
+**Stats** (`Scripts/Editor/landscape_snow_patch.py`, `UMaterialEditingLibrary::GetStatistics`, PCD3D_SM6, base pass, local VF):
+
+| State | Errors | VS instr. | PS instr. | Samplers | Texture samples (PS) |
+|---|---|---|---|---|---|
+| As found | 2 | n/a | n/a | n/a | n/a |
+| After the fix | 0 | 148 | 233 | 2 | 4 |
+| After the snow functions | 0 | 148 | 355 | 3 | 10 |
+
++122 PS instructions, +6 texture samples (3 RT + 3 noise), +1 sampler (the two shared samplers replace `RT_SnowTracks`' own): well under the
+landscape limit of 16 (the landscape's weightmaps use shared samplers too). No compile warning; the terrain run compiled the landscape vertex
+factory shaders without a material warning.
+
+**Script** `Scripts/Editor/landscape_snow_patch.py` (`CODEX_LANDSNOW_MODE`): `dump` (read-only, as before), `patch` (idempotent: the fix sets the mask
+bits; its own nodes carry the description `landsnow:<key>` - an already patched graph is detected by them and only those are rebuilt; the MFs are
+emptied and rebuilt; saves only the master, the MI and the 3 MFs; logs `Saved/Logs/landscape_snow_patch.txt`, the first run on an unpatched graph
+also `landscape_snow_patch_first.txt` with the "after the fix" stats), `stats` (read-only, `Saved/Logs/landscape_snow_stats.txt`). Run as a
+commandlet under the build lock with `-AllowCommandletRendering`. Note: `MaterialEditingLibrary.DeleteAllMaterialExpressionsInFunction` leaves
+expressions behind in 5.8 (stale outputs shadow new ones) - the script deletes them one by one.
+
+**Backups** (before the first patch): `Saved/Backups/landscape_snow_20261022_233432/` with `manifest.txt` (sha1 of `M_Landscape_Master`
+bd5b6102..., `MI_Landscape_Master` 45b95f1a..., `M_SnowTracks_Fade`, `MPC_Environment`); verified unchanged before patching; the final assets were
+produced by a clean patch from these originals (restore = copy the two files back).
+
+**Test map** `/Game/Environment/Weather/Test/L_SnowTerrainTest` (agents' map, `Scripts/Editor/create_snow_terrain_test_map.py`; re-running replaces it):
+a 101 x 101 m landscape (4 x 4 components of 63 quads, 40 cm) with `MI_Landscape_Master`: a flat plateau (snow), a 56° ridge to the north (rock),
+a 4.2 m bowl to the east (ice below -250 cm), a 19° slope to the west; sun, sky light, sky atmosphere, fog, PlayerStart (the project's game mode
+spawns the squad; the environment and the interactive snow run), NavMeshBoundsVolume. The landscape comes from the editor helper
+`ULandscapeAuthoringLibrary::CreateLandscapeFromHeights` (`Source/CodexTacticsEditor/Private/LandscapeAuthoringLibrary.*`).
+Captures: `CodexTactics.EnvironmentShots terrain [nomovie] [notracks]` on that map (`EnvironmentTerrainShotsCommand.cpp`) ->
+`Saved/Screenshots/Environment/terrain/`: `terrain_snow_000/050/100.png` (Clear 12:00 overview), `night_frost.png` / `night_fresh.png` (23:00,
+Clear vs Snowfall with FreshSnow ~1), `tracks_loop.png` / `tracks_close.png` / `crater_close.png` / `tracks_off.png` (a walked loop + a forced
+Crater stamp; off = `Codex.Env.SnowTracks 0`), `movie/` -> `terrain_10s.mp4` (SnowAmount 0 -> 1, camera orbit, the leader walking).
+Tests: `CodexTactics.Environment.LandscapeMaterial.Graph` (every user parameter with its default / group, Z-only masks, no WPO, the 3 MFs drive
+the outputs, the MI no longer loads `RT_SnowTracks`) and `.EncodeHeight`; `CodexTactics.Editor.Materials.VfxGraphsConnected` still passes.
+The lake, L_MovementTest and Frozen Factory load with rendering without a material error (they do not use the material).
+
+**Assigning it to a real terrain:** select the Landscape actor -> Details -> Landscape Material = `MI_Landscape_Master` (or a child MI of it for
+per-level tuning). No paint layers are needed: rock / ice / snow are automatic (slope, height), so the layer list stays empty. Tune per level in the
+MI: `IceMaxHeight` / `IceMinHeight` are absolute world Z (cm) - set them around the level's frozen-water height; `RockSlopeMin/MaxAngle` for the
+rock band. Snow cover, fresh snow, frost and tracks come from `MPC_Environment` at runtime (presenter + interactive-snow subsystem); tracks need the
+landscape inside the 64 m window around the view (automatic). Keep `MaxDepthCm` / `MaxBermCm` in step with the stamp set (§14 contract).
+
+## 14. Interactive snow (phase 1, 2026-10-23): core + walkers
+
+Plan: `docs/design/INTERACTIVE_SNOW.md` §2-§4 phase 1. UE-only (no Godot reference), visual only: nothing in the game reads it; no gameplay class
+was changed. The ground look (a material reading the RT) is phase 2 / the ground overlay (§12.d).
+
+**Contract (the ground materials rely on it; keep it stable)**
+- Render target `/Game/Environment/Weather/Snow/Tracks/RT_SnowInteraction`: **RG16F** (`RTF_RG16f` = `PF_G16R16F`), 2048², clamp, cleared black.
+  R = compaction depth 0..~4, G = berm 0..~4. Reader: height (cm) = `G·(1−saturate(R))·MaxBermCm − saturate(R)·MaxDepthCm`, with the material
+  parameters MaxDepthCm 20 / MaxBermCm 6 on the reader side.
+- `MPC_Environment` (`Scripts/Editor/create_environment_mpc.py`, now idempotent: it appends the missing parameters and keeps the existing ones with
+  their ids): vector `SnowTrackWindow` = (origin X cm, origin Y cm, 1 / size cm, enabled 0/1); scalars `SnowRefill` (the blended preset
+  SnowIntensity) and `FreshSnow` (0..1: rises over 120 s of full snowfall, falls over 600 s after it; visual only); all default 0.
+  UV = (WorldXY − origin.xy) × (1 / size). `.w` = 0 whenever nothing is drawn (feature off, no renderer, visuals off): readers treat the RT as empty then.
+- Test `CodexTactics.Environment.SnowInteraction.Contract` pins the RT format / size / clamp and the MPC parameters (defaults 0, distinct ids).
+
+**Assets** (`Scripts/Editor/create_snow_interaction_assets.py`, editor commandlet; all under `/Game/Environment/Weather/Snow/Tracks/`; the user's
+`Content/VFX/SnowTracks` and `M_Landscape_Master` are untouched)
+- `RT_SnowInteraction` (kept when it exists; only format / size / addressing are re-applied).
+- `M_SnowStamp`: unlit ADDITIVE; procedural shapes in local UV picked by the vertex colour (R = shape id × 16 + 8, G = depth / 4, B = berm / 4 in
+  8 bits; the canvas stores colours with `ToFColor(true)`, `SnowInteractionRules::EncodeStampColor` pre-compensates): 0 boot (toe + heel), 1 paw
+  (pad + 4 toes), 2 body (rounded box), 3 crater with a rim, 4 dent, 5 segment cross-section (trails). A print fills 72 % of its quad; the berm
+  lies in the margin.
+- `M_SnowInteraction_Fade`: unlit MODULATE, `RT *= (FadeR, FadeG)`.
+- `M_SnowTracks_Shift`: unlit OPAQUE copy, `out = clamp(Source(uv + Offset).rg, 0, ClampMax 4)`, 0 outside [0, 1].
+- `DA_SnowStamps` (`USnowStampSet`: `FSnowStampTable Stamps` + `FSnowInteractionTuning Tuning`): created once from the C++ defaults, then tuned by
+  hand (the script keeps it). Without the asset the C++ defaults are used (the tests never need it).
+The three materials are the script's own (rebuilt on every run).
+
+**`USnowInteractionSubsystem`** (`Environment/SnowInteractionSubsystem.*`, `SnowInteractionWalkers.cpp`; pure logic in `SnowInteractionRules`)
+- `UTickableWorldSubsystem`, Game / PIE only, **not created without a renderer** (`FApp::CanEverRender`: every `-nullrhi` smoke / bot run is
+  untouched) or on a dedicated server. Inactive (nothing drawn, `.w` = 0) while the weather presenter is not applying (`Codex.Env.Visuals 0`, a level
+  with `"visuals": false`), with `Codex.Env.SnowTracks 0`, or when an asset is missing (one warning). The RT is cleared at world begin (a restart
+  reloads the world), on (re)activation and at the end (it is an asset: PIE shares it with the editor). No Display logs (Verbose only).
+- Window: 64 m (Low effects quality: 1024² / 48 m), centred on the tactical view centre (`ATacticalCameraPawn::GetViewCentre`, else a point 15 m
+  below a cinematic camera) + `WindowLeadCm` 800 along the view yaw, snapped to 256-texel steps (8 m; 12 m at Low) with hysteresis (it re-snaps when
+  the centre is 0.75 step off: no flip-flop on a step boundary). A scroll = `M_SnowTracks_Shift` RT → scratch (a transient RT of the same format) →
+  RT by whole texels (exact, no blur) plus the MPC vector in the same frame; a jump past the whole window clears.
+- Fade on WORLD time (pauses with the game): `exp(−rate·dt)`, rate = `FadeBaseRate` 1/900 s × (1 + `FadeSnowBoost` 12 × SnowRefill): e-fold 15 min
+  in Clear, ~110 s in Snowfall (0.6), ~70 s in a blizzard. At most `FadeHz` 5 passes / s, and a pass waits until it changes the value by ≥ 0.4 %
+  (`MinFadeStep`: the RT is 16-bit float, a smaller step rounds back and never fades): 5 Hz in snowfall, one pass every ~3.6 s in Clear. A clamp
+  pass (a shift by 0) every 10 s bounds the additive pile-up at 4.
+- Stamps: ONE canvas draw per frame (`BeginDrawCanvasToRenderTarget` + `K2_DrawMaterialTriangle`, 2 triangles a stamp), at most
+  `MaxStampsPerFlush` 512 (the farthest from the view dropped first), stamps outside the window culled. The yaw / size variation comes from a hash
+  of the position: the game's random stream is never touched.
+- Walkers, polled at `PollHz` 20 through the registries (no actor iterators; `Combat.EnemyRegistry.HotPathsUseRegistry` scans both files):
+  - operatives (`USquadSubsystem::GetMembers`): boot prints alternating ±12 cm at a 70 cm stride; Prone stance / prone dive = a 60 cm body furrow;
+    knockdown (rising edge of `IsKnockedDown`) = a body imprint; hidden (in the APC) = nothing;
+  - enemies (`UEnemyRegistrySubsystem::GetEnemyCharacters`, by archetype): Base / Spitter / Marksman boots, Brute big boots (52 cm, 120 cm stride),
+    FrostHound / Cutter paws, Frostbitten a 28 cm drag furrow, Cryo Drone nothing; a knockdown imprint (beast / brute / humanoid sizes); dying = no prints;
+  - the APC (`UVehicleSubsystem::GetVehicles`): twin ruts ±105 cm (45 cm wide); its ground is only checked while `GetWheelSpinRate` ≠ 0 or it moved;
+  - turn-based relocation (`UTurnBasedCombatSubsystem::GetRelocatingObject`): the object is watched for 10 s (it moves after the order cleared it)
+    and leaves a 55 cm drag trail (a jump of up to 15 m still draws its segment);
+  - death imprints from the event bus (read-only): `UCodexEventBus::OnSoldierDowned` (operative), `OnGameplayEventDetailed` with
+    `GameplayEvents::EnemyKilled` (enemy, by archetype; drones none).
+  A stride / trail restarts without a stamp after a teleport (> 4 m in one poll) or off snow.
+- Ground gate (no trace for characters: `CharacterMovement->CurrentFloor`): a landscape (`LandscapeHeightfieldCollisionComponent`, matched by class
+  name), a floor tagged `SnowGround` (component or actor tag), **or any non-physics static mesh / BSP floor while `Codex.Env.SnowTracksAnyGround`
+  is 1** (default 1 until the levels have a real terrain: today every ground is `SM_Template_Map_Floor`; set it to 0 once the snow terrain exists).
+  Never inside a Closed / Shelter `ACameraZoneVolume` (gathered at begin play and every 10 s). Vehicles / dragged objects / bodies: one short
+  trace down.
+- Console: `Codex.Env.SnowTracks 0/1`, `Codex.Env.SnowTracksRes 0` (auto) | 1024 | 2048 | 4096 (a scalability CVar), `Codex.Env.SnowTracksAnyGround 0/1`,
+  `Codex.Env.SnowTracksFadeScale` (debug fade multiplier). Stats: `stat SnowInteraction` (tick / poll / draw / passes, stamps drawn / dropped,
+  walkers). `GetMetrics()` holds cumulative counters + CPU seconds; `DebugRunExtraPasses` is for the perf probe only.
+
+**Tests** `CodexTactics.Environment.SnowInteraction.*` (10): WindowSnap (resolution, size, 256-texel snap, hysteresis, shift texels), WorldToUV (and
+the reader's UV from the MPC vector), Stride (count, ±12 cm alternation, poll-rate independence, teleport, scale), Segments (trail spacing, quads),
+Cap, VertexColour (exact 8-bit round trip of the shape code), Fade (rates, the 16-bit due rule, FreshSnow), Gating (ground gate, archetype tracks /
+imprints), DataDefaults (C++ defaults = the asset class defaults, deterministic jitter), Contract (assets).
+
+**Rendered smoke** `SnowTracksSmoke` (`Debug/SnowTracksSmokeCommand.cpp`; test_map `"rendered": true`, so `smoke_parallel.ps1` starts it with
+`-RenderOffscreen -ResX=1280 -ResY=720` instead of `-nullrhi`; under `-nullrhi` it fails by design with "needs a real RHI"). L_MovementTest: RG16F
+2048 / 64 m and the MPC vector; the view snaps onto the leader, who walks ~4.4 m (the others frozen): the read-back (`FRenderTarget::ReadLinearColorPixels`,
+raw) shows R ≈ 0.89 in every metre of the path, prints on both sides of the path line, R = 0 three metres off it and behind the start; a 20 m view
+move scrolls the window (shift passes, the MPC follows) and every metre keeps its value at the new UV; `Codex.Env.SnowTracksFadeScale 300` for 2 s
+lowers R 0.89 → 0.24. Stills: `Saved/Screenshots/SnowTracks/path_rt.png` (R / G of the path region), `walk.png`.
+
+**Cost** (`CodexTactics.SnowTracksSmoke perf`: L_MovementTest wave 2 = 57 enemies running at the squad, 1920x1080 offscreen, `-benchmark -fps=60`,
+4 s per phase; GPU noise ±0.2 ms):
+
+| Phase | GPU ms | render ms | game ms | snow CPU ms / frame | stamps / s |
+|---|---|---|---|---|---|
+| tracks on | 4.94 | 7.20 | 14.89 | 0.054 | 297 |
+| tracks off | 5.00 | 6.78 | 14.32 | 0.002 | 0 |
+| tracks on (again) | 4.84 | 7.37 | 14.73 | 0.051 | 54 |
+| stress +512 stamps / frame | 5.16 | 7.96 | 15.74 | 0.142 | 30848 |
+| stress +10 fade passes / frame | 5.73 | 11.14 | 15.99 | 0.054 | 51 |
+| stress +10 shift passes / frame | 7.01 | 14.20 | 16.68 | 0.060 | 56 |
+| tracks off (again) | 4.81 | 7.23 | 15.20 | 0.002 | 0 |
+
+The real load (60 walkers, ~300 stamps / s while the horde runs in) is within the GPU noise; the subsystem's game-thread cost is ~0.05 ms / frame
+(the 20 Hz poll of 60 walkers + one canvas draw). Per item: a stamp ~0.0005 ms GPU; a fade pass (2048² modulate) ~0.085 ms GPU + ~0.4 ms render
+thread (the canvas setup of `DrawMaterialToRenderTarget`), at ≤ 5 Hz; a scroll (2 copies) ~0.2 ms GPU + ~0.7 ms render thread, only every 8 m of view
+travel (+ the clamp pass every 10 s). If the render thread gets tight: draw the fade in the stamp canvas (one canvas a frame) - phase 4.
+
+**Not yet** (phase 4 of the plan): re-applying recent stamps to scrolled-in strips, Nanite displacement, `NS_SnowPuff` (skipped in phase 3).
+The ground overlay reads the RT (§12.d); explosions / dents / real-time drag are phase 3 (§14.3).
+
+### 14.3 Interactive snow phase 3 (2026-10-23): event stamps
+
+Plan §5 (orchestrator-approved additive hooks). The gameplay only BROADCASTS; `USnowInteractionSubsystem` listens and stamps (new
+`SnowInteractionEvents.cpp`; rules in `SnowInteractionRules`). Nothing feeds back: no gameplay class reads the snow.
+
+**Hooks (one line each, no logic / order change)**
+- `PlayerCommands.h/.cpp`: `GameplayEvents::Explosion` + `ExplosionKinds` (Grenade / Barrel / Mine / Tripwire / Cannon / Trap),
+  `RaiseExplosion(WorldContext, Kind, Location, Radius, Source)` (one `RaiseWithContext`), `GetExplosionKind(Actor)` (barrel / proximity
+  mine / tripwire, else Trap) and `FGameplayEventContext::Radius` (new field, default 0).
+- Raise sites: `AGrenadeActor::Detonate` (after `ApplyAreaEffect`, radius `EffectRadius`), `AInteractableActor::ApplyBlast` (barrel / mine /
+  tripwire / trapped objects, after `AlertPatrolsNearTrap`), `UVehicleTurretComponent::FireCannon` (at `Impact`, the splash radius),
+  `UTurnBasedCombatSubsystem::DetonateBarrel` (in the `if (Barrel)` block) and `DetonateMine` (after its `ApplyBlast`; radius 0 = the kind's size).
+- `UCombatFeedbackSubsystem::OnTracerSpawned(Start, End, bHit)` (native multicast), broadcast first in `SpawnTracer` / `SpawnTurretTracer`.
+  bHit is false from both (they do not know the outcome); the listener classifies the end point.
+- `URelocationSubsystem::GetMovingObjects(TArray<const AInteractableActor*>&) const`: the objects of running tasks in stage 2 (pushed).
+- No tutorial pattern matches "Explosion" (checked: the shipped patterns are `Enemy*`, `ColdTier.*`, `Gone.*` and command patterns).
+
+**Stamps**
+- Explosion -> one trace down (WorldStatic / WorldDynamic, the source ignored, at most `CraterMaxDropCm` 300 below; snow ground facing up,
+  not sheltered) -> `ComputeCrater` + `MakeCraterStamps`:
+  - diameter = blast radius x `CraterDiameterPerRadius` 0.55, clamped 120..380 cm (no radius: the kind spec's length);
+  - depth / rim by kind (`GrenadeCrater` 1.5 / 1.1 (tripwire too), `BarrelCrater` 0.9 / 1.0, `MineCrater` 2.0 / 1.4, `CannonCrater` 1.3 / 1.0,
+    `Crater` for traps);
+  - the stamps: the bowl (Crater shape) + a steep-walled pit (Body shape, 0.55 x, 0.6 x the depth: the bowl alone is ~8 cm over a metre
+    and barely shades) + the thrown-snow ring (Crater shape with no bowl, `CraterSprayScale` 1.7 x) + `CraterClods` 7 clods (small pits
+    with rims, 0.6..1.15 x the diameter out). Yaw / oval / clod layout from a hash of the centre (deterministic).
+- Tracer -> `EnqueueShot` (queue `ShotQueueMax` 32, the oldest dropped) -> per frame at most `ShotTracesPerFrame` 8:
+  - a pawn within `ShotHitRadiusCm` 30 of the end = a hit (no trace);
+  - else one line trace from 30 cm before the end to `ShotExtendCm` 15 m past it;
+  - snow ground facing up = a dent (`Dent` 20 cm, depth 0.9, stretched along a grazing ray up to `DentMaxStretch` 2x).
+- Real-time drag: `GetMovingObjects` is polled with the walkers (20 Hz) and feeds the existing drag-trail tracker (`DragTrail`, watched
+  `DragTrackSeconds` after the push).
+- New `DA_SnowStamps` fields (`GrenadeCrater`, `BarrelCrater`, `MineCrater`, `CannonCrater`, `CraterSpray`, `CraterClod`; tuning
+  `CraterDiameterPerRadius`, `CraterMinCm` / `MaxCm`, `CraterSprayScale`, `CraterClods`, `CraterMaxDropCm`, `ShotExtendCm`,
+  `ShotTracesPerFrame`, `ShotQueueMax`, `ShotHitRadiusCm`, `DentMaxStretch`) load with the C++ defaults until the asset is re-saved.
+- Metrics: `Explosions`, `Craters`, `ShotsQueued` / `Dropped` / `OnTarget`, `ShotTraces`, `MaxShotTracesInFrame`, `Dents`,
+  `LastMovingObjects`, `DragSegments`.
+
+**Proof the explosion gameplay is unchanged**
+- Under `-nullrhi` the subsystem does not exist, so the hooks only broadcast. The tracer delegate has no listener there. The Explosion bus
+  event reaches the tutorial matcher only, which has no matching pattern. No RNG call is added.
+- 29 smokes (all PASS) were run before (pre-change build) and after:
+  - Grenade, AIGrenade, GrenadeAnim, Barrel, PauseBarrelOrder, Deployable, PrepDeploy, Tripwire, PMCTripwire, PeekMines, TrapSolo;
+  - Knockdown, KnockdownCover;
+  - TurnBased, TurnBasedBarricade, TurnBasedDeploy, TurnBasedPush, TurnBlastDeath, TurnRules, BarricadeTurnContact;
+  - Vehicle, VehicleCombat, VehicleDamage, TargetedShot, Turret, Relocation, EventBus, HordeIntro, SnowTracks.
+- Compared: every `LogCodexTactics` line, minus `[Env]` / minimap / ms timings.
+- 18 are byte-identical, among them Barrel, Tripwire, PMCTripwire, PeekMines, TrapSolo, Deployable, KnockdownCover, every turn-based
+  barricade / deploy / push smoke and EventBus.
+- The rest differ only in lines that also differ between two runs of the SAME build: random barks, fire-puddle durations, a Brute crit,
+  horde-intro stats, the TB hound in TurnBlastDeath, vehicle timings.
+
+**Tests / smokes**
+- `CodexTactics.Environment.SnowInteraction.*` +3 (13 total):
+  - `CraterShape`: kind -> spec, diameter from the radius / clamps, the bowl / pit / ring / clods, determinism, the vertex colour ids;
+  - `DentTraceCap`: the ray, the drop-oldest queue, at most 8 traces a frame, the grazing stretch;
+  - `DragSegments`: a 20 Hz push gives contiguous segments, a 10 m jump is one segment, 20 m restarts.
+- `SnowTracksSmoke` (rendered) +6 stages:
+  - a grenade's crater 8 m off the walk: R 2.4 at the centre, G 1.9 on the rim, 1.3 in the ring, 0 beyond 1.5 D;
+  - a missed shot's dent: R 0.89;
+  - a hit leaves none;
+  - 22 tracers in one frame: max 8 traced a frame, 21 dents;
+  - a real-time barrel push: `GetMovingObjects` 1, 16 drag segments, R 0.71 along it.
+  - The smoke now switches the camera's edge scroll off: the offscreen cursor on the viewport edge panned the view, and the window, off the
+    walk. That made the phase-1 smoke fail at the baseline.
+- Stills + clip: `CodexTactics.EnvironmentShots tracks [nomovie]` (`EnvironmentTracksShotsCommand.cpp`), Frozen Factory, Clear 12:00,
+  SnowAmount 0.85, 1600x900. Output `Saved/Screenshots/Environment/tracks/`: `squad_walk`, `prone_crawl`, `grenade_crater`, `barrel_drag`,
+  `bullet_dents`, `tracks_overview`, `tracks_off` and `tracks_10s.mp4` (the squad walks, a grenade, a burst of misses, a barrel pushed).
+- Known limit: the ground overlay's `MaxDepthCm` 8 / `MaxBermCm` 3 make a crater's large bowl shade weakly (hence the pit). A deeper
+  crater needs the reader side (material) changed.

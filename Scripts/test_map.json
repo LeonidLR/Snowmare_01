@@ -33,7 +33,7 @@
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke",
-    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "GroupCoverPrioritySmoke", "LadderQueueSmoke"
+    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -44,7 +44,8 @@
     "_comment": "Smokes known to pass only on a re-run, name -> reason (smoke_parallel prints them apart from NEW flaky ones). Goal: empty. Cleanup day 2026-10-15 fixed CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics (+ Panic, SquadControl, VisionCone failing) - see docs/port/KNOWN_GAPS.md (the old HANDOFF section 9)."
   },
   "smokeOptions": {
-    "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run; realTime = wall clock instead of the fixed step (smokeDefaults); fixedStepFps = this smoke's own fixed step; _why = the reason of an override",
+    "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run; realTime = wall clock instead of the fixed step (smokeDefaults); fixedStepFps = this smoke's own fixed step; rendered = a real RHI offscreen (-RenderOffscreen -ResX=1280 -ResY=720) instead of -nullrhi; _why = the reason of an override",
+    "SnowTracksSmoke": { "rendered": true, "_why": "interactive snow 2026-10-23: USnowInteractionSubsystem draws into RT_SnowInteraction and the smoke reads it back; it is not even created without a renderer" },
     "SaveLoadSmoke": { "exclusive": true },
     "OptimizedCharacterSmoke": { "timeout": 900, "_why": "art pipeline 2026-10-20: one case per optimized character body (operatives + enemies), ~25 s each" },
     "SaveRoundTripSmoke": { "exclusive": true },
@@ -725,6 +726,20 @@
       "globs": ["Source/**/Environment/EnvironmentRosterRules*", "Source/**/Debug/EnvironmentRosterSmoke*", "Source/**/Combat/WaveSubsystem*", "Source/CodexTacticsTests/Private/Environment/EnvironmentRosterTest*"],
       "tests": ["CodexTactics.Environment.Roster", "CodexTactics.LevelJson"],
       "smokes": ["EnvironmentRosterSmoke", "LevelWaveSmoke", "HordeIntroSmoke"]
+    },
+    {
+      "name": "interactive-snow",
+      "_comment": "2026-10-23 interactive snow phase 1 (docs/systems/environment-weather.md section 14): USnowInteractionSubsystem (window / fade / shift / stamps into RT_SnowInteraction, MPC_Environment.SnowTrackWindow / SnowRefill / FreshSnow), SnowInteractionRules, the walkers (registry polling), DA_SnowStamps. Visual only, inert under -nullrhi: the wave / horde smokes must keep their timing.",
+      "globs": ["Source/**/Environment/SnowInteraction*", "Source/**/Environment/SnowStampSet*", "Source/**/Debug/SnowTracksSmoke*", "Source/CodexTacticsTests/Private/Environment/EnvironmentSnowInteractionTest*", "Content/Environment/Weather/Snow/Tracks/**", "Content/Environment/Weather/MPC/**", "Scripts/Editor/create_snow_interaction_assets.py", "Scripts/Editor/create_environment_mpc.py"],
+      "tests": ["CodexTactics.Environment.SnowInteraction", "CodexTactics.Combat.EnemyRegistry"],
+      "smokes": ["SnowTracksSmoke", "WeatherSmoke", "HordeIntroSmoke", "LevelWaveSmoke"]
+    },
+    {
+      "name": "landscape-material",
+      "_comment": "2026-10-23 environment section 13: M_Landscape_Master fix + MF_SnowPowder / MF_SnowSurface / MF_SnowInteraction (Scripts/Editor/landscape_snow_patch.py), the landscape test map (create_snow_terrain_test_map.py, ULandscapeAuthoringLibrary) and EnvironmentShots terrain.",
+      "globs": ["Source/CodexTacticsEditor/Private/LandscapeAuthoringLibrary*", "Source/CodexTacticsEditor/Private/LandscapeMaterialTest*", "Source/**/Debug/EnvironmentTerrainShots*", "Scripts/Editor/landscape_snow_patch.py", "Scripts/Editor/create_snow_terrain_test_map.py", "Content/VFX/Materials/M_Landscape_Master*", "Content/VFX/Materials/MI_Landscape_Master*", "Content/Environment/Weather/Snow/Materials/MF_Snow*", "Content/Environment/Weather/Test/**"],
+      "tests": ["CodexTactics.Environment.LandscapeMaterial", "CodexTactics.Editor.Materials"],
+      "smokes": ["WeatherSmoke"]
     },
     {
       "name": "environment-visuals",

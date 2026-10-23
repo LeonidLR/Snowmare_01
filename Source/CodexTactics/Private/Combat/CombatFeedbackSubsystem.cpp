@@ -41,6 +41,7 @@ ACombatFeedbackActor* UCombatFeedbackSubsystem::SpawnFeedback(const FVector& Loc
 
 void UCombatFeedbackSubsystem::SpawnTracer(const FVector& Muzzle, const FVector& End, const FLinearColor& Color, EDamageType DamageType)
 {
+	OnTracerSpawned.Broadcast(Muzzle, End, false); // visual listeners only (snow bullet dents)
 	ACombatFeedbackActor* Tracer = SpawnFeedback(Muzzle);
 	if (!Tracer)
 	{
@@ -55,6 +56,7 @@ void UCombatFeedbackSubsystem::SpawnTracer(const FVector& Muzzle, const FVector&
 
 void UCombatFeedbackSubsystem::SpawnTurretTracer(const FVector& Muzzle, const FVector& End)
 {
+	OnTracerSpawned.Broadcast(Muzzle, End, false); // visual listeners only (snow bullet dents)
 	ACombatFeedbackActor* Tracer = SpawnFeedback(Muzzle);
 	if (!Tracer)
 	{

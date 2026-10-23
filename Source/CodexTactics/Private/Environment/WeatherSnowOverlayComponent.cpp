@@ -17,6 +17,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "MaterialShared.h"
 #include "PrimitiveSceneProxy.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/App.h"
 
@@ -34,6 +35,14 @@ namespace WeatherSnowOverlay
 	static FAutoConsoleVariableRef CVarNaniteFallback(TEXT("Codex.Env.SnowOverlayNanite"), GNaniteFallback,
 		TEXT("1 = Nanite meshes get the snow overlay too, drawn through their non-Nanite fallback mesh while they hold it (UE 5.8 Nanite never draws an overlay material); 0 = Nanite meshes are skipped."));
 
+	int32 GGroundEnabled = 1;
+	static FAutoConsoleVariableRef CVarGroundEnabled(TEXT("Codex.Env.SnowGround"), GGroundEnabled,
+		TEXT("1 = the ground slabs (floor templates, big flat floors) get the snow ground overlay M_SnowGroundOverlay (environment phase 4d), 0 = removed (perf A/B)."));
+
+	int32 GGroundMax = 32;
+	static FAutoConsoleVariableRef CVarGroundMax(TEXT("Codex.Env.SnowGroundMax"), GGroundMax,
+		TEXT("Max ground slabs that get the snow ground overlay (one extra translucent pass over the visible floor each), nearest edge first. 0 = none."));
+
 	/** Seconds between automatic re-scans while the overlay is shown (the presenter may call RefreshTargets sooner). */
 	constexpr double AutoRefreshSeconds = 3.0;
 	/** A re-scan also happens once the view focus moved this share of MaxDistance. */
@@ -42,6 +51,7 @@ namespace WeatherSnowOverlay
 	constexpr float CoverTraceHeightCm = 4000.f;
 
 	const TCHAR* DefaultMaterialPath = TEXT("/Game/Environment/Weather/Snow/Materials/MI_SnowOverlay.MI_SnowOverlay");
+	const TCHAR* DefaultGroundMaterialPath = TEXT("/Game/Environment/Weather/Snow/Materials/MI_SnowGroundOverlay.MI_SnowGroundOverlay");
 
 	bool ClassNameContains(const UObject* Object, const TCHAR* Text)
 	{
@@ -54,10 +64,11 @@ namespace WeatherSnowOverlay
 		return Component.ComponentHasTag(Tag) || (Owner && Owner->ActorHasTag(Tag));
 	}
 
-	bool HasAnyOverlay(const UStaticMeshComponent& Mesh, const UMaterialInterface* Ours)
+	/** An overlay material that is not one of ours (the object overlay or the ground instance). */
+	bool HasAnyOverlay(const UStaticMeshComponent& Mesh, const UMaterialInterface* Ours, const UMaterialInterface* OursGround)
 	{
 		const UMaterialInterface* Overlay = Mesh.GetOverlayMaterial();
-		if (Overlay && Overlay != Ours)
+		if (Overlay && Overlay != Ours && Overlay != OursGround)
 		{
 			return true;
 		}
@@ -90,12 +101,39 @@ namespace WeatherSnowOverlay
 		}
 		return true;
 	}
+
+	/** Something static is straight above Start (a roof, a ceiling, an overhang): no pawn / terrain / hidden / sky-sized mesh. */
+	bool IsCoveredAt(UWorld& World, const FVector& Start, const AActor* Ignore, float MaxFootprintCm)
+	{
+		const FVector End = Start + FVector(0.f, 0.f, CoverTraceHeightCm);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(SnowOverlayCover), false, Ignore);
+		TArray<FHitResult> Hits;
+		World.LineTraceMultiByObjectType(Hits, Start, End, FCollisionObjectQueryParams(ECC_WorldStatic), Params);
+		for (const FHitResult& Hit : Hits)
+		{
+			const UPrimitiveComponent* Above = Hit.GetComponent();
+			const AActor* AboveOwner = Hit.GetActor();
+			if (!Above || (AboveOwner && AboveOwner->IsA<APawn>()) || ClassNameContains(AboveOwner, TEXT("Landscape"))
+				|| ClassNameContains(Above, TEXT("Landscape")) || !Above->IsVisible() || (AboveOwner && AboveOwner->IsHidden()))
+			{
+				continue;
+			}
+			const FVector Extent = Above->Bounds.BoxExtent;
+			if (2.f * FMath::Max(Extent.X, Extent.Y) > MaxFootprintCm)
+			{
+				continue;
+			}
+			return true;
+		}
+		return false;
+	}
 }
 
 UWeatherSnowOverlayComponent::UWeatherSnowOverlayComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	OverlayMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(WeatherSnowOverlay::DefaultMaterialPath));
+	GroundMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(WeatherSnowOverlay::DefaultGroundMaterialPath));
 	// The tactical view: ~60 m around its focus covers the screen with margin (orchestrator cap, 2026-10-22).
 	MaxDistance = 6000.f;
 }
@@ -120,6 +158,45 @@ UMaterialInterface* UWeatherSnowOverlayComponent::ResolveOverlayMaterial()
 	return LoadedOverlay;
 }
 
+UMaterialInstanceDynamic* UWeatherSnowOverlayComponent::ResolveGroundMaterial()
+{
+	if (!bGroundResolved)
+	{
+		bGroundResolved = true;
+		UMaterialInterface* Base = GroundMaterial.IsNull() ? nullptr : GroundMaterial.LoadSynchronous();
+		GroundInstance = Base ? UMaterialInstanceDynamic::Create(Base, this, TEXT("SnowGroundOverlay")) : nullptr;
+		if (!GroundInstance)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Env] snow overlay: ground material %s not found - no snow on the ground slabs"), *GroundMaterial.ToString());
+		}
+	}
+	return GroundInstance;
+}
+
+UMaterialInterface* UWeatherSnowOverlayComponent::GetGroundOverlayMaterial() const
+{
+	return GroundInstance;
+}
+
+void UWeatherSnowOverlayComponent::UpdateGroundZones(const TArray<TPair<FTransform, FVector>>& Zones)
+{
+	if (!GroundInstance)
+	{
+		return;
+	}
+	for (int32 Index = 0; Index < SnowOverlayRules::GroundZoneCount; ++Index)
+	{
+		FLinearColor A(0.f, 0.f, 0.f, 0.f);
+		FLinearColor B(1.f, 0.f, 0.f, 0.f);
+		if (Zones.IsValidIndex(Index))
+		{
+			SnowOverlayRules::MakeGroundZoneParams(Zones[Index].Key, Zones[Index].Value, A, B);
+		}
+		GroundInstance->SetVectorParameterValue(*FString::Printf(TEXT("Zone%dA"), Index), A);
+		GroundInstance->SetVectorParameterValue(*FString::Printf(TEXT("Zone%dB"), Index), B);
+	}
+}
+
 void UWeatherSnowOverlayComponent::ApplySnowCover(float SnowAmount, float FrostAmount)
 {
 	LastSnow = SnowAmount;
@@ -128,26 +205,29 @@ void UWeatherSnowOverlayComponent::ApplySnowCover(float SnowAmount, float FrostA
 	{
 		return;
 	}
-	const bool bWant = bVisuals && WeatherSnowOverlay::GEnabled != 0 && WeatherSnowOverlay::GMaxMeshes > 0
-		&& SnowOverlayRules::ShouldShowOverlay(SnowAmount, FrostAmount);
-	if (!bWant)
+	const bool bCanShow = bVisuals && SnowOverlayRules::ShouldShowOverlay(SnowAmount, FrostAmount);
+	const bool bWantObjects = bCanShow && WeatherSnowOverlay::GEnabled != 0 && WeatherSnowOverlay::GMaxMeshes > 0;
+	const bool bWantGround = bCanShow && WeatherSnowOverlay::GGroundEnabled != 0 && WeatherSnowOverlay::GGroundMax > 0;
+	if (!bWantObjects && !bWantGround)
 	{
-		if (bOverlayShown)
+		if (bOverlayShown || bGroundShown || Touched.Num() > 0 || GroundTouched.Num() > 0)
 		{
 			RemoveOverlays();
 		}
 		return;
 	}
+	const bool bChanged = bWantObjects != bOverlayShown || bWantGround != bGroundShown;
+	bOverlayShown = bWantObjects;
+	bGroundShown = bWantGround;
 	const double Now = GetWorld()->GetRealTimeSeconds();
 	const bool bRefocus = MaxDistance > 0.f && FVector::DistSquared(GetViewFocus(), LastRefreshFocus) > FMath::Square(MaxDistance * WeatherSnowOverlay::RefocusShare);
-	if (!bScanned || Now - LastRefreshSeconds > WeatherSnowOverlay::AutoRefreshSeconds || bRefocus || LastMaxMeshes != WeatherSnowOverlay::GMaxMeshes)
+	if (!bScanned || Now - LastRefreshSeconds > WeatherSnowOverlay::AutoRefreshSeconds || bRefocus || LastMaxMeshes != WeatherSnowOverlay::GMaxMeshes
+		|| LastGroundMax != WeatherSnowOverlay::GGroundMax)
 	{
-		bOverlayShown = true;
 		RefreshTargets();
 	}
-	else if (!bOverlayShown)
+	else if (bChanged)
 	{
-		bOverlayShown = true;
 		SyncOverlays();
 	}
 }
@@ -202,13 +282,16 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 	}
 	const double StartSeconds = FPlatformTime::Seconds();
 	UMaterialInterface* Material = ResolveOverlayMaterial();
+	UMaterialInstanceDynamic* Ground = ResolveGroundMaterial();
 	bScanned = true;
 	LastRefreshSeconds = World->GetRealTimeSeconds();
 	LastRefreshFocus = GetViewFocus();
 	LastMaxMeshes = WeatherSnowOverlay::GMaxMeshes;
-	if (!Material)
+	LastGroundMax = WeatherSnowOverlay::GGroundMax;
+	if (!Material && !Ground)
 	{
 		Targets.Reset();
+		GroundTargets.Reset();
 		SyncOverlays();
 		return;
 	}
@@ -232,10 +315,14 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 		}
 	}
 
-	// 1. Cheap filter over every static mesh in the world.
+	// 1. Cheap filter over every static mesh in the world: objects (M_SnowOverlay) and ground slabs (M_SnowGroundOverlay).
+	constexpr int32 VerdictCount = static_cast<int32>(SnowOverlayRules::ESnowTargetVerdict::NotGround) + 1;
 	TArray<UStaticMeshComponent*> Pool;
 	TArray<SnowOverlayRules::FSnowCandidate> Candidates;
-	int32 VerdictCounts[static_cast<int32>(SnowOverlayRules::ESnowTargetVerdict::Covered) + 1] = {};
+	TArray<UStaticMeshComponent*> GroundPool;
+	TArray<SnowOverlayRules::FSnowCandidate> GroundCandidates;
+	int32 VerdictCounts[VerdictCount] = {};
+	int32 GroundVerdictCounts[VerdictCount] = {};
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		AActor* Actor = *It;
@@ -260,16 +347,32 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 			Traits.bLandscape = bLandscapeActor || WeatherSnowOverlay::ClassNameContains(Mesh, TEXT("Landscape"));
 			// A roof cut away by the roof cutaway (not in the main pass) keeps its snow for when it comes back.
 			Traits.bVisible = Mesh->IsVisible() && !Actor->IsHidden();
-			Traits.bHasOverlay = WeatherSnowOverlay::HasAnyOverlay(*Mesh, Material);
+			Traits.bHasOverlay = WeatherSnowOverlay::HasAnyOverlay(*Mesh, Material, Ground);
 			Traits.bOptOut = WeatherSnowOverlay::HasTag(*Mesh, SnowOverlayRules::OptOutTag());
 			Traits.bTranslucentOnly = WeatherSnowOverlay::IsTranslucentOnly(*Mesh);
 			Traits.bNanite = NaniteForced.Contains(Mesh) || WeatherSnowOverlay::IsDrawnByNanite(*Mesh);
+			Traits.bFloorTemplate = SnowOverlayRules::IsFloorTemplateMeshName(Mesh->GetStaticMesh()->GetName());
 			const FBoxSphereBounds Bounds = Mesh->Bounds;
 			Traits.BoundsRadiusCm = Bounds.SphereRadius;
 			Traits.FootprintCm = 2.f * FMath::Max(Bounds.BoxExtent.X, Bounds.BoxExtent.Y);
+			Traits.MinWidthCm = 2.f * FMath::Min(Bounds.BoxExtent.X, Bounds.BoxExtent.Y);
 			Traits.HeightCm = 2.f * Bounds.BoxExtent.Z;
 			const SnowOverlayRules::ESnowTargetVerdict Verdict = SnowOverlayRules::Classify(Traits, Config);
-			if (Verdict != SnowOverlayRules::ESnowTargetVerdict::Accept)
+			if (Verdict == SnowOverlayRules::ESnowTargetVerdict::Ground)
+			{
+				// A ground slab: the ground overlay's candidate (ordered by its nearest edge - a slab is big).
+				++VerdictCounts[static_cast<int32>(Verdict)];
+				if (Ground)
+				{
+					const FBox Box = Bounds.GetBox();
+					SnowOverlayRules::FSnowCandidate Candidate;
+					Candidate.Index = GroundPool.Add(Mesh);
+					Candidate.DistanceSq = SnowOverlayRules::DistanceSqToBox2D(LastRefreshFocus, Box.Min, Box.Max);
+					GroundCandidates.Add(Candidate);
+				}
+				continue;
+			}
+			if (Verdict != SnowOverlayRules::ESnowTargetVerdict::Accept || !Material)
 			{
 				++VerdictCounts[static_cast<int32>(Verdict)];
 				continue;
@@ -296,10 +399,9 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 
 	// 2. Nearest first within MaxDistance; the world queries (interior, cover) only until the cap is full.
 	const TArray<int32> Order = SnowOverlayRules::OrderCandidates(Candidates, MaxDistance, WeatherSnowOverlay::GMaxMeshes, /*bKeepAll*/ true);
-	int32 OutOfRange = Candidates.Num() - Order.Num();
+	const int32 OutOfRange = Candidates.Num() - Order.Num();
 	int32 OverCap = 0;
 	Targets.Reset();
-	FCollisionObjectQueryParams CoverObjects(ECC_WorldStatic);
 	for (const int32 Index : Order)
 	{
 		if (Targets.Num() >= WeatherSnowOverlay::GMaxMeshes)
@@ -320,28 +422,8 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 		if (!Traits.bInterior)
 		{
 			// Under cover: the first static thing straight above the top centre that is no pawn / terrain / sky-sized mesh.
-			const FVector Start(Box.GetCenter().X, Box.GetCenter().Y, Box.Max.Z + 5.f);
-			const FVector End = Start + FVector(0.f, 0.f, WeatherSnowOverlay::CoverTraceHeightCm);
-			FCollisionQueryParams Params(SCENE_QUERY_STAT(SnowOverlayCover), false, Mesh->GetOwner());
-			TArray<FHitResult> Hits;
-			World->LineTraceMultiByObjectType(Hits, Start, End, CoverObjects, Params);
-			for (const FHitResult& Hit : Hits)
-			{
-				const UPrimitiveComponent* Above = Hit.GetComponent();
-				const AActor* AboveOwner = Hit.GetActor();
-				if (!Above || (AboveOwner && AboveOwner->IsA<APawn>()) || WeatherSnowOverlay::ClassNameContains(AboveOwner, TEXT("Landscape"))
-					|| WeatherSnowOverlay::ClassNameContains(Above, TEXT("Landscape")) || !Above->IsVisible() || (AboveOwner && AboveOwner->IsHidden()))
-				{
-					continue;
-				}
-				const FVector Extent = Above->Bounds.BoxExtent;
-				if (2.f * FMath::Max(Extent.X, Extent.Y) > Config.MaxFootprintCm)
-				{
-					continue;
-				}
-				Traits.bCovered = true;
-				break;
-			}
+			Traits.bCovered = WeatherSnowOverlay::IsCoveredAt(*World, FVector(Box.GetCenter().X, Box.GetCenter().Y, Box.Max.Z + 5.f), Mesh->GetOwner(),
+				Config.MaxFootprintCm);
 		}
 		const SnowOverlayRules::ESnowTargetVerdict Verdict = SnowOverlayRules::Classify(Traits, Config);
 		if (Verdict != SnowOverlayRules::ESnowTargetVerdict::Accept)
@@ -352,56 +434,126 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 		}
 		Targets.Add(Mesh);
 	}
+
+	// 3. Ground slabs: nearest edge first within MaxDistance, own cap; interior = the slab inside a zone, covered = most of its sample
+	// points under a roof. Interior zones ON a slab are kept bare per pixel by the ground material (the nearest GroundZoneCount zones).
+	const TArray<int32> GroundOrder = SnowOverlayRules::OrderCandidates(GroundCandidates, MaxDistance, WeatherSnowOverlay::GGroundMax, /*bKeepAll*/ true);
+	const int32 GroundOutOfRange = GroundCandidates.Num() - GroundOrder.Num();
+	int32 GroundOverCap = 0;
+	GroundTargets.Reset();
+	for (const int32 Index : GroundOrder)
+	{
+		if (GroundTargets.Num() >= WeatherSnowOverlay::GGroundMax)
+		{
+			++GroundOverCap;
+			continue;
+		}
+		UStaticMeshComponent* Mesh = GroundPool[Index];
+		const FBox Box = Mesh->Bounds.GetBox();
+		SnowOverlayRules::FSnowTargetTraits Traits;
+		Traits.bStaticMesh = true;
+		Traits.BoundsRadiusCm = Mesh->Bounds.SphereRadius;
+		Traits.FootprintCm = 2.f * FMath::Max(Mesh->Bounds.BoxExtent.X, Mesh->Bounds.BoxExtent.Y);
+		Traits.MinWidthCm = 2.f * FMath::Min(Mesh->Bounds.BoxExtent.X, Mesh->Bounds.BoxExtent.Y);
+		Traits.HeightCm = 2.f * Mesh->Bounds.BoxExtent.Z;
+		Traits.bFloorTemplate = SnowOverlayRules::IsFloorTemplateMeshName(Mesh->GetStaticMesh()->GetName());
+		Traits.bInterior = Interiors.ContainsByPredicate([&Box](const FZoneBox& Zone)
+		{
+			return SnowOverlayRules::IsInsideInterior(Box.Min, Box.Max, Zone.Transform, Zone.HalfExtent);
+		});
+		if (!Traits.bInterior)
+		{
+			const TArray<FVector2D> Points = SnowOverlayRules::GroundCoverSamplePoints(FVector2D(Box.Min), FVector2D(Box.Max));
+			int32 CoveredPoints = 0;
+			for (const FVector2D& Point : Points)
+			{
+				CoveredPoints += WeatherSnowOverlay::IsCoveredAt(*World, FVector(Point.X, Point.Y, Box.Max.Z + 5.f), Mesh->GetOwner(), Config.MaxFootprintCm) ? 1 : 0;
+			}
+			Traits.bCovered = SnowOverlayRules::IsGroundCovered(CoveredPoints, Points.Num());
+		}
+		const SnowOverlayRules::ESnowTargetVerdict Verdict = SnowOverlayRules::ClassifyGround(Traits, Config);
+		if (Verdict != SnowOverlayRules::ESnowTargetVerdict::Accept)
+		{
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[Env] snow ground: %s.%s %s"), *GetNameSafe(Mesh->GetOwner()), *Mesh->GetName(), SnowOverlayRules::VerdictToString(Verdict));
+			++GroundVerdictCounts[static_cast<int32>(Verdict)];
+			continue;
+		}
+		GroundTargets.Add(Mesh);
+	}
+	if (Ground)
+	{
+		// The interior zones nearest to the view (the ground material keeps them bare).
+		TArray<SnowOverlayRules::FSnowCandidate> ZoneCandidates;
+		for (int32 Index = 0; Index < Interiors.Num(); ++Index)
+		{
+			SnowOverlayRules::FSnowCandidate Candidate;
+			Candidate.Index = Index;
+			Candidate.DistanceSq = FVector::DistSquared2D(Interiors[Index].Transform.GetLocation(), LastRefreshFocus);
+			ZoneCandidates.Add(Candidate);
+		}
+		TArray<TPair<FTransform, FVector>> Zones;
+		for (const int32 Index : SnowOverlayRules::OrderCandidates(ZoneCandidates, 0.f, SnowOverlayRules::GroundZoneCount))
+		{
+			Zones.Emplace(Interiors[Index].Transform, Interiors[Index].HalfExtent);
+		}
+		UpdateGroundZones(Zones);
+	}
 	SyncOverlays();
 
 	const int32 Summary = Targets.Num() * 7919 + VerdictCounts[static_cast<int32>(SnowOverlayRules::ESnowTargetVerdict::Covered)] * 31
-		+ VerdictCounts[static_cast<int32>(SnowOverlayRules::ESnowTargetVerdict::Interior)];
+		+ VerdictCounts[static_cast<int32>(SnowOverlayRules::ESnowTargetVerdict::Interior)] + GroundTargets.Num() * 104729;
 	const double Ms = (FPlatformTime::Seconds() - StartSeconds) * 1000.0;
 	if (Summary != LastLoggedSummary)
 	{
 		LastLoggedSummary = Summary;
-		FString Rejected;
-		for (int32 Index = 1; Index < UE_ARRAY_COUNT(VerdictCounts); ++Index)
+		auto Describe = [](const int32* Counts)
 		{
-			if (VerdictCounts[Index] > 0)
+			FString Text;
+			for (int32 Index = 1; Index < VerdictCount; ++Index)
 			{
-				Rejected += FString::Printf(TEXT(" %s %d"), SnowOverlayRules::VerdictToString(static_cast<SnowOverlayRules::ESnowTargetVerdict>(Index)),
-					VerdictCounts[Index]);
+				if (Counts[Index] > 0)
+				{
+					Text += FString::Printf(TEXT(" %s %d"), SnowOverlayRules::VerdictToString(static_cast<SnowOverlayRules::ESnowTargetVerdict>(Index)), Counts[Index]);
+				}
 			}
-		}
+			return Text.IsEmpty() ? FString(TEXT(" none")) : Text;
+		};
 		UE_LOG(LogCodexTactics, Display, TEXT("[Env] snow overlay: %d mesh(es) (cap %d, radius %.0f m, %s); out of range %d, over cap %d; rejected:%s; scan %.2f ms"),
 			Targets.Num(), WeatherSnowOverlay::GMaxMeshes, MaxDistance / 100.f, bOverlayShown ? TEXT("shown") : TEXT("hidden"), OutOfRange, OverCap,
-			Rejected.IsEmpty() ? TEXT(" none") : *Rejected, Ms);
+			*Describe(VerdictCounts), Ms);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] snow ground: %d slab(s) of %d ground candidate(s) (cap %d, %s); out of range %d, over cap %d; rejected:%s"),
+			GroundTargets.Num(), GroundCandidates.Num(), WeatherSnowOverlay::GGroundMax, bGroundShown ? TEXT("shown") : TEXT("hidden"), GroundOutOfRange,
+			GroundOverCap, *Describe(GroundVerdictCounts));
 	}
 }
 
-void UWeatherSnowOverlayComponent::SyncOverlays()
+void UWeatherSnowOverlayComponent::SyncList(const TArray<TWeakObjectPtr<UMeshComponent>>& Wanted, TArray<TWeakObjectPtr<UMeshComponent>>& InOutTouched,
+	UMaterialInterface* Material, bool bShow)
 {
-	UMaterialInterface* Material = LoadedOverlay;
-	const bool bShow = bOverlayShown && Material != nullptr;
+	bShow = bShow && Material != nullptr;
 	// Remove from the components that are no target any more (or all when hidden).
-	for (int32 Index = Touched.Num() - 1; Index >= 0; --Index)
+	for (int32 Index = InOutTouched.Num() - 1; Index >= 0; --Index)
 	{
-		UMeshComponent* Mesh = Touched[Index].Get();
-		const bool bKeep = bShow && Mesh && Targets.Contains(Touched[Index]);
+		UMeshComponent* Mesh = InOutTouched[Index].Get();
+		const bool bKeep = bShow && Mesh && Wanted.Contains(InOutTouched[Index]);
 		if (!bKeep)
 		{
-			if (Mesh && Mesh->GetOverlayMaterial() == Material)
+			if (Mesh && Material && Mesh->GetOverlayMaterial() == Material)
 			{
 				Mesh->SetOverlayMaterial(nullptr);
 			}
 			RestoreNanite(Mesh);
-			Touched.RemoveAtSwap(Index);
+			InOutTouched.RemoveAtSwap(Index);
 		}
 	}
 	if (!bShow)
 	{
 		return;
 	}
-	for (const TWeakObjectPtr<UMeshComponent>& Weak : Targets)
+	for (const TWeakObjectPtr<UMeshComponent>& Weak : Wanted)
 	{
 		UMeshComponent* Mesh = Weak.Get();
-		if (Mesh && !Touched.Contains(Weak))
+		if (Mesh && !InOutTouched.Contains(Weak))
 		{
 			UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Mesh);
 			if (StaticMesh && WeatherSnowOverlay::GNaniteFallback != 0 && WeatherSnowOverlay::IsDrawnByNanite(*StaticMesh))
@@ -411,24 +563,36 @@ void UWeatherSnowOverlayComponent::SyncOverlays()
 				NaniteForced.Add(StaticMesh);
 			}
 			Mesh->SetOverlayMaterial(Material);
-			Touched.Add(Weak);
+			InOutTouched.Add(Weak);
 		}
 	}
+}
+
+void UWeatherSnowOverlayComponent::SyncOverlays()
+{
+	SyncList(Targets, Touched, LoadedOverlay, bOverlayShown);
+	SyncList(GroundTargets, GroundTouched, GroundInstance, bGroundShown);
 }
 
 void UWeatherSnowOverlayComponent::RemoveOverlays()
 {
 	bOverlayShown = false;
-	for (const TWeakObjectPtr<UMeshComponent>& Weak : Touched)
+	bGroundShown = false;
+	auto Remove = [this](TArray<TWeakObjectPtr<UMeshComponent>>& List, const UMaterialInterface* Material)
 	{
-		UMeshComponent* Mesh = Weak.Get();
-		if (Mesh && LoadedOverlay && Mesh->GetOverlayMaterial() == LoadedOverlay)
+		for (const TWeakObjectPtr<UMeshComponent>& Weak : List)
 		{
-			Mesh->SetOverlayMaterial(nullptr);
+			UMeshComponent* Mesh = Weak.Get();
+			if (Mesh && Material && Mesh->GetOverlayMaterial() == Material)
+			{
+				Mesh->SetOverlayMaterial(nullptr);
+			}
+			RestoreNanite(Mesh);
 		}
-		RestoreNanite(Mesh);
-	}
-	Touched.Reset();
+		List.Reset();
+	};
+	Remove(Touched, LoadedOverlay);
+	Remove(GroundTouched, GroundInstance);
 	NaniteForced.Reset();
 }
 
@@ -445,5 +609,6 @@ void UWeatherSnowOverlayComponent::EndPlay(const EEndPlayReason::Type EndPlayRea
 {
 	RemoveOverlays();
 	Targets.Reset();
+	GroundTargets.Reset();
 	Super::EndPlay(EndPlayReason);
 }

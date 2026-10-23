@@ -142,6 +142,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	int32 GetActiveTaskCount() const { return Tasks.Num(); }
 
+	/** The objects a running relocation pushes right now (stage 2: riding in front of the worker); read-only (interactive snow drag trails). */
+	void GetMovingObjects(TArray<const AInteractableActor*>& Out) const
+	{
+		for (const FRelocateTask& Task : Tasks)
+		{
+			if (Task.Stage == 2 && Task.Object.IsValid())
+			{
+				Out.Add(Task.Object.Get());
+			}
+		}
+	}
+
 	/**
 	 * Sprint 06-E: RMB aborts Worker's running relocation (pushing: the object is set down where it is, collision and the
 	 * nav obstacle back, the worker steps back; still walking up: he stops) or his walk to set a deployable up.
