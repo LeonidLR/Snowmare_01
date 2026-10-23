@@ -140,6 +140,13 @@ namespace SquadFormation
 		float DistanceToSlot, int32 SlotIndex, float TimeSeconds, bool bLeaderMoving);
 
 	/**
+	 * Bug 2026-10-23 (UE-only): substitutes for a slot that lies off the navmesh - the slot's offset from the leader turned round him in
+	 * 30 deg steps (to 180 deg), at its own distance and at 60 % of it (never closer than MinRadius), ordered by the distance to the
+	 * original slot (the nearest first). Z = Slot.Z.
+	 */
+	CODEXTACTICS_API TArray<FVector> ComputeFallbackSlots(const FVector& LeaderLocation, const FVector& Slot, float MinRadius);
+
+	/**
 	 * Targets of a box-selected group ordered to Center (Godot main.gd _get_group_target_positions): index 0 (the
 	 * leader) on the click, 1 / 2 to the right / left 1.8 m and 0.8 m back, 3 2.2 m behind, further ones in rows of
 	 * two 1.5 m apart. The heading is from the group's average position to Center (FallbackForward when too close).

@@ -44,7 +44,7 @@
     },
     "TUT_A0_MOVE": {
       "title": "CLICK TO WALK",
-      "text": "Click the ground ({key:Order.Move}): the squad walks there. Follow the beacons to the amber ring at beacon one."
+      "text": "Click the ground ({key:Order.Move}): the squad walks there. Follow the beacons to the orange ring at beacon one."
     },
     "TUT_A0_NOSPRINT": {
       "text": "Save your strength - walk for now."
@@ -98,7 +98,10 @@
     },
     "TUT_A1_HUT_STACK_L": {
       "title": "LEFT OF THE DOOR",
-      "text": "Click the wall left of the door (amber ring) to preview the cover, click again: he hugs the wall beside the door."
+      "text": "Click the wall left of the door (orange ring) to preview the cover, click again: he hugs the wall beside the door."
+    },
+    "TUT_A1_HUT_HOLD": {
+      "text": "Hold this position - stack on the door."
     },
     "TUT_A1_HUT_STACK_R": {
       "title": "RIGHT OF THE DOOR",

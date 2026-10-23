@@ -238,9 +238,16 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	// shimmies, replays of deferred orders reach this without OrderMoveTo's check); formation moves are pulled into the area.
 	FVector Destination = InDestination;
 	UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
-	const bool bConfined = Tutorial && Tutorial->IsConfining();
+	// 2026-10-23 ("lock_in_place"): an operative locked at his spot of the lesson is judged like a confined one (CheckConfinedOrder refuses
+	// him with the hold line); a formation move leaves him where he stands without a line.
+	const bool bConfined = Tutorial && (Tutorial->IsConfining() || Tutorial->IsHeldInPlace(*this));
 	if (bConfined)
 	{
+		if (bFormationMove && Tutorial->IsMoveHeldInPlace(*this, Destination))
+		{
+			bHasMoveOrder = false;
+			return EOperativeOrderResult::Refused;
+		}
 		if (bFormationMove)
 		{
 			Tutorial->ClampIntoConfinement(Destination);

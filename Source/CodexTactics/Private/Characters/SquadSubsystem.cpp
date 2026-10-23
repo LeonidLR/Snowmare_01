@@ -1,5 +1,6 @@
 #include "Characters/SquadSubsystem.h"
 #include "Survival/WarmIdleSubsystem.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadOrderRules.h"
@@ -17,6 +18,7 @@
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "NavigationSystem.h"
 #include "UI/GameMessageSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "SquadSubsystem"
@@ -34,6 +36,10 @@ namespace
 		TEXT("1: Aggressive operatives open fire on enemies they see while exploring an ambush level (starting the fight); 0: never"));
 	TAutoConsoleVariable<int32> CVarSquadFollowerSprintStandUp(TEXT("Codex.Squad.SprintStandUp"), 1,
 		TEXT("1 (default): a follower crouched by the squad (Regroup's copy, Solo's guard crouch, a confinement) stands up to sprint with the sprinting leader (bug 2026-10-20); 0: the old rule (he walks crouched behind him)."));
+	TAutoConsoleVariable<int32> CVarSquadPostCombatFormation(TEXT("Codex.Squad.PostCombatFormation"), 1,
+		TEXT("1 (default): the formation runs after the final fight too (PostCombat) and Regroup (B) ends the post-fight hold (bug 2026-10-23); 0: the old rule (no follower walks after the final fight, B leaves the hold)."));
+	TAutoConsoleVariable<int32> CVarSquadSlotFallback(TEXT("Codex.Squad.SlotFallback"), 1,
+		TEXT("1 (default): a formation slot off the navmesh (wall, generator, a fallen mate's remains) is replaced by the nearest navigable spot round the leader (bug 2026-10-23); 0: the old rule (the follower stays where he is)."));
 }
 
 bool USquadSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -479,6 +485,13 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 	bIsSoloMode = false;
 	bTrapSolo = false;
 	SetFollowersHolding(false);
+	// Bug 2026-10-23 (lake, after the horde): Regroup is an order to come back - the post-fight hold ends with it, not only when the
+	// leader moves.
+	if (bPostFightHold && CVarSquadPostCombatFormation.GetValueOnGameThread() != 0)
+	{
+		bPostFightHold = SquadOrderRules::KeepsPostFightHold(bPostFightHold, false, /*bRegroup*/ true);
+		UE_LOG(LogCodexTactics, Display, TEXT("Squad: Regroup ends the post-fight hold"));
+	}
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	const FText LeaderName = LeaderRef ? LeaderRef->DisplayName : LOCTEXT("SquadDefaultName", "Squad");
@@ -490,6 +503,13 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 		{
 			if (AOperativeCharacter* Operative = Follower.Operative.Get())
 			{
+				// 2026-10-23 ("lock_in_place"): an operative the tutorial holds at his spot (stacked on the hut door) stays there - his wall,
+				// his stance; the formation leaves him alone (RequestMove refuses its moves) until the lesson releases him.
+				if (UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>(); Tutorial && Tutorial->IsHeldInPlace(*Operative))
+				{
+					Tutorial->ReportPlaceLockRefusal(Operative);
+					continue;
+				}
 				// Rev 5g: Regroup ends a follower's own move order - everybody comes back to the leader (a use / object task
 				// still finishes first, SquadOrderRules).
 				Operative->ReleaseOwnMoveOrder();
@@ -537,8 +557,9 @@ void USquadSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 bool USquadSubsystem::IsFormationActive() const
 {
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	// Godot: `is_tactical_mode` is set for everyone when preparation starts; formation only in exploration.
-	return !Flow || Flow->GetPhase() == ECodexGamePhase::Exploration;
+	// Godot: `is_tactical_mode` is set for everyone when preparation starts and cleared at the fight's end: the formation runs while
+	// exploring and after the final fight (PostCombat, bug 2026-10-23).
+	return !Flow || SquadOrderRules::IsFormationPhase(Flow->GetPhase(), CVarSquadPostCombatFormation.GetValueOnGameThread() != 0);
 }
 
 void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
@@ -845,7 +866,7 @@ void USquadSubsystem::Tick(float DeltaTime)
 	}
 
 	const bool bLeaderMoving = LeaderRef->IsMoving();
-	bPostFightHold = SquadOrderRules::KeepsPostFightHold(bPostFightHold, bLeaderMoving);
+	bPostFightHold = SquadOrderRules::KeepsPostFightHold(bPostFightHold, bLeaderMoving, false);
 	if (bPostFightHold)
 	{
 		return;
@@ -1001,6 +1022,7 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		SlotLocation += SquadFormation::ComputeWanderOffset(FormationConfig, FormationHeading, Follower.Slot, TimeSeconds);
 	}
 	SlotLocation.Z = Operative->GetActorLocation().Z;
+	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation);
 
 	const float Distance = FVector::Dist2D(Operative->GetActorLocation(), SlotLocation);
 	// Rev 5g (game designer 2026-10-14): in group mode a follower hugging a wall leaves the cover and follows once the leader walks
@@ -1069,6 +1091,24 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 
 	Follower.bParked = false;
 	Operative->FollowTo(SlotLocation, Speed);
+}
+
+FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot) const
+{
+	UNavigationSystemV1* Nav = CVarSquadSlotFallback.GetValueOnGameThread() != 0 ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()) : nullptr;
+	FNavLocation OnNav;
+	if (!Nav || Nav->ProjectPointToNavigation(Slot, OnNav))
+	{
+		return Slot;
+	}
+	for (const FVector& Candidate : SquadFormation::ComputeFallbackSlots(LeaderRef.GetActorLocation(), Slot, FormationConfig.StopRadius * 2.f))
+	{
+		if (Nav->ProjectPointToNavigation(Candidate, OnNav))
+		{
+			return FVector(OnNav.Location.X, OnNav.Location.Y, Slot.Z);
+		}
+	}
+	return Slot;
 }
 
 bool USquadSubsystem::IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, const FVector& SlotLocation) const
