@@ -66,6 +66,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	FName MontageSlot = TEXT("FullBody");
 
+	/** Waiting climbers stand off the link point (out from the rungs below / back from the edge on top): the first this far, cm ... */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0"))
+	float QueueFirstSpotCm = 90.f;
+
+	/** ... each next one this much further, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "40"))
+	float QueueSpacingCm = 75.f;
+
 	/** A climbing enemy waits this long at a leased ladder, then its AI decides afresh (it may queue again), s. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0.5"))
 	float EnemyQueueSeconds = 6.f;
@@ -157,6 +165,18 @@ public:
 
 	/** A new order mid-climb: he finishes the climb, then walks there (7.1). */
 	void SetPendingDestination(const FVector& Destination);
+
+	/**
+	 * A new order while he is on the ladder (2026-10-23): walked to after the climb; when the other end serves it better (the shorter
+	 * navmesh way from the two link points) and he is on the loop, he turns round at the next rung and climbs back. An order that agrees
+	 * with his way again cancels a pending turn-round.
+	 */
+	void HandleNewOrder(const FVector& Destination);
+
+	/** A turn-round is waiting for the next rung (smokes). */
+	bool IsReversePending() const { return bReversePending; }
+	/** Turn-rounds in this climb (smokes). */
+	int32 GetReversals() const { return Reversals; }
 	void ClearPendingDestination() { bHasPendingDestination = false; }
 
 	ELadderClimbState GetState() const { return State; }
@@ -293,9 +313,27 @@ private:
 	float QueueRetry = 0.f;
 	/** Time spent in Queue (an enemy gives up after EnemyQueueSeconds). */
 	float QueueSeconds = 0.f;
+	/** The waiting spot he walks to (by his place in the queue) and the place it was made for; walking back to the link point on his turn. */
+	FVector QueueSpot = FVector::ZeroVector;
+	int32 QueueSpotIndex = INDEX_NONE;
+	bool bQueueApproach = false;
+	/** The link point he starts the climb from (below / on top). */
+	FVector GetLinkStart() const;
+	/** Queue: keeps him on his waiting spot; on his turn walks him to the link point and starts the climb there. */
+	void TickQueue(float DeltaTime);
+	/** A plain navmesh walk on his own level (no ladder in the way), for the queue. */
+	void WalkTo(const FVector& Point, float Acceptance);
 
 	FVector PendingDestination = FVector::ZeroVector;
 	bool bHasPendingDestination = false;
+	/** He climbs on his own order (a player's move), not a formation follow: the walk after it stays his own order. */
+	bool bOwnOrderAtEntry = false;
+	/** HandleNewOrder: turn round at ReverseAt (the next rung boundary). */
+	bool bReversePending = false;
+	LadderRules::FLoopPos ReverseAt;
+	int32 Reversals = 0;
+	/** The navmesh path length from Point to Destination, cm; -1 when there is no full path. */
+	float PathLengthFrom(const FVector& Point, const FVector& Destination) const;
 	/** The actor location when the climb took the body (GetFloorReferenceLocation). */
 	FVector ClimbStartLocation = FVector::ZeroVector;
 

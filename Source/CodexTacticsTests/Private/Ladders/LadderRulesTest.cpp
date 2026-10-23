@@ -144,6 +144,32 @@ bool FLadderRefusalTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLadderReverseTest, "CodexTactics.Ladder.Climb.Reverse",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FLadderReverseTest::RunTest(const FString&)
+{
+	// A new order behind him mid-climb (2026-10-23): the loop turns round at the next rung.
+	using namespace LadderRules;
+	constexpr float L = 1.8f;
+	TestTrue(TEXT("up from early in the loop: its half"), NextRungBoundary(FLoopPos{ 2, 0.3f }, 1, L) == FLoopPos{ 2, 0.9f });
+	TestTrue(TEXT("up from late in the loop: the next loop's start (two rungs on)"), NextRungBoundary(FLoopPos{ 2, 1.2f }, 1, L) == FLoopPos{ 4, 0.f });
+	TestTrue(TEXT("up from the half itself: the next start"), NextRungBoundary(FLoopPos{ 2, 0.9f }, 1, L) == FLoopPos{ 4, 0.f });
+	TestTrue(TEXT("down from late: the half"), NextRungBoundary(FLoopPos{ 2, 1.2f }, -1, L) == FLoopPos{ 2, 0.9f });
+	TestTrue(TEXT("down from early: the loop start"), NextRungBoundary(FLoopPos{ 2, 0.3f }, -1, L) == FLoopPos{ 2, 0.f });
+	TestTrue(TEXT("down from a loop start: the half below"), NextRungBoundary(FLoopPos{ 2, 0.f }, -1, L) == FLoopPos{ 0, 0.9f });
+	TestTrue(TEXT("beyond going up"), IsBeyond(FLoopPos{ 4, 0.f }, FLoopPos{ 2, 0.9f }, 1, L) && !IsBeyond(FLoopPos{ 2, 0.5f }, FLoopPos{ 2, 0.9f }, 1, L));
+	TestTrue(TEXT("beyond going down"), IsBeyond(FLoopPos{ 0, 0.9f }, FLoopPos{ 2, 0.f }, -1, L) && !IsBeyond(FLoopPos{ 2, 0.5f }, FLoopPos{ 2, 0.f }, -1, L));
+	TestTrue(TEXT("the table: up turns down"), Transition(ELadderClimbState::ClimbUp, ELadderClimbEvent::Reverse) == ELadderClimbState::ClimbDown);
+	TestTrue(TEXT("... down turns up"), Transition(ELadderClimbState::ClimbDown, ELadderClimbEvent::Reverse) == ELadderClimbState::ClimbUp);
+	TestTrue(TEXT("... nothing to turn on a transition clip"), Transition(ELadderClimbState::ExitTop, ELadderClimbEvent::Reverse) == ELadderClimbState::ExitTop);
+	TestTrue(TEXT("the shorter way serves: a goal on the ground"), !PreferTopEnd(900.f, 300.f, true));
+	TestTrue(TEXT("... a goal on the roof"), PreferTopEnd(150.f, 1200.f, false));
+	TestTrue(TEXT("unreachable from the bottom: the top"), PreferTopEnd(500.f, -1.f, false));
+	TestTrue(TEXT("a tie keeps his way"), PreferTopEnd(400.f, 400.f, true) && !PreferTopEnd(400.f, 400.f, false));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLadderClimbTableTest, "CodexTactics.Ladder.Climb.StateTable",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

@@ -44,6 +44,8 @@ enum class ELadderClimbEvent : uint8
 	EnterDone,
 	TargetReached,
 	ExitDone,
+	/** A new order behind him: the loop turns round (ClimbUp <-> ClimbDown) at the next rung. */
+	Reverse,
 	Abort,
 	Drop,
 	Landed

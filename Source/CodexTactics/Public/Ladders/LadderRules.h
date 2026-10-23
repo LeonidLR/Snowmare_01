@@ -136,6 +136,21 @@ namespace LadderRules
 	CODEXTACTICS_API bool Advance(FLoopPos& Pos, float Delta, int32 Direction, const FLoopPos& Target, float LoopLength);
 
 	/**
+	 * Where a turn-round mid-climb happens (a new order behind him, 2026-10-23): the next rung boundary (a loop start or its half) from Pos in
+	 * Direction (+1 up, -1 down); Pos itself counts only when it is not on a boundary already.
+	 */
+	CODEXTACTICS_API FLoopPos NextRungBoundary(const FLoopPos& Pos, int32 Direction, float LoopLength);
+
+	/** Pos lies at / past Limit going in Direction (along the ladder). */
+	CODEXTACTICS_API bool IsBeyond(const FLoopPos& Pos, const FLoopPos& Limit, int32 Direction, float LoopLength);
+
+	/**
+	 * Which end of the ladder serves a destination (a new order mid-climb): the one with the shorter way there (the navmesh path lengths from
+	 * the two link points; < 0 = unreachable from that end). True = the top. Equal / both unreachable: the one he heads to now.
+	 */
+	CODEXTACTICS_API bool PreferTopEnd(float FromTopCm, float FromBottomCm, bool bGoingUp);
+
+	/**
 	 * Feet height over the ladder's floor at Pos: Rung * Pitch + 2 * Pitch * Fraction, Fraction = the root track's rise share at
 	 * Pos.Time (0 at the loop start, 1 at its end) - every loop boundary lands exactly on a rung (rung-index snapping).
 	 */

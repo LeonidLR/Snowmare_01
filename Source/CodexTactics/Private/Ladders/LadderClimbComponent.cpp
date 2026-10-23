@@ -22,6 +22,8 @@
 #include "Ladders/LadderActor.h"
 #include "Ladders/LadderSubsystem.h"
 #include "NavLinkCustomComponent.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "NavMesh/NavMeshPath.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -357,13 +359,7 @@ void ULadderClimbComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 			Enemy->ResumeMoveAfterLadder(Destination);
 			break;
 		}
-		if (QueueRetry <= 0.f)
-		{
-			QueueRetry = 0.25f;
-			PendingLadder = Ladder;
-			bPendingUp = bGoingUp;
-			StartEntry();
-		}
+		TickQueue(DeltaTime);
 		break;
 	case ELadderClimbState::AlignBottom: TickAlignBottom(DeltaTime); break;
 	case ELadderClimbState::AlignTop: TickAlignTop(DeltaTime); break;
@@ -469,6 +465,46 @@ void ULadderClimbComponent::SetPendingDestination(const FVector& Destination)
 	bHasPendingDestination = true;
 }
 
+float ULadderClimbComponent::PathLengthFrom(const FVector& Point, const FVector& Destination) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, Point, Destination, GetOwner()) : nullptr;
+	return Path && Path->IsValid() && !Path->IsPartial() ? static_cast<float>(Path->GetPathLength()) : -1.f;
+}
+
+void ULadderClimbComponent::HandleNewOrder(const FVector& Destination)
+{
+	SetPendingDestination(Destination);
+	const ALadderActor* Target = Ladder.Get();
+	const bool bLoop = State == ELadderClimbState::ClimbUp || State == ELadderClimbState::ClimbDown;
+	if (!Target || !bLoop || LoopLength <= 0.f)
+	{
+		return; // a transition clip (onto / off the ladder) finishes first; then the walk (it may lead back over the ladder)
+	}
+	const bool bUp = State == ELadderClimbState::ClimbUp;
+	const float FromTop = PathLengthFrom(Target->GetTopLinkWorld(), Destination);
+	const float FromBottom = PathLengthFrom(Target->GetBottomLinkWorld(), Destination);
+	const bool bWantUp = LadderRules::PreferTopEnd(FromTop, FromBottom, bUp);
+	if (bWantUp == bUp)
+	{
+		if (bReversePending)
+		{
+			bReversePending = false; // ordered back the way he climbs: no turn-round
+			UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s: turn-round cancelled (going %s again)"), *GetNameSafe(GetOwner()), bUp ? TEXT("up") : TEXT("down"));
+		}
+		return;
+	}
+	if (bReversePending)
+	{
+		return;
+	}
+	bReversePending = true;
+	ReverseAt = LadderRules::NextRungBoundary(LoopPos, bUp ? 1 : -1, LoopLength);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s: new order behind him (top %.0f cm / bottom %.0f cm away) - turns %s at rung %d t %.2f"), *GetNameSafe(GetOwner()),
+		FromTop, FromBottom, bUp ? TEXT("down") : TEXT("up"), ReverseAt.Rung, ReverseAt.Time);
+}
+
 void ULadderClimbComponent::Refuse(ELadderRefusal Refusal)
 {
 	LastRefusal = Refusal;
@@ -485,6 +521,7 @@ void ULadderClimbComponent::Refuse(ELadderRefusal Refusal)
 	if (ALadderActor* Held = Ladder.Get())
 	{
 		Held->ReleaseLease(GetOwner());
+		Held->LeaveQueue(GetOwner());
 	}
 	bHasPendingDestination = false;
 	Ladder = nullptr;
@@ -514,7 +551,7 @@ void ULadderClimbComponent::StartEntry()
 	Context.bMounted = VehicleQueries::IsMounted(Character);
 	Context.bKnockedDown = (Operative && Operative->IsKnockedDown()) || (Enemy && Enemy->IsKnockedDown());
 	Context.bCarrying = Operative && Operative->bCarrying;
-	Context.bLeasedByOther = Target->IsLeasedByOther(Character);
+	Context.bLeasedByOther = Target->IsBusyFor(Character); // held, or someone came before him (the queue)
 	Context.bStanding = !Operative || Operative->GetStance() == EOperativeStance::Standing;
 	const ELadderRefusal Refusal = LadderRules::CanStartClimb(Context);
 	const bool bWasQueued = State == ELadderClimbState::Queue;
@@ -522,9 +559,16 @@ void ULadderClimbComponent::StartEntry()
 		|| (Refusal == ELadderRefusal::None && Operative && Operative->GetMoveHoldSeconds() > 0.f))
 	{
 		// He waits at the link: the ladder is busy, or he stands up first (prone / crouched is not a refusal).
+		if (Refusal == ELadderRefusal::Leased)
+		{
+			Target->JoinQueue(Character); // at the back of the line
+		}
 		if (!bWasQueued)
 		{
 			QueueSeconds = 0.f;
+			QueueSpotIndex = INDEX_NONE;
+			bQueueApproach = false;
+			bOwnOrderAtEntry = Operative && Operative->HasOwnMoveOrder();
 			if (Operative)
 			{
 				const FVector Keep = PendingDestination;
@@ -554,14 +598,21 @@ void ULadderClimbComponent::StartEntry()
 	}
 	if (!Target->TryLease(Character))
 	{
+		Target->JoinQueue(Character);
 		Fire(ELadderClimbEvent::MustWait);
 		return;
 	}
 	LastRefusal = ELadderRefusal::None;
 	LastAbort = ELadderAbortReason::None; // this climb's own
+	bReversePending = false;
+	Reversals = 0;
 	MaxEdgePush = 0.f;
 
 	// Take the body over: the path ends here (it resumes at the other end), Flying, root motion ignored, the weapon hidden.
+	if (!bWasQueued)
+	{
+		bOwnOrderAtEntry = Operative && Operative->HasOwnMoveOrder();
+	}
 	{
 		const FVector Keep = PendingDestination;
 		const bool bKeep = bHasPendingDestination;
@@ -653,6 +704,72 @@ void ULadderClimbComponent::StartEntry()
 	UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s climbs %s %s (%d rungs, top %.0f cm, %s, loop rung %d t %.2f -> %d)"), *GetNameSafe(Character),
 		bGoingUp ? TEXT("up") : TEXT("down"), *Target->GetName(), Rungs, LadderRules::TopZ(Rungs, Contract.Pitch),
 		Target->HasWall() ? TEXT("wall") : TEXT("free-standing"), LoopPos.Rung, LoopPos.Time, TargetPos.Rung);
+}
+
+FVector ULadderClimbComponent::GetLinkStart() const
+{
+	const ALadderActor* Target = Ladder.Get();
+	return Target ? (bGoingUp ? Target->GetBottomLinkWorld() : Target->GetTopLinkWorld()) : FVector::ZeroVector;
+}
+
+void ULadderClimbComponent::WalkTo(const FVector& Point, float Acceptance)
+{
+	ACharacter* Character = GetCharacter();
+	if (AAIController* Controller = Character ? Cast<AAIController>(Character->GetController()) : nullptr)
+	{
+		Controller->MoveToLocation(Point, Acceptance, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true);
+	}
+}
+
+void ULadderClimbComponent::TickQueue(float DeltaTime)
+{
+	ALadderActor* Target = Ladder.Get();
+	const ACharacter* Character = GetCharacter();
+	if (!Target || !Character)
+	{
+		AbortClimb(ELadderAbortReason::LeaseLost);
+		return;
+	}
+	const FVector Feet = Character->GetActorLocation() - FVector(0.f, 0.f, GetHalfHeight());
+	if (!Target->IsBusyFor(Character))
+	{
+		// His turn: back to the link point, then the climb starts there.
+		const FVector Link = GetLinkStart();
+		if (FVector::Dist2D(Feet, Link) > 45.f)
+		{
+			if (!bQueueApproach || QueueRetry <= 0.f)
+			{
+				bQueueApproach = true;
+				QueueRetry = 1.f;
+				WalkTo(Link, 10.f);
+			}
+			return;
+		}
+		QueueRetry = 0.f;
+	}
+	else
+	{
+		// Waiting: on his spot, out from the rungs below (back from the edge on top), by his place in the line.
+		bQueueApproach = false;
+		const int32 Index = FMath::Max(0, Target->GetQueueIndex(Character));
+		if (Index != QueueSpotIndex)
+		{
+			QueueSpotIndex = Index;
+			const float Out = QueueFirstSpotCm + QueueSpacingCm * Index;
+			QueueSpot = bGoingUp ? Target->GetBottomLinkWorld() + Target->GetOutward() * Out : Target->GetTopLinkWorld() - Target->GetOutward() * Out;
+			if (FVector::Dist2D(Feet, QueueSpot) > 30.f)
+			{
+				WalkTo(QueueSpot, 15.f);
+			}
+		}
+	}
+	if (QueueRetry <= 0.f)
+	{
+		QueueRetry = 0.25f;
+		PendingLadder = Ladder;
+		bPendingUp = bGoingUp;
+		StartEntry();
+	}
 }
 
 void ULadderClimbComponent::PlaceAt(const FVector& CapsuleCentre, float Yaw)
@@ -812,7 +929,35 @@ void ULadderClimbComponent::TickLoop(float DeltaTime)
 		return;
 	}
 	const bool bUp = State == ELadderClimbState::ClimbUp;
-	const bool bReached = LadderRules::Advance(LoopPos, DeltaTime * ClimbPlayRate, bUp ? 1 : -1, TargetPos, LoopLength);
+	const int32 Direction = bUp ? 1 : -1;
+	// A turn-round waits for its rung (HandleNewOrder): advance to it first, unless the end of the ladder comes first.
+	if (bReversePending && LadderRules::IsBeyond(ReverseAt, TargetPos, Direction, LoopLength))
+	{
+		bReversePending = false; // the end comes first: he gets off there and walks back (over the ladder if needs be)
+	}
+	if (bReversePending)
+	{
+		const bool bTurn = LadderRules::Advance(LoopPos, DeltaTime * ClimbPlayRate, Direction, ReverseAt, LoopLength);
+		SetClipTime(LoopPos.Time);
+		const float TurnFeetZ = LadderRules::HeightAt(LoopPos, LoopFraction(LoopPos.Time), Target->GetContract().Pitch);
+		PlaceAt(Target->GetHangWorldLocation(TurnFeetZ) + FVector(0.f, 0.f, GetHalfHeight()), Target->GetClimberYaw());
+		if (bTurn)
+		{
+			// Back the other way from this rung: the loop plays the other way, the other end is the target.
+			bReversePending = false;
+			bGoingUp = !bUp;
+			++Reversals;
+			const LadderRules::FClipContract Contract = Target->GetContract();
+			const LadderRules::FLoopPos Out = LadderRules::ClimbOutStart(Contract, Target->GetRungCount());
+			TargetPos = bGoingUp ? Out : LadderRules::BottomPos(Out.Rung, LoopLength);
+			const double Steps = FMath::Abs((TargetPos.Rung - LoopPos.Rung) * (LoopLength * 0.5) + (TargetPos.Time - LoopPos.Time));
+			Fire(ELadderClimbEvent::Reverse, static_cast<float>(Steps) / ClimbPlayRate);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s turned round at rung %d t %.2f: now %s"), *GetNameSafe(GetOwner()), LoopPos.Rung, LoopPos.Time,
+				bGoingUp ? TEXT("up") : TEXT("down"));
+		}
+		return;
+	}
+	const bool bReached = LadderRules::Advance(LoopPos, DeltaTime * ClimbPlayRate, Direction, TargetPos, LoopLength);
 	SetClipTime(LoopPos.Time);
 	// Rung-index snapping: every loop boundary lands exactly on Floor + k * Pitch (HeightAt), the clip's error stays in one step.
 	const float FeetZ = LadderRules::HeightAt(LoopPos, LoopFraction(LoopPos.Time), Target->GetContract().Pitch);
@@ -1015,7 +1160,7 @@ void ULadderClimbComponent::ResumePath()
 	AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetOwner());
 	if (bHadDestination && Operative && FVector::Dist2D(Destination, Operative->GetActorLocation()) > 60.f)
 	{
-		Operative->ResumeMoveAfterLadder(Destination);
+		Operative->ResumeMoveAfterLadder(Destination, bOwnOrderAtEntry || Operative->HasOwnMoveOrder());
 	}
 }
 
@@ -1030,6 +1175,7 @@ void ULadderClimbComponent::AbortClimb(ELadderAbortReason Reason)
 		if (Target && State == ELadderClimbState::Queue)
 		{
 			Target->ReleaseLease(GetOwner());
+			Target->LeaveQueue(GetOwner());
 		}
 		if (State == ELadderClimbState::Queue)
 		{
