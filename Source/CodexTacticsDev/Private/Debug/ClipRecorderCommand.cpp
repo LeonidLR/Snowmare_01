@@ -68,6 +68,8 @@ namespace ClipRecorder
 		{
 			return;
 		}
+		// Offscreen there is no real cursor: GetMousePosition reports (0, 0), a screen edge, and the camera edge-scrolls away.
+		Camera->Config.EdgeScrollMargin = -1.f;
 		const AOperativeCharacter* Hero = Leader;
 		const AEnemyCharacter* Foe = nullptr;
 		float Best = 3500.f;
@@ -92,6 +94,12 @@ namespace ClipRecorder
 		State.Look = State.bHasLook ? FMath::Lerp(State.Look, Target, FMath::Min(1.f, Delta * 2.f)) : Target;
 		State.bHasLook = true;
 		Camera->LookAtPoint(State.Look);
+		if (State.Frame % 60 == 0)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("ClipRecorder %s director: look %s, camera %s, view centre %s, leader %s, foe %s"), *State.Name,
+				*State.Look.ToCompactString(), *Camera->GetActorLocation().ToCompactString(), *Camera->GetViewCentre().ToCompactString(),
+				*Leader->GetActorLocation().ToCompactString(), Foe ? *Foe->GetName() : TEXT("none"));
+		}
 	}
 
 	void DriveIntro(FState& State, UWorld* World, float Delta)
