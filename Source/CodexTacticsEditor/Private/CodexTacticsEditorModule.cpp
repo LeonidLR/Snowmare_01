@@ -1,6 +1,8 @@
 #include "Modules/ModuleManager.h"
 #include "BlueprintGraphToolset.h"
+#include "CodexCookRules.h"
 #include "Core/ActorLabelTag.h"
+#include "GameDelegates.h"
 #include "GameFramework/Actor.h"
 #include "ToolsetRegistry/UToolsetRegistry.h"
 #include "UObject/ObjectSaveContext.h"
@@ -23,10 +25,12 @@ class FCodexTacticsEditorModule : public IModuleInterface
 			UToolsetRegistry::RegisterToolsetClass(UBlueprintGraphToolset::StaticClass());
 		}
 		PreSaveHandle = FCoreUObjectDelegates::OnObjectPreSave.AddStatic(&FCodexTacticsEditorModule::StampLabelWhenCooking);
+		ModifyCookHandle = FGameDelegates::Get().GetModifyCookDelegate().AddStatic(&CodexCookRules::AddNativeSoftReferences);
 	}
 
 	virtual void ShutdownModule() override
 	{
+		FGameDelegates::Get().GetModifyCookDelegate().Remove(ModifyCookHandle);
 		FCoreUObjectDelegates::OnObjectPreSave.Remove(PreSaveHandle);
 		if (bToolsetRegistered)
 		{
@@ -51,6 +55,7 @@ class FCodexTacticsEditorModule : public IModuleInterface
 
 	bool bToolsetRegistered = false;
 	FDelegateHandle PreSaveHandle;
+	FDelegateHandle ModifyCookHandle;
 };
 
 IMPLEMENT_MODULE(FCodexTacticsEditorModule, CodexTacticsEditor);
