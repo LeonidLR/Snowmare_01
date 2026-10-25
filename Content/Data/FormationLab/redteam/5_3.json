@@ -1,0 +1,113 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_5_3",
+  "comment": "Red team 5_3 (threat_behind_thin_wall, aimed at #9,#1,#8): With a threat beyond the left end of a thin cross wall, the bypass goes round the longer right end (about 6 % longer). The far-side man may not slice that end, and someone may face the thin wall while swinging round it. Broke 2 (check, choice, members): #1 wall stare. First: #1 blizzard n3 R1 s1 t=16.4s - L at W1.",
+  "bounds": {
+    "min": [
+      -1000,
+      -2500
+    ],
+    "max": [
+      5500,
+      2000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        2500,
+        -300
+      ],
+      "b": [
+        2500,
+        900
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          5000,
+          0
+        ]
+      ],
+      "expect": [],
+      "threats": [
+        {
+          "pos": [
+            4000,
+            -1500
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W1",
+          "wall_on": "left"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "5_3",
+    "family": "threat_behind_thin_wall",
+    "intent": "With a threat beyond the left end of a thin cross wall, the bypass goes round the longer right end (about 6 % longer). The far-side man may not slice that end, and someone may face the thin wall while swinging round it.",
+    "target_checks": [
+      9,
+      1,
+      8
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.4,
+      "what": "L at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.4,
+      "what": "L at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

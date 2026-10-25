@@ -1,0 +1,546 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_11_8",
+  "comment": "Red team 11_8 (zigzag_corridor, aimed at #5,#1,#7): A 1.8 m clear zigzag (two 50 deg bends) ends in a dead end straight ahead; the pair's over-the-shoulder look hits the bend walls under 2 m (check 1, n2), and the wall layout cannot place two men along a 1.8 m end wall without breaking min spacing (check 5, n2) or putting the inner bend corner betwee. Broke 38 (check, choice, members): #1 wall stare, #5 slots / spacing, #7 squad split by a wall. First: #1 all_forward n2 R1 s2 t=25.3s - Z at L3w.",
+  "bounds": {
+    "min": [
+      -1200,
+      -1200
+    ],
+    "max": [
+      5800,
+      2000
+    ]
+  },
+  "walls": [
+    {
+      "id": "R1w",
+      "a": [
+        600,
+        100
+      ],
+      "b": [
+        2553,
+        100
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R2w",
+      "a": [
+        2553,
+        100
+      ],
+      "b": [
+        3517,
+        1249
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R3w",
+      "a": [
+        3517,
+        1249
+      ],
+      "b": [
+        5300,
+        1249
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L1w",
+      "a": [
+        600,
+        -100
+      ],
+      "b": [
+        2647,
+        -100
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L2w",
+      "a": [
+        2647,
+        -100
+      ],
+      "b": [
+        3611,
+        1049
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L3w",
+      "a": [
+        3611,
+        1049
+      ],
+      "b": [
+        5300,
+        1049
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "E1",
+      "a": [
+        5300,
+        1049
+      ],
+      "b": [
+        5300,
+        1249
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          2600,
+          0
+        ],
+        [
+          3564,
+          1149
+        ],
+        [
+          5100,
+          1149
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "11_8",
+    "family": "zigzag_corridor",
+    "intent": "A 1.8 m clear zigzag (two 50 deg bends) ends in a dead end straight ahead; the pair's over-the-shoulder look hits the bend walls under 2 m (check 1, n2), and the wall layout cannot place two men along a 1.8 m end wall without breaking min spacing (check 5, n2) or putting the inner bend corner betwee",
+    "target_checks": [
+      5,
+      1,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "all_forward",
+      "members": 2,
+      "route": "R1",
+      "seed": 2,
+      "t": 25.3,
+      "what": "Z at L3w",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 25.3,
+      "what": "P at L3w",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 70 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 70 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 71 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 71 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.8,
+      "what": "P-L 70 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.8,
+      "what": "P-L 70 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 72 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 72 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.8,
+      "what": "P-L 70 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.8,
+      "what": "P-L 70 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 10,
+      "what": "P-L 67 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 10,
+      "what": "P-L 67 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 10.6,
+      "what": "P-L 69 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 72 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 72 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.5,
+      "what": "P-L 72 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 6.7,
+      "what": "P-L 33 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 6,
+      "what": "L-Z 77 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column: wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.6,
+      "what": "column: wall cuts L-Z slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column (asked line): wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.6,
+      "what": "column (asked line): wall cuts L-Z slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column (asked wedge): wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.6,
+      "what": "column (asked diamond): wall cuts L-Z slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column (asked echelon_right): wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.6,
+      "what": "column (asked echelon_right): wall cuts L-Z slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column (asked blizzard): wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.6,
+      "what": "column (asked blizzard): wall cuts L-Z slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column: wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.6,
+      "what": "column: wall cuts L-Z slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column (asked hedgehog): wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.6,
+      "what": "column (asked hedgehog): wall cuts L-Z slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column (asked echelon_left): wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.6,
+      "what": "column (asked echelon_left): wall cuts L-Z slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "all_forward",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.2,
+      "what": "column: wall cuts P-L slots",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.6,
+      "what": "column: wall cuts L-Z",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_6_6",
+  "comment": "Red team 6_6 (stubs_pillars, aimed at #9,#3): Short 1 m stubs alternating 1.5 m left and right every 8 m are free wall ends beside the leader: slicing should be skipped for stubs (check 9), and the wall-on-one-side trigger should flicker the echelons (check 3). Broke 4 (check, choice, members): #1 wall stare, #7 squad split by a wall. First: #1 blizzard n3 R1 s1 t=15.8s - P at W3.",
+  "bounds": {
+    "min": [
+      -1000,
+      -1000
+    ],
+    "max": [
+      5000,
+      1000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1000,
+        150
+      ],
+      "b": [
+        1000,
+        250
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        1800,
+        -150
+      ],
+      "b": [
+        1800,
+        -250
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        2600,
+        150
+      ],
+      "b": [
+        2600,
+        250
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        3400,
+        -150
+      ],
+      "b": [
+        3400,
+        -250
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4400,
+          0
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "zones": [],
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "6_6",
+    "family": "stubs_pillars",
+    "intent": "Short 1 m stubs alternating 1.5 m left and right every 8 m are free wall ends beside the leader: slicing should be skipped for stubs (check 9), and the wall-on-one-side trigger should flicker the echelons (check 3).",
+    "target_checks": [
+      9,
+      3
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.8,
+      "what": "P at W3",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.8,
+      "what": "P at W3",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 14.9,
+      "what": "echelon_left (asked echelon_right): wall cuts Z",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 14.8,
+      "what": "echelon_left: wall cuts L-Z",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

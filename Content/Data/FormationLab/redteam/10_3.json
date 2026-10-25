@@ -1,0 +1,141 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_10_3",
+  "comment": "Red team 10_3 (dead_end_after_turn, aimed at #1,#5,#7,#9): Right after a 90 deg right turn the route enters a 2.6 m clear dead-end pocket. The wall layout has no room along the 3 m end wall, so men face side walls under 2 m away, crowd each other, or are left outside the pocket. The free entrance ends are passed during the turn without anyone looking round. Broke 3 (check, choice, members): #5 slots / spacing. First: #5 blizzard n3 R1 s1 t=27.7s - P-L 57 cm apart.",
+  "bounds": {
+    "min": [
+      -1500,
+      -2000
+    ],
+    "max": [
+      6000,
+      3000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        3850,
+        600
+      ],
+      "b": [
+        3850,
+        2400
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        3850,
+        2400
+      ],
+      "b": [
+        4150,
+        2400
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        4150,
+        2400
+      ],
+      "b": [
+        4150,
+        600
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4000,
+          0
+        ],
+        [
+          4000,
+          2200
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "10_3",
+    "family": "dead_end_after_turn",
+    "intent": "Right after a 90 deg right turn the route enters a 2.6 m clear dead-end pocket. The wall layout has no room along the 3 m end wall, so men face side walls under 2 m away, crowd each other, or are left outside the pocket. The free entrance ends are passed during the turn without anyone looking round ",
+    "target_checks": [
+      1,
+      5,
+      7,
+      9
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 27.7,
+      "what": "P-L 57 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 27.7,
+      "what": "P-L 57 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 28.1,
+      "what": "P-L 34 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

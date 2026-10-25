@@ -1,0 +1,102 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_7_2",
+  "comment": "Red team 7_2 (threat_behind_thin_wall, aimed at #8,#9,#7): A thin wall sits square across the route with both detours almost equal and a known threat on the left-front. The rules demand the right detour, which hides the threat, and the slice round that end. The trail column wrapping a 20 cm wall can cut chain links or skip the look round the end. Broke 1 (check, choice, members): #1 wall stare. First: #1 hedgehog n4 R1 s1 t=15s - L at W1.",
+  "bounds": {
+    "min": [
+      -1500,
+      -1500
+    ],
+    "max": [
+      5000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        2000,
+        -350
+      ],
+      "b": [
+        2000,
+        450
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -300,
+          0
+        ],
+        [
+          4300,
+          0
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            3500,
+            -800
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W1",
+          "wall_on": "left"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -300,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "7_2",
+    "family": "threat_behind_thin_wall",
+    "intent": "A thin wall sits square across the route with both detours almost equal and a known threat on the left-front. The rules demand the right detour, which hides the threat, and the slice round that end. The trail column wrapping a 20 cm wall can cut chain links or skip the look round the end.",
+    "target_checks": [
+      8,
+      9,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15,
+      "what": "L at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

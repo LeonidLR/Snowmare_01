@@ -1,0 +1,355 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_7_7",
+  "comment": "Red team 7_7 (t_l_junction, aimed at #7,#1,#5): The route makes a hard 90 deg right turn from a 7.6 m corridor into a 1.8 m side passage, so the pair partner and P on the inside of the turn are cut off by the corner wall end (7). In the narrow column, P's over-the-shoulder place and scan press into the passage walls (1, 5). Broke 18 (check, choice, members): #5 slots / spacing. First: #5 auto n3 R1 s1 t=16.5s - P-L 58 cm apart.",
+  "bounds": {
+    "min": [
+      -1600,
+      -600
+    ],
+    "max": [
+      3200,
+      3200
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        -1500,
+        -400
+      ],
+      "b": [
+        3000,
+        -400
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        -1500,
+        400
+      ],
+      "b": [
+        1490,
+        400
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        1710,
+        400
+      ],
+      "b": [
+        3000,
+        400
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        3000,
+        -400
+      ],
+      "b": [
+        3000,
+        400
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W5",
+      "a": [
+        1490,
+        400
+      ],
+      "b": [
+        1490,
+        3000
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W6",
+      "a": [
+        1710,
+        400
+      ],
+      "b": [
+        1710,
+        3000
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          1500,
+          1200
+        ],
+        [
+          1700,
+          1200
+        ],
+        [
+          1700,
+          2600
+        ],
+        [
+          1500,
+          2600
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -300,
+          0
+        ],
+        [
+          1600,
+          0
+        ],
+        [
+          1600,
+          2700
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -300,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "7_7",
+    "family": "t_l_junction",
+    "intent": "The route makes a hard 90 deg right turn from a 7.6 m corridor into a 1.8 m side passage, so the pair partner and P on the inside of the turn are cut off by the corner wall end (7). In the narrow column, P's over-the-shoulder place and scan press into the passage walls (1, 5).",
+    "target_checks": [
+      7,
+      1,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.5,
+      "what": "P-L 58 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.5,
+      "what": "P-L 58 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.5,
+      "what": "P-L 51 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.6,
+      "what": "P-L 58 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.4,
+      "what": "P-L 53 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.6,
+      "what": "P-L 58 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 17.2,
+      "what": "P-L 71 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.6,
+      "what": "P-L 58 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.4,
+      "what": "P-L 53 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 15.6,
+      "what": "L-Z 75 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.5,
+      "what": "P-L 58 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.5,
+      "what": "P-L 58 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 17.4,
+      "what": "P-L 68 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.6,
+      "what": "P-L 64 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.5,
+      "what": "P-L 51 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.6,
+      "what": "P-L 58 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 12,
+      "what": "P-L 80 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.2,
+      "what": "P-L 31 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

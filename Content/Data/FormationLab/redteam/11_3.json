@@ -1,0 +1,94 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_11_3",
+  "comment": "Red team 11_3 (wall_ends_at_turn, aimed at #9,#1,#7): A right-hand wall ends exactly where the route turns 90 deg left, so the free end is passed while the echelon folds to a column and the leader faces his new heading; the man nearest the end is mid-reshuffle and nobody slices it (check 9), or a right-side man faces the end face too closely (check 1). Broke 1 (check, choice, members): #5 slots / spacing. First: #5 hedgehog n4 R1 s2 t=18.6s - L-Z 67 cm apart.",
+  "bounds": {
+    "min": [
+      -1200,
+      -3200
+    ],
+    "max": [
+      4200,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        600,
+        250
+      ],
+      "b": [
+        3000,
+        250
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3000,
+          0
+        ],
+        [
+          3000,
+          -2500
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "11_3",
+    "family": "wall_ends_at_turn",
+    "intent": "A right-hand wall ends exactly where the route turns 90 deg left, so the free end is passed while the echelon folds to a column and the leader faces his new heading; the man nearest the end is mid-reshuffle and nobody slices it (check 9), or a right-side man faces the end face too closely (check 1).",
+    "target_checks": [
+      9,
+      1,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 18.6,
+      "what": "L-Z 67 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

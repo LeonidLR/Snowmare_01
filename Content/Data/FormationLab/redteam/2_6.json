@@ -1,0 +1,121 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_2_6",
+  "comment": "Red team 2_6 (threat_behind_thin_wall, aimed at #8,#7): A threat becomes known at 8 s, after a bypass was probably planned on the short left side: the right side (~17 % longer) hides the threat and must be taken, so a planner that does not re-plan should pass on the wrong side. Broke 3 (check, choice, members): #8 bypass side. First: #8 auto n2 R1 s1 - W1: wall on the right, wants left.",
+  "bounds": {
+    "min": [
+      -1000,
+      -2500
+    ],
+    "max": [
+      5000,
+      2500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        2000,
+        -300
+      ],
+      "b": [
+        2000,
+        1200
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4000,
+          0
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            2800,
+            -100
+          ],
+          "since_s": 8
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W1",
+          "wall_on": "left"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "2_6",
+    "family": "threat_behind_thin_wall",
+    "intent": "A threat becomes known at 8 s, after a bypass was probably planned on the short left side: the right side (~17 % longer) hides the threat and must be taken, so a planner that does not re-plan should pass on the wrong side.",
+    "target_checks": [
+      8,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 8,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "W1: wall on the right, wants left",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 8,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "W1: wall on the right, wants left",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 8,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "W1: wall on the right, wants left",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

@@ -11,6 +11,8 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export const CONFIG_REL = 'Content/Data/FormationLab/formation_config.json';
 export const CONFIG_PATH = path.join(ROOT, CONFIG_REL);
 export const LAB_DIR = path.join(ROOT, 'Content/Data/FormationLab');
+/** The red team's kept regression layouts (FORMATION_CONTRACT.md 11). */
+export const REDTEAM_DIR = path.join(LAB_DIR, 'redteam');
 export const GOLDEN_DIR = path.join(ROOT, 'Tools/TrainingGround/golden');
 export const OUT_DIR = path.join(ROOT, 'Saved/TrainingGround/movement');
 

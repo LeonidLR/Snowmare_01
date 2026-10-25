@@ -1,0 +1,118 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_4_6",
+  "comment": "Red team 4_6 (u_turn, aimed at #7,#9,#1): A U-turn round the end of a thin free 30 m wall, 2.5 m off each face. During the 180 deg swing the trailing men are still on the first face, so the wall sits between the leader and members. The wall end is passed beside the squad with nobody looking round it, and after the turn men face the wall. Broke 1 (check, choice, members): #5 slots / spacing. First: #5 column n4 R1 s2 t=24.9s - L-Z 60 cm apart.",
+  "bounds": {
+    "min": [
+      -2500,
+      -1500
+    ],
+    "max": [
+      4500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        0
+      ],
+      "b": [
+        3000,
+        0
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_end",
+      "poly": [
+        [
+          2700,
+          -600
+        ],
+        [
+          3700,
+          -600
+        ],
+        [
+          3700,
+          600
+        ],
+        [
+          2700,
+          600
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -800,
+          250
+        ],
+        [
+          3300,
+          250
+        ],
+        [
+          3300,
+          -250
+        ],
+        [
+          -500,
+          -250
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -800,
+      250
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "4_6",
+    "family": "u_turn",
+    "intent": "A U-turn round the end of a thin free 30 m wall, 2.5 m off each face. During the 180 deg swing the trailing men are still on the first face, so the wall sits between the leader and members. The wall end is passed beside the squad with nobody looking round it, and after the turn men face the wall.",
+    "target_checks": [
+      7,
+      9,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 24.9,
+      "what": "L-Z 60 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

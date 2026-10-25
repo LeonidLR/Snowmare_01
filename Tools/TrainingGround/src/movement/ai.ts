@@ -6,8 +6,12 @@
 import type { ConfigParam } from './config.ts';
 import type { SeriesSummary } from './checks.ts';
 import { rng } from './geometry.ts';
+import type { RedteamPayload } from './redteamMock.ts';
+import { mockRedteamText } from './redteamMock.ts';
 
-export type Purpose = 'advice' | 'propose';
+export type { RedteamPayload } from './redteamMock.ts';
+
+export type Purpose = 'advice' | 'propose' | 'redteam';
 
 export interface ModelRequest {
   purpose: Purpose;
@@ -16,7 +20,11 @@ export interface ModelRequest {
   prompt: string;
   maxTokens: number;
   /** The structured content of the prompt (the mock reads this instead of parsing text). */
-  payload: AdvicePayload | ProposePayload;
+  payload: AdvicePayload | ProposePayload | RedteamPayload;
+  /** Thinking effort for the real client (default 'low'); the red team designs layouts and asks for more. */
+  effort?: 'low' | 'medium' | 'high';
+  /** Per-request timeout override for the real client, ms (a red-team reply is long). */
+  timeoutMs?: number;
 }
 
 export interface ModelReply {
@@ -48,7 +56,7 @@ export interface ProposePayload {
 }
 
 /** Models per contract 6: proposals on the strong model, advice / summaries on the cheaper one. */
-export const MODELS = { propose: 'claude-opus-5-5', advice: 'claude-sonnet-5-5' } as const;
+export const MODELS = { propose: 'claude-opus-5-5', advice: 'claude-sonnet-5-5', redteam: 'claude-opus-5-5' } as const;
 
 /** Parameters the tuner may not touch (owned by the game, not by the formation logic). */
 // bypass.max_detour: the user's 30 % (decision 2026-10-25) - not a tuning lever.
@@ -112,6 +120,10 @@ export function mockClient(seed = 1): ModelClient {
     name: 'mock',
     async complete(req: ModelRequest): Promise<ModelReply> {
       const usage = { input_tokens: Math.ceil((req.system.length + req.prompt.length) / 4), output_tokens: 0 };
+      if (req.payload.kind === 'redteam') {
+        const text = mockRedteamText(req.payload);
+        return { text, usage: { ...usage, output_tokens: Math.ceil(text.length / 4) }, costUsd: 0 };
+      }
       if (req.payload.kind === 'advice') {
         const lines = mockAdvice(req.payload);
         const text = lines.join('\n');

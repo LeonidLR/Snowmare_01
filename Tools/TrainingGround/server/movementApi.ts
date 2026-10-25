@@ -1,9 +1,11 @@
 // Training Ground / movement + level design: dev-server endpoints (vite.config.ts). They read the layout / config files and
 // run the Node tools (bot, tuner) as child processes; the browser simulates with the same pure modules.
-//   GET  /api/movement/layouts            -> { layouts: string[] }      (Content/Data/FormationLab/*.json, the config excluded)
+//   GET  /api/movement/layouts            -> { layouts: string[] }      (Content/Data/FormationLab/*.json, the config excluded,
+//                                            + the red team's redteam/*.json as "redteam/<round>_<n>", FORMATION_CONTRACT.md 11)
 //   GET  /api/movement/layout?name=<n>    -> the layout JSON
 //   GET  /api/movement/config             -> formation_config.json
-//   GET  /api/movement/report?kind=bot|train -> { text } (the last report.md / train_report.md)
+//   GET  /api/movement/report?kind=bot|train|redteam|regression -> { text } (the last report.md / train_report.md /
+//                                            redteam_report.md / redteam_regression.md)
 //   POST /api/movement/run-bot  { layout, members, seeds }              -> { text, ok } (report.md)
 //   POST /api/movement/train    { layout, client, budgetUsd, rounds, dryRun } -> { text, ok } (train_report.md)
 import fs from 'node:fs';
@@ -17,7 +19,9 @@ const ROOT = path.resolve(TOOL_DIR, '../..');
 const LAB_DIR = path.join(ROOT, 'Content/Data/FormationLab');
 const OUT_DIR = path.join(ROOT, 'Saved/TrainingGround/movement');
 const CONFIG = path.join(LAB_DIR, 'formation_config.json');
-const NAME = /^[A-Za-z0-9_-]+$/;
+const REDTEAM_DIR = path.join(LAB_DIR, 'redteam');
+const NAME = /^(redteam\/)?[A-Za-z0-9_-]+$/;
+const REPORTS: Record<string, string> = { bot: 'report.md', train: 'train_report.md', redteam: 'redteam_report.md', regression: 'redteam_regression.md' };
 
 type Req = { method?: string; url?: string; on: (ev: string, cb: (chunk?: unknown) => void) => void };
 type Res = { statusCode: number; setHeader: (k: string, v: string) => void; end: (body?: string) => void };
@@ -47,9 +51,11 @@ function runTool(script: string, args: string[]): Promise<{ code: number; out: s
   });
 }
 
-const layoutNames = () => fs.existsSync(LAB_DIR)
-  ? fs.readdirSync(LAB_DIR).filter((f) => f.endsWith('.json') && f !== 'formation_config.json').map((f) => f.slice(0, -5)).sort()
-  : [];
+const jsonNames = (dir: string) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)) : []);
+const layoutNames = () => [
+  ...jsonNames(LAB_DIR).filter((n) => n !== 'formation_config').sort(),
+  ...jsonNames(REDTEAM_DIR).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).map((n) => `redteam/${n}`),
+];
 
 export function setupMovementApi(use: Use): void {
   use('/api/movement/layouts', (_req, res) => send(res, 200, { layouts: layoutNames() }));
@@ -63,7 +69,7 @@ export function setupMovementApi(use: Use): void {
   use('/api/movement/config', (_req, res) => send(res, 200, JSON.parse(fs.readFileSync(CONFIG, 'utf8'))));
 
   use('/api/movement/report', (req, res) => {
-    const kind = new URL(req.url ?? '', 'http://x').searchParams.get('kind') === 'train' ? 'train_report.md' : 'report.md';
+    const kind = REPORTS[new URL(req.url ?? '', 'http://x').searchParams.get('kind') ?? ''] ?? REPORTS.bot;
     const file = path.join(OUT_DIR, kind);
     send(res, 200, { text: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' });
   });

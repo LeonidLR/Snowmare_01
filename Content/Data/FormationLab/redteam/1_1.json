@@ -1,0 +1,137 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_1_1",
+  "comment": "Red team 1_1 (oblique_walls, aimed at #5,#7,#1,#9): A left wall converging at 17 deg slowly squeezes the diamond's L slot into the wall body. The cut test only samples the leader and 5 m ahead, so L may sit in or behind the wall before the echelon_right switch, and the free end at x=3000 may get no slice. Broke 3 (check, choice, members): #4 expected formation per zone. First: #4 auto n2 R1 s1 - Z1 wants echelon_right: 60 %.",
+  "bounds": {
+    "min": [
+      -1000,
+      -1500
+    ],
+    "max": [
+      5000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        600,
+        -900
+      ],
+      "b": [
+        3000,
+        -150
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_run",
+      "poly": [
+        [
+          1200,
+          -600
+        ],
+        [
+          2800,
+          -150
+        ],
+        [
+          2800,
+          700
+        ],
+        [
+          1200,
+          700
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4500,
+          0
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "echelon_right"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "1_1",
+    "family": "oblique_walls",
+    "intent": "A left wall converging at 17 deg slowly squeezes the diamond's L slot into the wall body. The cut test only samples the leader and 5 m ahead, so L may sit in or behind the wall before the echelon_right switch, and the free end at x=3000 may get no slice.",
+    "target_checks": [
+      5,
+      7,
+      1,
+      9
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 4,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "Z1 wants echelon_right: 60 %",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 4,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "Z1 wants echelon_right: 60 %",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 4,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "Z1 wants echelon_right: 60 %",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

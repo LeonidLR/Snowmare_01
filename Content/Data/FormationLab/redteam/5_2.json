@@ -1,0 +1,146 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_5_2",
+  "comment": "Red team 5_2 (dead_end_after_turn, aimed at #5,#7,#1): A sharp left turn from a 4 m corridor into a 4.6 m dead end leaves too little width to string 3-4 men along the end wall. The wall layout slots should land inside walls, or beyond the inner corner of the turn. Broke 1 (check, choice, members): #7 squad split by a wall. First: #7 echelon_left n4 R1 s2 t=11.2s - column (asked echelon_left): wall cuts L-Z.",
+  "bounds": {
+    "min": [
+      -2500,
+      -2000
+    ],
+    "max": [
+      4500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        -200
+      ],
+      "b": [
+        2700,
+        -200
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W2",
+      "a": [
+        0,
+        200
+      ],
+      "b": [
+        3200,
+        200
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W3",
+      "a": [
+        3200,
+        200
+      ],
+      "b": [
+        3200,
+        -1200
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W4",
+      "a": [
+        2700,
+        -200
+      ],
+      "b": [
+        2700,
+        -1200
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W5",
+      "a": [
+        2700,
+        -1200
+      ],
+      "b": [
+        3200,
+        -1200
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -1500,
+          0
+        ],
+        [
+          2950,
+          0
+        ],
+        [
+          2950,
+          -1000
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -1500,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "5_2",
+    "family": "dead_end_after_turn",
+    "intent": "A sharp left turn from a 4 m corridor into a 4.6 m dead end leaves too little width to string 3-4 men along the end wall. The wall layout slots should land inside walls, or beyond the inner corner of the turn.",
+    "target_checks": [
+      5,
+      7,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 11.2,
+      "what": "column (asked echelon_left): wall cuts L-Z",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

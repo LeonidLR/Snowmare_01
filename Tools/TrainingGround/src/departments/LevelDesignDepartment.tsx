@@ -1,5 +1,6 @@
 // Training Ground department «Левел-дизайн»: audits every layout in Content/Data/FormationLab (schema, route points in walls,
 // unreachable legs, zones no route crosses, expectations too short to settle) - the level-design bot's first checks, 0 tokens.
+// The red team's regression layouts are listed as a group of their own, with the last red-team summary (redteam_report.md).
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { SquadView } from './SquadView';
@@ -8,6 +9,7 @@ import type { FormationConfigFile } from '../movement/config';
 import { configValues } from '../movement/config';
 import type { AuditIssue } from '../movement/levelAudit';
 import { auditLayout } from '../movement/levelAudit';
+import { groupLayoutNames, redteamView } from '../movement/redteamView';
 
 export const LevelDesignDepartment: React.FC = () => {
   const [names, setNames] = useState<string[]>([]);
@@ -15,9 +17,11 @@ export const LevelDesignDepartment: React.FC = () => {
   const [configFile, setConfigFile] = useState<FormationConfigFile | null>(null);
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
+  const [redteamReport, setRedteamReport] = useState('');
 
   useEffect(() => {
     fetch('/api/movement/config').then((r) => r.json()).then(setConfigFile).catch(() => {});
+    fetch('/api/movement/report?kind=redteam').then((r) => r.json()).then((d) => setRedteamReport(d.text ?? '')).catch(() => {});
     fetch('/api/movement/layouts').then((r) => r.json()).then(async (d) => {
       const list: string[] = d.layouts ?? [];
       setNames(list);
@@ -50,7 +54,9 @@ export const LevelDesignDepartment: React.FC = () => {
       <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
         <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400">Раскладки (FormationLab)</h3>
         {error && <p className="text-sm text-amber-300">{error}</p>}
-        {names.map((n) => {
+        {groupLayoutNames(names).map((g) => (<React.Fragment key={g.label}>
+        {g.label !== 'Лаборатория' && <h4 className="text-[11px] font-bold tracking-widest uppercase text-rose-300 mt-2">{g.label}</h4>}
+        {g.names.map((n) => {
           const list = audits[n] ?? [];
           const errors = list.filter((i) => i.severity === 'error').length, warnings = list.length - errors;
           return (
@@ -65,10 +71,12 @@ export const LevelDesignDepartment: React.FC = () => {
             </button>
           );
         })}
+        </React.Fragment>))}
         <p className="text-xs text-slate-500 mt-2">Дальше в этом отделе: бот левел-дизайна (проходимость, узкие места, сектора обзора по всей карте) на тех же правилах.</p>
       </section>
       <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 min-w-0">
         <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400">{selected || '—'}</h3>
+        {redteamView(layouts[selected]) && <p className="text-xs text-rose-200 bg-rose-950/30 border border-rose-900 rounded-lg px-3 py-2">{redteamView(layouts[selected])!.comment}</p>}
         <SquadView layout={layout} height={460} marks={marks} />
         {issues.length === 0 ? (
           <p className="text-sm text-emerald-400 flex items-center gap-2"><CheckCircle2 size={16} />Замечаний нет.</p>
@@ -82,6 +90,11 @@ export const LevelDesignDepartment: React.FC = () => {
             ))}
           </ul>
         )}
+      </section>
+      <section className="xl:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2 min-w-0">
+        <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400">Красная команда (redteam_report.md)</h3>
+        <pre className="text-[11px] leading-snug bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-x-auto whitespace-pre text-slate-300 max-h-96">{redteamReport || 'Красная команда ещё не запускалась (npm run redteam).'}</pre>
+        <p className="text-xs text-slate-500">Раскладки красной команды смотрите в отделе «Перемещение» (группа Red team): прогон с падением выбран заранее.</p>
       </section>
     </div>
   );
