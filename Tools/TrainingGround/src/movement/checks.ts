@@ -226,7 +226,7 @@ export interface CheckLine {
 export interface SeriesSummary {
   runs: number;
   checks: CheckLine[];
-  /** 0..1, weighted pass rate of the failing-capable checks (the tuner maximises it). */
+  /** 0..1, weighted smooth pass measure of the failing-capable checks (the tuner maximises it; 1 = all green). */
   score: number;
   allGreen: boolean;
 }
@@ -274,13 +274,21 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
     line(8, `info: stuck followers (>${LIMITS.stuckDist} cm for ${LIMITS.stuckSeconds} s), slot fallbacks`, runs, (r) => r.stuck.events === 0,
       `${worstOf(runs, (r) => r.stuck.worst)}; fallback ticks ${runs.reduce((a, r) => a + r.slots.fallbackTicks, 0)}`, true),
   ];
+  // Smooth score: a passing run counts 1, a failing one by how close it came, so the tuner sees partial progress.
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((x, y) => x + y, 0) / xs.length : null);
+  const soft: Record<number, number | null> = {
+    1: mean(runs.map((r) => 1 / (1 + r.wallStare.events))),
+    2: mean(four.map((r) => Math.min(1, r.rearCover!.pct / LIMITS.rearCoverPct))),
+    3: mean(runs.map((r) => 1 / (1 + Math.max(0, r.flicker.per100m - LIMITS.flickerPer100m)))),
+    4: mean(withExpect.map(({ e }) => Math.min(1, e.pct / LIMITS.expectPct))),
+    5: mean(runs.map((r) => (r.slots.invalidTicks === 0 && r.slots.spacingEvents === 0 ? 1 : 0.5 / (1 + r.slots.spacingEvents + r.slots.invalidTicks / 30)))),
+    6: mean(paceRuns.map((r) => Math.min(1, LIMITS.paceBehind / Math.max(1, r.pace!.p95)))),
+  };
   let num = 0, den = 0;
-  for (const ch of checks) {
-    if (ch.info) continue;
-    const total = ch.pass + ch.fail;
-    if (!total) continue;
-    const w = CHECK_WEIGHTS[ch.id] ?? 1;
-    num += (w * ch.pass) / total; den += w;
+  for (const [id, v] of Object.entries(soft)) {
+    if (v === null) continue;
+    const w = CHECK_WEIGHTS[Number(id)] ?? 1;
+    num += w * v; den += w;
   }
   const score = den ? round(num / den, 4) : 1;
   return { runs: runs.length, checks, score, allGreen: checks.every((ch) => ch.info || ch.fail === 0) };

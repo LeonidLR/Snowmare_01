@@ -10,7 +10,8 @@
     "test": "node --test \"src/**/*.test.ts\"",
     "golden": "node src/movement/cli/golden.ts",
     "typecheck": "tsc && tsc -p tsconfig.node.json",
-    "bot:movement": "node src/movement/cli/bot.ts"
+    "bot:movement": "node src/movement/cli/bot.ts",
+    "train": "node src/movement/cli/train.ts"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

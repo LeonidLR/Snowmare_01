@@ -84,3 +84,15 @@ key is read from the environment / HKCU and never printed. The same loop pattern
 level-design bot (Training Ground departments).
 Where it runs: the user's PC (the key lives there). The cloud session builds the loop with a mock client (no key, no network)
 and a `--dry-run`; the coordinator's local agent wires the real client and runs the first training.
+
+## 7. Integration requirements for the runtime (stage 6; found by the simulator, coordinator 2026-10-25)
+- **Follower speed with velocity lead.** Today `SquadFormation::ComputeFollowerSpeed` slows a follower proportionally inside
+  `SlowRadius` (250 cm) even while his slot moves, so at walking pace every follower trails ~2 m behind his slot and the rear
+  man never closes a gap (the sectors / pace in the game then differ from the simulator). The runtime must move a follower
+  with the slot's own velocity (feed-forward) plus a proportional correction towards the slot: `v = v_slot * jitter +
+  dir * min(top * catchup_mult, d * FOLLOW_GAIN)`, `FOLLOW_GAIN = 2 / s`, capped by `top * move.catchup_mult` and, walking
+  backwards (> 120 deg off his facing), by `pace.walk_speed * move.backward_mult`; stop only when within 25 cm AND the slot is
+  still. Reference: `Tools/TrainingGround/src/movement/sim.ts` `stepTowards`.
+- **The wall layout only on arrival.** A wall straight ahead (`at_wall`) while the leader still walks is a corner to turn: keep
+  the previous formation; switch to `FormationWallRules::Layout` when the leader stops at the wall (or on a cover order).
+

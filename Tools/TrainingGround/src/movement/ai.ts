@@ -117,21 +117,30 @@ export function mockClient(seed = 1): ModelClient {
       const p = req.payload;
       const failing = new Set(p.best.summary.checks.filter((c) => !c.info && c.fail > 0).map((c) => c.id));
       const out: Record<string, number> = {};
+      // Rounds without improvement since the best -> bigger steps (the mock has no memory but the history).
+      const stale = 1 + p.history.filter((h) => h.score <= p.best.score).length;
       const nudge = (key: string, delta: number) => {
         const t = p.tunable[key];
-        if (t) out[key] = Math.max(t.min, Math.min(t.max, (p.best.params[key] ?? t.value) + delta));
+        if (t) out[key] = Math.max(t.min, Math.min(t.max, (p.best.params[key] ?? t.value) + delta * stale));
       };
-      if (failing.has(6)) { nudge('pace.patrol', -0.05); nudge('move.backward_mult', 0.05); }
-      if (failing.has(3)) nudge('classify.hold_time', 0.3);
-      if (failing.has(4)) nudge('classify.probe_side', 50);
-      if (failing.has(1)) nudge('wall.flank_deg', -5);
-      if (failing.has(2)) nudge('scan.amp_side', 5);
-      if (failing.has(5)) nudge('slot.side_offset', 20);
-      // Always explore one more parameter a little (seeded), so a stuck series still moves.
-      const keys = Object.keys(p.tunable);
-      const k = keys[Math.floor(random() * keys.length)];
-      const t = p.tunable[k];
-      nudge(k, (random() - 0.5) * 0.2 * (t.max - t.min));
+      // One lever per round (so the effect of each change stays visible): the failing checks in turn.
+      const levers: Record<number, () => void> = {
+        6: () => { nudge('pace.patrol', -0.05); nudge('move.backward_mult', 0.05); },
+        3: () => nudge('classify.hold_time', 0.3),
+        4: () => nudge('classify.probe_side', 50),
+        1: () => nudge('wall.flank_deg', -5),
+        2: () => nudge('echelon.sector_4', 8),
+        5: () => nudge('slot.side_offset', 20),
+      };
+      const order = [6, 2, 1, 3, 4, 5].filter((id) => failing.has(id));
+      if (order.length) levers[order[(p.round - 1) % order.length]]();
+      else {
+        // All green: explore one parameter a little (seeded).
+        const keys = Object.keys(p.tunable);
+        const k = keys[Math.floor(random() * keys.length)];
+        const t = p.tunable[k];
+        nudge(k, (random() - 0.5) * 0.1 * (t.max - t.min));
+      }
       const text = JSON.stringify({ params: out, reason: `mock: failing checks ${[...failing].join(',') || 'none'}` });
       return { text, usage: { ...usage, output_tokens: Math.ceil(text.length / 4) }, costUsd: 0 };
     },
