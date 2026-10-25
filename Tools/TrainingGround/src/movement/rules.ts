@@ -6,10 +6,13 @@
 import type { FormationConfig } from './config.ts';
 import { cfg } from './config.ts';
 import type { Segment, Vec2 } from './geometry.ts';
-import { add, closestOnSegment, dirOf, dist, distToWall, localToWorld, normYaw, raycastWalls, scale, segmentBlocked, sub, yawOf } from './geometry.ts';
+import { add, closestOnSegment, dirOf, dist, distToWall, dot, localToWorld, normYaw, raycastWalls, scale, segmentBlocked, sub, yawOf } from './geometry.ts';
 import type { Formation } from './layout.ts';
 
-/** K commander (leader), P right, L left, Z rear (with 2 members: the pair partner behind the right shoulder). */
+/**
+ * K commander (leader), P right, L left, Z rear (with 2 members: the pair partner behind the right shoulder). v2.2 (user
+ * 2026-10-25): three = K, P, Z - the triad has a rear man walking backwards like the four, P sweeps both flanks.
+ */
 export type Role = 'K' | 'P' | 'L' | 'Z';
 /** v1.2: 'forward' = the menu's "All forward" (10:30) - walking, everyone looks at 12 whatever the formation. */
 export type Mode = 'walk' | 'run' | 'halt' | 'wall' | 'forward';
@@ -28,7 +31,7 @@ export interface WallSlot extends Slot {
 export function rolesFor(memberCount: number): Role[] {
   if (memberCount <= 1) return ['K'];
   if (memberCount === 2) return ['K', 'Z'];
-  if (memberCount === 3) return ['K', 'P', 'L'];
+  if (memberCount === 3) return ['K', 'P', 'Z'];
   return ['K', 'P', 'L', 'Z'];
 }
 
@@ -45,7 +48,8 @@ function localSlot(formation: Formation, role: Role, n: number, c: FormationConf
       const side = cfg(c, 'slot.side_offset'), back = cfg(c, 'slot.back_offset');
       if (role === 'P') return [-back, side];
       if (role === 'L') return [-back, -side];
-      return [-cfg(c, 'diamond.rear_back'), 0];
+      // v2.2: the triad's rear man straight behind at triad.rear_back (the diamond's at diamond.rear_back).
+      return [-cfg(c, n === 3 ? 'triad.rear_back' : 'diamond.rear_back'), 0];
     }
     case 'blizzard': {
       const side = cfg(c, 'blizzard.side_offset'), back = cfg(c, 'blizzard.back_offset');
@@ -59,13 +63,13 @@ function localSlot(formation: Formation, role: Role, n: number, c: FormationConf
       if (n === 2) return [-base, st];
       if (role === 'P') return [-base, st];
       if (role === 'L') return [-base - sp, -st];
-      return [-base - 2 * sp, 0];
+      return [-base - (n === 3 ? 1 : 2) * sp, 0]; // v2.2: with three the rear man closes up behind P
     }
     case 'line': {
       const s = cfg(c, 'line.spacing');
       if (n === 2) return [0, s];
       if (role === 'P') return [0, s];
-      if (role === 'L') return [0, -s];
+      if (role === 'L' || n === 3) return [0, -s]; // v2.2: with three Z stands on the left
       return [0, 2 * s];
     }
     case 'echelon_right':
@@ -78,7 +82,7 @@ function localSlot(formation: Formation, role: Role, n: number, c: FormationConf
       const r = cfg(c, 'hedgehog.radius');
       if (n === 2) return [-2 * r, 0];
       if (n === 3) {
-        // Triangle round the centre (-r, 0): K at 0 deg, P at +120, L at -120.
+        // Triangle round the centre (-r, 0): K at 0 deg, P at +120, Z at -120.
         const a = (role === 'P' ? 120 : -120) * (Math.PI / 180);
         return [-r + r * Math.cos(a), r * Math.sin(a)];
       }
@@ -91,9 +95,13 @@ function localSlot(formation: Formation, role: Role, n: number, c: FormationConf
   }
 }
 
-/** Echelon order: towards the open side the far-side man goes second (minimal travel from the diamond). */
+/**
+ * Echelon order: towards the open side the far-side man goes second (minimal travel from the diamond). v2.2: three = K, P, Z
+ * both ways (Z last, the rear man; who actually stands where is FormationAssignRules' minimal travel).
+ */
 function echelonIndex(formation: Formation, role: Role, n: number): number {
-  const order: Role[] = n === 2 ? ['K', 'Z'] : formation === 'echelon_right' ? ['K', 'L', 'P', 'Z'] : ['K', 'P', 'L', 'Z'];
+  const order: Role[] = n === 2 ? ['K', 'Z'] : n === 3 ? ['K', 'P', 'Z']
+    : formation === 'echelon_right' ? ['K', 'L', 'P', 'Z'] : ['K', 'P', 'L', 'Z'];
   return Math.max(0, order.indexOf(role));
 }
 
@@ -178,6 +186,7 @@ function relativeLook(role: Role, formation: Formation, mode: Mode, n: number, t
     if (role === 'K') return 0;
     if (role === 'L') return cfg(c, 'wall.flank_deg');
     if (role === 'P') return -cfg(c, 'wall.flank_deg');
+    if (n === 3) return cfg(c, 'wall.flank_deg'); // v2.2: the triad's Z on the left end looks 8 (by position, not role)
     return -cfg(c, 'wall.end_deg'); // 4th at the right end by default (FormationWallRules.Layout decides the real end)
   }
   const exp = cfg(c, 'scan.dwell_exp');
@@ -214,7 +223,9 @@ function relativeLook(role: Role, formation: Formation, mode: Mode, n: number, t
     }
     case 'echelon_right':
     case 'echelon_left': {
-      const keys = ['echelon.sector_lead', 'echelon.sector_2', 'echelon.sector_3', 'echelon.sector_4'];
+      // v2.2: with three the last man (Z) takes the rear sector (sector_4), so 5-7 o'clock stays watched.
+      const keys = n === 3 ? ['echelon.sector_lead', 'echelon.sector_2', 'echelon.sector_4']
+        : ['echelon.sector_lead', 'echelon.sector_2', 'echelon.sector_3', 'echelon.sector_4'];
       const i = echelonIndex(formation, role, n);
       return (formation === 'echelon_right' ? 1 : -1) * cfg(c, keys[i]);
     }
@@ -464,7 +475,8 @@ function Layout(wall: Segment, clickedSlot: Vec2, memberCount: number, roomLeft:
       : [{ role: 'K', pos: k, yaw: y(-45) }, { role: 'Z', pos: at(-1), yaw: y(45) }];
   }
   if (memberCount === 3) {
-    return [{ role: 'K', pos: k, yaw: y(0) }, { role: 'P', pos: at(1), yaw: y(-flank) }, { role: 'L', pos: at(-1), yaw: y(flank) }];
+    // v2.2: the triad is K, P, Z - the man on the LEFT end (Z) looks 8, as L did: the user's wall rule is by position.
+    return [{ role: 'K', pos: k, yaw: y(0) }, { role: 'P', pos: at(1), yaw: y(-flank) }, { role: 'Z', pos: at(-1), yaw: y(flank) }];
   }
   return rightEnd
     ? [{ role: 'K', pos: k, yaw: y(0) }, { role: 'P', pos: at(1), yaw: y(-nb) }, { role: 'L', pos: at(-1), yaw: y(flank) },
@@ -492,7 +504,7 @@ function BreakRoomTie(roomLeft: number, roomRight: number, travelLeft: number, t
   return roomLeft === roomRight && travelLeft < travelRight ? { roomLeft: roomLeft + 1, roomRight } : { roomLeft, roomRight };
 }
 
-export const FormationWallRules = { Layout, BreakRoomTie };
+export const FormationWallRules = { Layout, BreakRoomTie, Slide };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationGuardRules (v2.1, FORMATION_CONTRACT.md 10): no formation may cut the squad in two with a wall
@@ -515,11 +527,11 @@ function ChainPairs(formation: Formation, memberCount: number): [Role, Role][] {
     case 'echelon_right': return chain(['K', 'L', 'P', 'Z']);
     case 'echelon_left': return chain(['K', 'P', 'L', 'Z']);
     case 'column': return chain(['K', 'P', 'L', 'Z']);
-    case 'line': return chain(['L', 'K', 'P', 'Z']);
+    case 'line': return chain(memberCount === 3 ? ['Z', 'K', 'P'] : ['L', 'K', 'P', 'Z']);
     case 'hedgehog': return chain(['K', 'P', 'Z', 'L'], true);
     case 'diamond':
     case 'wedge':
-    case 'blizzard': return memberCount >= 4 ? [['P', 'Z'], ['L', 'Z']] : [];
+    case 'blizzard': return memberCount >= 4 ? [['P', 'Z'], ['L', 'Z']] : [['P', 'Z']];
     case 'wall': return [];
   }
 }
@@ -854,6 +866,350 @@ function Watch(walls: readonly Segment[], leaderPos: Vec2, leaderYaw: number, me
 }
 
 export const FormationCornerRules = { Watch };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// FormationCoverRules (v2.2, user 2026-10-25: "the last man is responsible for the rear; recompute all variants")
+
+/** deg: the rear sector the rear guard always keeps in his cone - 5-7 o'clock = 6 o'clock +- 30 (the rear-cover check's). */
+export const REAR_SECTOR = 30;
+
+export interface CoverMember {
+  /** The place (its slot): K first. */
+  role: Role;
+  /** The place's slot (not the man's position: the allocation must not jitter with his steps). */
+  pos: Vec2;
+  /** How far back the place is along the leader's path / heading (cm; the largest = the rear guard). */
+  back: number;
+}
+
+export interface CoverShare {
+  role: Role;
+  /** The share, degrees relative to the heading (from <= to, within -180..180). */
+  from: number;
+  to: number;
+  /** The centre of the first gap he took (his halt look, relative). */
+  primary: number;
+}
+
+export interface CoverResult {
+  rearGuard: Role | null;
+  /** World look yaws per place. */
+  looks: { role: Role; yaw: number }[];
+  shares: CoverShare[];
+}
+
+/** Relative directions blocked by walls (within look.wall_dist of any place's slot; +-look.wall_angle round the closest point). */
+function blockedSpans(walls: readonly Segment[], members: readonly CoverMember[], heading: number, c: FormationConfig): number[] {
+  const reach = cfg(c, 'look.wall_dist');
+  const centers: number[] = [];
+  for (const m of members) for (const w of walls) {
+    const q = closestOnSegment(m.pos, w.a, w.b).point;
+    if (dist(m.pos, q) < 1e-6 || Math.max(0, dist(m.pos, q) - (w.thickness ?? 0) / 2) > reach) continue;
+    centers.push(normYaw(yawOf(sub(q, m.pos)) - heading));
+  }
+  return centers;
+}
+
+/**
+ * v2.2 general coverage (replaces the per-formation sector tables for walk / halt with 3+ members; the pair, run, "all
+ * forward", the wall layout and the hedgehog ring keep their rules). Angles relative to the heading, sampled per whole degree
+ * (-179..180) so the parity is exact:
+ * 1. K keeps the front: walk = the leader's search +-scan.amp_lead (as LookYaw), halt = 12. He guarantees +-(fov / 2 - amp_lead)
+ *    on the move (the whole cone standing).
+ * 2. The REAR GUARD = the place with the largest `back` (ties: the later in the list) whose look is not fixed (a corner watcher
+ *    hands the rear to the next man back): centre 6 o'clock, shifted by
+ *    rear.wall_shift_deg towards the open side when walls are within look.wall_dist on ONE side of his slot (an echelon along a
+ *    wall on the left -> about 5 o'clock); on the move he searches +-rear.share_half round it, cut so that 5-7 o'clock (REAR_SECTOR)
+ *    stays inside his cone at every moment (shift + search <= fov / 2 - REAR_SECTOR); he guarantees his cone minus the search;
+ *    standing he holds the centre. He walks backwards (the follower's backward cap).
+ * 3. Open = not blocked: a direction within look.wall_angle of the closest point of a wall within look.wall_dist of any slot.
+ *    The open degrees nobody guarantees (K, the rear guard, the fixed looks' full cones) form gaps; the others take them greedily: the widest gap first, given to the free member whose
+ *    bearing from the leader is nearest its centre (ties: the earlier gap from -179, the earlier member). Gaps left when nobody
+ *    is free join the nearest share (the union through the front: the triad's P then sweeps 3 -> 12 -> 9) unless the gap is no
+ *    wider than coverage.max_gap_deg (left open: stretching a sweep for it opens more than it closes) or the union would cross a
+ *    blocked direction (nobody sweeps across a wall). A member with no gap
+ *    doubles the share of K or the rear guard nearest his bearing.
+ * 4. Walk: each other member sweeps his share - centre the middle, amplitude min(half its width, coverage.max_sweep, and for a
+ *    share one cone can hold, (fov + coverage.max_gap_deg - width) / 2 so its far side stays within max_gap), period
+ *    scan.period x max(1, amplitude / scan.amp_side), scan.dwell_exp; shares in assignment order alternate phase 0 / pi. When a
+ *    share runs across the front, K's search (+-scan.amp_lead) runs against that sweep (same period, opposite sign).
+ *    Halt: K 12, the rear guard his centre, the others the centre of the first gap they took.
+ * `fixed` = looks set by a higher rule (the corner watcher, v2.1): kept as given; the direction counts as covered and the duty
+ * he leaves (K's front, the rear) becomes a gap for the others.
+ * Fewer than 3 members -> null (LookYaw).
+ */
+function Allocate(walls: readonly Segment[], leaderPos: Vec2, heading: number, members: readonly CoverMember[], mode: 'walk' | 'halt',
+  t: number, c: FormationConfig, fixed: readonly { role: Role; yaw: number }[] = []): CoverResult | null {
+  if (members.length < 3) return null;
+  const exp = cfg(c, 'scan.dwell_exp');
+  const lead = cfg(c, 'scan.amp_lead'), rearHalf = cfg(c, 'rear.share_half'), wallAngle = cfg(c, 'look.wall_angle');
+  // Rear guard: the largest back (ties -> the later) among the members whose look is NOT fixed (a corner watcher hands the rear
+  // to the next man back); all fixed -> the farthest back anyway (the rear then is a gap like any other).
+  const isFixed = (r: Role) => fixed.some((f) => f.role === r);
+  let rear = members[1];
+  for (const m of members.slice(1)) if (m.back >= rear.back - 1e-6) rear = m;
+  const freeBack = members.slice(1).filter((m) => !isFixed(m.role));
+  if (freeBack.length && isFixed(rear.role)) { rear = freeBack[0]; for (const m of freeBack) if (m.back >= rear.back - 1e-6) rear = m; }
+  // Shift towards the open side when walls stand on one side of his slot only.
+  const reach = cfg(c, 'look.wall_dist');
+  const h = dirOf(heading);
+  let wallLeft = false, wallRight = false;
+  for (const w of walls) {
+    const q = closestOnSegment(rear.pos, w.a, w.b).point;
+    if (Math.max(0, dist(rear.pos, q) - (w.thickness ?? 0) / 2) > reach) continue;
+    if (h[0] * (q[1] - rear.pos[1]) - h[1] * (q[0] - rear.pos[0]) >= 0) wallRight = true; else wallLeft = true;
+  }
+  const shift = cfg(c, 'rear.wall_shift_deg');
+  const rearCentre = wallLeft && !wallRight ? 180 - shift : wallRight && !wallLeft ? -180 + shift : 180;
+  const blocked = blockedSpans(walls, members, heading, c);
+  // Fixed looks (a corner watcher, the leader's aim in cover, a combat target): his cone counts as covered (+-fov / 2); his own
+  // duty (K's front, the rear) does not - it goes to the others like any gap.
+  const fixedOf = (role: Role) => fixed.find((f) => f.role === role);
+  const kFixed = fixedOf(members[0].role), rearFixed = fixedOf(rear.role);
+  const fixedRel = fixed.map((f) => normYaw(f.yaw - heading));
+  // What K and the rear guard GUARANTEE: their cone minus their own search swing (walk); standing, the full cone.
+  const fovHalf = cfg(c, 'sight.fov') / 2;
+  // The rear guard keeps 5-7 o'clock (180 +- REAR_SECTOR) inside his cone at every moment: shift + search <= fov / 2 - REAR_SECTOR.
+  const rearAmp = Math.max(0, Math.min(rearHalf, fovHalf - REAR_SECTOR - Math.abs(normYaw(rearCentre - 180))));
+  const kSure = mode === 'halt' ? fovHalf : fovHalf - lead, rearSure = mode === 'halt' ? fovHalf : fovHalf - rearAmp;
+  const isCovered = (r: number) => (!kFixed && Math.abs(r) <= kSure) || (!rearFixed && Math.abs(normYaw(r - rearCentre)) <= rearSure) ||
+    fixedRel.some((f) => Math.abs(normYaw(r - f)) <= cfg(c, 'sight.fov') / 2) || blocked.some((b) => Math.abs(normYaw(r - b)) < wallAngle);
+  // Gaps: runs of uncovered whole degrees, circular; as [start, end] relative (end may exceed 180 when it wraps).
+  const deg = Array.from({ length: 360 }, (_, i) => i - 179);
+  const free = deg.map((r) => !isCovered(r));
+  const gaps: { from: number; to: number }[] = [];
+  if (free.every(Boolean)) gaps.push({ from: -179, to: 180 });
+  else if (free.some(Boolean)) {
+    // Walk the circle once from a covered degree; a gap's `to` runs past 180 when it wraps.
+    const i0 = free.findIndex((f) => !f);
+    let cur: { from: number; to: number } | null = null;
+    for (let k = 1; k <= 360; k++) {
+      const i = (i0 + k) % 360;
+      if (!free[i]) { cur = null; continue; }
+      if (cur) cur.to += 1; else { cur = { from: deg[i], to: deg[i] }; gaps.push(cur); }
+    }
+    gaps.sort((a, b) => a.from - b.from);
+  }
+  const width = (g: { from: number; to: number }) => g.to - g.from + 1;
+  const centreOf = (g: { from: number; to: number }) => normYaw((g.from + g.to) / 2);
+  const bearing = (m: CoverMember) => normYaw(yawOf(sub(m.pos, leaderPos)) - heading);
+  const others = members.slice(1).filter((m) => m !== rear && !fixedOf(m.role));
+  const shares: CoverShare[] = [];
+  const open = [...gaps];
+  const freeMembers = [...others];
+  while (freeMembers.length && open.length) {
+    let best: { gi: number; mi: number; w: number; d: number } | null = null;
+    open.forEach((g, gi) => freeMembers.forEach((m, mi) => {
+      const w = width(g), d = Math.abs(normYaw(centreOf(g) - bearing(m)));
+      if (!best || w > best.w || (w === best.w && d < best.d - 1e-9)) best = { gi, mi, w, d };
+    }));
+    const b = best!;
+    const g = open.splice(b.gi, 1)[0], m = freeMembers.splice(b.mi, 1)[0];
+    shares.push({ role: m.role, from: g.from, to: g.to, primary: centreOf(g) });
+  }
+  // Gaps nobody took join the nearest share (relative min / max: the union runs through the front, never through the rear).
+  for (const g of open) {
+    if (!shares.length) break;
+    if (width(g) <= cfg(c, 'coverage.max_gap_deg')) continue; // small enough to leave open (stretching a sweep costs more)
+    const near = shares.reduce((a, s2) => (Math.abs(normYaw(centreOf(g) - (s2.from + s2.to) / 2)) < Math.abs(normYaw(centreOf(g) - (a.from + a.to) / 2)) - 1e-9 ? s2 : a));
+    if (g.to > 180 || near.to > 180) continue; // a gap through the rear stays with the rear guard
+    const lo = Math.min(near.from, g.from), hi = Math.max(near.to, g.to);
+    let crossesWall = false;
+    for (let r = Math.ceil(lo); r <= hi && !crossesWall; r++) crossesWall = blocked.some((b) => Math.abs(normYaw(r - b)) < wallAngle);
+    if (crossesWall) continue; // never sweep across a wall to reach it
+    near.from = lo; near.to = hi;
+  }
+  // Members without a gap double K's or the rear guard's share, whichever is nearer their bearing.
+  for (const m of freeMembers) {
+    const toRear = Math.abs(normYaw(bearing(m) - rearCentre)) < Math.abs(bearing(m));
+    const ctr = toRear ? rearCentre : 0, half = toRear ? rearSure : kSure;
+    shares.push({ role: m.role, from: ctr - half, to: ctr + half, primary: normYaw(ctr) });
+  }
+  const looks: { role: Role; yaw: number }[] = [];
+  const period = cfg(c, 'scan.period'), maxSweep = cfg(c, 'coverage.max_sweep'), sideAmp = cfg(c, 'scan.amp_side');
+  const maxGap = cfg(c, 'coverage.max_gap_deg');
+  const sweepOf = (sh: CoverShare) => {
+    // A share one cone can hold within coverage.max_gap: sweep only as far as keeps its far side within that; a share too
+    // wide for one cone (the triad's two flanks): the full sweep (user decision: P 3 -> 12 -> 9).
+    const w = sh.to - sh.from, mid = (sh.from + sh.to) / 2;
+    const amp = w <= 2 * fovHalf + maxGap ? Math.min(w / 2, maxSweep, Math.max(0, (2 * fovHalf + maxGap - w) / 2)) : Math.min(w / 2, maxSweep);
+    return { mid, amp, period: period * Math.max(1, amp / sideAmp), phase: shares.indexOf(sh) % 2 ? Math.PI : 0 };
+  };
+  // A share across the front (the triad's P: 3 -> 12 -> 9): K's search runs against that sweep (K left while he looks right),
+  // so the flank he has left is never also left by K. Otherwise K searches on his own (as LookYaw).
+  const front = shares.find((x) => x.from < -lead && x.to > lead);
+  let kRel = 0;
+  if (mode !== 'halt') {
+    if (front) { const sw = sweepOf(front); kRel = -lead * dwell(Math.sin((2 * Math.PI * t) / sw.period + sw.phase), exp); }
+    else kRel = scanValue(0, lead, period, 1.3, t, exp);
+  }
+  looks.push({ role: members[0].role, yaw: kFixed ? normYaw(kFixed.yaw) : normYaw(heading + kRel) });
+  // The rear guard searches 5-7 o'clock (+-rear.share_half round his centre) on the move; standing he holds the centre.
+  const rearRel = mode === 'halt' ? rearCentre : scanValue(rearCentre, rearAmp, period, Math.PI / 2, t, exp);
+  looks.push({ role: rear.role, yaw: rearFixed ? normYaw(rearFixed.yaw) : normYaw(heading + rearRel) });
+  for (const f of fixed) if (f.role !== members[0].role && f.role !== rear.role) looks.push({ role: f.role, yaw: normYaw(f.yaw) });
+  others.forEach((m) => {
+    const sh = shares.find((x) => x.role === m.role)!;
+    const sw = sweepOf(sh);
+    const rel = mode === 'halt' ? sh.primary : scanValue(sw.mid, sw.amp, sw.period, sw.phase, t, exp);
+    looks.push({ role: m.role, yaw: normYaw(heading + rel) });
+  });
+  return { rearGuard: rear.role, looks, shares };
+}
+
+/**
+ * v2.2 (user playtest 2026-10-25: in group cover at a wall corner the leader holds the new corner, the two followers looked the
+ * same way and a wide gap opened): coverage round a STANDING group with looks decided elsewhere. `fixed` = members whose look a
+ * higher rule sets (the leader's corner aim in cover, a combat target, an explicit facing order): each counts as covering his
+ * whole cone. The `free` members (roles, in priority order) fill the rest, absolute yaws sampled per whole degree (-179..180):
+ * open = not within look.wall_angle of the closest point of a wall within look.wall_dist of any member;
+ * 1. with 3+ members in all, one free member covers the REAR = the direction opposite the fixed looks' mean (the first fixed
+ *    look if they cancel; with no fixed look: no rear rule) - the free member whose bearing from the group centre is nearest
+ *    it; if that direction is blocked, the nearest open degree;
+ * 2. the others, greedily: the widest uncovered open gap first, to the free member whose bearing from the group centre is
+ *    nearest its middle (ties: the earlier gap from -179, the earlier member); he looks at the middle;
+ * 3. a free member with no gap left looks outward along his bearing from the centre (the nearest open degree to it).
+ * Every assigned cone (+-fov / 2) counts as covered for the next. Returns the free members' world yaws.
+ */
+function AllocateStatic(walls: readonly Segment[], members: readonly Slot[], fixed: readonly { role: Role; yaw: number }[],
+  free: readonly Role[], c: FormationConfig): { role: Role; yaw: number }[] {
+  const fovHalf = cfg(c, 'sight.fov') / 2, reach = cfg(c, 'look.wall_dist'), wallAngle = cfg(c, 'look.wall_angle');
+  const centre: Vec2 = members.length ? scale(members.reduce<Vec2>((a, m) => add(a, m.pos), [0, 0]), 1 / members.length) : [0, 0];
+  const blockedYaws: number[] = [];
+  for (const m of members) for (const w of walls) {
+    const q = closestOnSegment(m.pos, w.a, w.b).point;
+    if (dist(m.pos, q) < 1e-6 || Math.max(0, dist(m.pos, q) - (w.thickness ?? 0) / 2) > reach) continue;
+    blockedYaws.push(yawOf(sub(q, m.pos)));
+  }
+  const isBlocked = (a: number) => blockedYaws.some((b) => Math.abs(normYaw(a - b)) < wallAngle);
+  const cones: number[] = fixed.map((f) => f.yaw);
+  const isCovered = (a: number) => cones.some((y) => Math.abs(normYaw(a - y)) <= fovHalf);
+  const deg = Array.from({ length: 360 }, (_, i) => i - 179);
+  const nearestOpen = (a: number) => {
+    let best = a, bestD = Infinity;
+    for (const d of deg) if (!isBlocked(d)) { const dd = Math.abs(normYaw(d - a)); if (dd < bestD - 1e-9) { bestD = dd; best = d; } }
+    return normYaw(best);
+  };
+  const bearing = (r: Role) => { const m = members.find((x) => x.role === r); return m && dist(m.pos, centre) > 1e-6 ? yawOf(sub(m.pos, centre)) : 0; };
+  const out: { role: Role; yaw: number }[] = [];
+  const left = [...free];
+  const take = (r: Role, yaw: number) => { out.push({ role: r, yaw: normYaw(yaw) }); cones.push(yaw); left.splice(left.indexOf(r), 1); };
+  if (members.length >= 3 && fixed.length && left.length) {
+    const sx = fixed.reduce((a, f) => a + Math.cos((f.yaw * Math.PI) / 180), 0), sy = fixed.reduce((a, f) => a + Math.sin((f.yaw * Math.PI) / 180), 0);
+    const front = Math.hypot(sx, sy) > 1e-6 ? (Math.atan2(sy, sx) * 180) / Math.PI : fixed[0].yaw;
+    const rear = normYaw(front + 180);
+    const who = left.reduce((a, r) => (Math.abs(normYaw(bearing(r) - rear)) < Math.abs(normYaw(bearing(a) - rear)) - 1e-9 ? r : a));
+    take(who, isBlocked(rear) ? nearestOpen(rear) : rear);
+  }
+  while (left.length) {
+    const open = deg.map((d) => !isBlocked(d) && !isCovered(d));
+    const gaps: { from: number; to: number }[] = [];
+    if (open.every(Boolean)) gaps.push({ from: -179, to: 180 });
+    else if (open.some(Boolean)) {
+      const i0 = open.findIndex((o) => !o);
+      let cur: { from: number; to: number } | null = null;
+      for (let k = 1; k <= 360; k++) {
+        const i = (i0 + k) % 360;
+        if (!open[i]) { cur = null; continue; }
+        if (cur) cur.to += 1; else { cur = { from: deg[i], to: deg[i] }; gaps.push(cur); }
+      }
+      gaps.sort((a, b) => a.from - b.from);
+    }
+    if (!gaps.length) { for (const r of [...left]) take(r, nearestOpen(bearing(r))); break; }
+    let best: { g: { from: number; to: number }; r: Role; w: number; d: number } | null = null;
+    for (const g of gaps) for (const r of left) {
+      const w = g.to - g.from + 1, mid = normYaw((g.from + g.to) / 2), d = Math.abs(normYaw(mid - bearing(r)));
+      if (!best || w > best.w || (w === best.w && d < best.d - 1e-9)) best = { g, r, w, d };
+    }
+    take(best!.r, normYaw((best!.g.from + best!.g.to) / 2));
+  }
+  return free.map((r) => out.find((o) => o.role === r)!);
+}
+
+export const FormationCoverRules = { Allocate, AllocateStatic };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// FormationWallRules::Slide (v2.2, user approved on an animation 2026-10-25: "Все отлично")
+
+/** cm: a destination closer than this along the wall is not a slide (the layout just stays). */
+export const SLIDE_MIN = 50;
+
+export interface SlideResult {
+  /** The destination lies at the same wall, on the squad's side, within slide.max_off_wall, along it by >= SLIDE_MIN. */
+  active: boolean;
+  /** Where the leader's move along the wall ends (his start slot moved along the wall; the wall offset kept). */
+  leaderTarget: Vec2;
+  /** World targets (the start layout moved along the wall by what the leader has covered) and looks, per place. */
+  targets: WallSlot[];
+  /** The leading end (looks ahead along the wall) and the trailing end (looks back; the rear guard). */
+  lead: Role | null;
+  rearGuard: Role | null;
+  /** Yaw of the wall's outward normal (from the wall to the squad). */
+  normalYaw: number;
+  /** Places from the leading end to the trailing end (the order the slide keeps). */
+  order: Role[];
+}
+
+/**
+ * The squad stands in the wall layout (`startSlots`, K first, as FormationWallRules.Layout placed it) and the leader's next
+ * destination lies at the SAME wall: within slide.max_off_wall of its surface, on the squad's side, its projection on the wall
+ * inside it, at least SLIDE_MIN along it. Then nobody re-forms: everyone moves sideways together along the wall at the leader's
+ * pace - each target is his start slot moved along the wall by the leader's progress (leaderPos - his start slot, along the
+ * wall only), so the order and the offset from the wall are kept and nobody passes anybody. Looks: the leading end along the
+ * wall in the travel direction turned slide.lead_out_deg outward, the trailing end back along the wall turned as far outward
+ * (he is the rear guard), K (when not an end) away from the wall with his search (+-scan.amp_lead, as LookYaw), the members in
+ * between FormationCoverRules.AllocateStatic (the ends and K fixed). Not active -> the targets are the start slots (the caller
+ * forms the normal formation). On arrival the caller forms the normal wall layout again; at the wall's end the corner watcher
+ * (the leading end) applies as anywhere.
+ */
+function Slide(wall: Segment, startSlots: readonly WallSlot[], leaderPos: Vec2, destination: Vec2, t: number,
+  config: FormationConfig): SlideResult {
+  const k0 = startSlots[0].pos;
+  const L = dist(wall.a, wall.b);
+  const u: Vec2 = L > 1e-6 ? scale(sub(wall.b, wall.a), 1 / L) : [1, 0];
+  const foot = closestOnSegment(k0, wall.a, wall.b).point;
+  let nrm = sub(k0, foot);
+  if (Math.hypot(nrm[0], nrm[1]) < 1e-6) nrm = [-u[1], u[0]];
+  const N = scale(nrm, 1 / Math.hypot(nrm[0], nrm[1]));
+  const normalYaw = yawOf(N);
+  const destFoot = closestOnSegment(destination, wall.a, wall.b);
+  const off = dist(destination, destFoot.point) - (wall.thickness ?? 0) / 2;
+  const alongDest = dot(sub(destination, k0), u);
+  const sameSide = dot(sub(destination, destFoot.point), N) >= 0;
+  const inside = destFoot.t > 0 && destFoot.t < 1;
+  const active = off <= cfg(config, 'slide.max_off_wall') && sameSide && inside && Math.abs(alongDest) >= SLIDE_MIN;
+  const leaderTarget = add(k0, scale(u, alongDest));
+  if (!active) {
+    return { active, leaderTarget: k0, targets: startSlots.map((s) => ({ ...s })), lead: null, rearGuard: null, normalYaw, order: startSlots.map((s) => s.role) };
+  }
+  const D = scale(u, Math.sign(alongDest));
+  const moved = dot(sub(leaderPos, k0), D);
+  const shift = scale(D, Math.max(0, Math.min(Math.abs(alongDest), moved)));
+  const order = [...startSlots].sort((a, b) => dot(b.pos, D) - dot(a.pos, D)).map((s) => s.role);
+  const lead = order[0], trail = order[order.length - 1];
+  const out = cfg(config, 'slide.lead_out_deg');
+  const dYaw = yawOf(D);
+  // "Outward" = turned from the wall direction towards the normal.
+  const towardN = (y: number) => normYaw(y + Math.sign(normYaw(normalYaw - y) || 1) * out);
+  const pos = (r: Role) => add(startSlots.find((s) => s.role === r)!.pos, shift);
+  const looks = new Map<Role, number>();
+  looks.set(lead, towardN(dYaw));
+  looks.set(trail, towardN(normYaw(dYaw + 180)));
+  const kRole = startSlots[0].role;
+  if (!looks.has(kRole)) {
+    looks.set(kRole, normYaw(normalYaw + scanValue(0, cfg(config, 'scan.amp_lead'), cfg(config, 'scan.period'), 1.3, t, cfg(config, 'scan.dwell_exp'))));
+  }
+  const middle = order.filter((r) => !looks.has(r));
+  if (middle.length) {
+    const fixed = [...looks.entries()].map(([role, yaw]) => ({ role, yaw }));
+    const members = startSlots.map((s) => ({ role: s.role, pos: pos(s.role) }));
+    for (const l of FormationCoverRules.AllocateStatic([wall], members, fixed, middle, config)) looks.set(l.role, l.yaw);
+  }
+  return {
+    active, leaderTarget, normalYaw, order, lead, rearGuard: startSlots.length >= 2 ? trail : null,
+    targets: startSlots.map((s) => ({ role: s.role, pos: pos(s.role), yaw: looks.get(s.role)! })),
+  };
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationAssignRules (v2.1 fix, coordinator 2026-10-25): who takes which place when the formation changes

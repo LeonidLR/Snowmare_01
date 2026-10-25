@@ -52,6 +52,11 @@ export interface LayoutRoute {
   expect?: RouteExpect[];
   threats?: RouteThreat[];
   expect_bypass?: RouteBypassExpect[];
+  /**
+   * v2.2 wall slide: after the route ends at a wall (the wall layout), the leader's next destinations along that wall, one
+   * after the other (the squad halts in the wall layout between them). Bot check 11.
+   */
+  slide?: Vec2[];
 }
 
 export const PROP_KINDS = ['heat_source'] as const;
@@ -153,6 +158,10 @@ export function validateLayout(data: unknown): string[] {
         else if (!inBounds(t.pos)) e.push(`${where}.threats[${j}]: outside bounds`);
         if (!isNum(t?.since_s) || t.since_s < 0) e.push(`${where}.threats[${j}]: since_s must be a number >= 0`);
       });
+    }
+    if (r?.slide !== undefined) {
+      if (!Array.isArray(r.slide) || !r.slide.every(isVec)) e.push(`${where}: slide must be an array of [x, y]`);
+      else if (!r.slide.every(inBounds)) e.push(`${where}: a slide point is outside bounds`);
     }
     if (r?.expect_bypass !== undefined) {
       const wallIds = new Set(Array.isArray(l.walls) ? l.walls.map((w) => w?.id) : []);

@@ -65,6 +65,13 @@
       "unit": "deg",
       "doc": "Pair: the partner's sweep ends here (270 = 9 o'clock), written above 180 so the arc runs through 6 o'clock."
     },
+    "triad.rear_back": {
+      "value": 420,
+      "min": 300,
+      "max": 600,
+      "unit": "cm",
+      "doc": "v2.2: the triad's rear man Z straight behind the leader (walks backwards looking at 6)."
+    },
     "column.base_back": {
       "value": 180,
       "min": 120,
@@ -226,6 +233,20 @@
       "unit": "deg",
       "doc": "Wall layout, 4 members: the 4th man at the end looks along the wall (3-4 / 8-9 o'clock)."
     },
+    "slide.max_off_wall": {
+      "value": 200,
+      "min": 100,
+      "max": 300,
+      "unit": "cm",
+      "doc": "v2.2 wall slide (user 2026-10-25): a destination this close to the surface of the wall the squad stands at (on its side, along it) is a slide - the squad moves sideways together, no re-forming."
+    },
+    "slide.lead_out_deg": {
+      "value": 20,
+      "min": 0,
+      "max": 45,
+      "unit": "deg",
+      "doc": "v2.2: the leading / trailing end look along the wall turned this far outward."
+    },
     "pace.patrol": {
       "value": 0.8,
       "min": 0.5,
@@ -309,6 +330,34 @@
       "max": 90,
       "unit": "deg",
       "doc": "Short halt: the side men hold this sector centre (2 / 10 o'clock)."
+    },
+    "rear.share_half": {
+      "value": 30,
+      "min": 10,
+      "max": 60,
+      "unit": "deg",
+      "doc": "v2.2 (user 2026-10-25): the rear guard searches 6 o'clock +- this on the move (5-7 o'clock); he guarantees his cone minus it."
+    },
+    "rear.wall_shift_deg": {
+      "value": 30,
+      "min": 0,
+      "max": 60,
+      "unit": "deg",
+      "doc": "v2.2: with walls on ONE side of the rear guard (within look.wall_dist) his share turns this far towards the open side (wall left -> ~5 o'clock)."
+    },
+    "coverage.max_sweep": {
+      "value": 90,
+      "min": 30,
+      "max": 150,
+      "unit": "deg",
+      "doc": "v2.2: largest sweep amplitude of a member covering his share (the triad's P: 3 -> 12 -> 9)."
+    },
+    "coverage.max_gap_deg": {
+      "value": 60,
+      "min": 20,
+      "max": 120,
+      "unit": "deg",
+      "doc": "v2.2 check 10: the largest uncovered open arc allowed (>= 90 % of patrol time)."
     },
     "look.wall_dist": {
       "value": 260,

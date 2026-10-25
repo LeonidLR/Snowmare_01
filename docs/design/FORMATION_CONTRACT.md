@@ -142,11 +142,11 @@ ClosestOnSegment / NormYaw / DirOf / YawOfD` (double, = geometry.ts). Runs: v1 (
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):
 1. wall stare: nobody looks into a wall closer than 200 cm (facing within 45 deg of the wall normal, towards it);
-2. rear cover: with 4 members the 5-7 o'clock sector is watched >= 90 % of patrol time; with 3 the gap is reported, not failed;
+2. rear cover: with 3+ members (v2.2: the triad too) the 5-7 o'clock sector is watched >= 90 % of patrol time;
 3. flicker: formation changes per 100 m of route (target <= 1 outside expected changes);
 4. expected formation per zone (routes[].expect) matched;
 5. slots: no slot inside a wall / off the walkable area; spacing within config;
-6. pace: the man at the rear PLACE keeps <= 150 cm behind his slot at patrol pace (p95; not while the wall layout is in effect -
+6. pace: the man at the rear PLACE keeps <= 150 cm behind his slot at patrol pace (3+ members since v2.2; p95; not while the wall layout is in effect -
    its slots are destinations at the wall, not a following formation);
 7. (v2.1) squad split: no wall between the leader and a member's slot or position, nor between chain neighbours
    (`FormationGuardRules::ChainPairs`), for >= 0.3 s; in the trail column (guard level 2) the chain of neighbours (slots and
@@ -334,4 +334,72 @@ not in the wall layout, not running, not the corner watcher, and not the LEADER 
 travel (he must see his way; followers follow him). The slots stay as chosen. Bot check 1 gates manual formations too.
 Keys: `turn.fold_deg` 25 (10-90 deg), `turn.lookahead` 800 (100-1000 cm), `look.wall_dist` 260 (100-400 cm), `look.wall_angle`
 55 (30-90 deg). Golden: `formation_TurnAhead.json`, `formation_ClearLook.json`; `formation_Guard.json` gains `turnAhead`.
+
+## 11. v2.2 - the triad K, P, Z, the rear guard, the coverage allocator (user decisions 2026-10-25)
+### 11.1 The triad
+`rolesFor(3) = K, P, Z`. Slots: wedge / diamond with 3 = K 0, P (-slot.back_offset, +slot.side_offset), Z (-`triad.rear_back`
+420, 0); blizzard with 3 = P (-back, +side), Z (-2 back, 0); column with 3 = P (-base, +stagger), Z (-base - spacing, 0); line
+with 3 = P (0, +spacing), Z (0, -spacing); echelons with 3 = K, P, Z both ways (sectors lead / 2 / 4 = 10 / 45 / 150 in LookYaw);
+hedgehog with 3 = the triangle (P +120, Z -120). Wall layout with 3 = K, P at the right end (4 o'clock), Z at the LEFT end
+looking 8 (the user's wall rule is by position). ChainPairs with 3: wedge / diamond / blizzard P-Z, line Z-K-P, column / echelon
+K-P-Z, hedgehog the ring. Menu Resolve unchanged (diamond -> wedge with 3).
+
+### 11.2 `FormationCoverRules::Allocate(walls, leaderPos, heading, members [{role, pos, back}], mode walk|halt, t, fixed [{role, yaw}]) -> { rearGuard, looks, shares } | null`
+For 3+ members walking / halted (the sim / runtime: not running, not "all forward", not the wall layout, not the hedgehog;
+the pair keeps LookYaw). `members` = the PLACES (slot positions, K first), `back` = how far back along the leader's path (sim:
+-dot(slot - leader, heading); the trail column: the column order). Angles relative to the heading, whole degrees -179..180.
+1. K: walk = the search +-scan.amp_lead (LookYaw's), halt = 12; guarantees +-(fov / 2 - amp_lead) on the move.
+2. The rear guard = the largest `back` (ties: the later): centre 180, or 180 -/+ `rear.wall_shift_deg` (30) towards the open side
+   when walls (surface within look.wall_dist) stand on ONE side of his slot; search +-`rear.share_half` (30) cut so that 180 +-
+   REAR_SECTOR (30, the rear-cover check's 5-7 o'clock) stays in his cone; guarantees his cone minus the search.
+3. Open = not within look.wall_angle of the closest point of a wall within look.wall_dist of any slot. The open degrees nobody
+   guarantees (K, the rear guard, the FIXED looks' whole cones) form gaps; the others take them greedily (widest first, to the
+   member whose bearing from the leader is nearest its middle; ties: the earlier gap from -179, the earlier member). Leftover
+   gaps wider than `coverage.max_gap_deg` (60) join the nearest share through the front unless that crosses a blocked
+   direction; a member with no gap doubles K's or the rear guard's share.
+4. Walk: each sweeps his share: centre the middle, amplitude min(half width, `coverage.max_sweep` 90, and for a share one cone
+   can hold (width <= fov + max_gap) (fov + max_gap - width) / 2), period scan.period x max(1, amp / scan.amp_side), scan.dwell_exp,
+   phase 0 / pi alternating by assignment order. A share across the front (the triad's P) makes K search against it (same
+   period, opposite sign). Halt: the centre of each one's first gap.
+A fixed look (the corner watcher, a combat target, an explicit facing order) keeps its yaw; its whole cone counts as covered and
+the duty it leaves (K's front, the rear) goes to the others.
+
+### 11.3 `FormationCoverRules::AllocateStatic(walls, members [{role, pos}], fixed [{role, yaw}], free [roles]) -> [{role, yaw}]`
+A standing group with looks decided elsewhere (the playtest: the leader holds a new corner in group cover). Absolute yaws,
+whole degrees; open as in 11.2 (any member's position). With 3+ members and at least one fixed look, one free member covers the
+REAR = opposite the fixed looks' mean (the free member whose bearing from the group centre is nearest it; the nearest open
+degree if blocked); the others greedily: the widest open gap no cone covers, to the member with the nearest bearing, looking
+at its middle; with no gap left, outward along his bearing (nearest open). Each assigned cone counts as covered for the next.
+
+### 11.4 Checks, config, golden
+Check 2 for every formation of 3+ (manual too); check 10: the largest arc no member's cone (+-fov / 2) covers and no wall within
+look.wall_dist of a member blocks (+-45 deg round its closest point), sampled every 2 deg, <= `coverage.max_gap_deg` for >= 90 %
+of patrol (3+ members). Manual formations are gated by 1, 2, 5, 7, 10. Keys: `triad.rear_back` 420 (300-600), `rear.share_half`
+30 (10-60), `rear.wall_shift_deg` 30 (0-60), `coverage.max_sweep` 90 (30-150), `coverage.max_gap_deg` 60 (20-120). LookYaw
+stays the rule for the pair, run, "all forward", the wall mode and the hedgehog. Golden: `formation_Cover.json` (512 cases),
+`formation_CoverStatic.json`. Sim: `MemberFrame.rearGuard`.
+
+### 11.5 `FormationWallRules::Slide(wall, startSlots [{role, pos, yaw}], leaderPos, destination, t) -> SlideResult` (user: "Все отлично")
+The squad stands in the wall layout (`startSlots` = Layout's slots, K first) and the leader's next destination lies at the SAME
+wall: surface distance <= `slide.max_off_wall` (200, 100-300 cm), on the squad's side, its foot inside the wall, at least
+SLIDE_MIN (50 cm) along it. Then `active`: everyone moves sideways together - each target = his start slot moved along the wall by
+the leader's progress (leaderPos - his start slot, projected on the travel direction, clamped to [0, the destination's distance
+along]); order and wall offset kept, nobody passes anybody. `leaderTarget` = the leader's start slot moved along the wall to the
+destination's projection. Looks: the leading end (farthest along the travel direction) along the wall turned `slide.lead_out_deg`
+(20, 0-45) outward; the trailing end back along the wall turned as far outward = `rearGuard`; K (not an end) the wall's outward
+normal with his search (+-scan.amp_lead, LookYaw's phase 1.3); the members between: AllocateStatic([wall], ..., the ends and K
+fixed). `order` = places from the leading to the trailing end; `normalYaw` = the outward normal. Not active -> targets = the start
+slots (the caller forms the normal formation). Integration (sim): a route's `slide` stops after its wall arrival; the leader moves
+to `leaderTarget` at patrol pace; the formation stays 'wall' (no classify / guard, no place reassignment); the corner watch applies
+on the slide (the leading end at the wall's end); at the stop the normal wall layout again - with one integration choice: the 4th
+(the pair partner) keeps the end he is at when it has room for him (>= 2 x wall.spacing), because re-choosing the roomier end sends
+him through the line. Bot check 11: the order along the wall kept (20 cm tolerance, >= 0.3 s counts) and the open half (normal +-90)
+>= 90 % covered by the cones for >= 90 % of the slide time. Lab route `R_A_slide` (lane A's dead end, 6 m one way, 12 m back);
+map builder TargetPoints `<route id>_slide_<n>` (tag FormationLabSlide). Golden `formation_Slide.json`.
+
+### 11.6 Simulator notes (v2.2)
+- Places are also reassigned on the way (not only on a formation change) when the minimal assignment is REASSIGN_GAIN (100 cm)
+  cheaper than the places held (a tight formation pivoting 90 deg sent a flank man across the squad); never during a slide.
+- A light separation stands in for the engine's crowd avoidance: two members closer than slot.min_spacing + 10 cm drift apart at
+  up to 60 cm/s (the leader is never pushed). The runtime's RVO / detour crowd does this in the game.
 

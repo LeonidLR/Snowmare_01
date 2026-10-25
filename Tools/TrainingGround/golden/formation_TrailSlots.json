@@ -16,6 +16,7 @@
   "pair.scan_period": 5,
   "pair.scan_from": 90,
   "pair.scan_to": 270,
+  "triad.rear_back": 420,
   "column.base_back": 180,
   "column.spacing": 150,
   "column.stagger": 60,
@@ -39,6 +40,8 @@
   "wall.flank_deg": 60,
   "wall.neighbour_deg": 30,
   "wall.end_deg": 75,
+  "slide.max_off_wall": 200,
+  "slide.lead_out_deg": 20,
   "pace.patrol": 0.8,
   "pace.walk_speed": 220,
   "pace.run_speed": 480,
@@ -51,6 +54,10 @@
   "scan.amp_lead": 30,
   "scan.dwell_exp": 0.45,
   "halt.side_deg": 60,
+  "rear.share_half": 30,
+  "rear.wall_shift_deg": 30,
+  "coverage.max_sweep": 90,
+  "coverage.max_gap_deg": 60,
   "look.wall_dist": 260,
   "look.wall_angle": 55,
   "classify.probe_side": 400,
@@ -152,10 +159,10 @@
       "yaw": 0
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -330,
-       -60
+       0
       ],
       "yaw": 0
      }
@@ -299,10 +306,10 @@
       "yaw": -120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
-       913.039,
-       615.788
+       965,
+       585.788
       ],
       "yaw": -120
      }
@@ -454,10 +461,10 @@
       "yaw": -45
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
-       -275.772,
-       190.919
+       -233.345,
+       233.345
       ],
       "yaw": -45
      }
@@ -613,10 +620,10 @@
       "yaw": -165
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
-       1103.226,
-       443.366
+       1118.755,
+       385.41
       ],
       "yaw": -165
      }
@@ -756,10 +763,10 @@
       "yaw": 0
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -330,
-       -60
+       0
       ],
       "yaw": 0
      }
@@ -891,10 +898,10 @@
       "yaw": -120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
-       913.038,
-       615.789
+       964.999,
+       585.789
       ],
       "yaw": -120
      }
@@ -1018,10 +1025,10 @@
       "yaw": 0
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -330,
-       -60
+       0
       ],
       "yaw": 0
      }
@@ -1141,10 +1148,10 @@
       "yaw": -120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
-       913.038,
-       615.788
+       965,
+       585.788
       ],
       "yaw": -120
      }
@@ -1288,10 +1295,10 @@
       "yaw": 26.565
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
-       -268.328,
-       -201.246
+       -295.161,
+       -147.58
       ],
       "yaw": 26.565
      }
@@ -1447,10 +1454,10 @@
       "yaw": -93.435
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
-       759.88,
-       633.002
+       819.772,
+       629.407
       ],
       "yaw": -93.435
      }

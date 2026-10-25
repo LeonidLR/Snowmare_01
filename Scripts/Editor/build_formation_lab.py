@@ -11,6 +11,8 @@ Places (every actor tagged FormationLab and filed under the outliner folder Form
     (the in-game bot finds its click path by these);
   - a TextRenderActor per zone (its id, flat on the ground) for screenshots;
   - props: heat_source -> ACampfireActor (unlit: an operative kindles it with a match), else a TargetPoint;
+  - v2.2: a TargetPoint per wall-slide stop, label "<route id>_slide_<n>", tags FormationLab + FormationLabSlide + the route id
+    (after the route's wall arrival the in-game bot clicks them in order: the squad slides along the wall);
   - v2.1: a TargetPoint per route threat, label "<route id>_threat_<n>", tags FormationLab + FormationLabThreat + the route id
     (the in-game bot reports it to the squad as a known threat at since_s; FORMATION_CONTRACT.md 10.2).
 Lighting (sun, sky light, sky atmosphere, height fog) is tagged FormationLab_Env and placed only when missing, so hand tweaks stay.
@@ -46,6 +48,7 @@ TAG = "FormationLab"
 ENV_TAG = "FormationLab_Env"
 ROUTE_TAG = "FormationLabRoute"
 THREAT_TAG = "FormationLabThreat"
+SLIDE_TAG = "FormationLabSlide"
 FOLDER = "FormationLab"
 SCHEMA = "codex.formation_layout/1"
 
@@ -106,6 +109,9 @@ def plan(layout):
         for n, (px, py) in enumerate(r["points"]):
             specs.append({"kind": "target_point", "label": "%s_%d" % (r["id"], n), "folder": "Routes/" + r["id"],
                           "location": [px, py, gz + 50.0], "yaw": 0.0, "tags": [ROUTE_TAG, r["id"]]})
+        for n, (sx, sy) in enumerate(r.get("slide", [])):
+            specs.append({"kind": "target_point", "label": "%s_slide_%d" % (r["id"], n), "folder": "Routes/" + r["id"],
+                          "location": [sx, sy, gz + 50.0], "yaw": 0.0, "tags": [SLIDE_TAG, r["id"]]})
         for n, t in enumerate(r.get("threats", [])):
             tx, ty = t["pos"]
             specs.append({"kind": "target_point", "label": "%s_threat_%d" % (r["id"], n), "folder": "Threats/" + r["id"],

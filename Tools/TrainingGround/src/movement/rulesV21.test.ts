@@ -69,7 +69,9 @@ test('guard: the lookahead folds before a passage entrance (whole here, cut 5 m 
 
 test('guard: chain neighbours - echelon in its order, column K-P-L-Z, diamond P-Z / L-Z, none for a pair', () => {
   assert.deepEqual(G.ChainPairs('echelon_right', 4), [['K', 'L'], ['L', 'P'], ['P', 'Z']]);
-  assert.deepEqual(G.ChainPairs('column', 3), [['K', 'P'], ['P', 'L']]);
+  assert.deepEqual(G.ChainPairs('column', 3), [['K', 'P'], ['P', 'Z']]);
+  assert.deepEqual(G.ChainPairs('wedge', 3), [['P', 'Z']]);
+  assert.deepEqual(G.ChainPairs('line', 3), [['Z', 'K'], ['K', 'P']]);
   assert.deepEqual(G.ChainPairs('diamond', 4), [['P', 'Z'], ['L', 'Z']]);
   assert.deepEqual(G.ChainPairs('hedgehog', 4), [['K', 'P'], ['P', 'Z'], ['Z', 'L'], ['L', 'K']]);
   assert.deepEqual(G.ChainPairs('line', 2), []);
@@ -93,11 +95,11 @@ test('trail column: straight trail = the straight column; round a corner the slo
 
 test('assign: minimal total travel, no crossing - an echelon right folds L second, P third (finding 2: no pass-through)', () => {
   const A = FormationAssignRules.AssignPlaces;
-  // Echelon right (K, L 1st step, P 2nd step) -> the column: L is nearer the column's 1st place.
-  const echelon = FormationShapeRules.Slots('echelon_right', 3, [0, 0], 0, C).slice(1); // P at step 2, L at step 1
-  const column = FormationShapeRules.Slots('column', 3, [0, 0], 0, C).slice(1); // P first, L second
+  // Echelon right of four (K, L 1st step, P 2nd step, Z 3rd) -> the column (P first, L second, Z): L is nearer the 1st place.
+  const echelon = FormationShapeRules.Slots('echelon_right', 4, [0, 0], 0, C).slice(1); // P at step 2, L at step 1, Z at 3
+  const column = FormationShapeRules.Slots('column', 4, [0, 0], 0, C).slice(1); // P first, L second, Z third
   const pick = A(echelon.map((s) => s.pos), column.map((s) => s.pos));
-  assert.deepEqual(pick.map((k) => column[k].role), ['L', 'P'], 'P (far) takes the 2nd place, L (near) the 1st');
+  assert.deepEqual(pick.map((k) => column[k].role), ['L', 'P', 'Z'], 'P (far) takes the 2nd place, L (near) the 1st');
   // Nobody crosses: the two straight paths do not intersect.
   const paths = echelon.map((s, i) => [s.pos, column[pick[i]].pos] as [Vec2, Vec2]);
   assert.ok(!segmentBlocked(paths[0][0], paths[0][1], [{ a: paths[1][0], b: paths[1][1], thickness: 0 }], 0));
@@ -184,8 +186,8 @@ test('check 7: a wall between the leader and a member for >= 0.3 s is a split; s
   const dir: Vec2 = [w.b[0] - w.a[0], w.b[1] - w.a[1]], L = Math.hypot(dir[0], dir[1]);
   const n: Vec2 = [-dir[1] / L, dir[0] / L];
   const K: Vec2 = [mid[0] + n[0] * 300, mid[1] + n[1] * 300], Z: Vec2 = [mid[0] - n[0] * 300, mid[1] - n[1] * 300];
-  const member = (role: 'K' | 'Z', pos: Vec2): MemberFrame => ({ role, place: role, pos, yaw: 0, slot: role === 'K' ? pos : K, slotFallback: false, slotInvalid: false, backwards: false, moveYaw: null, cornerWatch: false });
-  const frame = (t: number): Frame => ({ t, mode: 'halt', formation: 'diamond', requested: 'diamond', guardLevel: 0, terrain: 'open', heading: 0, leaderDistance: 0, members: [member('K', K), member('Z', Z)], bypasses: [] });
+  const member = (role: 'K' | 'Z', pos: Vec2): MemberFrame => ({ role, place: role, pos, yaw: 0, slot: role === 'K' ? pos : K, slotFallback: false, slotInvalid: false, backwards: false, moveYaw: null, cornerWatch: false, rearGuard: false });
+  const frame = (t: number): Frame => ({ t, mode: 'halt', formation: 'diamond', requested: 'diamond', guardLevel: 0, terrain: 'open', heading: 0, leaderDistance: 0, members: [member('K', K), member('Z', Z)], bypasses: [], slide: null });
   const run = (seconds: number) => {
     const col = new RunCollector(layout, route, 2, 1, C);
     for (let t = 0; t < seconds; t += SIM_DT) col.onFrame(frame(t));

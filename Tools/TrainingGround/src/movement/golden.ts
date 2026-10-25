@@ -4,12 +4,12 @@
 
 import type { FormationConfig } from './config.ts';
 import type { Segment, Vec2 } from './geometry.ts';
-import { round } from './geometry.ts';
+import { normYaw, round } from './geometry.ts';
 import type { Formation } from './layout.ts';
 import { FORMATIONS } from './layout.ts';
 import type { ClassifyState, CornerState, GuardState, Mode, Role, TerrainClass, Threat } from './rules.ts';
 import {
-  CORNER_START, FormationAssignRules, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
+  CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
   FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor,
 } from './rules.ts';
 import { FormationMenuRules, MENU_ITEMS } from './menu.ts';
@@ -17,7 +17,7 @@ import type { MenuChoice } from './menu.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
 export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu',
-  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook'] as const;
+  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -309,8 +309,62 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
+  // v2.2: the coverage allocator (walk / halt, fixed looks) and the static allocation round a standing group.
+  const cover = base('Cover', 'in: walls, leaderPos, heading, members [{role, pos, back}] (K first), mode walk|halt, t, fixed [{role, yaw}] -> out {rearGuard, looks [{role, yaw}], shares [{role, from, to, primary}]} (FormationCoverRules.Allocate; yaws compare as angles).');
+  const COVER_SCENES = ['none', 'wall_left', 'wall_right', 'corridor', 'wide_street', 'gap_left', 'corner_left_ahead', 'far_left'];
+  for (const scene of COVER_SCENES) for (const [yaw, offset] of [[0, [0, 0]], [-120, [800, 300]]] as [number, Vec2][]) {
+    const placed = place(SCENES[scene], yaw, offset);
+    for (const f of ['diamond', 'column', 'echelon_right', 'line'] as Formation[]) for (const n of [3, 4]) {
+      const mem = FormationShapeRules.Slots(f, n, offset, yaw, config).map((x) => {
+        const p = r2(x.pos), h: Vec2 = [Math.cos((yaw * Math.PI) / 180), Math.sin((yaw * Math.PI) / 180)];
+        return { role: x.role, pos: p, back: round(-((p[0] - offset[0]) * h[0] + (p[1] - offset[1]) * h[1])) };
+      });
+      for (const [mode, t, fixed] of [['halt', 0, []], ['walk', 0.7, []], ['walk', 2.9, []], ['walk', 1.3, [{ role: 'K', yaw: round(yaw - 95) }]]] as ['walk' | 'halt', number, { role: Role; yaw: number }[]][]) {
+        const out = FormationCoverRules.Allocate(placed, offset, yaw, mem, mode, t, config, fixed)!;
+        cover.cases.push({ in: { scene, formation: f, walls: placed.map(seg), leaderPos: r2(offset), heading: yaw, members: mem, mode, t, fixed },
+          out: { rearGuard: out.rearGuard, looks: out.looks.map((l) => ({ role: l.role, yaw: round(l.yaw) })), shares: out.shares.map((x) => ({ ...x, primary: round(x.primary) })) } });
+      }
+    }
+  }
+  const coverStatic = base('CoverStatic', 'in: walls, members [{role, pos}], fixed [{role, yaw}], free [roles] -> out.looks [{role, yaw}] (FormationCoverRules.AllocateStatic).');
+  const coverWall: Segment = { a: [0, 0], b: [3000, 0], thickness: 40 };
+  for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
+    const [w] = place([coverWall], yaw, offset);
+    const tp = (p: Vec2) => r2(place([{ a: p, b: p }], yaw, offset)[0].a);
+    for (const n of [3, 4]) {
+      const slots = FormationWallRules.Layout(coverWall, [400, 300], n, 400, 2600, config).map((s2) => ({ role: s2.role, pos: tp(s2.pos) }));
+      for (const fixedYaw of [180, 135, 90]) {
+        const fixed = [{ role: 'K' as Role, yaw: round(fixedYaw + yaw) }];
+        const free = slots.map((s2) => s2.role).filter((r) => r !== 'K');
+        const out = FormationCoverRules.AllocateStatic([w], slots, fixed, free, config);
+        coverStatic.cases.push({ in: { walls: [seg(w)], members: slots, fixed, free }, out: { looks: out.map((l) => ({ role: l.role, yaw: round(l.yaw) })) } });
+      }
+      const all = slots.map((s2) => s2.role);
+      coverStatic.cases.push({ in: { walls: [seg(w)], members: slots, fixed: [], free: all }, out: { looks: FormationCoverRules.AllocateStatic([w], slots, [], all, config).map((l) => ({ role: l.role, yaw: round(l.yaw) })) } });
+    }
+  }
+
+  // v2.2: the wall slide.
+  const slide = base('Slide', 'in: wall, startSlots [{role, pos, yaw}] (FormationWallRules.Layout, K first), leaderPos, destination, t -> out {active, leaderTarget, targets [{role, pos, yaw}], lead, rearGuard, normalYaw, order} (FormationWallRules.Slide).');
+  for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
+    const [w] = place([{ a: [0, 0], b: [3000, 0], thickness: 40 }], yaw, offset);
+    const tp = (p: Vec2) => r2(place([{ a: p, b: p }], yaw, offset)[0].a);
+    for (const n of [2, 3, 4]) {
+      const start = FormationWallRules.Layout({ a: [0, 0], b: [3000, 0], thickness: 40 }, [1500, 300], n, 1500, 1500, config)
+        .map((s2) => ({ role: s2.role, pos: tp(s2.pos), yaw: round(normYaw(s2.yaw + yaw)) }));
+      const kLocal = FormationWallRules.Layout({ a: [0, 0], b: [3000, 0], thickness: 40 }, [1500, 300], n, 1500, 1500, config)[0].pos;
+      for (const [dx, dy, progress, t] of [[600, 100, 0, 0], [600, 100, 300, 1.3], [-900, 60, 450, 2.2], [600, 400, 0, 0], [600, -150, 0, 0], [20, 100, 0, 0]] as number[][]) {
+        const destination = tp([1500 + dx, dy]);
+        const leaderPos = tp([kLocal[0] + Math.sign(dx) * progress, kLocal[1]]);
+        const out = FormationWallRules.Slide(w, start, leaderPos, destination, t, config);
+        slide.cases.push({ in: { wall: seg(w), startSlots: start, leaderPos, destination, t },
+          out: { ...out, leaderTarget: r2(out.leaderTarget), normalYaw: round(out.normalYaw), targets: out.targets.map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) })) } });
+      }
+    }
+  }
+
   return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
-    Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign, TurnAhead: turnAhead, ClearLook: clear };
+    Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign, TurnAhead: turnAhead, ClearLook: clear, Cover: cover, CoverStatic: coverStatic, Slide: slide };
 }
 
 export const goldenFileName = (rule: GoldenRule): string => `formation_${rule}.json`;

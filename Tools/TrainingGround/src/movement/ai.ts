@@ -57,7 +57,7 @@ export const FIXED_PARAMS = ['sight.fov', 'pace.walk_speed', 'pace.run_speed', '
 const SYSTEM = [
   'You tune the squad formation logic of a tactical game (Operation: Cold Silence).',
   'A deterministic simulator walked the squad along test routes and scored nine checks:',
-  '1 wall stare, 2 rear cover with 4 men, 3 formation flicker, 4 expected formation per zone, 5 slots / spacing, 6 rear man pace,',
+  '1 wall stare, 2 rear cover with 3-4 men, 3 formation flicker, 4 expected formation per zone, 5 slots / spacing, 6 rear man pace,',
   '7 squad split by a wall, 8 passing a wall on the side hidden from a known threat, 9 the corner man looking round a wall end.',
   'Design rules you must keep: diamond (4) / wedge (3); the side men scan 12->3 and 9->12 while walking; the rear man walks',
   'backwards looking at 6; nobody looks into a wall; a wall on one side -> echelon to the open side; a narrow passage -> column;',

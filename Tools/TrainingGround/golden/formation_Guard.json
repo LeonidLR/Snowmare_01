@@ -16,6 +16,7 @@
   "pair.scan_period": 5,
   "pair.scan_from": 90,
   "pair.scan_to": 270,
+  "triad.rear_back": 420,
   "column.base_back": 180,
   "column.spacing": 150,
   "column.stagger": 60,
@@ -39,6 +40,8 @@
   "wall.flank_deg": 60,
   "wall.neighbour_deg": 30,
   "wall.end_deg": 75,
+  "slide.max_off_wall": 200,
+  "slide.lead_out_deg": 20,
   "pace.patrol": 0.8,
   "pace.walk_speed": 220,
   "pace.run_speed": 480,
@@ -51,6 +54,10 @@
   "scan.amp_lead": 30,
   "scan.dwell_exp": 0.45,
   "halt.side_deg": 60,
+  "rear.share_half": 30,
+  "rear.wall_shift_deg": 30,
+  "coverage.max_sweep": 90,
+  "coverage.max_gap_deg": 60,
   "look.wall_dist": 260,
   "look.wall_angle": 55,
   "classify.probe_side": 400,
@@ -7894,7 +7901,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -7942,7 +7949,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -7990,7 +7997,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -8044,7 +8051,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -8098,7 +8105,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -8152,7 +8159,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -8200,7 +8207,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -8248,7 +8255,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -8296,7 +8303,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -11764,7 +11771,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -11812,7 +11819,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -11860,7 +11867,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -11914,7 +11921,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -11968,7 +11975,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -12022,7 +12029,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -12070,7 +12077,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -12118,7 +12125,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -12166,7 +12173,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -12201,159 +12208,6 @@
     ],
     "leaderYaw": 63,
     "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 1,
-     "effective": "echelon_right",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_left",
-    "walls": [
-     {
-      "a": [
-       -140.679,
-       -2168.21
-      ],
-      "b": [
-       1675.283,
-       1395.816
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_left",
-    "walls": [
-     {
-      "a": [
-       -140.679,
-       -2168.21
-      ],
-      "b": [
-       1675.283,
-       1395.816
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_left",
-    "walls": [
-     {
-      "a": [
-       -140.679,
-       -2168.21
-      ],
-      "b": [
-       1675.283,
-       1395.816
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": {
-     "pos": [
-      726.995,
-      195.503
-     ],
-     "yaw": 63
-    },
     "turnAhead": 0,
     "state": {
      "requested": null,
@@ -12402,6 +12256,159 @@
      -250
     ],
     "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_left",
+    "walls": [
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       1675.283,
+       1395.816
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_left",
+    "walls": [
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       1675.283,
+       1395.816
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": {
+     "pos": [
+      726.995,
+      195.503
+     ],
+     "yaw": 63
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 1,
+     "effective": "echelon_right",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_left",
+    "walls": [
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       1675.283,
+       1395.816
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
     "ahead": {
      "pos": [
       726.995,
@@ -14815,7 +14822,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -14863,7 +14870,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -14911,7 +14918,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -14965,7 +14972,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -15019,7 +15026,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -15073,7 +15080,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -15121,7 +15128,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -15169,7 +15176,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -15217,7 +15224,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -15840,429 +15847,6 @@
     ],
     "requested": "echelon_left",
     "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 0,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 0,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 0,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 0,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       300
-      ],
-      "b": [
-       2000,
-       300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
     "leaderPos": [
      0,
      0
@@ -16313,6 +15897,429 @@
      }
     ],
     "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 0,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 0,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 0,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 0,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       2000,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
     "memberCount": 4,
     "leaderPos": [
      0,
@@ -18712,7 +18719,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -18760,7 +18767,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -18808,7 +18815,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -18862,7 +18869,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -18916,7 +18923,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -18970,7 +18977,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -19018,7 +19025,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -19066,7 +19073,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -19114,7 +19121,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -19149,159 +19156,6 @@
     ],
     "leaderYaw": 63,
     "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 1,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": {
-     "pos": [
-      726.995,
-      195.503
-     ],
-     "yaw": 63
-    },
     "turnAhead": 0,
     "state": {
      "requested": null,
@@ -19350,6 +19204,159 @@
      -250
     ],
     "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": {
+     "pos": [
+      726.995,
+      195.503
+     ],
+     "yaw": 63
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 1,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
     "ahead": {
      "pos": [
       726.995,
@@ -19737,429 +19744,6 @@
     ],
     "requested": "echelon_left",
     "memberCount": 3,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": {
-     "pos": [
-      726.995,
-      195.503
-     ],
-     "yaw": 63
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 0,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": {
-     "pos": [
-      726.995,
-      195.503
-     ],
-     "yaw": 63
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": {
-     "pos": [
-      726.995,
-      195.503
-     ],
-     "yaw": 63
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 0,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 0,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [],
-    "state": {
-     "requested": "echelon_left",
-     "level": 0,
-     "effective": "echelon_left",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_right",
-    "walls": [
-     {
-      "a": [
-       -675.283,
-       -1895.816
-      ],
-      "b": [
-       1140.679,
-       1668.21
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
     "leaderPos": [
      500,
      -250
@@ -20210,6 +19794,429 @@
      }
     ],
     "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": {
+     "pos": [
+      726.995,
+      195.503
+     ],
+     "yaw": 63
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": {
+     "pos": [
+      726.995,
+      195.503
+     ],
+     "yaw": 63
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 0,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 0,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 0,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": {
+     "pos": [
+      726.995,
+      195.503
+     ],
+     "yaw": 63
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [],
+    "state": {
+     "requested": "echelon_left",
+     "level": 0,
+     "effective": "echelon_left",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_right",
+    "walls": [
+     {
+      "a": [
+       -675.283,
+       -1895.816
+      ],
+      "b": [
+       1140.679,
+       1668.21
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
     "memberCount": 4,
     "leaderPos": [
      500,
@@ -22962,7 +22969,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -23021,7 +23028,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -23080,7 +23087,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -23145,7 +23152,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -23210,7 +23217,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -23275,7 +23282,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -23334,7 +23341,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -23393,7 +23400,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -23452,66 +23459,6 @@
    "out": {
     "blocked": [
      "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corridor",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -250
-      ],
-      "b": [
-       2000,
-       -250
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       250
-      ],
-      "b": [
-       2000,
-       250
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
      "Z"
     ],
     "state": {
@@ -23558,132 +23505,6 @@
     ],
     "leaderYaw": 0,
     "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corridor",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -250
-      ],
-      "b": [
-       2000,
-       -250
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       250
-      ],
-      "b": [
-       2000,
-       250
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corridor",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -250
-      ],
-      "b": [
-       2000,
-       -250
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       250
-      ],
-      "b": [
-       2000,
-       250
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
     "turnAhead": 0,
     "state": {
      "requested": null,
@@ -23743,6 +23564,192 @@
      0
     ],
     "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       2000,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       2000,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       2000,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       2000,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       2000,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       2000,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
     "ahead": {
      "pos": [
       500,
@@ -24069,7 +24076,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -24128,7 +24135,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -24187,7 +24194,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -24252,7 +24259,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -24317,7 +24324,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -24382,7 +24389,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -24441,7 +24448,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -24500,7 +24507,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -24559,7 +24566,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -27858,7 +27865,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -27917,7 +27924,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -27976,7 +27983,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -28041,7 +28048,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -28106,7 +28113,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -28171,7 +28178,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -28230,7 +28237,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -28289,7 +28296,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_right",
@@ -28348,66 +28355,6 @@
    "out": {
     "blocked": [
      "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corridor",
-    "walls": [
-     {
-      "a": [
-       -185.229,
-       -2145.511
-      ],
-      "b": [
-       1630.733,
-       1418.515
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -630.733,
-       -1918.515
-      ],
-      "b": [
-       1185.229,
-       1645.511
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
      "Z"
     ],
     "state": {
@@ -28454,132 +28401,6 @@
     ],
     "leaderYaw": 63,
     "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corridor",
-    "walls": [
-     {
-      "a": [
-       -185.229,
-       -2145.511
-      ],
-      "b": [
-       1630.733,
-       1418.515
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -630.733,
-       -1918.515
-      ],
-      "b": [
-       1185.229,
-       1645.511
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_right",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corridor",
-    "walls": [
-     {
-      "a": [
-       -185.229,
-       -2145.511
-      ],
-      "b": [
-       1630.733,
-       1418.515
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -630.733,
-       -1918.515
-      ],
-      "b": [
-       1185.229,
-       1645.511
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_right",
-    "memberCount": 4,
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "ahead": {
-     "pos": [
-      726.995,
-      195.503
-     ],
-     "yaw": 63
-    },
     "turnAhead": 0,
     "state": {
      "requested": null,
@@ -28639,6 +28460,192 @@
      -250
     ],
     "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor",
+    "walls": [
+     {
+      "a": [
+       -185.229,
+       -2145.511
+      ],
+      "b": [
+       1630.733,
+       1418.515
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -630.733,
+       -1918.515
+      ],
+      "b": [
+       1185.229,
+       1645.511
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor",
+    "walls": [
+     {
+      "a": [
+       -185.229,
+       -2145.511
+      ],
+      "b": [
+       1630.733,
+       1418.515
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -630.733,
+       -1918.515
+      ],
+      "b": [
+       1185.229,
+       1645.511
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "ahead": {
+     "pos": [
+      726.995,
+      195.503
+     ],
+     "yaw": 63
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_right",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor",
+    "walls": [
+     {
+      "a": [
+       -185.229,
+       -2145.511
+      ],
+      "b": [
+       1630.733,
+       1418.515
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -630.733,
+       -1918.515
+      ],
+      "b": [
+       1185.229,
+       1645.511
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
     "ahead": {
      "pos": [
       726.995,
@@ -28965,7 +28972,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -29024,7 +29031,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -29083,7 +29090,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -29148,7 +29155,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -29213,7 +29220,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -29278,7 +29285,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -29337,7 +29344,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -29396,7 +29403,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -29455,7 +29462,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -33726,7 +33733,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -33785,7 +33792,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -33844,7 +33851,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -33909,373 +33916,6 @@
    "out": {
     "blocked": [
      "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 1,
-     "effective": "echelon_right",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "gap_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -100,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       100,
-       -300
-      ],
-      "b": [
-       2000,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "gap_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -100,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       100,
-       -300
-      ],
-      "b": [
-       2000,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "gap_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -100,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       100,
-       -300
-      ],
-      "b": [
-       2000,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "gap_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -100,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       100,
-       -300
-      ],
-      "b": [
-       2000,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "gap_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -100,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       100,
-       -300
-      ],
-      "b": [
-       2000,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "gap_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -100,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       100,
-       -300
-      ],
-      "b": [
-       2000,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
      "Z"
     ],
     "state": {
@@ -34315,13 +33955,19 @@
      }
     ],
     "requested": "echelon_left",
-    "memberCount": 4,
+    "memberCount": 3,
     "leaderPos": [
      0,
      0
     ],
     "leaderYaw": 0,
-    "ahead": null,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
     "turnAhead": 0,
     "state": {
      "requested": "echelon_left",
@@ -34335,7 +33981,6 @@
    "out": {
     "blocked": [
      "P",
-     "L",
      "Z"
     ],
     "state": {
@@ -34344,6 +33989,248 @@
      "effective": "column",
      "candidate": 1,
      "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "gap_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -100,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       100,
+       -300
+      ],
+      "b": [
+       2000,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "gap_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -100,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       100,
+       -300
+      ],
+      "b": [
+       2000,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "gap_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -100,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       100,
+       -300
+      ],
+      "b": [
+       2000,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "gap_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -100,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       100,
+       -300
+      ],
+      "b": [
+       2000,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
     }
    }
   },
@@ -34382,72 +34269,6 @@
     ],
     "leaderYaw": 0,
     "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "gap_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -100,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       100,
-       -300
-      ],
-      "b": [
-       2000,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
     "turnAhead": 0,
     "state": {
      "requested": null,
@@ -34507,6 +34328,192 @@
      0
     ],
     "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "gap_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -100,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       100,
+       -300
+      ],
+      "b": [
+       2000,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "gap_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -100,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       100,
+       -300
+      ],
+      "b": [
+       2000,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 1,
+     "effective": "echelon_right",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "gap_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -100,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       100,
+       -300
+      ],
+      "b": [
+       2000,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
     "ahead": {
      "pos": [
       500,
@@ -38487,7 +38494,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -38546,7 +38553,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -38605,7 +38612,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -38670,7 +38677,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -38735,7 +38742,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -38800,7 +38807,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -38859,7 +38866,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -38918,7 +38925,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -38977,7 +38984,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -43248,556 +43255,6 @@
    "out": {
     "blocked": [
      "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 1,
-     "effective": "echelon_right",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 3,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 40,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "corner_left_ahead",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       400,
-       -300
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       400,
-       -300
-      ],
-      "b": [
-       400,
-       1500
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
      "Z"
     ],
     "state": {
@@ -43837,6 +43294,556 @@
      }
     ],
     "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 40,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 1,
+     "effective": "echelon_right",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "corner_left_ahead",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       400,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       400,
+       -300
+      ],
+      "b": [
+       400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
     "memberCount": 4,
     "leaderPos": [
      0,
@@ -48009,7 +48016,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -48068,7 +48075,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -48127,7 +48134,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -48192,7 +48199,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -48257,7 +48264,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -48322,7 +48329,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -48381,7 +48388,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -48440,7 +48447,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -48499,7 +48506,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52264,7 +52271,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52312,7 +52319,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52360,7 +52367,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52414,7 +52421,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52468,7 +52475,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52522,7 +52529,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52570,7 +52577,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52618,7 +52625,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52666,7 +52673,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -52701,159 +52708,6 @@
     ],
     "leaderYaw": 0,
     "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": null,
-     "level": 0,
-     "effective": null,
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 1,
-     "effective": "echelon_right",
-     "candidate": null,
-     "candidateDistance": 0
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_end_behind_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -150,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": null,
-     "candidateDistance": 0
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_end_behind_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -150,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": null,
-    "turnAhead": 0,
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 0,
-     "candidateDistance": 470
-    },
-    "stepDistance": 60
-   },
-   "out": {
-    "blocked": [
-     "P",
-     "L",
-     "Z"
-    ],
-    "state": {
-     "requested": "echelon_left",
-     "level": 2,
-     "effective": "column",
-     "candidate": 1,
-     "candidateDistance": 60
-    }
-   }
-  },
-  {
-   "in": {
-    "scene": "wall_end_behind_left",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -300
-      ],
-      "b": [
-       -150,
-       -300
-      ],
-      "thickness": 40
-     }
-    ],
-    "requested": "echelon_left",
-    "memberCount": 4,
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "ahead": {
-     "pos": [
-      500,
-      0
-     ],
-     "yaw": 0
-    },
     "turnAhead": 0,
     "state": {
      "requested": null,
@@ -52902,6 +52756,159 @@
      0
     ],
     "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_behind_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -150,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": null,
+    "turnAhead": 0,
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 0,
+     "candidateDistance": 470
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 2,
+     "effective": "column",
+     "candidate": 1,
+     "candidateDistance": 60
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_behind_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -150,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "ahead": {
+     "pos": [
+      500,
+      0
+     ],
+     "yaw": 0
+    },
+    "turnAhead": 0,
+    "state": {
+     "requested": null,
+     "level": 0,
+     "effective": null,
+     "candidate": null,
+     "candidateDistance": 0
+    },
+    "stepDistance": 60
+   },
+   "out": {
+    "blocked": [
+     "P",
+     "L",
+     "Z"
+    ],
+    "state": {
+     "requested": "echelon_left",
+     "level": 1,
+     "effective": "echelon_right",
+     "candidate": null,
+     "candidateDistance": 0
+    }
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_behind_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       -150,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "requested": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
     "ahead": {
      "pos": [
       500,
@@ -56134,7 +56141,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -56182,7 +56189,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -56230,7 +56237,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -56284,7 +56291,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -56338,7 +56345,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -56392,7 +56399,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -56440,7 +56447,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -56488,7 +56495,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
@@ -56536,7 +56543,7 @@
    "out": {
     "blocked": [
      "P",
-     "L"
+     "Z"
     ],
     "state": {
      "requested": "echelon_left",
