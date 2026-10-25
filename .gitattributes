@@ -15,3 +15,7 @@
 *.wav  filter=lfs diff=lfs merge=lfs -text
 *.ogg  filter=lfs diff=lfs merge=lfs -text
 *.mp4  filter=lfs diff=lfs merge=lfs -text
+
+# Formation golden vectors / lab data: byte-compared by the Training Ground tests (generator writes LF)
+Tools/TrainingGround/golden/** text eol=lf
+Content/Data/FormationLab/** text eol=lf
