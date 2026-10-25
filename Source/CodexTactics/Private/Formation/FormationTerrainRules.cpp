@@ -102,13 +102,23 @@ namespace FormationTerrainRules
 		return Best.IsSet() ? TOptional<float>(static_cast<float>(Best.GetValue())) : TOptional<float>();
 	}
 
-	EFormationTerrainClass ClassifyRaw(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, const FFormationConfig& Config)
+	bool IsArriving(const FVector2D& LeaderPos, const TOptional<FVector2D>& Destination, const FFormationConfig& Config)
 	{
-		for (const float RayDeg : TerrainAheadRaysDeg)
+		return Destination.IsSet() && FVector2D::Distance(LeaderPos, Destination.GetValue()) <= static_cast<double>(Config.ClassifyArriveDist);
+	}
+
+	EFormationTerrainClass ClassifyRaw(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, const FFormationConfig& Config,
+		const TOptional<FVector2D>& Destination)
+	{
+		// at_wall only on arrival: walking past a wall or turning at a corridor bend never triggers the wall layout.
+		if (IsArriving(LeaderPos, Destination, Config))
 		{
-			if (RayHit(Walls, LeaderPos, FormationMath::Forward(LeaderYaw + RayDeg), Config.ClassifyAtWallDist).IsSet())
+			for (const float RayDeg : TerrainAheadRaysDeg)
 			{
-				return EFormationTerrainClass::AtWall;
+				if (RayHit(Walls, LeaderPos, FormationMath::Forward(LeaderYaw + RayDeg), Config.ClassifyAtWallDist).IsSet())
+				{
+					return EFormationTerrainClass::AtWall;
+				}
 			}
 		}
 		const float Reach = Config.ClassifyProbeSide;
@@ -118,7 +128,8 @@ namespace FormationTerrainRules
 		const bool bLeftBlocked = Left.IsSet() && Left.GetValue() <= Reach;
 		if (bRightBlocked && bLeftBlocked)
 		{
-			return Left.GetValue() + Right.GetValue() < Config.ClassifyCorridorWidth ? EFormationTerrainClass::Corridor : EFormationTerrainClass::Open;
+			// Any passage between two walls is a column (user decision); PassageWidth picks the narrow / wide sectors.
+			return EFormationTerrainClass::Corridor;
 		}
 		if (bLeftBlocked)
 		{
@@ -146,7 +157,7 @@ namespace FormationTerrainRules
 	EFormationTerrainClass ApplyHysteresis(EFormationTerrainClass RawClass, const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass,
 		const FFormationConfig& Config)
 	{
-		if (!PreviousClass.IsSet() || RawClass == PreviousClass.GetValue())
+		if (!PreviousClass.IsSet() || RawClass == PreviousClass.GetValue() || RawClass == EFormationTerrainClass::AtWall)
 		{
 			return RawClass;
 		}
@@ -154,12 +165,12 @@ namespace FormationTerrainRules
 	}
 
 	EFormationTerrainClass Classify(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,
-		const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass, const FFormationConfig& Config)
+		const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass, const FFormationConfig& Config, const TOptional<FVector2D>& Destination)
 	{
-		return ApplyHysteresis(ClassifyRaw(Walls, LeaderPos, LeaderYaw, Config), PreviousClass, TimeInClass, Config);
+		return ApplyHysteresis(ClassifyRaw(Walls, LeaderPos, LeaderYaw, Config, Destination), PreviousClass, TimeInClass, Config);
 	}
 
-	EFormationKind FormationFor(EFormationTerrainClass Class, int32 MemberCount)
+	EFormationKind FormationFor(EFormationTerrainClass Class, int32 MemberCount, bool bBlizzard)
 	{
 		switch (Class)
 		{
@@ -167,19 +178,25 @@ namespace FormationTerrainRules
 		case EFormationTerrainClass::WallRight: return EFormationKind::EchelonLeft;
 		case EFormationTerrainClass::Corridor: return EFormationKind::Column;
 		case EFormationTerrainClass::AtWall: return EFormationKind::Wall;
-		default: return MemberCount >= 4 ? EFormationKind::Diamond : EFormationKind::Wedge;
+		default:
+			// Open ground; in a blizzard the tight diamond (walls / passages keep their rules; the menu choice overrides).
+			if (bBlizzard)
+			{
+				return EFormationKind::Blizzard;
+			}
+			return MemberCount >= 4 ? EFormationKind::Diamond : EFormationKind::Wedge;
 		}
 	}
 }
 
 EFormationTerrainClass FFormationTerrainTracker::Step(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, float DeltaSeconds,
-	const FFormationConfig& Config)
+	const FFormationConfig& Config, const TOptional<FVector2D>& Destination)
 {
 	if (Class.IsSet())
 	{
 		TimeInClass += FMath::Max(DeltaSeconds, 0.f);
 	}
-	const EFormationTerrainClass Next = FormationTerrainRules::Classify(Walls, LeaderPos, LeaderYaw, Class, TimeInClass, Config);
+	const EFormationTerrainClass Next = FormationTerrainRules::Classify(Walls, LeaderPos, LeaderYaw, Class, TimeInClass, Config, Destination);
 	if (!Class.IsSet() || Next != Class.GetValue())
 	{
 		Class = Next;

@@ -155,7 +155,7 @@ function mockAdvice(p: AdvicePayload): string[] {
       1: 'wall stare: lower wall.flank_deg or echelon sectors near walls',
       2: 'rear cover: the rear man must keep 6 o\'clock; check scan.amp_side / column.side_deg',
       3: 'flicker: raise classify.hold_time',
-      4: 'zone mismatch: tune classify.probe_side / classify.corridor_width',
+      4: 'zone mismatch: tune classify.probe_side / classify.side_ignore_perp_deg',
       5: 'slots: raise slot.min_spacing margins or the offsets',
       6: 'pace: lower pace.patrol or raise move.backward_mult',
     };

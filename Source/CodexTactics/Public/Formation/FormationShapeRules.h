@@ -40,4 +40,12 @@ namespace FormationShapeRules
 	 */
 	CODEXTACTICS_API TArray<FFormationSlot> Slots(EFormationKind Formation, int32 MemberCount, const FVector2D& LeaderPos, float LeaderYaw,
 		const FFormationConfig& Config = FFormationConfig());
+
+	/**
+	 * v1.2: the hedgehog round a centre point (the heat source; design "backs to the fire, faces out"): the leader stands HedgehogRadius
+	 * in front of Center along Yaw, then Slots(Hedgehog) - every member on the ring with his back to the centre; Yaw = the look yaw
+	 * (LookYaw halt). The runtime moves the leader to slot 0 so the ring's centre is the fire.
+	 */
+	CODEXTACTICS_API TArray<FFormationSlot> HedgehogSlots(const FVector2D& Center, int32 MemberCount, float Yaw,
+		const FFormationConfig& Config = FFormationConfig());
 }

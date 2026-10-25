@@ -64,9 +64,9 @@ namespace FormationTuning
 		{ TEXT("column.narrow_back_deg"), &FFormationConfig::ColumnNarrowBackDeg },
 		{ TEXT("classify.probe_side"), &FFormationConfig::ClassifyProbeSide },
 		{ TEXT("classify.probe_ahead"), &FFormationConfig::ClassifyProbeAhead },
-		{ TEXT("classify.corridor_width"), &FFormationConfig::ClassifyCorridorWidth },
 		{ TEXT("classify.hold_time"), &FFormationConfig::ClassifyHoldTime },
 		{ TEXT("classify.at_wall_dist"), &FFormationConfig::ClassifyAtWallDist },
+		{ TEXT("classify.arrive_dist"), &FFormationConfig::ClassifyArriveDist },
 		{ TEXT("classify.side_ignore_perp_deg"), &FFormationConfig::ClassifySideIgnorePerpDeg },
 		{ TEXT("sight.fov"), &FFormationConfig::SightFov } };
 

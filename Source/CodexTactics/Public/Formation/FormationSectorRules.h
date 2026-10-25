@@ -12,7 +12,7 @@
  * Look offsets relative to the reference yaw (the leader's heading; mode / formation wall: the wall's OUTWARD normal), degrees,
  * positive = right (clock c = 30 * c). scan(c, a, T, ph) = c + a * dwell(sin(2 pi t / T + ph)), dwell(s) = sign(s) * |s|^ScanDwellExp
  * (holds at the sector's ends). n = the member count.
- * - Run: everybody 0 (12 o'clock), every formation.
+ * - Run and Forward (v1.2, the menu's "All forward"): everybody 0 (12 o'clock), every formation.
  * - Wall (mode or formation): n = 2: K +45 (7:30), Z -45 (4:30); else K 0 (6 of the heading into the wall), L +WallFlankDeg (8),
  *   P -WallFlankDeg (4), Z -WallEndDeg (the 4th at the right end; FormationWallRules::Layout has the full answer for either end).
  * - Diamond / wedge / blizzard: n = 2 partner Z: walk scan((from + to) / 2, (to - from) / 2, PairScanPeriod, 0) = sweeps 3 -> 6 -> 9,

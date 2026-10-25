@@ -20,8 +20,10 @@ test('golden files are up to date (run `npm run golden` after changing the rules
 test('golden cases are rotation / translation invariant for Classify (no borderline scenes)', () => {
   const files = buildGolden(configValues(readConfigFile()), CONFIG_REL);
   const byKey = new Map<string, Set<string>>();
-  for (const c of files.Classify.cases as { in: { scene: string; previousClass: string | null; timeInClass: number }; out: { class: string } }[]) {
-    const key = `${c.in.scene}|${c.in.previousClass}|${c.in.timeInClass}`;
+  type In = { scene: string; previousClass: string | null; timeInClass: number; leaderPos: number[]; destination: number[] | null };
+  for (const c of files.Classify.cases as { in: In; out: { class: string } }[]) {
+    const dest = c.in.destination === null ? 'none' : c.in.destination[0] === c.in.leaderPos[0] && c.in.destination[1] === c.in.leaderPos[1] ? 'here' : 'ahead';
+    const key = `${c.in.scene}|${c.in.previousClass}|${c.in.timeInClass}|${dest}`;
     if (!byKey.has(key)) byKey.set(key, new Set());
     byKey.get(key)!.add(c.out.class);
   }
