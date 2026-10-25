@@ -51,8 +51,7 @@ export function auditLayout(data: unknown, config: FormationConfig, nav?: NavGri
         issues.push({ severity: 'warning', where: `${route.id} leg ${i}`, message: `the leg crosses a wall; the leader detours ${Math.round(L - straight)} cm (add a route point?)` });
       }
     }
-    // Time inside each expected zone at the route's pace vs. what the classifier needs to settle.
-    const speed = route.pace === 'run' ? cfg(config, 'pace.run_speed') : cfg(config, 'pace.walk_speed') * cfg(config, 'pace.patrol');
+    // Path length inside each expected zone vs. what the classifier needs to settle (v2: path distance, pace-independent).
     const step = 25;
     const samples = samplePath(route.points, step);
     const inZone = new Map<string, number>();
@@ -60,13 +59,14 @@ export function auditLayout(data: unknown, config: FormationConfig, nav?: NavGri
       crossed.add(z.id);
       inZone.set(z.id, (inZone.get(z.id) ?? 0) + step);
     }
-    const need = (cfg(config, 'classify.hold_time') + 0.5) * speed + 100;
+    // v2: tighter classes take over at once; an open-ground expectation needs the path hold (+ the settle margin and a step).
     for (const e of route.expect ?? []) {
       const len = inZone.get(e.zone) ?? 0;
       const zone = layout.zones.find((z) => z.id === e.zone)!;
       const endsHere = pointInPoly(route.points[route.points.length - 1], zone.poly); // the squad halts there: time to settle
+      const need = (e.formation === 'diamond' || e.formation === 'wedge' || e.formation === 'blizzard' ? cfg(config, 'classify.hold_distance') : 0) + 200;
       if (len === 0) issues.push({ severity: 'error', where: `${route.id} expect ${e.zone}`, message: 'the route never enters this zone' });
-      else if (len < need && !endsHere) issues.push({ severity: 'warning', where: `${route.id} expect ${e.zone}`, message: `only ${Math.round(len)} cm of the route in the zone; the classifier needs ~${Math.round(need)} cm to settle at ${route.pace} pace` });
+      else if (len < need && !endsHere) issues.push({ severity: 'warning', where: `${route.id} expect ${e.zone}`, message: `only ${Math.round(len)} cm of the route in the zone; the classifier needs ~${Math.round(need)} cm to settle` });
     }
   }
   for (const z of layout.zones) if (!crossed.has(z.id)) issues.push({ severity: 'warning', where: z.id, message: 'no route crosses this zone' });

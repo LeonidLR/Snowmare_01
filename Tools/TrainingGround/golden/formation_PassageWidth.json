@@ -53,7 +53,7 @@
   "halt.side_deg": 60,
   "classify.probe_side": 400,
   "classify.probe_ahead": 600,
-  "classify.hold_time": 1,
+  "classify.hold_distance": 500,
   "classify.at_wall_dist": 150,
   "classify.arrive_dist": 50,
   "classify.side_ignore_perp_deg": 30,

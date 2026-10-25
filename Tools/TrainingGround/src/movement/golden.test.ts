@@ -20,12 +20,12 @@ test('golden files are up to date (run `npm run golden` after changing the rules
 test('golden cases are rotation / translation invariant for Classify (no borderline scenes)', () => {
   const files = buildGolden(configValues(readConfigFile()), CONFIG_REL);
   const byKey = new Map<string, Set<string>>();
-  type In = { scene: string; previousClass: string | null; timeInClass: number; leaderPos: number[]; destination: number[] | null };
-  for (const c of files.Classify.cases as { in: In; out: { class: string } }[]) {
+  type In = { scene: string; state: unknown; stepDistance: number; leaderPos: number[]; destination: number[] | null };
+  for (const c of files.Classify.cases as { in: In; out: { state: unknown } }[]) {
     const dest = c.in.destination === null ? 'none' : c.in.destination[0] === c.in.leaderPos[0] && c.in.destination[1] === c.in.leaderPos[1] ? 'here' : 'ahead';
-    const key = `${c.in.scene}|${c.in.previousClass}|${c.in.timeInClass}|${dest}`;
+    const key = `${c.in.scene}|${JSON.stringify(c.in.state)}|${c.in.stepDistance}|${dest}`;
     if (!byKey.has(key)) byKey.set(key, new Set());
-    byKey.get(key)!.add(c.out.class);
+    byKey.get(key)!.add(JSON.stringify(c.out.state));
   }
   for (const [key, classes] of byKey) assert.equal(classes.size, 1, `${key}: ${[...classes].join(', ')}`);
 });
