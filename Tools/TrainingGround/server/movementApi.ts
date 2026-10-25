@@ -9,8 +9,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const TOOL_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
+// fileURLToPath, not URL.pathname: the pathname keeps %20 for the space in "Unreal Projects" (ENOENT on Windows).
+const TOOL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.resolve(TOOL_DIR, '../..');
 const LAB_DIR = path.join(ROOT, 'Content/Data/FormationLab');
 const OUT_DIR = path.join(ROOT, 'Saved/TrainingGround/movement');
