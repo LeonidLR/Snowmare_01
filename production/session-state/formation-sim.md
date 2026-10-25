@@ -3,7 +3,7 @@
 Branch `claude/stoic-bell-dr29o5`, last feature commit **1f8bc25** (v2.2). Coordinator: session «Дирижер»
 (merges into main, assigns tasks; the C++ agent ports the TS rules from the golden files). Read first:
 `docs/design/FORMATION_SECTORS.md` (every user decision with its date) and `docs/design/FORMATION_CONTRACT.md`
-(the contracts, sections 1–11). The user-facing page: `docs/design/formation-sectors.html` = claude.ai artifact
+(the contracts, sections 1–12). The user-facing page: `docs/design/formation-sectors.html` = claude.ai artifact
 https://claude.ai/artifact/ErDQfTKvYcV1Q3YzaA19HT (v14 = v2.2). The user's standing rule: **every formation change is
 reflected in the page's schemes / clips the same day** ("все, что мы исправляли с точки зрения формации, обновляй в анимациях").
 
@@ -66,7 +66,7 @@ reflected in the page's schemes / clips the same day** ("все, что мы и�
 - Manual-formation pace (#6 in parentheses: line / blizzard / hedgehog) — not gating by design; the line's lag is the 4-wide
   front pivoting.
 - Integration choice to confirm with the user if questioned: at a stop after a slide the 4th / the pair partner keeps his end
-  when it has room (re-choosing the roomier end would send him through the line) — FORMATION_CONTRACT 11.5.
+  when it has room (re-choosing the roomier end would send him through the line) — FORMATION_CONTRACT 12.5.
 - Coverage check 10 measures cones only by direction (no range); a check with ranges / occlusion is an idea.
 
 ## Gotchas
@@ -77,5 +77,5 @@ reflected in the page's schemes / clips the same day** ("все, что мы и�
 - `pkill -f "<pattern>"` in a shell whose own command line contains the pattern kills that shell too.
 - The sim is deterministic (seeded); "flake" is never the explanation — debug with a frame dump (positions, slots, yaws).
 - The simulator has a light separation standing in for the engine's crowd avoidance and reassigns places on the way when
-  1 m cheaper (contract 11.6) — the C++ runtime must not copy the separation (the engine's avoidance does it).
+  1 m cheaper (contract 12.6) — the C++ runtime must not copy the separation (the engine's avoidance does it).
 - CLAUDE.md is a protected user file: do not edit it (the Jev audit flags it).

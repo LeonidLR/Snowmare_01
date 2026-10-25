@@ -148,7 +148,7 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
    vectors; runtime integration (slots, look yaw, patrol pace, wall layout + pose); hold-G radial menu.
 4. In-game smoke on the lab map.
 
-## v2.2 — the rear guard and the coverage allocator (user decisions 2026-10-25, via the coordinator; contract section 11)
+## v2.2 — the rear guard and the coverage allocator (user decisions 2026-10-25, via the coordinator; contract section 12)
 - **The triad = K, P, Z (user, 2026-10-25, after playing the build: "when we walk as three the rear sector is too open; one of
   them must walk backwards, like the four")**: K leads (search 11–1), P right-behind sweeps BOTH flanks 3 → 12 → 9 → 12 → 3
   (K's search runs against him), Z straight behind (`triad.rear_back` 4.2 m) walks backwards at 6. Halt K 12, P 3, Z 6; run
