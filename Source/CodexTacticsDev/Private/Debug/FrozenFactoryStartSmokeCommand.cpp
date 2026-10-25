@@ -245,9 +245,12 @@ namespace FrozenFactoryStartSmoke
 				const float Beyond = FVector::DotProduct(Delta, Out);
 				const float Lateral = FVector::DotProduct(Delta, Along);
 				const float Facing = FVector::DotProduct(Member->GetActorForwardVector().GetSafeNormal2D(), Out);
-				Check(State, Beyond > 150.f && Beyond < 1200.f && FMath::Abs(Lateral) < HalfWidth + 300.f && Facing > 0.7f,
-					FString::Printf(TEXT("%s spawned just outside the open door (%.0f cm out, %.0f cm aside), facing away from it (%.2f)"),
-						*Member->DisplayName.ToString(), Beyond, Lateral, Facing));
+				// Formation look sectors (FORMATION_SECTORS.md, 2026-10-25): halted, each follower watches his sector centre (flankers 2 / 10
+				// o'clock, the rear man / a pair's partner 6), so only the leader must face straight into the factory.
+				const float MinFacing = Squad->GetLeader() == Member ? 0.7f : -1.01f;
+				Check(State, Beyond > 150.f && Beyond < 1200.f && FMath::Abs(Lateral) < HalfWidth + 300.f && Facing > MinFacing,
+					FString::Printf(TEXT("%s spawned just outside the open door (%.0f cm out, %.0f cm aside), facing away from it (%.2f, min %.1f)"),
+						*Member->DisplayName.ToString(), Beyond, Lateral, Facing, MinFacing));
 			}
 			int32 Walls = 0;
 			TArray<FVector> WallPoints;
