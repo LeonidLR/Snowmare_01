@@ -899,21 +899,29 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 	{
 		// A leader put somewhere (a teleport, a load) did not walk there: the heading starts from his facing, not his old travel.
 		const FVector2D LeaderHere(LeaderRef->GetActorLocation());
-		if (Sectors.bHeadingTickPosValid && FVector2D::Distance(LeaderHere, Sectors.HeadingTickPos) > FormationRuntime::MaxStepDistanceCm)
+		const float LeaderYaw = static_cast<float>(LeaderRef->GetActorRotation().Yaw);
+		if (Sectors.bHeadingTickPosValid && (FVector2D::Distance(LeaderHere, Sectors.HeadingTickPos) > FormationRuntime::MaxStepDistanceCm
+			|| FMath::Abs(FMath::FindDeltaAngleDegrees(Sectors.HeadingTickYaw, LeaderYaw)) > FormationRuntime::MaxTurnStepDeg))
 		{
 			FormationHeading = LeaderRef->GetActorForwardVector();
+			Sectors.LeaderStillSeconds = FormationRuntime::LeaderHaltLookSeconds; // no turn back to an old heading
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[Formation] %s was set to (%.0f, %.0f) yaw %.0f: the heading follows his facing"),
+				*LeaderRef->DisplayName.ToString(), LeaderHere.X, LeaderHere.Y, LeaderYaw);
 		}
 		Sectors.HeadingTickPos = LeaderHere;
+		Sectors.HeadingTickYaw = LeaderYaw;
 		Sectors.bHeadingTickPosValid = true;
 		const TOptional<float> TravelYaw = FormationRuntime::HeadingFromVelocity(FVector2D(LeaderRef->GetVelocity()));
 		if (TravelYaw.IsSet())
 		{
 			HeadingTarget = FRotator(0.f, TravelYaw.GetValue(), 0.f).Vector();
 		}
-		else if (Sectors.bHeadingValid && !FormationHeading.IsNearlyZero())
+		else if (Sectors.bHeadingValid && !FormationHeading.IsNearlyZero()
+			&& (Sectors.LeaderStillSeconds < FormationRuntime::LeaderHaltLookSeconds || Sectors.Formation == EFormationKind::Wall))
 		{
-			HeadingTarget = FormationHeading; // standing: the last travel direction holds
+			HeadingTarget = FormationHeading; // just stopped: the last travel direction holds while he turns his search back to 12
 		}
+		// (At a wall the heading stays into the wall while he faces out.) Standing longer: the heading follows his facing again (the old formation's rule) - a turn, a facing order, a teleport turn the squad.
 	}
 	FormationHeading = SquadFormation::SmoothHeading(FormationConfig, FormationHeading, HeadingTarget, DeltaTime);
 	UpdateSlotSwap(DeltaTime);

@@ -403,6 +403,7 @@ private:
 		bool bActiveThisFrame = false;
 		/** The leader's position at the last heading update (a jump = a teleport snaps the heading to his facing). */
 		FVector2D HeadingTickPos = FVector2D::ZeroVector;
+		float HeadingTickYaw = 0.f;
 		bool bHeadingTickPosValid = false;
 		/** Codex.Formation.Sectors last tick (a switch snaps the heading). */
 		bool bWasEnabled = true;

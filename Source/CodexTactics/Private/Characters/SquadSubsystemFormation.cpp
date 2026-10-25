@@ -437,7 +437,10 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	if (!HasMultiSelection())
 	{
 		const FFormationSlot* Lead = FindFrameSlot(EFormationRole::Commander);
-		if (Lead && Sectors.Mode != EFormationMode::Run)
+		// Halted: he turns his search back to 12 for a moment, then his facing is his own (the player's, a facing order) and the heading
+		// follows it; the wall layout keeps him facing out.
+		const bool bHaltLookOver = Sectors.Mode == EFormationMode::Halt && Sectors.LeaderStillSeconds >= FormationRuntime::LeaderHaltLookSeconds;
+		if (Lead && Sectors.Mode != EFormationMode::Run && !bHaltLookOver)
 		{
 			const bool bWalkingIn = bWall && Sectors.bWallOrder
 				&& !FormationRuntime::UseWallLayoutYaw(static_cast<float>(FVector2D::Distance(LeaderPos, Lead->Position)), !bLeaderStill);

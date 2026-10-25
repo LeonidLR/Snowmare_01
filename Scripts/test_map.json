@@ -110,7 +110,7 @@
       "name": "formation-runtime-2026-10-25",
       "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Debug/FormationLabSmoke*", "Source/**/Formation/FormationRuntimeRules*"],
       "tests": ["CodexTactics.Formation", "CodexTactics.Squad"],
-      "smokes": ["FormationLabSmoke", "SquadControlSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "MovementSmoke", "SoloRejoinSmoke", "RegroupAfterLossesSmoke", "WarmIdleSmoke"]
+      "smokes": ["FormationLabSmoke", "SquadControlSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "MovementSmoke", "SoloRejoinSmoke", "RegroupAfterLossesSmoke", "WarmIdleSmoke", "TrapSoloSmoke", "StanceSmoke", "TutorialSmoke"]
     },
     {
       "name": "orders-pause-relocate-pick-2026-10-25",

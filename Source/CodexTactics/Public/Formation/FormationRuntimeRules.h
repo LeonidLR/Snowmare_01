@@ -39,10 +39,17 @@ namespace FormationRuntime
 	inline constexpr float RoomMaxCm = 400.f;
 	/** A follower's formation move aims this far ahead of his slot along the slot's velocity, s (he never "arrives" at a moving slot). */
 	inline constexpr float LeadSeconds = 0.5f;
+	/**
+	 * A halted leader turns his search back to 12 (his sector's centre) for this long; then his facing is his own again and the halted
+	 * formation's heading follows it (as the old formation), s.
+	 */
+	inline constexpr float LeaderHaltLookSeconds = 1.f;
 	/** A formation follower gets a new move (speed + lead destination) this often, s (the old formation: FSquadFormationConfig::RepathInterval 0.2). */
 	inline constexpr float FollowRepathSeconds = 0.1f;
 	/** A leader "step" longer than this in one tick is a teleport, not a walk (the v2 hysteresis gets 0), cm. */
 	inline constexpr float MaxStepDistanceCm = 150.f;
+	/** A leader turned further than this in one tick was set (a teleport, a load, an ordered facing), not turned by his legs, deg. */
+	inline constexpr float MaxTurnStepDeg = 60.f;
 	/** The automatic wall layout is computed again once the leader stands this far from where it was computed, cm. */
 	inline constexpr float WallLayoutRecomputeCm = 50.f;
 
