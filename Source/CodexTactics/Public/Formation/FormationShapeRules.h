@@ -48,4 +48,15 @@ namespace FormationShapeRules
 	 */
 	CODEXTACTICS_API TArray<FFormationSlot> HedgehogSlots(const FVector2D& Center, int32 MemberCount, float Yaw,
 		const FFormationConfig& Config = FFormationConfig());
+
+	/**
+	 * v2.1: the TRAIL column - the column's offsets (LocalSlot(Column): ColumnBaseBack + i * ColumnSpacing back, ColumnStagger aside)
+	 * measured ALONG the leader's path instead of straight back, so the column bends round a corner and passes a wall on his side.
+	 * Trail = the leader's recent positions, oldest first, the last one = the leader now (empty: no slots); a trail shorter than the
+	 * column is extended straight back from its oldest point (along its oldest segment, or against LeaderYaw for a single point).
+	 * Slot order = Roles; Yaw = the trail's travel direction at the slot (the leader: LeaderYaw) - the reference for its look. Who
+	 * stands at which place: FormationAssignRules::AssignPlaces.
+	 */
+	CODEXTACTICS_API TArray<FFormationSlot> TrailSlots(const TArray<FVector2D>& Trail, float LeaderYaw, int32 MemberCount,
+		const FFormationConfig& Config = FFormationConfig());
 }

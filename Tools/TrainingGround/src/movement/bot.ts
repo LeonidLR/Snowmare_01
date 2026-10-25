@@ -5,6 +5,8 @@ import type { FormationConfig } from './config.ts';
 import type { RunMetrics, SeriesSummary } from './checks.ts';
 import { RunCollector, summarize } from './checks.ts';
 import type { Layout } from './layout.ts';
+import type { MenuChoice } from './menu.ts';
+import { FormationMenuRules } from './menu.ts';
 import type { NavGrid } from './nav.ts';
 import { buildNav, simulate } from './sim.ts';
 
@@ -17,6 +19,8 @@ export interface SeriesOptions {
   /** Only these route ids (default: all). */
   routes?: string[];
   nav?: NavGrid;
+  /** v2.1: the hold-G menu choice for every run (default 'auto'); resolved per member count (FormationMenuRules.Resolve). */
+  manual?: MenuChoice;
 }
 
 export function runSeries(o: SeriesOptions): { runs: RunMetrics[]; summary: SeriesSummary } {
@@ -26,7 +30,11 @@ export function runSeries(o: SeriesOptions): { runs: RunMetrics[]; summary: Seri
   for (const route of routes) for (const n of o.members) for (let s = 0; s < o.seeds; s++) {
     const seed = o.seedBase + s;
     const collector = new RunCollector(o.layout, route, n, seed, o.config);
-    simulate({ layout: o.layout, route, memberCount: n, config: o.config, seed, nav, onFrame: (f) => collector.onFrame(f) });
+    const pick = FormationMenuRules.Resolve(o.manual ?? 'auto', n);
+    simulate({
+      layout: o.layout, route, memberCount: n, config: o.config, seed, nav, onFrame: (f) => collector.onFrame(f),
+      manualFormation: pick.manualFormation ?? undefined, allForward: pick.allForward,
+    });
     runs.push(collector.finish());
   }
   return { runs, summary: summarize(runs) };

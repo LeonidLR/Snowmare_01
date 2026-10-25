@@ -1,0 +1,10906 @@
+{
+ "schema": "codex.formation_golden/1",
+ "rule": "Corner",
+ "tolerance": {
+  "cm": 0.5,
+  "deg": 0.5
+ },
+ "config": "Content/Data/FormationLab/formation_config.json",
+ "config_values": {
+  "slot.side_offset": 260,
+  "slot.back_offset": 280,
+  "slot.min_spacing": 80,
+  "diamond.rear_back": 560,
+  "pair.side_offset": 180,
+  "pair.back_offset": 220,
+  "pair.scan_period": 5,
+  "pair.scan_from": 90,
+  "pair.scan_to": 270,
+  "column.base_back": 180,
+  "column.spacing": 150,
+  "column.stagger": 60,
+  "column.side_deg": 70,
+  "column.narrow_width": 600,
+  "column.narrow_fwd_deg": 15,
+  "column.narrow_back_deg": 165,
+  "line.spacing": 260,
+  "line.fan_inner": 5,
+  "line.fan_outer": 25,
+  "echelon.step": 180,
+  "echelon.sector_lead": 10,
+  "echelon.sector_2": 45,
+  "echelon.sector_3": 80,
+  "echelon.sector_4": 150,
+  "blizzard.side_offset": 110,
+  "blizzard.back_offset": 120,
+  "hedgehog.radius": 130,
+  "wall.spacing": 100,
+  "wall.face_offset": 45,
+  "wall.flank_deg": 60,
+  "wall.neighbour_deg": 30,
+  "wall.end_deg": 75,
+  "pace.patrol": 0.8,
+  "pace.walk_speed": 220,
+  "pace.run_speed": 480,
+  "move.backward_mult": 0.9,
+  "move.catchup_mult": 1.25,
+  "facing.turn_speed": 10,
+  "scan.period": 3,
+  "scan.center_side": 45,
+  "scan.amp_side": 45,
+  "scan.amp_lead": 30,
+  "scan.dwell_exp": 0.45,
+  "halt.side_deg": 60,
+  "look.wall_dist": 260,
+  "look.wall_angle": 55,
+  "classify.probe_side": 400,
+  "classify.probe_ahead": 600,
+  "classify.hold_distance": 500,
+  "classify.at_wall_dist": 150,
+  "classify.arrive_dist": 50,
+  "classify.side_ignore_perp_deg": 30,
+  "guard.clearance": 10,
+  "guard.lookahead": 500,
+  "turn.fold_deg": 25,
+  "turn.lookahead": 800,
+  "bypass.max_detour": 0.3,
+  "bypass.threat_memory_s": 20,
+  "corner.lead_dist": 300,
+  "corner.hold_dist": 200,
+  "corner.peek_dist": 300,
+  "sight.fov": 140
+ },
+ "notes": "in: walls, leaderPos, leaderYaw, members [{role, pos}] (K first), state {left, right: {wall, end, role} | null} -> out {state, looks [{role, yaw}]} (Watch).",
+ "cases": [
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -680,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -680,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -680,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -680,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -48.013
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -19.872
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -48.013
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -10.305
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -68.199
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -23.806
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -130,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -130,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -68.199
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -130,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -130,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -14.036
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -29.511
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       20,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       20,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       20,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       20,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -21.801
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       220,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       220,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       220,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       220,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1213.205,
+       888.897
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       866.795,
+       1088.897
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1213.205,
+       888.897
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       866.795,
+       1088.897
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -168.013
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -139.872
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1013.205,
+       542.487
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       666.795,
+       742.487
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -168.013
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1013.205,
+       542.487
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       666.795,
+       742.487
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -130.305
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": 171.801
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -143.806
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       938.205,
+       412.583
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       591.795,
+       612.583
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": 171.801
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       938.205,
+       412.583
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       591.795,
+       612.583
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -134.036
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -149.511
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       863.205,
+       282.679
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       516.795,
+       482.679
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       863.205,
+       282.679
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       516.795,
+       482.679
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -141.802
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       763.205,
+       109.474
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       416.795,
+       309.474
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_left",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       763.205,
+       109.474
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       416.795,
+       309.474
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -680,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -680,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -680,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -680,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": 53.746
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": 53.746
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": 53.746
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": 53.746
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -130,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -130,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -130,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -130,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       20,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       20,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       20,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       20,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       220,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       220,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       300
+      ],
+      "b": [
+       150,
+       300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       220,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       220,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1213.205,
+       888.897
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       866.795,
+       1088.897
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1213.205,
+       888.897
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       866.795,
+       1088.897
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -66.254
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -66.254
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1013.205,
+       542.487
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       666.795,
+       742.487
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -66.254
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1013.205,
+       542.487
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       666.795,
+       742.487
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -66.254
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       938.205,
+       412.583
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       591.795,
+       612.583
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       938.205,
+       412.583
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       591.795,
+       612.583
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       863.205,
+       282.679
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       516.795,
+       482.679
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       863.205,
+       282.679
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       516.795,
+       482.679
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       763.205,
+       109.474
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       416.795,
+       309.474
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "wall_end_right",
+    "walls": [
+     {
+      "a": [
+       1959.808,
+       1982.051
+      ],
+      "b": [
+       884.808,
+       120.096
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       763.205,
+       109.474
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       416.795,
+       309.474
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -680,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -680,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -680,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -680,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "Z"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -55.784
+     },
+     {
+      "role": "Z",
+      "yaw": 15.859
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -18.905
+     },
+     {
+      "role": "K",
+      "yaw": 37.999
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "P"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -55.784
+     },
+     {
+      "role": "P",
+      "yaw": 4.764
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -6.34
+     },
+     {
+      "role": "K",
+      "yaw": 37.999
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": 55.784
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -23.318
+     },
+     {
+      "role": "K",
+      "yaw": 55.784
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -130,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -130,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": 55.784
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -130,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -130,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -9.462
+     },
+     {
+      "role": "K",
+      "yaw": 55.784
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -30.174
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       20,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       20,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       20,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       20,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -18.435
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       220,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       220,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -250
+      ],
+      "b": [
+       100,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       250
+      ],
+      "b": [
+       250,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       220,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       220,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1213.205,
+       888.897
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       866.795,
+       1088.897
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1213.205,
+       888.897
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       866.795,
+       1088.897
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "Z"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -175.784
+     },
+     {
+      "role": "Z",
+      "yaw": -104.141
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -138.905
+     },
+     {
+      "role": "K",
+      "yaw": -82.001
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1013.205,
+       542.487
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       666.795,
+       742.487
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "K"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "P"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -175.784
+     },
+     {
+      "role": "P",
+      "yaw": -115.236
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1013.205,
+       542.487
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       666.795,
+       742.487
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -126.34
+     },
+     {
+      "role": "K",
+      "yaw": -82.001
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -64.216
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "Z",
+      "yaw": -143.318
+     },
+     {
+      "role": "K",
+      "yaw": -64.216
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       938.205,
+       412.583
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       591.795,
+       612.583
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "K",
+      "yaw": -64.216
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       938.205,
+       412.583
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       591.795,
+       612.583
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": {
+      "wall": 1,
+      "end": 1,
+      "role": "K"
+     }
+    },
+    "looks": [
+     {
+      "role": "L",
+      "yaw": -129.462
+     },
+     {
+      "role": "K",
+      "yaw": -64.216
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       863.205,
+       282.679
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       516.795,
+       482.679
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       863.205,
+       282.679
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       516.795,
+       482.679
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       763.205,
+       109.474
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       416.795,
+       309.474
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "corridor_exit",
+    "walls": [
+     {
+      "a": [
+       1483.494,
+       2257.051
+      ],
+      "b": [
+       433.494,
+       438.397
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1916.506,
+       2007.051
+      ],
+      "b": [
+       791.506,
+       58.494
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       763.205,
+       109.474
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       416.795,
+       309.474
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -680,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -680,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -400,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       -400,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -680,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -680,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -960,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -130,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -130,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     150,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       150,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       -130,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       -130,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -410,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       20,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       20,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     300,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       300,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       20,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       20,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -260,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       220,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       220,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       200,
+       -300
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       200,
+       -300
+      ],
+      "b": [
+       200,
+       -1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     0
+    ],
+    "leaderYaw": 0,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       500,
+       0
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       220,
+       200
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       220,
+       -200
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -60,
+       0
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1213.205,
+       888.897
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       866.795,
+       1088.897
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     900,
+     746.41
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       900,
+       746.41
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1213.205,
+       888.897
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       866.795,
+       1088.897
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1180,
+       1231.384
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1013.205,
+       542.487
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       666.795,
+       742.487
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     700,
+     400
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       700,
+       400
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       1013.205,
+       542.487
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       666.795,
+       742.487
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       980,
+       884.974
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       938.205,
+       412.583
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       591.795,
+       612.583
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     625,
+     270.096
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       625,
+       270.096
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       938.205,
+       412.583
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       591.795,
+       612.583
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       905,
+       755.07
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       863.205,
+       282.679
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       516.795,
+       482.679
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     550,
+     140.192
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       550,
+       140.192
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       863.205,
+       282.679
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       516.795,
+       482.679
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       830,
+       625.167
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "Z"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       763.205,
+       109.474
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       416.795,
+       309.474
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": null,
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  },
+  {
+   "in": {
+    "scene": "room_corner",
+    "walls": [
+     {
+      "a": [
+       1440.192,
+       2282.051
+      ],
+      "b": [
+       340.192,
+       376.795
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       340.192,
+       376.795
+      ],
+      "b": [
+       -699.038,
+       976.795
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     450,
+     -33.013
+    ],
+    "leaderYaw": -120,
+    "members": [
+     {
+      "role": "K",
+      "pos": [
+       450,
+       -33.013
+      ]
+     },
+     {
+      "role": "P",
+      "pos": [
+       763.205,
+       109.474
+      ]
+     },
+     {
+      "role": "L",
+      "pos": [
+       416.795,
+       309.474
+      ]
+     },
+     {
+      "role": "Z",
+      "pos": [
+       730,
+       451.962
+      ]
+     }
+    ],
+    "state": {
+     "left": {
+      "wall": 0,
+      "end": 1,
+      "role": "L"
+     },
+     "right": null
+    }
+   },
+   "out": {
+    "state": {
+     "left": null,
+     "right": null
+    },
+    "looks": []
+   }
+  }
+ ]
+}

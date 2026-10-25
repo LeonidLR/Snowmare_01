@@ -4,10 +4,13 @@ import assert from 'node:assert/strict';
 import type { ModelClient } from './ai.ts';
 import { FIXED_PARAMS, mockClient, parsePropose, resolveClient } from './ai.ts';
 import { readConfigFile, readLayout } from './cli/paths.ts';
+import { withValues } from './config.ts';
 import { renderTrainReport, train, tunableOf } from './train.ts';
 
 const layout = readLayout('sample_small');
-const configFile = readConfigFile();
+// The tuner needs something to tune: sample_small is all green with the shipped config (v2.1.1), so the tests start from the
+// pre-decision echelon rear sector (125 deg: the rear-cover check fails) - the lever bot.test.ts also uses.
+const configFile = withValues(readConfigFile(), { 'echelon.sector_4': 125 }).file;
 const base = { layout, configFile, rounds: 6, budgetUsd: 5, patience: 3, members: [3, 4], seeds: 1, seedBase: 1 };
 
 test('dry run: builds the first request, calls nobody, spends nothing', async () => {

@@ -68,6 +68,32 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 - **Blizzard (user, 2026-10-25, "4А")**: in a blizzard the squad picks the tight blizzard diamond automatically on OPEN ground;
   walls and passages keep their normal rules; the hold-G menu still overrides.
 
+## v2.1 — the squad never splits (user decisions 2026-10-25, via the coordinator; contract section 10)
+- **The bug the user found**: lab lane B, 4 men, manual "echelon left" with the wall on the left — the echelon's slots went
+  through the wall, P / L / Z stood on its far side.
+- **Never split (user, 2026-10-25: "они должны переходить либо в эшелон вправо, либо идти ёлочкой, обходить эту стенку справа
+  или слева")**: everyone passes on the leader's side of a wall. A formation a wall cuts (any, manual or auto) takes the mirror
+  echelon if that is whole, else the column — along the leader's own path (it bends round a corner and wraps a wall end), narrow
+  or herringbone by the room each man has. It folds BEFORE a passage entrance (checked 5 m ahead on the path). The manual choice
+  is not cleared: it comes back by itself after 5 m of path with it whole again (no flicker). The HUD shows
+  "Эшелон влево → колонна (стена)".
+- **The leader's side = "Б" (user, 2026-10-25)**: the shortest path round the wall by default; with a known threat (seen, or
+  heard / last known position within 20 s) the side where the wall stands between the squad and the threat, if that detour is
+  at most 30 % longer; otherwise the shortest.
+- **Corner check = yes (user, 2026-10-25, "угол да")**: slicing the pie — nearing the free end of a wall the squad passes, the man
+  closest to it looks round the corner (from 3 m before the end until 2 m past it; at a corridor exit one man per corner). It
+  overrides his patrol sector only; a combat target and explicit facing orders keep priority.
+- **Sharp turn = fold (user, 2026-10-25, "5Б")**: before a sharp turn on the path (over 25°, seen 8 m ahead) an echelon or a line
+  folds into the column along the leader's path, and opens again 5 m after the turn — the far end no longer swings metres round
+  the turn and the rear man keeps up.
+- **Nobody looks into a wall, in manual formations too (user, 2026-10-25, "6А")**: the slots stay as chosen, but a man whose
+  sector would face a wall closer than ~2.6 m turns his look to the nearest open direction (his scan stays in the open part of
+  his sector) — and never sweeps his look across the wall to get there. Only the leader may keep looking where he walks.
+- **Places, not fixed slots (coordinator, 2026-10-25)**: on every formation change the men take the new places by the shortest
+  total walk (nobody walks through anybody); the sectors belong to the place (the man at the rear place looks at 6).
+- Bot: check 7 (squad split by a wall), 8 (passes on the shielded side), 9 (corner man in time); `--manual all` runs auto and every
+  menu formation on every lab route; lab lane G has the free-standing walls and threats.
+
 ## Selection
 - **Automatic by level geometry** (default): open ground → diamond / wedge (blizzard tight diamond in a blizzard); wall on one
   side → echelon away from it; any passage between two walls → column (narrow sectors / herringbone by width); arrival at a wall → the wall layout. Needs hysteresis (like today's

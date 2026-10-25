@@ -102,6 +102,36 @@ namespace FormationTerrainRules
 		return Best.IsSet() ? TOptional<float>(static_cast<float>(Best.GetValue())) : TOptional<float>();
 	}
 
+	TOptional<float> SideWidth(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, const FFormationConfig& Config)
+	{
+		const double Reach = Config.ClassifyProbeSide;
+		const FVector2D Heading = FormationMath::DirOf(Yaw);
+		double Right = TNumericLimits<double>::Max();
+		double Left = TNumericLimits<double>::Max();
+		for (const FFormationWall& Wall : Walls)
+		{
+			const FVector2D Closest = FormationMath::ClosestOnSegment(Pos, Wall.A, Wall.B);
+			const double Distance = FMath::Max(0.0, FVector2D::Distance(Pos, Closest) - 0.5 * Wall.Thickness);
+			if (Distance > Reach)
+			{
+				continue;
+			}
+			if (Heading.X * (Closest.Y - Pos.Y) - Heading.Y * (Closest.X - Pos.X) >= 0.0)
+			{
+				Right = FMath::Min(Right, Distance);
+			}
+			else
+			{
+				Left = FMath::Min(Left, Distance);
+			}
+		}
+		if (Right > Reach && Left > Reach)
+		{
+			return TOptional<float>();
+		}
+		return static_cast<float>(FMath::Min(Right, Reach) + FMath::Min(Left, Reach));
+	}
+
 	bool IsArriving(const FVector2D& LeaderPos, const TOptional<FVector2D>& Destination, const FFormationConfig& Config)
 	{
 		return Destination.IsSet() && FVector2D::Distance(LeaderPos, Destination.GetValue()) <= static_cast<double>(Config.ClassifyArriveDist);

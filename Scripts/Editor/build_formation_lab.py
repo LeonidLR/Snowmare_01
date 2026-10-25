@@ -10,7 +10,9 @@ Places (every actor tagged FormationLab and filed under the outliner folder Form
   - a TargetPoint per route point, label "<route id>_<n>" (e.g. R_A_open_0), tags FormationLab + FormationLabRoute + the route id
     (the in-game bot finds its click path by these);
   - a TextRenderActor per zone (its id, flat on the ground) for screenshots;
-  - props: heat_source -> ACampfireActor (unlit: an operative kindles it with a match), else a TargetPoint.
+  - props: heat_source -> ACampfireActor (unlit: an operative kindles it with a match), else a TargetPoint;
+  - v2.1: a TargetPoint per route threat, label "<route id>_threat_<n>", tags FormationLab + FormationLabThreat + the route id
+    (the in-game bot reports it to the squad as a known threat at since_s; FORMATION_CONTRACT.md 10.2).
 Lighting (sun, sky light, sky atmosphere, height fog) is tagged FormationLab_Env and placed only when missing, so hand tweaks stay.
 
 Idempotent: every run deletes the actors tagged FormationLab and places them again from the JSON; nothing else in the map is
@@ -43,6 +45,7 @@ TARGET_MAP = os.environ.get("CODEX_LAB_TARGET", "/Game/Maps/L_FormationLab")
 TAG = "FormationLab"
 ENV_TAG = "FormationLab_Env"
 ROUTE_TAG = "FormationLabRoute"
+THREAT_TAG = "FormationLabThreat"
 FOLDER = "FormationLab"
 SCHEMA = "codex.formation_layout/1"
 
@@ -103,6 +106,10 @@ def plan(layout):
         for n, (px, py) in enumerate(r["points"]):
             specs.append({"kind": "target_point", "label": "%s_%d" % (r["id"], n), "folder": "Routes/" + r["id"],
                           "location": [px, py, gz + 50.0], "yaw": 0.0, "tags": [ROUTE_TAG, r["id"]]})
+        for n, t in enumerate(r.get("threats", [])):
+            tx, ty = t["pos"]
+            specs.append({"kind": "target_point", "label": "%s_threat_%d" % (r["id"], n), "folder": "Threats/" + r["id"],
+                          "location": [tx, ty, gz + 100.0], "yaw": 0.0, "tags": [THREAT_TAG, r["id"], "since_s=%g" % t["since_s"]]})
     for z in layout["zones"]:
         cx = sum(p[0] for p in z["poly"]) / len(z["poly"])
         cy = sum(p[1] for p in z["poly"]) / len(z["poly"])

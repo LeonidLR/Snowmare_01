@@ -310,6 +310,20 @@
       "unit": "deg",
       "doc": "Short halt: the side men hold this sector centre (2 / 10 o'clock)."
     },
+    "look.wall_dist": {
+      "value": 260,
+      "min": 100,
+      "max": 400,
+      "unit": "cm",
+      "doc": "v2.1.1 (user 6A): a wall surface closer than this blocks looks towards it (FormationSectorRules.ClearLook) - 60 cm beyond the wall-stare check's 200 so a man turns away BEFORE the wall is that close (looks turn at facing.turn_speed)."
+    },
+    "look.wall_angle": {
+      "value": 55,
+      "min": 30,
+      "max": 90,
+      "unit": "deg",
+      "doc": "v2.1.1: half-width of the blocked span round the direction to the wall's closest point (the check counts 45; 10 deg margin)."
+    },
     "classify.probe_side": {
       "value": 400,
       "min": 200,
@@ -351,6 +365,69 @@
       "max": 45,
       "unit": "deg",
       "doc": "v1.1: the side probes ignore wall segments within this angle of perpendicular to the heading (walls ahead / behind, not beside)."
+    },
+    "guard.clearance": {
+      "value": 10,
+      "min": 0,
+      "max": 60,
+      "unit": "cm",
+      "doc": "v2.1: a slot is cut off when the segment from the leader (or a chain neighbour) to it passes closer than this to a wall body (FormationGuardRules.BlockedRoles)."
+    },
+    "guard.lookahead": {
+      "value": 500,
+      "min": 0,
+      "max": 1000,
+      "unit": "cm",
+      "doc": "v2.1: the guard also checks the formation at the leader's pose this far ahead along his path, so the squad folds before a passage entrance (0 = only where he stands)."
+    },
+    "turn.fold_deg": {
+      "value": 25,
+      "min": 10,
+      "max": 90,
+      "unit": "deg",
+      "doc": "v2.1.1 (user 5B): a heading change on the leader's path sharper than this (within turn.lookahead) folds an echelon / line into the trail column for the turn."
+    },
+    "turn.lookahead": {
+      "value": 800,
+      "min": 100,
+      "max": 1000,
+      "unit": "cm",
+      "doc": "v2.1.1: how far ahead on the leader's path a sharp turn is looked for (FormationGuardRules.TurnAhead) - ~4.5 s at patrol pace, the time a rear man walking backwards (move.backward_mult) needs to fold an echelon (600 is the least that kept the lab's pace green)."
+    },
+    "bypass.max_detour": {
+      "value": 0.3,
+      "min": 0,
+      "max": 0.6,
+      "unit": "ratio",
+      "doc": "v2.1 (user 2026-10-25): with a known threat the squad passes a wall on the side that hides it from the threat if that path is at most this much longer than the shortest (0.3 = 30 %)."
+    },
+    "bypass.threat_memory_s": {
+      "value": 20,
+      "min": 5,
+      "max": 60,
+      "unit": "s",
+      "doc": "v2.1: a threat seen / heard counts as known for this long after its last contact."
+    },
+    "corner.lead_dist": {
+      "value": 300,
+      "min": 100,
+      "max": 800,
+      "unit": "cm",
+      "doc": "v2.1 slicing the pie: the corner man starts looking round a wall end when the leader is this far (along the heading) before it."
+    },
+    "corner.hold_dist": {
+      "value": 200,
+      "min": 0,
+      "max": 600,
+      "unit": "cm",
+      "doc": "v2.1: ... and keeps looking until the leader is this far past the end."
+    },
+    "corner.peek_dist": {
+      "value": 300,
+      "min": 100,
+      "max": 800,
+      "unit": "cm",
+      "doc": "v2.1: once past the end, he looks at the point this far behind the wall's far face at the end (the area the wall hid)."
     },
     "sight.fov": {
       "value": 140,

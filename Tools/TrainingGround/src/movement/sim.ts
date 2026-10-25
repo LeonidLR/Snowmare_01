@@ -6,12 +6,15 @@
 import type { FormationConfig } from './config.ts';
 import { cfg } from './config.ts';
 import type { Segment, Vec2 } from './geometry.ts';
-import { add, angleDiff, clamp, deltaYaw, dirOf, dist, len, localToWorld, normYaw, raycastWalls, rng, scale, sub, yawOf } from './geometry.ts';
+import { add, angleDiff, clamp, closestOnSegment, deltaYaw, dirOf, dist, dot, len, localToWorld, normYaw, raycastWalls, rng, scale, segmentBlocked, sub, yawOf } from './geometry.ts';
 import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments } from './layout.ts';
 import { AGENT_RADIUS, NavGrid } from './nav.ts';
-import type { Mode, Role, TerrainClass } from './rules.ts';
-import { CLASSIFY_START, FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rolesFor, wallRoom } from './rules.ts';
+import type { GuardLevel, Mode, Role, TerrainClass, WallSide } from './rules.ts';
+import {
+  CLASSIFY_START, CORNER_START, FormationAssignRules, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
+  FormationShapeRules, FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
+} from './rules.ts';
 
 export const SIM_DT = 1 / 30;
 const HEADING_SMOOTHING = 3.5; // FSquadFormationConfig::RotationSmoothing
@@ -19,9 +22,15 @@ const STOP_RADIUS = 25;
 const WALL_TURN_DIST = 100; // cm: a member walking to his wall-layout slot turns to the layout yaw this close to it
 const FOLLOW_GAIN = 2.0; // 1/s: a 1 m gap to the (moving) slot adds 2 m/s on top of the slot's own velocity
 const REPATH_INTERVAL = 0.2;
+const TRAIL_STEP = 25; // cm between the leader's trail points (the trail column, v2.1)
+const TRAIL_KEEP = 1500; // cm of trail kept
+const WALK_LOOK_DEG = 35; // the leader's look within this of his travel = looking where he walks (exempt from ClearLook; the check allows 45)
 
 export interface MemberFrame {
+  /** Who he is (K the leader, P, L, Z). */
   role: Role;
+  /** v2.1 fix: the place he holds in the formation (its slot and sectors), reassigned by minimal travel on every change. */
+  place: Role;
   pos: Vec2;
   yaw: number;
   slot: Vec2;
@@ -33,16 +42,33 @@ export interface MemberFrame {
   backwards: boolean;
   /** Travel direction this tick (null when standing). */
   moveYaw: number | null;
+  /** v2.1: this member looks round a wall end (FormationCornerRules.Watch overrides his sector). */
+  cornerWatch: boolean;
+}
+
+/** v2.1: a bypass decision (FormationBypassRules.ChooseSide) taken when a route leg starts and a wall blocks it. */
+export interface BypassFrame {
+  wall: string;
+  wallOn: WallSide;
+  reason: 'shortest' | 'shielded' | 'too_long';
+  detour: number;
 }
 
 export interface Frame {
   t: number;
   mode: Mode;
+  /** v2.1: the formation in effect (after the wall guard). */
   formation: Formation;
+  /** v2.1: the formation asked for (the manual choice, or the terrain's); differs from `formation` while the guard falls back. */
+  requested: Formation;
+  /** v2.1: 0 = as requested, 1 = the mirror echelon, 2 = the column (FormationGuardRules.Resolve). */
+  guardLevel: GuardLevel;
   terrain: TerrainClass;
   heading: number;
   leaderDistance: number;
   members: MemberFrame[];
+  /** v2.1: the bypass decisions taken so far on this run. */
+  bypasses: readonly BypassFrame[];
 }
 
 export interface SimOptions {
@@ -66,6 +92,7 @@ export interface SimOptions {
 
 interface Member {
   role: Role;
+  place: Role;
   pos: Vec2;
   yaw: number;
   jitter: number;
@@ -88,22 +115,40 @@ export function simulate(o: SimOptions): number {
   const leaderSpeed = run ? cfg(c, 'pace.run_speed') : cfg(c, 'pace.walk_speed') * cfg(c, 'pace.patrol');
   const turnSpeed = cfg(c, 'facing.turn_speed');
 
-  // Leader path: the route points, with A* detours where a straight leg is blocked.
-  const legs: Vec2[] = [o.route.points[0]];
-  for (let i = 1; i < o.route.points.length; i++) {
-    const p = nav.path(o.route.points[i - 1], o.route.points[i]) ?? [o.route.points[i - 1], o.route.points[i]];
-    legs.push(...p.slice(1));
-  }
+  // Leader path: planned per route leg when the leader starts it (planLeg: the bypass side round a blocking wall, then A*).
+  const points = o.route.points;
+  const threats = o.route.threats ?? [];
+  const bypasses: BypassFrame[] = [];
+  const planLeg = (from: Vec2, to: Vec2, now: number): Vec2[] => {
+    const blocking = walls.map((w, i) => ({ w, i })).filter(({ w }) => segmentBlocked(from, to, [w], AGENT_RADIUS));
+    let via: Vec2[] = [from, to];
+    if (blocking.length) {
+      // The first wall along the leg decides the side (one wall per leg; A* handles the rest).
+      const along = (w: Segment) => dot(sub(closestOnSegment(from, w.a, w.b).point, from), sub(to, from));
+      const { w, i } = blocking.reduce((a, b) => (along(b.w) < along(a.w) ? b : a));
+      const known = threats.filter((th) => th.since_s <= now).map((th) => ({ pos: th.pos, ageS: now - th.since_s }));
+      const choice = FormationBypassRules.ChooseSide(w, from, to, known, c);
+      bypasses.push({ wall: o.layout.walls[i].id, wallOn: choice.wallOn, reason: choice.reason, detour: choice.detour });
+      via = choice.path;
+    }
+    const out: Vec2[] = [from];
+    for (let k = 1; k < via.length; k++) out.push(...(nav.path(via[k - 1], via[k]) ?? [via[k - 1], via[k]]).slice(1));
+    return out;
+  };
+  let routeLeg = 1;
+  let legs: Vec2[] = planLeg(points[0], points[1], 0);
+  const finalPoint = points[points.length - 1];
 
   let heading = yawOf(sub(legs[1] ?? add(legs[0], [1, 0]), legs[0]));
   const startSlots = FormationShapeRules.Slots(n >= 4 ? 'diamond' : 'wedge', n, legs[0], heading, c);
   const spawnAt = (slot: Vec2): Vec2 => {
     const p = add(slot, [(random() - 0.5) * 60, (random() - 0.5) * 60]);
     if (nav.walkable(p)) return p;
-    return fallbackSlot(nav, legs[0], slot) ?? legs[0];
+    return fallbackSlot(nav, walls, legs[0], slot) ?? legs[0];
   };
   const members: Member[] = rolesFor(n).map((role, i) => ({
     role,
+    place: role,
     pos: i === 0 ? legs[0] : spawnAt(startSlots[i].pos),
     yaw: heading,
     jitter: i === 0 ? 1 : 1 + (random() - 0.5) * 0.24,
@@ -117,7 +162,12 @@ export function simulate(o: SimOptions): number {
   let travelled = 0;
   let terrain: TerrainClass | null = null;
   let classify = CLASSIFY_START;
+  let guard = GUARD_START;
+  let corner = CORNER_START;
+  // v2.1: the leader's recent path (oldest first, >= TRAIL_STEP apart, up to TRAIL_KEEP long) for the trail column.
+  let trail: Vec2[] = [legs[0]];
   let lastTravelled = 0;
+  let placesFor = ''; // the formation the current places were assigned for (formation + trail flag)
   let formation: Formation = o.manualFormation ?? (n >= 4 ? 'diamond' : 'wedge');
   let haltLeft = o.haltSeconds ?? 3;
   let arrived = false;
@@ -133,7 +183,11 @@ export function simulate(o: SimOptions): number {
       while (step > 0 && leg < legs.length) {
         const to = sub(legs[leg], leader.pos);
         const d = len(to);
-        if (d <= step) { leader.pos = legs[leg]; step -= d; travelled += d; leg++; continue; }
+        if (d <= step) {
+          leader.pos = legs[leg]; step -= d; travelled += d; leg++;
+          if (leg >= legs.length && routeLeg + 1 < points.length) { routeLeg++; legs = planLeg(points[routeLeg - 1], points[routeLeg], t); leg = 1; }
+          continue;
+        }
         const move = scale(to, step / d);
         leader.pos = add(leader.pos, move);
         travelled += step;
@@ -142,21 +196,47 @@ export function simulate(o: SimOptions): number {
       }
       if (leg >= legs.length) arrived = true;
     }
+    if (dist(trail[trail.length - 1], leader.pos) >= TRAIL_STEP) {
+      trail.push(leader.pos);
+      let keep = 0, k = trail.length - 1;
+      while (k > 0 && keep < TRAIL_KEEP) { keep += dist(trail[k - 1], trail[k]); k--; }
+      if (k > 0) trail = trail.slice(k);
+    }
     if (len(leaderVel) > 1) {
       const target = yawOf(leaderVel);
       heading = normYaw(heading + deltaYaw(heading, target) * clamp(HEADING_SMOOTHING * SIM_DT, 0, 1));
     }
 
+    // The leader's pose `d` cm further along his path (the rest of this leg, then the route's next points), for the guard.
+    const aheadPose = (d: number): { pos: Vec2; yaw: number } => {
+      const path: Vec2[] = [leader.pos, ...legs.slice(leg), ...points.slice(routeLeg + 1)];
+      let left = d, yaw = heading;
+      for (let k = 1; k < path.length; k++) {
+        const L = dist(path[k - 1], path[k]);
+        if (L < 1e-6) continue;
+        yaw = yawOf(sub(path[k], path[k - 1]));
+        if (left <= L) return { pos: add(path[k - 1], scale(sub(path[k], path[k - 1]), left / L)), yaw };
+        left -= L;
+      }
+      return { pos: path[path.length - 1], yaw };
+    };
+
     // --- terrain / formation
     // v1.2: the leader's move ends at the route's last point (at_wall only on arrival there); in the wall layout his move goes
     // on to his own wall slot, which is then his destination (the layout must not drop on that last step).
-    const destination = formation === 'wall' && leaderWallSlot ? leaderWallSlot : legs[legs.length - 1];
-    classify = FormationTerrainRules.Classify(walls, leader.pos, heading, destination, classify, travelled - lastTravelled, c);
+    const destination = formation === 'wall' && leaderWallSlot ? leaderWallSlot : finalPoint;
+    const stepDistance = travelled - lastTravelled;
+    classify = FormationTerrainRules.Classify(walls, leader.pos, heading, destination, classify, stepDistance, c);
     lastTravelled = travelled;
     const next = classify.current!;
     const passage = classify.passageWidth; // v2: held with the corridor class (the column's tail still inside)
     terrain = next;
-    if (!o.manualFormation) formation = FormationTerrainRules.FormationFor(terrain, n, !!o.blizzard);
+    const requested = o.manualFormation ?? FormationTerrainRules.FormationFor(terrain, n, !!o.blizzard);
+    // v2.1: the wall guard - no formation may cut the squad in two (mirror echelon, else the column; the request stays).
+    const pathAhead: Vec2[] = arrived ? [leader.pos] : [leader.pos, ...legs.slice(leg), ...points.slice(routeLeg + 1)];
+    guard = FormationGuardRules.Resolve(walls, requested, n, leader.pos, heading, arrived ? null : aheadPose(cfg(c, 'guard.lookahead')),
+      FormationGuardRules.TurnAhead(pathAhead, heading, c), guard, stepDistance, c);
+    formation = guard.effective!;
     const mode: Mode = arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
     // --- targets and look yaws
@@ -165,36 +245,61 @@ export function simulate(o: SimOptions): number {
       const wall = wallAhead(walls, leader.pos, heading);
       if (wall) {
         const room = wallRoom(wall, leader.pos);
-        const z = members.find((m) => m.role === 'Z');
+        const z = members.find((m) => m.place === 'Z');
         // Tie: the 4th takes the side he reaches with less travel (FormationWallRules.BreakRoomTie, as the C++ caller).
         let rooms = room;
         if (z && n >= 4) {
           const endPos = (l: number, r: number) => FormationWallRules.Layout(wall, leader.pos, n, l, r, c).find((s) => s.role === 'Z')!.pos;
           rooms = FormationWallRules.BreakRoomTie(room.roomLeft, room.roomRight, dist(z.pos, endPos(1, 0)), dist(z.pos, endPos(0, 1)));
         }
-        targets = FormationWallRules.Layout(wall, leaderWallSlot ? legs[legs.length - 1] : leader.pos, n, rooms.roomLeft, rooms.roomRight, c);
+        targets = FormationWallRules.Layout(wall, leaderWallSlot ? finalPoint : leader.pos, n, rooms.roomLeft, rooms.roomRight, c);
         leaderWallSlot = targets[0].pos;
       } else {
         targets = FormationShapeRules.Slots(n >= 4 ? 'diamond' : 'wedge', n, leader.pos, heading, c)
           .map((s) => ({ ...s, yaw: heading }));
       }
+    } else if (FormationGuardRules.Effective(guard).trail) {
+      const path = dist(trail[trail.length - 1], leader.pos) > 1e-6 ? [...trail, leader.pos] : trail;
+      // Each man's sectors by his own surroundings (the corridor's held width, else a wall beside his slot -> narrow), relative
+      // to the trail's direction at his slot; the rear man keeps the squad's 6 o'clock (the leader's heading).
+      targets = FormationShapeRules.TrailSlots(path, heading, n, c).map((s) => ({
+        ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw,
+          passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c), c),
+      }));
     } else {
       targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
         ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),
       }));
     }
+    // v2.1: slicing the pie - one member looks round the end of the wall the squad passes (patrol only; not in the wall layout).
+    // v2.1 fix: a new formation in effect (fold, unfold, mirror, any switch) -> the followers take its places by minimal travel.
+    const key = `${formation}|${FormationGuardRules.Effective(guard).trail}`;
+    if (key !== placesFor) {
+      placesFor = key;
+      const followers = members.slice(1);
+      const places = followers.map((m) => targets.find((x) => x.role === m.place)).filter((x) => !!x);
+      if (places.length === followers.length) {
+        const pick = FormationAssignRules.AssignPlaces(followers.map((m) => m.pos), places.map((x) => x!.pos));
+        const labels = places.map((x) => x!.role);
+        followers.forEach((m, i) => { if (pick[i] >= 0) { m.place = labels[pick[i]]; m.path = null; } });
+      }
+    }
+    const watch = FormationCornerRules.Watch(walls, leader.pos, heading, members.map((m) => ({ role: m.place, pos: m.pos })), corner, c);
+    corner = watch.state;
+    const looks = mode === 'walk' && formation !== 'wall' ? watch.looks : [];
+    if (looks.length) targets = targets.map((x) => ({ ...x, yaw: looks.find((l) => l.role === x.role)?.yaw ?? x.yaw }));
 
     // --- members
     const frames: MemberFrame[] = [];
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
-      const target = targets.find((x) => x.role === m.role) ?? { role: m.role, pos: m.pos, yaw: m.yaw };
+      const target = targets.find((x) => x.role === m.place) ?? { role: m.place, pos: m.pos, yaw: m.yaw };
       let slot = target.pos;
       let slotFallback = false, slotInvalid = false;
       if (i > 0 || formation === 'wall') {
         if (!nav.walkable(slot)) {
           slotFallback = true;
-          const alt = fallbackSlot(nav, leader.pos, slot);
+          const alt = fallbackSlot(nav, walls, leader.pos, slot);
           if (alt) slot = alt; else { slotInvalid = true; slot = m.pos; }
         }
       }
@@ -208,14 +313,21 @@ export function simulate(o: SimOptions): number {
       // WALL_TURN_DIST of it, then the layout yaw (as an operative walking into cover; FORMATION_CONTRACT.md 7);
       // otherwise the rule's look yaw.
       const toWallSlot = formation === 'wall' && dist(m.pos, slot) > WALL_TURN_DIST && len(moveDir) > 0.5;
-      const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : target.yaw;
+      // v2.1.1 (user "6А"): nobody looks into a wall, manual formations too - not the wall layout, the corner watcher, running,
+      // or the LEADER looking where he walks (he must see his way; followers follow him - their step direction jitters along a
+      // wall they hug, which made an exemption for them flip on and off).
+      const watching = looks.some((l) => l.role === m.place);
+      const walking = i === 0 && len(leaderVel) > 1 ? yawOf(leaderVel) : null;
+      const free = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG)
+        ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c);
+      const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
       if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
       const moving = len(moveDir) > 0.5;
       const backwards = moving && angleDiff(yawOf(moveDir), m.yaw) > 120;
-      frames.push({ role: m.role, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null });
+      frames.push({ role: m.role, place: m.place, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.place) });
     }
-    o.onFrame({ t, mode, formation, terrain, heading, leaderDistance: travelled, members: frames });
+    o.onFrame({ t, mode, formation, requested, guardLevel: guard.level, terrain, heading, leaderDistance: travelled, members: frames, bypasses });
 
     t += SIM_DT;
     if (arrived) { haltLeft -= SIM_DT; if (haltLeft <= 0) break; }
@@ -233,8 +345,12 @@ function wallAhead(walls: readonly Segment[], pos: Vec2, heading: number): Segme
   return best;
 }
 
-/** SquadFormation::ComputeFallbackSlots: the slot offset turned round the leader in 30 deg steps, at 100 % and 60 %. */
-function fallbackSlot(nav: NavGrid, leader: Vec2, slot: Vec2): Vec2 | null {
+/**
+ * SquadFormation::ComputeFallbackSlots: the slot offset turned round the leader in 30 deg steps, at 100 % and 60 %.
+ * v2.1: a candidate must also be on the leader's side - the straight line leader -> candidate crosses no wall (a walkable point
+ * behind a wall splits the squad: FORMATION_CONTRACT.md 7 / 10).
+ */
+function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2): Vec2 | null {
   const off = sub(slot, leader);
   const r = len(off), base = yawOf(off);
   const cands: Vec2[] = [];
@@ -242,7 +358,7 @@ function fallbackSlot(nav: NavGrid, leader: Vec2, slot: Vec2): Vec2 | null {
     cands.push(localToWorld(leader, base + s * 30 * k, [Math.max(r * f, 120), 0]));
   }
   cands.sort((a, b) => dist(a, slot) - dist(b, slot));
-  return cands.find((p) => nav.walkable(p)) ?? null;
+  return cands.find((p) => nav.walkable(p) && !segmentBlocked(leader, p, walls, 0)) ?? null;
 }
 
 /**
@@ -271,16 +387,26 @@ function stepTowards(m: Member, slot: Vec2, nav: NavGrid, c: FormationConfig, ru
   const walk = cfg(c, 'pace.walk_speed');
   const top = (run ? cfg(c, 'pace.run_speed') : walk) * cfg(c, 'move.catchup_mult');
   let v: Vec2;
+  let ff: Vec2 = [0, 0];
+  const want = detour ? top : Math.min(top, d * FOLLOW_GAIN);
   if (detour) v = scale(dir, top);
   else {
-    const ff = len(slotVel) > top ? scale(slotVel, top / len(slotVel)) : slotVel;
-    v = add(scale(ff, jitter), scale(dir, Math.min(top, d * FOLLOW_GAIN)));
+    ff = scale(len(slotVel) > top ? scale(slotVel, top / len(slotVel)) : slotVel, jitter);
+    v = add(ff, scale(dir, want));
   }
   let speed = len(v);
   if (speed < 1e-6) return m.pos;
   let cap = top;
   if (!run && angleDiff(yawOf(v), m.yaw) > 120) cap = Math.min(cap, walk * cfg(c, 'move.backward_mult'));
-  if (speed > cap) { v = scale(v, cap / speed); speed = cap; }
+  if (speed > cap) {
+    // v2.1.1: keep the formation's own speed first (the slot's velocity), close the gap with the speed to spare - scaling the
+    // sum down let a big sideways correction (a fold, a swing) steal forward speed, so the man dropped behind his slot.
+    const fu = ff[0] * dir[0] + ff[1] * dir[1], fl = len(ff);
+    const disc = fu * fu - fl * fl + cap * cap;
+    if (detour || fl >= cap || disc < 0) v = scale(detour ? v : ff, cap / Math.max(1e-6, len(detour ? v : ff)));
+    else v = add(ff, scale(dir, Math.min(want, -fu + Math.sqrt(disc))));
+    speed = len(v);
+  }
   let step = scale(v, SIM_DT);
   if (detour && len(step) >= wd) { step = to; m.path!.splice(1, 1); }
   const next = add(m.pos, step);

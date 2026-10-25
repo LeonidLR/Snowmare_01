@@ -35,7 +35,7 @@ test('frames: run = everyone faces the travel direction; patrol = the rear man w
   simulate({ layout, route: walk, memberCount: 4, config, seed: 1, onFrame: (f) => frames.push(f) });
   const patrol = frames.filter((f) => f.mode === 'walk' && f.formation === 'diamond' && f.t > 2);
   assert.ok(patrol.length > 30);
-  assert.ok(patrol.filter((f) => f.members[3].backwards).length / patrol.length > 0.8, 'Z walks backwards in the diamond');
+  assert.ok(patrol.filter((f) => f.members.find((m) => m.place === 'Z')!.backwards).length / patrol.length > 0.8, 'the man at the rear place walks backwards in the diamond');
   const runFrames: Frame[] = [];
   const run = layout.routes.find((r) => r.pace === 'run')!;
   simulate({ layout, route: run, memberCount: 4, config, seed: 1, onFrame: (f) => runFrames.push(f) });

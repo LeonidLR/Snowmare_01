@@ -51,14 +51,17 @@ export interface ProposePayload {
 export const MODELS = { propose: 'claude-opus-5-5', advice: 'claude-sonnet-5-5' } as const;
 
 /** Parameters the tuner may not touch (owned by the game, not by the formation logic). */
-export const FIXED_PARAMS = ['sight.fov', 'pace.walk_speed', 'pace.run_speed'];
+// bypass.max_detour: the user's 30 % (decision 2026-10-25) - not a tuning lever.
+export const FIXED_PARAMS = ['sight.fov', 'pace.walk_speed', 'pace.run_speed', 'bypass.max_detour'];
 
 const SYSTEM = [
   'You tune the squad formation logic of a tactical game (Operation: Cold Silence).',
-  'A deterministic simulator walked the squad along test routes and scored six checks:',
-  '1 wall stare, 2 rear cover with 4 men, 3 formation flicker, 4 expected formation per zone, 5 slots / spacing, 6 rear man pace.',
+  'A deterministic simulator walked the squad along test routes and scored nine checks:',
+  '1 wall stare, 2 rear cover with 4 men, 3 formation flicker, 4 expected formation per zone, 5 slots / spacing, 6 rear man pace,',
+  '7 squad split by a wall, 8 passing a wall on the side hidden from a known threat, 9 the corner man looking round a wall end.',
   'Design rules you must keep: diamond (4) / wedge (3); the side men scan 12->3 and 9->12 while walking; the rear man walks',
-  'backwards looking at 6; nobody looks into a wall; a wall on one side -> echelon to the open side; a narrow passage -> column.',
+  'backwards looking at 6; nobody looks into a wall; a wall on one side -> echelon to the open side; a narrow passage -> column;',
+  'the squad never splits round a wall (a cut formation folds to the mirror echelon or the column on the leader\'s path).',
 ].join(' ');
 
 export function advicePrompt(p: AdvicePayload): ModelRequest {

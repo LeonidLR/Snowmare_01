@@ -210,6 +210,28 @@ struct CODEXTACTICS_API FFormationConfig
 	float ClassifySideIgnorePerpDeg = 30.f;
 	/** [sight.fov] Vision cone width standing / crouched (simulator checks only; the game owns the real value), deg. */
 	float SightFov = 140.f;
+	/** [look.wall_dist] v2.1.1 (user): a wall surface closer than this blocks looks towards it (FormationSectorRules::ClearLook), cm. */
+	float LookWallDist = 260.f;
+	/** [look.wall_angle] v2.1.1: half-width of the blocked span round the direction to the wall's closest point, deg. */
+	float LookWallAngle = 55.f;
+	/** [guard.clearance] v2.1: a slot is cut off when the leader -> slot / chain segment passes closer than this to a wall body, cm. */
+	float GuardClearance = 10.f;
+	/** [guard.lookahead] v2.1: the guard also checks the formation at the leader's pose this far ahead on his path (0 = only here), cm. */
+	float GuardLookahead = 500.f;
+	/** [turn.fold_deg] v2.1.1 (user): a heading change sharper than this within TurnLookahead folds an echelon / line into the trail column, deg. */
+	float TurnFoldDeg = 25.f;
+	/** [turn.lookahead] v2.1.1: how far ahead on the leader's path a sharp turn is looked for (FormationGuardRules::TurnAhead), cm. */
+	float TurnLookahead = 800.f;
+	/** [bypass.max_detour] v2.1 (user): the shielded side of a wall is taken when at most this much longer than the shortest (ratio). */
+	float BypassMaxDetour = 0.3f;
+	/** [bypass.threat_memory_s] v2.1: a threat seen / heard counts as known this long after its last contact, s. */
+	float BypassThreatMemoryS = 20.f;
+	/** [corner.lead_dist] v2.1 slicing the pie: the corner man starts when the leader is this far before the wall end, cm. */
+	float CornerLeadDist = 300.f;
+	/** [corner.hold_dist] v2.1: ... and keeps looking until the leader is this far past it, cm. */
+	float CornerHoldDist = 200.f;
+	/** [corner.peek_dist] v2.1: once past the end, he looks at the point this far behind the wall's far face, cm. */
+	float CornerPeekDist = 300.f;
 };
 
 /** Names, clock math and the shared helpers of the formation rules. */
@@ -247,4 +269,24 @@ namespace FormationMath
 	CODEXTACTICS_API float AngleBetween(float YawA, float YawB);
 	/** LeaderPos + Forward * ForwardCm + Right * RightCm. */
 	CODEXTACTICS_API FVector2D Offset(const FVector2D& LeaderPos, float LeaderYaw, float ForwardCm, float RightCm);
+
+	// --- v2.1 double-precision geometry (Training Ground geometry.ts: same maths, so the golden vectors agree) ---
+
+	/** Yaw normalized to (-180, 180] (geometry.ts normYaw), double. */
+	CODEXTACTICS_API double NormYaw(double Yaw);
+	/** Unit vector of a yaw, double (geometry.ts dirOf). */
+	CODEXTACTICS_API FVector2D DirOf(double Yaw);
+	/** Yaw of a vector, double; 0 for a zero vector (geometry.ts yawOf). */
+	CODEXTACTICS_API double YawOfD(const FVector2D& V);
+	/** The point of segment A -> B nearest to P (parameter clamped to 0..1; OutT = the parameter). */
+	CODEXTACTICS_API FVector2D ClosestOnSegment(const FVector2D& P, const FVector2D& A, const FVector2D& B, double* OutT = nullptr);
+	/** Distance from P to the wall's surface: centre-line distance minus half the thickness, never below 0. */
+	CODEXTACTICS_API double DistToWall(const FVector2D& P, const FFormationWall& Wall);
+	/** Minimum distance between segments P -> Q and A -> B (0 when they cross properly). */
+	CODEXTACTICS_API double SegSegDist(const FVector2D& P, const FVector2D& Q, const FVector2D& A, const FVector2D& B);
+	/**
+	 * True when the straight move P -> Q passes closer than Thickness / 2 + Radius to a wall's centre line (a wall body widened by
+	 * Radius); a zero-length move: P inside such a body.
+	 */
+	CODEXTACTICS_API bool SegmentBlocked(const FVector2D& P, const FVector2D& Q, const TArray<FFormationWall>& Walls, double Radius);
 }

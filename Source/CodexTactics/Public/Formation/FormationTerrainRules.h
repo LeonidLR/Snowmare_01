@@ -80,6 +80,15 @@ namespace FormationTerrainRules
 	CODEXTACTICS_API TOptional<float> PassageWidth(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,
 		const FFormationConfig& Config = FFormationConfig());
 
+	/**
+	 * v2.1: the free width round a man when at least ONE side has a wall body within ClassifyProbeSide, unset when both are open.
+	 * Measured to each wall's closest point (body distance; the side = which side of the heading that point lies, right = +), so a
+	 * wall END beside him counts as well as a wall along him; an open side counts as ClassifyProbeSide. The trail column's sectors
+	 * use it per member (a wall beside a man -> the narrow column's sectors).
+	 */
+	CODEXTACTICS_API TOptional<float> SideWidth(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw,
+		const FFormationConfig& Config = FFormationConfig());
+
 	/** v1.2: the leader is arriving = Destination is set and within ClassifyArriveDist of LeaderPos. */
 	CODEXTACTICS_API bool IsArriving(const FVector2D& LeaderPos, const TOptional<FVector2D>& Destination, const FFormationConfig& Config = FFormationConfig());
 
