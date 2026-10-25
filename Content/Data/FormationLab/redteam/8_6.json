@@ -109,14 +109,24 @@
   },
   "expected_fail": [
     {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 15.8,
+      "what": "p95 177 cm; Z 317 cm behind",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
       "check": 1,
       "choice": "auto",
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 20.5,
-      "what": "P at W2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -124,9 +134,7 @@
       "members": 4,
       "route": "R2",
       "seed": 2,
-      "t": 6.2,
-      "what": "P-Z 71 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -134,9 +142,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 16.9,
-      "what": "L-Z 60 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -144,19 +150,7 @@
       "members": 4,
       "route": "R2",
       "seed": 2,
-      "t": 6.3,
-      "what": "P-Z 79 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 6,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 15.8,
-      "what": "p95 152 cm; Z 223 cm behind",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
   ]
 }

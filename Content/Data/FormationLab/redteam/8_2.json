@@ -268,32 +268,76 @@
     {
       "check": 1,
       "choice": "auto",
-      "members": 4,
+      "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 15.2,
-      "what": "Z at A2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 1,
       "choice": "line",
       "members": 4,
       "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
       "seed": 1,
-      "t": 15.2,
-      "what": "Z at A2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 1,
       "choice": "diamond",
       "members": 4,
       "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
       "seed": 1,
-      "t": 15.2,
-      "what": "Z at A2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 1,
@@ -301,39 +345,30 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 15,
-      "what": "Z at A2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 1,
-      "choice": "blizzard",
+      "choice": "column",
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 25,
-      "what": "L at A4",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 24.9,
-      "what": "L at A4",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 1,
       "choice": "column",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 15.2,
-      "what": "Z at A2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 1,
@@ -343,7 +378,18 @@
       "seed": 1,
       "t": 13.9,
       "what": "Z at A2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 1,
@@ -351,9 +397,20 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 15,
-      "what": "Z at A2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 1,
@@ -361,29 +418,9 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 15,
-      "what": "Z at A2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "blizzard",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 19.4,
-      "what": "P-L 35 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 19.4,
-      "what": "P-L 37 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -391,9 +428,43 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 13.8,
+      "t": 19.4,
       "what": "blizzard: wall cuts Z",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
     }
   ]
 }

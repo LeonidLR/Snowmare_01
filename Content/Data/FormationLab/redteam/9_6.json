@@ -109,16 +109,16 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
+  "expected_fail": [],
+  "fixed_entries": [
     {
       "check": 1,
       "choice": "hedgehog",
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 19.4,
-      "what": "L at W1",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
-  ]
+  ],
+  "fixed_in": "v2.2"
 }

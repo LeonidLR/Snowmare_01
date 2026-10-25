@@ -122,16 +122,15 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
+  "expected_fail": [],
+  "fixed_entries": [
     {
       "check": 5,
       "choice": "auto",
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 25.5,
-      "what": "L-Z 78 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -139,9 +138,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 25.5,
-      "what": "L-Z 76 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -149,9 +146,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 25.4,
-      "what": "P-Z 78 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -159,9 +154,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 25.4,
-      "what": "L-Z 74 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -169,9 +162,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 25.5,
-      "what": "L-Z 79 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -179,9 +170,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 25.4,
-      "what": "L-Z 77 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -189,9 +178,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 25.5,
-      "what": "L-Z 78 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 7,
@@ -199,9 +186,8 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 7.3,
-      "what": "column (asked echelon_left): wall cuts L-Z",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
-  ]
+  ],
+  "fixed_in": "v2.2"
 }

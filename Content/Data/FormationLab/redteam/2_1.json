@@ -159,24 +159,15 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "hedgehog",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 11.8,
-      "what": "Z at W2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 2,
-      "choice": "auto",
-      "members": 4,
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": null,
-      "what": "5-7 o'clock watched 85.1 %",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 10.6,
+      "what": "P-Z 77 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 5,
@@ -184,9 +175,49 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 10.2,
-      "what": "P-L 38 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 11.2,
+      "what": "L-Z 55 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 10.1,
+      "what": "P-Z 69 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 11.1,
+      "what": "blizzard: wall cuts Z",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 2,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
     }
   ]
 }

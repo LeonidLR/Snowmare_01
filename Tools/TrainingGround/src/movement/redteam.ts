@@ -132,7 +132,7 @@ export function validateCandidate(data: unknown, name: string, config: Formation
   l.zones ??= [];
   const routes0 = Array.isArray(l.routes) ? (l.routes as { points?: unknown }[]) : [];
   if (!l.spawn && Array.isArray(routes0[0]?.points)) l.spawn = { pos: (routes0[0].points as unknown[])[0], yaw: 0 };
-  for (const k of ['comment', 'redteam', 'expected_fail']) delete l[k];
+  for (const k of ['comment', 'redteam', 'expected_fail', 'fixed_entries', 'fixed_in']) delete l[k];
   const issues = auditLayout(l, config);
   const errors = issues.filter((i) => i.severity === 'error').map((i) => `${i.where}: ${i.message}`);
   if (errors.length) return { layout: null, errors };
@@ -432,7 +432,9 @@ export function keptFile(k: KeptLayout, meta: { client: string; configHash: stri
   const intent = (k.intent || 'no intent given').trim().replace(/([^.!?])$/, '$1.');
   const comment = `Red team ${k.id} (${k.family}${k.targets.length ? `, aimed at #${k.targets.join(',#')}` : ''}): ${intent} ` +
     `Broke ${k.failures.length} (check, choice, members): ${kinds}. First: ${failureKey(first)} ${first.route} s${first.seed}${first.t !== null ? ` t=${first.t}s` : ''} - ${first.what}.`;
-  const { schema, name, ...rest } = k.layout as unknown as Record<string, unknown>;
+  // The layout's own comment (if any) gives way to ours.
+  const { schema, name, comment: _own, ...rest } = k.layout as unknown as Record<string, unknown>;
+  void _own;
   return {
     schema, name, comment, ...rest,
     redteam: { id: k.id, family: k.family, intent: k.intent, target_checks: k.targets, client: meta.client, config: meta.configHash, members: meta.members, seeds: meta.seeds, seed: meta.seed, date: meta.date },
@@ -481,7 +483,19 @@ export function renderRedteamReport(res: RedteamResult, h: { client: string; bud
 
 export interface ExpectedFail extends Failure { reason: string }
 
-export interface RegressionRow { file: string; known: number; fixed: string[]; fresh: Failure[]; runs: number }
+export interface RegressionRow {
+  file: string;
+  /** Still failing / now passing (the rules fixed it) / failing but not expected. */
+  known: number;
+  fixed: string[];
+  fresh: Failure[];
+  runs: number;
+  /** The current minimal failures (all keys). */
+  current: Failure[];
+  /** The checks of the expected entries now passing / still failing (the report's per-check summary). */
+  fixedChecks: number[];
+  knownChecks: number[];
+}
 
 /** Re-walks a kept layout (full matrix) and compares with its expected_fail: known / fixed (now passing) / new. */
 export function regressLayout(file: string, data: Record<string, unknown>, o: EvalOptions): RegressionRow {
@@ -491,12 +505,34 @@ export function regressLayout(file: string, data: Record<string, unknown>, o: Ev
   const ev = evaluateLayout(v.layout, o);
   const now = new Set(ev.failures.map(failureKey));
   const want = new Set(expected.map(failureKey));
+  const still = expected.filter((e) => now.has(failureKey(e))), gone = expected.filter((e) => !now.has(failureKey(e)));
   return {
-    file, runs: ev.runs,
-    known: expected.filter((e) => now.has(failureKey(e))).length,
-    fixed: expected.filter((e) => !now.has(failureKey(e))).map(failureKey),
+    file, runs: ev.runs, current: ev.failures,
+    known: still.length, knownChecks: still.map((e) => e.check),
+    fixed: gone.map(failureKey), fixedChecks: gone.map((e) => e.check),
     fresh: ev.failures.filter((f) => !want.has(failureKey(f))),
   };
+}
+
+/**
+ * The kept file refreshed against the current rules (`tag`, e.g. "v2.2"): expected_fail = the still-failing entries with their
+ * current minimal reproduction + the failures that appeared with these rules (`since: tag`); the entries now passing move to
+ * `fixed_entries` (with `fixed_in`); a layout with nothing left failing stays as a regression guard with `fixed_in: tag`.
+ */
+export function refreshKept(data: Record<string, unknown>, row: RegressionRow, tag: string): Record<string, unknown> {
+  const old = (Array.isArray(data.expected_fail) ? data.expected_fail : []) as ExpectedFail[];
+  const oldKeys = new Set(old.map(failureKey));
+  const fixedEntries = [
+    ...((Array.isArray(data.fixed_entries) ? data.fixed_entries : []) as Record<string, unknown>[]),
+    ...old.filter((e) => row.fixed.includes(failureKey(e))).map(({ check, choice, members, route, seed }) => ({ check, choice, members, route, seed, fixed_in: tag })),
+  ];
+  const expected = row.current.map((f) => oldKeys.has(failureKey(f))
+    ? { ...f, reason: `still failing under ${tag} (${looksLike(f.check)}): open until the rules are fixed or the layout is judged wrong` }
+    : { ...f, since: tag, reason: `appeared with ${tag} (${looksLike(f.check)}): a new failure on this layout - review` });
+  const out: Record<string, unknown> = { ...data, expected_fail: expected };
+  if (fixedEntries.length) out.fixed_entries = fixedEntries;
+  if (expected.length) delete out.fixed_in; else out.fixed_in = tag;
+  return out;
 }
 
 export function renderRegression(rows: RegressionRow[], h: { dir: string; configHash: string; date: string }): string {
@@ -506,7 +542,14 @@ export function renderRegression(rows: RegressionRow[], h: { dir: string; config
     `layouts ${rows.length} | runs ${rows.reduce((a, r) => a + r.runs, 0)} | config ${h.configHash} | ${h.date}`,
     `expected_fail still failing ${known} | fixed (clear their expected_fail) ${fixed} | NEW failures ${fresh}`,
     '',
-    ...rows.filter((r) => r.fixed.length || r.fresh.length).slice(0, 20).map((r) =>
+    '| check | still failing | fixed | new |',
+    '|---|---|---|---|',
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => {
+      const n = (xs: number[]) => xs.filter((x) => x === c).length;
+      return { c, k: rows.reduce((a, r) => a + n(r.knownChecks), 0), f: rows.reduce((a, r) => a + n(r.fixedChecks), 0), w: rows.reduce((a, r) => a + n(r.fresh.map((x) => x.check)), 0) };
+    }).filter((x) => x.k || x.f || x.w).map((x) => `| ${x.c} ${CHECK_SHORT[x.c]} | ${x.k} | ${x.f} | ${x.w} |`),
+    '',
+    ...rows.filter((r) => r.fixed.length || r.fresh.length).slice(0, 12).map((r) =>
       `- ${r.file}: ${r.fixed.length ? `fixed ${r.fixed.slice(0, 4).join(', ')}` : ''}${r.fixed.length && r.fresh.length ? '; ' : ''}${r.fresh.length ? `new ${r.fresh.slice(0, 3).map((f) => `${failureKey(f)} ${f.route}${f.t !== null ? ` t=${f.t}` : ''}`).join(', ')}` : ''}`),
   ];
   return lines.slice(0, 30).join('\n') + '\n';

@@ -25,7 +25,7 @@ export interface RedteamPayload {
 }
 
 type V = Vec2;
-interface Built { walls: [V, V, number?][]; routes: { id: string; pace: 'walk' | 'run'; points: V[]; threats?: { pos: V; since_s: number }[]; expect_bypass?: { wall: string; wall_on: 'left' | 'right' }[] }[] }
+interface Built { walls: [V, V, number?][]; zones?: { id: string; kind: string; poly: V[] }[]; routes: { id: string; pace: 'walk' | 'run'; points: V[]; expect?: { zone: string; formation: string }[]; threats?: { pos: V; since_s: number }[]; expect_bypass?: { wall: string; wall_on: 'left' | 'right' }[] }[] }
 interface Template { family: string; targets: number[]; intent: string; build: (v: number) => Built }
 
 const W = (i: number) => `W${i + 1}`;
@@ -33,8 +33,14 @@ const W = (i: number) => `W${i + 1}`;
 /** Parametric attack templates (v in 0..1 varies the geometry a little). Heading +X: left = -Y. */
 const TEMPLATES: Template[] = [
   {
-    family: 'oblique_walls', targets: [7, 1], intent: 'a wall converging on the left flank at 10-15 deg squeezes the left slot into it',
-    build: (v) => ({ walls: [[[-1500, -800 - 200 * v], [1600, -150]]], routes: [{ id: 'R1', pace: 'walk', points: [[-2600, 0], [2600, 0]] }] }),
+    // Plus a synthetic, rules-independent failure (the tests need one under ANY rules version): the zone expects the hedgehog,
+    // which the terrain never picks on its own (it is a menu / heat-source formation) -> check 4 fails in auto.
+    family: 'oblique_walls', targets: [7, 1, 4], intent: 'a wall converging on the left flank at 10-15 deg squeezes the left slot into it; synthetic: the zone expects the hedgehog',
+    build: (v) => ({
+      walls: [[[-1500, -800 - 200 * v], [1600, -150]]],
+      zones: [{ id: 'Z_synthetic', kind: 'open', poly: [[-2000, -100], [2500, -100], [2500, 100], [-2000, 100]] }],
+      routes: [{ id: 'R1', pace: 'walk', points: [[-2600, 0], [2600, 0]], expect: [{ zone: 'Z_synthetic', formation: 'hedgehog' }] }],
+    }),
   },
   {
     family: 'stubs_pillars', targets: [7, 5], intent: 'pillars on the line of the left slots: the chain L-Z and the leader-L line cross them',
@@ -91,7 +97,7 @@ function layoutOf(t: Template, v: number, broken: boolean): Record<string, unkno
     schema: 'codex.formation_layout/1', name: 'mock', bounds: { min: [-4000, -2500], max: [4000, 2500] }, ground_z: 0,
     spawn: { pos: routes[0].points[0], yaw: 0 },
     walls: b.walls.map(([a, c, th], i) => ({ id: W(i), a, b: c, height: 300, thickness: th ?? 40 })),
-    zones: [], routes,
+    zones: b.zones ?? [], routes,
   };
 }
 
