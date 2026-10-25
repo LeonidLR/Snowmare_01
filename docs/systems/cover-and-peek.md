@@ -187,6 +187,10 @@
   `std_sprint_fwd_R_to_cvr_std_idle_R`, in cover there at the corner. `CoverSwitchSmoke` stage 11: B moved into A's plane (0 / 30 cm back /
   30 cm forward, gaps 2.5 / 2.5 / 3.5 m), hover near the edge and in the middle -> the front-face corner ghost, the double-click -> there.
   Test `CodexTactics.Tactics.CoverSwitch.CoplanarBuildingsAreTwoWalls`.
+  **Smoke isolation (2026-10-25, no behaviour change):** from 2026-10-23 the smoke failed at step 3 with "mesh offset 11.0" - SKIP TUTORIAL wakes
+  the dormant A4 zombie where it was placed (~28 m east of the rocks) one tick AFTER the smoke parked the enemies, so a threat was known, the
+  corner hold leaned him out at both corners (by design) and the peek's `CornerLeanExtraPackRCm` 11 stayed on the mesh. The smoke now parks
+  again after the wake and checks no enemy is within `MaxThreatDistanceCm` 50 m; step 3's fail line logs corner aim / threat / peek / nearest enemy.
 - **Second playtest pass (user 2026-10-21):** (1) "only the walking animation - I want to click and he quickly moves from one edge to the
   other": ANY confirm of a switchable ghost is now the switch - the double-click and the slow second click alike
   (`CoverSwitchRules::IsSwitchConfirm`) - a sprint (725 cm/s) arriving through the pack's **sprint** run-ins
