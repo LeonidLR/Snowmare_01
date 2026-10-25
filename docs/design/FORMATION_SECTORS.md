@@ -1,0 +1,90 @@
+# Formation look sectors & tactical movement — design decisions (session 2026-10-25)
+
+Status: **design agreed with the user, no code yet.** Next session (local, with the model router / Jev / Unreal) starts here.
+Visual reference with interactive schemes and 3-second clips: `docs/design/formation-sectors.html` (open in a browser;
+same page as the claude.ai artifact https://claude.ai/artifact/ErDQfTKvYcV1Q3YzaA19HT). Keep the page, the clips and this
+file in sync with every design change (user request: "update the animations with every fix").
+
+## Core rule
+An operative sees only his vision cone (already in game: 140° standing / crouched, 110° prone; out of cover the cone is
+the body facing, `AOperativeCharacter::GetSightFacing`). The formation decides where each one looks. 12 o'clock = the
+leader's heading.
+
+## Roles and sectors (decided)
+| Role | Slot (from the leader, m) | Walk = patrol | Run (double click) | Short halt |
+|---|---|---|---|---|
+| Commander (K) | 0, 0 | 12, light search 11–1 | 12 | 12 |
+| Right (P) | 2.6 right, 2.8 back | scans 12 → 3, dwell on points | 12 | 2 |
+| Left (L) | 2.6 left, 2.8 back | scans 9 → 12, counter-phase | 12 | 10 |
+| Rear (Z), 4th member | 5.6 straight back (today slot 2 = 2nd row LEFT — change) | 6, walks BACKWARDS | 12 | 6 |
+
+- 3 men = wedge (triangle); 4 men = **diamond** (rear centred). No 2×2 square.
+- **Patrol pace: the whole squad walks at ~80 % of walk speed** so the rear man keeps up walking backwards.
+- **Triad keeps its rear gap** (5–7 o'clock, ~40°): the honest cost of three men; the 4th closes it.
+- Run: everybody faces 12 (rear blind ~220° — the price of speed).
+- Halt: everybody turns to the centre of his sector.
+- Box select + click: unchanged (each to his own point, `SquadFormation::ComputeGroupTargets`), faces his own path.
+- Facing priority: combat target > explicit facing order > cover > formation sector > movement direction.
+- Pair (2): partner behind the right shoulder, sweeps 3 → 6 → 9.
+
+## Wall (group cover order in formation mode) — decided after the user's correction
+Nobody looks through the wall. All stand along the wall (1 m apart) facing the OPEN side, the open half-plane is shared:
+- 3: L on the left looks 8 (left flank along the wall), K on the clicked slot looks **6 (away from the wall)**, P looks 4.
+- 4: the 4th stands at the end of the line **on the side with more wall room** (tie → the side he reaches with less
+  travel); he takes the flank along the wall (3–4 / 8–9), his neighbour turns toward the centre (4 → 5 / 8 → 7);
+  K and the other flanker unchanged.
+- 2: K 7:30, partner 4:30.
+- Needs a new pose: standing / crouched **back to the wall facing out** (today a cover operative is always shoulder to the
+  wall looking along it, `CoverFacingRules`). Baseline: crouch idle facing out; the user replaces it with a clip later.
+
+## Formations (kept)
+Diamond / wedge (default), column "herringbone" (narrow passages: 12 / 2 / 10 / 6 alternating — sectors K 0, P +70,
+L −70, Z 180), line (all forward with a slight fan), **echelon right** (obstacle on the left, all guns to the open right
+flank; from the diamond the LEFT man goes second — minimal travel), **echelon left** (mirror; the RIGHT man goes second),
+hedgehog at a heat source (backs to the fire, faces out — WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter
+cones). Dropped by the user: bounding overwatch, door stack.
+
+## Selection
+- **Automatic by level geometry** (default): open ground → diamond / wedge; wall on one side → echelon away from it;
+  narrow passage → column-herringbone; arrival at a wall → the wall layout. Needs hysteresis (like today's
+  `ColumnHoldTime`) so it does not flicker at wall gaps.
+- **Manual: hold G** → radial menu with schematic icons; move the cursor to a sector, release G. Centre = **Auto**.
+  A manual choice holds until Auto is picked. Proposed layout (user named 12 line, 3 echelon right, 10 echelon left,
+  5–6 column; 9 chosen for symmetry — confirm): 12 Line · 1:30 Diamond/wedge · 3 Echelon right · 4:30 Blizzard ·
+  6 Column · 7:30 Hedgehog · 9 Echelon left · 10:30 "All forward" (walk, everyone faces 12).
+
+## Test lab + bots (decided)
+- A big maze-like **formation lab map**: open areas, long walls, 90° corners, walls with gaps (wall–gap–wall), narrow
+  corridors. Built by a script from a layout JSON, never by hand.
+- **Rename `Tools/WaveEditor` → "Training Ground"** with departments: waves bot (existing), movement / formation bot,
+  level-design bot, … Rewrite the architecture if needed.
+- **Token policy (user):** bot runs must not burn the coding agent's session tokens.
+  - Simulation + checks: deterministic TypeScript in Node inside Training Ground (no Unreal, no LLM, 0 tokens) —
+    hundreds of routes per run through the same layout JSON.
+  - Analysis / advice / parameter search between run series: Jev (`TYPESAFE_API_KEY`, `Scripts/Tools/jev_client.py`)
+    or the Claude API (`ANTHROPIC_API_KEY`, like `Scripts/Tools/visual_qa.py`) — the user's API tokens. Without a key
+    the bot still runs and writes a plain report.
+  - The coding agent reads only the short distilled report (20–30 lines), never raw runs.
+  - Parity: the same layout JSON feeds the simulator and the Unreal map; pure C++ rules get parity tests against
+    golden vectors exported by the simulator (same inputs → same outputs), like the Godot parity tests.
+- Unreal is needed only for the final in-game check (smoke command on the lab map).
+
+## Code map (from this session's reading)
+- `Characters/SquadFormation.h` — pure slot math (`ComputeSlotPosition`: even slots left, odd right, two per row;
+  column mode; `ShouldSwapSlots`; `ComputeFallbackSlots`; `ComputeGroupTargets`). Config `FSquadFormationConfig`
+  (SideOffset 260, BackOffset 280, Column 180 / 150, ColumnHoldTime 0.6, RotationSmoothing 3.5).
+- `Characters/FacingRules.h` (Godot lerp_angle turning), `RifleLocomotionRules.h` (8-direction Rifle_2 starts / stops /
+  walk: strafing and walking backwards already animate), `AOperativeCharacter::IsFacingCombatTarget` (already moves
+  sideways / backwards while facing a target — reuse for the formation look yaw), `SetIdleFacingYaw` (parked followers
+  face the leader's way — replace by sector centres on halt).
+- `Tactics/GroupCoverRules.h` (+ `ACodexTacticsPlayerController::OrderGroupCover`): slots along the same wall,
+  minimal-travel assignment — add side binding (L left, P right, 4th at the roomier end) and the facing-out pose.
+- Sight: `docs/systems/sight-and-vision-cones.md`. Squad / orders: `docs/systems/squad-and-orders.md`.
+
+## Suggested order
+1. Training Ground shell (rename, departments) + layout JSON schema + movement simulator with the pure formation rules
+   in TS + movement bot + report (Jev / Claude API distillation).
+2. Formation lab layout JSON + Unreal map generator script + navmesh bake.
+3. C++ pure rules (`FormationShapeRules` / `FormationSectorRules` / terrain classifier) with parity tests from golden
+   vectors; runtime integration (slots, look yaw, patrol pace, wall layout + pose); hold-G radial menu.
+4. In-game smoke on the lab map.

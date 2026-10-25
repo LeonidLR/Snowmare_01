@@ -14,6 +14,19 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-25 — formation look sectors: DESIGN AGREED, no code yet (cloud session, branch claude/stoic-bell-dr29o5)
+
+- Read `docs/design/FORMATION_SECTORS.md` first (decisions, code map, order of work); schemes + 3 s clips in
+  `docs/design/formation-sectors.html`. Keep the page / clips in sync with every design change (user request).
+- Decided: diamond (4) / wedge (3), patrol at ~80 % pace with the rear man walking backwards, triad rear gap stays,
+  wall layout = everyone faces the open side (K away from the wall, 4th at the roomier end), auto selection by level
+  geometry + hold-G radial menu (centre = Auto), echelon right / left kept, bounding overwatch + door stack dropped.
+- Next: Wave Editor -> "Training Ground" (departments: waves / movement / level-design bots); movement simulator in TS
+  (0 tokens), analysis via Jev / Claude API on the user's keys (not the agent's session tokens); formation lab maze
+  from a layout JSON; then C++ rules with parity tests, runtime, radial menu, in-game smoke.
+- The cloud session had no Unreal, no TYPESAFE_API_KEY / ANTHROPIC_API_KEY and api.typesafe.ai was blocked; the user
+  moves the work to a local session with the model router.
+
 ## Checkpoint 2026-10-22 night — main b14c8ed pushed (morning report)
 
 - Parallel sessions protocol in force (memory parallel-sessions-protocol): weather (CodexTactics-agents2 / env/phase1), ladders spec owner (reviews), my agents in CodexTactics-agents / CodexTactics-ladder. Only I merge into main.
