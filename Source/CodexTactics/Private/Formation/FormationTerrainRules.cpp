@@ -66,8 +66,28 @@ namespace FormationTerrainRules
 		return Best <= static_cast<double>(MaxDistance) ? TOptional<float>(static_cast<float>(Best)) : TOptional<float>();
 	}
 
-	TOptional<float> SideClearance(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, int32 Side, float Reach)
+	bool IsAcrossHeading(const FFormationWall& Wall, float Yaw, float IgnorePerpDeg)
 	{
+		const float Along = FMath::Abs(FRotator::NormalizeAxis(FormationMath::YawOf(Wall.B - Wall.A) - Yaw));
+		const float OffParallel = FMath::Min(Along, 180.f - Along);
+		return OffParallel >= 90.f - IgnorePerpDeg;
+	}
+
+	TOptional<float> SideClearance(const TArray<FFormationWall>& AllWalls, const FVector2D& Pos, float Yaw, int32 Side, float Reach, float IgnorePerpDeg)
+	{
+		TArray<FFormationWall> Beside;
+		if (IgnorePerpDeg > 0.f)
+		{
+			Beside.Reserve(AllWalls.Num());
+			for (const FFormationWall& Wall : AllWalls)
+			{
+				if (!IsAcrossHeading(Wall, Yaw, IgnorePerpDeg))
+				{
+					Beside.Add(Wall);
+				}
+			}
+		}
+		const TArray<FFormationWall>& Walls = IgnorePerpDeg > 0.f ? Beside : AllWalls;
 		TOptional<double> Best;
 		for (const float RayDeg : TerrainSideRaysDeg)
 		{
@@ -92,8 +112,8 @@ namespace FormationTerrainRules
 			}
 		}
 		const float Reach = Config.ClassifyProbeSide;
-		const TOptional<float> Right = SideClearance(Walls, LeaderPos, LeaderYaw, 1, Reach);
-		const TOptional<float> Left = SideClearance(Walls, LeaderPos, LeaderYaw, -1, Reach);
+		const TOptional<float> Right = SideClearance(Walls, LeaderPos, LeaderYaw, 1, Reach, Config.ClassifySideIgnorePerpDeg);
+		const TOptional<float> Left = SideClearance(Walls, LeaderPos, LeaderYaw, -1, Reach, Config.ClassifySideIgnorePerpDeg);
 		const bool bRightBlocked = Right.IsSet() && Right.GetValue() <= Reach;
 		const bool bLeftBlocked = Left.IsSet() && Left.GetValue() <= Reach;
 		if (bRightBlocked && bLeftBlocked)
@@ -109,6 +129,18 @@ namespace FormationTerrainRules
 			return EFormationTerrainClass::WallRight;
 		}
 		return EFormationTerrainClass::Open;
+	}
+
+	TOptional<float> PassageWidth(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, const FFormationConfig& Config)
+	{
+		const float Reach = Config.ClassifyProbeSide;
+		const TOptional<float> Right = SideClearance(Walls, LeaderPos, LeaderYaw, 1, Reach, Config.ClassifySideIgnorePerpDeg);
+		const TOptional<float> Left = SideClearance(Walls, LeaderPos, LeaderYaw, -1, Reach, Config.ClassifySideIgnorePerpDeg);
+		if (Right.IsSet() && Left.IsSet() && Right.GetValue() <= Reach && Left.GetValue() <= Reach)
+		{
+			return Left.GetValue() + Right.GetValue();
+		}
+		return TOptional<float>();
 	}
 
 	EFormationTerrainClass ApplyHysteresis(EFormationTerrainClass RawClass, const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass,

@@ -19,7 +19,9 @@
  *   halt the centre (6). Else Z 180 (walks backwards looking at 6); K walk scan(0, ScanAmpLead, ScanPeriod, 1.3) (light search), halt 0;
  *   P walk scan(+ScanCenterSide, ScanAmpSide, ScanPeriod, 0) (12 -> 3), halt +HaltSideDeg (2); L walk scan(-ScanCenterSide,
  *   ScanAmpSide, ScanPeriod, pi) (9 -> 12, counter-phase: both out together), halt -HaltSideDeg (10).
- * - Column (herringbone): K 0, P +ColumnSideDeg, L -ColumnSideDeg, Z 180.
+ * - Column: K 0, Z 180; in a NARROW passage (PassageWidth set and < ColumnNarrowWidth; v1.1, user decision: the side men do not
+ *   look into the walls) P +ColumnNarrowFwdDeg (forward over the shoulder), L -ColumnNarrowBackDeg (back at a slant); else the
+ *   herringbone P +ColumnSideDeg, L -ColumnSideDeg.
  * - Line: n = 2: K -LineFanInner, partner +LineFanInner; n = 3: K 0, P +LineFanOuter, L -LineFanOuter; else K -LineFanInner,
  *   P +LineFanInner, L -LineFanOuter, Z +LineFanOuter (the line runs L, K, P, Z left to right).
  * - Echelon: the man's echelon index i (FormationShapeRules::EchelonIndex) looks EchelonSectorLead / 2 / 3 / 4 to the open side
@@ -68,14 +70,15 @@ namespace FormationSectorRules
 
 	/** The member's look relative to the reference yaw, deg (positive = right; see the header comment). */
 	CODEXTACTICS_API float LookOffset(EFormationRole Role, EFormationKind Formation, EFormationMode Mode, int32 MemberCount, float TimeInPatrol,
-		const FFormationConfig& Config = FFormationConfig());
+		const TOptional<float>& PassageWidth = TOptional<float>(), const FFormationConfig& Config = FFormationConfig());
 
 	/**
 	 * The member's world look yaw (UE yaw, normalized): LeaderYaw + LookOffset. LeaderYaw = the leader's heading; in mode / formation wall
-	 * the wall's outward normal.
+	 * the wall's outward normal. PassageWidth = the free width of the passage the leader is in (FormationTerrainRules::PassageWidth;
+	 * unset = not between two walls).
 	 */
 	CODEXTACTICS_API float LookYaw(EFormationRole Role, EFormationKind Formation, EFormationMode Mode, int32 MemberCount, float TimeInPatrol,
-		float LeaderYaw, const FFormationConfig& Config = FFormationConfig());
+		float LeaderYaw, const TOptional<float>& PassageWidth = TOptional<float>(), const FFormationConfig& Config = FFormationConfig());
 
 	/** The squad's pace for a mode, cm/s: walk = PaceWalkSpeed * PacePatrol, run = PaceRunSpeed, halt / wall = 0. */
 	CODEXTACTICS_API float SquadPace(EFormationMode Mode, const FFormationConfig& Config = FFormationConfig());

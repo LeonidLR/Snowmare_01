@@ -36,7 +36,7 @@ namespace FormationShapeRules
 
 	/**
 	 * World slots of every member in slot order (Roles). Position = the slot; Yaw = the member's halt look yaw
-	 * (FormationSectorRules::LookYaw in Halt; not part of the contract's output). Wall: empty.
+	 * (FormationSectorRules::LookYaw in Halt, no passage width; not part of the contract's output). Wall: empty.
 	 */
 	CODEXTACTICS_API TArray<FFormationSlot> Slots(EFormationKind Formation, int32 MemberCount, const FVector2D& LeaderPos, float LeaderYaw,
 		const FFormationConfig& Config = FFormationConfig());

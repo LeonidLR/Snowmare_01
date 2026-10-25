@@ -135,6 +135,39 @@ bool FFormationTerrainMappingTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_TERRAIN_TEST(FFormationTerrainPassageWidthTest, "PassageWidthAndDeadEnd")
+bool FFormationTerrainPassageWidthTest::RunTest(const FString&)
+{
+	using namespace FormationTerrainTestUtil;
+	const FFormationConfig Config;
+	const FFormationWall Left = MakeWall(-2000.0, -250.0, 2000.0, -250.0);
+	const FFormationWall Right = MakeWall(-2000.0, 250.0, 2000.0, 250.0);
+	// v1.1: the free width between the walls (centre lines 5 m apart, 40 cm thick -> 4.6 m free).
+	const TOptional<float> Width = FormationTerrainRules::PassageWidth({ Left, Right }, FVector2D::ZeroVector, 0.f, Config);
+	TestTrue(TEXT("Passage 460 cm"), Width.IsSet() && FMath::IsNearlyEqual(Width.GetValue(), 460.f, 0.01f));
+	TestFalse(TEXT("One side open: no passage"), FormationTerrainRules::PassageWidth({ Left }, FVector2D::ZeroVector, 0.f, Config).IsSet());
+	TestFalse(TEXT("No walls: no passage"), FormationTerrainRules::PassageWidth({}, FVector2D::ZeroVector, 0.f, Config).IsSet());
+
+	// Across the heading: a wall within classify.side_ignore_perp_deg of perpendicular is ahead / behind, not beside.
+	const FFormationWall Across = MakeWall(180.0, -1000.0, 180.0, 1000.0);
+	TestTrue(TEXT("A perpendicular wall is across the heading"), FormationTerrainRules::IsAcrossHeading(Across, 0.f, Config.ClassifySideIgnorePerpDeg));
+	TestTrue(TEXT("Its direction does not matter (B -> A)"), FormationTerrainRules::IsAcrossHeading(MakeWall(180.0, 1000.0, 180.0, -1000.0), 0.f, 30.f));
+	TestFalse(TEXT("A parallel wall is beside"), FormationTerrainRules::IsAcrossHeading(Left, 0.f, Config.ClassifySideIgnorePerpDeg));
+	const auto Slanted = [](double Deg) { return MakeWall(0.0, 0.0, 1000.0 * FMath::Cos(FMath::DegreesToRadians(Deg)), 1000.0 * FMath::Sin(FMath::DegreesToRadians(Deg))); };
+	TestTrue(TEXT("65 deg off parallel (band 30): across"), FormationTerrainRules::IsAcrossHeading(Slanted(65.0), 0.f, 30.f));
+	TestFalse(TEXT("55 deg off parallel: beside"), FormationTerrainRules::IsAcrossHeading(Slanted(55.0), 0.f, 30.f));
+	// A dead end 1.6 m ahead (face), just outside at_wall: the slanted side rays used to read it as two side walls 2.8 m off -> corridor.
+	TestEqual(TEXT("Dead end ahead: still open (no column flip before arriving)"), Raw({ Across }), EFormationTerrainClass::Open);
+	FFormationConfig Unfiltered = Config;
+	Unfiltered.ClassifySideIgnorePerpDeg = 0.f;
+	TestEqual(TEXT("Without the v1.1 filter the dead end read as a corridor"), FormationTerrainRules::ClassifyRaw({ Across }, FVector2D::ZeroVector, 0.f, Unfiltered),
+		EFormationTerrainClass::Corridor);
+	TestFalse(TEXT("No passage at a dead end"), FormationTerrainRules::PassageWidth({ Across }, FVector2D::ZeroVector, 0.f, Config).IsSet());
+	// Closer, the at_wall rays (first, unfiltered) see it.
+	TestEqual(TEXT("Arriving at the dead end: at_wall"), Raw({ Across }, FVector2D(40.0, 0.0)), EFormationTerrainClass::AtWall);
+	return true;
+}
+
 #undef FORMATION_TERRAIN_TEST
 
 #endif

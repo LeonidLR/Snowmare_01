@@ -19,7 +19,7 @@ namespace FormationSectorTestUtil
 		TArray<float> Out;
 		for (int32 Step = 0; Step < 1200; ++Step)
 		{
-			const float Yaw = FormationSectorRules::LookYaw(Role, EFormationKind::Diamond, EFormationMode::Walk, MemberCount, Step * 0.01f, Heading, Config);
+			const float Yaw = FormationSectorRules::LookYaw(Role, EFormationKind::Diamond, EFormationMode::Walk, MemberCount, Step * 0.01f, Heading, TOptional<float>(), Config);
 			Out.Add(FRotator::NormalizeAxis(Yaw - Heading));
 		}
 		return Out;
@@ -58,12 +58,12 @@ bool FFormationSectorPatrolTest::RunTest(const FString&)
 	// Counter-phase: when P is out at 3, L is out at 9.
 	const float Quarter = Config.ScanPeriod / 4.f;
 	TestTrue(TEXT("P at 3 at a quarter period"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Right, EFormationKind::Diamond,
-		EFormationMode::Walk, 4, Quarter, 0.f, Config), 90.f, 1e-3f));
+		EFormationMode::Walk, 4, Quarter, 0.f, TOptional<float>(), Config), 90.f, 1e-3f));
 	TestTrue(TEXT("L at 9 at the same time"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Left, EFormationKind::Diamond,
-		EFormationMode::Walk, 4, Quarter, 0.f, Config), -90.f, 1e-3f));
+		EFormationMode::Walk, 4, Quarter, 0.f, TOptional<float>(), Config), -90.f, 1e-3f));
 	// The look follows the leader's heading.
 	TestTrue(TEXT("Heading 40: Z at -140"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Rear, EFormationKind::Diamond,
-		EFormationMode::Walk, 4, 1.f, 40.f, Config), -140.f, 1e-3f));
+		EFormationMode::Walk, 4, 1.f, 40.f, TOptional<float>(), Config), -140.f, 1e-3f));
 	return true;
 }
 
@@ -85,7 +85,7 @@ bool FFormationSectorDwellTest::RunTest(const FString&)
 	int32 PlainNearEnds = 0;
 	for (int32 Step = 0; Step < 1200; ++Step)
 	{
-		const float Value = FormationSectorRules::LookYaw(EFormationRole::Right, EFormationKind::Diamond, EFormationMode::Walk, 4, Step * 0.01f, 0.f, Plain);
+		const float Value = FormationSectorRules::LookYaw(EFormationRole::Right, EFormationKind::Diamond, EFormationMode::Walk, 4, Step * 0.01f, 0.f, TOptional<float>(), Plain);
 		PlainNearEnds += (Value < 15.f || Value > 75.f) ? 1 : 0;
 	}
 	TestTrue(FString::Printf(TEXT("Dwell holds near the ends longer (%.0f %% vs plain %.0f %%)"), 100.f * DwellShare,
@@ -115,9 +115,9 @@ bool FFormationSectorPairTest::RunTest(const FString&)
 	TestTrue(TEXT("Only through 6 (never the front half)"), bThroughSix);
 	const FFormationConfig Config;
 	TestTrue(TEXT("Pair halt: the partner holds 6"), FMath::IsNearlyEqual(FMath::Abs(FormationSectorRules::LookYaw(EFormationRole::Rear,
-		EFormationKind::Diamond, EFormationMode::Halt, 2, 0.7f, 0.f, Config)), 180.f, 1e-3f));
+		EFormationKind::Diamond, EFormationMode::Halt, 2, 0.7f, 0.f, TOptional<float>(), Config)), 180.f, 1e-3f));
 	TestTrue(TEXT("Pair leader still searches round 12"), FMath::Abs(FormationSectorRules::LookYaw(EFormationRole::Commander, EFormationKind::Diamond,
-		EFormationMode::Walk, 2, 0.f, 0.f, Config)) <= Config.ScanAmpLead + 1e-3f);
+		EFormationMode::Walk, 2, 0.f, 0.f, TOptional<float>(), Config)) <= Config.ScanAmpLead + 1e-3f);
 	return true;
 }
 
@@ -133,16 +133,16 @@ bool FFormationSectorRunHaltTest::RunTest(const FString&)
 		for (const EFormationRole Role : Roles)
 		{
 			TestTrue(FString::Printf(TEXT("Run: %s in %s faces 12"), FormationNames::ToString(Role), FormationNames::ToString(Kind)),
-				FMath::IsNearlyEqual(FormationSectorRules::LookYaw(Role, Kind, EFormationMode::Run, 4, 1.7f, 30.f, Config), 30.f, 1e-3f));
+				FMath::IsNearlyEqual(FormationSectorRules::LookYaw(Role, Kind, EFormationMode::Run, 4, 1.7f, 30.f, TOptional<float>(), Config), 30.f, 1e-3f));
 		}
 	}
 	// Halt: K 12, P 2, L 10, Z 6.
-	TestTrue(TEXT("Halt K 12"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Commander, EFormationKind::Diamond, EFormationMode::Halt, 4, 1.7f, 0.f, Config), 0.f));
-	TestTrue(TEXT("Halt P 2"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Right, EFormationKind::Diamond, EFormationMode::Halt, 4, 1.7f, 0.f, Config),
+	TestTrue(TEXT("Halt K 12"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Commander, EFormationKind::Diamond, EFormationMode::Halt, 4, 1.7f, 0.f, TOptional<float>(), Config), 0.f));
+	TestTrue(TEXT("Halt P 2"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Right, EFormationKind::Diamond, EFormationMode::Halt, 4, 1.7f, 0.f, TOptional<float>(), Config),
 		FormationMath::ClockToYaw(2.f, 0.f)));
-	TestTrue(TEXT("Halt L 10"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Left, EFormationKind::Diamond, EFormationMode::Halt, 4, 1.7f, 0.f, Config),
+	TestTrue(TEXT("Halt L 10"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Left, EFormationKind::Diamond, EFormationMode::Halt, 4, 1.7f, 0.f, TOptional<float>(), Config),
 		FormationMath::ClockToYaw(10.f, 0.f)));
-	TestTrue(TEXT("Halt Z 6"), FMath::IsNearlyEqual(FMath::Abs(FormationSectorRules::LookYaw(EFormationRole::Rear, EFormationKind::Diamond, EFormationMode::Halt, 4, 1.7f, 0.f, Config)), 180.f));
+	TestTrue(TEXT("Halt Z 6"), FMath::IsNearlyEqual(FMath::Abs(FormationSectorRules::LookYaw(EFormationRole::Rear, EFormationKind::Diamond, EFormationMode::Halt, 4, 1.7f, 0.f, TOptional<float>(), Config)), 180.f));
 	return true;
 }
 
@@ -152,7 +152,7 @@ bool FFormationSectorShapesTest::RunTest(const FString&)
 	const FFormationConfig Config;
 	const auto Look = [&Config](EFormationRole Role, EFormationKind Kind, int32 Count)
 	{
-		return FormationSectorRules::LookYaw(Role, Kind, EFormationMode::Walk, Count, 0.f, 0.f, Config);
+		return FormationSectorRules::LookYaw(Role, Kind, EFormationMode::Walk, Count, 0.f, 0.f, TOptional<float>(), Config);
 	};
 	// Column herringbone: K 0, P +70, L -70, Z 180.
 	TestTrue(TEXT("Column sectors"), FMath::IsNearlyEqual(Look(EFormationRole::Commander, EFormationKind::Column, 4), 0.f)
@@ -160,13 +160,13 @@ bool FFormationSectorShapesTest::RunTest(const FString&)
 		&& FMath::IsNearlyEqual(Look(EFormationRole::Left, EFormationKind::Column, 4), -70.f)
 		&& FMath::IsNearlyEqual(FMath::Abs(Look(EFormationRole::Rear, EFormationKind::Column, 4)), 180.f));
 	// Echelon right: every gun on the open right side, growing back to the rear-right (order K, L, P, Z).
-	TestTrue(TEXT("Echelon right 10 / 45 / 80 / 125"), FMath::IsNearlyEqual(Look(EFormationRole::Commander, EFormationKind::EchelonRight, 4), 10.f)
+	TestTrue(TEXT("Echelon right 10 / 45 / 80 / 150 (v1.1: the rear sector 150 keeps 5-7 watched)"), FMath::IsNearlyEqual(Look(EFormationRole::Commander, EFormationKind::EchelonRight, 4), 10.f)
 		&& FMath::IsNearlyEqual(Look(EFormationRole::Left, EFormationKind::EchelonRight, 4), 45.f)
 		&& FMath::IsNearlyEqual(Look(EFormationRole::Right, EFormationKind::EchelonRight, 4), 80.f)
-		&& FMath::IsNearlyEqual(Look(EFormationRole::Rear, EFormationKind::EchelonRight, 4), 125.f));
+		&& FMath::IsNearlyEqual(Look(EFormationRole::Rear, EFormationKind::EchelonRight, 4), 150.f));
 	TestTrue(TEXT("Echelon left mirrored (order K, P, L, Z)"), FMath::IsNearlyEqual(Look(EFormationRole::Right, EFormationKind::EchelonLeft, 4), -45.f)
 		&& FMath::IsNearlyEqual(Look(EFormationRole::Left, EFormationKind::EchelonLeft, 4), -80.f)
-		&& FMath::IsNearlyEqual(Look(EFormationRole::Rear, EFormationKind::EchelonLeft, 4), -125.f));
+		&& FMath::IsNearlyEqual(Look(EFormationRole::Rear, EFormationKind::EchelonLeft, 4), -150.f));
 	// Line: all forward with a slight fan (outer 25, inner 5).
 	TestTrue(TEXT("Line fan L -25, K -5, P +5, Z +25"), FMath::IsNearlyEqual(Look(EFormationRole::Left, EFormationKind::Line, 4), -25.f)
 		&& FMath::IsNearlyEqual(Look(EFormationRole::Commander, EFormationKind::Line, 4), -5.f)
@@ -179,7 +179,7 @@ bool FFormationSectorShapesTest::RunTest(const FString&)
 	// Wall mode with the outward normal as the reference: K looks along it, nobody turns back towards the wall.
 	for (const EFormationRole Role : { EFormationRole::Commander, EFormationRole::Right, EFormationRole::Left, EFormationRole::Rear })
 	{
-		const float Yaw = FormationSectorRules::LookYaw(Role, EFormationKind::Diamond, EFormationMode::Wall, 4, 0.f, -90.f, Config);
+		const float Yaw = FormationSectorRules::LookYaw(Role, EFormationKind::Diamond, EFormationMode::Wall, 4, 0.f, -90.f, TOptional<float>(), Config);
 		TestTrue(FString::Printf(TEXT("Wall mode: %s within 90 deg of the outward normal"), FormationNames::ToString(Role)),
 			FormationMath::AngleBetween(Yaw, -90.f) < 90.f);
 	}
@@ -218,6 +218,36 @@ bool FFormationSectorPaceTest::RunTest(const FString&)
 	TestTrue(TEXT("Backward walk keeps up with the patrol pace"), Config.PaceWalkSpeed * Config.MoveBackwardMult >= FormationSectorRules::SquadPace(EFormationMode::Walk, Config) - 1e-3f);
 	TestEqual(TEXT("Run = the run speed"), FormationSectorRules::SquadPace(EFormationMode::Run, Config), Config.PaceRunSpeed);
 	TestEqual(TEXT("Halt = 0"), FormationSectorRules::SquadPace(EFormationMode::Halt, Config), 0.f);
+	return true;
+}
+
+FORMATION_SECTOR_TEST(FFormationSectorNarrowColumnTest, "NarrowColumnNobodyLooksIntoTheWalls")
+bool FFormationSectorNarrowColumnTest::RunTest(const FString&)
+{
+	const FFormationConfig Config;
+	const auto Look = [&Config](EFormationRole Role, const TOptional<float>& Width)
+	{
+		return FormationSectorRules::LookYaw(Role, EFormationKind::Column, EFormationMode::Walk, 4, 0.f, 0.f, Width, Config);
+	};
+	// v1.1, user decision: in a narrow passage P looks forward over the shoulder, L back at a slant, Z straight back, K 12.
+	const TOptional<float> Narrow(460.f);
+	TestTrue(TEXT("Narrow: K 0"), FMath::IsNearlyEqual(Look(EFormationRole::Commander, Narrow), 0.f));
+	TestTrue(TEXT("Narrow: P +15 (over the shoulder)"), FMath::IsNearlyEqual(Look(EFormationRole::Right, Narrow), Config.ColumnNarrowFwdDeg));
+	TestTrue(TEXT("Narrow: L -165 (back at a slant)"), FMath::IsNearlyEqual(Look(EFormationRole::Left, Narrow), -Config.ColumnNarrowBackDeg));
+	TestTrue(TEXT("Narrow: Z 180"), FMath::IsNearlyEqual(FMath::Abs(Look(EFormationRole::Rear, Narrow)), 180.f));
+	// Within 40 deg of 12 or of 6: nobody looks into a side wall.
+	for (const EFormationRole Role : { EFormationRole::Commander, EFormationRole::Right, EFormationRole::Left, EFormationRole::Rear })
+	{
+		const float Offset = FMath::Abs(Look(Role, Narrow));
+		TestTrue(FString::Printf(TEXT("Narrow: %s not towards a side wall (%.0f)"), FormationNames::ToString(Role), Offset), Offset <= 40.f || Offset >= 140.f);
+	}
+	// A wide passage (>= column.narrow_width) or no passage at all: the +-70 herringbone.
+	TestTrue(TEXT("Wide passage: herringbone P +70"), FMath::IsNearlyEqual(Look(EFormationRole::Right, TOptional<float>(760.f)), Config.ColumnSideDeg));
+	TestTrue(TEXT("At the threshold: wide"), FMath::IsNearlyEqual(Look(EFormationRole::Left, TOptional<float>(Config.ColumnNarrowWidth)), -Config.ColumnSideDeg));
+	TestTrue(TEXT("No passage: herringbone L -70"), FMath::IsNearlyEqual(Look(EFormationRole::Left, TOptional<float>()), -Config.ColumnSideDeg));
+	// The width matters only for the column.
+	TestTrue(TEXT("Diamond ignores the width"), FMath::IsNearlyEqual(FormationSectorRules::LookYaw(EFormationRole::Right, EFormationKind::Diamond,
+		EFormationMode::Halt, 4, 0.f, 0.f, Narrow, Config), Config.HaltSideDeg));
 	return true;
 }
 

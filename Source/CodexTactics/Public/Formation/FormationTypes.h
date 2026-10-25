@@ -141,8 +141,8 @@ struct CODEXTACTICS_API FFormationConfig
 	float EchelonSector2 = 45.f;
 	/** [echelon.sector_3] Echelon: the 3rd man's sector, deg. */
 	float EchelonSector3 = 80.f;
-	/** [echelon.sector_4] Echelon: the 4th man's sector (rear on the open side), deg. */
-	float EchelonSector4 = 125.f;
+	/** [echelon.sector_4] Echelon: the 4th man's sector (rear on the open side; v1.1, user: 150 keeps 5-7 o'clock watched), deg. */
+	float EchelonSector4 = 150.f;
 	/** [blizzard.side_offset] Blizzard tight diamond: flankers sideways, cm. */
 	float BlizzardSideOffset = 110.f;
 	/** [blizzard.back_offset] Blizzard tight diamond: flankers back (the rear man twice this), cm. */
@@ -183,8 +183,14 @@ struct CODEXTACTICS_API FFormationConfig
 	float ScanDwellExp = 0.45f;
 	/** [halt.side_deg] Short halt: the flankers' sector centres (P 2, L 10 o'clock), deg. */
 	float HaltSideDeg = 60.f;
-	/** [column.side_deg] Column herringbone sectors P +70 / L -70, deg. */
+	/** [column.side_deg] Wide column (herringbone) sectors P +70 / L -70, deg. */
 	float ColumnSideDeg = 70.f;
+	/** [column.narrow_width] v1.1 (user): a column in a passage narrower than this uses the narrow sectors, cm. */
+	float ColumnNarrowWidth = 600.f;
+	/** [column.narrow_fwd_deg] Narrow column: P looks this far right of the heading (forward over the leader's shoulder), deg. */
+	float ColumnNarrowFwdDeg = 15.f;
+	/** [column.narrow_back_deg] Narrow column: L looks back at a slant, this far LEFT of the heading (-value), deg. */
+	float ColumnNarrowBackDeg = 165.f;
 	/** [classify.probe_side] Terrain probe: a wall within this lateral distance to a side marks that side as blocked, cm. */
 	float ClassifyProbeSide = 400.f;
 	/** [classify.probe_ahead] Forward look-ahead range (simulator only; the C++ classifier's forward rays reach ClassifyAtWallDist), cm. */
@@ -195,6 +201,8 @@ struct CODEXTACTICS_API FFormationConfig
 	float ClassifyHoldTime = 1.f;
 	/** [classify.at_wall_dist] Terrain: a wall ahead within this distance = at_wall, cm. */
 	float ClassifyAtWallDist = 150.f;
+	/** [classify.side_ignore_perp_deg] v1.1: the side probes ignore wall segments within this angle of perpendicular to the heading, deg. */
+	float ClassifySideIgnorePerpDeg = 30.f;
 	/** [sight.fov] Vision cone width standing / crouched (simulator checks only; the game owns the real value), deg. */
 	float SightFov = 140.f;
 };
