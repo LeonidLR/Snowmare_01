@@ -80,6 +80,9 @@ outward normal for `wall.*`), positive = right. Owned by the cloud session (Trai
   periods); both sides read it.
 
 ## 3. Golden vectors - `Tools/TrainingGround/golden/formation_<rule>.json`
+Every output is computed from exactly the inputs written to the file (rotated scenes are rounded to 1e-3 cm before the rule
+runs; C++ port 2026-10-25: a wall whose nearest point lay on the heading line flipped sides between the unrounded and the written
+coordinates).
 ```json
 { "schema": "codex.formation_golden/1", "rule": "Slots", "tolerance": { "cm": 0.5, "deg": 0.5 },
   "cases": [ { "in": { ... }, "out": { ... } } ] }
@@ -260,8 +263,10 @@ Z stood on its far side. User: "они должны переходить либ�
   slot. Who stands at which place: 10.6.
 - Sectors in the trail column: LookYaw('column', ..., leaderYaw = the slot's trail yaw, the rear man Z: the leader's heading),
   passageWidth = the classifier's held corridor width, else `FormationTerrainRules::SideWidth(walls, slotPos, slotYaw)` - the
-  free width when a wall BODY (closest point, any orientation) is within classify.probe_side on a side (open side = probe_side),
-  null when both open: a wall beside a man -> the narrow sectors, nobody's herringbone look into it.
+  free width when a wall BODY (closest point) is within classify.probe_side on a side (open side = probe_side), null when both
+  open: a wall beside a man -> the narrow sectors, nobody's herringbone look into it. Walls ACROSS the heading
+  (`isAcrossHeading`, the classifier's classify.side_ignore_perp_deg band) are skipped (coordinator 2026-10-25: a wall ahead is
+  never a side wall; a look into its end is ClearLook's job).
 - HUD (in-game text is English, project rule): `guardHudText(requested, effective, level, memberCount)` in
   `Tools/TrainingGround/src/movement/labels.ts` -> "Echelon left -> Column (wall)" while the guard falls back, else the name;
   names `FORMATION_LABEL_EN`, menu labels `menuLabelEn` (Auto, Line, Diamond / Wedge / Pair, Echelon right, Blizzard diamond,

@@ -11,7 +11,7 @@ import { runSeries } from './bot.ts';
 import {
   CORNER_START, FormationAssignRules, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
   FormationTerrainRules,
-  GUARD_START, wallSideOf,
+  GUARD_START, sideClearance, wallSideOf,
 } from './rules.ts';
 import type { GuardState } from './rules.ts';
 import type { Frame, MemberFrame } from './sim.ts';
@@ -114,9 +114,14 @@ test('assign: minimal total travel, no crossing - an echelon right folds L secon
   }
 });
 
-test('SideWidth: a wall END beside a man counts (the side rays slip past it); open both sides -> null', () => {
-  const end: Segment[] = [{ a: [20, 110], b: [20, 1500], thickness: 40 }];
+test('SideWidth: a wall END beside a man counts (the side rays slip past it); walls across the heading never; open -> null', () => {
+  // A wall along the heading on the right, ending just behind him: the classifier's side rays (60 / 90 / 120 deg) miss its end.
+  const end: Segment[] = [{ a: [-1500, 110], b: [-90, 110], thickness: 40 }];
+  assert.equal(sideClearance(end, [0, 0], 0, 1, C['classify.probe_side']), Infinity, 'the rays miss it');
   assert.ok(FormationTerrainRules.SideWidth(end, [0, 0], 0, C)! < C['column.narrow_width']);
+  // Coordinator 2026-10-25: a wall across the heading (straight ahead, or its end beside him) is not a side wall.
+  assert.equal(FormationTerrainRules.SideWidth([{ a: [150, -1000], b: [150, 1000], thickness: 40 }], [0, 0], 0, C), null);
+  assert.equal(FormationTerrainRules.SideWidth([{ a: [20, 110], b: [20, 1500], thickness: 40 }], [0, 0], 0, C), null);
   assert.equal(FormationTerrainRules.SideWidth([], [0, 0], 0, C), null);
 });
 
