@@ -1,4 +1,4 @@
-# 🎛️ Standalone Wave & Level Visual Editor
+# 🎛️ Training Ground (бывший Wave & Level Visual Editor)
 
 Визуальный интерактивный веб-редактор боевых волн, таймингов и кривых сложности для игры **Codex Tactics**.
 
@@ -18,6 +18,31 @@ cd Tools/WaveEditor
 npm run dev
 ```
 Редактор автоматически откроется в браузере по адресу: **http://localhost:5173**
+
+---
+
+## 🏟️ Отделы Training Ground (с 2026-10-25)
+
+Вверху страницы — переключатель отделов:
+
+* **Волны** — редактор волн, оружия и скрытности (всё, что описано ниже).
+* **Перемещение** — построения и сектора взгляда отряда (`docs/design/FORMATION_SECTORS.md`, договор
+  `docs/design/FORMATION_CONTRACT.md`): прогон отряда по маршруту раскладки в симуляторе прямо в браузере (0 токенов,
+  без Unreal), проверки прогона, бот и обучение (тюнер).
+* **Левел-дизайн** — аудит раскладок `Content/Data/FormationLab/*.json` (схема, точки маршрута в стенах, недостижимые участки,
+  зоны без маршрутов, зоны, где классификатор не успевает переключиться).
+
+Командная строка (`Tools/TrainingGround`):
+
+| Команда | Что делает |
+|---|---|
+| `npm run bot:movement -- --layout sample_small --members 2,3,4 --seeds 4` | серия прогонов → `Saved/TrainingGround/movement/report.md` (≤ 30 строк) и `runs.jsonl` |
+| `npm run train -- --budget-usd 5 --rounds 10 --client claude` | обучение: модель предлагает параметры `formation_config.json`, симулятор их оценивает; `--dry-run` — без вызова API; `--client mock` — без сети |
+| `npm run golden` (`-- --check`) | эталонные векторы для C++ parity-тестов (`golden/formation_<Rule>.json`) |
+| `npm test`, `npm run typecheck` | тесты логики и проверка типов |
+
+Платные только вызовы модели в обучении: ключ берётся из окружения этого компьютера (`ANTHROPIC_API_KEY` / `TYPESAFE_API_KEY`)
+и не печатается; расход ограничен `--budget-usd`. Агент читает только `report.md` / `train_report.md`.
 
 ---
 

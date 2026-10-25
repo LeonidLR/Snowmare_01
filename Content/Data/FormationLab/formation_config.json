@@ -91,7 +91,28 @@
       "min": 40,
       "max": 100,
       "unit": "deg",
-      "doc": "Column: right / left followers look this far off the heading."
+      "doc": "Wide column (herringbone): right / left followers look this far off the heading."
+    },
+    "column.narrow_width": {
+      "value": 600,
+      "min": 300,
+      "max": 900,
+      "unit": "cm",
+      "doc": "v1.1 (user Q1 = A): a column in a passage narrower than this uses the narrow sectors (P forward over the shoulder, L back at a slant)."
+    },
+    "column.narrow_fwd_deg": {
+      "value": 15,
+      "min": 0,
+      "max": 40,
+      "unit": "deg",
+      "doc": "Narrow column: P looks this far right of the heading (forward over the leader's shoulder)."
+    },
+    "column.narrow_back_deg": {
+      "value": 165,
+      "min": 140,
+      "max": 180,
+      "unit": "deg",
+      "doc": "Narrow column: L looks back at a slant, this far LEFT of the heading (-value)."
     },
     "line.spacing": {
       "value": 260,
@@ -143,11 +164,11 @@
       "doc": "Echelon: the third member's sector centre (open side)."
     },
     "echelon.sector_4": {
-      "value": 125,
+      "value": 150,
       "min": 90,
       "max": 160,
       "unit": "deg",
-      "doc": "Echelon: the last member's sector centre (open side, rear)."
+      "doc": "Echelon: the last member's sector centre (open side, rear; user Q2 = A: 150 keeps 5-7 o'clock watched)."
     },
     "blizzard.side_offset": {
       "value": 110,
@@ -323,6 +344,13 @@
       "max": 300,
       "unit": "cm",
       "doc": "A wall straight ahead within this distance = at_wall."
+    },
+    "classify.side_ignore_perp_deg": {
+      "value": 30,
+      "min": 10,
+      "max": 45,
+      "unit": "deg",
+      "doc": "v1.1: the side probes ignore wall segments within this angle of perpendicular to the heading (walls ahead / behind, not beside)."
     },
     "sight.fov": {
       "value": 140,

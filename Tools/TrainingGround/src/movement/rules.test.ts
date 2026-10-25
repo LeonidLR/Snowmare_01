@@ -76,7 +76,7 @@ test('Slots: column herringbone staggers right / left / centre', () => {
 
 const sweep = (role: 'K' | 'P' | 'L' | 'Z', n: number, heading = 0) => {
   const ys: number[] = [];
-  for (let t = 0; t < 12; t += 0.01) ys.push(normYaw(FormationSectorRules.LookYaw(role, 'diamond', 'walk', n, t, heading, C) - heading));
+  for (let t = 0; t < 12; t += 0.01) ys.push(normYaw(FormationSectorRules.LookYaw(role, 'diamond', 'walk', n, t, heading, null, C) - heading));
   return ys;
 };
 
@@ -88,8 +88,8 @@ test('LookYaw patrol: P scans 12 -> 3, L 9 -> 12 (mirror), K light search, Z loo
   assert.ok(z.every((v) => Math.abs(Math.abs(v) - 180) < 1e-9));
   // Mirror (counter-phase): when P is out at 3 o'clock, L is out at 9.
   const t = C['scan.period'] / 4;
-  near(FormationSectorRules.LookYaw('P', 'diamond', 'walk', 4, t, 0, C), 90, 1e-6);
-  near(FormationSectorRules.LookYaw('L', 'diamond', 'walk', 4, t, 0, C), -90, 1e-6);
+  near(FormationSectorRules.LookYaw('P', 'diamond', 'walk', 4, t, 0, null, C), 90, 1e-6);
+  near(FormationSectorRules.LookYaw('L', 'diamond', 'walk', 4, t, 0, null, C), -90, 1e-6);
 });
 
 test('LookYaw: pair partner sweeps 3 -> 6 -> 9 (user decision), through 6 never through 12', () => {
@@ -100,17 +100,17 @@ test('LookYaw: pair partner sweeps 3 -> 6 -> 9 (user decision), through 6 never 
 });
 
 test('LookYaw: run = everyone on the heading; halt = sector centres 12 / 2 / 10 / 6', () => {
-  for (const r of ['K', 'P', 'L', 'Z'] as const) near(FormationSectorRules.LookYaw(r, 'diamond', 'run', 4, 1.7, 30, C), 30);
-  near(FormationSectorRules.LookYaw('P', 'diamond', 'halt', 4, 1.7, 0, C), 60);
-  near(FormationSectorRules.LookYaw('L', 'diamond', 'halt', 4, 1.7, 0, C), -60);
-  near(Math.abs(FormationSectorRules.LookYaw('Z', 'diamond', 'halt', 4, 1.7, 0, C)), 180);
+  for (const r of ['K', 'P', 'L', 'Z'] as const) near(FormationSectorRules.LookYaw(r, 'diamond', 'run', 4, 1.7, 30, null, C), 30);
+  near(FormationSectorRules.LookYaw('P', 'diamond', 'halt', 4, 1.7, 0, null, C), 60);
+  near(FormationSectorRules.LookYaw('L', 'diamond', 'halt', 4, 1.7, 0, null, C), -60);
+  near(Math.abs(FormationSectorRules.LookYaw('Z', 'diamond', 'halt', 4, 1.7, 0, null, C)), 180);
 });
 
-test('LookYaw: echelon right - every gun on the open right side, sectors grow back to the rear-right', () => {
-  const ys = (['K', 'L', 'P', 'Z'] as const).map((r) => FormationSectorRules.LookYaw(r, 'echelon_right', 'walk', 4, 0, 0, C));
-  assert.deepEqual(ys, [10, 45, 80, 125]);
-  const left = (['K', 'P', 'L', 'Z'] as const).map((r) => FormationSectorRules.LookYaw(r, 'echelon_left', 'walk', 4, 0, 0, C));
-  assert.deepEqual(left, [-10, -45, -80, -125]);
+test('LookYaw: echelon right - every gun on the open right side, the last man covers the rear-right (150)', () => {
+  const ys = (['K', 'L', 'P', 'Z'] as const).map((r) => FormationSectorRules.LookYaw(r, 'echelon_right', 'walk', 4, 0, 0, null, C));
+  assert.deepEqual(ys, [10, 45, 80, 150]); // user Q2 = A: the rear sector 150 (5-7 o'clock watched)
+  const left = (['K', 'P', 'L', 'Z'] as const).map((r) => FormationSectorRules.LookYaw(r, 'echelon_left', 'walk', 4, 0, 0, null, C));
+  assert.deepEqual(left, [-10, -45, -80, -150]);
 });
 
 // A wall along X at y = 200 (thickness 40), the squad on the y < 200 side: outward normal = -Y (yaw -90).
@@ -193,3 +193,30 @@ test('geometry sanity: dirOf / dist', () => {
   nearV(dirOf(90), [0, 1]);
   near(dist([0, 0], [3, 4]), 5);
 });
+
+test('v1.1 (Q3): a dead end ahead does not read as side walls; walls across the heading are ignored by the side probes', async () => {
+  const { isAcrossHeading } = await import('./rules.ts');
+  const deadEnd: Segment[] = [{ a: [300, -2000], b: [300, 2000], thickness: 40 }];
+  assert.equal(rawClass(deadEnd, [0, 0], 0, C), 'open', 'v1 said corridor here (both 60 deg rays hit the wall ahead)');
+  assert.equal(rawClass([...deadEnd, { a: [-2000, -300], b: [250, -300], thickness: 40 }], [0, 0], 0, C), 'wall_left');
+  assert.equal(rawClass([{ a: [120, -500], b: [120, 500], thickness: 20 }], [0, 0], 0, C), 'at_wall', 'at_wall still first');
+  const band = C['classify.side_ignore_perp_deg'];
+  assert.equal(isAcrossHeading({ a: [0, -100], b: [0, 100] }, 0, band), true);
+  assert.equal(isAcrossHeading({ a: [-100, 0], b: [100, 0] }, 0, band), false);
+  assert.equal(isAcrossHeading({ a: [0, 0], b: [Math.cos(Math.PI / 180 * 65), Math.sin(Math.PI / 180 * 65)] }, 0, band), true, '65 deg off = 25 off perpendicular');
+  assert.equal(isAcrossHeading({ a: [0, 0], b: [Math.cos(Math.PI / 180 * 55), Math.sin(Math.PI / 180 * 55)] }, 0, band), false, '55 deg off = 35 off perpendicular');
+  assert.equal(isAcrossHeading({ a: [0, -100], b: [0, 100] }, 90, band), false, 'same wall, heading along it');
+});
+
+test('v1.1 (user Q1 = A): a narrow column looks forward over the shoulder / back at a slant; the herringbone only when wide', async () => {
+  const { FormationTerrainRules: T } = await import('./rules.ts');
+  const look = (role: 'K' | 'P' | 'L' | 'Z', width: number | null) => FormationSectorRules.LookYaw(role, 'column', 'walk', 4, 1, 0, width, C);
+  assert.deepEqual([look('K', 460), look('P', 460), look('L', 460), Math.abs(look('Z', 460))], [0, 15, -165, 180]);
+  assert.deepEqual([look('P', 760), look('L', 760)], [70, -70], 'wider than column.narrow_width: herringbone');
+  assert.deepEqual([look('P', null), look('L', null)], [70, -70], 'no passage (a manual column in the open): herringbone');
+  const corridor: Segment[] = [{ a: [-2000, -250], b: [2000, -250], thickness: 40 }, { a: [-2000, 250], b: [2000, 250], thickness: 40 }];
+  near(T.PassageWidth(corridor, [0, 0], 0, C)!, 460);
+  assert.equal(T.PassageWidth([corridor[0]], [0, 0], 0, C), null);
+  assert.equal(T.PassageWidth([], [0, 0], 0, C), null);
+});
+

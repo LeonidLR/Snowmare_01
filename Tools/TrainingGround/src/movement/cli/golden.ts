@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { configValues } from '../config.ts';
-import { GOLDEN_RULES, buildGolden, goldenFileName, goldenText } from '../golden.ts';
+import { GOLDEN_RULES, buildGolden, goldenFileName, goldenText, sameGoldenText } from '../golden.ts';
 import { CONFIG_REL, GOLDEN_DIR, parseArgs, readConfigFile } from './paths.ts';
 
 const args = parseArgs(process.argv.slice(2));
@@ -13,7 +13,7 @@ let stale = 0;
 for (const rule of GOLDEN_RULES) {
   const file = path.join(GOLDEN_DIR, goldenFileName(rule));
   const text = goldenText(files[rule]);
-  const same = fs.existsSync(file) && fs.readFileSync(file, 'utf8') === text;
+  const same = fs.existsSync(file) && sameGoldenText(fs.readFileSync(file, 'utf8'), text);
   if (args.check) {
     if (!same) { stale++; console.log(`STALE ${path.relative(process.cwd(), file)}`); }
   } else {
