@@ -1,0 +1,335 @@
+{
+  "schema": "codex.formation_config/1",
+  "comment": "Formation tuning (docs/design/FORMATION_CONTRACT.md 2). Read by the Training Ground simulator / tuner and by the C++ rules. Angles are relative to the leader's heading (or to the wall's outward normal for wall.*), positive = right (UE yaw). The tuner changes only value, inside min..max.",
+  "params": {
+    "slot.side_offset": {
+      "value": 260,
+      "min": 150,
+      "max": 400,
+      "unit": "cm",
+      "doc": "Diamond / wedge: sideways distance of the side men from the leader."
+    },
+    "slot.back_offset": {
+      "value": 280,
+      "min": 150,
+      "max": 450,
+      "unit": "cm",
+      "doc": "Diamond / wedge: distance of the side men behind the leader."
+    },
+    "slot.min_spacing": {
+      "value": 80,
+      "min": 50,
+      "max": 150,
+      "unit": "cm",
+      "doc": "Two members closer than this count as a spacing failure."
+    },
+    "diamond.rear_back": {
+      "value": 560,
+      "min": 350,
+      "max": 800,
+      "unit": "cm",
+      "doc": "Diamond: the rear man straight behind the leader."
+    },
+    "pair.side_offset": {
+      "value": 180,
+      "min": 100,
+      "max": 300,
+      "unit": "cm",
+      "doc": "Pair (2 members): the partner to the right of the leader."
+    },
+    "pair.back_offset": {
+      "value": 220,
+      "min": 120,
+      "max": 350,
+      "unit": "cm",
+      "doc": "Pair (2 members): the partner behind the leader."
+    },
+    "pair.scan_period": {
+      "value": 5.0,
+      "min": 2.0,
+      "max": 10.0,
+      "unit": "s",
+      "doc": "Pair (2 members): one full sweep cycle of the partner (3 -> 6 -> 9 and back)."
+    },
+    "pair.scan_from": {
+      "value": 90,
+      "min": 60,
+      "max": 120,
+      "unit": "deg",
+      "doc": "Pair: the partner's sweep starts here (90 = 3 o'clock); the sweep runs clockwise through 180 (6 o'clock) to pair.scan_to."
+    },
+    "pair.scan_to": {
+      "value": 270,
+      "min": 240,
+      "max": 300,
+      "unit": "deg",
+      "doc": "Pair: the partner's sweep ends here (270 = 9 o'clock), written above 180 so the arc runs through 6 o'clock."
+    },
+    "column.base_back": {
+      "value": 180,
+      "min": 120,
+      "max": 300,
+      "unit": "cm",
+      "doc": "Column: the first follower behind the leader."
+    },
+    "column.spacing": {
+      "value": 150,
+      "min": 100,
+      "max": 250,
+      "unit": "cm",
+      "doc": "Column: spacing between followers."
+    },
+    "column.stagger": {
+      "value": 60,
+      "min": 0,
+      "max": 120,
+      "unit": "cm",
+      "doc": "Column herringbone: alternate followers this far right / left of the axis."
+    },
+    "column.side_deg": {
+      "value": 70,
+      "min": 40,
+      "max": 100,
+      "unit": "deg",
+      "doc": "Column: right / left followers look this far off the heading."
+    },
+    "line.spacing": {
+      "value": 260,
+      "min": 150,
+      "max": 400,
+      "unit": "cm",
+      "doc": "Line: distance between neighbours."
+    },
+    "line.fan_inner": {
+      "value": 5,
+      "min": 0,
+      "max": 20,
+      "unit": "deg",
+      "doc": "Line: the two inner members fan out this far."
+    },
+    "line.fan_outer": {
+      "value": 25,
+      "min": 10,
+      "max": 45,
+      "unit": "deg",
+      "doc": "Line: the two outer members fan out this far."
+    },
+    "echelon.step": {
+      "value": 180,
+      "min": 120,
+      "max": 300,
+      "unit": "cm",
+      "doc": "Echelon: each next member this far back and this far to the open side."
+    },
+    "echelon.sector_lead": {
+      "value": 10,
+      "min": 0,
+      "max": 30,
+      "unit": "deg",
+      "doc": "Echelon: the leader looks this far to the open side."
+    },
+    "echelon.sector_2": {
+      "value": 45,
+      "min": 20,
+      "max": 70,
+      "unit": "deg",
+      "doc": "Echelon: the second member's sector centre (open side)."
+    },
+    "echelon.sector_3": {
+      "value": 80,
+      "min": 50,
+      "max": 110,
+      "unit": "deg",
+      "doc": "Echelon: the third member's sector centre (open side)."
+    },
+    "echelon.sector_4": {
+      "value": 125,
+      "min": 90,
+      "max": 160,
+      "unit": "deg",
+      "doc": "Echelon: the last member's sector centre (open side, rear)."
+    },
+    "blizzard.side_offset": {
+      "value": 110,
+      "min": 70,
+      "max": 200,
+      "unit": "cm",
+      "doc": "Blizzard tight diamond: sideways distance."
+    },
+    "blizzard.back_offset": {
+      "value": 120,
+      "min": 70,
+      "max": 200,
+      "unit": "cm",
+      "doc": "Blizzard tight diamond: side men behind the leader; the rear man at twice this."
+    },
+    "hedgehog.radius": {
+      "value": 130,
+      "min": 80,
+      "max": 250,
+      "unit": "cm",
+      "doc": "Hedgehog: members this far from the centre, facing out."
+    },
+    "wall.spacing": {
+      "value": 100,
+      "min": 70,
+      "max": 150,
+      "unit": "cm",
+      "doc": "Wall layout: shoulder-to-shoulder spacing along the wall."
+    },
+    "wall.face_offset": {
+      "value": 45,
+      "min": 30,
+      "max": 80,
+      "unit": "cm",
+      "doc": "Wall layout: the body centre this far off the wall face."
+    },
+    "wall.flank_deg": {
+      "value": 60,
+      "min": 40,
+      "max": 85,
+      "unit": "deg",
+      "doc": "Wall layout: flank men look this far off the outward normal (L +, P -: 8 / 4 o'clock)."
+    },
+    "wall.neighbour_deg": {
+      "value": 30,
+      "min": 10,
+      "max": 50,
+      "unit": "deg",
+      "doc": "Wall layout, 4 members: the 4th man's neighbour turns to the centre (5 / 7 o'clock)."
+    },
+    "wall.end_deg": {
+      "value": 75,
+      "min": 55,
+      "max": 90,
+      "unit": "deg",
+      "doc": "Wall layout, 4 members: the 4th man at the end looks along the wall (3-4 / 8-9 o'clock)."
+    },
+    "pace.patrol": {
+      "value": 0.8,
+      "min": 0.5,
+      "max": 1.0,
+      "unit": "ratio",
+      "doc": "Patrol (walk) pace of the whole squad relative to the walk speed."
+    },
+    "pace.walk_speed": {
+      "value": 220,
+      "min": 150,
+      "max": 300,
+      "unit": "cm/s",
+      "doc": "Walk speed (OperativeMovementRules WalkSpeed)."
+    },
+    "pace.run_speed": {
+      "value": 480,
+      "min": 350,
+      "max": 650,
+      "unit": "cm/s",
+      "doc": "Run speed of the squad (sprint)."
+    },
+    "move.backward_mult": {
+      "value": 0.8,
+      "min": 0.5,
+      "max": 1.0,
+      "unit": "ratio",
+      "doc": "A member walking backwards moves at most this fraction of the walk speed."
+    },
+    "move.catchup_mult": {
+      "value": 1.25,
+      "min": 1.0,
+      "max": 1.6,
+      "unit": "ratio",
+      "doc": "A member far behind his slot may move this much faster than the squad pace."
+    },
+    "facing.turn_speed": {
+      "value": 10,
+      "min": 3,
+      "max": 20,
+      "unit": "1/s",
+      "doc": "Body turn rate (Godot lerp_angle turn_speed, FacingRules::StepYaw)."
+    },
+    "scan.period": {
+      "value": 3.0,
+      "min": 1.5,
+      "max": 8.0,
+      "unit": "s",
+      "doc": "Patrol scan: one full sweep cycle of the side men."
+    },
+    "scan.center_side": {
+      "value": 45,
+      "min": 20,
+      "max": 70,
+      "unit": "deg",
+      "doc": "Patrol scan: centre of the side men's sweep (P +, L -)."
+    },
+    "scan.amp_side": {
+      "value": 45,
+      "min": 10,
+      "max": 60,
+      "unit": "deg",
+      "doc": "Patrol scan: half-width of the side men's sweep (45 = 12 -> 3)."
+    },
+    "scan.amp_lead": {
+      "value": 12,
+      "min": 0,
+      "max": 30,
+      "unit": "deg",
+      "doc": "Patrol scan: the leader's light search half-width."
+    },
+    "scan.dwell_exp": {
+      "value": 0.45,
+      "min": 0.2,
+      "max": 1.0,
+      "unit": "ratio",
+      "doc": "Patrol scan: dwell shaping (sign(s)*|s|^exp; 1 = plain sine, lower = longer holds at the ends)."
+    },
+    "halt.side_deg": {
+      "value": 60,
+      "min": 30,
+      "max": 90,
+      "unit": "deg",
+      "doc": "Short halt: the side men hold this sector centre (2 / 10 o'clock)."
+    },
+    "classify.probe_side": {
+      "value": 400,
+      "min": 200,
+      "max": 800,
+      "unit": "cm",
+      "doc": "Terrain probe: a wall within this distance to a side marks that side as blocked."
+    },
+    "classify.probe_ahead": {
+      "value": 600,
+      "min": 300,
+      "max": 1000,
+      "unit": "cm",
+      "doc": "Terrain probe: forward look-ahead range."
+    },
+    "classify.corridor_width": {
+      "value": 600,
+      "min": 300,
+      "max": 900,
+      "unit": "cm",
+      "doc": "Both sides blocked and the free width below this = corridor (column)."
+    },
+    "classify.hold_time": {
+      "value": 1.0,
+      "min": 0.2,
+      "max": 3.0,
+      "unit": "s",
+      "doc": "Hysteresis: a class is kept at least this long before it may change."
+    },
+    "classify.at_wall_dist": {
+      "value": 150,
+      "min": 80,
+      "max": 300,
+      "unit": "cm",
+      "doc": "A wall straight ahead within this distance = at_wall."
+    },
+    "sight.fov": {
+      "value": 140,
+      "min": 90,
+      "max": 180,
+      "unit": "deg",
+      "doc": "Vision cone width standing / crouched (checks only; the game owns the real value)."
+    }
+  }
+}

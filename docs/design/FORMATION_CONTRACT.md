@@ -2,8 +2,12 @@
 
 Design source: `docs/design/FORMATION_SECTORS.md` (+ `formation-sectors.html`). This file fixes the DATA the parts exchange, so
 the TypeScript simulator (Training Ground), the C++ rules and the Unreal map generator can be built in parallel and meet.
-Units: centimetres, degrees, seconds. Yaw: degrees, 0 = +X, counter-clockwise positive (UE yaw); "clock" sectors are relative
-to the leader's heading (12 = heading, 3 = right = heading - 90).
+Units: centimetres, degrees, seconds. Yaw: strictly UE - X forward, Y right, yaw = atan2(dy, dx) in degrees, growing from +X
+towards +Y (clockwise seen from above); "clock" sectors are relative to the leader's heading: clock c -> yaw = heading + 30*c
+(12 = heading, 3 = right = heading + 90, 9 = left = heading - 90). Coordinator decision 2026-10-25 (the first version had the
+sign mirrored). Config: `Content/Data/FormationLab/formation_config.json`, schema `codex.formation_config/1`,
+`params: { "<key>": { value, min, max, unit, doc } }`, scalars only; angles relative to the leader's heading (or the wall's
+outward normal for `wall.*`), positive = right. Owned by the cloud session (Training Ground); the tuner changes only `value`.
 
 ## 1. Layout JSON - `Content/Data/FormationLab/<name>.json` (one file feeds the simulator AND the Unreal map generator)
 ```json
@@ -25,8 +29,10 @@ to the leader's heading (12 = heading, 3 = right = heading - 90).
 
 ## 2. Pure rules (same names in TS and C++; TS first, C++ ports them; golden vectors prove equality)
 - `FormationShapeRules::Slots(formation, memberCount, leaderPos, leaderYaw, config) -> slots[]` (pos + role K/P/L/Z).
-- `FormationSectorRules::LookYaw(role, formation, mode(walk|run|halt|wall), timeInPatrol, leaderYaw, config) -> yaw`
-  (patrol scans: P 12->3, L 9->12 counter-phase, dwell; Z walks backwards looking at 6).
+- `FormationSectorRules::LookYaw(role, formation, mode(walk|run|halt|wall), memberCount, timeInPatrol, leaderYaw, config) -> yaw`
+  (patrol scans: P 12->3, L 9->12 counter-phase, dwell; Z walks backwards looking at 6; with memberCount 2 the partner is
+  role Z behind the right shoulder and SWEEPS 3 -> 6 -> 9 (`pair.scan_period / scan_from / scan_to`), user decision in
+  FORMATION_SECTORS.md; coordinator 2026-10-25). In mode `wall` leaderYaw is the wall's outward normal.
 - `FormationTerrainRules::Classify(layout walls, leaderPos, leaderYaw, previousClass, timeInClass, config) -> class`
   (open / wall_left / wall_right / corridor / at_wall) with hysteresis (like ColumnHoldTime) -> formation choice.
 - `FormationWallRules::Layout(wall segment, clickedSlot, memberCount, roomLeft, roomRight) -> slots[] + look yaws`
@@ -41,6 +47,30 @@ to the leader's heading (12 = heading, 3 = right = heading - 90).
 ```
 Exported by the simulator (`npm run golden`); C++ parity tests `CodexTactics.Formation.Parity.<Rule>` read them from
 `FPaths::ProjectDir()/Tools/TrainingGround/golden/` (skip with a warning while the file does not exist yet).
+
+### 3.1 Field names the C++ parity harness reads (`Source/CodexTacticsTests/Private/Formation/FormationParityTest.cpp`)
+Top level: `schema` = `codex.formation_golden/1`, `rule` = the file's rule name, `tolerance.cm` / `tolerance.deg` (default 0.5 / 0.5),
+`config_values` = flat `{ "<config key>": number }` snapshot the vectors were computed with (the C++ config is built FROM it over the
+struct defaults, never from the current `formation_config.json`; an unknown key is a warning), `cases` = non-empty array of
+`{ in, out }`. Every case is checked, none skipped; an unreadable case is an error. Input names are camelCase (snake_case aliases
+`member_count`, `leader_pos`, ... are accepted too). Vectors are `[x, y]` cm; yaws UE degrees compared as angles (|normalize(a - b)| <=
+tolerance.deg, 180 == -180); positions by distance <= tolerance.cm. Enum strings: formation `diamond | wedge | column | line |
+echelon_left | echelon_right | wall | hedgehog | blizzard`, role `K | P | L | Z`, mode `walk | run | halt | wall`, class
+`open | wall_left | wall_right | corridor | at_wall`. Walls `{ a: [x, y], b: [x, y], thickness? }` (thickness missing = 0).
+
+| File / test | `in` | `out` (compared) |
+|---|---|---|
+| `formation_Slots.json` / `Parity.Slots` | `formation`, `memberCount`, `leaderPos`, `leaderYaw` | `slots: [{ role, pos }]` - same count, same role ORDER (index 0 = the leader; `wall` -> `[]`), pos |
+| `formation_LookYaw.json` / `Parity.LookYaw` | `role`, `formation`, `mode`, `memberCount`, `timeInPatrol`, `leaderYaw` (mode / formation `wall`: the wall's outward normal) | `yaw` |
+| `formation_Classify.json` / `Parity.Classify` | `walls[]`, `leaderPos`, `leaderYaw`, `previousClass` (string or `null` = no history), `timeInClass` | `class` (after the hysteresis) |
+| `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount` | `formation` |
+| `formation_WallLayout.json` / `Parity.WallLayout` | `wall`, `clickedSlot`, `memberCount`, `roomLeft`, `roomRight` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
+
+C++ entry points: `FormationShapeRules::Slots`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol,
+leaderYaw, config)`, `FormationTerrainRules::Classify(walls, leaderPos, leaderYaw, TOptional previousClass, timeInClass, config)` /
+`FormationFor(class, memberCount)`, `FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)`;
+config `FFormationConfig` + `FormationTuning` (`Source/CodexTactics/Public/Formation/`). First run 2026-10-25 against ead0faf:
+Slots 288, LookYaw 3888, Classify 264, FormationFor 15, WallLayout 108 cases, 0 mismatched.
 
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):
