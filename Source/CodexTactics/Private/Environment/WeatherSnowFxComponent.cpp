@@ -12,6 +12,7 @@
 #include "Engine/StreamableManager.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Environment/EnvironmentStartRules.h"
 #include "Environment/SnowFxSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
@@ -19,7 +20,11 @@
 #include "Materials/MaterialInterface.h"
 #include "Misc/App.h"
 #include "NiagaraComponent.h"
+#include "NiagaraEmitterHandle.h"
+#include "NiagaraEmitterInstance.h"
 #include "NiagaraSystem.h"
+#include "NiagaraSystemInstance.h"
+#include "NiagaraSystemInstanceController.h"
 
 namespace WeatherSnowFx
 {
@@ -147,6 +152,11 @@ void UWeatherSnowFxComponent::SetVisualsEnabled(bool bEnabled)
 		}
 		Niagara->SetVisibility(bEnabled);
 	}
+	if (!bEnabled)
+	{
+		bActivateWithWarmup = false;
+		bWarmupWhenActive = false;
+	}
 	if (bEnabled)
 	{
 		Refresh();
@@ -156,6 +166,20 @@ void UWeatherSnowFxComponent::SetVisualsEnabled(bool bEnabled)
 void UWeatherSnowFxComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (bActivateWithWarmup)
+	{
+		bActivateWithWarmup = false;
+		if (Niagara && bVisualsEnabled)
+		{
+			ActivateWarmedUp();
+		}
+	}
+	else if (bWarmupWhenActive && Niagara && bVisualsEnabled && Niagara->IsActive())
+	{
+		bWarmupWhenActive = false;
+		UpdatePlacement();
+		RunWarmup();
+	}
 	if (Niagara && bVisualsEnabled && Niagara->IsActive())
 	{
 		UpdatePlacement();
@@ -166,6 +190,96 @@ void UWeatherSnowFxComponent::TickComponent(float DeltaTime, ELevelTick TickType
 			UpdateKillBoxes();
 		}
 	}
+}
+
+void UWeatherSnowFxComponent::RequestStartWarmup()
+{
+	if (!WeatherSnowFx::CanShowSnow())
+	{
+		return;
+	}
+	bStartWarmupPending = true;
+	// The level start must not wait for the async load (the first frame would show no snow): load what is missing now.
+	if (!SnowSystem.IsNull() && !SnowSystem.Get())
+	{
+		SnowSystem.LoadSynchronous();
+	}
+	if (!Settings.IsNull() && !Settings.Get())
+	{
+		Settings.LoadSynchronous();
+	}
+	if (!FlakeMaterial.IsNull() && !FlakeMaterial.Get())
+	{
+		FlakeMaterial.LoadSynchronous();
+	}
+}
+
+void UWeatherSnowFxComponent::ActivateWarmedUp()
+{
+	UpdatePlacement();
+	UpdateKillBoxes();
+#if WITH_EDITORONLY_DATA
+	// Editor builds: a system still compiling would defer the activation by frames; the level start waits for it instead.
+	Niagara->bWaitForCompilationOnActivate = true;
+#endif
+	Niagara->Activate(true);
+#if WITH_EDITORONLY_DATA
+	Niagara->bWaitForCompilationOnActivate = false;
+#endif
+	if (!Niagara->IsActive())
+	{
+		// Niagara deferred it (system / PSOs not ready): the warm-up runs on the first tick the system is active, still full at once.
+		bWarmupWhenActive = true;
+		UE_LOG(LogCodexTactics, Log, TEXT("WeatherSnowFx: the activation is deferred by Niagara (not ready); the start warm-up runs when it starts"));
+		return;
+	}
+	RunWarmup();
+}
+
+void UWeatherSnowFxComponent::RunWarmup()
+{
+	const FWeatherSnowFxTuning& Active = GetActiveTuning();
+	LastWarmupSeconds = EnvironmentStartRules::GetSnowWarmupSeconds(Active);
+	LastWarmupTicks = EnvironmentStartRules::GetSnowWarmupTicks(LastWarmupSeconds, Active.StartWarmupTickSeconds);
+	if (LastWarmupTicks > 0)
+	{
+		// The flakes and the ground drift of the last LastWarmupSeconds, simulated now: the first rendered frame shows a full snowfall.
+		Niagara->AdvanceSimulation(LastWarmupTicks, LastWarmupSeconds / LastWarmupTicks);
+	}
+	++WarmupCount;
+	UE_LOG(LogCodexTactics, Log, TEXT("WeatherSnowFx: start warm-up %.1f s (%d ticks) at intensity %.2f, focus %s, engine frame %llu: %s"), LastWarmupSeconds,
+		LastWarmupTicks, CurrentIntensity, *LastFocus.ToCompactString(), static_cast<uint64>(GFrameCounter), *DescribeParticles());
+}
+
+FString UWeatherSnowFxComponent::DescribeParticles() const
+{
+	const FNiagaraSystemInstanceControllerConstPtr Controller = Niagara ? Niagara->GetSystemInstanceController() : nullptr;
+	const FNiagaraSystemInstance* Instance = Controller.IsValid() ? Controller->GetSystemInstance_Unsafe() : nullptr;
+	if (!Instance)
+	{
+		return TEXT("no system instance");
+	}
+	FString Out;
+	for (const FNiagaraEmitterInstanceRef& Emitter : Instance->GetEmitters())
+	{
+		Out += FString::Printf(TEXT("%s%s %d"), Out.IsEmpty() ? TEXT("") : TEXT(", "), *Emitter->GetEmitterHandle().GetName().ToString(), Emitter->GetNumParticles());
+	}
+	return Out.IsEmpty() ? FString(TEXT("no emitters")) : Out;
+}
+
+int32 UWeatherSnowFxComponent::GetParticleCount() const
+{
+	const FNiagaraSystemInstanceControllerConstPtr Controller = Niagara ? Niagara->GetSystemInstanceController() : nullptr;
+	const FNiagaraSystemInstance* Instance = Controller.IsValid() ? Controller->GetSystemInstance_Unsafe() : nullptr;
+	int32 Count = 0;
+	if (Instance)
+	{
+		for (const FNiagaraEmitterInstanceRef& Emitter : Instance->GetEmitters())
+		{
+			Count += Emitter->GetNumParticles();
+		}
+	}
+	return Count;
 }
 
 void UWeatherSnowFxComponent::RequestLoad()
@@ -363,6 +477,13 @@ void UWeatherSnowFxComponent::Refresh()
 	}
 	const FWeatherSnowFxTuning& Active = GetActiveTuning();
 	const bool bWantSnow = CurrentIntensity >= Active.OffThreshold;
+	if (!bWantSnow)
+	{
+		// A start (or load) without snow: a later snowfall is a weather change and fades in (section 16).
+		bStartWarmupPending = false;
+		bActivateWithWarmup = false;
+		bWarmupWhenActive = false;
+	}
 	if (!bWantSnow && !Niagara)
 	{
 		RequestLoad(); // warm up, so the first snowfall does not wait for the asset
@@ -389,9 +510,23 @@ void UWeatherSnowFxComponent::Refresh()
 	WriteLook(*Fx, Params, Active);
 	if (bWantSnow && !Fx->IsActive())
 	{
-		UpdatePlacement();
-		UpdateKillBoxes();
-		Fx->Activate(true);
+		if (bStartWarmupPending || bActivateWithWarmup)
+		{
+			// Level start / load: activated and warmed up in this frame's TickComponent, once the camera has its view (section 16).
+			bStartWarmupPending = false;
+			bActivateWithWarmup = true;
+		}
+		else
+		{
+			UpdatePlacement();
+			UpdateKillBoxes();
+			Fx->Activate(true);
+		}
+	}
+	else if (bWantSnow)
+	{
+		// Already falling: a snap only jumps the intensity (no second warm-up over the flakes in the air).
+		bStartWarmupPending = false;
 	}
 	else if (!bWantSnow && Fx->IsActive())
 	{

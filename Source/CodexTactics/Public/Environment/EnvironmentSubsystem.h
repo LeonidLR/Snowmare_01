@@ -145,6 +145,13 @@ public:
 	/** The clock has advanced at least once on this level (level settings arriving later no longer re-init). */
 	bool HasClockRun() const { return bClockRan; }
 
+	/**
+	 * Moves every time the whole state JUMPS (the level start resolve, SetState = a save load / debug): the visuals snap to it - no
+	 * smoothing, the eye adaptation settles at once, the falling snow is pre-warmed (EnvironmentStartRules::ShouldSnap; section 16).
+	 * Weather / hour changes in play (the clock, ForceWeather, SetHour) do not move it.
+	 */
+	int32 GetSnapSerial() const { return SnapSerial; }
+
 	/** Real seconds the clock ran on this level (smokes / telemetry). */
 	float GetAdvancedSeconds() const { return AdvancedSeconds; }
 
@@ -261,6 +268,7 @@ private:
 	bool bInitialised = false;
 	bool bClockRan = false;
 	bool bHandedOver = false;
+	int32 SnapSerial = 0;
 	/** The presenter spawned for this world (GetWindStrength reads its presets; weak: it may be destroyed first). */
 	TWeakObjectPtr<AWeatherPresenterActor> Presenter;
 	/** Debug wind travel direction (GetWindDirection). */

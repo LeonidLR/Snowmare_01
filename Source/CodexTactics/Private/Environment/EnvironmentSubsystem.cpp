@@ -197,6 +197,7 @@ void UEnvironmentSubsystem::InitialiseFromWorld(UWorld& World)
 	LevelSettings = Level ? Level->Config.Environment : FEnvironmentLevelSettings();
 	Resolve();
 	bInitialised = true;
+	++SnapSerial;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Env] %s start: %s"), *World.GetMapName(), *Describe());
 	OnStateSet.Broadcast(State);
 	// Phase 3: the visual presenter (never placed in a map; visual only, never read by gameplay).
@@ -239,6 +240,7 @@ void UEnvironmentSubsystem::ApplyLevelSettings(const FEnvironmentLevelSettings& 
 	Resolve();
 	const bool bWasInitialised = bInitialised;
 	bInitialised = true;
+	++SnapSerial; // still the level start (the clock has not run): the visuals snap
 	UE_LOG(LogCodexTactics, Display, TEXT("[Env] level settings applied: %s"), *Describe());
 	if (bWasInitialised)
 	{
@@ -314,6 +316,8 @@ void UEnvironmentSubsystem::SetState(const FEnvironmentState& NewState)
 	State.SnowAmount = FMath::Clamp(State.SnowAmount, 0.f, 1.f);
 	State.ObjectSnow = State.ObjectSnow.Clamped();
 	bInitialised = true;
+	// A load / debug jump: the visuals snap to it (section 16), no fade from the state shown before.
+	++SnapSerial;
 	UE_LOG(LogCodexTactics, Log, TEXT("[Env] state set: %s"), *Describe());
 	BroadcastDifferences(Old, true);
 }

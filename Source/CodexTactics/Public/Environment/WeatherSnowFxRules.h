@@ -186,6 +186,20 @@ struct CODEXTACTICS_API FWeatherSnowFxTuning
 	/** Below this smoothed intensity nothing spawns and the system deactivates softly (the flakes in the air still land). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoothing", meta = (ClampMin = "0"))
 	float OffThreshold = 0.02f;
+
+	// --- Level start (docs/systems/environment-weather.md section 16) ---
+
+	/**
+	 * When the snow is already falling at the level start (or after a save load), this much simulation runs before the first frame that
+	 * shows it, so the air is full at once (flakes and ground drift); 0 = the longest flake life (LifetimeMax). Not used for weather
+	 * changes during play (they fade in by IntensityRisePerSecond).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Start", meta = (ClampMin = "0", ClampMax = "20", Units = "s"))
+	float StartWarmupSeconds = 0.f;
+
+	/** The warm-up's simulation step (smaller = smoother but more ticks while the level loads). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Start", meta = (ClampMin = "0.01", ClampMax = "0.5", Units = "s"))
+	float StartWarmupTickSeconds = 0.1f;
 };
 
 /** The values written to the Niagara User parameters of NS_Weather_Snow (docs §12.b). */

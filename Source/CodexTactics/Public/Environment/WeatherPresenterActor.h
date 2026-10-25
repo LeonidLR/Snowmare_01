@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/Scene.h"
+#include "Environment/EnvironmentStartRules.h"
 #include "Environment/WeatherVisualTypes.h"
 #include "GameFramework/Actor.h"
 #include "WeatherPresenterActor.generated.h"
@@ -13,8 +14,11 @@ class ASkyAtmosphere;
 class ASkyLight;
 class AVolumetricCloud;
 class UDirectionalLightComponent;
+class UExponentialHeightFogComponent;
 class UMaterialParameterCollection;
 class UPostProcessComponent;
+class USkyAtmosphereComponent;
+class USkyLightComponent;
 class UWeatherPresetAsset;
 class UWeatherSnowFxComponent;
 class UWeatherSnowOverlayComponent;
@@ -82,6 +86,12 @@ struct FWeatherCloudAuthored
  * drifting wind direction), the gradual snow cover on objects (UWeatherSnowOverlayComponent: FEnvironmentState::SnowAmount + blended
  * FrostAmount; targets re-scanned every TargetRefreshInterval) and MPC_Environment (scalars SnowAmount / FrostAmount / WindStrength /
  * IsSnowing, vector WindDirection); visuals off -> both components off and the MPC values back to 0 (the authored look).
+ * Section 16 (game designer 2026-10-25): the presenter STANDS ALONE - every part of sun / sky atmosphere / sky light / height fog the
+ * level lacks is its own component (OwnSun / OwnSkyAtmosphere / OwnSkyLight / OwnHeightFog, defaults = the Demo 01 levels' template
+ * lighting; tune them in BP_WeatherPresenter), so a level's "Lighting" folder can be deleted (Scripts/Editor/remove_level_lighting.py);
+ * a level that still has its actors keeps them adopted (EnvironmentStartRules::PlanRig, logged "[EnvVisuals] rig mode ..."). The level
+ * start is shown from the first frame: applied in BeginPlay, the eye adaptation snaps, the falling snow is pre-warmed. PLACED in a level
+ * without lights it is the editor preview too: OnConstruction lights the editor viewport as PreviewHour / PreviewWeather (12:00 Clear).
  */
 UCLASS(Blueprintable)
 class CODEXTACTICS_API AWeatherPresenterActor : public AActor
@@ -122,7 +132,34 @@ public:
 	const FWeatherVisualPreset& GetPreset(EWeatherState Weather) const;
 	bool IsPresetFromAsset(EWeatherState Weather) const;
 
+	/** The level's sun actor when adopted (null with the own sun: GetSunLight). */
 	ADirectionalLight* GetSun() const { return Sun; }
+	/** Section 16: the light components in use - the adopted actor's or the presenter's own (null when neither). */
+	UDirectionalLightComponent* GetSunLight() const { return SunComp; }
+	USkyAtmosphereComponent* GetSkyAtmosphereComponent() const { return SkyAtmosphereComp; }
+	USkyLightComponent* GetSkyLightComponent() const { return SkyLightComp; }
+	UExponentialHeightFogComponent* GetHeightFogComponent() const { return FogComp; }
+	/** Section 16: adopted / own / mixed (EnvironmentStartRules::PlanRig of the level's lighting actors). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	EWeatherRigMode GetRigMode() const { return RigPlan.Mode; }
+	const FWeatherRigPlan& GetRigPlan() const { return RigPlan; }
+	/** Section 16: game seconds since the last snap (level start / state jump); negative before the first. */
+	float GetSecondsSinceSnap() const;
+	/** Section 16: the eye adaptation runs at the snap speed now. */
+	bool IsExposureSnapping() const;
+	/** Section 16: the game time of the first application (0 at a level start = in BeginPlay, before the world's first tick); -1 = none. */
+	double GetFirstApplyGameTime() const { return FirstApplyTime; }
+
+	/**
+	 * Section 16, the start cover: the level's first rendered frames (drawn before the camera, the lighting history and the pre-warmed
+	 * snow are in place - an editor -game run showed the view at the world origin with default materials) stay black; lifted on the
+	 * presenter's tick after the camera ticked and the falling snow is warmed (or not snowing), at the latest StartCoverMaxTicks.
+	 * Only when no other camera fade runs (the factory's start fade-in wins); not without a renderer.
+	 */
+	bool WasStartCoverShown() const { return StartCoverTicks >= 0; }
+	bool IsStartCoverOn() const { return bStartCoverOn; }
+	/** Presenter ticks the cover stayed (-1 = never shown). */
+	int32 GetStartCoverTicks() const { return StartCoverTicks; }
 	/** The light component of a directional light actor. ADirectionalLight::GetComponent() is editor-only data (does not compile in a game build). */
 	static UDirectionalLightComponent* GetDirectionalComponent(const ADirectionalLight* Light);
 	ASkyAtmosphere* GetSkyAtmosphere() const { return SkyAtmosphere; }
@@ -210,6 +247,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather")
 	bool bDisableVolumetricClouds = true;
 
+	/**
+	 * Section 16: a part of the rig the level lacks (sun, sky atmosphere, sky light, height fog) is lit by the presenter's own component.
+	 * Off = the old behaviour (a missing part stays missing). The level's own actors always win while they exist.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Own rig")
+	bool bBuildMissingLighting = true;
+
+	/**
+	 * Section 16, editor preview: a presenter PLACED in a level lights the editor viewport (not PIE / game) with its own rig for the parts
+	 * the level lacks, as this hour and weather (the C++ / DA_Weather_* look; no snow). Default 12:00 Clear = plain working light; 23 /
+	 * Snowfall shows the Demo 01 lake's game look. Off = the own rig stays dark in the editor.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Editor preview")
+	bool bEditorPreview = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Editor preview", meta = (ClampMin = "0", ClampMax = "24"))
+	float PreviewHour = 12.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Editor preview")
+	EWeatherState PreviewWeather = EWeatherState::Clear;
+
 	/** After every application: the frame that was applied (art tweaks in the BP subclass). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Environment")
 	void OnEnvironmentApplied(const FWeatherVisualFrame& Frame);
@@ -222,6 +280,7 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void OnConstruction(const FTransform& Transform) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather")
 	TObjectPtr<USceneComponent> Root;
@@ -242,9 +301,40 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
 	TObjectPtr<UWeatherSnowOverlayComponent> SnowOverlay;
 
+	/**
+	 * Section 16, the own rig (hidden unless the level lacks that part). Its class-default values are the "authored" baseline the hour /
+	 * weather multiply (like a level's own actors) and the look with the visuals off: tune them in BP_WeatherPresenter.
+	 * Defaults = the Demo 01 levels' template lighting: sun 6 lux Movable (atmosphere light 0, 4 cascades to 200 m), sky atmosphere
+	 * (planet top 60 m below the presenter), sky light real-time capture, height fog 0.0436 / falloff 0.2 / black inscattering at -68.5 m.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Own rig")
+	TObjectPtr<UDirectionalLightComponent> OwnSun;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Own rig")
+	TObjectPtr<USkyAtmosphereComponent> OwnSkyAtmosphere;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Own rig")
+	TObjectPtr<USkyLightComponent> OwnSkyLight;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Own rig")
+	TObjectPtr<UExponentialHeightFogComponent> OwnHeightFog;
+
 private:
 	void LoadPresets();
+	/**
+	 * Finds the level's lighting actors, plans the rig (FLevelLightingInventory -> EnvironmentStartRules::PlanRig), points the *Comp
+	 * members at the adopted / own components, shows only the used own parts and records the authored values.
+	 */
 	void Adopt();
+	/** Section 16: plans the rig for Inventory, binds the *Comp members (adopted actor's or own), shows the used own parts, records Authored. */
+	void BindRig(const FLevelLightingInventory& Inventory, bool bBuildMissing);
+	/** Section 16: snow jump + pre-warm + exposure snap for the next application (level start, state jump). */
+	void BeginSnap();
+	/** Section 16: the editor preview of a placed presenter (OnConstruction in an editor world). */
+	void ApplyEditorPreview();
+	/** Section 16: the start cover on (BeginPlay) / its lift check (Tick). */
+	void ShowStartCover();
+	void TickStartCover();
 	/** Whether the presenter should drive the lighting now (console variable, the level's "visuals", the environment initialised). */
 	bool WantsToApply() const;
 	void StartApplying();
@@ -267,6 +357,12 @@ private:
 	void HandleStateSet(const FEnvironmentState& State);
 
 	UPROPERTY(Transient) TObjectPtr<ADirectionalLight> Sun;
+	// Section 16: the components driven (the adopted actors' or the own rig's).
+	UPROPERTY(Transient) TObjectPtr<UDirectionalLightComponent> SunComp;
+	UPROPERTY(Transient) TObjectPtr<USkyAtmosphereComponent> SkyAtmosphereComp;
+	UPROPERTY(Transient) TObjectPtr<USkyLightComponent> SkyLightComp;
+	UPROPERTY(Transient) TObjectPtr<UExponentialHeightFogComponent> FogComp;
+	FWeatherRigPlan RigPlan;
 	UPROPERTY(Transient) TObjectPtr<ADirectionalLight> AdoptedMoon;
 	UPROPERTY(Transient) TObjectPtr<ASkyAtmosphere> SkyAtmosphere;
 	UPROPERTY(Transient) TObjectPtr<ASkyLight> SkyLight;
@@ -283,7 +379,16 @@ private:
 
 	FDelegateHandle StateSetHandle;
 	float SinceApply = 0.f;
-	float StartTime = -1.f;
+	/** Game time of the last snap (level start / state jump; the exposure snap window); -1 = none yet. */
+	double SnapTime = -1.;
+	double FirstApplyTime = -1.;
+	/** Section 16: frames left that are flagged as camera cuts after a snap (no TAA / motion blur smear from the view's first placement). */
+	int32 CameraCutFramesLeft = 0;
+	/** Section 16: the start cover (a manual black camera fade of the presenter's own colour). */
+	int32 StartCoverTicks = -1;
+	bool bStartCoverOn = false;
+	/** UEnvironmentSubsystem::GetSnapSerial seen at the last snap. */
+	int32 SeenSnapSerial = -1;
 	float LastRecaptureTime = -1000.f;
 	float LastRecaptureSunElevation = -1000.f;
 	EWeatherState LastRecaptureWeather = EWeatherState::Clear;

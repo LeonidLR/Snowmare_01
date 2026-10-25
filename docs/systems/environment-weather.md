@@ -98,7 +98,8 @@ the Blizzard camera zone); phase Night 1.3, EarlyMorning 1.15, Midday 0.9, After
 
 ## 5. Visual presenter and the Niagara contract
 
-- `AWeatherPresenterActor` (C++) adopts the lighting actors already placed in the map (sun, sky atmosphere, sky light, height fog, volumetric clouds) and
+- `AWeatherPresenterActor` (C++) adopts the lighting actors already placed in the map (sun, sky atmosphere, sky light, height fog, volumetric clouds) - or, since
+  2026-10-25, lights a map without them with its OWN rig (section 16) - and
   drives them from the active and target `DA_Weather_*` presets by the subsystem's blend. `BP_WeatherPresenter` (child, the user's) is where art tweaks live.
 - Each preset references its **Niagara layers as soft asset references** (falling snow, ground drift / "pozyomka", frost sparkle for Clear, blizzard sheets)
   plus parameter overrides. The user can swap systems or edit them freely; code only writes these **User parameters** (the contract):
@@ -249,7 +250,7 @@ Key files:
   `ResetToDefaults()` CallInEditor). Instances `/Game/Environment/Weather/Presets/DA_Weather_Clear / _Overcast / _Snowfall / _Blizzard`
   (`Scripts/Editor/create_weather_presets.py`, new assets only, started from the C++ defaults; the user tunes them in the editor).
 - `Public/Environment/WeatherPresenterActor.h` / `.cpp` - `AWeatherPresenterActor` (Blueprintable): spawned by `UEnvironmentSubsystem` at the
-  end of `InitialiseFromWorld` (`SpawnForWorld`; never placed in a map; a game world with the project's game mode only). Adopts the map's
+  end of `InitialiseFromWorld` (`SpawnForWorld`; a game world with the project's game mode only; since section 16 it MAY be placed in a map - then that one is used). Adopts the map's
   `ADirectionalLight` (sun = the atmosphere sun light 0, else the brightest), a second directional light as the moon (atmosphere index 1 / "Moon"
   in the name) else its own `MoonLight` component (Movable, atmosphere light index 1), `ASkyAtmosphere`, `ASkyLight`, `AExponentialHeightFog`,
   an unbound `APostProcessVolume` else its own unbound `PostProcess` component. Records the authored values (`FWeatherAuthoredLighting`) and
@@ -853,3 +854,97 @@ windward SIDES too, with memory: 5 pockets (top +Z, +X, -X, +Y, -Y). UE-only, no
   night + snow from frame 1 (the presenter applying at frame 1; mean luminance 130 / 113 / 108 / 108 / 108; frame 30 vs 150 differ by 0.6
   levels; frame 1 is the editor build's first frame with shaders still compiling). Stills `start_L_Demo01_A_FrozenLake_f*.png`,
   `start_lake_sheet.png`. The falling-snow Niagara warm-up itself (flakes already in the air at frame 1) belongs to the NS_Weather_Snow owner.
+
+## 16. The level opens in its final look; the presenter stands alone (game designer 2026-10-25)
+
+Designer feedback 2026-10-25: "When I press Play, first a sunset shows, then it switches to night. The snow also starts falling with a delay;
+the night lighting appears with a delay. Make it appear at once." and "If I just need to delete the lighting folder from all levels and keep
+only our Blueprint, tell me". Cause on main: the presenter held its first application for the 4 s minimap captures (`MinimapHoldSeconds`;
+the lake's authored sun is at pitch -0.2 = a sunset), the falling snow loaded asynchronously and then ramped from 0 (0.35 / s) with flakes
+born at the top of a 28 m cylinder (~6-9 s to fill the air), and the eye adaptation faded. UE-only, no Godot reference.
+
+### 16.1 Frame 1 = the final state
+- `AWeatherPresenterActor::BeginPlay` applies the resolved start (random / forced `-EnvWeather` / carry-over / locked level) synchronously
+  (section 15.5): sun / moon / sky / fog / post / MPC_Environment / snow cover, before the world's first tick (`GetFirstApplyGameTime() == 0`).
+- **Snap** (`BeginSnap`, rules in `EnvironmentStartRules`): on the first application and whenever the whole state JUMPS -
+  `UEnvironmentSubsystem::GetSnapSerial()` moves on the level start resolve and on `SetState` (a save load, debug) but not on `ForceWeather` /
+  `SetHour` / the clock. A snap: (1) the falling-snow intensity jumps to its target (no 0.35 / s ramp); (2) a snowfall that starts with it is
+  **pre-warmed**: `UWeatherSnowFxComponent::RequestStartWarmup` loads NS_Weather_Snow / DA_SnowFX / the flake MI synchronously, the
+  activation runs in the first `TickComponent` (TG_PostUpdateWork, the camera has its view) and `AdvanceSimulation` simulates
+  `EnvironmentStartRules::GetSnowWarmupSeconds` (DA_SnowFX `StartWarmupSeconds`, 0 = the longest flake life, 9 s) in
+  `StartWarmupTickSeconds` 0.1 s steps (90 ticks): flakes and ground drift are in the air on the first frame that shows the system (the
+  lake: ~51k flakes right after the warm-up); if Niagara defers the activation (system / PSOs not ready) the warm-up runs on the first tick
+  it is active, editor builds wait for the system compile at that activation; (3) the eye adaptation runs at `ExposureSnapSpeed` 1000
+  f-stops / s for `ExposureSnapSeconds` 1 s (one 60 fps frame closes the whole gap), then the authored speeds return; (4) the next 3
+  frames are camera cuts (`SetGameCameraCutThisFrame`: no TAA / motion-blur smear from the camera's first placement).
+- **Start cover** (level start only): the stills showed that the level's very first rendered frame is drawn before the camera manager
+  updated (the view at the world origin, editor builds also with default materials) and the pre-warmed flakes show one frame after the
+  warm-up. The presenter therefore holds a black manual camera fade (its own marker colour) from BeginPlay and lifts it on its tick after
+  the camera ticked and the snow is warmed (`StartCoverMinTicks` 2, safety cap 10 ticks): the player sees black for ~2 frames (~33 ms),
+  then the final night / day with the snow already falling. Never over another fade (the factory's start fade-in wins and is never
+  touched); not without a renderer. `WasStartCoverShown` / `IsStartCoverOn` / `GetStartCoverTicks`.
+- Weather CHANGES during play keep their smoothing (fade-in at `IntensityRisePerSecond`, no second warm-up).
+- Sky light: the own / the levels' sky light is real-time capture (its first capture is complete); a recaptured one is recaptured at start.
+- Not changed by this: Lumen's GI / reflections still converge over the first ~0.5 s (temporal); editor `-game` runs show the default
+  material on objects whose shaders are still compiling in the very first frame (packaged builds have cooked shaders).
+
+### 16.2 The own rig (the level's lighting actors become optional)
+- `EnvironmentStartRules::PlanRig(FLevelLightingInventory, bBuildMissingLighting)`: every part the level has is ADOPTED as before (backward
+  compatible); each missing part of sun / sky atmosphere / sky light / height fog is the presenter's OWN component; moon and post-process as
+  before (own unless the level has a second directional light / an unbound volume). Mode `adopted` / `own` / `mixed`, logged
+  `[EnvVisuals] rig mode ...` and in `DescribeAdopted` (`rig own: sun own, ...`).
+- Own components (default subobjects, hidden unless used): `OwnSun` (Movable, 6 lux, temperature 6500, source angle 0.7357, atmosphere
+  light 0, 4 cascades to 200 m), `OwnSkyAtmosphere` (planet top at the component, 60 m below the presenter), `OwnSkyLight` (Movable,
+  real-time capture, intensity 1), `OwnHeightFog` (0.0436, falloff 0.2, black inscattering, at -68.5 m), plus the old `MoonLight` /
+  `PostProcess`. Defaults = the Demo 01 levels' template "Lighting" folder (the dry-run dump in 16.4). Their CLASS-DEFAULT values are the
+  "authored" baseline the hour / weather multiply (`AuthoredSource` = the component archetype, so values an editor preview wrote on a
+  placed instance never become the baseline) and the look with the visuals off (`Codex.Env.Visuals 0`, level `"visuals": false`): a
+  daylight sun at pitch -49.5, never a black level. Tune them in BP_WeatherPresenter.
+- No own volumetric clouds (switched off anyway, section 11). `bBuildMissingLighting` false = the old behaviour.
+- Getters for the parts in use: `GetSunLight()`, `GetSkyAtmosphereComponent()`, `GetSkyLightComponent()`, `GetHeightFogComponent()`,
+  `GetRigMode()`; `WeatherSmoke` / `WeatherLakeSmoke` check these (they pass with or without the level's lights).
+
+### 16.3 Editor preview (a level without lights is not black in the editor)
+- The presenter MAY be placed in a level (`SpawnForWorld` uses a placed one instead of spawning). A placed presenter is the editor
+  preview: `OnConstruction` in an editor world (not PIE / game) counts the level's lighting actors and lights the parts the level lacks
+  with its own rig as `PreviewHour` (12) / `PreviewWeather` (Clear) of the DA_Weather_* presets (plain working light; 23 / Snowfall shows the
+  lake's game look; own moon + own post-process too; no snow in the editor). It never writes the level's own actors (they and the map package stay untouched); with the level's lights present
+  the own rig stays hidden. `bEditorPreview` off = a dark editor viewport. Change the hour / weather on the placed actor to preview
+  another look.
+- `remove_level_lighting.py` places one (label `WeatherPresenter`, folder `Lighting`; BP_WeatherPresenter when it exists) after removing
+  the lights.
+
+### 16.4 Map cleanup `Scripts/Editor/remove_level_lighting.py`
+- Removes exactly what the presenter replaces: `DirectionalLight`, `SkyLight`, `SkyAtmosphere`, `ExponentialHeightFog`, `VolumetricCloud`,
+  an UNBOUND `PostProcessVolume`, the template sky dome (StaticMeshActor `/Engine/EngineSky/SM_SkySphere`); lists any other actor of a
+  lighting-looking folder as KEPT. Then places the presenter (`CODEX_PLACE_PRESENTER=0` skips).
+- Dry run by default (report only); `CODEX_APPLY=1` backs the map files up first (`Saved/Backups/remove_level_lighting_<stamp>/`, SHA1
+  manifest, each copy verified) and saves; `CODEX_SAVE_AS=<map>` writes a test COPY only (the source is never saved). `CODEX_MAPS`
+  (default: the two Demo 01 maps; names or /Game paths). Report `Saved/Logs/remove_level_lighting.txt`.
+- Navmesh: the lake's A4 smokes need its EDITOR-built navmesh (docs/port/TRAPS.md); a commandlet save drops it, so `CODEX_APPLY=1` refuses
+  in a commandlet when the map has a RecastNavMesh unless `CODEX_ALLOW_COMMANDLET=1` (then `Scripts/bake_navmesh.ps1 -Map <name>`).
+  Run it in the full editor (this checkout's editor closed): `UnrealEditor.exe <uproject> -ExecutePythonScript="<abs path>" -unattended`
+  with `CODEX_APPLY=1` set.
+- Dry run 2026-10-25 (worktree): the lake and the factory each lose the same 6 actors of their `Lighting` folder - `DirectionalLight`
+  (6 lux, Movable; lake pitch -0.2 = the "sunset", factory -49.5), `SkyAtmosphere` (factory: `SkyAtmosphere2`), `SkyLight` (factory:
+  `SkyLight2`; real-time capture), `ExponentialHeightFog`, `VolumetricCloud`, `SM_SkySphere`; nothing else is in the folder; no
+  post-process volume on either map.
+
+### 16.5 Tests, smokes, stills
+- Tests `CodexTactics.Environment.StartLighting.*` (3): RigPlan, SnowWarmup, Snap.
+- `StartLightingSmoke` (nullrhi, the lake): A the start state applied in BeginPlay (frame / sun pitch / moon / MPC / exposure snap / snow
+  at its target); B the level's lights destroyed + the presenter re-spawned -> rig own, applied in its spawn frame, the night lit by the own
+  moon / sky light / post, 12:00 lights the own sun, visuals off = the own daylight baseline; C `SetState` snaps again, `ForceWeather` fades.
+- `StartSnowSmoke` (rendered, the lake): the snow active and pre-warmed once by frame 2 at its full target, particles in the air; a
+  ForceWeather Blizzard afterwards fades in without a second warm-up.
+- Stills: `-StartLightingShots=<tag>` on the command line (armed at `PostLoadMapWithWorld`, so frame 1 is the level's first rendered
+  frame; `CodexTactics.StartLightingShots <tag>` from the console) -> `Saved/Screenshots/StartLighting/<map>_<tag>_f001..f005, f060.png` +
+  a `[StartShots]` log line per frame (presenter, rig, sun / moon, exposure snap, snow warm-ups and live particles per emitter).
+- Verified 2026-10-25 (editor -game, 1280x720 offscreen, `Saved/Screenshots/StartLighting/`, sheets in `sheets/`): the lake (locked 23:00
+  Snowfall) with its lights and the no-lights copy: frames 1-2 black (start cover; frame 1 is drawn with the camera still at the world
+  origin), frame 3 on = the final moonlit night with the snow falling (~51k flakes warmed), mean luminance 113.7 / 113.8 / 113.4 / 111.4 at
+  frames 3 / 4 / 5 / 60 with lights and 111.3 / 111.1 / 110.9 / 107.4 without - the same look, no sunset, no ramp. The factory day
+  (12:00 Clear) / night (23:00 Snowfall) / blizzard, with and without its lights: its own start title fade covers frames 1-5, then the
+  final look (own-rig daylight with shadows and the own-rig night match the level's lights). Editor preview of the no-lights lake copy:
+  `EditorPreview_L_LakeNoLights*.png` (lit, not black). Ground drift (`SnowSmoke`) stays at 0 particles with the current DA_SnowFX also
+  in a blizzard, before and after this change (a tuning matter of the snow FX, not of the start).

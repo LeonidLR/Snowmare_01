@@ -59,6 +59,35 @@ public:
 	/** Dev / captures only: hides the snow for a pixel A / B without stopping it (the flakes keep simulating). */
 	void SetHiddenForCapture(bool bHidden);
 
+	/**
+	 * Level start / save load (docs/systems/environment-weather.md section 16): loads the snow assets NOW (no async wait before the first
+	 * frame) and makes the next activation a warmed-up one - activated after the camera placed the view this frame and simulated
+	 * EnvironmentStartRules::GetSnowWarmupSeconds ahead, so flakes and ground drift fill the air on the first rendered frame. The presenter
+	 * calls it right before its snapping application (which also jumps the intensity to its target). A start without snow, or snow that is
+	 * already falling, drops the request on that refresh: a later snowfall fades in as a weather change.
+	 */
+	void RequestStartWarmup();
+
+	/** Activations that ran the start warm-up (smokes). */
+	int32 GetWarmupCount() const { return WarmupCount; }
+
+	/** The simulated seconds / ticks of the last warm-up (smokes, logs). */
+	float GetLastWarmupSeconds() const { return LastWarmupSeconds; }
+	int32 GetLastWarmupTicks() const { return LastWarmupTicks; }
+
+	/** The smoothed intensity in force and the weather's target (smokes: equal right after a snap). */
+	float GetCurrentIntensity() const { return CurrentIntensity; }
+	float GetTargetIntensity() const { return TargetIntensity; }
+
+	/** A warmed-up activation is waiting for this frame's tick (after the camera update) or for Niagara to become ready. */
+	bool IsWarmupActivationPending() const { return bActivateWithWarmup || bWarmupWhenActive; }
+
+	/** "flakes N, drift M" (the live particle counts per emitter; GPU counts may lag a frame) for logs / smokes. */
+	FString DescribeParticles() const;
+
+	/** Particles alive over all emitters (0 without an active system). */
+	int32 GetParticleCount() const;
+
 	/** The system to spawn (default NS_Weather_Snow; a user BP presenter may override). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment|Snow")
 	TSoftObjectPtr<UNiagaraSystem> SnowSystem;
@@ -87,6 +116,10 @@ private:
 	void WriteLook(UNiagaraComponent& Fx, const FWeatherSnowFxParams& Params, const FWeatherSnowFxTuning& Active);
 	/** Gathers the interior zones / roofs near the focus and writes the kill box user parameters. */
 	void UpdateKillBoxes();
+	/** Section 16: places the system on this frame's view, activates it and simulates the start warm-up (or arms it when Niagara defers). */
+	void ActivateWarmedUp();
+	/** Section 16: the warm-up simulation itself (the system is active). */
+	void RunWarmup();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNiagaraComponent> Niagara;
@@ -106,6 +139,15 @@ private:
 	float TargetIntensity = 0.f;
 	float CurrentIntensity = 0.f;
 	float WindStrength = 0.f;
+	float LastWarmupSeconds = 0.f;
+	int32 LastWarmupTicks = 0;
+	int32 WarmupCount = 0;
+	/** RequestStartWarmup was called; the next refresh decides (snow starts -> bActivateWithWarmup, else dropped). */
+	bool bStartWarmupPending = false;
+	/** The warmed-up activation runs in the next TickComponent (TG_PostUpdateWork: the camera has its view of this frame). */
+	bool bActivateWithWarmup = false;
+	/** Niagara deferred the activation (system / PSOs not ready yet): the warm-up runs on the first tick it is active. */
+	bool bWarmupWhenActive = false;
 	double NextKillBoxUpdate = 0.;
 	bool bHasFocus = false;
 	bool bVisualsEnabled = true;

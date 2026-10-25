@@ -133,8 +133,8 @@ namespace WeatherSmoke
 
 	float FogDensityOf(const AWeatherPresenterActor& Presenter)
 	{
-		const AExponentialHeightFog* Fog = Presenter.GetHeightFog();
-		return Fog ? Fog->GetComponent()->FogDensity : Presenter.GetLastFrame().Preset.FogDensity;
+		const UExponentialHeightFogComponent* Fog = Presenter.GetHeightFogComponent();
+		return Fog ? Fog->FogDensity : Presenter.GetLastFrame().Preset.FogDensity;
 	}
 
 	bool CloudsOff(const UWorld& World)
@@ -160,10 +160,12 @@ namespace WeatherSmoke
 			++Placed;
 		}
 		Check(State, Placed == 1, FString::Printf(TEXT("1 exactly one presenter in the world (%d)"), Placed));
-		Check(State, Presenter.GetSun() != nullptr, TEXT("1 the map's sun (directional light) adopted"));
-		Check(State, Presenter.GetSkyAtmosphere() != nullptr, TEXT("1 the map's sky atmosphere adopted"));
-		Check(State, Presenter.GetSkyLight() != nullptr, TEXT("1 the map's sky light adopted"));
-		Check(State, Presenter.GetHeightFog() != nullptr, TEXT("1 the map's height fog adopted"));
+		// Section 16: each part is the map's actor (adopted) or the presenter's own component (a map without its lights).
+		const FString Rig = EnvironmentStartRules::RigModeToString(Presenter.GetRigMode());
+		Check(State, Presenter.GetSunLight() != nullptr, FString::Printf(TEXT("1 a sun light (%s; rig %s)"), Presenter.GetSun() ? TEXT("adopted") : TEXT("own"), *Rig));
+		Check(State, Presenter.GetSkyAtmosphereComponent() != nullptr, FString::Printf(TEXT("1 a sky atmosphere (%s)"), Presenter.GetSkyAtmosphere() ? TEXT("adopted") : TEXT("own")));
+		Check(State, Presenter.GetSkyLightComponent() != nullptr, FString::Printf(TEXT("1 a sky light (%s)"), Presenter.GetSkyLight() ? TEXT("adopted") : TEXT("own")));
+		Check(State, Presenter.GetHeightFogComponent() != nullptr, FString::Printf(TEXT("1 a height fog (%s)"), Presenter.GetHeightFog() ? TEXT("adopted") : TEXT("own")));
 		Check(State, Presenter.GetActiveMoon() != nullptr, FString::Printf(TEXT("1 a moon light (%s)"), Presenter.IsMoonOwn() ? TEXT("own") : TEXT("adopted")));
 		Check(State, Presenter.GetAdoptedPostProcess() || (Presenter.GetOwnPostProcess() && Presenter.GetOwnPostProcess()->bEnabled),
 			TEXT("1 a post-process is driven (adopted unbound volume or the own component, enabled)"));
@@ -175,7 +177,7 @@ namespace WeatherSmoke
 	void CheckHoursAndWeather(FState& State, UEnvironmentSubsystem& Env, AWeatherPresenterActor& Presenter)
 	{
 		Env.SetClockScale(0.f);
-		const UDirectionalLightComponent* Sun = Presenter.GetSun() ? AWeatherPresenterActor::GetDirectionalComponent(Presenter.GetSun()) : nullptr;
+		const UDirectionalLightComponent* Sun = Presenter.GetSunLight();
 		const UDirectionalLightComponent* Moon = Presenter.GetActiveMoon();
 
 		Env.SetHour(12.f);
@@ -211,9 +213,9 @@ namespace WeatherSmoke
 		Env.ForceWeather(EWeatherState::Blizzard, true);
 		State.BlizzardFogDensity = FogDensityOf(Presenter);
 		Check(State, State.BlizzardFogDensity > ClearFog, FString::Printf(TEXT("3 Blizzard: fog density %.4f > Clear %.4f"), State.BlizzardFogDensity, ClearFog));
-		if (const AExponentialHeightFog* Fog = Presenter.GetHeightFog())
+		if (const UExponentialHeightFogComponent* Fog = Presenter.GetHeightFogComponent())
 		{
-			Check(State, Fog->GetComponent()->bEnableVolumetricFog == Presenter.GetPreset(EWeatherState::Blizzard).bVolumetricFog,
+			Check(State, Fog->bEnableVolumetricFog == Presenter.GetPreset(EWeatherState::Blizzard).bVolumetricFog,
 				TEXT("3 Blizzard: volumetric fog as the preset says"));
 		}
 		Env.SetHour(12.f);
@@ -360,9 +362,8 @@ namespace WeatherSmoke
 	{
 		const FWeatherAuthoredLighting& Authored = Presenter.GetAuthored();
 		Check(State, !Presenter.IsApplying(), TEXT("4 Codex.Env.Visuals 0: the presenter stopped"));
-		if (const ADirectionalLight* SunActor = Presenter.GetSun())
+		if (const UDirectionalLightComponent* Sun = Presenter.GetSunLight())
 		{
-			const UDirectionalLightComponent* Sun = AWeatherPresenterActor::GetDirectionalComponent(SunActor);
 			Check(State, FMath::IsNearlyEqual(Sun->Intensity, Authored.SunIntensity, 1.e-3f) && Sun->IsVisible() == Authored.bSunVisible,
 				FString::Printf(TEXT("4 sun intensity %.3f = authored %.3f, visibility authored"), Sun->Intensity, Authored.SunIntensity));
 			Check(State, Sun->GetComponentRotation().Equals(Authored.SunRotation, 0.01f),
@@ -370,9 +371,8 @@ namespace WeatherSmoke
 			Check(State, (Sun->bUseTemperature != 0) == Authored.bSunUseTemperature && FMath::IsNearlyEqual(Sun->LightSourceAngle, Authored.SunSourceAngle, 1.e-3f),
 				TEXT("4 sun temperature flag / source angle authored"));
 		}
-		if (const AExponentialHeightFog* FogActor = Presenter.GetHeightFog())
+		if (const UExponentialHeightFogComponent* Fog = Presenter.GetHeightFogComponent())
 		{
-			const UExponentialHeightFogComponent* Fog = FogActor->GetComponent();
 			Check(State, FMath::IsNearlyEqual(Fog->FogDensity, Authored.FogDensity, 1.e-5f) && FMath::IsNearlyEqual(Fog->FogHeightFalloff, Authored.FogHeightFalloff, 1.e-5f)
 				&& Fog->FogInscatteringLuminance.Equals(Authored.FogInscattering, 1.e-4f) && Fog->bEnableVolumetricFog == Authored.bVolumetricFog,
 				FString::Printf(TEXT("4 fog density %.4f = authored %.4f (falloff, colour, volumetric too)"), Fog->FogDensity, Authored.FogDensity));
@@ -532,13 +532,14 @@ namespace WeatherLakeSmoke
 		const FWeatherVisualFrame& Frame = Presenter->GetLastFrame();
 		Check(State, Frame.Weather == EWeatherState::Snowfall && FMath::IsNearlyEqual(Frame.Hour, 23.f, 0.01f),
 			FString::Printf(TEXT("L1 the applied frame is 23:00 Snowfall (%.2f, %s)"), Frame.Hour, *EnvironmentRules::WeatherToString(Frame.Weather)));
-		const UDirectionalLightComponent* Sun = Presenter->GetSun() ? AWeatherPresenterActor::GetDirectionalComponent(Presenter->GetSun()) : nullptr;
+		const UDirectionalLightComponent* Sun = Presenter->GetSunLight();
 		Check(State, Frame.SunElevation < 0.f && (!Sun || !Sun->IsVisible()), FString::Printf(TEXT("L2 night: the sun is below the horizon (%.1f deg) and off"), Frame.SunElevation));
 		const UDirectionalLightComponent* Moon = Presenter->GetActiveMoon();
 		Check(State, Moon && Moon->IsVisible() && Moon->Intensity > 0.f, FString::Printf(TEXT("L2 night: the moon lights the lake (%.2f)"), Moon ? Moon->Intensity : 0.f));
 		Check(State, Frame.NightAmount > 0.99f, TEXT("L2 night: full night grade"));
 		const float Fog = FogDensityOf(*Presenter);
-		Check(State, Presenter->GetHeightFog() != nullptr, TEXT("L3 the lake's height fog adopted"));
+		Check(State, Presenter->GetHeightFogComponent() != nullptr, FString::Printf(TEXT("L3 the lake's height fog (%s; rig %s)"),
+			Presenter->GetHeightFog() ? TEXT("adopted") : TEXT("own"), *EnvironmentStartRules::RigModeToString(Presenter->GetRigMode())));
 		Check(State, FMath::IsNearlyEqual(Fog, Presenter->GetPreset(EWeatherState::Snowfall).FogDensity, 1.e-4f)
 			&& Fog > Presenter->GetPreset(EWeatherState::Clear).FogDensity,
 			FString::Printf(TEXT("L3 Snowfall fog %.4f (> Clear %.4f)"), Fog, Presenter->GetPreset(EWeatherState::Clear).FogDensity));
