@@ -72,6 +72,10 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 - **Automatic by level geometry** (default): open ground → diamond / wedge (blizzard tight diamond in a blizzard); wall on one
   side → echelon away from it; any passage between two walls → column (narrow sectors / herringbone by width); arrival at a wall → the wall layout. Needs hysteresis (like today's
   `ColumnHoldTime`) so it does not flicker at wall gaps.
+- **Menu rules (2026-10-25, stage 7 prep)**: release on an item picks it (holds until Auto), release in the centre = Auto,
+  Esc / RMB cancels (the previous choice stays); with one operative every item is greyed out (a pick is refused, Auto works);
+  the diamond item is the wedge with 3, the pair with 2; too few members for the held choice -> back to Auto. Icons in
+  `Content/UI/FormationMenu/src/*.svg`; contract section 9.
 - **Manual: hold G** → radial menu with schematic icons; move the cursor to a sector, release G. Centre = **Auto**.
   A manual choice holds until Auto is picked. Proposed layout (user named 12 line, 3 echelon right, 10 echelon left,
   5–6 column; 9 chosen for symmetry — confirm): 12 Line · 1:30 Diamond/wedge · 3 Echelon right · 4:30 Blizzard ·

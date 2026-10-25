@@ -9,9 +9,11 @@ import type { Formation } from './layout.ts';
 import { FORMATIONS } from './layout.ts';
 import type { ClassifyState, Mode, Role, TerrainClass } from './rules.ts';
 import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rolesFor } from './rules.ts';
+import { FormationMenuRules, MENU_ITEMS } from './menu.ts';
+import type { MenuChoice } from './menu.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
-export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout'] as const;
+export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -145,7 +147,20 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall };
+  const menu = base('Menu', 'in: op (itemAt | release | resolve) + its inputs -> out (FormationMenuRules; screen px, y down, 12 = up).');
+  for (let deg = 1.3; deg < 360; deg += 7.5) for (const r of [20, 41, 120]) { // off the sector borders (22.5 + 45k): parity-safe
+    const dx = round(Math.sin((deg * Math.PI) / 180) * r, 4), dy = round(-Math.cos((deg * Math.PI) / 180) * r, 4);
+    menu.cases.push({ in: { op: 'itemAt', dx, dy, deadZonePx: 40 }, out: { item: FormationMenuRules.ItemAt(dx, dy, 40) } });
+  }
+  for (const highlighted of [null, ...MENU_ITEMS.map((i) => i.id)]) for (const choice of ['auto', 'column'] as MenuChoice[]) for (const memberCount of [1, 2, 4]) {
+    const r = FormationMenuRules.Release({ open: true, choice, highlighted }, memberCount);
+    menu.cases.push({ in: { op: 'release', state: { open: true, choice, highlighted }, memberCount }, out: r });
+  }
+  for (const choice of ['auto', ...MENU_ITEMS.map((i) => i.id)] as MenuChoice[]) for (const memberCount of [1, 2, 3, 4]) {
+    menu.cases.push({ in: { op: 'resolve', choice, memberCount }, out: FormationMenuRules.Resolve(choice, memberCount) });
+  }
+
+  return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall };
 }
 
 export const goldenFileName = (rule: GoldenRule): string => `formation_${rule}.json`;
