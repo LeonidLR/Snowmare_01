@@ -83,6 +83,12 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 - **Corner check = yes (user, 2026-10-25, "угол да")**: slicing the pie — nearing the free end of a wall the squad passes, the man
   closest to it looks round the corner (from 3 m before the end until 2 m past it; at a corridor exit one man per corner). It
   overrides his patrol sector only; a combat target and explicit facing orders keep priority.
+- **Sharp turn = fold (user, 2026-10-25, "5Б")**: before a sharp turn on the path (over 25°, seen 8 m ahead) an echelon or a line
+  folds into the column along the leader's path, and opens again 5 m after the turn — the far end no longer swings metres round
+  the turn and the rear man keeps up.
+- **Nobody looks into a wall, in manual formations too (user, 2026-10-25, "6А")**: the slots stay as chosen, but a man whose
+  sector would face a wall closer than ~2.6 m turns his look to the nearest open direction (his scan stays in the open part of
+  his sector) — and never sweeps his look across the wall to get there. Only the leader may keep looking where he walks.
 - **Places, not fixed slots (coordinator, 2026-10-25)**: on every formation change the men take the new places by the shortest
   total walk (nobody walks through anybody); the sectors belong to the place (the man at the rear place looks at 6).
 - Bot: check 7 (squad split by a wall), 8 (passes on the shielded side), 9 (corner man in time); `--manual all` runs auto and every

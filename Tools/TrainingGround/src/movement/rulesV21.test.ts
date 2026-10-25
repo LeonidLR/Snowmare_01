@@ -9,7 +9,8 @@ import { configValues } from './config.ts';
 import { readConfigFile, readLayout } from './cli/paths.ts';
 import { runSeries } from './bot.ts';
 import {
-  CORNER_START, FormationAssignRules, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationShapeRules, FormationTerrainRules,
+  CORNER_START, FormationAssignRules, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
+  FormationTerrainRules,
   GUARD_START, wallSideOf,
 } from './rules.ts';
 import type { GuardState } from './rules.ts';
@@ -20,13 +21,14 @@ import { validateLayout } from './layout.ts';
 const C = configValues(readConfigFile());
 const G = FormationGuardRules;
 const hold = C['classify.hold_distance'];
+const near = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 // The user's case (lab lane B, 2026-10-25): a long wall 3 m to the LEFT of the leader, heading +X.
 const wallLeft: Segment[] = [{ a: [-3000, -300], b: [3000, -300], thickness: 40 }];
 
 test('guard: manual echelon LEFT along a wall on the left is cut (its tail behind the wall) -> the mirror echelon right', () => {
   assert.deepEqual(G.BlockedRoles(wallLeft, 'echelon_left', 4, [0, 0], 0, C), ['P', 'L', 'Z']);
   assert.deepEqual(G.BlockedRoles(wallLeft, 'echelon_right', 4, [0, 0], 0, C), []);
-  const st = G.Resolve(wallLeft, 'echelon_left', 4, [0, 0], 0, null, GUARD_START, 0, C);
+  const st = G.Resolve(wallLeft, 'echelon_left', 4, [0, 0], 0, null, 0, GUARD_START, 0, C);
   assert.equal(st.requested, 'echelon_left', 'the request is never cleared');
   assert.equal(st.effective, 'echelon_right');
   assert.equal(st.level, 1);
@@ -34,35 +36,35 @@ test('guard: manual echelon LEFT along a wall on the left is cut (its tail behin
 
 test('guard: walls on both sides cut both echelons -> the trail column (level 2); a column is never cut further', () => {
   const corridor: Segment[] = [{ a: [-3000, -250], b: [3000, -250], thickness: 40 }, { a: [-3000, 250], b: [3000, 250], thickness: 40 }];
-  const st = G.Resolve(corridor, 'echelon_left', 4, [0, 0], 0, null, GUARD_START, 0, C);
+  const st = G.Resolve(corridor, 'echelon_left', 4, [0, 0], 0, null, 0, GUARD_START, 0, C);
   assert.equal(st.effective, 'column');
   assert.equal(st.level, 2);
   assert.deepEqual(G.Effective(st), { formation: 'column', trail: true });
-  assert.equal(G.Resolve(corridor, 'diamond', 4, [0, 0], 0, null, GUARD_START, 0, C).effective, 'column', 'any cut formation -> column');
-  assert.equal(G.Resolve(corridor, 'wall', 4, [0, 0], 0, null, GUARD_START, 0, C).effective, 'wall', 'the wall layout is never guarded');
+  assert.equal(G.Resolve(corridor, 'diamond', 4, [0, 0], 0, null, 0, GUARD_START, 0, C).effective, 'column', 'any cut formation -> column');
+  assert.equal(G.Resolve(corridor, 'wall', 4, [0, 0], 0, null, 0, GUARD_START, 0, C).effective, 'wall', 'the wall layout is never guarded');
 });
 
 test('guard: the fallback comes at once, the request comes back only after hold_distance of whole path', () => {
-  let st: GuardState = G.Resolve(wallLeft, 'echelon_left', 4, [0, 0], 0, null, GUARD_START, 0, C);
+  let st: GuardState = G.Resolve(wallLeft, 'echelon_left', 4, [0, 0], 0, null, 0, GUARD_START, 0, C);
   assert.equal(st.level, 1);
   // The wall is gone: the echelon left is whole again, but it waits for the path hold (no flicker at a short gap).
-  st = G.Resolve([], 'echelon_left', 4, [0, 0], 0, null, st, hold / 2, C);
+  st = G.Resolve([], 'echelon_left', 4, [0, 0], 0, null, 0, st, hold / 2, C);
   assert.equal(st.effective, 'echelon_right'); assert.equal(st.candidate, 0);
-  st = G.Resolve([], 'echelon_left', 4, [0, 0], 0, null, st, 0, C);
+  st = G.Resolve([], 'echelon_left', 4, [0, 0], 0, null, 0, st, 0, C);
   assert.equal(st.effective, 'echelon_right', 'standing still adds no path');
-  st = G.Resolve([], 'echelon_left', 4, [0, 0], 0, null, st, hold / 2, C);
+  st = G.Resolve([], 'echelon_left', 4, [0, 0], 0, null, 0, st, hold / 2, C);
   assert.equal(st.effective, 'echelon_left', 'back by itself');
   assert.equal(st.level, 0);
   // A new request starts over at its own level.
-  const other = G.Resolve(wallLeft, 'diamond', 4, [0, 0], 0, null, { ...st, level: 2, effective: 'column' }, 0, C);
+  const other = G.Resolve(wallLeft, 'diamond', 4, [0, 0], 0, null, 0, { ...st, level: 2, effective: 'column' }, 0, C);
   assert.equal(other.effective, 'diamond');
 });
 
 test('guard: the lookahead folds before a passage entrance (whole here, cut 5 m ahead)', () => {
   const entrance: Segment[] = [{ a: [300, -250], b: [3000, -250], thickness: 40 }, { a: [300, 250], b: [3000, 250], thickness: 40 }];
   const ahead = { pos: [C['guard.lookahead'], 0] as Vec2, yaw: 0 };
-  assert.equal(G.Resolve(entrance, 'line', 4, [0, 0], 0, null, GUARD_START, 0, C).effective, 'line');
-  assert.equal(G.Resolve(entrance, 'line', 4, [0, 0], 0, ahead, GUARD_START, 0, C).effective, 'column');
+  assert.equal(G.Resolve(entrance, 'line', 4, [0, 0], 0, null, 0, GUARD_START, 0, C).effective, 'line');
+  assert.equal(G.Resolve(entrance, 'line', 4, [0, 0], 0, ahead, 0, GUARD_START, 0, C).effective, 'column');
 });
 
 test('guard: chain neighbours - echelon in its order, column K-P-L-Z, diamond P-Z / L-Z, none for a pair', () => {
@@ -218,4 +220,45 @@ test('in-game text is English: menu labels and the guard HUD line ("Echelon left
   assert.equal(guardHudText('echelon_left', 'echelon_right', 1, 4), 'Echelon left -> Echelon right (wall)');
   assert.equal(guardHudText('diamond', 'diamond', 0, 4), 'Diamond');
   assert.equal(guardHudText('wedge', 'wedge', 0, 2), 'Pair');
+});
+
+test('v2.1.1 (user "5Б"): a sharp turn ahead folds a wide formation into the trail column; it opens after hold_distance', () => {
+  const T = FormationGuardRules.TurnAhead;
+  assert.equal(T([[0, 0], [2000, 0]], 0, C), 0);
+  near(T([[0, 0], [200, 0], [1200, 577.35]], 0, C), 30, 0.01);
+  assert.equal(T([[0, 0], [C['turn.lookahead'] + 10, 0], [C['turn.lookahead'] + 10, 900]], 0, C), 0, 'a turn beyond turn.lookahead does not count');
+  const sharp = C['turn.fold_deg'] + 5;
+  let st = G.Resolve([], 'echelon_right', 4, [0, 0], 0, null, sharp, GUARD_START, 0, C);
+  assert.equal(st.effective, 'column'); assert.equal(st.level, 2);
+  assert.equal(G.Resolve([], 'line', 4, [0, 0], 0, null, sharp, GUARD_START, 0, C).effective, 'column');
+  assert.equal(G.Resolve([], 'diamond', 4, [0, 0], 0, null, sharp, GUARD_START, 0, C).effective, 'diamond', 'only wide formations fold');
+  assert.equal(G.Resolve([], 'echelon_right', 4, [0, 0], 0, null, C['turn.fold_deg'] - 5, GUARD_START, 0, C).effective, 'echelon_right');
+  st = G.Resolve([], 'echelon_right', 4, [0, 0], 0, null, 0, st, hold / 2, C);
+  assert.equal(st.effective, 'column', 'the turn behind: still folded');
+  st = G.Resolve([], 'echelon_right', 4, [0, 0], 0, null, 0, st, hold / 2, C);
+  assert.equal(st.effective, 'echelon_right', 'opens after hold_distance on the new heading');
+});
+
+test('v2.1.1 (user "6А"): ClearLook - a look into a wall within look.wall_dist turns to the nearest free edge, never across the wall', () => {
+  const L = FormationSectorRules.ClearLook;
+  const left: Segment[] = [{ a: [-2000, -150], b: [2000, -150], thickness: 40 }]; // wall 130 cm to the left (direction -90)
+  const half = C['look.wall_angle'];
+  near(L(left, [0, 0], -90, -90, C), -90 - half, 1e-6); // straight at it: an edge (the left / back one first on a tie)
+  near(L(left, [0, 0], -60, -60, C), -90 + half, 1e-6); // inside the span, nearer the front edge
+  assert.equal(L(left, [0, 0], 0, 0, C), 0, 'a free look stays');
+  assert.equal(L([], [0, 0], -90, -90, C), -90);
+  // Far wall (beyond look.wall_dist): free.
+  assert.equal(L([{ a: [-2000, -C['look.wall_dist'] - 50], b: [2000, -C['look.wall_dist'] - 50], thickness: 40 }], [0, 0], -90, -90, C), -90);
+  // He faces back-left (-150): the back edge (-145) is reachable without sweeping across -90; the front edge (-35) is not.
+  near(L(left, [0, 0], -95, -150, C), -90 - half, 1e-6);
+  near(L(left, [0, 0], -85, -150, C), -90 - half, 1e-6);
+  near(L(left, [0, 0], -85, -20, C), -90 + half, 1e-6);
+});
+
+test('v2.1.1: the lab is green for auto, and nobody stares into a wall in a manual line along walls', () => {
+  const lab = readLayout('formation_lab_01');
+  const auto = runSeries({ layout: lab, config: C, members: [4], seeds: 1, seedBase: 1, routes: ['R_G_threat_left', 'R_B_walls'] }).summary;
+  for (const id of [1, 6, 7]) assert.equal(auto.checks.find((c) => c.id === id)!.fail, 0, auto.checks.find((c) => c.id === id)!.worst);
+  const line = runSeries({ layout: lab, config: C, members: [3, 4], seeds: 1, seedBase: 1, routes: ['R_B_walls', 'R_C_gaps'], manual: 'line' }).summary;
+  assert.equal(line.checks.find((c) => c.id === 1)!.fail, 0, line.checks.find((c) => c.id === 1)!.worst);
 });

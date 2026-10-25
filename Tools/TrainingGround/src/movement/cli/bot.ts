@@ -2,7 +2,7 @@
 //  [--config <file>] [--manual auto|<menu item>|all] [--strict]` - runs the movement series, writes
 // Saved/TrainingGround/movement/runs.jsonl (raw, not for agents) and report.md (<= 30 lines, FORMATION_CONTRACT.md 4).
 // --manual <item>: every run with that hold-G menu choice; --manual all: auto + every menu item, report = the matrix
-// (manual_matrix.md too). --strict exits 1 when a check fails (with all: auto any check, a manual item checks 5 / 7).
+// (manual_matrix.md too). --strict exits 1 when a check fails (with all: auto any check, a manual item checks 1 / 5 / 7).
 import fs from 'node:fs';
 import path from 'node:path';
 import { advicePrompt, resolveClient } from '../ai.ts';
@@ -37,7 +37,7 @@ if (manualArg === 'all') {
   fs.writeFileSync(path.join(OUT_DIR, 'report.md'), text);
   process.stdout.write(text);
   console.error(`[bot] ${rows.reduce((a, r) => a + r.runs.length, 0)} runs in ${((Date.now() - started) / 1000).toFixed(1)} s -> ${path.relative(process.cwd(), OUT_DIR)}`);
-  const gate = (r: (typeof rows)[number]) => r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((ch) => [5, 7].includes(ch.id)).every((ch) => ch.fail === 0);
+  const gate = (r: (typeof rows)[number]) => r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((ch) => [1, 5, 7].includes(ch.id)).every((ch) => ch.fail === 0);
   process.exit(args.strict && !rows.every(gate) ? 1 : 0);
 }
 if (manualArg !== 'auto' && !MENU_ITEMS.some((i) => i.id === manualArg)) { console.error(`--manual: unknown item "${manualArg}"`); process.exit(2); }

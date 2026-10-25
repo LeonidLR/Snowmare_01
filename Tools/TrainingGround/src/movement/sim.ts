@@ -24,6 +24,7 @@ const FOLLOW_GAIN = 2.0; // 1/s: a 1 m gap to the (moving) slot adds 2 m/s on to
 const REPATH_INTERVAL = 0.2;
 const TRAIL_STEP = 25; // cm between the leader's trail points (the trail column, v2.1)
 const TRAIL_KEEP = 1500; // cm of trail kept
+const WALK_LOOK_DEG = 35; // the leader's look within this of his travel = looking where he walks (exempt from ClearLook; the check allows 45)
 
 export interface MemberFrame {
   /** Who he is (K the leader, P, L, Z). */
@@ -232,8 +233,9 @@ export function simulate(o: SimOptions): number {
     terrain = next;
     const requested = o.manualFormation ?? FormationTerrainRules.FormationFor(terrain, n, !!o.blizzard);
     // v2.1: the wall guard - no formation may cut the squad in two (mirror echelon, else the column; the request stays).
+    const pathAhead: Vec2[] = arrived ? [leader.pos] : [leader.pos, ...legs.slice(leg), ...points.slice(routeLeg + 1)];
     guard = FormationGuardRules.Resolve(walls, requested, n, leader.pos, heading, arrived ? null : aheadPose(cfg(c, 'guard.lookahead')),
-      guard, stepDistance, c);
+      FormationGuardRules.TurnAhead(pathAhead, heading, c), guard, stepDistance, c);
     formation = guard.effective!;
     const mode: Mode = arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
@@ -311,7 +313,14 @@ export function simulate(o: SimOptions): number {
       // WALL_TURN_DIST of it, then the layout yaw (as an operative walking into cover; FORMATION_CONTRACT.md 7);
       // otherwise the rule's look yaw.
       const toWallSlot = formation === 'wall' && dist(m.pos, slot) > WALL_TURN_DIST && len(moveDir) > 0.5;
-      const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : target.yaw;
+      // v2.1.1 (user "6А"): nobody looks into a wall, manual formations too - not the wall layout, the corner watcher, running,
+      // or the LEADER looking where he walks (he must see his way; followers follow him - their step direction jitters along a
+      // wall they hug, which made an exemption for them flip on and off).
+      const watching = looks.some((l) => l.role === m.place);
+      const walking = i === 0 && len(leaderVel) > 1 ? yawOf(leaderVel) : null;
+      const free = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG)
+        ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c);
+      const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
       if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
       const moving = len(moveDir) > 0.5;
@@ -378,16 +387,26 @@ function stepTowards(m: Member, slot: Vec2, nav: NavGrid, c: FormationConfig, ru
   const walk = cfg(c, 'pace.walk_speed');
   const top = (run ? cfg(c, 'pace.run_speed') : walk) * cfg(c, 'move.catchup_mult');
   let v: Vec2;
+  let ff: Vec2 = [0, 0];
+  const want = detour ? top : Math.min(top, d * FOLLOW_GAIN);
   if (detour) v = scale(dir, top);
   else {
-    const ff = len(slotVel) > top ? scale(slotVel, top / len(slotVel)) : slotVel;
-    v = add(scale(ff, jitter), scale(dir, Math.min(top, d * FOLLOW_GAIN)));
+    ff = scale(len(slotVel) > top ? scale(slotVel, top / len(slotVel)) : slotVel, jitter);
+    v = add(ff, scale(dir, want));
   }
   let speed = len(v);
   if (speed < 1e-6) return m.pos;
   let cap = top;
   if (!run && angleDiff(yawOf(v), m.yaw) > 120) cap = Math.min(cap, walk * cfg(c, 'move.backward_mult'));
-  if (speed > cap) { v = scale(v, cap / speed); speed = cap; }
+  if (speed > cap) {
+    // v2.1.1: keep the formation's own speed first (the slot's velocity), close the gap with the speed to spare - scaling the
+    // sum down let a big sideways correction (a fold, a swing) steal forward speed, so the man dropped behind his slot.
+    const fu = ff[0] * dir[0] + ff[1] * dir[1], fl = len(ff);
+    const disc = fu * fu - fl * fl + cap * cap;
+    if (detour || fl >= cap || disc < 0) v = scale(detour ? v : ff, cap / Math.max(1e-6, len(detour ? v : ff)));
+    else v = add(ff, scale(dir, Math.min(want, -fu + Math.sqrt(disc))));
+    speed = len(v);
+  }
   let step = scale(v, SIM_DT);
   if (detour && len(step) >= wd) { step = to; m.path!.splice(1, 1); }
   const next = add(m.pos, step);

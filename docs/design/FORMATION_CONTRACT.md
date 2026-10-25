@@ -139,8 +139,8 @@ Header: layout, routes, runs, seed. Then one line per check with pass / fail cou
 10, 11. info: rear cover with 3 men; stuck followers / slot fallbacks.
 Checks 3 and 4 judge the REQUESTED formation (`Frame.requested`: the terrain's / the menu's decision); the guard's fallbacks are
 geometry, covered by 7. `npm run bot:movement -- --manual <item>|all`: every run with that menu choice; `all` = auto + every
-item, the report is a matrix of failing runs per check (`manual_matrix.md`); a manual formation is gated by 5 and 7 only (it
-ignores the terrain on purpose: a manual diamond in a corridor scans into its walls).
+item, the report is a matrix of failing runs per check (`manual_matrix.md`); a manual formation is gated by 1, 5 and 7 (it
+ignores the terrain on purpose, but since v2.1.1 nobody looks into a wall in it either).
 Raw runs: `Saved/TrainingGround/movement/runs.jsonl` (never read by agents). Advice (optional): Jev (`TYPESAFE_API_KEY`) or the
 Claude API (`ANTHROPIC_API_KEY`) turns runs.jsonl into <= 10 lines of tuning advice appended to the report; without a key the
 report says "no model advice".
@@ -177,7 +177,10 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
   with the slot's own velocity (feed-forward) plus a proportional correction towards the slot: `v = v_slot * jitter +
   dir * min(top * catchup_mult, d * FOLLOW_GAIN)`, `FOLLOW_GAIN = 2 / s`, capped by `top * move.catchup_mult` and, walking
   backwards (> 120 deg off his facing), by `pace.walk_speed * move.backward_mult`; stop only when within 25 cm AND the slot is
-  still. Reference: `Tools/TrainingGround/src/movement/sim.ts` `stepTowards`.
+  still. v2.1.1: when the sum exceeds the cap, keep the slot's velocity (the formation's own speed) and shorten only the
+  correction: `v = v_ff + dir * min(want, -(v_ff . dir) + sqrt((v_ff . dir)^2 - |v_ff|^2 + cap^2))` (if |v_ff| >= cap: v_ff scaled
+  to cap) - scaling the whole sum let a big sideways correction (a fold, a swing) steal forward speed and the man fell behind
+  his slot (sample_small's pace failure). Reference: `Tools/TrainingGround/src/movement/sim.ts` `stepTowards`.
 - **Walking into the wall layout:** a member walking to his wall slot faces his travel direction and turns to the layout yaw
   only within 100 cm of the slot (else he looks into the passage walls on the way; sim `WALL_TURN_DIST`).
 - **v2.1: fallback slots on the leader's side.** `SquadFormation::ComputeFallbackSlots` (a slot inside a wall turned round the
@@ -292,4 +295,23 @@ mirror made P and L pass each other: check 5, 71 cm). Between changes the places
 assignment replaces the best only when cheaper by > 1e-3 cm (ties keep the earlier: no movement -> the identity). Sim:
 `MemberFrame.place`; the checks use places (the rear place for pace, chain neighbours for check 7). Golden `formation_Assign.json`
 (every pair of switchable formations, 3 / 4 members, plus tie cases).
+
+### 10.7 v2.1.1 turn fold (user decision 2026-10-25, "5Б") - `FormationGuardRules::TurnAhead` + Resolve's `turnAhead`
+`TurnAhead(path [[x, y]] (path[0] = the leader now; the nav path then the route's next points), heading) -> deg`: the largest
+|heading - piece direction| over the path pieces starting within `turn.lookahead` (800 cm) of the leader. `Resolve(..., ahead,
+turnAhead, state, ...)`: a WIDE formation (echelon right / left, line - its far end swings metres on a turn) with turnAhead >
+`turn.fold_deg` (25) gets raw level 2 = the trail column for the turn; it opens again after `classify.hold_distance` of path once
+the turn is behind (the Classify hysteresis). 800 cm ~ 4.5 s at patrol pace: the time a rear man walking backwards
+(move.backward_mult 0.9) needs to fold an echelon; 600 was the least that kept the lab's pace check green.
+
+### 10.8 v2.1.1 nobody looks into a wall, manual formations too (user decision 2026-10-25, "6А") - `FormationSectorRules::ClearLook`
+`ClearLook(walls, pos, yaw, currentYaw) -> yaw`: a wall whose surface is within `look.wall_dist` (260 cm: 60 beyond the check's 200,
+looks turn at facing.turn_speed) blocks the directions within `look.wall_angle` (55: the check's 45 + 10) of the direction to its
+closest point. A blocked look turns to a free span edge: first the edges reachable from currentYaw WITHOUT sweeping across a
+wall direction (+360 penalty otherwise), then the nearest to the wanted yaw; ties keep the first (walls in order, the minus edge
+first). Enclosed -> unchanged. Integration (sim): applied to every member's patrol / halt / "all forward" look in ANY formation -
+not in the wall layout, not running, not the corner watcher, and not the LEADER looking within 35 deg (WALK_LOOK_DEG) of his
+travel (he must see his way; followers follow him). The slots stay as chosen. Bot check 1 gates manual formations too.
+Keys: `turn.fold_deg` 25 (10-90 deg), `turn.lookahead` 800 (100-1000 cm), `look.wall_dist` 260 (100-400 cm), `look.wall_angle`
+55 (30-90 deg). Golden: `formation_TurnAhead.json`, `formation_ClearLook.json`; `formation_Guard.json` gains `turnAhead`.
 

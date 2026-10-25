@@ -435,11 +435,11 @@ export function renderReport(h: ReportHeader, s: SeriesSummary, advice: string[]
 
 /**
  * v2.1: auto + every manual menu item on every route - fail counts per check. A manual formation ignores the terrain on
- * purpose, so only checks 5 (slots / spacing) and 7 (squad split) gate it (a manual diamond in a corridor scans into its walls by definition); the rest is shown for information.
+ * purpose, so only checks 1 (wall stare - v2.1.1: nobody looks into a wall in a manual formation either), 5 (slots / spacing) and 7 (squad split) gate it; the rest is shown for information.
  */
 export function renderManualMatrix(h: ReportHeader, rows: { choice: string; summary: SeriesSummary }[]): string {
   const ids = rows[0]?.summary.checks.filter((c) => !c.info).map((c) => c.id) ?? [];
-  const gated = (choice: string, id: number) => choice === 'auto' || [5, 7].includes(id);
+  const gated = (choice: string, id: number) => choice === 'auto' || [1, 5, 7].includes(id);
   const cell = (choice: string, ch: CheckLine | undefined) => !ch || ch.pass + ch.fail === 0 ? '-' : gated(choice, ch.id) ? String(ch.fail) : `(${ch.fail})`;
   const lines = [
     `# Movement bot - auto + every manual formation - ${h.layout}`,
@@ -449,7 +449,7 @@ export function renderManualMatrix(h: ReportHeader, rows: { choice: string; summ
     `| choice | runs | ${ids.map((i) => `#${i}`).join(' | ')} | score | gate |`,
     `|---|---|${ids.map(() => '---').join('|')}|---|---|`,
     ...rows.map((r) => {
-      const ok = r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((c) => [5, 7].includes(c.id)).every((c) => c.fail === 0);
+      const ok = r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((c) => [1, 5, 7].includes(c.id)).every((c) => c.fail === 0);
       return `| ${r.choice} | ${r.summary.runs} | ${ids.map((i) => cell(r.choice, r.summary.checks.find((c) => c.id === i))).join(' | ')} | ${r.summary.score} | ${ok ? 'PASS' : 'FAIL'} |`;
     }),
     '',

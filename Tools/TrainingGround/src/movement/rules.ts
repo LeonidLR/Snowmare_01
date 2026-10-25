@@ -238,7 +238,42 @@ function LookYaw(role: Role, formation: Formation, mode: Mode, memberCount: numb
   return normYaw(leaderYaw + relativeLook(role, formation, mode, memberCount, timeInPatrol, passageWidth, config));
 }
 
-export const FormationSectorRules = { LookYaw };
+/**
+ * v2.1.1 (user decision 2026-10-25, "6А"): nobody looks into a wall - in ANY formation, the manual ones too. A wall within
+ * look.wall_dist of the member (surface distance) blocks the directions within look.wall_angle of the direction to its closest
+ * point; a look yaw inside a blocked span turns to the nearest free direction (an edge of the span), so a scan sweeping into
+ * the wall stops at the open edge of his sector. Of the free edges he takes the one he reaches from his current facing
+ * (currentYaw) WITHOUT sweeping across a wall direction, then the nearest to the wanted yaw (else two edges about as near
+ * flip-flop and his look swings through the wall). Enclosed on all sides -> unchanged. Ties: the earlier wall, the left edge
+ * first (the first strictly better edge wins). The integration applies it to the patrol / halt / "all forward" looks - not to
+ * the wall layout, the corner watcher (he looks at the corner on purpose) or a man looking where he walks (within 45 deg).
+ */
+function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw: number, config: FormationConfig): number {
+  const reach = cfg(config, 'look.wall_dist'), half = cfg(config, 'look.wall_angle');
+  const centers: number[] = [];
+  for (const w of walls) {
+    const q = closestOnSegment(pos, w.a, w.b).point;
+    if (Math.max(0, dist(pos, q) - (w.thickness ?? 0) / 2) > reach) continue;
+    if (dist(pos, q) < 1e-6) continue;
+    centers.push(yawOf(sub(q, pos)));
+  }
+  const blocked = (a: number) => centers.some((c) => Math.abs(normYaw(a - c)) < half - 1e-6);
+  if (!blocked(yaw)) return normYaw(yaw);
+  // A turn from currentYaw to `to` (the short way) sweeps across a wall direction strictly inside it.
+  const sweeps = (to: number) => {
+    const turn = normYaw(to - currentYaw);
+    return centers.some((c) => { const k = normYaw(c - currentYaw); return Math.sign(k) === Math.sign(turn) && Math.abs(k) < Math.abs(turn) - 1e-6; });
+  };
+  let best: number | null = null, bestScore = Infinity;
+  for (const c of centers) for (const edge of [c - half, c + half]) {
+    if (blocked(edge)) continue;
+    const score = Math.abs(normYaw(edge - yaw)) + (sweeps(edge) ? 360 : 0);
+    if (score < bestScore - 1e-9) { bestScore = score; best = normYaw(edge); }
+  }
+  return best ?? normYaw(yaw);
+}
+
+export const FormationSectorRules = { LookYaw, ClearLook };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationTerrainRules::Classify
@@ -521,6 +556,26 @@ export interface GuardState {
 
 export const GUARD_START: GuardState = { requested: null, level: 0, effective: null, candidate: null, candidateDistance: 0 };
 
+/** v2.1.1: formations whose far end swings metres on a turn (the trail column takes the turn for them). */
+const WIDE: readonly Formation[] = ['echelon_right', 'echelon_left', 'line'];
+
+/**
+ * v2.1.1: the sharpest heading change on the leader's path within turn.lookahead ahead of him: the largest |delta| between his
+ * heading and the direction of a path piece starting within that distance (path[0] = the leader now; the caller's nav path then
+ * the route's next points), degrees 0..180. 0 for a straight path or no path.
+ */
+function TurnAhead(path: readonly Vec2[], heading: number, config: FormationConfig): number {
+  const look = cfg(config, 'turn.lookahead');
+  let walked = 0, worst = 0;
+  for (let k = 1; k < path.length && walked <= look; k++) {
+    const L = dist(path[k - 1], path[k]);
+    if (L < 1e-6) continue;
+    worst = Math.max(worst, Math.abs(normYaw(yawOf(sub(path[k], path[k - 1])) - heading)));
+    walked += L;
+  }
+  return worst;
+}
+
 const mirrorOf = (f: Formation): Formation | null => (f === 'echelon_right' ? 'echelon_left' : f === 'echelon_left' ? 'echelon_right' : null);
 
 function formationAt(requested: Formation, level: GuardLevel): Formation {
@@ -545,13 +600,19 @@ function Effective(state: GuardState): { formation: Formation | null; trail: boo
  * Hysteresis as the classifier (v2): a fallback (higher level) at once; back towards the request (lower level) only after it has
  * been whole for classify.hold_distance of the leader's path (stepDistance per tick), unless the fallback itself is cut - then
  * at once. A new request (menu pick, terrain class change) starts over at its own level. The request itself is never cleared.
+ * v2.1.1 (user decision 2026-10-25, "5Б"): turnAhead = TurnAhead of the leader's path (deg); above turn.fold_deg a WIDE
+ * formation (the echelons, the line - their far end would swing metres round the turn) takes the trail column for the turn
+ * and opens again after hold_distance of path once the turn is behind (the same hysteresis).
  */
 function Resolve(walls: readonly Segment[], requested: Formation, memberCount: number, leaderPos: Vec2, leaderYaw: number,
-  ahead: { pos: Vec2; yaw: number } | null, state: GuardState, stepDistance: number, config: FormationConfig): GuardState {
+  ahead: { pos: Vec2; yaw: number } | null, turnAhead: number, state: GuardState, stepDistance: number,
+  config: FormationConfig): GuardState {
   const whole = (f: Formation) => BlockedRoles(walls, f, memberCount, leaderPos, leaderYaw, config).length === 0 &&
     (!ahead || BlockedRoles(walls, f, memberCount, ahead.pos, ahead.yaw, config).length === 0);
   let raw: GuardLevel = 0;
-  if (requested !== 'wall' && !whole(requested)) {
+  // v2.1.1 (user "5Б"): a sharp turn ahead folds a wide formation into the trail column (no long swing of its far end).
+  if (WIDE.includes(requested) && turnAhead > cfg(config, 'turn.fold_deg')) raw = 2;
+  else if (requested !== 'wall' && !whole(requested)) {
     const mirror = mirrorOf(requested);
     raw = mirror && whole(mirror) ? 1 : 2;
   }
@@ -564,7 +625,7 @@ function Resolve(walls: readonly Segment[], requested: Formation, memberCount: n
   return at(state.level, raw, walked);
 }
 
-export const FormationGuardRules = { ChainPairs, BlockedRoles, Resolve, Effective };
+export const FormationGuardRules = { ChainPairs, BlockedRoles, Resolve, Effective, TurnAhead };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationBypassRules (v2.1, FORMATION_CONTRACT.md 10.2): which side of a wall the leader - and with him the whole squad - passes
