@@ -2,8 +2,12 @@
 
 Design source: `docs/design/FORMATION_SECTORS.md` (+ `formation-sectors.html`). This file fixes the DATA the parts exchange, so
 the TypeScript simulator (Training Ground), the C++ rules and the Unreal map generator can be built in parallel and meet.
-Units: centimetres, degrees, seconds. Yaw: degrees, 0 = +X, counter-clockwise positive (UE yaw); "clock" sectors are relative
-to the leader's heading (12 = heading, 3 = right = heading - 90).
+Units: centimetres, degrees, seconds. Yaw: strictly UE - X forward, Y right, yaw = atan2(dy, dx) in degrees, growing from +X
+towards +Y (clockwise seen from above); "clock" sectors are relative to the leader's heading: clock c -> yaw = heading + 30*c
+(12 = heading, 3 = right = heading + 90, 9 = left = heading - 90). Coordinator decision 2026-10-25 (the first version had the
+sign mirrored). Config: `Content/Data/FormationLab/formation_config.json`, schema `codex.formation_config/1`,
+`params: { "<key>": { value, min, max, unit, doc } }`, scalars only; angles relative to the leader's heading (or the wall's
+outward normal for `wall.*`), positive = right. Owned by the cloud session (Training Ground); the tuner changes only `value`.
 
 ## 1. Layout JSON - `Content/Data/FormationLab/<name>.json` (one file feeds the simulator AND the Unreal map generator)
 ```json
