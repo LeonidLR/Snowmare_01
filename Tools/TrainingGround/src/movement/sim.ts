@@ -11,7 +11,7 @@ import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments } from './layout.ts';
 import { AGENT_RADIUS, NavGrid } from './nav.ts';
 import type { Mode, Role, TerrainClass } from './rules.ts';
-import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rolesFor, wallRoom } from './rules.ts';
+import { CLASSIFY_START, FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rolesFor, wallRoom } from './rules.ts';
 
 export const SIM_DT = 1 / 30;
 const HEADING_SMOOTHING = 3.5; // FSquadFormationConfig::RotationSmoothing
@@ -116,7 +116,8 @@ export function simulate(o: SimOptions): number {
   let t = 0;
   let travelled = 0;
   let terrain: TerrainClass | null = null;
-  let timeInClass = 0;
+  let classify = CLASSIFY_START;
+  let lastTravelled = 0;
   let formation: Formation = o.manualFormation ?? (n >= 4 ? 'diamond' : 'wedge');
   let haltLeft = o.haltSeconds ?? 3;
   let arrived = false;
@@ -150,9 +151,11 @@ export function simulate(o: SimOptions): number {
     // v1.2: the leader's move ends at the route's last point (at_wall only on arrival there); in the wall layout his move goes
     // on to his own wall slot, which is then his destination (the layout must not drop on that last step).
     const destination = formation === 'wall' && leaderWallSlot ? leaderWallSlot : legs[legs.length - 1];
-    const next = FormationTerrainRules.Classify(walls, leader.pos, heading, destination, terrain, timeInClass, c);
-    const passage = FormationTerrainRules.PassageWidth(walls, leader.pos, heading, c);
-    if (next !== terrain) { terrain = next; timeInClass = 0; } else timeInClass += SIM_DT;
+    classify = FormationTerrainRules.Classify(walls, leader.pos, heading, destination, classify, travelled - lastTravelled, c);
+    lastTravelled = travelled;
+    const next = classify.current!;
+    const passage = classify.passageWidth; // v2: held with the corridor class (the column's tail still inside)
+    terrain = next;
     if (!o.manualFormation) formation = FormationTerrainRules.FormationFor(terrain, n, !!o.blizzard);
     const mode: Mode = arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
