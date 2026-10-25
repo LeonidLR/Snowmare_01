@@ -10,7 +10,8 @@ import type { FormationConfigFile } from './config.ts';
 import { angleDiff, clockToYaw, dirOf, dist, localToWorld, normYaw, yawOf } from './geometry.ts';
 import type { Segment, Vec2 } from './geometry.ts';
 import { validateLayout } from './layout.ts';
-import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rawClass, wallRoom } from './rules.ts';
+import { CLASSIFY_START, classRank, FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rawClass, wallRoom } from './rules.ts';
+import type { ClassifyState } from './rules.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const CONFIG_FILE: FormationConfigFile = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/FormationLab/formation_config.json'), 'utf8'));
@@ -167,13 +168,27 @@ test('Classify: open, wall on one side -> echelon to the open side, corridor -> 
   assert.equal(FormationTerrainRules.FormationFor('open', 3, false), 'wedge');
 });
 
-test('Classify: a 2 m gap in a wall is bridged by the slanted probes; hysteresis holds a class for hold_time', () => {
+test('Classify v2: gaps bridged; tighter classes at once, looser ones only after classify.hold_distance of path', () => {
   const gapped: Segment[] = [{ a: [-2000, -300], b: [-100, -300], thickness: 40 }, { a: [100, -300], b: [2000, -300], thickness: 40 }];
   assert.equal(rawClass(gapped, [0, 0], 0, null, C), 'wall_left');
-  const hold = C['classify.hold_time'];
-  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, null, 'wall_left', hold * 0.5, C), 'wall_left');
-  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, null, 'wall_left', hold, C), 'open');
-  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, null, null, 0, C), 'open');
+  const T = FormationTerrainRules, hold = C['classify.hold_distance'];
+  const leftWall: Segment[] = [{ a: [-2000, -300], b: [2000, -300], thickness: 40 }];
+  // start: the raw class at once
+  assert.deepEqual(T.Classify([], [0, 0], 0, null, CLASSIFY_START, 0, C), { current: 'open', candidate: null, candidateDistance: 0, passageWidth: null });
+  // tighter (open -> wall_left) at once
+  assert.equal(T.Classify(leftWall, [0, 0], 0, null, { current: 'open', candidate: null, candidateDistance: 0, passageWidth: null }, 6, C).current, 'wall_left');
+  // looser (wall_left -> open): pending until hold_distance of path
+  let st: ClassifyState = { current: 'wall_left', candidate: null, candidateDistance: 0, passageWidth: null };
+  st = T.Classify([], [0, 0], 0, null, st, hold / 2, C);
+  assert.deepEqual(st, { current: 'wall_left', candidate: 'open', candidateDistance: hold / 2, passageWidth: null });
+  st = T.Classify([], [0, 0], 0, null, st, 0, C);
+  assert.equal(st.current, 'wall_left', 'standing still adds no path');
+  st = T.Classify([], [0, 0], 0, null, st, hold / 2, C);
+  assert.equal(st.current, 'open');
+  // a pending candidate that stops being the raw class is dropped
+  const back = T.Classify(leftWall, [0, 0], 0, null, { current: 'wall_left', candidate: 'open', candidateDistance: hold - 1, passageWidth: null }, 6, C);
+  assert.deepEqual(back, { current: 'wall_left', candidate: null, candidateDistance: 0, passageWidth: null });
+  assert.equal(classRank('open') < classRank('wall_left') && classRank('wall_right') < classRank('corridor'), true);
 });
 
 test('layout validation: the sample layout is valid; broken files name the element', () => {
@@ -233,9 +248,11 @@ test('v1.2: leader search 11-1 o\'clock (+-30); "All forward" (mode forward) = e
 test('v1.2: at_wall only on arrival - walking past / up to a wall is not the wall layout; arriving within arrive_dist is, at once', () => {
   const ahead: Segment[] = [{ a: [120, -500], b: [120, 500], thickness: 20 }];
   const T = FormationTerrainRules;
-  assert.equal(T.Classify(ahead, [0, 0], 0, [1000, 0], 'open', 5, C), 'open', 'destination far away: just passing');
-  assert.equal(T.Classify(ahead, [0, 0], 0, [C['classify.arrive_dist'] - 1, 0], 'open', 0.1, C), 'at_wall', 'arriving: no hold for the event');
-  assert.equal(T.Classify(ahead, [0, 0], 0, [C['classify.arrive_dist'] + 1, 0], 'open', 5, C), 'open');
+  const open: ClassifyState = { current: 'open', candidate: null, candidateDistance: 0, passageWidth: null };
+  assert.equal(T.Classify(ahead, [0, 0], 0, [1000, 0], open, 6, C).current, 'open', 'destination far away: just passing');
+  assert.equal(T.Classify(ahead, [0, 0], 0, [C['classify.arrive_dist'] - 1, 0], open, 0, C).current, 'at_wall', 'arriving: at once');
+  assert.equal(T.Classify(ahead, [0, 0], 0, [C['classify.arrive_dist'] + 1, 0], open, 6, C).current, 'open');
+  assert.equal(T.Classify([], [0, 0], 0, [500, 0], { current: 'at_wall', candidate: null, candidateDistance: 0, passageWidth: null }, 6, C).current, 'open', 'a new move leaves the wall layout at once');
 });
 
 test('v1.2: hedgehog round the heat source - centre = the fire, everyone on the ring, back to it, looking out', () => {
@@ -280,5 +297,17 @@ test('v1.2 (user Q4 = A): the blizzard tight diamond on OPEN ground in a blizzar
   assert.equal(F('open', 3, true), 'blizzard');
   assert.equal(F('open', 4, false), 'diamond');
   for (const t of ['wall_left', 'wall_right', 'corridor', 'at_wall'] as const) assert.equal(F(t, 4, true), F(t, 4, false));
+});
+
+test('v2: leaving a narrow passage the held column keeps its passage width (narrow sectors) until the hold ends', () => {
+  const T = FormationTerrainRules, hold = C['classify.hold_distance'];
+  const corridor: Segment[] = [{ a: [-2000, -250], b: [0, -250], thickness: 40 }, { a: [-2000, 250], b: [0, 250], thickness: 40 }];
+  let st = T.Classify(corridor, [-1000, 0], 0, null, CLASSIFY_START, 0, C);
+  assert.equal(st.current, 'corridor'); near(st.passageWidth!, 460);
+  st = T.Classify(corridor, [600, 0], 0, null, st, hold / 2, C); // out of the passage, the column held
+  assert.equal(st.current, 'corridor'); near(st.passageWidth!, 460);
+  assert.equal(FormationSectorRules.LookYaw('L', 'column', 'walk', 4, 0, 0, st.passageWidth, C), -165, 'the tail keeps looking back');
+  st = T.Classify(corridor, [900, 0], 0, null, st, hold / 2, C);
+  assert.equal(st.current, 'open'); assert.equal(st.passageWidth, null);
 });
 

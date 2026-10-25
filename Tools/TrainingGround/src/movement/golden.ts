@@ -7,7 +7,7 @@ import type { Segment, Vec2 } from './geometry.ts';
 import { round } from './geometry.ts';
 import type { Formation } from './layout.ts';
 import { FORMATIONS } from './layout.ts';
-import type { Mode, Role, TerrainClass } from './rules.ts';
+import type { ClassifyState, Mode, Role, TerrainClass } from './rules.ts';
 import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rolesFor } from './rules.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
@@ -88,16 +88,27 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  const classify = base('Classify', 'in: walls [{a, b, thickness}], leaderPos, leaderYaw, destination (null = none; v1.2 at_wall only when arriving), previousClass (null = none), timeInClass -> out.class.');
-  const previous: (TerrainClass | null)[] = [null, 'open', 'wall_left', 'corridor'];
+  const classify = base('Classify', 'in: walls [{a, b, thickness}], leaderPos, leaderYaw, destination (null = none; v1.2 at_wall only when arriving), state {current, candidate, candidateDistance} (v2), stepDistance -> out.state.');
+  // v2 states: none; settled classes; a pending looser candidate short of / just under the hold distance; leaving at_wall.
+  const hold = config['classify.hold_distance'];
+  const STATES: ClassifyState[] = [
+    { current: null, candidate: null, candidateDistance: 0, passageWidth: null },
+    { current: 'open', candidate: null, candidateDistance: 0, passageWidth: null },
+    { current: 'wall_left', candidate: null, candidateDistance: 0, passageWidth: null },
+    { current: 'corridor', candidate: null, candidateDistance: 0, passageWidth: 460 },
+    { current: 'wall_left', candidate: 'open', candidateDistance: 100, passageWidth: null },
+    { current: 'corridor', candidate: 'open', candidateDistance: hold - 30, passageWidth: 460 },
+    { current: 'at_wall', candidate: null, candidateDistance: 0, passageWidth: null },
+  ];
   for (const [scene, walls] of Object.entries(SCENES)) {
     for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]], [-140, [-1200, 800]]] as [number, Vec2][]) {
       const placed = place(walls, yaw, offset);
       const ahead = (d: number): Vec2 => [offset[0] + Math.cos((yaw * Math.PI) / 180) * d, offset[1] + Math.sin((yaw * Math.PI) / 180) * d];
       for (const destination of [null, r2(offset), r2(ahead(1000))] as (Vec2 | null)[]) {
-        for (const previousClass of previous) for (const timeInClass of [0.3, 1.5]) {
-          const out = FormationTerrainRules.Classify(placed, offset, yaw, destination, previousClass, timeInClass, config);
-          classify.cases.push({ in: { scene, walls: placed.map(seg), leaderPos: r2(offset), leaderYaw: yaw, destination, previousClass, timeInClass }, out: { class: out } });
+        for (const state of STATES) for (const stepDistance of [6, 60]) {
+          const out = FormationTerrainRules.Classify(placed, offset, yaw, destination, state, stepDistance, config);
+          classify.cases.push({ in: { scene, walls: placed.map(seg), leaderPos: r2(offset), leaderYaw: yaw, destination, state, stepDistance },
+            out: { state: { ...out, candidateDistance: round(out.candidateDistance), passageWidth: out.passageWidth === null ? null : round(out.passageWidth) } } });
         }
       }
     }

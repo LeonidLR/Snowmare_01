@@ -161,10 +161,16 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
 - **The wall layout only on arrival.** A wall straight ahead (`at_wall`) while the leader still walks is a corner to turn: keep
   the previous formation; switch to `FormationWallRules::Layout` when the leader stops at the wall (or on a cover order).
 
-## 8. Planned changes (not implemented yet)
-- **v2: `classify.hold_distance` (cm of the leader's path) instead of `classify.hold_time` (s).** Found by the tuner: a hold in
-  seconds shrinks in distance at a slower patrol pace, so a short wall gap flips the formation again (flicker grows when
-  `pace.patrol` drops). Coordinator decision 2026-10-25: agreed in principle, scheduled after the C++ parity on v1 lands; then
-  the TS rules, the C++ rules, `Classify`'s signature (timeInClass -> distanceInClass), the config and the golden vectors change
-  together. No code until then.
-
+## 8. v2 - the path hold (implemented 2026-10-25, coordinator; was "planned" here)
+- `classify.hold_time` (s) is replaced by **`classify.hold_distance`** (cm of the leader's path, default 500 >= the column length,
+  range 150-1200). Pace-independent (a hold in seconds shrank in distance at a slow patrol pace and short gaps flipped again).
+- **Asymmetric**: a TIGHTER raw class (rank open 0 < wall_left / wall_right 1 < corridor 2 < at_wall 3) takes over at once -
+  the squad never walks a diamond into a passage; a LOOSER (or equal-rank) one only after it has been the raw class for
+  hold_distance of the leader's path (standing still adds nothing). Leaving at_wall (a new move) is immediate.
+- `Classify(walls, leaderPos, leaderYaw, destination, state, stepDistance, config) -> state`, pure:
+  `state = { current, candidate, candidateDistance, passageWidth }` (start `{null, null, 0, null}`); `stepDistance` = the leader's
+  path this tick. `passageWidth` = PassageWidth while `current` is corridor, HELD with the class after the leader left the
+  passage (the column's tail keeps the narrow sectors) - this is what LookYaw takes. Golden: Classify cases are state in /
+  state out (1890).
+- Integration: the click on a cover / wall slot is where K stands - the leader's move ends ON his wall slot (an extra step
+  away from the destination would drop the arrival). `formation_lab_01` routes A / F end on the slot (face - 45 cm).

@@ -273,16 +273,50 @@ export function isArriving(pos: Vec2, destination: Vec2 | null, c: FormationConf
   return destination !== null && dist(pos, destination) <= cfg(c, 'classify.arrive_dist');
 }
 
+/** Classifier state carried tick to tick (v2): the class in force and a looser class waiting for its path distance. */
+export interface ClassifyState {
+  current: TerrainClass | null;
+  candidate: TerrainClass | null;
+  /** Leader path walked while `candidate` has been the raw class, cm. */
+  candidateDistance: number;
+  /**
+   * Width of the passage while `current` is a corridor (PassageWidth when measured; HELD with the class after the leader has left
+   * the passage, so the column's tail keeps the narrow sectors until the column ends), else null. LookYaw's passageWidth.
+   */
+  passageWidth: number | null;
+}
+
+export const CLASSIFY_START: ClassifyState = { current: null, candidate: null, candidateDistance: 0, passageWidth: null };
+
+/** How tight a class is: open 0, a wall on one side 1, a passage 2, at a wall 3. */
+export function classRank(c: TerrainClass): number {
+  return c === 'open' ? 0 : c === 'corridor' ? 2 : c === 'at_wall' ? 3 : 1;
+}
+
 /**
- * Terrain class at the leader with hysteresis: a class is kept for at least classify.hold_time before it may change
- * (previousClass null = no history, the raw class at once). destination (v1.2) = where the leader's current move ends (null =
- * none); at_wall is an arrival EVENT and is returned at once, without the hold.
+ * v2 (FORMATION_CONTRACT.md 8, coordinator 2026-10-25): hysteresis in cm of the LEADER'S PATH, asymmetric.
+ * - Tighter at once: a raw class of higher rank (a wall beside, a passage, the arrival at a wall) replaces the current one
+ *   immediately - the squad must not walk a diamond into a corridor. Leaving at_wall (a new move) is immediate too.
+ * - Looser only after classify.hold_distance: a lower (or equal-rank, e.g. wall_left -> wall_right) raw class becomes current
+ *   only when it has been the raw class for hold_distance of the leader's path (stepDistance per tick; standing still adds
+ *   nothing). A gap in a wall shorter than that never flips the echelon; leaving a passage, the column holds until its tail
+ *   (~5 m) is out. Pace-independent (v1's seconds shrank in distance at a slow patrol pace).
+ * destination (v1.2) = where the leader's current move ends (null = none). Returns the next state (pure).
  */
-function Classify(walls: readonly Segment[], leaderPos: Vec2, leaderYaw: number, destination: Vec2 | null,
-  previousClass: TerrainClass | null, timeInClass: number, config: FormationConfig): TerrainClass {
+function Classify(walls: readonly Segment[], leaderPos: Vec2, leaderYaw: number, destination: Vec2 | null, state: ClassifyState,
+  stepDistance: number, config: FormationConfig): ClassifyState {
   const raw = rawClass(walls, leaderPos, leaderYaw, destination, config);
-  if (previousClass === null || raw === previousClass || raw === 'at_wall') return raw;
-  return timeInClass < cfg(config, 'classify.hold_time') ? previousClass : raw;
+  const measured = raw === 'corridor' ? PassageWidth(walls, leaderPos, leaderYaw, config) : null;
+  const next = (current: TerrainClass, candidate: TerrainClass | null, candidateDistance: number): ClassifyState => ({
+    current, candidate, candidateDistance,
+    passageWidth: current !== 'corridor' ? null : raw === 'corridor' ? measured : state.passageWidth,
+  });
+  const current = state.current;
+  if (current === null || raw === current) return next(raw, null, 0);
+  if (current === 'at_wall' || classRank(raw) > classRank(current)) return next(raw, null, 0);
+  const walked = (state.candidate === raw ? state.candidateDistance : 0) + Math.max(0, stepDistance);
+  if (walked >= cfg(config, 'classify.hold_distance')) return next(raw, null, 0);
+  return next(current, raw, walked);
 }
 
 /**

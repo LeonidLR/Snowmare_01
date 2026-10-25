@@ -126,7 +126,7 @@ export function mockClient(seed = 1): ModelClient {
       // One lever per round (so the effect of each change stays visible): the failing checks in turn.
       const levers: Record<number, () => void> = {
         6: () => { nudge('pace.patrol', -0.05); nudge('move.backward_mult', 0.05); },
-        3: () => nudge('classify.hold_time', 0.3),
+        3: () => nudge('classify.hold_distance', 100),
         4: () => nudge('classify.probe_side', 50),
         1: () => nudge('wall.flank_deg', -5),
         2: () => nudge('echelon.sector_4', 8),
@@ -154,7 +154,7 @@ function mockAdvice(p: AdvicePayload): string[] {
     const hint: Record<number, string> = {
       1: 'wall stare: lower wall.flank_deg or echelon sectors near walls',
       2: 'rear cover: the rear man must keep 6 o\'clock; check scan.amp_side / column.side_deg',
-      3: 'flicker: raise classify.hold_time',
+      3: 'flicker: raise classify.hold_distance',
       4: 'zone mismatch: tune classify.probe_side / classify.side_ignore_perp_deg',
       5: 'slots: raise slot.min_spacing margins or the offsets',
       6: 'pace: lower pace.patrol or raise move.backward_mult',
