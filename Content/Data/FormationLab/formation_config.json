@@ -231,7 +231,7 @@
       "min": 0.5,
       "max": 1.0,
       "unit": "ratio",
-      "doc": "Patrol (walk) pace of the whole squad relative to the walk speed."
+      "doc": "Patrol (walk) pace of the whole squad relative to the walk speed (user 2026-10-25: ~80 %, kept - variant A)."
     },
     "pace.walk_speed": {
       "value": 220,
@@ -248,11 +248,11 @@
       "doc": "Run speed of the squad (sprint)."
     },
     "move.backward_mult": {
-      "value": 0.8,
+      "value": 0.9,
       "min": 0.5,
       "max": 1.0,
       "unit": "ratio",
-      "doc": "A member walking backwards moves at most this fraction of the walk speed."
+      "doc": "A member walking backwards moves at most this fraction of the walk speed (user 2026-10-25, variant A: 0.9 > the 0.8 patrol pace, so the rear man keeps up)."
     },
     "move.catchup_mult": {
       "value": 1.25,
@@ -324,12 +324,12 @@
       "unit": "cm",
       "doc": "Terrain probe: forward look-ahead range."
     },
-    "classify.hold_time": {
-      "value": 1.0,
-      "min": 0.2,
-      "max": 3.0,
-      "unit": "s",
-      "doc": "Hysteresis: a class is kept at least this long before it may change."
+    "classify.hold_distance": {
+      "value": 500,
+      "min": 150,
+      "max": 1200,
+      "unit": "cm",
+      "doc": "v2: a LOOSER class (open after a wall, a wall after a passage, the other side) takes over only after the leader walked this far with it; tighter classes take over at once. >= the column length (~5 m) so the tail leaves a passage first."
     },
     "classify.at_wall_dist": {
       "value": 150,

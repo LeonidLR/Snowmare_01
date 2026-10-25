@@ -56,6 +56,12 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   10:30) = walking with everyone looking at 12 in any formation; the wall layout triggers only on ARRIVAL at a wall (not when
   walking past it or turning at a bend); the hedgehog is centred on the heat source; a column of three keeps the triad's open
   rear in the wide herringbone (in a narrow column L's back-slant look covers it).
+- **Patrol pace (user, 2026-10-25, "Вариант А. Потом будем смотреть.")**: the squad keeps ~80 % of the walk speed on patrol
+  (`pace.patrol` 0.8, unchanged) and the rear man walks backwards at up to 90 % of the walk speed (`move.backward_mult` 0.9),
+  so he keeps up with a margin (the first training preferred 0.7 / 1.0; to be revisited).
+- **v2 (coordinator, 2026-10-25): the formation switch is held by the leader's PATH, not time** — a tighter situation (a wall
+  beside, a passage, arrival at a wall) switches at once; a looser one only after 5 m of path with it, so short gaps never flip
+  the echelon and a column keeps its narrow sectors until its tail has left the passage.
 - **Wide passage = column (user, 2026-10-25, "3А")**: ANY passage between two walls (both sides walled within the probe reach,
   4 m) is a column — narrow sectors below 6 m (above), the ±70° herringbone in a wider one (e.g. 7.6 m); the diamond no longer
   walks a wide street with its side men scanning into walls 1.2 m away.

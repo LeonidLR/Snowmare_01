@@ -98,18 +98,21 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_Slots.json` / `Parity.Slots` | `formation`, `memberCount`, `leaderPos`, `leaderYaw` | `slots: [{ role, pos }]` - same count, same role ORDER (index 0 = the leader; `wall` -> `[]`), pos |
 | `formation_HedgehogSlots.json` / `Parity.HedgehogSlots` (v1.2) | `center`, `memberCount`, `yaw` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
 | `formation_LookYaw.json` / `Parity.LookYaw` | `role`, `formation`, `mode`, `memberCount`, `timeInPatrol`, `leaderYaw` (mode / formation `wall`: the wall's outward normal), `passageWidth` (v1.1; number, `null` or missing = not in a passage) | `yaw` |
-| `formation_Classify.json` / `Parity.Classify` | `walls[]`, `leaderPos`, `leaderYaw`, `destination` (v1.2; `[x, y]`, `null` or missing = no move), `previousClass` (string or `null` = no history), `timeInClass` | `class` (after the hysteresis) |
+| `formation_Classify.json` / `Parity.Classify` (v2) | `walls[]`, `leaderPos`, `leaderYaw`, `destination` (`[x, y]`, `null` or missing = no move), `state: { current, candidate, candidateDistance, passageWidth }` (classes string / `null`, passageWidth number / `null`; missing = null / 0), `stepDistance` | `state` - current and candidate exactly, candidateDistance and passageWidth within cm |
 | `formation_PassageWidth.json` / `Parity.PassageWidth` (v1.1) | `walls[]`, `leaderPos`, `leaderYaw` | `width` (number or `null`; the field must be present) |
 | `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount`, `blizzard` (v1.2; bool, missing = false) | `formation` |
 | `formation_WallLayout.json` / `Parity.WallLayout` | `wall`, `clickedSlot`, `memberCount`, `roomLeft`, `roomRight` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
 
 C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
 config)`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`,
-`FormationTerrainRules::Classify(walls, leaderPos, leaderYaw, TOptional previousClass, timeInClass, config, TOptional destination)`
-(C++ keeps destination LAST, defaulted, so v1.1 callers compile; TS order differs) / `ClassifyRaw(walls, leaderPos, leaderYaw, config,
-TOptional destination)` / `PassageWidth(walls, leaderPos, leaderYaw, config)` / `FormationFor(class, memberCount, bBlizzard = false)`,
+`FormationTerrainRules::Classify(walls, leaderPos, leaderYaw, TOptional destination, FFormationClassifyState state, stepDistance,
+config) -> FFormationClassifyState` (v2, the TS order) / `AdvanceState(raw, measuredWidth, state, stepDistance, config)` / `ClassRank` /
+`ClassifyRaw(walls, leaderPos, leaderYaw, config, TOptional destination)` / `PassageWidth(walls, leaderPos, leaderYaw, config)` /
+`FormationFor(class, memberCount, bBlizzard = false)`; the runtime entry `FFormationTerrainTracker::Step(walls, leaderPos, leaderYaw,
+TOptional destination, stepDistance, config)` + `GetClass()` / `GetPassageWidth()` / `Reset()`;
 `FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)` / `BreakRoomTie`; config `FFormationConfig` +
-`FormationTuning`. Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2 (b5e2c7d) 7523 - each 0 mismatched.
+`FormationTuning`. Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2 (b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333 - each 0
+mismatched.
 
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):
@@ -161,10 +164,16 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
 - **The wall layout only on arrival.** A wall straight ahead (`at_wall`) while the leader still walks is a corner to turn: keep
   the previous formation; switch to `FormationWallRules::Layout` when the leader stops at the wall (or on a cover order).
 
-## 8. Planned changes (not implemented yet)
-- **v2: `classify.hold_distance` (cm of the leader's path) instead of `classify.hold_time` (s).** Found by the tuner: a hold in
-  seconds shrinks in distance at a slower patrol pace, so a short wall gap flips the formation again (flicker grows when
-  `pace.patrol` drops). Coordinator decision 2026-10-25: agreed in principle, scheduled after the C++ parity on v1 lands; then
-  the TS rules, the C++ rules, `Classify`'s signature (timeInClass -> distanceInClass), the config and the golden vectors change
-  together. No code until then.
-
+## 8. v2 - the path hold (implemented 2026-10-25, coordinator; was "planned" here)
+- `classify.hold_time` (s) is replaced by **`classify.hold_distance`** (cm of the leader's path, default 500 >= the column length,
+  range 150-1200). Pace-independent (a hold in seconds shrank in distance at a slow patrol pace and short gaps flipped again).
+- **Asymmetric**: a TIGHTER raw class (rank open 0 < wall_left / wall_right 1 < corridor 2 < at_wall 3) takes over at once -
+  the squad never walks a diamond into a passage; a LOOSER (or equal-rank) one only after it has been the raw class for
+  hold_distance of the leader's path (standing still adds nothing). Leaving at_wall (a new move) is immediate.
+- `Classify(walls, leaderPos, leaderYaw, destination, state, stepDistance, config) -> state`, pure:
+  `state = { current, candidate, candidateDistance, passageWidth }` (start `{null, null, 0, null}`); `stepDistance` = the leader's
+  path this tick. `passageWidth` = PassageWidth while `current` is corridor, HELD with the class after the leader left the
+  passage (the column's tail keeps the narrow sectors) - this is what LookYaw takes. Golden: Classify cases are state in /
+  state out (1890).
+- Integration: the click on a cover / wall slot is where K stands - the leader's move ends ON his wall slot (an extra step
+  away from the destination would drop the arrival). `formation_lab_01` routes A / F end on the slot (face - 45 cm).

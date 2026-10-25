@@ -48,7 +48,7 @@ bool FFormationTuningDefaultsMirrorFileTest::RunTest(const FString&)
 	{
 		TestTrue(FString::Printf(TEXT("The struct knows the file's key %s"), *Pair.Key), Known.Contains(Pair.Key));
 	}
-	TestEqual(TEXT("51 keys in the struct (contract v1.2)"), Known.Num(), 51);
+	TestEqual(TEXT("51 keys in the struct (contract v2)"), Known.Num(), 51);
 	return true;
 }
 
@@ -79,9 +79,9 @@ bool FFormationTuningParseTest::RunTest(const FString&)
 	// Round trip through the key table.
 	FFormationConfig Changed;
 	Changed.WallEndDeg = 80.f;
-	Changed.ClassifyHoldTime = 2.f;
+	Changed.ClassifyHoldDistance = 700.f;
 	const FFormationConfig Back = FormationTuning::FromValues(FormationTuning::ToValues(Changed));
-	TestTrue(TEXT("ToValues / FromValues round trip"), Back.WallEndDeg == 80.f && Back.ClassifyHoldTime == 2.f);
+	TestTrue(TEXT("ToValues / FromValues round trip"), Back.WallEndDeg == 80.f && Back.ClassifyHoldDistance == 700.f);
 	return true;
 }
 
