@@ -1,0 +1,113 @@
+// Training Ground / movement: golden vectors for the C++ parity tests (FORMATION_CONTRACT.md 3). Deterministic: the same
+// config gives byte-identical files. C++ CodexTactics.Formation.Parity.<Rule> reads Tools/TrainingGround/golden/formation_<Rule>.json
+// and must reproduce every "out" within the tolerance, using "config_values" (a snapshot of formation_config.json).
+
+import type { FormationConfig } from './config.ts';
+import type { Segment, Vec2 } from './geometry.ts';
+import { round } from './geometry.ts';
+import type { Formation } from './layout.ts';
+import { FORMATIONS } from './layout.ts';
+import type { Mode, Role, TerrainClass } from './rules.ts';
+import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rolesFor } from './rules.ts';
+
+export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
+export const GOLDEN_RULES = ['Slots', 'LookYaw', 'Classify', 'FormationFor', 'WallLayout'] as const;
+export type GoldenRule = (typeof GOLDEN_RULES)[number];
+
+export interface GoldenFile {
+  schema: string;
+  rule: GoldenRule;
+  tolerance: { cm: number; deg: number };
+  config: string;
+  config_values: Record<string, number>;
+  notes: string;
+  cases: { in: unknown; out: unknown }[];
+}
+
+const r2 = (v: Vec2): Vec2 => [round(v[0]), round(v[1])];
+const seg = (s: Segment) => ({ a: r2(s.a), b: r2(s.b), thickness: s.thickness ?? 0 });
+
+/** Rotates and moves a scene so the parity tests also cover arbitrary headings / positions. */
+function place(walls: Segment[], yaw: number, offset: Vec2): Segment[] {
+  const c = Math.cos((yaw * Math.PI) / 180), s = Math.sin((yaw * Math.PI) / 180);
+  const t = (p: Vec2): Vec2 => [offset[0] + p[0] * c - p[1] * s, offset[1] + p[0] * s + p[1] * c];
+  return walls.map((w) => ({ a: t(w.a), b: t(w.b), thickness: w.thickness }));
+}
+
+/** Scenes in the leader's frame (heading +X, left = -Y). */
+const SCENES: Record<string, Segment[]> = {
+  none: [],
+  wall_left: [{ a: [-2000, -300], b: [2000, -300], thickness: 40 }],
+  wall_right: [{ a: [-2000, 300], b: [2000, 300], thickness: 40 }],
+  corridor: [{ a: [-2000, -250], b: [2000, -250], thickness: 40 }, { a: [-2000, 250], b: [2000, 250], thickness: 40 }],
+  wide_street: [{ a: [-2000, -380], b: [2000, -380], thickness: 40 }, { a: [-2000, 380], b: [2000, 380], thickness: 40 }],
+  ahead: [{ a: [120, -500], b: [120, 500], thickness: 20 }],
+  gap_left: [{ a: [-2000, -300], b: [-100, -300], thickness: 40 }, { a: [100, -300], b: [2000, -300], thickness: 40 }],
+  wide_gap_left: [{ a: [-2000, -300], b: [-400, -300], thickness: 40 }, { a: [400, -300], b: [2000, -300], thickness: 40 }],
+  corner_left_ahead: [{ a: [-2000, -300], b: [400, -300], thickness: 40 }, { a: [400, -300], b: [400, 1500], thickness: 40 }],
+  wall_end_behind_left: [{ a: [-2000, -300], b: [-150, -300], thickness: 40 }],
+  far_left: [{ a: [-2000, -700], b: [2000, -700], thickness: 40 }],
+};
+
+export function buildGolden(config: FormationConfig, configPath: string): Record<GoldenRule, GoldenFile> {
+  const base = (rule: GoldenRule, notes: string): GoldenFile => ({
+    schema: GOLDEN_SCHEMA, rule, tolerance: { cm: 0.5, deg: 0.5 }, config: configPath,
+    config_values: { ...config }, notes, cases: [],
+  });
+
+  const slots = base('Slots', 'in: formation, memberCount, leaderPos, leaderYaw -> out.slots [{role, pos}] (index 0 = leader); wall -> [].');
+  for (const formation of FORMATIONS) for (const memberCount of [1, 2, 3, 4]) {
+    for (const leaderPos of [[0, 0], [1234.5, -678.25]] as Vec2[]) for (const leaderYaw of [0, 37.5, -120, 180]) {
+      const out = FormationShapeRules.Slots(formation, memberCount, leaderPos, leaderYaw, config).map((s) => ({ role: s.role, pos: r2(s.pos) }));
+      slots.cases.push({ in: { formation, memberCount, leaderPos, leaderYaw }, out: { slots: out } });
+    }
+  }
+
+  const look = base('LookYaw', 'in: role, formation, mode, memberCount, timeInPatrol, leaderYaw -> out.yaw (UE yaw, -180..180; compare as angles).');
+  const modes: Mode[] = ['walk', 'run', 'halt', 'wall'];
+  for (const formation of FORMATIONS) for (const mode of modes) for (const memberCount of [2, 3, 4]) {
+    for (const role of rolesFor(memberCount) as Role[]) for (const timeInPatrol of [0, 0.37, 0.75, 1.6, 2.9, 4.4]) {
+      for (const leaderYaw of [0, -150]) {
+        const yaw = FormationSectorRules.LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, config);
+        look.cases.push({ in: { role, formation, mode, memberCount, timeInPatrol, leaderYaw }, out: { yaw: round(yaw) } });
+      }
+    }
+  }
+
+  const classify = base('Classify', 'in: walls [{a, b, thickness}], leaderPos, leaderYaw, previousClass (null = none), timeInClass -> out.class.');
+  const previous: (TerrainClass | null)[] = [null, 'open', 'wall_left', 'corridor'];
+  for (const [scene, walls] of Object.entries(SCENES)) {
+    for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]], [-140, [-1200, 800]]] as [number, Vec2][]) {
+      const placed = place(walls, yaw, offset);
+      for (const previousClass of previous) for (const timeInClass of [0.3, 1.5]) {
+        const out = FormationTerrainRules.Classify(placed, offset, yaw, previousClass, timeInClass, config);
+        classify.cases.push({ in: { scene, walls: placed.map(seg), leaderPos: r2(offset), leaderYaw: yaw, previousClass, timeInClass }, out: { class: out } });
+      }
+    }
+  }
+
+  const formationFor = base('FormationFor', 'in: class, memberCount -> out.formation.');
+  for (const terrain of ['open', 'wall_left', 'wall_right', 'corridor', 'at_wall'] as TerrainClass[]) for (const memberCount of [2, 3, 4]) {
+    formationFor.cases.push({ in: { class: terrain, memberCount }, out: { formation: FormationTerrainRules.FormationFor(terrain, memberCount) as Formation } });
+  }
+
+  const wall = base('WallLayout', 'in: wall {a, b, thickness}, clickedSlot, memberCount, roomLeft, roomRight -> out.slots [{role, pos, yaw}].');
+  const walls: Segment[] = [
+    { a: [-1000, 200], b: [1000, 200], thickness: 40 },
+    { a: [300, -800], b: [300, 900], thickness: 30 },
+    { a: [-500, -500], b: [700, 700], thickness: 50 },
+  ];
+  const clicks: Vec2[] = [[0, 0], [600, 100], [-200, 400]];
+  for (const w of walls) for (const clickedSlot of clicks) for (const memberCount of [1, 2, 3, 4]) {
+    for (const [roomLeft, roomRight] of [[100, 900], [900, 100], [500, 500]]) {
+      const out = FormationWallRules.Layout(w, clickedSlot, memberCount, roomLeft, roomRight, config)
+        .map((s) => ({ role: s.role, pos: r2(s.pos), yaw: round(s.yaw) }));
+      wall.cases.push({ in: { wall: seg(w), clickedSlot, memberCount, roomLeft, roomRight }, out: { slots: out } });
+    }
+  }
+
+  return { Slots: slots, LookYaw: look, Classify: classify, FormationFor: formationFor, WallLayout: wall };
+}
+
+export const goldenFileName = (rule: GoldenRule): string => `formation_${rule}.json`;
+export const goldenText = (file: GoldenFile): string => JSON.stringify(file, null, 1) + '\n';

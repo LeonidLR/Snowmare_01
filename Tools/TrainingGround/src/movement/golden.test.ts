@@ -1,0 +1,29 @@
+// Golden vectors stay in step with the rules and formation_config.json (FORMATION_CONTRACT.md 3): a rule or config change
+// without `npm run golden` fails here, before the C++ parity tests see stale files.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { configValues } from './config.ts';
+import { GOLDEN_RULES, buildGolden, goldenFileName, goldenText } from './golden.ts';
+import { CONFIG_REL, GOLDEN_DIR, readConfigFile } from './cli/paths.ts';
+
+test('golden files are up to date (run `npm run golden` after changing the rules or the config)', () => {
+  const files = buildGolden(configValues(readConfigFile()), CONFIG_REL);
+  for (const rule of GOLDEN_RULES) {
+    const file = path.join(GOLDEN_DIR, goldenFileName(rule));
+    assert.ok(fs.existsSync(file), `${goldenFileName(rule)} missing`);
+    assert.equal(fs.readFileSync(file, 'utf8'), goldenText(files[rule]), `${goldenFileName(rule)} is stale`);
+  }
+});
+
+test('golden cases are rotation / translation invariant for Classify (no borderline scenes)', () => {
+  const files = buildGolden(configValues(readConfigFile()), CONFIG_REL);
+  const byKey = new Map<string, Set<string>>();
+  for (const c of files.Classify.cases as { in: { scene: string; previousClass: string | null; timeInClass: number }; out: { class: string } }[]) {
+    const key = `${c.in.scene}|${c.in.previousClass}|${c.in.timeInClass}`;
+    if (!byKey.has(key)) byKey.set(key, new Set());
+    byKey.get(key)!.add(c.out.class);
+  }
+  for (const [key, classes] of byKey) assert.equal(classes.size, 1, `${key}: ${[...classes].join(', ')}`);
+});
