@@ -406,15 +406,19 @@ function FormationFor(terrain: TerrainClass, memberCount: number, blizzard: bool
 /**
  * v2.1: the free width round a man when at least ONE side has a wall body within classify.probe_side, null when both sides are
  * open. Measured to each wall's closest point (body distance; the side = which side of the heading that point lies), so a
- * wall END beside him counts as well as a wall along him - the side rays of the classifier slip past a 40 cm end. An open side
+ * wall END beside him counts as well as a wall along him - the side rays of the classifier slip past a 40 cm end. Walls across
+ * the heading (isAcrossHeading, the classifier's classify.side_ignore_perp_deg band) are skipped. An open side
  * counts as probe_side. The trail column's sectors use it per member (a wall beside a man -> the narrow column's sectors,
  * nobody's herringbone look into it).
  */
 function SideWidth(walls: readonly Segment[], pos: Vec2, yaw: number, c: FormationConfig): number | null {
-  const reach = cfg(c, 'classify.probe_side');
+  const reach = cfg(c, 'classify.probe_side'), ignore = cfg(c, 'classify.side_ignore_perp_deg');
   const h = dirOf(yaw);
   let right = Infinity, left = Infinity;
   for (const w of walls) {
+    // Coordinator 2026-10-25 (design consistency with Classify): a wall ACROSS the heading is ahead / behind, never a side wall
+    // (a man's look into its end is ClearLook's job, v2.1.1).
+    if (isAcrossHeading(w, yaw, ignore)) continue;
     const q = closestOnSegment(pos, w.a, w.b).point;
     const d = Math.max(0, dist(pos, q) - (w.thickness ?? 0) / 2);
     if (d > reach) continue;

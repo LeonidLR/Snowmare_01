@@ -25,7 +25,8 @@ test('golden cases are rotation / translation invariant for Classify (no borderl
     const dest = c.in.destination === null ? 'none' : c.in.destination[0] === c.in.leaderPos[0] && c.in.destination[1] === c.in.leaderPos[1] ? 'here' : 'ahead';
     const key = `${c.in.scene}|${JSON.stringify(c.in.state)}|${c.in.stepDistance}|${dest}`;
     if (!byKey.has(key)) byKey.set(key, new Set());
-    byKey.get(key)!.add(JSON.stringify(c.out.state));
+    // Classes exactly; the numbers to 0.01 cm (the scenes are written rounded to 1e-3 and the outputs computed from that).
+    byKey.get(key)!.add(JSON.stringify(c.out.state, (_k, v) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v)));
   }
   for (const [key, classes] of byKey) assert.equal(classes.size, 1, `${key}: ${[...classes].join(', ')}`);
 });

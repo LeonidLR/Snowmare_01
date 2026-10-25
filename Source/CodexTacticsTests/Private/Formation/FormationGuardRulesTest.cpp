@@ -221,13 +221,20 @@ bool FFormationAssignTest::RunTest(const FString&)
 	return true;
 }
 
-FORMATION_V21_TEST(FFormationSideWidthTest, "Terrain.SideWidthCountsAWallEnd")
+FORMATION_V21_TEST(FFormationSideWidthTest, "Terrain.SideWidthCountsAWallEndNotAcross")
 bool FFormationSideWidthTest::RunTest(const FString&)
 {
 	using namespace FormationV21TestUtil;
 	const FFormationConfig C;
-	const TOptional<float> End = FormationTerrainRules::SideWidth({ Seg(20.0, 110.0, 20.0, 1500.0) }, FVector2D::ZeroVector, 0.f, C);
-	TestTrue(TEXT("A wall END beside him: narrow (the side rays slip past it)"), End.IsSet() && End.GetValue() < C.ColumnNarrowWidth);
+	// A wall along the heading on the right, ending just behind him: the classifier's side rays (60 / 90 / 120 deg) miss its end.
+	const TArray<FFormationWall> EndBeside = { Seg(-1500.0, 110.0, -90.0, 110.0) };
+	TestFalse(TEXT("The side rays miss it"), FormationTerrainRules::SideClearance(EndBeside, FVector2D::ZeroVector, 0.f, 1, C.ClassifyProbeSide).IsSet());
+	const TOptional<float> End = FormationTerrainRules::SideWidth(EndBeside, FVector2D::ZeroVector, 0.f, C);
+	TestTrue(TEXT("SideWidth counts the wall END beside him: narrow"), End.IsSet() && End.GetValue() < C.ColumnNarrowWidth);
+	// A wall across the heading (straight ahead, or its end beside him) is never a side wall (491a24d).
+	TestFalse(TEXT("A wall straight ahead: no side width"), FormationTerrainRules::SideWidth({ Seg(150.0, -1000.0, 150.0, 1000.0) }, FVector2D::ZeroVector, 0.f, C).IsSet());
+	TestFalse(TEXT("The end of a wall across the heading beside him: no side width"),
+		FormationTerrainRules::SideWidth({ Seg(20.0, 110.0, 20.0, 1500.0) }, FVector2D::ZeroVector, 0.f, C).IsSet());
 	TestFalse(TEXT("Open both sides: unset"), FormationTerrainRules::SideWidth({}, FVector2D::ZeroVector, 0.f, C).IsSet());
 	return true;
 }

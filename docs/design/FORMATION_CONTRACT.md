@@ -80,6 +80,9 @@ outward normal for `wall.*`), positive = right. Owned by the cloud session (Trai
   periods); both sides read it.
 
 ## 3. Golden vectors - `Tools/TrainingGround/golden/formation_<rule>.json`
+Every output is computed from exactly the inputs written to the file (rotated scenes are rounded to 1e-3 cm before the rule
+runs; C++ port 2026-10-25: a wall whose nearest point lay on the heading line flipped sides between the unrounded and the written
+coordinates).
 ```json
 { "schema": "codex.formation_golden/1", "rule": "Slots", "tolerance": { "cm": 0.5, "deg": 0.5 },
   "cases": [ { "in": { ... }, "out": { ... } } ] }
@@ -111,7 +114,7 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_Guard.json` / `Parity.Guard` (10.1, 10.7) | `walls[]`, `requested`, `memberCount`, `leaderPos`, `leaderYaw`, `ahead` (`{ pos, yaw }` or null), `turnAhead`, `state: { requested, level (0/1/2), effective, candidate (level or null), candidateDistance }`, `stepDistance` | `blocked` (roles, slot order: BlockedRoles at the leader) + `state` (Resolve) |
 | `formation_TurnAhead.json` / `Parity.TurnAhead` (10.7) | `points` (the path; `path` is the scene's name), `heading` | `deg` |
 | `formation_TrailSlots.json` / `Parity.TrailSlots` (10.1) | `points` (the trail, oldest first; `trail` is the scene's name), `leaderYaw`, `memberCount` | `slots: [{ role, pos, yaw }]` |
-| `formation_SideWidth.json` / `Parity.SideWidth` (10.1) | `walls[]`, `pos`, `yaw` | `width` (number or null). A wall whose closest point lies on the heading line (within 1e-2 cm) has no side in the rounded file: such a case passes when flipping only that wall's side gives the golden width, with a warning (2 cases at 308667a: the golden is computed from the unrounded scene) |
+| `formation_SideWidth.json` / `Parity.SideWidth` (10.1) | `walls[]`, `pos`, `yaw` | `width` (number or null); walls across the heading are skipped (491a24d); the golden is computed from the rounded inputs it writes |
 | `formation_ClearLook.json` / `Parity.ClearLook` (10.8) | `walls[]`, `pos`, `yaw`, `currentYaw` | `yaw` |
 | `formation_Bypass.json` / `Parity.Bypass` (10.2) | `wall`, `leaderPos`, `destination`, `threats: [{ pos, ageS }]` | `wallOn`, `shortest`, `reason` exactly, `detour` within 1e-3, `path` (same count, points within cm) |
 | `formation_Corner.json` / `Parity.Corner` (10.3) | `walls[]`, `leaderPos`, `leaderYaw`, `members: [{ role, pos }]`, `state: { left, right: { wall, end, role } or null }` | `state` exactly, `looks: [{ role, yaw }]` (same order: left first) |
@@ -260,8 +263,10 @@ Z stood on its far side. User: "они должны переходить либ�
   slot. Who stands at which place: 10.6.
 - Sectors in the trail column: LookYaw('column', ..., leaderYaw = the slot's trail yaw, the rear man Z: the leader's heading),
   passageWidth = the classifier's held corridor width, else `FormationTerrainRules::SideWidth(walls, slotPos, slotYaw)` - the
-  free width when a wall BODY (closest point, any orientation) is within classify.probe_side on a side (open side = probe_side),
-  null when both open: a wall beside a man -> the narrow sectors, nobody's herringbone look into it.
+  free width when a wall BODY (closest point) is within classify.probe_side on a side (open side = probe_side), null when both
+  open: a wall beside a man -> the narrow sectors, nobody's herringbone look into it. Walls ACROSS the heading
+  (`isAcrossHeading`, the classifier's classify.side_ignore_perp_deg band) are skipped (coordinator 2026-10-25: a wall ahead is
+  never a side wall; a look into its end is ClearLook's job).
 - HUD (in-game text is English, project rule): `guardHudText(requested, effective, level, memberCount)` in
   `Tools/TrainingGround/src/movement/labels.ts` -> "Echelon left -> Column (wall)" while the guard falls back, else the name;
   names `FORMATION_LABEL_EN`, menu labels `menuLabelEn` (Auto, Line, Diamond / Wedge / Pair, Echelon right, Blizzard diamond,
