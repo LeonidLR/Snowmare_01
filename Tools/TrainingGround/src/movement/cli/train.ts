@@ -6,9 +6,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveClient } from '../ai.ts';
+import { registerClients } from '../clients.ts';
 import { renderTrainReport, train } from '../train.ts';
 import { OUT_DIR, parseArgs, readConfigFile, readLayout } from './paths.ts';
 
+registerClients();
 const args = parseArgs(process.argv.slice(2));
 const str = (k: string, d: string) => (typeof args[k] === 'string' ? (args[k] as string) : d);
 const num = (k: string, d: number) => (Number.isFinite(Number(args[k])) && typeof args[k] === 'string' ? Number(args[k]) : d);
