@@ -153,17 +153,18 @@ User decisions of FORMATION_SECTORS.md v2.2 (contract 11). With the console 0 ev
 
 ### Rules v2.1 in the runtime (2026-10-26, branch formation/runtime-v21; behind `Codex.Formation.Sectors` and `Codex.Formation.V21`)
 
-User decisions of FORMATION_SECTORS.md v2.1 / v2.1.1 (contract 10): the squad never splits round a wall, the corner check,
+User decisions of FORMATION_SECTORS.md v2.1 / v2.1.1 (contract 10): the squad never splits round a wall, the bypass side "B", the corner check,
 the sharp-turn fold "5Б", nobody looks into a wall "6А". `Codex.Formation.V21 0` = the v2.2 runtime without any of it (A/B); `Codex.Formation.Sectors 0`
 = the old formation, untouched. Code: `Private/Characters/SquadSubsystemFormationGuard.cpp` (walls, trail, guard, trail column, corner watch,
-ClearLook, HUD text), the pure glue `Formation/FormationGuardRuntimeRules`
+ClearLook, HUD text), `SquadSubsystemFormationBypass.cpp` (bypass), the pure glue `Formation/FormationGuardRuntimeRules`
 (`CodexTactics.Formation.GuardRuntime.*`); the pipeline stays in `USquadSubsystem::UpdateFormationSectors`.
 - **What the player sees:** whatever formation is asked for (the terrain's, or a manual one), nobody is ever sent to the far side of a wall: an
   echelon whose men would stand behind a wall takes its mirror ("Echelon left -> Echelon right (wall)"), anything else folds into a column that
   walks the leader's own path - it bends round a corner and wraps a wall end ("Line -> Column (wall)"); the HUD's squad panel shows the line
   `Formation: ...` (amber while the guard falls back; English, `labels.ts guardHudText`). The request comes back by itself 5 m of path after it is
   whole again. Before a sharp turn (over 25 deg within 8 m of the leader's path) an echelon / line folds into that column too and opens after it.
-  Passing a free wall end on patrol,
+  Clicking a point behind a free-standing wall: the squad passes it on the shortest side - or, with an enemy seen / heard (or a reported threat)
+  within 20 s, on the side where the wall stands between it and the threat if that is at most 30 % longer. Passing a free wall end on patrol,
   the man closest to it looks round the corner (slicing the pie; also the leading man of a wall slide). Nobody looks into a wall closer than
   2.6 m, in manual formations too.
 - **The level as walls:** the v2.1 rules read FFormationWall, not traces: `USquadSubsystem::GatherFormationWalls` overlaps a thin slab at the probe
@@ -174,7 +175,7 @@ ClearLook, HUD text), the pure glue `Formation/FormationGuardRuntimeRules`
   (the trace probes still feed the terrain classifier and the allocator).
 - **Wall guard + trail column:** per frame `StepFormationGuard`: `FormationGuardRules::Resolve(WorldWalls, Requested, n, leader, heading, Ahead,
   TurnAhead, state, the leader's path this tick)` - Ahead = his pose `guard.lookahead` (500 cm) further along his path (`LeaderPathAhead`: his
-  path following's points from the piece he walks on, `FormationGuardRuntime::PathAheadFrom`, then his destination).
+  path following's points from the piece he walks on, `FormationGuardRuntime::PathAheadFrom`, then the bypass's waypoints and his destination).
   Level 2 -> `BuildTrailFrameSlots`: `FormationShapeRules::TrailSlots` on the leader's RECORDED path (`Sectors.Trail`, a point every 25 cm, 15 m
   kept, a teleport restarts it), the column's sectors per man by his room (`SideWidth`), the allocator's `back` = the column order. The requested
   formation is `GetFormationRequested()` (the menu's manual choice, else the terrain's), `GetFormationKind()` is the one in effect.
@@ -182,6 +183,14 @@ ClearLook, HUD text), the pure glue `Formation/FormationGuardRuntimeRules`
   places at once by minimal travel (`ReassignFormationPlaces`, no cooldown, any saving > 1 cm); the 100 cm gain rule stays for the way.
 - **Fallback slots on the leader's side (contract 7):** `ResolveReachableSlot(..., bLeaderSide)` rejects a fallback candidate a trace from the leader
   cannot reach (a walkable point behind a wall).
+- **Bypass "B":** a new own order of the leader in group mode (no box selection, no slide / wall order): `PlanFormationBypass` gathers the walls
+  along the leg, the first FREE-STANDING one blocking it (`FirstBlockingWall`, agent radius 35 cm; walls of rooms / corridors stay the nav mesh's
+  business) -> `FormationBypassRules::ChooseSide` with the known threats (`ReportFormationThreat` + `UTacticalSightSubsystem::GetSquadKnownEnemies`:
+  the enemies shown now and the last-known silhouettes with their age; without the squad's sight an enemy an operative has a clear line to) ->
+  the leader's order is steered through the chosen side's corners (`AOperativeCharacter::SteerOwnMoveVia` / `ResumeOwnMove`: his order, its
+  destination and serial stay his; a waypoint reached -> the next, the last -> on to his destination; his next order drops it). Every decision is
+  logged (`[Formation] bypass N: wall ... on the left (shielded, ...)`) and kept for smokes (`GetLastFormationBypass`). Not under a tutorial
+  confinement (its own path judgement wins).
 - **Corner watch:** `ApplyFormationCornerWatch` - `FormationCornerRules::Watch` on the places (actual positions) every frame of the move and of a
   wall slide; in walk mode the watcher's look replaces his slot's and is a FIXED look for the coverage allocator (the others cover what he leaves);
   a combat target / facing order still wins (the operative's facing priority). `GetFormationCornerLooks()`.
@@ -193,8 +202,9 @@ ClearLook, HUD text), the pure glue `Formation/FormationGuardRuntimeRules`
   The radial menu UI is still open.
 - **Checks:** `FormationLabSmoke` (check 4 on the requested formation; check 7 "never split" and check 9 "somebody looks round each passed wall end" on
   every run; R_E_corner: the turn fold; manual runs R_B_walls "echelon left" -> the mirror + HUD line, R_D_corridors "line" -> the trail column + HUD
-  line; R_E_corner_pass: the corner watch at W_E_14's free end). Stills: `Saved/Screenshots/FormationV21/` (`FormationLabSmoke shot`).
-- **Known limits / open:** the world walls are boxes only (a building made of one complex mesh is not seen by the guard / corner); the
+  line; R_E_corner_pass: the corner watch at W_E_14's free end), `FormationBypassSmoke` (lane G: the four routes + the shielded side from the squad's
+  own sight of a parked hound). Stills: `Saved/Screenshots/FormationV21/` (`FormationLabSmoke shot`, `FormationBypassSmoke shot`).
+- **Known limits / open:** the world walls are boxes only (a building made of one complex mesh is not seen by the guard / corner / bypass); the
   corner watch flips between the two exits of the lab's wide corridor when the leader walks exactly `classify.probe_side` (400 cm) from both walls (the
   rule's `Lateral > probe_side` edge); the HUD says "(wall)" for the turn fold too (labels.ts wording); a manual line's rear guard walks backwards
   to catch up a slot that jumps forward (rules v2.2 rear guard) and trails up to 5 m (not gated for manual formations, as in checks.ts).

@@ -184,6 +184,14 @@ TArray<FVector2D> USquadSubsystem::LeaderPathAhead(const AOperativeCharacter& Le
 		}
 	}
 	TArray<FVector2D> Path = FormationGuardRuntime::PathAheadFrom(Points, LeaderPos);
+	// A bypass steers him to its waypoint first: the rest of its waypoints, then his destination (sim: the route's next points).
+	if (Sectors.Bypass.bActive)
+	{
+		for (int32 Index = Sectors.Bypass.Index + 1; Index < Sectors.Bypass.Waypoints.Num(); ++Index)
+		{
+			Path.Add(Sectors.Bypass.Waypoints[Index]);
+		}
+	}
 	const FVector2D Destination(LeaderRef.GetLastMoveDestination());
 	if (FVector2D::Distance(Path.Last(), Destination) > FormationRuntime::StopRadiusCm)
 	{

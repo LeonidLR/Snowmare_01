@@ -422,6 +422,19 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	{
 		TryStartFormationSlide(LeaderRef, false);
 	}
+	// Rules v2.1 bypass "B": a new own order of the leader (not a slide) - the side round a free-standing wall on his way; then the steering.
+	if (bV21 && bNewLeaderOrder && !Sectors.bSlide && !Sectors.bWallOrder)
+	{
+		PlanFormationBypass(LeaderRef);
+	}
+	if (bV21)
+	{
+		UpdateFormationBypass(LeaderRef);
+	}
+	else
+	{
+		EndFormationBypass(TEXT("Codex.Formation.V21 0"));
+	}
 
 	// The formation: the wall order's wall, else by terrain with the wall layout only on arrival (the leader stood a moment).
 	const bool bLeaderStill = !bLeaderMoving && LeaderRef.GetVelocity().Size2D() < StandingSpeed;
@@ -848,7 +861,8 @@ void USquadSubsystem::ResetFormationState(const FVector& Forward)
 {
 	EndFormationWallOrder(TEXT("reset"));
 	EndWallGroup(TEXT("reset"));
-	// Rules v2.1: the guard, the trail and the corner watch start afresh (the menu's choice stays).
+	// Rules v2.1: the guard, the trail, the corner watch and the bypass start afresh (the menu's choice and reported threats stay).
+	EndFormationBypass(TEXT("reset"));
 	Sectors.Guard = FFormationGuardState();
 	Sectors.bTrail = false;
 	Sectors.Trail.Reset();
