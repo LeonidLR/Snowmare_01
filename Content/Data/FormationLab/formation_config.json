@@ -231,7 +231,7 @@
       "min": 0.5,
       "max": 1.0,
       "unit": "ratio",
-      "doc": "Patrol (walk) pace of the whole squad relative to the walk speed."
+      "doc": "Patrol (walk) pace of the whole squad relative to the walk speed (user 2026-10-25: ~80 %, kept - variant A)."
     },
     "pace.walk_speed": {
       "value": 220,
@@ -248,11 +248,11 @@
       "doc": "Run speed of the squad (sprint)."
     },
     "move.backward_mult": {
-      "value": 0.8,
+      "value": 0.9,
       "min": 0.5,
       "max": 1.0,
       "unit": "ratio",
-      "doc": "A member walking backwards moves at most this fraction of the walk speed."
+      "doc": "A member walking backwards moves at most this fraction of the walk speed (user 2026-10-25, variant A: 0.9 > the 0.8 patrol pace, so the rear man keeps up)."
     },
     "move.catchup_mult": {
       "value": 1.25,

@@ -42,7 +42,7 @@
   "pace.patrol": 0.8,
   "pace.walk_speed": 220,
   "pace.run_speed": 480,
-  "move.backward_mult": 0.8,
+  "move.backward_mult": 0.9,
   "move.catchup_mult": 1.25,
   "facing.turn_speed": 10,
   "scan.period": 3,
