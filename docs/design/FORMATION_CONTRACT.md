@@ -48,6 +48,25 @@ outward normal for `wall.*`), positive = right. Owned by the cloud session (Trai
     the heading (`isAcrossHeading`); the ahead / at_wall rays are evaluated first.
   - `echelon.sector_4` default 150 (was 125). Config v1.1: 51 keys (+ classify.side_ignore_perp_deg, column.narrow_width,
     column.narrow_fwd_deg, column.narrow_back_deg). Golden: + `formation_PassageWidth.json`; LookYaw cases carry passageWidth.
+- **v1.2 (2026-10-25, coordinator's decisions on the C++ agent's questions; design-doc fidelity)** - supersedes v1.1 where it differs:
+  - `scan.amp_lead` default 30 (range 10-40): the leader's patrol search 11-1 o'clock.
+  - LookYaw mode `forward` = the menu's "All forward" (10:30): walking, everyone looks at the heading whatever the formation.
+  - `Classify(walls, leaderPos, leaderYaw, destination, previousClass, timeInClass, config)`: `destination` = where the leader's
+    current move ends (null = none). at_wall ONLY on arrival: the leader within `classify.arrive_dist` (50) of the destination
+    AND a wall ahead within at_wall_dist (forward rays first, as v1.1); at_wall skips the hold (an arrival event). In the wall
+    layout the leader's own wall slot is his destination (his last step must not drop the layout). `rawClass` likewise.
+  - New `FormationShapeRules::HedgehogSlots(center, memberCount, yaw, config) -> [{role, pos, yaw}]`: the ring round the heat
+    source (leader = center + radius along yaw, then Slots('hedgehog'), look yaws = LookYaw halt). Golden
+    `formation_HedgehogSlots.json`.
+  - Column of three: no change (documented by a test): the wide herringbone keeps the triad rear gap; in a NARROW column of
+    three L's -165 (user Q1 = A) covers 5-7 o'clock.
+  - Wall tie: unchanged - Layout sends a tie right; the caller breaks travel ties with `FormationWallRules::BreakRoomTie` (TS too).
+  - User Q3 = A: `rawClass` - both sides blocked within classify.probe_side -> `corridor` regardless of width (the
+    `classify.corridor_width` condition and key are removed); PassageWidth / column.narrow_width pick narrow vs herringbone.
+  - User Q4 = A: `FormationFor(class, memberCount, blizzard)` - open + blizzard -> `blizzard`; every other class unchanged; the
+    menu choice overrides. The runtime passes the weather (blizzard phase) in.
+  - Config v1.2: 51 keys (+ classify.arrive_dist, - classify.corridor_width). Golden: Classify cases carry `destination` (1080),
+    LookYaw has mode forward, FormationFor has `blizzard` (30).
 - `FormationTerrainRules::Classify(layout walls, leaderPos, leaderYaw, previousClass, timeInClass, config) -> class`
   (open / wall_left / wall_right / corridor / at_wall) with hysteresis (like ColumnHoldTime) -> formation choice.
 - `FormationWallRules::Layout(wall segment, clickedSlot, memberCount, roomLeft, roomRight) -> slots[] + look yaws`
@@ -71,23 +90,26 @@ struct defaults, never from the current `formation_config.json`; an unknown key 
 `member_count`, `leader_pos`, ... are accepted too). Vectors are `[x, y]` cm; yaws UE degrees compared as angles (|normalize(a - b)| <=
 tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `null` = unset (TOptional). Enum strings: formation
 `diamond | wedge | column | line | echelon_left | echelon_right | wall | hedgehog | blizzard`, role `K | P | L | Z`, mode
-`walk | run | halt | wall`, class `open | wall_left | wall_right | corridor | at_wall`. Walls `{ a: [x, y], b: [x, y], thickness? }`
-(thickness missing = 0).
+`walk | run | halt | wall | forward` (v1.2), class `open | wall_left | wall_right | corridor | at_wall`. Walls
+`{ a: [x, y], b: [x, y], thickness? }` (thickness missing = 0).
 
 | File / test | `in` | `out` (compared) |
 |---|---|---|
 | `formation_Slots.json` / `Parity.Slots` | `formation`, `memberCount`, `leaderPos`, `leaderYaw` | `slots: [{ role, pos }]` - same count, same role ORDER (index 0 = the leader; `wall` -> `[]`), pos |
+| `formation_HedgehogSlots.json` / `Parity.HedgehogSlots` (v1.2) | `center`, `memberCount`, `yaw` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
 | `formation_LookYaw.json` / `Parity.LookYaw` | `role`, `formation`, `mode`, `memberCount`, `timeInPatrol`, `leaderYaw` (mode / formation `wall`: the wall's outward normal), `passageWidth` (v1.1; number, `null` or missing = not in a passage) | `yaw` |
-| `formation_Classify.json` / `Parity.Classify` | `walls[]`, `leaderPos`, `leaderYaw`, `previousClass` (string or `null` = no history), `timeInClass` | `class` (after the hysteresis) |
+| `formation_Classify.json` / `Parity.Classify` | `walls[]`, `leaderPos`, `leaderYaw`, `destination` (v1.2; `[x, y]`, `null` or missing = no move), `previousClass` (string or `null` = no history), `timeInClass` | `class` (after the hysteresis) |
 | `formation_PassageWidth.json` / `Parity.PassageWidth` (v1.1) | `walls[]`, `leaderPos`, `leaderYaw` | `width` (number or `null`; the field must be present) |
-| `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount` | `formation` |
+| `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount`, `blizzard` (v1.2; bool, missing = false) | `formation` |
 | `formation_WallLayout.json` / `Parity.WallLayout` | `wall`, `clickedSlot`, `memberCount`, `roomLeft`, `roomRight` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
 
-C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots`, `FormationSectorRules::LookYaw(role,
-formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`, `FormationTerrainRules::Classify(walls,
-leaderPos, leaderYaw, TOptional previousClass, timeInClass, config)` / `PassageWidth(walls, leaderPos, leaderYaw, config)` /
-`FormationFor(class, memberCount)`, `FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)`;
-config `FFormationConfig` + `FormationTuning`. Runs: v1 (ead0faf) 4563 cases, 0 mismatched; v1.1 (b4dcf9b) see the CHANGELOG.
+C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
+config)`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`,
+`FormationTerrainRules::Classify(walls, leaderPos, leaderYaw, TOptional previousClass, timeInClass, config, TOptional destination)`
+(C++ keeps destination LAST, defaulted, so v1.1 callers compile; TS order differs) / `ClassifyRaw(walls, leaderPos, leaderYaw, config,
+TOptional destination)` / `PassageWidth(walls, leaderPos, leaderYaw, config)` / `FormationFor(class, memberCount, bBlizzard = false)`,
+`FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)` / `BreakRoomTie`; config `FFormationConfig` +
+`FormationTuning`. Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2 (b5e2c7d) 7523 - each 0 mismatched.
 
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):

@@ -22,9 +22,10 @@ namespace FormationTerrainTestUtil
 		return Out;
 	}
 
-	EFormationTerrainClass Raw(const TArray<FFormationWall>& Walls, const FVector2D& Pos = FVector2D::ZeroVector, float Yaw = 0.f)
+	EFormationTerrainClass Raw(const TArray<FFormationWall>& Walls, const FVector2D& Pos = FVector2D::ZeroVector, float Yaw = 0.f,
+		const TOptional<FVector2D>& Destination = TOptional<FVector2D>())
 	{
-		return FormationTerrainRules::ClassifyRaw(Walls, Pos, Yaw, FFormationConfig());
+		return FormationTerrainRules::ClassifyRaw(Walls, Pos, Yaw, FFormationConfig(), Destination);
 	}
 }
 
@@ -38,9 +39,21 @@ bool FFormationTerrainClassesTest::RunTest(const FString&)
 	TestEqual(TEXT("A wall 3 m to the left: wall_left"), Raw({ Left }), EFormationTerrainClass::WallLeft);
 	TestEqual(TEXT("A wall 3 m to the right: wall_right"), Raw({ Right }), EFormationTerrainClass::WallRight);
 	TestEqual(TEXT("Both, 6 m apart (5.6 m free): corridor"), Raw({ Left, Right }), EFormationTerrainClass::Corridor);
-	TestEqual(TEXT("A 7.6 m street fits the diamond: open"), Raw({ MakeWall(-2000.0, -380.0, 2000.0, -380.0), MakeWall(-2000.0, 380.0, 2000.0, 380.0) }),
+	// v1.2 (user decision): ANY passage walled on both sides within classify.probe_side is a column, whatever its width.
+	const TArray<FFormationWall> Street = { MakeWall(-2000.0, -380.0, 2000.0, -380.0), MakeWall(-2000.0, 380.0, 2000.0, 380.0) };
+	TestEqual(TEXT("A 7.6 m street: corridor (column)"), Raw(Street), EFormationTerrainClass::Corridor);
+	const TOptional<float> StreetWidth = FormationTerrainRules::PassageWidth(Street, FVector2D::ZeroVector, 0.f, FFormationConfig());
+	TestTrue(TEXT("... with the wide (herringbone) sectors: 720 cm >= column.narrow_width"), StreetWidth.IsSet()
+		&& FMath::IsNearlyEqual(StreetWidth.GetValue(), 720.f, 0.01f) && StreetWidth.GetValue() >= FFormationConfig().ColumnNarrowWidth);
+	// v1.2: at_wall only on ARRIVAL at the move's destination.
+	const TArray<FFormationWall> Ahead = { MakeWall(120.0, -500.0, 120.0, 500.0, 20.f) };
+	TestEqual(TEXT("A wall 1.2 m ahead, arriving: at_wall"), Raw(Ahead, FVector2D::ZeroVector, 0.f, FVector2D(20.0, 0.0)), EFormationTerrainClass::AtWall);
+	TestEqual(TEXT("The same wall, walking on (destination 10 m away): not at_wall"), Raw(Ahead, FVector2D::ZeroVector, 0.f, FVector2D(-1000.0, 0.0)),
 		EFormationTerrainClass::Open);
-	TestEqual(TEXT("A wall 1.2 m ahead: at_wall"), Raw({ MakeWall(120.0, -500.0, 120.0, 500.0, 20.f) }), EFormationTerrainClass::AtWall);
+	TestEqual(TEXT("The same wall, no move: not at_wall"), Raw(Ahead), EFormationTerrainClass::Open);
+	TestTrue(TEXT("Arriving within classify.arrive_dist"), FormationTerrainRules::IsArriving(FVector2D::ZeroVector, FVector2D(50.0, 0.0), FFormationConfig())
+		&& !FormationTerrainRules::IsArriving(FVector2D::ZeroVector, FVector2D(51.0, 0.0), FFormationConfig())
+		&& !FormationTerrainRules::IsArriving(FVector2D::ZeroVector, TOptional<FVector2D>(), FFormationConfig()));
 	TestEqual(TEXT("A wall 5 m ahead: not at_wall yet"), Raw({ MakeWall(500.0, -100.0, 500.0, 100.0, 20.f) }), EFormationTerrainClass::Open);
 	TestEqual(TEXT("A wall 6 m to the left: out of the probe, open"), Raw({ MakeWall(-2000.0, -600.0, 2000.0, -600.0) }), EFormationTerrainClass::Open);
 	// Rotated + shifted scene: the same left wall seen from a leader heading +Y (left = +X).
@@ -118,6 +131,11 @@ bool FFormationTerrainHysteresisTest::RunTest(const FString&)
 	Fresh.Step(None, FVector2D::ZeroVector, 0.f, 0.05f, Config);
 	TestEqual(TEXT("A wall right after entering open: held open"), Fresh.Step(LeftWall, FVector2D::ZeroVector, 0.f, 0.05f, Config), EFormationTerrainClass::Open);
 	TestTrue(TEXT("Its time runs on"), FMath::IsNearlyEqual(Fresh.TimeInClass, 0.05f));
+	// v1.2: at_wall is an arrival EVENT - it skips the hold.
+	TestEqual(TEXT("Arrival at a wall right after a change: at_wall at once"), FormationTerrainRules::Classify({ MakeWall(120.0, -500.0, 120.0, 500.0, 20.f) },
+		FVector2D::ZeroVector, 0.f, EFormationTerrainClass::Corridor, 0.1f, Config, FVector2D::ZeroVector), EFormationTerrainClass::AtWall);
+	TestEqual(TEXT("Tracker: arrival skips the hold"), Fresh.Step({ MakeWall(120.0, -500.0, 120.0, 500.0, 20.f) }, FVector2D::ZeroVector, 0.f, 0.05f, Config,
+		FVector2D::ZeroVector), EFormationTerrainClass::AtWall);
 	return true;
 }
 
@@ -132,6 +150,12 @@ bool FFormationTerrainMappingTest::RunTest(const FString&)
 	TestEqual(TEXT("Wall on the right: echelon left"), FormationTerrainRules::FormationFor(EFormationTerrainClass::WallRight, 3), EFormationKind::EchelonLeft);
 	TestEqual(TEXT("Narrow: column"), FormationTerrainRules::FormationFor(EFormationTerrainClass::Corridor, 4), EFormationKind::Column);
 	TestEqual(TEXT("Arrival at a wall: the wall layout"), FormationTerrainRules::FormationFor(EFormationTerrainClass::AtWall, 4), EFormationKind::Wall);
+	// v1.2 (user decision): open ground in a blizzard -> the blizzard tight diamond; walls / passages keep their rules.
+	TestEqual(TEXT("Open in a blizzard: blizzard diamond"), FormationTerrainRules::FormationFor(EFormationTerrainClass::Open, 4, true), EFormationKind::Blizzard);
+	TestEqual(TEXT("Open in a blizzard, 3: blizzard"), FormationTerrainRules::FormationFor(EFormationTerrainClass::Open, 3, true), EFormationKind::Blizzard);
+	TestEqual(TEXT("Corridor in a blizzard: still the column"), FormationTerrainRules::FormationFor(EFormationTerrainClass::Corridor, 4, true), EFormationKind::Column);
+	TestEqual(TEXT("Wall left in a blizzard: still echelon right"), FormationTerrainRules::FormationFor(EFormationTerrainClass::WallLeft, 4, true),
+		EFormationKind::EchelonRight);
 	return true;
 }
 
@@ -164,7 +188,7 @@ bool FFormationTerrainPassageWidthTest::RunTest(const FString&)
 		EFormationTerrainClass::Corridor);
 	TestFalse(TEXT("No passage at a dead end"), FormationTerrainRules::PassageWidth({ Across }, FVector2D::ZeroVector, 0.f, Config).IsSet());
 	// Closer, the at_wall rays (first, unfiltered) see it.
-	TestEqual(TEXT("Arriving at the dead end: at_wall"), Raw({ Across }, FVector2D(40.0, 0.0)), EFormationTerrainClass::AtWall);
+	TestEqual(TEXT("Arriving at the dead end: at_wall"), Raw({ Across }, FVector2D(40.0, 0.0), 0.f, FVector2D(40.0, 0.0)), EFormationTerrainClass::AtWall);
 	return true;
 }
 

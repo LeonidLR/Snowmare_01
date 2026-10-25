@@ -165,6 +165,30 @@ bool FFormationShapeBlizzardHedgehogTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_SHAPE_TEST(FFormationShapeHedgehogSlotsTest, "HedgehogRoundTheHeatSource")
+bool FFormationShapeHedgehogSlotsTest::RunTest(const FString&)
+{
+	const FFormationConfig Config;
+	const FVector2D Fire(1234.5, -678.25);
+	for (int32 Count = 2; Count <= 4; ++Count)
+	{
+		const TArray<FFormationSlot> Ring = FormationShapeRules::HedgehogSlots(Fire, Count, 180.f, Config);
+		TestEqual(FString::Printf(TEXT("Hedgehog %d: everybody has a slot"), Count), Ring.Num(), Count);
+		for (const FFormationSlot& Slot : Ring)
+		{
+			// Backs to the fire, faces out; on the ring centred on the heat source.
+			TestTrue(FString::Printf(TEXT("Hedgehog %d: %s on the ring round the fire"), Count, FormationNames::ToString(Slot.Role)),
+				FMath::IsNearlyEqual(FVector2D::Distance(Slot.Position, Fire), static_cast<double>(Config.HedgehogRadius), 0.01));
+			const double Facing = FVector2D::DotProduct((Slot.Position - Fire).GetSafeNormal(), FormationMath::Forward(Slot.Yaw));
+			TestTrue(FString::Printf(TEXT("Hedgehog %d: %s back to the fire (dot %.2f)"), Count, FormationNames::ToString(Slot.Role), Facing), Facing > 0.999);
+		}
+	}
+	const TArray<FFormationSlot> Four = FormationShapeRules::HedgehogSlots(Fire, 4, 180.f, Config);
+	TestTrue(TEXT("The leader stands the radius in front of the fire along the yaw"), Four.Num() == 4
+		&& FVector2D::Distance(Four[0].Position, FVector2D(1104.5, -678.25)) < 0.01 && FMath::IsNearlyEqual(FMath::Abs(Four[0].Yaw), 180.f));
+	return true;
+}
+
 #undef FORMATION_SHAPE_TEST
 
 #endif

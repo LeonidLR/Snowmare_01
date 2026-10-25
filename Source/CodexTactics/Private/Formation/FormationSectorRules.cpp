@@ -34,7 +34,7 @@ namespace FormationSectorRules
 		const bool bP = Role == EFormationRole::Right;
 		const bool bL = Role == EFormationRole::Left;
 		const bool bZ = Role == EFormationRole::Rear;
-		if (Mode == EFormationMode::Run)
+		if (Mode == EFormationMode::Run || Mode == EFormationMode::Forward)
 		{
 			return 0.f;
 		}

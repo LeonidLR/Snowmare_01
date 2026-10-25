@@ -39,6 +39,7 @@ namespace FormationNames
 		case EFormationMode::Run: return TEXT("run");
 		case EFormationMode::Halt: return TEXT("halt");
 		case EFormationMode::Wall: return TEXT("wall");
+		case EFormationMode::Forward: return TEXT("forward");
 		default: return TEXT("walk");
 		}
 	}
@@ -84,7 +85,7 @@ namespace FormationNames
 
 	bool Parse(const FString& Name, EFormationMode& Out)
 	{
-		return ParseFormationEnumName(Name, static_cast<int32>(EFormationMode::Wall) + 1, Out);
+		return ParseFormationEnumName(Name, static_cast<int32>(EFormationMode::Forward) + 1, Out);
 	}
 
 	bool Parse(const FString& Name, EFormationTerrainClass& Out)
