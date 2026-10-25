@@ -9,7 +9,9 @@
  * where each member of a squad stands for a formation shape, relative to the leader's position and heading.
  * Tests: CodexTactics.Formation.Shape.*, parity CodexTactics.Formation.Parity.Slots.
  *
- * Roles by squad size (Roles): <= 1 = K; 2 = K, Z (the pair's partner); 3 = K, P, L; >= 4 = K, P, L, Z. Offsets below are
+ * Roles by squad size (Roles): <= 1 = K; 2 = K, Z (the pair's partner); 3 = K, P, Z (v2.2: the triad's rear man walks backwards like
+ * the four's, P sweeps both flanks); >= 4 = K, P, L, Z. With three: Z at TriadRearBack straight back (diamond / wedge), one spacing
+ * behind P (column), on the left (line), last in both echelons. Offsets below are
  * (forward, right) from the leader, cm; K is always on the leader (0, 0):
  * - Diamond / wedge: P (-SlotBackOffset, +SlotSideOffset), L (-SlotBackOffset, -SlotSideOffset), Z (-DiamondRearBack, 0); with 2 members
  *   the partner Z (-PairBackOffset, +PairSideOffset) behind the right shoulder.

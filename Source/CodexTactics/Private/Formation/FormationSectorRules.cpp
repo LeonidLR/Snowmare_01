@@ -16,8 +16,13 @@ namespace FormationSectorRules
 		return Center + Amp * Dwell(static_cast<float>(FMath::Sin(Angle)), Exp);
 	}
 
-	static float SectorEchelonValue(int32 Index, const FFormationConfig& Config)
+	static float SectorEchelonValue(int32 Index, int32 MemberCount, const FFormationConfig& Config)
 	{
+		// v2.2: with three the last man (Z) takes the rear sector (sector_4), so 5-7 o'clock stays watched.
+		if (MemberCount == 3 && Index == 2)
+		{
+			return Config.EchelonSector4;
+		}
 		switch (Index)
 		{
 		case 0: return Config.EchelonSectorLead;
@@ -56,6 +61,11 @@ namespace FormationSectorRules
 			if (bP)
 			{
 				return -Config.WallFlankDeg;
+			}
+			if (N == 3)
+			{
+				// v2.2: the triad's Z on the left end looks 8 (by position, not role).
+				return Config.WallFlankDeg;
 			}
 			return -Config.WallEndDeg;
 		}
@@ -123,7 +133,7 @@ namespace FormationSectorRules
 		case EFormationKind::EchelonLeft:
 		{
 			const float OpenSide = Formation == EFormationKind::EchelonRight ? 1.f : -1.f;
-			return OpenSide * SectorEchelonValue(FormationShapeRules::EchelonIndex(Formation, Role, N), Config);
+			return OpenSide * SectorEchelonValue(FormationShapeRules::EchelonIndex(Formation, Role, N), N, Config);
 		}
 		case EFormationKind::Hedgehog:
 			if (bK)

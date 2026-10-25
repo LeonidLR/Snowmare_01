@@ -117,7 +117,9 @@ bool FFormationGuardChainTest::RunTest(const FString&)
 	using namespace FormationV21TestUtil;
 	using FPair = TPair<ER, ER>;
 	TestTrue(TEXT("Echelon right K-L-P-Z"), FormationGuardRules::ChainPairs(EK::EchelonRight, 4) == TArray<FPair>({ FPair(ER::Commander, ER::Left), FPair(ER::Left, ER::Right), FPair(ER::Right, ER::Rear) }));
-	TestTrue(TEXT("Column of 3: K-P-L"), FormationGuardRules::ChainPairs(EK::Column, 3) == TArray<FPair>({ FPair(ER::Commander, ER::Right), FPair(ER::Right, ER::Left) }));
+	TestTrue(TEXT("Column of 3 (v2.2 triad): K-P-Z"), FormationGuardRules::ChainPairs(EK::Column, 3) == TArray<FPair>({ FPair(ER::Commander, ER::Right), FPair(ER::Right, ER::Rear) }));
+	TestTrue(TEXT("Wedge of 3: P-Z"), FormationGuardRules::ChainPairs(EK::Wedge, 3) == TArray<FPair>({ FPair(ER::Right, ER::Rear) }));
+	TestTrue(TEXT("Line of 3: Z-K-P"), FormationGuardRules::ChainPairs(EK::Line, 3) == TArray<FPair>({ FPair(ER::Rear, ER::Commander), FPair(ER::Commander, ER::Right) }));
 	TestTrue(TEXT("Diamond: P-Z, L-Z"), FormationGuardRules::ChainPairs(EK::Diamond, 4) == TArray<FPair>({ FPair(ER::Right, ER::Rear), FPair(ER::Left, ER::Rear) }));
 	TestTrue(TEXT("Hedgehog: the ring"), FormationGuardRules::ChainPairs(EK::Hedgehog, 4) == TArray<FPair>({ FPair(ER::Commander, ER::Right), FPair(ER::Right, ER::Rear),
 		FPair(ER::Rear, ER::Left), FPair(ER::Left, ER::Commander) }));
@@ -193,13 +195,21 @@ bool FFormationAssignTest::RunTest(const FString&)
 		}
 		return Out;
 	};
-	// Echelon right (L 1st step, P 2nd) -> the column: L takes the 1st place, P the 2nd (nobody passes through anybody).
-	const TArray<FFormationSlot> ColumnSlots = FormationShapeRules::Slots(EK::Column, 3, FVector2D::ZeroVector, 0.f, C);
-	const TArray<FVector2D> From = Followers(FormationShapeRules::Slots(EK::EchelonRight, 3, FVector2D::ZeroVector, 0.f, C));
+	// Echelon right of four (L 1st step, P 2nd, Z 3rd) -> the column (P first, L second, Z): L takes the 1st place, P the 2nd.
+	const TArray<FFormationSlot> ColumnSlots = FormationShapeRules::Slots(EK::Column, 4, FVector2D::ZeroVector, 0.f, C);
+	const TArray<FVector2D> From = Followers(FormationShapeRules::Slots(EK::EchelonRight, 4, FVector2D::ZeroVector, 0.f, C));
 	const TArray<FVector2D> To = Followers(ColumnSlots);
 	const TArray<int32> Pick = FormationAssignRules::AssignPlaces(From, To);
-	TestTrue(TEXT("P (far) takes the 2nd place, L (near) the 1st"), Pick.Num() == 2 && ColumnSlots[1 + Pick[0]].Role == ER::Left && ColumnSlots[1 + Pick[1]].Role == ER::Right);
-	TestFalse(TEXT("The two paths do not cross"), FormationMath::SegmentBlocked(From[0], To[Pick[0]], { Seg(From[1].X, From[1].Y, To[Pick[1]].X, To[Pick[1]].Y, 0.f) }, 0.0));
+	TestTrue(TEXT("P (far) takes the 2nd place, L (near) the 1st, Z the last"), Pick.Num() == 3 && ColumnSlots[1 + Pick[0]].Role == ER::Left
+		&& ColumnSlots[1 + Pick[1]].Role == ER::Right && ColumnSlots[1 + Pick[2]].Role == ER::Rear);
+	for (int32 I = 0; I < 3; ++I)
+	{
+		for (int32 J = I + 1; J < 3; ++J)
+		{
+			TestFalse(FString::Printf(TEXT("Fold: paths %d and %d do not cross"), I, J), FormationMath::SegmentBlocked(From[I], To[Pick[I]],
+				{ Seg(From[J].X, From[J].Y, To[Pick[J]].X, To[Pick[J]].Y, 0.f) }, 0.0));
+		}
+	}
 	// Ties keep the identity; empty input -> empty.
 	TestTrue(TEXT("Nobody moves: identity"), FormationAssignRules::AssignPlaces({ FVector2D(0.0, 0.0), FVector2D(100.0, 0.0) }, { FVector2D(0.0, 0.0), FVector2D(100.0, 0.0) })
 		== TArray<int32>({ 0, 1 }));

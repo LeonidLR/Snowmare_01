@@ -119,6 +119,9 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_Bypass.json` / `Parity.Bypass` (10.2) | `wall`, `leaderPos`, `destination`, `threats: [{ pos, ageS }]` | `wallOn`, `shortest`, `reason` exactly, `detour` within 1e-3, `path` (same count, points within cm) |
 | `formation_Corner.json` / `Parity.Corner` (10.3) | `walls[]`, `leaderPos`, `leaderYaw`, `members: [{ role, pos }]`, `state: { left, right: { wall, end, role } or null }` | `state` exactly, `looks: [{ role, yaw }]` (same order: left first) |
 | `formation_Assign.json` / `Parity.Assign` (10.6) | `members`, `places` (`[[x, y]]`) | `places` (index per member) exactly |
+| `formation_Cover.json` / `Parity.Cover` (11.2) | `walls[]`, `leaderPos`, `heading`, `members: [{ role, pos, back }]` (K first), `mode` (walk / halt), `t`, `fixed: [{ role, yaw }]` | `rearGuard`; `looks: [{ role, yaw }]` (same order: K, the rear guard, other fixed, the others); `shares: [{ role, from, to, primary }]` (from / to within deg, primary as an angle) |
+| `formation_CoverStatic.json` / `Parity.CoverStatic` (11.3) | `walls[]`, `members: [{ role, pos }]`, `fixed: [{ role, yaw }]`, `free` (roles) | `looks: [{ role, yaw }]` in `free`'s order |
+| `formation_Slide.json` / `Parity.Slide` (11.5) | `wall`, `startSlots: [{ role, pos, yaw }]` (K first), `leaderPos`, `destination`, `t` | `active`, `lead` / `rearGuard` (role or null), `order` exactly; `leaderTarget` within cm, `normalYaw` as an angle, `targets: [{ role, pos, yaw }]` |
 
 C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
 config)`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`,
@@ -137,7 +140,10 @@ yaw, currentYaw, config)`, `FormationBypassRules::ChooseSide(wall, leaderPos, de
 `FormationCornerRules::Watch(walls, leaderPos, leaderYaw, members, FFormationCornerState state, config) / CornerAhead`,
 `FormationAssignRules::AssignPlaces(members, places)`; geometry `FormationMath::SegmentBlocked / SegSegDist / DistToWall /
 ClosestOnSegment / NormYaw / DirOf / YawOfD` (double, = geometry.ts). Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2
-(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515 - each 0 mismatched.
+(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515, v2.2 (1f8bc25) 12079 - each 0 mismatched. v2.2
+adds `FormationCoverRules::Allocate(walls, leaderPos, heading, members, mode, t, config, fixed) -> TOptional<FFormationCoverResult>` /
+`AllocateStatic(walls, members, fixed, free, config)` and `FormationWallRules::Slide(wall, startSlots, leaderPos, destination, t, config)
+-> FFormationSlideResult`.
 
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):

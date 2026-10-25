@@ -16,7 +16,8 @@ namespace FormationShapeRules
 		}
 		if (MemberCount == 3)
 		{
-			return { EFormationRole::Commander, EFormationRole::Right, EFormationRole::Left };
+			// v2.2 (user): the triad has a rear man walking backwards like the four; P sweeps both flanks.
+			return { EFormationRole::Commander, EFormationRole::Right, EFormationRole::Rear };
 		}
 		return { EFormationRole::Commander, EFormationRole::Right, EFormationRole::Left, EFormationRole::Rear };
 	}
@@ -27,6 +28,11 @@ namespace FormationShapeRules
 		if (MemberCount == 2)
 		{
 			Order = { EFormationRole::Commander, EFormationRole::Rear };
+		}
+		else if (MemberCount == 3)
+		{
+			// v2.2: three = K, P, Z both ways (Z last, the rear man; who stands where is FormationAssignRules' minimal travel).
+			Order = { EFormationRole::Commander, EFormationRole::Right, EFormationRole::Rear };
 		}
 		else if (Formation == EFormationKind::EchelonRight)
 		{
@@ -62,7 +68,8 @@ namespace FormationShapeRules
 			{
 				return FVector2D(-Config.SlotBackOffset, -Config.SlotSideOffset);
 			}
-			return FVector2D(-Config.DiamondRearBack, 0.f);
+			// v2.2: the triad's rear man straight behind at TriadRearBack (the diamond's at DiamondRearBack).
+			return FVector2D(MemberCount == 3 ? -Config.TriadRearBack : -Config.DiamondRearBack, 0.f);
 		case EFormationKind::Blizzard:
 			if (bPair || Role == EFormationRole::Right)
 			{
@@ -82,14 +89,16 @@ namespace FormationShapeRules
 			{
 				return FVector2D(-Config.ColumnBaseBack - Config.ColumnSpacing, -Config.ColumnStagger);
 			}
-			return FVector2D(-Config.ColumnBaseBack - 2.f * Config.ColumnSpacing, 0.f);
+			// v2.2: with three the rear man closes up behind P.
+			return FVector2D(-Config.ColumnBaseBack - (MemberCount == 3 ? 1.f : 2.f) * Config.ColumnSpacing, 0.f);
 		case EFormationKind::Line:
 			if (bPair || Role == EFormationRole::Right)
 			{
 				return FVector2D(0.f, Config.LineSpacing);
 			}
-			if (Role == EFormationRole::Left)
+			if (Role == EFormationRole::Left || MemberCount == 3)
 			{
+				// v2.2: with three Z stands on the left.
 				return FVector2D(0.f, -Config.LineSpacing);
 			}
 			return FVector2D(0.f, 2.f * Config.LineSpacing);

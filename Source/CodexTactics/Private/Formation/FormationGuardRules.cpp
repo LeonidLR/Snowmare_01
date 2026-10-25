@@ -38,14 +38,24 @@ namespace FormationGuardRules
 		case EFormationKind::EchelonRight: Chain({ ER::Commander, ER::Left, ER::Right, ER::Rear }, false); break;
 		case EFormationKind::EchelonLeft:
 		case EFormationKind::Column: Chain({ ER::Commander, ER::Right, ER::Left, ER::Rear }, false); break;
-		case EFormationKind::Line: Chain({ ER::Left, ER::Commander, ER::Right, ER::Rear }, false); break;
+		case EFormationKind::Line:
+			// v2.2: the line of three runs Z, K, P (Z on the left).
+			if (MemberCount == 3)
+			{
+				Chain({ ER::Rear, ER::Commander, ER::Right }, false);
+			}
+			else
+			{
+				Chain({ ER::Left, ER::Commander, ER::Right, ER::Rear }, false);
+			}
+			break;
 		case EFormationKind::Hedgehog: Chain({ ER::Commander, ER::Right, ER::Rear, ER::Left }, true); break;
 		case EFormationKind::Diamond:
 		case EFormationKind::Wedge:
 		case EFormationKind::Blizzard:
+			Pairs.Emplace(ER::Right, ER::Rear);
 			if (MemberCount >= 4)
 			{
-				Pairs.Emplace(ER::Right, ER::Rear);
 				Pairs.Emplace(ER::Left, ER::Rear);
 			}
 			break;

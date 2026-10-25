@@ -111,6 +111,8 @@ struct CODEXTACTICS_API FFormationConfig
 	float SlotBackOffset = 280.f;
 	/** [diamond.rear_back] Rear man Z straight behind the leader, cm. */
 	float DiamondRearBack = 560.f;
+	/** [triad.rear_back] v2.2: the triad's rear man Z straight behind the leader (diamond / wedge of three), cm. */
+	float TriadRearBack = 420.f;
 	/** [slot.min_spacing] Two members closer than this count as a spacing failure (checks only), cm. */
 	float SlotMinSpacing = 80.f;
 	/** [pair.side_offset] Pair: the partner to the right of the leader, cm. */
@@ -232,6 +234,18 @@ struct CODEXTACTICS_API FFormationConfig
 	float CornerHoldDist = 200.f;
 	/** [corner.peek_dist] v2.1: once past the end, he looks at the point this far behind the wall's far face, cm. */
 	float CornerPeekDist = 300.f;
+	/** [rear.share_half] v2.2: the rear guard's search half-width round his centre on the move, deg. */
+	float RearShareHalf = 30.f;
+	/** [rear.wall_shift_deg] v2.2: the rear guard's centre shifts this far to the open side with walls on one side of his slot, deg. */
+	float RearWallShiftDeg = 30.f;
+	/** [coverage.max_gap_deg] v2.2: an open gap no wider than this may stay open (stretching a sweep for it opens more), deg. */
+	float CoverageMaxGapDeg = 60.f;
+	/** [coverage.max_sweep] v2.2: a member's sweep amplitude cap round his share's middle, deg. */
+	float CoverageMaxSweep = 90.f;
+	/** [slide.max_off_wall] v2.2: a destination within this of the wall surface (same wall, squad's side) is a wall slide, cm. */
+	float SlideMaxOffWall = 200.f;
+	/** [slide.lead_out_deg] v2.2: the slide's leading / trailing ends look along the wall turned this far outward, deg. */
+	float SlideLeadOutDeg = 20.f;
 };
 
 /** Names, clock math and the shared helpers of the formation rules. */
