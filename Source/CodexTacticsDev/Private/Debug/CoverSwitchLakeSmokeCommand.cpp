@@ -8,6 +8,10 @@
 // geometry of the user's screenshot. Root cause found with it: two faces in one plane counted as ONE wall (CoverTraceRules::IsSameWall:
 // normal + plane only), so the click on the other building was a shimmy "along his wall" and the switch never offered; now a face past an
 // exposed edge is another wall. The tutorial is skipped (its locks), the enemies parked; nothing is saved.
+// Isolation (fix 2026-10-25): SKIP TUTORIAL wakes the dormant A4 zombie (BP_Enemy_MilitaryZombie_C_1, tutorial binding "dormant",
+// 2026-10-23) WHERE IT WAS PLACED one tick after stage 0 parked everyone - 28 m east of the rocks, inside the 50 m cover threat range. A known
+// threat is the corner hold (by design): he leaned out at both corners and the peek's extra lean (CornerLeanExtraPackRCm 11) stayed on the
+// mesh, so step 3's "mesh offset < 1" never held. Stage 1 parks again after the wake and checks that no enemy is within the threat range.
 //  1 the Commander in cover at the north rock's west face, its south end;
 //  2 hovering the south rock's west face near its north edge and in its middle: the ghost on that SAME-facing face at its north corner,
 //    mirrored (he faces right at his corner -> left there), the dash path;
@@ -34,6 +38,7 @@
 #include "GameFramework/HUD.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverGhostActor.h"
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
@@ -127,6 +132,23 @@ namespace CoverSwitchLakeSmoke
 	bool Settled(const AOperativeCharacter* Op)
 	{
 		return Op && Op->bInCover && !Op->bShimmying && !Op->IsMoving() && Op->GetVelocity().Size2D() < 5.f && Op->GetCoverEntryMeshOffset().Size() < 1.f;
+	}
+
+	/** The nearest living enemy to At (2D) and its distance in cm; an empty name when there is none. */
+	FString NearestEnemy(UWorld* World, const FVector& At, float& OutDistance)
+	{
+		FString Name;
+		OutDistance = TNumericLimits<float>::Max();
+		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+		{
+			const float Distance = static_cast<float>(FVector::Dist2D(At, It->GetActorLocation()));
+			if (!It->IsDying() && Distance < OutDistance)
+			{
+				OutDistance = Distance;
+				Name = It->GetName();
+			}
+		}
+		return Name;
 	}
 
 	/** A hit on the south rock's west face at Y (a horizontal trace from the west at chest height). */
@@ -224,6 +246,22 @@ namespace CoverSwitchLakeSmoke
 			{
 				return true;
 			}
+			// The skip's in-place wake of the dormant A4 zombie came a tick after stage 0 parked everyone (UTutorialSubsystem::TickDormantEnemies):
+			// park whatever stands near the rocks again - a known threat would be the corner hold, its lean on the mesh (see the header).
+			const FVector Rocks(State.FaceX, (State.NorthSouthEndY + State.SouthNorthEndY) * 0.5f, State.GroundZ);
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				if (FVector::Dist2D(It->GetActorLocation(), Rocks) < 50000.f)
+				{
+					SmokeUtils::ParkEnemyFarAway(*It);
+					It->SetActorTickEnabled(false);
+				}
+			}
+			float EnemyCm = 0.f;
+			const FString Enemy = NearestEnemy(World, Rocks, EnemyCm);
+			Check(State, EnemyCm > FCoverFacingConfig().MaxThreatDistanceCm,
+				FString::Printf(TEXT("1: no enemy within the cover threat range (%.0f m) of the rocks - nearest %s %.0f m"),
+					FCoverFacingConfig().MaxThreatDistanceCm / 100.f, Enemy.IsEmpty() ? TEXT("none") : *Enemy, EnemyCm / 100.f));
 			// In cover at the north rock's west face, 50 cm from its south end.
 			FCoverSlot Slot;
 			const bool bSlot = CoverTraceRules::FindCoverSlotAt(World, FVector(State.FaceX, State.NorthSouthEndY + 50.f, State.GroundZ + 90.f), FVector(1.f, 0.f, 0.f), Slot)
@@ -337,9 +375,12 @@ namespace CoverSwitchLakeSmoke
 			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
 			const FString Clip = Anim ? Anim->GetLastCoverSwitchClip() : FString();
 			const FCoverSlot& Arrived = Op->GetCoverSlot();
-			Check(State, bDone, FString::Printf(TEXT("3: in cover at the south rock after %.1f s (wall %s; in cover %d, shimmying %d, moving %d, speed %.0f, mesh offset %.1f)"),
+			float EnemyCm = 0.f;
+			const FString Enemy = NearestEnemy(World, Op->GetActorLocation(), EnemyCm);
+			Check(State, bDone, FString::Printf(TEXT("3: in cover at the south rock after %.1f s (wall %s; in cover %d, shimmying %d, moving %d, speed %.0f, mesh offset %.1f; corner aim %d, threat %d, peek %d, nearest enemy %s %.0f m)"),
 				State.StageTime, Arrived.WallActor.IsValid() ? *Arrived.WallActor->GetName() : TEXT("none"), Op->bInCover ? 1 : 0, Op->bShimmying ? 1 : 0,
-				Op->IsMoving() ? 1 : 0, Op->GetVelocity().Size2D(), Op->GetCoverEntryMeshOffset().Size()));
+				Op->IsMoving() ? 1 : 0, Op->GetVelocity().Size2D(), Op->GetCoverEntryMeshOffset().Size(), Op->IsCornerAimActive() ? 1 : 0,
+				Op->IsCoverThreatActive() ? 1 : 0, Op->IsPeekingRoundCorner() ? 1 : 0, Enemy.IsEmpty() ? TEXT("none") : *Enemy, EnemyCm / 100.f));
 			Check(State, State.MaxDashSpeed >= 450.f && Op->GetCoverSwitchCount() > State.SwitchesBefore && Clip.Contains(TEXT("_sprint_")),
 				FString::Printf(TEXT("3: a quick dash (top speed %.0f cm/s) arriving through the sprint run-in %s"), State.MaxDashSpeed, *Clip));
 			Check(State, Arrived.WallNormal.X < -0.9 && FVector::Dist2D(Arrived.WorldLocation, State.GhostAt) < 10.f && Op->CoverFacing == State.GhostFacing
