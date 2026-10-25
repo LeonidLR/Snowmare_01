@@ -43,6 +43,7 @@
   },
   "cvars": {
     "Codex.Enemy.MeleeCloseIn": "1",
+    "Codex.Enemy.OperativeAttackersBeforeObjects": "2",
     "Codex.Bot.AssaultClearRadius": "1800",
     "Codex.Perception.SightRangeScale": "0.9"
   },

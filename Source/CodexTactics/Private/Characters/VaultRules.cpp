@@ -19,3 +19,17 @@ FVector VaultRules::Position(const FVector& Start, const FVector& Landing, float
 	Result.Z += FMath::Sin(T * PI) * Apex;
 	return Result;
 }
+
+FVector VaultRules::NavAreaExtent(const FBox& LocalBounds, const FVector& Scale, float PaddingCm)
+{
+	if (!LocalBounds.IsValid)
+	{
+		return FVector(100.f, 100.f, 100.f); // UNavModifierComponent's own failsafe
+	}
+	const FVector Abs = Scale.GetAbs();
+	const FVector Half(FMath::Max(FMath::Abs(LocalBounds.Min.X), FMath::Abs(LocalBounds.Max.X)) * Abs.X,
+		FMath::Max(FMath::Abs(LocalBounds.Min.Y), FMath::Abs(LocalBounds.Max.Y)) * Abs.Y,
+		FMath::Max(FMath::Abs(LocalBounds.Min.Z), FMath::Abs(LocalBounds.Max.Z)) * Abs.Z);
+	const float Pad = FMath::Max(0.f, PaddingCm);
+	return FVector(Half.X + Pad, Half.Y + Pad, Half.Z + 50.f);
+}

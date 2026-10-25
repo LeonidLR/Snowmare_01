@@ -1,4 +1,5 @@
 #include "Interactables/VaultNavigation.h"
+#include "Characters/VaultRules.h"
 #include "Interactables/TripwireActor.h"
 #include "Level/CrawlGapActor.h"
 #include "Components/PrimitiveComponent.h"
@@ -162,6 +163,9 @@ namespace VaultNavigation
 			Primitive->SetCanEverAffectNavigation(false);
 		}
 		UNavModifierComponent* Modifier = NewObject<UNavModifierComponent>(Actor, VaultNavModifierName);
+		// The shapes no longer affect navigation, so the modifier falls back to its failsafe box: size it to the real obstacle
+		// (2026-10-25; the 2 x 2 m default left the ends of a 3 m barricade open to the enemies' paths).
+		Modifier->FailsafeExtent = VaultRules::NavAreaExtent(Actor->CalculateComponentsBoundingBoxInLocalSpace(false), Actor->GetActorScale3D());
 		Modifier->SetAreaClass(UNavArea_Vault::StaticClass());
 		Modifier->RegisterComponent();
 	}

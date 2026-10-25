@@ -1,8 +1,10 @@
 // Dev-only console command for a headless enemy AI check on L_MovementTest (exploration, so the squad holds fire):
 //   Scripts/smoke.ps1 -Command CodexTactics.EnemyAISmoke
 // Godot enemy_base.gd / enemy_frost_*.gd: per-type affinities / armor (brute kinetic 0.25, armor 0.75); frost halves
-// the speed; a hound near a burning barrel flees («FEAR OF FIRE»); a hound picks a close turret over the squad; a
-// barricade in the way gets smashed; a spitter with a clear line shoots the commander.
+// the speed; a hound near a burning barrel flees («FEAR OF FIRE»); operatives first (game designer 2026-10-25, it was the Godot
+// turret / barricade pull): a lone hound ignores a close turret for the squad and a lone brute does not hack at a free-standing
+// barricade between it and the commander (EnemyPrioritySmoke has the saturated / unreachable cases); a spitter with a clear line
+// shoots the commander.
 
 #include "CoreMinimal.h"
 
@@ -130,7 +132,7 @@ namespace EnemyAISmoke
 			State.Barrel->Extinguish();
 			State.Hound->Destroy();
 
-			// A close turret pulls a hound off the squad.
+			// Operatives first (2026-10-25): a close turret no longer pulls a lone hound off the squad (Godot: 0.5 x distance).
 			FActorSpawnParameters Params;
 			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			ATurretActor* Turret = World->SpawnActor<ATurretActor>(SmokeUtils::LevelPoint(World, FVector(1500.f, -1500.f, 60.f)), FRotator::ZeroRotator, Params);
@@ -150,8 +152,9 @@ namespace EnemyAISmoke
 			{
 				Generator->bGeneratorBroken = false;
 			}
-			Check(State, Turret && Hound && Picked == Turret, FString::Printf(TEXT("hound goes for a close turret (picked %s, turret broken %d)"),
-				*GetNameSafe(Picked), Turret && Turret->IsBroken() ? 1 : 0));
+			Check(State, Turret && Hound && Picked && Picked->IsA<AOperativeCharacter>() && !Hound->IsObjectDistractionAllowed(),
+				FString::Printf(TEXT("a lone hound ignores a close turret for the squad (picked %s, turret broken %d)"), *GetNameSafe(Picked),
+					Turret && Turret->IsBroken() ? 1 : 0));
 			if (Hound)
 			{
 				Hound->Destroy();
@@ -161,7 +164,7 @@ namespace EnemyAISmoke
 				Turret->Destroy();
 			}
 
-			// A barricade between a brute and the commander gets smashed.
+			// A free-standing barricade between a lone brute and the commander: it goes round (operatives first, 2026-10-25).
 			AEnemyCharacter* Brute = Spawn(World, EEnemyArchetype::Brute, FVector(800.f, 0.f, 100.f));
 			State.Barricade = World->SpawnActor<ABarricadeActor>(SmokeUtils::LevelPoint(World, FVector(620.f, 0.f, 50.f)),
 				SmokeUtils::LayoutTransform(World).Rotator() + FRotator(0.f, 90.f, 0.f), Params);
@@ -177,7 +180,10 @@ namespace EnemyAISmoke
 				return true;
 			}
 			const float Health = State.Barricade.IsValid() ? State.Barricade->FindComponentByClass<UHealthComponent>()->GetCurrentHealth() : 0.f;
-			Check(State, Health < State.BarricadeHealth, FString::Printf(TEXT("brute smashes the barricade in its way (%.0f -> %.0f)"), State.BarricadeHealth, Health));
+			const AActor* BruteTarget = State.Hound.IsValid() ? State.Hound->GetCurrentTarget() : nullptr;
+			Check(State, Health >= State.BarricadeHealth && BruteTarget && BruteTarget->IsA<AOperativeCharacter>(),
+				FString::Printf(TEXT("a lone brute leaves the free-standing barricade alone (%.0f -> %.0f) and goes for %s"), State.BarricadeHealth, Health,
+					*GetNameSafe(BruteTarget)));
 			if (State.Hound.IsValid())
 			{
 				State.Hound->Destroy();
@@ -268,7 +274,7 @@ namespace EnemyAISmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.EnemyAISmoke"),
-		TEXT("Dev check: enemy affinities, frost slow, fire fear, turret priority, barricade smashing, spitter fire; logs PASS/FAIL, then exits."),
+		TEXT("Dev check: enemy affinities, frost slow, fire fear, operatives before a turret / barricade, spitter fire; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

@@ -57,7 +57,10 @@ namespace VaultNavigation
 
 	/**
 	 * Lets the operatives' paths cross the actor: its shapes stop cutting the navmesh and a UNavArea_Vault modifier covers
-	 * it instead (enemies still go round). Called from BeginPlay of barricades and for tagged level actors.
+	 * it instead (enemies still go round). Called from BeginPlay of barricades and for tagged level actors. The area is the
+	 * actor's own collision plus VaultRules::NavAreaPaddingCm round it (VaultRules::NavAreaExtent); before 2026-10-25 it was the engine's 2 x 2 m
+	 * failsafe square (the shapes were already off the navmesh), which left the last 50 cm of each end of a 3 m barricade open
+	 * to the enemies' paths - a zombie walking round it ran into the solid end and stuck there.
 	 */
 	CODEXTACTICS_API void MakeVaultable(AActor* Actor);
 

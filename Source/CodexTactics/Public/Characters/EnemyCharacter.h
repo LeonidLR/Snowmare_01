@@ -400,6 +400,24 @@ public:
 	/** Smokes: forces the victim (the behaviour tick may re-pick it; freeze the enemy with CustomTimeDilation 0 first). */
 	void SetCurrentTargetForTesting(AActor* Target) { CurrentTarget = Target; }
 
+	/**
+	 * Operatives first (the game designer's rule 2026-10-25): FindTarget's last verdict of EnemyAIRules::MayBeDistractedByObjects -
+	 * true when a barricade / turret may take this enemy off the squad (every operative it could go for already has
+	 * GetOperativeAttackersBeforeObjects() other enemies on him, or none is left to go for).
+	 */
+	bool IsObjectDistractionAllowed() const { return bObjectDistractionAllowed; }
+
+	/**
+	 * 2026-10-25: can this enemy get within bite reach of Target on foot? A navmesh path query with its own filter (no vaulting
+	 * over barricades; partial paths allowed) whose end must pass EnemyAIRules::PathEndReachesTarget. False as well while the
+	 * stuck detector has Target on its no-way list (UnreachableUntil). Never a guess against the squad: no navmesh, a target off
+	 * the navmesh or a failed query count as reachable (the stuck detector decides then). Cached for 0.5 s per target.
+	 */
+	bool IsTargetReachableOnFoot(const AActor* Target) const;
+
+	/** Codex.Enemy.OperativeAttackersBeforeObjects (ai_tuning.json "cvars"; code default 2; 0 = the Godot weighting). */
+	static int32 GetOperativeAttackersBeforeObjects();
+
 	/** Shared enemy tuning (Godot enemy_* / spitter_preferred_range keys). */
 	FEnemyAIConfig AIConfig;
 
@@ -914,6 +932,14 @@ protected:
 	bool bFleeingFire = false;
 	/** Set by FindTarget (see IsBravingFire). */
 	mutable bool bBravingFire = false;
+	/** Set by FindTarget (see IsObjectDistractionAllowed). */
+	mutable bool bObjectDistractionAllowed = true;
+	/** IsTargetReachableOnFoot cache: the target, when it was checked (world seconds) and the verdict. */
+	mutable TWeakObjectPtr<const AActor> ReachCheckTarget;
+	mutable double ReachCheckTime = -1.0;
+	mutable bool bReachCheckResult = true;
+	/** The last obstacle this enemy walked round for an operative (logged once per obstacle). */
+	TWeakObjectPtr<AActor> LoggedObstacleSkip;
 	/** Godot last_attacker_source (a turret hit pulls large enemies to turrets). */
 	FString LastAttackerSource;
 	TWeakObjectPtr<AActor> CurrentTarget;
@@ -947,6 +973,11 @@ protected:
 	 * FeelsHeat): a visibility trace at EnemyAIRules::HeatLineHeightCm, pawns and IgnoreActor passed through.
 	 */
 	bool HasClearHeatLine(const FVector& SourceLocation, const AActor* SourceOwner, const FVector& Location, const AActor* IgnoreActor) const;
+	/**
+	 * 2026-10-25: where to walk to hit Object (a turret): just outside it on this enemy's side, else the nearest navmesh point round
+	 * it - its box cuts a navmesh hole wider than a MoveToActor query reaches. False without a navmesh / any point.
+	 */
+	bool FindObjectApproachPoint(const AActor* Object, const FVector& Feet, FVector& OutPoint) const;
 	/** Barricade / turret in the way within 2.2 m (Godot _find_blocking_barricade). */
 	AActor* FindBlockingObstacle(const AActor* Target) const;
 	/** Godot _attack_barricade (brutes hit twice as hard) and melee on turrets / the generator. */

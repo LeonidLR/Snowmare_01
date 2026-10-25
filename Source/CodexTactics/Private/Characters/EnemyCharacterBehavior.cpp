@@ -23,6 +23,10 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
+#include "NavigationData.h"
+#include "NavigationSystem.h"
+#include "NavFilters/NavigationQueryFilter.h"
 
 namespace EnemyCharacterLocal
 {
@@ -35,6 +39,18 @@ namespace EnemyCharacterLocal
 	 */
 	static TAutoConsoleVariable<int32> CVarMeleeCloseIn(TEXT("Codex.Enemy.MeleeCloseIn"), 0,
 		TEXT("1 (ai_tuning.json, the game value since 2026-10-18): melee enemies close in to their bite reach (MoveToActor acceptance minus the capsule radii); 0 (code default, A/B): the old AttackRange x 0.5 stop (1.65-1.75 m off a hound's 1.5 m reach)"));
+
+	/**
+	 * Operatives first (the game designer's rule 2026-10-25, EnemyAIRules::MayBeDistractedByObjects): a barricade or a turret takes an
+	 * enemy off the squad only once every operative it could go for already has this many OTHER enemies on him. Data: ai_tuning.json
+	 * "cvars" (the game value), -dpcvars= wins; 0 = the Godot weighting (turrets pull small enemies at 0.5 x distance, any barricade
+	 * within 2.2 m towards the target is smashed).
+	 */
+	static TAutoConsoleVariable<int32> CVarOperativeAttackersBeforeObjects(TEXT("Codex.Enemy.OperativeAttackersBeforeObjects"), 2,
+		TEXT("Other enemies already on EVERY operative an enemy could go for before a barricade / turret may distract it (2026-10-25, default 2); 0 = the old Godot weighting"));
+
+	/** How often IsTargetReachableOnFoot re-runs its path query for the same target, s. */
+	constexpr double ReachCheckSeconds = 0.5;
 }
 
 void AEnemyCharacter::TickBehavior(float DeltaTime)
@@ -242,8 +258,23 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		}
 	}
 
-	// 1. A barricade / turret in the way is smashed first.
-	if (AActor* Obstacle = FindBlockingObstacle(Target))
+	// 1. A barricade / turret in the way is smashed first - for an operative target only when he cannot be reached on foot or the
+	// squad is saturated (operatives first, 2026-10-25: a lone zombie walked into a barricade next to the operative it had engaged
+	// and hacked at it, the Godot rule; the navmesh walks it round a free-standing barricade).
+	AActor* Obstacle = FindBlockingObstacle(Target);
+	// (The path query runs only for an obstacle next to an enemy that may not be distracted.)
+	if (Obstacle && Target->IsA<AOperativeCharacter>() && !bObjectDistractionAllowed
+		&& !EnemyAIRules::ShouldSmashBlockingObstacle(true, IsTargetReachableOnFoot(Target), bObjectDistractionAllowed))
+	{
+		if (LoggedObstacleSkip.Get() != Obstacle)
+		{
+			LoggedObstacleSkip = Obstacle;
+			UE_LOG(LogCodexTactics, Log, TEXT("[EnemyAI] %s: %s is in the way but %s is reachable on foot - round it, operatives first"),
+				*EnemyDisplayName, *Obstacle->GetName(), *Target->GetName());
+		}
+		Obstacle = nullptr; // round it to the operative
+	}
+	if (Obstacle)
 	{
 		if (AIC)
 		{
@@ -321,6 +352,12 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		{
 			RequestAIMoveToLocation(AIC, Order.MovePoint, 60.f); // round his side, then in (the detour latch above ends it)
 		}
+		else if (FVector Approach; Target->IsA<ATurretActor>() && FindObjectApproachPoint(Target, Feet, Approach))
+		{
+			// 2026-10-25: a turret cuts a hole in the navmesh wider than the move query's 50 cm reach, so MoveToActor never found a
+			// path to it ("no way to TurretActor" after 3 s, every time): walk to the navmesh edge on the near side instead.
+			RequestAIMoveToLocation(AIC, Approach, 30.f);
+		}
 		else
 		{
 			// Sprint 08: an operative it does not perceive now is hunted at his last known spot.
@@ -364,6 +401,96 @@ bool AEnemyCharacter::IsTargetUsableForTactics(const AActor* Candidate) const
 		return false;
 	}
 	return !(bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && IsInFearZone(GodotPosition(Candidate), Candidate));
+}
+
+int32 AEnemyCharacter::GetOperativeAttackersBeforeObjects()
+{
+	return FMath::Max(0, EnemyCharacterLocal::CVarOperativeAttackersBeforeObjects.GetValueOnGameThread());
+}
+
+bool AEnemyCharacter::IsTargetReachableOnFoot(const AActor* Target) const
+{
+	UWorld* World = GetWorld();
+	if (!Target || !World)
+	{
+		return true;
+	}
+	const double Now = World->GetTimeSeconds();
+	if (ReachCheckTarget.Get() == Target && ReachCheckTime >= 0.0 && Now - ReachCheckTime < EnemyCharacterLocal::ReachCheckSeconds)
+	{
+		return bReachCheckResult;
+	}
+	ReachCheckTarget = Target;
+	ReachCheckTime = Now;
+	bReachCheckResult = true;
+	// The stuck detector found no way there (3 s without 1 m of progress): that is a real "unreachable".
+	if (const double* Until = UnreachableUntil.Find(Target); Until && *Until > Now)
+	{
+		bReachCheckResult = false;
+		return false;
+	}
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	const ANavigationData* NavData = Nav ? Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), GetNavAgentLocation()) : nullptr;
+	if (!NavData)
+	{
+		return true; // no navmesh: no evidence against the squad
+	}
+	const AAIController* AIC = Cast<AAIController>(GetController());
+	const FSharedConstNavQueryFilter Filter = UNavigationQueryFilter::GetQueryFilter(*NavData, this,
+		AIC ? AIC->GetDefaultNavigationFilterClass() : nullptr);
+	const FVector Extent(100.f, 100.f, 250.f);
+	FNavLocation Start;
+	FNavLocation Goal;
+	const FVector TargetFeet = GodotPosition(Target) - FVector(0.f, 0.f, 100.f);
+	// The goal is projected with the enemy's own filter: a crouched operative's feet inside a barricade's vault strip snap to the
+	// walkable ground beside it, not onto the strip the enemy may not enter (that made every cover spot look "unreachable").
+	if (!Nav->ProjectPointToNavigation(GetNavAgentLocation(), Start, Extent, NavData, Filter)
+		|| !Nav->ProjectPointToNavigation(TargetFeet, Goal, Extent, NavData, Filter))
+	{
+		return true; // off the navmesh: unknown, the stuck detector decides
+	}
+	FPathFindingQuery Query(this, *NavData, Start.Location, Goal.Location, Filter);
+	Query.SetAllowPartialPaths(true);
+	const FPathFindingResult Result = Nav->FindPathSync(GetNavAgentPropertiesRef(), Query);
+	if (!Result.IsSuccessful() || !Result.Path.IsValid() || Result.Path->GetPathPoints().IsEmpty())
+	{
+		return true; // a failed query is no evidence either
+	}
+	bReachCheckResult = EnemyAIRules::PathEndReachesTarget(Result.Path->GetPathPoints().Last().Location, GodotPosition(Target), AttackRange);
+	UE_LOG(LogCodexTactics, Verbose, TEXT("[EnemyAI] %s: path to %s %s (partial %d, end %.0f cm off)"), *EnemyDisplayName, *Target->GetName(),
+		bReachCheckResult ? TEXT("reaches him") : TEXT("stops short"), Result.IsPartial() ? 1 : 0,
+		FVector::Dist2D(Result.Path->GetPathPoints().Last().Location, Target->GetActorLocation()));
+	return bReachCheckResult;
+}
+
+bool AEnemyCharacter::FindObjectApproachPoint(const AActor* Object, const FVector& Feet, FVector& OutPoint) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	const ANavigationData* NavData = Nav ? Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), GetNavAgentLocation()) : nullptr;
+	if (!Object || !NavData)
+	{
+		return false;
+	}
+	const AAIController* AIC = Cast<AAIController>(GetController());
+	const FSharedConstNavQueryFilter Filter = UNavigationQueryFilter::GetQueryFilter(*NavData, this,
+		AIC ? AIC->GetDefaultNavigationFilterClass() : nullptr);
+	const FVector Base = GodotPosition(Object);
+	FVector Side = FVector(Feet.X - Base.X, Feet.Y - Base.Y, 0.f).GetSafeNormal();
+	if (Side.IsNearlyZero())
+	{
+		Side = GetActorForwardVector();
+	}
+	// Just outside the object on this enemy's side (in bite reach), else the nearest navmesh point round it.
+	const float Radius = Object->GetSimpleCollisionRadius();
+	FNavLocation Spot;
+	if (Nav->ProjectPointToNavigation(Base + Side * (Radius + GetSimpleCollisionRadius() + 10.f), Spot, FVector(60.f, 60.f, 250.f), NavData, Filter)
+		|| Nav->ProjectPointToNavigation(Base, Spot, FVector(Radius + 100.f, Radius + 100.f, 250.f), NavData, Filter))
+	{
+		OutPoint = Spot.Location;
+		return true;
+	}
+	return false;
 }
 
 AActor* AEnemyCharacter::FindTarget() const
@@ -429,6 +556,30 @@ AActor* AEnemyCharacter::FindTarget() const
 		}
 		bAnyUsable |= Candidates[Index].bUsable;
 	}
+	// Operatives first (the game designer's rule 2026-10-25): a turret may only distract it once every operative it could go for already
+	// has Codex.Enemy.OperativeAttackersBeforeObjects OTHER enemies on him (their current target); the same verdict lets TickBehavior
+	// smash a barricade in the way of a reachable operative (EnemyAIRules::ShouldSmashBlockingObstacle).
+	{
+		TMap<const AActor*, int32> Engaged;
+		for (const AEnemyCharacter* Other : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+		{
+			const AActor* OtherTarget = Other && Other != this && !Other->IsDying() && Other->HealthComponent && Other->HealthComponent->IsAlive()
+				? Other->CurrentTarget.Get() : nullptr;
+			if (OtherTarget && OtherTarget->IsA<AOperativeCharacter>())
+			{
+				++Engaged.FindOrAdd(OtherTarget);
+			}
+		}
+		TArray<int32, TInlineAllocator<8>> OtherAttackers;
+		for (int32 Index = 0; Index < Actors.Num(); ++Index)
+		{
+			if (Candidates[Index].Kind == EEnemyTargetKind::Operative && Candidates[Index].bUsable)
+			{
+				OtherAttackers.Add(Engaged.FindRef(Actors[Index]));
+			}
+		}
+		bObjectDistractionAllowed = EnemyAIRules::MayBeDistractedByObjects(OtherAttackers, GetOperativeAttackersBeforeObjects());
+	}
 	bBravingFire = false;
 	if (!bAnyUsable)
 	{
@@ -454,7 +605,8 @@ AActor* AEnemyCharacter::FindTarget() const
 	}
 	const bool bTurretHit = LastAttackerSource.Contains(TEXT("Турель")) || LastAttackerSource.Contains(TEXT("Turret")); // cyrillic-ok: legacy Russian data
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
-	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit);
+	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit,
+		bObjectDistractionAllowed);
 	if (Actors.IsValidIndex(Index))
 	{
 		// Sprint 14: a melee enemy goes for a knocked-down operative close by (he takes x1.33, cannot hit back); spitters keep their pick.
