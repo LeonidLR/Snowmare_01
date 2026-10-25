@@ -16,6 +16,7 @@
 #include "Characters/SquadAutonomySubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Combat/WaveVictorySubsystem.h"
 #include "Misc/PackageName.h"
@@ -1106,6 +1107,26 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	{
 		GameState->SetObjectField(TEXT("kill_stats"), SaveKillStats(Victory->GetKillStats()));
 	}
+	// 2026-10-25 (game designer: the horde flyover only once per level, then only a new enemy type): what the flyovers showed.
+	if (const UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+	{
+		const FHordeIntroMemory& Memory = Intro->GetMemory();
+		TSharedRef<FJsonObject> HordeIntro = MakeShared<FJsonObject>();
+		HordeIntro->SetBoolField(TEXT("wide_shown"), Memory.bWideShotShown);
+		TArray<FString> Types;
+		for (const EEnemyArchetype Type : Memory.ShownTypes)
+		{
+			Types.Add(SaveEnumName(Type));
+		}
+		Types.Sort(); // a stable order (the save diff of SaveRoundTripSmoke)
+		TArray<TSharedPtr<FJsonValue>> TypeValues;
+		for (const FString& Type : Types)
+		{
+			TypeValues.Add(MakeShared<FJsonValueString>(Type));
+		}
+		HordeIntro->SetArrayField(TEXT("shown_types"), TypeValues);
+		GameState->SetObjectField(TEXT("horde_intro"), HordeIntro);
+	}
 	// Environment (2026-10-22, docs/systems/environment-weather.md §12): the whole day cycle / weather / snow cover state, so a load
 	// continues the same hour, weather, blend, dwell, RNG and the snow lying on the ground (a reopened level re-resolved them).
 	if (const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World); Environment && Environment->IsInitialised())
@@ -1749,6 +1770,29 @@ void USaveGameSubsystem::RestoreGameState(FSaveRestoreContext& Context)
 		Victory && (*GameState)->TryGetObjectField(TEXT("kill_stats"), KillStats) && KillStats && KillStats->IsValid())
 	{
 		Victory->RestoreKillStats(LoadKillStats(*KillStats));
+	}
+	// 2026-10-25: the level's horde flyover memory (older saves: none - the level's first horde flies over again).
+	const TSharedPtr<FJsonObject>* HordeIntro = nullptr;
+	if (UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+	{
+		FHordeIntroMemory Memory;
+		if ((*GameState)->TryGetObjectField(TEXT("horde_intro"), HordeIntro) && HordeIntro && HordeIntro->IsValid())
+		{
+			Memory.bWideShotShown = SaveBool(*HordeIntro, TEXT("wide_shown"), false);
+			const TArray<TSharedPtr<FJsonValue>>* TypeValues = nullptr;
+			if ((*HordeIntro)->TryGetArrayField(TEXT("shown_types"), TypeValues) && TypeValues)
+			{
+				for (const TSharedPtr<FJsonValue>& Value : *TypeValues)
+				{
+					EEnemyArchetype Type = EEnemyArchetype::Base;
+					if (Value.IsValid() && LoadEnumName(Value->AsString(), Type))
+					{
+						Memory.ShownTypes.Add(Type);
+					}
+				}
+			}
+		}
+		Intro->RestoreMemory(Memory);
 	}
 	if (Squad)
 	{

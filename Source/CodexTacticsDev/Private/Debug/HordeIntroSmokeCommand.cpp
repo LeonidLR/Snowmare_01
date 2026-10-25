@@ -13,11 +13,13 @@
 // 4. (game designer 2026-10-25: no "Start the next wave" plate) wave 1 cleared -> straight into the rest before wave 2: no victory
 //    panel / WaveCleared phase, no «Start Battle» button, the banner counts down "NEXT WAVE IN", the world runs; NOBODY clicks
 //    anything and wave 2 breaks through on its own when the rest runs out (real time, intro armed);
-// 5. wave 2's flyover shows only the new types (cutter, marksman); Esc (simulated key) skips it during a type shot: camera at once
-//    on the leader, unlocked, the free pause at 0.02, no menu;
+// 5. (game designer 2026-10-25: the flyover only once per level, then only a NEW enemy type) wave 2's flyover has NO wide shot and
+//    flies only to the new types (cutter, marksman); Esc (simulated key) skips it during a type shot: camera at once on the leader,
+//    unlocked, the free pause at 0.02, no menu;
 // 6. wave 3 (the rest cut short like the bot does) before its trigger: a click is a normal click (no pause), Esc opens the free
 //    pause at once (no flyover);
-// 7. a load resumes wave 3 (RestoreForLoad): it comes suddenly again; known types only: wide shot + return; a click skips.
+// 7. a load resumes wave 3 (RestoreForLoad): it comes suddenly again; every type known on this level -> at the trigger the alert and
+//    the free pause, but NO flyover (camera stays on the squad, unlocked); Space resumes.
 // Framing (game designer play-test 2026-10-22, "the fly-in sometimes shows nothing"): a level hound parked 60 m away (NOT part
 // of the wave, like the lake's patrols) must not pull the frame; every settled wide shot holds the wave's main cluster in the
 // camera frustum (feet and heads), visible, each at least 2.5 % of the frame height; a type shot holds its runner, >= 12 %.
@@ -406,7 +408,7 @@ namespace HordeIntroSmoke
 				State.bFlyoverSeen = true;
 				CheckTrigger(State, World, *Flow, *Intro, *Camera);
 				FString ExpectedLabels;
-				for (const FHordeIntroShot& Shot : HordeIntroRules::BuildShotList(LiveTypes(World), TSet<EEnemyArchetype>(), Config))
+				for (const FHordeIntroShot& Shot : HordeIntroRules::BuildShotList(LiveTypes(World), FHordeIntroMemory(), Config))
 				{
 					ExpectedLabels += (ExpectedLabels.IsEmpty() ? TEXT("") : TEXT(" ")) + HordeIntroRules::ShotLabel(Shot);
 				}
@@ -439,6 +441,7 @@ namespace HordeIntroSmoke
 					Check(State, Intro->GetShownTypes().Contains(Type), FString::Printf(TEXT("type %s marked shown"),
 						*StaticEnum<EEnemyArchetype>()->GetNameStringByValue(static_cast<int64>(Type))));
 				}
+				Check(State, Intro->GetMemory().bWideShotShown, TEXT("the level remembers its wide shot (2026-10-25: once per level)"));
 				if (AEnemyCharacter* Decoy = State.Decoy.Get())
 				{
 					Decoy->Destroy(); // the later waves count every enemy of the map
@@ -616,18 +619,22 @@ namespace HordeIntroSmoke
 		{
 			if (!Intro->IsFlyoverActive())
 			{
-				return State.StageTime < Config.MaxWaitSeconds + 4.f || Finish(State, false);
+				return State.StageTime < Config.MaxWaitSeconds + Config.SpawnGraceSeconds + 4.f || Finish(State, false);
 			}
+			// 2026-10-25: the level showed its horde once - wave 2 flies only to its NEW types, no wide shot.
 			const TSet<EEnemyArchetype> Shown1 = { EEnemyArchetype::FrostHound, EEnemyArchetype::Frostbitten };
 			bool bNoOld = true;
+			bool bNoWide = true;
 			int32 TypeShots = 0;
 			for (const FHordeIntroShot& Shot : Intro->GetShots())
 			{
 				bNoOld &= !(Shot.Kind == EHordeIntroShotKind::Type && Shown1.Contains(Shot.Archetype));
+				bNoWide &= Shot.Kind != EHordeIntroShotKind::Wide;
 				TypeShots += Shot.Kind == EHordeIntroShotKind::Type ? 1 : 0;
 			}
-			Check(State, bNoOld && TypeShots >= 1 && Intro->GetShots()[0].Kind == EHordeIntroShotKind::Wide,
-				FString::Printf(TEXT("wave 2 shots \"%s\": the running mass + only the new types"), *ShotLabels(*Intro)));
+			Check(State, bNoOld && bNoWide && TypeShots >= 1 && Intro->GetShots()[0].Kind == EHordeIntroShotKind::Type
+				&& Intro->GetShots().Last().Kind == EHordeIntroShotKind::Return,
+				FString::Printf(TEXT("wave 2 shots \"%s\": only the new types, no wide shot of the horde again"), *ShotLabels(*Intro)));
 			Next(State);
 			return true;
 		}
@@ -744,32 +751,32 @@ namespace HordeIntroSmoke
 			return true;
 		case 11:
 		{
-			if (!State.bKeyDown)
+			// Every type of wave 3 was shown on this level: at the trigger the alert + the free pause, NO flyover (2026-10-25).
+			if (!Flow->IsFreePause())
 			{
-				if (!Intro->IsFlyoverActive())
+				if (Intro->IsFlyoverActive())
 				{
-					return State.StageTime < Config.MaxWaitSeconds + 4.f || Finish(State, false);
+					Check(State, false, FString::Printf(TEXT("wave 3 of known types flew over again: \"%s\""), *ShotLabels(*Intro)));
+					return Finish(State, false);
 				}
-				TrackFlyover(State, *Intro, *Camera, Leader);
-				if (State.Total - State.ShotStartTime < 0.8f)
-				{
-					return true;
-				}
-				const TArray<FHordeIntroShot>& Shots = Intro->GetShots();
-				const bool bKnownOnly = Shots.Num() == 2 && Shots[0].Kind == EHordeIntroShotKind::Wide
-					&& FMath::IsNearlyEqual(Shots[0].Seconds, Config.RepeatWideShotSeconds) && Shots[1].Kind == EHordeIntroShotKind::Return;
-				Check(State, bKnownOnly, FString::Printf(TEXT("wave 3 again (known types): \"%s\""), *ShotLabels(*Intro)));
-				Squad->ClearPlannedOrder(Leader);
-				PressKey(PC, EKeys::LeftMouseButton, IE_Pressed);
-				State.bKeyDown = true;
-				return true;
+				return State.StageTime < Config.MaxWaitSeconds + Config.SpawnGraceSeconds + 4.f || Finish(State, false);
 			}
-			PressKey(PC, EKeys::LeftMouseButton, IE_Released);
-			State.bKeyDown = false;
-			Check(State, !Intro->IsIntroPending() && Intro->GetSkippedCount() == 3, TEXT("a click skipped the flyover"));
-			Check(State, Camera->GetFollowTarget() == Leader && !Camera->IsCinematicLocked(), TEXT("camera on the leader"));
-			Check(State, Squad->GetPlannedOrderCount() == 0 && Flow->IsFreePause() && bPauseDilation,
-				TEXT("the click gave no order, the free pause stays"));
+			FString Known;
+			for (const EEnemyArchetype Type : LiveTypes(World))
+			{
+				Known += FString::Printf(TEXT("%s%s%s"), Known.IsEmpty() ? TEXT("") : TEXT(", "),
+					*StaticEnum<EEnemyArchetype>()->GetNameStringByValue(static_cast<int64>(Type)),
+					Intro->GetShownTypes().Contains(Type) ? TEXT("") : TEXT(" (NEW)"));
+			}
+			Check(State, HordeIntroRules::BuildShotList(LiveTypes(World), Intro->GetMemory(), Config).IsEmpty(),
+				FString::Printf(TEXT("wave 3 holds only types shown on this level: %s"), *Known));
+			Check(State, !Intro->IsFlyoverActive() && Intro->GetStage() == EHordeIntroStage::Idle && Intro->GetStartedCount() == State.StartedBefore,
+				FString::Printf(TEXT("wave 3 of known types: no flyover (%d flyovers in all)"), Intro->GetStartedCount()));
+			Check(State, Intro->GetAlertWidget() && Intro->GetAlertWidget()->IsInViewport() && Intro->GetAlertTitle().ToString() == TEXT("HORDE INCOMING"),
+				TEXT("... the «HORDE INCOMING» alert still shows"));
+			Check(State, bPauseDilation && Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges,
+				TEXT("... the free pause still opens (0.02, charges 3/3)"));
+			Check(State, !Camera->IsCinematicLocked() && Camera->GetFollowTarget() == Leader, TEXT("... the camera stays on the squad, unlocked"));
 			PC->SpacePressed();
 			PC->SpaceReleased();
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && FMath::IsNearlyEqual(WorldDilation(World), 1.f, 0.001f),

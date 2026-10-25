@@ -29,6 +29,7 @@
 #include "CodexTactics.h"
 #include "Combat/DeathCinematicSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Combat/WaveVictorySubsystem.h"
 #include "Containers/Ticker.h"
@@ -277,6 +278,18 @@ namespace SaveCoverageSmoke
 			Out.Add(TEXT("kills.commander_turret"), Num(Kills.Commander.TurretKills));
 			Out.Add(TEXT("kills.turret"), Num(Kills.TurretKills));
 			Out.Add(TEXT("kills.barricade"), Num(Kills.BarricadeKills));
+		}
+		if (const UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+		{
+			// game_state.horde_intro (2026-10-25): the level's horde flyover memory.
+			TArray<FString> Types;
+			for (const EEnemyArchetype Type : Intro->GetMemory().ShownTypes)
+			{
+				Types.Add(EnumName(Type));
+			}
+			Types.Sort();
+			Out.Add(TEXT("horde.wide_shown"), Flag(Intro->GetMemory().bWideShotShown));
+			Out.Add(TEXT("horde.shown_types"), FString::Join(Types, TEXT(",")));
 		}
 		if (const UQuestSubsystem* Quests = World->GetSubsystem<UQuestSubsystem>())
 		{
@@ -552,6 +565,14 @@ namespace SaveCoverageSmoke
 		// The mission's event waves, the breach done, the rest's cold drain, kills so far (gaps: re-rolled / 1.0 / zero).
 		Waves->RestoreRandomEvents(3, 2, true);
 		Waves->RestoreColdDrainMultiplier(1.7f);
+		// The level's horde flyover memory (2026-10-25: the flyover once per level - a reopened level forgot it).
+		if (UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+		{
+			FHordeIntroMemory Memory;
+			Memory.bWideShotShown = true;
+			Memory.ShownTypes = { EEnemyArchetype::Frostbitten, EEnemyArchetype::Spitter };
+			Intro->RestoreMemory(Memory);
+		}
 		// The environment (gap until 2026-10-22: a reopened level re-resolved it - the snow cover back to its start value). The lake is
 		// locked (its fixed night): only the snow there.
 		if (UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World))
@@ -758,6 +779,9 @@ namespace SaveCoverageSmoke
 				Environment ? Environment->GetHour() : -1.f));
 			const UWaveVictorySubsystem* Victory = World->GetSubsystem<UWaveVictorySubsystem>();
 			Check(State, Victory && Victory->GetKillStats().GetTotal() == 3 && Victory->GetKillStats().Commander.TurretKills == 1, TEXT("kill statistics back"));
+			const UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>();
+			Check(State, Intro && Intro->GetMemory().bWideShotShown && Intro->GetMemory().ShownTypes.Num() == 2
+				&& Intro->GetMemory().ShownTypes.Contains(EEnemyArchetype::Spitter), TEXT("the horde flyover memory back (no second flyover on the reopened level)"));
 			if (!State.BarrelName.IsEmpty())
 			{
 				const ABarrelActor* Barrel = nullptr;

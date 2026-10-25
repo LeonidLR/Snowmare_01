@@ -32,8 +32,10 @@ enum class EHordeIntroStage : uint8
  * waits until the horde has become a running mass (HordeIntroRules::ShouldTrigger), then opens the free tactical pause,
  * shows the «HORDE INCOMING» alert (UHordeAlertWidget), and flies the tactical camera over the horde on real time while
  * the world runs in dramatic slow motion (FlyoverTimeDilation): a wide shot of the running mass seen from the squad's
- * side, a close tracking shot of a running front-runner of every type not yet shown in this fight, then back to the
- * leader, where the world settles into the free pause (0.02). Esc / a click skip it (camera at once on the leader);
+ * side, a close tracking shot of a running front-runner of every type not yet shown on this level, then back to the
+ * leader, where the world settles into the free pause (0.02). Game designer 2026-10-25: only the level's FIRST flyover has
+ * the wide shot; a later wave flies only to its types never shown on the level, a wave of known types gets the alert and the
+ * free pause without a flyover (GetMemory, saved in game_state.horde_intro). Esc / a click skip it (camera at once on the leader);
  * before the trigger Esc / a Space tap open the free pause at once. Camera input is locked during the flyover, camera
  * zones step aside, the line of sight shows the whole horde. Pattern: UDeathCinematicSubsystem.
  * Hooks for a later HUD effect: OnHordeIntroStarted / OnHordeIntroFinished.
@@ -103,7 +105,12 @@ public:
 	int32 GetWideClusterCount() const { return WideClusterCount; }
 	/** Every started shot of this world, "wide@<anchor>", "type:FrostHound@<enemy>", "return@<leader>". */
 	const TArray<FString>& GetShotLog() const { return ShotLog; }
-	const TSet<EEnemyArchetype>& GetShownTypes() const { return ShownTypes; }
+	const TSet<EEnemyArchetype>& GetShownTypes() const { return Memory.ShownTypes; }
+
+	/** What the flyovers have shown on this level (the wide shot, the types): the save game writes it. */
+	const FHordeIntroMemory& GetMemory() const { return Memory; }
+	/** Save-game load: the level's flyover memory (no flyover / UI side effect). */
+	void RestoreMemory(const FHordeIntroMemory& InMemory) { Memory = InMemory; }
 	int32 GetStartedCount() const { return StartedCount; }
 	int32 GetCompletedCount() const { return CompletedCount; }
 	int32 GetSkippedCount() const { return SkippedCount; }
@@ -144,7 +151,8 @@ private:
 	FHordeIntroConfig Config;
 	EHordeIntroStage Stage = EHordeIntroStage::Idle;
 	TArray<FHordeIntroShot> Shots;
-	TSet<EEnemyArchetype> ShownTypes;
+	/** What this level's flyovers have shown (game designer 2026-10-25: the wide shot once, then only new types). */
+	FHordeIntroMemory Memory;
 	TArray<FString> ShotLog;
 	TWeakObjectPtr<AActor> ShotTarget;
 	int32 CurrentShot = INDEX_NONE;

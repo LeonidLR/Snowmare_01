@@ -33,6 +33,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/SplineComponent.h"
 #include "Containers/Ticker.h"
@@ -640,6 +641,14 @@ namespace SaveRoundTripSmoke
 			Tutorial->HandlePlayerCommand(PlayerCommands::Guard, FPlayerCommandContext());
 			Tutorial->SkipStep(TEXT("rt_skip"));
 		}
+		// 2026-10-25: the level's horde flyover memory (the wide shot flown, two types shown) - a load must not fly over again.
+		if (UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+		{
+			FHordeIntroMemory Memory;
+			Memory.bWideShotShown = true;
+			Memory.ShownTypes = { EEnemyArchetype::FrostHound, EEnemyArchetype::Brute };
+			Intro->RestoreMemory(Memory);
+		}
 		return true;
 	}
 
@@ -668,6 +677,10 @@ namespace SaveRoundTripSmoke
 			FString::Printf(TEXT("save info: version %d, map %s"), Info.Version, *Info.MapName));
 
 		// Mutate everything.
+		if (UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+		{
+			Intro->RestoreMemory(FHordeIntroMemory()); // the level's horde flyover memory forgotten
+		}
 		UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>();
 		if (Tutorial)
 		{
@@ -868,6 +881,10 @@ namespace SaveRoundTripSmoke
 		Check(State, Searcher && Searcher->IsSearching(), TEXT("frostbitten still searching"));
 		Check(State, Squad->GetEffectivePosture(Engineer) == ESquadFirePosture::Defensive && Squad->GetSquadPosture() == ESquadFirePosture::Passive,
 			TEXT("postures back (squad Passive, engineer Defensive)"));
+		const UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>();
+		Check(State, Intro && Intro->GetMemory().bWideShotShown && Intro->GetMemory().ShownTypes.Num() == 2
+			&& Intro->GetMemory().ShownTypes.Contains(EEnemyArchetype::Brute),
+			TEXT("the level's horde flyover memory back (wide shot flown, hound + brute shown: no second flyover after a load)"));
 	}
 
 	// --- Stage 2: save policy; rev 5f: no automatic saves ---
