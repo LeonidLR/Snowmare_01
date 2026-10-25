@@ -9,6 +9,19 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## Red horde-direction arrows (game designer 2026-10-25)
+
+"We need a visual indicator of the direction from which the horde is moving - the same arrows as the tutorial's, in RED; several hordes = several
+arrows." `UI/HordeArrowsWidget` (HUD layer 13, just under the tutorial overlay; `ACodexTacticsHUD::GetHordeArrows`, class `HordeArrowsWidgetClass`):
+the guide arrow's look (a 20 px chevron on the screen edge, the distance in metres from the leader) in red. **Grouping = by bearing**, not by lane
+name (`UI/HordeArrowRules`: `GroupByBearing`): the fight's live enemies (`UWaveSubsystem::GetAliveEnemies`, never the level's parked patrols) are
+sorted by bearing from the leader; a gap of `MergeAngleDeg` (35 deg) or more splits two groups, so two lanes = two arrows and a lane split over two
+spawn points = one. Enemies within `HideRangeCm` (18 m, engaged) are not counted. A group's arrow shows only while its centroid is off-screen (the
+guide arrow's rule), in the WaveCombat phase (turn-based fights too: the guide arrow is not hidden there either); dead group = no arrow. Cost:
+regroup 10 Hz (`RefreshIntervalSeconds`), the projection every frame, no world scans. The three tunables are UPROPERTYs of the widget (a Widget
+Blueprint subclass / the HUD class sets them). Tips are spread (`SpreadTips`, 56 px) so two red arrows or a red + the amber guide arrow never sit on
+one spot. Tests `CodexTactics.UI.HordeArrows.Groups / SpreadTips`; smoke `HordeArrowsSmoke` (`shot` argument: a rendered still).
+
 ## Skirmishes and the Susanin switch (2026-10-21)
 
 User play-test of the Demo 01 A4 ambush: "if the first or the second zombie attacks and we kill it, remove the next-wave option - they attack

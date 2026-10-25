@@ -65,6 +65,7 @@
 #include "UI/Frontend/CodexUISubsystem.h"
 #include "UI/Frontend/CodexUITags.h"
 #include "UI/MissionFailedWidget.h"
+#include "UI/HordeArrowsWidget.h"
 #include "UI/TutorialOverlayWidget.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "Core/PlayerCommands.h"
@@ -182,6 +183,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
 	TurnBasedHudWidgetClass = UTurnBasedHudWidget::StaticClass();
 	TutorialOverlayWidgetClass = UTutorialOverlayWidget::StaticClass();
+	HordeArrowsWidgetClass = UHordeArrowsWidget::StaticClass();
 }
 
 bool ACodexTacticsHUD::ShouldDrawStatus() const
@@ -299,6 +301,17 @@ void ACodexTacticsHUD::BeginPlay()
 		if (TutorialOverlay)
 		{
 			TutorialOverlay->AddToViewport(14);
+		}
+	}
+	if (HordeArrowsWidgetClass && GetOwningPlayerController())
+	{
+		// Red edge arrows towards the wave's approach directions (game designer 2026-10-25), just under the tutorial overlay.
+		HordeArrows = CreateWidget<UHordeArrowsWidget>(GetOwningPlayerController(), HordeArrowsWidgetClass);
+		if (HordeArrows)
+		{
+			HordeArrows->SetVisibility(ESlateVisibility::HitTestInvisible);
+			HordeArrows->SetTutorialOverlay(TutorialOverlay);
+			HordeArrows->AddToViewport(13);
 		}
 	}
 	if (DialogueWidgetClass && GetOwningPlayerController())
