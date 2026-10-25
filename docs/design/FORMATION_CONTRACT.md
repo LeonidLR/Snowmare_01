@@ -29,8 +29,10 @@ outward normal for `wall.*`), positive = right. Owned by the cloud session (Trai
 
 ## 2. Pure rules (same names in TS and C++; TS first, C++ ports them; golden vectors prove equality)
 - `FormationShapeRules::Slots(formation, memberCount, leaderPos, leaderYaw, config) -> slots[]` (pos + role K/P/L/Z).
-- `FormationSectorRules::LookYaw(role, formation, mode(walk|run|halt|wall), timeInPatrol, leaderYaw, config) -> yaw`
-  (patrol scans: P 12->3, L 9->12 counter-phase, dwell; Z walks backwards looking at 6).
+- `FormationSectorRules::LookYaw(role, formation, mode(walk|run|halt|wall), memberCount, timeInPatrol, leaderYaw, config) -> yaw`
+  (patrol scans: P 12->3, L 9->12 counter-phase, dwell; Z walks backwards looking at 6; with memberCount 2 the partner is
+  role Z behind the right shoulder and SWEEPS 3 -> 6 -> 9 (`pair.scan_period / scan_from / scan_to`), user decision in
+  FORMATION_SECTORS.md; coordinator 2026-10-25). In mode `wall` leaderYaw is the wall's outward normal.
 - `FormationTerrainRules::Classify(layout walls, leaderPos, leaderYaw, previousClass, timeInClass, config) -> class`
   (open / wall_left / wall_right / corridor / at_wall) with hysteresis (like ColumnHoldTime) -> formation choice.
 - `FormationWallRules::Layout(wall segment, clickedSlot, memberCount, roomLeft, roomRight) -> slots[] + look yaws`
