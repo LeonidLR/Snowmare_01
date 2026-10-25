@@ -103,6 +103,11 @@ bool UKnockdownComponent::CanFallNow() const
 	{
 		return false;
 	}
+	// Falling off a ladder (operative or enemy): the knockdown comes on landing (ULadderClimbComponent, LADDERS.md 7.7).
+	if (const ULadderClimbComponent* Ladder = Owner->FindComponentByClass<ULadderClimbComponent>(); Ladder && Ladder->IsDropping())
+	{
+		return false;
+	}
 	if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Owner))
 	{
 		// Already lying in the snow (prone) or mid-vault: nothing to knock over.

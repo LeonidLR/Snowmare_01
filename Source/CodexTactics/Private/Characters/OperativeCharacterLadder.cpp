@@ -10,10 +10,17 @@ bool AOperativeCharacter::IsClimbingLadder() const
 	return LadderClimb && LadderClimb->IsOnLadder();
 }
 
-void AOperativeCharacter::ResumeMoveAfterLadder(const FVector& Destination)
+void AOperativeCharacter::ResumeMoveAfterLadder(const FVector& Destination, bool bOwnOrder)
 {
 	ApplyMovementParams();
 	RequestMove(Destination);
+	// The climb stopped his path, not his order: an own order stays his own (the formation does not pull him off it, LADDERS.md 7.1).
+	bOwnMoveOrder = bOwnOrder && bHasMoveOrder;
+}
+
+FVector AOperativeCharacter::GetFloorReferenceLocation() const
+{
+	return LadderClimb ? LadderClimb->GetFloorReferenceLocation() : GetActorLocation();
 }
 
 FVector AOperativeCharacter::GetSaveLocation() const

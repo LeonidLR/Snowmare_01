@@ -123,6 +123,38 @@ bool FGameFlowWaveActiveTest::RunTest(const FString&)
 	return true;
 }
 
+CAMERA_TEST(FCameraLadderSpringTest, "Camera.LadderZSpring")
+bool FCameraLadderSpringTest::RunTest(const FString&)
+{
+	// docs/design/LADDERS.md 7.3: the focus height follows a climber through a critically damped spring (half-life 0.35 s).
+	float Z = 0.f;
+	float Velocity = 0.f;
+	float Previous = 0.f;
+	bool bMonotone = true;
+	float AtHalfLife = 0.f;
+	for (int32 Frame = 1; Frame <= 120; ++Frame)
+	{
+		Z = TacticalCameraRules::SpringDamp(Z, Velocity, 100.f, 0.35f, 1.f / 60.f);
+		bMonotone &= Z >= Previous - 0.001f && Z <= 100.001f;
+		Previous = Z;
+		if (Frame == 21)
+		{
+			AtHalfLife = Z;
+		}
+	}
+	TestTrue(TEXT("no overshoot, never back down (no pumping)"), bMonotone);
+	TestTrue(TEXT("after one half-life the gap is ~60 % (critically damped from rest)"), AtHalfLife > 30.f && AtHalfLife < 50.f);
+	TestTrue(TEXT("settled after 2 s"), FMath::Abs(Z - 100.f) < 1.f);
+	float Big = 0.f;
+	float BigVelocity = 0.f;
+	Big = TacticalCameraRules::SpringDamp(Big, BigVelocity, 100.f, 0.35f, 5.f);
+	TestTrue(TEXT("stable for a huge step"), Big > 90.f && Big <= 100.001f);
+	float Steady = 50.f;
+	float SteadyVelocity = 0.f;
+	TestTrue(TEXT("at the target it stays"), FMath::IsNearlyEqual(TacticalCameraRules::SpringDamp(Steady, SteadyVelocity, 50.f, 0.35f, 0.016f), 50.f));
+	return true;
+}
+
 #undef CAMERA_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

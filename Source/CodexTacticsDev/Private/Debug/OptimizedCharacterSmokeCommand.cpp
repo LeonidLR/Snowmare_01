@@ -409,7 +409,9 @@ namespace OptimizedCharacterSmoke
 		}
 		// Referenced (not "used"): the used list comes from compiled shaders, which a -nullrhi run does not have.
 		TSet<const UTexture*> Used;
+#if WITH_EDITOR // editor-only API; the smoke runs in UnrealEditor -game, a packaged game build reports 0
 		Material->GetReferencedTexturesAndOverrides(Used);
+#endif
 		for (const UTexture* Texture : Used)
 		{
 			if (Texture && !Seen.Contains(Texture))

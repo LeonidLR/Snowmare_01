@@ -490,6 +490,8 @@ void FTutorialStateMachine::ResetProgress()
 	History.Reset();
 	Confines.Reset();
 	++ConfineSerial;
+	PlaceLocks.Reset();
+	++PlaceLockSerial;
 	RouteProgressKey = INDEX_NONE;
 	RouteProgressVolume = NAME_None;
 }
@@ -906,6 +908,11 @@ void FTutorialStateMachine::Finish(int32 Index, ETutorialStepState FinalState)
 	Runtime[Index].bEverFinished = true;
 	ApplyStepLocks(Index); // a step that never showed still applies its locks (never lost)
 	SetState(Index, FinalState, /*bSilent*/ !bWasActive);
+	if (FinalState == ETutorialStepState::Completed)
+	{
+		LockStepContributors(Index); // 2026-10-23: before the confinement it may follow ends
+	}
+	ReleasePlaceLocksUntil(Step.Id);
 	ReleaseConfinesUntil(Index); // rev 5i: the lesson that held the squad is over
 	const FName FinishedId = Step.Id;
 	CancelMatching(FinishedId, NAME_None, NAME_None); // rev 5e: talk about this step's place / moment is over
@@ -1264,6 +1271,18 @@ bool FTutorialStateMachine::StartBeat(FName BeatId, bool bAllowBackwards)
 			++ConfineSerial;
 		}
 	}
+	// 2026-10-23: so do the place locks of an earlier beat's steps (beat-less steps: only their "until" / UnlockAll).
+	const int32 LocksBefore = PlaceLocks.Num();
+	PlaceLocks.RemoveAll([this, BeatIndex](const FTutorialPlaceLockState& Lock)
+	{
+		const FTutorialStep* Owner = Data.FindStep(Lock.Step);
+		const int32 OwnerBeat = Owner && !Owner->Beat.IsNone() ? Data.FindBeatIndex(Owner->Beat) : INDEX_NONE;
+		return OwnerBeat != INDEX_NONE && OwnerBeat < BeatIndex;
+	});
+	if (PlaceLocks.Num() != LocksBefore)
+	{
+		++PlaceLockSerial;
+	}
 	// Leftover hint cards of the beats the squad has left (waiting, queued or shown) are dropped; their chains follow.
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
@@ -1491,6 +1510,7 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 	Progress.bHasLocks = true;
 	Progress.History = History;
 	Progress.RouteVolume = RouteProgressVolume;
+	Progress.PlaceLocks = PlaceLocks;
 	for (int32 Index = 0; Index < Runtime.Num(); ++Index)
 	{
 		const FRuntime& State = Runtime[Index];
@@ -1523,6 +1543,7 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 			Saved.Owner = Data.Steps[Confine.Owner].Id;
 			Saved.bReleased = Confine.bReleased;
 			Saved.Passed = Confine.Passed;
+			Saved.Free = Confine.Free;
 		}
 	}
 	return Progress;
@@ -1573,9 +1594,13 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 			Confine.Owner = Owner;
 			Confine.bReleased = Saved.bReleased;
 			Confine.Passed = Saved.Passed;
+			Confine.Free = Saved.Free;
 		}
 	}
 	++ConfineSerial;
+	// 2026-10-23: the operatives held in place stay held after the load (the locks of steps the file no longer has are dropped).
+	PlaceLocks = TutorialRules::FilterPlaceLocks(Data, Progress.PlaceLocks);
+	++PlaceLockSerial;
 	// Rev 5f: who counted for which step (finished ones too: "distinct_from" of the steps still running).
 	for (const TPair<FName, FTutorialStepProgress>& Entry : Progress.StepProgress)
 	{
@@ -1691,6 +1716,17 @@ void FTutorialStateMachine::ReleaseConfinesUntil(int32 FinishedIndex)
 	}
 }
 
+bool FTutorialStateMachine::ClaimConfineFree(FName OperativeId)
+{
+	const int32 Active = FindActiveConfine();
+	if (Active == INDEX_NONE || OperativeId.IsNone() || !Data.Steps[Confines[Active].Owner].Confine.bFreeFirst || !Confines[Active].Free.IsNone())
+	{
+		return false;
+	}
+	Confines[Active].Free = OperativeId;
+	return true;
+}
+
 bool FTutorialStateMachine::ReleaseConfines()
 {
 	bool bReleased = false;
@@ -1731,6 +1767,10 @@ bool FTutorialStateMachine::GetActiveConfine(FTutorialConfineView& Out) const
 	{
 		Out.FreeOperative = FocusSubjectProvider(Owner.Id); // 2026-10-20: the operative who does the lesson alone
 	}
+	else if (Owner.Confine.bFreeFirst)
+	{
+		Out.FreeOperative = Confine.Free; // 2026-10-23: the one who took it (none yet: the first ordered outside will)
+	}
 	return true;
 }
 
@@ -1746,6 +1786,77 @@ void FTutorialStateMachine::NoteConfineEvent(FName EventName, FName SubjectId)
 	if (!ThroughEvent.IsEmpty() && TutorialRules::MatchesName(ThroughEvent, EventName))
 	{
 		Confine.Passed.AddUnique(SubjectId); // through: free to move on
+	}
+}
+
+// --- 2026-10-23: lock in place ---------------------------------------------------------------------------------------
+
+bool FTutorialStateMachine::IsLockedInPlace(FName OperativeId, FName* OutStep) const
+{
+	if (OperativeId.IsNone())
+	{
+		return false;
+	}
+	const FTutorialPlaceLockState* Lock = PlaceLocks.FindByPredicate([OperativeId](const FTutorialPlaceLockState& Entry) { return Entry.Operative == OperativeId; });
+	if (Lock && OutStep)
+	{
+		*OutStep = Lock->Step;
+	}
+	return Lock != nullptr;
+}
+
+bool FTutorialStateMachine::ReleasePlaceLocks()
+{
+	if (PlaceLocks.IsEmpty())
+	{
+		return false;
+	}
+	PlaceLocks.Reset();
+	++PlaceLockSerial;
+	return true;
+}
+
+void FTutorialStateMachine::LockStepContributors(int32 Index)
+{
+	const FTutorialStep& Step = Data.Steps[Index];
+	if (!Step.LockInPlace.IsSet())
+	{
+		return;
+	}
+	// Released by its own "until", else by the "until" of the confinement in force (the lesson it belongs to), else by the next beat.
+	FName Until = Step.LockInPlace.Until;
+	if (Until.IsNone())
+	{
+		const int32 Active = FindActiveConfine();
+		const int32 ConfineUntil = Active != INDEX_NONE ? GetConfineUntilIndex(Confines[Active].Owner) : INDEX_NONE;
+		Until = Data.Steps.IsValidIndex(ConfineUntil) ? Data.Steps[ConfineUntil].Id : NAME_None;
+	}
+	const int32 UntilIndex = IndexOf(Until);
+	if (UntilIndex == Index || (Runtime.IsValidIndex(UntilIndex) && TutorialRules::IsFinished(Runtime[UntilIndex].State)))
+	{
+		return; // the lesson is already over: nothing to hold him for
+	}
+	TArray<FName> Operatives = Runtime[Index].Contributors.Array();
+	Operatives.Sort(FNameLexicalLess());
+	for (const FName Operative : Operatives)
+	{
+		PlaceLocks.RemoveAll([Operative](const FTutorialPlaceLockState& Lock) { return Lock.Operative == Operative; });
+		FTutorialPlaceLockState& Lock = PlaceLocks.AddDefaulted_GetRef();
+		Lock.Operative = Operative;
+		Lock.Step = Step.Id;
+		Lock.Until = Until;
+	}
+	if (!Operatives.IsEmpty())
+	{
+		++PlaceLockSerial;
+	}
+}
+
+void FTutorialStateMachine::ReleasePlaceLocksUntil(FName FinishedStep)
+{
+	if (PlaceLocks.RemoveAll([FinishedStep](const FTutorialPlaceLockState& Lock) { return !Lock.Until.IsNone() && Lock.Until == FinishedStep; }) > 0)
+	{
+		++PlaceLockSerial;
 	}
 }
 

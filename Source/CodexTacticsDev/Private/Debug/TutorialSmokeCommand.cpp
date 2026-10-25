@@ -62,6 +62,11 @@
 //     is beacon 3 (the guide beacon stands there); at every check exactly one target, at most one edge arrow, the arrow (headless: the
 //     1920 x 1080 camera view) points at the target when it is off-screen (the camera looks away), its distance label in m, the minimap
 //     highlights exactly one objective icon; beacon 3 reached -> the camp.
+// 11. (2026-10-23, game designer play-test) "lock_in_place" at the hut door, stages 78 / 79 inside the hut lesson: the operative who took
+//     the LEFT side is locked - his move order and a click with him selected are refused with "Hold this position - stack on the door.",
+//     he stays (< 5 cm), the third operative can still be ordered; the RIGHT side's operative is locked too, a REGROUP (Solo off) leaves
+//     both at the door (< 5 cm), the save section lists both; the "go in" card done (the third inside) releases them (an order is taken
+//     again). The tutorial markers wear the hologram material (M_HoloMarker) - checked on the guide course.
 // Saves go to Saved/SmokeSaves/Tutorial (exclusive in Scripts/test_map.json).
 
 #include "CoreMinimal.h"
@@ -217,6 +222,13 @@ namespace TutorialSmoke
 		TWeakObjectPtr<AEnemyCharacter> PerimeterEnemy;
 		bool bSawWallCards = false;
 		TWeakObjectPtr<AOperativeCharacter> AmbushMate;
+		/** 2026-10-23 lock_in_place (stages 78 / 79): the approach area's centre, the orders issued, the spots the locked ones hold. */
+		FVector ApproachCentre = FVector::ZeroVector;
+		bool bPlaceLockOrdersIssued = false;
+		int32 PlaceLockRefusalsBefore = 0;
+		FVector LockedLeftSpot = FVector::ZeroVector;
+		FVector LockedRightSpot = FVector::ZeroVector;
+		bool bHoloMarkersChecked = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -302,6 +314,20 @@ namespace TutorialSmoke
 		{
 			Codex->HandleWorldHit(FHitResult(nullptr, nullptr, Point - FVector(0.f, 0.f, 90.f), FVector::UpVector));
 		}
+	}
+
+	/** 2026-10-23: every tutorial marker of the world (placed ones and the runtime guide beacon) wears the hologram material. */
+	void CheckHoloMarkers(FState& State, UWorld* World, const TCHAR* Where)
+	{
+		int32 Markers = 0;
+		int32 Holo = 0;
+		for (TActorIterator<ATutorialMarkerActor> It(World); It; ++It)
+		{
+			++Markers;
+			Holo += It->IsHologram() ? 1 : 0;
+		}
+		Check(State, Markers > 0 && Holo == Markers, FString::Printf(TEXT("2026-10-23: %s - %d of %d tutorial markers wear M_HoloMarker (ring + pole)"), Where, Holo, Markers));
+		State.bHoloMarkersChecked = true;
 	}
 
 	/** A settled cover entry of Operative as the cover code raises it (subject + slot), through the event bus. */
@@ -1268,6 +1294,48 @@ namespace TutorialSmoke
 			RaiseCoverEntered(World, Second);
 			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Completed, TEXT("an operative left of the door completes the left card"));
 			SpawnVolumeAround(World, First, TEXT("VOL_A1_DOOR_R"));
+			State.bPlaceLockOrdersIssued = false;
+			State.Stage = 78;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 78:
+		{
+			// 2026-10-23 (game designer: "I place one - he's fixed, can't be moved back"): the left side's operative is locked at the door.
+			AOperativeCharacter* Left = Squad->GetMembers()[1];
+			if (!State.bPlaceLockOrdersIssued)
+			{
+				Check(State, Tutorial->IsHeldInPlace(*Left) && !Tutorial->IsHeldInPlace(*Squad->GetMembers()[0]) && !Tutorial->IsHeldInPlace(*Squad->GetMembers()[2]),
+					TEXT("lock_in_place: left of the door done - only he is locked"));
+				State.LockedLeftSpot = Left->GetActorLocation();
+				State.PlaceLockRefusalsBefore = Tutorial->GetPlaceLockRefusalCount();
+				const int32 HoldLines = CountMessages(World, TEXT("Hold this position - stack on the door."));
+				FVector Away = State.ApproachCentre;
+				if (FVector::Dist2D(Away, State.LockedLeftSpot) < 150.f)
+				{
+					Away += FVector(250.f, 0.f, 0.f);
+				}
+				Check(State, Left->OrderMoveTo(Away, false) == EOperativeOrderResult::Refused
+					&& Tutorial->GetPlaceLockRefusalCount() == State.PlaceLockRefusalsBefore + 1,
+					TEXT("lock_in_place: a move order for him (inside the approach area) is refused"));
+				Squad->SetLeaderByIndex(1); // selection still works
+				ClickAt(PC, State.HutPoint); // the ground click path stage 34 proves (a click near the door walls would preview cover)
+				Check(State, Squad->GetLeader() == Left && Tutorial->GetPlaceLockRefusalCount() == State.PlaceLockRefusalsBefore + 2,
+					TEXT("lock_in_place: selected, a ground click for him is refused too"));
+				Check(State, CountMessages(World, TEXT("Hold this position - stack on the door.")) == HoldLines + 1,
+					TEXT("lock_in_place: one 'Hold this position - stack on the door.' line"));
+				AOperativeCharacter* Third = Squad->GetMembers()[2];
+				Check(State, Third->OrderMoveTo(Away, false) == EOperativeOrderResult::Accepted, TEXT("lock_in_place: the next operative can still be ordered"));
+				Third->StopOperative();
+				State.bPlaceLockOrdersIssued = true;
+				return true;
+			}
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			Check(State, FVector::Dist2D(Left->GetActorLocation(), State.LockedLeftSpot) < 5.f,
+				FString::Printf(TEXT("lock_in_place: he stays at the door (%.1f cm)"), FVector::Dist2D(Left->GetActorLocation(), State.LockedLeftSpot)));
 			State.Stage = 75;
 			State.StageTime = 0.f;
 			return true;
@@ -1287,6 +1355,48 @@ namespace TutorialSmoke
 			Check(State, Squad->GetMembers()[2]->OrderMoveTo(State.HutPoint, false) == EOperativeOrderResult::Refused
 				&& Tutorial->GetConfinedRefusalCount() == State.ConfinedBefore + 1, TEXT("rev 5i: the hut stays closed until the 'go in' card is up"));
 			Squad->GetMembers()[2]->StopOperative();
+			State.bPlaceLockOrdersIssued = false;
+			State.Stage = 79;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 79:
+		{
+			// 2026-10-23: the right side's operative is locked too; a regroup leaves both at the door.
+			AOperativeCharacter* Right = Squad->GetMembers()[0];
+			AOperativeCharacter* Left = Squad->GetMembers()[1];
+			if (!State.bPlaceLockOrdersIssued)
+			{
+				Check(State, Tutorial->IsHeldInPlace(*Right) && Tutorial->IsHeldInPlace(*Left) && !Tutorial->IsHeldInPlace(*Squad->GetMembers()[2]),
+					TEXT("lock_in_place: right of the door done - both door operatives locked, the third free"));
+				State.LockedRightSpot = Right->GetActorLocation();
+				State.LockedLeftSpot = Left->GetActorLocation();
+				State.PlaceLockRefusalsBefore = Tutorial->GetPlaceLockRefusalCount();
+				Check(State, Right->OrderMoveTo(Right->GetActorLocation() + FVector(0.f, 250.f, 0.f), false) == EOperativeOrderResult::Refused
+					&& Tutorial->GetPlaceLockRefusalCount() > State.PlaceLockRefusalsBefore, TEXT("lock_in_place: a move order for the right one is refused"));
+				// The save section carries both locks (TutorialRules::SaveProgress "place_locks"; the round trip is unit-tested).
+				const TSharedPtr<FJsonObject> Saved = Tutorial->CaptureSaveState();
+				const TArray<TSharedPtr<FJsonValue>>* SavedLocks = nullptr;
+				Check(State, Saved.IsValid() && Saved->TryGetArrayField(TEXT("place_locks"), SavedLocks) && SavedLocks->Num() == 2,
+					TEXT("lock_in_place: the save section lists both locked operatives"));
+				Check(State, Squad->IsSoloMode(), TEXT("lock_in_place: Solo is on before the regroup"));
+				const int32 RefusalsBeforeRegroup = Tutorial->GetPlaceLockRefusalCount();
+				Squad->ToggleSoloMode(); // B in Solo = regroup: the followers leave cover and come to the leader
+				Check(State, !Squad->IsSoloMode() && Tutorial->GetPlaceLockRefusalCount() > RefusalsBeforeRegroup,
+					TEXT("lock_in_place: regroup - the locked follower's part of it is refused"));
+				State.bPlaceLockOrdersIssued = true;
+				return true;
+			}
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			Check(State, FVector::Dist2D(Right->GetActorLocation(), State.LockedRightSpot) < 5.f && FVector::Dist2D(Left->GetActorLocation(), State.LockedLeftSpot) < 5.f,
+				FString::Printf(TEXT("lock_in_place: after the regroup both still at the door (%.1f / %.1f cm)"),
+					FVector::Dist2D(Right->GetActorLocation(), State.LockedRightSpot), FVector::Dist2D(Left->GetActorLocation(), State.LockedLeftSpot)));
+			Squad->ToggleSoloMode(); // Solo on again for the 'go in' click
+			Squad->GetMembers()[2]->StopOperative();
+			Check(State, Squad->IsSoloMode(), TEXT("lock_in_place: Solo on again"));
 			State.Stage = 76;
 			State.StageTime = 0.f;
 			return true;
@@ -1315,6 +1425,16 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A1_hut_enter")) == ETutorialStepState::Completed,
 				FString::Printf(TEXT("the third operative walked into the hut: 'go in' done (%s, %.1f s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A1_hut_enter"))), State.StageTime));
 			Check(State, !Tutorial->IsConfining(), TEXT("rev 5i: the entry lesson done - the squad is free"));
+			Check(State, !Tutorial->IsHoldingInPlace() && !Tutorial->IsHeldInPlace(*Squad->GetMembers()[0]) && !Tutorial->IsHeldInPlace(*Squad->GetMembers()[1]),
+				TEXT("lock_in_place: the 'go in' card done releases both door operatives"));
+			{
+				AOperativeCharacter* Freed = Squad->GetMembers()[1];
+				const int32 RefusalsBefore = Tutorial->GetPlaceLockRefusalCount();
+				const FVector Near = SmokeUtils::ClearPoint(World, Freed->GetActorLocation(), Freed->GetActorLocation() + FVector(200.f, 0.f, 0.f));
+				Check(State, Freed->OrderMoveTo(Near, false) != EOperativeOrderResult::Refused && Tutorial->GetPlaceLockRefusalCount() == RefusalsBefore,
+					TEXT("lock_in_place: released - an order for him is taken again"));
+				Freed->StopOperative();
+			}
 			Squad->GetMembers()[2]->StopOperative();
 			Squad->SetLeaderByIndex(0); // the loot stages count the first operative's heat packs (State.HeatPacksBeforeLoot)
 			State.Stage = 43;
@@ -1448,6 +1568,7 @@ namespace TutorialSmoke
 				State.HutPoint = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Ahead * 1000.f);
 				State.HutVolume = SpawnVolumeAt(World, State.HutPoint, TEXT("VOL_A1_HUT"), 150.f);
 				ATutorialTriggerVolume* Approach = SpawnVolumeAt(World, Leader->GetActorLocation(), TEXT("VOL_A1_HUT_APPROACH"), 400.f);
+				State.ApproachCentre = Leader->GetActorLocation();
 				Check(State, FVector::Dist2D(State.HutPoint, Leader->GetActorLocation()) > 600.f,
 					FString::Printf(TEXT("the hut stand-in lies outside the approach area (%.0f cm ahead)"), FVector::Dist2D(State.HutPoint, Leader->GetActorLocation())));
 				Approach->ActivatedBy = ETutorialVolumeFilter::Leader;
@@ -2293,15 +2414,9 @@ namespace TutorialSmoke
 		// (StealthLure.Heard completes it), then the reminder card asks for AGGRESSIVE (/).
 		case 130:
 		{
-			if (Tutorial->GetStepState(TEXT("A4_tripwire")) != ETutorialStepState::Active && State.StageTime < 8.f)
-			{
-				return true;
-			}
-			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::DeployTripwire),
-				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
-			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
-				TEXT("the lure is still locked"));
-			// 2026-10-21: part 1's zombie walks the AmbushRoute (senses off, parked: only its events matter here).
+			// 2026-10-23: part 1's zombie is DORMANT until the squad is in cover at the overlook (its binding's "dormant"); here it is spawned
+			// on the AmbushRoute and woken in place at once (the cover condition and the hidden spawn: TutorialAmbushLakeSmoke) - the card
+			// "TAKE HIM QUIETLY" follows its EnemyWoke.A4_PERIMETER.
 			if (!State.PerimeterEnemy.IsValid())
 			{
 				const FVector RouteStart = State.AmbushRoute.IsValid() ? State.AmbushRoute->GetActorLocation() : Leader->GetActorLocation();
@@ -2321,43 +2436,64 @@ namespace TutorialSmoke
 					Zombie->SetActorTickEnabled(false);
 				}
 				State.PerimeterEnemy = Zombie;
+				Check(State, Zombie && !Tutorial->IsBindingAwake(TEXT("A4_PERIMETER")) && Tutorial->WakeDormantBinding(TEXT("A4_PERIMETER"), false, TEXT("smoke"))
+					&& Tutorial->IsBindingAwake(TEXT("A4_PERIMETER")), TEXT("2026-10-23: part 1's binding is dormant, woken (EnemyWoke.A4_PERIMETER)"));
 			}
-			// 2026-10-20 (game designer): the ambush is done by ONE operative - the Medic-Sapper; Solo with her selected, the others held.
+			if (Tutorial->GetStepState(TEXT("A4_tripwire")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
-				AOperativeCharacter* Ambusher = Tutorial->GetFocusOperative(TEXT("A4_tripwire"));
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::DeployTripwire),
+				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
+				TEXT("the lure is still locked"));
+			// 2026-10-23 (game designer): part 1 by ANY one operative - the first sent off the overlook takes it (confine "free": "first"),
+			// the others are held; the Engineer here (neither the Commander nor the Medic-Sapper).
+			{
+				AOperativeCharacter* Ambusher = nullptr;
 				AOperativeCharacter* Mate = nullptr;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (Member && Member->SquadRole == EOperativeRole::Engineer)
+					{
+						Ambusher = Member;
+					}
+				}
 				for (AOperativeCharacter* Member : Squad->GetMembers())
 				{
 					Mate = Mate ? Mate : (Member != Ambusher ? Member : nullptr);
 				}
-				Check(State, Ambusher && Ambusher->SquadRole == EOperativeRole::MedicSapper && Squad->IsSoloMode() && Squad->GetLeader() == Ambusher
-					&& Tutorial->IsConfining() && Tutorial->GetCardView().Title.ToString().Contains(Ambusher->DisplayName.ToString().ToUpper()),
-					FString::Printf(TEXT("ambush: the Medic-Sapper alone (%s), Solo on with her selected, the squad held, the card names her ('%s')"),
-						Ambusher ? *Ambusher->DisplayName.ToString() : TEXT("-"), *Tutorial->GetCardView().Title.ToString()));
+				Check(State, Ambusher && Tutorial->IsConfining() && Tutorial->GetCardView().Title.ToString().Contains(TEXT("QUIETLY")),
+					FString::Printf(TEXT("ambush: TAKE HIM QUIETLY, the squad held at the overlook ('%s')"), *Tutorial->GetCardView().Title.ToString()));
+				if (Ambusher)
+				{
+					Squad->EnterSoloMode(); // the player: Solo, the Engineer selected
+					Squad->SetLeader(Ambusher);
+				}
 				Tutorial->RefreshGuideNow();
 				const FTutorialGuideView& Guide = Tutorial->GetGuideView();
 				const APatrolRouteActor* Route = State.AmbushRoute.Get();
-				// 2026-10-21: the spot is on the PERIMETER zombie's route only ("@patrol_route.A4_PERIMETER"), nearest to her.
+				// 2026-10-21: the spot is on the PERIMETER zombie's route only ("@patrol_route.A4_PERIMETER"), nearest to the leader (no focus).
 				FVector Nearest = FVector::ZeroVector;
-				if (Route && Ambusher)
+				if (Route && Squad->GetLeader())
 				{
 					TArray<FVector> Points;
 					for (int32 Index = 0; Index < Route->GetNumberOfWaypoints(); ++Index)
 					{
 						Points.Add(Route->GetWaypointWorldLocation(Index));
 					}
-					Nearest = TutorialRules::NearestPointOnRoute(Points, Route->bIsLoop, Ambusher->GetActorLocation());
+					Nearest = TutorialRules::NearestPointOnRoute(Points, Route->bIsLoop, Squad->GetLeader()->GetActorLocation());
 				}
 				Check(State, Guide.bValid && Guide.Guide.Kind == ETutorialGuideKind::Spot && Guide.Guide.Id == FName(TEXT("@patrol_route.A4_PERIMETER")) && Route
 					&& FVector::Dist2D(Guide.Location, Nearest) < 50.f,
 					FString::Printf(TEXT("ambush: the current target is the wire spot on the perimeter zombie's route nearest to her (%s, %.0f cm from it)"),
 						*UTutorialSubsystem::DescribeGuide(Guide.Guide), FVector::Dist2D(Guide.Location, Nearest)));
 				const FVector Far = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 1000.f);
+				Check(State, Ambusher && UTutorialSubsystem::CheckConfinedOrder(World, Ambusher, Far) && Ambusher->OrderMoveTo(Far, false) != EOperativeOrderResult::Refused,
+					TEXT("ambush: the first one sent off the overlook (the Engineer) takes the job"));
 				const int32 LinesBefore = CountMessages(World, TEXT("handles it"));
 				Check(State, Mate && Mate->OrderMoveTo(Far, false) == EOperativeOrderResult::Refused && CountMessages(World, TEXT("handles it")) == LinesBefore + 1,
-					FString::Printf(TEXT("ambush: %s's order off the overlook is refused ('Hold here - <Name> handles it.')"), Mate ? *Mate->DisplayName.ToString() : TEXT("-")));
-				Check(State, Ambusher && UTutorialSubsystem::CheckConfinedOrder(World, Ambusher, Far) && Ambusher->OrderMoveTo(Far, false) != EOperativeOrderResult::Refused,
-					TEXT("ambush: the Medic-Sapper may go anywhere"));
+					FString::Printf(TEXT("ambush: then %s's order off the overlook is refused ('Hold here - <Name> handles it.')"), Mate ? *Mate->DisplayName.ToString() : TEXT("-")));
 				if (Ambusher)
 				{
 					Ambusher->StopOperative();
@@ -2410,17 +2546,18 @@ namespace TutorialSmoke
 			Check(State, Guard && Tutorial->IsEnemyBound(*Guard, TEXT("A4_LURE")) && State.PerimeterEnemy.IsValid()
 				&& Tutorial->IsEnemyBound(*State.PerimeterEnemy, TEXT("A4_PERIMETER")) && !Tutorial->IsEnemyBound(*Guard, TEXT("A4_PERIMETER")),
 				TEXT("bindings: the guard is A4_LURE (its route's tag), the perimeter zombie A4_PERIMETER"));
+			// 2026-10-23: part 1 is done when ITS zombie is killed by a squad trap (EnemyKilled.SquadTrap; the real blast: TutorialAmbushLakeSmoke).
 			if (Guard)
 			{
-				Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), Guard->GetFName());
+				Tutorial->NotifyEvent(TEXT("EnemyKilled.SquadTrap"), Guard->GetFName());
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A4_wt_trap")) == ETutorialStepState::Idle,
-				TEXT("part 1: the FAR zombie tripping a wire does not complete it (no 'that's one' line)"));
+				TEXT("part 1: the FAR zombie killed by a squad trap does not complete it (no 'that's one' line)"));
 			if (AEnemyCharacter* Zombie = State.PerimeterEnemy.Get())
 			{
-				Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), Zombie->GetFName()); // the perimeter zombie walked into it
+				Tutorial->NotifyEvent(TEXT("EnemyKilled.SquadTrap"), Zombie->GetFName()); // the perimeter zombie killed by the squad's trap
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed, TEXT("part 1: the perimeter zombie pulled the pin -> the objective is done"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed, TEXT("part 1: the perimeter zombie killed by the squad's trap -> the objective is done"));
 			Next(State);
 			return true;
 		}
@@ -2892,6 +3029,7 @@ namespace TutorialSmoke
 			}
 			AOperativeCharacter* Second = Squad->GetMembers()[1];
 			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("left of the door"), TEXT("VOL_A1_DOOR_L"));
+			CheckHoloMarkers(State, World, TEXT("guide course, left of the door"));
 			RaiseCoverEntered(World, Second);
 			SpawnVolumeAround(World, Squad->GetMembers()[0], TEXT("VOL_A1_DOOR_R"));
 			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Completed, TEXT("guide course: left of the door done"));
@@ -3110,6 +3248,7 @@ namespace TutorialSmoke
 			}
 			Check(State, Tutorial->IsTutorialSkipped() && !Tutorial->IsTutorialActive() && !Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen),
 				TEXT("rev 5i: after the load the tutorial stays skipped"));
+			Check(State, State.bHoloMarkersChecked, TEXT("2026-10-23: the hologram marker check ran"));
 			return Finish(State, true);
 		}
 		default:

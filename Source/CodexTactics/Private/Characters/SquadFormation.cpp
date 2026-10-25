@@ -151,3 +151,36 @@ TArray<FVector> SquadFormation::ComputeGroupTargets(const FVector& Center, const
 	}
 	return Targets;
 }
+
+TArray<FVector> SquadFormation::ComputeFallbackSlots(const FVector& LeaderLocation, const FVector& Slot, float MinRadius)
+{
+	TArray<FVector> Candidates;
+	const FVector Offset(Slot.X - LeaderLocation.X, Slot.Y - LeaderLocation.Y, 0.f);
+	const float Radius = Offset.Size();
+	const FVector Direction = Radius > KINDA_SMALL_NUMBER ? Offset / Radius : FVector(-1.f, 0.f, 0.f);
+	for (const float Scale : { 1.f, 0.6f })
+	{
+		const float CandidateRadius = FMath::Max(Radius * Scale, MinRadius);
+		for (int32 Step = 0; Step <= 6; ++Step)
+		{
+			for (const float Sign : { 1.f, -1.f })
+			{
+				if ((Step == 0 && Sign < 0.f) || (Step == 6 && Sign < 0.f))
+				{
+					continue; // 0 and 180 deg only once
+				}
+				if (Step == 0 && FMath::IsNearlyEqual(CandidateRadius, Radius))
+				{
+					continue; // the slot itself
+				}
+				const FVector Turned = Direction.RotateAngleAxis(Sign * 30.f * Step, FVector::UpVector) * CandidateRadius;
+				Candidates.Add(FVector(LeaderLocation.X + Turned.X, LeaderLocation.Y + Turned.Y, Slot.Z));
+			}
+		}
+	}
+	Candidates.StableSort([&Slot](const FVector& A, const FVector& B)
+	{
+		return FVector::DistSquared2D(A, Slot) < FVector::DistSquared2D(B, Slot);
+	});
+	return Candidates;
+}

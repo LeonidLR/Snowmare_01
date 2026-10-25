@@ -157,4 +157,27 @@ bool FSquadOrderPostFightHoldTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_ORDER_TEST(FSquadOrderRegroupAfterFightTest, "RegroupAfterFight")
+bool FSquadOrderRegroupAfterFightTest::RunTest(const FString&)
+{
+	// Bug 2026-10-23 (lake, after the horde; one operative KIA, one frozen): "even pressing B he does not return to the formation".
+	using namespace SquadOrderRules;
+	TestFalse(TEXT("Regroup (B) ends the post-fight hold with the leader standing"), KeepsPostFightHold(true, false, true));
+	TestFalse(TEXT("Regroup while the leader moves: no hold"), KeepsPostFightHold(true, true, true));
+	TestTrue(TEXT("No Regroup, leader standing: the hold stays"), KeepsPostFightHold(true, false, false));
+	TestFalse(TEXT("Regroup with no hold armed: nothing held"), KeepsPostFightHold(false, false, true));
+
+	// The formation runs while exploring and after the final fight (PostCombat lasts until the level ends).
+	TestTrue(TEXT("Exploration: formation"), IsFormationPhase(ECodexGamePhase::Exploration));
+	TestTrue(TEXT("PostCombat (after the final fight): formation"), IsFormationPhase(ECodexGamePhase::PostCombat));
+	TestFalse(TEXT("Old rule (Codex.Squad.PostCombatFormation 0): no formation in PostCombat"), IsFormationPhase(ECodexGamePhase::PostCombat, false));
+	TestTrue(TEXT("Old rule: exploration unchanged"), IsFormationPhase(ECodexGamePhase::Exploration, false));
+	for (const ECodexGamePhase Fight : { ECodexGamePhase::Cutscene, ECodexGamePhase::Preparation, ECodexGamePhase::WaveCombat,
+		ECodexGamePhase::WaveCleared, ECodexGamePhase::GameOver })
+	{
+		TestFalse(FString::Printf(TEXT("No formation in phase %d"), static_cast<int32>(Fight)), IsFormationPhase(Fight));
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

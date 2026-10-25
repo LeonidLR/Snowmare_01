@@ -31,6 +31,7 @@
 #include "Combat/EnemySpawnPoint.h"
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Core/PlayerCommands.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Debug/EventBusProbe.h"
@@ -89,6 +90,15 @@ namespace LakeQuestSmoke
 		/** Every wave enemy as it spawned: its kind and where (UWaveSubsystem::OnEnemySpawnedNative). */
 		TSharedPtr<TArray<TPair<EEnemyArchetype, FVector>>> Spawns = MakeShared<TArray<TPair<EEnemyArchetype, FVector>>>();
 		bool bListening = false;
+		/** "pauseorders" (game designer bug 2026-10-25): the orders of the horde's free pause, then real-time orders after it. */
+		bool bPauseOrders = false;
+		/** "trapsolo": the squad is still in the trap Solo of a spotted / failed crate (the game designer's run) when the wave comes. */
+		bool bTrapSolo = false;
+		/** "nogroup": the pause order goes to the selected operative only (no multi-selection). */
+		bool bNoGroup = false;
+		int32 PauseStage = 0;
+		float PauseStageTime = 0.f;
+		TArray<FVector> PauseStart;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -268,6 +278,146 @@ namespace LakeQuestSmoke
 		return State.Probe ? State.Probe->CountEvent(FName(Name), SubjectId) : 0;
 	}
 
+
+	/** A world click on Point through the controller's real click path (ground hit traced under it). */
+	bool ClickGround(UWorld* World, const FVector& Point)
+	{
+		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+		FHitResult Hit;
+		if (!PC || !World->LineTraceSingleByChannel(Hit, Point + FVector(0.f, 0.f, 2000.f), Point - FVector(0.f, 0.f, 2000.f), ECC_Visibility))
+		{
+			return false;
+		}
+		PC->HandleWorldHit(Hit);
+		return true;
+	}
+
+	/**
+	 * Bug 2026-10-25 (game designer, packaged build): at the console's wave the horde's free tactical pause opens; a move order there,
+	 * Space -> the Commander and the Engineer walked, the Medic-Sapper stayed, and after that NO click order was taken in real time
+	 * (an object relocation in a new pause unstuck it). Gives the pause order like the player, resumes, then gives real-time orders.
+	 */
+	bool PauseOrdersStep(UWorld* World, FState& State)
+	{
+		UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+		UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>();
+		State.PauseStageTime += StepSeconds;
+		auto NextPause = [&State]() { ++State.PauseStage; State.PauseStageTime = 0.f; };
+		auto LogSquad = [Squad, Flow, Tutorial](const TCHAR* When)
+		{
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[PauseOrders] %s: %s at %s, vel %.0f, own order %d"), When, *Member->DisplayName.ToString(),
+					*Member->GetActorLocation().ToCompactString(), Member->GetVelocity().Size2D(), Member->HasOwnMoveOrder() ? 1 : 0);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PauseOrders] %s: selected %d, solo %d"), When, Squad->GetSelectedGroup().Num(), Squad->IsSoloMode() ? 1 : 0);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PauseOrders] %s: phase %d mode %d free %d horde-armed %d; Order.Move locked %d"), When,
+				static_cast<int32>(Flow->GetPhase()), static_cast<int32>(Flow->GetCombatMode()), Flow->IsFreePause() ? 1 : 0,
+				Flow->IsAwaitingHordeIntro() ? 1 : 0, Tutorial && Tutorial->IsCommandLocked(PlayerCommands::Move) ? 1 : 0);
+		};
+		if (State.PauseStageTime > 60.f)
+		{
+			LogSquad(TEXT("timeout"));
+			Check(State, false, FString::Printf(TEXT("pause orders: stage %d timed out"), State.PauseStage));
+			return Finish(State, false);
+		}
+		switch (State.PauseStage)
+		{
+		case 0: // the horde intro runs on its own up to the free pause (no skip), like a player watching it
+			if (Flow->GetCombatMode() != ECodexCombatMode::TacticalPause || State.PauseStageTime < 1.f)
+			{
+				return true;
+			}
+			LogSquad(TEXT("pause open"));
+			UE_LOG(LogCodexTactics, Display, TEXT("[PauseOrders] trap solo at the pause: %d"), Squad->IsTrapSolo() ? 1 : 0);
+			State.PauseStart.Reset();
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				State.PauseStart.Add(Member->GetActorLocation());
+			}
+			NextPause();
+			return true;
+		case 1: // the player's pause order: the squad 8 m back towards the yard
+		{
+			AOperativeCharacter* Leader = Squad->GetLeader();
+			if (!State.bNoGroup)
+			{
+				Squad->SetSelectedGroup(Squad->GetMembers(), false); // the player has the whole squad selected (box / select all)
+			// The game designer's case: the action bar's MOVE (object relocation) pressed in the pause - it used to swallow every click.
+			if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController()))
+			{
+				PC->ToggleRelocateSelectMode();
+				Check(State, PC->IsRelocateSelectMode(), TEXT("the action bar's MOVE OBJ pick is on (pressed by mistake)"));
+			}
+				Check(State, Squad->GetSelectedGroup().Num() == 3, TEXT("the whole squad selected"));
+			}
+			Check(State, ClickGround(World, Leader->GetActorLocation() + FVector(-800.f, 0.f, 0.f)), TEXT("pause order: a ground click under the cursor"));
+			LogSquad(TEXT("after the pause click"));
+			NextPause();
+			return true;
+		}
+		case 2: // Space
+			if (State.PauseStageTime < 1.f)
+			{
+				return true;
+			}
+			Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok, TEXT("Space resumes real time"));
+			LogSquad(TEXT("resumed"));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Check(State, Member->HasOwnMoveOrder(), FString::Printf(TEXT("%s runs the planned pause order"), *Member->DisplayName.ToString()));
+			}
+			NextPause();
+			return true;
+		case 3: // all three carry the planned move out
+		{
+			if (State.PauseStageTime < 6.f)
+			{
+				return true;
+			}
+			LogSquad(TEXT("6 s after the pause"));
+			const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+			for (int32 Index = 0; Index < Members.Num() && Index < State.PauseStart.Num(); ++Index)
+			{
+				const float Moved = FVector::Dist2D(Members[Index]->GetActorLocation(), State.PauseStart[Index]);
+				Check(State, Moved > 150.f, FString::Printf(TEXT("%s carried out the pause order (moved %.0f cm)"), *Members[Index]->DisplayName.ToString(), Moved));
+			}
+			State.PauseStart.Reset();
+			for (AOperativeCharacter* Member : Members)
+			{
+				State.PauseStart.Add(Member->GetActorLocation());
+			}
+			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("real time after the pause"));
+			Check(State, ClickGround(World, Squad->GetLeader()->GetActorLocation() + FVector(0.f, 700.f, 0.f)), TEXT("a real-time ground click"));
+			LogSquad(TEXT("after the real-time click"));
+			for (AOperativeCharacter* Member : Members)
+			{
+				Check(State, Member->HasOwnMoveOrder(), FString::Printf(TEXT("%s took the real-time move order"), *Member->DisplayName.ToString()));
+			}
+			NextPause();
+			return true;
+		}
+		case 4: // the real-time order is taken by the whole squad
+		{
+			if (State.PauseStageTime < 6.f)
+			{
+				return true;
+			}
+			LogSquad(TEXT("6 s after the real-time click"));
+			const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+			for (int32 Index = 0; Index < Members.Num() && Index < State.PauseStart.Num(); ++Index)
+			{
+				const float Moved = FVector::Dist2D(Members[Index]->GetActorLocation(), State.PauseStart[Index]);
+				UE_LOG(LogCodexTactics, Display, TEXT("[PauseOrders] %s moved %.0f cm on the real-time order"), *Members[Index]->DisplayName.ToString(), Moved);
+			}
+			return Finish(State, true);
+		}
+		default:
+			return Finish(State, false);
+		}
+	}
+
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
 	{
 		State.Time += StepSeconds;
@@ -297,7 +447,7 @@ namespace LakeQuestSmoke
 			Check(State, false, FString::Printf(TEXT("time out in stage %d"), State.Stage));
 			return Finish(State, false);
 		}
-		if (State.Stage > 0 && State.StageTime > 40.f)
+		if (State.Stage > 0 && State.StageTime > 40.f && !(State.bPauseOrders && State.Stage == 6))
 		{
 			Check(State, false, FString::Printf(TEXT("stage %d took more than 40 s"), State.Stage));
 			return Finish(State, false);
@@ -517,6 +667,11 @@ namespace LakeQuestSmoke
 				}
 				State.bListening = true;
 			}
+			if (State.bTrapSolo && !Squad->IsTrapSolo())
+			{
+				Squad->HoldForSpottedTrap(Squad->GetLeader(), FText::FromString(TEXT("Supply crate"))); // the run's crate inside the house
+				UE_LOG(LogCodexTactics, Display, TEXT("[PauseOrders] trap solo on before the console: %d"), Squad->IsTrapSolo() ? 1 : 0);
+			}
 			if (!RunInteraction(World, State, Terminal, TEXT("blast_door_console"), [Quests]() { return Quests->IsGatePowered(); }))
 			{
 				return true;
@@ -527,6 +682,10 @@ namespace LakeQuestSmoke
 		}
 		case 6:
 		{
+			if (State.bPauseOrders)
+			{
+				return PauseOrdersStep(World, State);
+			}
 			if (Flow->GetPhase() == ECodexGamePhase::WaveCombat && (Flow->IsAwaitingHordeIntro() || Flow->IsFreePause()))
 			{
 				SmokeUtils::ReleaseHordeIntroPause(Flow); // real time: the wave's later spawns (the hounds, 2 s) come on
@@ -704,12 +863,26 @@ namespace LakeQuestSmoke
 		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->bTrapSolo = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("trapsolo"), ESearchCase::IgnoreCase); });
+		State->bNoGroup = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("nogroup"), ESearchCase::IgnoreCase); });
+		State->bPauseOrders = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("pauseorders"), ESearchCase::IgnoreCase); });
 		State->bShots = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); }) && FApp::CanEverRender();
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			return Step(WeakWorld, *State);
 		}), StepSeconds);
 	}
+
+	static FAutoConsoleCommandWithWorldAndArgs PauseOrdersCommand(
+		TEXT("CodexTactics.LakePauseOrdersSmoke"),
+		TEXT("Dev check (bug 2026-10-25): LakeQuestSmoke up to the console's wave, then the horde's free pause: MOVE OBJ pressed by mistake, a "
+			"ground click = the squad's planned move, Space, every member runs it and takes a real-time order."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			TArray<FString> WithMode = Args;
+			WithMode.Add(TEXT("pauseorders"));
+			Run(WithMode, World);
+		}));
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.LakeQuestSmoke"),

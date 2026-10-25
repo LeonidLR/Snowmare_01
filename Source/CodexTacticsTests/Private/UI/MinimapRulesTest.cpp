@@ -432,4 +432,14 @@ bool FMinimapLevelJsonTest::RunTest(const FString&)
 	return true;
 }
 
+MINIMAP_TEST(FMinimapFloorLadderTest, "Floors.Ladder")
+bool FMinimapFloorLadderTest::RunTest(const FString&)
+{
+	// docs/design/LADDERS.md 7.3: on a ladder he keeps the floor he climbed from; off it, the selected floor.
+	TestEqual(TEXT("climbing up: still the ground floor"), MinimapRules::FloorWithLadder(true, 0, 1), 0);
+	TestEqual(TEXT("off on the roof: the upper floor"), MinimapRules::FloorWithLadder(false, 0, 1), 1);
+	TestEqual(TEXT("climbing down: still the roof"), MinimapRules::FloorWithLadder(true, 1, 0), 1);
+	return true;
+}
+
 #endif

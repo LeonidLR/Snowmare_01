@@ -495,7 +495,7 @@ void UActionBarWidget::Refresh()
 		}
 		else
 		{
-			ActionBarDirty::SetText(BarRelocateText, bActive ? LOCTEXT("RelocateActive", "ACTIVE") : LOCTEXT("Relocate", "MOVE"));
+			ActionBarDirty::SetText(BarRelocateText, bActive ? LOCTEXT("RelocateActive", "ACTIVE") : LOCTEXT("Relocate", "MOVE OBJ"));
 			ActionBarDirty::SetTextColor(BarRelocateText, FSlateColor(BarTextColor));
 		}
 	}

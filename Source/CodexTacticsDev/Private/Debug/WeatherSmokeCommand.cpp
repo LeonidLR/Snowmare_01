@@ -175,7 +175,7 @@ namespace WeatherSmoke
 	void CheckHoursAndWeather(FState& State, UEnvironmentSubsystem& Env, AWeatherPresenterActor& Presenter)
 	{
 		Env.SetClockScale(0.f);
-		const UDirectionalLightComponent* Sun = Presenter.GetSun() ? Presenter.GetSun()->GetComponent() : nullptr;
+		const UDirectionalLightComponent* Sun = Presenter.GetSun() ? AWeatherPresenterActor::GetDirectionalComponent(Presenter.GetSun()) : nullptr;
 		const UDirectionalLightComponent* Moon = Presenter.GetActiveMoon();
 
 		Env.SetHour(12.f);
@@ -362,7 +362,7 @@ namespace WeatherSmoke
 		Check(State, !Presenter.IsApplying(), TEXT("4 Codex.Env.Visuals 0: the presenter stopped"));
 		if (const ADirectionalLight* SunActor = Presenter.GetSun())
 		{
-			const UDirectionalLightComponent* Sun = SunActor->GetComponent();
+			const UDirectionalLightComponent* Sun = AWeatherPresenterActor::GetDirectionalComponent(SunActor);
 			Check(State, FMath::IsNearlyEqual(Sun->Intensity, Authored.SunIntensity, 1.e-3f) && Sun->IsVisible() == Authored.bSunVisible,
 				FString::Printf(TEXT("4 sun intensity %.3f = authored %.3f, visibility authored"), Sun->Intensity, Authored.SunIntensity));
 			Check(State, Sun->GetComponentRotation().Equals(Authored.SunRotation, 0.01f),
@@ -532,7 +532,7 @@ namespace WeatherLakeSmoke
 		const FWeatherVisualFrame& Frame = Presenter->GetLastFrame();
 		Check(State, Frame.Weather == EWeatherState::Snowfall && FMath::IsNearlyEqual(Frame.Hour, 23.f, 0.01f),
 			FString::Printf(TEXT("L1 the applied frame is 23:00 Snowfall (%.2f, %s)"), Frame.Hour, *EnvironmentRules::WeatherToString(Frame.Weather)));
-		const UDirectionalLightComponent* Sun = Presenter->GetSun() ? Presenter->GetSun()->GetComponent() : nullptr;
+		const UDirectionalLightComponent* Sun = Presenter->GetSun() ? AWeatherPresenterActor::GetDirectionalComponent(Presenter->GetSun()) : nullptr;
 		Check(State, Frame.SunElevation < 0.f && (!Sun || !Sun->IsVisible()), FString::Printf(TEXT("L2 night: the sun is below the horizon (%.1f deg) and off"), Frame.SunElevation));
 		const UDirectionalLightComponent* Moon = Presenter->GetActiveMoon();
 		Check(State, Moon && Moon->IsVisible() && Moon->Intensity > 0.f, FString::Printf(TEXT("L2 night: the moon lights the lake (%.2f)"), Moon ? Moon->Intensity : 0.f));

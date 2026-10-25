@@ -110,9 +110,9 @@ namespace LadderRules
 		case S::EnterTop:
 			return Event == E::EnterDone ? S::ClimbDown : From;
 		case S::ClimbUp:
-			return Event == E::TargetReached ? S::ExitTop : From;
+			return Event == E::TargetReached ? S::ExitTop : Event == E::Reverse ? S::ClimbDown : From;
 		case S::ClimbDown:
-			return Event == E::TargetReached ? S::ExitBottom : From;
+			return Event == E::TargetReached ? S::ExitBottom : Event == E::Reverse ? S::ClimbUp : From;
 		case S::ExitTop:
 		case S::ExitBottom:
 			return Event == E::ExitDone ? S::None : From;
@@ -194,6 +194,28 @@ namespace LadderRules
 		return false;
 	}
 
+	FLoopPos NextRungBoundary(const FLoopPos& Pos, int32 Direction, float LoopLength)
+	{
+		const float Half = LoopLength * 0.5f;
+		constexpr float Eps = 1e-3f;
+		if (Direction >= 0)
+		{
+			return Pos.Time < Half - Eps ? FLoopPos{ Pos.Rung, Half } : FLoopPos{ Pos.Rung + 2, 0.f };
+		}
+		if (Pos.Time > Half + Eps)
+		{
+			return FLoopPos{ Pos.Rung, Half };
+		}
+		return Pos.Time > Eps ? FLoopPos{ Pos.Rung, 0.f } : FLoopPos{ Pos.Rung - 2, Half };
+	}
+
+	bool IsBeyond(const FLoopPos& Pos, const FLoopPos& Limit, int32 Direction, float LoopLength)
+	{
+		const double A = Phase(Pos, LoopLength);
+		const double B = Phase(Limit, LoopLength);
+		return Direction >= 0 ? A >= B - 1e-4 : A <= B + 1e-4;
+	}
+
 	float HeightAt(const FLoopPos& Pos, float Fraction, float Pitch)
 	{
 		return Pos.Rung * Pitch + 2.f * Pitch * Fraction;
@@ -218,7 +240,8 @@ namespace LadderRules
 			{ 1, 34.f, 50.f },
 		};
 		constexpr float LastFrame = 53.f;
-		constexpr float FadeFrames = 2.f;
+		/** A grip fades in / out over 5 frames (~0.17 s, eased): no foot / hand pops at the contact window edges (user report 2026-10-23). */
+		constexpr float FadeFrames = 5.f;
 	}
 
 	FLimbGrip LimbGrip(ELadderLimb Limb, float NormalizedTime)
@@ -235,12 +258,12 @@ namespace LadderRules
 		if (Frame < Mid)
 		{
 			Grip.RungOffset = Window.StartRung;
-			Grip.Alpha = FMath::Clamp((Window.ReleaseFrame - Frame) / FadeFrames, 0.f, 1.f);
+			Grip.Alpha = FMath::SmoothStep(0.f, 1.f, FMath::Clamp((Window.ReleaseFrame - Frame) / FadeFrames, 0.f, 1.f));
 		}
 		else
 		{
 			Grip.RungOffset = Window.StartRung + 2;
-			Grip.Alpha = FMath::Clamp((Frame - (Window.GripFrame - FadeFrames)) / FadeFrames, 0.f, 1.f);
+			Grip.Alpha = FMath::SmoothStep(0.f, 1.f, FMath::Clamp((Frame - (Window.GripFrame - FadeFrames)) / FadeFrames, 0.f, 1.f));
 		}
 		return Grip;
 	}
@@ -284,6 +307,29 @@ namespace LadderRules
 			return ELadderRefusal::MustStand;
 		}
 		return ELadderRefusal::None;
+	}
+
+	bool PreferTopEnd(float FromTopCm, float FromBottomCm, bool bGoingUp)
+	{
+		if (FromTopCm < 0.f && FromBottomCm < 0.f)
+		{
+			return bGoingUp;
+		}
+		if (FromTopCm < 0.f || FromBottomCm < 0.f)
+		{
+			return FromTopCm >= 0.f;
+		}
+		return FMath::IsNearlyEqual(FromTopCm, FromBottomCm, 1.f) ? bGoingUp : FromTopCm < FromBottomCm;
+	}
+
+	bool EnemyMayClimb(bool bClassClimbs, bool bHasClips, bool bLadderAllowsEnemies)
+	{
+		return bClassClimbs && bHasClips && bLadderAllowsEnemies;
+	}
+
+	bool JoinsOnUpperFloor(float FeetZ, float GridGroundZ, float ToleranceCm)
+	{
+		return FeetZ > GridGroundZ + ToleranceCm;
 	}
 
 	bool NearestEndIsTop(int32 Rung, int32 RungCount)

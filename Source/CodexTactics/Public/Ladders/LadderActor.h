@@ -76,7 +76,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "1"))
 	float WallSearchCm = 25.f;
 
-	/** Humans that may climb (LADDERS.md 7.5) may use this ladder (no enemy climbs yet). */
+	/** The climbing enemies (AEnemyCharacter::bCanClimbLadders, LADDERS.md 7.5) may use this ladder; off = the squad only. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	bool bAllowEnemies = true;
 
@@ -148,6 +148,18 @@ public:
 	AActor* GetLeaseHolder() const { return LeaseHolder.Get(); }
 	bool IsLeasedByOther(const AActor* Climber) const { return LeaseHolder.IsValid() && LeaseHolder.Get() != Climber; }
 
+	// --- The queue (LADDERS.md 7.1, 2026-10-23: group orders - one on the ladder at a time, the others wait their turn in the order they came) ---
+
+	/** Climber waits for this ladder (added once, at the back). */
+	void JoinQueue(AActor* Climber);
+	void LeaveQueue(AActor* Climber);
+	/** Climber's place in the queue (0 = next), INDEX_NONE when not waiting. Stale entries (no longer queued here) do not count. */
+	int32 GetQueueIndex(const AActor* Climber) const;
+	/** Live waiters (smokes). */
+	int32 GetQueueLength() const;
+	/** Not Climber's turn: someone else holds the ladder, or someone came before him and still waits for it. */
+	bool IsBusyFor(const AActor* Climber) const;
+
 	/** The last validation result (empty = fine). */
 	const FString& GetValidationText() const { return ValidationText; }
 
@@ -200,4 +212,7 @@ private:
 	bool bHasWall = false;
 	FString ValidationText;
 	TWeakObjectPtr<AActor> LeaseHolder;
+	TArray<TWeakObjectPtr<AActor>> Waiting;
+	/** A waiter still waits for this ladder (alive, its climb component queued here). */
+	bool IsWaitingHere(const AActor* Climber) const;
 };

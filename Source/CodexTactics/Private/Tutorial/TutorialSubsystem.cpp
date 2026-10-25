@@ -9,6 +9,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/KnockdownComponent.h"
+#include "Core/ActorLabelTag.h"
 #include "Core/DemoModeSubsystem.h"
 #include "Core/MissionSessionSubsystem.h"
 #include "Core/SaveGameRules.h"
@@ -183,14 +184,10 @@ namespace TutorialSubsystemLocal
 		return Points;
 	}
 
-	/** An actor's label in editor builds (the "enemies" selectors), empty in cooked builds. */
+	/** An actor's label (the "enemies" / route selectors); a packaged game reads the cook's label tag (ActorLabelTag). */
 	FString TutorialActorLabel(const AActor& Actor)
 	{
-#if WITH_EDITOR
-		return Actor.GetActorLabel(false);
-#else
-		return FString();
-#endif
+		return ActorLabelTag::GetLabel(Actor);
 	}
 
 	/** Actor matches any of the "enemies" selectors (label, object name, tag). */
@@ -362,6 +359,8 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 	}
 	LockedRefusals = 0;
 	ConfinedRefusals = 0;
+	PlaceLockRefusals = 0;
+	PlaceLockLineTime = -1.0e9;
 	LastCardDoneAt = -1.0;
 	NoInstructionRun = NoInstructionTotal = MaxNextInstructionSeconds = 0.f;
 	ConfineLineTimes.Reset();
@@ -481,6 +480,7 @@ void UTutorialSubsystem::Tick(float DeltaTime)
 		SquadBindTimer = 1.f;
 		BindSquadMembers();
 	}
+	TickDormantEnemies(); // 2026-10-23: also with the tutorial off (wakes them in place)
 	if (!IsTutorialActive())
 	{
 		return;
@@ -758,6 +758,11 @@ void UTutorialSubsystem::ResetTutorial()
 {
 	bSkipped = false; // rev 5i: RESET TUTORIAL starts a skipped tutorial again
 	Machine.ResetProgress();
+	for (TPair<FName, FDormantBindingState>& Dormant : DormantBindings)
+	{
+		Dormant.Value.bWoken = false; // 2026-10-23: from the start again - the dormant enemies sleep until their condition
+		Dormant.Value.bHasSpawn = false;
+	}
 	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
 	ClearOverlayState();
@@ -893,6 +898,10 @@ void UTutorialSubsystem::ProcessTransitions()
 	if (Machine.GetConfineSerial() != SeenConfineSerial)
 	{
 		HandleConfineChanged(); // rev 5i: a confinement started / ended
+	}
+	if (Machine.GetPlaceLockSerial() != SeenPlaceLockSerial)
+	{
+		HandlePlaceLocksChanged(); // 2026-10-23: an operative locked in place / released
 	}
 	RefreshMarkers();
 }
@@ -1183,6 +1192,36 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		}
 		return static_cast<float>(NotLow);
 	}
+	if (const FName CoverVolume = TutorialRules::ParseNotInCoverAtStat(Stat); !CoverVolume.IsNone())
+	{
+		// 2026-10-23 (the dormant A4 zombie wakes when the squad is in cover at the overlook): the living members NOT in cover (settled,
+		// not mid-shimmy) inside that volume's box or within 3 m of it (0 = everybody is in cover there).
+		const TArray<const ATutorialTriggerVolume*> CoverVolumes = FindVolumes(CoverVolume);
+		int32 NotInCover = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (!TutorialSubsystemLocal::IsLivingOrUntracked(Member))
+			{
+				continue;
+			}
+			const bool bThere = CoverVolumes.ContainsByPredicate([Member](const ATutorialTriggerVolume* Volume)
+			{
+				return TutorialConfineLocal::IsInsideBox(*Volume->Box, Member->GetActorLocation(), TutorialConfineLocal::NearVolumeCm, TutorialConfineLocal::AreaMarginZCm);
+			});
+			NotInCover += Member->bInCover && bThere ? 0 : 1;
+		}
+		return static_cast<float>(NotInCover);
+	}
+	if (Stat == FName(TEXT("squad_mines")))
+	{
+		// 2026-10-23: mines the living members carry (the A4 card offers the mine only then).
+		int32 Mines = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Mines += TutorialSubsystemLocal::IsLivingOrUntracked(Member) ? Member->MinesCount : 0;
+		}
+		return static_cast<float>(Mines);
+	}
 	if (Stat == FName(TEXT("squad_injury_max")))
 	{
 		// Rev 2026-10-19: the medkit lesson - the share of health the most wounded living member has lost, % (0 = all healthy / none alive).
@@ -1327,6 +1366,14 @@ void UTutorialSubsystem::UnlockAllCommands(const TCHAR* Reason)
 		WriteTelemetry(TEXT("confine_released"), NAME_None, Machine.GetCurrentBeat(), 0.f);
 		SeenConfineSerial = Machine.GetConfineSerial();
 	}
+	// 2026-10-23: nobody is held at his spot in a fight / with the tutorial off.
+	if (Machine.ReleasePlaceLocks())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: place locks released (%s)"), Reason);
+		WriteTelemetry(TEXT("place_lock_released"), NAME_None, Machine.GetCurrentBeat(), 0.f);
+		SeenPlaceLockSerial = Machine.GetPlaceLockSerial();
+		SeenPlaceLocked.Reset();
+	}
 }
 
 // --- Confine (rev 5i) -----------------------------------------------------------------------------------------------
@@ -1468,6 +1515,11 @@ bool UTutorialSubsystem::ClampIntoConfinement(FVector& InOutDestination) const
 
 ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination)
 {
+	// 2026-10-23: an operative locked at his spot of the lesson goes nowhere, inside the area or not.
+	if (IsMoveHeldInPlace(Operative, Destination))
+	{
+		return ETutorialConfineVerdict::LockedInPlace;
+	}
 	FTutorialConfineView Confine;
 	if (!IsTutorialActive() || !Machine.GetActiveConfine(Confine))
 	{
@@ -1483,6 +1535,11 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 {
 	if (Verdict == ETutorialConfineVerdict::Allowed)
 	{
+		return;
+	}
+	if (Verdict == ETutorialConfineVerdict::LockedInPlace)
+	{
+		ReportPlaceLockRefusal(Operative);
 		return;
 	}
 	++ConfinedRefusals;
@@ -1511,8 +1568,15 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 		break;
 	case ETutorialConfineVerdict::HeldBack:
 	{
-		// 2026-10-20: the A4 ambush - one operative does it, the others hold.
-		const AOperativeCharacter* Free = GetFocusOperative(Confine.Owner);
+		// 2026-10-20: the A4 ambush - one operative does it, the others hold (2026-10-23 "first": the one who took it).
+		const AOperativeCharacter* Free = Confine.Spec.bFreeFocus ? GetFocusOperative(Confine.Owner) : nullptr;
+		if (const USquadSubsystem* Squad = !Free && GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+		{
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Free = Member && Member->GetFName() == Confine.FreeOperative ? Member : Free;
+			}
+		}
 		Line = FText::Format(LOCTEXT("ConfineHeldBack", "Hold here - {0} handles it."), Free ? Free->DisplayName : LOCTEXT("ConfineHeldBackSomeone", "the other one"));
 		break;
 	}
@@ -1526,17 +1590,121 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 bool UTutorialSubsystem::CheckConfinedOrder(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination)
 {
 	UTutorialSubsystem* Tutorial = TutorialSubsystemLocal::FindTutorialFor(WorldContext);
-	if (!Tutorial || !Operative || !Tutorial->IsConfining())
+	if (!Tutorial || !Operative || (!Tutorial->IsConfining() && !Tutorial->IsHoldingInPlace()))
 	{
 		return true;
 	}
 	const ETutorialConfineVerdict Verdict = Tutorial->JudgeMove(*Operative, Destination);
 	if (Verdict == ETutorialConfineVerdict::Allowed)
 	{
+		// 2026-10-23 ("free": "first"): the SELECTED operative (the one the player orders) first sent outside the area takes the lesson -
+		// the others are held from now on. Anyone else's walk outside before that (a task, autonomy) is refused like a held one.
+		FTutorialConfineView Confine;
+		if (Tutorial->IsConfining() && Tutorial->Machine.GetActiveConfine(Confine) && Confine.Spec.bFreeFirst && Confine.FreeOperative.IsNone()
+			&& !Tutorial->IsInsideConfinement(Destination))
+		{
+			const USquadSubsystem* Squad = Tutorial->GetWorld() ? Tutorial->GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+			if (!Squad || Squad->GetLeader() != Operative)
+			{
+				Tutorial->ReportConfinedRefusal(ETutorialConfineVerdict::Outside, Operative);
+				return false;
+			}
+			if (Tutorial->Machine.ClaimConfineFree(Operative->GetFName()))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s takes the lesson of %s alone (the others hold the area)"), *Operative->DisplayName.ToString(),
+					*Confine.Owner.ToString());
+				Tutorial->WriteTelemetry(TEXT("confine_free_taken"), Confine.Owner, Tutorial->Machine.GetCurrentBeat(), 0.f);
+			}
+		}
 		return true;
 	}
 	Tutorial->ReportConfinedRefusal(Verdict, Operative);
 	return false;
+}
+
+bool UTutorialSubsystem::IsHeldInPlace(const AOperativeCharacter& Operative) const
+{
+	return IsTutorialActive() && Machine.IsLockedInPlace(Operative.GetFName());
+}
+
+bool UTutorialSubsystem::IsHoldingInPlace() const
+{
+	return IsTutorialActive() && !Machine.GetPlaceLocks().IsEmpty();
+}
+
+bool UTutorialSubsystem::IsMoveHeldInPlace(const AOperativeCharacter& Operative, const FVector& Destination) const
+{
+	return TutorialRules::IsPlaceLockedMove(IsHeldInPlace(Operative), Operative.GetActorLocation(), Destination);
+}
+
+void UTutorialSubsystem::ReportPlaceLockRefusal(const AOperativeCharacter* Operative)
+{
+	++PlaceLockRefusals;
+	FName StepId;
+	Machine.IsLockedInPlace(Operative ? Operative->GetFName() : NAME_None, &StepId);
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: order for %s refused - held in place by %s"), Operative ? *Operative->DisplayName.ToString() : TEXT("?"),
+		*StepId.ToString());
+	WriteTelemetry(TEXT("place_lock_refused"), StepId, Machine.GetCurrentBeat(), 0.f);
+	GameplayEvents::Raise(this, FName(TEXT("Tutorial.HeldInPlace")));
+	const double Now = FPlatformTime::Seconds();
+	if (Now - PlaceLockLineTime < 1.0)
+	{
+		return; // a group order refused for each locked member: one line
+	}
+	PlaceLockLineTime = Now;
+	const FTutorialStep* Step = Machine.GetData().FindStep(StepId);
+	const FText Line = Step && !Step->LockInPlace.TextId.IsNone() ? GetTutorialText(Step->LockInPlace.TextId)
+		: LOCTEXT("PlaceLockHold", "Hold this position.");
+	PostTrainingLine(Operative ? FText::Format(LOCTEXT("PlaceLockHoldNamed", "{0}: {1}"), Operative->DisplayName, Line) : Line);
+}
+
+bool UTutorialSubsystem::CheckHeldInPlace(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination)
+{
+	UTutorialSubsystem* Tutorial = TutorialSubsystemLocal::FindTutorialFor(WorldContext);
+	if (!Tutorial || !Operative || !Tutorial->IsMoveHeldInPlace(*Operative, Destination))
+	{
+		return true;
+	}
+	Tutorial->ReportPlaceLockRefusal(Operative);
+	return false;
+}
+
+void UTutorialSubsystem::HandlePlaceLocksChanged()
+{
+	SeenPlaceLockSerial = Machine.GetPlaceLockSerial();
+	TArray<FName> Now;
+	for (const FTutorialPlaceLockState& Lock : Machine.GetPlaceLocks())
+	{
+		Now.Add(Lock.Operative);
+	}
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	for (const FTutorialPlaceLockState& Lock : Machine.GetPlaceLocks())
+	{
+		if (SeenPlaceLocked.Contains(Lock.Operative))
+		{
+			continue;
+		}
+		AOperativeCharacter* Held = nullptr;
+		for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			Held = Member && Member->GetFName() == Lock.Operative ? Member : Held;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s held in place by %s (until %s)"), Held ? *Held->DisplayName.ToString() : *Lock.Operative.ToString(),
+			*Lock.Step.ToString(), Lock.Until.IsNone() ? TEXT("the next beat") : *Lock.Until.ToString());
+		WriteTelemetry(TEXT("place_locked"), Lock.Step, Machine.GetCurrentBeat(), 0.f);
+		if (Held && IsTutorialActive())
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(Held, TEXT("HOLDING POSITION"), FLinearColor(1.f, 0.42f, 0.05f));
+		}
+	}
+	for (const FName Was : SeenPlaceLocked)
+	{
+		if (!Now.Contains(Was))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s released from his place"), *Was.ToString());
+		}
+	}
+	SeenPlaceLocked = MoveTemp(Now);
 }
 
 void UTutorialSubsystem::HandleConfineChanged()
@@ -2177,7 +2345,10 @@ FString UTutorialSubsystem::ResolvePauseTokens(const FString& Text) const
 	// 2026-10-22: the pause lesson names the fight's real limits ({pause_charges} / {pause_seconds} / {pause_cooldown}).
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	const FGameFlowConfig Config = Flow ? Flow->GetConfig() : FGameFlowConfig();
-	return TutorialRules::ResolvePauseTokens(Text, Config.TacticalPauseMaxCharges, Config.TacticalPauseDuration, Config.TacticalPauseCooldown);
+	// 2026-10-23: "{if:<stat>:<text>}" (the A4 card names the mine only when the squad carries one).
+	return TutorialRules::ResolveIfStatTokens(
+		TutorialRules::ResolvePauseTokens(Text, Config.TacticalPauseMaxCharges, Config.TacticalPauseDuration, Config.TacticalPauseCooldown),
+		[this](FName Stat) { return GetConditionStat(Stat); });
 }
 
 FTutorialCardView UTutorialSubsystem::GetCardView() const
@@ -2540,6 +2711,7 @@ TSharedPtr<FJsonObject> UTutorialSubsystem::CaptureSaveState() const
 	}
 	Object->SetArrayField(TEXT("lock_hints"), Hints);
 	Object->SetBoolField(TEXT("skipped"), bSkipped); // rev 5i: SKIP TUTORIAL stays skipped after a load
+	SaveDormantEnemies(*Object); // 2026-10-23: dormant / woken enemies and where they woke
 	// 2026-10-22: the enemy bindings that had enemies in this level ("all_dead.<binding>": dead ones are not in the save's world).
 	TArray<FName> SeenBindings = EnemyBindingsSeen.Array();
 	SeenBindings.Sort(FNameLexicalLess());
@@ -2585,6 +2757,7 @@ void UTutorialSubsystem::RestoreSaveState(const FJsonObject& Object)
 	}
 	bool bSavedSkipped = false;
 	bSkipped = Object.TryGetBoolField(TEXT("skipped"), bSavedSkipped) && bSavedSkipped;
+	LoadDormantEnemies(Object);
 	const TArray<TSharedPtr<FJsonValue>>* SeenList = nullptr;
 	if (Object.TryGetArrayField(TEXT("enemy_bindings_seen"), SeenList))
 	{

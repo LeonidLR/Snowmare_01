@@ -6,6 +6,7 @@
 #include "Characters/PersonalItemRules.h"
 #include "Interactables/DeployableRules.h"
 #include "Combat/SpaceInput.h"
+#include "GameFlow/GameFlowTypes.h"
 #include "Characters/FirePostureRules.h"
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
@@ -348,6 +349,8 @@ private:
 	TSharedPtr<class IInputProcessor> SquadKeyProcessor;
 	/** Next object click starts its relocation (action bar "MOVE"). */
 	bool bRelocateSelectMode = false;
+	/** The combat sub-mode when the "MOVE OBJ" pick started: a pause entered / left drops the pick (bug 2026-10-25). */
+	ECodexCombatMode RelocateSelectCombatMode = ECodexCombatMode::None;
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */
 	bool IsDialogueOpen() const;
 	void DialogueNext();

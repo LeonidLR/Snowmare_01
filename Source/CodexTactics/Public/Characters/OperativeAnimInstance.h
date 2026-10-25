@@ -167,10 +167,14 @@ struct CODEXTACTICS_API FOperativeAnimInstanceProxy : public FAnimInstanceProxy
 	/** Graph instances: the graph, then the ladder rung IK (LADDERS.md 6.2) on hands / feet - no ABP node needed. */
 	virtual bool Evaluate_WithRoot(FPoseContext& Output, FAnimNode_Base* InRootNode) override;
 
+	/** How far the rung IK moved each knee in the last evaluation (component space; 0 = no IK), [0] left, [1] right (smokes). */
+	FVector GetKneeIKOffset(int32 Side) const { return KneeIKOffset[FMath::Clamp(Side, 0, 1)]; }
+
 private:
 	/** Two-bone IK of the hands / feet onto their rungs (component space, after the whole graph). */
 	void ApplyLadderIK(FPoseContext& Output) const;
 	FLadderIKFrame LadderIK;
+	mutable FVector KneeIKOffset[2] = { FVector::ZeroVector, FVector::ZeroVector };
 	TStaticArray<FOperativeClipState, static_cast<int32>(EOperativeClip::Count)> Clips;
 	bool bUseNative = true;
 };
@@ -542,6 +546,9 @@ public:
 
 	/** The rung IK frame copied from the climb this update (the proxy applies it). */
 	FLadderIKFrame LadderIKFrame;
+
+	/** How far the rung IK moved the left (0) / right (1) knee in the last evaluated pose, cm, component space (smokes). */
+	FVector GetLadderKneeIKOffset(int32 Side) const;
 
 	/** Vaulting over an obstacle (Godot "Vault" state). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
@@ -1321,6 +1328,8 @@ public:
 	bool IsBlizzardSheltered() const { return bBlizzardSheltered; }
 	/** The storm clip set for this body (female / male, either as fallback), or nullptr. */
 	const FWarmIdleClipSet* GetBlizzardWalkClipSet() const;
+	/** Smokes: the loop a storm pose starts with (None = random, as in the game); the random pick made the pose checks flaky. */
+	EWarmClipStep BlizzardWalkFirstStepForTesting = EWarmClipStep::None;
 	/** Smokes: storm clips started (capped). */
 	const TArray<FString>& GetBlizzardWalkClipLog() const { return BlizzardWalkClipLog; }
 

@@ -459,6 +459,47 @@ public:
 	/** Move orders refused by a confinement since the steps were loaded (smokes). */
 	int32 GetConfinedRefusalCount() const { return ConfinedRefusals; }
 
+	// --- Lock in place (2026-10-23, game designer: "the one I placed at the hut wall stays there") ---------------------
+
+	/** The tutorial is active and Operative is held where he stands by a "lock_in_place" step (FTutorialPlaceLock). */
+	bool IsHeldInPlace(const AOperativeCharacter& Operative) const;
+	/** The tutorial is active and some operative is held in place. */
+	bool IsHoldingInPlace() const;
+	/**
+	 * Is an order moving Operative to Destination refused by his place lock? (TutorialRules::IsPlaceLockedMove: locked and farther than
+	 * PlaceLockToleranceCm.) No line is posted - formation moves ask this quietly.
+	 */
+	bool IsMoveHeldInPlace(const AOperativeCharacter& Operative, const FVector& Destination) const;
+	/** An order for a locked operative was refused: the step's line ("Hold this position - stack on the door.", one per second), "Tutorial.HeldInPlace". */
+	void ReportPlaceLockRefusal(const AOperativeCharacter* Operative);
+	/**
+	 * The place-lock choke point for orders that change something before they reach CheckConfinedOrder (the shimmy gets up from prone
+	 * first, the regroup leaves cover): true when the order may go ahead; false = refused (the line is posted).
+	 */
+	static bool CheckHeldInPlace(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination);
+	/** Orders refused by a place lock since the steps were loaded (smokes). */
+	int32 GetPlaceLockRefusalCount() const { return PlaceLockRefusals; }
+
+	// --- Dormant enemies (2026-10-23, game designer: the A4 zombie #1 spotted the squad on its way to the overlook cover) ----------
+
+	/** Enemy belongs to a "dormant" binding (FTutorialDormant) that has not woken yet: the runtime keeps it out of the game. */
+	bool IsEnemyDormant(const AEnemyCharacter& Enemy) const;
+	/** The binding has woken (or is not dormant at all / no tutorial). */
+	bool IsBindingAwake(FName BindingId) const;
+	/** Where the binding's enemies were woken; false while dormant or when woken in place. */
+	bool GetWakeSpawn(FName BindingId, FVector& OutSpawn) const;
+	/**
+	 * Wakes a dormant binding now: bHiddenSpawn = at the point of its patrol route hidden from the squad (TutorialRules::ChooseHiddenRoutePoint),
+	 * else where it was placed. Raises "EnemyWoke" (subject = the enemy). False when the binding is not dormant.
+	 */
+	bool WakeDormantBinding(FName BindingId, bool bHiddenSpawn, const TCHAR* Reason);
+	/**
+	 * The route point a dormant enemy would wake at now: its patrol route sampled every metre, each sample traced from every living
+	 * operative's eye (his stance's height) at the zombie's chest and knees; hidden = blocked for everyone. OutWaypoint = the waypoint it
+	 * walks to next from there. False without a route.
+	 */
+	bool FindHiddenRouteSpawn(const AEnemyCharacter& Enemy, FVector& OutSpawn, int32& OutWaypoint, bool& bOutHidden) const;
+
 	// --- Markers / save ---------------------------------------------------------------------------------------------
 
 	void RegisterMarker(ATutorialMarkerActor* Marker);
@@ -575,6 +616,30 @@ private:
 	TMap<uint8, double> ConfineLineTimes;
 	/** A confinement started / ended: a start stops the walks that would leave the area (or the whole squad with "stop"). */
 	void HandleConfineChanged();
+	/** 2026-10-23: the place-lock serial last seen, the operatives held when it was seen, the refusals so far, the last line time. */
+	int32 SeenPlaceLockSerial = 0;
+	TArray<FName> SeenPlaceLocked;
+	int32 PlaceLockRefusals = 0;
+	double PlaceLockLineTime = -1.0e9;
+	/** An operative was locked in place / released: log, telemetry, a floating "HOLDING POSITION" over the newly locked. */
+	void HandlePlaceLocksChanged();
+
+	/** 2026-10-23: one "dormant" binding's runtime state (saved as "dormant_enemies"). */
+	struct FDormantBindingState
+	{
+		bool bWoken = false;
+		bool bHasSpawn = false;
+		FVector Spawn = FVector::ZeroVector;
+		/** Where each bound enemy was placed (actor name -> location / yaw): the in-place wake (tutorial off / SKIP). */
+		TMap<FString, FVector4> Homes;
+	};
+	TMap<FName, FDormantBindingState> DormantBindings;
+	/** Every tick: keeps the not-yet-woken bound enemies out of the game, wakes them when their "until" holds (or in place when off). */
+	void TickDormantEnemies();
+	void PutEnemyToSleep(AEnemyCharacter& Enemy, FDormantBindingState& State);
+	void WakeEnemy(AEnemyCharacter& Enemy, const FDormantBindingState& State, bool bHiddenSpawn, int32 Waypoint);
+	void SaveDormantEnemies(FJsonObject& Object) const;
+	void LoadDormantEnemies(const FJsonObject& Object);
 	/** 2026-10-20: the current navigation target (RefreshGuide, every RefreshMarkers) and the beacon shown at a volume target. */
 	FTutorialGuideView GuideView;
 	TWeakObjectPtr<ATutorialMarkerActor> GuideBeacon;

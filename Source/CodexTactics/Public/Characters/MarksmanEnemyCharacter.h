@@ -85,6 +85,8 @@ protected:
 	virtual bool HasLegacyPatrolRoute() const override { return !PatrolRoute.IsEmpty(); }
 	/** Turn-based hold: cancels a pending get-up run and the aim (bug fix 2026-10-06). */
 	virtual void OnTurnBasedHeldChanged(bool bHeld) override;
+	/** The climb took the body (LADDERS.md 7.5): as the hold - no get-up run, no aim. */
+	virtual void OnLadderClimbStarted() override;
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Marksman")
 	TObjectPtr<UStaticMeshComponent> AimBeam;

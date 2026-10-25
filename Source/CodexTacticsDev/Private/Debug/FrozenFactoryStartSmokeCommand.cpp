@@ -51,7 +51,7 @@ namespace FrozenFactoryStartSmoke
 		float StageTime = 0.f;
 		int32 Failures = 0;
 		float FirstAlpha = -1.f;
-		float FirstRealTime = -1.f;
+		float FirstGameTime = -1.f;
 		float LastAlpha = 2.f;
 		bool bBrightened = false;
 		float ClearAt = -1.f;
@@ -121,13 +121,13 @@ namespace FrozenFactoryStartSmoke
 			if (State.FirstAlpha < 0.f)
 			{
 				State.FirstAlpha = Alpha;
-				State.FirstRealTime = World->GetRealTimeSeconds();
+				State.FirstGameTime = World->GetTimeSeconds();
 			}
 			State.bBrightened |= Alpha > State.LastAlpha + 0.001f;
 			State.LastAlpha = Alpha;
 			if (Alpha <= 0.f && State.ClearAt < 0.f)
 			{
-				State.ClearAt = World->GetRealTimeSeconds();
+				State.ClearAt = World->GetTimeSeconds();
 			}
 		}
 		switch (State.Stage)
@@ -155,8 +155,8 @@ namespace FrozenFactoryStartSmoke
 			const float Fade = Exit->GetStartFadeSeconds();
 			Check(State, FMath::IsNearlyEqual(Fade, 2.f) && Exit->GetStartTitle() == TEXT("0.1 Frozen Factory"),
 				FString::Printf(TEXT("the level starts with a %.1f s fade-in and the title \"%s\""), Fade, *Exit->GetStartTitle()));
-			Check(State, State.FirstRealTime > CampaignRules::StartHoldSeconds || State.FirstAlpha >= 0.99f,
-				FString::Printf(TEXT("black at the start (alpha %.2f at %.2f s)"), State.FirstAlpha, State.FirstRealTime));
+			Check(State, State.FirstGameTime > CampaignRules::StartHoldSeconds || State.FirstAlpha >= 0.99f,
+				FString::Printf(TEXT("black at the start (alpha %.2f at %.2f s)"), State.FirstAlpha, State.FirstGameTime));
 			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 			const ULevelExitSubsystem* ConstExit = Exit;
 			Check(State, Flow && Flow->GetConfig().TotalWaves == 1 && !ConstExit->GetConfig().bEnabled,
@@ -294,8 +294,9 @@ namespace FrozenFactoryStartSmoke
 		case 2:
 		{
 			// The fade is over by hold + fade (+ a step), and the screen never got darker again on the way.
+			// Measured in game time (the fade itself advances by frame deltas): wall-clock stalls under parallel load must not fail it.
 			const float End = CampaignRules::StartHoldSeconds + Exit->GetStartFadeSeconds();
-			if (State.ClearAt < 0.f && World->GetRealTimeSeconds() < End + 2.f)
+			if (State.ClearAt < 0.f && World->GetTimeSeconds() < End + 2.f)
 			{
 				return true;
 			}

@@ -93,4 +93,24 @@ again; a facing order is kept).
 ### Post-fight hold
 
 See [waves-horde-encounters](waves-horde-encounters.md) "Fight over: the squad stays put": after a fight the followers keep their spots until the
-leader moves.
+leader moves - or until Regroup (B) (2026-10-23, below).
+
+### After the final fight: Regroup brings them back (bug 2026-10-23, lake after the horde)
+
+Designer: "after the fight one operative died, one froze, and even pressing B he does not return to the formation; Solo does not switch off".
+Three causes, none of them the dead / frozen operative as such (the leadership passes on a death, `UnregisterOperative`; B is not refused):
+1. **The formation was off for good after the final fight.** The last wave / ambush fight ends in **PostCombat**, which lasts until the level ends
+   (nothing calls `FinishPostCombat`), and `USquadSubsystem::IsFormationActive` was "Exploration only" - after the horde no follower ever walked
+   again, B toggled Solo on / off without a visible effect. Godot `_return_squad_to_prep_stations` cleared `is_tactical_mode` at the fight's end.
+   Fix: `SquadOrderRules::IsFormationPhase` (Exploration and PostCombat).
+2. **Regroup did not end the post-fight hold** (2026-10-22, it ended only when the leader moved). Fix: `ExitSoloMode` ends it
+   (`KeepsPostFightHold(..., bRegroup)`).
+3. **A formation slot off the navmesh was unreachable for good** (inside a wall, the generator, the fallen mate's remains crate - a navmesh hole):
+   while the leader stood still the follower stood too (`FollowTo` -> Unreachable every repath). Fix: `USquadSubsystem::ResolveReachableSlot` -
+   a slot that does not project onto the navmesh is replaced by the nearest candidate round the leader that does
+   (`SquadFormation::ComputeFallbackSlots`: the slot's offset turned in 30 deg steps, at its distance and at 60 %).
+A frostbitten follower (prone, cannot get up) crawls back slowly (x0.25 cold speed); warmed he walks. Consoles (A/B, 0 = the old rule):
+`Codex.Squad.PostCombatFormation`, `Codex.Squad.SlotFallback`. Tests `CodexTactics.Squad.Orders.RegroupAfterFight`,
+`CodexTactics.Formation.FallbackSlotsRoundTheLeader`; smoke `RegroupAfterLossesSmoke` (Solo with the Engineer leading, he is killed -> the
+Commander leads, Solo stays on; the Medic-Sapper frostbitten; the fight's end -> PostCombat; with each old rule the bug reproduces (B: she stays),
+with the fixes she crawls back, warmed she walks into the formation, the leader walks 10 m and she follows).

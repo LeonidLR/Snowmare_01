@@ -293,6 +293,37 @@ namespace TutorialRules
 	CODEXTACTICS_API ETutorialConfineVerdict JudgeConfinedMove(const FTutorialConfineView& Confine, FName OperativeId, FName OperativeStance,
 		bool bDestinationInside);
 
-	/** "allowed" / "outside" / "stance" / "exit_stance" / "not_your_turn" (logs, telemetry). */
+	/** "allowed" / "outside" / "stance" / "exit_stance" / "held_back" / "locked_in_place" (logs, telemetry). */
 	CODEXTACTICS_API const TCHAR* ConfineVerdictName(ETutorialConfineVerdict Verdict);
+
+	/**
+	 * 2026-10-23 ("lock_in_place"): an order closer than this to where a locked operative stands is no move at all (a cover order for the
+	 * slot he already holds, a re-issued walk to his own feet) and is let through; anything farther is refused, cm (2D).
+	 */
+	constexpr float PlaceLockToleranceCm = 30.f;
+
+	/**
+	 * 2026-10-23: is an order for an operative refused because a "lock_in_place" step holds him (bLocked)? Refused when he is locked and
+	 * the destination lies farther than PlaceLockToleranceCm (2D) from where he stands; never when he is not locked.
+	 */
+	CODEXTACTICS_API bool IsPlaceLockedMove(bool bLocked, const FVector& OperativeLocation, const FVector& Destination);
+
+	/** 2026-10-23: "squad_not_in_cover_at.<volume>" -> the volume id (living members NOT in cover at / within 3 m of it); else none. */
+	CODEXTACTICS_API FName ParseNotInCoverAtStat(FName Stat);
+
+	/** 2026-10-23: distance between two positions along a route (cm of arc); LoopLength > 0 = a closed loop (the shorter way round). */
+	CODEXTACTICS_API float RouteArcDistance(float ArcA, float ArcB, float LoopLength);
+
+	/**
+	 * 2026-10-23 (the dormant A4 zombie wakes out of sight): the route sample to wake an enemy at - hidden from every operative (Hidden[i])
+	 * and, among those, the farthest along the route from the nearest operative (SampleArcs / OperativeArcs = arc positions, cm;
+	 * LoopLength > 0 = closed loop). No hidden sample: the farthest one. INDEX_NONE without samples.
+	 */
+	CODEXTACTICS_API int32 ChooseHiddenRoutePoint(const TArray<float>& SampleArcs, const TArray<bool>& Hidden, const TArray<float>& OperativeArcs, float LoopLength);
+
+	/** 2026-10-23: card / feed text token "{if:<stat>:<text>}" -> <text> when that condition stat is at least 1, else removed. */
+	CODEXTACTICS_API FString ResolveIfStatTokens(const FString& Text, TFunctionRef<float(FName)> Stat);
+
+	/** 2026-10-23: the place locks of a save that still apply to these steps (unknown steps dropped, one entry per operative - the latest). */
+	CODEXTACTICS_API TArray<FTutorialPlaceLockState> FilterPlaceLocks(const FTutorialStepsData& Data, const TArray<FTutorialPlaceLockState>& Saved);
 }

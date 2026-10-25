@@ -31,9 +31,9 @@
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
-    "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
-    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke",
-    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "BlizzardWalkSmoke", "SnowTracksSmoke", "SnowIndoorSmoke"
+    "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
+    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke",
+    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -69,12 +69,18 @@
     "WeatherLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "_why": "2026-10-22 environment phase 3: the weather presenter shows the locked 23:00 Snowfall as night (moon, no sun) + the Snowfall fog" },
     "GateExitLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "2026-10-22: the lake ends through the fully opened blast door - the last wave goes straight to post-combat, two of three out = no fade, the third out = fade to black + mission complete; 2026-10-22 b: then the stat-points screen -> Continue -> the factory (campaign 0.1) with the carried squad" },
     "GateExitLakeNoPointsSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "2026-10-22 b: the lake exit with no unspent points - no points screen, the factory opens at once with the carried squad" },
+    "GateExitLakeKiaSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "bug 2026-10-23: the lake exit with the Engineer killed in action - the two living cross, the points screen, the factory (the fallen stays behind)" },
+    "GateExitLakeKiaNoPointsSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "bug 2026-10-23: the same with no unspent points - the factory opens at once" },
     "FrozenFactoryStartSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 300, "_why": "2026-10-22 b: campaign level 0.1 starts with a fade-in, the squad just outside the lake compound's blast door (set dressing; CLOSED and blocking since 2026-10-22 e), facing away, the door in the start camera" },
+    "LadderQueueSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.1): 3 operatives ordered onto the wall ladder's roof together - one on the ladder at a time, the others wait at its foot in the order they came" },
+    "LadderEnemySmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.5): the Marksman, the Frozen PMC Fighter and the Military Zombie climb the factory's test ladders through their nav links (knockdown / death on the way down drop them); the Hound, the Frostbitten and the Brute never take a ladder" },
     "LadderClimbSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-22 e (docs/design/LADDERS.md): the factory's two test ladders (against a wall / free-standing) up and down by real clicks through their nav links, rung IK, gates, a decoration ladder, a knockdown mid-climb -> the fall with fall damage" },
+    "LakePauseOrdersSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "bug 2026-10-25: after the horde pause no click order was taken - the action bar MOVE (object relocation) pick swallowed ground clicks" },
     "LakeQuestSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A7 canister quest in the lake's last compound (layout 5k): navmesh paths, jerrycan -> BTR -> generator -> console, wave 1 on the lake lanes, the paced blast door" },
     "TutorialAmbushLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: the A4 ambush in two parts on the lake layout (the placed zombies walk their routes: a loop into the wire, a whistle)" },
     "TutorialAmbushLakeSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 1 fails: spotted -> pause + posture card, a skirmish, back to exploring" },
     "TutorialAmbushLakeLureSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 2 fails: spotted at the wall -> pause + posture card, a skirmish, back to exploring" },
+    "TutorialAmbushLakeMineSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-23: part 1 by a mine - zombie #1 dormant until the squad is in cover, wakes hidden, the Engineer's mine kills it" },
     "TutorialAmbushLakeEarlyKillSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-22: the first PMC wire -> the tripwire card; both A4 zombies killed early -> every bound step closes (no stale target); A7 -> PREPARE THE GROUND" },
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" },
@@ -87,14 +93,18 @@
     "SniperSmoke": { "fixedStepFps": 240, "_why": "per-frame body yaw check (max 25 deg in one frame): 41.7 at 30 fps, 20.8 at 60 fps for the same turn" },
     "TutorialSmoke": { "realTime": true, "_why": "the dialogue Enter hold (0.6 s skip) is timed on the wall clock (FPlatformTime, the dialogue pause freezes the game clock); a fixed step runs the game faster than the wall clock, so the held key is too short" }
   },
-  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots"],
+  "nonSmokeDebugCommands": ["ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots"],
   "rules": [
     {
       "name": "ladders-2026-10-22",
       "globs": [
         "Source/**/Ladders/**",
         "Source/**/Characters/OperativeCharacterLadder*",
+        "Source/**/Characters/EnemyCharacterLadder*",
         "Source/**/Debug/LadderClimbSmoke*",
+        "Source/**/Debug/LadderEnemySmoke*",
+        "Source/**/Debug/LadderQueueSmoke*",
+        "Scripts/Editor/setup_enemy_ladder_climbing.py",
         "Source/**/Debug/LadderClipShots*",
         "Scripts/Editor/place_factory_test_ladders.py",
         "Content/Maps/L_Demo01_B_FrozenFactory.umap"
@@ -104,6 +114,8 @@
       ],
       "smokes": [
         "LadderClimbSmoke",
+        "LadderEnemySmoke",
+        "LadderQueueSmoke",
         "FrozenFactoryStartSmoke",
         "MovementSmoke",
         "VaultSmoke",
@@ -136,9 +148,9 @@
     },
     {
       "name": "designer-2026-10-22-post-fight-hold",
-      "globs": ["Source/**/Combat/WaveVictorySubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/SquadSubsystem.*"],
+      "globs": ["Source/**/Combat/WaveVictorySubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/SquadSubsystem.*", "Source/**/Debug/RegroupAfterLossesSmoke*"],
       "tests": ["CodexTactics.Squad.Orders"],
-      "smokes": ["VictorySmoke", "TutorialAmbushLakeSpottedSmoke", "CombatFlowSmoke", "MovementSmoke"]
+      "smokes": ["RegroupAfterLossesSmoke", "VictorySmoke", "TutorialAmbushLakeSpottedSmoke", "CombatFlowSmoke", "MovementSmoke"]
     },
     {
       "name": "optimized-character",
@@ -185,7 +197,7 @@
       "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
         "Source/**/Debug/TutorialSmoke*", "Source/**/Debug/TutorialAmbushLake*", "Content/Data/Tutorial/**"],
       "tests": ["CodexTactics.Tutorial", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke", "PeekMinesSmoke", "LakeQuestSmoke"]
+      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke", "PeekMinesSmoke", "LakeQuestSmoke"]
     },
     {
       "name": "sniper",
@@ -286,9 +298,9 @@
     {
       "name": "level-exit",
       "_comment": "2026-10-22: the level end through the fully opened blast gate (gate_exit), the fight end without the victory panel, the level-up badge.",
-      "globs": ["Source/**/Quests/GateExit*", "Source/**/GameFlow/LevelExit*", "Source/**/Debug/GateExitLakeSmoke*", "Source/**/GameFlow/GameFlowStateMachine*", "Source/**/Combat/WaveVictory*", "Source/**/UI/VictoryPanel*", "Source/**/Core/MissionSubsystem*", "Source/**/Core/MissionRules*", "Source/**/UI/ActionBar*", "Source/**/Characters/Progression*"],
-      "tests": ["CodexTactics.Quests.GateExit", "CodexTactics.GameFlow", "CodexTactics.Characters.Progression"],
-      "smokes": ["GateExitLakeSmoke", "VictorySmoke", "ProgressionSmoke", "MissionSmoke", "GateGeneratorSmoke", "HordeIntroSmoke"]
+      "globs": ["Source/**/Quests/GateExit*", "Source/**/GameFlow/LevelExit*", "Source/**/Debug/GateExitLakeSmoke*", "Source/**/Core/MissionRules*", "Source/**/GameFlow/GameFlowStateMachine*", "Source/**/Combat/WaveVictory*", "Source/**/UI/VictoryPanel*", "Source/**/Core/MissionSubsystem*", "Source/**/Core/MissionRules*", "Source/**/UI/ActionBar*", "Source/**/Characters/Progression*"],
+      "tests": ["CodexTactics.Quests.GateExit", "CodexTactics.GameFlow", "CodexTactics.Characters.Progression", "CodexTactics.Mission"],
+      "smokes": ["GateExitLakeSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "VictorySmoke", "ProgressionSmoke", "MissionSmoke", "GateGeneratorSmoke", "HordeIntroSmoke"]
     },
     {
       "name": "campaign",
@@ -309,7 +321,7 @@
       "_comment": "2026-10-21: the Demo 01 canister quest in the lake's last compound (layout section 5k, the A7 beat, the BTR's art mesh on the Vehicle interactable).",
       "globs": ["Source/**/Debug/LakeQuestSmoke*", "Source/**/Interactables/VisualMesh*", "Scripts/Editor/build_demo01_lake_layout.py", "Content/Maps/L_Demo01_A_FrozenLake.umap", "Content/Data/LevelJson/L_Demo01_A_FrozenLake.json"],
       "tests": ["CodexTactics.Quests", "CodexTactics.Interactables.VisualMesh", "CodexTactics.Tutorial.QuestLesson"],
-      "smokes": ["LakeQuestSmoke", "TutorialAmbushLakeSmoke", "SaveCoverageLakeSmoke"]
+      "smokes": ["LakeQuestSmoke", "LakePauseOrdersSmoke", "TutorialAmbushLakeSmoke", "SaveCoverageLakeSmoke"]
     },
     {
       "name": "quests",
@@ -608,9 +620,9 @@
     },
     {
       "name": "group-cover",
-      "globs": ["Source/**/Tactics/GroupCover*", "Source/**/Characters/SquadSubsystemGroupCover*", "Source/**/Debug/GroupCoverSmoke*"],
+      "globs": ["Source/**/Tactics/GroupCover*", "Source/**/Characters/SquadSubsystemGroupCover*", "Source/**/Debug/GroupCoverSmoke*", "Source/**/Debug/GroupCoverPrioritySmoke*"],
       "tests": ["CodexTactics.Tactics.GroupCover", "CodexTactics.Squad.Orders"],
-      "smokes": ["GroupCoverSmoke", "CoverSmoke", "GroupSelectSmoke", "SoloRejoinSmoke"]
+      "smokes": ["GroupCoverPrioritySmoke", "GroupCoverSmoke", "CoverSmoke", "GroupSelectSmoke", "SoloRejoinSmoke"]
     },
     {
       "name": "cover-switch",

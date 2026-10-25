@@ -70,7 +70,7 @@ Every way a step finishes without being played normally reaches the runtime as o
 | `start_beat` | beat id | none | Started when the steps load (fresh start / RESET). Unknown id: warning, ignored. None: no beat runs until a step / volume starts one. |
 | `beats` | array | [] | Beat objects (below), in story order: the file order IS the beat order. |
 | `steps` | array | **required** | Step objects; their file order also orders the route (section 9) and the "n / m" card counter. |
-| `enemies` | array | [] | 2026-10-21: enemy bindings `{ "id", "route", "actor" }` - the level enemies a lesson is about (section 19). |
+| `enemies` | array | [] | 2026-10-21: enemy bindings `{ "id", "route", "actor" }` - the level enemies a lesson is about (section 19); 2026-10-23: `"dormant"` (section 22). |
 | `_anything` | any | - | Keys starting with `_` are comments at every level (never warned). |
 
 Beat object:
@@ -123,6 +123,7 @@ Beat-less steps are never "earlier": a later beat never drops them.
 | `confine` | object | none | Section 12. |
 | `guide` | volume id / step id / `"none"` | none | Section 17: where this step sends the squad while it is shown (a volume = a guide beacon on its box; a step id = that step's markers). `"none"`: the step never names the current target. |
 | `beyond` | clause object or array (AND) | [] | Section 17: the squad is already past this step's place (e.g. all across the crevasse) - the step is passed, the route moves past its place. |
+| `lock_in_place` | `true` / `false` / `{ "until", "text_id" }` | off | Section 21 (2026-10-23): the operatives who COMPLETE the step are held where they stand until `until` finishes. |
 
 | Kind | Slot | Shows | Ends on its own |
 |---|---|---|---|
@@ -331,7 +332,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | Feature | Behaviour |
 |---|---|
 | Texts | `FNarrativeManifest::GetTutorialText`: manifest `"tutorial"` (`title_en`, `text_en`, `radio_en`, `speaker_en`) -> a one-line `sequences` entry -> `demo_01_texts_draft.json` -> `[EN missing: <id>]`. Tokens: `{key:<CommandId>}` (all texts: its key cap), `{focus}` (card title / body, feed lines), `{progress}` / `{count}` (card title / body: counted so far / `complete.count`), `{pause_charges}` / `{pause_seconds}` / `{pause_cooldown}` (2026-10-22, card title / body: the fight's tactical pause limits). |
-| Markers | `ATutorialMarkerActor`: with `StepId` shown while that step is Active, else with `BeatId` while that beat is current, and always while it is the current navigation target (section 17); role spots see section 10; `Label` drawn by the overlay; `Screen Edge Pointer` = it may carry the edge arrow when it is the current target. Hidden while the tutorial is inactive. The runtime guide beacon (`bRuntimeGuide`) is spawned by the subsystem, never placed. |
+| Markers | `ATutorialMarkerActor` (2026-10-23: every one - placed, role spots, the runtime guide beacon - wears the orange hologram `/Game/UI/Materials/MI_HoloMarker_Orange` of `M_HoloMarker`, section 21): with `StepId` shown while that step is Active, else with `BeatId` while that beat is current, and always while it is the current navigation target (section 17); role spots see section 10; `Label` drawn by the overlay; `Screen Edge Pointer` = it may carry the edge arrow when it is the current target. Hidden while the tutorial is inactive. The runtime guide beacon (`bRuntimeGuide`) is spawned by the subsystem, never placed. |
 | Current target | Section 17: ONE edge arrow (small chevron + "42 m" from the leader, `UTutorialOverlayWidget`), ONE highlighted minimap icon (`UMinimapSubsystem::BuildIcons`, `bHighlight` on an Objective icon), telemetry event `guide` when it changes. |
 | Tutorial ON / OFF | `Codex.Tutorial.Enabled` + `Saved/Tutorial/profile.json` (player setting). OFF hides everything, stops counting and unlocks everything; ON again does not re-lock. |
 | SKIP TUTORIAL | `SkipTutorial()` (button offered while the start beat runs, pause menu; confirm first): off for this run, locks + confinement released, overlay cleared, no checkpoints, normal death rules; saved (`skipped`). RESET TUTORIAL starts it again. |
@@ -355,6 +356,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | `volumes_fired`, `lock_hints`, `skipped` | subsystem | used-up volumes (by actor name), families that already got the "Not yet" line, SKIP TUTORIAL |
 | `enemy_bindings_seen` | the `enemies` bindings that had enemies in this level (2026-10-22) | merged back: a bound zombie killed before the save stays dead for `all_dead.<binding>` |
 | `route` | the furthest place reached (a volume id; 2026-10-20) | the route progress (its key is recomputed from the volume; an older save: the saved beat's start) - the current target follows from it and the finished steps |
+| `place_locks` | `[{operative, step, until}]` - the operatives held in place (2026-10-23, section 21) | held again (entries naming a step the file no longer has, or without `lock_in_place`, are dropped) |
 | `guide` | the current target (`markers:<step>` / `volume:<id>`) | informational only (it is derived again after the load; `SaveCoverageLakeSmoke` dumps it as `tutorial.guide`) |
 
 Not saved (restart after a load): trigger event counts, the first-use memory, timeouts / state timers, the card breather and the remedial cooldown,
@@ -556,6 +558,63 @@ Demo use: the pause lesson `X_pause` / `X_pause_resume`, the A4 steps bound to a
 block 2026-10-22. Tests `CodexTactics.Tutorial.CancelOnCondition.*`, `PauseLesson.TwoCards`, `AmbushLesson.BothZombiesDeadEarly`.
 
 2026-10-21 b (Demo 01 A7): quest events for steps - `QuestStep.<CanisterTaken|FuelDrained|GeneratorStarted|GatePowered>` (then `QuestStep`; subject = the operative), `GeneratorDamaged` / `GeneratorDown` / `GeneratorRepaired` (subject = the repairer) / `GateOpened` (`GameplayEvents`); stat `quest_progress`. Beats A7 (from `VOL_A7_YARD`) and A8 (from `QuestStep.GatePowered`, no checkpoint) in `demo_01_steps.json`; tests `CodexTactics.Tutorial.QuestLesson.*`.
+### 21. `"lock_in_place"` and the hologram markers (2026-10-23, game designer play-test)
+
+**"lock_in_place"** - "I place one at the hut wall - he's fixed, can't be moved back; place the second - fixed. Otherwise a stray click moves
+the one I already put there back the other way."
+
+```json
+"lock_in_place": true
+"lock_in_place": { "until": "A1_hut_enter", "text_id": "TUT_A1_HUT_HOLD" }
+```
+
+| Rule | Detail |
+|---|---|
+| Who | When the step **completes** (not skipped / timed out / passed / cancelled), every operative who counted for it (its contributors: the subject of the completing event or volume entry) is locked where he stands. A completion without a subject (commands, a condition) locks nobody (parse warning). |
+| What is refused | Every order that would move him farther than 30 cm (`TutorialRules::PlaceLockToleranceCm`, 2D) - a move / ground click, a cover order, a shimmy (before a prone one gets up), a wrap round the cover, a group order - through the confinement choke point (`UTutorialSubsystem::CheckConfinedOrder` -> `JudgeMove` -> verdict `LockedInPlace`, checked BEFORE the confinement) and `CheckHeldInPlace`. A refusal posts the step's `text_id` line ("<Name>: Hold this position - stack on the door."; none: "Hold this position."), at most one per second, raises `Tutorial.HeldInPlace`, telemetry `place_lock_refused`. Formation moves leave him where he is without a line (`AOperativeCharacter::RequestMove`); a regroup (Solo off) skips him (no leaving cover, no stance copy) with the line. Selecting him, stance keys, firing still work; other operatives take orders as usual. |
+| Until | `until` finishes (completed / skipped / timed out). Without `until`: the `until` step of the confinement in force when he was locked; no confinement: the next beat. Always also: a later beat starts (the owner's beat is over; beat-less owners only by `until` / the safety release), tutorial OFF, SKIP TUTORIAL, a wave / skirmish fight (`UnlockAllCommands`). An `until` already finished when the step completes locks nobody. |
+| Runtime | `FTutorialStateMachine::IsLockedInPlace / GetPlaceLocks / ReleasePlaceLocks`, serial `GetPlaceLockSerial`; the subsystem logs "held in place by", floats "HOLDING POSITION" over him, telemetry `place_locked`. Saved (`place_locks`, section 14). |
+| Validation | Not true / false / an object: error; `until` naming no step or the step itself: error; unknown keys: warning; no `event` / `volume` completion: warning. |
+
+Demo: `A1_hut_stack_l` / `A1_hut_stack_r` lock their operative until `A1_hut_enter` (the third inside) with `TUT_A1_HUT_HOLD`. Tests
+`CodexTactics.Tutorial.PlaceLock.*` (`Parse`, `MoveRule`, `HutFlow`, `Release`, `DemoFile`); `TutorialSmoke` stages 78 / 79 (refused move,
+refused click with him selected, the third still ordered, < 5 cm, the regroup leaves both, the save lists both, the "go in" card releases them).
+
+**Hologram markers** - "all the markers - discs with a pole stuck in them - must be HOLOGRAPHIC, ORANGE." Every `ATutorialMarkerActor` (the only
+disc + pole actor: placed step / beat markers, role spots, the runtime guide beacon of lure spots / objective beacons / `@enemy` spots) wears
+`MI_HoloMarker_Orange` by default (a marker still on the old `BasicShapeMaterial` is switched too; `bCustomColor` would tint it with `Color` -
+off: the role spots are orange like the rest, their `Label` names the role). `M_HoloMarker` (`Scripts/Editor/create_holo_marker_material.py`):
+unlit translucent, Apply Fogging off, emissive x `EyeAdaptationInverse` (the same on screen at noon and in the snowy night), orange
+sRGB (255, 122, 16); a bright outer rim and rings running out over the disc, a fresnel rim and rising scanlines on the pole (custom primitive
+data 0 = 1 on the disc), a gentle pulse, a soft flicker, depth fade (disc 3 cm - it lies 2-5 cm over the snow; pole foot 25 cm); translucent
+casts no shadow. The weather presenter grades the night / snowfall down to 45-70 % saturation (the orange came out peach; resaturating it
+came out pink): while shown the marker sets `SaturationCompensation` = 1 / the grade's saturation (twice a second) and the material drops
+the blue and dims slightly under it, so it stays a copper orange at night. Cost (8 markers in view at night, 8 alternating rounds): GPU
++0.01 to +0.11 ms median, inside the frame noise. Shapes, sizes, the bob and the show / hide rules are unchanged. `ATutorialMarkerActor::IsHologram()` (smokes),
+`ApplyLegacyLookForComparison()` (shots only). Rendered check + comparison `CodexTactics.HoloMarkerShots` (lake, Clear 13:00 / Snowfall
+23:00, `Saved/Screenshots/HoloMarker/`), cost line `[HoloMarkerPerf]`.
+
+### 22. Dormant enemies, `"free": "first"`, squad-trap kills (2026-10-23, the A4 part 1 redesign)
+
+Game designer: "zombie #1 spots the squad while they run to the cover" -> it does not exist until the squad is in cover; then "take him
+QUIETLY, ALONE, with a TRIPWIRE or a MINE - any one operative, in Solo, the other two stay in cover".
+
+| Feature | Detail |
+|---|---|
+| binding `"dormant": { "until": [clauses], "spawn": "hidden_on_route" \| "in_place" }` | (`FTutorialDormant`, `Tutorial/TutorialSubsystemDormant.cpp`) From the steps' load, with the tutorial active, the bound enemies are kept out of the game every tick: parked 500 m under where they were placed, hidden, no collision, actor tick off (no AI, no senses), movement off. When the clauses hold: woken - `hidden_on_route` = the sample of its own patrol route (every metre, straight between the waypoints, closed while `bIsLoop`) hidden from every living operative (traces from each one's eye for his stance - 165 / 110 / 35 cm - to the enemy's chest 130 cm and knees 50 cm, blocked; beyond 60 m = hidden) and farthest along the route from the nearest operative (`TutorialRules::ChooseHiddenRoutePoint`; none hidden: the farthest), patrolling on to the next waypoint; `in_place` = where it was placed. Events `EnemyWoke.<binding>` then `EnemyWoke` (subject = the enemy). Tutorial OFF / SKIP TUTORIAL: woken in place at once (as if never dormant). RESET TUTORIAL: dormant again. Saved: `"dormant_enemies": { <binding>: { "woken", "spawn": [x, y, z], "homes": { <actor>: [x, y, z, yaw] } } }`; a load puts a not-woken binding back to sleep (its saved position is the parked one). `until` missing / unknown `spawn`: parse error. Dev / smokes: `WakeDormantBinding`, `IsEnemyDormant`, `IsBindingAwake`, `GetWakeSpawn`. |
+| stat `squad_not_in_cover_at.<volume>` | Living members NOT in cover (`bInCover`) inside that volume's box or within 3 m of it (0 = everybody is in cover there). |
+| stat `squad_mines` | Mines the living members carry. |
+| text token `{if:<stat>:<text>}` | Card title / body: `<text>` when the stat is >= 1, else removed (`TutorialRules::ResolveIfStatTokens`; no nested braces inside). |
+| confine `"free": "first"` | Nobody free yet: the SELECTED operative (`USquadSubsystem::GetLeader`) first ordered outside the area takes the lesson (`FTutorialStateMachine::ClaimConfineFree`, saved as `confines[].free`); another one's walk outside before that is refused ("Hold here - follow the training."); afterwards the others are held like `"focus"` ("Hold here - <Name> handles it."). |
+| event `EnemyKilled.SquadTrap` | Raised before `EnemyKilled.Trap` / `EnemyKilled` when the blast of a SQUAD trap kills (`AEnemyCharacter::FScopedSquadTrapBlast` round the blast of a squad `ATripwireActor` / a `bPlacedBySquad` mine). |
+| Solo tripwire | `URelocationSubsystem`: in Solo the selected operative rigs his own wire (out of Solo the Medic-Sapper still takes the job when free, Sprint 09-B). |
+
+Demo: binding `A4_PERIMETER` dormant until `squad_not_in_cover_at.VOL_A4_OVERLOOK below 1`; `A4_tripwire` ("TAKE HIM QUIETLY", triggered by
+`EnemyWoke.A4_PERIMETER`, no role focus, unlocks the wire, the mine and Solo, confine `free: first` until `A4_trap_wait`, done on
+`Deploy.Tripwire` / `Deploy.Mine`); `A4_trap_wait` done on `EnemyKilled.SquadTrap` of `A4_PERIMETER`; part 2 (`A4_hug_wall`) selects the
+Medic-Sapper (`solo_focus`) and holds the other two (`free: focus` until `A4_lure`). Spotted: the existing SPOTTED / skirmish path.
+Tests `CodexTactics.Tutorial.A4Quiet.*`, smokes `TutorialAmbushLakeSmoke` (tripwire by the Engineer), `TutorialAmbushLakeMineSmoke`.
+
 ## History
 
 The notes below are the revision-by-revision record the reference above was distilled from (moved verbatim from the old `docs/port/HANDOFF.md` in the

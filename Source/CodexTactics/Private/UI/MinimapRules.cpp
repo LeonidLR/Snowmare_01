@@ -402,6 +402,11 @@ namespace MinimapRules
 		return Floor;
 	}
 
+	int32 FloorWithLadder(bool bOnLadder, int32 PreviousFloor, int32 SelectedFloor)
+	{
+		return bOnLadder ? PreviousFloor : SelectedFloor;
+	}
+
 	bool HideOnFloor(int32 Floor, float BottomZ, float BottomAboveGroundCm, TConstArrayView<float> UpperBases, const FFloorParams& Params)
 	{
 		if (Floor <= 0 || Floor > UpperBases.Num())

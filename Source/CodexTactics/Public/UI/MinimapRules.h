@@ -159,6 +159,11 @@ namespace MinimapRules
 	 */
 	CODEXTACTICS_API int32 SelectFloor(float FeetZ, float AboveLowestCm, TConstArrayView<float> UpperBases, int32 PreviousFloor, const FFloorParams& Params);
 	/**
+	 * The floor shown for a character (docs/design/LADDERS.md 7.3): on a ladder he keeps the floor he climbed from (PreviousFloor) until
+	 * he is off it; then the selected one.
+	 */
+	CODEXTACTICS_API int32 FloorWithLadder(bool bOnLadder, int32 PreviousFloor, int32 SelectedFloor);
+	/**
 	 * Is a piece of geometry left out of Floor's capture? Floor 0: its bottom stands CutClearanceCm above the ground under it
 	 * (roofs, ceilings, upper storeys - terrain independent); floor k: its bottom is CutClearanceCm above that floor's surface.
 	 */

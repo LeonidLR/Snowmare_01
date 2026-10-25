@@ -11,8 +11,12 @@ class UStaticMeshComponent;
 /**
  * A world objective marker the user places for the tutorial (Demo 01 C2, UX brief 03 §2.1 "Highlight"): a flat ground
  * ring plus an optional beacon, shown while its step is active (StepId) or, without a step, while its beat runs
- * (BeatId); hidden otherwise (also with the tutorial off / before any steps exist). Placeholder look from engine shapes
- * with the colour parameter "Color"; MarkerMaterial is the slot for Gemini's marker material (TANDEM request #18).
+ * (BeatId); hidden otherwise (also with the tutorial off / before any steps exist). The runtime guide beacon of the current
+ * navigation target (lure spots, objective beacons, "@enemy" spots) is one too. Engine shapes (the cylinder as a disc and a
+ * pole) wearing the orange HOLOGRAM (2026-10-23, game designer play-test: "all the disc-with-a-pole markers must be holographic,
+ * orange"): /Game/UI/Materials/MI_HoloMarker_Orange of M_HoloMarker (unlit translucent, fresnel rim, scanlines, pulse, flicker,
+ * depth fade on the ground, no fog, exposure-invariant; Scripts/Editor/create_holo_marker_material.py). Custom primitive data 0 =
+ * 1 on the disc, 0 on the pole (the material draws rings on the disc, scanlines up the pole).
  * bScreenEdgePointer: the tutorial overlay points at it from the screen edge while it is off-screen. UE-only.
  */
 UCLASS(Blueprintable)
@@ -76,13 +80,36 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
 	bool bScreenEdgePointer = true;
 
-	/** Amber = path / warmth (art bible navigation language). Fed to the material's "Color" parameter. */
+	/**
+	 * A tint for the material's "Color" parameter - used only with bCustomColor (2026-10-23: every marker is the hologram ORANGE of
+	 * MI_HoloMarker_Orange; the role spots keep their old per-role colours here, unused).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
-	FLinearColor Color = FLinearColor(1.f, 0.55f, 0.08f);
+	FLinearColor Color = FLinearColor(1.f, 0.195f, 0.005f);
 
-	/** Gemini's marker material (request #18); empty = the engine placeholder. Needs a vector parameter "Color" to tint. */
+	/** Tint this marker with Color instead of the material's own orange (off by default: the game designer wants every marker orange). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
+	bool bCustomColor = false;
+
+	/**
+	 * The marker material: MI_HoloMarker_Orange by default (2026-10-23). A marker still set to the old engine placeholder
+	 * (BasicShapeMaterial) gets the hologram too. Needs a vector parameter "Color" to tint (bCustomColor).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
 	TObjectPtr<UMaterialInterface> MarkerMaterial;
+
+	/** The hologram marker material (the parent of MI_HoloMarker_Orange). */
+	static constexpr const TCHAR* HoloMaterialPath = TEXT("/Game/UI/Materials/M_HoloMarker.M_HoloMarker");
+	static constexpr const TCHAR* HoloInstancePath = TEXT("/Game/UI/Materials/MI_HoloMarker_Orange.MI_HoloMarker_Orange");
+
+	/** Ring and pole wear the hologram (their base material is M_HoloMarker) - smokes / the marker shots assert it. */
+	bool IsHologram() const;
+
+	/**
+	 * Dev / comparison shots only: dress this marker in the old placeholder look (BasicShapeMaterial, amber) instead of the hologram.
+	 * Never used by the game.
+	 */
+	void ApplyLegacyLookForComparison();
 
 	/**
 	 * 2026-10-20: the guide beacon UTutorialSubsystem spawns at a volume that is the current navigation target (no marker of its own
@@ -107,6 +134,13 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> MaterialInstance;
+
+	/**
+	 * The weather presenter's colour grade desaturates the night / snowfall (to 45-70 %): the hologram's "SaturationCompensation" = 1 / that
+	 * saturation (1-2.5), refreshed twice a second while shown, keeps it orange in every lighting.
+	 */
+	void UpdateSaturationCompensation();
+	float SaturationCheckIn = 0.f;
 
 	bool bShown = false;
 	float PulseTime = 0.f;

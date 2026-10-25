@@ -35,10 +35,19 @@ UNavFilter_NoVault::UNavFilter_NoVault()
 	FNavigationFilterArea& Crawl = Areas.AddDefaulted_GetRef();
 	Crawl.AreaClass = UNavArea_CrawlOnly::StaticClass();
 	Crawl.bIsExcluded = true;
-	// Ladders (docs/design/LADDERS.md 7.4): no enemy climbs yet (the climbing humans of 7.5 get their own filter later).
+	// Ladders (docs/design/LADDERS.md 7.4): closed to the enemies; the climbing ones (7.5) path with UNavFilter_NoVaultLadder.
 	FNavigationFilterArea& Ladder = Areas.AddDefaulted_GetRef();
 	Ladder.AreaClass = UNavArea_Ladder::StaticClass();
 	Ladder.bIsExcluded = true;
+	FNavigationFilterArea& SquadLadder = Areas.AddDefaulted_GetRef();
+	SquadLadder.AreaClass = UNavArea_LadderSquadOnly::StaticClass();
+	SquadLadder.bIsExcluded = true;
+}
+
+UNavFilter_NoVaultLadder::UNavFilter_NoVaultLadder()
+{
+	// The base closes the ladder links; a climbing enemy may take them (the squad-only ones stay closed).
+	Areas.RemoveAll([](const FNavigationFilterArea& Area) { return Area.AreaClass == UNavArea_Ladder::StaticClass(); });
 }
 
 namespace VaultNavigation

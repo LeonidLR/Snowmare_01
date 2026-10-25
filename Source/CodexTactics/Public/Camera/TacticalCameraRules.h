@@ -58,6 +58,13 @@ struct CODEXTACTICS_API FTacticalCameraConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Follow", meta = (ClampMin = "0"))
 	float TacticalDeadzone = 300.f;
 
+	/**
+	 * While the followed character climbs a ladder (docs/design/LADDERS.md 7.3) the focus height follows him through a critically damped
+	 * spring of this half-life, s: the loop's bursts of rise (two pulls per loop) and the top / bottom transitions do not pump the view.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Follow", meta = (ClampMin = "0.01"))
+	float LadderZHalfLife = 0.35f;
+
 	/** Q/E rotation step, degrees. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rotation")
 	float RotationStep = 45.f;
@@ -81,7 +88,15 @@ struct CODEXTACTICS_API FTacticalCameraConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan", meta = (ClampMin = "0"))
 	float MaxPanCombat = 8500.f;
 
-	/** In exploration, released pan drifts back to the focus at this rate, 1/s. */
+	/**
+	 * Exploration pans like combat (game designer 2026-10-25: "during exploration the camera should be as free as in the fight, less
+	 * tied to the characters"): no drift back to the leader, the combat pan range. False = the old leash (MaxPanExploration +
+	 * PanReturnSpeed). Console: Codex.Camera.FreeExploration.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan")
+	bool bFreeExplorationPan = true;
+
+	/** In exploration (bFreeExplorationPan off), released pan drifts back to the focus at this rate, 1/s. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan", meta = (ClampMin = "0"))
 	float PanReturnSpeed = 2.5f;
 
@@ -131,6 +146,13 @@ namespace TacticalCameraRules
 
 	/** Cubic ease-out, 0..1. */
 	CODEXTACTICS_API float CubicEaseOut(float T);
+
+	/**
+	 * One step of a critically damped spring from Current towards Target (no overshoot): from rest ~60 % of the gap is left after
+	 * HalfLife seconds, ~5 % after 3x;
+	 * Velocity is the spring's state (units / s). Stable for any DeltaSeconds.
+	 */
+	CODEXTACTICS_API float SpringDamp(float Current, float& Velocity, float Target, float HalfLife, float DeltaSeconds);
 
 	/** Follows the target only once it leaves a deadzone around the current focus (turn-based framing). */
 	CODEXTACTICS_API FVector FollowWithDeadzone(const FVector& Focus, const FVector& Target, float Deadzone, float Speed, float DeltaSeconds);

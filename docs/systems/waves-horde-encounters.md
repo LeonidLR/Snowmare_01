@@ -105,6 +105,8 @@ block 2026-10-22 c. Tests `CodexTactics.GameFlow.FightEnd.LastWaveNoPanel`; smok
   PostCombat / a skirmish ending in Exploration `USquadSubsystem` holds the followers (stance, cover) until the leader moves
   (`SquadOrderRules::ArmsPostFightHold` / `KeepsPostFightHold`, `IsPostFightHoldActive`). Smokes: `VictorySmoke` (scattered squad stays 3 s later),
   the TutorialAmbushLake skirmishes.
+  2026-10-23: Regroup (B) ends the hold too, and the formation runs in PostCombat (it lasts until the level ends) - see
+  [squad-and-orders](squad-and-orders.md) "After the final fight: Regroup brings them back".
 - **Horde fly-in frames the wave.** `UHordeIntroSubsystem::GatherEnemies` = the fight's own enemies (`UWaveSubsystem::GetAliveEnemies`; the level's
   patrols / parked enemies never count). The wide shot frames the main cluster (`HordeIntroRules::MainCluster`, `WideClusterRadiusCm` 15 m) at the
   shortest distance that holds every runner's feet and head in the tactical camera's frustum (`FrameDistance` / `FrameWide`, `WideFrameMargin` 0.12,

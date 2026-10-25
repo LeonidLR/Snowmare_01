@@ -223,7 +223,8 @@ RoofCutawayRules::FRoofPieceTraits URoofCutawaySubsystem::GetTraits(const UPrimi
 void URoofCutawaySubsystem::CollectRoofPieces(const AOperativeCharacter& Operative, const TArray<ACameraZoneVolume*>& ShownZones,
 	TSet<UPrimitiveComponent*>& OutPieces) const
 {
-	const FVector Location = Operative.GetActorLocation();
+	// On a ladder he counts on the floor he left until he is off it (LADDERS.md 7.3: no cutaway flicker mid-ladder).
+	const FVector Location = Operative.GetFloorReferenceLocation();
 	const bool bInShownZone = ShownZones.ContainsByPredicate([&Location](const ACameraZoneVolume* Zone) { return Zone->ContainsLocation(Location); });
 	if (!RoofCutawayRules::ShouldCutForOperative(bInShownZone))
 	{

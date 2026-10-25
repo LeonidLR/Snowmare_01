@@ -170,6 +170,10 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	{
 		return EOperativeOrderResult::Refused; // firing a quick fire burst (2026-10-19): the formation waits for him
 	}
+	if (LadderClimb && LadderClimb->IsBusy())
+	{
+		return EOperativeOrderResult::Refused; // on a ladder / waiting for one (LADDERS.md 7.1): the formation waits for him
+	}
 	// Rev 5i: a tutorial confinement asks for a stance ("crouch first"): a follower copies the leader's low stance before he
 	// follows, else he holds (the squad retries, as for a stance clip below).
 	if (const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr; Tutorial && Tutorial->IsConfining())
@@ -220,11 +224,12 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	{
 		return EOperativeOrderResult::Refused; // APC P1: aboard he rides (Y gets him out)
 	}
-	// Ladders (LADDERS.md 7.1): a new order mid-climb - he finishes the climb, then walks there; queued at a busy ladder: the
+	// Ladders (LADDERS.md 7.1): a new order mid-climb - he walks there after the climb (turning round at the next rung when the goal
+	// lies behind him, 2026-10-23); queued at a busy ladder: the
 	// new order replaces the wait.
 	if (LadderClimb && LadderClimb->IsOnLadder())
 	{
-		LadderClimb->SetPendingDestination(InDestination);
+		LadderClimb->HandleNewOrder(InDestination); // the walk after the climb; a goal behind him turns him round at the next rung
 		LastMoveDestination = InDestination;
 		bHasMoveOrder = true;
 		return EOperativeOrderResult::Accepted;
@@ -237,9 +242,16 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	// shimmies, replays of deferred orders reach this without OrderMoveTo's check); formation moves are pulled into the area.
 	FVector Destination = InDestination;
 	UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
-	const bool bConfined = Tutorial && Tutorial->IsConfining();
+	// 2026-10-23 ("lock_in_place"): an operative locked at his spot of the lesson is judged like a confined one (CheckConfinedOrder refuses
+	// him with the hold line); a formation move leaves him where he stands without a line.
+	const bool bConfined = Tutorial && (Tutorial->IsConfining() || Tutorial->IsHeldInPlace(*this));
 	if (bConfined)
 	{
+		if (bFormationMove && Tutorial->IsMoveHeldInPlace(*this, Destination))
+		{
+			bHasMoveOrder = false;
+			return EOperativeOrderResult::Refused;
+		}
 		if (bFormationMove)
 		{
 			Tutorial->ClampIntoConfinement(Destination);

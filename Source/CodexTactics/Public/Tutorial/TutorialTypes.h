@@ -128,11 +128,34 @@ struct CODEXTACTICS_API FTutorialEnemyFilter
  * builds), object name or actor tag; "actor" = the enemy itself by the same three. JSON:
  *   "enemies": [ { "id": "A4_PERIMETER", "route": ["PatrolRoute_A4_Hounds", "PatrolRouteActor_1"] } ]
  */
+/**
+ * "dormant" of an enemy binding (2026-10-23, game designer: the A4 zombie #1 spotted the squad while it ran to the overlook cover): the
+ * bound enemies do not exist for the game from the level start - hidden, no collision, no AI, no senses, parked out of the world - until
+ * the "until" clauses hold (e.g. the whole squad in cover at the overlook); then they are woken at "spawn": "hidden_on_route" = the point
+ * of their own patrol route hidden from every living operative (sight traces from each one's eye for his stance) and farthest along the
+ * route from them (none hidden: the farthest), patrolling on from there; "in_place" = where they were placed. Woken: the gameplay events
+ * "EnemyWoke.<binding>" and "EnemyWoke" (subject = the enemy). Tutorial off / SKIP TUTORIAL: woken in place at once.
+ * The runtime keeps the state and the spawn point in the save ("dormant_enemies"). JSON:
+ *   "dormant": { "until": [ { "stat": "squad_not_in_cover_at.VOL_A4_OVERLOOK", "below": 1 } ], "spawn": "hidden_on_route" }
+ */
+struct CODEXTACTICS_API FTutorialDormant
+{
+	bool bEnabled = false;
+	TArray<FTutorialCondition> Until;
+	/** "hidden_on_route" (default) | "in_place". */
+	FName Spawn;
+
+	bool IsSet() const { return bEnabled; }
+	bool SpawnsHidden() const { return Spawn != FName(TEXT("in_place")); }
+};
+
 struct CODEXTACTICS_API FTutorialEnemyBinding
 {
 	FName Id;
 	TArray<FString> Routes;
 	TArray<FString> Actors;
+	/** 2026-10-23: dormant until a condition holds (FTutorialDormant). */
+	FTutorialDormant Dormant;
 };
 
 struct CODEXTACTICS_API FTutorialTrigger
@@ -283,6 +306,11 @@ struct CODEXTACTICS_API FTutorialConfine
 	 * anywhere, the others stay in the area ("Hold here - <Name> handles it.").
 	 */
 	bool bFreeFocus = false;
+	/**
+	 * "free": "first" (2026-10-23, game designer: "any ONE operative, in Solo, the other two stay in cover"): the first operative ordered
+	 * outside the area becomes the free one (FTutorialConfineView::FreeOperative, saved); after that the others are held like "focus".
+	 */
+	bool bFreeFirst = false;
 
 	bool IsSet() const { return !Volume.IsNone(); }
 	bool HasExit() const { return !ExitStance.IsNone() || !ThroughEvent.IsEmpty(); }
@@ -299,7 +327,12 @@ enum class ETutorialConfineVerdict : uint8
 	/** Outside, and not in the exit stance ("Go prone first, then crawl under."). */
 	ExitStance,
 	/** Outside while the lesson belongs to another operative ("free": "focus"; "Hold here - <Name> handles it."). */
-	HeldBack
+	HeldBack,
+	/**
+	 * 2026-10-23 ("lock_in_place", FTutorialPlaceLock): the ordered operative was locked at the spot his part of the lesson put him on
+	 * ("Hold this position - stack on the door.") - any order that would move him away is refused, inside the area or not.
+	 */
+	LockedInPlace
 };
 
 /** The confinement in force now (FTutorialStateMachine::GetActiveConfine; the runtime adds the geometry). */
@@ -321,6 +354,41 @@ struct CODEXTACTICS_API FTutorialConfineProgress
 	FName Owner;
 	bool bReleased = false;
 	TArray<FName> Passed;
+	/** 2026-10-23 ("free": "first"): the operative who took the lesson ("free"). */
+	FName Free;
+};
+
+/**
+ * "lock_in_place" (2026-10-23, game designer play-test: "I place one at the hut wall - he's fixed; the second - fixed; otherwise a stray
+ * click moves the one I already put there back the other way"): when the step COMPLETES, every operative who counted for it (its
+ * contributors: the subject of the completing event / volume entry) is locked where he stands - move / cover / shimmy / wrap / regroup
+ * orders for him are refused with one feed line (TextId, else "Hold this position."), formation moves leave him in place. Selecting him
+ * still works. Released when the "until" step finishes (default: the "until" step of the confinement in force when he was locked; no
+ * confinement: when a later beat starts), when a later beat starts, and on tutorial OFF / SKIP TUTORIAL / a fight (UnlockAll). JSON:
+ *   "lock_in_place": true    |    "lock_in_place": { "until": "A1_hut_enter", "text_id": "TUT_A1_HUT_HOLD" }
+ */
+struct CODEXTACTICS_API FTutorialPlaceLock
+{
+	bool bEnabled = false;
+	/** The step whose finish releases the lock; none = the confinement's "until" at lock time, else the next beat. */
+	FName Until;
+	/** The feed line a refused order shows (narrative manifest / draft texts); none = the generic "Hold this position.". */
+	FName TextId;
+
+	bool IsSet() const { return bEnabled; }
+};
+
+/** One operative held in place by a "lock_in_place" step (FTutorialStateMachine::GetPlaceLocks; saved as "place_locks"). */
+struct CODEXTACTICS_API FTutorialPlaceLockState
+{
+	/** The operative's id (his object name, as the event subjects / contributors). */
+	FName Operative;
+	/** The step that locked him. */
+	FName Step;
+	/** The step whose finish releases him; none = the next beat. */
+	FName Until;
+
+	bool operator==(const FTutorialPlaceLockState& Other) const { return Operative == Other.Operative && Step == Other.Step && Until == Other.Until; }
 };
 
 struct CODEXTACTICS_API FTutorialStep
@@ -371,6 +439,8 @@ struct CODEXTACTICS_API FTutorialStep
 	FTutorialCancelOn CancelOn;
 	/** "confine" (rev 5i): keeps the squad in an area while the lesson runs (FTutorialConfine). */
 	FTutorialConfine Confine;
+	/** "lock_in_place" (2026-10-23): the operatives who complete this step are held where they stand (FTutorialPlaceLock). */
+	FTutorialPlaceLock LockInPlace;
 	/**
 	 * "guide" (2026-10-20, game designer: "after the hut nothing showed where to go next"): where this step sends the squad while it
 	 * is shown - a tutorial volume id (the target is that volume's box on the ground) or a step id (that step's markers). Overrides the
@@ -496,6 +566,8 @@ struct CODEXTACTICS_API FTutorialProgress
 	 * The current navigation target is derived from it, so it survives a load.
 	 */
 	FName RouteVolume;
+	/** 2026-10-23 ("place_locks"): the operatives held in place by a "lock_in_place" step (FTutorialPlaceLockState). */
+	TArray<FTutorialPlaceLockState> PlaceLocks;
 
 	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone() && Locks.IsEmpty() && History.IsEmpty(); }
 };

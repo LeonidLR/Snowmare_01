@@ -62,9 +62,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	TSoftObjectPtr<UAnimSequence> IntoFromTopClip;
 
-	/** The anim graph's full-body slot. */
+	/** The anim graph's full-body slot (an enemy's UEnemyAnimInstance::OneShotSlot is used on an enemy body). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	FName MontageSlot = TEXT("FullBody");
+
+	/** Waiting climbers stand off the link point (out from the rungs below / back from the edge on top): the first this far, cm ... */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0"))
+	float QueueFirstSpotCm = 90.f;
+
+	/** ... each next one this much further, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "40"))
+	float QueueSpacingCm = 75.f;
+
+	/** A climbing enemy waits this long at a leased ladder, then its AI decides afresh (it may queue again), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0.5"))
+	float EnemyQueueSeconds = 6.f;
 
 	// --- Tunables (LADDERS.md 7.9) ---
 
@@ -83,6 +95,18 @@ public:
 	/** Turn rate of the align glides, deg/s. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "10"))
 	float AlignTurnRate = 540.f;
+
+	/**
+	 * Going down from the top (user feedback 2026-10-23: "he goes down with his BACK to the ladder for the first seconds"): he walks to the
+	 * ladder head, turns in place until he faces the ladder (back to the drop), and climbs down backwards - the ClimbOutTop clip played in
+	 * reverse (its body faces the ladder throughout). Off = the old IntoFromTop clip, whose 180 deg turn runs while the body already sinks.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
+	bool bDescendFacingLadder = true;
+
+	/** The turn in place at the ladder head before going down: at least this long, s (feet planted). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0.1"))
+	float TopTurnMinSeconds = 0.5f;
 
 	/** Blend between the loop and the top clips, s (IntoFromTop always starts with blend-in 0). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder", meta = (ClampMin = "0"))
@@ -117,6 +141,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder IK")
 	bool bRungIK = true;
 
+	/**
+	 * This body's offset from the clips' hang line on the loop, cm: X away from the rungs (towards the climber), Y up. Zero for the
+	 * Manny-proportioned bodies the clips were made on; a body whose arms cannot reach the hand rungs (the Marksman's short torso) hangs
+	 * a little higher / closer. Faded in with the rung IK on the loop, out at the transitions.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder IK")
+	FVector2D BodyHangOffset = FVector2D::ZeroVector;
+
 	// --- API ---
 
 	/**
@@ -133,9 +165,30 @@ public:
 
 	/** A new order mid-climb: he finishes the climb, then walks there (7.1). */
 	void SetPendingDestination(const FVector& Destination);
+
+	/**
+	 * A new order while he is on the ladder (2026-10-23): walked to after the climb; when the other end serves it better (the shorter
+	 * navmesh way from the two link points) and he is on the loop, he turns round at the next rung and climbs back. An order that agrees
+	 * with his way again cancels a pending turn-round.
+	 */
+	void HandleNewOrder(const FVector& Destination);
+
+	/** A turn-round is waiting for the next rung (smokes). */
+	bool IsReversePending() const { return bReversePending; }
+	/** Turn-rounds in this climb (smokes). */
+	int32 GetReversals() const { return Reversals; }
 	void ClearPendingDestination() { bHasPendingDestination = false; }
 
 	ELadderClimbState GetState() const { return State; }
+
+	/** Loads the clips (once) and extracts their root tracks; false when one is missing (that body cannot climb). */
+	bool EnsureClips() { return LoadClips(); }
+
+	/** The climb owns the body: any state but None, or an entry pending for the next tick (the owner's AI waits). */
+	bool IsBusy() const { return State != ELadderClimbState::None || bEntryPending; }
+
+	/** The slot the climb clips play on for this body. */
+	FName GetClipSlot() const;
 
 	/** On the ladder or moving onto / off it, or falling off it (not None / Queue). */
 	bool IsOnLadder() const { return LadderRules::IsOnLadderState(State); }
@@ -153,6 +206,12 @@ public:
 	/** Where a save taken now puts him: the link point of the end he is heading to (7.8); his location when not climbing. */
 	FVector GetSaveLocation() const;
 
+	/**
+	 * The floor he counts on for the roof cutaway / minimap (LADDERS.md 7.3): on the ladder (or falling off it) the spot where the climb
+	 * started - the floor he left - until ExitTop / ExitBottom ends; his location otherwise.
+	 */
+	FVector GetFloorReferenceLocation() const;
+
 	/** Rung IK for the anim instance (game thread). */
 	const FLadderIKFrame& GetIKFrame() const { return IKFrame; }
 
@@ -168,6 +227,9 @@ public:
 	ELadderAbortReason GetLastAbort() const { return LastAbort; }
 	float GetLoopLength() const { return LoopLength; }
 
+	/** The align glide's walking speed now (the legs walk it; 0 = standing / turning), cm/s. */
+	float GetAlignWalkSpeed() const { return AlignWalkSpeed; }
+
 private:
 	/** The clip's root track in the climber frame (X forward to the wall, Y right, Z up), from its first frame, at 30 Hz. */
 	struct FRootTrack
@@ -181,6 +243,11 @@ private:
 
 	bool LoadClips();
 	FRootTrack ExtractTrack(UAnimSequence* Clip) const;
+	/**
+	 * Takes the clip's own lift of its last part out of Track (the ClimbOutTop's feet rise with the body after LiftStart although they stand
+	 * on the top): from LiftStart the smaller of the two feet's rise is subtracted from the root's height. Returns the lift removed at the end.
+	 */
+	float RemoveClipLift(UAnimSequence* Clip, FRootTrack& Track, float LiftStart) const;
 	/** The up loop's rise share at Time (0..1). */
 	float LoopFraction(float Time) const;
 
@@ -201,7 +268,17 @@ private:
 	void PollLinks();
 
 	void BeginEnterTop();
+	/** The ClimbOutTop warp between the hang pose on rung Rung and the platform: its scale and where it ends on top (capsule centres). */
+	void TopWarp(int32 Rung, FVector& OutHang, FVector& OutTop, FVector& OutScale) const;
 	void BeginExitTop();
+	/** The platform's edge behind the rung plane at the ladder's top, cm (a trace towards the wall); -1 = none found. */
+	float MeasureTopEdge() const;
+	/**
+	 * On ClimbOutTop (both ways) the knees / feet swing over the platform's edge while still a little under its top (the clip's ladder stood
+	 * further off its ledge): pushes him off the wall just enough that no leg bone below the top is past the edge (a few cm, released smoothly).
+	 * Base = where the root track puts him. Returns the push, cm.
+	 */
+	float EdgePushFor(const FVector& Base, float DeltaTime);
 	void BeginLoop(bool bUp);
 	void BeginExitBottom();
 	void FinishClimb();
@@ -234,9 +311,31 @@ private:
 	TWeakObjectPtr<ALadderActor> PendingLadder;
 	bool bPendingUp = true;
 	float QueueRetry = 0.f;
+	/** Time spent in Queue (an enemy gives up after EnemyQueueSeconds). */
+	float QueueSeconds = 0.f;
+	/** The waiting spot he walks to (by his place in the queue) and the place it was made for; walking back to the link point on his turn. */
+	FVector QueueSpot = FVector::ZeroVector;
+	int32 QueueSpotIndex = INDEX_NONE;
+	bool bQueueApproach = false;
+	/** The link point he starts the climb from (below / on top). */
+	FVector GetLinkStart() const;
+	/** Queue: keeps him on his waiting spot; on his turn walks him to the link point and starts the climb there. */
+	void TickQueue(float DeltaTime);
+	/** A plain navmesh walk on his own level (no ladder in the way), for the queue. */
+	void WalkTo(const FVector& Point, float Acceptance);
 
 	FVector PendingDestination = FVector::ZeroVector;
 	bool bHasPendingDestination = false;
+	/** He climbs on his own order (a player's move), not a formation follow: the walk after it stays his own order. */
+	bool bOwnOrderAtEntry = false;
+	/** HandleNewOrder: turn round at ReverseAt (the next rung boundary). */
+	bool bReversePending = false;
+	LadderRules::FLoopPos ReverseAt;
+	int32 Reversals = 0;
+	/** The navmesh path length from Point to Destination, cm; -1 when there is no full path. */
+	float PathLengthFrom(const FVector& Point, const FVector& Destination) const;
+	/** The actor location when the climb took the body (GetFloorReferenceLocation). */
+	FVector ClimbStartLocation = FVector::ZeroVector;
 
 	LadderRules::FLoopPos LoopPos;
 	LadderRules::FLoopPos TargetPos;
@@ -268,6 +367,25 @@ private:
 	FVector WarpScale = FVector::OneVector;
 	float WarpYaw = 0.f;
 	float ClipTime = 0.f;
+	/** The warped clip plays backwards (ClimbOutTop going down). */
+	bool bWarpReverse = false;
+	/** EdgePushFor: the edge measured at the top transition, the push (cm, away from the wall) and its release spring. */
+	float TopEdgeCm = -1.f;
+	float EdgePush = 0.f;
+	float EdgePushVelocity = 0.f;
+	float MaxEdgePush = 0.f;
+
+public:
+	/** The largest edge push of the last climb (smokes), cm. */
+	float GetMaxEdgePush() const { return MaxEdgePush; }
+
+private:
+	/** AlignTop: walk to the ladder head (0), then the turn in place (1). */
+	int32 AlignPhase = 0;
+	float AlignPhaseStart = 0.f;
+	float WalkSeconds = 0.f;
+	float TurnSeconds = 0.f;
+	float AlignWalkSpeed = 0.f;
 
 	/** Snapshot restored on every exit (LADDERS.md 2: movement mode, rotation flags, braking, gravity, root motion, weapon). */
 	struct FSnapshot
@@ -284,6 +402,10 @@ private:
 
 	/** Knockdown drop. */
 	float DropFeetZ = 0.f;
+	/** A body without collision (a killed enemy's capsule is switched off) falls by code onto this floor. */
+	float DropFloorZ = 0.f;
+	float DropSpeed = 0.f;
+	bool bDropFloorFound = false;
 	bool bKnockdownOnLanding = false;
 	EKnockdownDirection DropDirection = EKnockdownDirection::Back;
 	EKnockdownCause DropCause = EKnockdownCause::None;

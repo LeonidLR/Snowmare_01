@@ -112,7 +112,7 @@ namespace TutorialRulesLocal
 	/** The plain condition stats (UTutorialSubsystem::GetConditionStat); the prefixed ones are listed by DescribeKnownStats. */
 	const TCHAR* const PlainConditionStats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
 		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max"), TEXT("squad_prone"),
-		TEXT("enemies_unseen"), TEXT("squad_passive"), TEXT("in_fight"), TEXT("quest_progress"), TEXT("tactical_pause") };
+		TEXT("enemies_unseen"), TEXT("squad_passive"), TEXT("in_fight"), TEXT("quest_progress"), TEXT("tactical_pause"), TEXT("squad_mines") };
 
 	/** "squad_cold_max | ... | traps_spotted.<tag> | squad_not_low_in.<volume>" for the parse error of an unknown stat. */
 	FString DescribeKnownStats()
@@ -124,6 +124,7 @@ namespace TutorialRulesLocal
 		}
 		Names.Add(TEXT("traps_spotted.<tag>"));
 		Names.Add(TEXT("squad_not_low_in.<volume>"));
+		Names.Add(TEXT("squad_not_in_cover_at.<volume>"));
 		Names.Add(TEXT("squad_not_across.<volume>"));
 		Names.Add(TEXT("all_dead.<enemy binding>"));
 		Names.Add(TEXT("step_shown.<step>"));
@@ -399,11 +400,35 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			OutError = FString::Printf(TEXT("tutorial steps: duplicate enemy binding id \"%s\""), *Id);
 			return false;
 		}
-		WarnUnknownKeys(Object, { TEXT("id"), TEXT("route"), TEXT("actor") }, TEXT("enemy ") + Id, OutWarnings);
+		WarnUnknownKeys(Object, { TEXT("id"), TEXT("route"), TEXT("actor"), TEXT("dormant") }, TEXT("enemy ") + Id, OutWarnings);
 		FTutorialEnemyBinding& Binding = OutData.Enemies.AddDefaulted_GetRef();
 		Binding.Id = FName(*Id);
 		Binding.Routes = JsonStrings(Object, TEXT("route"));
 		Binding.Actors = JsonStrings(Object, TEXT("actor"));
+		// 2026-10-23: "dormant": { "until": clauses, "spawn": "hidden_on_route" | "in_place" } (FTutorialDormant).
+		const TSharedPtr<FJsonObject>* DormantObject = nullptr;
+		if (Object->TryGetObjectField(TEXT("dormant"), DormantObject))
+		{
+			const FString Where = TEXT("enemy ") + Id + TEXT(" dormant");
+			WarnUnknownKeys(*DormantObject, { TEXT("until"), TEXT("spawn") }, Where, OutWarnings);
+			Binding.Dormant.bEnabled = true;
+			if (!ParseConditions(*DormantObject, Where, Binding.Dormant.Until, OutWarnings, OutError, TEXT("until")))
+			{
+				return false;
+			}
+			if (Binding.Dormant.Until.IsEmpty())
+			{
+				OutError = Where + TEXT(": needs \"until\" clauses (when the enemy wakes)");
+				return false;
+			}
+			const FString Spawn = JsonString(*DormantObject, TEXT("spawn"), TEXT("hidden_on_route"));
+			if (Spawn != TEXT("hidden_on_route") && Spawn != TEXT("in_place"))
+			{
+				OutError = FString::Printf(TEXT("%s: unknown spawn \"%s\" (hidden_on_route | in_place)"), *Where, *Spawn);
+				return false;
+			}
+			Binding.Dormant.Spawn = FName(*Spawn);
+		}
 		if (Binding.Routes.IsEmpty() && Binding.Actors.IsEmpty())
 		{
 			OutError = FString::Printf(TEXT("tutorial steps: enemy binding \"%s\" needs \"route\" and / or \"actor\" (label, object name or tag)"), *Id);
@@ -463,7 +488,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		const FString Where = TEXT("step ") + Id;
 		WarnUnknownKeys(Object, { TEXT("id"), TEXT("beat"), TEXT("kind"), TEXT("text_id"), TEXT("keys"), TEXT("trigger"), TEXT("complete"),
 			TEXT("once"), TEXT("skippable"), TEXT("blocking"), TEXT("lines"), TEXT("condition"), TEXT("lock"), TEXT("unlock"), TEXT("action"),
-			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on"), TEXT("confine"), TEXT("guide"), TEXT("beyond") }, Where, OutWarnings);
+			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on"), TEXT("confine"), TEXT("guide"), TEXT("beyond"), TEXT("lock_in_place") }, Where, OutWarnings);
 		FTutorialStep Step;
 		Step.Id = FName(*Id);
 		Step.Beat = FName(*JsonString(Object, TEXT("beat")));
@@ -657,14 +682,16 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			const TSharedPtr<FJsonObject> Confine = *ConfineObject;
 			WarnUnknownKeys(Confine, { TEXT("volume"), TEXT("allow"), TEXT("until"), TEXT("stop"), TEXT("span"), TEXT("stance"), TEXT("exit"), TEXT("free") },
 				Where + TEXT(" confine"), OutWarnings);
-			// 2026-10-20: "free": "focus" - the step's focus operative is not held (the A4 ambusher).
+			// 2026-10-20: "free": "focus" - the step's focus operative is not held (the A4 ambusher); 2026-10-23: "first" - the first one
+			// ordered outside the area is (any ONE operative does the lesson).
 			const FString FreeText = JsonString(Confine, TEXT("free"));
-			if (!FreeText.IsEmpty() && FreeText != TEXT("focus"))
+			if (!FreeText.IsEmpty() && FreeText != TEXT("focus") && FreeText != TEXT("first"))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown confine \"free\" \"%s\" (focus)"), *Where, *FreeText);
+				OutError = FString::Printf(TEXT("%s: unknown confine \"free\" \"%s\" (focus | first)"), *Where, *FreeText);
 				return false;
 			}
 			Step.Confine.bFreeFocus = FreeText == TEXT("focus");
+			Step.Confine.bFreeFirst = FreeText == TEXT("first");
 			Step.Confine.Volume = FName(*JsonString(Confine, TEXT("volume")));
 			if (Step.Confine.Volume.IsNone())
 			{
@@ -698,6 +725,32 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 					return false;
 				}
 				Step.Confine.ThroughEvent = JsonString(*ExitObject, TEXT("through"));
+			}
+		}
+		// 2026-10-23: "lock_in_place": true | { "until": step, "text_id": id } - the operatives who complete the step are held where they
+		// stand (FTutorialPlaceLock; "until" is checked with the other step references below).
+		if (const TSharedPtr<FJsonValue> LockValue = Object->TryGetField(TEXT("lock_in_place")); LockValue.IsValid())
+		{
+			if (LockValue->Type == EJson::Boolean)
+			{
+				Step.LockInPlace.bEnabled = LockValue->AsBool();
+			}
+			else if (LockValue->Type == EJson::Object)
+			{
+				const TSharedPtr<FJsonObject> LockObject = LockValue->AsObject();
+				WarnUnknownKeys(LockObject, { TEXT("until"), TEXT("text_id") }, Where + TEXT(" lock_in_place"), OutWarnings);
+				Step.LockInPlace.bEnabled = true;
+				Step.LockInPlace.Until = FName(*JsonString(LockObject, TEXT("until")));
+				Step.LockInPlace.TextId = FName(*JsonString(LockObject, TEXT("text_id")));
+			}
+			else
+			{
+				OutError = Where + TEXT(": \"lock_in_place\" must be true / false or { \"until\": <step>, \"text_id\": <text> }");
+				return false;
+			}
+			if (Step.LockInPlace.IsSet() && Step.Complete.Event.IsEmpty() && Step.Complete.Volume.IsNone())
+			{
+				OutWarnings.Add(Where + TEXT(": \"lock_in_place\" without a completion \"event\" / \"volume\" - nobody completes it in person, nobody is locked"));
 			}
 		}
 		Step.Focus = FName(*JsonString(Object, TEXT("focus")));
@@ -771,9 +824,11 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			return false;
 		}
 		const TArray<FName> ConfineUntil = Step.Confine.Until.IsNone() ? TArray<FName>() : TArray<FName>{ Step.Confine.Until };
+		const TArray<FName> PlaceLockUntil = Step.LockInPlace.Until.IsNone() ? TArray<FName>() : TArray<FName>{ Step.LockInPlace.Until };
 		if (!CheckStepReferences(OutData, Step, Step.Complete.DistinctFrom, TEXT("complete \"distinct_from\""), /*bSelfAllowed*/ false, OutError)
 			|| !CheckStepReferences(OutData, Step, Step.CancelOn.Steps, TEXT("\"cancel_on\""), /*bSelfAllowed*/ false, OutError)
 			|| !CheckStepReferences(OutData, Step, ConfineUntil, TEXT("\"confine\" \"until\""), /*bSelfAllowed*/ true, OutError)
+			|| !CheckStepReferences(OutData, Step, PlaceLockUntil, TEXT("\"lock_in_place\" \"until\""), /*bSelfAllowed*/ false, OutError)
 			|| !CheckStepReferences(OutData, Step, Step.Trigger.Requires, TEXT("trigger \"requires\""), /*bSelfAllowed*/ true, OutError))
 		{
 			return false;
@@ -1047,11 +1102,26 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		Entry->SetStringField(TEXT("step"), Confine.Owner.ToString());
 		Entry->SetBoolField(TEXT("released"), Confine.bReleased);
 		Entry->SetArrayField(TEXT("passed"), JsonNameValues(Confine.Passed));
+		if (!Confine.Free.IsNone())
+		{
+			Entry->SetStringField(TEXT("free"), Confine.Free.ToString());
+		}
 		Confines.Add(MakeShared<FJsonValueObject>(Entry));
 	}
 	Object->SetArrayField(TEXT("confines"), Confines);
 	// 2026-10-20: the furthest place reached on the route (the current navigation target is derived from it).
 	Object->SetStringField(TEXT("route"), Progress.RouteVolume.IsNone() ? FString() : Progress.RouteVolume.ToString());
+	// 2026-10-23: the operatives held in place by a "lock_in_place" step.
+	TArray<TSharedPtr<FJsonValue>> PlaceLocks;
+	for (const FTutorialPlaceLockState& Lock : Progress.PlaceLocks)
+	{
+		const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+		Entry->SetStringField(TEXT("operative"), Lock.Operative.ToString());
+		Entry->SetStringField(TEXT("step"), Lock.Step.ToString());
+		Entry->SetStringField(TEXT("until"), Lock.Until.IsNone() ? FString() : Lock.Until.ToString());
+		PlaceLocks.Add(MakeShared<FJsonValueObject>(Entry));
+	}
+	Object->SetArrayField(TEXT("place_locks"), PlaceLocks);
 	return Object;
 }
 
@@ -1132,6 +1202,8 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 			Stored.Owner = FName(*Owner);
 			Stored.bReleased = JsonBool(Entry, TEXT("released"), false);
 			JsonUniqueNames(*Entry, TEXT("passed"), Stored.Passed);
+			const FString Free = JsonString(Entry, TEXT("free"));
+			Stored.Free = Free.IsEmpty() ? NAME_None : FName(*Free);
 		}
 	}
 	FString Route;
@@ -1139,7 +1211,94 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 	{
 		OutProgress.RouteVolume = FName(*Route); // an older save without it: the route starts at the saved beat's start
 	}
+	const TArray<TSharedPtr<FJsonValue>>* PlaceLocks = nullptr;
+	if (Object.TryGetArrayField(TEXT("place_locks"), PlaceLocks))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *PlaceLocks)
+		{
+			const TSharedPtr<FJsonObject> Entry = Value.IsValid() ? Value->AsObject() : nullptr;
+			const FString Operative = JsonString(Entry, TEXT("operative"));
+			const FString Step = JsonString(Entry, TEXT("step"));
+			if (Operative.IsEmpty() || Step.IsEmpty())
+			{
+				continue;
+			}
+			FTutorialPlaceLockState& Stored = OutProgress.PlaceLocks.AddDefaulted_GetRef();
+			Stored.Operative = FName(*Operative);
+			Stored.Step = FName(*Step);
+			const FString Until = JsonString(Entry, TEXT("until"));
+			Stored.Until = Until.IsEmpty() ? NAME_None : FName(*Until);
+		}
+	}
 	return true;
+}
+
+FName TutorialRules::ParseNotInCoverAtStat(FName Stat)
+{
+	static const FString Prefix(TEXT("squad_not_in_cover_at."));
+	const FString Name = Stat.ToString();
+	return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
+}
+
+float TutorialRules::RouteArcDistance(float ArcA, float ArcB, float LoopLength)
+{
+	const float Along = FMath::Abs(ArcA - ArcB);
+	return LoopLength > 0.f ? FMath::Min(Along, FMath::Max(0.f, LoopLength - Along)) : Along;
+}
+
+int32 TutorialRules::ChooseHiddenRoutePoint(const TArray<float>& SampleArcs, const TArray<bool>& Hidden, const TArray<float>& OperativeArcs, float LoopLength)
+{
+	int32 Best = INDEX_NONE;
+	bool bBestHidden = false;
+	float BestDistance = -1.f;
+	for (int32 Index = 0; Index < SampleArcs.Num(); ++Index)
+	{
+		const bool bHidden = Hidden.IsValidIndex(Index) && Hidden[Index];
+		float Nearest = TNumericLimits<float>::Max();
+		for (const float OperativeArc : OperativeArcs)
+		{
+			Nearest = FMath::Min(Nearest, RouteArcDistance(SampleArcs[Index], OperativeArc, LoopLength));
+		}
+		// A hidden point always beats a seen one; among equals the farthest from the nearest operative (along the route).
+		if (Best == INDEX_NONE || (bHidden && !bBestHidden) || (bHidden == bBestHidden && Nearest > BestDistance))
+		{
+			Best = Index;
+			bBestHidden = bHidden;
+			BestDistance = Nearest;
+		}
+	}
+	return Best;
+}
+
+FString TutorialRules::ResolveIfStatTokens(const FString& Text, TFunctionRef<float(FName)> Stat)
+{
+	// "{if:<stat>:<text>}" -> <text> when the stat is at least 1, else nothing (2026-10-23: the A4 card names the mine only when the
+	// squad carries one).
+	FString Out;
+	int32 From = 0;
+	while (true)
+	{
+		const int32 Start = Text.Find(TEXT("{if:"), ESearchCase::CaseSensitive, ESearchDir::FromStart, From);
+		if (Start == INDEX_NONE)
+		{
+			Out += Text.Mid(From);
+			return Out;
+		}
+		const int32 StatEnd = Text.Find(TEXT(":"), ESearchCase::CaseSensitive, ESearchDir::FromStart, Start + 4);
+		const int32 End = StatEnd == INDEX_NONE ? INDEX_NONE : Text.Find(TEXT("}"), ESearchCase::CaseSensitive, ESearchDir::FromStart, StatEnd);
+		if (End == INDEX_NONE)
+		{
+			Out += Text.Mid(From);
+			return Out;
+		}
+		Out += Text.Mid(From, Start - From);
+		const FName StatName(*Text.Mid(Start + 4, StatEnd - Start - 4));
+		if (Stat(StatName) >= 1.f)
+		{
+			Out += Text.Mid(StatEnd + 1, End - StatEnd - 1);
+		}
+		From = End + 1;
+	}
 }
 
 FName TutorialRules::ParseNotLowInStat(FName Stat)
@@ -1270,7 +1429,8 @@ bool TutorialRules::StanceSatisfies(FName Have, FName Need)
 
 ETutorialConfineVerdict TutorialRules::JudgeConfinedMove(const FTutorialConfineView& Confine, FName OperativeId, FName OperativeStance, bool bDestinationInside)
 {
-	if (Confine.Spec.bFreeFocus && !OperativeId.IsNone() && OperativeId == Confine.FreeOperative)
+	const bool bFreeOne = Confine.Spec.bFreeFocus || Confine.Spec.bFreeFirst;
+	if (bFreeOne && !OperativeId.IsNone() && OperativeId == Confine.FreeOperative)
 	{
 		return ETutorialConfineVerdict::Allowed; // 2026-10-20: the one who does the lesson is never held
 	}
@@ -1282,9 +1442,14 @@ ETutorialConfineVerdict TutorialRules::JudgeConfinedMove(const FTutorialConfineV
 	{
 		return ETutorialConfineVerdict::Allowed;
 	}
-	if (Confine.Spec.bFreeFocus)
+	if (bFreeOne)
 	{
-		// 2026-10-20: one operative does the lesson; the rest hold the area whatever their stance.
+		// 2026-10-20: one operative does the lesson; the rest hold the area whatever their stance. 2026-10-23 "first": nobody took it yet ->
+		// this one may (the runtime records him: UTutorialSubsystem::CheckConfinedOrder -> FTutorialStateMachine::ClaimConfineFree).
+		if (Confine.Spec.bFreeFirst && Confine.FreeOperative.IsNone() && !OperativeId.IsNone())
+		{
+			return ETutorialConfineVerdict::Allowed;
+		}
 		return !OperativeId.IsNone() && OperativeId == Confine.FreeOperative ? ETutorialConfineVerdict::Allowed : ETutorialConfineVerdict::HeldBack;
 	}
 	if (!Confine.Spec.HasExit())
@@ -1311,8 +1476,30 @@ const TCHAR* TutorialRules::ConfineVerdictName(ETutorialConfineVerdict Verdict)
 	case ETutorialConfineVerdict::Stance: return TEXT("stance");
 	case ETutorialConfineVerdict::ExitStance: return TEXT("exit_stance");
 	case ETutorialConfineVerdict::HeldBack: return TEXT("held_back");
+	case ETutorialConfineVerdict::LockedInPlace: return TEXT("locked_in_place");
 	default: return TEXT("?");
 	}
+}
+
+bool TutorialRules::IsPlaceLockedMove(bool bLocked, const FVector& OperativeLocation, const FVector& Destination)
+{
+	return bLocked && FVector::DistSquared2D(OperativeLocation, Destination) > FMath::Square(PlaceLockToleranceCm);
+}
+
+TArray<FTutorialPlaceLockState> TutorialRules::FilterPlaceLocks(const FTutorialStepsData& Data, const TArray<FTutorialPlaceLockState>& Saved)
+{
+	TArray<FTutorialPlaceLockState> Out;
+	for (const FTutorialPlaceLockState& Lock : Saved)
+	{
+		const FTutorialStep* Step = Data.FindStep(Lock.Step);
+		if (Lock.Operative.IsNone() || !Step || !Step->LockInPlace.IsSet() || (!Lock.Until.IsNone() && !Data.FindStep(Lock.Until)))
+		{
+			continue; // the steps file changed since the save: that lock no longer exists
+		}
+		Out.RemoveAll([&Lock](const FTutorialPlaceLockState& Other) { return Other.Operative == Lock.Operative; });
+		Out.Add(Lock);
+	}
+	return Out;
 }
 
 FString TutorialRules::GetCommandFamily(FName CommandId)
@@ -1383,6 +1570,7 @@ bool TutorialRules::IsKnownStat(FName Stat)
 {
 	// Rev 5h: "traps_spotted.<SpotEventTag>" counts the spotted traps of a tagged group (TrapSpotRules::ParseSpottedStatTag).
 	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone() || !ParseNotLowInStat(Stat).IsNone() || !ParseNotAcrossStat(Stat).IsNone()
+		|| !ParseNotInCoverAtStat(Stat).IsNone()
 		|| !ParseAllDeadStat(Stat).IsNone() || !ParseStepShownStat(Stat).IsNone())
 	{
 		return true;

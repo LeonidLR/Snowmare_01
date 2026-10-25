@@ -6,11 +6,27 @@
 #include "Characters/SquadFormation.h"
 #include "Characters/FirePostureRules.h"
 #include "GameFlow/GameFlowTypes.h"
+#include "Tactics/CoverTypes.h"
 #include "SquadSubsystem.generated.h"
 
 class AOperativeCharacter;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSquadLeaderChanged, AOperativeCharacter*, NewLeader);
+
+/**
+ * Group cover leader priority (game designer 2026-10-23): what one group cover order keeps for its waiting members - the free slots of
+ * the same wall nobody was given and the unused prone spots behind the cover (a member whose slot was taken while he waited gets the
+ * nearest free spare, else a prone spot).
+ */
+struct FGroupCoverSpares
+{
+	TArray<FCoverSlot> Slots;
+	TArray<bool> SlotUsed;
+	TArray<FVector> ProneSpots;
+	TArray<bool> ProneUsed;
+	/** Facing of a prone member (towards the cover). */
+	float FaceYaw = 0.f;
+};
 
 /** Where a group cover member without a slot is in his "prone behind the cover" order (USquadSubsystem::OrderGroupCoverProne). */
 enum class ESquadGroupCoverPronePhase : uint8
@@ -89,7 +105,7 @@ public:
 
 	/**
 	 * Game designer play-test 2026-10-22: after a fight that returns to exploring the followers keep the spots they fought from
-	 * until the leader moves (SquadOrderRules::ArmsPostFightHold / KeepsPostFightHold).
+	 * until the leader moves or the player orders Regroup (B; bug 2026-10-23) - SquadOrderRules::ArmsPostFightHold / KeepsPostFightHold.
 	 */
 	bool IsPostFightHoldActive() const { return bPostFightHold; }
 
@@ -220,7 +236,10 @@ public:
 	/** Operatives whose planned targeted shot could not fire on the pause release and is being retried (smokes). */
 	int32 GetDeferredShotCount() const { return DeferredShots.Num(); }
 
-	/** True while formation following is on (exploration only; from preparation on, operatives act individually). */
+	/**
+	 * True while formation following is on: exploration and after the final fight (PostCombat, bug 2026-10-23; SquadOrderRules::IsFormationPhase).
+	 * From preparation to the fight's end the operatives act individually.
+	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsFormationActive() const;
 
@@ -248,6 +267,19 @@ public:
 
 	/** The spot of his group cover prone order; false when he has none. */
 	bool GetGroupCoverProneSpot(const AOperativeCharacter* Operative, FVector& OutSpot) const;
+
+	/**
+	 * Group cover leader priority (game designer 2026-10-23): instead of running straight into his slot, Member runs to his wait point
+	 * (GroupCoverRules::ComputeWaitPoint, ~1.6 m out from the slot) and waits there until CoverLeader has taken his cover (or CoverLeader's order
+	 * failed / he is down: GroupCoverRules::ShouldReleaseToSlot), then takes Slot (a run); a slot taken meanwhile -> the nearest free
+	 * spare slot, else prone behind the cover (Spares). bHoldSlot: SetHoldGroupCoverSlot on the slot order. False when no wait point
+	 * is reachable (the caller sends him into the slot at once). Dropped by a new order to him, Regroup or turn-based combat.
+	 */
+	bool OrderGroupCoverWait(AOperativeCharacter* Member, const FCoverSlot& Slot, AOperativeCharacter* CoverLeader, bool bHoldSlot,
+		const TSharedRef<FGroupCoverSpares>& Spares);
+
+	/** He waits off the wall for the leader of his group cover order (on the way to the wait point or standing there). */
+	bool IsWaitingForGroupCoverLeader(const AOperativeCharacter* Operative) const;
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
@@ -305,6 +337,28 @@ private:
 		bool bRetried = false;
 	};
 
+	/** A group cover member waiting for the leader (OrderGroupCoverWait). */
+	struct FGroupCoverWaitOrder
+	{
+		TWeakObjectPtr<AOperativeCharacter> Leader;
+		FCoverSlot Slot;
+		FVector WaitPoint = FVector::ZeroVector;
+		/** AOperativeCharacter::GetMoveOrderSerial after the walk to the wait point: another value = a new order to him. */
+		uint32 Serial = 0;
+		float WaitSeconds = 0.f;
+		float LeaderIdleSeconds = 0.f;
+		bool bHoldSlot = false;
+		TSharedPtr<FGroupCoverSpares> Spares;
+	};
+
+	/** Waiting members: released into their slots once the leader is in cover (SquadSubsystemGroupCover.cpp). */
+	void UpdateGroupCoverWait(float DeltaTime);
+	void DropGroupCoverWait(const AOperativeCharacter* Operative, const TCHAR* Why);
+	/** Sends him into his slot (or the nearest free spare / a prone spot when it was taken). */
+	void ReleaseGroupCoverWait(AOperativeCharacter& Member, const FGroupCoverWaitOrder& Order, const TCHAR* Why);
+	/** Another operative is in / going to a cover slot within the occupied radius of Point (or a body stands there). */
+	bool IsGroupCoverPointTaken(const FVector& Point, const AOperativeCharacter* Except) const;
+
 	/** The group cover prone orders: arrival -> face the cover -> prone -> hold; dropped by a new order (SquadSubsystemGroupCover.cpp). */
 	void UpdateGroupCoverProne(float DeltaTime);
 	void DropGroupCoverProne(const AOperativeCharacter* Operative, const TCHAR* Why);
@@ -315,6 +369,12 @@ private:
 	void UpdateSlotSwap(float DeltaTime);
 	void UpdateFollower(FFollowerState& Follower, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime, float TimeSeconds);
 	bool IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, const FVector& SlotLocation) const;
+	/**
+	 * Bug 2026-10-23: a formation slot off the navmesh (inside a wall, the generator, a fallen mate's remains crate) was unreachable
+	 * for good - while the leader stood still the follower never came back. Returns Slot when it lies on the navmesh, else the
+	 * nearest candidate round the leader that does (SquadFormation::ComputeFallbackSlots), else Slot.
+	 */
+	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot) const;
 
 	TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 	TWeakObjectPtr<AOperativeCharacter> Leader;
@@ -331,6 +391,7 @@ private:
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder> PlannedOrders;
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FGroupCoverProneOrder> GroupCoverProneOrders;
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FGroupCoverWaitOrder> GroupCoverWaitOrders;
 	/** Operatives with a deferred planned shot -> seconds of real-time fight since the release. */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, float> DeferredShots;
 	ECodexCombatMode LastCombatMode = ECodexCombatMode::None;

@@ -226,8 +226,27 @@ public:
 	bool GetActiveConfine(FTutorialConfineView& Out) const;
 	/** Ends the confinement in force (the tutorial was switched off / skipped, a fight started). False when none held. */
 	bool ReleaseConfines();
+	/**
+	 * 2026-10-23 ("free": "first"): OperativeId takes the lesson of the confinement in force - from now on he alone moves freely. False
+	 * when there is no such confinement or someone already took it.
+	 */
+	bool ClaimConfineFree(FName OperativeId);
 	/** Changes whenever a confinement starts or ends (the runtime stops the squad when one starts). */
 	int32 GetConfineSerial() const { return ConfineSerial; }
+
+	// --- Lock in place (2026-10-23, game designer play-test) -------------------------------------------------------------
+	/**
+	 * OperativeId is held where he stands by a "lock_in_place" step he completed (FTutorialPlaceLock); OutStep = that step. Locked when the
+	 * step COMPLETES (not skipped / timed out / passed), released when its "until" step finishes, when a later beat starts (the owner's
+	 * beat is over) or by ReleasePlaceLocks.
+	 */
+	bool IsLockedInPlace(FName OperativeId, FName* OutStep = nullptr) const;
+	/** Every operative held in place now (one entry per operative). */
+	const TArray<FTutorialPlaceLockState>& GetPlaceLocks() const { return PlaceLocks; }
+	/** Releases every place lock (the tutorial was switched off / skipped, a fight started). False when nobody was locked. */
+	bool ReleasePlaceLocks();
+	/** Changes whenever an operative is locked in place or released (the runtime logs it and marks him). */
+	int32 GetPlaceLockSerial() const { return PlaceLockSerial; }
 
 	// --- Save -------------------------------------------------------------------------------------------------------
 	FTutorialProgress ExportProgress() const;
@@ -376,6 +395,8 @@ private:
 		int32 Owner = INDEX_NONE;
 		bool bReleased = false;
 		TArray<FName> Passed;
+		/** "free": "first" - the operative who took the lesson. */
+		FName Free;
 	};
 	TArray<FConfineRuntime> Confines;
 	int32 ConfineSerial = 0;
@@ -393,4 +414,12 @@ private:
 	void ReleaseConfinesUntil(int32 FinishedIndex);
 	/** "exit.through": the event named SubjectId - he got through (free to move on). */
 	void NoteConfineEvent(FName EventName, FName SubjectId);
+
+	/** 2026-10-23: the operatives held in place (FTutorialPlaceLockState), one entry per operative. */
+	TArray<FTutorialPlaceLockState> PlaceLocks;
+	int32 PlaceLockSerial = 0;
+	/** The step completed: its contributors are locked in place when it has "lock_in_place" (and its release step has not finished yet). */
+	void LockStepContributors(int32 Index);
+	/** Releases the place locks whose "until" is the step that just finished. */
+	void ReleasePlaceLocksUntil(FName FinishedStep);
 };

@@ -28,6 +28,11 @@
 #include "Misc/PackageName.h"
 #include "NiagaraSystem.h"
 
+UDirectionalLightComponent* AWeatherPresenterActor::GetDirectionalComponent(const ADirectionalLight* Light)
+{
+	return Light ? Cast<UDirectionalLightComponent>(Light->GetLightComponent()) : nullptr;
+}
+
 namespace WeatherPresenterLocal
 {
 	TAutoConsoleVariable<int32> CVarVisuals(
@@ -235,12 +240,12 @@ bool AWeatherPresenterActor::IsPresetFromAsset(EWeatherState Weather) const
 
 UDirectionalLightComponent* AWeatherPresenterActor::GetActiveMoon() const
 {
-	return AdoptedMoon ? AdoptedMoon->GetComponent() : MoonLight.Get();
+	return AdoptedMoon ? GetDirectionalComponent(AdoptedMoon) : MoonLight.Get();
 }
 
 FString AWeatherPresenterActor::DescribeAdopted() const
 {
-	const UDirectionalLightComponent* SunLight = Sun ? Sun->GetComponent() : nullptr;
+	const UDirectionalLightComponent* SunLight = Sun ? GetDirectionalComponent(Sun) : nullptr;
 	const USkyLightComponent* Sky = SkyLight ? SkyLight->GetLightComponent() : nullptr;
 	int32 AssetCount = 0;
 	for (const bool bAsset : bPresetFromAsset)
@@ -330,14 +335,14 @@ void AWeatherPresenterActor::Adopt()
 	TArray<ADirectionalLight*> Lights;
 	for (TActorIterator<ADirectionalLight> It(World); It; ++It)
 	{
-		if (IsValid(*It) && It->GetComponent())
+		if (IsValid(*It) && GetDirectionalComponent(*It))
 		{
 			Lights.Add(*It);
 		}
 	}
 	auto Score = [](const ADirectionalLight* Light)
 	{
-		const UDirectionalLightComponent* Component = Light->GetComponent();
+		const UDirectionalLightComponent* Component = GetDirectionalComponent(Light);
 		const bool bAtmosphereSun = Component->IsUsedAsAtmosphereSunLight() && Component->GetAtmosphereSunLightIndex() == 0;
 		return (bAtmosphereSun ? 1.e9f : 0.f) + Component->Intensity;
 	};
@@ -350,7 +355,7 @@ void AWeatherPresenterActor::Adopt()
 	}
 	for (ADirectionalLight* Light : Lights)
 	{
-		if (Light != Sun && (Light->GetName().Contains(TEXT("Moon")) || Light->GetComponent()->GetAtmosphereSunLightIndex() == 1))
+		if (Light != Sun && (Light->GetName().Contains(TEXT("Moon")) || GetDirectionalComponent(Light)->GetAtmosphereSunLightIndex() == 1))
 		{
 			AdoptedMoon = Light;
 			break;
@@ -387,7 +392,7 @@ void AWeatherPresenterActor::Adopt()
 	// Record the authored values.
 	if (Sun)
 	{
-		const UDirectionalLightComponent* Light = Sun->GetComponent();
+		const UDirectionalLightComponent* Light = GetDirectionalComponent(Sun);
 		Authored.SunRotation = Light->GetComponentRotation();
 		Authored.SunIntensity = Light->Intensity;
 		Authored.SunColor = Light->GetLightColor();
@@ -405,7 +410,7 @@ void AWeatherPresenterActor::Adopt()
 	}
 	if (AdoptedMoon)
 	{
-		const UDirectionalLightComponent* Light = AdoptedMoon->GetComponent();
+		const UDirectionalLightComponent* Light = GetDirectionalComponent(AdoptedMoon);
 		Authored.MoonRotation = Light->GetComponentRotation();
 		Authored.MoonIntensity = Light->Intensity;
 		Authored.MoonColor = Light->GetLightColor();
@@ -447,7 +452,7 @@ void AWeatherPresenterActor::Adopt()
 	// The moon: the presenter's own light shares the sky atmosphere as its second light.
 	if (!AdoptedMoon)
 	{
-		const UDirectionalLightComponent* SunLight = Sun ? Sun->GetComponent() : nullptr;
+		const UDirectionalLightComponent* SunLight = Sun ? GetDirectionalComponent(Sun) : nullptr;
 		const bool bSunInAtmosphere = SunLight && SunLight->IsUsedAsAtmosphereSunLight();
 		MoonLight->SetAtmosphereSunLight(true);
 		MoonLight->SetAtmosphereSunLightIndex(bSunInAtmosphere && SunLight->GetAtmosphereSunLightIndex() == 0 ? 1 : 0);
@@ -582,7 +587,7 @@ void AWeatherPresenterActor::Apply()
 
 void AWeatherPresenterActor::ApplySun(const FWeatherVisualFrame& Frame)
 {
-	UDirectionalLightComponent* Light = Sun ? Sun->GetComponent() : nullptr;
+	UDirectionalLightComponent* Light = Sun ? GetDirectionalComponent(Sun) : nullptr;
 	if (!Light || !bSunAdjustable)
 	{
 		return;
@@ -775,7 +780,7 @@ void AWeatherPresenterActor::SetCloudsOff(bool bOff)
 
 void AWeatherPresenterActor::RestoreAuthored()
 {
-	if (UDirectionalLightComponent* Light = Sun && bSunAdjustable ? Sun->GetComponent() : nullptr)
+	if (UDirectionalLightComponent* Light = Sun && bSunAdjustable ? GetDirectionalComponent(Sun) : nullptr)
 	{
 		if (bSunMovable)
 		{
@@ -790,7 +795,7 @@ void AWeatherPresenterActor::RestoreAuthored()
 	}
 	if (AdoptedMoon)
 	{
-		UDirectionalLightComponent* Light = AdoptedMoon->GetComponent();
+		UDirectionalLightComponent* Light = GetDirectionalComponent(AdoptedMoon);
 		if (Light->Mobility == EComponentMobility::Movable)
 		{
 			Light->SetWorldRotation(Authored.MoonRotation);

@@ -337,7 +337,9 @@ namespace CoverSwitchLakeSmoke
 			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
 			const FString Clip = Anim ? Anim->GetLastCoverSwitchClip() : FString();
 			const FCoverSlot& Arrived = Op->GetCoverSlot();
-			Check(State, bDone, FString::Printf(TEXT("3: in cover at the south rock after %.1f s"), State.StageTime));
+			Check(State, bDone, FString::Printf(TEXT("3: in cover at the south rock after %.1f s (wall %s; in cover %d, shimmying %d, moving %d, speed %.0f, mesh offset %.1f)"),
+				State.StageTime, Arrived.WallActor.IsValid() ? *Arrived.WallActor->GetName() : TEXT("none"), Op->bInCover ? 1 : 0, Op->bShimmying ? 1 : 0,
+				Op->IsMoving() ? 1 : 0, Op->GetVelocity().Size2D(), Op->GetCoverEntryMeshOffset().Size()));
 			Check(State, State.MaxDashSpeed >= 450.f && Op->GetCoverSwitchCount() > State.SwitchesBefore && Clip.Contains(TEXT("_sprint_")),
 				FString::Printf(TEXT("3: a quick dash (top speed %.0f cm/s) arriving through the sprint run-in %s"), State.MaxDashSpeed, *Clip));
 			Check(State, Arrived.WallNormal.X < -0.9 && FVector::Dist2D(Arrived.WorldLocation, State.GhostAt) < 10.f && Op->CoverFacing == State.GhostFacing

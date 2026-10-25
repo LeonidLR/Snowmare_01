@@ -135,6 +135,8 @@ private:
 
 	/** True once the mission left pure exploration (Godot: is_combat_phase / is_combat_phase_unlocked). */
 	bool IsCombatView() const;
+	/** The pan stays where the player leaves it, in the combat range: combat, or exploration with the free camera (2026-10-25). */
+	bool IsFreePanView() const;
 	bool IsTurnBased() const;
 	void UpdateZoomMode();
 	void UpdatePan(float RealDelta);
@@ -173,6 +175,12 @@ private:
 	TWeakObjectPtr<AActor> FollowTarget;
 	FVector Focus = FVector::ZeroVector;
 	bool bInitialized = false;
+	/** The focus height smoothed while the followed character climbs a ladder (LADDERS.md 7.3; Config.LadderZHalfLife). */
+	bool bLadderZSmoothing = false;
+	float LadderZ = 0.f;
+	float LadderZVelocity = 0.f;
+	/** The smoothed focus Z for a climbing follow target (passes TargetZ through otherwise; releases once settled off the ladder). */
+	float SmoothLadderZ(float TargetZ, float RealDelta);
 
 	float CurrentYaw = 0.f;
 	float TargetYaw = 0.f;

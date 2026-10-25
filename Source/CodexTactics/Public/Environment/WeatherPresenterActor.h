@@ -123,6 +123,8 @@ public:
 	bool IsPresetFromAsset(EWeatherState Weather) const;
 
 	ADirectionalLight* GetSun() const { return Sun; }
+	/** The light component of a directional light actor. ADirectionalLight::GetComponent() is editor-only data (does not compile in a game build). */
+	static UDirectionalLightComponent* GetDirectionalComponent(const ADirectionalLight* Light);
 	ASkyAtmosphere* GetSkyAtmosphere() const { return SkyAtmosphere; }
 	ASkyLight* GetSkyLight() const { return SkyLight; }
 	AExponentialHeightFog* GetHeightFog() const { return HeightFog; }

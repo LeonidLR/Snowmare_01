@@ -6,6 +6,8 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
+#include "Characters/EnemyAnimInstance.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
@@ -20,10 +22,13 @@
 #include "Ladders/LadderActor.h"
 #include "Ladders/LadderSubsystem.h"
 #include "NavLinkCustomComponent.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "NavMesh/NavMeshPath.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "UI/FloatingTextSubsystem.h"
+#include "Camera/TacticalCameraRules.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 namespace LadderClimbInternal
@@ -31,6 +36,8 @@ namespace LadderClimbInternal
 	const TCHAR* const UpLoopPath = TEXT("/Game/Characters/Operatives/Anims/Ladder/AS_Ladder_UpLoop.AS_Ladder_UpLoop");
 	const TCHAR* const ClimbOutPath = TEXT("/Game/Characters/Operatives/Anims/Ladder/AS_Ladder_ClimbOutTop.AS_Ladder_ClimbOutTop");
 	const TCHAR* const IntoFromTopPath = TEXT("/Game/Characters/Operatives/Anims/Ladder/AS_Ladder_IntoFromTop.AS_Ladder_IntoFromTop");
+	/** The character movement keeps a walking capsule this far over its floor (MIN / MAX_FLOOR_DIST 1.9 / 2.4 cm). */
+	constexpr float WalkFloorGapCm = 2.15f;
 
 	FString StateName(ELadderClimbState State)
 	{
@@ -138,6 +145,65 @@ ULadderClimbComponent::FRootTrack ULadderClimbComponent::ExtractTrack(UAnimSeque
 	return Track;
 }
 
+namespace LadderClimbInternal
+{
+	/** A bone's location in the clip's component space at Time (the parent chain of its local transforms, the root's motion included). */
+	bool ClipBoneLocation(const UAnimSequence& Clip, FName Bone, double Time, FVector& OutLocation)
+	{
+		const USkeleton* Skeleton = Clip.GetSkeleton();
+		if (!Skeleton)
+		{
+			return false;
+		}
+		const FReferenceSkeleton& Reference = Skeleton->GetReferenceSkeleton();
+		int32 Index = Reference.FindBoneIndex(Bone);
+		if (Index == INDEX_NONE)
+		{
+			return false;
+		}
+		const FAnimExtractContext Context(Time);
+		FTransform Component = FTransform::Identity;
+		while (Index != INDEX_NONE)
+		{
+			FTransform Local;
+			Clip.GetBoneTransform(Local, FSkeletonPoseBoneIndex(Index), Context, false);
+			Component = Component * Local; // child first
+			Index = Reference.GetParentIndex(Index);
+		}
+		OutLocation = Component.GetLocation();
+		return true;
+	}
+}
+
+float ULadderClimbComponent::RemoveClipLift(UAnimSequence* Clip, FRootTrack& Track, float LiftStart) const
+{
+	FVector LeftStart, RightStart;
+	if (!Clip || Track.Samples.Num() < 2 || LiftStart <= 0.f || LiftStart >= Track.Length
+		|| !LadderClimbInternal::ClipBoneLocation(*Clip, TEXT("ball_l"), LiftStart, LeftStart)
+		|| !LadderClimbInternal::ClipBoneLocation(*Clip, TEXT("ball_r"), LiftStart, RightStart))
+	{
+		return 0.f;
+	}
+	float Lift = 0.f;
+	for (int32 Index = 0; Index < Track.Samples.Num(); ++Index)
+	{
+		const double Time = FMath::Min(static_cast<double>(Index) / Track.SampleRate, static_cast<double>(Track.Length));
+		if (Time <= LiftStart)
+		{
+			continue;
+		}
+		FVector Left, Right;
+		if (!LadderClimbInternal::ClipBoneLocation(*Clip, TEXT("ball_l"), Time, Left) || !LadderClimbInternal::ClipBoneLocation(*Clip, TEXT("ball_r"), Time, Right))
+		{
+			break;
+		}
+		// The feet stand on the top (or step up onto it): the smaller rise of the two is the clip's lift of the whole body.
+		Lift = FMath::Max(0.f, static_cast<float>(FMath::Min(Left.Z - LeftStart.Z, Right.Z - RightStart.Z)));
+		Track.Samples[Index].Z -= Lift;
+	}
+	return Lift;
+}
+
 bool ULadderClimbComponent::LoadClips()
 {
 	if (bClipsLoaded)
@@ -163,6 +229,9 @@ bool ULadderClimbComponent::LoadClips()
 		LoopRise.Add(Rise > 1.f ? Sample.Z / Rise : 0.f);
 	}
 	ClimbOutTrack = ExtractTrack(LoadedClimbOut);
+	const float Lift = RemoveClipLift(LoadedClimbOut, ClimbOutTrack, LadderRules::FClipContract().ClimbOutLiftStart);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] climb out: the clip's own end lift of %.1f cm taken out of its root track (from %.2f s)"), Lift,
+		LadderRules::FClipContract().ClimbOutLiftStart);
 	IntoFromTopTrack = ExtractTrack(LoadedIntoFromTop);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] clips: up loop %.3f s rise %.1f cm; climb out %.3f s %s; into from top %.3f s %s (climber frame: X to the wall)"),
 		LoopLength, Rise, ClimbOutTrack.Length, *ClimbOutTrack.End().ToCompactString(), IntoFromTopTrack.Length, *IntoFromTopTrack.End().ToCompactString());
@@ -181,6 +250,13 @@ float ULadderClimbComponent::LoopFraction(float Time) const
 	return FMath::Lerp(LoopRise[Low], LoopRise[High], Index - Low);
 }
 
+FName ULadderClimbComponent::GetClipSlot() const
+{
+	// An enemy body plays its one-shots on its own full-body slot (the Frostbitten graph's DefaultSlot), not the operatives' FullBody.
+	const UEnemyAnimInstance* EnemyAnim = Cast<UEnemyAnimInstance>(GetAnimInstance());
+	return EnemyAnim ? EnemyAnim->OneShotSlot : MontageSlot;
+}
+
 UAnimMontage* ULadderClimbComponent::PlayClip(UAnimSequence* Clip, float Time, float BlendIn)
 {
 	UAnimInstance* Anim = GetAnimInstance();
@@ -189,10 +265,11 @@ UAnimMontage* ULadderClimbComponent::PlayClip(UAnimSequence* Clip, float Time, f
 		return nullptr;
 	}
 	CurrentMontage = nullptr; // the montage it replaces ends as "interrupted": not an interrupt of the climb
-	UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage(Clip, MontageSlot, BlendIn, ExitBlendSeconds, 1.f, 1);
+	const FName Slot = GetClipSlot();
+	UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage(Clip, Slot, BlendIn, ExitBlendSeconds, 1.f, 1);
 	if (!Montage || Anim->Montage_Play(Montage, 1.f, EMontagePlayReturnType::MontageLength, Time, /*bStopAllMontages*/ true) <= 0.f)
 	{
-		UE_LOG(LogCodexTactics, Warning, TEXT("[Ladder] %s: could not play %s on slot %s"), *GetNameSafe(GetOwner()), *Clip->GetName(), *MontageSlot.ToString());
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Ladder] %s: could not play %s on slot %s"), *GetNameSafe(GetOwner()), *Clip->GetName(), *Slot.ToString());
 		return nullptr;
 	}
 	// The component sets the position every tick (the root track it follows is sampled at the same time).
@@ -258,6 +335,7 @@ void ULadderClimbComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	StateTime += DeltaTime;
+	AlignWalkSpeed = 0.f; // TickAlignTop sets it while he walks to the ladder head
 	if (bEntryPending)
 	{
 		StartEntry();
@@ -271,13 +349,17 @@ void ULadderClimbComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 		break;
 	case ELadderClimbState::Queue:
 		QueueRetry -= DeltaTime;
-		if (QueueRetry <= 0.f)
+		QueueSeconds += DeltaTime;
+		if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetOwner()); Enemy && QueueSeconds > EnemyQueueSeconds)
 		{
-			QueueRetry = 0.25f;
-			PendingLadder = Ladder;
-			bPendingUp = bGoingUp;
-			StartEntry();
+			// An enemy does not wait for ever: its AI decides afresh (the target may have moved; it may queue again).
+			UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s stops waiting for %s after %.1f s"), *Enemy->GetName(), *GetNameSafe(Ladder.Get()), QueueSeconds);
+			const FVector Destination = bHasPendingDestination ? PendingDestination : Enemy->GetActorLocation();
+			AbortClimb(ELadderAbortReason::None);
+			Enemy->ResumeMoveAfterLadder(Destination);
+			break;
 		}
+		TickQueue(DeltaTime);
 		break;
 	case ELadderClimbState::AlignBottom: TickAlignBottom(DeltaTime); break;
 	case ELadderClimbState::AlignTop: TickAlignTop(DeltaTime); break;
@@ -383,6 +465,46 @@ void ULadderClimbComponent::SetPendingDestination(const FVector& Destination)
 	bHasPendingDestination = true;
 }
 
+float ULadderClimbComponent::PathLengthFrom(const FVector& Point, const FVector& Destination) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, Point, Destination, GetOwner()) : nullptr;
+	return Path && Path->IsValid() && !Path->IsPartial() ? static_cast<float>(Path->GetPathLength()) : -1.f;
+}
+
+void ULadderClimbComponent::HandleNewOrder(const FVector& Destination)
+{
+	SetPendingDestination(Destination);
+	const ALadderActor* Target = Ladder.Get();
+	const bool bLoop = State == ELadderClimbState::ClimbUp || State == ELadderClimbState::ClimbDown;
+	if (!Target || !bLoop || LoopLength <= 0.f)
+	{
+		return; // a transition clip (onto / off the ladder) finishes first; then the walk (it may lead back over the ladder)
+	}
+	const bool bUp = State == ELadderClimbState::ClimbUp;
+	const float FromTop = PathLengthFrom(Target->GetTopLinkWorld(), Destination);
+	const float FromBottom = PathLengthFrom(Target->GetBottomLinkWorld(), Destination);
+	const bool bWantUp = LadderRules::PreferTopEnd(FromTop, FromBottom, bUp);
+	if (bWantUp == bUp)
+	{
+		if (bReversePending)
+		{
+			bReversePending = false; // ordered back the way he climbs: no turn-round
+			UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s: turn-round cancelled (going %s again)"), *GetNameSafe(GetOwner()), bUp ? TEXT("up") : TEXT("down"));
+		}
+		return;
+	}
+	if (bReversePending)
+	{
+		return;
+	}
+	bReversePending = true;
+	ReverseAt = LadderRules::NextRungBoundary(LoopPos, bUp ? 1 : -1, LoopLength);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s: new order behind him (top %.0f cm / bottom %.0f cm away) - turns %s at rung %d t %.2f"), *GetNameSafe(GetOwner()),
+		FromTop, FromBottom, bUp ? TEXT("down") : TEXT("up"), ReverseAt.Rung, ReverseAt.Time);
+}
+
 void ULadderClimbComponent::Refuse(ELadderRefusal Refusal)
 {
 	LastRefusal = Refusal;
@@ -399,6 +521,7 @@ void ULadderClimbComponent::Refuse(ELadderRefusal Refusal)
 	if (ALadderActor* Held = Ladder.Get())
 	{
 		Held->ReleaseLease(GetOwner());
+		Held->LeaveQueue(GetOwner());
 	}
 	bHasPendingDestination = false;
 	Ladder = nullptr;
@@ -417,17 +540,18 @@ void ULadderClimbComponent::StartEntry()
 	Ladder = Target;
 	bGoingUp = bPendingUp;
 	AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Character);
+	AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Character);
 	const UHealthComponent* Health = Character->FindComponentByClass<UHealthComponent>();
 	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
 	LadderRules::FEntryContext Context;
-	Context.bDead = Health && !Health->IsAlive();
-	Context.bClimbable = Target->IsClimbable();
+	Context.bDead = (Health && !Health->IsAlive()) || (Enemy && Enemy->IsDying());
+	Context.bClimbable = Target->IsClimbable() && (!Enemy || LadderRules::EnemyMayClimb(Enemy->bCanClimbLadders, Enemy->CanClimbLadders(), Target->bAllowEnemies));
 	Context.bHasClips = LoadClips();
-	Context.bTurnBased = TurnBased && TurnBased->IsActive();
+	Context.bTurnBased = (TurnBased && TurnBased->IsActive()) || (Enemy && Enemy->IsTurnBasedHeld());
 	Context.bMounted = VehicleQueries::IsMounted(Character);
-	Context.bKnockedDown = Operative && Operative->IsKnockedDown();
+	Context.bKnockedDown = (Operative && Operative->IsKnockedDown()) || (Enemy && Enemy->IsKnockedDown());
 	Context.bCarrying = Operative && Operative->bCarrying;
-	Context.bLeasedByOther = Target->IsLeasedByOther(Character);
+	Context.bLeasedByOther = Target->IsBusyFor(Character); // held, or someone came before him (the queue)
 	Context.bStanding = !Operative || Operative->GetStance() == EOperativeStance::Standing;
 	const ELadderRefusal Refusal = LadderRules::CanStartClimb(Context);
 	const bool bWasQueued = State == ELadderClimbState::Queue;
@@ -435,8 +559,16 @@ void ULadderClimbComponent::StartEntry()
 		|| (Refusal == ELadderRefusal::None && Operative && Operative->GetMoveHoldSeconds() > 0.f))
 	{
 		// He waits at the link: the ladder is busy, or he stands up first (prone / crouched is not a refusal).
+		if (Refusal == ELadderRefusal::Leased)
+		{
+			Target->JoinQueue(Character); // at the back of the line
+		}
 		if (!bWasQueued)
 		{
+			QueueSeconds = 0.f;
+			QueueSpotIndex = INDEX_NONE;
+			bQueueApproach = false;
+			bOwnOrderAtEntry = Operative && Operative->HasOwnMoveOrder();
 			if (Operative)
 			{
 				const FVector Keep = PendingDestination;
@@ -466,12 +598,21 @@ void ULadderClimbComponent::StartEntry()
 	}
 	if (!Target->TryLease(Character))
 	{
+		Target->JoinQueue(Character);
 		Fire(ELadderClimbEvent::MustWait);
 		return;
 	}
 	LastRefusal = ELadderRefusal::None;
+	LastAbort = ELadderAbortReason::None; // this climb's own
+	bReversePending = false;
+	Reversals = 0;
+	MaxEdgePush = 0.f;
 
 	// Take the body over: the path ends here (it resumes at the other end), Flying, root motion ignored, the weapon hidden.
+	if (!bWasQueued)
+	{
+		bOwnOrderAtEntry = Operative && Operative->HasOwnMoveOrder();
+	}
 	{
 		const FVector Keep = PendingDestination;
 		const bool bKeep = bHasPendingDestination;
@@ -505,11 +646,16 @@ void ULadderClimbComponent::StartEntry()
 	{
 		Operative->WeaponMesh->SetVisibility(false, true);
 	}
+	if (Enemy)
+	{
+		Enemy->OnLadderClimbStarted();
+	}
 
 	const LadderRules::FClipContract Contract = Target->GetContract();
 	const int32 Rungs = Target->GetRungCount();
 	const float HalfHeight = GetHalfHeight();
 	GlideFrom = Character->GetActorLocation();
+	ClimbStartLocation = GlideFrom;
 	GlideFromYaw = Character->GetActorRotation().Yaw;
 	if (bGoingUp)
 	{
@@ -519,14 +665,32 @@ void ULadderClimbComponent::StartEntry()
 		GlideTo = Target->GetHangWorldLocation(FeetZ) + FVector(0.f, 0.f, HalfHeight);
 		GlideToYaw = Target->GetClimberYaw();
 	}
+	else if (bDescendFacingLadder)
+	{
+		// User feedback 2026-10-23: he walks to the ladder head (where ClimbOutTop ends), turns in place until he faces the ladder - his back
+		// to the drop - and only then climbs down (ClimbOutTop backwards: the body faces the ladder the whole way).
+		FVector Hang, Top, Scale;
+		TopWarp(LadderRules::ClimbOutStart(Contract, Rungs).Rung, Hang, Top, Scale);
+		GlideTo = Top;
+		GlideToYaw = Target->GetClimberYaw();
+	}
 	else
 	{
-		// Facing the drop (pre-turn when needed, 5.4): the IntoFromTop clip turns the body itself, the root never rotates.
+		// The old way: facing the drop (pre-turn when needed, 5.4); the IntoFromTop clip turns the body itself while it sinks.
 		GlideTo = Target->GetTopLinkWorld() + FVector(0.f, 0.f, HalfHeight);
 		GlideToYaw = Target->GetActorRotation().Yaw;
 	}
 	const float Turn = FMath::Abs(FMath::FindDeltaAngleDegrees(GlideFromYaw, GlideToYaw));
 	GlideSeconds = FMath::Max3(AlignMinSeconds, static_cast<float>(FVector::Dist(GlideFrom, GlideTo)) / AlignSpeed, Turn / AlignTurnRate);
+	if (!bGoingUp && bDescendFacingLadder)
+	{
+		// Two phases at the top: the walk to the ladder head (facing the way he walks), then the turn in place (feet planted).
+		const float Walk = static_cast<float>(FVector::Dist2D(GlideFrom, GlideTo));
+		WalkSeconds = Walk > 5.f ? Walk / AlignSpeed : 0.f;
+		const float WalkYaw = Walk > 10.f ? (GlideTo - GlideFrom).GetSafeNormal2D().Rotation().Yaw : GlideFromYaw;
+		TurnSeconds = FMath::Max(TopTurnMinSeconds, FMath::Abs(FMath::FindDeltaAngleDegrees(WalkYaw, GlideToYaw)) / 360.f);
+		GlideSeconds = WalkSeconds + TurnSeconds;
+	}
 	if (bGoingUp)
 	{
 		// The loop's start pose blends in while he steps onto the bottom rungs.
@@ -542,11 +706,81 @@ void ULadderClimbComponent::StartEntry()
 		Target->HasWall() ? TEXT("wall") : TEXT("free-standing"), LoopPos.Rung, LoopPos.Time, TargetPos.Rung);
 }
 
+FVector ULadderClimbComponent::GetLinkStart() const
+{
+	const ALadderActor* Target = Ladder.Get();
+	return Target ? (bGoingUp ? Target->GetBottomLinkWorld() : Target->GetTopLinkWorld()) : FVector::ZeroVector;
+}
+
+void ULadderClimbComponent::WalkTo(const FVector& Point, float Acceptance)
+{
+	ACharacter* Character = GetCharacter();
+	if (AAIController* Controller = Character ? Cast<AAIController>(Character->GetController()) : nullptr)
+	{
+		Controller->MoveToLocation(Point, Acceptance, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true);
+	}
+}
+
+void ULadderClimbComponent::TickQueue(float DeltaTime)
+{
+	ALadderActor* Target = Ladder.Get();
+	const ACharacter* Character = GetCharacter();
+	if (!Target || !Character)
+	{
+		AbortClimb(ELadderAbortReason::LeaseLost);
+		return;
+	}
+	const FVector Feet = Character->GetActorLocation() - FVector(0.f, 0.f, GetHalfHeight());
+	if (!Target->IsBusyFor(Character))
+	{
+		// His turn: back to the link point, then the climb starts there.
+		const FVector Link = GetLinkStart();
+		if (FVector::Dist2D(Feet, Link) > 45.f)
+		{
+			if (!bQueueApproach || QueueRetry <= 0.f)
+			{
+				bQueueApproach = true;
+				QueueRetry = 1.f;
+				WalkTo(Link, 10.f);
+			}
+			return;
+		}
+		QueueRetry = 0.f;
+	}
+	else
+	{
+		// Waiting: on his spot, out from the rungs below (back from the edge on top), by his place in the line.
+		bQueueApproach = false;
+		const int32 Index = FMath::Max(0, Target->GetQueueIndex(Character));
+		if (Index != QueueSpotIndex)
+		{
+			QueueSpotIndex = Index;
+			const float Out = QueueFirstSpotCm + QueueSpacingCm * Index;
+			QueueSpot = bGoingUp ? Target->GetBottomLinkWorld() + Target->GetOutward() * Out : Target->GetTopLinkWorld() - Target->GetOutward() * Out;
+			if (FVector::Dist2D(Feet, QueueSpot) > 30.f)
+			{
+				WalkTo(QueueSpot, 15.f);
+			}
+		}
+	}
+	if (QueueRetry <= 0.f)
+	{
+		QueueRetry = 0.25f;
+		PendingLadder = Ladder;
+		bPendingUp = bGoingUp;
+		StartEntry();
+	}
+}
+
 void ULadderClimbComponent::PlaceAt(const FVector& CapsuleCentre, float Yaw)
 {
 	if (ACharacter* Character = GetCharacter())
 	{
-		Character->SetActorLocationAndRotation(CapsuleCentre, FRotator(0.f, Yaw, 0.f), false, nullptr, ETeleportType::None);
+		// The body's own hang offset (BodyHangOffset), faded with the rung IK: full on the loop, none at the ends.
+		const ALadderActor* Target = Ladder.Get();
+		const FVector BodyOffset = Target && IKWeight > 0.f
+			? (Target->GetOutward() * BodyHangOffset.X + FVector::UpVector * BodyHangOffset.Y) * IKWeight : FVector::ZeroVector;
+		Character->SetActorLocationAndRotation(CapsuleCentre + BodyOffset, FRotator(0.f, Yaw, 0.f), false, nullptr, ETeleportType::None);
 		Character->GetCharacterMovement()->Velocity = FVector::ZeroVector;
 	}
 }
@@ -565,6 +799,27 @@ void ULadderClimbComponent::TickAlignBottom(float DeltaTime)
 
 void ULadderClimbComponent::TickAlignTop(float DeltaTime)
 {
+	if (bDescendFacingLadder)
+	{
+		// Phase 1: walk to the ladder head facing the way he walks; phase 2: turn in place to face the ladder (back to the drop).
+		const float Walk = static_cast<float>(FVector::Dist2D(GlideFrom, GlideTo));
+		const float WalkYaw = Walk > 10.f ? (GlideTo - GlideFrom).GetSafeNormal2D().Rotation().Yaw : GlideFromYaw;
+		if (StateTime < WalkSeconds)
+		{
+			const float Alpha = FMath::Clamp(StateTime / FMath::Max(WalkSeconds, 0.01f), 0.f, 1.f);
+			const float TurnIn = FMath::Clamp(StateTime / 0.2f, 0.f, 1.f);
+			PlaceAt(FMath::Lerp(GlideFrom, GlideTo, Alpha), GlideFromYaw + FMath::FindDeltaAngleDegrees(GlideFromYaw, WalkYaw) * TurnIn);
+			AlignWalkSpeed = Walk / FMath::Max(WalkSeconds, 0.01f);
+			return;
+		}
+		const float Alpha = FMath::Clamp((StateTime - WalkSeconds) / FMath::Max(TurnSeconds, 0.01f), 0.f, 1.f);
+		PlaceAt(GlideTo, WalkYaw + FMath::FindDeltaAngleDegrees(WalkYaw, GlideToYaw) * FMath::SmoothStep(0.f, 1.f, Alpha));
+		if (Alpha >= 1.f)
+		{
+			BeginEnterTop();
+		}
+		return;
+	}
 	const float Alpha = FMath::Clamp(StateTime / FMath::Max(GlideSeconds, 0.01f), 0.f, 1.f);
 	const float Smooth = FMath::SmoothStep(0.f, 1.f, Alpha);
 	PlaceAt(FMath::Lerp(GlideFrom, GlideTo, Smooth), GlideFromYaw + FMath::FindDeltaAngleDegrees(GlideFromYaw, GlideToYaw) * Smooth);
@@ -583,10 +838,27 @@ void ULadderClimbComponent::BeginEnterTop()
 		AbortClimb(ELadderAbortReason::LeaseLost);
 		return;
 	}
-	// Wall-facing from here on (5.4): the clip's first frame still shows the body facing the drop - blend-in 0, nothing pops.
 	WarpYaw = Target->GetClimberYaw();
 	PlaceAt(GlideTo, WarpYaw);
 	Character->SetActorEnableCollision(false);
+	TopEdgeCm = MeasureTopEdge();
+	EdgePush = EdgePushVelocity = 0.f;
+	if (bDescendFacingLadder)
+	{
+		// Facing the ladder, back to the drop: ClimbOutTop backwards from its last frame (he stands there now) down to the hang pose.
+		FVector Hang, Top, Scale;
+		TopWarp(LadderRules::ClimbOutStart(Target->GetContract(), Target->GetRungCount()).Rung, Hang, Top, Scale);
+		WarpTrack = &ClimbOutTrack;
+		WarpStart = Hang;
+		WarpScale = Scale;
+		bWarpReverse = true;
+		ClipTime = ClimbOutTrack.Length;
+		PlayClip(LoadedClimbOut, FMath::Max(0.f, ClimbOutTrack.Length - 0.001f), ClipBlendSeconds);
+		Fire(ELadderClimbEvent::AlignDone, ClimbOutTrack.Length / ClimbPlayRate);
+		return;
+	}
+	// The old way, wall-facing from here on (5.4): the clip's first frame still shows the body facing the drop - blend-in 0, nothing pops.
+	bWarpReverse = false;
 	const LadderRules::FClipContract Contract = Target->GetContract();
 	const LadderRules::FLoopPos Landing = LadderRules::IntoFromTopEnd(Contract, Target->GetRungCount());
 	const FVector End = Target->GetHangWorldLocation(LadderRules::HeightAt(Landing, 0.f, Contract.Pitch)) + FVector(0.f, 0.f, GetHalfHeight());
@@ -607,11 +879,15 @@ void ULadderClimbComponent::TickWarpClip(float DeltaTime)
 		AbortClimb(ELadderAbortReason::Timeout);
 		return;
 	}
-	ClipTime += DeltaTime * ClimbPlayRate;
-	const float Time = FMath::Min(ClipTime, WarpTrack->Length);
-	PlaceAt(WarpStart + FRotator(0.f, WarpYaw, 0.f).RotateVector(WarpTrack->Sample(Time) * WarpScale), WarpYaw);
+	ClipTime += (bWarpReverse ? -1.f : 1.f) * DeltaTime * ClimbPlayRate;
+	const float Time = FMath::Clamp(ClipTime, 0.f, WarpTrack->Length);
+	const FVector Base = WarpStart + FRotator(0.f, WarpYaw, 0.f).RotateVector(WarpTrack->Sample(Time) * WarpScale);
+	// Faded out over the clip's last 0.3 s: it ends exactly on the exit point / the hang line (no jump into the loop or the walk).
+	const float TimeLeft = bWarpReverse ? Time : WarpTrack->Length - Time;
+	const float Push = WarpTrack == &ClimbOutTrack ? EdgePushFor(Base, DeltaTime) * FMath::Clamp(TimeLeft / 0.3f, 0.f, 1.f) : 0.f;
+	PlaceAt(Base + (Ladder.IsValid() ? Ladder->GetOutward() * Push : FVector::ZeroVector), WarpYaw);
 	SetClipTime(Time);
-	if (ClipTime < WarpTrack->Length)
+	if (bWarpReverse ? ClipTime > 0.f : ClipTime < WarpTrack->Length)
 	{
 		return;
 	}
@@ -629,7 +905,9 @@ void ULadderClimbComponent::TickWarpClip(float DeltaTime)
 		const ALadderActor* Target = Ladder.Get();
 		const LadderRules::FClipContract Contract = Target ? Target->GetContract() : LadderRules::FClipContract();
 		const int32 Rungs = Target ? Target->GetRungCount() : 0;
-		LoopPos = LadderRules::IntoFromTopEnd(Contract, Rungs);
+		// The loop's start pose: ClimbOutRungs below the platform after the reversed ClimbOutTop, IntoFromTopRungs after IntoFromTop.
+		LoopPos = bWarpReverse ? LadderRules::ClimbOutStart(Contract, Rungs) : LadderRules::IntoFromTopEnd(Contract, Rungs);
+		bWarpReverse = false;
 		TargetPos = LadderRules::BottomPos(LadderRules::ClimbOutStart(Contract, Rungs).Rung, LoopLength);
 		PlayClip(LoadedUpLoop, LoopPos.Time, ClipBlendSeconds);
 		BeginLoop(false);
@@ -651,7 +929,35 @@ void ULadderClimbComponent::TickLoop(float DeltaTime)
 		return;
 	}
 	const bool bUp = State == ELadderClimbState::ClimbUp;
-	const bool bReached = LadderRules::Advance(LoopPos, DeltaTime * ClimbPlayRate, bUp ? 1 : -1, TargetPos, LoopLength);
+	const int32 Direction = bUp ? 1 : -1;
+	// A turn-round waits for its rung (HandleNewOrder): advance to it first, unless the end of the ladder comes first.
+	if (bReversePending && LadderRules::IsBeyond(ReverseAt, TargetPos, Direction, LoopLength))
+	{
+		bReversePending = false; // the end comes first: he gets off there and walks back (over the ladder if needs be)
+	}
+	if (bReversePending)
+	{
+		const bool bTurn = LadderRules::Advance(LoopPos, DeltaTime * ClimbPlayRate, Direction, ReverseAt, LoopLength);
+		SetClipTime(LoopPos.Time);
+		const float TurnFeetZ = LadderRules::HeightAt(LoopPos, LoopFraction(LoopPos.Time), Target->GetContract().Pitch);
+		PlaceAt(Target->GetHangWorldLocation(TurnFeetZ) + FVector(0.f, 0.f, GetHalfHeight()), Target->GetClimberYaw());
+		if (bTurn)
+		{
+			// Back the other way from this rung: the loop plays the other way, the other end is the target.
+			bReversePending = false;
+			bGoingUp = !bUp;
+			++Reversals;
+			const LadderRules::FClipContract Contract = Target->GetContract();
+			const LadderRules::FLoopPos Out = LadderRules::ClimbOutStart(Contract, Target->GetRungCount());
+			TargetPos = bGoingUp ? Out : LadderRules::BottomPos(Out.Rung, LoopLength);
+			const double Steps = FMath::Abs((TargetPos.Rung - LoopPos.Rung) * (LoopLength * 0.5) + (TargetPos.Time - LoopPos.Time));
+			Fire(ELadderClimbEvent::Reverse, static_cast<float>(Steps) / ClimbPlayRate);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s turned round at rung %d t %.2f: now %s"), *GetNameSafe(GetOwner()), LoopPos.Rung, LoopPos.Time,
+				bGoingUp ? TEXT("up") : TEXT("down"));
+		}
+		return;
+	}
+	const bool bReached = LadderRules::Advance(LoopPos, DeltaTime * ClimbPlayRate, Direction, TargetPos, LoopLength);
 	SetClipTime(LoopPos.Time);
 	// Rung-index snapping: every loop boundary lands exactly on Floor + k * Pitch (HeightAt), the clip's error stays in one step.
 	const float FeetZ = LadderRules::HeightAt(LoopPos, LoopFraction(LoopPos.Time), Target->GetContract().Pitch);
@@ -670,6 +976,84 @@ void ULadderClimbComponent::TickLoop(float DeltaTime)
 	}
 }
 
+void ULadderClimbComponent::TopWarp(int32 Rung, FVector& OutHang, FVector& OutTop, FVector& OutScale) const
+{
+	const ALadderActor* Target = Ladder.Get();
+	OutScale = FVector::OneVector;
+	if (!Target)
+	{
+		OutHang = OutTop = GetOwner() ? GetOwner()->GetActorLocation() : FVector::ZeroVector;
+		return;
+	}
+	const FVector Up(0.f, 0.f, GetHalfHeight());
+	const LadderRules::FClipContract Contract = Target->GetContract();
+	OutHang = Target->GetHangWorldLocation(LadderRules::HeightAt(LadderRules::FLoopPos{ Rung, 0.f }, 0.f, Contract.Pitch)) + Up;
+	const FRotator Facing(0.f, Target->GetClimberYaw(), 0.f);
+	const FVector Delta = Facing.UnrotateVector(Target->GetTopExitWorld() + Up + FVector(0.f, 0.f, LadderClimbInternal::WalkFloorGapCm) - OutHang);
+	const FVector ClipEnd = ClimbOutTrack.End();
+	// Forward / up scaled onto the exit point, the clip's own sideways step kept.
+	OutScale = FVector(FMath::Abs(ClipEnd.X) > 1.f ? Delta.X / ClipEnd.X : 1.f, 1.f, FMath::Abs(ClipEnd.Z) > 1.f ? Delta.Z / ClipEnd.Z : 1.f);
+	OutTop = OutHang + Facing.RotateVector(ClipEnd * OutScale);
+}
+
+float ULadderClimbComponent::MeasureTopEdge() const
+{
+	const ALadderActor* Target = Ladder.Get();
+	UWorld* World = GetWorld();
+	if (!Target || !World)
+	{
+		return -1.f;
+	}
+	// Just under the top floor, from in front of the rungs towards the wall: the first surface met is the platform's face.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(LadderTopEdge), false, GetOwner());
+	Params.AddIgnoredActor(Target);
+	const FVector From = Target->GetActorLocation() + FVector(0.f, 0.f, Target->GetTopWorldZ() - Target->GetFloorZ() - 5.f) + Target->GetOutward() * 60.f;
+	FHitResult Hit;
+	if (!World->LineTraceSingleByChannel(Hit, From, From - Target->GetOutward() * 250.f, ECC_Visibility, Params) || (Hit.GetActor() && Hit.GetActor()->IsA<APawn>()))
+	{
+		return -1.f;
+	}
+	return static_cast<float>(FVector::DotProduct(Hit.ImpactPoint - Target->GetActorLocation(), -Target->GetOutward()));
+}
+
+float ULadderClimbComponent::EdgePushFor(const FVector& Base, float DeltaTime)
+{
+	const ALadderActor* Target = Ladder.Get();
+	const ACharacter* Character = GetCharacter();
+	const USkeletalMeshComponent* Mesh = Character ? Character->GetMesh() : nullptr;
+	if (!Target || !Mesh || TopEdgeCm < 0.f)
+	{
+		return 0.f;
+	}
+	// The last evaluated pose moved with the actor to Base (one frame behind; the clip moves slowly there).
+	const FVector Inward = -Target->GetOutward();
+	const FVector Shift = Base - Character->GetActorLocation();
+	const float TopZ = Target->GetTopWorldZ();
+	float Wanted = 0.f;
+	// The knee's skin and the pose's one frame of lag (more going down: the reversed clip swings the legs over the edge faster).
+	const float Margin = bWarpReverse ? 12.f : 6.f;
+	for (const TCHAR* Bone : { TEXT("ball_l"), TEXT("ball_r"), TEXT("foot_l"), TEXT("foot_r"), TEXT("calf_l"), TEXT("calf_r") })
+	{
+		if (Mesh->GetBoneIndex(FName(Bone)) == INDEX_NONE)
+		{
+			continue;
+		}
+		const FVector At = Mesh->GetBoneLocation(FName(Bone)) + Shift;
+		// A bone standing on the top (ball / ankle a few cm over it) is fine; one swinging over the edge just under it (the knee / the foot
+		// stepping up, at most 60 cm under) must stay in front of the edge. Lower down he hangs on the rungs (the loop pose: no push).
+		if (At.Z >= TopZ - 4.f || At.Z < TopZ - 60.f)
+		{
+			continue;
+		}
+		Wanted = FMath::Max(Wanted, static_cast<float>(FVector::DotProduct(At - Target->GetActorLocation(), Inward)) - (TopEdgeCm - Margin));
+	}
+	Wanted = FMath::Clamp(Wanted, 0.f, 35.f);
+	// Out at once, back smoothly.
+	EdgePush = FMath::Max(Wanted, FMath::Max(0.f, TacticalCameraRules::SpringDamp(EdgePush, EdgePushVelocity, Wanted, 0.08f, DeltaTime)));
+	MaxEdgePush = FMath::Max(MaxEdgePush, EdgePush);
+	return EdgePush;
+}
+
 void ULadderClimbComponent::BeginExitTop()
 {
 	ALadderActor* Target = Ladder.Get();
@@ -681,10 +1065,14 @@ void ULadderClimbComponent::BeginExitTop()
 	}
 	// Over the edge with his own collision off (the platform / wall keep theirs, like the vault).
 	Character->SetActorEnableCollision(false);
+	TopEdgeCm = MeasureTopEdge();
+	EdgePush = EdgePushVelocity = 0.f;
+	bWarpReverse = false;
 	WarpYaw = Target->GetClimberYaw();
 	WarpTrack = &ClimbOutTrack;
 	WarpStart = Character->GetActorLocation();
-	const FVector End = Target->GetTopExitWorld() + FVector(0.f, 0.f, GetHalfHeight());
+	// The capsule ends where walking keeps it: its bottom the movement's floor distance (~2 cm) over the top - no snap, no sunk feet.
+	const FVector End = Target->GetTopExitWorld() + FVector(0.f, 0.f, GetHalfHeight() + LadderClimbInternal::WalkFloorGapCm);
 	const FVector Delta = FRotator(0.f, WarpYaw, 0.f).UnrotateVector(End - WarpStart);
 	const FVector ClipEnd = ClimbOutTrack.End();
 	WarpScale = FVector(FMath::Abs(ClipEnd.X) > 1.f ? Delta.X / ClipEnd.X : 1.f, 1.f, FMath::Abs(ClipEnd.Z) > 1.f ? Delta.Z / ClipEnd.Z : 1.f);
@@ -755,13 +1143,24 @@ void ULadderClimbComponent::FinishClimb()
 
 void ULadderClimbComponent::ResumePath()
 {
-	AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetOwner());
-	const bool bGo = bHasPendingDestination && Operative && FVector::Dist2D(PendingDestination, Operative->GetActorLocation()) > 60.f;
 	const FVector Destination = PendingDestination;
+	const bool bHadDestination = bHasPendingDestination;
 	bHasPendingDestination = false;
-	if (bGo)
+	// Turn-based (LADDERS.md 7.6): the fight started while he climbed - he stays where the ladder left him and joins its next round.
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	if (TurnBased && TurnBased->IsActive())
 	{
-		Operative->ResumeMoveAfterLadder(Destination);
+		return;
+	}
+	if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetOwner()))
+	{
+		Enemy->ResumeMoveAfterLadder(bHadDestination ? Destination : Enemy->GetActorLocation());
+		return;
+	}
+	AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetOwner());
+	if (bHadDestination && Operative && FVector::Dist2D(Destination, Operative->GetActorLocation()) > 60.f)
+	{
+		Operative->ResumeMoveAfterLadder(Destination, bOwnOrderAtEntry || Operative->HasOwnMoveOrder());
 	}
 }
 
@@ -776,6 +1175,7 @@ void ULadderClimbComponent::AbortClimb(ELadderAbortReason Reason)
 		if (Target && State == ELadderClimbState::Queue)
 		{
 			Target->ReleaseLease(GetOwner());
+			Target->LeaveQueue(GetOwner());
 		}
 		if (State == ELadderClimbState::Queue)
 		{
@@ -799,10 +1199,19 @@ void ULadderClimbComponent::AbortClimb(ELadderAbortReason Reason)
 	{
 		// He falls to the bottom (7.7): off the hang line, his collision on, gravity.
 		DropFeetZ = Character->GetActorLocation().Z - GetHalfHeight();
+		DropSpeed = 0.f;
+		bDropFloorFound = false;
 		RestoreSnapshot(true);
 		if (Target)
 		{
 			Character->SetActorLocation(Character->GetActorLocation() + Target->GetOutward() * DropAwayCm, false, nullptr, ETeleportType::None);
+			// The floor below (a killed enemy's capsule has no collision: it falls by code onto it, see TickDropping).
+			FHitResult Floor;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(LadderDropFloor), false, Character);
+			const FVector From = Character->GetActorLocation();
+			const bool bHit = GetWorld()->LineTraceSingleByChannel(Floor, From, From - FVector(0.f, 0.f, 5000.f), ECC_Visibility, Params);
+			DropFloorZ = bHit ? static_cast<float>(Floor.ImpactPoint.Z) : Target->GetFloorZ();
+			bDropFloorFound = true;
 		}
 		Fire(ELadderClimbEvent::Drop, 6.f);
 		return;
@@ -847,7 +1256,22 @@ void ULadderClimbComponent::TickDropping(float DeltaTime)
 		Enter(ELadderClimbState::None, 0.f);
 		return;
 	}
-	if (!Character->GetCharacterMovement()->IsMovingOnGround() && StateTime < 6.f)
+	const UCapsuleComponent* Capsule = Character->GetCapsuleComponent();
+	if (bDropFloorFound && Capsule && Capsule->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
+	{
+		// No collision to land with (a killed enemy): the fall by code, gravity onto the floor found at the drop.
+		Character->GetCharacterMovement()->DisableMovement();
+		DropSpeed += 980.f * DeltaTime;
+		const float FeetZ = static_cast<float>(Character->GetActorLocation().Z) - GetHalfHeight();
+		const float NewFeetZ = FMath::Max(DropFloorZ, FeetZ - DropSpeed * DeltaTime);
+		Character->SetActorLocation(FVector(Character->GetActorLocation().X, Character->GetActorLocation().Y, NewFeetZ + GetHalfHeight()), false, nullptr,
+			ETeleportType::TeleportPhysics);
+		if (NewFeetZ > DropFloorZ + 0.5f && StateTime < 6.f)
+		{
+			return;
+		}
+	}
+	else if (!Character->GetCharacterMovement()->IsMovingOnGround() && StateTime < 6.f)
 	{
 		return;
 	}
@@ -891,6 +1315,12 @@ FVector ULadderClimbComponent::GetSaveLocation() const
 	}
 	const bool bTop = bGoingUp && State != ELadderClimbState::Dropping;
 	return (bTop ? Target->GetTopLinkWorld() : Target->GetBottomLinkWorld()) + FVector(0.f, 0.f, GetHalfHeight() + 2.f);
+}
+
+FVector ULadderClimbComponent::GetFloorReferenceLocation() const
+{
+	const AActor* Owner = GetOwner();
+	return IsOnLadder() ? ClimbStartLocation : (Owner ? Owner->GetActorLocation() : FVector::ZeroVector);
 }
 
 // --- Snapshot ----------------------------------------------------------------------------------------------------------

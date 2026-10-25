@@ -50,6 +50,32 @@ struct CODEXTACTICS_API FGroupCoverConfig
 	/** Turning to face the cover before lying down ends within this angle or after this time. */
 	float ProneFaceToleranceDeg = 25.f;
 	float ProneFaceMaxSeconds = 1.2f;
+	/**
+	 * Leader priority (game designer 2026-10-23): the others wait this far out from their slots (straight off the wall, towards the
+	 * squad's side) until the leader has taken his cover, cm.
+	 */
+	float WaitStandOffCm = 160.f;
+	/** The leader's cover order failed / was cancelled / he is down: the others wait this long, then take their slots anyway, s. */
+	float LeaderFailGraceSeconds = 4.f;
+	/** They never wait longer than this for the leader (a leader stuck on his way), s. */
+	float MaxWaitSeconds = 15.f;
+	/** A waiting member is "at" his wait point within this distance, cm. */
+	float WaitArriveCm = 60.f;
+};
+
+/** What a member of a group cover order who waits for the leader (leader priority, 2026-10-23) knows. */
+struct FGroupCoverWaitFacts
+{
+	/** The leader (the direct order) is in his cover now. */
+	bool bLeaderInCover = false;
+	/** The leader's cover order still runs (pending cover: on his way to it). */
+	bool bLeaderGoingToCover = false;
+	/** The leader is dead or knocked down. */
+	bool bLeaderDown = false;
+	/** Seconds since the leader was last in cover or on his way to it (0 while he is). */
+	float LeaderIdleSeconds = 0.f;
+	/** Seconds since the order. */
+	float WaitSeconds = 0.f;
 };
 
 /** Result of one probe along the wall. */
@@ -138,4 +164,21 @@ namespace GroupCoverRules
 	 */
 	CODEXTACTICS_API TArray<FGroupCoverAssignment> PlanAssignments(const TArray<FVector2D>& Members, const TArray<FVector2D>& SlotPoints,
 		const TArray<FVector2D>& PronePoints);
+
+	/**
+	 * Leader priority (game designer 2026-10-23: "the soldier running to the wall can be delayed and the two others reach the wall first;
+	 * then he doesn't take cover at all, or goes past the edge of the wall because his mates took his place - the other two wait until he
+	 * has taken cover, then take cover after him"): a waiting member goes into his slot once the leader is in cover; when the leader's
+	 * order failed / was cancelled or he is down, LeaderFailGraceSeconds later; never later than MaxWaitSeconds after the order.
+	 */
+	CODEXTACTICS_API bool ShouldReleaseToSlot(const FGroupCoverWaitFacts& Facts, const FGroupCoverConfig& Config = FGroupCoverConfig());
+
+	/** Where a member waits for the leader: WaitStandOffCm straight out from his slot along the wall normal (the squad's side). */
+	CODEXTACTICS_API FVector ComputeWaitPoint(const FVector& SlotLocation, const FVector& WallNormal, const FGroupCoverConfig& Config = FGroupCoverConfig());
+
+	/**
+	 * A waiting member's slot was taken when he is released: the nearest of Candidates (spare slots of the same wall) to Preferred that
+	 * is not Taken, INDEX_NONE when all are (then he goes prone behind the cover).
+	 */
+	CODEXTACTICS_API int32 PickFreeSlot(const TArray<FVector2D>& Candidates, const TArray<bool>& Taken, const FVector2D& Preferred);
 }

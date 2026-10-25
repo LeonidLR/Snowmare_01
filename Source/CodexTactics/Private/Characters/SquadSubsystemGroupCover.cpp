@@ -10,7 +10,9 @@
 #include "Characters/SquadOrderRules.h"
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "NavigationSystem.h"
 #include "Tactics/GroupCoverRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
@@ -34,7 +36,8 @@ TArray<AOperativeCharacter*> USquadSubsystem::GetGroupCoverMembers(const AOperat
 		Facts.bSoloMode = bIsSoloMode || bFollowersHolding; // a camera-zone perimeter hold keeps them too
 		Facts.bFormationActive = bFormation;
 		Facts.bFollower = Followers.ContainsByPredicate([Member](const FFollowerState& Follower) { return Follower.Operative.Get() == Member; });
-		Facts.bOnOwnOrder = IsOnOwnOrder(Member);
+		// One still waiting off the wall for the leader of the last group cover order (2026-10-23) goes along with the next one.
+		Facts.bOnOwnOrder = !IsWaitingForGroupCoverLeader(Member) && IsOnOwnOrder(Member); // (any new order ends the wait)
 		Facts.bUnavailable = VehicleQueries::IsMounted(Member) || VehicleQueries::IsBoarding(Member) || Member->IsTrafficHeld();
 		if (SquadOrderRules::ShouldJoinGroupCover(Facts))
 		{
@@ -121,6 +124,211 @@ void USquadSubsystem::StartPlannedGroupCoverProne()
 		Order.Serial = Operative->GetMoveOrderSerial();
 		Order.Phase = ESquadGroupCoverPronePhase::Moving;
 		Order.PhaseSeconds = 0.f;
+	}
+}
+
+bool USquadSubsystem::OrderGroupCoverWait(AOperativeCharacter* Member, const FCoverSlot& Slot, AOperativeCharacter* CoverLeader, bool bHoldSlot,
+	const TSharedRef<FGroupCoverSpares>& Spares)
+{
+	UWorld* World = GetWorld();
+	if (!Member || !CoverLeader || !World || !Slot.IsValid())
+	{
+		return false;
+	}
+	FGroupCoverConfig Config;
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	FVector WaitPoint = FVector::ZeroVector;
+	bool bFound = false;
+	for (const float StandOff : { Config.WaitStandOffCm, Config.WaitStandOffCm * 0.7f })
+	{
+		Config.WaitStandOffCm = StandOff;
+		const FVector Candidate = GroupCoverRules::ComputeWaitPoint(Slot.WorldLocation, Slot.WallNormal, Config);
+		FNavLocation OnNav;
+		if (!Nav || (Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(60.f, 60.f, 200.f)) && FVector::Dist2D(OnNav.Location, Candidate) <= 50.f))
+		{
+			WaitPoint = Nav ? OnNav.Location : Candidate;
+			bFound = true;
+			break;
+		}
+	}
+	if (!bFound)
+	{
+		return false;
+	}
+	if (FVector::Dist2D(Member->GetActorLocation(), WaitPoint) > Config.WaitArriveCm)
+	{
+		if (Member->OrderMoveTo(WaitPoint, true) != EOperativeOrderResult::Accepted)
+		{
+			return false;
+		}
+	}
+	else
+	{
+		Member->StopOperative();
+	}
+	Member->ClearPendingCover();
+	FGroupCoverWaitOrder Order;
+	Order.Leader = CoverLeader;
+	Order.Slot = Slot;
+	Order.WaitPoint = WaitPoint;
+	Order.Serial = Member->GetMoveOrderSerial();
+	Order.bHoldSlot = bHoldSlot;
+	Order.Spares = Spares;
+	GroupCoverWaitOrders.Add(Member, Order);
+	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: waits %.0f cm out from his slot until %s has taken cover"), *Member->DisplayName.ToString(),
+		FVector::Dist2D(WaitPoint, Slot.WorldLocation), *CoverLeader->DisplayName.ToString());
+	return true;
+}
+
+bool USquadSubsystem::IsWaitingForGroupCoverLeader(const AOperativeCharacter* Operative) const
+{
+	return Operative && GroupCoverWaitOrders.Contains(TWeakObjectPtr<AOperativeCharacter>(const_cast<AOperativeCharacter*>(Operative)));
+}
+
+void USquadSubsystem::DropGroupCoverWait(const AOperativeCharacter* Operative, const TCHAR* Why)
+{
+	if (Operative && GroupCoverWaitOrders.Remove(TWeakObjectPtr<AOperativeCharacter>(const_cast<AOperativeCharacter*>(Operative))) > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: no longer waits for the leader (%s)"), *Operative->DisplayName.ToString(), Why);
+	}
+}
+
+bool USquadSubsystem::IsGroupCoverPointTaken(const FVector& Point, const AOperativeCharacter* Except) const
+{
+	const FGroupCoverConfig Config;
+	for (TActorIterator<AOperativeCharacter> It(GetWorld()); It; ++It)
+	{
+		const AOperativeCharacter* Other = *It;
+		if (Other == Except || !Other->HealthComponent || !Other->HealthComponent->IsAlive())
+		{
+			continue;
+		}
+		if ((Other->bInCover && FVector::Dist2D(Other->GetCoverSlot().WorldLocation, Point) < Config.OccupiedRadiusCm)
+			|| (Other->HasPendingCover() && FVector::Dist2D(Other->GetPendingCoverSlot().WorldLocation, Point) < Config.OccupiedRadiusCm)
+			|| FVector::Dist2D(Other->GetActorLocation(), Point) < Config.OccupiedRadiusCm)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void USquadSubsystem::ReleaseGroupCoverWait(AOperativeCharacter& Member, const FGroupCoverWaitOrder& Order, const TCHAR* Why)
+{
+	FCoverSlot Slot = Order.Slot;
+	FGroupCoverSpares* Spares = Order.Spares.Get();
+	if (IsGroupCoverPointTaken(Slot.WorldLocation, &Member))
+	{
+		// His slot was taken while he waited: the nearest free spare slot of the same wall, else prone behind the cover - never
+		// standing in the open, never past the wall's edge (the spares are the order's own probed slots).
+		int32 Pick = INDEX_NONE;
+		if (Spares)
+		{
+			TArray<FVector2D> Points;
+			TArray<bool> Taken;
+			for (int32 Index = 0; Index < Spares->Slots.Num(); ++Index)
+			{
+				Points.Add(FVector2D(Spares->Slots[Index].WorldLocation));
+				Taken.Add((Spares->SlotUsed.IsValidIndex(Index) && Spares->SlotUsed[Index]) || IsGroupCoverPointTaken(Spares->Slots[Index].WorldLocation, &Member));
+			}
+			Pick = GroupCoverRules::PickFreeSlot(Points, Taken, FVector2D(Slot.WorldLocation));
+		}
+		if (Pick != INDEX_NONE)
+		{
+			Spares->SlotUsed[Pick] = true;
+			Slot = Spares->Slots[Pick];
+			UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: his slot was taken - the next free one, %.0f cm along"), *Member.DisplayName.ToString(),
+				FVector::Dist2D(Slot.WorldLocation, Order.Slot.WorldLocation));
+		}
+		else
+		{
+			for (int32 Index = 0; Spares && Index < Spares->ProneSpots.Num(); ++Index)
+			{
+				FVector Destination;
+				if (!Spares->ProneUsed[Index] && !IsGroupCoverPointTaken(Spares->ProneSpots[Index], &Member)
+					&& OrderGroupCoverProne(&Member, Spares->ProneSpots[Index], Spares->FaceYaw, true, false, 0.f, Destination))
+				{
+					Spares->ProneUsed[Index] = true;
+					UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: his slot was taken, no free slot left - prone behind the cover (%s)"),
+						*Member.DisplayName.ToString(), Why);
+					return;
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: his slot was taken, no free slot / prone spot - into it anyway"), *Member.DisplayName.ToString());
+		}
+	}
+	const EOperativeOrderResult Result = Member.OrderTakeCover(Slot, true);
+	if (Result == EOperativeOrderResult::Accepted)
+	{
+		Member.SetHoldGroupCoverSlot(Order.bHoldSlot);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: into his slot after the leader (%s)%s"), *Member.DisplayName.ToString(), Why,
+		Result == EOperativeOrderResult::Accepted ? TEXT("") : TEXT(" - refused"));
+}
+
+void USquadSubsystem::UpdateGroupCoverWait(float DeltaTime)
+{
+	if (GroupCoverWaitOrders.IsEmpty())
+	{
+		return;
+	}
+	const UWorld* World = GetWorld();
+	const UTurnBasedCombatSubsystem* TurnBased = World ? World->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	const bool bGrid = TurnBased && TurnBased->IsActive();
+	const FGroupCoverConfig Config;
+	TArray<TPair<TWeakObjectPtr<AOperativeCharacter>, FGroupCoverWaitOrder>> Released;
+	for (auto It = GroupCoverWaitOrders.CreateIterator(); It; ++It)
+	{
+		AOperativeCharacter* Member = It->Key.Get();
+		FGroupCoverWaitOrder& Order = It->Value;
+		if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+		{
+			It.RemoveCurrent();
+			continue;
+		}
+		if (Member->IsKnockedDown())
+		{
+			Order.Serial = 0; // the buffered walk replays at the get-up (a new serial): taken as this one
+		}
+		else if (Order.Serial == 0)
+		{
+			Order.Serial = Member->GetMoveOrderSerial();
+		}
+		const TCHAR* DropWhy = bGrid ? TEXT("turn-based: the grid owns the positions")
+			: Order.Serial != 0 && Member->GetMoveOrderSerial() != Order.Serial ? TEXT("a new order") : nullptr;
+		if (DropWhy)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: no longer waits for the leader (%s)"), *Member->DisplayName.ToString(), DropWhy);
+			It.RemoveCurrent();
+			continue;
+		}
+		Order.WaitSeconds += DeltaTime;
+		const AOperativeCharacter* CoverLeader = Order.Leader.Get();
+		FGroupCoverWaitFacts Facts;
+		Facts.bLeaderInCover = CoverLeader && CoverLeader->bInCover;
+		Facts.bLeaderGoingToCover = CoverLeader && CoverLeader->HasPendingCover();
+		Facts.bLeaderDown = !CoverLeader || !CoverLeader->HealthComponent || !CoverLeader->HealthComponent->IsAlive() || CoverLeader->IsKnockedDown();
+		Order.LeaderIdleSeconds = (Facts.bLeaderGoingToCover && !Facts.bLeaderDown) ? 0.f : Order.LeaderIdleSeconds + DeltaTime;
+		Facts.LeaderIdleSeconds = Order.LeaderIdleSeconds;
+		Facts.WaitSeconds = Order.WaitSeconds;
+		if (!Member->HasOwnMoveOrder() && FVector::Dist2D(Member->GetActorLocation(), Order.WaitPoint) <= Config.WaitArriveCm * 3.f)
+		{
+			Member->SetIdleFacingYaw((-Order.Slot.WallNormal.GetSafeNormal2D()).Rotation().Yaw); // waits facing the cover
+		}
+		if (GroupCoverRules::ShouldReleaseToSlot(Facts, Config))
+		{
+			Released.Emplace(It->Key, Order);
+			It.RemoveCurrent();
+		}
+	}
+	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FGroupCoverWaitOrder>& Each : Released)
+	{
+		if (AOperativeCharacter* Member = Each.Key.Get())
+		{
+			const AOperativeCharacter* CoverLeader = Each.Value.Leader.Get();
+			ReleaseGroupCoverWait(*Member, Each.Value, CoverLeader && CoverLeader->bInCover ? TEXT("the leader is in cover")
+				: Each.Value.WaitSeconds >= Config.MaxWaitSeconds ? TEXT("waited too long") : TEXT("the leader's cover order ended"));
+		}
 	}
 }
 

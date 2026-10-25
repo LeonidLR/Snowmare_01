@@ -1,4 +1,5 @@
 #include "Characters/OperativeAnimInstance.h"
+#include "Ladders/LadderPoseIK.h"
 
 #include "Combat/KnockdownComponent.h"
 #include "Characters/HitReactionRules.h"
@@ -190,7 +191,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (bUseRifle2Locomotion)
 	{
 		const AOperativeCharacter* Rifle2Owner = Cast<AOperativeCharacter>(TryGetPawnOwner());
-		UpdateRifle2Locomotion(DeltaSeconds, Rifle2Owner && Rifle2Owner->IsMoving() && !bIsClimbing, Speed, Direction,
+		UpdateRifle2Locomotion(DeltaSeconds, Rifle2Owner && (bIsClimbing ? Speed > 1.f : Rifle2Owner->IsMoving()), Speed, Direction,
 			Rifle2Owner ? Rifle2Owner->GetActorRotation().Yaw : 0.f);
 	}
 	if (CVarAnimTrace.GetValueOnGameThread() > 0 && (Speed > 0.f || TryGetPawnOwner() && TryGetPawnOwner()->GetVelocity().SizeSquared2D() > 0.f))
@@ -922,7 +923,8 @@ void UOperativeAnimInstance::UpdateState()
 	LadderIKFrame = bIsClimbing && Operative->LadderClimb ? Operative->LadderClimb->GetIKFrame() : FLadderIKFrame();
 	if (bIsClimbing)
 	{
-		Speed = 0.f;
+		// Standing / turning on the ladder head (the turn-in-place clips follow the actor's yaw), or walking up to it.
+		Speed = Operative->LadderClimb ? Operative->LadderClimb->GetAlignWalkSpeed() : 0.f;
 		Direction = 0.f;
 	}
 	// Sprint 12 cover state (the shimmy moves sideways: the blend-space direction already strafes).
@@ -1245,30 +1247,9 @@ bool FOperativeAnimInstanceProxy::Evaluate(FPoseContext& Output)
 
 // --- Ladder rung IK (docs/design/LADDERS.md 6.2): applied after the whole graph, no ABP node ---------------------------------
 
-namespace OperativeLadderIK
+FVector UOperativeAnimInstance::GetLadderKneeIKOffset(int32 Side) const
 {
-	struct FChain
-	{
-		const TCHAR* Root;
-		const TCHAR* Joint;
-		const TCHAR* End;
-		/** The contact bone (ball of the foot); null = the end bone itself (the wrist). */
-		const TCHAR* Contact;
-	};
-
-	// ELadderLimb order: HandL, HandR, FootL, FootR (UE4 mannequin names; the UE5 Manny shares them).
-	const FChain Chains[] = {
-		{ TEXT("upperarm_l"), TEXT("lowerarm_l"), TEXT("hand_l"), nullptr },
-		{ TEXT("upperarm_r"), TEXT("lowerarm_r"), TEXT("hand_r"), nullptr },
-		{ TEXT("thigh_l"), TEXT("calf_l"), TEXT("foot_l"), TEXT("ball_l") },
-		{ TEXT("thigh_r"), TEXT("calf_r"), TEXT("foot_r"), TEXT("ball_r") },
-	};
-
-	FCompactPoseBoneIndex Find(const FBoneContainer& Bones, const TCHAR* Name)
-	{
-		const int32 MeshIndex = Name ? Bones.GetPoseBoneIndexForBoneName(FName(Name)) : INDEX_NONE;
-		return MeshIndex == INDEX_NONE ? FCompactPoseBoneIndex(INDEX_NONE) : Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
-	}
+	return GetProxyOnGameThread<FOperativeAnimInstanceProxy>().GetKneeIKOffset(Side);
 }
 
 bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimNode_Base* InRootNode)
@@ -1279,6 +1260,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	}
 	if (!LadderIK.bActive || InRootNode != GetRootNode())
 	{
+		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
 	}
 	EvaluateAnimationNode_WithRoot(Output, InRootNode);
@@ -1288,56 +1270,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 
 void FOperativeAnimInstanceProxy::ApplyLadderIK(FPoseContext& Output) const
 {
-	using namespace OperativeLadderIK;
-	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
-	const FTransform& Component = GetComponentTransform();
-	FCSPose<FCompactPose> Pose;
-	Pose.InitPose(Output.Pose);
-	TArray<FBoneTransform> Changed;
-	for (int32 Limb = 0; Limb < static_cast<int32>(ELadderLimb::Count); ++Limb)
-	{
-		const float Alpha = FMath::Clamp(LadderIK.Alpha[Limb], 0.f, 1.f);
-		if (Alpha <= 0.001f)
-		{
-			continue;
-		}
-		const FChain& Chain = Chains[Limb];
-		const FCompactPoseBoneIndex RootIndex = Find(Bones, Chain.Root);
-		const FCompactPoseBoneIndex JointIndex = Find(Bones, Chain.Joint);
-		const FCompactPoseBoneIndex EndIndex = Find(Bones, Chain.End);
-		const FCompactPoseBoneIndex ContactIndex = Chain.Contact ? Find(Bones, Chain.Contact) : EndIndex;
-		if (RootIndex == INDEX_NONE || JointIndex == INDEX_NONE || EndIndex == INDEX_NONE || ContactIndex == INDEX_NONE)
-		{
-			continue;
-		}
-		FTransform Root = Pose.GetComponentSpaceTransform(RootIndex);
-		FTransform Joint = Pose.GetComponentSpaceTransform(JointIndex);
-		FTransform End = Pose.GetComponentSpaceTransform(EndIndex);
-		const FVector Contact = Pose.GetComponentSpaceTransform(ContactIndex).GetLocation();
-		// The grip point: the rung's centre + the limb's offset (towards the climber / up), at the limb's own spot across the rung.
-		const bool bFoot = Limb >= static_cast<int32>(ELadderLimb::FootL);
-		const FVector2D Offset = bFoot ? LadderIK.FootOffset : LadderIK.HandOffset;
-		const FVector Rung = LadderIK.RungCentre[Limb];
-		const float Across = FMath::Clamp(static_cast<float>(FVector::DotProduct(Component.TransformPosition(Contact) - Rung, LadderIK.Across)),
-			-LadderIK.HalfWidth, LadderIK.HalfWidth);
-		const FVector TargetWorld = Rung + LadderIK.Across * Across + LadderIK.Outward * Offset.X + FVector::UpVector * Offset.Y;
-		// The end bone goes where the contact bone lands on the target (the foot keeps its orientation).
-		const FVector EndTarget = Component.InverseTransformPosition(TargetWorld) - (Contact - End.GetLocation());
-		const FVector Effector = FMath::Lerp(End.GetLocation(), EndTarget, Alpha);
-		// Pole: the elbow / knee keeps the side it bends to in the clip.
-		const FVector Pole = Joint.GetLocation() + (Joint.GetLocation() - (Root.GetLocation() + End.GetLocation()) * 0.5);
-		AnimationCore::SolveTwoBoneIK(Root, Joint, End, Pole, Effector, false, 1.0, 1.0);
-		Changed.Add(FBoneTransform(RootIndex, Root));
-		Changed.Add(FBoneTransform(JointIndex, Joint));
-		Changed.Add(FBoneTransform(EndIndex, End));
-	}
-	if (Changed.IsEmpty())
-	{
-		return;
-	}
-	Changed.Sort(FCompareBoneTransformIndex());
-	Pose.LocalBlendCSBoneTransforms(Changed, 1.f);
-	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(Pose), Output.Pose);
+	LadderPoseIK::Apply(Output, GetComponentTransform(), LadderIK, KneeIKOffset);
 }
 
 // --- Tactical cover baseline (Sprint 12) ------------------------------------------------------------------------
