@@ -22,13 +22,21 @@
  * A ray meets a thick wall at its faces (the centre line offset by +-Thickness / 2; a thin wall at its centre line) and is 0 when it
  * starts inside the wall body; a ray parallel to a wall never hits it.
  *
- * Hysteresis (Classify): no previous class -> the raw class at once; at_wall (an arrival event, v1.2) at once too; else a class is kept
- * for at least ClassifyHoldTime (TimeInClass = seconds since it was entered) before a different raw class may take over
- * (FFormationTerrainTracker keeps the time).
+ * Hysteresis (v2, contract 8: in cm of the LEADER'S PATH, asymmetric; Classify / AdvanceState, state in -> state out):
+ * - no current class -> the raw class at once; the raw class equal to the current one -> kept (the candidate is dropped);
+ * - TIGHTER at once: a raw class of higher ClassRank (open 0 < wall_left / wall_right 1 < corridor 2 < at_wall 3) replaces the current
+ *   one immediately (the squad never walks a diamond into a passage); leaving at_wall (a new move) is immediate too;
+ * - LOOSER (or equal rank, e.g. wall_left -> wall_right) only after it has been the raw class for ClassifyHoldDistance of the leader's
+ *   path: StepDistance per tick adds to CandidateDistance while the raw class stays that candidate (another raw class restarts it;
+ *   standing still adds nothing). A gap in a wall shorter than that never flips the echelon; leaving a passage the column holds
+ *   until its tail is out.
+ * - PassageWidth of the state: PassageWidth (measured) while the raw class is corridor, HELD while the current class stays corridor
+ *   after the leader has left the passage (the column's tail keeps the narrow sectors), unset for any other current class - this is
+ *   what LookYaw takes.
+ * FFormationTerrainTracker is the runtime's entry point (keeps the state).
  *
  * Destination (v1.2) = where the leader's current move ends (unset = none); in the wall layout the leader's own wall slot is his
- * destination (his last step must not drop the layout). The C++ parameter comes last (after Config, defaulted, so v1.1 callers
- * compile; TS order: walls, pos, yaw, destination, previous, time, config).
+ * destination (his last step must not drop the layout).
  *
  * PassageWidth (v1.1): Left + Right clearance (the same side rays) when both sides are blocked, else unset - feeds LookYaw's narrow /
  * wide column.
@@ -37,6 +45,19 @@
  * diamond; wall_left -> echelon RIGHT (away from the wall), wall_right ->
  * echelon LEFT, corridor -> column, at_wall -> wall.
  */
+/** v2 classifier state carried tick to tick (contract 8: {current, candidate, candidateDistance, passageWidth}). */
+struct FFormationClassifyState
+{
+	/** The class in force; unset = no history (start). */
+	TOptional<EFormationTerrainClass> Current;
+	/** A looser raw class waiting for its path distance; unset = none. */
+	TOptional<EFormationTerrainClass> Candidate;
+	/** Leader path walked while Candidate has been the raw class, cm. */
+	float CandidateDistance = 0.f;
+	/** The passage width while Current is corridor (measured, or held after the leader left the passage), else unset; LookYaw's input. */
+	TOptional<float> PassageWidth;
+};
+
 namespace FormationTerrainRules
 {
 	/** Distance along the ray Origin + Dir * t (Dir unit) to the first wall surface within MaxDistance; unset = none. */
@@ -66,34 +87,48 @@ namespace FormationTerrainRules
 	CODEXTACTICS_API EFormationTerrainClass ClassifyRaw(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,
 		const FFormationConfig& Config = FFormationConfig(), const TOptional<FVector2D>& Destination = TOptional<FVector2D>());
 
-	/**
-	 * The hysteresis step alone: no previous -> Raw; Raw == previous -> Raw; Raw at_wall -> at once (an arrival event); else previous
-	 * while TimeInClass < ClassifyHoldTime.
-	 */
-	CODEXTACTICS_API EFormationTerrainClass ApplyHysteresis(EFormationTerrainClass RawClass, const TOptional<EFormationTerrainClass>& PreviousClass,
-		float TimeInClass, const FFormationConfig& Config = FFormationConfig());
+	/** v2: how tight a class is - open 0, a wall on one side 1, a passage 2, at a wall 3. */
+	CODEXTACTICS_API int32 ClassRank(EFormationTerrainClass Class);
 
-	/** The raw class through the hysteresis (contract Classify; Destination see the header comment). */
-	CODEXTACTICS_API EFormationTerrainClass Classify(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,
-		const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass, const FFormationConfig& Config = FFormationConfig(),
-		const TOptional<FVector2D>& Destination = TOptional<FVector2D>());
+	/**
+	 * v2: the hysteresis step alone (Classify without the probes): RawClass = ClassifyRaw, MeasuredWidth = PassageWidth when RawClass is
+	 * corridor (else unset); StepDistance = the leader's path this tick, cm. Returns the next state (see the header comment).
+	 */
+	CODEXTACTICS_API FFormationClassifyState AdvanceState(EFormationTerrainClass RawClass, const TOptional<float>& MeasuredWidth,
+		const FFormationClassifyState& State, float StepDistance, const FFormationConfig& Config = FFormationConfig());
+
+	/** v2 contract Classify: the probes (ClassifyRaw, PassageWidth) through AdvanceState. Pure: state in -> state out. */
+	CODEXTACTICS_API FFormationClassifyState Classify(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,
+		const TOptional<FVector2D>& Destination, const FFormationClassifyState& State, float StepDistance,
+		const FFormationConfig& Config = FFormationConfig());
 
 	/** The formation for a terrain class and squad size; bBlizzard (v1.2): open ground in a blizzard -> the blizzard tight diamond. */
 	CODEXTACTICS_API EFormationKind FormationFor(EFormationTerrainClass Class, int32 MemberCount, bool bBlizzard = false);
 }
 
-/** Keeps the terrain class and its time over frames (the runtime side of Classify's hysteresis). */
+/**
+ * The runtime's entry point to the terrain classifier (v2): keeps FFormationClassifyState tick to tick. Each tick: Step with the leader's
+ * position, heading, move destination and the path he walked since the last Step; read GetClass (-> FormationTerrainRules::FormationFor)
+ * and GetPassageWidth (-> FormationSectorRules::LookYaw).
+ */
 struct CODEXTACTICS_API FFormationTerrainTracker
 {
-	/** The class in force; unset until the first Step. */
-	TOptional<EFormationTerrainClass> Class;
-	/** Seconds since Class was entered. */
-	float TimeInClass = 0.f;
+	/** The classifier state (Current unset until the first Step). */
+	FFormationClassifyState State;
 
 	/**
-	 * Advances the time by DeltaSeconds, classifies (Classify) and returns the class in force (a change restarts the time). Destination =
-	 * the leader's move destination (v1.2; unset = none: no at_wall).
+	 * Classifies (FormationTerrainRules::Classify) and returns the class in force. Destination = the leader's move destination (unset =
+	 * none: no at_wall); StepDistance = the leader's path since the last Step, cm (standing still: 0).
 	 */
-	EFormationTerrainClass Step(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, float DeltaSeconds,
-		const FFormationConfig& Config = FFormationConfig(), const TOptional<FVector2D>& Destination = TOptional<FVector2D>());
+	EFormationTerrainClass Step(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, const TOptional<FVector2D>& Destination,
+		float StepDistance, const FFormationConfig& Config = FFormationConfig());
+
+	/** The class in force (open before the first Step). */
+	EFormationTerrainClass GetClass() const;
+
+	/** The passage width LookYaw takes (held with the corridor class; unset otherwise). */
+	TOptional<float> GetPassageWidth() const;
+
+	/** Forgets the history (the next Step takes the raw class at once). */
+	void Reset();
 };

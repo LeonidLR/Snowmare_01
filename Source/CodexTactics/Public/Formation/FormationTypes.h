@@ -168,7 +168,7 @@ struct CODEXTACTICS_API FFormationConfig
 	/** [pace.run_speed] Run speed of the squad (sprint), cm/s. */
 	float PaceRunSpeed = 480.f;
 	/** [move.backward_mult] A member walking backwards moves at most this fraction of the walk speed. */
-	float MoveBackwardMult = 0.8f;
+	float MoveBackwardMult = 0.9f;
 	/** [move.catchup_mult] A member far behind his slot may move this much faster than the squad pace. */
 	float MoveCatchupMult = 1.25f;
 	/** [facing.turn_speed] Body turn rate (FacingRules::StepYaw turn speed), 1/s. */
@@ -197,8 +197,11 @@ struct CODEXTACTICS_API FFormationConfig
 	float ClassifyProbeSide = 400.f;
 	/** [classify.probe_ahead] Forward look-ahead range (simulator only; the C++ classifier's forward rays reach ClassifyAtWallDist), cm. */
 	float ClassifyProbeAhead = 600.f;
-	/** [classify.hold_time] Terrain hysteresis: a class is kept at least this long (since it was entered) before it may change, s. */
-	float ClassifyHoldTime = 1.f;
+	/**
+	 * [classify.hold_distance] v2 terrain hysteresis: a LOOSER class takes over only after the leader walked this far with it (tighter
+	 * ones at once); >= the column length so its tail leaves a passage first, cm.
+	 */
+	float ClassifyHoldDistance = 500.f;
 	/** [classify.at_wall_dist] Terrain: on ARRIVAL (ClassifyArriveDist) a wall ahead within this distance = at_wall, cm. */
 	float ClassifyAtWallDist = 150.f;
 	/** [classify.arrive_dist] v1.2: the leader is arriving within this distance of his move's destination (at_wall only then), cm. */
