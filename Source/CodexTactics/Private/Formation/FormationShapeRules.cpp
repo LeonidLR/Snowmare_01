@@ -147,4 +147,11 @@ namespace FormationShapeRules
 		}
 		return Result;
 	}
+
+	TArray<FFormationSlot> HedgehogSlots(const FVector2D& Center, int32 MemberCount, float Yaw, const FFormationConfig& Config)
+	{
+		const FVector2D LeaderPos = Center + FormationMath::Forward(Yaw) * static_cast<double>(Config.HedgehogRadius);
+		// Slots fills Yaw with the halt look (outward on the ring).
+		return Slots(EFormationKind::Hedgehog, MemberCount, LeaderPos, Yaw, Config);
+	}
 }

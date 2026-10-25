@@ -47,7 +47,8 @@ bool FFormationSectorPatrolTest::RunTest(const FString&)
 	const TArray<float> Z = Sweep(EFormationRole::Rear, 4);
 	TestTrue(TEXT("P scans 12 -> 3"), FMath::IsNearlyEqual(MinOf(P), 0.f, 0.5f) && FMath::IsNearlyEqual(MaxOf(P), 90.f, 0.5f));
 	TestTrue(TEXT("L scans 9 -> 12"), FMath::IsNearlyEqual(MinOf(L), -90.f, 0.5f) && FMath::IsNearlyEqual(MaxOf(L), 0.f, 0.5f));
-	TestTrue(TEXT("K: light search round 12 within scan.amp_lead"), FMath::Max(FMath::Abs(MinOf(K)), FMath::Abs(MaxOf(K))) <= Config.ScanAmpLead + 1e-3f);
+	TestTrue(TEXT("K: search round 12 within scan.amp_lead"), FMath::Max(FMath::Abs(MinOf(K)), FMath::Abs(MaxOf(K))) <= Config.ScanAmpLead + 1e-3f);
+	TestTrue(TEXT("K searches 11 - 1 o'clock (v1.2: scan.amp_lead 30)"), FMath::IsNearlyEqual(MinOf(K), -30.f, 0.5f) && FMath::IsNearlyEqual(MaxOf(K), 30.f, 0.5f));
 	TestTrue(TEXT("K does search (not frozen on 12)"), MaxOf(K) - MinOf(K) > Config.ScanAmpLead);
 	bool bZAlwaysSix = true;
 	for (const float Value : Z)
@@ -134,6 +135,9 @@ bool FFormationSectorRunHaltTest::RunTest(const FString&)
 		{
 			TestTrue(FString::Printf(TEXT("Run: %s in %s faces 12"), FormationNames::ToString(Role), FormationNames::ToString(Kind)),
 				FMath::IsNearlyEqual(FormationSectorRules::LookYaw(Role, Kind, EFormationMode::Run, 4, 1.7f, 30.f, TOptional<float>(), Config), 30.f, 1e-3f));
+			// v1.2: the menu's "All forward" - walking, everybody on 12 whatever the formation.
+			TestTrue(FString::Printf(TEXT("All forward: %s in %s faces 12"), FormationNames::ToString(Role), FormationNames::ToString(Kind)),
+				FMath::IsNearlyEqual(FormationSectorRules::LookYaw(Role, Kind, EFormationMode::Forward, 4, 1.7f, 30.f, TOptional<float>(460.f), Config), 30.f, 1e-3f));
 		}
 	}
 	// Halt: K 12, P 2, L 10, Z 6.

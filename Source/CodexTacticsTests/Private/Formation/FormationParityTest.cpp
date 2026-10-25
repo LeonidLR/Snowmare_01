@@ -1,5 +1,5 @@
 // CodexTactics.Formation.Parity.<Rule> - the C++ formation rules against the golden vectors the Training Ground simulator exports
-// (`npm run golden`; v1.1 adds PassageWidth): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
+// (`npm run golden`; v1.1 adds PassageWidth, v1.2 HedgehogSlots): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
 // (docs/design/FORMATION_CONTRACT.md 3, field names in 3.1). Same inputs -> same outputs within the file's tolerance (cm / deg; yaws
 // compared as angles). The rules' config is built from the file's "config_values" (the snapshot the vectors were computed with), so
 // later tuning of formation_config.json cannot break parity. A missing file: a warning, the test passes. Every case is checked (none is
@@ -380,9 +380,22 @@ bool FFormationParityClassifyTest::RunTest(const FString&)
 			}
 			Previous = Parsed;
 		}
-		const EFormationTerrainClass Actual = FormationTerrainRules::Classify(Walls, Pos, static_cast<float>(Yaw), Previous, static_cast<float>(TimeInClass), Golden.Config);
+		// v1.2: the leader's move destination (null / missing = none).
+		TOptional<FVector2D> Destination;
+		const TSharedPtr<FJsonValue> DestinationValue = Field(*In, TEXT("destination"));
+		if (DestinationValue.IsValid() && !DestinationValue->IsNull())
+		{
+			FVector2D Parsed;
+			if (!Vec2(DestinationValue, Parsed))
+			{
+				return TEXT("destination is neither [x, y] nor null");
+			}
+			Destination = Parsed;
+		}
+		const EFormationTerrainClass Actual = FormationTerrainRules::Classify(Walls, Pos, static_cast<float>(Yaw), Previous, static_cast<float>(TimeInClass),
+			Golden.Config, Destination);
 		return Actual == Expected ? FString() : FString::Printf(TEXT("class %s (raw %s), expected %s"), FormationNames::ToString(Actual),
-			FormationNames::ToString(FormationTerrainRules::ClassifyRaw(Walls, Pos, static_cast<float>(Yaw), Golden.Config)), *ExpectedName);
+			FormationNames::ToString(FormationTerrainRules::ClassifyRaw(Walls, Pos, static_cast<float>(Yaw), Golden.Config, Destination)), *ExpectedName);
 	});
 }
 
@@ -415,6 +428,31 @@ bool FFormationParityPassageWidthTest::RunTest(const FString&)
 	});
 }
 
+FORMATION_PARITY_TEST(FFormationParityHedgehogSlotsTest, "HedgehogSlots")
+bool FFormationParityHedgehogSlotsTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("HedgehogSlots"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("HedgehogSlots"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		FVector2D Center;
+		double Count = 0.0;
+		double Yaw = 0.0;
+		const TArray<TSharedPtr<FJsonValue>>* Slots = nullptr;
+		if (!Vec2(Field(*In, TEXT("center")), Center) || !Number(*In, TEXT("memberCount"), TEXT("member_count"), Count) || !Number(*In, TEXT("yaw"), nullptr, Yaw)
+			|| !Out->TryGetArrayField(TEXT("slots"), Slots))
+		{
+			return TEXT("unreadable input / output");
+		}
+		return CompareSlots(FormationShapeRules::HedgehogSlots(Center, static_cast<int32>(Count), static_cast<float>(Yaw), Golden.Config), *Slots, Golden, true);
+	});
+}
+
 FORMATION_PARITY_TEST(FFormationParityFormationForTest, "FormationFor")
 bool FFormationParityFormationForTest::RunTest(const FString&)
 {
@@ -436,7 +474,14 @@ bool FFormationParityFormationForTest::RunTest(const FString&)
 		{
 			return TEXT("unreadable input / output");
 		}
-		const FString Actual = FormationNames::ToString(FormationTerrainRules::FormationFor(Class, static_cast<int32>(Count)));
+		// v1.2: the weather flag (missing = false).
+		bool bBlizzard = false;
+		const TSharedPtr<FJsonValue> BlizzardValue = Field(*In, TEXT("blizzard"));
+		if (BlizzardValue.IsValid() && !BlizzardValue->TryGetBool(bBlizzard))
+		{
+			return TEXT("blizzard is not a bool");
+		}
+		const FString Actual = FormationNames::ToString(FormationTerrainRules::FormationFor(Class, static_cast<int32>(Count), bBlizzard));
 		return Actual == ExpectedName ? FString() : FString::Printf(TEXT("formation %s, expected %s"), *Actual, *ExpectedName);
 	});
 }

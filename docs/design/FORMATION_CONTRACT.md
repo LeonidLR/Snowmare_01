@@ -90,23 +90,26 @@ struct defaults, never from the current `formation_config.json`; an unknown key 
 `member_count`, `leader_pos`, ... are accepted too). Vectors are `[x, y]` cm; yaws UE degrees compared as angles (|normalize(a - b)| <=
 tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `null` = unset (TOptional). Enum strings: formation
 `diamond | wedge | column | line | echelon_left | echelon_right | wall | hedgehog | blizzard`, role `K | P | L | Z`, mode
-`walk | run | halt | wall`, class `open | wall_left | wall_right | corridor | at_wall`. Walls `{ a: [x, y], b: [x, y], thickness? }`
-(thickness missing = 0).
+`walk | run | halt | wall | forward` (v1.2), class `open | wall_left | wall_right | corridor | at_wall`. Walls
+`{ a: [x, y], b: [x, y], thickness? }` (thickness missing = 0).
 
 | File / test | `in` | `out` (compared) |
 |---|---|---|
 | `formation_Slots.json` / `Parity.Slots` | `formation`, `memberCount`, `leaderPos`, `leaderYaw` | `slots: [{ role, pos }]` - same count, same role ORDER (index 0 = the leader; `wall` -> `[]`), pos |
+| `formation_HedgehogSlots.json` / `Parity.HedgehogSlots` (v1.2) | `center`, `memberCount`, `yaw` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
 | `formation_LookYaw.json` / `Parity.LookYaw` | `role`, `formation`, `mode`, `memberCount`, `timeInPatrol`, `leaderYaw` (mode / formation `wall`: the wall's outward normal), `passageWidth` (v1.1; number, `null` or missing = not in a passage) | `yaw` |
-| `formation_Classify.json` / `Parity.Classify` | `walls[]`, `leaderPos`, `leaderYaw`, `previousClass` (string or `null` = no history), `timeInClass` | `class` (after the hysteresis) |
+| `formation_Classify.json` / `Parity.Classify` | `walls[]`, `leaderPos`, `leaderYaw`, `destination` (v1.2; `[x, y]`, `null` or missing = no move), `previousClass` (string or `null` = no history), `timeInClass` | `class` (after the hysteresis) |
 | `formation_PassageWidth.json` / `Parity.PassageWidth` (v1.1) | `walls[]`, `leaderPos`, `leaderYaw` | `width` (number or `null`; the field must be present) |
-| `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount` | `formation` |
+| `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount`, `blizzard` (v1.2; bool, missing = false) | `formation` |
 | `formation_WallLayout.json` / `Parity.WallLayout` | `wall`, `clickedSlot`, `memberCount`, `roomLeft`, `roomRight` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
 
-C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots`, `FormationSectorRules::LookYaw(role,
-formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`, `FormationTerrainRules::Classify(walls,
-leaderPos, leaderYaw, TOptional previousClass, timeInClass, config)` / `PassageWidth(walls, leaderPos, leaderYaw, config)` /
-`FormationFor(class, memberCount)`, `FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)`;
-config `FFormationConfig` + `FormationTuning`. Runs: v1 (ead0faf) 4563 cases, 0 mismatched; v1.1 (b4dcf9b) see the CHANGELOG.
+C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
+config)`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`,
+`FormationTerrainRules::Classify(walls, leaderPos, leaderYaw, TOptional previousClass, timeInClass, config, TOptional destination)`
+(C++ keeps destination LAST, defaulted, so v1.1 callers compile; TS order differs) / `ClassifyRaw(walls, leaderPos, leaderYaw, config,
+TOptional destination)` / `PassageWidth(walls, leaderPos, leaderYaw, config)` / `FormationFor(class, memberCount, bBlizzard = false)`,
+`FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)` / `BreakRoomTie`; config `FFormationConfig` +
+`FormationTuning`. Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2 (b5e2c7d) 7523 - each 0 mismatched.
 
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):

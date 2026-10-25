@@ -60,7 +60,9 @@ enum class EFormationMode : uint8
 	/** Short halt: everybody turns to the centre of his sector. */
 	Halt,
 	/** At a wall (group cover in formation mode): the wall layout's yaws. */
-	Wall
+	Wall,
+	/** v1.2: the menu's "All forward" (10:30) - walking, everybody faces 12 whatever the formation [forward]. */
+	Forward
 };
 
 /** Terrain around the leader (contract: open | wall_left | wall_right | corridor | at_wall). */
@@ -177,8 +179,8 @@ struct CODEXTACTICS_API FFormationConfig
 	float ScanAmpSide = 45.f;
 	/** [scan.center_side] Flankers' walk sector centre (P +45 = 1:30, L -45 = 10:30), deg. */
 	float ScanCenterSide = 45.f;
-	/** [scan.amp_lead] The leader's light search amplitude round 12, deg. */
-	float ScanAmpLead = 12.f;
+	/** [scan.amp_lead] The leader's search amplitude round 12 (v1.2: 30 = 11 - 1 o'clock, as the design says), deg. */
+	float ScanAmpLead = 30.f;
 	/** [scan.dwell_exp] Scan shape sign(sin) * |sin|^exp: below 1 it dwells at the sector's ends. */
 	float ScanDwellExp = 0.45f;
 	/** [halt.side_deg] Short halt: the flankers' sector centres (P 2, L 10 o'clock), deg. */
@@ -195,12 +197,12 @@ struct CODEXTACTICS_API FFormationConfig
 	float ClassifyProbeSide = 400.f;
 	/** [classify.probe_ahead] Forward look-ahead range (simulator only; the C++ classifier's forward rays reach ClassifyAtWallDist), cm. */
 	float ClassifyProbeAhead = 600.f;
-	/** [classify.corridor_width] Terrain: walls on both sides closer together than this = corridor, cm. */
-	float ClassifyCorridorWidth = 600.f;
 	/** [classify.hold_time] Terrain hysteresis: a class is kept at least this long (since it was entered) before it may change, s. */
 	float ClassifyHoldTime = 1.f;
-	/** [classify.at_wall_dist] Terrain: a wall ahead within this distance = at_wall, cm. */
+	/** [classify.at_wall_dist] Terrain: on ARRIVAL (ClassifyArriveDist) a wall ahead within this distance = at_wall, cm. */
 	float ClassifyAtWallDist = 150.f;
+	/** [classify.arrive_dist] v1.2: the leader is arriving within this distance of his move's destination (at_wall only then), cm. */
+	float ClassifyArriveDist = 50.f;
 	/** [classify.side_ignore_perp_deg] v1.1: the side probes ignore wall segments within this angle of perpendicular to the heading, deg. */
 	float ClassifySideIgnorePerpDeg = 30.f;
 	/** [sight.fov] Vision cone width standing / crouched (simulator checks only; the game owns the real value), deg. */
