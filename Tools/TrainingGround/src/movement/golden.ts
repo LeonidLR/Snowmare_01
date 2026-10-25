@@ -9,7 +9,7 @@ import type { Formation } from './layout.ts';
 import { FORMATIONS } from './layout.ts';
 import type { ClassifyState, CornerState, GuardState, Mode, Role, TerrainClass, Threat } from './rules.ts';
 import {
-  CORNER_START, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
+  CORNER_START, FormationAssignRules, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
   FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor,
 } from './rules.ts';
 import { FormationMenuRules, MENU_ITEMS } from './menu.ts';
@@ -17,7 +17,7 @@ import type { MenuChoice } from './menu.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
 export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu',
-  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner'] as const;
+  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -195,7 +195,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  const trail = base('TrailSlots', 'in: trail [[x, y]] (oldest first, last = the leader), leaderYaw, memberCount, requested -> out.slots [{role, pos, yaw}] (the column along the path; yaw = the trail direction there).');
+  const trail = base('TrailSlots', 'in: trail [[x, y]] (oldest first, last = the leader), leaderYaw, memberCount -> out.slots [{role, pos, yaw}] (the column along the path; yaw = the trail direction there).');
   const TRAILS: Record<string, Vec2[]> = {
     straight: [[-2000, 0], [-1000, 0], [0, 0]],
     turn_left_90: [[-1500, 600], [-600, 600], [-300, 300], [0, 0]],
@@ -205,9 +205,9 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
   };
   for (const [name, pts] of Object.entries(TRAILS)) for (const [yaw, offset] of [[0, [0, 0]], [-120, [800, 300]]] as [number, Vec2][]) {
     const tr = pts.map((p) => r2([offset[0] + p[0] * Math.cos((yaw * Math.PI) / 180) - p[1] * Math.sin((yaw * Math.PI) / 180), offset[1] + p[0] * Math.sin((yaw * Math.PI) / 180) + p[1] * Math.cos((yaw * Math.PI) / 180)]));
-    for (const memberCount of [2, 3, 4]) for (const requested of ['column', 'echelon_right', 'echelon_left'] as Formation[]) {
-      const out = FormationShapeRules.TrailSlots(tr, yaw, memberCount, requested, config).map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
-      trail.cases.push({ in: { trail: name, points: tr, leaderYaw: yaw, memberCount, requested }, out: { slots: out } });
+    for (const memberCount of [2, 3, 4]) {
+      const out = FormationShapeRules.TrailSlots(tr, yaw, memberCount, config).map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
+      trail.cases.push({ in: { trail: name, points: tr, leaderYaw: yaw, memberCount }, out: { slots: out } });
     }
   }
 
@@ -264,8 +264,23 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
+  // v2.1 fix: minimal-travel places on a formation change (every pair of formations, from their slots, 3 and 4 members; plus
+  // tie / identity cases). out.places[i] = the index into in.places for member i.
+  const assign = base('Assign', 'in: members [[x, y]] (the followers), places [[x, y]] -> out.places [index into places per member] (AssignPlaces = GroupCoverRules::AssignMinimalTravel: DFS member-major, a full assignment wins only when cheaper by > 1e-3 cm).');
+  const switchable: Formation[] = ['diamond', 'line', 'column', 'echelon_right', 'echelon_left', 'hedgehog', 'blizzard'];
+  for (const memberCount of [3, 4]) for (const from of switchable) for (const to of switchable) {
+    for (const [yaw, offset, turn] of [[0, [0, 0], 0], [63, [500, -250], 35]] as [number, Vec2, number][]) {
+      const a = FormationShapeRules.Slots(from, memberCount, offset, yaw, config).slice(1).map((x) => r2(x.pos));
+      const b = FormationShapeRules.Slots(to, memberCount, r2([offset[0] + 150, offset[1]]), yaw + turn, config).slice(1).map((x) => r2(x.pos));
+      assign.cases.push({ in: { from, to, memberCount, members: a, places: b }, out: { places: FormationAssignRules.AssignPlaces(a, b) } });
+    }
+  }
+  for (const [members, places] of [
+    [[[0, 0], [100, 0]], [[0, 0], [100, 0]]], [[[0, 0], [0, 0]], [[50, 0], [50, 0]]], [[[0, 0], [100, 0], [200, 0]], [[200, 0], [100, 0], [0, 0]]],
+  ] as Vec2[][][]) assign.cases.push({ in: { from: 'tie', to: 'tie', memberCount: members.length + 1, members, places }, out: { places: FormationAssignRules.AssignPlaces(members, places) } });
+
   return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
-    Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner };
+    Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign };
 }
 
 export const goldenFileName = (rule: GoldenRule): string => `formation_${rule}.json`;

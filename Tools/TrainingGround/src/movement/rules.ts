@@ -126,12 +126,10 @@ function HedgehogSlots(center: Vec2, memberCount: number, yaw: number, config: F
  * the leader's path instead of straight back, so the column bends round a corner and passes a wall on his side. trail = the
  * leader's recent positions, oldest first, the last one = the leader now; a trail shorter than the column is extended straight
  * back from its oldest point (along its oldest segment, or against leaderYaw for a single point). Each slot carries the trail's
- * direction there (yaw) - the reference for its look (LookYaw's leaderYaw). `requested` = the formation the guard folded: an
- * echelon keeps its order in the column (echelon right K-L-P-Z), so folding and opening it again crosses nobody's path;
- * otherwise the column's own order K-P-L-Z.
+ * direction there (yaw) - the reference for its look (LookYaw's leaderYaw). Who stands where is FormationAssignRules'
+ * job (minimal travel on every formation change), not the slot order's.
  */
-function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: number, requested: Formation,
-  config: FormationConfig): (Slot & { yaw: number })[] {
+function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: number, config: FormationConfig): (Slot & { yaw: number })[] {
   const leaderPos = trail[trail.length - 1];
   // Segments newest -> oldest, each with its travel direction.
   const segs: { from: Vec2; to: Vec2; len: number; yaw: number }[] = [];
@@ -151,9 +149,7 @@ function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: numb
   };
   return rolesFor(memberCount).map((role) => {
     if (role === 'K') return { role, pos: leaderPos, yaw: leaderYaw };
-    // The role standing at this role's place in the column's own order K-P-L-Z (P <-> L for the echelon right).
-    const place: Role = requested === 'echelon_right' && memberCount >= 3 && (role === 'P' || role === 'L') ? (role === 'P' ? 'L' : 'P') : role;
-    const local = localSlot('column', place, memberCount, config);
+    const local = localSlot('column', role, memberCount, config);
     const at = back(-local[0]);
     return { role, pos: add(at.pos, scale(dirOf(at.yaw + 90), local[1])), yaw: at.yaw };
   });
@@ -793,6 +789,38 @@ function Watch(walls: readonly Segment[], leaderPos: Vec2, leaderYaw: number, me
 }
 
 export const FormationCornerRules = { Watch };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// FormationAssignRules (v2.1 fix, coordinator 2026-10-25): who takes which place when the formation changes
+
+/**
+ * Minimal total travel (sum of straight distances) from the followers' positions to the new formation's follower places -
+ * an optimal assignment never has two paths crossing, so nobody walks through anybody on a fold, unfold, mirror or any switch.
+ * `members` = the followers (the leader keeps place K and is not passed), `places` = the slots to fill (same count; roles are
+ * the place labels: the sectors belong to the place). Returns, per member in order, the index into `places`.
+ * Search order and tie rule = GroupCoverRules::AssignMinimalTravel (C++ may call it): depth-first, member-major, places in
+ * index order; a complete assignment replaces the best only when cheaper by more than 1e-3 cm (ties keep the earlier one, so
+ * with no movement needed the identity wins).
+ */
+function AssignPlaces(members: readonly Vec2[], places: readonly Vec2[]): number[] {
+  const n = Math.min(members.length, places.length);
+  let best: number[] = members.map((_, i) => (i < n ? i : -1)), bestCost = Infinity;
+  const used = places.map(() => false), current: number[] = members.map(() => -1);
+  const search = (m: number, cost: number) => {
+    if (cost >= bestCost - 1e-3) return;
+    if (m === n) { bestCost = cost; best = [...current]; return; }
+    for (let k = 0; k < places.length; k++) {
+      if (used[k]) continue;
+      used[k] = true; current[m] = k;
+      search(m + 1, cost + dist(members[m], places[k]));
+      used[k] = false; current[m] = -1;
+    }
+  };
+  search(0, 0);
+  return best;
+}
+
+export const FormationAssignRules = { AssignPlaces };
 
 /** Distance helper re-exported for the checks. */
 export { dist };

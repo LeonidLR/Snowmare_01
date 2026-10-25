@@ -9,7 +9,7 @@ import { configValues } from './config.ts';
 import { readConfigFile, readLayout } from './cli/paths.ts';
 import { runSeries } from './bot.ts';
 import {
-  CORNER_START, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationShapeRules, FormationTerrainRules,
+  CORNER_START, FormationAssignRules, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationShapeRules, FormationTerrainRules,
   GUARD_START, wallSideOf,
 } from './rules.ts';
 import type { GuardState } from './rules.ts';
@@ -73,22 +73,43 @@ test('guard: chain neighbours - echelon in its order, column K-P-L-Z, diamond P-
   assert.deepEqual(G.ChainPairs('line', 2), []);
 });
 
-test('trail column: straight trail = the straight column; round a corner the slots follow the path, the echelon order kept', () => {
-  const straight = FormationShapeRules.TrailSlots([[-2000, 0], [0, 0]], 0, 4, 'column', C);
+test('trail column: straight trail = the straight column; round a corner the slots follow the path', () => {
+  const straight = FormationShapeRules.TrailSlots([[-2000, 0], [0, 0]], 0, 4, C);
   const column = FormationShapeRules.Slots('column', 4, [0, 0], 0, C);
   for (let i = 0; i < 4; i++) { assert.equal(straight[i].role, column[i].role); assert.ok(Math.hypot(straight[i].pos[0] - column[i].pos[0], straight[i].pos[1] - column[i].pos[1]) < 1e-6); }
   // A right turn 4 m behind the leader (along +X, then down to him along -Y) round the end of a wall: the column bends with
   // the path - the tail is on the first leg and no two neighbours have the wall between them.
   const corner: Segment[] = [{ a: [-2000, 300], b: [-100, 300], thickness: 40 }];
-  const bent = FormationShapeRules.TrailSlots([[-2000, 400], [0, 400], [0, 0]], -90, 4, 'column', C);
+  const bent = FormationShapeRules.TrailSlots([[-2000, 400], [0, 400], [0, 0]], -90, 4, C);
   const z = bent.find((s) => s.role === 'Z')!;
   assert.ok(Math.abs(z.pos[1] - 400) < 1e-6 && z.pos[0] < 0, `Z on the first leg (${z.pos})`);
   for (const [a, b] of FormationGuardRules.ChainPairs('column', 4)) {
     const A = bent.find((s) => s.role === a)!, B = bent.find((s) => s.role === b)!;
     assert.ok(!segmentBlocked(A.pos, B.pos, corner, 0), `${a}-${b} cut`);
   }
-  const fromEchelon = FormationShapeRules.TrailSlots([[-2000, 0], [0, 0]], 0, 4, 'echelon_right', C);
-  assert.ok(fromEchelon.find((s) => s.role === 'L')!.pos[0] > fromEchelon.find((s) => s.role === 'P')!.pos[0], 'echelon right folds L second');
+});
+
+test('assign: minimal total travel, no crossing - an echelon right folds L second, P third (finding 2: no pass-through)', () => {
+  const A = FormationAssignRules.AssignPlaces;
+  // Echelon right (K, L 1st step, P 2nd step) -> the column: L is nearer the column's 1st place.
+  const echelon = FormationShapeRules.Slots('echelon_right', 3, [0, 0], 0, C).slice(1); // P at step 2, L at step 1
+  const column = FormationShapeRules.Slots('column', 3, [0, 0], 0, C).slice(1); // P first, L second
+  const pick = A(echelon.map((s) => s.pos), column.map((s) => s.pos));
+  assert.deepEqual(pick.map((k) => column[k].role), ['L', 'P'], 'P (far) takes the 2nd place, L (near) the 1st');
+  // Nobody crosses: the two straight paths do not intersect.
+  const paths = echelon.map((s, i) => [s.pos, column[pick[i]].pos] as [Vec2, Vec2]);
+  assert.ok(!segmentBlocked(paths[0][0], paths[0][1], [{ a: paths[1][0], b: paths[1][1], thickness: 0 }], 0));
+  // Ties keep the identity (nobody moves); empty input -> [].
+  assert.deepEqual(A([[0, 0], [100, 0]], [[0, 0], [100, 0]]), [0, 1]);
+  assert.deepEqual(A([[0, 0], [0, 0]], [[50, 0], [50, 0]]), [0, 1]);
+  assert.deepEqual(A([], []), []);
+  // Four men, a mirror (echelon left -> right): every path pair stays apart.
+  const from = FormationShapeRules.Slots('echelon_left', 4, [0, 0], 0, C).slice(1).map((s) => s.pos);
+  const to = FormationShapeRules.Slots('echelon_right', 4, [0, 0], 0, C).slice(1).map((s) => s.pos);
+  const p4 = A(from, to);
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) {
+    assert.ok(!segmentBlocked(from[i], to[p4[i]], [{ a: from[j], b: to[p4[j]], thickness: 0 }], 0), `paths ${i} and ${j} cross`);
+  }
 });
 
 test('SideWidth: a wall END beside a man counts (the side rays slip past it); open both sides -> null', () => {
@@ -156,7 +177,7 @@ test('check 7: a wall between the leader and a member for >= 0.3 s is a split; s
   const dir: Vec2 = [w.b[0] - w.a[0], w.b[1] - w.a[1]], L = Math.hypot(dir[0], dir[1]);
   const n: Vec2 = [-dir[1] / L, dir[0] / L];
   const K: Vec2 = [mid[0] + n[0] * 300, mid[1] + n[1] * 300], Z: Vec2 = [mid[0] - n[0] * 300, mid[1] - n[1] * 300];
-  const member = (role: 'K' | 'Z', pos: Vec2): MemberFrame => ({ role, pos, yaw: 0, slot: role === 'K' ? pos : K, slotFallback: false, slotInvalid: false, backwards: false, moveYaw: null, cornerWatch: false });
+  const member = (role: 'K' | 'Z', pos: Vec2): MemberFrame => ({ role, place: role, pos, yaw: 0, slot: role === 'K' ? pos : K, slotFallback: false, slotInvalid: false, backwards: false, moveYaw: null, cornerWatch: false });
   const frame = (t: number): Frame => ({ t, mode: 'halt', formation: 'diamond', requested: 'diamond', guardLevel: 0, terrain: 'open', heading: 0, leaderDistance: 0, members: [member('K', K), member('Z', Z)], bypasses: [] });
   const run = (seconds: number) => {
     const col = new RunCollector(layout, route, 2, 1, C);

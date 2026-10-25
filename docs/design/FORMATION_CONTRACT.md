@@ -128,7 +128,8 @@ Header: layout, routes, runs, seed. Then one line per check with pass / fail cou
 3. flicker: formation changes per 100 m of route (target <= 1 outside expected changes);
 4. expected formation per zone (routes[].expect) matched;
 5. slots: no slot inside a wall / off the walkable area; spacing within config;
-6. pace: the rear man keeps <= 150 cm behind his slot at patrol pace;
+6. pace: the man at the rear PLACE keeps <= 150 cm behind his slot at patrol pace (p95; not while the wall layout is in effect -
+   its slots are destinations at the wall, not a following formation);
 7. (v2.1) squad split: no wall between the leader and a member's slot or position, nor between chain neighbours
    (`FormationGuardRules::ChainPairs`), for >= 0.3 s; in the trail column (guard level 2) the chain of neighbours (slots and
    positions) is judged instead of the leader's straight line (the column wraps a wall end on his own path);
@@ -235,10 +236,10 @@ Z stood on its far side. User: "они должны переходить либ�
   one after `classify.hold_distance` of path with it (stepDistance; standing adds nothing), at once if the current fallback is
   itself cut; a new request starts over. The request is never cleared (the menu choice comes back by itself).
   `Effective(state) -> { formation, trail }` (trail = level 2).
-- `FormationShapeRules::TrailSlots(trail, leaderYaw, memberCount, requested) -> [{role, pos, yaw}]`: the column's offsets
+- `FormationShapeRules::TrailSlots(trail, leaderYaw, memberCount) -> [{role, pos, yaw}]`: the column's offsets
   (column.base_back + i x column.spacing back, column.stagger aside) measured ALONG the leader's trail (oldest first, last = the
   leader; sim: points >= 25 cm apart, 15 m kept), extended straight back from the oldest point; yaw = the trail direction at the
-  slot. The echelon right keeps its order in the column (P and L swap places) so folding crosses nobody.
+  slot. Who stands at which place: 10.6.
 - Sectors in the trail column: LookYaw('column', ..., leaderYaw = the slot's trail yaw, the rear man Z: the leader's heading),
   passageWidth = the classifier's held corridor width, else `FormationTerrainRules::SideWidth(walls, slotPos, slotYaw)` - the
   free width when a wall BODY (closest point, any orientation) is within classify.probe_side on a side (open side = probe_side),
@@ -280,4 +281,15 @@ G1 `W_G_19` oblique across the route (both sides about as long): `R_G_free` (no 
 right), `R_G_threat_right` (threat right: the shortest side also hides it), `R_G_threat_left` (threat left: the 0.2 % longer
 side that hides it, wall on the left); G2 `W_G_20` square to the route and lopsided: `R_G_far` (the hiding side ~70 % longer ->
 too long, the shortest side).
+
+### 10.6 `FormationAssignRules::AssignPlaces(members [[x, y]], places [[x, y]]) -> [index into places per member]` (finding 2 fix)
+A slot belongs to a PLACE (its role label: K, P, L, Z - the sectors go with the place), not to a fixed man. Whenever the
+formation in effect changes (any switch: fold, unfold, mirror, menu pick, terrain change, trail column on / off), the followers
+take the new formation's follower places by minimal total travel from where they stand (the leader keeps K). An optimal
+assignment never has two straight paths crossing, so nobody walks through anybody (the old fold echelon right -> column ->
+mirror made P and L pass each other: check 5, 71 cm). Between changes the places stay. Search and tie rule = C++
+`GroupCoverRules::AssignMinimalTravel` (it may be called as is): depth-first, member-major, places in index order, a complete
+assignment replaces the best only when cheaper by > 1e-3 cm (ties keep the earlier: no movement -> the identity). Sim:
+`MemberFrame.place`; the checks use places (the rear place for pace, chain neighbours for check 7). Golden `formation_Assign.json`
+(every pair of switchable formations, 3 / 4 members, plus tie cases).
 

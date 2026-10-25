@@ -12,7 +12,7 @@ import { wallSegments } from './layout.ts';
 import { AGENT_RADIUS, NavGrid } from './nav.ts';
 import type { GuardLevel, Mode, Role, TerrainClass, WallSide } from './rules.ts';
 import {
-  CLASSIFY_START, CORNER_START, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
+  CLASSIFY_START, CORNER_START, FormationAssignRules, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
   FormationShapeRules, FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
 } from './rules.ts';
 
@@ -26,7 +26,10 @@ const TRAIL_STEP = 25; // cm between the leader's trail points (the trail column
 const TRAIL_KEEP = 1500; // cm of trail kept
 
 export interface MemberFrame {
+  /** Who he is (K the leader, P, L, Z). */
   role: Role;
+  /** v2.1 fix: the place he holds in the formation (its slot and sectors), reassigned by minimal travel on every change. */
+  place: Role;
   pos: Vec2;
   yaw: number;
   slot: Vec2;
@@ -88,6 +91,7 @@ export interface SimOptions {
 
 interface Member {
   role: Role;
+  place: Role;
   pos: Vec2;
   yaw: number;
   jitter: number;
@@ -143,6 +147,7 @@ export function simulate(o: SimOptions): number {
   };
   const members: Member[] = rolesFor(n).map((role, i) => ({
     role,
+    place: role,
     pos: i === 0 ? legs[0] : spawnAt(startSlots[i].pos),
     yaw: heading,
     jitter: i === 0 ? 1 : 1 + (random() - 0.5) * 0.24,
@@ -161,6 +166,7 @@ export function simulate(o: SimOptions): number {
   // v2.1: the leader's recent path (oldest first, >= TRAIL_STEP apart, up to TRAIL_KEEP long) for the trail column.
   let trail: Vec2[] = [legs[0]];
   let lastTravelled = 0;
+  let placesFor = ''; // the formation the current places were assigned for (formation + trail flag)
   let formation: Formation = o.manualFormation ?? (n >= 4 ? 'diamond' : 'wedge');
   let haltLeft = o.haltSeconds ?? 3;
   let arrived = false;
@@ -237,7 +243,7 @@ export function simulate(o: SimOptions): number {
       const wall = wallAhead(walls, leader.pos, heading);
       if (wall) {
         const room = wallRoom(wall, leader.pos);
-        const z = members.find((m) => m.role === 'Z');
+        const z = members.find((m) => m.place === 'Z');
         // Tie: the 4th takes the side he reaches with less travel (FormationWallRules.BreakRoomTie, as the C++ caller).
         let rooms = room;
         if (z && n >= 4) {
@@ -254,7 +260,7 @@ export function simulate(o: SimOptions): number {
       const path = dist(trail[trail.length - 1], leader.pos) > 1e-6 ? [...trail, leader.pos] : trail;
       // Each man's sectors by his own surroundings (the corridor's held width, else a wall beside his slot -> narrow), relative
       // to the trail's direction at his slot; the rear man keeps the squad's 6 o'clock (the leader's heading).
-      targets = FormationShapeRules.TrailSlots(path, heading, n, requested, c).map((s) => ({
+      targets = FormationShapeRules.TrailSlots(path, heading, n, c).map((s) => ({
         ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw,
           passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c), c),
       }));
@@ -264,7 +270,19 @@ export function simulate(o: SimOptions): number {
       }));
     }
     // v2.1: slicing the pie - one member looks round the end of the wall the squad passes (patrol only; not in the wall layout).
-    const watch = FormationCornerRules.Watch(walls, leader.pos, heading, members.map((m) => ({ role: m.role, pos: m.pos })), corner, c);
+    // v2.1 fix: a new formation in effect (fold, unfold, mirror, any switch) -> the followers take its places by minimal travel.
+    const key = `${formation}|${FormationGuardRules.Effective(guard).trail}`;
+    if (key !== placesFor) {
+      placesFor = key;
+      const followers = members.slice(1);
+      const places = followers.map((m) => targets.find((x) => x.role === m.place)).filter((x) => !!x);
+      if (places.length === followers.length) {
+        const pick = FormationAssignRules.AssignPlaces(followers.map((m) => m.pos), places.map((x) => x!.pos));
+        const labels = places.map((x) => x!.role);
+        followers.forEach((m, i) => { if (pick[i] >= 0) { m.place = labels[pick[i]]; m.path = null; } });
+      }
+    }
+    const watch = FormationCornerRules.Watch(walls, leader.pos, heading, members.map((m) => ({ role: m.place, pos: m.pos })), corner, c);
     corner = watch.state;
     const looks = mode === 'walk' && formation !== 'wall' ? watch.looks : [];
     if (looks.length) targets = targets.map((x) => ({ ...x, yaw: looks.find((l) => l.role === x.role)?.yaw ?? x.yaw }));
@@ -273,7 +291,7 @@ export function simulate(o: SimOptions): number {
     const frames: MemberFrame[] = [];
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
-      const target = targets.find((x) => x.role === m.role) ?? { role: m.role, pos: m.pos, yaw: m.yaw };
+      const target = targets.find((x) => x.role === m.place) ?? { role: m.place, pos: m.pos, yaw: m.yaw };
       let slot = target.pos;
       let slotFallback = false, slotInvalid = false;
       if (i > 0 || formation === 'wall') {
@@ -298,7 +316,7 @@ export function simulate(o: SimOptions): number {
       if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
       const moving = len(moveDir) > 0.5;
       const backwards = moving && angleDiff(yawOf(moveDir), m.yaw) > 120;
-      frames.push({ role: m.role, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.role) });
+      frames.push({ role: m.role, place: m.place, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.place) });
     }
     o.onFrame({ t, mode, formation, requested, guardLevel: guard.level, terrain, heading, leaderDistance: travelled, members: frames, bypasses });
 

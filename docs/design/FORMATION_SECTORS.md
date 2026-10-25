@@ -83,6 +83,8 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 - **Corner check = yes (user, 2026-10-25, "угол да")**: slicing the pie — nearing the free end of a wall the squad passes, the man
   closest to it looks round the corner (from 3 m before the end until 2 m past it; at a corridor exit one man per corner). It
   overrides his patrol sector only; a combat target and explicit facing orders keep priority.
+- **Places, not fixed slots (coordinator, 2026-10-25)**: on every formation change the men take the new places by the shortest
+  total walk (nobody walks through anybody); the sectors belong to the place (the man at the rear place looks at 6).
 - Bot: check 7 (squad split by a wall), 8 (passes on the shielded side), 9 (corner man in time); `--manual all` runs auto and every
   menu formation on every lab route; lab lane G has the free-standing walls and threats.
 

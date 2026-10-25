@@ -196,8 +196,10 @@ export class RunCollector {
     }
 
     // 6. pace: the rear man behind his slot (patrol, 4 members)
-    if (this.n >= 4 && f.mode === 'walk') {
-      const z = f.members.find((mem) => mem.role === 'Z');
+    // Not while the wall layout is in effect: its slots are destinations at the wall (the last arrive_dist of the leader's walk),
+    // not a formation that follows him - the old "Z 580 cm behind" worst case at a wall end was that.
+    if (this.n >= 4 && f.mode === 'walk' && f.formation !== 'wall') {
+      const z = f.members.find((mem) => mem.place === 'Z'); // the man at the rear place
       if (z) {
         const h = dirOf(f.heading), d = sub(z.slot, z.pos);
         const behind = d[0] * h[0] + d[1] * h[1];
@@ -216,9 +218,9 @@ export class RunCollector {
       if (segmentBlocked(leader.pos, mem.slot, this.segs, 0)) cut.push(`${mem.role}'s slot`);
       else if (segmentBlocked(leader.pos, mem.pos, this.segs, 0)) cut.push(mem.role);
     }
-    const chainOf: Formation = trailColumn ? (f.requested === 'echelon_right' ? 'echelon_right' : 'column') : f.formation;
-    for (const [a, b] of FormationGuardRules.ChainPairs(chainOf, this.n)) {
-      const A = f.members.find((x) => x.role === a), B = f.members.find((x) => x.role === b);
+    // Chain neighbours by PLACE (who holds which place changes with the minimal-travel assignment).
+    for (const [a, b] of FormationGuardRules.ChainPairs(trailColumn ? 'column' : f.formation, this.n)) {
+      const A = f.members.find((x) => x.place === a), B = f.members.find((x) => x.place === b);
       if (!A || !B) continue;
       if (segmentBlocked(A.pos, B.pos, this.segs, 0)) cut.push(`${a}-${b}`);
       else if (trailColumn && segmentBlocked(A.slot, B.slot, this.segs, 0)) cut.push(`${a}-${b} slots`);
