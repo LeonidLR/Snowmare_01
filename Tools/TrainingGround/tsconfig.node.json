@@ -10,7 +10,8 @@
     "jsx": "react-jsx"
   },
   "include": [
-    "src/movement/**/*.ts"
+    "src/movement/**/*.ts",
+    "server/**/*.ts"
   ],
   "exclude": [
     "src/**/*.test.ts"

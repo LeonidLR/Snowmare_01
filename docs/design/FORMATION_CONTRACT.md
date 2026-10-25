@@ -96,3 +96,10 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
 - **The wall layout only on arrival.** A wall straight ahead (`at_wall`) while the leader still walks is a corner to turn: keep
   the previous formation; switch to `FormationWallRules::Layout` when the leader stops at the wall (or on a cover order).
 
+## 8. Planned changes (not implemented yet)
+- **v2: `classify.hold_distance` (cm of the leader's path) instead of `classify.hold_time` (s).** Found by the tuner: a hold in
+  seconds shrinks in distance at a slower patrol pace, so a short wall gap flips the formation again (flicker grows when
+  `pace.patrol` drops). Coordinator decision 2026-10-25: agreed in principle, scheduled after the C++ parity on v1 lands; then
+  the TS rules, the C++ rules, `Classify`'s signature (timeInClass -> distanceInClass), the config and the golden vectors change
+  together. No code until then.
+
