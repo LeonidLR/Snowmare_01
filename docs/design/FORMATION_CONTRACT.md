@@ -59,4 +59,22 @@ report says "no model advice".
   movement simulator + bot + report (4.), golden export (3.), a SMALL sample layout for its own tests.
 - Local agent (Opus, worktree): C++ pure rules (2.) + unit tests from the design doc, then parity tests (3.).
 - Local agent (Sonnet, worktree, after 1-2 land): the big lab layout JSON (1.) + Unreal map generator script + navmesh bake.
+- Local agent (Sonnet): the real Claude API / Jev client for the tuner (6.) and the first budget-capped training runs.
 - Later: runtime integration (slots, look yaw, pace, wall pose), hold-G radial menu, in-game smoke on the lab map.
+
+## 6. Bot training on the user's API tokens (user request 2026-10-25: "use the API tokens as much as possible, train the bot through the cloud APIs")
+The tuner loop - `Tools/TrainingGround` department "movement", `npm run train -- --budget-usd <N> --rounds <N>`:
+1. simulate a series (deterministic TS, 0 tokens): every route x N seeds with the current `formation_config.json`;
+2. distil the series to a compact JSON summary (check stats, worst cases, current parameters) - never raw runs;
+3. ask the Claude API (`ANTHROPIC_API_KEY`, model `claude-opus-5-5` for proposals, `claude-sonnet-5-5` for summaries; Jev
+   `TYPESAFE_API_KEY` for typed pass/fail judgments when available) for the next parameter set as strict JSON within allowed
+   ranges (the ranges live next to the defaults in formation_config.json);
+4. keep the best set (score = weighted checks of section 4), stop on budget, on no improvement for K rounds, or on all checks green;
+5. write `Saved/TrainingGround/movement/train_report.md` (<= 30 lines: rounds, spend, best score, the winning parameters as a
+   diff) and `train_best_config.json`. A coding agent reads only train_report.md; the winning config goes into main only after
+   the coordinator's review.
+Budget: a hard cap per run (`--budget-usd`, default 5), the spend counted from the API's token usage and logged per call; the
+key is read from the environment / HKCU and never printed. The same loop pattern later serves the waves bot and the
+level-design bot (Training Ground departments).
+Where it runs: the user's PC (the key lives there). The cloud session builds the loop with a mock client (no key, no network)
+and a `--dry-run`; the coordinator's local agent wires the real client and runs the first training.
