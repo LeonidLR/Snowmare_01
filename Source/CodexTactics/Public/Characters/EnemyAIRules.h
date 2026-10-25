@@ -100,10 +100,37 @@ namespace EnemyAIRules
 	 * operatives at 1 x; large ones weigh operatives at 0.7 x and then turrets at 0.85 x (0.6 x when a turret hit
 	 * them last), also taking a turret within the threat distance unless something is clearly closer. APC P4: a Vehicle
 	 * candidate (a manned APC) competes at distance x its own Weight, right after the operatives.
+	 * Operatives first (the game designer's rule 2026-10-25): with bObjectsAllowed false (MayBeDistractedByObjects said no) a
+	 * turret is only taken when no usable operative / vehicle candidate is left. The generator keeps its Godot weight.
 	 * Returns the candidate index or INDEX_NONE.
 	 */
 	CODEXTACTICS_API int32 SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy, const FVector& Enemy,
-		const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret);
+		const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret, bool bObjectsAllowed = true);
+
+	/**
+	 * Operatives first (the game designer's rule 2026-10-25, after a lone tutorial zombie went for a barricade instead of the
+	 * operative it had engaged): an enemy may be distracted by a barricade or a turret only when every operative it could go for
+	 * (known, alive, not out of reach) already has at least AttackersPerOperativeCap OTHER enemies on him - or when there is no
+	 * such operative. OtherAttackersPerOperative holds one count per such operative. A cap <= 0 switches the rule off (always
+	 * allowed: the Godot weighting). Data: Codex.Enemy.OperativeAttackersBeforeObjects (ai_tuning.json "cvars", default 2).
+	 */
+	CODEXTACTICS_API bool MayBeDistractedByObjects(TConstArrayView<int32> OtherAttackersPerOperative, int32 AttackersPerOperativeCap);
+
+	/**
+	 * Whether an enemy stops to smash the barricade / turret in its way (SelectBlockingObstacle) instead of going on to its
+	 * target (2026-10-25): always for a target that is no operative (a turret / generator / vehicle: Godot), and for an operative
+	 * only when he cannot be reached on foot (bTargetReachable false: the barricade is the way through) or when objects may
+	 * distract it (MayBeDistractedByObjects). Otherwise it walks round the barricade to the operative.
+	 */
+	CODEXTACTICS_API bool ShouldSmashBlockingObstacle(bool bTargetIsOperative, bool bTargetReachable, bool bObjectsAllowed);
+
+	/**
+	 * Reachability of a melee target (2026-10-25): the enemy's navmesh path towards the target ends at PathEnd (its feet there);
+	 * the target counts as reached when it could bite from there - CanMelee against the target's Godot position (1 m above his
+	 * feet), with HeightSlackCm of navmesh height noise forgiven (never a false "unreachable" from a navmesh lying a few cm
+	 * under the ground). A full path that ends at the target passes; a partial one stopped short by a closed barricade line fails.
+	 */
+	CODEXTACTICS_API bool PathEndReachesTarget(const FVector& PathEnd, const FVector& Target, float AttackRangeCm, float HeightSlackCm = 30.f);
 
 	/**
 	 * Godot _find_blocking_barricade: the closest obstacle within 2.2 m that lies towards the target (dot > 0.15), or

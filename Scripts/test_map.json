@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -95,6 +95,31 @@
   },
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots"],
   "rules": [
+    {
+      "name": "enemy-operatives-first-2026-10-25",
+      "globs": [
+        "Source/**/Debug/EnemyPrioritySmoke*",
+        "Source/**/Characters/EnemyCharacterBehavior*",
+        "Source/**/Characters/EnemyAIRules*",
+        "Source/**/Interactables/VaultNavigation*",
+        "Content/Data/AI/ai_tuning.json"
+      ],
+      "tests": [
+        "CodexTactics.Characters.EnemyAI",
+        "CodexTactics.Interactables"
+      ],
+      "smokes": [
+        "EnemyPrioritySmoke",
+        "EnemyAISmoke",
+        "BarricadeVaultBackSmoke",
+        "VaultSmoke",
+        "TurretSmoke",
+        "DefendSmoke",
+        "EnemyTacticsSmoke",
+        "MilitaryZombieSmoke",
+        "TutorialAmbushLakeSmoke"
+      ]
+    },
     {
       "name": "ladders-2026-10-22",
       "globs": [

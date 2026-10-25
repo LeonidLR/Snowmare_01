@@ -6,7 +6,7 @@
 >
 > Key files:
 > - `Combat/EnemyRegistrySubsystem`, `EnemyRegistryRules`, `Characters/EnemyTacticsRules`, `Characters/EnemyCharacter`, `EnemyAIController`
-> - Data `Content/Data/AI/ai_tuning.json`; smokes `EnemyAISmoke`, `EnemyTacticsSmoke`, `EnemyArchetypeSmoke`, `PmcFighterSmoke` (Frozen PMC Fighter), `MilitaryZombieSmoke` (Military Zombie, last section)
+> - Data `Content/Data/AI/ai_tuning.json`; smokes `EnemyPrioritySmoke` (operatives first, last section), `EnemyAISmoke`, `EnemyTacticsSmoke`, `EnemyArchetypeSmoke`, `PmcFighterSmoke` (Frozen PMC Fighter), `MilitaryZombieSmoke` (Military Zombie, last section)
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
@@ -100,3 +100,52 @@ idempotent, never overwrites a saved asset; `CODEX_MZ_REAPPLY=1` re-applies the 
 - Code: `Private/Characters/EnemyCharacterPerformance.cpp` (new unit), pure rules `Characters/EnemyAnimRules` (tests
   `CodexTactics.Characters.EnemyAnim.*`); asset test `CodexTactics.Characters.EnemyAssets.MilitaryZombie`; smoke `MilitaryZombieSmoke`
   (`Saved/Screenshots/military_zombie_*.png`). Animation route and clip roles: [animation-setup](animation-setup.md) "Military Zombie".
+
+## Operatives first (game designer 2026-10-25, branch agents/enemy-priority)
+
+**Report** (packaged build, Demo 01 tutorial, the A4 lake zombie): "when it switched to combat it once attacked the barricade instead of me.
+Hard-code it: with a barricade or a turret around they must ALWAYS attack the player, an operative, first; only when enough other enemies
+already attack the operative may one be distracted by the barricade or the turret."
+
+**Cause (two parts).** (1) The Godot rule `_find_blocking_barricade` (`AEnemyCharacter::FindBlockingObstacle` + `TickBehavior` step 1): ANY
+live barricade / turret within 2.2 m roughly towards the target (dot > 0.15) is smashed first - Godot enemies cannot walk round a barricade,
+UE enemies path round it on the navmesh. (2) The barricade's vault nav area (closed to enemies, `UNavFilter_NoVault`) was not the barricade:
+`VaultNavigation::MakeVaultable` takes the box off the navmesh before adding the `UNavModifierComponent`, whose bounds then fall back to its
+`FailsafeExtent` - a 2 x 2 m square round the middle of a 3 m box. The last 50 cm of each end were open navmesh under a solid box, so an
+enemy going round the barricade walked into its end, stuck there within 2.2 m, and the Godot rule made it hack at the barricade. Also: small
+enemies (hounds, cutters, frostbitten - the Military Zombie is a Frostbitten) weigh a turret at 0.5 x its distance, large ones take a turret
+within 10 m (Godot `_find_closest_squad_member`), so a lone enemy left the operative for a turret.
+
+**Rule now** (pure `EnemyAIRules`, tests `CodexTactics.Characters.EnemyAI.OperativesFirst.*`):
+- `MayBeDistractedByObjects(OtherAttackersPerOperative, Cap)`: a barricade / turret may take an enemy off the squad only when EVERY operative it
+  could go for (known, alive, not on its no-way list, not in a feared fire zone) already has at least `Cap` OTHER enemies on him (their current
+  target), or when there is no such operative. Computed in `FindTarget` (registry walk), kept as `IsObjectDistractionAllowed()`.
+- `SelectTarget(..., bObjectsAllowed)`: not allowed -> a turret is taken only when no usable operative / manned APC candidate is left. The
+  generator keeps its Godot weight (0.4 x distance for small enemies, the wave objective - not a barricade / turret; changing it is a design
+  question). A horde still ignores objects while it knows the squad.
+- `ShouldSmashBlockingObstacle(bTargetIsOperative, bReachable, bAllowed)`: the barricade / turret in the way is smashed for an operative target
+  only when he cannot be reached on foot or objects are allowed; any other target keeps the Godot rule.
+- Reachability `AEnemyCharacter::IsTargetReachableOnFoot` (cached 0.5 s): a navmesh path query with the enemy's own filter, partial paths
+  allowed, goal projected WITH that filter (a crouched operative's feet in the vault strip snap to his side, never a false "unreachable" at a
+  cover spot); reachable when `PathEndReachesTarget` (the bite test `CanMelee` from the path end, 30 cm navmesh height slack). Unreachable
+  also while the stuck detector has him on its no-way list (3 s without 1 m of progress -> 8 s). No navmesh / off-mesh / failed query =
+  reachable (no evidence against the squad; the stuck detector decides). The query only runs for an obstacle next to an enemy that may not
+  be distracted. A skipped obstacle logs `[EnemyAI] <enemy>: <obstacle> is in the way but <op> is reachable on foot - round it` once.
+- Vault area = the real obstacle: `VaultRules::NavAreaExtent` (actor-space collision bounds x scale, mirrored round the pivot, + 40 cm
+  `NavAreaPaddingCm` = an enemy capsule radius on X / Y, + 50 cm down) as the modifier's failsafe box. A barricade: 3.8 x 1.4 m (was 2 x 2 m).
+  Applies to level objects tagged `Vault` as well (they had the same 2 x 2 m square whatever their size).
+- Turrets were never reached on foot: the box cuts a navmesh hole wider than the 50 cm move query, `MoveToActor` failed ("no way to
+  TurretActor" after 3 s, every time). An enemy going for a turret now walks to `FindObjectApproachPoint` (just outside it on its side, else
+  the nearest navmesh point round it) and hits it from there.
+
+**Tunable:** `Codex.Enemy.OperativeAttackersBeforeObjects` - code default **2**, game value in `Content/Data/AI/ai_tuning.json` "cvars"
+(`"2"`), editable in the Wave Editor stealth / combat tab (`Tools/WaveEditor/src/utils/stealthCombat.ts` `CVARS`); `-dpcvars=` wins;
+**0 = the old Godot weighting** (A/B). Turn-based enemies only ever target operatives (`TurnBasedCombatSubsystem` `ChooseTarget`), unchanged.
+
+**Checks:** unit tests `CodexTactics.Characters.EnemyAI.OperativesFirst.{Saturation, TargetPick, BlockingObstacle, Reachability,
+VaultAreaCoversBarricade, CapByData}`; smoke `EnemyPrioritySmoke` (L_MovementTest, own arena): vault area 190 x 70 cm, the enemy path round
+clears the box (76 cm); a lone Frostbitten with a turret 3.6 m off and a barricade between it and the commander picks him, walks round
+(3.3 s), barricade and turret untouched; cap - 1 others on the commander -> still an operative, cap on everyone -> the turret, hit within
+1 s; a saturated extra one in front of the barricade smashes it; a closed ring of barricades round the commander -> unreachable (a mate
+outside reachable), a lone enemy smashes its way in. `EnemyAISmoke` now checks the opposite of its old turret / barricade stages (a lone hound
+ignores a close turret, a lone brute leaves a free-standing barricade alone).

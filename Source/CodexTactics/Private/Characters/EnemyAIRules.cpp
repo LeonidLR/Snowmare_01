@@ -104,10 +104,17 @@ FString EnemyAIRules::NormalizeKnockdownClipFolder(const FString& Folder)
 }
 
 int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy, const FVector& Enemy,
-	const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret)
+	const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret, bool bObjectsAllowed)
 {
 	int32 Best = INDEX_NONE;
 	float MinDistance = 999900.f;
+	// Operatives first (2026-10-25): a turret only distracts when allowed, or when no operative / manned vehicle is left to go for.
+	bool bSquadTarget = false;
+	for (const FEnemyTargetCandidate& Candidate : Candidates)
+	{
+		bSquadTarget |= Candidate.bUsable && (Candidate.Kind == EEnemyTargetKind::Operative || Candidate.Kind == EEnemyTargetKind::Vehicle);
+	}
+	const bool bTurrets = Config.bCanTargetTurrets && (bObjectsAllowed || !bSquadTarget);
 	auto Consider = [&](EEnemyTargetKind Kind, float Weight)
 	{
 		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
@@ -127,7 +134,7 @@ int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy,
 	if (bSmallEnemy)
 	{
 		Consider(EEnemyTargetKind::Generator, 0.4f);
-		if (Config.bCanTargetTurrets)
+		if (bTurrets)
 		{
 			Consider(EEnemyTargetKind::Turret, 0.5f);
 		}
@@ -147,7 +154,7 @@ int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy,
 			}
 		}
 	}
-	if (!bSmallEnemy && Config.bCanTargetTurrets)
+	if (!bSmallEnemy && bTurrets)
 	{
 		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
 		{
@@ -166,6 +173,33 @@ int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy,
 		}
 	}
 	return Best;
+}
+
+bool EnemyAIRules::MayBeDistractedByObjects(TConstArrayView<int32> OtherAttackersPerOperative, int32 AttackersPerOperativeCap)
+{
+	if (AttackersPerOperativeCap <= 0)
+	{
+		return true; // the rule is off: the Godot weighting
+	}
+	for (const int32 Attackers : OtherAttackersPerOperative)
+	{
+		if (Attackers < AttackersPerOperativeCap)
+		{
+			return false; // an operative still has room: he comes first
+		}
+	}
+	return true; // every operative is busy (or there is none to go for)
+}
+
+bool EnemyAIRules::ShouldSmashBlockingObstacle(bool bTargetIsOperative, bool bTargetReachable, bool bObjectsAllowed)
+{
+	return !bTargetIsOperative || !bTargetReachable || bObjectsAllowed;
+}
+
+bool EnemyAIRules::PathEndReachesTarget(const FVector& PathEnd, const FVector& Target, float AttackRangeCm, float HeightSlackCm)
+{
+	const float Height = FMath::Max(0.f, FMath::Abs(Target.Z - PathEnd.Z) - FMath::Max(0.f, HeightSlackCm));
+	return CanMelee(FMath::Sqrt(FMath::Square(FVector::Dist2D(PathEnd, Target)) + FMath::Square(Height)), Height, AttackRangeCm);
 }
 
 int32 EnemyAIRules::SelectBlockingObstacle(const FVector& Enemy, const FVector* Target, const TArray<FVector>& Obstacles)

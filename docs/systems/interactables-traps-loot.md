@@ -33,6 +33,9 @@
   routing. `BarricadeActor` (200 HP, tripwire on enemy contact 1.8 m). `ProximityMineActor` (trigger 1.6 m, blast
   120 / 3.5 m, arming 3 s for squad mines, hidden level mines spotted at 4.5 m / sapper 6 m).
   Godot `deployables/barricade.gd`, `mine.gd`.
+  2026-10-25: the barricade's vault nav area (`VaultNavigation::MakeVaultable`, closed to enemies) covers its whole box + 40 cm
+  (`VaultRules::NavAreaExtent`; it was a 2 x 2 m square, the ends open to enemy paths), and enemies smash a barricade in the way of an
+  operative only when he is unreachable on foot or the squad is saturated - [enemy-ai-and-perception](enemy-ai-and-perception.md) "Operatives first".
 - `Interactables/LootCrateActor` + `LootRules` (`FLootContents`, `ELootItem`, `FLootEntry`) — supply crate: intact →
   `HandleDirectInteraction` opens the lid (1.8 s) and the loot dialog, trapped → defusal menu (2 s crouched work),
   detonation burns the contents, enemy contact 1.8 m, tiers Standard / Maximal, Godot colours. Items go to the

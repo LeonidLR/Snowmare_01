@@ -31,4 +31,16 @@ namespace VaultRules
 
 	/** Position at Alpha (0..1): smoothstep along the ground from Start to Landing, lifted by the sine arc over Height. */
 	CODEXTACTICS_API FVector Position(const FVector& Start, const FVector& Landing, float Height, float Alpha);
+
+	/** Margin of an obstacle's vault nav area round its collision: an enemy capsule radius, so the enemies' paths round it clear the box. */
+	constexpr float NavAreaPaddingCm = 40.f;
+
+	/**
+	 * Half-size of the vault nav area of an obstacle (VaultNavigation::MakeVaultable; the nav modifier's failsafe box, centred on the
+	 * actor, in its rotated frame, world units), 2026-10-25: the collision bounds in actor space (LocalBounds) scaled by the actor's
+	 * Scale, mirrored to cover both sides of the pivot, plus PaddingCm on X / Y and 50 cm on Z (down through the navmesh surface).
+	 * An invalid LocalBounds gives the engine's failsafe (100, 100, 100) - which every vault area was before: the last 50 cm of
+	 * each end of a 3 m barricade lay outside it, open navmesh for the enemies under a solid box.
+	 */
+	CODEXTACTICS_API FVector NavAreaExtent(const FBox& LocalBounds, const FVector& Scale, float PaddingCm = NavAreaPaddingCm);
 }

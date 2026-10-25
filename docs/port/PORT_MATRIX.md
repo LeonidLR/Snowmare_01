@@ -111,6 +111,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | Wave rest | `is_wave_active` and `is_preparation_active` both true | `Preparation` phase with next wave index | User, 2026-09-28 — same behaviour |
 | Pathing | Straight line to target, wall sliding, whisker steering, leader breadcrumbs, collider phasing | NavMesh pathfinding + Detour Crowd avoidance | User, 2026-09-28 |
 | Stamina | Described in GDD / unused `movement_component.gd`; not active in `player.gd` | No stamina; sprint limited by cold and wounds only | User, 2026-09-28 |
+| Enemy target choice vs barricades / turrets | Small enemies weigh a turret at 0.5 x distance, large ones take one within 10 m; any barricade / turret within 2.2 m towards the target is smashed first (`_find_closest_squad_member`, `_find_blocking_barricade`) | Operatives first: a barricade / turret distracts an enemy only when every operative it could go for has `Codex.Enemy.OperativeAttackersBeforeObjects` (default 2) others on him or he is unreachable on foot (`EnemyAIRules::MayBeDistractedByObjects`, `IsTargetReachableOnFoot`); 0 = Godot. Generator weight unchanged | Game designer, 2026-10-25 |
 
 ## 2026-09-30 — user art wired
 - Operatives: ABP_Operative on RifleAnims (stand / crouch / aim blend spaces, fire / reload on the upper body), outfits per member.
