@@ -111,3 +111,6 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
 
 export const goldenFileName = (rule: GoldenRule): string => `formation_${rule}.json`;
 export const goldenText = (file: GoldenFile): string => JSON.stringify(file, null, 1) + '\n';
+
+/** Line endings normalised (a Windows checkout with core.autocrlf may hold CRLF). */
+export const sameGoldenText = (onDisk: string, expected: string): boolean => onDisk.replace(/\r\n/g, '\n') === expected;

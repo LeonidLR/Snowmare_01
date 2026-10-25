@@ -15,3 +15,7 @@
 *.wav  filter=lfs diff=lfs merge=lfs -text
 *.ogg  filter=lfs diff=lfs merge=lfs -text
 *.mp4  filter=lfs diff=lfs merge=lfs -text
+
+# Training Ground formation data: byte-compared by the golden check and read by C++ parity tests on every OS
+Tools/TrainingGround/golden/*.json text eol=lf
+Content/Data/FormationLab/*.json text eol=lf
