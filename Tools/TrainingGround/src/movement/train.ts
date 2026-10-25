@@ -27,7 +27,7 @@ export interface TrainOptions {
   log?: (line: string) => void;
 }
 
-export interface CallRecord { round: number; model: string; inputTokens: number; outputTokens: number; costUsd: number; error?: string }
+export interface CallRecord { round: number; purpose: string; model: string; inputTokens: number; outputTokens: number; costUsd: number; error?: string }
 
 export interface TrainResult {
   baseline: { score: number; summary: SeriesSummary };
@@ -93,12 +93,12 @@ export async function train(o: TrainOptions): Promise<TrainResult> {
       const reply = await o.client.complete(req);
       lastCost = reply.costUsd;
       result.spendUsd = round(result.spendUsd + reply.costUsd, 6);
-      result.calls.push({ round: r, model: req.model, inputTokens: reply.usage.input_tokens, outputTokens: reply.usage.output_tokens, costUsd: reply.costUsd });
+      result.calls.push({ round: r, purpose: req.purpose, model: req.model, inputTokens: reply.usage.input_tokens, outputTokens: reply.usage.output_tokens, costUsd: reply.costUsd });
       log(`[train] round ${r}: ${req.model} ${reply.usage.input_tokens} in / ${reply.usage.output_tokens} out, $${reply.costUsd.toFixed(4)} (total $${result.spendUsd.toFixed(4)})`);
       ({ params: changed, reason } = parsePropose(reply.text, tunable));
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
-      result.calls.push({ round: r, model: req.model, inputTokens: 0, outputTokens: 0, costUsd: 0, error });
+      result.calls.push({ round: r, purpose: req.purpose, model: req.model, inputTokens: 0, outputTokens: 0, costUsd: 0, error });
       log(`[train] round ${r}: ${error}`);
     }
     if (error || !Object.keys(changed).length) {
