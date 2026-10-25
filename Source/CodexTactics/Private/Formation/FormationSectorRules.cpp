@@ -26,7 +26,8 @@ namespace FormationSectorRules
 		}
 	}
 
-	float LookOffset(EFormationRole Role, EFormationKind Formation, EFormationMode Mode, int32 MemberCount, float TimeInPatrol, const FFormationConfig& Config)
+	float LookOffset(EFormationRole Role, EFormationKind Formation, EFormationMode Mode, int32 MemberCount, float TimeInPatrol,
+		const TOptional<float>& PassageWidth, const FFormationConfig& Config)
 	{
 		const int32 N = MemberCount;
 		const bool bK = Role == EFormationRole::Commander;
@@ -97,6 +98,11 @@ namespace FormationSectorRules
 			{
 				return 180.f;
 			}
+			if (PassageWidth.IsSet() && PassageWidth.GetValue() < Config.ColumnNarrowWidth)
+			{
+				// Narrow passage: nobody looks into the walls - P forward over the shoulder, L back at a slant.
+				return bP ? Config.ColumnNarrowFwdDeg : -Config.ColumnNarrowBackDeg;
+			}
 			return (bP ? 1.f : -1.f) * Config.ColumnSideDeg;
 		case EFormationKind::Line:
 		{
@@ -138,9 +144,9 @@ namespace FormationSectorRules
 	}
 
 	float LookYaw(EFormationRole Role, EFormationKind Formation, EFormationMode Mode, int32 MemberCount, float TimeInPatrol, float LeaderYaw,
-		const FFormationConfig& Config)
+		const TOptional<float>& PassageWidth, const FFormationConfig& Config)
 	{
-		return FRotator::NormalizeAxis(LeaderYaw + LookOffset(Role, Formation, Mode, MemberCount, TimeInPatrol, Config));
+		return FRotator::NormalizeAxis(LeaderYaw + LookOffset(Role, Formation, Mode, MemberCount, TimeInPatrol, PassageWidth, Config));
 	}
 
 	float SquadPace(EFormationMode Mode, const FFormationConfig& Config)

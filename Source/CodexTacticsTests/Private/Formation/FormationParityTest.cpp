@@ -1,5 +1,5 @@
 // CodexTactics.Formation.Parity.<Rule> - the C++ formation rules against the golden vectors the Training Ground simulator exports
-// (`npm run golden`): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
+// (`npm run golden`; v1.1 adds PassageWidth): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
 // (docs/design/FORMATION_CONTRACT.md 3, field names in 3.1). Same inputs -> same outputs within the file's tolerance (cm / deg; yaws
 // compared as angles). The rules' config is built from the file's "config_values" (the snapshot the vectors were computed with), so
 // later tuning of formation_config.json cannot break parity. A missing file: a warning, the test passes. Every case is checked (none is
@@ -141,6 +141,39 @@ namespace FormationParityUtil
 		}
 		double Thickness = 0.0;
 		Out.Thickness = (*Object)->TryGetNumberField(TEXT("thickness"), Thickness) ? static_cast<float>(Thickness) : 0.f;
+		return true;
+	}
+
+	bool ReadWalls(const TArray<TSharedPtr<FJsonValue>>& Values, TArray<FFormationWall>& Out)
+	{
+		Out.Reset();
+		for (const TSharedPtr<FJsonValue>& Value : Values)
+		{
+			FFormationWall Wall;
+			if (!ReadWall(Value, Wall))
+			{
+				return false;
+			}
+			Out.Add(Wall);
+		}
+		return true;
+	}
+
+	/** A number or null / missing (unset); false when it is something else. */
+	bool OptionalNumber(const FJsonObject& Object, const TCHAR* Name, const TCHAR* Alias, TOptional<float>& Out)
+	{
+		Out.Reset();
+		const TSharedPtr<FJsonValue> Value = Field(Object, Name, Alias);
+		if (!Value.IsValid() || Value->IsNull())
+		{
+			return true;
+		}
+		double Parsed = 0.0;
+		if (!Value->TryGetNumber(Parsed))
+		{
+			return false;
+		}
+		Out = static_cast<float>(Parsed);
 		return true;
 	}
 
@@ -295,8 +328,13 @@ bool FFormationParityLookYawTest::RunTest(const FString&)
 		{
 			return TEXT("unreadable input / output");
 		}
+		TOptional<float> Width;
+		if (!OptionalNumber(*In, TEXT("passageWidth"), TEXT("passage_width"), Width))
+		{
+			return TEXT("passageWidth is neither a number nor null");
+		}
 		const float Actual = FormationSectorRules::LookYaw(Role, Formation, Mode, static_cast<int32>(Count), static_cast<float>(Time), static_cast<float>(LeaderYaw),
-			Golden.Config);
+			Width, Golden.Config);
 		return AngleDiff(Actual, Expected) <= Golden.TolDeg ? FString() : FString::Printf(TEXT("yaw %.3f, expected %.3f"), Actual, Expected);
 	});
 }
@@ -326,14 +364,9 @@ bool FFormationParityClassifyTest::RunTest(const FString&)
 			return TEXT("unreadable input / output");
 		}
 		TArray<FFormationWall> Walls;
-		for (const TSharedPtr<FJsonValue>& Value : *WallValues)
+		if (!ReadWalls(*WallValues, Walls))
 		{
-			FFormationWall Wall;
-			if (!FormationParityUtil::ReadWall(Value, Wall))
-			{
-				return TEXT("unreadable wall");
-			}
-			Walls.Add(Wall);
+			return TEXT("unreadable wall");
 		}
 		TOptional<EFormationTerrainClass> Previous;
 		const TSharedPtr<FJsonValue> PreviousValue = Field(*In, TEXT("previousClass"), TEXT("previous_class"));
@@ -350,6 +383,35 @@ bool FFormationParityClassifyTest::RunTest(const FString&)
 		const EFormationTerrainClass Actual = FormationTerrainRules::Classify(Walls, Pos, static_cast<float>(Yaw), Previous, static_cast<float>(TimeInClass), Golden.Config);
 		return Actual == Expected ? FString() : FString::Printf(TEXT("class %s (raw %s), expected %s"), FormationNames::ToString(Actual),
 			FormationNames::ToString(FormationTerrainRules::ClassifyRaw(Walls, Pos, static_cast<float>(Yaw), Golden.Config)), *ExpectedName);
+	});
+}
+
+FORMATION_PARITY_TEST(FFormationParityPassageWidthTest, "PassageWidth")
+bool FFormationParityPassageWidthTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("PassageWidth"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("PassageWidth"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
+		FVector2D Pos;
+		double Yaw = 0.0;
+		TOptional<float> Expected;
+		TArray<FFormationWall> Walls;
+		if (!In->TryGetArrayField(TEXT("walls"), WallValues) || !ReadWalls(*WallValues, Walls) || !Vec2(Field(*In, TEXT("leaderPos"), TEXT("leader_pos")), Pos)
+			|| !Number(*In, TEXT("leaderYaw"), TEXT("leader_yaw"), Yaw) || !Out->HasField(TEXT("width")) || !OptionalNumber(*Out, TEXT("width"), nullptr, Expected))
+		{
+			return TEXT("unreadable input / output");
+		}
+		const TOptional<float> Actual = FormationTerrainRules::PassageWidth(Walls, Pos, static_cast<float>(Yaw), Golden.Config);
+		const auto Show = [](const TOptional<float>& Value) { return Value.IsSet() ? FString::Printf(TEXT("%.3f"), Value.GetValue()) : FString(TEXT("null")); };
+		const bool bSame = Actual.IsSet() == Expected.IsSet() && (!Actual.IsSet() || FMath::Abs(Actual.GetValue() - Expected.GetValue()) <= Golden.TolCm);
+		return bSame ? FString() : FString::Printf(TEXT("width %s, expected %s"), *Show(Actual), *Show(Expected));
 	});
 }
 

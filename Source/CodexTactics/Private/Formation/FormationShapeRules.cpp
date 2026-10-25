@@ -142,7 +142,7 @@ namespace FormationShapeRules
 			FFormationSlot Slot;
 			Slot.Role = Role;
 			Slot.Position = FormationMath::Offset(LeaderPos, LeaderYaw, static_cast<float>(Local.X), static_cast<float>(Local.Y));
-			Slot.Yaw = FormationSectorRules::LookYaw(Role, Formation, EFormationMode::Halt, MemberCount, 0.f, LeaderYaw, Config);
+			Slot.Yaw = FormationSectorRules::LookYaw(Role, Formation, EFormationMode::Halt, MemberCount, 0.f, LeaderYaw, TOptional<float>(), Config);
 			Result.Add(Slot);
 		}
 		return Result;
