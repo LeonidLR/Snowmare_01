@@ -1,0 +1,26 @@
+{
+  "$schema": "../Schemas/level_config.schema.json",
+  "level_id": "L_FormationLab",
+  "level_name": "Formation Lab",
+  "description": "Test map for the squad formations and look sectors (docs/design/FORMATION_SECTORS.md, built by Scripts/Editor/build_formation_lab.py from Content/Data/FormationLab/formation_lab_01.json). Movement only: the fight never starts by itself (combat_start button), no cold (cold_rate_mult 0), no intro briefing. ONE small wave only because the level file must hold a valid wave (an empty list falls back to the built-in waves; CodexTactics.LevelJson.AllFilesParse).",
+  "combat_start": "button",
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "cold_rate_mult": 0,
+  "intro_dialogue": false,
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        { "enemy_type": "FROSTBITTEN", "count": 2, "spawn_lane": "ANY", "spawn_delay_sec": 1, "initial_delay_sec": 0 }
+      ],
+      "wave_modifiers": { "enemy_hp_mult": 1, "enemy_damage_mult": 1, "enemy_speed_mult": 1, "cold_drain_mult": 1 }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  }
+}
