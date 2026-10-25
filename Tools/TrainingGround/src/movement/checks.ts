@@ -17,9 +17,9 @@ export const LIMITS = {
   rearCoverPct: 90, // % of patrol time, 4 members (contract)
   rearMargin: 30, // the 5-7 o'clock sector (60 deg) must sit inside a cone: centre within fov / 2 - 30
   flickerPer100m: 1, // unexpected formation changes per 100 m (contract)
-  flickerRevert: 2, // a change undone within 2 x classify.hold_time is a flicker
+  flickerRevert: 2, // a change undone within 2 x classify.hold_distance of the leader's path is a flicker
   expectLookAhead: 500, // cm: a change into the formation expected just ahead counts as expected
-  expectSettleExtra: 0.5, // s after entering a zone (plus classify.hold_time) before matching counts
+  expectSettleCm: 100, // cm of path after entering a zone (plus classify.hold_distance for an open-ground expectation) before matching counts; standing: 0.5 s
   expectPct: 80, // % of settled time in the zone with the expected formation
   spacingMinSeconds: 0.5,
   paceBehind: 150, // cm (contract), checked on the 95th percentile
@@ -59,7 +59,8 @@ export class RunCollector {
   private stareCounted = new Set<string>();
   private m: RunMetrics;
   private prevFormation: Formation | null = null;
-  private lastChange: { t: number; from: Formation; what: string } | null = null;
+  private lastChange: { t: number; d: number; from: Formation; what: string } | null = null;
+  private haltStart: number | null = null;
   private zoneEnter = new Map<string, number>();
   private expectAcc = new Map<string, { settled: number; match: number }>();
   private spacingTimer = new Map<string, number>();
@@ -116,27 +117,33 @@ export class RunCollector {
     }
 
     // 3. flicker + 4. expected formation per zone
+    if (f.mode === 'halt' || f.mode === 'wall') this.haltStart ??= f.t; else this.haltStart = null;
     const zone = zoneAt(this.layout, leader.pos);
     // A change is unexpected when it contradicts the expectation of the zone the leader is in / about to enter, or when it
-    // is reverted within LIMITS.flickerRevert x hold_time (a real flicker); a lasting change on unlabelled ground is fine.
+    // is reverted within LIMITS.flickerRevert x hold_distance of path (a real flicker); a lasting change on open ground is fine.
     if (this.prevFormation && f.formation !== this.prevFormation) {
       this.m.flicker.changes++;
       const ahead: Vec2 = [leader.pos[0] + dirOf(f.heading)[0] * LIMITS.expectLookAhead, leader.pos[1] + dirOf(f.heading)[1] * LIMITS.expectLookAhead];
       const zones = [zone, zoneAt(this.layout, ahead)].filter(Boolean).map((z) => z!.id);
       const wants = (this.route.expect ?? []).filter((e) => zones.includes(e.zone));
       const what = `${this.prevFormation} -> ${f.formation}${zone ? ` in ${zone.id}` : ''}`;
-      const reverted = this.lastChange && f.t - this.lastChange.t < LIMITS.flickerRevert * cfg(this.c, 'classify.hold_time') &&
+      const reverted = this.lastChange && f.leaderDistance - this.lastChange.d < LIMITS.flickerRevert * cfg(this.c, 'classify.hold_distance') &&
         sameFormation(this.lastChange.from, f.formation);
       if (reverted) this.unexpected(f.t, `${this.lastChange!.what}, back after ${round(f.t - this.lastChange!.t, 1)} s`);
       else if (wants.length && !wants.some((e) => sameFormation(e.formation, f.formation))) this.unexpected(f.t, `${what} (zone wants ${wants[0].formation})`);
-      this.lastChange = { t: f.t, from: this.prevFormation, what };
+      this.lastChange = { t: f.t, d: f.leaderDistance, from: this.prevFormation, what };
     }
     this.prevFormation = f.formation;
     for (const e of this.route.expect ?? []) {
       const key = e.zone;
       if (zone?.id === key) {
-        if (!this.zoneEnter.has(key)) this.zoneEnter.set(key, f.t);
-        if (f.t - this.zoneEnter.get(key)! >= cfg(this.c, 'classify.hold_time') + LIMITS.expectSettleExtra) {
+        if (!this.zoneEnter.has(key)) this.zoneEnter.set(key, f.leaderDistance);
+        const walkedIn = f.leaderDistance - this.zoneEnter.get(key)!;
+        const halted = this.haltStart !== null && f.t - this.haltStart >= 0.5;
+        // Tighter classes (echelon, column, wall) take over at once (v2); only a looser expectation waits for hold_distance.
+        const looser = sameFormation(e.formation, 'diamond') || e.formation === 'blizzard';
+        const settleCm = LIMITS.expectSettleCm + (looser ? cfg(this.c, 'classify.hold_distance') : 0);
+        if (walkedIn >= settleCm || halted) {
           const acc = this.expectAcc.get(key) ?? { settled: 0, match: 0 };
           acc.settled += SIM_DT;
           if (sameFormation(f.formation, e.formation)) acc.match += SIM_DT;

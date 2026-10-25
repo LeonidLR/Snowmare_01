@@ -37,7 +37,8 @@ test('budget: a paid client stops before the next call would exceed the cap; spe
   const paid: ModelClient = {
     name: 'paid',
     async complete() {
-      return { text: '{"params": {"pace.patrol": 0.7}, "reason": "x"}', usage: { input_tokens: 1000, output_tokens: 50 }, costUsd: 0.4 };
+      // A change that moves no check (the hedgehog is not walked), so only the budget can stop the loop.
+      return { text: '{"params": {"hedgehog.radius": 140}, "reason": "x"}', usage: { input_tokens: 1000, output_tokens: 50 }, costUsd: 0.4 };
     },
   };
   const res = await train({ ...base, client: paid, dryRun: false, budgetUsd: 1, rounds: 10, patience: 10 });

@@ -91,51 +91,107 @@ bool FFormationTerrainRayTest::RunTest(const FString&)
 	return true;
 }
 
-FORMATION_TERRAIN_TEST(FFormationTerrainHysteresisTest, "HysteresisHoldsTheClassForTheHoldTime")
+FORMATION_TERRAIN_TEST(FFormationTerrainHysteresisTest, "PathHoldTighterAtOnceLooserAfterTheHoldDistance")
 bool FFormationTerrainHysteresisTest::RunTest(const FString&)
 {
 	using namespace FormationTerrainTestUtil;
 	const FFormationConfig Config;
-	const float Hold = Config.ClassifyHoldTime;
-	const TArray<FFormationWall> None;
-	TestEqual(TEXT("Within the hold time the previous class stays"), FormationTerrainRules::Classify(None, FVector2D::ZeroVector, 0.f,
-		EFormationTerrainClass::WallLeft, 0.5f * Hold, Config), EFormationTerrainClass::WallLeft);
-	TestEqual(TEXT("After it the raw class wins"), FormationTerrainRules::Classify(None, FVector2D::ZeroVector, 0.f,
-		EFormationTerrainClass::WallLeft, Hold, Config), EFormationTerrainClass::Open);
-	TestEqual(TEXT("No history: the raw class at once"), FormationTerrainRules::Classify(None, FVector2D::ZeroVector, 0.f,
-		TOptional<EFormationTerrainClass>(), 0.f, Config), EFormationTerrainClass::Open);
-
-	// Tracker over frames: walk along a left wall, then into the open. The class holds for the hold time after entering it.
-	FFormationTerrainTracker Tracker;
-	const TArray<FFormationWall> LeftWall = { MakeWall(-2000.0, -300.0, 2000.0, -300.0) };
-	TestEqual(TEXT("Tracker starts with the raw class"), Tracker.Step(LeftWall, FVector2D::ZeroVector, 0.f, 0.1f, Config), EFormationTerrainClass::WallLeft);
-	// Out of the wall's reach after 0.3 s: still wall_left until the hold time since entering it has passed.
-	float Elapsed = 0.f;
-	EFormationTerrainClass Seen = EFormationTerrainClass::WallLeft;
-	float SwitchTime = -1.f;
-	for (int32 Frame = 0; Frame < 40; ++Frame)
+	const float Hold = Config.ClassifyHoldDistance;
+	using EC = EFormationTerrainClass;
+	const auto State = [](EC Current)
 	{
-		const float Dt = 0.05f;
-		Elapsed += Dt;
-		Seen = Tracker.Step(None, FVector2D::ZeroVector, 0.f, Dt, Config);
-		if (Seen == EFormationTerrainClass::Open && SwitchTime < 0.f)
+		FFormationClassifyState Out;
+		Out.Current = Current;
+		return Out;
+	};
+	TestTrue(TEXT("Ranks open < wall beside < passage < at wall"), FormationTerrainRules::ClassRank(EC::Open) == 0 && FormationTerrainRules::ClassRank(EC::WallLeft) == 1
+		&& FormationTerrainRules::ClassRank(EC::WallRight) == 1 && FormationTerrainRules::ClassRank(EC::Corridor) == 2 && FormationTerrainRules::ClassRank(EC::AtWall) == 3);
+	// No history: the raw class at once.
+	TestTrue(TEXT("Start: the raw class at once"), FormationTerrainRules::AdvanceState(EC::WallLeft, TOptional<float>(), FFormationClassifyState(), 0.f, Config).Current
+		== TOptional<EC>(EC::WallLeft));
+	// Tighter at once, even standing still.
+	TestTrue(TEXT("Open -> wall beside at once"), FormationTerrainRules::AdvanceState(EC::WallLeft, TOptional<float>(), State(EC::Open), 0.f, Config).Current == TOptional<EC>(EC::WallLeft));
+	const FFormationClassifyState IntoPassage = FormationTerrainRules::AdvanceState(EC::Corridor, TOptional<float>(460.f), State(EC::WallLeft), 10.f, Config);
+	TestTrue(TEXT("Wall beside -> passage at once, with its width"), IntoPassage.Current == TOptional<EC>(EC::Corridor) && IntoPassage.PassageWidth == TOptional<float>(460.f)
+		&& !IntoPassage.Candidate.IsSet());
+	// Looser only after the hold distance of PATH.
+	FFormationClassifyState Walk = State(EC::WallLeft);
+	float Walked = 0.f;
+	while (Walk.Current == TOptional<EC>(EC::WallLeft) && Walked < 5000.f)
+	{
+		Walk = FormationTerrainRules::AdvanceState(EC::Open, TOptional<float>(), Walk, 50.f, Config);
+		Walked += 50.f;
+	}
+	TestTrue(FString::Printf(TEXT("Wall beside -> open after %.0f cm of path (hold %.0f)"), Walked, Hold), FMath::IsNearlyEqual(Walked, Hold));
+	FFormationClassifyState Waiting = FormationTerrainRules::AdvanceState(EC::Open, TOptional<float>(), State(EC::WallLeft), Hold - 1.f, Config);
+	TestTrue(TEXT("1 cm short: still the wall, open is the candidate"), Waiting.Current == TOptional<EC>(EC::WallLeft) && Waiting.Candidate == TOptional<EC>(EC::Open)
+		&& FMath::IsNearlyEqual(Waiting.CandidateDistance, Hold - 1.f));
+	// Standing still accumulates nothing.
+	const FFormationClassifyState Still = FormationTerrainRules::AdvanceState(EC::Open, TOptional<float>(), Waiting, 0.f, Config);
+	TestTrue(TEXT("Standing still: no progress"), Still.Current == TOptional<EC>(EC::WallLeft) && FMath::IsNearlyEqual(Still.CandidateDistance, Hold - 1.f));
+	// A different raw class restarts the candidate (equal rank also waits).
+	const FFormationClassifyState Other = FormationTerrainRules::AdvanceState(EC::WallRight, TOptional<float>(), Waiting, 20.f, Config);
+	TestTrue(TEXT("wall_left -> wall_right (equal rank) waits, the candidate restarts"), Other.Current == TOptional<EC>(EC::WallLeft)
+		&& Other.Candidate == TOptional<EC>(EC::WallRight) && FMath::IsNearlyEqual(Other.CandidateDistance, 20.f));
+	// The raw class back to the current one drops the candidate (a short gap in a wall never flips the echelon).
+	const FFormationClassifyState Back = FormationTerrainRules::AdvanceState(EC::WallLeft, TOptional<float>(), Waiting, 50.f, Config);
+	TestTrue(TEXT("Back to the wall: candidate dropped"), Back.Current == TOptional<EC>(EC::WallLeft) && !Back.Candidate.IsSet() && Back.CandidateDistance == 0.f);
+	// Leaving at_wall (a new move) at once.
+	TestTrue(TEXT("Leaving the wall layout: at once"), FormationTerrainRules::AdvanceState(EC::Open, TOptional<float>(), State(EC::AtWall), 0.f, Config).Current
+		== TOptional<EC>(EC::Open));
+	TestTrue(TEXT("Arrival at a wall from a passage: at once"), FormationTerrainRules::AdvanceState(EC::AtWall, TOptional<float>(), State(EC::Corridor), 0.f, Config).Current
+		== TOptional<EC>(EC::AtWall));
+	// The passage width is held with the corridor class after the leader has left the passage (the column's tail keeps narrow sectors).
+	FFormationClassifyState Column = IntoPassage;
+	Column = FormationTerrainRules::AdvanceState(EC::Open, TOptional<float>(), Column, 100.f, Config);
+	TestTrue(TEXT("Out of the passage, within the hold: still corridor, width 460 held"), Column.Current == TOptional<EC>(EC::Corridor)
+		&& Column.PassageWidth == TOptional<float>(460.f));
+	Column = FormationTerrainRules::AdvanceState(EC::Open, TOptional<float>(), Column, Hold, Config);
+	TestTrue(TEXT("After the hold: open, no width"), Column.Current == TOptional<EC>(EC::Open) && !Column.PassageWidth.IsSet());
+	return true;
+}
+
+FORMATION_TERRAIN_TEST(FFormationTerrainTrackerTest, "TrackerAlongARoute")
+bool FFormationTerrainTrackerTest::RunTest(const FString&)
+{
+	using namespace FormationTerrainTestUtil;
+	const FFormationConfig Config;
+	const TOptional<FVector2D> NoMove;
+	// A left wall for x in [-2000, 1000], then open ground; the leader walks +X in 50 cm steps.
+	const TArray<FFormationWall> Walls = { MakeWall(-2000.0, -300.0, 1000.0, -300.0) };
+	FFormationTerrainTracker Tracker;
+	TestEqual(TEXT("Before the first Step: open"), Tracker.GetClass(), EFormationTerrainClass::Open);
+	TestEqual(TEXT("First Step: the raw class"), Tracker.Step(Walls, FVector2D(0.0, 0.0), 0.f, NoMove, 0.f, Config), EFormationTerrainClass::WallLeft);
+	double SwitchX = -1.0;
+	for (double X = 50.0; X <= 3000.0; X += 50.0)
+	{
+		if (Tracker.Step(Walls, FVector2D(X, 0.0), 0.f, NoMove, 50.f, Config) == EFormationTerrainClass::Open && SwitchX < 0.0)
 		{
-			SwitchTime = Elapsed;
+			SwitchX = X;
 		}
 	}
-	TestTrue(FString::Printf(TEXT("Switched to open once the hold time had passed (at %.2f s, hold %.2f s)"), SwitchTime, Hold),
-		SwitchTime >= Hold - 1e-3f && SwitchTime <= Hold + 0.051f);
-	TestEqual(TEXT("Open in the end"), Seen, EFormationTerrainClass::Open);
-	// Flicker: open just entered, a wall shows up for a moment - the class holds.
-	FFormationTerrainTracker Fresh;
-	Fresh.Step(None, FVector2D::ZeroVector, 0.f, 0.05f, Config);
-	TestEqual(TEXT("A wall right after entering open: held open"), Fresh.Step(LeftWall, FVector2D::ZeroVector, 0.f, 0.05f, Config), EFormationTerrainClass::Open);
-	TestTrue(TEXT("Its time runs on"), FMath::IsNearlyEqual(Fresh.TimeInClass, 0.05f));
-	// v1.2: at_wall is an arrival EVENT - it skips the hold.
-	TestEqual(TEXT("Arrival at a wall right after a change: at_wall at once"), FormationTerrainRules::Classify({ MakeWall(120.0, -500.0, 120.0, 500.0, 20.f) },
-		FVector2D::ZeroVector, 0.f, EFormationTerrainClass::Corridor, 0.1f, Config, FVector2D::ZeroVector), EFormationTerrainClass::AtWall);
-	TestEqual(TEXT("Tracker: arrival skips the hold"), Fresh.Step({ MakeWall(120.0, -500.0, 120.0, 500.0, 20.f) }, FVector2D::ZeroVector, 0.f, 0.05f, Config,
-		FVector2D::ZeroVector), EFormationTerrainClass::AtWall);
+	// The slanted side rays see the wall up to ~x = 1000 + 400 / tan 60; then open needs hold_distance of path.
+	const double LastSeen = 1000.0 + 280.0 / FMath::Tan(FMath::DegreesToRadians(60.0));
+	TestTrue(FString::Printf(TEXT("Open only after the hold distance past the wall's end (at x = %.0f, wall seen to ~%.0f)"), SwitchX, LastSeen),
+		SwitchX >= LastSeen + Config.ClassifyHoldDistance - 50.0 && SwitchX <= LastSeen + Config.ClassifyHoldDistance + 100.0);
+	// Standing at the wall's end does not wear the hold down.
+	FFormationTerrainTracker Standing;
+	Standing.Step(Walls, FVector2D(0.0, 0.0), 0.f, NoMove, 0.f, Config);
+	for (int32 Tick = 0; Tick < 200; ++Tick)
+	{
+		Standing.Step(Walls, FVector2D(2000.0, 0.0), 0.f, NoMove, 0.f, Config);
+	}
+	TestEqual(TEXT("Standing still in the open: still wall_left"), Standing.GetClass(), EFormationTerrainClass::WallLeft);
+	// Arrival at a wall: at once; Reset forgets.
+	TestEqual(TEXT("Arrival: at_wall at once"), Standing.Step({ MakeWall(120.0, -500.0, 120.0, 500.0, 20.f) }, FVector2D::ZeroVector, 0.f, FVector2D::ZeroVector, 0.f, Config),
+		EFormationTerrainClass::AtWall);
+	Standing.Reset();
+	TestFalse(TEXT("Reset: no history"), Standing.State.Current.IsSet());
+	// The passage width follows the corridor class.
+	FFormationTerrainTracker Passage;
+	Passage.Step({ MakeWall(-2000.0, -250.0, 2000.0, -250.0), MakeWall(-2000.0, 250.0, 2000.0, 250.0) }, FVector2D::ZeroVector, 0.f, NoMove, 0.f, Config);
+	TestTrue(TEXT("In a 4.6 m passage: corridor with its width"), Passage.GetClass() == EFormationTerrainClass::Corridor && Passage.GetPassageWidth().IsSet()
+		&& FMath::IsNearlyEqual(Passage.GetPassageWidth().GetValue(), 460.f, 0.01f));
 	return true;
 }
 

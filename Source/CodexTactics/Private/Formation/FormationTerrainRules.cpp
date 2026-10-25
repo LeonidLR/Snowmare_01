@@ -154,20 +154,59 @@ namespace FormationTerrainRules
 		return TOptional<float>();
 	}
 
-	EFormationTerrainClass ApplyHysteresis(EFormationTerrainClass RawClass, const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass,
-		const FFormationConfig& Config)
+	int32 ClassRank(EFormationTerrainClass Class)
 	{
-		if (!PreviousClass.IsSet() || RawClass == PreviousClass.GetValue() || RawClass == EFormationTerrainClass::AtWall)
+		switch (Class)
 		{
-			return RawClass;
+		case EFormationTerrainClass::Open: return 0;
+		case EFormationTerrainClass::Corridor: return 2;
+		case EFormationTerrainClass::AtWall: return 3;
+		default: return 1;
 		}
-		return TimeInClass < Config.ClassifyHoldTime ? PreviousClass.GetValue() : RawClass;
 	}
 
-	EFormationTerrainClass Classify(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,
-		const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass, const FFormationConfig& Config, const TOptional<FVector2D>& Destination)
+	FFormationClassifyState AdvanceState(EFormationTerrainClass RawClass, const TOptional<float>& MeasuredWidth, const FFormationClassifyState& State,
+		float StepDistance, const FFormationConfig& Config)
 	{
-		return ApplyHysteresis(ClassifyRaw(Walls, LeaderPos, LeaderYaw, Config, Destination), PreviousClass, TimeInClass, Config);
+		const auto Next = [RawClass, &MeasuredWidth, &State](EFormationTerrainClass Current, const TOptional<EFormationTerrainClass>& Candidate, float Distance)
+		{
+			FFormationClassifyState Out;
+			Out.Current = Current;
+			Out.Candidate = Candidate;
+			Out.CandidateDistance = Distance;
+			if (Current == EFormationTerrainClass::Corridor)
+			{
+				// Measured while in the passage, held with the class after the leader has left it.
+				Out.PassageWidth = RawClass == EFormationTerrainClass::Corridor ? MeasuredWidth : State.PassageWidth;
+			}
+			return Out;
+		};
+		const TOptional<EFormationTerrainClass> NoCandidate;
+		if (!State.Current.IsSet() || RawClass == State.Current.GetValue())
+		{
+			return Next(RawClass, NoCandidate, 0.f);
+		}
+		const EFormationTerrainClass Current = State.Current.GetValue();
+		if (Current == EFormationTerrainClass::AtWall || ClassRank(RawClass) > ClassRank(Current))
+		{
+			// Tighter at once; leaving the wall (a new move) at once.
+			return Next(RawClass, NoCandidate, 0.f);
+		}
+		const bool bSameCandidate = State.Candidate.IsSet() && State.Candidate.GetValue() == RawClass;
+		const float Walked = (bSameCandidate ? State.CandidateDistance : 0.f) + FMath::Max(StepDistance, 0.f);
+		if (Walked >= Config.ClassifyHoldDistance)
+		{
+			return Next(RawClass, NoCandidate, 0.f);
+		}
+		return Next(Current, RawClass, Walked);
+	}
+
+	FFormationClassifyState Classify(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, const TOptional<FVector2D>& Destination,
+		const FFormationClassifyState& State, float StepDistance, const FFormationConfig& Config)
+	{
+		const EFormationTerrainClass Raw = ClassifyRaw(Walls, LeaderPos, LeaderYaw, Config, Destination);
+		const TOptional<float> Measured = Raw == EFormationTerrainClass::Corridor ? PassageWidth(Walls, LeaderPos, LeaderYaw, Config) : TOptional<float>();
+		return AdvanceState(Raw, Measured, State, StepDistance, Config);
 	}
 
 	EFormationKind FormationFor(EFormationTerrainClass Class, int32 MemberCount, bool bBlizzard)
@@ -189,18 +228,24 @@ namespace FormationTerrainRules
 	}
 }
 
-EFormationTerrainClass FFormationTerrainTracker::Step(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, float DeltaSeconds,
-	const FFormationConfig& Config, const TOptional<FVector2D>& Destination)
+EFormationTerrainClass FFormationTerrainTracker::Step(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,
+	const TOptional<FVector2D>& Destination, float StepDistance, const FFormationConfig& Config)
 {
-	if (Class.IsSet())
-	{
-		TimeInClass += FMath::Max(DeltaSeconds, 0.f);
-	}
-	const EFormationTerrainClass Next = FormationTerrainRules::Classify(Walls, LeaderPos, LeaderYaw, Class, TimeInClass, Config, Destination);
-	if (!Class.IsSet() || Next != Class.GetValue())
-	{
-		Class = Next;
-		TimeInClass = 0.f;
-	}
-	return Next;
+	State = FormationTerrainRules::Classify(Walls, LeaderPos, LeaderYaw, Destination, State, StepDistance, Config);
+	return GetClass();
+}
+
+EFormationTerrainClass FFormationTerrainTracker::GetClass() const
+{
+	return State.Current.Get(EFormationTerrainClass::Open);
+}
+
+TOptional<float> FFormationTerrainTracker::GetPassageWidth() const
+{
+	return State.PassageWidth;
+}
+
+void FFormationTerrainTracker::Reset()
+{
+	State = FFormationClassifyState();
 }

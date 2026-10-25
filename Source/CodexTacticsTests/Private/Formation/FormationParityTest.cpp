@@ -1,5 +1,5 @@
 // CodexTactics.Formation.Parity.<Rule> - the C++ formation rules against the golden vectors the Training Ground simulator exports
-// (`npm run golden`; v1.1 adds PassageWidth, v1.2 HedgehogSlots): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
+// (`npm run golden`; v1.1 adds PassageWidth, v1.2 HedgehogSlots, v2 Classify state in / out): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
 // (docs/design/FORMATION_CONTRACT.md 3, field names in 3.1). Same inputs -> same outputs within the file's tolerance (cm / deg; yaws
 // compared as angles). The rules' config is built from the file's "config_values" (the snapshot the vectors were computed with), so
 // later tuning of formation_config.json cannot break parity. A missing file: a warning, the test passes. Every case is checked (none is
@@ -177,6 +177,64 @@ namespace FormationParityUtil
 		return true;
 	}
 
+	/** A terrain class string or null / missing (unset); false when it is something else. */
+	bool OptionalClass(const FJsonObject& Object, const TCHAR* Name, TOptional<EFormationTerrainClass>& Out)
+	{
+		Out.Reset();
+		const TSharedPtr<FJsonValue> Value = Object.TryGetField(Name);
+		if (!Value.IsValid() || Value->IsNull())
+		{
+			return true;
+		}
+		FString ClassName;
+		EFormationTerrainClass Parsed = EFormationTerrainClass::Open;
+		if (!Value->TryGetString(ClassName) || !FormationNames::Parse(ClassName, Parsed))
+		{
+			return false;
+		}
+		Out = Parsed;
+		return true;
+	}
+
+	/** v2 classifier state {current, candidate, candidateDistance, passageWidth} (missing optional fields = unset / 0). */
+	bool ReadClassifyState(const FJsonObject& Object, FFormationClassifyState& Out)
+	{
+		Out = FFormationClassifyState();
+		double Distance = 0.0;
+		if (Object.HasField(TEXT("candidateDistance")) && !Object.TryGetNumberField(TEXT("candidateDistance"), Distance))
+		{
+			return false;
+		}
+		Out.CandidateDistance = static_cast<float>(Distance);
+		return OptionalClass(Object, TEXT("current"), Out.Current) && OptionalClass(Object, TEXT("candidate"), Out.Candidate)
+			&& OptionalNumber(Object, TEXT("passageWidth"), TEXT("passage_width"), Out.PassageWidth);
+	}
+
+	FString ShowClass(const TOptional<EFormationTerrainClass>& Class)
+	{
+		return Class.IsSet() ? FString(FormationNames::ToString(Class.GetValue())) : FString(TEXT("null"));
+	}
+
+	FString ShowNumber(const TOptional<float>& Value)
+	{
+		return Value.IsSet() ? FString::Printf(TEXT("%.3f"), Value.GetValue()) : FString(TEXT("null"));
+	}
+
+	/** Compares two classifier states (classes exactly, distances / widths within cm); empty = equal. */
+	FString CompareClassifyState(const FFormationClassifyState& Actual, const FFormationClassifyState& Expected, const FGolden& Golden)
+	{
+		const bool bWidthSame = Actual.PassageWidth.IsSet() == Expected.PassageWidth.IsSet()
+			&& (!Actual.PassageWidth.IsSet() || FMath::Abs(Actual.PassageWidth.GetValue() - Expected.PassageWidth.GetValue()) <= Golden.TolCm);
+		if (Actual.Current == Expected.Current && Actual.Candidate == Expected.Candidate
+			&& FMath::Abs(Actual.CandidateDistance - Expected.CandidateDistance) <= Golden.TolCm && bWidthSame)
+		{
+			return FString();
+		}
+		return FString::Printf(TEXT("state {%s, %s, %.3f, %s}, expected {%s, %s, %.3f, %s}"), *ShowClass(Actual.Current), *ShowClass(Actual.Candidate),
+			Actual.CandidateDistance, *ShowNumber(Actual.PassageWidth), *ShowClass(Expected.Current), *ShowClass(Expected.Candidate),
+			Expected.CandidateDistance, *ShowNumber(Expected.PassageWidth));
+	}
+
 	bool InOut(const TSharedPtr<FJsonValue>& Case, TSharedPtr<FJsonObject>& OutIn, TSharedPtr<FJsonObject>& OutOut)
 	{
 		const TSharedPtr<FJsonObject>* CaseObject = nullptr;
@@ -352,33 +410,20 @@ bool FFormationParityClassifyTest::RunTest(const FString&)
 	return RunCases(*this, TEXT("Classify"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
 	{
 		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
+		const TSharedPtr<FJsonObject>* InState = nullptr;
+		const TSharedPtr<FJsonObject>* OutState = nullptr;
 		FVector2D Pos;
 		double Yaw = 0.0;
-		double TimeInClass = 0.0;
-		FString ExpectedName;
-		EFormationTerrainClass Expected = EFormationTerrainClass::Open;
-		if (!In->TryGetArrayField(TEXT("walls"), WallValues) || !Vec2(Field(*In, TEXT("leaderPos"), TEXT("leader_pos")), Pos)
-			|| !Number(*In, TEXT("leaderYaw"), TEXT("leader_yaw"), Yaw) || !Number(*In, TEXT("timeInClass"), TEXT("time_in_class"), TimeInClass)
-			|| !Out->TryGetStringField(TEXT("class"), ExpectedName) || !FormationNames::Parse(ExpectedName, Expected))
+		double StepDistance = 0.0;
+		TArray<FFormationWall> Walls;
+		FFormationClassifyState State;
+		FFormationClassifyState Expected;
+		if (!In->TryGetArrayField(TEXT("walls"), WallValues) || !ReadWalls(*WallValues, Walls) || !Vec2(Field(*In, TEXT("leaderPos"), TEXT("leader_pos")), Pos)
+			|| !Number(*In, TEXT("leaderYaw"), TEXT("leader_yaw"), Yaw) || !Number(*In, TEXT("stepDistance"), TEXT("step_distance"), StepDistance)
+			|| !In->TryGetObjectField(TEXT("state"), InState) || !ReadClassifyState(**InState, State)
+			|| !Out->TryGetObjectField(TEXT("state"), OutState) || !ReadClassifyState(**OutState, Expected))
 		{
 			return TEXT("unreadable input / output");
-		}
-		TArray<FFormationWall> Walls;
-		if (!ReadWalls(*WallValues, Walls))
-		{
-			return TEXT("unreadable wall");
-		}
-		TOptional<EFormationTerrainClass> Previous;
-		const TSharedPtr<FJsonValue> PreviousValue = Field(*In, TEXT("previousClass"), TEXT("previous_class"));
-		FString PreviousName;
-		if (PreviousValue.IsValid() && PreviousValue->TryGetString(PreviousName))
-		{
-			EFormationTerrainClass Parsed = EFormationTerrainClass::Open;
-			if (!FormationNames::Parse(PreviousName, Parsed))
-			{
-				return FString::Printf(TEXT("unknown previous class %s"), *PreviousName);
-			}
-			Previous = Parsed;
 		}
 		// v1.2: the leader's move destination (null / missing = none).
 		TOptional<FVector2D> Destination;
@@ -392,10 +437,11 @@ bool FFormationParityClassifyTest::RunTest(const FString&)
 			}
 			Destination = Parsed;
 		}
-		const EFormationTerrainClass Actual = FormationTerrainRules::Classify(Walls, Pos, static_cast<float>(Yaw), Previous, static_cast<float>(TimeInClass),
-			Golden.Config, Destination);
-		return Actual == Expected ? FString() : FString::Printf(TEXT("class %s (raw %s), expected %s"), FormationNames::ToString(Actual),
-			FormationNames::ToString(FormationTerrainRules::ClassifyRaw(Walls, Pos, static_cast<float>(Yaw), Golden.Config, Destination)), *ExpectedName);
+		const FFormationClassifyState Actual = FormationTerrainRules::Classify(Walls, Pos, static_cast<float>(Yaw), Destination, State,
+			static_cast<float>(StepDistance), Golden.Config);
+		const FString Problem = CompareClassifyState(Actual, Expected, Golden);
+		return Problem.IsEmpty() ? Problem : FString::Printf(TEXT("%s (raw %s)"), *Problem,
+			FormationNames::ToString(FormationTerrainRules::ClassifyRaw(Walls, Pos, static_cast<float>(Yaw), Golden.Config, Destination)));
 	});
 }
 
