@@ -38,15 +38,33 @@ Nobody looks through the wall. All stand along the wall (1 m apart) facing the O
   wall looking along it, `CoverFacingRules`). Baseline: crouch idle facing out; the user replaces it with a clip later.
 
 ## Formations (kept)
-Diamond / wedge (default), column "herringbone" (narrow passages: 12 / 2 / 10 / 6 alternating — sectors K 0, P +70,
-L −70, Z 180), line (all forward with a slight fan), **echelon right** (obstacle on the left, all guns to the open right
-flank; from the diamond the LEFT man goes second — minimal travel), **echelon left** (mirror; the RIGHT man goes second),
-hedgehog at a heat source (backs to the fire, faces out — WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter
-cones). Dropped by the user: bounding overwatch, door stack.
+Diamond / wedge (default), **column** — narrow vs wide (user decision 2026-10-25, Q1 = A): in a **narrow passage** (free width
+below `column.narrow_width`, 6 m) the side men do not look into the walls: P looks **forward over the leader's shoulder
+(+15°)**, L **back at a slant (−165°)**, Z straight back (180), K 12; the **"herringbone"** (K 0, P +70, L −70, Z 180) stays only
+for a **wide column** (a manual column in the open / a wide passage). Line (all forward with a slight fan), **echelon right**
+(obstacle on the left, all guns to the open right flank; from the diamond the LEFT man goes second — minimal travel; sectors
+K 10, 2nd 45, 3rd 80, **last 150** — user decision 2026-10-25, Q2 = A: the last man covers the rear-right so 5–7 o'clock stays
+watched), **echelon left** (mirror; the RIGHT man goes second), hedgehog at a heat source (backs to the fire, faces out —
+WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by the user: bounding overwatch, door stack.
+
+## Decisions after the bot's first runs (2026-10-25, via the coordinator)
+- **Q1 = A** (user): narrow column = P forward over the shoulder, L back at a slant, Z back; herringbone only in a wide column.
+- **Q2 = A** (user): echelon last man 150° (was 125°); the rear-cover check stays in force for the echelon.
+- **Q3** (coordinator, classifier bug): a dead-end wall ahead no longer reads as side walls (classifier v1.1: ahead rays first,
+  side probes ignore walls within 30° of perpendicular to the heading) — no column / echelon flip before the wall layout.
+- **v1.2** (coordinator, design-doc fidelity): the leader's patrol search is ±30° (11–1 o'clock, as above); "All forward" (menu
+  10:30) = walking with everyone looking at 12 in any formation; the wall layout triggers only on ARRIVAL at a wall (not when
+  walking past it or turning at a bend); the hedgehog is centred on the heat source; a column of three keeps the triad's open
+  rear in the wide herringbone (in a narrow column L's back-slant look covers it).
+- **Wide passage = column (user, 2026-10-25, "3А")**: ANY passage between two walls (both sides walled within the probe reach,
+  4 m) is a column — narrow sectors below 6 m (above), the ±70° herringbone in a wider one (e.g. 7.6 m); the diamond no longer
+  walks a wide street with its side men scanning into walls 1.2 m away.
+- **Blizzard (user, 2026-10-25, "4А")**: in a blizzard the squad picks the tight blizzard diamond automatically on OPEN ground;
+  walls and passages keep their normal rules; the hold-G menu still overrides.
 
 ## Selection
-- **Automatic by level geometry** (default): open ground → diamond / wedge; wall on one side → echelon away from it;
-  narrow passage → column-herringbone; arrival at a wall → the wall layout. Needs hysteresis (like today's
+- **Automatic by level geometry** (default): open ground → diamond / wedge (blizzard tight diamond in a blizzard); wall on one
+  side → echelon away from it; any passage between two walls → column (narrow sectors / herringbone by width); arrival at a wall → the wall layout. Needs hysteresis (like today's
   `ColumnHoldTime`) so it does not flicker at wall gaps.
 - **Manual: hold G** → radial menu with schematic icons; move the cursor to a sector, release G. Centre = **Auto**.
   A manual choice holds until Auto is picked. Proposed layout (user named 12 line, 3 echelon right, 10 echelon left,

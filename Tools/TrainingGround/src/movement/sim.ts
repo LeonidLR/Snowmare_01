@@ -16,6 +16,7 @@ import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, Forma
 export const SIM_DT = 1 / 30;
 const HEADING_SMOOTHING = 3.5; // FSquadFormationConfig::RotationSmoothing
 const STOP_RADIUS = 25;
+const WALL_TURN_DIST = 100; // cm: a member walking to his wall-layout slot turns to the layout yaw this close to it
 const FOLLOW_GAIN = 2.0; // 1/s: a 1 m gap to the (moving) slot adds 2 m/s on top of the slot's own velocity
 const REPATH_INTERVAL = 0.2;
 
@@ -30,6 +31,8 @@ export interface MemberFrame {
   slotInvalid: boolean;
   /** Moving backwards relative to his facing (> 120 deg). */
   backwards: boolean;
+  /** Travel direction this tick (null when standing). */
+  moveYaw: number | null;
 }
 
 export interface Frame {
@@ -50,6 +53,10 @@ export interface SimOptions {
   seed: number;
   /** Fixed formation (the hold-G manual choice); undefined = automatic by terrain. */
   manualFormation?: Formation;
+  /** v1.2 (user Q4 = A): the weather is a blizzard - open ground picks the blizzard tight diamond. */
+  blizzard?: boolean;
+  /** v1.2: the menu's "All forward" - walking, everyone looks at 12 (LookYaw mode 'forward'). */
+  allForward?: boolean;
   /** Seconds the squad stays after the leader reaches the end of the route. */
   haltSeconds?: number;
   /** Shared grid (built once per layout). */
@@ -113,6 +120,7 @@ export function simulate(o: SimOptions): number {
   let formation: Formation = o.manualFormation ?? (n >= 4 ? 'diamond' : 'wedge');
   let haltLeft = o.haltSeconds ?? 3;
   let arrived = false;
+  let leaderWallSlot: Vec2 | null = null;
   const maxTime = 600;
 
   while (t < maxTime) {
@@ -139,14 +147,14 @@ export function simulate(o: SimOptions): number {
     }
 
     // --- terrain / formation
-    const next = FormationTerrainRules.Classify(walls, leader.pos, heading, terrain, timeInClass, c);
+    // v1.2: the leader's move ends at the route's last point (at_wall only on arrival there); in the wall layout his move goes
+    // on to his own wall slot, which is then his destination (the layout must not drop on that last step).
+    const destination = formation === 'wall' && leaderWallSlot ? leaderWallSlot : legs[legs.length - 1];
+    const next = FormationTerrainRules.Classify(walls, leader.pos, heading, destination, terrain, timeInClass, c);
+    const passage = FormationTerrainRules.PassageWidth(walls, leader.pos, heading, c);
     if (next !== terrain) { terrain = next; timeInClass = 0; } else timeInClass += SIM_DT;
-    if (!o.manualFormation) {
-      const wanted = FormationTerrainRules.FormationFor(terrain, n);
-      // A wall straight ahead while still walking is a corner to turn, not a stop: the wall layout only on arrival.
-      if (wanted !== 'wall' || arrived) formation = wanted;
-    }
-    const mode: Mode = arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : 'walk';
+    if (!o.manualFormation) formation = FormationTerrainRules.FormationFor(terrain, n, !!o.blizzard);
+    const mode: Mode = arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
     // --- targets and look yaws
     let targets: { role: Role; pos: Vec2; yaw: number }[];
@@ -155,19 +163,21 @@ export function simulate(o: SimOptions): number {
       if (wall) {
         const room = wallRoom(wall, leader.pos);
         const z = members.find((m) => m.role === 'Z');
-        // Tie: the 4th takes the side he reaches with less travel.
-        if (z && Math.abs(room.roomRight - room.roomLeft) < 1) {
-          const right = dirOf(heading + 90);
-          if ((z.pos[0] - leader.pos[0]) * right[0] + (z.pos[1] - leader.pos[1]) * right[1] < 0) room.roomLeft += 1; else room.roomRight += 1;
+        // Tie: the 4th takes the side he reaches with less travel (FormationWallRules.BreakRoomTie, as the C++ caller).
+        let rooms = room;
+        if (z && n >= 4) {
+          const endPos = (l: number, r: number) => FormationWallRules.Layout(wall, leader.pos, n, l, r, c).find((s) => s.role === 'Z')!.pos;
+          rooms = FormationWallRules.BreakRoomTie(room.roomLeft, room.roomRight, dist(z.pos, endPos(1, 0)), dist(z.pos, endPos(0, 1)));
         }
-        targets = FormationWallRules.Layout(wall, leader.pos, n, room.roomLeft, room.roomRight, c);
+        targets = FormationWallRules.Layout(wall, leaderWallSlot ? legs[legs.length - 1] : leader.pos, n, rooms.roomLeft, rooms.roomRight, c);
+        leaderWallSlot = targets[0].pos;
       } else {
         targets = FormationShapeRules.Slots(n >= 4 ? 'diamond' : 'wedge', n, leader.pos, heading, c)
           .map((s) => ({ ...s, yaw: heading }));
       }
     } else {
       targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
-        ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, c),
+        ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),
       }));
     }
 
@@ -191,11 +201,16 @@ export function simulate(o: SimOptions): number {
         m.pos = stepTowards(m, slot, nav, c, run, i === 0 ? 1 : m.jitter);
         moveDir = sub(m.pos, before);
       }
-      // Facing: run = travel direction for everyone; otherwise the rule's look yaw.
-      const desired = run && !arrived ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : target.yaw;
+      // Facing: run = travel direction for everyone; walking to a wall-layout slot = travel direction until within
+      // WALL_TURN_DIST of it, then the layout yaw (as an operative walking into cover; FORMATION_CONTRACT.md 7);
+      // otherwise the rule's look yaw.
+      const toWallSlot = formation === 'wall' && dist(m.pos, slot) > WALL_TURN_DIST && len(moveDir) > 0.5;
+      const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : target.yaw;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
-      const backwards = len(moveDir) > 0.5 && angleDiff(yawOf(moveDir), m.yaw) > 120;
-      frames.push({ role: m.role, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards });
+      if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
+      const moving = len(moveDir) > 0.5;
+      const backwards = moving && angleDiff(yawOf(moveDir), m.yaw) > 120;
+      frames.push({ role: m.role, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null });
     }
     o.onFrame({ t, mode, formation, terrain, heading, leaderDistance: travelled, members: frames });
 

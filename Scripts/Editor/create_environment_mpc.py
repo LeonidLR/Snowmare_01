@@ -9,6 +9,7 @@
 #   scalars: SnowRefill (the blended preset SnowIntensity, speeds up the track fade), FreshSnow (rises while it snows, fades ~10 min
 #            after; visual only)
 # Directional snow (docs/systems/environment-weather.md section 15, AWeatherPresenterActor writes them from FEnvironmentState::ObjectSnow):
+#   scalars: SnowTop, SnowPX, SnowNX, SnowPY, SnowNY (0..1 snow held by faces pointing up / +X / -X / +Y / -Y, world axes)
 # AWeatherPresenterActor writes it every application (UMaterialParameterCollectionInstance). The migrated MPC_WeatherSettings is
 # left untouched. IDEMPOTENT: an existing MPC_Environment keeps every parameter it has (names, defaults and ids) and only gets the
 # missing ones appended (then it is saved); nothing else is changed.
@@ -20,7 +21,8 @@ import unreal
 
 PATH = "/Game/Environment/Weather/MPC"
 NAME = "MPC_Environment"
-SCALARS = [("SnowAmount", 0.0), ("FrostAmount", 0.0), ("WindStrength", 0.0), ("IsSnowing", 0.0), ("SnowRefill", 0.0), ("FreshSnow", 0.0)]
+SCALARS = [("SnowAmount", 0.0), ("FrostAmount", 0.0), ("WindStrength", 0.0), ("IsSnowing", 0.0), ("SnowRefill", 0.0), ("FreshSnow", 0.0),
+           ("SnowTop", 0.0), ("SnowPX", 0.0), ("SnowNX", 0.0), ("SnowPY", 0.0), ("SnowNY", 0.0)]
 VECTORS = [("WindDirection", unreal.LinearColor(1.0, 0.0, 0.0, 0.0)), ("SnowTrackWindow", unreal.LinearColor(0.0, 0.0, 0.0, 0.0))]
 
 log_lines = []

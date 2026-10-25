@@ -74,6 +74,27 @@ public:
 	static FString SetRendererProperty(UNiagaraSystem* System, const FString& EmitterName, int32 RendererIndex, const FString& PropertyName,
 		const FString& ValueText);
 
+	/**
+	 * Adds a module script (e.g. /Niagara/Modules/Update/Lifetime/KillParticlesInVolume.KillParticlesInVolume) to one stack of the emitter.
+	 * Usage: ParticleSpawn, ParticleUpdate, EmitterSpawn, EmitterUpdate. InsertBeforeModule = the module it goes before (empty = the end).
+	 * Returns the new node's name (usable as ModuleName; compile before setting its constants) or "ERROR: ...".
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Niagara")
+	static FString AddModule(UNiagaraSystem* System, const FString& EmitterName, const FString& Usage, const FString& ModuleScriptPath,
+		const FString& SuggestedName, const FString& InsertBeforeModule);
+
+	/** Sets a static switch input of a module (a pin on the module node itself; the dump lists them as "switch"). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Niagara")
+	static FString SetModuleStaticSwitch(UNiagaraSystem* System, const FString& EmitterName, const FString& ModuleName, const FString& InputName,
+		const FString& ValueText);
+
+	/**
+	 * Binds a sprite renderer's material to a new (or existing) object user parameter (User.<Name>, default = the renderer's material), so
+	 * a component can swap in a dynamic material instance (UNiagaraComponent::SetVariableMaterial).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Niagara")
+	static FString BindRendererMaterialToUserParameter(UNiagaraSystem* System, const FString& EmitterName, int32 RendererIndex, const FString& UserParameterName);
+
 	/** Requests a compile and waits for it (GPU shaders included). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Niagara")
 	static FString CompileSystem(UNiagaraSystem* System);

@@ -127,14 +127,59 @@ namespace EnvironmentRules
 	/** The start snow cover of a fresh / locked level: the level's "snow_cover" when present, else Config.SnowCoverStart; clamped 0..1. */
 	CODEXTACTICS_API float GetInitialSnowCover(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level);
 
+	// --- Directional snow on objects / characters (FEnvironmentState::ObjectSnow, UCharacterSnowSubsystem; design §15) ---
+
+	/** max(0, -dot(Wind, side)) for side pocket Index (1..4; the top 0): 1 when the side faces straight into the wind. Wind need not be unit. */
+	CODEXTACTICS_API float GetSideWindFactor(const FVector2D& WindDirection, int32 PocketIndex);
+
+	/** 0 with the sun at / below the horizon, rising linearly to 1 at Config.ObjectSnowMeltFullSunElevation degrees. */
+	CODEXTACTICS_API float GetSunMeltFactor(const FEnvironmentConfig& Config, float SunElevationDegrees);
+
+	/**
+	 * The objects' melt per real second now: ObjectSnowMeltRate x the Clear weather amount (GetWeatherAmount: 0 while it snows or is
+	 * overcast, blended through a transition) x GetSunMeltFactor. No melt at night, under cloud or while it snows.
+	 */
+	CODEXTACTICS_API float GetObjectSnowMeltRate(const FEnvironmentConfig& Config, const FEnvironmentState& State, float SunElevationDegrees);
+
+	/**
+	 * One step of directional pockets (pure): Top += GrowRate x Dt; side += GrowRate x SideRateScale x GetSideWindFactor x WindStrength x Dt;
+	 * then every pocket loses MeltRate x Dt (never below TopFloor for the top, 0 for a side; a pocket already below its floor stays) and
+	 * ClearRate x Dt (down to 0). Clamped to [0, 1]. A pocket the wind does not reach keeps its snow (memory).
+	 */
+	CODEXTACTICS_API void StepDirectionalSnow(FDirectionalSnow& Pockets, const FDirectionalSnowInputs& Inputs, float DeltaSeconds);
+
+	/**
+	 * The inputs of the objects' step: GrowRate = GetBlendedSnowCoverRate, the wind as given (world travel direction, xy), SideRateScale =
+	 * ObjectSnowSideRateScale, MeltRate = GetObjectSnowMeltRate, TopFloor = ObjectSnowMeltFloor x State.SnowAmount.
+	 */
+	CODEXTACTICS_API FDirectionalSnowInputs MakeObjectSnowInputs(const FEnvironmentConfig& Config, const FEnvironmentState& State,
+		const FVector2D& WorldWindDirection, float WindStrength, float SunElevationDegrees);
+
+	/**
+	 * Advances State.ObjectSnow by DeltaSeconds of running clock (MakeObjectSnowInputs + StepDirectionalSnow). Called by the subsystem after
+	 * StepSnowCover. A locked state (Demo 01) never changes, like the ground cover.
+	 */
+	CODEXTACTICS_API void StepObjectSnow(const FEnvironmentConfig& Config, FEnvironmentState& State, float DeltaSeconds,
+		const FVector2D& WorldWindDirection, float WindStrength, float SunElevationDegrees);
+
+	/**
+	 * Back-compat / fresh start: when every object pocket is 0 but the ground has snow, the objects' top takes the ground cover
+	 * (Top = SnowAmount, sides 0). Returns true when it seeded.
+	 */
+	CODEXTACTICS_API bool SeedObjectSnow(FEnvironmentState& State);
+
 	// --- Save (docs/systems/save-load.md, key "game_state.environment") ---
 
-	/** The whole state as the save object: hour, weather, next_weather, weather_elapsed, weather_dwell, seed, locked, snow_amount. */
+	/**
+	 * The whole state as the save object: hour, weather, next_weather, weather_elapsed, weather_dwell, seed, locked, snow_amount and
+	 * object_snow {top, px, nx, py, ny}.
+	 */
 	CODEXTACTICS_API TSharedRef<FJsonObject> StateToSaveJson(const FEnvironmentState& State);
 
 	/**
 	 * The state of a save object over Fallback: every key is optional (a missing / mistyped key keeps Fallback's value; an unknown weather
-	 * name too); the hour is wrapped into [0, 24), the snow cover clamped to [0, 1], dwell / elapsed to >= 0.
+	 * name too); the hour is wrapped into [0, 24), the snow cover clamped to [0, 1], dwell / elapsed to >= 0. object_snow: each pocket
+	 * optional (clamped 0..1); a save WITHOUT object_snow (older builds) gets Top = the loaded snow_amount, sides 0 (SeedObjectSnow).
 	 */
 	CODEXTACTICS_API FEnvironmentState StateFromSaveJson(const FJsonObject& Json, const FEnvironmentState& Fallback);
 }

@@ -39,6 +39,16 @@ export interface LayoutRoute {
   expect?: RouteExpect[];
 }
 
+export const PROP_KINDS = ['heat_source'] as const;
+export type PropKind = (typeof PROP_KINDS)[number];
+
+/** Optional set dressing the map builder places (not read by the rules): a heat source for the hedgehog. */
+export interface LayoutProp {
+  id: string;
+  kind: PropKind;
+  pos: Vec2;
+}
+
 export interface Layout {
   schema: string;
   name: string;
@@ -48,6 +58,7 @@ export interface Layout {
   walls: LayoutWall[];
   zones: LayoutZone[];
   routes: LayoutRoute[];
+  props?: LayoutProp[];
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -94,6 +105,17 @@ export function validateLayout(data: unknown): string[] {
     if (!ZONE_KINDS.includes(z?.kind as ZoneKind)) e.push(`${where}: kind must be one of ${ZONE_KINDS.join(' | ')}`);
     if (!Array.isArray(z?.poly) || z.poly.length < 3 || !z.poly.every(isVec)) e.push(`${where}: poly needs at least 3 [x, y] points`);
   });
+
+  if (l.props !== undefined) {
+    if (!Array.isArray(l.props)) e.push('props: expected an array');
+    else l.props.forEach((p, i) => {
+      const where = `props[${i}]${p && typeof p.id === 'string' ? ` (${p.id})` : ''}`;
+      unique(where, p?.id);
+      if (!PROP_KINDS.includes(p?.kind as PropKind)) e.push(`${where}: kind must be one of ${PROP_KINDS.join(' | ')}`);
+      if (!isVec(p?.pos)) e.push(`${where}: pos must be [x, y]`);
+      else if (!inBounds(p.pos)) e.push(`${where}: outside bounds`);
+    });
+  }
 
   if (!Array.isArray(l.routes)) e.push('routes: expected an array');
   else l.routes.forEach((r, i) => {

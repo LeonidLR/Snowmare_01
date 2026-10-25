@@ -416,3 +416,13 @@ walk play would fix it. (2) run_2 is a sprint (~660 cm/s) played at 0.6x for the
 (gameplay). (5) The dying clip falls ~1.6 m forward of the capsule (in place clip): the corpse lies in front of where it stood.
 (6) Look variants are random per spawn; pin one with `VariantSeedOverride`, or edit `LookVariants` on the Blueprint.
 
+## Custom Primitive Data on the character bodies (2026-10-23)
+
+| Index | Meaning | Written by | Read by |
+|---|---|---|---|
+| 8 | snow, top pocket (faces pointing up, the body's LOCAL axes) | `UCharacterSnowSubsystem` (`CharacterSnowRules::FirstCustomDataIndex`) | the snow layer of `M_CharacterMaster*` (`SnowTop`) |
+| 9 / 10 | snow, local +X / -X pockets | same | `SnowPX` / `SnowNX` |
+| 11 / 12 | snow, local +Y / -Y pockets | same | `SnowPY` / `SnowNY` |
+
+Indices 0..7 are unused (free for a future system); verified free on every switched body (docs/systems/environment-weather.md section 15.3).
+The body is `ACharacter::GetMesh()`; the FrozenPMC keeps its pack material and gets no snow. The overlay slot materials do not read CPD.

@@ -20,7 +20,7 @@
 // UI removed); timelapse_<map>/frame_NNNN.png at 10 fps (encode: ffmpeg -y -framerate 10 -i frame_%04d.png -vf scale=960:-2 -c:v libx264
 // -pix_fmt yuv420p -crf 26 out.mp4).
 //
-// Mode "snowperf" (falling snow cost): -ExecCmds="CodexTactics.EnvironmentShots snowperf" -> log lines "[SnowFxPerf]" (GPU / render / game ms, draws)
+// Mode "snowperf" (falling snow cost): -ExecCmds="CodexTactics.EnvironmentShots snowperf [<subdir>]" -> log lines "[SnowFxPerf]" (GPU / render / game ms, draws)
 // and stills Saved/Screenshots/Environment/snowperf/<map>_<state>[_far].png for snow FX off / Snowfall / Blizzard at the default and the max zoom
 // (MovementTest: wave 2 is started first).
 //
@@ -99,6 +99,19 @@ namespace EnvironmentTerrainShots
 
 // Mode "tracks" (environment §14, interactive snow stills + clip) lives in EnvironmentTracksShotsCommand.cpp.
 namespace EnvironmentTracksShots
+{
+	void Run(const TArray<FString>& Args);
+}
+
+// Mode "charsnow" (environment section 15, directional snow on characters / objects) lives in EnvironmentCharSnowShotsCommand.cpp.
+namespace EnvironmentCharSnowShots
+{
+	void Run(const TArray<FString>& Args);
+}
+
+// Mode "snowfx2" (environment section 12.b, the falling snow after the 2026-10-23 feedback: DA_SnowFX, smaller flakes, no snow indoors)
+// lives in EnvironmentSnowFx2ShotsCommand.cpp.
+namespace EnvironmentSnowFx2Shots
 {
 	void Run(const TArray<FString>& Args);
 }
@@ -1374,12 +1387,13 @@ namespace EnvironmentShots
 			}
 		}
 
-		void Run()
+		/** OutSubDir: the folder under Saved/Screenshots/Environment (default "snowperf"; e.g. "snowfx2/perf"). */
+		void Run(const FString& OutSubDir)
 		{
 			Runner = MakeShared<FRunner>();
 			Snow::FxRunner = MakeShared<Snow::FSnowFxRunner>();
 			PRunner = MakeShared<FPerfRunner>();
-			PRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / TEXT("snowperf"));
+			PRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / OutSubDir);
 			FPaths::CollapseRelativeDirectories(PRunner->Dir);
 			IFileManager::Get().MakeDirectory(*PRunner->Dir, true);
 			Runner->Dir = PRunner->Dir;
@@ -2293,6 +2307,11 @@ namespace EnvironmentShots
 
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("charsnow"), ESearchCase::IgnoreCase))
+		{
+			EnvironmentCharSnowShots::Run(Args);
+			return;
+		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("terrain"), ESearchCase::IgnoreCase))
 		{
 			EnvironmentTerrainShots::Run(Args);
@@ -2313,9 +2332,14 @@ namespace EnvironmentShots
 			SnowCover::Run(Args);
 			return;
 		}
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("snowfx2"), ESearchCase::IgnoreCase))
+		{
+			EnvironmentSnowFx2Shots::Run(Args);
+			return;
+		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("snowperf"), ESearchCase::IgnoreCase))
 		{
-			SnowPerf::Run();
+			SnowPerf::Run(Args.Num() > 1 ? Args[1] : FString(TEXT("snowperf")));
 			return;
 		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("snow"), ESearchCase::IgnoreCase))
@@ -2340,7 +2364,7 @@ namespace EnvironmentShots
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.EnvironmentShots"),
-		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse]': the weather presenter stills (+ a day at x60) into Environment/visuals; 'snowcover [nomovie] [noperf]': the snow cover overlay stills, movie and perf A/B into Environment/snowcover; 'snowperf': the falling snow GPU cost off / Snowfall / Blizzard at 2 camera distances into Environment/snowperf; 'snow': the falling snow stills + 10 s clips into Environment/snow; 'grounddust [nomovie] [noperf] [notracks]': the snow ground overlay stills (Clear 12:00, cover 0 / 0.35 / 0.7 / 1), the 0 -> 1 movie, the GPU A/B (Codex.Env.SnowGround 0 / 1; MovementTest: in wave 2) and a tracks loop into Environment/grounddust; 'terrain [nomovie] [notracks]' (on /Game/Environment/Weather/Test/L_SnowTerrainTest): the landscape material stills, night fresh / frost, interactive tracks and a 10 s movie into Environment/terrain; needs rendering, then exits."),
+		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse]': the weather presenter stills (+ a day at x60) into Environment/visuals; 'snowcover [nomovie] [noperf]': the snow cover overlay stills, movie and perf A/B into Environment/snowcover; 'snowperf [<subdir>]': the falling snow GPU cost off / Snowfall / Blizzard at 2 camera distances into Environment/snowperf (or <subdir>); 'snow': the falling snow stills + 10 s clips into Environment/snow; 'snowfx2 [noclip]' (the lake): DA_SnowFX before / after flake size, the fishermen's hut in a blizzard (indoor kill off / on) and a clip into Environment/snowfx2; 'grounddust [nomovie] [noperf] [notracks]': the snow ground overlay stills (Clear 12:00, cover 0 / 0.35 / 0.7 / 1), the 0 -> 1 movie, the GPU A/B (Codex.Env.SnowGround 0 / 1; MovementTest: in wave 2) and a tracks loop into Environment/grounddust; 'terrain [nomovie] [notracks]' (on /Game/Environment/Weather/Test/L_SnowTerrainTest): the landscape material stills, night fresh / frost, interactive tracks and a 10 s movie into Environment/terrain; needs rendering, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

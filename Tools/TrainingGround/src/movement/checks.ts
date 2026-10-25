@@ -13,7 +13,7 @@ import { SIM_DT } from './sim.ts';
 export const LIMITS = {
   stareDist: 200, // cm (contract)
   stareAngle: 45, // deg (contract)
-  stareMinSeconds: 0.3, // a glance while turning is not a stare
+  stareMinSeconds: 0.3, // a glance while turning is not a stare (looking where one walks never counts: approaching a wall)
   rearCoverPct: 90, // % of patrol time, 4 members (contract)
   rearMargin: 30, // the 5-7 o'clock sector (60 deg) must sit inside a cone: centre within fov / 2 - 30
   flickerPer100m: 1, // unexpected formation changes per 100 m (contract)
@@ -90,7 +90,9 @@ export class RunCollector {
     // 1. wall stare
     for (const mem of f.members) {
       let staring = '';
-      for (const w of this.walls) {
+      // Looking where he walks (facing within stareAngle of his travel) is approaching, not staring (a dead end ahead).
+      const approaching = mem.moveYaw !== null && angleDiff(mem.yaw, mem.moveYaw) <= LIMITS.stareAngle;
+      for (const w of approaching ? [] : this.walls) {
         if (distToWall(mem.pos, w.seg) > LIMITS.stareDist) continue;
         const towards = yawOf(sub(closestOnSegment(mem.pos, w.seg.a, w.seg.b).point, mem.pos));
         if (angleDiff(mem.yaw, towards) <= LIMITS.stareAngle) { staring = w.id; break; }

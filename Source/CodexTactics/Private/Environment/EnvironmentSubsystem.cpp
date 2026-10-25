@@ -53,6 +53,9 @@ namespace
 		FEnvironmentState State = EnvironmentRules::MakeInitialState(Config, Hour, Weather, Seed);
 		State.bLocked = bLocked;
 		State.SnowAmount = EnvironmentRules::GetInitialSnowCover(Config, Level);
+		// Section 15: the objects start with the ground cover on their tops (no side snow yet).
+		State.ObjectSnow = FDirectionalSnow();
+		EnvironmentRules::SeedObjectSnow(State);
 		return State;
 	}
 
@@ -194,6 +197,7 @@ void UEnvironmentSubsystem::InitialiseFromWorld(UWorld& World)
 	LevelSettings = Level ? Level->Config.Environment : FEnvironmentLevelSettings();
 	Resolve();
 	bInitialised = true;
+	++SnapSerial;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Env] %s start: %s"), *World.GetMapName(), *Describe());
 	OnStateSet.Broadcast(State);
 	// Phase 3: the visual presenter (never placed in a map; visual only, never read by gameplay).
@@ -236,6 +240,7 @@ void UEnvironmentSubsystem::ApplyLevelSettings(const FEnvironmentLevelSettings& 
 	Resolve();
 	const bool bWasInitialised = bInitialised;
 	bInitialised = true;
+	++SnapSerial; // still the level start (the clock has not run): the visuals snap
 	UE_LOG(LogCodexTactics, Display, TEXT("[Env] level settings applied: %s"), *Describe());
 	if (bWasInitialised)
 	{
@@ -282,6 +287,9 @@ void UEnvironmentSubsystem::Tick(float DeltaTime)
 	const FWeatherStepResult Step = EnvironmentRules::StepWeather(Config, State, Delta);
 	// Phase 4: the snow cover grows with the weather now in force (blended); it never recedes.
 	EnvironmentRules::StepSnowCover(Config, State, Delta);
+	// Section 15: the objects' directional pockets (top with the cover rates, windward sides with the wind, melt in Clear daylight).
+	const FVector Wind = GetWindDirection();
+	EnvironmentRules::StepObjectSnow(Config, State, Delta, FVector2D(Wind.X, Wind.Y), GetWindStrength(), GetSunElevation());
 	bClockRan = true;
 	AdvancedSeconds += Delta;
 
@@ -306,7 +314,10 @@ void UEnvironmentSubsystem::SetState(const FEnvironmentState& NewState)
 	State = NewState;
 	State.Hour = WrapHour(State.Hour);
 	State.SnowAmount = FMath::Clamp(State.SnowAmount, 0.f, 1.f);
+	State.ObjectSnow = State.ObjectSnow.Clamped();
 	bInitialised = true;
+	// A load / debug jump: the visuals snap to it (section 16), no fade from the state shown before.
+	++SnapSerial;
 	UE_LOG(LogCodexTactics, Log, TEXT("[Env] state set: %s"), *Describe());
 	BroadcastDifferences(Old, true);
 }
@@ -393,16 +404,63 @@ float UEnvironmentSubsystem::GetWeatherAmount(EWeatherState Weather) const
 void UEnvironmentSubsystem::SetSnowAmount(float Amount)
 {
 	State.SnowAmount = FMath::Clamp(Amount, 0.f, 1.f);
+	State.ObjectSnow.Top = State.SnowAmount;
 	UE_LOG(LogCodexTactics, Log, TEXT("[Env] snow cover set to %.3f"), State.SnowAmount);
 	OnStateSet.Broadcast(State);
 }
 
+void UEnvironmentSubsystem::SetObjectSnow(const FDirectionalSnow& Pockets)
+{
+	State.ObjectSnow = Pockets.Clamped();
+	UE_LOG(LogCodexTactics, Log, TEXT("[Env] object snow set: %s"), *Describe());
+	OnStateSet.Broadcast(State);
+}
+
+FVector UEnvironmentSubsystem::GetWindDirection() const
+{
+	if (WindOverride.IsSet())
+	{
+		return WindOverride.GetValue();
+	}
+	const UWorld* World = GetWorld();
+	const float Time = World ? World->GetTimeSeconds() : 0.f;
+	const AWeatherPresenterActor* Visuals = Presenter.Get();
+	const AWeatherPresenterActor* Source = Visuals ? Visuals : GetDefault<AWeatherPresenterActor>();
+	return AWeatherPresenterActor::ComputeWindDirection(Time, Source->WindBaseYaw, Source->WindDriftDegrees, Source->WindDriftPeriodSeconds);
+}
+
+void UEnvironmentSubsystem::SetWindDirectionOverride(const FVector& Direction)
+{
+	const FVector Flat = FVector(Direction.X, Direction.Y, 0.0).GetSafeNormal();
+	if (Flat.IsNearlyZero())
+	{
+		WindOverride.Reset();
+	}
+	else
+	{
+		WindOverride = Flat;
+	}
+	UE_LOG(LogCodexTactics, Log, TEXT("[Env] wind direction override %s"), WindOverride.IsSet() ? *WindOverride->ToCompactString() : TEXT("off"));
+}
+
+float UEnvironmentSubsystem::GetSunElevation() const
+{
+	if (const AWeatherPresenterActor* Visuals = Presenter.Get())
+	{
+		return EnvironmentVisualRules::GetSunElevation(Visuals->DayCurves, State.Hour);
+	}
+	static const FEnvironmentDayCurves DefaultCurves;
+	return EnvironmentVisualRules::GetSunElevation(DefaultCurves, State.Hour);
+}
+
 FString UEnvironmentSubsystem::Describe() const
 {
-	return FString::Printf(TEXT("hour %.2f (%s), weather %s -> %s, blend %.2f, dwell %.0f/%.0f s, seed %d%s, snow %.3f, clock x%.2f%s"),
+	const FDirectionalSnow& Objects = State.ObjectSnow;
+	return FString::Printf(TEXT("hour %.2f (%s), weather %s -> %s, blend %.2f, dwell %.0f/%.0f s, seed %d%s, snow %.3f, objects top %.3f px %.3f nx %.3f py %.3f ny %.3f, clock x%.2f%s"),
 		State.Hour, *EnvironmentRules::PhaseToString(GetPhase()), *EnvironmentRules::WeatherToString(State.Weather),
 		*EnvironmentRules::WeatherToString(State.NextWeather), GetTransitionBlend(), State.WeatherElapsedSeconds, State.WeatherDwellSeconds,
-		State.RandomSeed, State.bLocked ? TEXT(", LOCKED") : TEXT(""), State.SnowAmount, ClockScale, bInitialised ? TEXT("") : TEXT(" (not initialised)"));
+		State.RandomSeed, State.bLocked ? TEXT(", LOCKED") : TEXT(""), State.SnowAmount, Objects.Top, Objects.PX, Objects.NX, Objects.PY, Objects.NY,
+		ClockScale, bInitialised ? TEXT("") : TEXT(" (not initialised)"));
 }
 
 void UEnvironmentSubsystem::BroadcastDifferences(const FEnvironmentState& Old, bool bStateSet)
