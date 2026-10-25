@@ -164,23 +164,124 @@
   "expected_fail": [
     {
       "check": 1,
-      "choice": "all_forward",
-      "members": 2,
+      "choice": "auto",
+      "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 25.3,
-      "what": "Z at L3w",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 26.9,
+      "what": "P at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 1,
-      "choice": "all_forward",
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 26.9,
+      "what": "P at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "line",
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 25.3,
-      "what": "P at L3w",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 17.9,
+      "what": "L at L2w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 26.9,
+      "what": "P at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 17.9,
+      "what": "L at L2w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 26.9,
+      "what": "P at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 27.6,
+      "what": "L at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 26.9,
+      "what": "P at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 26.9,
+      "what": "P at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 27.6,
+      "what": "L at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 26.9,
+      "what": "P at R3w",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 5,
@@ -188,9 +289,9 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 9.5,
-      "what": "P-L 70 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.2,
+      "what": "P-Z 70 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -198,9 +299,9 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 9.5,
-      "what": "P-L 70 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.2,
+      "what": "P-L 60 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -208,9 +309,9 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 9.5,
-      "what": "P-L 71 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.2,
+      "what": "P-Z 70 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -218,9 +319,9 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 9.5,
-      "what": "P-L 71 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.3,
+      "what": "P-L 56 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -228,9 +329,9 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 9.8,
-      "what": "P-L 70 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.2,
+      "what": "P-Z 70 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -238,29 +339,19 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 9.8,
-      "what": "P-L 70 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "echelon_right",
-      "members": 3,
-      "route": "R1",
-      "seed": 2,
-      "t": 9.5,
-      "what": "P-L 72 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.3,
+      "what": "P-L 62 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "echelon_right",
       "members": 4,
       "route": "R1",
-      "seed": 2,
-      "t": 9.5,
-      "what": "P-L 72 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 1,
+      "t": 24.1,
+      "what": "P-L 58 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -268,39 +359,39 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 9.8,
-      "what": "P-L 70 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.2,
+      "what": "P-Z 70 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "blizzard",
       "members": 4,
       "route": "R1",
-      "seed": 2,
-      "t": 9.8,
-      "what": "P-L 70 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 1,
+      "t": 31.8,
+      "what": "P has no walkable slot",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "column",
       "members": 3,
       "route": "R1",
-      "seed": 1,
-      "t": 10,
-      "what": "P-L 67 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 2,
+      "t": 25.2,
+      "what": "P-Z 70 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "column",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 10,
-      "what": "P-L 67 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 2,
+      "t": 24.2,
+      "what": "P-L 60 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -308,19 +399,19 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 10.6,
-      "what": "P-L 69 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.2,
+      "what": "P-Z 70 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "hedgehog",
       "members": 4,
       "route": "R1",
-      "seed": 2,
-      "t": 9.5,
-      "what": "P-L 72 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 1,
+      "t": 31.8,
+      "what": "P has no walkable slot",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -328,9 +419,9 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 9.5,
-      "what": "P-L 72 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 25.2,
+      "what": "P-Z 70 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -338,59 +429,29 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 9.5,
-      "what": "P-L 72 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 16.3,
+      "what": "P-L 79 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "all_forward",
-      "members": 3,
+      "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 6.7,
-      "what": "P-L 33 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 8.2,
+      "what": "P-L 55 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
-      "check": 5,
-      "choice": "all_forward",
+      "check": 7,
+      "choice": "auto",
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 6,
-      "what": "L-Z 77 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "auto",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 23.2,
-      "what": "column: wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
       "t": 15.6,
       "what": "column: wall cuts L-Z slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "line",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 23.2,
-      "what": "column (asked line): wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -400,57 +461,27 @@
       "seed": 1,
       "t": 15.6,
       "what": "column (asked line): wall cuts L-Z slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "diamond",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 23.2,
-      "what": "column (asked wedge): wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
       "choice": "diamond",
       "members": 4,
       "route": "R1",
-      "seed": 1,
+      "seed": 2,
       "t": 15.6,
       "what": "column (asked diamond): wall cuts L-Z slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "echelon_right",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 23.2,
-      "what": "column (asked echelon_right): wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
       "choice": "echelon_right",
       "members": 4,
       "route": "R1",
-      "seed": 1,
+      "seed": 2,
       "t": 15.6,
       "what": "column (asked echelon_right): wall cuts L-Z slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "blizzard",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 23.2,
-      "what": "column (asked blizzard): wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -460,17 +491,7 @@
       "seed": 1,
       "t": 15.6,
       "what": "column (asked blizzard): wall cuts L-Z slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "column",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 23.2,
-      "what": "column: wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -480,17 +501,7 @@
       "seed": 1,
       "t": 15.6,
       "what": "column: wall cuts L-Z slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "hedgehog",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 23.2,
-      "what": "column (asked hedgehog): wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -500,27 +511,125 @@
       "seed": 1,
       "t": 15.6,
       "what": "column (asked hedgehog): wall cuts L-Z slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
       "choice": "echelon_left",
-      "members": 3,
+      "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 23.2,
-      "what": "column (asked echelon_left): wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 35,
+      "what": "column (asked echelon_left): wall cuts P-L, L-Z",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
-      "choice": "echelon_left",
+      "choice": "all_forward",
       "members": 4,
       "route": "R1",
       "seed": 1,
       "t": 15.6,
-      "what": "column (asked echelon_left): wall cuts L-Z slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "what": "column: wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "all_forward",
+      "members": 2,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
     },
     {
       "check": 7,
@@ -528,19 +637,7 @@
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 23.2,
-      "what": "column: wall cuts P-L slots",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "all_forward",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 16.6,
-      "what": "column: wall cuts L-Z",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
   ]
 }

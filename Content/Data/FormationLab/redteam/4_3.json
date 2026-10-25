@@ -171,14 +171,24 @@
   },
   "expected_fail": [
     {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 24.2,
+      "what": "blizzard: wall cuts Z",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
       "check": 1,
       "choice": "blizzard",
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 25.6,
-      "what": "P at W4",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 1,
@@ -186,9 +196,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25.5,
-      "what": "Z at W2a",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -196,9 +204,7 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 25.3,
-      "what": "P-L 54 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -206,9 +212,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 23.5,
-      "what": "K-P 59 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -216,19 +220,7 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 27.1,
-      "what": "P-L 26 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 24.2,
-      "what": "blizzard: wall cuts Z",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 7,
@@ -236,9 +228,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 7.1,
-      "what": "column (asked echelon_left): wall cuts L-Z",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
   ]
 }

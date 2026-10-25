@@ -130,14 +130,24 @@
   },
   "expected_fail": [
     {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 22.7,
+      "what": "P-Z 78 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
       "check": 1,
       "choice": "blizzard",
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 25.2,
-      "what": "P at W2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -145,9 +155,7 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 24.8,
-      "what": "P-L 56 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 5,
@@ -155,19 +163,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 22.8,
-      "what": "P-L 37 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "hedgehog",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 25.2,
-      "what": "P-L 32 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
   ]
 }

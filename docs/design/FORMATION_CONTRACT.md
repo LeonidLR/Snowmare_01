@@ -364,6 +364,9 @@ open rear, a gap at a wall corner after a cover switch, the formation breaking a
    seed, t, what, reason}]. These are regression layouts: `npm run bot:movement -- --layouts redteam` re-walks them and reports
    known / fixed (clear the entry) / NEW (`redteam_regression.md`; `--strict` exits 1 only on new failures); `npm test` checks
    they are valid and reports each expected_fail's reproduction, never failing on a known failure.
+   After a rules change: `npm run bot:movement -- --layouts redteam --refresh <tag>` rewrites expected_fail against the current
+   rules (still failing: new reason; now passing: moved to `fixed_entries` with `fixed_in`; appeared with these rules: `since: <tag>`;
+   nothing left failing: the layout stays as a guard with `"fixed_in": "<tag>"`). Refreshed for v2.2 on 2026-10-25.
 5. `Saved/TrainingGround/movement/redteam_report.md` (<= 30 lines: rounds, spend, layouts tried / valid / failing, the distinct
    failures per check with one example, "rule bug?" = checks 1 2 5 6 7 (geometry promises) vs. "design question" = 3 4 8 9
    (expectations / thresholds)); `redteam_calls.jsonl` per call (round, attempt, model, tokens, cost, error - never prompts or the

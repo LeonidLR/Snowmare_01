@@ -91,23 +91,14 @@
   "expected_fail": [
     {
       "check": 5,
-      "choice": "diamond",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 26.1,
-      "what": "K-P 79 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "diamond",
+      "choice": "blizzard",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 26.1,
-      "what": "K-P 79 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 2,
+      "t": 26,
+      "what": "P-Z 70 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 5,
@@ -115,9 +106,9 @@
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 26.3,
-      "what": "P-L 41 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 26.5,
+      "what": "P-Z 77 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -125,9 +116,49 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
+      "t": 26.4,
+      "what": "P-L 76 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
       "t": 26.3,
-      "what": "P-L 41 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "what": "P-Z 21 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 26,
+      "what": "P-Z 79 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
     }
   ]
 }

@@ -1,4 +1,5 @@
-# CHANGELOG - CodexTactics UE port (moved from the old HANDOFF.md §10)
+# CHANGELOG - Cod| (this, formation/redteam) | **chore(formation): red-team regression refreshed for rules v2.2.** `bot:movement -- --layouts redteam --refresh v2.2`: of 334 old expected_fail entries 152 still fail, 182 fixed by v2.2 (moved to `fixed_entries`), 58 new failures on these layouts (`since: v2.2`); 23 of 56 layouts fully fixed (`fixed_in: v2.2`, kept as guards); 210 expected_fail now, regression 0 fixed / 0 new. Tests rules-version-proof (the mock carries a synthetic check-4 failure; the UI test uses a hand-made kept file); keptFile no longer lets a layout's own comment override ours. |
+exTactics UE port (moved from the old HANDOFF.md §10)
 
 > Newest first. Every commit that adds / changes a system appends a row here (it used to be HANDOFF.md §10), and updates the matching `docs/systems/*.md`,
 > `docs/port/PORT_MATRIX.md` and the `docs/port/TANDEM.md` log. Index: [HANDOFF](HANDOFF.md) | [system docs](../systems/README.md)

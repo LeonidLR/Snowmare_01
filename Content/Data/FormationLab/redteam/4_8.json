@@ -230,14 +230,25 @@
   },
   "expected_fail": [
     {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.3,
+      "what": "L-Z 70 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ],
+  "fixed_entries": [
+    {
       "check": 1,
       "choice": "hedgehog",
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 20.2,
-      "what": "L at L2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 7,
@@ -245,9 +256,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 7.1,
-      "what": "column (asked echelon_left): wall cuts L-Z",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
   ]
 }

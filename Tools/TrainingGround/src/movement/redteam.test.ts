@@ -14,7 +14,7 @@ import { readConfigFile, readLayout, REDTEAM_DIR } from './cli/paths.ts';
 import { configValues } from './config.ts';
 import type { RedteamOptions } from './redteam.ts';
 import {
-  ATTACK_FAMILIES, failureKey, keptFile, parseRedteam, redteam, redteamPrompt, regressLayout, renderRedteamReport, reproduces,
+  ATTACK_FAMILIES, failureKey, keptFile, parseRedteam, redteam, redteamPrompt, refreshKept, regressLayout, renderRedteamReport, reproduces,
   runFailures, validateCandidate,
 } from './redteam.ts';
 import { mockRedteamText } from './redteamMock.ts';
@@ -49,7 +49,8 @@ test('mock loop: an invalid layout gets one retry, valid layouts are walked, fai
   assert.equal(r.tried, 3);
   assert.equal(r.fixed, 1);
   assert.equal(r.valid, 3);
-  assert.ok(a.kept.length >= 1, 'the zigzag breaks something');
+  // The mock's oblique-wall layout carries a synthetic, rules-independent failure (its zone expects the hedgehog): kept under any rules.
+  assert.ok(a.kept.some((k) => k.failures.some((f) => f.check === 4 && f.choice === 'auto')), 'the synthetic check-4 failure is found');
   assert.equal(new Set(a.distinct.map((d) => d.key)).size, a.distinct.length);
   for (const k of a.kept) for (const f of k.failures) assert.ok(reproduces(k.layout, f, config), `${k.id} ${failureKey(f)} reproduces in one run`);
   const b = await redteam({ ...base, client: mockClient(1) });
@@ -59,9 +60,9 @@ test('mock loop: an invalid layout gets one retry, valid layouts are walked, fai
   assert.match(report, /tried 3 \| valid 3 \(1 after the retry\)/);
 });
 
-test('kept file: comment + expected_fail with reasons; the regression of the same layout finds them all known, nothing new', async () => {
+test('kept file: comment + expected_fail with reasons; the regression of the same layout under the same rules: all known, nothing new', async () => {
   const res = await redteam({ ...base, client: mockClient(1) });
-  const k = res.kept[0];
+  const k = res.kept.find((x) => x.failures.some((f) => f.check === 4))!;
   const file = keptFile(k, { client: 'mock', configHash: 'h', members: [4], seeds: 1, seed: 1, date: 'd' });
   assert.match(String(file.comment), /^Red team 1_\d \(/);
   const ef = file.expected_fail as { reason: string }[];
@@ -168,7 +169,7 @@ test('regression layouts (Content/Data/FormationLab/redteam): valid, expected_fa
     const v = validateCandidate(data, data.name, config);
     assert.deepEqual(v.errors, [], f);
     assert.ok(typeof data.comment === 'string' && data.comment.length > 0, `${f}: comment`);
-    assert.ok(Array.isArray(data.expected_fail) && data.expected_fail.length > 0, `${f}: expected_fail`);
+    assert.ok(Array.isArray(data.expected_fail) && (data.expected_fail.length > 0 || typeof data.fixed_in === 'string'), `${f}: expected_fail or fixed_in`);
     for (const e of data.expected_fail) {
       assert.ok(typeof e.reason === 'string' && e.reason.length > 0, `${f}: reason`);
       // One run per entry (its minimal reproduction): still failing = known; passing = the rules fixed it (clear the entry).
@@ -186,13 +187,31 @@ test('UI view: picker groups (lab first, "Red team" in numeric order); comment +
   assert.deepEqual(g[1].names, ['redteam/2_3', 'redteam/10_1']);
   assert.deepEqual(groupLayoutNames(['sample_small']).map((x) => x.label), ['Лаборатория']);
   assert.equal(redteamView(readLayout('sample_small')), null);
-  const res = await redteam({ ...base, client: mockClient(1) });
-  const file = keptFile(res.kept[0], { client: 'mock', configHash: 'h', members: [4], seeds: 1, seed: 1, date: 'd' });
+  // A hand-made kept layout: the view must not depend on which failures the current rules still reproduce.
+  const kept = { id: '1_1', family: 'u_turn', intent: 'x', targets: [7], layout: readLayout('sample_small'),
+    failures: [{ check: 7, choice: 'auto' as const, members: 4, route: 'R1_walk', seed: 1, t: 12.5, what: 'wall cuts Z' }, { check: 1, choice: 'line' as const, members: 3, route: 'R2_run', seed: 2, t: null, what: 'L at W1' }] };
+  const file = keptFile(kept, { client: 'mock', configHash: 'h', members: [4], seeds: 1, seed: 1, date: 'd' });
   const v = redteamView(JSON.parse(JSON.stringify(file)))!;
-  assert.match(v.comment, /^Red team/);
-  assert.equal(v.failures.length, res.kept[0].failures.length);
-  assert.equal(v.failures[0].route, res.kept[0].failures[0].route);
+  assert.match(v.comment, /^Red team 1_1 [(]u_turn/);
+  assert.equal(v.family, 'u_turn');
+  assert.deepEqual(v.failures.map((x) => [x.check, x.route, x.choice]), [[7, 'R1_walk', 'auto'], [1, 'R2_run', 'line']]);
+  assert.equal(redteamView({ ...file, expected_fail: [], fixed_in: 'v2.2' })!.failures.length, 0);
   assert.equal(seekFor({ t: 10 }), 8);
   assert.equal(seekFor({ t: 1 }), 0);
   assert.equal(seekFor({ t: null }), 0);
+});
+
+test('refreshKept: still-failing entries kept with new reasons, passing ones -> fixed_entries, nothing left -> fixed_in', () => {
+  const f = (check: number, members: number) => ({ check, choice: 'auto' as const, members, route: 'R1', seed: 1, t: 3, what: 'x' });
+  const data = { name: 'n', expected_fail: [{ ...f(7, 4), reason: 'old' }, { ...f(1, 3), reason: 'old' }] };
+  const row = { file: 'n.json', known: 1, fixed: ['#1 auto n3'], fresh: [f(5, 2)], runs: 1, current: [f(7, 4), f(5, 2)], fixedChecks: [1], knownChecks: [7] };
+  const out = refreshKept(data, row, 'v9') as { expected_fail: { check: number; reason: string; since?: string }[]; fixed_entries: { check: number; fixed_in: string }[]; fixed_in?: string };
+  assert.deepEqual(out.expected_fail.map((e) => e.check), [7, 5]);
+  assert.match(out.expected_fail[0].reason, /still failing under v9/);
+  assert.equal(out.expected_fail[1].since, 'v9');
+  assert.deepEqual(out.fixed_entries, [{ check: 1, choice: 'auto', members: 3, route: 'R1', seed: 1, fixed_in: 'v9' }]);
+  assert.equal(out.fixed_in, undefined);
+  const done = refreshKept(data, { ...row, known: 0, fixed: ['#7 auto n4', '#1 auto n3'], fresh: [], current: [] }, 'v9') as { expected_fail: unknown[]; fixed_in?: string };
+  assert.deepEqual(done.expected_fail, []);
+  assert.equal(done.fixed_in, 'v9');
 });

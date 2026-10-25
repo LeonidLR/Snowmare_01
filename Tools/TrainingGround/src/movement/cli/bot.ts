@@ -6,6 +6,8 @@
 // --layouts redteam: the red team's regression layouts (Content/Data/FormationLab/redteam, FORMATION_CONTRACT.md 11), each walked
 // with auto + every menu item and compared with its expected_fail -> redteam_regression.md; known failures never fail the run,
 // --strict exits 1 only on NEW failures. Members / seeds / seed: each file's own (redteam meta) unless given.
+// --refresh <tag> (e.g. v2.2): rewrites each file's expected_fail against the current rules (refreshKept: fixed entries move to
+// fixed_entries, a layout with nothing left failing stays with fixed_in: <tag>).
 import fs from 'node:fs';
 import path from 'node:path';
 import { advicePrompt, resolveClient } from '../ai.ts';
@@ -14,7 +16,7 @@ import { renderManualMatrix, renderReport } from '../checks.ts';
 import { configValues } from '../config.ts';
 import type { MenuChoice } from '../menu.ts';
 import { MENU_ITEMS } from '../menu.ts';
-import { regressLayout, renderRegression } from '../redteam.ts';
+import { refreshKept, regressLayout, renderRegression } from '../redteam.ts';
 import { CONFIG_PATH, OUT_DIR, REDTEAM_DIR, ROOT, parseArgs, readConfigFile, readLayout } from './paths.ts';
 
 const args = parseArgs(process.argv.slice(2));
@@ -26,11 +28,13 @@ if (typeof args.layouts === 'string') {
   const rows = files.map((f) => {
     const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
     const meta = (data.redteam ?? {}) as { members?: number[]; seeds?: number; seed?: number };
-    return regressLayout(f, data, {
+    const row = regressLayout(f, data, {
       config: cfgValues,
       members: typeof args.members === 'string' ? args.members.split(',').map(Number).filter((v) => v >= 1 && v <= 4) : meta.members ?? [2, 3, 4],
       seeds: Number(args.seeds ?? meta.seeds ?? 2) || 2, seedBase: Number(args.seed ?? meta.seed ?? 1) || 1,
     });
+    if (typeof args.refresh === 'string') fs.writeFileSync(path.join(dir, f), JSON.stringify(refreshKept(data, row, args.refresh), null, 2) + '\n');
+    return row;
   });
   const text = renderRegression(rows, { dir: path.relative(ROOT, dir).split(path.sep).join('/'), configHash: configHash(cfgValues), date: new Date().toISOString().slice(0, 16).replace('T', ' ') });
   fs.mkdirSync(OUT_DIR, { recursive: true });

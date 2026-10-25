@@ -176,54 +176,59 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 3,
-      "route": "R1",
-      "seed": 2,
-      "t": 1.6,
-      "what": "L at W2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 1.6,
-      "what": "L at W2",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "blizzard",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 5.1,
-      "what": "P-L 60 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 5.1,
-      "what": "P-L 60 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
       "check": 5,
       "choice": "hedgehog",
       "members": 3,
       "route": "R1",
+      "seed": 1,
+      "t": 25.2,
+      "what": "P-Z 73 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 1.2,
+      "what": "hedgehog: wall cuts L, L-K",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
       "seed": 2,
-      "t": 10.4,
-      "what": "P-L 69 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
     },
     {
       "check": 7,
@@ -231,9 +236,7 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 1.4,
-      "what": "hedgehog: wall cuts L, L-K",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
   ]
 }

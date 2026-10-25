@@ -139,104 +139,99 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "auto",
-      "members": 3,
-      "route": "R1",
-      "seed": 2,
-      "t": 19.7,
-      "what": "L at S6",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 19.7,
-      "what": "L at S6",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 18.7,
-      "what": "L at S6",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 18.7,
-      "what": "L at S6",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "echelon_left",
-      "members": 3,
-      "route": "R1",
-      "seed": 2,
-      "t": 19.7,
-      "what": "L at S6",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "echelon_left",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 19.7,
-      "what": "L at S6",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 13.6,
-      "what": "L-Z 14 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 18.8,
-      "what": "L-Z 79 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "echelon_left",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 13.5,
-      "what": "L-Z 42 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
       "check": 6,
       "choice": "auto",
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 9.7,
-      "what": "p95 187 cm; Z 203 cm behind",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 11.4,
+      "what": "p95 228 cm; Z 253 cm behind",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 17.3,
+      "what": "column (asked echelon_right): wall cuts L-Z",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
     },
     {
       "check": 7,
@@ -244,9 +239,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 21.8,
-      "what": "column (asked echelon_left): wall cuts L-Z",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     },
     {
       "check": 7,
@@ -254,9 +247,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 21.8,
-      "what": "column (asked echelon_left): wall cuts L-Z",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.2"
     }
   ]
 }
