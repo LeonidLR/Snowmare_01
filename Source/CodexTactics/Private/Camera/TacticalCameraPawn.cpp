@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/App.h"
 #include "UI/MinimapSubsystem.h"
 
@@ -17,6 +18,13 @@ namespace
 	/** Real-time delta clamp, s (Godot camera: 0.001..0.1). */
 	constexpr float MinRealDelta = 0.001f;
 	constexpr float MaxRealDelta = 0.1f;
+}
+
+namespace TacticalCameraPawnLocal
+{
+	TAutoConsoleVariable<int32> CVarFreeExploration(TEXT("Codex.Camera.FreeExploration"), 1,
+		TEXT("1: in exploration the camera pans like in combat - no drift back to the leader, the combat range (game designer 2026-10-25); "
+			"0: the old exploration leash"));
 }
 
 ATacticalCameraPawn::ATacticalCameraPawn()
@@ -261,7 +269,7 @@ void ATacticalCameraPawn::SetDragPanning(bool bActive)
 	{
 		bPanReturning = false;
 	}
-	else if (!IsCombatView())
+	else if (!IsFreePanView())
 	{
 		bPanReturning = true;
 		PanReturnStart = PanOffset;
@@ -299,6 +307,11 @@ bool ATacticalCameraPawn::IsCombatView() const
 {
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	return Flow && Flow->GetPhase() != ECodexGamePhase::Exploration;
+}
+
+bool ATacticalCameraPawn::IsFreePanView() const
+{
+	return IsCombatView() || (Config.bFreeExplorationPan && TacticalCameraPawnLocal::CVarFreeExploration.GetValueOnGameThread() != 0);
 }
 
 bool ATacticalCameraPawn::IsTurnBased() const
@@ -395,7 +408,7 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 		return;
 	}
 
-	const bool bCombat = IsCombatView();
+	const bool bCombat = IsFreePanView();
 	// Demo 01 command choke point: the start of a keyboard / edge pan is reported once per pan (not every frame), then
 	// hold ticks while it lasts (the tutorial's "hold_s").
 	const bool bKeysNow = !KeyInput.IsNearlyZero();

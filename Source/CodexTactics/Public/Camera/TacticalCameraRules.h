@@ -88,7 +88,15 @@ struct CODEXTACTICS_API FTacticalCameraConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan", meta = (ClampMin = "0"))
 	float MaxPanCombat = 8500.f;
 
-	/** In exploration, released pan drifts back to the focus at this rate, 1/s. */
+	/**
+	 * Exploration pans like combat (game designer 2026-10-25: "during exploration the camera should be as free as in the fight, less
+	 * tied to the characters"): no drift back to the leader, the combat pan range. False = the old leash (MaxPanExploration +
+	 * PanReturnSpeed). Console: Codex.Camera.FreeExploration.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan")
+	bool bFreeExplorationPan = true;
+
+	/** In exploration (bFreeExplorationPan off), released pan drifts back to the focus at this rate, 1/s. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan", meta = (ClampMin = "0"))
 	float PanReturnSpeed = 2.5f;
 
