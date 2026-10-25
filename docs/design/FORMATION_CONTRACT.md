@@ -177,3 +177,22 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
   state out (1890).
 - Integration: the click on a cover / wall slot is where K stands - the leader's move ends ON his wall slot (an extra step
   away from the destination would drop the arrival). `formation_lab_01` routes A / F end on the slot (face - 45 cm).
+
+## 9. Hold-G radial menu - `FormationMenuRules` (pure; TS `Tools/TrainingGround/src/movement/menu.ts`, golden `formation_Menu.json`)
+- Items (`MENU_ITEMS`, clockwise from 12, 45 deg sectors): 12 `line`, 1:30 `diamond` (wedge with 3, pair with 2), 3
+  `echelon_right`, 4:30 `blizzard`, 6 `column`, 7:30 `hedgehog`, 9 `echelon_left`, 10:30 `all_forward`; the centre = Auto.
+  Choice type: `auto | <item id>`; a manual choice holds until Auto is picked.
+- `ItemAt(dx, dy, deadZonePx) -> item | null`: screen px offset from the menu centre, x right, **y down** (UMG), 12 = up;
+  `hypot <= deadZonePx` -> null (Auto); else angle a = atan2(dx, -dy) in deg 0..360, item = floor(a / 45 + 0.5) mod 8 (each item
+  owns +-22.5 deg; a border goes clockwise). Golden avoids exact borders.
+- `IsEnabled(item, memberCount)`: every item needs >= 2 members (one operative has no formation); Auto always.
+- State `{ open, choice, highlighted }` (start `{false, auto, null}`), effects `none | opened | picked | auto | cancelled | disabled`:
+  `Open` (G pressed: open, highlight Auto, choice untouched) / `Move(state, dx, dy, deadZonePx)` (highlight follows the cursor
+  while open) / `Release(state, memberCount)` (G released: on an enabled item -> picked, holds; centre -> auto; disabled item ->
+  `disabled`, the previous choice stays; always closes) / `Cancel` (Esc / RMB: closes, previous choice stays).
+- `Resolve(choice, memberCount) -> { manualFormation | null, allForward }`: auto -> terrain rules; all_forward -> terrain
+  rules + LookYaw mode `forward`; diamond -> `diamond` with 4 else `wedge`; a choice the member count no longer allows -> Auto.
+  Hedgehog: the runtime centres it on the nearest heat source when one is near (HedgehogSlots), else round the leader's spot.
+- Icons: `Content/UI/FormationMenu/src/<item|auto>.svg`, 64 x 64, currentColor (tint in UMG), generated from the rules by
+  `npm run menu:icons` (`--check`); labels in Russian: `menuLabel` (Авто, Цепь, Ромб / Клин / Пара, Эшелон вправо, ...).
+

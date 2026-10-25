@@ -12,7 +12,8 @@
     "typecheck": "tsc && tsc -p tsconfig.node.json",
     "bot:movement": "node src/movement/cli/bot.ts",
     "train": "node src/movement/cli/train.ts",
-    "lab:gen": "node src/movement/cli/genLab.ts"
+    "lab:gen": "node src/movement/cli/genLab.ts",
+    "menu:icons": "node src/movement/cli/genMenuIcons.ts"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

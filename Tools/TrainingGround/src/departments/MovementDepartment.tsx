@@ -3,8 +3,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Pause, Play, RotateCcw, Sparkles } from 'lucide-react';
 import { SquadView } from './SquadView';
-import type { Layout, Formation } from '../movement/layout';
-import { FORMATIONS } from '../movement/layout';
+import type { Layout } from '../movement/layout';
+import { FormationMenuRules, MENU_ITEMS, menuLabel } from '../movement/menu';
+import type { MenuChoice } from '../movement/menu';
 import type { FormationConfigFile } from '../movement/config';
 import { configValues } from '../movement/config';
 import type { Frame } from '../movement/sim';
@@ -47,7 +48,8 @@ export const MovementDepartment: React.FC = () => {
   const [members, setMembers] = useState(4);
   const [seed, setSeed] = useState(1);
   // '' = Auto; 'all_forward' = the menu's "All forward" (v1.2: walking, everyone looks at 12, formation stays automatic).
-  const [manual, setManual] = useState<Formation | '' | 'all_forward'>('');
+  // The hold-G menu's choice (same item list and rules as the game's radial menu, menu.ts).
+  const [manual, setManual] = useState<MenuChoice>('auto');
   const [speed, setSpeed] = useState(1);
   const [follow, setFollow] = useState(true);
   const [blizzard, setBlizzard] = useState(false);
@@ -89,7 +91,8 @@ export const MovementDepartment: React.FC = () => {
     const out: Frame[] = [];
     const collector = new RunCollector(layout, route, members, seed, config);
     simulate({ layout, route, memberCount: members, config, seed, nav,
-      manualFormation: manual && manual !== 'all_forward' ? manual : undefined, allForward: manual === 'all_forward', blizzard,
+      manualFormation: FormationMenuRules.Resolve(manual, members).manualFormation ?? undefined,
+      allForward: FormationMenuRules.Resolve(manual, members).allForward, blizzard,
       onFrame: (f) => { out.push(f); collector.onFrame(f); } });
     return { frames: out, metrics: collector.finish() };
   }, [layout, routeId, config, nav, members, seed, manual, blizzard]);
@@ -178,10 +181,12 @@ export const MovementDepartment: React.FC = () => {
               </select>
             </Field>
             <Field label="Построение">
-              <select className={inputCls} value={manual} onChange={(e) => setManual(e.target.value as Formation | '' | 'all_forward')}>
-                <option value="">Авто (по местности)</option>
-                {FORMATIONS.filter((f) => f !== 'wall').map((f) => <option key={f} value={f}>{FORMATION_RU[f]} (вручную)</option>)}
-                <option value="all_forward">Все вперёд (все смотрят на 12)</option>
+              <select className={inputCls} value={manual} onChange={(e) => setManual(e.target.value as MenuChoice)}>
+                {(['auto', ...MENU_ITEMS.map((it) => it.id)] as MenuChoice[]).map((id) => (
+                  <option key={id} value={id} disabled={id !== 'auto' && !FormationMenuRules.IsEnabled(id, members)}>
+                    {id === 'auto' ? 'Авто (по местности)' : `${menuLabel(id, members)} (вручную)`}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Seed">
@@ -211,7 +216,7 @@ export const MovementDepartment: React.FC = () => {
             {frame && (
               <div className="absolute top-3 left-3 bg-slate-950/85 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 flex flex-col gap-0.5">
                 <span>t = {frame.t.toFixed(1)} с · {MODE_RU[frame.mode]}</span>
-                <span>построение: <b className="text-cyan-300">{FORMATION_RU[frame.formation]}</b>{manual === 'all_forward' ? ' · все вперёд' : manual ? ' (вручную)' : ''}</span>
+                <span>построение: <b className="text-cyan-300">{FORMATION_RU[frame.formation]}</b>{manual === 'all_forward' ? ' · все вперёд' : manual !== 'auto' ? ' (вручную)' : ''}</span>
                 <span>местность: {frame.terrain}</span>
                 <span>пройдено: {(frame.leaderDistance / 100).toFixed(1)} м</span>
               </div>
