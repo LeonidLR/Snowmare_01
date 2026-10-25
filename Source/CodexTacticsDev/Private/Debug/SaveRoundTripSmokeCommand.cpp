@@ -917,15 +917,21 @@ namespace SaveRoundTripSmoke
 
 		Check(State, Flow->NotifyWaveCleared() == EGameFlowResult::Ok && Saves->GetWrittenSaveCount() == WrittenBefore && CountSaveFiles(*Saves) == FilesBefore,
 			TEXT("no autosave when the wave is cleared (rev 5f)"));
-		Check(State, Saves->CanSaveNow() && Saves->QuickSave() && SavedPhase(ReadSaveFile(*Saves, TEXT("quicksave"))) == TEXT("WaveCleared"),
-			TEXT("after the wave: F5 allowed, the quicksave holds WaveCleared"));
+		// 2026-10-25: no victory panel between waves - the cleared wave is the rest before wave 2 (Preparation, the countdown running).
+		const float RestLeft = Flow->GetPreparationTimeRemaining();
+		Check(State, Flow->IsRestBetweenWaves() && Saves->CanSaveNow() && Saves->QuickSave()
+			&& SavedPhase(ReadSaveFile(*Saves, TEXT("quicksave"))) == TEXT("Preparation"),
+			TEXT("after the wave: the rest before wave 2, F5 allowed, the quicksave holds Preparation"));
 		const FGameFlowConfig& Config = Flow->GetConfig();
-		const FSaveLoadFlow Expected = SaveGameRules::ResolveLoadFlow(2, ECodexGamePhase::WaveCleared, true, false, false, 1, Config.TotalWaves, false,
+		const FSaveLoadFlow Expected = SaveGameRules::ResolveLoadFlow(2, ECodexGamePhase::Preparation, true, true, false, 2, Config.TotalWaves, false,
 			Config.bAmbushSingleFight);
 		const int32 WrittenBeforeLoad = Saves->GetWrittenSaveCount();
 		const bool bQuickLoaded = Saves->LoadGame(TEXT("quicksave"));
 		Check(State, bQuickLoaded && Flow->GetPhase() == Expected.Phase && Flow->GetWaveIndex() == Expected.WaveIndex,
 			FString::Printf(TEXT("the after-the-wave quicksave resumes %s of wave %d"), *UEnum::GetValueAsString(Flow->GetPhase()), Flow->GetWaveIndex()));
+		Check(State, Flow->IsRestBetweenWaves() && FMath::Abs(Flow->GetPreparationTimeRemaining() - RestLeft) < 0.5f,
+			FString::Printf(TEXT("... the rest goes on where it was saved (%.1f s left, saved %.1f): the wave then comes by itself"),
+				Flow->GetPreparationTimeRemaining(), RestLeft));
 		Check(State, Saves->GetWrittenSaveCount() == WrittenBeforeLoad, TEXT("loading writes no save"));
 
 		// Rev 5f: a legacy autosave file (written by an older build) stays on disk but is never listed / continued / F9-loaded.

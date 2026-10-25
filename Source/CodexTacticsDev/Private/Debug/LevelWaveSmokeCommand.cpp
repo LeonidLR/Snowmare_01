@@ -152,7 +152,7 @@ namespace LevelWaveSmoke
 			const FGameFlowConfig& Config = Flow->GetConfig();
 			Check(State, Config.TotalWaves == 3, FString::Printf(TEXT("level waves: %d"), Config.TotalWaves));
 			Check(State, FMath::IsNearlyEqual(Config.PreparationDuration, 60.f) && FMath::IsNearlyEqual(Config.WaveRestDuration, 20.f),
-				FString::Printf(TEXT("preparation %.0f s, rest %.0f s (parsed, unused by sudden waves)"), Config.PreparationDuration, Config.WaveRestDuration));
+				FString::Printf(TEXT("preparation %.0f s, rest %.0f s (the rest runs between the waves by itself since 2026-10-25)"), Config.PreparationDuration, Config.WaveRestDuration));
 			Check(State, Flow->UsesSuddenStart(1) && Flow->UsesSuddenStart(2) && Flow->UsesSuddenStart(3) && Config.PreparedWaveIndices.IsEmpty(),
 				TEXT("every level wave starts suddenly"));
 			Flow->TriggerCombatZone();

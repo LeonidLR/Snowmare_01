@@ -10,10 +10,14 @@
 //    running front-runner per type in spawn order (hound, frostbitten), back to the leader (camera locked meanwhile,
 //    the whole horde revealed); then the free pause at 0.02, camera unlocked;
 // 3. orders in the free pause: a planned move and a barricade set-up; a Space tap releases it: real time, charges 3/3;
-// 4. wave 2 comes at once (real time, intro armed); its flyover shows only the new types (cutter, marksman); Esc
-//    (simulated key) skips it during a type shot: camera at once on the leader, unlocked, the free pause at 0.02, no menu;
-// 5. wave 3 before its trigger: a click is a normal click (no pause), Esc opens the free pause at once (no flyover);
-// 6. a load resumes wave 3 (RestoreForLoad): it comes suddenly again; known types only: wide shot + return; a click skips.
+// 4. (game designer 2026-10-25: no "Start the next wave" plate) wave 1 cleared -> straight into the rest before wave 2: no victory
+//    panel / WaveCleared phase, no «Start Battle» button, the banner counts down "NEXT WAVE IN", the world runs; NOBODY clicks
+//    anything and wave 2 breaks through on its own when the rest runs out (real time, intro armed);
+// 5. wave 2's flyover shows only the new types (cutter, marksman); Esc (simulated key) skips it during a type shot: camera at once
+//    on the leader, unlocked, the free pause at 0.02, no menu;
+// 6. wave 3 (the rest cut short like the bot does) before its trigger: a click is a normal click (no pause), Esc opens the free
+//    pause at once (no flyover);
+// 7. a load resumes wave 3 (RestoreForLoad): it comes suddenly again; known types only: wide shot + return; a click skips.
 // Framing (game designer play-test 2026-10-22, "the fly-in sometimes shows nothing"): a level hound parked 60 m away (NOT part
 // of the wave, like the lake's patrols) must not pull the frame; every settled wide shot holds the wave's main cluster in the
 // camera frustum (feet and heads), visible, each at least 2.5 % of the frame height; a type shot holds its runner, >= 12 %.
@@ -48,6 +52,7 @@
 #include "UI/CodexTacticsHUD.h"
 #include "UI/HordeAlertWidget.h"
 #include "UI/PhaseBannersWidget.h"
+#include "UI/VictoryPanelWidget.h"
 
 namespace HordeIntroSmoke
 {
@@ -78,6 +83,8 @@ namespace HordeIntroSmoke
 		TWeakObjectPtr<UPhaseBannersWidget> Banners;
 		/** A level enemy far away, not in the wave (the lake's patrols): the flyover must ignore it. */
 		TWeakObjectPtr<AEnemyCharacter> Decoy;
+		/** Game seconds the rest before wave 2 ran until the wave came by itself (2026-10-25). */
+		float RestSeconds = 0.f;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -288,7 +295,7 @@ namespace HordeIntroSmoke
 		State.StageTime += StepSeconds;
 		State.Total += StepSeconds;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Total > 180.f)
+		if (!World || State.Total > 260.f)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke stopped in stage %d"), State.Stage);
 			return Finish(State, false);
@@ -558,19 +565,54 @@ namespace HordeIntroSmoke
 			return true;
 		}
 		case 4:
-			if (Flow->GetPhase() == ECodexGamePhase::WaveCleared)
+		{
+			// Game designer 2026-10-25: no "Start the next wave" plate - wave 1 cleared goes straight into the rest before wave 2.
+			if (Flow->GetPhase() == ECodexGamePhase::WaveCombat)
 			{
-				SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f);
-				Check(State, Flow->AdvanceAfterWave() == EGameFlowResult::Ok, TEXT("next wave"));
-				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro() && Flow->GetWaveIndex() == 2,
-					TEXT("wave 2 comes at once (no rest countdown), real time, intro armed"));
-				State.LastShot = INDEX_NONE;
-				State.VerifiedShot = INDEX_NONE;
-				Next(State);
-				return true;
+				return State.StageTime < 5.f || Finish(State, false);
 			}
-			return State.StageTime < 5.f || Finish(State, false);
+			const APlayerController* HudOwner = PC;
+			const ACodexTacticsHUD* Hud = HudOwner ? Cast<ACodexTacticsHUD>(HudOwner->GetHUD()) : nullptr;
+			const UVictoryPanelWidget* Panel = Hud ? Hud->GetVictoryPanel() : nullptr;
+			Check(State, Flow->GetPhase() == ECodexGamePhase::Preparation && Flow->IsRestBetweenWaves() && Flow->GetWaveIndex() == 2,
+				FString::Printf(TEXT("wave 1 cleared: straight into the rest before wave 2 (phase %s, wave %d)"),
+					*UEnum::GetValueAsString(Flow->GetPhase()), Flow->GetWaveIndex()));
+			Check(State, !State.PhasesSeen.Contains(ECodexGamePhase::WaveCleared) && (!Panel || !Panel->IsShown()),
+				TEXT("no victory panel / \"Start the next wave\" plate (no WaveCleared phase)"));
+			if (UPhaseBannersWidget* Banners = State.Banners.Get())
+			{
+				Banners->Refresh();
+				const FString Combat = Banners->GetCombatText().ToString();
+				Check(State, !Banners->IsStartBattleShown() && Combat.Contains(TEXT("NEXT WAVE IN")),
+					FString::Printf(TEXT("banner: \"%s\", no Start Battle button"), *Combat));
+			}
+			Check(State, FMath::IsNearlyEqual(WorldDilation(World), 1.f, 0.001f)
+				&& Flow->GetPreparationTimeRemaining() > FlowConfig.WaveRestDuration - 1.f,
+				FString::Printf(TEXT("the world runs in the rest (dilation %.2f), %.1f of %.0f s left"), WorldDilation(World),
+					Flow->GetPreparationTimeRemaining(), FlowConfig.WaveRestDuration));
+			SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f);
+			State.RestSeconds = 0.f;
+			Next(State);
+			return true;
+		}
 		case 5:
+		{
+			// Nobody touches anything: the rest runs out and wave 2 breaks through on its own.
+			if (Flow->GetPhase() == ECodexGamePhase::Preparation)
+			{
+				State.RestSeconds = State.StageTime;
+				return State.StageTime < FlowConfig.WaveRestDuration + 5.f || Finish(State, false);
+			}
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro() && Flow->GetWaveIndex() == 2,
+				FString::Printf(TEXT("wave 2 broke through on its own after the %.1f s rest (real time, intro armed)"), State.RestSeconds));
+			Check(State, State.RestSeconds > FlowConfig.WaveRestDuration - 2.f, FString::Printf(TEXT("... after the level's rest (%.0f s)"),
+				FlowConfig.WaveRestDuration));
+			State.LastShot = INDEX_NONE;
+			State.VerifiedShot = INDEX_NONE;
+			Next(State);
+			return true;
+		}
+		case 6:
 		{
 			if (!Intro->IsFlyoverActive())
 			{
@@ -589,7 +631,7 @@ namespace HordeIntroSmoke
 			Next(State);
 			return true;
 		}
-		case 6:
+		case 7:
 		{
 			// Esc during the last type shot skips the rest.
 			TrackFlyover(State, *Intro, *Camera, Leader);
@@ -630,18 +672,22 @@ namespace HordeIntroSmoke
 			Next(State);
 			return true;
 		}
-		case 7:
-			if (Flow->GetPhase() == ECodexGamePhase::WaveCleared)
+		case 8:
+			// The rest before wave 3 (no panel); cut short like the bot does (stage 4-5 waited one out).
+			if (Flow->IsRestBetweenWaves())
 			{
-				Flow->AdvanceAfterWave();
+				Check(State, !State.PhasesSeen.Contains(ECodexGamePhase::WaveCleared) && Flow->GetWaveIndex() == 3,
+					TEXT("wave 2 cleared: the rest before wave 3, no panel"));
+				SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f);
+				Flow->FinishPreparation();
 				Check(State, Flow->IsAwaitingHordeIntro() && Flow->GetWaveIndex() == 3 && Intro->GetStage() == EHordeIntroStage::Waiting,
-					TEXT("wave 3 at once, intro waiting"));
+					TEXT("wave 3 (rest cut short), intro waiting"));
 				State.StartedBefore = Intro->GetStartedCount();
 				Next(State);
 				return true;
 			}
 			return State.StageTime < 5.f || Finish(State, false);
-		case 8:
+		case 9:
 			// Before the trigger: a click is a normal click, Esc opens the free pause at once.
 			switch (State.SubStep++)
 			{
@@ -673,7 +719,7 @@ namespace HordeIntroSmoke
 			default:
 				return true;
 			}
-		case 9:
+		case 10:
 			// A load resumes wave 3 in its preparation: it comes suddenly again on the next flow tick.
 			if (State.SubStep == 0)
 			{
@@ -696,7 +742,7 @@ namespace HordeIntroSmoke
 			State.VerifiedShot = INDEX_NONE;
 			Next(State);
 			return true;
-		case 10:
+		case 11:
 		{
 			if (!State.bKeyDown)
 			{

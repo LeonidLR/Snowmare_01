@@ -85,7 +85,7 @@ namespace FirePostureRules
 	CODEXTACTICS_API bool MayAutoFireInExploration(ESquadFirePosture Posture, bool bContactStartsFight, ECodexGamePhase Phase, bool bCombatUnlocked,
 		const FFirePostureConfig& Config);
 
-	/** Provocations end with the fight: a wave cleared, after the combat, back in exploration or game over. */
+	/** Provocations end with the fight: a wave cleared (its panel or the rest before the next wave), after the combat, back in exploration or game over. */
 	CODEXTACTICS_API bool ClearsProvocation(ECodexGamePhase NewPhase);
 
 	/**

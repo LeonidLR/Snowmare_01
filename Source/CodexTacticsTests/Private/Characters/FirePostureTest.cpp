@@ -54,6 +54,7 @@ bool FPostureDefensiveHoldsUntilAttackedTest::RunTest(const FString&)
 	TestFalse(TEXT("No exploration opening"), MayAutoFireInExploration(ESquadFirePosture::Defensive, true, ECodexGamePhase::Exploration, false, Config));
 	// Provocation lasts one fight.
 	TestTrue(TEXT("Cleared after the wave"), ClearsProvocation(ECodexGamePhase::WaveCleared));
+	TestTrue(TEXT("Cleared in the rest before the next wave (2026-10-25: no panel)"), ClearsProvocation(ECodexGamePhase::Preparation));
 	TestTrue(TEXT("Cleared back in exploration"), ClearsProvocation(ECodexGamePhase::Exploration));
 	TestFalse(TEXT("Kept during the fight"), ClearsProvocation(ECodexGamePhase::WaveCombat));
 	return true;

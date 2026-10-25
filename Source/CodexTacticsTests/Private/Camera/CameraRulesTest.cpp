@@ -107,6 +107,7 @@ bool FGameFlowWaveActiveTest::RunTest(const FString&)
 {
 	FGameFlowConfig Prepared;
 	Prepared.bSuddenWaveStart = false; // Godot's is_wave_active through the classic prepared start
+	Prepared.bVictoryPanelBetweenWaves = true; // ... and its victory panel between waves (off by default since 2026-10-25)
 	FGameFlowStateMachine Machine(Prepared);
 	TestFalse(TEXT("Exploration"), Machine.IsWaveActive());
 	Machine.TriggerCombatZone();

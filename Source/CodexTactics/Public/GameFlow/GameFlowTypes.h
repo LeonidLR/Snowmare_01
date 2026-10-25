@@ -81,7 +81,10 @@ struct CODEXTACTICS_API FGameFlowConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Flow", meta = (ClampMin = "0"))
 	float PreparationDuration = 60.f;
 
-	/** Real seconds of rest (preparation) before every following wave. */
+	/**
+	 * Real seconds of rest (preparation) before every following wave; since 2026-10-25 the rest starts by itself when a wave is
+	 * cleared and the next wave comes when it runs out (bVictoryPanelBetweenWaves), sudden waves included (level JSON wave_rest_duration).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Flow", meta = (ClampMin = "0"))
 	float WaveRestDuration = 20.f;
 
@@ -164,10 +167,20 @@ struct CODEXTACTICS_API FGameFlowConfig
 	 * The victory panel after the fight's LAST wave (or a single ambush fight) with its "End combat and continue exploring" button
 	 * (Godot _on_wave_cleared, time stopped until the click). Off by default (game designer 2026-10-22: "after a fight ends, remove
 	 * the 'End combat and continue exploring' button - it's not needed"): the end of the fight goes straight to PostCombat (the
-	 * world runs on, the squad stays put). The panel between waves ("Start the next wave (N/M)") is unchanged.
+	 * world runs on, the squad stays put). The panel between waves: bVictoryPanelBetweenWaves.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Victory")
 	bool bVictoryPanelAfterLastWave = false;
+
+	/**
+	 * The victory panel BETWEEN the waves of a fight with its "Start the next wave (N/M)" button (Godot _on_wave_cleared /
+	 * _on_next_wave_pressed: time stopped until the click). Off by default (game designer 2026-10-25: "when a wave ends, remove the
+	 * plate «Start the next wave» - the waves must break through on their own"): a cleared wave that is not the fight's last goes
+	 * straight into the rest before the next one (Preparation, WaveRestDuration, the world runs) and the next wave starts by itself
+	 * when the rest runs out (a sudden one awaiting its horde intro). True restores the Godot panel.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Victory")
+	bool bVictoryPanelBetweenWaves = false;
 
 	/**
 	 * Horde waves start suddenly (user decision 2026-10-11, UE-only): no pre-combat cutscene, no preparation / rest

@@ -87,6 +87,7 @@ cannot exist in a save because saves are refused in combat), **GAP** (open; list
 | **event waves** (flank breach, Susanin rescue) + **breach done** | SAVED (v3) | `breach_wave`, `susanin_wave`, `breach_triggered` -> `UWaveSubsystem::RestoreRandomEvents` (a reopened level re-rolled them: the rescue could land on a wave already fought) |
 | **cold drain of the rest between waves** | SAVED (v3) | `cold_drain_mult` -> `RestoreColdDrainMultiplier` |
 | **kill statistics** (victory panel) | SAVED (v3) | `kill_stats` -> `UWaveVictorySubsystem::RestoreKillStats` |
+| **the rest between waves** (2026-10-25: it starts by itself, then the wave) | SAVED | phase `Preparation` + `preparation_time_left` -> `RestoreForLoad` resumes the same rest for wave 2+ (`bRestCountdown`); a save from the fight still resumes the wave at once |
 | pause charges / cooldown, turn-based uses, free pause, horde clocks, horde intro, turn-based grid state, wave spawns | DERIVED | combat-only / full outside combat |
 | mission intro seen, objective text, `bCombatFinished`, feed / floating-text history, run telemetry | DERIVED | a loaded save starts without the intro; the objective is recomputed; telemetry counts the run from the load (analytics only) |
 | encounter "ambush started" counter, console overrides | DERIVED | the fight itself is in the phase / combat unlocked |

@@ -243,7 +243,7 @@ bool FHordeIntroSpaceBeforeTriggerTest::RunTest(const FString&)
 	return true;
 }
 
-HORDEINTRO_TEST(FHordeIntroNextWaveTest, "FreePause.NextWaveComesSuddenlyWithoutRest")
+HORDEINTRO_TEST(FHordeIntroNextWaveTest, "FreePause.NextWaveComesSuddenlyAfterTheRest")
 bool FHordeIntroNextWaveTest::RunTest(const FString&)
 {
 	FGameFlowConfig Config;
@@ -254,12 +254,19 @@ bool FHordeIntroNextWaveTest::RunTest(const FString&)
 	Machine.ToggleTacticalPause();
 	Machine.ToggleTacticalPause(); // a normal pause: 2/3
 	TestEqual(TEXT("wave cleared from a pause"), Machine.NotifyWaveCleared(), EGameFlowResult::Ok);
-	TestEqual(TEXT("next wave"), Machine.AdvanceAfterWave(), EGameFlowResult::Ok);
-	TestEqual(TEXT("wave 2 at once"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
-	TestEqual(TEXT("wave index 2"), Machine.GetWaveIndex(), 2);
-	TestTrue(TEXT("its horde intro armed, real time"), Machine.IsAwaitingHordeIntro());
+	// Game designer 2026-10-25: no "Start the next wave" panel - the rest runs, then the wave breaks through on its own.
+	TestTrue(TEXT("the rest before wave 2 (no panel)"), Machine.IsRestBetweenWaves() && Machine.GetWaveIndex() == 2);
+	TestEqual(TEXT("the world runs in the rest"), Machine.GetTimeDilation(), 1.f);
 	TestEqual(TEXT("charges back to 3/3"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
-	TestEqual(TEXT("no rest countdown"), Machine.GetPreparationTimeRemaining(), 0.f);
+	TestEqual(TEXT("the rest countdown"), Machine.GetPreparationTimeRemaining(), Config.WaveRestDuration);
+	for (float Time = 0.f; Time < Config.WaveRestDuration - 0.5f; Time += 0.25f)
+	{
+		Machine.Tick(0.25f);
+	}
+	TestEqual(TEXT("a sudden wave waits for the rest"), Machine.GetPhase(), ECodexGamePhase::Preparation);
+	Machine.Tick(1.f);
+	TestEqual(TEXT("wave 2 comes by itself"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
+	TestTrue(TEXT("its horde intro armed, real time"), Machine.IsAwaitingHordeIntro() && Machine.GetWaveIndex() == 2);
 	Machine.EnterFreeTacticalPause();
 	TestEqual(TEXT("hold -> turn-based from the free pause"), Machine.RequestEnterTurnBased(true), EGameFlowResult::Ok);
 	TestEqual(TEXT("charges untouched"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
@@ -267,7 +274,7 @@ bool FHordeIntroNextWaveTest::RunTest(const FString&)
 	TestFalse(TEXT("not free in the grid"), Machine.IsFreePause());
 	Machine.ExitTurnBasedToRealTime();
 	Machine.NotifyWaveCleared();
-	Machine.AdvanceAfterWave();
+	TestEqual(TEXT("the bot / smokes may cut the rest short"), Machine.FinishPreparation(), EGameFlowResult::Ok);
 	TestTrue(TEXT("wave 3 armed"), Machine.IsAwaitingHordeIntro() && Machine.GetWaveIndex() == 3);
 	Machine.TriggerGameOver();
 	TestFalse(TEXT("game over: nothing armed"), Machine.IsAwaitingHordeIntro() || Machine.IsFreePause());
@@ -286,11 +293,11 @@ bool FHordeIntroPreparedWaveTest::RunTest(const FString&)
 	Machine.TriggerCombatZone();
 	TestTrue(TEXT("wave 1 armed"), Machine.IsAwaitingHordeIntro());
 	Machine.NotifyWaveCleared();
-	Machine.AdvanceAfterWave();
 	TestEqual(TEXT("wave 2: the rest countdown"), Machine.GetPhase(), ECodexGamePhase::Preparation);
 	TestEqual(TEXT("rest seconds"), Machine.GetPreparationTimeRemaining(), Config.WaveRestDuration);
-	TestEqual(TEXT("rest ends"), Machine.FinishPreparation(), EGameFlowResult::Ok);
-	TestEqual(TEXT("wave 2 in real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
+	TestFalse(TEXT("no Start Battle in the rest"), Machine.OffersStartBattle());
+	Machine.Tick(Config.WaveRestDuration + 0.1f);
+	TestEqual(TEXT("the rest ran out: wave 2 in real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
 	TestFalse(TEXT("no horde intro"), Machine.IsAwaitingHordeIntro());
 	FGameFlowStateMachine Old(Config);
 	Old.SetSuddenStartOverride(0);
@@ -310,12 +317,20 @@ bool FHordeIntroLoadTest::RunTest(const FString&)
 	FGameFlowConfig Config;
 	Config.TotalWaves = 3;
 	FGameFlowStateMachine Machine(Config);
-	Machine.RestoreForLoad(true, true, 2, 15.f);
+	// A save from the fight / after it (no rest seconds): the wave comes at once.
+	Machine.RestoreForLoad(true, true, 2);
 	TestEqual(TEXT("restored in the preparation"), Machine.GetPhase(), ECodexGamePhase::Preparation);
 	Machine.Tick(0.016f);
 	TestEqual(TEXT("wave 2 comes at once"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
 	TestTrue(TEXT("its horde intro armed"), Machine.IsAwaitingHordeIntro());
 	TestEqual(TEXT("wave index kept"), Machine.GetWaveIndex(), 2);
+	// 2026-10-25: a save from the rest between waves resumes that rest, then the wave comes by itself.
+	FGameFlowStateMachine Rest(Config);
+	Rest.RestoreForLoad(true, true, 2, 12.f);
+	Rest.Tick(0.016f);
+	TestTrue(TEXT("the saved rest resumes (12 s)"), Rest.IsRestBetweenWaves() && FMath::IsNearlyEqual(Rest.GetPreparationTimeRemaining(), 12.f - 0.016f, 0.01f));
+	Rest.Tick(12.f);
+	TestTrue(TEXT("... then wave 2 breaks through, horde intro armed"), Rest.GetPhase() == ECodexGamePhase::WaveCombat && Rest.IsAwaitingHordeIntro());
 	return true;
 }
 

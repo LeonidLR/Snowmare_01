@@ -625,6 +625,10 @@ namespace HudShot
 					Victory->RegisterEnemyKill(EEnemyArchetype::Spitter, TEXT("Turret"));
 					Victory->RegisterEnemyKill(EEnemyArchetype::Brute, TEXT("Engineer"));
 					Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Mine"));
+					// The panel between waves is off since 2026-10-25 (the next wave comes by itself): the shot shows the optional one.
+					FGameFlowConfig PanelConfig = Flow->GetConfig();
+					PanelConfig.bVictoryPanelBetweenWaves = true;
+					Flow->SetConfig(PanelConfig);
 					Flow->NotifyWaveCleared();
 					// Time stands still while the panel is up: shoot and exit on real time.
 					TSharedRef<int32> Frames = MakeShared<int32>(0);

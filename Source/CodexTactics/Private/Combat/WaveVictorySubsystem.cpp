@@ -66,8 +66,9 @@ void UWaveVictorySubsystem::ContinueAfterWave()
 	{
 		return;
 	}
-	// The planned tactical orders were dropped when the wave ended; the flow restores the pause charges and starts the
-	// rest countdown (or PostCombat after the last wave, handled below).
+	// Only with the Godot panel (FGameFlowConfig::bVictoryPanelBetweenWaves; off since 2026-10-25 - the rest starts by itself). The
+	// planned tactical orders were dropped when the wave ended; the flow restores the pause charges and starts the rest countdown (or
+	// PostCombat after the last wave, handled below).
 	Flow->AdvanceAfterWave();
 }
 
@@ -125,10 +126,12 @@ void UWaveVictorySubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexC
 		// Godot _end_cutscene_and_start_pause: initial_prep_station = where each operative stands now.
 		RecordPrepStations(true);
 	}
-	// Game designer 2026-10-22: the fight's end skips the panel (WaveCombat -> PostCombat) - the wave-cleared line still comes.
-	if (Flow && (Phase == ECodexGamePhase::WaveCleared || (Phase == ECodexGamePhase::PostCombat && Previous == ECodexGamePhase::WaveCombat)))
+	// Game designer 2026-10-22: the fight's end skips the panel (WaveCombat -> PostCombat) - the wave-cleared line still comes. 2026-10-25:
+	// so does a wave cleared between waves (WaveCombat -> the rest = Preparation of the NEXT wave, no "Start the next wave" panel).
+	const bool bIntoRest = Phase == ECodexGamePhase::Preparation && Previous == ECodexGamePhase::WaveCombat;
+	if (Flow && (Phase == ECodexGamePhase::WaveCleared || bIntoRest || (Phase == ECodexGamePhase::PostCombat && Previous == ECodexGamePhase::WaveCombat)))
 	{
-		const int32 Wave = Flow->GetWaveIndex();
+		const int32 Wave = bIntoRest ? Flow->GetWaveIndex() - 1 : Flow->GetWaveIndex();
 		const int32 Total = Flow->GetConfig().TotalWaves;
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
