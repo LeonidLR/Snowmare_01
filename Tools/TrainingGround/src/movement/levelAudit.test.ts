@@ -32,3 +32,13 @@ test('audit: schema errors come first and stop the audit', () => {
   const issues = auditLayout({ schema: 'x' }, config);
   assert.ok(issues.length > 0 && issues.every((i) => i.where === 'schema'));
 });
+
+test('formation_lab_01 (the big lab): audit clean and every zone gets its expected formation', async () => {
+  const lab = readLayout('formation_lab_01');
+  assert.deepEqual(auditLayout(lab, config), []);
+  const { runSeries } = await import('./bot.ts');
+  const { summary } = runSeries({ layout: lab, config, members: [2, 3, 4], seeds: 1, seedBase: 1 });
+  const expect = summary.checks.find((c) => c.id === 4)!;
+  assert.equal(expect.fail, 0, expect.worst);
+  assert.equal(summary.checks.find((c) => c.id === 5)!.fail <= 1, true, 'slots: at most the known pair-at-the-wall spacing blip');
+});

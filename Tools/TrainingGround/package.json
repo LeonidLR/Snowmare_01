@@ -11,7 +11,8 @@
     "golden": "node src/movement/cli/golden.ts",
     "typecheck": "tsc && tsc -p tsconfig.node.json",
     "bot:movement": "node src/movement/cli/bot.ts",
-    "train": "node src/movement/cli/train.ts"
+    "train": "node src/movement/cli/train.ts",
+    "lab:gen": "node src/movement/cli/genLab.ts"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",
