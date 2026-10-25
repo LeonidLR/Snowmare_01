@@ -335,3 +335,31 @@ travel (he must see his way; followers follow him). The slots stay as chosen. Bo
 Keys: `turn.fold_deg` 25 (10-90 deg), `turn.lookahead` 800 (100-1000 cm), `look.wall_dist` 260 (100-400 cm), `look.wall_angle`
 55 (30-90 deg). Golden: `formation_TurnAhead.json`, `formation_ClearLook.json`; `formation_Guard.json` gains `turnAhead`.
 
+
+## 11. Red team - the model designs layouts to break the rules (user decision 2026-10-25; TS `redteam.ts`, `cli/redteam.ts`)
+The bot only finds what the hand-made lab exercises; the user found the rest by hand (a wall cutting the squad in two, the triad's
+open rear, a gap at a wall corner after a cover switch, the formation breaking along a wall). `npm run redteam -- --budget-usd <N>
+--rounds <N> [--per-round 4] [--patience 3] [--client claude|mock] [--dry-run] [--members 2,3,4] [--seeds 2] [--effort medium]`:
+1. Each round the model (`MODELS.redteam` = claude-opus-5-5, the tuner's budget-capped client, effort medium by default) gets a
+   compact brief (the rules' intent from FORMATION_SECTORS.md, checks 1-9, the layout schema + limits: span <= 100 m, <= 40 walls,
+   1-4 routes of <= 12 points), the attack families with tried / broke counts (oblique walls, stubs and pillars, gaps vs. the
+   formation width, zigzag corridors, T / L junctions, dead end after a turn, a wall ending at a turn, a threat behind a thin wall,
+   U-turns, long walls with periodic gaps, hugging a wall then leaving it), the distinct failures already found and the previous
+   round distilled (never raw runs), and answers `{"layouts": [{family, target_checks, intent, layout}]}` (strict JSON).
+2. Validation (`validateCandidate`, 0 tokens): schema + `auditLayout` errors, the size limits, no wall in / between the squad's
+   start diamond round each route's first point (a start artifact, not a rule bug), the leader reaching the end in the sim. Invalid
+   layouts get ONE retry with their errors fed back (a reply that is not JSON too); still invalid -> discarded and counted.
+3. The bot walks every valid layout with auto + the 8 menu items x members x seeds (`--manual all`); gating as the matrix: auto by
+   every check, a manual item by 1 / 5 / 7. Score = the distinct (check, choice, members) failures; each keeps a minimal
+   reproduction (route, seed, the earliest time).
+4. Every layout with >= 1 failure is kept in `Content/Data/FormationLab/redteam/<round>_<n>.json` (numbering continues after the
+   files there; nothing is overwritten; the mock writes to Saved/.../redteam_mock instead) with `comment` (the attack and the first
+   failure), `redteam` (family, intent, client, config hash, members, seeds, seed) and `expected_fail` [{check, choice, members, route,
+   seed, t, what, reason}]. These are regression layouts: `npm run bot:movement -- --layouts redteam` re-walks them and reports
+   known / fixed (clear the entry) / NEW (`redteam_regression.md`; `--strict` exits 1 only on new failures); `npm test` checks
+   they are valid and reports each expected_fail's reproduction, never failing on a known failure.
+5. `Saved/TrainingGround/movement/redteam_report.md` (<= 30 lines: rounds, spend, layouts tried / valid / failing, the distinct
+   failures per check with one example, "rule bug?" = checks 1 2 5 6 7 (geometry promises) vs. "design question" = 3 4 8 9
+   (expectations / thresholds)); `redteam_calls.jsonl` per call (round, attempt, model, tokens, cost, error - never prompts or the
+   key). Budget cap as the tuner (stop before a call whose cost would exceed `--budget-usd`); patience: stop after N rounds in a row
+   with no new distinct failure. The red team never changes the rules: its failures go to the coordinator.

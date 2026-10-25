@@ -71,7 +71,7 @@ export function claudeClient(env: Env = realEnv, opt: ClientOptions = {}): Model
         max_tokens: req.maxTokens + 4000,
         system: req.system,
         messages: [{ role: 'user', content: req.prompt }],
-        output_config: { effort: 'low' },
+        output_config: { effort: req.effort ?? 'low' },
       });
       let lastErr = 'unknown error';
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -80,7 +80,7 @@ export function claudeClient(env: Env = realEnv, opt: ClientOptions = {}): Model
           res = await env.fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-            body, signal: AbortSignal.timeout(timeoutMs),
+            body, signal: AbortSignal.timeout(req.timeoutMs ?? timeoutMs),
           });
         } catch (e) {
           lastErr = `network: ${scrub(e instanceof Error ? e.message : String(e), key)}`;

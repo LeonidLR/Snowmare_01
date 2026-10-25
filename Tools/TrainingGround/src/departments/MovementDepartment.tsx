@@ -1,5 +1,7 @@
 // Training Ground department «Перемещение»: replay the squad simulator on a layout route (in the browser, 0 tokens), the run's
 // checks, the movement bot (Node, report.md) and the tuner (npm run train; real model calls need the key on this PC).
+// Red-team layouts (Content/Data/FormationLab/redteam, FORMATION_CONTRACT.md 11) are a group of their own in the picker: the
+// failure comment is shown next to the view and the first failing run (route, members, formation, seed) is preselected.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Pause, Play, RotateCcw, Sparkles } from 'lucide-react';
 import { SquadView } from './SquadView';
@@ -13,12 +15,18 @@ import { buildNav, simulate } from '../movement/sim';
 import { RunCollector } from '../movement/checks';
 import { guardHudText } from '../movement/labels';
 import type { RunMetrics } from '../movement/checks';
+import type { RedteamFailureView, RedteamView } from '../movement/redteamView';
+import { groupLayoutNames, redteamView, seekFor } from '../movement/redteamView';
 
 const BYPASS_RU: Record<string, string> = { shortest: 'кратчайший путь', shielded: 'укрыт от угрозы', too_long: 'укрытый путь слишком длинный' };
 const ROLE_RU: Record<string, string> = { K: 'командир', P: 'правый', L: 'левый', Z: 'замыкающий' };
 const FORMATION_RU: Record<string, string> = {
   diamond: 'Ромб', wedge: 'Клин', column: 'Колонна-ёлочка', line: 'Цепь', echelon_left: 'Эшелон влево',
   echelon_right: 'Эшелон вправо', wall: 'У стены', hedgehog: 'Ёж', blizzard: 'Метельная сцепка',
+};
+const CHECK_RU: Record<number, string> = {
+  1: 'Взгляд в стену', 2: 'Тыл 5–7 ч.', 3: 'Мерцание', 4: 'Построение по зонам', 5: 'Слоты', 6: 'Темп замыкающего',
+  7: 'Отряд разрезан стеной', 8: 'Обход с укрытой стороны', 9: 'Проверка угла',
 };
 const MODE_RU: Record<string, string> = { walk: 'шаг (патруль)', run: 'бег', halt: 'остановка', wall: 'у стены', forward: 'шаг, все вперёд' };
 
@@ -68,6 +76,19 @@ export const MovementDepartment: React.FC = () => {
   const [budget, setBudget] = useState(5);
   const [rounds, setRounds] = useState(10);
   const [dryRun, setDryRun] = useState(true);
+  const [rtView, setRtView] = useState<RedteamView | null>(null);
+  // A red-team failure picked: the replay starts 2 s before it once the run is simulated.
+  const pendingSeek = useRef<number | null>(null);
+
+  const showFailure = (f: RedteamFailureView) => {
+    setRouteId(f.route);
+    setMembers(f.members);
+    setManual(f.choice);
+    setSeed(f.seed);
+    pendingSeek.current = seekFor(f);
+    setT(seekFor(f));
+    setPlaying(true);
+  };
 
   useEffect(() => {
     fetch('/api/movement/layouts').then((r) => r.json()).then((d) => setLayouts(d.layouts ?? [])).catch(() => setError('Нет связи с сервером Training Ground'));
@@ -80,7 +101,10 @@ export const MovementDepartment: React.FC = () => {
     fetch(`/api/movement/layout?name=${encodeURIComponent(layoutName)}`).then((r) => r.json()).then((d: Layout) => {
       if ((d as unknown as { error?: string }).error) { setError((d as unknown as { error: string }).error); return; }
       setLayout(d);
-      setRouteId(d.routes[0]?.id ?? '');
+      const view = redteamView(d);
+      setRtView(view);
+      if (view?.failures.length) showFailure(view.failures[0]);
+      else setRouteId(d.routes[0]?.id ?? '');
     }).catch(() => setError(`Не удалось загрузить ${layoutName}`));
   }, [layoutName]);
 
@@ -100,7 +124,7 @@ export const MovementDepartment: React.FC = () => {
     return { frames: out, metrics: collector.finish() };
   }, [layout, routeId, config, nav, members, seed, manual, blizzard]);
 
-  useEffect(() => { setT(0); }, [frames]);
+  useEffect(() => { setT(pendingSeek.current ?? 0); pendingSeek.current = null; }, [frames]);
   const last = useRef(0);
   useEffect(() => {
     if (!playing || !frames.length) return;
@@ -174,7 +198,11 @@ export const MovementDepartment: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             <Field label="Раскладка">
               <select className={inputCls} value={layoutName} onChange={(e) => setLayoutName(e.target.value)}>
-                {(layouts.length ? layouts : [layoutName]).map((n) => <option key={n} value={n}>{n}</option>)}
+                {groupLayoutNames(layouts.length ? layouts : [layoutName]).map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.names.map((n) => <option key={n} value={n}>{n}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </Field>
             <Field label="Маршрут">
@@ -217,6 +245,23 @@ export const MovementDepartment: React.FC = () => {
               </select>
             </Field>
           </div>
+          {rtView && (
+            <div className="text-xs bg-rose-950/30 border border-rose-900 rounded-lg px-3 py-2 flex flex-col gap-1.5">
+              <span className="text-rose-200"><b>Red team{rtView.family ? ` · ${rtView.family}` : ''}:</b> {rtView.comment || 'без комментария'}</span>
+              <span className="text-slate-400">Известные падения (expected_fail) — клик показывает прогон с 2 с до падения:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {rtView.failures.map((f, i) => {
+                  const on = f.route === routeId && f.members === members && f.choice === manual && f.seed === seed;
+                  return (
+                    <button key={i} onClick={() => showFailure(f)} title={f.what}
+                      className={`px-2 py-1 rounded border font-mono ${on ? 'border-rose-500 bg-rose-900/50 text-rose-100' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>
+                      #{f.check} {CHECK_RU[f.check] ?? ''} · {f.choice === 'auto' ? 'авто' : menuLabel(f.choice, f.members)} · {f.members} · {f.route} s{f.seed}{f.t !== null ? ` · ${f.t} с` : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="relative">
             <SquadView layout={layout} frame={frame} routeId={routeId} fov={fov} height={540}
               focus={follow && frame ? frame.members[0].pos : null} span={2600} />
