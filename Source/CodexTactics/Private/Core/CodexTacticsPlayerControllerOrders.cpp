@@ -287,18 +287,30 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		}
 	}
 
-	// Action bar "MOVE": the clicked object is picked up for relocation.
+	// Action bar "MOVE OBJ": the clicked object is picked up for relocation.
+	// Bug 2026-10-25 (game designer, packaged build: "after the pause no click order was taken at all; relocating a barrel unstuck it"):
+	// the pick swallowed every other click silently - the button reads like a move order. Now a click on anything that is not a movable
+	// object (or a pick left over from before a pause was entered / left) drops the pick with a line and goes on as the usual order.
 	if (bRelocateSelectMode)
 	{
-		if (AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor()))
+		const UGameFlowSubsystem* PickFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		const bool bSamePause = !PickFlow || PickFlow->GetCombatMode() == RelocateSelectCombatMode;
+		AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor());
+		bRelocateSelectMode = false;
+		if (bSamePause && Object)
 		{
-			bRelocateSelectMode = false;
 			if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
 			{
 				Relocation->StartRelocate(Object, Leader);
 			}
+			return;
 		}
-		return;
+		UE_LOG(LogCodexTactics, Display, TEXT("Relocate pick dropped by a click on %s (%s): the click is a normal order"),
+			Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("the ground"), bSamePause ? TEXT("not an object") : TEXT("the pause changed"));
+		if (UGameMessageSubsystem* PickMessages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			PickMessages->PostMessage(LOCTEXT("Engineering", "ENGINEERING"), LOCTEXT("RelocatePickDropped", "Object move cancelled - orders as usual."));
+		}
 	}
 
 	// APC P1: with the leader aboard a click on the ground drives his vehicle (double click: full speed); a click on an

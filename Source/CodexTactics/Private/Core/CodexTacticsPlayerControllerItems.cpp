@@ -455,6 +455,7 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 		return;
 	}
 	bRelocateSelectMode = true;
+	RelocateSelectCombatMode = Flow ? Flow->GetCombatMode() : ECodexCombatMode::None;
 	if (Messages)
 	{
 		Messages->PostMessage(LOCTEXT("Engineering", "ENGINEERING"),
