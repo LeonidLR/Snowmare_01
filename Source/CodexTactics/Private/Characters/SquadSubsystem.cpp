@@ -835,6 +835,7 @@ void USquadSubsystem::Tick(float DeltaTime)
 	RetryPlannedShots(DeltaTime);
 	UpdateGroupCoverProne(DeltaTime); // fights too (the formation is off there, a prone order still lies down on arrival)
 	UpdateGroupCoverWait(DeltaTime); // group cover leader priority (2026-10-23)
+	UpdateWallGroup(DeltaTime); // rules v2.2 wall group (Codex.Formation.Sectors): the followers' looks round the leader's fixed corner aim
 
 	// Formation look sectors (Codex.Formation.Sectors): the follow below fills this frame's looks / the leader's pace; every member not
 	// given one this frame (console off, Solo, a fight, an order of his own, ...) gets none - his old facing and speed.
@@ -932,6 +933,7 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 		{
 			EndFormationWallOrder(TEXT("the formation is off (a fight)"));
 		}
+		Sectors.bSlide = false;
 		return;
 	}
 
@@ -962,6 +964,10 @@ void USquadSubsystem::UpdateSlotSwap(float DeltaTime)
 	{
 		SlotSwapCooldownRemaining -= DeltaTime;
 		return;
+	}
+	if (FormationRuntime::IsEnabled())
+	{
+		return; // formation sectors: places by minimal travel over every role (ReassignFormationPlaces), not the old left / right swap
 	}
 
 	FFollowerState* Slot0 = Followers.FindByPredicate([](const FFollowerState& F) { return F.Slot == 0; });
@@ -1019,6 +1025,11 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	{
 		Follower.bParked = false;
 		Follower.RepathTimeRemaining = 0.f;
+		return;
+	}
+	// Rules v2.2 wall group (Codex.Formation.Sectors): taken out of his cover slot into the back-to-wall pose, he holds it facing his look.
+	if (HoldsWallGroupPose(Follower, *Operative))
+	{
 		return;
 	}
 

@@ -251,6 +251,7 @@ void USquadSubsystem::ReleaseGroupCoverWait(AOperativeCharacter& Member, const F
 					Spares->ProneUsed[Index] = true;
 					UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: his slot was taken, no free slot left - prone behind the cover (%s)"),
 						*Member.DisplayName.ToString(), Why);
+					ReallocateWallGroupForMember(Member, TEXT("a follower's re-entry (the prone fallback)"));
 					return;
 				}
 			}
@@ -264,6 +265,17 @@ void USquadSubsystem::ReleaseGroupCoverWait(AOperativeCharacter& Member, const F
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: into his slot after the leader (%s)%s"), *Member.DisplayName.ToString(), Why,
 		Result == EOperativeOrderResult::Accepted ? TEXT("") : TEXT(" - refused"));
+	ReallocateWallGroupForMember(Member, TEXT("a follower's re-entry (into his slot after the leader)"));
+}
+
+void USquadSubsystem::ReallocateWallGroupForMember(AOperativeCharacter& Member, const TCHAR* Why)
+{
+	// Rules v2.2: only a member of the wall group in force (a box selection's group cover has none).
+	if (WallGroup.bActive && WallGroup.Members.Contains(&Member))
+	{
+		++WallGroup.Reentries;
+		ReallocateWallGroup(WallGroup.Leader.Get(), { &Member }, Why);
+	}
 }
 
 void USquadSubsystem::UpdateGroupCoverWait(float DeltaTime)
@@ -423,6 +435,7 @@ void USquadSubsystem::UpdateGroupCoverProne(float DeltaTime)
 				Order.PhaseSeconds = 0.f;
 				UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: prone behind the cover (%.0f cm off the spot, facing %.0f deg off)"),
 					*Operative->DisplayName.ToString(), ToSpot, Off);
+				ReallocateWallGroupForMember(*Operative, TEXT("a follower's re-entry (prone behind the cover)"));
 			}
 		}
 		else // Holding

@@ -1,5 +1,11 @@
 # Formation look sectors & tactical movement — design decisions (session 2026-10-25)
 
+Status v2.2 (2026-10-25, branch formation/runtime-v22): **in the game** behind `Codex.Formation.Sectors` - the triad K / P / Z, the coverage allocator's
+patrol / halt looks with the rear guard (`Codex.Formation.CoverAllocator 0` = the v2.1 tables), places by minimal travel, the wall group after a group
+cover switch / wrap / re-entry (the leader's look fixed, the others close the open arc - the user's playtest bug), the wall slide; smokes
+`FormationWallGroupSmoke`, `FormationSlideSmoke`; details `docs/systems/squad-and-orders.md` "Rules v2.2 in the runtime". Not yet: the corner check
+(slicing the pie, v2.1) and the guard / trail column in the runtime.
+
 Status: **implemented in the game (stage 6, 2026-10-25, branch formation/integration)** behind `Codex.Formation.Sectors` (default 1; 0 = the
 old triangle formation): pure rules v2 (`Source/CodexTactics/*/Formation/`), runtime in `USquadSubsystem` (`SquadSubsystemFormation.cpp`), facing in
 `AOperativeCharacter`, the group cover order in group mode = the wall layout; smoke `CodexTactics.FormationLabSmoke`; details

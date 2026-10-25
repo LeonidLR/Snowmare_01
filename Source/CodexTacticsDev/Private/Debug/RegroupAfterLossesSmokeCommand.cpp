@@ -5,7 +5,8 @@
 // Root causes: (a) the final fight ends in PostCombat, which lasts until the level ends - and the formation ran in Exploration only, so
 // after the horde no follower ever walked again (B toggled Solo on / off without a visible effect); (b) the post-fight hold
 // (2026-10-22) ended only when the leader moved, not on Regroup; (c) a formation slot off the navmesh (here the fallen Engineer's
-// remains crate, at the lake a wall / the generator) was unreachable for good - the follower stood while the leader stood.
+// remains crate, at the lake a wall / the generator) was unreachable for good - the follower stood while the leader stood. The smoke puts the
+// Engineer onto the Medic's future old-formation slot before he falls (rules v2.2 moved the triad's third man off it, 2026-10-25).
 //  1. a real-time wave fight, Solo on with the Engineer leading; the Engineer (the leader) is killed: the leadership passes to a
 //     living operative (the Commander), Solo stays on; the Medic-Sapper freezes (frostbite: prone, cannot get up);
 //  2. the fight's end -> PostCombat, the Commander leads, the post-fight hold is armed; B is not refused (no order lock, no
@@ -21,8 +22,10 @@
 
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/SquadFormation.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "NavigationSystem.h"
 #include "Combat/DeathCinematicSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
@@ -55,6 +58,8 @@ namespace RegroupAfterLossesSmoke
 		TWeakObjectPtr<AOperativeCharacter> Medic;
 		FVector MedicStart = FVector::ZeroVector;
 		float StartGap = 0.f;
+		/** Where the Engineer falls (the Medic's old-formation slot 0 round the Commander), the Medic's feet height. */
+		FVector FallSpot = FVector::ZeroVector;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -200,6 +205,18 @@ namespace RegroupAfterLossesSmoke
 			{
 				return true;
 			}
+			// The leader falls on the spot that becomes the Medic's slot once he is gone (the old formation's slot 0 round the Commander):
+			// his remains crate cuts that slot out of the navmesh - the scene of the second cause. Rules v2.2 (2026-10-25): before, the triad's
+			// LEFT man stood there by himself from the start; the triad's third man is now the rear man 4.2 m straight behind the leader, so
+			// his remains lay 409 cm behind the Commander, off her slot and across her crawl back (both checks of stages 7 / 8 failed).
+			{
+				const FVector Fall = SquadFormation::ComputeSlotPosition(Squad->FormationConfig, Commander->GetActorLocation(),
+					Commander->GetActorForwardVector(), 0, false);
+				Engineer->TeleportTo(FVector(Fall.X, Fall.Y, Engineer->GetActorLocation().Z), Engineer->GetActorRotation(), false, true);
+				State.FallSpot = FVector(Fall.X, Fall.Y, Medic->GetActorLocation().Z);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: the Engineer falls at the Medic's future slot 0, %.0f cm from the Commander"),
+					FVector::Dist2D(Fall, Commander->GetActorLocation()));
+			}
 			// The leader falls: the leadership passes to a living operative, Solo stays on.
 			Kill(Engineer, Engineer->HealthComponent);
 			Check(State, Engineer->IsKilledInAction() && !Squad->GetMembers().Contains(Engineer) && Squad->GetMembers().Num() == 2,
@@ -313,8 +330,15 @@ namespace RegroupAfterLossesSmoke
 					RemainsToLeader = FVector::Dist2D(It->GetActorLocation(), Commander->GetActorLocation());
 				}
 			}
-			Check(State, State.StartGap - Gap() < 30.f, FString::Printf(TEXT("[slot fallback off] the second cause reproduces: her slot is off the navmesh "
-				"(the Engineer's remains %.0f cm from the leader), she stays (%.0f -> %.0f cm)"), RemainsToLeader, State.StartGap, Gap()));
+			// Her old-formation slot 0 round the Commander (the Engineer's fall spot) must be off the navmesh: the remains crate's hole.
+			const FVector Slot0 = SquadFormation::ComputeSlotPosition(Squad->FormationConfig, Commander->GetActorLocation(),
+				Commander->GetActorForwardVector(), 0, false);
+			const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			FNavLocation OnNav;
+			const bool bSlotOnNav = Nav && Nav->ProjectPointToNavigation(FVector(Slot0.X, Slot0.Y, State.FallSpot.Z), OnNav);
+			Check(State, State.StartGap - Gap() < 30.f && !bSlotOnNav, FString::Printf(TEXT("[slot fallback off] the second cause reproduces: her slot is "
+				"off the navmesh (on navmesh %d; the Engineer's remains %.0f cm from the leader, %.0f cm from her slot), she stays (%.0f -> %.0f cm)"),
+				bSlotOnNav ? 1 : 0, RemainsToLeader, FVector::Dist2D(Slot0, State.FallSpot), State.StartGap, Gap()));
 			SetSlotFallback(1);
 			UseOldFormationRuleRegroup(false);
 			State.StartGap = Gap();

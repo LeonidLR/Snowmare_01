@@ -7,6 +7,7 @@
 #include "Characters/FirePostureRules.h"
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTypes.h"
+#include "Formation/FormationWallGroupRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Tactics/CoverTypes.h"
 #include "SquadSubsystem.generated.h"
@@ -328,6 +329,41 @@ public:
 	/** Smokes / teleports: the formation heading snaps to Forward, the terrain history and the slot velocities start afresh, a wall order ends. */
 	void ResetFormationState(const FVector& Forward);
 
+	// --- Rules v2.2 wall group (Codex.Formation.Sectors; user playtest 2026-10-25; SquadSubsystemWallGroup.cpp) ---
+
+	/**
+	 * The ONE squad-level "re-allocate the wall group" call. The squad stands at a wall with the leader in a real cover slot (the group cover
+	 * order's cover switch / wrap / slot path): his own cover facing or corner aim is a FIXED look; FormationWallGroup::Allocate
+	 * (FormationCoverRules::AllocateStatic) gives each follower the look that closes the open arc - nobody looks into a wall, one covers the
+	 * rear - and the pose to hold it: his cover side along the wall (AOperativeCharacter::SetCoverLookSide), or the back-to-wall pose facing
+	 * out (LeaveCoverForWallPose) when the look points away from the wall. NewMembers (the followers taken along) join the group; Why is
+	 * logged. Fired by the group cover order (ACodexTacticsPlayerController::OrderGroupCover: the formation wall layout - whose looks are
+	 * the user's wall rule already -, the cover switch, the wrap), the leader's arrival (the switch's run-in, the wrap's goal), a member's
+	 * (re-)entry (UpdateGroupCoverWait's release, the prone fallbacks, any cover entry of a member). The allocation runs once the leader is
+	 * in his slot and again while the group settles. Group mode only (no Solo / box selection, the exploration formation); ends with the
+	 * leader's next order, the leader out of cover, Solo, a fight, the console 0. Codex.Formation.Sectors 0: nothing (the old facing).
+	 */
+	void ReallocateWallGroup(AOperativeCharacter* GroupLeader, const TArray<AOperativeCharacter*>& NewMembers, const TCHAR* Why);
+
+	/** AOperativeCharacter::EnterCover: the wall group's leader / a member entered a slot (the switch / wrap arrival, a re-entry). */
+	void NotifyWallGroupCoverEntered(AOperativeCharacter* Operative, bool bSwitchArrival, bool bWrapArrival);
+
+	/** The wall group is in force (ReallocateWallGroup). */
+	bool HasWallGroup() const { return WallGroup.bActive; }
+	/** Operative's look and pose from the last wall-group allocation; false when he has none. */
+	bool GetWallGroupLook(const AOperativeCharacter* Operative, float& OutYaw, EWallGroupLook& OutKind) const;
+	/** How many allocations the wall group in force has run (smokes). */
+	int32 GetWallGroupAllocationCount() const { return WallGroup.Allocations; }
+	/** How many members' (re-)entries (into the slot after the leader, a prone fallback) re-allocated the wall group in force (smokes). */
+	int32 GetWallGroupReentryCount() const { return WallGroup.Reentries; }
+
+	/** Rules v2.2 wall slide (FormationWallRules::Slide) in progress: the wall layout side-steps along its wall. */
+	bool IsFormationSliding() const { return Sectors.bSlide; }
+	/** Wall slides started since the level began (smokes). */
+	int32 GetFormationSlideCount() const { return Sectors.SlideCount; }
+	/** The last coverage allocation on the move (FormationCoverRules::Allocate): its rear guard; false when the allocator did not run. */
+	bool GetFormationRearGuard(EFormationRole& OutRole) const;
+
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
 
@@ -373,6 +409,9 @@ private:
 		/** Formation sectors: his slot at the last repath and when (the slot's velocity for the follower speed, contract 7). */
 		FVector2D PrevSectorSlot = FVector2D::ZeroVector;
 		double PrevSectorSlotTime = -1.0;
+		/** Rules v2.2: the rear guard's last formation move direction while he catches up (FormationRuntime::RearGuardCatchUpLook). */
+		float CatchUpMoveYaw = 0.f;
+		bool bCatchUp = false;
 	};
 
 	/** Formation look sectors: the state over frames (SquadSubsystemFormation.cpp). */
@@ -420,7 +459,80 @@ private:
 		uint32 WallOrderSerial = 0;
 		float WallOrderSeconds = 0.f;
 		TMap<TWeakObjectPtr<AOperativeCharacter>, EFormationRole> WallOrderRoles;
+		/** The wall order's members crouch at their slots (the group cover order); false = a held wall layout after a slide from the automatic one. */
+		bool bWallOrderCrouch = true;
+		/** The leader's move order serial last tick (a new order while the wall layout stands may be a slide). */
+		uint32 LastLeaderSerial = 0;
+		bool bLastLeaderSerialValid = false;
+		/** A new leader order seen, decided once his move runs (a stand-up clip defers it: its destination is not known before). */
+		bool bLeaderOrderPending = false;
+		float LeaderOrderPendingSeconds = 0.f;
+		/** Rules v2.2 wall slide (FormationWallRules::Slide): the wall (its face line along the measured room), the layout it started from. */
+		bool bSlide = false;
+		FFormationWall SlideWall;
+		TArray<FFormationSlot> SlideStartSlots;
+		FVector2D SlideDestination = FVector2D::ZeroVector;
+		FVector2D SlideLeaderTarget = FVector2D::ZeroVector;
+		/** The leader's serial of the slide's own move (his next order ends / restarts it). */
+		uint32 SlideSerial = 0;
+		float SlideSeconds = 0.f;
+		int32 SlideCount = 0;
+		/** The slide came from the group cover order's wall layout (it ends crouched again) or the automatic one. */
+		bool bSlideFromOrder = false;
+		/** The 4th / the pair's partner ends the slide on the right end (keeps it when it has room, contract 11.5). */
+		bool bSlideEndRight = true;
+		/** Rules v2.2 look probes round each follower's slot (FormationCoverRules::Allocate's walls next to the slots). */
+		TArray<FFormationWall> LookWalls;
+		/** The last coverage allocation on the move: its rear guard. */
+		TOptional<EFormationRole> RearGuard;
 	};
+
+	/** Rules v2.2 wall group (ReallocateWallGroup; SquadSubsystemWallGroup.cpp). */
+	struct FWallGroupState
+	{
+		bool bActive = false;
+		TWeakObjectPtr<AOperativeCharacter> Leader;
+		/** The leader's move order serial when the group was (re)started: another one = his next order ends it. */
+		uint32 LeaderSerial = 0;
+		TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
+		/** Members this group took out of their cover slot into the back-to-wall pose. */
+		TArray<TWeakObjectPtr<AOperativeCharacter>> WallPose;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, FWallGroupLookResult> Looks;
+		bool bDirty = false;
+		float RecheckSeconds = 0.f;
+		float LeaderOutSeconds = 0.f;
+		float Seconds = 0.f;
+		int32 Allocations = 0;
+		int32 Reentries = 0;
+		FString Why;
+	};
+	FWallGroupState WallGroup;
+	/** The wall group per tick: its end, the members' state, the allocation (dirty / every RecheckSeconds) and its poses. */
+	void UpdateWallGroup(float DeltaTime);
+	void EndWallGroup(const TCHAR* Why);
+	/** The wall group's member re-entered (his slot after the leader, a prone fallback): ReallocateWallGroup when he is a member. */
+	void ReallocateWallGroupForMember(AOperativeCharacter& Member, const TCHAR* Why);
+	/** Runs FormationWallGroup::Allocate for the group as it stands and applies the cover sides / wall poses / prone looks. */
+	void AllocateWallGroupNow();
+	/** UpdateFollower: a member the wall group holds in the back-to-wall pose stands still facing his look (true = handled). */
+	bool HoldsWallGroupPose(FFollowerState& Follower, AOperativeCharacter& Operative);
+	/** Thin wall segments from rays round Positions at Height above their feet (look / wall-group probes), cm. */
+	TArray<FFormationWall> TraceLookWalls(const TArray<FVector>& Positions, float HeightAboveFeet, int32 Rays, float Length) const;
+
+	/** Rules v2.2 wall slide: a new leader order from the wall layout - starts the slide when its destination lies along the same wall. */
+	bool TryStartFormationSlide(AOperativeCharacter& LeaderRef, bool bFromOrder);
+	/** The slide per tick (targets / looks by the leader's progress); on arrival the wall layout again. */
+	void UpdateFormationSlide(AOperativeCharacter& LeaderRef, float DeltaTime);
+	void EndFormationSlide(AOperativeCharacter& LeaderRef, bool bArrived, const TCHAR* Why);
+	/** The wall layout round the leader at his wall (the face behind his back: -WallNormalYaw); keeps the roles of an order. */
+	bool HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float WallNormalYaw, bool bCrouch, const TOptional<bool>& KeepEndRight);
+	/** The patrol / halt looks of FrameSlots from FormationCoverRules::Allocate (rules v2.2); false when the allocator does not apply. */
+	bool AllocateFormationLooks(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos);
+	/**
+	 * Places, not fixed slots (contract 10.6 / 11.6): the followers' slot indices (= roles) re-assigned by minimal travel to this frame's
+	 * places when that saves FormationRuntime::ReassignGainCm (after a turn the man nearest the rear place becomes the rear man).
+	 */
+	void ReassignFormationPlaces();
 
 	struct FGroupCoverProneOrder
 	{
@@ -482,7 +594,7 @@ private:
 	 * (left / right of a man facing it); false when there is none.
 	 */
 	bool BuildFormationWall(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, FVector2D& OutFace, float& OutNormalYaw,
-		float& OutRoomLeft, float& OutRoomRight) const;
+		float& OutRoomLeft, float& OutRoomRight, float RoomMaxCm = 400.f) const;
 	/** The wall layout for the members at a wall (Others' roles by minimal travel when bAssignRoles); false when no wall is found. */
 	bool ComputeWallLayout(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, const FVector2D& ClickedSlot, int32 MemberCount,
 		const AOperativeCharacter* FourthMan);
