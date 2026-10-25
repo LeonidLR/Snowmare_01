@@ -644,6 +644,8 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 			Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), FText::Format(LOCTEXT("GroupWallOrdered",
 				"🏃 Along the wall ({0} operatives), facing out!"), 1 + Others.Num()));
 		}
+		// Rules v2.2: the one wall-group call on every group cover path (here: the wall layout's own looks are the allocation).
+		Squad->ReallocateWallGroup(Direct, Others, TEXT("the group cover order: the formation wall layout"));
 		return true;
 	}
 	const FGroupCoverConfig Config;
@@ -968,6 +970,13 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 			: FText::Format(bPlan ? LOCTEXT("GroupCoverPlanned", "📋 [PLAN] Group into cover ({0} operatives)!")
 				: LOCTEXT("GroupCoverOrdered", "🏃 Group into cover ({0} operatives)!"), InSlots);
 		Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), Line);
+	}
+	// Rules v2.2 (Codex.Formation.Sectors, group mode): the leader's cover facing / corner aim at the new wall is his own; the others get
+	// the looks that close the open arc (FormationWallGroup) - not all the same way as he (user playtest 2026-10-25). Real time only.
+	if (!bPlan)
+	{
+		Squad->ReallocateWallGroup(Direct, Others, bLeaderSwitch ? TEXT("the group cover order: the cover switch")
+			: LeaderWrap ? TEXT("the group cover order: the wrap round the object") : TEXT("the group cover order: the cover slots"));
 	}
 	return true;
 }

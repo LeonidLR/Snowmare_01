@@ -10,6 +10,7 @@
 #include "CodexTactics.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
+#include "Characters/SquadSubsystem.h"
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -223,6 +224,11 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 			CoverEnteredPendingSeconds = 0.f;
 		}
 	}
+	// Rules v2.2 wall group (Codex.Formation.Sectors): the leader's switch / wrap arrival or a member's (re-)entry re-allocates the looks.
+	if (USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+	{
+		Squad->NotifyWallGroupCoverEntered(this, bSwitchFacing || bCoverSwitchEntry, bWrapArrival);
+	}
 }
 
 void AOperativeCharacter::UpdateCoverEnteredEvent(float DeltaTime)
@@ -285,6 +291,7 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 		bManualCornerPeekEventPending = false;
 	}
 	bInCover = false;
+	CoverLookSide.Reset(); // the wall group's side belongs to that slot
 	CurrentCoverHeight = ECoverHeight::None;
 	bShimmying = false;
 	ShimmyDirection = 0.f;
@@ -688,6 +695,11 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 			CoverFacing = Edge;
 		}
 	}
+	// Formation wall group (rules v2.2): the squad's coverage allocator decides a follower's side - his mates cover the others.
+	if (CoverLookSide.IsSet())
+	{
+		CoverFacing = CoverLookSide.GetValue();
+	}
 	if (bManualCornerPeek)
 	{
 		CoverFacing = ManualCornerPeekSide; // the ordered corner, whatever the threat side (until another order)
@@ -702,8 +714,44 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: turns along the wall to the %s (threat %s)"), *DisplayName.ToString(),
 			CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), bHasCoverThreat ? TEXT("known") : TEXT("none, nearest edge"));
-		bCoverSnapPending |= bAllowSnap && !bShimmying && !bManualCornerPeek;
+		bCoverSnapPending |= bAllowSnap && !bShimmying && !bManualCornerPeek && !CoverLookSide.IsSet();
 	}
+}
+
+void AOperativeCharacter::SetCoverLookSide(const TOptional<ECoverFacing>& Side)
+{
+	if (CoverLookSide == Side)
+	{
+		return;
+	}
+	CoverLookSide = Side;
+	if (bInCover && Side.IsSet())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s: the wall group gives him the %s side along the wall"), *DisplayName.ToString(),
+			Side.GetValue() == ECoverFacing::Left ? TEXT("left") : TEXT("right"));
+		UpdateCoverFacing(/*bAllowSnap*/ false);
+	}
+}
+
+bool AOperativeCharacter::LeaveCoverForWallPose()
+{
+	if (!bInCover || bShimmying || bCornerAimActive || bManualCornerPeek || bCoverWrapActive || IsKnockedDown() || bHasMoveOrder
+		|| GetVelocity().SizeSquared2D() > FMath::Square(20.f) || GetCoverEntryMeshOffset().Size() >= 1.f)
+	{
+		return false;
+	}
+	{
+		TGuardValue<bool> Quiet(bQuietCoverLeaveRequest, true); // the wall pose is still at the wall: no CoverLeft for the tutorial
+		LeaveCover(TEXT("the wall group: back to the wall, facing out"));
+	}
+	ClearIdleFacing();
+	if (Stance == EOperativeStance::Standing && !bCarrying)
+	{
+		SetStance(EOperativeStance::Crouching);
+		MarkStanceFromSquad(); // the squad's crouch: his next order / the walk-on stands him up
+	}
+	bFormationWallPose = true;
+	return true;
 }
 
 bool AOperativeCharacter::IsCoverThreatActive() const

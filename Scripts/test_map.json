@@ -34,7 +34,8 @@
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
-    "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke"
+    "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke",
+    "FormationWallGroupSmoke", "FormationSlideSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -110,7 +111,14 @@
       "name": "formation-runtime-2026-10-25",
       "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Debug/FormationLabSmoke*", "Source/**/Formation/FormationRuntimeRules*"],
       "tests": ["CodexTactics.Formation", "CodexTactics.Squad"],
-      "smokes": ["FormationLabSmoke", "SquadControlSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "MovementSmoke", "SoloRejoinSmoke", "RegroupAfterLossesSmoke", "WarmIdleSmoke", "TrapSoloSmoke", "StanceSmoke", "TutorialSmoke"]
+      "smokes": ["FormationLabSmoke", "FormationWallGroupSmoke", "FormationSlideSmoke", "SquadControlSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "MovementSmoke", "SoloRejoinSmoke", "RegroupAfterLossesSmoke", "WarmIdleSmoke", "TrapSoloSmoke", "StanceSmoke", "TutorialSmoke"]
+    },
+    {
+      "name": "formation-v22-runtime-2026-10-25",
+      "globs": ["Source/**/Characters/SquadSubsystemWallGroup*", "Source/**/Characters/SquadSubsystemFormationSlide*", "Source/**/Characters/SquadSubsystemGroupCover*",
+        "Source/**/Formation/FormationWallGroupRules*", "Source/**/Debug/FormationWallGroupSmoke*", "Source/**/Debug/FormationSlideSmoke*"],
+      "tests": ["CodexTactics.Formation", "CodexTactics.Squad", "CodexTactics.Tactics.GroupCover"],
+      "smokes": ["FormationWallGroupSmoke", "FormationSlideSmoke", "FormationLabSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "CoverSwitchSmoke", "CoverWrapSmoke"]
     },
     {
       "name": "orders-pause-relocate-pick-2026-10-25",
@@ -682,13 +690,13 @@
       "name": "cover-switch",
       "globs": ["Source/**/Tactics/CoverSwitch*", "Source/**/Debug/CoverSwitchSmoke*", "Source/**/Characters/OperativeCharacterCoverEntry*", "Scripts/Editor/measure_cover_switch_clips.py"],
       "tests": ["CodexTactics.Tactics.CoverSwitch", "CodexTactics.Tactics.Cover"],
-      "smokes": ["CoverSwitchSmoke", "CoverSwitchLakeSmoke", "CornerEntrySmoke", "CoverSmoke", "GroupCoverSmoke"]
+      "smokes": ["CoverSwitchSmoke", "CoverSwitchLakeSmoke", "CornerEntrySmoke", "CoverSmoke", "GroupCoverSmoke", "FormationWallGroupSmoke"]
     },
     {
       "name": "cover-wrap",
       "globs": ["Source/**/Tactics/CoverWrap*", "Source/**/Debug/CoverWrapSmoke*", "Source/**/Characters/OperativeCharacterCoverWrap*", "Source/**/Tactics/CoverGhostActor*"],
       "tests": ["CodexTactics.Tactics.CoverWrap", "CodexTactics.Tactics.CoverSwitch", "CodexTactics.Tactics.Cover"],
-      "smokes": ["CoverWrapSmoke", "CoverSwitchSmoke", "CoverSmoke", "CoverMoveSmoke", "GroupCoverSmoke"]
+      "smokes": ["CoverWrapSmoke", "CoverSwitchSmoke", "CoverSmoke", "CoverMoveSmoke", "GroupCoverSmoke", "FormationWallGroupSmoke"]
     },
     {
       "name": "controller-cover",

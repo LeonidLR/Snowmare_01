@@ -680,26 +680,57 @@ namespace FormationLabSmoke
 				}
 			}
 		}
-		// The narrow column's sectors (v1.1, user Q1 = A): P +15 over the shoulder, L -165 back at a slant.
+		// The narrow column's sectors. The v1.1 tables (user Q1 = A: P +15 over the shoulder, L -165 back at a slant) with
+		// Codex.Formation.CoverAllocator 0; rules v2.2 (default) the coverage allocator replaces them on the move: the rear guard holds 5-7
+		// (his look within 180 +- (fov / 2 - 30)), the leader his search 11-1 (+- scan.amp_lead), the others share what is left open.
 		if (Zone && Zone->Id == TEXT("Z_D_narrow") && Formation == EFormationKind::Column && Squad->GetFormationPassageWidth().IsSet()
 			&& Squad->GetFormationPassageWidth().GetValue() < Config.ColumnNarrowWidth)
 		{
+			const bool bAllocator = FormationRuntime::IsCoverAllocatorEnabled();
+			EFormationRole RearGuard = EFormationRole::Rear;
+			const bool bHasRearGuard = Squad->GetFormationRearGuard(RearGuard);
 			for (const AOperativeCharacter* Each : All)
 			{
 				EFormationRole Role;
 				FVector Slot;
 				float Look = 0.f;
-				if (Squad->GetFormationRole(Each, Role) && (Role == EFormationRole::Right || Role == EFormationRole::Left) && Squad->GetFormationTarget(Each, Slot, Look))
+				if (!Squad->GetFormationRole(Each, Role) || !Squad->GetFormationTarget(Each, Slot, Look))
 				{
-					const float Want = Role == EFormationRole::Right ? Config.ColumnNarrowFwdDeg : -Config.ColumnNarrowBackDeg;
-					const float Off = FMath::Abs(FMath::FindDeltaAngleDegrees(Heading + Want, Look));
-					++State.NarrowSamples;
-					State.NarrowOk += Off <= 2.f ? 1 : 0;
-					if (Off > 2.f && State.NarrowWorst.IsEmpty())
+					continue;
+				}
+				float Want = 0.f;
+				float Tolerance = 2.f;
+				if (bAllocator)
+				{
+					if (bHasRearGuard && Role == RearGuard)
 					{
-						State.NarrowWorst = FString::Printf(TEXT("%s looks %.0f off the heading (want %.0f)"), FormationNames::ToString(Role),
-							FMath::FindDeltaAngleDegrees(Heading, Look), Want);
+						Want = 180.f;
+						Tolerance = 0.5f * Config.SightFov - 30.f + 1.f;
 					}
+					else if (Role == EFormationRole::Commander && Squad->GetFormationMode() == EFormationMode::Walk)
+					{
+						Tolerance = Config.ScanAmpLead + 1.f;
+					}
+					else
+					{
+						continue;
+					}
+				}
+				else if (Role == EFormationRole::Right || Role == EFormationRole::Left)
+				{
+					Want = Role == EFormationRole::Right ? Config.ColumnNarrowFwdDeg : -Config.ColumnNarrowBackDeg;
+				}
+				else
+				{
+					continue;
+				}
+				const float Off = FMath::Abs(FMath::FindDeltaAngleDegrees(Heading + Want, Look));
+				++State.NarrowSamples;
+				State.NarrowOk += Off <= Tolerance ? 1 : 0;
+				if (Off > Tolerance && State.NarrowWorst.IsEmpty())
+				{
+					State.NarrowWorst = FString::Printf(TEXT("%s looks %.0f off the heading (want %.0f +- %.0f)"), FormationNames::ToString(Role),
+						FMath::FindDeltaAngleDegrees(Heading, Look), Want, Tolerance);
 				}
 			}
 		}
@@ -814,7 +845,8 @@ namespace FormationLabSmoke
 		if (Route.Id == TEXT("R_D_corridors"))
 		{
 			Check(State, State.NarrowSamples > 30 && State.NarrowOk == State.NarrowSamples,
-				FString::Printf(TEXT("%s: narrow column sectors P +15 / L -165 (%d / %d samples%s)"), *Name, State.NarrowOk, State.NarrowSamples,
+				FString::Printf(TEXT("%s: narrow column sectors %s (%d / %d samples%s)"), *Name, FormationRuntime::IsCoverAllocatorEnabled()
+					? TEXT("by the coverage allocator: the rear guard holds 5-7, the leader 11-1") : TEXT("P +15 / L -165 (v1.1 tables)"), State.NarrowOk, State.NarrowSamples,
 					State.NarrowWorst.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", %s"), *State.NarrowWorst)));
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s: %d formation changes"), *Name, State.FormationChanges);

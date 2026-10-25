@@ -1840,6 +1840,25 @@ public:
 	void SetFormationWallPose(bool bInPose) { bFormationWallPose = bInPose; }
 	bool IsInFormationWallPose() const { return bFormationWallPose; }
 
+	/**
+	 * Formation wall group (Codex.Formation.Sectors, rules v2.2, USquadSubsystem::ReallocateWallGroup): the side along the wall the
+	 * squad's coverage allocator gives this FOLLOWER in his cover slot (unset = his own CoverFacingRules: threat side, corner hold, nearest
+	 * edge). Above the threat side and the corner hold, below a manual corner peek; no automatic walk to a corner for it. Cleared when he
+	 * leaves the cover.
+	 */
+	void SetCoverLookSide(const TOptional<ECoverFacing>& Side);
+	TOptional<ECoverFacing> GetCoverLookSide() const { return CoverLookSide; }
+
+	/**
+	 * Formation wall group: out of his cover slot (quietly - no CoverLeft event) into the back-to-wall pose where he stands: crouched (the
+	 * squad's crouch), facing out - his look then comes from the squad every tick (SetFormationLookYaw). False when he is not in cover or
+	 * is busy (side-stepping, aiming round the corner, moving, knocked down, the entry glide not over).
+	 */
+	bool LeaveCoverForWallPose();
+
+	/** He has a facing order of his own (SetFacingPoint) or a quick fire: a look decided elsewhere (the coverage allocator's fixed look). */
+	bool HasOwnFacing() const { return bExplicitFacing || bQuickFireActive; }
+
 	/** Current barrel-to-body yaw correction, degrees. */
 	float GetBarrelYawOffset() const { return BarrelYawOffset; }
 
@@ -2001,6 +2020,8 @@ private:
 	bool bFacingFormationSector = false;
 	float FormationPaceMultiplier = 1.f;
 	bool bFormationWallPose = false;
+	/** SetCoverLookSide: the wall group's side along the wall in cover. */
+	TOptional<ECoverFacing> CoverLookSide;
 	/** ThreatFacingRules: the enemy he last faced in this fight and where he last saw it; a facing order of his own (SetFacingPoint). */
 	TWeakObjectPtr<AActor> LastThreat;
 	FVector LastThreatLocation = FVector::ZeroVector;

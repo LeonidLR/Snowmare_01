@@ -703,12 +703,18 @@ namespace CoverSwitchSmoke
 		{
 			AOperativeCharacter* B = Member(State, 1);
 			AOperativeCharacter* C = Member(State, 2);
-			const bool bJoined = B && C && (B->bInCover || Squad->HasGroupCoverProne(B, true)) && (C->bInCover || Squad->HasGroupCoverProne(C, true));
+			// Rules v2.2 (Codex.Formation.Sectors 1): the wall group may take one out of his slot into the back-to-wall pose there, facing out.
+			const auto AtB = [Squad, Op](const AOperativeCharacter* Other)
+			{
+				return Other && (Other->bInCover || Squad->HasGroupCoverProne(Other, true)
+					|| (Squad->HasWallGroup() && Other->IsInFormationWallPose() && FVector::Dist2D(Other->GetActorLocation(), Op->GetActorLocation()) < 400.f));
+			};
+			const bool bJoined = AtB(B) && AtB(C);
 			if (!bJoined && State.StageTime < 15.f)
 			{
 				return true;
 			}
-			Check(State, bJoined, TEXT("7: the two others joined at B (in cover or prone behind it)"));
+			Check(State, bJoined, TEXT("7: the two others joined at B (in cover, prone behind it, or - rules v2.2 - back to the wall facing out)"));
 			Check(State, B && C && B->GetCoverSwitchCount() == 0 && C->GetCoverSwitchCount() == 0, TEXT("7: only the leader dashed in through the run-in clip"));
 			// 10 (before the fight: real-time fight clicks only select): the hovered ghost is the committed target.
 			Squad->EnterSoloMode();
