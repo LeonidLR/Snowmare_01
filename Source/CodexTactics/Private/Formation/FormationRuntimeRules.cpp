@@ -166,7 +166,12 @@ namespace FormationRuntime
 
 	FVector2D LeadDestination(const FVector2D& SlotPos, const FVector2D& SlotVelocity, float Lead)
 	{
-		return SlotVelocity.Size() < SlotStillSpeed ? SlotPos : SlotPos + SlotVelocity * Lead;
+		if (SlotVelocity.Size() < SlotStillSpeed)
+		{
+			return SlotPos;
+		}
+		const FVector2D Ahead = SlotVelocity * Lead;
+		return SlotPos + (Ahead.Size() > LeadMaxCm ? Ahead.GetSafeNormal() * LeadMaxCm : Ahead);
 	}
 
 	bool UseWallLayoutYaw(float DistanceToSlotCm, bool bMoving)

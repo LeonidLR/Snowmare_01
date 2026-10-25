@@ -293,7 +293,7 @@ public:
 	/** Walk (patrol) / run / halt / wall. */
 	EFormationMode GetFormationMode() const { return Sectors.Mode; }
 	/** The terrain class in force (unset before the first probe). */
-	TOptional<EFormationTerrainClass> GetFormationTerrainClass() const { return Sectors.Terrain.Class; }
+	TOptional<EFormationTerrainClass> GetFormationTerrainClass() const { return Sectors.Terrain.State.Current; }
 	/** The free passage width round the leader (FormationTerrainRules::PassageWidth), unset when a side is open. */
 	TOptional<float> GetFormationPassageWidth() const { return Sectors.PassageWidth; }
 	/** The formation heading (the leader's smoothed travel direction), UE yaw. */
@@ -394,10 +394,18 @@ private:
 		TArray<FFormationWall> ProbeWalls;
 		FVector2D ProbeOrigin = FVector2D::ZeroVector;
 		float ProbeHeadingYaw = 0.f;
+		/** The leader's position last tick (the path the v2 hysteresis counts). */
+		FVector2D LastLeaderPos = FVector2D::ZeroVector;
+		bool bLastLeaderPosValid = false;
 		/** The raw class of the last probe (FormationRuntime::AcceptProbe). */
 		TOptional<EFormationTerrainClass> LastProbeRaw;
 		int32 MemberCount = 1;
 		bool bActiveThisFrame = false;
+		/** The leader's position at the last heading update (a jump = a teleport snaps the heading to his facing). */
+		FVector2D HeadingTickPos = FVector2D::ZeroVector;
+		bool bHeadingTickPosValid = false;
+		/** Codex.Formation.Sectors last tick (a switch snaps the heading). */
+		bool bWasEnabled = true;
 		/** This frame's slots and look yaws by role (Slots / LookYaw, or the wall layout). */
 		TArray<FFormationSlot> FrameSlots;
 		/** The wall layout in force (the automatic one on arrival or the order's). */
@@ -465,7 +473,7 @@ private:
 	/** v1.2: the weather is a blizzard (FormationFor's blizzard tight diamond). */
 	bool IsFormationBlizzard() const;
 	/** The one adapter over FFormationTerrainTracker::Step (rules v2 changes it again). */
-	EFormationTerrainClass StepFormationTerrain(const AOperativeCharacter& LeaderRef, float DeltaTime);
+	EFormationTerrainClass StepFormationTerrain(const AOperativeCharacter& LeaderRef);
 	/** Traces the probe rays round the leader into Sectors.ProbeWalls. */
 	void ProbeFormationWalls(const AOperativeCharacter& LeaderRef);
 	/**

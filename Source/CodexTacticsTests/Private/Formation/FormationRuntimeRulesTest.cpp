@@ -274,6 +274,8 @@ bool FFormationRuntimeLeadTest::RunTest(const FString&)
 	using namespace FormationRuntime;
 	TestTrue(TEXT("still slot: the slot"), LeadDestination(FVector2D(100, 100), FVector2D::ZeroVector).Equals(FVector2D(100, 100)));
 	TestTrue(TEXT("moving slot: ahead by velocity x lead"), LeadDestination(FVector2D(100, 100), FVector2D(200, 0), 0.5f).Equals(FVector2D(200, 100)));
+	TestTrue(TEXT("a fast / jumping slot: the lead stops at LeadMaxCm"),
+		LeadDestination(FVector2D::ZeroVector, FVector2D(5000, 0), 0.5f).Equals(FVector2D(LeadMaxCm, 0)));
 	TestFalse(TEXT("walking in, 3 m off his wall slot: his path"), UseWallLayoutYaw(300.f, true));
 	TestTrue(TEXT("walking in, within 1 m: the layout yaw"), UseWallLayoutYaw(90.f, true));
 	TestTrue(TEXT("standing: the layout yaw"), UseWallLayoutYaw(300.f, false));

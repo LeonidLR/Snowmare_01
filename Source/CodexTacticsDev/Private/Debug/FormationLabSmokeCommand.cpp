@@ -59,7 +59,9 @@ namespace FormationLabSmoke
 	constexpr float StareAngleDeg = 45.f;
 	constexpr float StareMinSeconds = 0.3f;
 	constexpr float ExpectPct = 80.f;
-	constexpr float ExpectSettleExtra = 0.5f;
+	/** checks.ts v2: cm of the leader's path in a zone before its expectation counts (+ classify.hold_distance for a looser one); halted 0.5 s. */
+	constexpr float ExpectSettleCm = 100.f;
+	constexpr float ExpectHaltSettleSeconds = 0.5f;
 	constexpr float PaceBehindCm = 150.f;
 	/** Followers settle round the leader this long after a teleport, s. */
 	constexpr float SettleSeconds = 3.f;
@@ -73,6 +75,8 @@ namespace FormationLabSmoke
 	/** At the end of a dead-end route the squad has this long to stand in the wall layout, s. */
 	constexpr float WallHaltMaxSeconds = 12.f;
 	constexpr float HaltSeconds = 3.f;
+	/** At a dead end the squad stands this long at least (the wall layout settles; checks.ts halts 3 s after an instant arrival). */
+	constexpr float WallHaltSeconds = 4.f;
 	/** A member stands on his wall slot within this distance, cm. */
 	constexpr float WallSlotTolCm = 120.f;
 
@@ -84,10 +88,7 @@ namespace FormationLabSmoke
 		const TCHAR* Why;
 	};
 	const FKnown Known[] = {
-		{ TEXT("R_B_walls"), TEXT("pace"), TEXT("rules v1.1: the 4th man of an echelon (540 cm behind) trails his slot after the switch (the simulator fails it too)") },
-		{ TEXT("R_C_gaps"), TEXT("pace"), TEXT("rules v1.1: the 4th man of an echelon trails his slot (the simulator fails it too)") },
-		{ TEXT("R_v2_gaps"), TEXT("pace"), TEXT("rules v1.1: the 4th man of an echelon trails his slot (the simulator fails it too)") },
-		{ TEXT("R_E_corner"), TEXT("pace"), TEXT("rules v1.1: the echelon's 4th man looks 150 deg back, so after the diamond -> echelon switch he walks capped at walk x backward_mult = the squad pace and never makes up the lag (in the game 150-170 cm; the simulator's faster turn keeps it at 55-70 cm) - a tuning point for v1.2 (pace.patrol below move.backward_mult)") },
+		{ TEXT("R_B_walls"), TEXT("pace"), TEXT("rules v2 / contract 7: at the echelon <-> diamond switches the 4th man crosses ~5.4 m to his new slot walking BACKWARDS (he looks 150 / 180 deg), capped at walk x move.backward_mult (0.9) = only ~22 cm/s over the squad's patrol pace; the game shows p95 160-175 cm, the simulator 95-105 cm (its members turn and accelerate instantly) - a tuning / design point for the Training Ground (2026-10-25)") },
 	};
 
 	const TCHAR* KnownWhy(const FString& Route, const TCHAR* Check)
@@ -192,6 +193,9 @@ namespace FormationLabSmoke
 		TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 		TWeakObjectPtr<AOperativeCharacter> Fourth;
 		// Per-route metrics.
+		/** The leader's path on this route, cm, and where it was entered per zone (v2 counts path, not time). */
+		float LeaderPath = 0.f;
+		TOptional<FVector2D> LastLeaderPos;
 		TMap<FString, float> ZoneEnter;
 		TMap<FString, FZoneAcc> Zones;
 		TMap<int32, float> StareTimer;
@@ -427,6 +431,8 @@ namespace FormationLabSmoke
 	void ResetMetrics(FState& State)
 	{
 		State.ZoneEnter.Reset();
+		State.LeaderPath = 0.f;
+		State.LastLeaderPos.Reset();
 		State.Zones.Reset();
 		State.StareTimer.Reset();
 		State.StareCounted.Reset();
@@ -540,6 +546,12 @@ namespace FormationLabSmoke
 		const float Heading = Squad->GetFormationHeadingYaw();
 		const FVector2D LeaderPos(Leader->GetActorLocation());
 		const FLabZone* Zone = ZoneAt(State, LeaderPos);
+		if (State.LastLeaderPos.IsSet())
+		{
+			State.LeaderPath += static_cast<float>(FVector2D::Distance(LeaderPos, State.LastLeaderPos.GetValue()));
+		}
+		State.LastLeaderPos = LeaderPos;
+		const bool bHalted = State.Stage == EStage::RouteHalt && State.StageTime >= ExpectHaltSettleSeconds;
 
 		// Formation changes (info).
 		if (!State.LastFormation.IsSet() || State.LastFormation.GetValue() != Formation)
@@ -559,8 +571,10 @@ namespace FormationLabSmoke
 		{
 			if (Zone && Zone->Id == Expect.Zone)
 			{
-				float& Entered = State.ZoneEnter.FindOrAdd(Expect.Zone, State.Time);
-				if (State.Time - Entered >= Config.ClassifyHoldTime + ExpectSettleExtra)
+				const float Entered = State.ZoneEnter.FindOrAdd(Expect.Zone, State.LeaderPath);
+				// Tighter classes (echelon, column, wall) take over at once (v2); a looser expectation waits for hold_distance.
+				const bool bLooser = Expect.Formation == TEXT("diamond") || Expect.Formation == TEXT("wedge") || Expect.Formation == TEXT("blizzard");
+				if (State.LeaderPath - Entered >= ExpectSettleCm + (bLooser ? Config.ClassifyHoldDistance : 0.f) || bHalted)
 				{
 					FZoneAcc& Acc = State.Zones.FindOrAdd(Expect.Zone);
 					Acc.Settled += Dt;
@@ -682,20 +696,20 @@ namespace FormationLabSmoke
 		if (State.bShot && State.Photos.IsEmpty())
 		{
 			const FVector Center = Centroid(State);
-			const auto Settled = [&State, Zone](const TCHAR* Id, float Seconds)
+			const auto Settled = [&State, Zone](const TCHAR* Id, float Cm)
 			{
 				const float* Entered = Zone && Zone->Id == Id ? State.ZoneEnter.Find(Id) : nullptr;
-				return Entered && State.Time - *Entered >= Seconds;
+				return Entered && State.LeaderPath - *Entered >= Cm;
 			};
 			if (Route.Id == TEXT("R_A_open") && Mode == EFormationMode::Walk && Formation == EFormationKind::Diamond && LeaderPos.X > -1000.0)
 			{
 				QueuePhoto(State, TEXT("01_diamond_open"), Center, Heading + 25.f);
 			}
-			else if (Route.Id == TEXT("R_B_walls") && Settled(TEXT("Z_B_left"), 3.f) && Formation == EFormationKind::EchelonRight)
+			else if (Route.Id == TEXT("R_B_walls") && Settled(TEXT("Z_B_left"), 500.f) && Formation == EFormationKind::EchelonRight)
 			{
 				QueuePhoto(State, TEXT("02_echelon_right_wall_left"), Center, Heading + 35.f);
 			}
-			else if (Route.Id == TEXT("R_D_corridors") && Settled(TEXT("Z_D_narrow"), 2.5f) && Formation == EFormationKind::Column)
+			else if (Route.Id == TEXT("R_D_corridors") && Settled(TEXT("Z_D_narrow"), 400.f) && Formation == EFormationKind::Column)
 			{
 				QueuePhoto(State, TEXT("03_column_narrow_corridor"), Center, Heading + 20.f, -60.f, 1300.f);
 			}
@@ -1001,7 +1015,7 @@ namespace FormationLabSmoke
 		{
 			Sample(World, State, *Route, Dt);
 			const bool bWallEnd = !Route->Expect.IsEmpty() && Route->Expect.Last().Formation == TEXT("wall");
-			const bool bDone = bWallEnd ? (AllOnWallSlots(World, State) && State.StageTime >= HaltSeconds) || State.StageTime >= WallHaltMaxSeconds
+			const bool bDone = bWallEnd ? (AllOnWallSlots(World, State) && State.StageTime >= WallHaltSeconds) || State.StageTime >= WallHaltMaxSeconds
 				: State.StageTime >= HaltSeconds;
 			if (!bDone)
 			{

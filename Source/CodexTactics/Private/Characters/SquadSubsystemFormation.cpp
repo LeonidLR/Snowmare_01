@@ -163,12 +163,20 @@ bool USquadSubsystem::IsFormationBlizzard() const
 	return Environment && Environment->GetWeather() == EWeatherState::Blizzard;
 }
 
-EFormationTerrainClass USquadSubsystem::StepFormationTerrain(const AOperativeCharacter& LeaderRef, float DeltaTime)
+EFormationTerrainClass USquadSubsystem::StepFormationTerrain(const AOperativeCharacter& LeaderRef)
 {
-	// The one adapter over FFormationTerrainTracker (its Step changes again with rules v2: hold distance, stateful Classify): the accepted
-	// probe's walls, read from where they were traced, and the leader's destination.
-	return Sectors.Terrain.Step(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, DeltaTime, FormationTuning::Get(),
-		LeaderDestination(LeaderRef));
+	// The one adapter over FFormationTerrainTracker (rules v2: the hysteresis counts the leader's PATH): the accepted probe's walls, read from
+	// where they were traced, the leader's destination and the path he walked since the last tick (0 standing; a teleport is not a walk).
+	const FVector2D Here(LeaderRef.GetActorLocation());
+	float StepDistance = Sectors.bLastLeaderPosValid ? static_cast<float>(FVector2D::Distance(Here, Sectors.LastLeaderPos)) : 0.f;
+	if (StepDistance > FormationRuntime::MaxStepDistanceCm)
+	{
+		StepDistance = 0.f;
+	}
+	Sectors.LastLeaderPos = Here;
+	Sectors.bLastLeaderPosValid = true;
+	return Sectors.Terrain.Step(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, LeaderDestination(LeaderRef), StepDistance,
+		FormationTuning::Get());
 }
 
 void USquadSubsystem::ProbeFormationWalls(const AOperativeCharacter& LeaderRef)
@@ -201,7 +209,7 @@ void USquadSubsystem::ProbeFormationWalls(const AOperativeCharacter& LeaderRef)
 	// class differs from the class in force is taken only when the probe before said the same (FormationRuntime::AcceptProbe).
 	const EFormationTerrainClass Raw = FormationTerrainRules::ClassifyRaw(Walls, FVector2D(Origin), Sectors.HeadingYaw, FormationTuning::Get(),
 		LeaderDestination(LeaderRef));
-	const bool bAccept = FormationRuntime::AcceptProbe(Raw, Sectors.LastProbeRaw, Sectors.Terrain.Class);
+	const bool bAccept = FormationRuntime::AcceptProbe(Raw, Sectors.LastProbeRaw, Sectors.Terrain.State.Current);
 	Sectors.LastProbeRaw = Raw;
 	if (bAccept)
 	{
@@ -350,8 +358,8 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 			}
 		}
 	}
-	const EFormationTerrainClass Class = StepFormationTerrain(LeaderRef, DeltaTime);
-	Sectors.PassageWidth = FormationTerrainRules::PassageWidth(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, Config);
+	const EFormationTerrainClass Class = StepFormationTerrain(LeaderRef);
+	Sectors.PassageWidth = Sectors.Terrain.GetPassageWidth(); // v2: held with the corridor class (the column's tail keeps the narrow sectors)
 
 	if (Sectors.bWallOrder)
 	{
@@ -368,8 +376,10 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	else
 	{
 		const EFormationKind Previous = Sectors.Formation;
-		Sectors.Formation = FormationRuntime::ChooseFormation(Class, Count, Sectors.LeaderStillSeconds >= WallArrivalStillSeconds, Sectors.MoveFormation,
-			IsFormationBlizzard());
+		// v1.2: at_wall fires only on arrival (within classify.arrive_dist of his destination) - that, or a short stand, is the arrival.
+		const bool bArrived = FormationTerrainRules::IsArriving(LeaderPos, LeaderDestination(LeaderRef), Config)
+			|| Sectors.LeaderStillSeconds >= WallArrivalStillSeconds;
+		Sectors.Formation = FormationRuntime::ChooseFormation(Class, Count, bArrived, Sectors.MoveFormation, IsFormationBlizzard());
 		if (bLeaderMoving)
 		{
 			Sectors.MoveFormation = Sectors.Formation;
@@ -490,9 +500,10 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	{
 		return true;
 	}
-	Follower.RepathTimeRemaining = FormationConfig.RepathInterval;
+	Follower.RepathTimeRemaining = FormationRuntime::FollowRepathSeconds; // the speed follows the moving slot closely (contract 7)
 	if (TryWarmPull(Follower, Operative, LeaderRef))
 	{
+		Follower.RepathTimeRemaining = FormationConfig.RepathInterval; // the warm pull keeps its own (old) cadence
 		return true;
 	}
 	if (HoldsCoverOrLeavesIt(Follower, Operative, LeaderRef, bLeaderMoving, Distance))
@@ -511,8 +522,9 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	Follower.PrevSectorSlotTime = TimeSeconds;
 
 	const float Jitter = bLeaderMoving ? 1.f + FMath::Sin(TimeSeconds * 0.9f + static_cast<float>(Follower.Slot + 1) * 1.7f) * FormationConfig.SpeedJitter : 1.f;
-	const bool bRun = LeaderRef.IsSprinting();
-	const float Top = Operative.GetMaxSpeed(); // his walk, or the sprint he copies from the leader
+	// Running - or crawling (prone: no sector look, he crawls facing his way) - there is no walking backwards to cap.
+	const bool bRun = LeaderRef.IsSprinting() || Operative.GetStance() == EOperativeStance::Prone;
+	const float Top = Operative.GetMaxSpeed(); // his walk / crawl, or the sprint he copies from the leader
 	const FormationRuntime::FFollowerMove Move = FormationRuntime::FollowerMove(Here, static_cast<float>(Operative.GetActorRotation().Yaw), Target,
 		SlotVelocity, Jitter, Top, Top, bRun, FormationTuning::Get());
 	const bool bSlotStill = SlotVelocity.Size() < FormationRuntime::SlotStillSpeed;
@@ -683,7 +695,8 @@ void USquadSubsystem::ResetFormationState(const FVector& Forward)
 {
 	EndFormationWallOrder(TEXT("reset"));
 	FormationHeading = FVector(Forward.X, Forward.Y, 0.f).GetSafeNormal();
-	Sectors.Terrain = FFormationTerrainTracker();
+	Sectors.Terrain.Reset();
+	Sectors.bLastLeaderPosValid = false;
 	Sectors.bHeadingValid = !FormationHeading.IsNearlyZero();
 	Sectors.HeadingYaw = static_cast<float>(FormationHeading.Rotation().Yaw);
 	Sectors.ProbeTimeRemaining = 0.f;

@@ -10,6 +10,8 @@
 //  2. the leader takes cover on the clicked slot; then the two others take their slots: all three in cover on the same wall, the leader
 //     on the clicked slot, nobody past the wall's ends, no overlap;
 //  3. the leader's order cancelled on his way (StopOperative): the others wait the grace (4 s), then take their slots anyway.
+// 2026-10-25: runs on the cover-slot order (Codex.Formation.Sectors 0, restored at the end): with the console on a group mode cover order is
+// the formation wall layout (no wait points; FormationLabSmoke / GroupCoverSmoke scene W check it).
 
 #include "CoreMinimal.h"
 
@@ -64,8 +66,34 @@ namespace GroupCoverPrioritySmoke
 		State.Failures += bOk ? 0 : 1;
 	}
 
+	/**
+	 * Formation sectors (2026-10-25): the cover-slot group order (slots shoulder to shoulder, prone behind, leader priority) runs for a box
+	 * selection and with Codex.Formation.Sectors 0; in group mode with the console on the order is the formation wall layout
+	 * (FORMATION_SECTORS.md "Wall", FormationLabSmoke). bOld saves the console's value and sets 0, false restores it.
+	 */
+	void UseCoverSlotOrderPriority(bool bOld)
+	{
+		static int32 Saved = -1;
+		IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Sectors"));
+		if (!CVar)
+		{
+			return;
+		}
+		if (bOld && Saved < 0)
+		{
+			Saved = CVar->GetInt();
+			CVar->Set(0, ECVF_SetByConsole);
+		}
+		else if (!bOld && Saved >= 0)
+		{
+			CVar->Set(Saved, ECVF_SetByConsole);
+			Saved = -1;
+		}
+	}
+
 	bool Finish(FState& State, bool bComplete)
 	{
+		UseCoverSlotOrderPriority(false);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		if (State.Wall.IsValid())
 		{
@@ -245,6 +273,8 @@ namespace GroupCoverPrioritySmoke
 			ResetSquad(Squad, State);
 			SpawnWall(World, State);
 			Check(State, State.Wall.IsValid(), TEXT("an 8 m long high wall 6 m ahead"));
+			// Formation sectors: in group mode the order would be the wall layout (no wait points) - this smoke checks the cover-slot order.
+			UseCoverSlotOrderPriority(true);
 			Next(State, 1);
 			return true;
 		}

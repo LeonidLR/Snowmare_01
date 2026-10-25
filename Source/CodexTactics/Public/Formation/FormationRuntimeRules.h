@@ -39,6 +39,10 @@ namespace FormationRuntime
 	inline constexpr float RoomMaxCm = 400.f;
 	/** A follower's formation move aims this far ahead of his slot along the slot's velocity, s (he never "arrives" at a moving slot). */
 	inline constexpr float LeadSeconds = 0.5f;
+	/** A formation follower gets a new move (speed + lead destination) this often, s (the old formation: FSquadFormationConfig::RepathInterval 0.2). */
+	inline constexpr float FollowRepathSeconds = 0.1f;
+	/** A leader "step" longer than this in one tick is a teleport, not a walk (the v2 hysteresis gets 0), cm. */
+	inline constexpr float MaxStepDistanceCm = 150.f;
 	/** The automatic wall layout is computed again once the leader stands this far from where it was computed, cm. */
 	inline constexpr float WallLayoutRecomputeCm = 50.f;
 
@@ -129,7 +133,10 @@ namespace FormationRuntime
 	CODEXTACTICS_API FFollowerMove FollowerMove(const FVector2D& MemberPos, float FacingYaw, const FVector2D& SlotPos, const FVector2D& SlotVelocity,
 		float Jitter, float TopSpeed, float WalkSpeed, bool bRun, const FFormationConfig& Config = FFormationConfig());
 
-	/** Where a formation move aims: the slot plus its velocity x LeadSeconds (the slot itself while it stands still). */
+	/** The lead never reaches further than this past the slot (a fast or jumping slot must not send him through a fence / round a corner), cm. */
+	inline constexpr float LeadMaxCm = 120.f;
+
+	/** Where a formation move aims: the slot plus its velocity x Lead, at most LeadMaxCm past it (the slot itself while it stands still). */
 	CODEXTACTICS_API FVector2D LeadDestination(const FVector2D& SlotPos, const FVector2D& SlotVelocity, float Lead = LeadSeconds);
 
 	/**

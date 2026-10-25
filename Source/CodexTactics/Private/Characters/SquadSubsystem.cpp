@@ -877,9 +877,34 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 
 	// Formation sectors: the heading is the leader's smoothed TRAVEL direction (his body scans his sector while he walks).
 	const bool bSectors = FormationRuntime::IsEnabled();
+	if (bSectors != Sectors.bWasEnabled)
+	{
+		// The console switched (an A/B in a smoke): each formation starts from its own heading - the old one the leader's facing.
+		Sectors.bWasEnabled = bSectors;
+		Sectors.bHeadingValid = false;
+		FormationHeading = LeaderRef->GetActorForwardVector();
+		for (FFollowerState& Follower : Followers)
+		{
+			AOperativeCharacter* Operative = Follower.Operative.Get();
+			if (Operative && Operative->IsMoving() && !IsOnOwnOrder(Operative) && !Operative->bInCover)
+			{
+				Operative->StopOperative(); // the other formation's move does not run on
+			}
+			Follower.RepathTimeRemaining = 0.f;
+			Follower.PrevSectorSlotTime = -1.0;
+		}
+	}
 	FVector HeadingTarget = LeaderRef->GetActorForwardVector();
 	if (bSectors)
 	{
+		// A leader put somewhere (a teleport, a load) did not walk there: the heading starts from his facing, not his old travel.
+		const FVector2D LeaderHere(LeaderRef->GetActorLocation());
+		if (Sectors.bHeadingTickPosValid && FVector2D::Distance(LeaderHere, Sectors.HeadingTickPos) > FormationRuntime::MaxStepDistanceCm)
+		{
+			FormationHeading = LeaderRef->GetActorForwardVector();
+		}
+		Sectors.HeadingTickPos = LeaderHere;
+		Sectors.bHeadingTickPosValid = true;
 		const TOptional<float> TravelYaw = FormationRuntime::HeadingFromVelocity(FVector2D(LeaderRef->GetVelocity()));
 		if (TravelYaw.IsSet())
 		{
