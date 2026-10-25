@@ -824,10 +824,10 @@ def build():
         p.wall(label, "Compound", a, b, 320, anchor="main building 10 x 18 m")
     gz = p.ground((bx0 + bx1) * 0.5, ky, "base")
     p.block("Base_Roof", "Compound", (bx0 + bx1) * 0.5, ky, (1040, 1840, 20), base_z=gz + 320, anchor="main building roof")
-    cam = p.spawn(unreal.CameraActor, "Base_Interior_Camera", unreal.Vector(bx0 + 120, by0 + 150, gz + 290),
-                  65.0, "Compound", "inside the base, SW corner", pitch=-30.0)
-    p.zone("Base_Interior_Shelter", (bx0 + bx1) * 0.5, ky, (460, 860, 200), unreal.CameraZoneEnvironment.SHELTER, cam,
-           "PMC base", "main building interior (fixed camera)")
+    # Game designer 2026-10-25: no fixed camera in the base - the squad goes in together (no "squad holds outside"); the zone
+    # stays for the shelter's cold multiplier only.
+    p.zone("Base_Interior_Shelter", (bx0 + bx1) * 0.5, ky, (460, 860, 200), unreal.CameraZoneEnvironment.SHELTER, None,
+           "PMC base", "main building interior (shelter, no fixed camera)")
     if want_volume("VOL_A5_BASE"):
         p.volume("VOL_A5_BASE", bx0 - 250, ky, (200, 250, 150), beat="A5", anchor="in front of the base door")
     crate = p.thing(unreal.LootCrateActor, "Base_Crate_Clean", bx1 - 250, by0 + 200, 40, 0, "Compound", "supply corner")
