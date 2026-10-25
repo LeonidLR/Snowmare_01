@@ -49,6 +49,9 @@
 #include "Tactics/CoverTraceRules.h"
 #include "TimerManager.h"
 #include "UnrealClient.h"
+#include "GameFramework/HUD.h"
+#include "Engine/Engine.h"
+#include "ShaderCompiler.h"
 
 namespace FormationLabSmoke
 {
@@ -175,6 +178,8 @@ namespace FormationLabSmoke
 		FRotator View = FRotator::ZeroRotator;
 		float Distance = 1500.f;
 		int32 Frames = 0;
+		int32 TakenFrame = 0;
+		bool bTaken = false;
 	};
 
 	struct FState
@@ -477,7 +482,7 @@ namespace FormationLabSmoke
 		State.Photos.Add(Photo);
 	}
 
-	/** Takes the queued photo (the game paused meanwhile); true while one is in progress. */
+	/** Takes the queued photo (the game slowed to a standstill, the HUD hidden, shaders compiled); true while one is in progress. */
 	bool StepPhotos(UWorld* World, FState& State)
 	{
 		if (State.Photos.IsEmpty())
@@ -493,39 +498,46 @@ namespace FormationLabSmoke
 		}
 		if (Photo.Frames == 0)
 		{
-			UGameplayStatics::SetGamePaused(World, true);
+			UGameplayStatics::SetGlobalTimeDilation(World, 0.01f);
 			State.bPausedForPhoto = true;
+			if (AHUD* Hud = PC->GetHUD())
+			{
+				Hud->bShowHUD = false;
+			}
+			GEngine->Exec(World, TEXT("DisableAllScreenMessages"));
 			if (!State.Camera.IsValid())
 			{
 				FActorSpawnParameters Params;
 				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 				State.Camera = World->SpawnActor<ACameraActor>(Photo.Target, FRotator::ZeroRotator, Params);
-				if (State.Camera.IsValid())
-				{
-					State.Camera->GetCameraComponent()->SetFieldOfView(60.f);
-					State.Camera->GetCameraComponent()->bConstrainAspectRatio = false;
-				}
 			}
-			if (ACameraActor* Camera = State.Camera.Get())
-			{
-				Camera->SetActorLocationAndRotation(Photo.Target - Photo.View.Vector() * Photo.Distance, Photo.View);
-				PC->SetViewTarget(Camera);
-			}
+		}
+		// Every frame (the game's camera code may take the view back).
+		if (ACameraActor* Camera = State.Camera.Get())
+		{
+			Camera->GetCameraComponent()->SetFieldOfView(60.f);
+			Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+			Camera->SetActorLocationAndRotation(Photo.Target - Photo.View.Vector() * Photo.Distance, Photo.View);
+			PC->SetViewTarget(Camera);
 		}
 		++Photo.Frames;
-		if (Photo.Frames == 20)
+		const bool bShadersDone = !GShaderCompilingManager || GShaderCompilingManager->GetNumRemainingJobs() == 0;
+		if (!Photo.bTaken && Photo.Frames >= 30 && (bShadersDone || Photo.Frames >= 900))
 		{
+			Photo.bTaken = true;
+			Photo.TakenFrame = Photo.Frames;
 			const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("FormationLab") / (Photo.Name + TEXT(".png"));
-			FScreenshotRequest::RequestScreenshot(Path, false, false);
+			FScreenshotRequest::RequestScreenshot(Path, /*bInShowUI*/ false, /*bAddFilenameSuffix*/ false);
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke screenshot %s"), *Path);
 		}
-		if (Photo.Frames >= 35)
+		if (Photo.bTaken && Photo.Frames >= Photo.TakenFrame + 15)
 		{
 			State.Photos.RemoveAt(0);
 			if (State.Photos.IsEmpty())
 			{
-				UGameplayStatics::SetGamePaused(World, false);
+				UGameplayStatics::SetGlobalTimeDilation(World, 1.f);
 				State.bPausedForPhoto = false;
+				PC->SetViewTarget(PC->GetPawn());
 			}
 		}
 		return true;
