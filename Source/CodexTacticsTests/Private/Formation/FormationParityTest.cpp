@@ -984,8 +984,7 @@ bool FFormationParitySideWidthTest::RunTest(const FString&)
 	{
 		return bMissing;
 	}
-	int32 Ambiguous = 0;
-	const bool bPassed = RunCases(*this, TEXT("SideWidth"), Golden, [this, &Golden, &Ambiguous](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	return RunCases(*this, TEXT("SideWidth"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
 	{
 		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
 		TArray<FFormationWall> Walls;
@@ -998,60 +997,9 @@ bool FFormationParitySideWidthTest::RunTest(const FString&)
 			return TEXT("unreadable input / output");
 		}
 		const TOptional<float> Actual = FormationTerrainRules::SideWidth(Walls, Pos, static_cast<float>(Yaw), Golden.Config);
-		const auto Same = [&Golden, &Expected](const TOptional<float>& Width)
-		{
-			return Width.IsSet() == Expected.IsSet() && (!Width.IsSet() || FMath::Abs(Width.GetValue() - Expected.GetValue()) <= Golden.TolCm);
-		};
-		if (Same(Actual))
-		{
-			return FString();
-		}
-		// Input quantization: the file's wall ends are rounded to 1e-3 cm, but the simulator computed the width from the unrounded scene.
-		// A wall whose closest point lies on the heading line (within SideAmbiguityCm) has no defined side in the rounded input; if
-		// flipping only such walls gives the expected width, the case is undecidable from the file (reported, not a rule difference).
-		constexpr double SideAmbiguityCm = 1e-2;
-		const FVector2D Heading = FormationMath::DirOf(Yaw);
-		const double Reach = Golden.Config.ClassifyProbeSide;
-		double Right = TNumericLimits<double>::Max();
-		double Left = TNumericLimits<double>::Max();
-		bool bAnyAmbiguous = false;
-		for (const FFormationWall& Wall : Walls)
-		{
-			const FVector2D Closest = FormationMath::ClosestOnSegment(Pos, Wall.A, Wall.B);
-			const double Distance = FMath::Max(0.0, FVector2D::Distance(Pos, Closest) - 0.5 * Wall.Thickness);
-			if (Distance > Reach)
-			{
-				continue;
-			}
-			const double Cross = Heading.X * (Closest.Y - Pos.Y) - Heading.Y * (Closest.X - Pos.X);
-			const bool bAmbiguous = FMath::Abs(Cross) < SideAmbiguityCm;
-			bAnyAmbiguous |= bAmbiguous;
-			// The ambiguous wall goes to the other side than SideWidth put it.
-			if ((Cross >= 0.0) != bAmbiguous)
-			{
-				Right = FMath::Min(Right, Distance);
-			}
-			else
-			{
-				Left = FMath::Min(Left, Distance);
-			}
-		}
-		const TOptional<float> Flipped = (Right > Reach && Left > Reach) ? TOptional<float>()
-			: TOptional<float>(static_cast<float>(FMath::Min(Right, Reach) + FMath::Min(Left, Reach)));
-		if (bAnyAmbiguous && Same(Flipped))
-		{
-			++Ambiguous;
-			AddWarning(FString::Printf(TEXT("SideWidth: a wall's closest point lies on the heading line (side undefined after the file's input rounding): width %s, the golden %s - in %s"),
-				*ShowNumber(Actual), *ShowNumber(Expected), *CaseText(In)));
-			return FString();
-		}
-		return FString::Printf(TEXT("width %s, expected %s"), *ShowNumber(Actual), *ShowNumber(Expected));
+		const bool bSame = Actual.IsSet() == Expected.IsSet() && (!Actual.IsSet() || FMath::Abs(Actual.GetValue() - Expected.GetValue()) <= Golden.TolCm);
+		return bSame ? FString() : FString::Printf(TEXT("width %s, expected %s"), *ShowNumber(Actual), *ShowNumber(Expected));
 	});
-	if (Ambiguous > 0)
-	{
-		AddInfo(FString::Printf(TEXT("SideWidth: %d case(s) undecidable from the rounded inputs (a wall exactly ahead); the golden should be computed from the rounded scene"), Ambiguous));
-	}
-	return bPassed;
 }
 
 FORMATION_PARITY_TEST(FFormationParityClearLookTest, "ClearLook")

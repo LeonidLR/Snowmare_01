@@ -110,6 +110,11 @@ namespace FormationTerrainRules
 		double Left = TNumericLimits<double>::Max();
 		for (const FFormationWall& Wall : Walls)
 		{
+			// A wall ACROSS the heading is ahead / behind, never a side wall (a look into its end is ClearLook's job).
+			if (IsAcrossHeading(Wall, Yaw, Config.ClassifySideIgnorePerpDeg))
+			{
+				continue;
+			}
 			const FVector2D Closest = FormationMath::ClosestOnSegment(Pos, Wall.A, Wall.B);
 			const double Distance = FMath::Max(0.0, FVector2D::Distance(Pos, Closest) - 0.5 * Wall.Thickness);
 			if (Distance > Reach)
