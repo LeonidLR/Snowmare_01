@@ -1,0 +1,157 @@
+#include "Formation/FormationTerrainRules.h"
+
+namespace FormationTerrainRules
+{
+	/** Probe directions off the heading, deg: side rays (forward-side, side, back-side) and the forward fan. */
+	static const float TerrainSideRaysDeg[] = { 60.f, 90.f, 120.f };
+	static const float TerrainAheadRaysDeg[] = { 0.f, -20.f, 20.f };
+
+	static double TerrainCross2D(const FVector2D& A, const FVector2D& B)
+	{
+		return A.X * B.Y - A.Y * B.X;
+	}
+
+	/** Distance along the ray to one wall (its faces / centre line), infinity when none (geometry.ts raySegment). */
+	static double TerrainRaySegment(const FVector2D& Origin, const FVector2D& Dir, const FFormationWall& Wall)
+	{
+		const double Half = 0.5 * Wall.Thickness;
+		const FVector2D Edge = Wall.B - Wall.A;
+		const double Length = Edge.Size();
+		if (Length == 0.0)
+		{
+			return TNumericLimits<double>::Max();
+		}
+		const FVector2D Normal(-Edge.Y / Length, Edge.X / Length);
+		double Best = TNumericLimits<double>::Max();
+		const double Offsets[2] = { Half, -Half };
+		const int32 OffsetCount = Half > 0.0 ? 2 : 1;
+		for (int32 Index = 0; Index < OffsetCount; ++Index)
+		{
+			const FVector2D A = Wall.A + Normal * (Half > 0.0 ? Offsets[Index] : 0.0);
+			const double Denominator = TerrainCross2D(Dir, Edge);
+			if (FMath::Abs(Denominator) < 1e-9)
+			{
+				continue;
+			}
+			const FVector2D ToA = A - Origin;
+			const double T = TerrainCross2D(ToA, Edge) / Denominator;
+			const double U = TerrainCross2D(ToA, Dir) / Denominator;
+			if (T >= 0.0 && U >= 0.0 && U <= 1.0 && T < Best)
+			{
+				Best = T;
+			}
+		}
+		if (Half > 0.0)
+		{
+			// Started inside the wall body: distance 0.
+			const double LengthSquared = Length * Length;
+			const double Along = FVector2D::DotProduct(Origin - Wall.A, Edge) / LengthSquared;
+			const double Clamped = FMath::Clamp(Along, 0.0, 1.0);
+			const FVector2D Closest = Wall.A + Edge * Clamped;
+			if (Clamped > 0.0 && Clamped < 1.0 && FVector2D::Distance(Origin, Closest) < Half)
+			{
+				return 0.0;
+			}
+		}
+		return Best;
+	}
+
+	TOptional<float> RayHit(const TArray<FFormationWall>& Walls, const FVector2D& Origin, const FVector2D& Dir, float MaxDistance)
+	{
+		double Best = TNumericLimits<double>::Max();
+		for (const FFormationWall& Wall : Walls)
+		{
+			Best = FMath::Min(Best, TerrainRaySegment(Origin, Dir, Wall));
+		}
+		return Best <= static_cast<double>(MaxDistance) ? TOptional<float>(static_cast<float>(Best)) : TOptional<float>();
+	}
+
+	TOptional<float> SideClearance(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, int32 Side, float Reach)
+	{
+		TOptional<double> Best;
+		for (const float RayDeg : TerrainSideRaysDeg)
+		{
+			const double Sine = FMath::Sin(FMath::DegreesToRadians(static_cast<double>(RayDeg)));
+			const TOptional<float> Hit = RayHit(Walls, Pos, FormationMath::Forward(Yaw + static_cast<float>(Side) * RayDeg), static_cast<float>(Reach / Sine));
+			if (Hit.IsSet())
+			{
+				const double Lateral = static_cast<double>(Hit.GetValue()) * Sine;
+				Best = Best.IsSet() ? FMath::Min(Best.GetValue(), Lateral) : Lateral;
+			}
+		}
+		return Best.IsSet() ? TOptional<float>(static_cast<float>(Best.GetValue())) : TOptional<float>();
+	}
+
+	EFormationTerrainClass ClassifyRaw(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, const FFormationConfig& Config)
+	{
+		for (const float RayDeg : TerrainAheadRaysDeg)
+		{
+			if (RayHit(Walls, LeaderPos, FormationMath::Forward(LeaderYaw + RayDeg), Config.ClassifyAtWallDist).IsSet())
+			{
+				return EFormationTerrainClass::AtWall;
+			}
+		}
+		const float Reach = Config.ClassifyProbeSide;
+		const TOptional<float> Right = SideClearance(Walls, LeaderPos, LeaderYaw, 1, Reach);
+		const TOptional<float> Left = SideClearance(Walls, LeaderPos, LeaderYaw, -1, Reach);
+		const bool bRightBlocked = Right.IsSet() && Right.GetValue() <= Reach;
+		const bool bLeftBlocked = Left.IsSet() && Left.GetValue() <= Reach;
+		if (bRightBlocked && bLeftBlocked)
+		{
+			return Left.GetValue() + Right.GetValue() < Config.ClassifyCorridorWidth ? EFormationTerrainClass::Corridor : EFormationTerrainClass::Open;
+		}
+		if (bLeftBlocked)
+		{
+			return EFormationTerrainClass::WallLeft;
+		}
+		if (bRightBlocked)
+		{
+			return EFormationTerrainClass::WallRight;
+		}
+		return EFormationTerrainClass::Open;
+	}
+
+	EFormationTerrainClass ApplyHysteresis(EFormationTerrainClass RawClass, const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass,
+		const FFormationConfig& Config)
+	{
+		if (!PreviousClass.IsSet() || RawClass == PreviousClass.GetValue())
+		{
+			return RawClass;
+		}
+		return TimeInClass < Config.ClassifyHoldTime ? PreviousClass.GetValue() : RawClass;
+	}
+
+	EFormationTerrainClass Classify(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,
+		const TOptional<EFormationTerrainClass>& PreviousClass, float TimeInClass, const FFormationConfig& Config)
+	{
+		return ApplyHysteresis(ClassifyRaw(Walls, LeaderPos, LeaderYaw, Config), PreviousClass, TimeInClass, Config);
+	}
+
+	EFormationKind FormationFor(EFormationTerrainClass Class, int32 MemberCount)
+	{
+		switch (Class)
+		{
+		case EFormationTerrainClass::WallLeft: return EFormationKind::EchelonRight;
+		case EFormationTerrainClass::WallRight: return EFormationKind::EchelonLeft;
+		case EFormationTerrainClass::Corridor: return EFormationKind::Column;
+		case EFormationTerrainClass::AtWall: return EFormationKind::Wall;
+		default: return MemberCount >= 4 ? EFormationKind::Diamond : EFormationKind::Wedge;
+		}
+	}
+}
+
+EFormationTerrainClass FFormationTerrainTracker::Step(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, float DeltaSeconds,
+	const FFormationConfig& Config)
+{
+	if (Class.IsSet())
+	{
+		TimeInClass += FMath::Max(DeltaSeconds, 0.f);
+	}
+	const EFormationTerrainClass Next = FormationTerrainRules::Classify(Walls, LeaderPos, LeaderYaw, Class, TimeInClass, Config);
+	if (!Class.IsSet() || Next != Class.GetValue())
+	{
+		Class = Next;
+		TimeInClass = 0.f;
+	}
+	return Next;
+}

@@ -100,6 +100,12 @@
   "nonSmokeDebugCommands": ["StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots"],
   "rules": [
     {
+      "name": "formation-sectors-2026-10-25",
+      "globs": ["Source/**/Formation/**", "Content/Data/FormationLab/**", "Tools/TrainingGround/golden/formation_*"],
+      "tests": ["CodexTactics.Formation"],
+      "smokes": []
+    },
+    {
       "name": "orders-pause-relocate-pick-2026-10-25",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerOrders*", "Source/**/Core/CodexTacticsPlayerControllerItems*", "Source/**/Debug/LakeQuestSmoke*"],
       "tests": [],

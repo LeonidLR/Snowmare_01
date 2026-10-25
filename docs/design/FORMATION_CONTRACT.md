@@ -48,6 +48,30 @@ outward normal for `wall.*`), positive = right. Owned by the cloud session (Trai
 Exported by the simulator (`npm run golden`); C++ parity tests `CodexTactics.Formation.Parity.<Rule>` read them from
 `FPaths::ProjectDir()/Tools/TrainingGround/golden/` (skip with a warning while the file does not exist yet).
 
+### 3.1 Field names the C++ parity harness reads (`Source/CodexTacticsTests/Private/Formation/FormationParityTest.cpp`)
+Top level: `schema` = `codex.formation_golden/1`, `rule` = the file's rule name, `tolerance.cm` / `tolerance.deg` (default 0.5 / 0.5),
+`config_values` = flat `{ "<config key>": number }` snapshot the vectors were computed with (the C++ config is built FROM it over the
+struct defaults, never from the current `formation_config.json`; an unknown key is a warning), `cases` = non-empty array of
+`{ in, out }`. Every case is checked, none skipped; an unreadable case is an error. Input names are camelCase (snake_case aliases
+`member_count`, `leader_pos`, ... are accepted too). Vectors are `[x, y]` cm; yaws UE degrees compared as angles (|normalize(a - b)| <=
+tolerance.deg, 180 == -180); positions by distance <= tolerance.cm. Enum strings: formation `diamond | wedge | column | line |
+echelon_left | echelon_right | wall | hedgehog | blizzard`, role `K | P | L | Z`, mode `walk | run | halt | wall`, class
+`open | wall_left | wall_right | corridor | at_wall`. Walls `{ a: [x, y], b: [x, y], thickness? }` (thickness missing = 0).
+
+| File / test | `in` | `out` (compared) |
+|---|---|---|
+| `formation_Slots.json` / `Parity.Slots` | `formation`, `memberCount`, `leaderPos`, `leaderYaw` | `slots: [{ role, pos }]` - same count, same role ORDER (index 0 = the leader; `wall` -> `[]`), pos |
+| `formation_LookYaw.json` / `Parity.LookYaw` | `role`, `formation`, `mode`, `memberCount`, `timeInPatrol`, `leaderYaw` (mode / formation `wall`: the wall's outward normal) | `yaw` |
+| `formation_Classify.json` / `Parity.Classify` | `walls[]`, `leaderPos`, `leaderYaw`, `previousClass` (string or `null` = no history), `timeInClass` | `class` (after the hysteresis) |
+| `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount` | `formation` |
+| `formation_WallLayout.json` / `Parity.WallLayout` | `wall`, `clickedSlot`, `memberCount`, `roomLeft`, `roomRight` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
+
+C++ entry points: `FormationShapeRules::Slots`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol,
+leaderYaw, config)`, `FormationTerrainRules::Classify(walls, leaderPos, leaderYaw, TOptional previousClass, timeInClass, config)` /
+`FormationFor(class, memberCount)`, `FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)`;
+config `FFormationConfig` + `FormationTuning` (`Source/CodexTactics/Public/Formation/`). First run 2026-10-25 against ead0faf:
+Slots 288, LookYaw 3888, Classify 264, FormationFor 15, WallLayout 108 cases, 0 mismatched.
+
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):
 1. wall stare: nobody looks into a wall closer than 200 cm (facing within 45 deg of the wall normal, towards it);
