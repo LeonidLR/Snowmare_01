@@ -149,30 +149,31 @@ test('WallLayout (4): the 4th at the roomier end, his neighbour turns to the cen
 
 test('Classify: open, wall on one side -> echelon to the open side, corridor -> column, at_wall', () => {
   const none: Segment[] = [];
-  assert.equal(rawClass(none, [0, 0], 0, C), 'open');
+  assert.equal(rawClass(none, [0, 0], 0, null, C), 'open');
   const leftWall: Segment[] = [{ a: [-2000, -300], b: [2000, -300], thickness: 40 }];
-  assert.equal(rawClass(leftWall, [0, 0], 0, C), 'wall_left');
+  assert.equal(rawClass(leftWall, [0, 0], 0, null, C), 'wall_left');
   assert.equal(FormationTerrainRules.FormationFor('wall_left', 4), 'echelon_right');
   const rightWall: Segment[] = [{ a: [-2000, 300], b: [2000, 300], thickness: 40 }];
-  assert.equal(rawClass(rightWall, [0, 0], 0, C), 'wall_right');
+  assert.equal(rawClass(rightWall, [0, 0], 0, null, C), 'wall_right');
   assert.equal(FormationTerrainRules.FormationFor('wall_right', 3), 'echelon_left');
-  assert.equal(rawClass([...leftWall, ...rightWall], [0, 0], 0, C), 'corridor');
+  assert.equal(rawClass([...leftWall, ...rightWall], [0, 0], 0, null, C), 'corridor');
   assert.equal(FormationTerrainRules.FormationFor('corridor', 4), 'column');
   const wide: Segment[] = [{ a: [-2000, -380], b: [2000, -380], thickness: 40 }, { a: [-2000, 380], b: [2000, 380], thickness: 40 }];
-  assert.equal(rawClass(wide, [0, 0], 0, C), 'open', 'a 7.6 m street fits the diamond');
+  assert.equal(rawClass(wide, [0, 0], 0, null, C), 'open', 'a 7.6 m street fits the diamond');
   const ahead: Segment[] = [{ a: [120, -500], b: [120, 500], thickness: 20 }];
-  assert.equal(rawClass(ahead, [0, 0], 0, C), 'at_wall');
+  assert.equal(rawClass(ahead, [0, 0], 0, [0, 0], C), 'at_wall', 'arriving');
+  assert.equal(rawClass(ahead, [0, 0], 0, null, C), 'open', 'v1.2: no destination = walking past - never at_wall');
   assert.equal(FormationTerrainRules.FormationFor('open', 4), 'diamond');
   assert.equal(FormationTerrainRules.FormationFor('open', 3), 'wedge');
 });
 
 test('Classify: a 2 m gap in a wall is bridged by the slanted probes; hysteresis holds a class for hold_time', () => {
   const gapped: Segment[] = [{ a: [-2000, -300], b: [-100, -300], thickness: 40 }, { a: [100, -300], b: [2000, -300], thickness: 40 }];
-  assert.equal(rawClass(gapped, [0, 0], 0, C), 'wall_left');
+  assert.equal(rawClass(gapped, [0, 0], 0, null, C), 'wall_left');
   const hold = C['classify.hold_time'];
-  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, 'wall_left', hold * 0.5, C), 'wall_left');
-  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, 'wall_left', hold, C), 'open');
-  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, null, 0, C), 'open');
+  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, null, 'wall_left', hold * 0.5, C), 'wall_left');
+  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, null, 'wall_left', hold, C), 'open');
+  assert.equal(FormationTerrainRules.Classify([], [0, 0], 0, null, null, 0, C), 'open');
 });
 
 test('layout validation: the sample layout is valid; broken files name the element', () => {
@@ -197,9 +198,9 @@ test('geometry sanity: dirOf / dist', () => {
 test('v1.1 (Q3): a dead end ahead does not read as side walls; walls across the heading are ignored by the side probes', async () => {
   const { isAcrossHeading } = await import('./rules.ts');
   const deadEnd: Segment[] = [{ a: [300, -2000], b: [300, 2000], thickness: 40 }];
-  assert.equal(rawClass(deadEnd, [0, 0], 0, C), 'open', 'v1 said corridor here (both 60 deg rays hit the wall ahead)');
-  assert.equal(rawClass([...deadEnd, { a: [-2000, -300], b: [250, -300], thickness: 40 }], [0, 0], 0, C), 'wall_left');
-  assert.equal(rawClass([{ a: [120, -500], b: [120, 500], thickness: 20 }], [0, 0], 0, C), 'at_wall', 'at_wall still first');
+  assert.equal(rawClass(deadEnd, [0, 0], 0, null, C), 'open', 'v1 said corridor here (both 60 deg rays hit the wall ahead)');
+  assert.equal(rawClass([...deadEnd, { a: [-2000, -300], b: [250, -300], thickness: 40 }], [0, 0], 0, null, C), 'wall_left');
+  assert.equal(rawClass([{ a: [120, -500], b: [120, 500], thickness: 20 }], [0, 0], 0, [0, 0], C), 'at_wall', 'at_wall still first (arriving)');
   const band = C['classify.side_ignore_perp_deg'];
   assert.equal(isAcrossHeading({ a: [0, -100], b: [0, 100] }, 0, band), true);
   assert.equal(isAcrossHeading({ a: [-100, 0], b: [100, 0] }, 0, band), false);
@@ -218,5 +219,49 @@ test('v1.1 (user Q1 = A): a narrow column looks forward over the shoulder / back
   near(T.PassageWidth(corridor, [0, 0], 0, C)!, 460);
   assert.equal(T.PassageWidth([corridor[0]], [0, 0], 0, C), null);
   assert.equal(T.PassageWidth([], [0, 0], 0, C), null);
+});
+
+test('v1.2: leader search 11-1 o\'clock (+-30); "All forward" (mode forward) = everyone on 12 in any formation', () => {
+  assert.equal(C['scan.amp_lead'], 30);
+  const k = sweep('K', 4);
+  near(Math.max(...k), 30, 0.5); near(Math.min(...k), -30, 0.5);
+  for (const f of ['diamond', 'column', 'echelon_right', 'line', 'hedgehog'] as const) {
+    for (const r of ['K', 'P', 'L', 'Z'] as const) near(FormationSectorRules.LookYaw(r, f, 'forward', 4, 1.3, 40, 460, C), 40);
+  }
+});
+
+test('v1.2: at_wall only on arrival - walking past / up to a wall is not the wall layout; arriving within arrive_dist is, at once', () => {
+  const ahead: Segment[] = [{ a: [120, -500], b: [120, 500], thickness: 20 }];
+  const T = FormationTerrainRules;
+  assert.equal(T.Classify(ahead, [0, 0], 0, [1000, 0], 'open', 5, C), 'open', 'destination far away: just passing');
+  assert.equal(T.Classify(ahead, [0, 0], 0, [C['classify.arrive_dist'] - 1, 0], 'open', 0.1, C), 'at_wall', 'arriving: no hold for the event');
+  assert.equal(T.Classify(ahead, [0, 0], 0, [C['classify.arrive_dist'] + 1, 0], 'open', 5, C), 'open');
+});
+
+test('v1.2: hedgehog round the heat source - centre = the fire, everyone on the ring, back to it, looking out', () => {
+  const fire: Vec2 = [500, -300], r = C['hedgehog.radius'];
+  for (const n of [2, 3, 4]) {
+    const s = FormationShapeRules.HedgehogSlots(fire, n, 30, C);
+    assert.equal(s.length, n);
+    for (const m of s) {
+      near(dist(m.pos, fire), r, 1e-6);
+      near(angleDiff(m.yaw, yawOf([m.pos[0] - fire[0], m.pos[1] - fire[1]])), 0, 1e-6); // facing away from the centre
+    }
+    near(s[0].yaw, 30);
+  }
+});
+
+test('v1.2 (documents): a column of THREE - the wide herringbone keeps the triad rear gap; the narrow column covers it with L', () => {
+  const fov = C['sight.fov'];
+  const watchesRear = (width: number | null) => (['K', 'P', 'L'] as const)
+    .some((r) => angleDiff(FormationSectorRules.LookYaw(r, 'column', 'walk', 3, 0, 0, width, C), 180) <= fov / 2 - 30);
+  assert.equal(watchesRear(null), false, 'wide column of three: 5-7 o\'clock open (triad gap rule)');
+  assert.equal(watchesRear(460), true, 'narrow column of three: L back at a slant (-165, user Q1 = A) covers 5-7 o\'clock');
+});
+
+test('BreakRoomTie (as the C++ caller): a tie goes to the side with less travel; otherwise unchanged', () => {
+  assert.deepEqual(FormationWallRules.BreakRoomTie(500, 500, 100, 300), { roomLeft: 501, roomRight: 500 });
+  assert.deepEqual(FormationWallRules.BreakRoomTie(500, 500, 300, 100), { roomLeft: 500, roomRight: 500 });
+  assert.deepEqual(FormationWallRules.BreakRoomTie(400, 500, 100, 300), { roomLeft: 400, roomRight: 500 });
 });
 

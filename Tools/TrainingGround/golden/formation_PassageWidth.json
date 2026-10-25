@@ -48,7 +48,7 @@
   "scan.period": 3,
   "scan.center_side": 45,
   "scan.amp_side": 45,
-  "scan.amp_lead": 12,
+  "scan.amp_lead": 30,
   "scan.dwell_exp": 0.45,
   "halt.side_deg": 60,
   "classify.probe_side": 400,
@@ -56,6 +56,7 @@
   "classify.corridor_width": 600,
   "classify.hold_time": 1,
   "classify.at_wall_dist": 150,
+  "classify.arrive_dist": 50,
   "classify.side_ignore_perp_deg": 30,
   "sight.fov": 140
  },

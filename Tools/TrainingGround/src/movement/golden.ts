@@ -11,7 +11,7 @@ import type { Mode, Role, TerrainClass } from './rules.ts';
 import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rolesFor } from './rules.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
-export const GOLDEN_RULES = ['Slots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout'] as const;
+export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -71,8 +71,14 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
+  const hedgehog = base('HedgehogSlots', 'in: center, memberCount, yaw -> out.slots [{role, pos, yaw}] (v1.2: the ring round the heat source).');
+  for (const memberCount of [1, 2, 3, 4]) for (const center of [[0, 0], [1234.5, -678.25]] as Vec2[]) for (const yaw of [0, 37.5, -120, 180]) {
+    const out = FormationShapeRules.HedgehogSlots(center, memberCount, yaw, config).map((s) => ({ role: s.role, pos: r2(s.pos), yaw: round(s.yaw) }));
+    hedgehog.cases.push({ in: { center, memberCount, yaw }, out: { slots: out } });
+  }
+
   const look = base('LookYaw', 'in: role, formation, mode, memberCount, timeInPatrol, leaderYaw, passageWidth (null = not in a passage) -> out.yaw (UE yaw, -180..180; compare as angles).');
-  const modes: Mode[] = ['walk', 'run', 'halt', 'wall'];
+  const modes: Mode[] = ['walk', 'run', 'halt', 'wall', 'forward'];
   for (const formation of FORMATIONS) for (const mode of modes) for (const memberCount of [2, 3, 4]) {
     for (const role of rolesFor(memberCount) as Role[]) for (const timeInPatrol of [0, 0.37, 0.75, 1.6, 2.9, 4.4]) {
       for (const leaderYaw of [0, -150]) for (const passageWidth of formation === 'column' ? [null, 460, 760] : [null]) {
@@ -82,14 +88,17 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  const classify = base('Classify', 'in: walls [{a, b, thickness}], leaderPos, leaderYaw, previousClass (null = none), timeInClass -> out.class.');
+  const classify = base('Classify', 'in: walls [{a, b, thickness}], leaderPos, leaderYaw, destination (null = none; v1.2 at_wall only when arriving), previousClass (null = none), timeInClass -> out.class.');
   const previous: (TerrainClass | null)[] = [null, 'open', 'wall_left', 'corridor'];
   for (const [scene, walls] of Object.entries(SCENES)) {
     for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]], [-140, [-1200, 800]]] as [number, Vec2][]) {
       const placed = place(walls, yaw, offset);
-      for (const previousClass of previous) for (const timeInClass of [0.3, 1.5]) {
-        const out = FormationTerrainRules.Classify(placed, offset, yaw, previousClass, timeInClass, config);
-        classify.cases.push({ in: { scene, walls: placed.map(seg), leaderPos: r2(offset), leaderYaw: yaw, previousClass, timeInClass }, out: { class: out } });
+      const ahead = (d: number): Vec2 => [offset[0] + Math.cos((yaw * Math.PI) / 180) * d, offset[1] + Math.sin((yaw * Math.PI) / 180) * d];
+      for (const destination of [null, r2(offset), r2(ahead(1000))] as (Vec2 | null)[]) {
+        for (const previousClass of previous) for (const timeInClass of [0.3, 1.5]) {
+          const out = FormationTerrainRules.Classify(placed, offset, yaw, destination, previousClass, timeInClass, config);
+          classify.cases.push({ in: { scene, walls: placed.map(seg), leaderPos: r2(offset), leaderYaw: yaw, destination, previousClass, timeInClass }, out: { class: out } });
+        }
       }
     }
   }
@@ -123,7 +132,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  return { Slots: slots, LookYaw: look, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall };
+  return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall };
 }
 
 export const goldenFileName = (rule: GoldenRule): string => `formation_${rule}.json`;

@@ -52,6 +52,10 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 - **Q2 = A** (user): echelon last man 150° (was 125°); the rear-cover check stays in force for the echelon.
 - **Q3** (coordinator, classifier bug): a dead-end wall ahead no longer reads as side walls (classifier v1.1: ahead rays first,
   side probes ignore walls within 30° of perpendicular to the heading) — no column / echelon flip before the wall layout.
+- **v1.2** (coordinator, design-doc fidelity): the leader's patrol search is ±30° (11–1 o'clock, as above); "All forward" (menu
+  10:30) = walking with everyone looking at 12 in any formation; the wall layout triggers only on ARRIVAL at a wall (not when
+  walking past it or turning at a bend); the hedgehog is centred on the heat source; a column of three keeps the triad's open
+  rear in the wide herringbone (in a narrow column L's back-slant look covers it).
 - **Open (Q4)**: a wide passage (both sides walled, wider than 6 m, e.g. 7.6 m) is still "open" → diamond, whose side men scan
   3 / 9 o'clock straight into walls 1.2 m away. Proposal: any passage between two walls → column (narrow / wide sectors by width).
 

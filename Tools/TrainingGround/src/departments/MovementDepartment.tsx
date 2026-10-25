@@ -16,7 +16,7 @@ const FORMATION_RU: Record<string, string> = {
   diamond: 'Ромб', wedge: 'Клин', column: 'Колонна-ёлочка', line: 'Цепь', echelon_left: 'Эшелон влево',
   echelon_right: 'Эшелон вправо', wall: 'У стены', hedgehog: 'Ёж', blizzard: 'Метельная сцепка',
 };
-const MODE_RU: Record<string, string> = { walk: 'шаг (патруль)', run: 'бег', halt: 'остановка', wall: 'у стены' };
+const MODE_RU: Record<string, string> = { walk: 'шаг (патруль)', run: 'бег', halt: 'остановка', wall: 'у стены', forward: 'шаг, все вперёд' };
 
 const Panel: React.FC<{ title: string; children: React.ReactNode; right?: React.ReactNode }> = ({ title, children, right }) => (
   <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 min-w-0">
@@ -46,7 +46,8 @@ export const MovementDepartment: React.FC = () => {
   const [routeId, setRouteId] = useState('');
   const [members, setMembers] = useState(4);
   const [seed, setSeed] = useState(1);
-  const [manual, setManual] = useState<Formation | ''>('');
+  // '' = Auto; 'all_forward' = the menu's "All forward" (v1.2: walking, everyone looks at 12, formation stays automatic).
+  const [manual, setManual] = useState<Formation | '' | 'all_forward'>('');
   const [speed, setSpeed] = useState(1);
   const [follow, setFollow] = useState(true);
   const [playing, setPlaying] = useState(true);
@@ -86,7 +87,8 @@ export const MovementDepartment: React.FC = () => {
     if (!layout || !route || !config || !nav) return { frames: [] as Frame[], metrics: null as RunMetrics | null };
     const out: Frame[] = [];
     const collector = new RunCollector(layout, route, members, seed, config);
-    simulate({ layout, route, memberCount: members, config, seed, nav, manualFormation: manual || undefined,
+    simulate({ layout, route, memberCount: members, config, seed, nav,
+      manualFormation: manual && manual !== 'all_forward' ? manual : undefined, allForward: manual === 'all_forward',
       onFrame: (f) => { out.push(f); collector.onFrame(f); } });
     return { frames: out, metrics: collector.finish() };
   }, [layout, routeId, config, nav, members, seed, manual]);
@@ -175,9 +177,10 @@ export const MovementDepartment: React.FC = () => {
               </select>
             </Field>
             <Field label="Построение">
-              <select className={inputCls} value={manual} onChange={(e) => setManual(e.target.value as Formation | '')}>
+              <select className={inputCls} value={manual} onChange={(e) => setManual(e.target.value as Formation | '' | 'all_forward')}>
                 <option value="">Авто (по местности)</option>
                 {FORMATIONS.filter((f) => f !== 'wall').map((f) => <option key={f} value={f}>{FORMATION_RU[f]} (вручную)</option>)}
+                <option value="all_forward">Все вперёд (все смотрят на 12)</option>
               </select>
             </Field>
             <Field label="Seed">
@@ -201,7 +204,7 @@ export const MovementDepartment: React.FC = () => {
             {frame && (
               <div className="absolute top-3 left-3 bg-slate-950/85 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 flex flex-col gap-0.5">
                 <span>t = {frame.t.toFixed(1)} с · {MODE_RU[frame.mode]}</span>
-                <span>построение: <b className="text-cyan-300">{FORMATION_RU[frame.formation]}</b>{manual ? ' (вручную)' : ''}</span>
+                <span>построение: <b className="text-cyan-300">{FORMATION_RU[frame.formation]}</b>{manual === 'all_forward' ? ' · все вперёд' : manual ? ' (вручную)' : ''}</span>
                 <span>местность: {frame.terrain}</span>
                 <span>пройдено: {(frame.leaderDistance / 100).toFixed(1)} м</span>
               </div>
