@@ -18,6 +18,9 @@ namespace EnvironmentRules
 
 		const ETimeOfDayPhase AllPhases[] = {ETimeOfDayPhase::EarlyMorning, ETimeOfDayPhase::Midday, ETimeOfDayPhase::Afternoon, ETimeOfDayPhase::Night};
 
+		/** Save keys of the FDirectionalSnow pockets, in pocket order. */
+		const TCHAR* const ObjectSnowKeys[FDirectionalSnow::PocketCount] = {TEXT("top"), TEXT("px"), TEXT("nx"), TEXT("py"), TEXT("ny")};
+
 		/** Hour wrapped into [0, 24). */
 		float WrapHour(float Hour)
 		{
@@ -315,6 +318,7 @@ namespace EnvironmentRules
 		State.Weather = Weather;
 		State.bLocked = false;
 		State.SnowAmount = FMath::Clamp(Config.SnowCoverStart, 0.f, 1.f);
+		State.ObjectSnow.Top = State.SnowAmount;
 		FRandomStream Random(ActualSeed);
 		BeginDwell(Config, State, Random);
 		return State;
@@ -458,6 +462,90 @@ namespace EnvironmentRules
 		return FMath::Clamp(Level.bHasSnowCover ? Level.SnowCover : Config.SnowCoverStart, 0.f, 1.f);
 	}
 
+	float GetSideWindFactor(const FVector2D& WindDirection, int32 PocketIndex)
+	{
+		if (PocketIndex < 1 || PocketIndex >= FDirectionalSnow::PocketCount)
+		{
+			return 0.f;
+		}
+		const FVector2D Wind = WindDirection.GetSafeNormal();
+		const FVector Side = FDirectionalSnow::GetPocketDirection(PocketIndex);
+		return FMath::Max(0.f, -static_cast<float>(Wind.X * Side.X + Wind.Y * Side.Y));
+	}
+
+	float GetSunMeltFactor(const FEnvironmentConfig& Config, float SunElevationDegrees)
+	{
+		return FMath::Clamp(SunElevationDegrees / FMath::Max(0.1f, Config.ObjectSnowMeltFullSunElevation), 0.f, 1.f);
+	}
+
+	float GetObjectSnowMeltRate(const FEnvironmentConfig& Config, const FEnvironmentState& State, float SunElevationDegrees)
+	{
+		return FMath::Max(0.f, Config.ObjectSnowMeltRate) * GetWeatherAmount(Config, State, EWeatherState::Clear)
+			* GetSunMeltFactor(Config, SunElevationDegrees);
+	}
+
+	void StepDirectionalSnow(FDirectionalSnow& Pockets, const FDirectionalSnowInputs& Inputs, float DeltaSeconds)
+	{
+		if (DeltaSeconds <= 0.f)
+		{
+			return;
+		}
+		const float Grow = FMath::Max(0.f, Inputs.GrowRate) * DeltaSeconds;
+		const float SideGrow = Grow * FMath::Max(0.f, Inputs.SideRateScale) * FMath::Clamp(Inputs.WindStrength, 0.f, 1.f);
+		const float Melt = FMath::Max(0.f, Inputs.MeltRate) * DeltaSeconds;
+		const float Clear = FMath::Max(0.f, Inputs.ClearRate) * DeltaSeconds;
+		const float TopFloor = FMath::Clamp(Inputs.TopFloor, 0.f, 1.f);
+		for (int32 Index = 0; Index < FDirectionalSnow::PocketCount; ++Index)
+		{
+			float Value = FMath::Clamp(Pockets.Get(Index), 0.f, 1.f);
+			Value = FMath::Min(1.f, Value + (Index == 0 ? Grow : SideGrow * GetSideWindFactor(Inputs.WindDirection, Index)));
+			if (Melt > 0.f)
+			{
+				// Down to the floor, never through it; a pocket already under its floor (it never grew that far) stays where it is.
+				const float Floor = Index == 0 ? TopFloor : 0.f;
+				if (Value > Floor)
+				{
+					Value = FMath::Max(Floor, Value - Melt);
+				}
+			}
+			Value = FMath::Max(0.f, Value - Clear);
+			Pockets.Set(Index, Value);
+		}
+	}
+
+	FDirectionalSnowInputs MakeObjectSnowInputs(const FEnvironmentConfig& Config, const FEnvironmentState& State, const FVector2D& WorldWindDirection,
+		float WindStrength, float SunElevationDegrees)
+	{
+		FDirectionalSnowInputs Inputs;
+		Inputs.GrowRate = GetBlendedSnowCoverRate(Config, State);
+		Inputs.WindDirection = WorldWindDirection;
+		Inputs.WindStrength = WindStrength;
+		Inputs.SideRateScale = Config.ObjectSnowSideRateScale;
+		Inputs.MeltRate = GetObjectSnowMeltRate(Config, State, SunElevationDegrees);
+		Inputs.TopFloor = FMath::Clamp(Config.ObjectSnowMeltFloor, 0.f, 1.f) * FMath::Clamp(State.SnowAmount, 0.f, 1.f);
+		return Inputs;
+	}
+
+	void StepObjectSnow(const FEnvironmentConfig& Config, FEnvironmentState& State, float DeltaSeconds, const FVector2D& WorldWindDirection,
+		float WindStrength, float SunElevationDegrees)
+	{
+		if (State.bLocked || DeltaSeconds <= 0.f)
+		{
+			return;
+		}
+		StepDirectionalSnow(State.ObjectSnow, MakeObjectSnowInputs(Config, State, WorldWindDirection, WindStrength, SunElevationDegrees), DeltaSeconds);
+	}
+
+	bool SeedObjectSnow(FEnvironmentState& State)
+	{
+		if (!State.ObjectSnow.IsZero() || State.SnowAmount <= 0.f)
+		{
+			return false;
+		}
+		State.ObjectSnow.Top = FMath::Clamp(State.SnowAmount, 0.f, 1.f);
+		return true;
+	}
+
 	TSharedRef<FJsonObject> StateToSaveJson(const FEnvironmentState& State)
 	{
 		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
@@ -469,6 +557,12 @@ namespace EnvironmentRules
 		Json->SetNumberField(TEXT("seed"), State.RandomSeed);
 		Json->SetBoolField(TEXT("locked"), State.bLocked);
 		Json->SetNumberField(TEXT("snow_amount"), State.SnowAmount);
+		TSharedRef<FJsonObject> Pockets = MakeShared<FJsonObject>();
+		for (int32 Index = 0; Index < FDirectionalSnow::PocketCount; ++Index)
+		{
+			Pockets->SetNumberField(ObjectSnowKeys[Index], State.ObjectSnow.Get(Index));
+		}
+		Json->SetObjectField(TEXT("object_snow"), Pockets);
 		return Json;
 	}
 
@@ -510,6 +604,23 @@ namespace EnvironmentRules
 		if (Json.TryGetNumberField(TEXT("snow_amount"), Number))
 		{
 			State.SnowAmount = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
+		}
+		const TSharedPtr<FJsonObject>* Pockets = nullptr;
+		if (Json.TryGetObjectField(TEXT("object_snow"), Pockets) && Pockets && Pockets->IsValid())
+		{
+			for (int32 Index = 0; Index < FDirectionalSnow::PocketCount; ++Index)
+			{
+				if ((*Pockets)->TryGetNumberField(ObjectSnowKeys[Index], Number))
+				{
+					State.ObjectSnow.Set(Index, FMath::Clamp(static_cast<float>(Number), 0.f, 1.f));
+				}
+			}
+		}
+		else
+		{
+			// A save of an older build: the objects carried the ground cover on their tops.
+			State.ObjectSnow = FDirectionalSnow();
+			SeedObjectSnow(State);
 		}
 		return State;
 	}

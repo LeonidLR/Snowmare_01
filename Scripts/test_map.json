@@ -32,8 +32,9 @@
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
-    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke",
-    "EnvironmentSmoke", "EnvironmentLakeSmoke", "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke"
+    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
+    "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
+    "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -45,6 +46,9 @@
   },
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run; realTime = wall clock instead of the fixed step (smokeDefaults); fixedStepFps = this smoke's own fixed step; rendered = a real RHI offscreen (-RenderOffscreen -ResX=1280 -ResY=720) instead of -nullrhi; _why = the reason of an override",
+    "StartLightingSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 400, "_why": "start lighting 2026-10-25 (designer: a sunset first, then night; snow late): the start state applied before the first world tick, the own rig without the level lights, snap on a state jump" },
+    "StartSnowSmoke": { "rendered": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "start lighting 2026-10-25: the falling snow pre-warmed and at full density from the first frames; the snow FX never spawns without a renderer" },
+    "SnowIndoorSmoke": { "rendered": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "falling snow 2026-10-23 (user: snow fell INSIDE the hut): a pixel A/B of the snow Niagara system under the fishermen's hut roof in a blizzard, indoor kill off (control) / on / outside; the snow FX never spawns without a renderer" },
     "SnowTracksSmoke": { "rendered": true, "_why": "interactive snow 2026-10-23: USnowInteractionSubsystem draws into RT_SnowInteraction and the smoke reads it back; it is not even created without a renderer" },
     "SaveLoadSmoke": { "exclusive": true },
     "OptimizedCharacterSmoke": { "timeout": 900, "_why": "art pipeline 2026-10-20: one case per optimized character body (operatives + enemies), ~25 s each" },
@@ -93,7 +97,7 @@
     "SniperSmoke": { "fixedStepFps": 240, "_why": "per-frame body yaw check (max 25 deg in one frame): 41.7 at 30 fps, 20.8 at 60 fps for the same turn" },
     "TutorialSmoke": { "realTime": true, "_why": "the dialogue Enter hold (0.6 s skip) is timed on the wall clock (FPlatformTime, the dialogue pause freezes the game clock); a fixed step runs the game faster than the wall clock, so the held key is too short" }
   },
-  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "ClipRecorder", "ComplexityShot", "PackagedCheck"],
+  "nonSmokeDebugCommands": ["StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots"],
   "rules": [
     {
       "name": "orders-pause-relocate-pick-2026-10-25",
@@ -352,7 +356,7 @@
       "_comment": "2026-10-21: the Demo 01 canister quest in the lake's last compound (layout section 5k, the A7 beat, the BTR's art mesh on the Vehicle interactable).",
       "globs": ["Source/**/Debug/LakeQuestSmoke*", "Source/**/Interactables/VisualMesh*", "Scripts/Editor/build_demo01_lake_layout.py", "Content/Maps/L_Demo01_A_FrozenLake.umap", "Content/Data/LevelJson/L_Demo01_A_FrozenLake.json"],
       "tests": ["CodexTactics.Quests", "CodexTactics.Interactables.VisualMesh", "CodexTactics.Tutorial.QuestLesson"],
-      "smokes": ["LakeQuestSmoke", "TutorialAmbushLakeSmoke", "SaveCoverageLakeSmoke"]
+      "smokes": ["LakeQuestSmoke", "LakePauseOrdersSmoke", "TutorialAmbushLakeSmoke", "SaveCoverageLakeSmoke"]
     },
     {
       "name": "quests",
@@ -772,6 +776,20 @@
       "globs": ["Source/**/Environment/SnowInteraction*", "Source/**/Environment/SnowStampSet*", "Source/**/Debug/SnowTracksSmoke*", "Source/CodexTacticsTests/Private/Environment/EnvironmentSnowInteractionTest*", "Content/Environment/Weather/Snow/Tracks/**", "Content/Environment/Weather/MPC/**", "Scripts/Editor/create_snow_interaction_assets.py", "Scripts/Editor/create_environment_mpc.py"],
       "tests": ["CodexTactics.Environment.SnowInteraction", "CodexTactics.Combat.EnemyRegistry"],
       "smokes": ["SnowTracksSmoke", "WeatherSmoke", "HordeIntroSmoke", "LevelWaveSmoke"]
+    },
+    {
+      "name": "start-lighting",
+      "_comment": "2026-10-25 environment section 16 (game designer: the level opens in its final look, the presenter stands alone): EnvironmentStartRules, the presenter's own rig / snap / editor preview, the snow start warm-up, the map cleanup script.",
+      "globs": ["Source/**/Environment/EnvironmentStartRules*", "Source/**/Environment/WeatherPresenterActor*", "Source/**/Environment/WeatherSnowFxComponent*", "Source/**/Environment/EnvironmentSubsystem*", "Source/**/Debug/StartLighting*", "Source/CodexTacticsTests/Private/Environment/EnvironmentStartLightingTest*", "Scripts/Editor/remove_level_lighting.py"],
+      "tests": ["CodexTactics.Environment.StartLighting", "CodexTactics.Environment.Visuals", "CodexTactics.Environment.SnowFx"],
+      "smokes": ["StartLightingSmoke", "StartSnowSmoke", "WeatherSmoke", "WeatherLakeSmoke"]
+    },
+    {
+      "name": "falling-snow",
+      "_comment": "2026-10-23 falling snow after the user feedback (docs/systems/environment-weather.md section 12.b): DA_SnowFX (USnowFxSettings) -> NS_Weather_Snow User parameters, smaller flakes, no snow indoors (kill boxes from the Closed / Shelter camera zones and roofs). Visual only, inert under -nullrhi.",
+      "globs": ["Source/**/Environment/WeatherSnowFx*", "Source/**/Environment/SnowFxSettings*", "Source/**/Debug/SnowIndoorSmoke*", "Source/**/Debug/EnvironmentSnowFx2Shots*", "Source/CodexTacticsTests/Private/Environment/EnvironmentSnowFxTest*", "Source/CodexTacticsEditor/Private/NiagaraAuthoringLibrary*", "Content/Environment/Weather/Snow/Niagara/**", "Content/Environment/Weather/Snow/DA_SnowFX*", "Scripts/Editor/create_weather_snow_fx.py"],
+      "tests": ["CodexTactics.Environment.SnowFx"],
+      "smokes": ["SnowIndoorSmoke", "WeatherSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "landscape-material",

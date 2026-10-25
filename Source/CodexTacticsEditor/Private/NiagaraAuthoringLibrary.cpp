@@ -11,6 +11,9 @@
 #include "NiagaraRendererProperties.h"
 #include "NiagaraScript.h"
 #include "NiagaraScriptSource.h"
+#include "NiagaraSpriteRendererProperties.h"
+#include "EdGraphSchema_Niagara.h"
+#include "Materials/MaterialInterface.h"
 #include "NiagaraSystem.h"
 #include "NiagaraTypes.h"
 #include "ViewModels/Stack/NiagaraParameterHandle.h"
@@ -325,6 +328,14 @@ namespace NiagaraAuthoring
 			{
 				Out += FString::Printf(TEXT("    - %s (%s)%s\n"), *Call->GetFunctionName(),
 					Call->FunctionScript ? *Call->FunctionScript->GetPathName() : TEXT("no script"), Call->IsNodeEnabled() ? TEXT("") : TEXT(" DISABLED"));
+				for (const UEdGraphPin* Pin : Call->Pins)
+				{
+					// Static switches are pins on the module node itself (the other inputs live on its override node).
+					if (Pin->Direction == EGPD_Input && !IsParameterMapPin(Pin) && !Pin->bHidden && Pin->LinkedTo.Num() == 0)
+					{
+						Out += FString::Printf(TEXT("        switch %s = %s\n"), *Pin->PinName.ToString(), *Pin->DefaultValue);
+					}
+				}
 				if (UEdGraphNode* Override = GetOverrideNode(*Call))
 				{
 					for (UEdGraphPin* Pin : Override->Pins)
@@ -743,6 +754,120 @@ static bool CompileSystemImpl(UNiagaraSystem* System, FString& OutReport)
 	return System->IsValid();
 }
 
+static bool AddModuleImpl(UNiagaraSystem* System, const FString& EmitterName, const FString& Usage, const FString& ModuleScriptPath,
+	const FString& SuggestedName, const FString& InsertBeforeModule, FString& OutNodeName, FString& OutReport)
+{
+	using namespace NiagaraAuthoring;
+	UNiagaraGraph* Graph = System ? FindNiagaraGraph(*System, EmitterName) : nullptr;
+	UNiagaraScript* ModuleScript = LoadObject<UNiagaraScript>(nullptr, *ModuleScriptPath);
+	if (!Graph || !ModuleScript)
+	{
+		OutReport = FString::Printf(TEXT("emitter '%s' or module script %s not found"), *EmitterName, *ModuleScriptPath);
+		return false;
+	}
+	ENiagaraScriptUsage WantedUsage;
+	if (Usage == TEXT("ParticleSpawn")) { WantedUsage = ENiagaraScriptUsage::ParticleSpawnScript; }
+	else if (Usage == TEXT("ParticleUpdate")) { WantedUsage = ENiagaraScriptUsage::ParticleUpdateScript; }
+	else if (Usage == TEXT("EmitterSpawn")) { WantedUsage = ENiagaraScriptUsage::EmitterSpawnScript; }
+	else if (Usage == TEXT("EmitterUpdate")) { WantedUsage = ENiagaraScriptUsage::EmitterUpdateScript; }
+	else
+	{
+		OutReport = FString::Printf(TEXT("unknown usage '%s'"), *Usage);
+		return false;
+	}
+	TArray<UNiagaraNodeOutput*> Outputs;
+	Graph->GetNodesOfClass<UNiagaraNodeOutput>(Outputs);
+	UNiagaraNodeOutput* const* Output = Outputs.FindByPredicate([WantedUsage](const UNiagaraNodeOutput* Node) { return Node->GetUsage() == WantedUsage; });
+	if (!Output)
+	{
+		OutReport = FString::Printf(TEXT("no %s stack in '%s'"), *Usage, *EmitterName);
+		return false;
+	}
+	int32 TargetIndex = INDEX_NONE;
+	if (!InsertBeforeModule.IsEmpty())
+	{
+		const TArray<UNiagaraNodeFunctionCall*> Modules = GetOrderedModules(**Output);
+		TargetIndex = Modules.IndexOfByPredicate([&InsertBeforeModule](const UNiagaraNodeFunctionCall* Call) { return Call->GetFunctionName() == InsertBeforeModule; });
+		if (TargetIndex == INDEX_NONE)
+		{
+			OutReport = FString::Printf(TEXT("module %s not found in the %s stack"), *InsertBeforeModule, *Usage);
+			return false;
+		}
+	}
+	Graph->Modify();
+	UNiagaraNodeFunctionCall* Node = FNiagaraStackGraphUtilities::AddScriptModuleToStack(ModuleScript, **Output, TargetIndex, SuggestedName);
+	if (!Node)
+	{
+		OutReport = TEXT("AddScriptModuleToStack failed");
+		return false;
+	}
+	Graph->NotifyGraphChanged();
+	System->MarkPackageDirty();
+	OutNodeName = Node->GetFunctionName();
+	OutReport = FString::Printf(TEXT("%s %s += %s (index %d)"), *EmitterName, *Usage, *OutNodeName, TargetIndex);
+	return true;
+}
+
+static bool SetModuleStaticSwitchImpl(UNiagaraSystem* System, const FString& EmitterName, const FString& ModuleName, const FString& InputName,
+	const FString& ValueText, FString& OutReport)
+{
+	using namespace NiagaraAuthoring;
+	UNiagaraGraph* Graph = System ? FindNiagaraGraph(*System, EmitterName) : nullptr;
+	UNiagaraNodeFunctionCall* Module = Graph ? FindModule(*Graph, ModuleName) : nullptr;
+	UEdGraphPin* Pin = Module ? Module->FindPin(FName(*InputName), EGPD_Input) : nullptr;
+	if (!Pin)
+	{
+		OutReport = FString::Printf(TEXT("%s.%s: no such static switch in '%s'"), *ModuleName, *InputName, *EmitterName);
+		return false;
+	}
+	const FString Old = Pin->DefaultValue;
+	Graph->Modify();
+	Module->Modify();
+	GetDefault<UEdGraphSchema_Niagara>()->TrySetDefaultValue(*Pin, ValueText, true);
+	Module->MarkNodeRequiresSynchronization(TEXT("static switch set by NiagaraAuthoringLibrary"), true);
+	Graph->NotifyGraphChanged();
+	System->MarkPackageDirty();
+	OutReport = FString::Printf(TEXT("%s.%s switch %s -> %s"), *ModuleName, *InputName, *Old, *Pin->DefaultValue);
+	return Pin->DefaultValue == ValueText;
+}
+
+static bool BindRendererMaterialImpl(UNiagaraSystem* System, const FString& EmitterName, int32 RendererIndex, const FString& UserParameterName,
+	FString& OutReport)
+{
+	using namespace NiagaraAuthoring;
+	FVersionedNiagaraEmitterData* Data = nullptr;
+	if (!System || !FindNiagaraGraph(*System, EmitterName, &Data) || !Data || !Data->GetRenderers().IsValidIndex(RendererIndex))
+	{
+		OutReport = FString::Printf(TEXT("emitter '%s' renderer %d not found"), *EmitterName, RendererIndex);
+		return false;
+	}
+	UNiagaraSpriteRendererProperties* Sprite = Cast<UNiagaraSpriteRendererProperties>(Data->GetRenderers()[RendererIndex]);
+	if (!Sprite)
+	{
+		OutReport = TEXT("not a sprite renderer");
+		return false;
+	}
+	const FNiagaraTypeDefinition MaterialType(UMaterialInterface::StaticClass());
+	const FNiagaraVariable Var(MaterialType, FName(*WithUserPrefix(UserParameterName)));
+	FNiagaraUserRedirectionParameterStore& Exposed = System->GetExposedParameters();
+	System->Modify();
+	if (!FindStoreVariable(Exposed, Var.GetName().ToString()))
+	{
+		Exposed.AddParameter(Var, true, false);
+	}
+	Exposed.SetUObject(Sprite->Material.Get(), Var);
+	FProperty* Property = Sprite->GetClass()->FindPropertyByName(TEXT("MaterialUserParamBinding"));
+	Sprite->Modify();
+	Sprite->PreEditChange(Property);
+	Sprite->MaterialUserParamBinding.Parameter = Var;
+	FPropertyChangedEvent Event(Property);
+	Sprite->PostEditChangeProperty(Event);
+	System->MarkPackageDirty();
+	OutReport = FString::Printf(TEXT("%s renderer %d material <- %s (default %s)"), *EmitterName, RendererIndex, *Var.GetName().ToString(),
+		*GetNameSafe(Sprite->Material.Get()));
+	return true;
+}
+
 // Python-facing wrappers: UE Python drops a bool return when a function has out parameters, so every call returns its report text
 // ("ERROR: ..." on failure).
 namespace NiagaraAuthoring
@@ -831,5 +956,30 @@ FString UNiagaraAuthoringLibrary::CompileSystem(UNiagaraSystem* System)
 {
 	FString Text;
 	const bool bOk = CompileSystemImpl(System, Text);
+	return NiagaraAuthoring::Report(bOk, Text);
+}
+
+FString UNiagaraAuthoringLibrary::AddModule(UNiagaraSystem* System, const FString& EmitterName, const FString& Usage, const FString& ModuleScriptPath,
+	const FString& SuggestedName, const FString& InsertBeforeModule)
+{
+	FString Text;
+	FString NodeName;
+	const bool bOk = AddModuleImpl(System, EmitterName, Usage, ModuleScriptPath, SuggestedName, InsertBeforeModule, NodeName, Text);
+	return bOk ? NodeName : TEXT("ERROR: ") + Text;
+}
+
+FString UNiagaraAuthoringLibrary::SetModuleStaticSwitch(UNiagaraSystem* System, const FString& EmitterName, const FString& ModuleName, const FString& InputName,
+	const FString& ValueText)
+{
+	FString Text;
+	const bool bOk = SetModuleStaticSwitchImpl(System, EmitterName, ModuleName, InputName, ValueText, Text);
+	return NiagaraAuthoring::Report(bOk, Text);
+}
+
+FString UNiagaraAuthoringLibrary::BindRendererMaterialToUserParameter(UNiagaraSystem* System, const FString& EmitterName, int32 RendererIndex,
+	const FString& UserParameterName)
+{
+	FString Text;
+	const bool bOk = BindRendererMaterialImpl(System, EmitterName, RendererIndex, UserParameterName, Text);
 	return NiagaraAuthoring::Report(bOk, Text);
 }

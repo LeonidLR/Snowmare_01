@@ -99,4 +99,127 @@ bool FEnvironmentSnowFxFocusTest::RunTest(const FString&)
 	return true;
 }
 
+// DA_SnowFX (user request 2026-10-23): the look the component writes to NS_Weather_Snow's User parameters.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnvironmentSnowFxLookTest, "CodexTactics.Environment.SnowFx.Look",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnvironmentSnowFxLookTest::RunTest(const FString&)
+{
+	FWeatherSnowFxTuning Tuning;
+	// The approved default: clearly smaller than the first version's 8-18 cm flakes.
+	TestTrue(TEXT("default flakes smaller than the old 8-18 cm"), Tuning.FlakeSizeMin < 8.f && Tuning.FlakeSizeMax <= 12.f);
+	TestTrue(TEXT("default flakes min < max"), Tuning.FlakeSizeMin < Tuning.FlakeSizeMax);
+
+	Tuning.FlakeSizeMin = 3.f;
+	Tuning.FlakeSizeMax = 7.f;
+	Tuning.LifetimeMin = 5.f;
+	Tuning.LifetimeMax = 8.f;
+	Tuning.FallAcceleration = 1500.f;
+	Tuning.SpeedLimit = 1800.f;
+	Tuning.FlakeWindSpeed = 700.f;
+	Tuning.SpawnRadius = 2500.f;
+	Tuning.SpawnHeight = 2400.f;
+	Tuning.DriftRateAtFull = 30.f;
+	const FWeatherSnowFxParams Full = WeatherSnowFxRules::ComputeParams(1.f, 1.f, FVector::ForwardVector, Tuning);
+	TestEqual(TEXT("size min"), Full.FlakeSizeMin, 3.f);
+	TestEqual(TEXT("size max"), Full.FlakeSizeMax, 7.f);
+	TestEqual(TEXT("life min"), Full.LifetimeMin, 5.f);
+	TestEqual(TEXT("life max"), Full.LifetimeMax, 8.f);
+	TestTrue(TEXT("fall acceleration = gravity down"), Full.Gravity.Equals(FVector(0., 0., -1500.)));
+	TestEqual(TEXT("speed limit"), Full.SpeedLimit, 1800.f);
+	TestEqual(TEXT("wind influence"), Full.FlakeWindSpeed, 700.f);
+	TestEqual(TEXT("spawn radius"), Full.SpawnRadius, 2500.f);
+	TestEqual(TEXT("spawn height"), Full.SpawnHeight, 2400.f);
+	TestEqual(TEXT("drift rate at full"), Full.DriftRate, 30.f);
+
+	// The look is written even with no snow (the asset reads right at the next snowfall); nothing spawns.
+	const FWeatherSnowFxParams Off = WeatherSnowFxRules::ComputeParams(0.f, 0.f, FVector::ForwardVector, Tuning);
+	TestEqual(TEXT("off: look kept"), Off.FlakeSizeMax, 7.f);
+	TestEqual(TEXT("off: no drift puffs"), Off.DriftRate, 0.f);
+
+	// Drift scales from its start intensity; switched off = no puffs at all.
+	const float Half = Tuning.DriftStartIntensity + (1.f - Tuning.DriftStartIntensity) * 0.5f;
+	TestEqual(TEXT("drift rate halfway"), WeatherSnowFxRules::ComputeParams(Half, 0.5f, FVector::ForwardVector, Tuning).DriftRate, 15.f, 1e-3f);
+	Tuning.bDriftEnabled = false;
+	const FWeatherSnowFxParams NoDrift = WeatherSnowFxRules::ComputeParams(1.f, 1.f, FVector::ForwardVector, Tuning);
+	TestEqual(TEXT("drift off: rate 0"), NoDrift.DriftRate, 0.f);
+	TestEqual(TEXT("drift off: opacity 0"), NoDrift.DriftOpacity, 0.f);
+	TestTrue(TEXT("drift off: flakes still fall"), NoDrift.SpawnRate > 0.f);
+
+	// Bad input from the editor: a min above its max is one value, nothing negative reaches Niagara.
+	Tuning.FlakeSizeMin = 12.f;
+	Tuning.FlakeSizeMax = 6.f;
+	Tuning.LifetimeMin = -1.f;
+	Tuning.FallAcceleration = -50.f;
+	const FWeatherSnowFxParams Bad = WeatherSnowFxRules::ComputeParams(1.f, 1.f, FVector::ForwardVector, Tuning);
+	TestEqual(TEXT("swapped sizes: max = min"), Bad.FlakeSizeMax, 12.f);
+	TestTrue(TEXT("lifetime positive"), Bad.LifetimeMin > 0.f && Bad.LifetimeMax >= Bad.LifetimeMin);
+	TestTrue(TEXT("no upward gravity"), Bad.Gravity.Z <= 0.);
+	return true;
+}
+
+// No snow indoors: the kill boxes (Niagara KillParticlesInVolume, box mode) the component builds from interior zones and roofs.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnvironmentSnowFxKillBoxTest, "CodexTactics.Environment.SnowFx.KillBoxes",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnvironmentSnowFxKillBoxTest::RunTest(const FString&)
+{
+	// The lake's fishermen's hut zone (Trigger_BoatsCabin): centre (-2180, -7090), half extent 606 x 400; 3 m tall standing on z 0.
+	const FTransform Hut(FRotator::ZeroRotator, FVector(-2180., -7090., 150.));
+	const FVector HutHalf(606., 400., 150.);
+	const FBox Box = WeatherSnowFxRules::MakeZoneKillBox(Hut, HutHalf, 20.f, 150.f);
+	TestTrue(TEXT("hut box valid"), Box.IsValid != 0);
+	TestTrue(TEXT("sides grown by the margin"), Box.Min.Equals(FVector(-2180. - 626., -7090. - 420., -150.), 0.01)
+		&& Box.Max.Equals(FVector(-2180. + 626., -7090. + 420., 300.), 0.01));
+	TestTrue(TEXT("a flake by the crate is killed"), WeatherSnowFxRules::IsInsideKillBox(FVector(-2000., -7000., 100.), Box));
+	TestTrue(TEXT("a flake on the floor is killed"), WeatherSnowFxRules::IsInsideKillBox(FVector(-2180., -7090., 1.), Box));
+	TestFalse(TEXT("a flake above the roof lives"), WeatherSnowFxRules::IsInsideKillBox(FVector(-2180., -7090., 320.), Box));
+	TestFalse(TEXT("a flake 1 m outside the wall lives"), WeatherSnowFxRules::IsInsideKillBox(FVector(-2180. + 606. + 100., -7090., 100.), Box));
+
+	// A turned zone: the axis-aligned bounds of the rotated box (90 deg swaps the extents).
+	const FBox Turned = WeatherSnowFxRules::MakeZoneKillBox(FTransform(FRotator(0., 90., 0.), FVector::ZeroVector), FVector(600., 200., 100.), 0.f, 0.f);
+	TestTrue(TEXT("90 deg: extents swapped"), Turned.GetExtent().Equals(FVector(200., 600., 100.), 0.01));
+	const FBox Diagonal = WeatherSnowFxRules::MakeZoneKillBox(FTransform(FRotator(0., 45., 0.), FVector::ZeroVector), FVector(100., 100., 100.), 0.f, 0.f);
+	TestEqual(TEXT("45 deg: the bounds hold the corners"), Diagonal.Max.X, 100. * FMath::Sqrt(2.), 0.01);
+	TestFalse(TEXT("flat zone: no box"), WeatherSnowFxRules::MakeZoneKillBox(Hut, FVector(600., 400., 0.), 0.f, 0.f).IsValid != 0);
+
+	// The Niagara slot of an unused box: zero size far below the world (nothing inside); a used one = centre + full size.
+	FVector Origin, Size;
+	WeatherSnowFxRules::PackKillBox(FBox(ForceInit), Origin, Size);
+	TestTrue(TEXT("unused slot: zero size"), Size.IsZero());
+	TestTrue(TEXT("unused slot: far below"), Origin.Z < -1.0e6);
+	WeatherSnowFxRules::PackKillBox(Box, Origin, Size);
+	TestTrue(TEXT("slot origin = centre"), Origin.Equals(Box.GetCenter()));
+	TestTrue(TEXT("slot size = full size"), Size.Equals(Box.GetSize()));
+
+	// Roofs without a zone: a hit within the trace height on a mesh no wider than RoofMaxSizeCm.
+	const FWeatherSnowFxTuning Tuning;
+	const FBox Shed(FVector(0., 0., 280.), FVector(800., 500., 320.));
+	TestTrue(TEXT("a shed roof 3 m up is a roof"), WeatherSnowFxRules::IsRoofCandidate(Shed, 290., 0., Tuning));
+	TestFalse(TEXT("too high above"), WeatherSnowFxRules::IsRoofCandidate(Shed, Tuning.RoofTraceHeight + 10., 0., Tuning));
+	TestFalse(TEXT("a sky dome / foliage cluster is not"), WeatherSnowFxRules::IsRoofCandidate(FBox(FVector(-50000.), FVector(50000.)), 2000., 0., Tuning));
+	const FBox UnderShed = WeatherSnowFxRules::MakeRoofKillBox(Shed, 0., 20.f, 150.f);
+	TestTrue(TEXT("under the shed: footprint + margin, floor - below .. roof top"),
+		UnderShed.Min.Equals(FVector(-20., -20., -150.), 0.01) && UnderShed.Max.Equals(FVector(820., 520., 320.), 0.01));
+	TestFalse(TEXT("roof below the floor: no box"), WeatherSnowFxRules::MakeRoofKillBox(Shed, 400., 0.f, 0.f).IsValid != 0);
+
+	// Selection: nearest first within the radius (to the edge), a box inside a chosen one dropped, at most KillBoxCount.
+	TArray<FBox> Candidates;
+	for (int32 Index = 0; Index < 6; ++Index)
+	{
+		Candidates.Add(FBox(FVector(1000. * Index, 0., 0.), FVector(1000. * Index + 500., 500., 300.)));
+	}
+	Candidates.Add(FBox(FVector(100., 100., 0.), FVector(200., 200., 100.))); // inside the first one
+	Candidates.Add(FBox(ForceInit));
+	const TArray<FBox> Chosen = WeatherSnowFxRules::SelectKillBoxes(Candidates, FVector(5200., 250., 0.), 100000., WeatherSnowFxRules::KillBoxCount);
+	TestEqual(TEXT("capped"), Chosen.Num(), WeatherSnowFxRules::KillBoxCount);
+	TestTrue(TEXT("the one under the focus first"), Chosen.Num() > 0 && Chosen[0].Min.X == 5000.);
+	TestTrue(TEXT("then the next nearest"), Chosen.Num() > 1 && Chosen[1].Min.X == 4000.);
+	const TArray<FBox> Near = WeatherSnowFxRules::SelectKillBoxes(Candidates, FVector(250., 250., 0.), 800., WeatherSnowFxRules::KillBoxCount);
+	TestEqual(TEXT("radius: two boxes in reach, the inner one dropped"), Near.Num(), 2);
+	TestEqual(TEXT("edge distance 0 inside"), WeatherSnowFxRules::DistanceSq2D(FVector(250., 250., 999.), Candidates[0]), 0.);
+	TestTrue(TEXT("nothing in reach"), WeatherSnowFxRules::SelectKillBoxes(Candidates, FVector(-90000., 0., 0.), 1000., 4).IsEmpty());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

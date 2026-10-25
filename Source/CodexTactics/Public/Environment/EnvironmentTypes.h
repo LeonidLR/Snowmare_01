@@ -101,6 +101,112 @@ struct CODEXTACTICS_API FEnvironmentRosterConfig
 	TArray<FEnvironmentSuitabilityRow> Suitability;
 };
 
+/**
+ * Snow held by a surface in five directional pockets, 0..1 each (design §15, user decision 2026-10-23): Top = faces pointing up
+ * (+Z), PX / NX / PY / NY = faces pointing along +X / -X / +Y / -Y. Static objects use WORLD axes (FEnvironmentState::ObjectSnow,
+ * MPC_Environment.SnowTop / SnowPX / SnowNX / SnowPY / SnowNY); characters use their body mesh's LOCAL axes (UCharacterSnowSubsystem,
+ * Custom Primitive Data CharacterSnowRules::FirstCustomDataIndex..+4). A pocket keeps its snow when the wind turns. Shader mask:
+ * Top x max(0, N.z) + sum of side_i x max(0, N . dir_i), plus noise.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FDirectionalSnow
+{
+	GENERATED_BODY()
+
+	static constexpr int32 PocketCount = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snow", meta = (ClampMin = "0", ClampMax = "1"))
+	float Top = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snow", meta = (ClampMin = "0", ClampMax = "1"))
+	float PX = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snow", meta = (ClampMin = "0", ClampMax = "1"))
+	float NX = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snow", meta = (ClampMin = "0", ClampMax = "1"))
+	float PY = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snow", meta = (ClampMin = "0", ClampMax = "1"))
+	float NY = 0.f;
+
+	/** Pocket Index: 0 Top, 1 PX, 2 NX, 3 PY, 4 NY (out of range = 0). */
+	float Get(int32 Index) const
+	{
+		switch (Index)
+		{
+		case 0: return Top;
+		case 1: return PX;
+		case 2: return NX;
+		case 3: return PY;
+		case 4: return NY;
+		default: return 0.f;
+		}
+	}
+
+	void Set(int32 Index, float Value)
+	{
+		switch (Index)
+		{
+		case 0: Top = Value; break;
+		case 1: PX = Value; break;
+		case 2: NX = Value; break;
+		case 3: PY = Value; break;
+		case 4: NY = Value; break;
+		default: break;
+		}
+	}
+
+	/** Unit face direction of pocket Index (+Z, +X, -X, +Y, -Y). */
+	static FVector GetPocketDirection(int32 Index)
+	{
+		switch (Index)
+		{
+		case 1: return FVector(1.0, 0.0, 0.0);
+		case 2: return FVector(-1.0, 0.0, 0.0);
+		case 3: return FVector(0.0, 1.0, 0.0);
+		case 4: return FVector(0.0, -1.0, 0.0);
+		default: return FVector(0.0, 0.0, 1.0);
+		}
+	}
+
+	float GetMax() const { return FMath::Max(FMath::Max(Top, PX), FMath::Max(FMath::Max(NX, PY), NY)); }
+
+	bool IsZero() const { return Top == 0.f && PX == 0.f && NX == 0.f && PY == 0.f && NY == 0.f; }
+
+	/** Every pocket clamped to [0, 1]. */
+	FDirectionalSnow Clamped() const
+	{
+		FDirectionalSnow Out;
+		for (int32 Index = 0; Index < PocketCount; ++Index)
+		{
+			Out.Set(Index, FMath::Clamp(Get(Index), 0.f, 1.f));
+		}
+		return Out;
+	}
+};
+
+/**
+ * One step of a set of directional snow pockets (EnvironmentRules::StepDirectionalSnow; pure). Growth first, then melt / clear. The
+ * wind is the TRAVEL direction (where the snow is blown to, MPC WindDirection) in the pockets' frame; a side fills when it faces it.
+ */
+struct FDirectionalSnowInputs
+{
+	/** Top gain per second (the blended snow cover rate; 0 when it does not snow / indoors). */
+	float GrowRate = 0.f;
+	/** Horizontal unit wind travel direction in the pockets' frame (zero = no side growth). */
+	FVector2D WindDirection = FVector2D::ZeroVector;
+	/** 0..1 blended preset wind. */
+	float WindStrength = 0.f;
+	/** Side gain = GrowRate x SideRateScale x max(0, -dot(wind, side)) x WindStrength. */
+	float SideRateScale = 1.f;
+	/** Loss per second on every pocket (sun melt), never below TopFloor for the top / 0 for the sides. */
+	float MeltRate = 0.f;
+	float TopFloor = 0.f;
+	/** Loss per second on every pocket down to 0 (heat / indoors), applied after the melt. */
+	float ClearRate = 0.f;
+};
+
 /** Tuning of the day cycle and the weather ladder (environment.json; snake_case keys of these fields). */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FEnvironmentConfig
@@ -215,6 +321,42 @@ struct CODEXTACTICS_API FEnvironmentConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SnowCover", meta = (ClampMin = "0", ClampMax = "1"))
 	float SnowCoverStart = 0.35f;
 
+	// --- Directional snow on objects / characters (FEnvironmentState::ObjectSnow, UCharacterSnowSubsystem; design §15, user decisions
+	// 2026-10-23): the top pocket grows at the snow cover rates, a side pocket at rate x max(0, -dot(wind, side)) x wind strength x
+	// object_snow_side_rate_scale; every pocket melts in Clear while the sun is up (the ground cover never recedes) ---
+
+	/** x the snow cover rate for the windward side pockets (1 = a side facing a full-strength wind fills as fast as the top). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DirectionalSnow", meta = (ClampMin = "0"))
+	float ObjectSnowSideRateScale = 1.f;
+
+	/** Pocket loss per REAL second in Clear with the sun high (1 / 600: a full pocket melts away in ~10 real minutes of midday sun). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DirectionalSnow", meta = (ClampMin = "0"))
+	float ObjectSnowMeltRate = 1.f / 600.f;
+
+	/** The objects' TOP pocket never melts below this share of the ground cover (FEnvironmentState::SnowAmount); sides melt to 0. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DirectionalSnow", meta = (ClampMin = "0", ClampMax = "1"))
+	float ObjectSnowMeltFloor = 0.5f;
+
+	/** Sun elevation (degrees) from which the melt runs at full rate; it ramps up linearly from the horizon (0 at or below it). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DirectionalSnow", meta = (ClampMin = "0.1", ClampMax = "90"))
+	float ObjectSnowMeltFullSunElevation = 20.f;
+
+	/** Characters: x the snow cover rates (top and windward sides) while outdoors. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DirectionalSnow", meta = (ClampMin = "0"))
+	float CharacterSnowFillScale = 1.f;
+
+	/** Characters: x object_snow_melt_rate in the sun (floor 0: a character's snow melts away completely). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DirectionalSnow", meta = (ClampMin = "0"))
+	float CharacterSnowMeltScale = 1.f;
+
+	/** Characters near a heat source / inside a Closed or Shelter zone lose this much per real second on every pocket (1/20: ~20 s). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DirectionalSnow", meta = (ClampMin = "0"))
+	float CharacterSnowClearRate = 1.f / 20.f;
+
+	/** An enemy appearing while it snows starts with this share of the objects' pockets (x the snowing amount). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DirectionalSnow", meta = (ClampMin = "0", ClampMax = "1"))
+	float CharacterSnowSpawnShare = 0.5f;
+
 	// --- Phase 2: enemy roster by conditions (design §4.2; defaults filled by EnvironmentTuning from environment.json) ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
@@ -265,6 +407,14 @@ struct CODEXTACTICS_API FEnvironmentState
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
 	float SnowAmount = 0.f;
+
+	/**
+	 * Directional snow on static objects (§15, WORLD axes): the top grows with the snow cover rates, the windward sides with the wind;
+	 * every pocket melts in Clear daylight (EnvironmentRules::StepObjectSnow), the top never below ObjectSnowMeltFloor x SnowAmount.
+	 * Saved / carried with the state; the presenter writes it to MPC_Environment.SnowTop / SnowPX / SnowNX / SnowPY / SnowNY.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	FDirectionalSnow ObjectSnow;
 };
 
 /** What one weather step of EnvironmentRules::StepWeather did. */

@@ -7,7 +7,11 @@
 # Look: snow mask = saturate((world up - threshold(SnowAmount) + noise) x sharpness) x a dusting patch mask that fills in with SnowAmount,
 # so at SnowAmount ~0.35 only flat tops are white and at 1 most upward faces are; a short creep band near the object top; Megascans Fresh
 # Snow albedo / normal / roughness projected from above (world XY; steep faces fade to a flat snow colour); FrostAmount = a light bluish-white rime in noisy patches on all
-# faces. Driven by MPC_Environment (SnowAmount, FrostAmount; written by AWeatherPresenterActor).
+# faces. Driven by MPC_Environment (FrostAmount + the directional pockets SnowTop / SnowPX / SnowNX / SnowPY / SnowNY; written by
+# AWeatherPresenterActor).
+# Directional snow (section 15, 2026-10-23): the old world-up mask is the TOP pocket (driven by SnowTop instead of SnowAmount: with bare
+# sides the look is exactly the old one at SnowTop = SnowAmount); the windward sides add sum side_i x max(0, N . dir_i) (world +X / -X /
+# +Y / -Y), broken by the side-projected noise (SideGain / SideNoise / SideThreshold / SideSharpness), never on downward faces.
 # MF_SnowyWeatherBlend is NOT used: it reads the old MPC_WeatherSettings and calls MF_ComputeLandscapeUV, which fails to load in 5.8.
 # Only the two assets above are created / replaced (they are this script's own). CODEX_SNOW_DEBUG_FORCE=1 bakes DebugForce 1 (snow on
 # every face) to check that the overlay draws at all.
@@ -43,7 +47,8 @@ def write_log():
 # --- HLSL -------------------------------------------------------------------------------------------------------------
 # Masks: x = snow, y = frost, z = opacity (max of both), w = 0.
 MASK_HLSL = r"""
-float amount = saturate(SnowAmount);
+// Top pocket (the original world-up mask, SnowTop in place of the old single SnowAmount).
+float amount = saturate(SnowTop);
 float frostAmount = saturate(FrostAmount);
 float up = N.z;
 // Threshold on the world-up normal: high (flat tops only) at a light cover, low (most upward faces) at a full one.
@@ -66,6 +71,12 @@ float steepBlend = saturate(up * 2.5 - 0.5);
 float fine = lerp(NoiseSide.r * 0.6 + NoiseSide.b * 0.4, NoiseB.r * 0.6 + NoiseA.g * 0.4, steepBlend);
 float coverage = saturate((fine + grow - 0.75) * 2.2);
 snow *= coverage * (0.6 + 0.4 * grow) * step(0.005, amount);
+// Side pockets (wind-plastered faces): sum side_i x max(0, N . dir_i), world axes; not on faces pointing down (overhangs).
+float side = SnowPX * saturate(N.x) + SnowNX * saturate(-N.x) + SnowPY * saturate(N.y) + SnowNY * saturate(-N.y);
+side = saturate(side) * saturate(1.0 + N.z * 2.0);
+float sideFine = NoiseSide.r * 0.6 + NoiseSide.b * 0.4;
+float plaster = saturate((side * SideGain + (sideFine - 0.5) * SideNoise - SideThreshold) * SideSharpness) * step(0.005, side);
+snow = max(snow, plaster * SideOpacity);
 // Frost: a thin bluish rime in soft patches on every face, a little more on top.
 float frostNoise = NoiseA.a * 0.5 + NoiseB.b * 0.3 + NoiseSide.g * 0.2;
 float frost = saturate((frostNoise - (1.0 - frostAmount * FrostCoverage)) * 2.5) * FrostStrength * saturate(up * 0.4 + 0.8);
@@ -108,7 +119,7 @@ if not eal.does_asset_exist(MPC_PATH):
 mpc = eal.load_asset(MPC_PATH)
 scalar_names = [str(p.get_editor_property("parameter_name")) for p in mpc.get_editor_property("scalar_parameters")]
 log("MPC scalars: %s" % ", ".join(scalar_names))
-for needed in ("SnowAmount", "FrostAmount"):
+for needed in ("FrostAmount", "SnowTop", "SnowPX", "SnowNX", "SnowPY", "SnowNY"):
     if needed not in scalar_names:
         log("MPC has no scalar %s - nothing done" % needed)
         write_log()
@@ -217,7 +228,16 @@ def custom(code, description, input_names, output_type, x, y):
 
 
 # Inputs -------------------------------------------------------------------------------------------------------------
-snow_amount = mpc_scalar("SnowAmount", -1400)
+snow_top = mpc_scalar("SnowTop", -1400)
+snow_px = mpc_scalar("SnowPX", -1950)
+snow_nx = mpc_scalar("SnowNX", -1880)
+snow_py = mpc_scalar("SnowPY", -1810)
+snow_ny = mpc_scalar("SnowNY", -1740)
+side_gain = scalar("SideGain", 0.85, -1670, "Sides")
+side_noise = scalar("SideNoise", 0.5, -1600, "Sides")
+side_threshold = scalar("SideThreshold", 0.25, -1530, "Sides")
+side_sharpness = scalar("SideSharpness", 1.6, -1460, "Sides")
+side_opacity = scalar("SideOpacity", 0.8, -1390, "Sides")
 frost_amount = mpc_scalar("FrostAmount", -1300)
 threshold_light = scalar("ThresholdLight", 0.97, -1200)
 threshold_full = scalar("ThresholdFull", 0.22, -1100)
@@ -273,12 +293,14 @@ snow_n = texture(SNOW_N, "SnowNormal", snow_uv, 1000)
 snow_ord = texture(SNOW_ORD, "SnowORD", snow_uv, 1200)
 
 # Masks --------------------------------------------------------------------------------------------------------------
-mask_inputs = ["SnowAmount", "FrostAmount", "N", "NoiseA", "NoiseB", "NoiseSide", "RelZ", "BoundsZ", "ThresholdLight", "ThresholdFull", "ThresholdCurve",
-               "Sharpness", "NoiseStrength", "CreepShare", "PatchGrowth", "FrostCoverage", "FrostStrength", "DebugForce"]
+mask_inputs = ["SnowTop", "FrostAmount", "N", "NoiseA", "NoiseB", "NoiseSide", "RelZ", "BoundsZ", "ThresholdLight", "ThresholdFull", "ThresholdCurve",
+               "Sharpness", "NoiseStrength", "CreepShare", "PatchGrowth", "FrostCoverage", "FrostStrength", "DebugForce",
+               "SnowPX", "SnowNX", "SnowPY", "SnowNY", "SideGain", "SideNoise", "SideThreshold", "SideSharpness", "SideOpacity"]
 masks = custom(MASK_HLSL, "Snow + frost masks", mask_inputs, unreal.CustomMaterialOutputType.CMOT_FLOAT4, -700, -600)
-for input_name, node in zip(mask_inputs, [snow_amount, frost_amount, normal_ws, noise_a, noise_b, noise_side, rel_z, bounds_z, threshold_light, threshold_full,
+for input_name, node in zip(mask_inputs, [snow_top, frost_amount, normal_ws, noise_a, noise_b, noise_side, rel_z, bounds_z, threshold_light, threshold_full,
                                           threshold_curve, sharpness, noise_strength, creep_share, patch_growth, frost_coverage, frost_strength,
-                                          debug_force]):
+                                          debug_force, snow_px, snow_nx, snow_py, snow_ny, side_gain, side_noise, side_threshold,
+                                          side_sharpness, side_opacity]):
     # The noise textures pack four noises: all four channels (RGBA) go in.
     mel.connect_material_expressions(node, "RGBA" if node in (noise_a, noise_b, noise_side) else "", masks, input_name)
 

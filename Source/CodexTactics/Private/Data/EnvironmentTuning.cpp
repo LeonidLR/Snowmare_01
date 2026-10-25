@@ -54,7 +54,16 @@ namespace EnvironmentTuning
 		// Phase 4: persistent snow cover (per REAL second while it snows; it never recedes).
 		{ TEXT("snow_cover_rate_snowfall"), &FEnvironmentConfig::SnowCoverRateSnowfall, 0.f, BIG_NUMBER },
 		{ TEXT("snow_cover_rate_blizzard"), &FEnvironmentConfig::SnowCoverRateBlizzard, 0.f, BIG_NUMBER },
-		{ TEXT("snow_cover_start"), &FEnvironmentConfig::SnowCoverStart, 0.f, 1.f } };
+		{ TEXT("snow_cover_start"), &FEnvironmentConfig::SnowCoverStart, 0.f, 1.f },
+		// Directional snow on objects / characters (section 15): side fill, sun melt (the ground cover never recedes), characters.
+		{ TEXT("object_snow_side_rate_scale"), &FEnvironmentConfig::ObjectSnowSideRateScale, 0.f, BIG_NUMBER },
+		{ TEXT("object_snow_melt_rate"), &FEnvironmentConfig::ObjectSnowMeltRate, 0.f, BIG_NUMBER },
+		{ TEXT("object_snow_melt_floor"), &FEnvironmentConfig::ObjectSnowMeltFloor, 0.f, 1.f },
+		{ TEXT("object_snow_melt_full_sun_elevation"), &FEnvironmentConfig::ObjectSnowMeltFullSunElevation, 0.1f, 90.f },
+		{ TEXT("character_snow_fill_scale"), &FEnvironmentConfig::CharacterSnowFillScale, 0.f, BIG_NUMBER },
+		{ TEXT("character_snow_melt_scale"), &FEnvironmentConfig::CharacterSnowMeltScale, 0.f, BIG_NUMBER },
+		{ TEXT("character_snow_clear_rate"), &FEnvironmentConfig::CharacterSnowClearRate, 0.f, BIG_NUMBER },
+		{ TEXT("character_snow_spawn_share"), &FEnvironmentConfig::CharacterSnowSpawnShare, 0.f, 1.f } };
 
 	static const TCHAR* ColdOnLockedKey = TEXT("cold_on_locked_levels");
 
