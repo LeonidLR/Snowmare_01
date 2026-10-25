@@ -7,7 +7,7 @@ class FJsonObject;
 
 /**
  * Level / wave data read at runtime from Content/Data/LevelJson/<file>.json (user decision 2026-10-02: Unreal is the
- * reference; the JSON is edited with the Wave Editor in Tools/WaveEditor and migrated from the Godot archive
+ * reference; the JSON is edited with the Wave Editor in Tools/TrainingGround and migrated from the Godot archive
  * data/configs/levels). Same contract as Godot main.gd _load_active_level_config / data/schemas/level_config.schema.json
  * and the former Scripts/Editor/import_levels.py: inactive waves ("is_active": false) are skipped, custom_stats keep
  * Godot units (m, m/s, s), squad_loadout falls back to the .get() defaults.

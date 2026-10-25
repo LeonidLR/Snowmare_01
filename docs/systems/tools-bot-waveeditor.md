@@ -1,11 +1,11 @@
 # Tools: editor scripts, playtest bot, Wave Editor, Jev
 
-> Editor scripts (`Scripts/Editor/`) are idempotent commandlets. The Wave Editor is `Tools/WaveEditor` (run via `Scripts/run_wave_editor.bat`);
+> Editor scripts (`Scripts/Editor/`) are idempotent commandlets. The Wave Editor is `Tools/TrainingGround` (Training Ground since 2026-10-25, run via `Scripts/run_training_ground.bat`);
 > the playtest bot is `UPlaytestBotSubsystem` (development builds only) driven by `Scripts/bot_run.ps1`; Jev tools are in `Scripts/Tools/`.
 > Most history of these tools is in `docs/port/CHANGELOG.md` (search for «Wave Editor», «playtest bot», «Jev»).
 >
 > Key files:
-> - `Scripts/Editor/*.py`, `Tools/WaveEditor`, `Scripts/bot_run.ps1`, `Scripts/run_simulations.bat`, `Scripts/Tools/typesafe_triage.py`, `jev_digest.py`, `find_unity_clashes.py`
+> - `Scripts/Editor/*.py`, `Tools/TrainingGround`, `Scripts/bot_run.ps1`, `Scripts/run_simulations.bat`, `Scripts/Tools/typesafe_triage.py`, `jev_digest.py`, `find_unity_clashes.py`
 > - `Source/CodexTactics/Private/Bot/`, `Private/Telemetry/`; data `Content/Data/LevelJson/*.json` (edited with the Wave Editor)
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
