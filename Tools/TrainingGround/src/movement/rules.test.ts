@@ -49,8 +49,11 @@ test('Slots: diamond (4) - side men 2.6 m right / left 2.8 m back, rear 5.6 m st
   nearV(r[1].pos, [-260, -280]);
 });
 
-test('Slots: wedge = first three of the diamond; pair partner behind the right shoulder; wall -> []', () => {
-  assert.deepEqual(FormationShapeRules.Slots('wedge', 3, [0, 0], 0, C).map((x) => x.role), ['K', 'P', 'L']);
+test('Slots: wedge (v2.2) = K, P right-behind, Z straight behind; pair partner behind the right shoulder; wall -> []', () => {
+  const wedge = FormationShapeRules.Slots('wedge', 3, [0, 0], 0, C);
+  assert.deepEqual(wedge.map((x) => x.role), ['K', 'P', 'Z']);
+  nearV(wedge[1].pos, [-C['slot.back_offset'], C['slot.side_offset']]);
+  nearV(wedge[2].pos, [-C['triad.rear_back'], 0]);
   const pair = FormationShapeRules.Slots('diamond', 2, [0, 0], 0, C);
   assert.deepEqual(pair.map((x) => x.role), ['K', 'Z']);
   nearV(pair[1].pos, [-220, 180]);
@@ -117,19 +120,19 @@ test('LookYaw: echelon right - every gun on the open right side, the last man co
 // A wall along X at y = 200 (thickness 40), the squad on the y < 200 side: outward normal = -Y (yaw -90).
 const WALL: Segment = { a: [-1000, 200], b: [1000, 200], thickness: 40 };
 
-test('WallLayout (3): nobody looks into the wall; L 8, K 6 (away), P 4', () => {
+test('WallLayout (3): nobody looks into the wall; the left end 8 (v2.2: Z), K 6 (away), P 4', () => {
   const s = FormationWallRules.Layout(WALL, [0, 0], 3, 1000, 1000, C);
   const byRole = Object.fromEntries(s.map((x) => [x.role, x]));
   nearV(byRole.K.pos, [0, 200 - 20 - 45]);
   near(byRole.K.yaw, -90);
-  // Facing the wall (+Y) the right hand is -X: P stands at -X, L at +X.
-  assert.ok(byRole.P.pos[0] < 0 && byRole.L.pos[0] > 0);
+  // Facing the wall (+Y) the right hand is -X: P stands at -X, the triad's Z (v2.2) at +X - the left end.
+  assert.ok(byRole.P.pos[0] < 0 && byRole.Z.pos[0] > 0);
   near(byRole.P.yaw, normYaw(-90 - 60));
-  near(byRole.L.yaw, normYaw(-90 + 60));
+  near(byRole.Z.yaw, normYaw(-90 + 60));
   for (const m of s) assert.ok(angleDiff(m.yaw, -90) < 90, `${m.role} looks into the wall`);
-  // In clock terms relative to "facing the wall" (12 = +Y): L 8, K 6, P 4.
+  // In clock terms relative to "facing the wall" (12 = +Y): the left end 8, K 6, P 4 (the rule is by position, not role).
   const clock = (yaw: number) => ((normYaw(yaw - 90) + 360) % 360) / 30;
-  near(clock(byRole.L.yaw), 8); near(clock(byRole.K.yaw), 6); near(clock(byRole.P.yaw), 4);
+  near(clock(byRole.Z.yaw), 8); near(clock(byRole.K.yaw), 6); near(clock(byRole.P.yaw), 4);
 });
 
 test('WallLayout (4): the 4th at the roomier end, his neighbour turns to the centre', () => {
@@ -268,14 +271,11 @@ test('v1.2: hedgehog round the heat source - centre = the fire, everyone on the 
   }
 });
 
-test('v1.2 (documents): a column of THREE - the wide herringbone keeps the triad rear gap; the narrow column covers it with L', () => {
-  const fov = C['sight.fov'];
-  const watchesRear = (width: number | null) => (['K', 'P', 'L'] as const)
-    .some((r) => angleDiff(FormationSectorRules.LookYaw(r, 'column', 'walk', 3, 0, 0, width, C), 180) <= fov / 2 - 30);
-  assert.equal(watchesRear(null), false, 'wide column of three: 5-7 o\'clock open (triad gap rule)');
-  assert.equal(watchesRear(460), true, 'narrow column of three: L back at a slant (-165, user Q1 = A) covers 5-7 o\'clock');
+test('v2.2 (user 2026-10-25, replaces "the triad keeps its rear gap"): three = K, P, Z - slots', () => {
+  // Column of three closes up (Z one spacing behind P), line of three: Z on the left.
+  nearV(FormationShapeRules.Slots('column', 3, [0, 0], 0, C)[2].pos, [-C['column.base_back'] - C['column.spacing'], 0]);
+  nearV(FormationShapeRules.Slots('line', 3, [0, 0], 0, C)[2].pos, [0, -C['line.spacing']]);
 });
-
 test('BreakRoomTie (as the C++ caller): a tie goes to the side with less travel; otherwise unchanged', () => {
   assert.deepEqual(FormationWallRules.BreakRoomTie(500, 500, 100, 300), { roomLeft: 501, roomRight: 500 });
   assert.deepEqual(FormationWallRules.BreakRoomTie(500, 500, 300, 100), { roomLeft: 500, roomRight: 500 });

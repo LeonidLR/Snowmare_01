@@ -42,7 +42,7 @@ bool FFormationShapeConventionsTest::RunTest(const FString&)
 	TestTrue(TEXT("Clock of 90 from 0 = 3"), FMath::IsNearlyEqual(FormationMath::YawToClock(90.f, 0.f), 3.f, 1e-4f));
 	TestEqual(TEXT("Roles of 1"), FormationShapeRules::Roles(1).Num(), 1);
 	TestTrue(TEXT("Roles of 2: K, Z (the pair's partner)"), FormationShapeRules::Roles(2) == TArray<EFormationRole>({ EFormationRole::Commander, EFormationRole::Rear }));
-	TestTrue(TEXT("Roles of 3: K, P, L"), FormationShapeRules::Roles(3) == TArray<EFormationRole>({ EFormationRole::Commander, EFormationRole::Right, EFormationRole::Left }));
+	TestTrue(TEXT("Roles of 3 (v2.2 triad): K, P, Z"), FormationShapeRules::Roles(3) == TArray<EFormationRole>({ EFormationRole::Commander, EFormationRole::Right, EFormationRole::Rear }));
 	TestEqual(TEXT("Roles of 6 clamp to 4"), FormationShapeRules::Roles(6).Num(), 4);
 	return true;
 }
@@ -75,11 +75,18 @@ bool FFormationShapeWedgePairWallTest::RunTest(const FString&)
 {
 	using namespace FormationShapeTestUtil;
 	const FFormationConfig Config;
-	// 3 men = wedge (the diamond's first three: the triad keeps its rear gap); no 2x2 square.
+	// v2.2 (user, replaces "the triad keeps its rear gap"): 3 men = K, P right-behind, Z straight behind (walks backwards like the four's).
 	const TArray<FFormationSlot> Wedge = FormationShapeRules::Slots(EFormationKind::Wedge, 3, FVector2D::ZeroVector, 0.f, Config);
-	TestTrue(TEXT("Wedge K, P, L"), Wedge.Num() == 3 && Wedge[1].Role == EFormationRole::Right && Wedge[2].Role == EFormationRole::Left);
+	TestTrue(TEXT("Wedge K, P, Z"), Wedge.Num() == 3 && Wedge[1].Role == EFormationRole::Right && Wedge[2].Role == EFormationRole::Rear);
+	TestTrue(TEXT("Wedge P 2.6 right / 2.8 back"), Near(PosOf(Wedge, EFormationRole::Right), FVector2D(-Config.SlotBackOffset, Config.SlotSideOffset)));
+	TestTrue(TEXT("Wedge Z straight behind at triad.rear_back"), Near(PosOf(Wedge, EFormationRole::Rear), FVector2D(-Config.TriadRearBack, 0.0)));
 	TestTrue(TEXT("Diamond with 3 = the wedge"), Near(PosOf(FormationShapeRules::Slots(EFormationKind::Diamond, 3, FVector2D::ZeroVector, 0.f, Config),
-		EFormationRole::Left), PosOf(Wedge, EFormationRole::Left)));
+		EFormationRole::Rear), PosOf(Wedge, EFormationRole::Rear)));
+	// Column of three closes up (Z one spacing behind P), line of three: Z on the left.
+	TestTrue(TEXT("Column of 3: Z behind P"), Near(FormationShapeRules::Slots(EFormationKind::Column, 3, FVector2D::ZeroVector, 0.f, Config)[2].Position,
+		FVector2D(-Config.ColumnBaseBack - Config.ColumnSpacing, 0.0)));
+	TestTrue(TEXT("Line of 3: Z on the left"), Near(FormationShapeRules::Slots(EFormationKind::Line, 3, FVector2D::ZeroVector, 0.f, Config)[2].Position,
+		FVector2D(0.0, -Config.LineSpacing)));
 	// Pair: the partner behind the right shoulder.
 	const TArray<FFormationSlot> Pair = FormationShapeRules::Slots(EFormationKind::Diamond, 2, FVector2D::ZeroVector, 0.f, Config);
 	TestTrue(TEXT("Pair K, Z"), Pair.Num() == 2 && Pair[1].Role == EFormationRole::Rear);

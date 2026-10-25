@@ -57,12 +57,13 @@ bool FFormationWallThreeTest::RunTest(const FString&)
 	TestEqual(TEXT("Three slots"), Slots.Num(), 3);
 	const FFormationSlot& K = Get(Slots, EFormationRole::Commander);
 	const FFormationSlot& P = Get(Slots, EFormationRole::Right);
-	const FFormationSlot& L = Get(Slots, EFormationRole::Left);
+	// v2.2: the triad is K, P, Z - the man on the LEFT end (Z) looks 8 (the wall rule is by position).
+	const FFormationSlot& L = Get(Slots, EFormationRole::Rear);
 	TestTrue(TEXT("K on the clicked slot, face offset off the wall face"), FVector2D::Distance(K.Position, FVector2D(0.0, 200.0 - 20.0 - 45.0)) < 0.01);
 	TestTrue(TEXT("K looks 6 (away from the wall)"), FMath::IsNearlyEqual(WallClock(K.Yaw), 6.f, 1e-3f));
-	TestTrue(TEXT("L looks 8"), FMath::IsNearlyEqual(WallClock(L.Yaw), 8.f, 1e-3f));
+	TestTrue(TEXT("The left end (Z) looks 8"), FMath::IsNearlyEqual(WallClock(L.Yaw), 8.f, 1e-3f));
 	TestTrue(TEXT("P looks 4"), FMath::IsNearlyEqual(WallClock(P.Yaw), 4.f, 1e-3f));
-	TestTrue(TEXT("Facing the wall: P on the right (-X), L on the left (+X)"), P.Position.X < 0.0 && L.Position.X > 0.0);
+	TestTrue(TEXT("Facing the wall: P on the right (-X), Z on the left (+X)"), P.Position.X < 0.0 && L.Position.X > 0.0);
 	TestTrue(TEXT("1 m apart along the wall"), FMath::IsNearlyEqual(FVector2D::Distance(K.Position, P.Position), 100.0, 0.01)
 		&& FMath::IsNearlyEqual(FVector2D::Distance(K.Position, L.Position), 100.0, 0.01));
 	CheckNobodyFacesTheWall(*this, Slots, TEXT("3"));

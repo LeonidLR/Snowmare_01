@@ -69,9 +69,10 @@ bool FFormationRuntimeRolesTest::RunTest(const FString&)
 	TestFalse(TEXT("1 member: no follower role"), RoleForFollowerSlot(0, 1).IsSet());
 	TestTrue(TEXT("pair: slot 0 is the partner Z"), RoleForFollowerSlot(0, 2) == EFormationRole::Rear);
 	TestFalse(TEXT("pair: no slot 1"), RoleForFollowerSlot(1, 2).IsSet());
-	TestTrue(TEXT("wedge: slot 0 (left) is L"), RoleForFollowerSlot(0, 3) == EFormationRole::Left);
-	TestTrue(TEXT("wedge: slot 1 (right) is P"), RoleForFollowerSlot(1, 3) == EFormationRole::Right);
-	TestFalse(TEXT("wedge: no slot 2"), RoleForFollowerSlot(2, 3).IsSet());
+	// Rules v2.2: three = K, P, Z (the rear guard), no L.
+	TestTrue(TEXT("three: slot 0 is the rear guard Z"), RoleForFollowerSlot(0, 3) == EFormationRole::Rear);
+	TestTrue(TEXT("three: slot 1 (right) is P"), RoleForFollowerSlot(1, 3) == EFormationRole::Right);
+	TestFalse(TEXT("three: no slot 2"), RoleForFollowerSlot(2, 3).IsSet());
 	TestTrue(TEXT("diamond: slot 2 (old 2nd row left) is the rear man Z"), RoleForFollowerSlot(2, 4) == EFormationRole::Rear);
 	TestFalse(TEXT("5 members: slot 3 keeps the old slot math"), RoleForFollowerSlot(3, 5).IsSet());
 	TestFalse(TEXT("negative slot"), RoleForFollowerSlot(-1, 4).IsSet());

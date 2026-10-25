@@ -170,7 +170,7 @@ export const MovementDepartment: React.FC = () => {
   const fov = config?.['sight.fov'] ?? 140;
   const checks: [string, string, boolean | null][] = metrics ? [
     ['Взгляд в стену', `${metrics.wallStare.events} эпизодов`, metrics.wallStare.events === 0],
-    ['Тыл 5–7 ч.', metrics.rearCover ? `${metrics.rearCover.pct} %` : '—', metrics.members >= 4 && metrics.rearCover ? metrics.rearCover.pct >= 90 : null],
+    ['Тыл 5–7 ч.', metrics.rearCover ? `${metrics.rearCover.pct} %` : '—', metrics.members >= 3 && metrics.rearCover ? metrics.rearCover.pct >= 90 : null],
     ['Мерцание', `${metrics.flicker.unexpected} / ${metrics.flicker.changes} смен`, metrics.flicker.per100m <= 1],
     ['Построение по зонам', metrics.expect.length ? metrics.expect.map((e) => `${e.zone} ${e.pct}%`).join(', ') : '—', metrics.expect.length ? metrics.expect.every((e) => e.pct >= 80) : null],
     ['Слоты', `${metrics.slots.invalidTicks} недоступных, ${metrics.slots.spacingEvents} теснота`, metrics.slots.invalidTicks === 0 && metrics.slots.spacingEvents === 0],
@@ -178,6 +178,7 @@ export const MovementDepartment: React.FC = () => {
     ['Отряд не разрезан стеной', `${metrics.split.events} эпизодов`, metrics.split.events === 0],
     ['Обход с укрытой стороны', metrics.bypass.length ? metrics.bypass.map((b) => `${b.wall}: стена ${b.got === 'left' ? 'слева' : 'справа'}`).join(', ') : '—',
       metrics.bypass.length ? metrics.bypass.every((b) => b.got === b.want) : null],
+    ['Обзор (самая большая открытая дуга)', metrics.cover ? `${metrics.cover.pct} % патруля в норме` : '—', metrics.cover ? metrics.cover.pct >= 90 : null],
     ['Проверка угла', metrics.corner.ends ? `${metrics.corner.ends - metrics.corner.missed} / ${metrics.corner.ends} концов стен` : '—', metrics.corner.ends ? metrics.corner.missed === 0 : null],
   ] : [];
 
@@ -284,7 +285,7 @@ export const MovementDepartment: React.FC = () => {
           </div>
           <input type="range" min={0} max={frames.length ? frames[frames.length - 1].t : 0} step={1 / 30} value={t}
             onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} aria-label="Время прогона" />
-          <p className="text-xs text-slate-500">К — командир, П — правый, Л — левый, З — замыкающий. Белое кольцо: боец идёт задом. Жёлтое кольцо: проверяет угол. Крестик: его слот (оранжевый — запасной, слот был в стене). Красный ромб: известная угроза.</p>
+          <p className="text-xs text-slate-500">К — командир, П — правый, Л — левый, З — замыкающий. Белое кольцо: боец идёт задом. Жёлтое кольцо: проверяет угол. Пунктирное фиолетовое: замыкающий (держит тыл). Крестик: его слот (оранжевый — запасной, слот был в стене). Красный ромб: известная угроза.</p>
         </Panel>
       </div>
 

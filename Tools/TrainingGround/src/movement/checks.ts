@@ -17,7 +17,7 @@ export const LIMITS = {
   stareDist: 200, // cm (contract)
   stareAngle: 45, // deg (contract)
   stareMinSeconds: 0.3, // a glance while turning is not a stare (looking where one walks never counts: approaching a wall)
-  rearCoverPct: 90, // % of patrol time, 4 members (contract)
+  rearCoverPct: 90, // % of patrol time, 3 and 4 members (contract; v2.2: the triad has a rear man too)
   rearMargin: 30, // the 5-7 o'clock sector (60 deg) must sit inside a cone: centre within fov / 2 - 30
   flickerPer100m: 1, // unexpected formation changes per 100 m (contract)
   flickerRevert: 2, // a change undone within 2 x classify.hold_distance of the leader's path is a flicker
@@ -31,6 +31,10 @@ export const LIMITS = {
   splitSeconds: 0.3, // v2.1 check 7: a wall between the leader and a member's slot / position (or chain neighbours) this long
   cornerPeek: 200, // cm, check 9: the hidden area's point behind the far face at the wall end
   cornerMargin: 10, // deg, check 9: the corner / hidden point within fov / 2 - margin of a member's facing
+  coverPct: 90, // % of patrol time the largest open uncovered arc stays within coverage.max_gap_deg (check 10, 3+ members)
+  coverStep: 2, // deg, the arc sampling of check 10
+  slideOrderTol: 20, // cm, check 11: two neighbours may be this much out of order along the wall
+  slideOpenPct: 90, // %, check 11: the open half (the wall's outward normal +-90) covered by the cones
 } as const;
 
 export interface Worst { t: number; what: string; value: number }
@@ -58,6 +62,10 @@ export interface RunMetrics {
   bypass: { wall: string; want: WallSide; got: WallSide }[];
   /** v2.1 check 9: free wall ends passed on patrol, and those nobody looked round in time. */
   corner: { ends: number; missed: number; worst: Worst | null };
+  /** v2.2 check 10: patrol time with the largest open uncovered arc <= coverage.max_gap_deg (3+ members). */
+  cover: { walkTime: number; okTime: number; pct: number; worst: Worst | null } | null;
+  /** v2.2 check 11: wall slides - time, order broken (>= 0.3 s), time with the open half covered >= LIMITS.slideOpenPct. */
+  slide: { time: number; orderBreaks: number; okTime: number; pct: number; worst: Worst | null };
 }
 
 /** Collects one run's frames into RunMetrics. */
@@ -84,6 +92,8 @@ export class RunCollector {
   private splitCounted = false;
   private trail: Vec2[] = [];
   private cornerPrev = new Map<string, number>();
+  private slideBreak = 0;
+  private slideCounted = false;
 
   constructor(layout: Layout, route: LayoutRoute, memberCount: number, seed: number, config: FormationConfig) {
     this.layout = layout; this.route = route; this.n = memberCount; this.c = config;
@@ -101,6 +111,8 @@ export class RunCollector {
       split: { events: 0, worst: null },
       bypass: [],
       corner: { ends: 0, missed: 0, worst: null },
+      cover: memberCount >= 3 ? { walkTime: 0, okTime: 0, pct: 100, worst: null } : null,
+      slide: { time: 0, orderBreaks: 0, okTime: 0, pct: 100, worst: null },
     };
   }
 
@@ -198,7 +210,7 @@ export class RunCollector {
     // 6. pace: the rear man behind his slot (patrol, 4 members)
     // Not while the wall layout is in effect: its slots are destinations at the wall (the last arrive_dist of the leader's walk),
     // not a formation that follows him - the old "Z 580 cm behind" worst case at a wall end was that.
-    if (this.n >= 4 && f.mode === 'walk' && f.formation !== 'wall') {
+    if (this.n >= 3 && f.mode === 'walk' && f.formation !== 'wall') { // v2.2: the triad's Z too
       const z = f.members.find((mem) => mem.place === 'Z'); // the man at the rear place
       if (z) {
         const h = dirOf(f.heading), d = sub(z.slot, z.pos);
@@ -264,6 +276,52 @@ export class RunCollector {
       });
     }
 
+    // 10. coverage (v2.2): the largest arc nobody's cone covers, walls (within look.wall_dist of a member, +-45 deg round the
+    // closest point) excluded, stays within coverage.max_gap_deg
+    if (this.m.cover && f.mode === 'walk') {
+      const fov = cfg(this.c, 'sight.fov'), reach = cfg(this.c, 'look.wall_dist'), step = LIMITS.coverStep;
+      const blocked: number[] = [];
+      for (const mem of f.members) for (const w of this.segs) {
+        if (distToWall(mem.pos, w) > reach) continue;
+        const q = closestOnSegment(mem.pos, w.a, w.b).point;
+        if (dist(q, mem.pos) > 1e-6) blocked.push(yawOf(sub(q, mem.pos)));
+      }
+      const n = 360 / step;
+      const open = Array.from({ length: n }, (_, i) => {
+        const a = i * step - 180;
+        return !f.members.some((mem) => angleDiff(mem.yaw, a) <= fov / 2) && !blocked.some((b) => angleDiff(b, a) < LIMITS.stareAngle);
+      });
+      let gap = 0;
+      if (open.every(Boolean)) gap = 360;
+      else {
+        const i0 = open.findIndex((o) => !o);
+        let run = 0;
+        for (let k = 1; k <= n; k++) { if (open[(i0 + k) % n]) { run++; gap = Math.max(gap, run * step); } else run = 0; }
+      }
+      this.m.cover.walkTime += SIM_DT;
+      if (gap <= cfg(this.c, 'coverage.max_gap_deg')) this.m.cover.okTime += SIM_DT;
+      else if (!this.m.cover.worst || gap > this.m.cover.worst.value) this.m.cover.worst = { t: round(f.t, 1), what: `${gap} deg open (${f.formation})`, value: gap };
+    }
+
+    // 11. wall slide (v2.2): the order along the wall kept, the open half covered
+    if (f.slide) {
+      const D = dirOf(f.slide.travelYaw);
+      const along = f.slide.order.map((p) => { const m = f.members.find((x) => x.place === p)!; return m.pos[0] * D[0] + m.pos[1] * D[1]; });
+      const broken = along.some((v, i) => i > 0 && v > along[i - 1] + LIMITS.slideOrderTol);
+      if (broken) {
+        this.slideBreak += SIM_DT;
+        if (this.slideBreak >= LIMITS.splitSeconds && !this.slideCounted) { this.slideCounted = true; this.m.slide.orderBreaks++; this.m.slide.worst ??= { t: round(f.t, 1), what: 'order along the wall broken', value: 1 }; }
+      } else { this.slideBreak = 0; this.slideCounted = false; }
+      const fov = cfg(this.c, 'sight.fov');
+      let seen = 0, total = 0;
+      for (let a = -90; a <= 90; a += LIMITS.coverStep) {
+        total++;
+        if (f.members.some((m) => angleDiff(m.yaw, f.slide!.normalYaw + a) <= fov / 2)) seen++;
+      }
+      this.m.slide.time += SIM_DT;
+      if ((100 * seen) / total >= LIMITS.slideOpenPct) this.m.slide.okTime += SIM_DT;
+    }
+
     // stuck (info)
     for (const mem of f.members.slice(1)) {
       if (dist(mem.pos, mem.slot) > LIMITS.stuckDist) {
@@ -299,6 +357,8 @@ export class RunCollector {
       const i = this.layout.walls.findIndex((w) => w.id === e.wall);
       return { wall: e.wall, want: e.wall_on, got: wallSideOf(this.trail, this.segs[i]) };
     });
+    if (m.cover) m.cover.pct = m.cover.walkTime > 0 ? round((100 * m.cover.okTime) / m.cover.walkTime, 1) : 100;
+    m.slide.pct = m.slide.time > 0 ? round((100 * m.slide.okTime) / m.slide.time, 1) : 100;
     m.duration = round(m.duration, 2);
     m.distance = round(m.distance, 0);
     return m;
@@ -337,25 +397,27 @@ function worstOf(runs: RunMetrics[], pick: (r: RunMetrics) => Worst | null | und
   return best ? `${runTag(best.r)} t=${best.w.t}s ${best.w.what}` : '-';
 }
 
-export const CHECK_WEIGHTS: Record<number, number> = { 1: 2, 2: 2, 3: 1, 4: 2, 5: 2, 6: 1, 7: 3, 8: 2, 9: 1 };
+export const CHECK_WEIGHTS: Record<number, number> = { 1: 2, 2: 2, 3: 1, 4: 2, 5: 2, 6: 1, 7: 3, 8: 2, 9: 1, 10: 2, 11: 2 };
 
 export function summarize(runs: RunMetrics[]): SeriesSummary {
   const line = (id: number, name: string, applicable: RunMetrics[], ok: (r: RunMetrics) => boolean, worst: string, info = false): CheckLine => {
     const pass = applicable.filter(ok).length;
     return { id, name, pass, fail: applicable.length - pass, worst, info };
   };
-  const four = runs.filter((r) => r.members >= 4 && r.rearCover && r.rearCover.walkTime > 0);
-  const three = runs.filter((r) => r.members === 3 && r.rearCover && r.rearCover.walkTime > 0);
+  // v2.2 (user 2026-10-25): rear cover is required with 3 members too (the triad's Z walks backwards looking at 6).
+  const four = runs.filter((r) => r.members >= 3 && r.rearCover && r.rearCover.walkTime > 0);
   const withExpect = runs.flatMap((r) => r.expect.map((e) => ({ r, e })));
   const expectFail = withExpect.filter(({ e }) => e.pct < LIMITS.expectPct).sort((a, b) => a.e.pct - b.e.pct)[0];
   const paceRuns = runs.filter((r) => r.pace);
   const bypassRuns = runs.filter((r) => r.bypass.length);
   const bypassFail = bypassRuns.find((r) => r.bypass.some((b) => b.got !== b.want));
   const cornerRuns = runs.filter((r) => r.corner.ends > 0);
+  const coverRuns = runs.filter((r) => r.cover && r.cover.walkTime > 0);
+  const slideRuns = runs.filter((r) => r.slide.time > 0);
   const checks: CheckLine[] = [
     line(1, `wall stare (<${LIMITS.stareDist} cm, ${LIMITS.stareAngle} deg, >=${LIMITS.stareMinSeconds} s)`, runs,
       (r) => r.wallStare.events === 0, worstOf(runs, (r) => r.wallStare.worst)),
-    line(2, `rear cover 5-7 o'clock, 4 men (>=${LIMITS.rearCoverPct} % of patrol)`, four,
+    line(2, `rear cover 5-7 o'clock, 3-4 men (>=${LIMITS.rearCoverPct} % of patrol)`, four,
       (r) => r.rearCover!.pct >= LIMITS.rearCoverPct,
       four.length ? (() => { const w = [...four].sort((a, b) => a.rearCover!.pct - b.rearCover!.pct)[0]; return `${runTag(w)} ${w.rearCover!.pct} %`; })() : '-'),
     line(3, `flicker (unexpected changes <=${LIMITS.flickerPer100m} / 100 m)`, runs,
@@ -374,9 +436,13 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
       bypassFail ? (() => { const b = bypassFail.bypass.find((x) => x.got !== x.want)!; return `${runTag(bypassFail)} ${b.wall}: wall on the ${b.got}, wants ${b.want}`; })() : '-'),
     line(9, 'corner man looks round a passed wall end in time', cornerRuns,
       (r) => r.corner.missed === 0, worstOf(cornerRuns, (r) => r.corner.worst)),
-    line(10, `info: rear cover with 3 men (gap kept by design)`, three, () => true,
-      three.length ? `min ${Math.min(...three.map((r) => r.rearCover!.pct))} % / avg ${round(three.reduce((a, r) => a + r.rearCover!.pct, 0) / three.length, 1)} %` : '-', true),
-    line(11, `info: stuck followers (>${LIMITS.stuckDist} cm for ${LIMITS.stuckSeconds} s), slot fallbacks`, runs, (r) => r.stuck.events === 0,
+    line(10, `coverage: largest open uncovered arc <= coverage.max_gap_deg, 3-4 men (>=${LIMITS.coverPct} % of patrol)`, coverRuns,
+      (r) => r.cover!.pct >= LIMITS.coverPct,
+      coverRuns.length ? (() => { const w = [...coverRuns].sort((a, b) => a.cover!.pct - b.cover!.pct)[0]; return `${runTag(w)} ${w.cover!.pct} %${w.cover!.worst ? `, worst t=${w.cover!.worst.t}s ${w.cover!.worst.what}` : ''}`; })() : '-'),
+    line(11, `wall slide: order kept, open half covered (>=${LIMITS.slideOpenPct} % of it, >=90 % of the slide)`, slideRuns,
+      (r) => r.slide.orderBreaks === 0 && r.slide.pct >= 90,
+      slideRuns.length ? (() => { const w = [...slideRuns].sort((a, b) => a.slide.pct - b.slide.pct - (b.slide.orderBreaks - a.slide.orderBreaks) * 1000)[0]; return `${runTag(w)} ${w.slide.pct} %${w.slide.orderBreaks ? `, order broken ${w.slide.orderBreaks}x` : ''}`; })() : '-'),
+    line(12, `info: stuck followers (>${LIMITS.stuckDist} cm for ${LIMITS.stuckSeconds} s), slot fallbacks`, runs, (r) => r.stuck.events === 0,
       `${worstOf(runs, (r) => r.stuck.worst)}; fallback ticks ${runs.reduce((a, r) => a + r.slots.fallbackTicks, 0)}`, true),
   ];
   // Smooth score: a passing run counts 1, a failing one by how close it came, so the tuner sees partial progress.
@@ -391,6 +457,8 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
     7: mean(runs.map((r) => 1 / (1 + r.split.events))),
     8: mean(bypassRuns.map((r) => r.bypass.filter((b) => b.got === b.want).length / r.bypass.length)),
     9: mean(cornerRuns.map((r) => 1 - r.corner.missed / r.corner.ends)),
+    10: mean(coverRuns.map((r) => Math.min(1, r.cover!.pct / LIMITS.coverPct))),
+    11: mean(slideRuns.map((r) => (r.slide.orderBreaks ? 0.5 : 1) * Math.min(1, r.slide.pct / 90))),
   };
   let num = 0, den = 0;
   for (const [id, v] of Object.entries(soft)) {
@@ -435,11 +503,11 @@ export function renderReport(h: ReportHeader, s: SeriesSummary, advice: string[]
 
 /**
  * v2.1: auto + every manual menu item on every route - fail counts per check. A manual formation ignores the terrain on
- * purpose, so only checks 1 (wall stare - v2.1.1: nobody looks into a wall in a manual formation either), 5 (slots / spacing) and 7 (squad split) gate it; the rest is shown for information.
+ * purpose, so only checks 1 (wall stare), 2 (rear cover - v2.2: every formation with 3+ has a rear guard), 5 (slots / spacing), 7 (squad split) and 10 (coverage) gate it; the rest is shown for information.
  */
 export function renderManualMatrix(h: ReportHeader, rows: { choice: string; summary: SeriesSummary }[]): string {
   const ids = rows[0]?.summary.checks.filter((c) => !c.info).map((c) => c.id) ?? [];
-  const gated = (choice: string, id: number) => choice === 'auto' || [1, 5, 7].includes(id);
+  const gated = (choice: string, id: number) => choice === 'auto' || [1, 2, 5, 7, 10, 11].includes(id);
   const cell = (choice: string, ch: CheckLine | undefined) => !ch || ch.pass + ch.fail === 0 ? '-' : gated(choice, ch.id) ? String(ch.fail) : `(${ch.fail})`;
   const lines = [
     `# Movement bot - auto + every manual formation - ${h.layout}`,
@@ -449,7 +517,7 @@ export function renderManualMatrix(h: ReportHeader, rows: { choice: string; summ
     `| choice | runs | ${ids.map((i) => `#${i}`).join(' | ')} | score | gate |`,
     `|---|---|${ids.map(() => '---').join('|')}|---|---|`,
     ...rows.map((r) => {
-      const ok = r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((c) => [1, 5, 7].includes(c.id)).every((c) => c.fail === 0);
+      const ok = r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((c) => [1, 2, 5, 7, 10, 11].includes(c.id)).every((c) => c.fail === 0);
       return `| ${r.choice} | ${r.summary.runs} | ${ids.map((i) => cell(r.choice, r.summary.checks.find((c) => c.id === i))).join(' | ')} | ${r.summary.score} | ${ok ? 'PASS' : 'FAIL'} |`;
     }),
     '',

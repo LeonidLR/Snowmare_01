@@ -14,7 +14,7 @@ An operative sees only his vision cone (already in game: 140° standing / crouch
 the body facing, `AOperativeCharacter::GetSightFacing`). The formation decides where each one looks. 12 o'clock = the
 leader's heading.
 
-## Roles and sectors (decided)
+## Roles and sectors (decided; the walk / halt sectors of 3-4 replaced by the v2.2 allocator below)
 | Role | Slot (from the leader, m) | Walk = patrol | Run (double click) | Short halt |
 |---|---|---|---|---|
 | Commander (K) | 0, 0 | 12, light search 11–1 | 12 | 12 |
@@ -22,9 +22,10 @@ leader's heading.
 | Left (L) | 2.6 left, 2.8 back | scans 9 → 12, counter-phase | 12 | 10 |
 | Rear (Z), 4th member | 5.6 straight back (today slot 2 = 2nd row LEFT — change) | 6, walks BACKWARDS | 12 | 6 |
 
-- 3 men = wedge (triangle); 4 men = **diamond** (rear centred). No 2×2 square.
+- 3 men = wedge (triangle; **v2.2: K, P, Z** — see below); 4 men = **diamond** (rear centred). No 2×2 square.
 - **Patrol pace: the whole squad walks at ~80 % of walk speed** so the rear man keeps up walking backwards.
-- **Triad keeps its rear gap** (5–7 o'clock, ~40°): the honest cost of three men; the 4th closes it.
+- ~~**Triad keeps its rear gap** (5–7 o'clock, ~40°): the honest cost of three men; the 4th closes it.~~ **Replaced 2026-10-25
+  (v2.2)**: the triad has a rear man.
 - Run: everybody faces 12 (rear blind ~220° — the price of speed).
 - Halt: everybody turns to the centre of his sector.
 - Box select + click: unchanged (each to his own point, `SquadFormation::ComputeGroupTargets`), faces his own path.
@@ -146,3 +147,33 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 3. C++ pure rules (`FormationShapeRules` / `FormationSectorRules` / terrain classifier) with parity tests from golden
    vectors; runtime integration (slots, look yaw, patrol pace, wall layout + pose); hold-G radial menu.
 4. In-game smoke on the lab map.
+
+## v2.2 — the rear guard and the coverage allocator (user decisions 2026-10-25, via the coordinator; contract section 11)
+- **The triad = K, P, Z (user, 2026-10-25, after playing the build: "when we walk as three the rear sector is too open; one of
+  them must walk backwards, like the four")**: K leads (search 11–1), P right-behind sweeps BOTH flanks 3 → 12 → 9 → 12 → 3
+  (K's search runs against him), Z straight behind (`triad.rear_back` 4.2 m) walks backwards at 6. Halt K 12, P 3, Z 6; run
+  everyone 12. Replaces "the triad keeps its rear gap" (above) and the "column of three keeps the gap" note (v1.2). The left end
+  of the wall layout looks 8 whatever the role (in the triad: Z).
+- **The last man is responsible for the rear — in every formation (user, 2026-10-25, screenshot of an echelon along a wall
+  whose last man looked forward-right: "the last man must look the other way, too big a sector opens; recompute all variants")**:
+  with 3+ members the place farthest back along the leader's path is the REAR GUARD: he walks backwards and holds 5–7 o'clock,
+  turned towards the open side (about 5 o'clock) when a wall stands on one side of him, never into a wall; it re-assigns with
+  the places after any formation change.
+- **Coverage allocator replaces the per-formation sector tables on the move (coordinator, 2026-10-25)**: K keeps the front,
+  the rear guard the rear, the others split the remaining OPEN arc (walls excluded) — the largest uncovered gap first, to the
+  nearest man, each sweeping inside his share (narrow enough that its far side stays within 60°); halt = the centres of the
+  same shares; run everyone 12; the pair, the wall layout and the hedgehog ring keep their rules.
+- **A look decided elsewhere counts as cover (user playtest, 2026-10-25: in group cover at a wall corner the leader held the
+  new corner and the two followers looked the same way, a wide gap opened)**: a member whose look is fixed (the leader's corner
+  aim, a combat target, an explicit facing order, the corner check) counts as covering his cone; the others fill the rest
+  (`FormationCoverRules.AllocateStatic` for a standing group, the fixed looks of `Allocate` on the move).
+- Bot: check 2 (rear cover >= 90 %) for every formation of 3+ (manual too); new check 10 — the largest open arc nobody covers
+  <= 60° (`coverage.max_gap_deg`) for >= 90 % of patrol. Tunable keys: `rear.share_half`, `rear.wall_shift_deg`,
+  `coverage.max_sweep`, `coverage.max_gap_deg`, `triad.rear_back`.
+- **Wall slide (user, 2026-10-25, approved on an animation: "Все отлично")**: the squad stands at a wall and the next destination
+  lies at the same wall (within 2 m of it, along it): nobody re-forms - everyone moves sideways together along the wall at patrol
+  pace, the order and the offset from the wall kept, nobody passes anybody, nobody goes round the wall. The leading end looks ahead
+  along the wall (a little outward), K away from the wall (his search), the trailing end back along the wall - he is the rear
+  guard. On the stop: the normal wall layout (the 4th stays on his side when there is room - otherwise he would walk through the
+  line). A destination farther from the wall: the normal formation. At the wall's end the corner check (the leading end) applies.
+

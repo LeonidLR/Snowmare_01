@@ -16,6 +16,7 @@
   "pair.scan_period": 5,
   "pair.scan_from": 90,
   "pair.scan_to": 270,
+  "triad.rear_back": 420,
   "column.base_back": 180,
   "column.spacing": 150,
   "column.stagger": 60,
@@ -39,6 +40,8 @@
   "wall.flank_deg": 60,
   "wall.neighbour_deg": 30,
   "wall.end_deg": 75,
+  "slide.max_off_wall": 200,
+  "slide.lead_out_deg": 20,
   "pace.patrol": 0.8,
   "pace.walk_speed": 220,
   "pace.run_speed": 480,
@@ -51,6 +54,10 @@
   "scan.amp_lead": 30,
   "scan.dwell_exp": 0.45,
   "halt.side_deg": 60,
+  "rear.share_half": 30,
+  "rear.wall_shift_deg": 30,
+  "coverage.max_sweep": 90,
+  "coverage.max_gap_deg": 60,
   "look.wall_dist": 260,
   "look.wall_angle": 55,
   "classify.probe_side": 400,
@@ -340,7 +347,7 @@
       "yaw": -150
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        100,
        135
@@ -390,7 +397,7 @@
       "yaw": -150
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        100,
        135
@@ -440,7 +447,7 @@
       "yaw": -150
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        100,
        135
@@ -892,7 +899,7 @@
       "yaw": -150
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        700,
        135
@@ -942,7 +949,7 @@
       "yaw": -150
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        700,
        135
@@ -992,7 +999,7 @@
       "yaw": -150
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        700,
        135
@@ -1444,7 +1451,7 @@
       "yaw": 30
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -300,
        265
@@ -1494,7 +1501,7 @@
       "yaw": 30
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -300,
        265
@@ -1544,7 +1551,7 @@
       "yaw": 30
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -300,
        265
@@ -1996,7 +2003,7 @@
       "yaw": 120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        240,
        -100
@@ -2046,7 +2053,7 @@
       "yaw": 120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        240,
        -100
@@ -2096,7 +2103,7 @@
       "yaw": 120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        240,
        -100
@@ -2548,7 +2555,7 @@
       "yaw": -60
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        360,
        200
@@ -2598,7 +2605,7 @@
       "yaw": -60
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        360,
        200
@@ -2648,7 +2655,7 @@
       "yaw": -60
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        360,
        200
@@ -3100,7 +3107,7 @@
       "yaw": 120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        240,
        300
@@ -3150,7 +3157,7 @@
       "yaw": 120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        240,
        300
@@ -3200,7 +3207,7 @@
       "yaw": 120
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        240,
        300
@@ -3652,7 +3659,7 @@
       "yaw": 75
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -120.208,
        -21.213
@@ -3702,7 +3709,7 @@
       "yaw": 75
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -120.208,
        -21.213
@@ -3752,7 +3759,7 @@
       "yaw": 75
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -120.208,
        -21.213
@@ -4204,7 +4211,7 @@
       "yaw": -105
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        470.208,
        371.213
@@ -4254,7 +4261,7 @@
       "yaw": -105
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        470.208,
        371.213
@@ -4304,7 +4311,7 @@
       "yaw": -105
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        470.208,
        371.213
@@ -4756,7 +4763,7 @@
       "yaw": 75
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -20.208,
        78.787
@@ -4806,7 +4813,7 @@
       "yaw": 75
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -20.208,
        78.787
@@ -4856,7 +4863,7 @@
       "yaw": 75
      },
      {
-      "role": "L",
+      "role": "Z",
       "pos": [
        -20.208,
        78.787

@@ -115,6 +115,8 @@ const layout = {
       expect: [{ zone: 'Z_F_end', formation: 'wall' }] },
     { id: 'R_v2_gaps', pace: 'walk', points: [[-5500, V2], [-300, V2]],
       expect: [{ zone: 'Z_V2_gaps', formation: 'echelon_right' }] },
+    // v2.2 wall slide (check 11): to the lane-A dead end (the wall layout), then 6 m along the wall one way, 12 m back the other
+    { id: 'R_A_slide', pace: 'walk', points: [[2000, A], [4435, A]], slide: [[4435, A - 600], [4435, A + 600]] },
     // v2.1 bypass (check 8): no threat -> the shortest side; a threat seen behind the wall -> the side it hides; too long -> shortest
     { id: 'R_G_free', pace: 'walk', points: [[1100, G], [4300, G]], expect_bypass: [{ wall: 'W_G_19', wall_on: 'right' }] },
     { id: 'R_G_threat_right', pace: 'walk', points: [[1100, G], [4300, G]], threats: [{ pos: [2600, G + 900], since_s: 0 }],

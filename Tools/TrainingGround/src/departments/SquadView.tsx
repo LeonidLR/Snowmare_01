@@ -124,6 +124,8 @@ export const SquadView: React.FC<Props> = ({ layout, frame, routeId, fov = 140, 
         g.beginPath(); g.arc(q[0], q[1], rad, 0, Math.PI * 2); g.fill();
         if (m.backwards) { g.strokeStyle = '#f8fafc'; g.lineWidth = 1.5; g.beginPath(); g.arc(q[0], q[1], rad + 3, 0, Math.PI * 2); g.stroke(); }
         if (m.cornerWatch) { g.strokeStyle = '#facc15'; g.lineWidth = 2; g.beginPath(); g.arc(q[0], q[1], rad + 6, 0, Math.PI * 2); g.stroke(); }
+        // v2.2: the rear guard (the place farthest back, holds 5-7 o'clock)
+        if (m.rearGuard) { g.strokeStyle = '#e879f9'; g.lineWidth = 2; g.setLineDash([3, 3]); g.beginPath(); g.arc(q[0], q[1], rad + 9, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
         g.fillStyle = '#020617'; g.font = `bold ${Math.max(9, rad * 1.2)}px ui-monospace, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(ROLE_LABEL[m.role] ?? m.role, q[0], q[1] + 0.5);
         g.textBaseline = 'alphabetic';
