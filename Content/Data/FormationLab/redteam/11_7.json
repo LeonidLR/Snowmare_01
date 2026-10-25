@@ -1,0 +1,119 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_11_7",
+  "comment": "Red team 11_7 (dead_end_after_turn, aimed at #1,#5): A right turn into a 3 m wide, 7 m deep pocket that ends in a wall leaves no outward direction past 2.6 m; manual hedgehog (n3), diamond and line, and the auto wall layout, must face side walls under 2 m (check 1) or crowd the 3 m end wall (check 5, n2). Broke 1 (check, choice, members): #5 slots / spacing. First: #5 hedgehog n4 R1 s2 t=17.9s - P-Z 68 cm apart.",
+  "bounds": {
+    "min": [
+      -1200,
+      -1500
+    ],
+    "max": [
+      4000,
+      1600
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        2340,
+        300
+      ],
+      "b": [
+        2340,
+        1000
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W2",
+      "a": [
+        2660,
+        300
+      ],
+      "b": [
+        2660,
+        1000
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W3",
+      "a": [
+        2340,
+        1000
+      ],
+      "b": [
+        2660,
+        1000
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          2500,
+          0
+        ],
+        [
+          2500,
+          830
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "11_7",
+    "family": "dead_end_after_turn",
+    "intent": "A right turn into a 3 m wide, 7 m deep pocket that ends in a wall leaves no outward direction past 2.6 m; manual hedgehog (n3), diamond and line, and the auto wall layout, must face side walls under 2 m (check 1) or crowd the 3 m end wall (check 5, n2).",
+    "target_checks": [
+      1,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 17.9,
+      "what": "P-Z 68 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

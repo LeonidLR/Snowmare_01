@@ -1,0 +1,190 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_12_1",
+  "comment": "Red team 12_1 (long_wall_periodic_gaps, aimed at #9,#3,#1): A thin wall 1.4 m to the left with 2.5 m gaps every 8 m creates many free wall ends right beside the leader. The fold to echelon_right should flicker at each gap, and in the run route everyone faces 12, so nobody may slice the pie round the ends. Broke 6 (check, choice, members): #1 wall stare, #5 slots / spacing. First: #1 blizzard n3 R1 s2 t=10.1s - L at W1.",
+  "bounds": {
+    "min": [
+      -2000,
+      -2000
+    ],
+    "max": [
+      6000,
+      2000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        -150
+      ],
+      "b": [
+        800,
+        -150
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W2",
+      "a": [
+        1050,
+        -150
+      ],
+      "b": [
+        1850,
+        -150
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W3",
+      "a": [
+        2100,
+        -150
+      ],
+      "b": [
+        2900,
+        -150
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W4",
+      "a": [
+        3150,
+        -150
+      ],
+      "b": [
+        3950,
+        -150
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -800,
+          0
+        ],
+        [
+          5200,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "R2",
+      "pace": "run",
+      "points": [
+        [
+          -800,
+          0
+        ],
+        [
+          5200,
+          0
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -800,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "12_1",
+    "family": "long_wall_periodic_gaps",
+    "intent": "A thin wall 1.4 m to the left with 2.5 m gaps every 8 m creates many free wall ends right beside the leader. The fold to echelon_right should flicker at each gap, and in the run route everyone faces 12, so nobody may slice the pie round the ends.",
+    "target_checks": [
+      9,
+      3,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 10.1,
+      "what": "L at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 10.1,
+      "what": "L at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 22.5,
+      "what": "L at W3",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.3,
+      "what": "L at W2",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R2",
+      "seed": 2,
+      "t": 5.8,
+      "what": "L-Z 49 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R2",
+      "seed": 2,
+      "t": 5.2,
+      "what": "L-Z 57 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

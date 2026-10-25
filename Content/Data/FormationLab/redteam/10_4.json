@@ -1,0 +1,103 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_10_4",
+  "comment": "Red team 10_4 (threat_behind_thin_wall, aimed at #9,#1,#8): A thin free wall sits straight ahead. The left side is both shorter and hides the right-rear threat. While rounding the left end, threat-watching and the slice-the-pie look-round compete, so the nearest man may skip the end or stare into the 20 cm wall up close. Broke 1 (check, choice, members): #1 wall stare. First: #1 hedgehog n4 R1 s1 t=18.5s - P at W1.",
+  "bounds": {
+    "min": [
+      -1000,
+      -2000
+    ],
+    "max": [
+      7000,
+      3000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        3000,
+        -300
+      ],
+      "b": [
+        3000,
+        700
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          6000,
+          0
+        ]
+      ],
+      "expect": [],
+      "threats": [
+        {
+          "pos": [
+            3600,
+            1500
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W1",
+          "wall_on": "right"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "10_4",
+    "family": "threat_behind_thin_wall",
+    "intent": "A thin free wall sits straight ahead. The left side is both shorter and hides the right-rear threat. While rounding the left end, threat-watching and the slice-the-pie look-round compete, so the nearest man may skip the end or stare into the 20 cm wall up close.",
+    "target_checks": [
+      9,
+      1,
+      8
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 18.5,
+      "what": "P at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

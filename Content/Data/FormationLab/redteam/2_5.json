@@ -1,0 +1,164 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_2_5",
+  "comment": "Red team 2_5 (long_wall_periodic_gaps, aimed at #7,#6,#5): The route runs beside a long gapped wall and then crosses it diagonally through a 3 m gap to the other side: the echelon must flip sides through a narrow gap, so chain neighbours should end up on opposite sides of the wall, the rear man should lag far behind his slot, and men should bunch at the gap. Broke 4 (check, choice, members): #1 wall stare, #5 slots / spacing. First: #1 column n3 R1 s1 t=20.7s - L at W3.",
+  "bounds": {
+    "min": [
+      -1000,
+      -1500
+    ],
+    "max": [
+      7500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        600,
+        0
+      ],
+      "b": [
+        1500,
+        0
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        1650,
+        0
+      ],
+      "b": [
+        3000,
+        0
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        3300,
+        0
+      ],
+      "b": [
+        4500,
+        0
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        4650,
+        0
+      ],
+      "b": [
+        6000,
+        0
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          200,
+          -350
+        ],
+        [
+          2700,
+          -350
+        ],
+        [
+          3600,
+          350
+        ],
+        [
+          6800,
+          350
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      200,
+      -350
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "2_5",
+    "family": "long_wall_periodic_gaps",
+    "intent": "The route runs beside a long gapped wall and then crosses it diagonally through a 3 m gap to the other side: the echelon must flip sides through a narrow gap, so chain neighbours should end up on opposite sides of the wall, the rear man should lag far behind his slot, and men should bunch at the gap",
+    "target_checks": [
+      7,
+      6,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 20.7,
+      "what": "L at W3",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 20.7,
+      "what": "L at W3",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "L-Z 76 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "L-Z 75 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

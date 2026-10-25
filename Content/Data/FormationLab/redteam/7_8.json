@@ -1,0 +1,144 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_7_8",
+  "comment": "Red team 7_8 (u_turn, aimed at #9,#7,#1): An echelon_left walks 3 m off a free wall on its right, then hairpins round the wall end. The fold to column, the slice round the end and the 180 deg turn all overlap: the trail members cut the end (7), the slicer faces the end face under 2 m (1), or the look round the end is dropped (9). Broke 3 (check, choice, members): #3 flicker. First: #3 auto n2 R1 s1 t=26s - echelon_left -> wedge, back after 3.4 s.",
+  "bounds": {
+    "min": [
+      -1500,
+      -1000
+    ],
+    "max": [
+      4500,
+      2000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        500,
+        300
+      ],
+      "b": [
+        3000,
+        300
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_run",
+      "poly": [
+        [
+          1300,
+          -600
+        ],
+        [
+          2300,
+          -600
+        ],
+        [
+          2300,
+          250
+        ],
+        [
+          1300,
+          250
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -300,
+          0
+        ],
+        [
+          3400,
+          0
+        ],
+        [
+          3400,
+          700
+        ],
+        [
+          500,
+          700
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "echelon_left"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -300,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "7_8",
+    "family": "u_turn",
+    "intent": "An echelon_left walks 3 m off a free wall on its right, then hairpins round the wall end. The fold to column, the slice round the end and the 180 deg turn all overlap: the trail members cut the end (7), the slicer faces the end face under 2 m (1), or the look round the end is dropped (9).",
+    "target_checks": [
+      9,
+      7,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": 26,
+      "what": "echelon_left -> wedge, back after 3.4 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 26,
+      "what": "echelon_left -> wedge, back after 3.4 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 26,
+      "what": "echelon_left -> diamond, back after 3.4 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

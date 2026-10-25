@@ -1,0 +1,102 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_1_6",
+  "comment": "Red team 1_6 (threat_behind_thin_wall, aimed at #8,#9,#7): A thin cross wall has its short side on the left (8 % shorter), but a known threat far behind-left is hidden only from the right side, so the rules require a right bypass. A shortest-side bias or a late threat check sends the squad left, and the end may get no slice. Broke 1 (check, choice, members): #1 wall stare. First: #1 hedgehog n4 R1 s1 t=15.2s - L at W1.",
+  "bounds": {
+    "min": [
+      -1000,
+      -2800
+    ],
+    "max": [
+      4500,
+      2000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        2000,
+        -700
+      ],
+      "b": [
+        2000,
+        1100
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4000,
+          0
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            3200,
+            -2200
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W1",
+          "wall_on": "left"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "1_6",
+    "family": "threat_behind_thin_wall",
+    "intent": "A thin cross wall has its short side on the left (8 % shorter), but a known threat far behind-left is hidden only from the right side, so the rules require a right bypass. A shortest-side bias or a late threat check sends the squad left, and the end may get no slice.",
+    "target_checks": [
+      8,
+      9,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 15.2,
+      "what": "L at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

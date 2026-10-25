@@ -1,0 +1,192 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_2_1",
+  "comment": "Red team 2_1 (dead_end_after_turn, aimed at #5,#1,#7): A 90 deg right turn from a 4.6 m corridor into a 3.6 m side passage that dead-ends 3 m later: the arrival-at-wall layout (all along the wall facing out) cannot fit 4 men in the pocket, so slots should land inside walls or overlap, and the turn should leave a corner wall between the leader and the tr. Broke 3 (check, choice, members): #1 wall stare, #2 rear cover (4 men), #5 slots / spacing. First: #1 hedgehog n4 R1 s2 t=11.8s - Z at W2.",
+  "bounds": {
+    "min": [
+      -1000,
+      -1500
+    ],
+    "max": [
+      3000,
+      1600
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        800,
+        -250
+      ],
+      "b": [
+        2000,
+        -250
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        800,
+        250
+      ],
+      "b": [
+        1600,
+        250
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        1600,
+        250
+      ],
+      "b": [
+        1600,
+        1100
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        2000,
+        -250
+      ],
+      "b": [
+        2000,
+        1100
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W5",
+      "a": [
+        1600,
+        1100
+      ],
+      "b": [
+        2000,
+        1100
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          1000,
+          -200
+        ],
+        [
+          1500,
+          -200
+        ],
+        [
+          1500,
+          200
+        ],
+        [
+          1000,
+          200
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          200,
+          0
+        ],
+        [
+          1800,
+          0
+        ],
+        [
+          1800,
+          800
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      200,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "2_1",
+    "family": "dead_end_after_turn",
+    "intent": "A 90 deg right turn from a 4.6 m corridor into a 3.6 m side passage that dead-ends 3 m later: the arrival-at-wall layout (all along the wall facing out) cannot fit 4 men in the pocket, so slots should land inside walls or overlap, and the turn should leave a corner wall between the leader and the tr",
+    "target_checks": [
+      5,
+      1,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 11.8,
+      "what": "Z at W2",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 2,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "5-7 o'clock watched 85.1 %",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 10.2,
+      "what": "P-L 38 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

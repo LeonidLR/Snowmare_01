@@ -1,0 +1,107 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_5_7",
+  "comment": "Red team 5_7 (wall_ends_at_turn, aimed at #7,#6,#1): The leader wraps a 90 deg left turn tightly round the outer corner of an L wall 1 m off. The echelon_right fold to column should lag, leaving the left and rear men's slots cut by the corner and Z dragging far behind his slot. Broke 1 (check, choice, members): #5 slots / spacing. First: #5 column n4 R1 s2 t=21.5s - L-Z 59 cm apart.",
+  "bounds": {
+    "min": [
+      -1500,
+      -4000
+    ],
+    "max": [
+      5000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        -200
+      ],
+      "b": [
+        2900,
+        -200
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W2",
+      "a": [
+        2900,
+        -200
+      ],
+      "b": [
+        2900,
+        -3500
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -500,
+          0
+        ],
+        [
+          3000,
+          0
+        ],
+        [
+          3000,
+          -3000
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -500,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "5_7",
+    "family": "wall_ends_at_turn",
+    "intent": "The leader wraps a 90 deg left turn tightly round the outer corner of an L wall 1 m off. The echelon_right fold to column should lag, leaving the left and rear men's slots cut by the corner and Z dragging far behind his slot.",
+    "target_checks": [
+      7,
+      6,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 21.5,
+      "what": "L-Z 59 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

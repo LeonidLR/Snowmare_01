@@ -1,0 +1,166 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_9_4",
+  "comment": "Red team 9_4 (t_l_junction, aimed at #9,#1,#7): A 3 m corridor ends in a T against a wall 4 m ahead and the route turns right into the cross passage. The corridor wall end the squad passes beside should trigger the slicing look, which competes with the arrival-at-wall layout and the column fold, so the look is skipped or a man ends up facing the. Broke 3 (check, choice, members): #5 slots / spacing. First: #5 blizzard n3 R1 s1 t=6.4s - P-L 53 cm apart.",
+  "bounds": {
+    "min": [
+      -1500,
+      -2000
+    ],
+    "max": [
+      4500,
+      2500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        500,
+        -150
+      ],
+      "b": [
+        3000,
+        -150
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        500,
+        150
+      ],
+      "b": [
+        3000,
+        150
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        3400,
+        -1500
+      ],
+      "b": [
+        3400,
+        2000
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          1000,
+          -130
+        ],
+        [
+          2600,
+          -130
+        ],
+        [
+          2600,
+          130
+        ],
+        [
+          1000,
+          130
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3200,
+          0
+        ],
+        [
+          3200,
+          1400
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "9_4",
+    "family": "t_l_junction",
+    "intent": "A 3 m corridor ends in a T against a wall 4 m ahead and the route turns right into the cross passage. The corridor wall end the squad passes beside should trigger the slicing look, which competes with the arrival-at-wall layout and the column fold, so the look is skipped or a man ends up facing the ",
+    "target_checks": [
+      9,
+      1,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 6.4,
+      "what": "P-L 53 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 6.4,
+      "what": "P-L 53 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 4.8,
+      "what": "P-L 34 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

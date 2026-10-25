@@ -1,0 +1,113 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_6_1",
+  "comment": "Red team 6_1 (wall_ends_at_turn, aimed at #9,#7): The leader turns left round the free end of a perpendicular wall 3 m away; the fold to echelon_right should take the nearest man away from the end, so nobody slices the pie (check 9) and the chain cuts the wall end (check 7). Broke 1 (check, choice, members): #5 slots / spacing. First: #5 column n4 R1 s2 t=8.8s - L-Z 62 cm apart.",
+  "bounds": {
+    "min": [
+      -1200,
+      -2000
+    ],
+    "max": [
+      2400,
+      800
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1000,
+        -1600
+      ],
+      "b": [
+        1000,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_end",
+      "poly": [
+        [
+          700,
+          -500
+        ],
+        [
+          1500,
+          -500
+        ],
+        [
+          1500,
+          300
+        ],
+        [
+          700,
+          300
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          1250,
+          0
+        ],
+        [
+          1250,
+          -1400
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "6_1",
+    "family": "wall_ends_at_turn",
+    "intent": "The leader turns left round the free end of a perpendicular wall 3 m away; the fold to echelon_right should take the nearest man away from the end, so nobody slices the pie (check 9) and the chain cuts the wall end (check 7).",
+    "target_checks": [
+      9,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 8.8,
+      "what": "L-Z 62 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

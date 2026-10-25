@@ -1,0 +1,146 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_3_8",
+  "comment": "Red team 3_8 (stubs_pillars, aimed at #5,#7,#1): Pillars sit exactly on the L and P slot tracks and a 2.5 m stub crosses L's track in open ground, too small to trigger a formation change, so slots land inside them. Broke 3 (check, choice, members): #3 flicker. First: #3 auto n2 R1 s1 t=29s - wedge -> echelon_right, back after 4.1 s.",
+  "bounds": {
+    "min": [
+      -1500,
+      -1500
+    ],
+    "max": [
+      6000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "P1",
+      "a": [
+        1480,
+        -260
+      ],
+      "b": [
+        1520,
+        -260
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "ST1",
+      "a": [
+        2500,
+        -400
+      ],
+      "b": [
+        2500,
+        -150
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "P2",
+      "a": [
+        3480,
+        260
+      ],
+      "b": [
+        3520,
+        260
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "P3",
+      "a": [
+        4480,
+        -130
+      ],
+      "b": [
+        4520,
+        -130
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          5500,
+          0
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "3_8",
+    "family": "stubs_pillars",
+    "intent": "Pillars sit exactly on the L and P slot tracks and a 2.5 m stub crosses L's track in open ground, too small to trigger a formation change, so slots land inside them.",
+    "target_checks": [
+      5,
+      7,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": 29,
+      "what": "wedge -> echelon_right, back after 4.1 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 29,
+      "what": "wedge -> echelon_right, back after 4.1 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 29,
+      "what": "diamond -> echelon_right, back after 4.1 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

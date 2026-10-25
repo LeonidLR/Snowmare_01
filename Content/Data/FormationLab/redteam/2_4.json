@@ -1,0 +1,262 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_2_4",
+  "comment": "Red team 2_4 (stubs_pillars, aimed at #5,#7,#1): Small pillars placed exactly in the P and L slot lanes (y = +-260), alternating with short stubs pointing at the route: if the terrain probe ignores tiny walls, diamond slots should sit inside pillars, pillars should block leader-to-slot lines, and the scanning P/L should stare into a pillar under 2. Broke 12 (check, choice, members): #1 wall stare, #5 slots / spacing, #6 rear man pace, #7 squad split by a wall. First: #1 auto n3 R1 s2 t=19.7s - L at S6.",
+  "bounds": {
+    "min": [
+      -1000,
+      -1500
+    ],
+    "max": [
+      5000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "S1",
+      "a": [
+        1000,
+        260
+      ],
+      "b": [
+        1030,
+        260
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "S2",
+      "a": [
+        1800,
+        -260
+      ],
+      "b": [
+        1830,
+        -260
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "S3",
+      "a": [
+        2600,
+        260
+      ],
+      "b": [
+        2630,
+        260
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "S4",
+      "a": [
+        3400,
+        -260
+      ],
+      "b": [
+        3430,
+        -260
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "S5",
+      "a": [
+        2200,
+        140
+      ],
+      "b": [
+        2200,
+        290
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "S6",
+      "a": [
+        3000,
+        -290
+      ],
+      "b": [
+        3000,
+        -140
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4400,
+          0
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "2_4",
+    "family": "stubs_pillars",
+    "intent": "Small pillars placed exactly in the P and L slot lanes (y = +-260), alternating with short stubs pointing at the route: if the terrain probe ignores tiny walls, diamond slots should sit inside pillars, pillars should block leader-to-slot lines, and the scanning P/L should stare into a pillar under 2",
+    "target_checks": [
+      5,
+      7,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 19.7,
+      "what": "L at S6",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 19.7,
+      "what": "L at S6",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 18.7,
+      "what": "L at S6",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 18.7,
+      "what": "L at S6",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 19.7,
+      "what": "L at S6",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 19.7,
+      "what": "L at S6",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 13.6,
+      "what": "L-Z 14 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 18.8,
+      "what": "L-Z 79 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 13.5,
+      "what": "L-Z 42 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 9.7,
+      "what": "p95 187 cm; Z 203 cm behind",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 21.8,
+      "what": "column (asked echelon_left): wall cuts L-Z",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 21.8,
+      "what": "column (asked echelon_left): wall cuts L-Z",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

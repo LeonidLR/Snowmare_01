@@ -1,0 +1,239 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_6_4",
+  "comment": "Red team 6_4 (u_turn, aimed at #3,#7,#5): A U-turn round a divider end inside a closed 8 m turnaround should make the column briefly unfold to the wall layout or a wedge and fold back within 10 m (check 3), with the chain cutting the divider end (check 7). Broke 6 (check, choice, members): #1 wall stare, #5 slots / spacing, #7 squad split by a wall. First: #1 blizzard n3 R1 s2 t=1.6s - L at W2.",
+  "bounds": {
+    "min": [
+      -1000,
+      -800
+    ],
+    "max": [
+      4200,
+      800
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        600,
+        0
+      ],
+      "b": [
+        3000,
+        0
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        0,
+        -320
+      ],
+      "b": [
+        3800,
+        -320
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        0,
+        320
+      ],
+      "b": [
+        3800,
+        320
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        3800,
+        -320
+      ],
+      "b": [
+        3800,
+        320
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          900,
+          -300
+        ],
+        [
+          2700,
+          -300
+        ],
+        [
+          2700,
+          -20
+        ],
+        [
+          900,
+          -20
+        ]
+      ]
+    },
+    {
+      "id": "Z2",
+      "kind": "corridor",
+      "poly": [
+        [
+          900,
+          20
+        ],
+        [
+          2700,
+          20
+        ],
+        [
+          2700,
+          300
+        ],
+        [
+          900,
+          300
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          -160
+        ],
+        [
+          3400,
+          -160
+        ],
+        [
+          3400,
+          160
+        ],
+        [
+          400,
+          160
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        },
+        {
+          "zone": "Z2",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      -160
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "6_4",
+    "family": "u_turn",
+    "intent": "A U-turn round a divider end inside a closed 8 m turnaround should make the column briefly unfold to the wall layout or a wedge and fold back within 10 m (check 3), with the chain cutting the divider end (check 7).",
+    "target_checks": [
+      3,
+      7,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 1.6,
+      "what": "L at W2",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 1.6,
+      "what": "L at W2",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 5.1,
+      "what": "P-L 60 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 5.1,
+      "what": "P-L 60 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 10.4,
+      "what": "P-L 69 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 1.4,
+      "what": "hedgehog: wall cuts L, L-K",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_8_4",
+  "comment": "Red team 8_4 (threat_behind_thin_wall, aimed at #1,#8,#7): R1 hugs a thin wall 1.4 m away with a known threat just behind it, so threat-watching should turn men into the wall (#1, incl. n2). On R2 the threat makes the 25 % longer left side the hidden one, which the bypass choice should get wrong (#8). Broke 1 (check, choice, members): #1 wall stare. First: #1 hedgehog n4 R2 s1 t=15.6s - P at W2.",
+  "bounds": {
+    "min": [
+      0,
+      -3500
+    ],
+    "max": [
+      8000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        2000,
+        140
+      ],
+      "b": [
+        5000,
+        140
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W2",
+      "a": [
+        3500,
+        -2400
+      ],
+      "b": [
+        3500,
+        -1700
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          1000,
+          0
+        ],
+        [
+          6000,
+          0
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            3500,
+            700
+          ],
+          "since_s": 0
+        }
+      ]
+    },
+    {
+      "id": "R2",
+      "pace": "walk",
+      "points": [
+        [
+          1000,
+          -2000
+        ],
+        [
+          6000,
+          -2000
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            4500,
+            -800
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W2",
+          "wall_on": "right"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      1000,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "8_4",
+    "family": "threat_behind_thin_wall",
+    "intent": "R1 hugs a thin wall 1.4 m away with a known threat just behind it, so threat-watching should turn men into the wall (#1, incl. n2). On R2 the threat makes the 25 % longer left side the hidden one, which the bypass choice should get wrong (#8).",
+    "target_checks": [
+      1,
+      8,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R2",
+      "seed": 1,
+      "t": 15.6,
+      "what": "P at W2",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

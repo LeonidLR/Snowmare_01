@@ -1,0 +1,162 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_8_6",
+  "comment": "Red team 8_6 (wall_ends_at_turn, aimed at #9,#7,#1): The route turns left exactly round the end of the flanking wall, and right after passes a second wall end on the right. The folded column's nearest man to each end is the leader himself, so nobody looks round either end (#9), especially on the run route. Broke 5 (check, choice, members): #1 wall stare, #5 slots / spacing, #6 rear man pace. First: #1 auto n3 R1 s2 t=20.5s - P at W2.",
+  "bounds": {
+    "min": [
+      0,
+      -3000
+    ],
+    "max": [
+      7000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1600,
+        -200
+      ],
+      "b": [
+        3500,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        3900,
+        -600
+      ],
+      "b": [
+        5500,
+        -600
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          1000,
+          0
+        ],
+        [
+          3700,
+          0
+        ],
+        [
+          3700,
+          -1800
+        ]
+      ]
+    },
+    {
+      "id": "R2",
+      "pace": "run",
+      "points": [
+        [
+          1000,
+          0
+        ],
+        [
+          3700,
+          0
+        ],
+        [
+          3700,
+          -1800
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      1000,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "8_6",
+    "family": "wall_ends_at_turn",
+    "intent": "The route turns left exactly round the end of the flanking wall, and right after passes a second wall end on the right. The folded column's nearest man to each end is the leader himself, so nobody looks round either end (#9), especially on the run route.",
+    "target_checks": [
+      9,
+      7,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.5,
+      "what": "P at W2",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R2",
+      "seed": 2,
+      "t": 6.2,
+      "what": "P-Z 71 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 16.9,
+      "what": "L-Z 60 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R2",
+      "seed": 2,
+      "t": 6.3,
+      "what": "P-Z 79 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 15.8,
+      "what": "p95 152 cm; Z 223 cm behind",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

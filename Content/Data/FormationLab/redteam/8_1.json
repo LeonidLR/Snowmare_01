@@ -1,0 +1,283 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_8_1",
+  "comment": "Red team 8_1 (long_wall_periodic_gaps, aimed at #9,#3,#1): Gapped walls on both flanks with staggered ends create a free wall end beside the route every 3 m. The slicing windows (3 m before to 2 m after) overlap, so one nearest man cannot look round every end; the run route, where all face 12, should leave ends unsliced (#9) and make the echelon/column choi. Broke 1 (check, choice, members): #1 wall stare. First: #1 line n3 R1 s2 t=20.7s - L at L6.",
+  "bounds": {
+    "min": [
+      0,
+      -1500
+    ],
+    "max": [
+      8000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "L1",
+      "a": [
+        1600,
+        -300
+      ],
+      "b": [
+        2000,
+        -300
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L2",
+      "a": [
+        2200,
+        -300
+      ],
+      "b": [
+        2600,
+        -300
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L3",
+      "a": [
+        2800,
+        -300
+      ],
+      "b": [
+        3200,
+        -300
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L4",
+      "a": [
+        3400,
+        -300
+      ],
+      "b": [
+        3800,
+        -300
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L5",
+      "a": [
+        4000,
+        -300
+      ],
+      "b": [
+        4400,
+        -300
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L6",
+      "a": [
+        4600,
+        -300
+      ],
+      "b": [
+        5000,
+        -300
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L7",
+      "a": [
+        5200,
+        -300
+      ],
+      "b": [
+        5600,
+        -300
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "L8",
+      "a": [
+        5800,
+        -300
+      ],
+      "b": [
+        6200,
+        -300
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R1w",
+      "a": [
+        1900,
+        450
+      ],
+      "b": [
+        2300,
+        450
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R2w",
+      "a": [
+        2500,
+        450
+      ],
+      "b": [
+        2900,
+        450
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R3w",
+      "a": [
+        3100,
+        450
+      ],
+      "b": [
+        3500,
+        450
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R4w",
+      "a": [
+        3700,
+        450
+      ],
+      "b": [
+        4100,
+        450
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R5w",
+      "a": [
+        4300,
+        450
+      ],
+      "b": [
+        4700,
+        450
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R6w",
+      "a": [
+        4900,
+        450
+      ],
+      "b": [
+        5300,
+        450
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "R7w",
+      "a": [
+        5500,
+        450
+      ],
+      "b": [
+        5900,
+        450
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          1000,
+          0
+        ],
+        [
+          7000,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "R2",
+      "pace": "run",
+      "points": [
+        [
+          1000,
+          0
+        ],
+        [
+          7000,
+          0
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      1000,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "8_1",
+    "family": "long_wall_periodic_gaps",
+    "intent": "Gapped walls on both flanks with staggered ends create a free wall end beside the route every 3 m. The slicing windows (3 m before to 2 m after) overlap, so one nearest man cannot look round every end; the run route, where all face 12, should leave ends unsliced (#9) and make the echelon/column choi",
+    "target_checks": [
+      9,
+      3,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.7,
+      "what": "L at L6",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

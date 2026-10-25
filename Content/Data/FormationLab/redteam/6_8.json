@@ -1,0 +1,213 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_6_8",
+  "comment": "Red team 6_8 (dead_end_after_turn, aimed at #1,#7,#5): A right turn into a 3 m side passage that dead-ends 9 m later should force manual line and the auto wall layout into a space narrower than the line, so men face the side walls (check 1) and slots fall behind the passage walls (check 7). Broke 8 (check, choice, members): #1 wall stare, #5 slots / spacing, #6 rear man pace. First: #1 blizzard n3 R1 s1 t=13.3s - P at W1.",
+  "bounds": {
+    "min": [
+      -1000,
+      -1200
+    ],
+    "max": [
+      3400,
+      1400
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        200
+      ],
+      "b": [
+        1500,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        1800,
+        200
+      ],
+      "b": [
+        3000,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        1500,
+        200
+      ],
+      "b": [
+        1500,
+        1000
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        1800,
+        200
+      ],
+      "b": [
+        1800,
+        1000
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W5",
+      "a": [
+        1500,
+        1000
+      ],
+      "b": [
+        1800,
+        1000
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          -100
+        ],
+        [
+          1650,
+          -100
+        ],
+        [
+          1650,
+          800
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "zones": [],
+  "spawn": {
+    "pos": [
+      0,
+      -100
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "6_8",
+    "family": "dead_end_after_turn",
+    "intent": "A right turn into a 3 m side passage that dead-ends 9 m later should force manual line and the auto wall layout into a space narrower than the line, so men face the side walls (check 1) and slots fall behind the passage walls (check 7).",
+    "target_checks": [
+      1,
+      7,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 13.3,
+      "what": "P at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 13.3,
+      "what": "P at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 12.9,
+      "what": "P-L 55 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 12.9,
+      "what": "P-L 55 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 10.5,
+      "what": "P-L 77 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 10.5,
+      "what": "P-L 77 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 13.3,
+      "what": "P-L 27 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.8,
+      "what": "p95 212 cm; Z 239 cm behind",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

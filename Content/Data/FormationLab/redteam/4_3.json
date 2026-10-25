@@ -1,0 +1,244 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_4_3",
+  "comment": "Red team 4_3 (t_l_junction, aimed at #7,#5): A 3.6 m corridor ends in a dead-end stub 13 m ahead, but the route turns 90 deg right into a 2.6 m side passage. The rear column men cut the inside corner, so the corner sits between chain neighbours, and the dead-end wall-layout logic may pull slots into the stub. Broke 7 (check, choice, members): #1 wall stare, #5 slots / spacing, #7 squad split by a wall. First: #1 blizzard n3 R1 s1 t=25.6s - P at W4.",
+  "bounds": {
+    "min": [
+      -2500,
+      -1500
+    ],
+    "max": [
+      5500,
+      3500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        -200
+      ],
+      "b": [
+        4500,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2a",
+      "a": [
+        0,
+        200
+      ],
+      "b": [
+        3000,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2b",
+      "a": [
+        3300,
+        200
+      ],
+      "b": [
+        4500,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        4500,
+        -200
+      ],
+      "b": [
+        4500,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        3000,
+        200
+      ],
+      "b": [
+        3000,
+        2500
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W5",
+      "a": [
+        3300,
+        200
+      ],
+      "b": [
+        3300,
+        2500
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          600,
+          -180
+        ],
+        [
+          2300,
+          -180
+        ],
+        [
+          2300,
+          180
+        ],
+        [
+          600,
+          180
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -800,
+          0
+        ],
+        [
+          3150,
+          0
+        ],
+        [
+          3150,
+          2800
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -800,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "4_3",
+    "family": "t_l_junction",
+    "intent": "A 3.6 m corridor ends in a dead-end stub 13 m ahead, but the route turns 90 deg right into a 2.6 m side passage. The rear column men cut the inside corner, so the corner sits between chain neighbours, and the dead-end wall-layout logic may pull slots into the stub.",
+    "target_checks": [
+      7,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.6,
+      "what": "P at W4",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.5,
+      "what": "Z at W2a",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 25.3,
+      "what": "P-L 54 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 23.5,
+      "what": "K-P 59 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 27.1,
+      "what": "P-L 26 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 24.2,
+      "what": "blizzard: wall cuts Z",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 7.1,
+      "what": "column (asked echelon_left): wall cuts L-Z",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

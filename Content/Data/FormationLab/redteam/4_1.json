@@ -1,0 +1,128 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_4_1",
+  "comment": "Red team 4_1 (hug_then_leave, aimed at #7,#5,#1): The route hugs a long free wall 1.3 m to its left, then veers 33 deg right while the wall still runs on behind. The left-back diamond/wedge slot swings behind the wall before the fold or mirror logic reacts, so a wall ends up between the leader and L, or L's slot lands in the wall. Broke 2 (check, choice, members): #1 wall stare. First: #1 blizzard n3 R1 s1 t=6.6s - L at W1.",
+  "bounds": {
+    "min": [
+      -2500,
+      -1500
+    ],
+    "max": [
+      6500,
+      3000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        -150
+      ],
+      "b": [
+        3000,
+        -150
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_run",
+      "poly": [
+        [
+          0,
+          -130
+        ],
+        [
+          1700,
+          -130
+        ],
+        [
+          1700,
+          400
+        ],
+        [
+          0,
+          400
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -800,
+          0
+        ],
+        [
+          1800,
+          0
+        ],
+        [
+          3800,
+          1300
+        ],
+        [
+          5500,
+          1300
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -800,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "4_1",
+    "family": "hug_then_leave",
+    "intent": "The route hugs a long free wall 1.3 m to its left, then veers 33 deg right while the wall still runs on behind. The left-back diamond/wedge slot swings behind the wall before the fold or mirror logic reacts, so a wall ends up between the leader and L, or L's slot lands in the wall.",
+    "target_checks": [
+      7,
+      5,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 6.6,
+      "what": "L at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 6.6,
+      "what": "L at W1",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

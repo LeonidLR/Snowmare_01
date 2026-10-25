@@ -1,0 +1,176 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_8_5",
+  "comment": "Red team 8_5 (t_l_junction, aimed at #7,#5,#1): From a 4 m corridor the leader turns sharply right into a 2.5 m side passage. The pair partner kept behind the right shoulder cuts the inside corner, so the corner wall stands between leader and partner (#7 n2) or the slot lies in the wall (#5). Broke 1 (check, choice, members): #2 rear cover (4 men). First: #2 auto n4 R1 s1 - 5-7 o'clock watched 89.8 %.",
+  "bounds": {
+    "min": [
+      0,
+      -1500
+    ],
+    "max": [
+      5000,
+      2500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1600,
+        -200
+      ],
+      "b": [
+        4000,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        1600,
+        200
+      ],
+      "b": [
+        3000,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        3250,
+        200
+      ],
+      "b": [
+        4000,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        3000,
+        200
+      ],
+      "b": [
+        3000,
+        1500
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W5",
+      "a": [
+        3250,
+        200
+      ],
+      "b": [
+        3250,
+        1500
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          1900,
+          -200
+        ],
+        [
+          2700,
+          -200
+        ],
+        [
+          2700,
+          200
+        ],
+        [
+          1900,
+          200
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          1000,
+          0
+        ],
+        [
+          3125,
+          0
+        ],
+        [
+          3125,
+          1300
+        ],
+        [
+          3125,
+          2000
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      1000,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "8_5",
+    "family": "t_l_junction",
+    "intent": "From a 4 m corridor the leader turns sharply right into a 2.5 m side passage. The pair partner kept behind the right shoulder cuts the inside corner, so the corner wall stands between leader and partner (#7 n2) or the slot lies in the wall (#5).",
+    "target_checks": [
+      7,
+      5,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 2,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "5-7 o'clock watched 89.8 %",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}
