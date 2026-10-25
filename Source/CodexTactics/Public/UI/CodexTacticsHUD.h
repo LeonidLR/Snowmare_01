@@ -24,6 +24,7 @@ class AOperativeCharacter;
 enum class ESquadFirePosture : uint8;
 class UPhaseBannersWidget;
 class UTurnBasedHudWidget;
+class UHordeArrowsWidget;
 class UTutorialOverlayWidget;
 class ALootCrateActor;
 class UFont;
@@ -100,6 +101,12 @@ public:
 	TSubclassOf<UTutorialOverlayWidget> TutorialOverlayWidgetClass;
 
 	UTutorialOverlayWidget* GetTutorialOverlay() const { return TutorialOverlay; }
+
+	/** Red edge arrows towards the wave's approach directions (game designer 2026-10-25; a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UHordeArrowsWidget> HordeArrowsWidgetClass;
+
+	UHordeArrowsWidget* GetHordeArrows() const { return HordeArrows; }
 
 	/**
 	 * Demo HUD preset (Demo 01 C10, level JSON "demo": {"hud": "demo"}, set by UDemoModeSubsystem): the debug squad panel
@@ -259,6 +266,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTutorialOverlayWidget> TutorialOverlay;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UHordeArrowsWidget> HordeArrows;
 
 	void DrawMessageFeed();
 	/**
