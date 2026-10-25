@@ -59,7 +59,7 @@ namespace FormationGuardRules
 {
 	/**
 	 * Neighbours in a formation's chain (the leader's own segments to every slot come on top): echelon right K-L-P-Z, echelon left /
-	 * column K-P-L-Z, line L-K-P-Z, diamond / wedge / blizzard P-Z + L-Z (4 members only), hedgehog the ring K-P-Z-L-K. Roles the member
+	 * column K-P-L-Z, line L-K-P-Z (three: Z-K-P), diamond / wedge / blizzard P-Z (+ L-Z with 4), hedgehog the ring K-P-Z-L-K. Roles the member
 	 * count lacks are skipped (the chain closes over them). None for 2 members or the wall.
 	 */
 	CODEXTACTICS_API TArray<TPair<EFormationRole, EFormationRole>> ChainPairs(EFormationKind Formation, int32 MemberCount);

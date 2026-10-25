@@ -119,6 +119,9 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_Bypass.json` / `Parity.Bypass` (10.2) | `wall`, `leaderPos`, `destination`, `threats: [{ pos, ageS }]` | `wallOn`, `shortest`, `reason` exactly, `detour` within 1e-3, `path` (same count, points within cm) |
 | `formation_Corner.json` / `Parity.Corner` (10.3) | `walls[]`, `leaderPos`, `leaderYaw`, `members: [{ role, pos }]`, `state: { left, right: { wall, end, role } or null }` | `state` exactly, `looks: [{ role, yaw }]` (same order: left first) |
 | `formation_Assign.json` / `Parity.Assign` (10.6) | `members`, `places` (`[[x, y]]`) | `places` (index per member) exactly |
+| `formation_Cover.json` / `Parity.Cover` (11.2) | `walls[]`, `leaderPos`, `heading`, `members: [{ role, pos, back }]` (K first), `mode` (walk / halt), `t`, `fixed: [{ role, yaw }]` | `rearGuard`; `looks: [{ role, yaw }]` (same order: K, the rear guard, other fixed, the others); `shares: [{ role, from, to, primary }]` (from / to within deg, primary as an angle) |
+| `formation_CoverStatic.json` / `Parity.CoverStatic` (11.3) | `walls[]`, `members: [{ role, pos }]`, `fixed: [{ role, yaw }]`, `free` (roles) | `looks: [{ role, yaw }]` in `free`'s order |
+| `formation_Slide.json` / `Parity.Slide` (11.5) | `wall`, `startSlots: [{ role, pos, yaw }]` (K first), `leaderPos`, `destination`, `t` | `active`, `lead` / `rearGuard` (role or null), `order` exactly; `leaderTarget` within cm, `normalYaw` as an angle, `targets: [{ role, pos, yaw }]` |
 
 C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
 config)`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`,
@@ -137,7 +140,10 @@ yaw, currentYaw, config)`, `FormationBypassRules::ChooseSide(wall, leaderPos, de
 `FormationCornerRules::Watch(walls, leaderPos, leaderYaw, members, FFormationCornerState state, config) / CornerAhead`,
 `FormationAssignRules::AssignPlaces(members, places)`; geometry `FormationMath::SegmentBlocked / SegSegDist / DistToWall /
 ClosestOnSegment / NormYaw / DirOf / YawOfD` (double, = geometry.ts). Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2
-(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515 - each 0 mismatched.
+(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515, v2.2 (1f8bc25) 12079 - each 0 mismatched. v2.2
+adds `FormationCoverRules::Allocate(walls, leaderPos, heading, members, mode, t, config, fixed) -> TOptional<FFormationCoverResult>` /
+`AllocateStatic(walls, members, fixed, free, config)` and `FormationWallRules::Slide(wall, startSlots, leaderPos, destination, t, config)
+-> FFormationSlideResult`.
 
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):
@@ -335,7 +341,38 @@ travel (he must see his way; followers follow him). The slots stay as chosen. Bo
 Keys: `turn.fold_deg` 25 (10-90 deg), `turn.lookahead` 800 (100-1000 cm), `look.wall_dist` 260 (100-400 cm), `look.wall_angle`
 55 (30-90 deg). Golden: `formation_TurnAhead.json`, `formation_ClearLook.json`; `formation_Guard.json` gains `turnAhead`.
 
-## 11. v2.2 - the triad K, P, Z, the rear guard, the coverage allocator (user decisions 2026-10-25)
+
+## 11. Red team - the model designs layouts to break the rules (user decision 2026-10-25; TS `redteam.ts`, `cli/redteam.ts`)
+The bot only finds what the hand-made lab exercises; the user found the rest by hand (a wall cutting the squad in two, the triad's
+open rear, a gap at a wall corner after a cover switch, the formation breaking along a wall). `npm run redteam -- --budget-usd <N>
+--rounds <N> [--per-round 4] [--patience 3] [--client claude|mock] [--dry-run] [--members 2,3,4] [--seeds 2] [--effort medium]`:
+1. Each round the model (`MODELS.redteam` = claude-opus-5-5, the tuner's budget-capped client, effort medium by default) gets a
+   compact brief (the rules' intent from FORMATION_SECTORS.md, checks 1-9, the layout schema + limits: span <= 100 m, <= 40 walls,
+   1-4 routes of <= 12 points), the attack families with tried / broke counts (oblique walls, stubs and pillars, gaps vs. the
+   formation width, zigzag corridors, T / L junctions, dead end after a turn, a wall ending at a turn, a threat behind a thin wall,
+   U-turns, long walls with periodic gaps, hugging a wall then leaving it), the distinct failures already found and the previous
+   round distilled (never raw runs), and answers `{"layouts": [{family, target_checks, intent, layout}]}` (strict JSON).
+2. Validation (`validateCandidate`, 0 tokens): schema + `auditLayout` errors, the size limits, no wall in / between the squad's
+   start diamond round each route's first point (a start artifact, not a rule bug), the leader reaching the end in the sim. Invalid
+   layouts get ONE retry with their errors fed back (a reply that is not JSON too); still invalid -> discarded and counted.
+3. The bot walks every valid layout with auto + the 8 menu items x members x seeds (`--manual all`); gating as the matrix: auto by
+   every check, a manual item by 1 / 5 / 7. Score = the distinct (check, choice, members) failures; each keeps a minimal
+   reproduction (route, seed, the earliest time).
+4. Every layout with >= 1 failure is kept in `Content/Data/FormationLab/redteam/<round>_<n>.json` (numbering continues after the
+   files there; nothing is overwritten; the mock writes to Saved/.../redteam_mock instead) with `comment` (the attack and the first
+   failure), `redteam` (family, intent, client, config hash, members, seeds, seed) and `expected_fail` [{check, choice, members, route,
+   seed, t, what, reason}]. These are regression layouts: `npm run bot:movement -- --layouts redteam` re-walks them and reports
+   known / fixed (clear the entry) / NEW (`redteam_regression.md`; `--strict` exits 1 only on new failures); `npm test` checks
+   they are valid and reports each expected_fail's reproduction, never failing on a known failure.
+   After a rules change: `npm run bot:movement -- --layouts redteam --refresh <tag>` rewrites expected_fail against the current
+   rules (still failing: new reason; now passing: moved to `fixed_entries` with `fixed_in`; appeared with these rules: `since: <tag>`;
+   nothing left failing: the layout stays as a guard with `"fixed_in": "<tag>"`). Refreshed for v2.2 on 2026-10-25.
+5. `Saved/TrainingGround/movement/redteam_report.md` (<= 30 lines: rounds, spend, layouts tried / valid / failing, the distinct
+   failures per check with one example, "rule bug?" = checks 1 2 5 6 7 (geometry promises) vs. "design question" = 3 4 8 9
+   (expectations / thresholds)); `redteam_calls.jsonl` per call (round, attempt, model, tokens, cost, error - never prompts or the
+   key). Budget cap as the tuner (stop before a call whose cost would exceed `--budget-usd`); patience: stop after N rounds in a row
+   with no new distinct failure. The red team never changes the rules: its failures go to the coordinator.
+## 12. v2.2 - the triad K, P, Z, the rear guard, the coverage allocator (user decisions 2026-10-25)
 ### 11.1 The triad
 `rolesFor(3) = K, P, Z`. Slots: wedge / diamond with 3 = K 0, P (-slot.back_offset, +slot.side_offset), Z (-`triad.rear_back`
 420, 0); blizzard with 3 = P (-back, +side), Z (-2 back, 0); column with 3 = P (-base, +stagger), Z (-base - spacing, 0); line
@@ -343,7 +380,6 @@ with 3 = P (0, +spacing), Z (0, -spacing); echelons with 3 = K, P, Z both ways (
 hedgehog with 3 = the triangle (P +120, Z -120). Wall layout with 3 = K, P at the right end (4 o'clock), Z at the LEFT end
 looking 8 (the user's wall rule is by position). ChainPairs with 3: wedge / diamond / blizzard P-Z, line Z-K-P, column / echelon
 K-P-Z, hedgehog the ring. Menu Resolve unchanged (diamond -> wedge with 3).
-
 ### 11.2 `FormationCoverRules::Allocate(walls, leaderPos, heading, members [{role, pos, back}], mode walk|halt, t, fixed [{role, yaw}]) -> { rearGuard, looks, shares } | null`
 For 3+ members walking / halted (the sim / runtime: not running, not "all forward", not the wall layout, not the hedgehog;
 the pair keeps LookYaw). `members` = the PLACES (slot positions, K first), `back` = how far back along the leader's path (sim:
@@ -363,14 +399,12 @@ the pair keeps LookYaw). `members` = the PLACES (slot positions, K first), `back
    period, opposite sign). Halt: the centre of each one's first gap.
 A fixed look (the corner watcher, a combat target, an explicit facing order) keeps its yaw; its whole cone counts as covered and
 the duty it leaves (K's front, the rear) goes to the others.
-
 ### 11.3 `FormationCoverRules::AllocateStatic(walls, members [{role, pos}], fixed [{role, yaw}], free [roles]) -> [{role, yaw}]`
 A standing group with looks decided elsewhere (the playtest: the leader holds a new corner in group cover). Absolute yaws,
 whole degrees; open as in 11.2 (any member's position). With 3+ members and at least one fixed look, one free member covers the
 REAR = opposite the fixed looks' mean (the free member whose bearing from the group centre is nearest it; the nearest open
 degree if blocked); the others greedily: the widest open gap no cone covers, to the member with the nearest bearing, looking
 at its middle; with no gap left, outward along his bearing (nearest open). Each assigned cone counts as covered for the next.
-
 ### 11.4 Checks, config, golden
 Check 2 for every formation of 3+ (manual too); check 10: the largest arc no member's cone (+-fov / 2) covers and no wall within
 look.wall_dist of a member blocks (+-45 deg round its closest point), sampled every 2 deg, <= `coverage.max_gap_deg` for >= 90 %
@@ -378,7 +412,6 @@ of patrol (3+ members). Manual formations are gated by 1, 2, 5, 7, 10. Keys: `tr
 30 (10-60), `rear.wall_shift_deg` 30 (0-60), `coverage.max_sweep` 90 (30-150), `coverage.max_gap_deg` 60 (20-120). LookYaw
 stays the rule for the pair, run, "all forward", the wall mode and the hedgehog. Golden: `formation_Cover.json` (512 cases),
 `formation_CoverStatic.json`. Sim: `MemberFrame.rearGuard`.
-
 ### 11.5 `FormationWallRules::Slide(wall, startSlots [{role, pos, yaw}], leaderPos, destination, t) -> SlideResult` (user: "Все отлично")
 The squad stands in the wall layout (`startSlots` = Layout's slots, K first) and the leader's next destination lies at the SAME
 wall: surface distance <= `slide.max_off_wall` (200, 100-300 cm), on the squad's side, its foot inside the wall, at least
@@ -396,10 +429,8 @@ on the slide (the leading end at the wall's end); at the stop the normal wall la
 him through the line. Bot check 11: the order along the wall kept (20 cm tolerance, >= 0.3 s counts) and the open half (normal +-90)
 >= 90 % covered by the cones for >= 90 % of the slide time. Lab route `R_A_slide` (lane A's dead end, 6 m one way, 12 m back);
 map builder TargetPoints `<route id>_slide_<n>` (tag FormationLabSlide). Golden `formation_Slide.json`.
-
 ### 11.6 Simulator notes (v2.2)
 - Places are also reassigned on the way (not only on a formation change) when the minimal assignment is REASSIGN_GAIN (100 cm)
   cheaper than the places held (a tight formation pivoting 90 deg sent a flank man across the squad); never during a slide.
 - A light separation stands in for the engine's crowd avoidance: two members closer than slot.min_spacing + 10 cm drift apart at
   up to 60 cm/s (the leader is never pushed). The runtime's RVO / detour crowd does this in the game.
-

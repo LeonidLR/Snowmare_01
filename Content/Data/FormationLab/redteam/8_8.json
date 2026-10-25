@@ -1,0 +1,193 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_8_8",
+  "comment": "Red team 8_8 (u_turn, aimed at #6,#2,#5): A U-turn inside an open-ended 3.6 m corridor reverses the column. Minimal-walk reassignment makes the new rear man walk the whole column length past the others, giving a long rear lag (#6), unwatched 5-7 o'clock while Z re-forms (#2) and men squeezing past each other (#5). Broke 8 (check, choice, members): #5 slots / spacing, #7 squad split by a wall. First: #5 auto n4 R1 s2 t=25.5s - L-Z 78 cm apart.",
+  "bounds": {
+    "min": [
+      0,
+      -1500
+    ],
+    "max": [
+      7000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1800,
+        -180
+      ],
+      "b": [
+        5600,
+        -180
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "W2",
+      "a": [
+        1800,
+        180
+      ],
+      "b": [
+        5600,
+        180
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          2300,
+          -180
+        ],
+        [
+          4700,
+          -180
+        ],
+        [
+          4700,
+          180
+        ],
+        [
+          2300,
+          180
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          1000,
+          0
+        ],
+        [
+          5000,
+          -60
+        ],
+        [
+          5000,
+          60
+        ],
+        [
+          2400,
+          60
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      1000,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "8_8",
+    "family": "u_turn",
+    "intent": "A U-turn inside an open-ended 3.6 m corridor reverses the column. Minimal-walk reassignment makes the new rear man walk the whole column length past the others, giving a long rear lag (#6), unwatched 5-7 o'clock while Z re-forms (#2) and men squeezing past each other (#5).",
+    "target_checks": [
+      6,
+      2,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ],
+  "fixed_in": "v2.2"
+}

@@ -1,0 +1,223 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_1_5",
+  "comment": "Red team 1_5 (t_l_junction, aimed at #7,#1,#3,#4): A 4 m corridor ends in a T and the route turns right into a 5.6 m arm. At the junction the open crossing should flicker the column, the inner corner should cut chain neighbours, and the forward man may stare into the back wall 2-4 m ahead. Broke 4 (check, choice, members): #5 slots / spacing. First: #5 echelon_right n4 R1 s2 t=20.8s - L-Z 78 cm apart.",
+  "bounds": {
+    "min": [
+      -1000,
+      -2700
+    ],
+    "max": [
+      4000,
+      3000
+    ]
+  },
+  "walls": [
+    {
+      "id": "ML",
+      "a": [
+        600,
+        -220
+      ],
+      "b": [
+        3000,
+        -220
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "MLC",
+      "a": [
+        3000,
+        -220
+      ],
+      "b": [
+        3000,
+        -2500
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "MR",
+      "a": [
+        600,
+        220
+      ],
+      "b": [
+        3000,
+        220
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "MRC",
+      "a": [
+        3000,
+        220
+      ],
+      "b": [
+        3000,
+        2900
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "BK",
+      "a": [
+        3600,
+        -2500
+      ],
+      "b": [
+        3600,
+        2900
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          1000,
+          -200
+        ],
+        [
+          2700,
+          -200
+        ],
+        [
+          2700,
+          200
+        ],
+        [
+          1000,
+          200
+        ]
+      ]
+    },
+    {
+      "id": "Z2",
+      "kind": "corridor",
+      "poly": [
+        [
+          3020,
+          700
+        ],
+        [
+          3580,
+          700
+        ],
+        [
+          3580,
+          2300
+        ],
+        [
+          3020,
+          2300
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3200,
+          0
+        ],
+        [
+          3200,
+          2500
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        },
+        {
+          "zone": "Z2",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "1_5",
+    "family": "t_l_junction",
+    "intent": "A 4 m corridor ends in a T and the route turns right into a 5.6 m arm. At the junction the open crossing should flicker the column, the inner corner should cut chain neighbours, and the forward man may stare into the back wall 2-4 m ahead.",
+    "target_checks": [
+      7,
+      1,
+      3,
+      4
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ],
+  "fixed_in": "v2.2"
+}

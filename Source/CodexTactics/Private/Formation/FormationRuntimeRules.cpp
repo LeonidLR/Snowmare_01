@@ -26,11 +26,17 @@ namespace FormationRuntime
 		{
 			return SlotIndex == 0 ? TOptional<EFormationRole>(EFormationRole::Rear) : TOptional<EFormationRole>();
 		}
+		// Rules v2.2 (user decision 2026-10-25): three = K, P, Z - the third man is the rear guard, there is no L.
+		if (MemberCount == 3)
+		{
+			return SlotIndex == 0 ? TOptional<EFormationRole>(EFormationRole::Rear)
+				: (SlotIndex == 1 ? TOptional<EFormationRole>(EFormationRole::Right) : TOptional<EFormationRole>());
+		}
 		switch (SlotIndex)
 		{
 		case 0: return EFormationRole::Left;
 		case 1: return EFormationRole::Right;
-		case 2: return MemberCount >= 4 ? TOptional<EFormationRole>(EFormationRole::Rear) : TOptional<EFormationRole>();
+		case 2: return EFormationRole::Rear;
 		default: return TOptional<EFormationRole>();
 		}
 	}

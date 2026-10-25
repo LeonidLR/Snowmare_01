@@ -1,0 +1,205 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_1_7",
+  "comment": "Red team 1_7 (u_turn, aimed at #7,#1,#9,#3,#4): The squad runs echelon_left along a wall, then U-turns tightly round its free end. Trailing men cut the end and get occluded, men face the wall end at close range, and the echelon-column-echelon refold may flicker or never settle on the return leg. Broke 3 (check, choice, members): #3 flicker. First: #3 auto n2 R1 s1 t=24.3s - echelon_left -> wedge, back after 3.3 s.",
+  "bounds": {
+    "min": [
+      -1500,
+      -1500
+    ],
+    "max": [
+      4500,
+      2500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        300,
+        350
+      ],
+      "b": [
+        3000,
+        350
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_run",
+      "poly": [
+        [
+          800,
+          -400
+        ],
+        [
+          2400,
+          -400
+        ],
+        [
+          2400,
+          200
+        ],
+        [
+          800,
+          200
+        ]
+      ]
+    },
+    {
+      "id": "Z2",
+      "kind": "wall_run",
+      "poly": [
+        [
+          800,
+          550
+        ],
+        [
+          2400,
+          550
+        ],
+        [
+          2400,
+          950
+        ],
+        [
+          800,
+          950
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3400,
+          0
+        ],
+        [
+          3400,
+          750
+        ],
+        [
+          200,
+          750
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "echelon_left"
+        },
+        {
+          "zone": "Z2",
+          "formation": "echelon_left"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "1_7",
+    "family": "u_turn",
+    "intent": "The squad runs echelon_left along a wall, then U-turns tightly round its free end. Trailing men cut the end and get occluded, men face the wall end at close range, and the echelon-column-echelon refold may flicker or never settle on the return leg.",
+    "target_checks": [
+      7,
+      1,
+      9,
+      3,
+      4
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": 24.3,
+      "what": "echelon_left -> wedge, back after 3.3 s",
+      "reason": "still failing under v2.2 (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 24.3,
+      "what": "echelon_left -> wedge, back after 3.3 s",
+      "reason": "still failing under v2.2 (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 24.3,
+      "what": "echelon_left -> diamond, back after 3.3 s",
+      "reason": "still failing under v2.2 (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 25.5,
+      "what": "K-Z 30 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 21.1,
+      "what": "K-P 78 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 25.5,
+      "what": "K-Z 9 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ]
+}

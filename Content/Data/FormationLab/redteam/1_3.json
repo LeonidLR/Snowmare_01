@@ -1,0 +1,129 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_1_3",
+  "comment": "Red team 1_3 (gap_vs_width, aimed at #4,#5,#7): A 5.4 m corridor is just wider than the 5.2 m diamond, so the terrain check may keep the diamond instead of the required narrow column. P and L slots would then sit 25 cm from the walls, unwalkable for a 35 cm agent. Broke 1 (check, choice, members): #1 wall stare. First: #1 line n3 R1 s1 t=7.1s - L at W1.",
+  "bounds": {
+    "min": [
+      -1000,
+      -1500
+    ],
+    "max": [
+      5000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1200,
+        -290
+      ],
+      "b": [
+        3200,
+        -290
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        1200,
+        290
+      ],
+      "b": [
+        3200,
+        290
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          1700,
+          -250
+        ],
+        [
+          3000,
+          -250
+        ],
+        [
+          3000,
+          250
+        ],
+        [
+          1700,
+          250
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4500,
+          0
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "1_3",
+    "family": "gap_vs_width",
+    "intent": "A 5.4 m corridor is just wider than the 5.2 m diamond, so the terrain check may keep the diamond instead of the required narrow column. P and L slots would then sit 25 cm from the walls, unwalkable for a 35 cm agent.",
+    "target_checks": [
+      4,
+      5,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    }
+  ],
+  "fixed_in": "v2.2"
+}

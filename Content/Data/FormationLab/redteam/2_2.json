@@ -1,0 +1,161 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_2_2",
+  "comment": "Red team 2_2 (wall_ends_at_turn, aimed at #7,#9,#1): A left-side wall ends 1 m before a 90 deg left turn round its end: the trailing men of the echelon/column should cut the inside corner through the wall end, the man nearest should fail to slice the pie, and the inside-turn man should end up facing the wall end. Broke 8 (check, choice, members): #5 slots / spacing, #6 rear man pace, #7 squad split by a wall. First: #5 column n4 R1 s2 t=12.9s - L-Z 57 cm apart.",
+  "bounds": {
+    "min": [
+      -1000,
+      -2800
+    ],
+    "max": [
+      3000,
+      1200
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        500,
+        -220
+      ],
+      "b": [
+        1900,
+        -220
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          2000,
+          0
+        ],
+        [
+          2000,
+          -2400
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "2_2",
+    "family": "wall_ends_at_turn",
+    "intent": "A left-side wall ends 1 m before a 90 deg left turn round its end: the trailing men of the echelon/column should cut the inside corner through the wall end, the man nearest should fail to slice the pie, and the inside-turn man should end up facing the wall end.",
+    "target_checks": [
+      7,
+      9,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 11.8,
+      "what": "p95 251 cm; Z 305 cm behind",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 14.7,
+      "what": "column (asked diamond): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 14.7,
+      "what": "column (asked line): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 14.7,
+      "what": "column (asked diamond): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 14.7,
+      "what": "column (asked blizzard): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 14.7,
+      "what": "column (asked hedgehog): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 14.7,
+      "what": "column (asked diamond): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ]
+}

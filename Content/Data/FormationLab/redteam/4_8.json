@@ -1,0 +1,262 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_4_8",
+  "comment": "Red team 4_8 (zigzag_corridor, aimed at #7,#6,#4): A 3.6 m corridor zigzags with 25-50 deg bends every 12 m. Rear column men following the leader's path cut the inner apex of the 50 deg bend, so the wall comes between chain neighbours. The rear man lags behind his slot on every bend, and repeated fold/unfold churn drops column match below 80 %. Broke 2 (check, choice, members): #1 wall stare, #7 squad split by a wall. First: #1 hedgehog n4 R1 s1 t=20.2s - L at L2.",
+  "bounds": {
+    "min": [
+      -2500,
+      -1500
+    ],
+    "max": [
+      6500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "L1",
+      "a": [
+        0,
+        -200
+      ],
+      "b": [
+        1244,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "L2",
+      "a": [
+        1244,
+        -200
+      ],
+      "b": [
+        2287,
+        286
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "L3",
+      "a": [
+        2287,
+        286
+      ],
+      "b": [
+        3330,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "L4",
+      "a": [
+        3330,
+        -200
+      ],
+      "b": [
+        4800,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "R1w",
+      "a": [
+        0,
+        200
+      ],
+      "b": [
+        1156,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "R2w",
+      "a": [
+        1156,
+        200
+      ],
+      "b": [
+        2287,
+        728
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "R3w",
+      "a": [
+        2287,
+        728
+      ],
+      "b": [
+        3418,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "R4w",
+      "a": [
+        3418,
+        200
+      ],
+      "b": [
+        4800,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          600,
+          -150
+        ],
+        [
+          1150,
+          -150
+        ],
+        [
+          2287,
+          380
+        ],
+        [
+          3400,
+          -150
+        ],
+        [
+          4200,
+          -150
+        ],
+        [
+          4200,
+          150
+        ],
+        [
+          3420,
+          150
+        ],
+        [
+          2287,
+          640
+        ],
+        [
+          1150,
+          150
+        ],
+        [
+          600,
+          150
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -800,
+          0
+        ],
+        [
+          1200,
+          0
+        ],
+        [
+          2287,
+          507
+        ],
+        [
+          3374,
+          0
+        ],
+        [
+          5400,
+          0
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -800,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "4_8",
+    "family": "zigzag_corridor",
+    "intent": "A 3.6 m corridor zigzags with 25-50 deg bends every 12 m. Rear column men following the leader's path cut the inner apex of the 50 deg bend, so the wall comes between chain neighbours. The rear man lags behind his slot on every bend, and repeated fold/unfold churn drops column match below 80 %.",
+    "target_checks": [
+      7,
+      6,
+      4
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.3,
+      "what": "L-Z 70 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ]
+}

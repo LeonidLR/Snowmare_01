@@ -1,0 +1,201 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_9_1",
+  "comment": "Red team 9_1 (hug_then_leave, aimed at #9,#1,#4): The route hugs a left wall 1.2 m off, then wraps left round its free end. The echelon_right fold into column before the turn and the slicing-the-pie look should collide, so either nobody looks round the end or the inner man faces the wall end at under 2 m. Broke 1 (check, choice, members): #5 slots / spacing. First: #5 column n4 R1 s2 t=26.6s - L-Z 73 cm apart.",
+  "bounds": {
+    "min": [
+      -1500,
+      -2500
+    ],
+    "max": [
+      5500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1000,
+        -120
+      ],
+      "b": [
+        4000,
+        -120
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_run",
+      "poly": [
+        [
+          1800,
+          -100
+        ],
+        [
+          3000,
+          -100
+        ],
+        [
+          3000,
+          600
+        ],
+        [
+          1800,
+          600
+        ]
+      ]
+    },
+    {
+      "id": "Z2",
+      "kind": "wall_end",
+      "poly": [
+        [
+          3700,
+          -600
+        ],
+        [
+          4600,
+          -600
+        ],
+        [
+          4600,
+          400
+        ],
+        [
+          3700,
+          400
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4100,
+          0
+        ],
+        [
+          4300,
+          -900
+        ],
+        [
+          3000,
+          -1200
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "echelon_right"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "9_1",
+    "family": "hug_then_leave",
+    "intent": "The route hugs a left wall 1.2 m off, then wraps left round its free end. The echelon_right fold into column before the turn and the slicing-the-pie look should collide, so either nobody looks round the end or the inner man faces the wall end at under 2 m.",
+    "target_checks": [
+      9,
+      1,
+      4
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 30,
+      "what": "P-Z 71 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 30.1,
+      "what": "P-Z 46 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 30.3,
+      "what": "K-L 78 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 23.8,
+      "what": "p95 199 cm; Z 282 cm behind",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 7,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 24.9,
+      "what": "column: wall cuts Z",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ]
+}

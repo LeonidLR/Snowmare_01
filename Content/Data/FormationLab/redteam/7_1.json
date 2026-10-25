@@ -1,0 +1,121 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_7_1",
+  "comment": "Red team 7_1 (hug_then_leave, aimed at #9,#1): The squad hugs a free wall 1.5 m off with the leader nearest to it, then turns round its end. The nearest man (the leader, or nobody on the run route where all face 12) may never look round the end, failing 9, or may look into the wall face while slicing, failing 1. Broke 1 (check, choice, members): #5 slots / spacing. First: #5 blizzard n4 R2 s2 t=5s - P-Z 74 cm apart.",
+  "bounds": {
+    "min": [
+      -1500,
+      -2000
+    ],
+    "max": [
+      4500,
+      4500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        -150
+      ],
+      "b": [
+        2000,
+        -150
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        0,
+        2650
+      ],
+      "b": [
+        2000,
+        2650
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -300,
+          0
+        ],
+        [
+          2300,
+          0
+        ],
+        [
+          3500,
+          -1300
+        ]
+      ]
+    },
+    {
+      "id": "R2",
+      "pace": "run",
+      "points": [
+        [
+          -300,
+          2500
+        ],
+        [
+          2300,
+          2500
+        ],
+        [
+          3500,
+          3800
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -300,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "7_1",
+    "family": "hug_then_leave",
+    "intent": "The squad hugs a free wall 1.5 m off with the leader nearest to it, then turns round its end. The nearest man (the leader, or nobody on the run route where all face 12) may never look round the end, failing 9, or may look into the wall face while slicing, failing 1.",
+    "target_checks": [
+      9,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R2",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ],
+  "fixed_in": "v2.2"
+}

@@ -1,0 +1,124 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_9_6",
+  "comment": "Red team 9_6 (threat_behind_thin_wall, aimed at #8,#9): The route runs straight into a free wall whose short end is on the left. A known threat far behind it makes the right side (3 % longer) correct; the bypass may still pick the shortest side, and on either side the man nearest the wall end may not look round it. Broke 1 (check, choice, members): #1 wall stare. First: #1 hedgehog n4 R1 s2 t=19.4s - L at W1.",
+  "bounds": {
+    "min": [
+      -1500,
+      -3000
+    ],
+    "max": [
+      7500,
+      3000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        3000,
+        -400
+      ],
+      "b": [
+        3000,
+        800
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_end",
+      "poly": [
+        [
+          2500,
+          -1000
+        ],
+        [
+          3500,
+          -1000
+        ],
+        [
+          3500,
+          1400
+        ],
+        [
+          2500,
+          1400
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          6000,
+          0
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            5000,
+            -1200
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W1",
+          "wall_on": "left"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "9_6",
+    "family": "threat_behind_thin_wall",
+    "intent": "The route runs straight into a free wall whose short end is on the left. A known threat far behind it makes the right side (3 % longer) correct; the bypass may still pick the shortest side, and on either side the man nearest the wall end may not look round it.",
+    "target_checks": [
+      8,
+      9
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ],
+  "fixed_in": "v2.2"
+}

@@ -1,0 +1,272 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_1_4",
+  "comment": "Red team 1_4 (zigzag_corridor, aimed at #7,#1,#3): In a 3.2 m zigzag corridor with 22-deg bends, the narrow column's over-the-shoulder P slot and slanted L slot should cut through the bend apexes. This puts a wall between chain neighbours or makes a man face the near wall, and the bends may also flicker the column/echelon choice. Broke 3 (check, choice, members): #5 slots / spacing. First: #5 blizzard n3 R1 s2 t=5.3s - P-L 55 cm apart.",
+  "bounds": {
+    "min": [
+      -1000,
+      -800
+    ],
+    "max": [
+      6500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "WR1",
+      "a": [
+        600,
+        160
+      ],
+      "b": [
+        1469,
+        160
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WR2",
+      "a": [
+        1469,
+        160
+      ],
+      "b": [
+        3000,
+        772
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WR3",
+      "a": [
+        3000,
+        772
+      ],
+      "b": [
+        4531,
+        160
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WR4",
+      "a": [
+        4531,
+        160
+      ],
+      "b": [
+        6000,
+        160
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WL1",
+      "a": [
+        600,
+        -160
+      ],
+      "b": [
+        1531,
+        -160
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WL2",
+      "a": [
+        1531,
+        -160
+      ],
+      "b": [
+        3000,
+        428
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WL3",
+      "a": [
+        3000,
+        428
+      ],
+      "b": [
+        4469,
+        -160
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WL4",
+      "a": [
+        4469,
+        -160
+      ],
+      "b": [
+        6000,
+        -160
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          1000,
+          -160
+        ],
+        [
+          1531,
+          -160
+        ],
+        [
+          3000,
+          428
+        ],
+        [
+          4469,
+          -160
+        ],
+        [
+          5500,
+          -160
+        ],
+        [
+          5500,
+          160
+        ],
+        [
+          4531,
+          160
+        ],
+        [
+          3000,
+          772
+        ],
+        [
+          1469,
+          160
+        ],
+        [
+          1000,
+          160
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          1500,
+          0
+        ],
+        [
+          3000,
+          600
+        ],
+        [
+          4500,
+          0
+        ],
+        [
+          5600,
+          0
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "1_4",
+    "family": "zigzag_corridor",
+    "intent": "In a 3.2 m zigzag corridor with 22-deg bends, the narrow column's over-the-shoulder P slot and slanted L slot should cut through the bend apexes. This puts a wall between chain neighbours or makes a man face the near wall, and the bends may also flicker the column/echelon choice.",
+    "target_checks": [
+      7,
+      1,
+      3
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 21,
+      "what": "L at WL3",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 33.7,
+      "what": "P-Z 74 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ]
+}

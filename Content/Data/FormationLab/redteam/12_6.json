@@ -1,0 +1,164 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_12_6",
+  "comment": "Red team 12_6 (u_turn, aimed at #9,#1,#7): A tight U-turn round the end of a free wall, 2.5 m off each face. The squad must fold to the trail column and slice the pie at the end. Pair and column members turning the corner should either skip the look-round or have the wall between them and the leader. Broke 4 (check, choice, members): #5 slots / spacing. First: #5 diamond n3 R1 s1 t=26.1s - K-P 79 cm apart.",
+  "bounds": {
+    "min": [
+      -2000,
+      -1500
+    ],
+    "max": [
+      4500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        0
+      ],
+      "b": [
+        3000,
+        0
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -800,
+          -250
+        ],
+        [
+          3200,
+          -250
+        ],
+        [
+          3550,
+          0
+        ],
+        [
+          3200,
+          250
+        ],
+        [
+          0,
+          250
+        ],
+        [
+          -600,
+          250
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -800,
+      -250
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "12_6",
+    "family": "u_turn",
+    "intent": "A tight U-turn round the end of a free wall, 2.5 m off each face. The squad must fold to the trail column and slice the pie at the end. Pair and column members turning the corner should either skip the look-round or have the wall between them and the leader.",
+    "target_checks": [
+      9,
+      1,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 26,
+      "what": "P-Z 70 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 26.5,
+      "what": "P-Z 77 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 26.4,
+      "what": "P-L 76 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 26.3,
+      "what": "P-Z 21 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 26,
+      "what": "P-Z 79 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    }
+  ]
+}

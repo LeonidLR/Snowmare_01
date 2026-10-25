@@ -1,0 +1,169 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_12_7",
+  "comment": "Red team 12_7 (t_l_junction, aimed at #7,#1,#5): In a 5 m corridor the squad turns 90 deg right into a 2.6 m side passage. The pair partner and the column's P (forward over the right shoulder) sit on the inside of the turn, so the inner corner should cut the leader-partner line (n2) or put a slot into the jamb. Broke 4 (check, choice, members): #1 wall stare, #5 slots / spacing. First: #1 blizzard n3 R1 s1 t=25.2s - P at W2.",
+  "bounds": {
+    "min": [
+      -2000,
+      -1000
+    ],
+    "max": [
+      5500,
+      3500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        0,
+        -250
+      ],
+      "b": [
+        5000,
+        -250
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        0,
+        250
+      ],
+      "b": [
+        2850,
+        250
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W3",
+      "a": [
+        3150,
+        250
+      ],
+      "b": [
+        5000,
+        250
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W4",
+      "a": [
+        2850,
+        250
+      ],
+      "b": [
+        2850,
+        3000
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W5",
+      "a": [
+        3150,
+        250
+      ],
+      "b": [
+        3150,
+        3000
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -800,
+          0
+        ],
+        [
+          3000,
+          0
+        ],
+        [
+          3000,
+          2600
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -800,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "12_7",
+    "family": "t_l_junction",
+    "intent": "In a 5 m corridor the squad turns 90 deg right into a 2.6 m side passage. The pair partner and the column's P (forward over the right shoulder) sit on the inside of the turn, so the inner corner should cut the leader-partner line (n2) or put a slot into the jamb.",
+    "target_checks": [
+      7,
+      1,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 22.7,
+      "what": "P-Z 78 cm apart",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    }
+  ]
+}

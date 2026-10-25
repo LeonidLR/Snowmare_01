@@ -21,6 +21,7 @@ namespace FormationTuning
 		{ TEXT("slot.side_offset"), &FFormationConfig::SlotSideOffset },
 		{ TEXT("slot.back_offset"), &FFormationConfig::SlotBackOffset },
 		{ TEXT("diamond.rear_back"), &FFormationConfig::DiamondRearBack },
+		{ TEXT("triad.rear_back"), &FFormationConfig::TriadRearBack },
 		{ TEXT("slot.min_spacing"), &FFormationConfig::SlotMinSpacing },
 		{ TEXT("pair.side_offset"), &FFormationConfig::PairSideOffset },
 		{ TEXT("pair.back_offset"), &FFormationConfig::PairBackOffset },
@@ -79,7 +80,13 @@ namespace FormationTuning
 		{ TEXT("bypass.threat_memory_s"), &FFormationConfig::BypassThreatMemoryS },
 		{ TEXT("corner.lead_dist"), &FFormationConfig::CornerLeadDist },
 		{ TEXT("corner.hold_dist"), &FFormationConfig::CornerHoldDist },
-		{ TEXT("corner.peek_dist"), &FFormationConfig::CornerPeekDist } };
+		{ TEXT("corner.peek_dist"), &FFormationConfig::CornerPeekDist },
+		{ TEXT("rear.share_half"), &FFormationConfig::RearShareHalf },
+		{ TEXT("rear.wall_shift_deg"), &FFormationConfig::RearWallShiftDeg },
+		{ TEXT("coverage.max_gap_deg"), &FFormationConfig::CoverageMaxGapDeg },
+		{ TEXT("coverage.max_sweep"), &FFormationConfig::CoverageMaxSweep },
+		{ TEXT("slide.max_off_wall"), &FFormationConfig::SlideMaxOffWall },
+		{ TEXT("slide.lead_out_deg"), &FFormationConfig::SlideLeadOutDeg } };
 
 	static const TCHAR* FormationConfigSchema = TEXT("codex.formation_config/1");
 

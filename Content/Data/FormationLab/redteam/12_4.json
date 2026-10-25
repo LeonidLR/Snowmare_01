@@ -1,0 +1,95 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_12_4",
+  "comment": "Red team 12_4 (threat_behind_thin_wall, aimed at #9,#1): A known threat sits just behind the short end of a thin free-standing wall. The man nearest the wall end should keep watching the threat instead of slicing round the end (check 9 never broken), or be turned into the wall within 2 m. Broke 1 (check, choice, members): #1 wall stare. First: #1 hedgehog n4 R1 s2 t=14.9s - L at W1.",
+  "bounds": {
+    "min": [
+      -2000,
+      -2500
+    ],
+    "max": [
+      4500,
+      2500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1500,
+        -400
+      ],
+      "b": [
+        1500,
+        600
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -800,
+          0
+        ],
+        [
+          3600,
+          0
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            2800,
+            -600
+          ],
+          "since_s": 0
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -800,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "12_4",
+    "family": "threat_behind_thin_wall",
+    "intent": "A known threat sits just behind the short end of a thin free-standing wall. The man nearest the wall end should keep watching the threat instead of slicing round the end (check 9 never broken), or be turned into the wall within 2 m.",
+    "target_checks": [
+      9,
+      1
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ],
+  "fixed_in": "v2.2"
+}

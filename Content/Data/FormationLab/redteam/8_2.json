@@ -1,0 +1,470 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_8_2",
+  "comment": "Red team 8_2 (zigzag_corridor, aimed at #2,#1,#7): In a 3 m corridor zigzagging with 50 deg bends every 10 m, Z walking backwards in the narrow column must face 6 o'clock straight into the bend walls closer than 2.6 m. The no-look-into-wall rule then leaves 5-7 o'clock unwatched (#2), or Z keeps facing the wall (#1). Broke 13 (check, choice, members): #1 wall stare, #5 slots / spacing, #7 squad split by a wall. First: #1 auto n4 R1 s1 t=15.2s - Z at A2.",
+  "bounds": {
+    "min": [
+      0,
+      -1000
+    ],
+    "max": [
+      7500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "A1",
+      "a": [
+        1500,
+        -150
+      ],
+      "b": [
+        2033,
+        -150
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "A2",
+      "a": [
+        2033,
+        -150
+      ],
+      "b": [
+        2900,
+        254
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "A3",
+      "a": [
+        2900,
+        254
+      ],
+      "b": [
+        3800,
+        -166
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "A4",
+      "a": [
+        3800,
+        -166
+      ],
+      "b": [
+        4700,
+        254
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "A5",
+      "a": [
+        4700,
+        254
+      ],
+      "b": [
+        5567,
+        -150
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "A6",
+      "a": [
+        5567,
+        -150
+      ],
+      "b": [
+        6400,
+        -150
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "B1",
+      "a": [
+        1500,
+        150
+      ],
+      "b": [
+        1967,
+        150
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "B2",
+      "a": [
+        1967,
+        150
+      ],
+      "b": [
+        2900,
+        586
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "B3",
+      "a": [
+        2900,
+        586
+      ],
+      "b": [
+        3800,
+        166
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "B4",
+      "a": [
+        3800,
+        166
+      ],
+      "b": [
+        4700,
+        586
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "B5",
+      "a": [
+        4700,
+        586
+      ],
+      "b": [
+        5633,
+        150
+      ],
+      "height": 300,
+      "thickness": 20
+    },
+    {
+      "id": "B6",
+      "a": [
+        5633,
+        150
+      ],
+      "b": [
+        6400,
+        150
+      ],
+      "height": 300,
+      "thickness": 20
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          2100,
+          -200
+        ],
+        [
+          5500,
+          -200
+        ],
+        [
+          5500,
+          620
+        ],
+        [
+          2100,
+          620
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          1000,
+          0
+        ],
+        [
+          2000,
+          0
+        ],
+        [
+          2900,
+          420
+        ],
+        [
+          3800,
+          0
+        ],
+        [
+          4700,
+          420
+        ],
+        [
+          5600,
+          0
+        ],
+        [
+          6900,
+          0
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      1000,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "8_2",
+    "family": "zigzag_corridor",
+    "intent": "In a 3 m corridor zigzagging with 50 deg bends every 10 m, Z walking backwards in the narrow column must face 6 o'clock straight into the bend walls closer than 2.6 m. The no-look-into-wall rule then leaves 5-7 o'clock unwatched (#2), or Z keeps facing the wall (#1).",
+    "target_checks": [
+      2,
+      1,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": 13.9,
+      "what": "Z at A2",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 25.4,
+      "what": "Z at B5",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.6,
+      "what": "Z at A4",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 19.4,
+      "what": "blizzard: wall cuts Z",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ]
+}

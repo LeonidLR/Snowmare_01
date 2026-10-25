@@ -1,0 +1,150 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_3_5",
+  "comment": "Red team 3_5 (gap_vs_width, aimed at #9,#1,#5): A cross-wall gap exactly 5.2 m clear (diamond width) may let the diamond pass unfolded with P/L brushing both ends, and a second offset 2.6 m gap shortly after leaves no time to settle or slice both ends. Broke 3 (check, choice, members): #1 wall stare, #7 squad split by a wall. First: #1 blizzard n3 R1 s1 t=27.3s - L at G2a.",
+  "bounds": {
+    "min": [
+      -1500,
+      -3500
+    ],
+    "max": [
+      8000,
+      3500
+    ]
+  },
+  "walls": [
+    {
+      "id": "G1a",
+      "a": [
+        3000,
+        -3000
+      ],
+      "b": [
+        3000,
+        -280
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "G1b",
+      "a": [
+        3000,
+        280
+      ],
+      "b": [
+        3000,
+        3000
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "G2a",
+      "a": [
+        4500,
+        -3000
+      ],
+      "b": [
+        4500,
+        0
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "G2b",
+      "a": [
+        4500,
+        300
+      ],
+      "b": [
+        4500,
+        3000
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3600,
+          0
+        ],
+        [
+          4200,
+          150
+        ],
+        [
+          7000,
+          150
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "3_5",
+    "family": "gap_vs_width",
+    "intent": "A cross-wall gap exactly 5.2 m clear (diamond width) may let the diamond pass unfolded with P/L brushing both ends, and a second offset 2.6 m gap shortly after leaves no time to settle or slice both ends.",
+    "target_checks": [
+      9,
+      1,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ],
+  "fixed_in": "v2.2"
+}

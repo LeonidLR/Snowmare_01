@@ -1,8 +1,13 @@
 // `npm run bot:movement -- [--layout sample_small] [--members 2,3,4] [--seeds 4] [--seed 1] [--client none|mock|claude|jev]
-//  [--config <file>] [--manual auto|<menu item>|all] [--strict]` - runs the movement series, writes
+//  [--config <file>] [--manual auto|<menu item>|all] [--strict] [--layouts redteam|<dir>]` - runs the movement series, writes
 // Saved/TrainingGround/movement/runs.jsonl (raw, not for agents) and report.md (<= 30 lines, FORMATION_CONTRACT.md 4).
 // --manual <item>: every run with that hold-G menu choice; --manual all: auto + every menu item, report = the matrix
 // (manual_matrix.md too). --strict exits 1 when a check fails (with all: auto any check, a manual item checks 1 / 2 / 5 / 7 / 10 / 11).
+// --layouts redteam: the red team's regression layouts (Content/Data/FormationLab/redteam, FORMATION_CONTRACT.md 11), each walked
+// with auto + every menu item and compared with its expected_fail -> redteam_regression.md; known failures never fail the run,
+// --strict exits 1 only on NEW failures. Members / seeds / seed: each file's own (redteam meta) unless given.
+// --refresh <tag> (e.g. v2.2): rewrites each file's expected_fail against the current rules (refreshKept: fixed entries move to
+// fixed_entries, a layout with nothing left failing stays with fixed_in: <tag>).
 import fs from 'node:fs';
 import path from 'node:path';
 import { advicePrompt, resolveClient } from '../ai.ts';
@@ -11,9 +16,33 @@ import { renderManualMatrix, renderReport } from '../checks.ts';
 import { configValues } from '../config.ts';
 import type { MenuChoice } from '../menu.ts';
 import { MENU_ITEMS } from '../menu.ts';
-import { CONFIG_PATH, OUT_DIR, parseArgs, readConfigFile, readLayout } from './paths.ts';
+import { refreshKept, regressLayout, renderRegression } from '../redteam.ts';
+import { CONFIG_PATH, OUT_DIR, REDTEAM_DIR, ROOT, parseArgs, readConfigFile, readLayout } from './paths.ts';
 
 const args = parseArgs(process.argv.slice(2));
+if (typeof args.layouts === 'string') {
+  const dir = args.layouts === 'redteam' ? REDTEAM_DIR : path.resolve(args.layouts);
+  const cfgValues = configValues(readConfigFile(typeof args.config === 'string' ? args.config : CONFIG_PATH));
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })) : [];
+  const t0 = Date.now();
+  const rows = files.map((f) => {
+    const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+    const meta = (data.redteam ?? {}) as { members?: number[]; seeds?: number; seed?: number };
+    const row = regressLayout(f, data, {
+      config: cfgValues,
+      members: typeof args.members === 'string' ? args.members.split(',').map(Number).filter((v) => v >= 1 && v <= 4) : meta.members ?? [2, 3, 4],
+      seeds: Number(args.seeds ?? meta.seeds ?? 2) || 2, seedBase: Number(args.seed ?? meta.seed ?? 1) || 1,
+    });
+    if (typeof args.refresh === 'string') fs.writeFileSync(path.join(dir, f), JSON.stringify(refreshKept(data, row, args.refresh), null, 2) + '\n');
+    return row;
+  });
+  const text = renderRegression(rows, { dir: path.relative(ROOT, dir).split(path.sep).join('/'), configHash: configHash(cfgValues), date: new Date().toISOString().slice(0, 16).replace('T', ' ') });
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  fs.writeFileSync(path.join(OUT_DIR, 'redteam_regression.md'), text);
+  process.stdout.write(text);
+  console.error(`[bot] ${files.length} red-team layouts in ${((Date.now() - t0) / 1000).toFixed(1)} s (${path.relative(process.cwd(), dir)})`);
+  process.exit(args.strict && rows.some((r) => r.fresh.length) ? 1 : 0);
+}
 const layoutName = typeof args.layout === 'string' ? args.layout : 'sample_small';
 const members = (typeof args.members === 'string' ? args.members : '2,3,4').split(',').map(Number).filter((v) => v >= 1 && v <= 4);
 const seeds = Number(args.seeds ?? 4) || 4;

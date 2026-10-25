@@ -1,0 +1,167 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_3_4",
+  "comment": "Red team 3_4 (dead_end_after_turn, aimed at #1,#5,#7): A 3.5 m corridor turns right into a dead end 2.7 m later, so the wall layout and manual echelons squeeze four men along a 3.1 m wall and P scans into the near side walls. Broke 4 (check, choice, members): #5 slots / spacing. First: #5 echelon_right n4 R1 s2 t=16.9s - L-Z 78 cm apart.",
+  "bounds": {
+    "min": [
+      -1500,
+      -1500
+    ],
+    "max": [
+      4000,
+      3500
+    ]
+  },
+  "walls": [
+    {
+      "id": "WO1",
+      "a": [
+        600,
+        -175
+      ],
+      "b": [
+        2675,
+        -175
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WO2",
+      "a": [
+        2675,
+        -175
+      ],
+      "b": [
+        2675,
+        2700
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WI1",
+      "a": [
+        600,
+        175
+      ],
+      "b": [
+        2325,
+        175
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WI2",
+      "a": [
+        2325,
+        175
+      ],
+      "b": [
+        2325,
+        2700
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "WE",
+      "a": [
+        2325,
+        2700
+      ],
+      "b": [
+        2675,
+        2700
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          2500,
+          0
+        ],
+        [
+          2500,
+          2300
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "3_4",
+    "family": "dead_end_after_turn",
+    "intent": "A 3.5 m corridor turns right into a dead end 2.7 m later, so the wall layout and manual echelons squeeze four men along a 3.1 m wall and P scans into the near side walls.",
+    "target_checks": [
+      1,
+      5,
+      7
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [],
+  "fixed_entries": [
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.2"
+    }
+  ],
+  "fixed_in": "v2.2"
+}

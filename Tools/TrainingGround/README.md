@@ -38,6 +38,7 @@ npm run dev
 |---|---|
 | `npm run bot:movement -- --layout sample_small --members 2,3,4 --seeds 4` | серия прогонов → `Saved/TrainingGround/movement/report.md` (≤ 30 строк) и `runs.jsonl` |
 | `npm run train -- --budget-usd 5 --rounds 10 --client claude` | обучение: модель предлагает параметры `formation_config.json`, симулятор их оценивает; `--dry-run` — без вызова API; `--client mock` — без сети |
+| `npm run redteam -- --budget-usd 5 --rounds 4 --client claude` | «красная команда»: модель придумывает раскладки, ломающие правила строя; бот их проходит (auto + все ручные формации), упавшие сохраняются в `Content/Data/FormationLab/redteam/` как регрессия (`expected_fail`) → `redteam_report.md`; `bot:movement -- --layouts redteam` — прогон регрессии |
 | `npm run golden` (`-- --check`) | эталонные векторы для C++ parity-тестов (`golden/formation_<Rule>.json`) |
 | `npm test`, `npm run typecheck` | тесты логики и проверка типов |
 

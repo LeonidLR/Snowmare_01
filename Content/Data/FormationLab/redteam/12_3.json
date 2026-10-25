@@ -1,0 +1,311 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_12_3",
+  "comment": "Red team 12_3 (gap_vs_width, aimed at #7,#5): The route crosses a 2 m gap at 45 deg. The pair partner behind the right shoulder (and the column's trailing men) should cut the gap jamb, putting the wall between leader and partner or the partner's slot inside the wall body (n2 never failed yet). Broke 19 (check, choice, members): #1 wall stare, #5 slots / spacing, #7 squad split by a wall. First: #1 diamond n3 R1 s1 t=7.9s - P at W2.",
+  "bounds": {
+    "min": [
+      -1500,
+      -3500
+    ],
+    "max": [
+      3500,
+      3500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1000,
+        -3000
+      ],
+      "b": [
+        1000,
+        -100
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        1000,
+        100
+      ],
+      "b": [
+        1000,
+        3000
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          200,
+          -800
+        ],
+        [
+          1800,
+          800
+        ],
+        [
+          2800,
+          800
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      200,
+      -800
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "12_3",
+    "family": "gap_vs_width",
+    "intent": "The route crosses a 2 m gap at 45 deg. The pair partner behind the right shoulder (and the column's trailing men) should cut the gap jamb, putting the wall between leader and partner or the partner's slot inside the wall body (n2 never failed yet).",
+    "target_checks": [
+      7,
+      5
+    ],
+    "client": "claude",
+    "config": "ea1d4500",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-25 19:43"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 14.8,
+      "what": "L-Z 54 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.4,
+      "what": "P-Z 78 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.4,
+      "what": "P-Z 78 cm apart",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 6.3,
+      "what": "p95 152 cm; Z 170 cm behind",
+      "since": "v2.2",
+      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.2,
+      "what": "column (asked echelon_right): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.2,
+      "what": "column (asked line): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.2,
+      "what": "column (asked diamond): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.6,
+      "what": "column (asked echelon_right): wall cuts K-P",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.2,
+      "what": "column (asked blizzard): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.2,
+      "what": "column: wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.2,
+      "what": "column (asked hedgehog): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 7,
+      "what": "column (asked echelon_left): wall cuts K-P",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 9.8,
+      "what": "column (asked echelon_left): wall cuts L-Z",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.2,
+      "what": "column (asked echelon_right): wall cuts L-Z slots",
+      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ],
+  "fixed_entries": [
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.2"
+    }
+  ]
+}
