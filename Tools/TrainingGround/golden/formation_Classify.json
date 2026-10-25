@@ -53,7 +53,6 @@
   "halt.side_deg": 60,
   "classify.probe_side": 400,
   "classify.probe_ahead": 600,
-  "classify.corridor_width": 600,
   "classify.hold_time": 1,
   "classify.at_wall_dist": 150,
   "classify.arrive_dist": 50,
@@ -8955,7 +8954,7 @@
     "timeInClass": 0.3
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -8995,7 +8994,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9075,7 +9074,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9155,7 +9154,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9235,7 +9234,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9278,7 +9277,7 @@
     "timeInClass": 0.3
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9321,7 +9320,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9407,7 +9406,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9493,7 +9492,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9579,7 +9578,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9619,264 +9618,6 @@
      0
     ],
     "previousClass": null,
-    "timeInClass": 0.3
-   },
-   "out": {
-    "class": "open"
-   }
-  },
-  {
-   "in": {
-    "scene": "wide_street",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -380
-      ],
-      "b": [
-       2000,
-       -380
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       380
-      ],
-      "b": [
-       2000,
-       380
-      ],
-      "thickness": 40
-     }
-    ],
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "destination": [
-     1000,
-     0
-    ],
-    "previousClass": null,
-    "timeInClass": 1.5
-   },
-   "out": {
-    "class": "open"
-   }
-  },
-  {
-   "in": {
-    "scene": "wide_street",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -380
-      ],
-      "b": [
-       2000,
-       -380
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       380
-      ],
-      "b": [
-       2000,
-       380
-      ],
-      "thickness": 40
-     }
-    ],
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "destination": [
-     1000,
-     0
-    ],
-    "previousClass": "open",
-    "timeInClass": 0.3
-   },
-   "out": {
-    "class": "open"
-   }
-  },
-  {
-   "in": {
-    "scene": "wide_street",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -380
-      ],
-      "b": [
-       2000,
-       -380
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       380
-      ],
-      "b": [
-       2000,
-       380
-      ],
-      "thickness": 40
-     }
-    ],
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "destination": [
-     1000,
-     0
-    ],
-    "previousClass": "open",
-    "timeInClass": 1.5
-   },
-   "out": {
-    "class": "open"
-   }
-  },
-  {
-   "in": {
-    "scene": "wide_street",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -380
-      ],
-      "b": [
-       2000,
-       -380
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       380
-      ],
-      "b": [
-       2000,
-       380
-      ],
-      "thickness": 40
-     }
-    ],
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "destination": [
-     1000,
-     0
-    ],
-    "previousClass": "wall_left",
-    "timeInClass": 0.3
-   },
-   "out": {
-    "class": "wall_left"
-   }
-  },
-  {
-   "in": {
-    "scene": "wide_street",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -380
-      ],
-      "b": [
-       2000,
-       -380
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       380
-      ],
-      "b": [
-       2000,
-       380
-      ],
-      "thickness": 40
-     }
-    ],
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "destination": [
-     1000,
-     0
-    ],
-    "previousClass": "wall_left",
-    "timeInClass": 1.5
-   },
-   "out": {
-    "class": "open"
-   }
-  },
-  {
-   "in": {
-    "scene": "wide_street",
-    "walls": [
-     {
-      "a": [
-       -2000,
-       -380
-      ],
-      "b": [
-       2000,
-       -380
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -2000,
-       380
-      ],
-      "b": [
-       2000,
-       380
-      ],
-      "thickness": 40
-     }
-    ],
-    "leaderPos": [
-     0,
-     0
-    ],
-    "leaderYaw": 0,
-    "destination": [
-     1000,
-     0
-    ],
-    "previousClass": "corridor",
     "timeInClass": 0.3
    },
    "out": {
@@ -9919,11 +9660,269 @@
      1000,
      0
     ],
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "wide_street",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -380
+      ],
+      "b": [
+       2000,
+       -380
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       380
+      ],
+      "b": [
+       2000,
+       380
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "destination": [
+     1000,
+     0
+    ],
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "wide_street",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -380
+      ],
+      "b": [
+       2000,
+       -380
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       380
+      ],
+      "b": [
+       2000,
+       380
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "destination": [
+     1000,
+     0
+    ],
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "wide_street",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -380
+      ],
+      "b": [
+       2000,
+       -380
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       380
+      ],
+      "b": [
+       2000,
+       380
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "destination": [
+     1000,
+     0
+    ],
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "wide_street",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -380
+      ],
+      "b": [
+       2000,
+       -380
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       380
+      ],
+      "b": [
+       2000,
+       380
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "destination": [
+     1000,
+     0
+    ],
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "wide_street",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -380
+      ],
+      "b": [
+       2000,
+       -380
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       380
+      ],
+      "b": [
+       2000,
+       380
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "destination": [
+     1000,
+     0
+    ],
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "wide_street",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -380
+      ],
+      "b": [
+       2000,
+       -380
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       380
+      ],
+      "b": [
+       2000,
+       380
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "destination": [
+     1000,
+     0
+    ],
     "previousClass": "corridor",
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -9963,7 +9962,7 @@
     "timeInClass": 0.3
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10003,7 +10002,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10083,7 +10082,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10163,7 +10162,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10243,7 +10242,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10286,7 +10285,7 @@
     "timeInClass": 0.3
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10329,7 +10328,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10415,7 +10414,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10501,7 +10500,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10587,7 +10586,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10630,7 +10629,7 @@
     "timeInClass": 0.3
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10673,7 +10672,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10759,7 +10758,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10845,49 +10844,6 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
-   }
-  },
-  {
-   "in": {
-    "scene": "wide_street",
-    "walls": [
-     {
-      "a": [
-       -69.399,
-       -2204.529
-      ],
-      "b": [
-       1746.563,
-       1359.497
-      ],
-      "thickness": 40
-     },
-     {
-      "a": [
-       -746.563,
-       -1859.497
-      ],
-      "b": [
-       1069.399,
-       1704.529
-      ],
-      "thickness": 40
-     }
-    ],
-    "leaderPos": [
-     500,
-     -250
-    ],
-    "leaderYaw": 63,
-    "destination": [
-     953.99,
-     641.007
-    ],
-    "previousClass": "corridor",
-    "timeInClass": 0.3
-   },
-   "out": {
     "class": "corridor"
    }
   },
@@ -10928,10 +10884,53 @@
      641.007
     ],
     "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "wide_street",
+    "walls": [
+     {
+      "a": [
+       -69.399,
+       -2204.529
+      ],
+      "b": [
+       1746.563,
+       1359.497
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -746.563,
+       -1859.497
+      ],
+      "b": [
+       1069.399,
+       1704.529
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "destination": [
+     953.99,
+     641.007
+    ],
+    "previousClass": "corridor",
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -10971,7 +10970,7 @@
     "timeInClass": 0.3
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11011,7 +11010,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11091,7 +11090,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11171,7 +11170,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11251,7 +11250,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11294,7 +11293,7 @@
     "timeInClass": 0.3
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11337,7 +11336,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11423,7 +11422,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11509,7 +11508,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11595,7 +11594,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11638,7 +11637,7 @@
     "timeInClass": 0.3
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11681,7 +11680,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11767,7 +11766,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11853,7 +11852,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {
@@ -11939,7 +11938,7 @@
     "timeInClass": 1.5
    },
    "out": {
-    "class": "open"
+    "class": "corridor"
    }
   },
   {

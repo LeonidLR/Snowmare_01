@@ -249,7 +249,9 @@ export function rawClass(walls: readonly Segment[], pos: Vec2, yaw: number, dest
   const right = sideClearance(walls, pos, yaw, 1, reach, ignore);
   const left = sideClearance(walls, pos, yaw, -1, reach, ignore);
   const rightBlocked = right <= reach, leftBlocked = left <= reach;
-  if (rightBlocked && leftBlocked) return left + right < cfg(c, 'classify.corridor_width') ? 'corridor' : 'open';
+  // v1.2 (user Q3 = A): ANY passage between two walls (both sides blocked within probe_side) is a corridor -> column; the
+  // narrow / wide column sectors follow PassageWidth (column.narrow_width). The old width limit (classify.corridor_width) is gone.
+  if (rightBlocked && leftBlocked) return 'corridor';
   if (leftBlocked) return 'wall_left';
   if (rightBlocked) return 'wall_right';
   return 'open';
@@ -283,10 +285,14 @@ function Classify(walls: readonly Segment[], leaderPos: Vec2, leaderYaw: number,
   return timeInClass < cfg(config, 'classify.hold_time') ? previousClass : raw;
 }
 
-/** Formation for a terrain class: open -> diamond (4) / wedge (3 or fewer), a wall on one side -> echelon to the open side. */
-function FormationFor(terrain: TerrainClass, memberCount: number): Formation {
+/**
+ * Formation for a terrain class: open -> diamond (4) / wedge (3 or fewer), or the blizzard tight diamond in a blizzard (v1.2,
+ * user Q4 = A: weather = blizzard on OPEN ground only - walls / passages keep their rules); a wall on one side -> echelon to
+ * the open side; a passage -> column; arrival at a wall -> the wall layout. The menu choice (hold G) overrides all of it.
+ */
+function FormationFor(terrain: TerrainClass, memberCount: number, blizzard: boolean): Formation {
   switch (terrain) {
-    case 'open': return memberCount >= 4 ? 'diamond' : 'wedge';
+    case 'open': return blizzard ? 'blizzard' : memberCount >= 4 ? 'diamond' : 'wedge';
     case 'wall_left': return 'echelon_right';
     case 'wall_right': return 'echelon_left';
     case 'corridor': return 'column';

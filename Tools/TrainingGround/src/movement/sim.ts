@@ -53,6 +53,8 @@ export interface SimOptions {
   seed: number;
   /** Fixed formation (the hold-G manual choice); undefined = automatic by terrain. */
   manualFormation?: Formation;
+  /** v1.2 (user Q4 = A): the weather is a blizzard - open ground picks the blizzard tight diamond. */
+  blizzard?: boolean;
   /** v1.2: the menu's "All forward" - walking, everyone looks at 12 (LookYaw mode 'forward'). */
   allForward?: boolean;
   /** Seconds the squad stays after the leader reaches the end of the route. */
@@ -151,7 +153,7 @@ export function simulate(o: SimOptions): number {
     const next = FormationTerrainRules.Classify(walls, leader.pos, heading, destination, terrain, timeInClass, c);
     const passage = FormationTerrainRules.PassageWidth(walls, leader.pos, heading, c);
     if (next !== terrain) { terrain = next; timeInClass = 0; } else timeInClass += SIM_DT;
-    if (!o.manualFormation) formation = FormationTerrainRules.FormationFor(terrain, n);
+    if (!o.manualFormation) formation = FormationTerrainRules.FormationFor(terrain, n, !!o.blizzard);
     const mode: Mode = arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
     // --- targets and look yaws

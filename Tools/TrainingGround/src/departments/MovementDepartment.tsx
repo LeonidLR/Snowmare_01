@@ -50,6 +50,7 @@ export const MovementDepartment: React.FC = () => {
   const [manual, setManual] = useState<Formation | '' | 'all_forward'>('');
   const [speed, setSpeed] = useState(1);
   const [follow, setFollow] = useState(true);
+  const [blizzard, setBlizzard] = useState(false);
   const [playing, setPlaying] = useState(true);
   const [t, setT] = useState(0);
   const [error, setError] = useState('');
@@ -88,10 +89,10 @@ export const MovementDepartment: React.FC = () => {
     const out: Frame[] = [];
     const collector = new RunCollector(layout, route, members, seed, config);
     simulate({ layout, route, memberCount: members, config, seed, nav,
-      manualFormation: manual && manual !== 'all_forward' ? manual : undefined, allForward: manual === 'all_forward',
+      manualFormation: manual && manual !== 'all_forward' ? manual : undefined, allForward: manual === 'all_forward', blizzard,
       onFrame: (f) => { out.push(f); collector.onFrame(f); } });
     return { frames: out, metrics: collector.finish() };
-  }, [layout, routeId, config, nav, members, seed, manual]);
+  }, [layout, routeId, config, nav, members, seed, manual, blizzard]);
 
   useEffect(() => { setT(0); }, [frames]);
   const last = useRef(0);
@@ -185,6 +186,12 @@ export const MovementDepartment: React.FC = () => {
             </Field>
             <Field label="Seed">
               <input className={`${inputCls} w-20`} type="number" min={1} value={seed} onChange={(e) => setSeed(Math.max(1, Number(e.target.value) || 1))} />
+            </Field>
+            <Field label="Погода">
+              <select className={inputCls} value={blizzard ? 'blizzard' : 'clear'} onChange={(e) => setBlizzard(e.target.value === 'blizzard')}>
+                <option value="clear">Ясно</option>
+                <option value="blizzard">Метель</option>
+              </select>
             </Field>
             <Field label="Камера">
               <select className={inputCls} value={follow ? 'follow' : 'all'} onChange={(e) => setFollow(e.target.value === 'follow')}>

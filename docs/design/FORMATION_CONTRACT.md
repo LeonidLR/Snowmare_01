@@ -61,7 +61,12 @@ outward normal for `wall.*`), positive = right. Owned by the cloud session (Trai
   - Column of three: no change (documented by a test): the wide herringbone keeps the triad rear gap; in a NARROW column of
     three L's -165 (user Q1 = A) covers 5-7 o'clock.
   - Wall tie: unchanged - Layout sends a tie right; the caller breaks travel ties with `FormationWallRules::BreakRoomTie` (TS too).
-  - Config v1.2: 52 keys (+ classify.arrive_dist). Golden: Classify cases carry `destination` (1080), LookYaw has mode forward.
+  - User Q3 = A: `rawClass` - both sides blocked within classify.probe_side -> `corridor` regardless of width (the
+    `classify.corridor_width` condition and key are removed); PassageWidth / column.narrow_width pick narrow vs herringbone.
+  - User Q4 = A: `FormationFor(class, memberCount, blizzard)` - open + blizzard -> `blizzard`; every other class unchanged; the
+    menu choice overrides. The runtime passes the weather (blizzard phase) in.
+  - Config v1.2: 51 keys (+ classify.arrive_dist, - classify.corridor_width). Golden: Classify cases carry `destination` (1080),
+    LookYaw has mode forward, FormationFor has `blizzard` (30).
 - `FormationTerrainRules::Classify(layout walls, leaderPos, leaderYaw, previousClass, timeInClass, config) -> class`
   (open / wall_left / wall_right / corridor / at_wall) with hysteresis (like ColumnHoldTime) -> formation choice.
 - `FormationWallRules::Layout(wall segment, clickedSlot, memberCount, roomLeft, roomRight) -> slots[] + look yaws`

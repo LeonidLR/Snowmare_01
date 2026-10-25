@@ -152,19 +152,19 @@ test('Classify: open, wall on one side -> echelon to the open side, corridor -> 
   assert.equal(rawClass(none, [0, 0], 0, null, C), 'open');
   const leftWall: Segment[] = [{ a: [-2000, -300], b: [2000, -300], thickness: 40 }];
   assert.equal(rawClass(leftWall, [0, 0], 0, null, C), 'wall_left');
-  assert.equal(FormationTerrainRules.FormationFor('wall_left', 4), 'echelon_right');
+  assert.equal(FormationTerrainRules.FormationFor('wall_left', 4, false), 'echelon_right');
   const rightWall: Segment[] = [{ a: [-2000, 300], b: [2000, 300], thickness: 40 }];
   assert.equal(rawClass(rightWall, [0, 0], 0, null, C), 'wall_right');
-  assert.equal(FormationTerrainRules.FormationFor('wall_right', 3), 'echelon_left');
+  assert.equal(FormationTerrainRules.FormationFor('wall_right', 3, false), 'echelon_left');
   assert.equal(rawClass([...leftWall, ...rightWall], [0, 0], 0, null, C), 'corridor');
-  assert.equal(FormationTerrainRules.FormationFor('corridor', 4), 'column');
+  assert.equal(FormationTerrainRules.FormationFor('corridor', 4, false), 'column');
   const wide: Segment[] = [{ a: [-2000, -380], b: [2000, -380], thickness: 40 }, { a: [-2000, 380], b: [2000, 380], thickness: 40 }];
-  assert.equal(rawClass(wide, [0, 0], 0, null, C), 'open', 'a 7.6 m street fits the diamond');
+  assert.equal(rawClass(wide, [0, 0], 0, null, C), 'corridor', 'v1.2 (user Q3 = A): a 7.6 m street is a passage too -> column (herringbone)');
   const ahead: Segment[] = [{ a: [120, -500], b: [120, 500], thickness: 20 }];
   assert.equal(rawClass(ahead, [0, 0], 0, [0, 0], C), 'at_wall', 'arriving');
   assert.equal(rawClass(ahead, [0, 0], 0, null, C), 'open', 'v1.2: no destination = walking past - never at_wall');
-  assert.equal(FormationTerrainRules.FormationFor('open', 4), 'diamond');
-  assert.equal(FormationTerrainRules.FormationFor('open', 3), 'wedge');
+  assert.equal(FormationTerrainRules.FormationFor('open', 4, false), 'diamond');
+  assert.equal(FormationTerrainRules.FormationFor('open', 3, false), 'wedge');
 });
 
 test('Classify: a 2 m gap in a wall is bridged by the slanted probes; hysteresis holds a class for hold_time', () => {
@@ -263,5 +263,22 @@ test('BreakRoomTie (as the C++ caller): a tie goes to the side with less travel;
   assert.deepEqual(FormationWallRules.BreakRoomTie(500, 500, 100, 300), { roomLeft: 501, roomRight: 500 });
   assert.deepEqual(FormationWallRules.BreakRoomTie(500, 500, 300, 100), { roomLeft: 500, roomRight: 500 });
   assert.deepEqual(FormationWallRules.BreakRoomTie(400, 500, 100, 300), { roomLeft: 400, roomRight: 500 });
+});
+
+test('v1.2 (user Q3 = A): any passage between two walls is a column - narrow sectors below column.narrow_width, herringbone above', () => {
+  const street = (half: number): Segment[] => [{ a: [-2000, -half], b: [2000, -half], thickness: 40 }, { a: [-2000, half], b: [2000, half], thickness: 40 }];
+  for (const half of [250, 380, 410]) assert.equal(rawClass(street(half), [0, 0], 0, null, C), 'corridor', `${2 * half} cm`);
+  assert.equal(rawClass(street(450), [0, 0], 0, null, C), 'open', 'walls further than probe_side on both sides: open ground');
+  const width = FormationTerrainRules.PassageWidth(street(380), [0, 0], 0, C)!;
+  assert.deepEqual([FormationSectorRules.LookYaw('P', 'column', 'walk', 4, 0, 0, width, C), FormationSectorRules.LookYaw('L', 'column', 'walk', 4, 0, 0, width, C)], [70, -70]);
+  assert.ok(!('classify.corridor_width' in C), 'the old width limit is gone from the config');
+});
+
+test('v1.2 (user Q4 = A): the blizzard tight diamond on OPEN ground in a blizzard only; walls / passages keep their rules', () => {
+  const F = FormationTerrainRules.FormationFor;
+  assert.equal(F('open', 4, true), 'blizzard');
+  assert.equal(F('open', 3, true), 'blizzard');
+  assert.equal(F('open', 4, false), 'diamond');
+  for (const t of ['wall_left', 'wall_right', 'corridor', 'at_wall'] as const) assert.equal(F(t, 4, true), F(t, 4, false));
 });
 

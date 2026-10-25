@@ -112,9 +112,11 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  const formationFor = base('FormationFor', 'in: class, memberCount -> out.formation.');
+  const formationFor = base('FormationFor', 'in: class, memberCount, blizzard -> out.formation.');
   for (const terrain of ['open', 'wall_left', 'wall_right', 'corridor', 'at_wall'] as TerrainClass[]) for (const memberCount of [2, 3, 4]) {
-    formationFor.cases.push({ in: { class: terrain, memberCount }, out: { formation: FormationTerrainRules.FormationFor(terrain, memberCount) as Formation } });
+    for (const blizzard of [false, true]) {
+      formationFor.cases.push({ in: { class: terrain, memberCount, blizzard }, out: { formation: FormationTerrainRules.FormationFor(terrain, memberCount, blizzard) as Formation } });
+    }
   }
 
   const wall = base('WallLayout', 'in: wall {a, b, thickness}, clickedSlot, memberCount, roomLeft, roomRight -> out.slots [{role, pos, yaw}].');

@@ -324,13 +324,6 @@
       "unit": "cm",
       "doc": "Terrain probe: forward look-ahead range."
     },
-    "classify.corridor_width": {
-      "value": 600,
-      "min": 300,
-      "max": 900,
-      "unit": "cm",
-      "doc": "Both sides blocked and the free width below this = corridor (column)."
-    },
     "classify.hold_time": {
       "value": 1.0,
       "min": 0.2,
