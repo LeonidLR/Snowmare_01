@@ -1,5 +1,5 @@
 // CodexTactics.Formation.Parity.<Rule> - the C++ formation rules against the golden vectors the Training Ground simulator exports
-// (`npm run golden`; v1.1 adds PassageWidth, v1.2 HedgehogSlots, v2 Classify state in / out): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
+// (`npm run golden`; v1.1 adds PassageWidth, v1.2 HedgehogSlots, v2 Classify state in / out, contract 9 Menu): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
 // (docs/design/FORMATION_CONTRACT.md 3, field names in 3.1). Same inputs -> same outputs within the file's tolerance (cm / deg; yaws
 // compared as angles). The rules' config is built from the file's "config_values" (the snapshot the vectors were computed with), so
 // later tuning of formation_config.json cannot break parity. A missing file: a warning, the test passes. Every case is checked (none is
@@ -8,6 +8,7 @@
 #include "Misc/AutomationTest.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "Formation/FormationMenuRules.h"
 #include "Formation/FormationSectorRules.h"
 #include "Formation/FormationShapeRules.h"
 #include "Formation/FormationTerrainRules.h"
@@ -41,7 +42,7 @@ namespace FormationParityUtil
 	};
 
 	/** Loads formation_<Rule>.json; false with a warning when missing (the test passes), false with an error when broken. */
-	bool LoadGolden(FAutomationTestBase& Test, const TCHAR* Rule, FGolden& Out, bool& bOutMissing)
+	bool LoadGolden(FAutomationTestBase& Test, const TCHAR* Rule, FGolden& Out, bool& bOutMissing, bool bUsesConfig = true)
 	{
 		bOutMissing = false;
 		const FString Path = FPaths::ProjectDir() / TEXT("Tools/TrainingGround/golden") / FString::Printf(TEXT("formation_%s.json"), Rule);
@@ -82,7 +83,7 @@ namespace FormationParityUtil
 				Test.AddWarning(FString::Printf(TEXT("%s: config_values key %s is unknown to the C++ config"), *Path, *Key));
 			}
 		}
-		else
+		else if (bUsesConfig)
 		{
 			Test.AddWarning(FString::Printf(TEXT("%s has no config_values: the C++ defaults are used"), *Path));
 		}
@@ -559,6 +560,145 @@ bool FFormationParityWallLayoutTest::RunTest(const FString&)
 		const TArray<FFormationSlot> Actual = FormationWallRules::Layout(Wall, Clicked, static_cast<int32>(Count), static_cast<float>(RoomLeft),
 			static_cast<float>(RoomRight), Golden.Config);
 		return CompareSlots(Actual, *Slots, Golden, true);
+	});
+}
+
+namespace FormationParityUtil
+{
+	/** A menu item id or null / missing (unset = Auto); false when it is something else. */
+	bool OptionalMenuItem(const FJsonObject& Object, const TCHAR* Name, TOptional<EFormationMenuItem>& Out)
+	{
+		Out.Reset();
+		const TSharedPtr<FJsonValue> Value = Object.TryGetField(Name);
+		if (!Value.IsValid() || Value->IsNull())
+		{
+			return true;
+		}
+		FString Id;
+		EFormationMenuItem Item = EFormationMenuItem::Line;
+		if (!Value->TryGetString(Id) || !FormationMenuRules::Parse(Id, Item))
+		{
+			return false;
+		}
+		Out = Item;
+		return true;
+	}
+
+	/** Menu state { open, choice ("auto" | item), highlighted (item | null) }. */
+	bool ReadMenuState(const FJsonObject& Object, FFormationMenuState& Out)
+	{
+		FString Choice;
+		return Object.TryGetBoolField(TEXT("open"), Out.bOpen) && Object.TryGetStringField(TEXT("choice"), Choice)
+			&& FormationMenuRules::ParseChoice(Choice, Out.Choice) && OptionalMenuItem(Object, TEXT("highlighted"), Out.Highlighted);
+	}
+
+	FString ShowMenuItem(const TOptional<EFormationMenuItem>& Item, const TCHAR* Unset)
+	{
+		return Item.IsSet() ? FString(FormationMenuRules::ToString(Item.GetValue())) : FString(Unset);
+	}
+
+	const TCHAR* MenuEffectName(EFormationMenuEffect Effect)
+	{
+		switch (Effect)
+		{
+		case EFormationMenuEffect::Opened: return TEXT("opened");
+		case EFormationMenuEffect::Picked: return TEXT("picked");
+		case EFormationMenuEffect::Auto: return TEXT("auto");
+		case EFormationMenuEffect::Cancelled: return TEXT("cancelled");
+		case EFormationMenuEffect::Disabled: return TEXT("disabled");
+		default: return TEXT("none");
+		}
+	}
+}
+
+FORMATION_PARITY_TEST(FFormationParityMenuTest, "Menu")
+bool FFormationParityMenuTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("Menu"), Golden, bMissing, false))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("Menu"), Golden, [](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		FString Op;
+		if (!In->TryGetStringField(TEXT("op"), Op))
+		{
+			return TEXT("no op");
+		}
+		if (Op == TEXT("itemAt"))
+		{
+			double Dx = 0.0;
+			double Dy = 0.0;
+			double DeadZone = 0.0;
+			TOptional<EFormationMenuItem> Expected;
+			if (!Number(*In, TEXT("dx"), nullptr, Dx) || !Number(*In, TEXT("dy"), nullptr, Dy) || !Number(*In, TEXT("deadZonePx"), TEXT("dead_zone_px"), DeadZone)
+				|| !Out->HasField(TEXT("item")) || !OptionalMenuItem(*Out, TEXT("item"), Expected))
+			{
+				return TEXT("unreadable itemAt case");
+			}
+			const TOptional<EFormationMenuItem> Actual = FormationMenuRules::ItemAt(static_cast<float>(Dx), static_cast<float>(Dy), static_cast<float>(DeadZone));
+			return Actual == Expected ? FString() : FString::Printf(TEXT("item %s, expected %s"), *ShowMenuItem(Actual, TEXT("null")), *ShowMenuItem(Expected, TEXT("null")));
+		}
+		if (Op == TEXT("release"))
+		{
+			const TSharedPtr<FJsonObject>* InState = nullptr;
+			const TSharedPtr<FJsonObject>* OutState = nullptr;
+			double Count = 0.0;
+			FString ExpectedEffect;
+			FFormationMenuState State;
+			FFormationMenuState Expected;
+			if (!In->TryGetObjectField(TEXT("state"), InState) || !ReadMenuState(**InState, State) || !Number(*In, TEXT("memberCount"), TEXT("member_count"), Count)
+				|| !Out->TryGetObjectField(TEXT("state"), OutState) || !ReadMenuState(**OutState, Expected) || !Out->TryGetStringField(TEXT("effect"), ExpectedEffect))
+			{
+				return TEXT("unreadable release case");
+			}
+			const EFormationMenuEffect Effect = FormationMenuRules::Release(State, static_cast<int32>(Count));
+			if (State.bOpen != Expected.bOpen || State.Choice != Expected.Choice || State.Highlighted != Expected.Highlighted || ExpectedEffect != MenuEffectName(Effect))
+			{
+				return FString::Printf(TEXT("state {%s, %s, %s} %s, expected {%s, %s, %s} %s"), State.bOpen ? TEXT("open") : TEXT("closed"),
+					*ShowMenuItem(State.Choice, TEXT("auto")), *ShowMenuItem(State.Highlighted, TEXT("null")), MenuEffectName(Effect),
+					Expected.bOpen ? TEXT("open") : TEXT("closed"), *ShowMenuItem(Expected.Choice, TEXT("auto")), *ShowMenuItem(Expected.Highlighted, TEXT("null")),
+					*ExpectedEffect);
+			}
+			return FString();
+		}
+		if (Op == TEXT("resolve"))
+		{
+			FString ChoiceId;
+			TOptional<EFormationMenuItem> Choice;
+			double Count = 0.0;
+			bool bExpectedForward = false;
+			if (!In->TryGetStringField(TEXT("choice"), ChoiceId) || !FormationMenuRules::ParseChoice(ChoiceId, Choice)
+				|| !Number(*In, TEXT("memberCount"), TEXT("member_count"), Count) || !Out->TryGetBoolField(TEXT("allForward"), bExpectedForward)
+				|| !Out->HasField(TEXT("manualFormation")))
+			{
+				return TEXT("unreadable resolve case");
+			}
+			TOptional<EFormationKind> ExpectedFormation;
+			FString FormationName;
+			const TSharedPtr<FJsonValue> FormationValue = Out->TryGetField(TEXT("manualFormation"));
+			if (!FormationValue->IsNull())
+			{
+				EFormationKind Parsed = EFormationKind::Diamond;
+				if (!FormationValue->TryGetString(FormationName) || !FormationNames::Parse(FormationName, Parsed))
+				{
+					return TEXT("unreadable manualFormation");
+				}
+				ExpectedFormation = Parsed;
+			}
+			const FFormationMenuResolved Actual = FormationMenuRules::Resolve(Choice, static_cast<int32>(Count));
+			if (Actual.ManualFormation != ExpectedFormation || Actual.bAllForward != bExpectedForward)
+			{
+				return FString::Printf(TEXT("{%s, all forward %d}, expected {%s, %d}"),
+					Actual.ManualFormation.IsSet() ? FormationNames::ToString(Actual.ManualFormation.GetValue()) : TEXT("null"), Actual.bAllForward ? 1 : 0,
+					ExpectedFormation.IsSet() ? FormationNames::ToString(ExpectedFormation.GetValue()) : TEXT("null"), bExpectedForward ? 1 : 0);
+			}
+			return FString();
+		}
+		return FString::Printf(TEXT("unknown op %s"), *Op);
 	});
 }
 
