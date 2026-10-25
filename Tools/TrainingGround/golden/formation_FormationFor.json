@@ -57,6 +57,13 @@
   "classify.at_wall_dist": 150,
   "classify.arrive_dist": 50,
   "classify.side_ignore_perp_deg": 30,
+  "guard.clearance": 10,
+  "guard.lookahead": 500,
+  "bypass.max_detour": 0.3,
+  "bypass.threat_memory_s": 20,
+  "corner.lead_dist": 300,
+  "corner.hold_dist": 200,
+  "corner.peek_dist": 300,
   "sight.fov": 140
  },
  "notes": "in: class, memberCount, blizzard -> out.formation.",

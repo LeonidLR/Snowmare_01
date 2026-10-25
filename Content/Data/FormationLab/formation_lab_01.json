@@ -254,6 +254,32 @@
       ],
       "height": 300,
       "thickness": 40
+    },
+    {
+      "id": "W_G_19",
+      "a": [
+        1700,
+        2800
+      ],
+      "b": [
+        3100,
+        3100
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W_G_20",
+      "a": [
+        4800,
+        2700
+      ],
+      "b": [
+        4800,
+        4000
+      ],
+      "height": 300,
+      "thickness": 40
     }
   ],
   "zones": [
@@ -586,6 +612,50 @@
           5850
         ]
       ]
+    },
+    {
+      "id": "Z_G1",
+      "kind": "wall_run",
+      "poly": [
+        [
+          1800,
+          2450
+        ],
+        [
+          3400,
+          2450
+        ],
+        [
+          3400,
+          3350
+        ],
+        [
+          1800,
+          3350
+        ]
+      ]
+    },
+    {
+      "id": "Z_G2",
+      "kind": "wall_end",
+      "poly": [
+        [
+          4500,
+          2400
+        ],
+        [
+          5100,
+          2400
+        ],
+        [
+          5100,
+          3200
+        ],
+        [
+          4500,
+          3200
+        ]
+      ]
     }
   ],
   "props": [
@@ -792,6 +862,113 @@
         {
           "zone": "Z_V2_gaps",
           "formation": "echelon_right"
+        }
+      ]
+    },
+    {
+      "id": "R_G_free",
+      "pace": "walk",
+      "points": [
+        [
+          1100,
+          2900
+        ],
+        [
+          4300,
+          2900
+        ]
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W_G_19",
+          "wall_on": "right"
+        }
+      ]
+    },
+    {
+      "id": "R_G_threat_right",
+      "pace": "walk",
+      "points": [
+        [
+          1100,
+          2900
+        ],
+        [
+          4300,
+          2900
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            2600,
+            3800
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W_G_19",
+          "wall_on": "right"
+        }
+      ]
+    },
+    {
+      "id": "R_G_threat_left",
+      "pace": "walk",
+      "points": [
+        [
+          1100,
+          2900
+        ],
+        [
+          4300,
+          2900
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            2600,
+            2000
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W_G_19",
+          "wall_on": "left"
+        }
+      ]
+    },
+    {
+      "id": "R_G_far",
+      "pace": "walk",
+      "points": [
+        [
+          3900,
+          2900
+        ],
+        [
+          5900,
+          2900
+        ]
+      ],
+      "threats": [
+        {
+          "pos": [
+            5500,
+            3600
+          ],
+          "since_s": 0
+        }
+      ],
+      "expect_bypass": [
+        {
+          "wall": "W_G_20",
+          "wall_on": "right"
         }
       ]
     }

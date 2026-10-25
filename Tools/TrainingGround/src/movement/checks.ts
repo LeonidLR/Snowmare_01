@@ -4,9 +4,12 @@
 import type { FormationConfig } from './config.ts';
 import { cfg } from './config.ts';
 import type { Vec2 } from './geometry.ts';
-import { angleDiff, closestOnSegment, dirOf, dist, distToWall, round, sub, yawOf } from './geometry.ts';
+import type { Segment } from './geometry.ts';
+import { add, angleDiff, closestOnSegment, dirOf, dist, distToWall, round, scale, segmentBlocked, sub, yawOf } from './geometry.ts';
 import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments, zoneAt } from './layout.ts';
+import type { WallSide } from './rules.ts';
+import { CORNER_GRAZE, cornerAhead, FormationGuardRules, wallSideOf } from './rules.ts';
 import type { Frame } from './sim.ts';
 import { SIM_DT } from './sim.ts';
 
@@ -25,6 +28,9 @@ export const LIMITS = {
   paceBehind: 150, // cm (contract), checked on the 95th percentile
   stuckDist: 600,
   stuckSeconds: 3,
+  splitSeconds: 0.3, // v2.1 check 7: a wall between the leader and a member's slot / position (or chain neighbours) this long
+  cornerPeek: 200, // cm, check 9: the hidden area's point behind the far face at the wall end
+  cornerMargin: 10, // deg, check 9: the corner / hidden point within fov / 2 - margin of a member's facing
 } as const;
 
 export interface Worst { t: number; what: string; value: number }
@@ -46,6 +52,12 @@ export interface RunMetrics {
   slots: { fallbackTicks: number; invalidTicks: number; spacingEvents: number; worst: Worst | null };
   pace: { p95: number; max: number; worst: Worst | null } | null;
   stuck: { events: number; worst: Worst | null };
+  /** v2.1 check 7: squad split by a wall (events = splits lasting >= LIMITS.splitSeconds). */
+  split: { events: number; worst: Worst | null };
+  /** v2.1 check 8: the side the leader really passed each expected wall on. */
+  bypass: { wall: string; want: WallSide; got: WallSide }[];
+  /** v2.1 check 9: free wall ends passed on patrol, and those nobody looked round in time. */
+  corner: { ends: number; missed: number; worst: Worst | null };
 }
 
 /** Collects one run's frames into RunMetrics. */
@@ -67,10 +79,16 @@ export class RunCollector {
   private stuckTimer = new Map<string, number>();
   private behind: number[] = [];
   private rearWatched = 0;
+  private readonly segs: Segment[];
+  private splitTimer = 0;
+  private splitCounted = false;
+  private trail: Vec2[] = [];
+  private cornerPrev = new Map<string, number>();
 
   constructor(layout: Layout, route: LayoutRoute, memberCount: number, seed: number, config: FormationConfig) {
     this.layout = layout; this.route = route; this.n = memberCount; this.c = config;
-    this.walls = layout.walls.map((w, i) => ({ id: w.id, seg: wallSegments(layout)[i] }));
+    this.segs = wallSegments(layout);
+    this.walls = layout.walls.map((w, i) => ({ id: w.id, seg: this.segs[i] }));
     this.m = {
       route: route.id, members: memberCount, seed, duration: 0, distance: 0,
       wallStare: { events: 0, worst: null },
@@ -80,6 +98,9 @@ export class RunCollector {
       slots: { fallbackTicks: 0, invalidTicks: 0, spacingEvents: 0, worst: null },
       pace: null,
       stuck: { events: 0, worst: null },
+      split: { events: 0, worst: null },
+      bypass: [],
+      corner: { ends: 0, missed: 0, worst: null },
     };
   }
 
@@ -92,7 +113,8 @@ export class RunCollector {
     for (const mem of f.members) {
       let staring = '';
       // Looking where he walks (facing within stareAngle of his travel) is approaching, not staring (a dead end ahead).
-      const approaching = mem.moveYaw !== null && angleDiff(mem.yaw, mem.moveYaw) <= LIMITS.stareAngle;
+      // v2.1: the corner man looks at the wall end on purpose (slicing the pie), that is not a stare either.
+      const approaching = (mem.moveYaw !== null && angleDiff(mem.yaw, mem.moveYaw) <= LIMITS.stareAngle) || mem.cornerWatch;
       for (const w of approaching ? [] : this.walls) {
         if (distToWall(mem.pos, w.seg) > LIMITS.stareDist) continue;
         const towards = yawOf(sub(closestOnSegment(mem.pos, w.seg.a, w.seg.b).point, mem.pos));
@@ -119,21 +141,23 @@ export class RunCollector {
     // 3. flicker + 4. expected formation per zone
     if (f.mode === 'halt' || f.mode === 'wall') this.haltStart ??= f.t; else this.haltStart = null;
     const zone = zoneAt(this.layout, leader.pos);
+    // v2.1: 3 and 4 judge the REQUESTED formation (the terrain's / the menu's decision); the wall guard's fallbacks are geometry
+    // (check 7 proves they keep the squad whole; their hysteresis is the rule's).
     // A change is unexpected when it contradicts the expectation of the zone the leader is in / about to enter, or when it
     // is reverted within LIMITS.flickerRevert x hold_distance of path (a real flicker); a lasting change on open ground is fine.
-    if (this.prevFormation && f.formation !== this.prevFormation) {
+    if (this.prevFormation && f.requested !== this.prevFormation) {
       this.m.flicker.changes++;
       const ahead: Vec2 = [leader.pos[0] + dirOf(f.heading)[0] * LIMITS.expectLookAhead, leader.pos[1] + dirOf(f.heading)[1] * LIMITS.expectLookAhead];
       const zones = [zone, zoneAt(this.layout, ahead)].filter(Boolean).map((z) => z!.id);
       const wants = (this.route.expect ?? []).filter((e) => zones.includes(e.zone));
-      const what = `${this.prevFormation} -> ${f.formation}${zone ? ` in ${zone.id}` : ''}`;
+      const what = `${this.prevFormation} -> ${f.requested}${zone ? ` in ${zone.id}` : ''}`;
       const reverted = this.lastChange && f.leaderDistance - this.lastChange.d < LIMITS.flickerRevert * cfg(this.c, 'classify.hold_distance') &&
-        sameFormation(this.lastChange.from, f.formation);
+        sameFormation(this.lastChange.from, f.requested);
       if (reverted) this.unexpected(f.t, `${this.lastChange!.what}, back after ${round(f.t - this.lastChange!.t, 1)} s`);
-      else if (wants.length && !wants.some((e) => sameFormation(e.formation, f.formation))) this.unexpected(f.t, `${what} (zone wants ${wants[0].formation})`);
+      else if (wants.length && !wants.some((e) => sameFormation(e.formation, f.requested))) this.unexpected(f.t, `${what} (zone wants ${wants[0].formation})`);
       this.lastChange = { t: f.t, d: f.leaderDistance, from: this.prevFormation, what };
     }
-    this.prevFormation = f.formation;
+    this.prevFormation = f.requested;
     for (const e of this.route.expect ?? []) {
       const key = e.zone;
       if (zone?.id === key) {
@@ -146,7 +170,7 @@ export class RunCollector {
         if (walkedIn >= settleCm || halted) {
           const acc = this.expectAcc.get(key) ?? { settled: 0, match: 0 };
           acc.settled += SIM_DT;
-          if (sameFormation(f.formation, e.formation)) acc.match += SIM_DT;
+          if (sameFormation(f.requested, e.formation)) acc.match += SIM_DT;
           this.expectAcc.set(key, acc);
         }
       } else this.zoneEnter.delete(key);
@@ -183,6 +207,61 @@ export class RunCollector {
       }
     }
 
+    // 7. squad split by a wall (v2.1): leader -> slot / position, and chain neighbours (actual positions)
+    // The trail column (guard level 2) bends round a wall end on the leader's own path: there the chain of neighbours (slots and
+    // positions) must hold - the leader's straight line to the tail may clip the end it wraps.
+    const cut: string[] = [];
+    const trailColumn = f.guardLevel === 2;
+    if (!trailColumn) for (const mem of f.members.slice(1)) {
+      if (segmentBlocked(leader.pos, mem.slot, this.segs, 0)) cut.push(`${mem.role}'s slot`);
+      else if (segmentBlocked(leader.pos, mem.pos, this.segs, 0)) cut.push(mem.role);
+    }
+    const chainOf: Formation = trailColumn ? (f.requested === 'echelon_right' ? 'echelon_right' : 'column') : f.formation;
+    for (const [a, b] of FormationGuardRules.ChainPairs(chainOf, this.n)) {
+      const A = f.members.find((x) => x.role === a), B = f.members.find((x) => x.role === b);
+      if (!A || !B) continue;
+      if (segmentBlocked(A.pos, B.pos, this.segs, 0)) cut.push(`${a}-${b}`);
+      else if (trailColumn && segmentBlocked(A.slot, B.slot, this.segs, 0)) cut.push(`${a}-${b} slots`);
+    }
+    if (cut.length) {
+      this.splitTimer += SIM_DT;
+      if (this.splitTimer >= LIMITS.splitSeconds && !this.splitCounted) { this.splitCounted = true; this.m.split.events++; }
+      if (this.splitTimer >= LIMITS.splitSeconds && (!this.m.split.worst || this.splitTimer > this.m.split.worst.value)) {
+        this.m.split.worst = { t: round(f.t, 1), what: `${f.formation}${f.requested !== f.formation ? ` (asked ${f.requested})` : ''}: wall cuts ${cut.join(', ')}`, value: round(this.splitTimer, 2) };
+      }
+    } else { this.splitTimer = 0; this.splitCounted = false; }
+
+    // 8. the leader's trail (the pass side is judged at the end)
+    const last = this.trail[this.trail.length - 1];
+    if (!last || dist(last, leader.pos) >= 25) this.trail.push(leader.pos);
+
+    // 9. corner: the leader passes a free wall end beside him on patrol -> someone looks round it at that moment
+    if (f.mode === 'walk') {
+      const fov = cfg(this.c, 'sight.fov');
+      this.segs.forEach((w, i) => {
+        for (const end of [0, 1] as const) {
+          const key = `${i}:${end}`;
+          const s = cornerAhead(this.segs, i, end, leader.pos, f.heading, this.c);
+          const prev = this.cornerPrev.get(key);
+          if (s === null) { this.cornerPrev.delete(key); continue; }
+          this.cornerPrev.set(key, s);
+          if (prev === undefined || !(prev > 0 && s <= 0)) continue;
+          const E = end === 0 ? w.a : w.b, O = end === 0 ? w.b : w.a;
+          const u = scale(sub(E, O), 1 / Math.max(1e-6, dist(E, O)));
+          const nrm: Vec2 = [-u[1], u[0]];
+          const side = (leader.pos[0] - E[0]) * nrm[0] + (leader.pos[1] - E[1]) * nrm[1] >= 0 ? 1 : -1;
+          const G = add(E, scale(u, (w.thickness ?? 0) / 2 + CORNER_GRAZE));
+          const H = add(G, scale(nrm, -side * LIMITS.cornerPeek));
+          const sees = (p: Vec2) => f.members.some((mem) => angleDiff(mem.yaw, yawOf(sub(p, mem.pos))) <= fov / 2 - LIMITS.cornerMargin);
+          this.m.corner.ends++;
+          if (!sees(G) && !sees(H)) {
+            this.m.corner.missed++;
+            this.m.corner.worst ??= { t: round(f.t, 1), what: `nobody looked round the ${end === 0 ? 'a' : 'b'} end of ${this.walls[i].id}`, value: this.m.corner.missed };
+          }
+        }
+      });
+    }
+
     // stuck (info)
     for (const mem of f.members.slice(1)) {
       if (dist(mem.pos, mem.slot) > LIMITS.stuckDist) {
@@ -213,6 +292,11 @@ export class RunCollector {
       const s = [...this.behind].sort((a, b) => a - b);
       m.pace.p95 = round(s[Math.min(s.length - 1, Math.floor(s.length * 0.95))] ?? 0, 0);
     }
+    if (this.trail.length < 2 || dist(this.trail[this.trail.length - 1], this.trail[0]) < 1) this.trail.push(this.trail[0] ?? [0, 0]);
+    m.bypass = (this.route.expect_bypass ?? []).map((e) => {
+      const i = this.layout.walls.findIndex((w) => w.id === e.wall);
+      return { wall: e.wall, want: e.wall_on, got: wallSideOf(this.trail, this.segs[i]) };
+    });
     m.duration = round(m.duration, 2);
     m.distance = round(m.distance, 0);
     return m;
@@ -251,7 +335,7 @@ function worstOf(runs: RunMetrics[], pick: (r: RunMetrics) => Worst | null | und
   return best ? `${runTag(best.r)} t=${best.w.t}s ${best.w.what}` : '-';
 }
 
-export const CHECK_WEIGHTS: Record<number, number> = { 1: 2, 2: 2, 3: 1, 4: 2, 5: 2, 6: 1 };
+export const CHECK_WEIGHTS: Record<number, number> = { 1: 2, 2: 2, 3: 1, 4: 2, 5: 2, 6: 1, 7: 3, 8: 2, 9: 1 };
 
 export function summarize(runs: RunMetrics[]): SeriesSummary {
   const line = (id: number, name: string, applicable: RunMetrics[], ok: (r: RunMetrics) => boolean, worst: string, info = false): CheckLine => {
@@ -263,6 +347,9 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
   const withExpect = runs.flatMap((r) => r.expect.map((e) => ({ r, e })));
   const expectFail = withExpect.filter(({ e }) => e.pct < LIMITS.expectPct).sort((a, b) => a.e.pct - b.e.pct)[0];
   const paceRuns = runs.filter((r) => r.pace);
+  const bypassRuns = runs.filter((r) => r.bypass.length);
+  const bypassFail = bypassRuns.find((r) => r.bypass.some((b) => b.got !== b.want));
+  const cornerRuns = runs.filter((r) => r.corner.ends > 0);
   const checks: CheckLine[] = [
     line(1, `wall stare (<${LIMITS.stareDist} cm, ${LIMITS.stareAngle} deg, >=${LIMITS.stareMinSeconds} s)`, runs,
       (r) => r.wallStare.events === 0, worstOf(runs, (r) => r.wallStare.worst)),
@@ -278,9 +365,16 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
       (r) => r.slots.invalidTicks === 0 && r.slots.spacingEvents === 0, worstOf(runs, (r) => r.slots.worst)),
     line(6, `pace: rear man <=${LIMITS.paceBehind} cm behind his slot (p95)`, paceRuns,
       (r) => r.pace!.p95 <= LIMITS.paceBehind, worstOf(paceRuns, (r) => r.pace!.worst)),
-    line(7, `info: rear cover with 3 men (gap kept by design)`, three, () => true,
+    line(7, `squad never split by a wall (>=${LIMITS.splitSeconds} s)`, runs,
+      (r) => r.split.events === 0, worstOf(runs, (r) => r.split.worst)),
+    line(8, 'passes on the shielded side when a threat is known (detour <= bypass.max_detour)', bypassRuns,
+      (r) => r.bypass.every((b) => b.got === b.want),
+      bypassFail ? (() => { const b = bypassFail.bypass.find((x) => x.got !== x.want)!; return `${runTag(bypassFail)} ${b.wall}: wall on the ${b.got}, wants ${b.want}`; })() : '-'),
+    line(9, 'corner man looks round a passed wall end in time', cornerRuns,
+      (r) => r.corner.missed === 0, worstOf(cornerRuns, (r) => r.corner.worst)),
+    line(10, `info: rear cover with 3 men (gap kept by design)`, three, () => true,
       three.length ? `min ${Math.min(...three.map((r) => r.rearCover!.pct))} % / avg ${round(three.reduce((a, r) => a + r.rearCover!.pct, 0) / three.length, 1)} %` : '-', true),
-    line(8, `info: stuck followers (>${LIMITS.stuckDist} cm for ${LIMITS.stuckSeconds} s), slot fallbacks`, runs, (r) => r.stuck.events === 0,
+    line(11, `info: stuck followers (>${LIMITS.stuckDist} cm for ${LIMITS.stuckSeconds} s), slot fallbacks`, runs, (r) => r.stuck.events === 0,
       `${worstOf(runs, (r) => r.stuck.worst)}; fallback ticks ${runs.reduce((a, r) => a + r.slots.fallbackTicks, 0)}`, true),
   ];
   // Smooth score: a passing run counts 1, a failing one by how close it came, so the tuner sees partial progress.
@@ -292,6 +386,9 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
     4: mean(withExpect.map(({ e }) => Math.min(1, e.pct / LIMITS.expectPct))),
     5: mean(runs.map((r) => (r.slots.invalidTicks === 0 && r.slots.spacingEvents === 0 ? 1 : 0.5 / (1 + r.slots.spacingEvents + r.slots.invalidTicks / 30)))),
     6: mean(paceRuns.map((r) => Math.min(1, LIMITS.paceBehind / Math.max(1, r.pace!.p95)))),
+    7: mean(runs.map((r) => 1 / (1 + r.split.events))),
+    8: mean(bypassRuns.map((r) => r.bypass.filter((b) => b.got === b.want).length / r.bypass.length)),
+    9: mean(cornerRuns.map((r) => 1 - r.corner.missed / r.corner.ends)),
   };
   let num = 0, den = 0;
   for (const [id, v] of Object.entries(soft)) {
@@ -311,13 +408,15 @@ export interface ReportHeader {
   seed: number;
   configHash: string;
   date: string;
+  /** v2.1: the manual menu choice of every run (absent = auto). */
+  manual?: string;
 }
 
 /** The <= 30-line report (FORMATION_CONTRACT.md 4): the only thing a coding agent reads. */
 export function renderReport(h: ReportHeader, s: SeriesSummary, advice: string[] | null): string {
   const lines = [
     `# Movement bot report - ${h.layout}`,
-    `layout ${h.layout} | routes ${h.routes} | runs ${s.runs} (members ${h.members.join(',')} x seeds ${h.seeds}) | seed ${h.seed} | config ${h.configHash} | ${h.date}`,
+    `layout ${h.layout} | routes ${h.routes} | runs ${s.runs} (members ${h.members.join(',')} x seeds ${h.seeds}) | seed ${h.seed} | config ${h.configHash} | ${h.date}${h.manual ? ` | manual ${h.manual}` : ''}`,
     `result: ${s.allGreen ? 'ALL GREEN' : 'FAILURES'} | score ${s.score}`,
     '',
     '| # | check | pass | fail | worst case |',
@@ -328,6 +427,32 @@ export function renderReport(h: ReportHeader, s: SeriesSummary, advice: string[]
     ...(advice ?? []).slice(0, 10).map((a) => `- ${a}`),
     '',
     'raw runs: runs.jsonl (not for agents)',
+  ];
+  return lines.slice(0, 30).join('\n') + '\n';
+}
+
+/**
+ * v2.1: auto + every manual menu item on every route - fail counts per check. A manual formation ignores the terrain on
+ * purpose, so only checks 5 (slots / spacing) and 7 (squad split) gate it (a manual diamond in a corridor scans into its walls by definition); the rest is shown for information.
+ */
+export function renderManualMatrix(h: ReportHeader, rows: { choice: string; summary: SeriesSummary }[]): string {
+  const ids = rows[0]?.summary.checks.filter((c) => !c.info).map((c) => c.id) ?? [];
+  const gated = (choice: string, id: number) => choice === 'auto' || [5, 7].includes(id);
+  const cell = (choice: string, ch: CheckLine | undefined) => !ch || ch.pass + ch.fail === 0 ? '-' : gated(choice, ch.id) ? String(ch.fail) : `(${ch.fail})`;
+  const lines = [
+    `# Movement bot - auto + every manual formation - ${h.layout}`,
+    `layout ${h.layout} | routes ${h.routes} | members ${h.members.join(',')} x seeds ${h.seeds} | seed ${h.seed} | config ${h.configHash} | ${h.date}`,
+    'cells = failing runs per check; (n) = not gating for a manual formation (it ignores the terrain on purpose)',
+    '',
+    `| choice | runs | ${ids.map((i) => `#${i}`).join(' | ')} | score | gate |`,
+    `|---|---|${ids.map(() => '---').join('|')}|---|---|`,
+    ...rows.map((r) => {
+      const ok = r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((c) => [5, 7].includes(c.id)).every((c) => c.fail === 0);
+      return `| ${r.choice} | ${r.summary.runs} | ${ids.map((i) => cell(r.choice, r.summary.checks.find((c) => c.id === i))).join(' | ')} | ${r.summary.score} | ${ok ? 'PASS' : 'FAIL'} |`;
+    }),
+    '',
+    'worst split (#7) per choice:',
+    ...rows.map((r) => `- ${r.choice}: ${r.summary.checks.find((c) => c.id === 7)?.worst ?? '-'}`),
   ];
   return lines.slice(0, 30).join('\n') + '\n';
 }

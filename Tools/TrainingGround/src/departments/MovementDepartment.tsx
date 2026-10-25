@@ -11,8 +11,11 @@ import { configValues } from '../movement/config';
 import type { Frame } from '../movement/sim';
 import { buildNav, simulate } from '../movement/sim';
 import { RunCollector } from '../movement/checks';
+import { guardHudText } from '../movement/labels';
 import type { RunMetrics } from '../movement/checks';
 
+const BYPASS_RU: Record<string, string> = { shortest: 'кратчайший путь', shielded: 'укрыт от угрозы', too_long: 'укрытый путь слишком длинный' };
+const ROLE_RU: Record<string, string> = { K: 'командир', P: 'правый', L: 'левый', Z: 'замыкающий' };
 const FORMATION_RU: Record<string, string> = {
   diamond: 'Ромб', wedge: 'Клин', column: 'Колонна-ёлочка', line: 'Цепь', echelon_left: 'Эшелон влево',
   echelon_right: 'Эшелон вправо', wall: 'У стены', hedgehog: 'Ёж', blizzard: 'Метельная сцепка',
@@ -148,6 +151,10 @@ export const MovementDepartment: React.FC = () => {
     ['Построение по зонам', metrics.expect.length ? metrics.expect.map((e) => `${e.zone} ${e.pct}%`).join(', ') : '—', metrics.expect.length ? metrics.expect.every((e) => e.pct >= 80) : null],
     ['Слоты', `${metrics.slots.invalidTicks} недоступных, ${metrics.slots.spacingEvents} теснота`, metrics.slots.invalidTicks === 0 && metrics.slots.spacingEvents === 0],
     ['Темп замыкающего', metrics.pace ? `p95 ${metrics.pace.p95} см` : '—', metrics.pace ? metrics.pace.p95 <= 150 : null],
+    ['Отряд не разрезан стеной', `${metrics.split.events} эпизодов`, metrics.split.events === 0],
+    ['Обход с укрытой стороны', metrics.bypass.length ? metrics.bypass.map((b) => `${b.wall}: стена ${b.got === 'left' ? 'слева' : 'справа'}`).join(', ') : '—',
+      metrics.bypass.length ? metrics.bypass.every((b) => b.got === b.want) : null],
+    ['Проверка угла', metrics.corner.ends ? `${metrics.corner.ends - metrics.corner.missed} / ${metrics.corner.ends} концов стен` : '—', metrics.corner.ends ? metrics.corner.missed === 0 : null],
   ] : [];
 
   return (
@@ -216,15 +223,23 @@ export const MovementDepartment: React.FC = () => {
             {frame && (
               <div className="absolute top-3 left-3 bg-slate-950/85 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 flex flex-col gap-0.5">
                 <span>t = {frame.t.toFixed(1)} с · {MODE_RU[frame.mode]}</span>
-                <span>построение: <b className="text-cyan-300">{FORMATION_RU[frame.formation]}</b>{manual === 'all_forward' ? ' · все вперёд' : manual !== 'auto' ? ' (вручную)' : ''}</span>
+                {/* v2.1: the requested formation and, while a wall cuts it, the one in effect ("Эшелон влево -> колонна (стена)"). */}
+                <span>построение: <b className="text-cyan-300">{FORMATION_RU[frame.requested]}</b>
+                  {frame.formation !== frame.requested && <> → <b className="text-amber-300">{FORMATION_RU[frame.formation]}</b> (стена{frame.guardLevel === 2 ? ', по следу' : ''})</>}
+                  {manual === 'all_forward' ? ' · все вперёд' : manual !== 'auto' ? ' (вручную)' : ''}</span>
+                <span className="text-slate-400">в игре: {guardHudText(frame.requested, frame.formation, frame.guardLevel, frame.members.length)}</span>
                 <span>местность: {frame.terrain}</span>
                 <span>пройдено: {(frame.leaderDistance / 100).toFixed(1)} м</span>
+                {frame.bypasses.map((b, i) => (
+                  <span key={i}>обход {b.wall}: стена {b.wallOn === 'left' ? 'слева' : 'справа'} · {BYPASS_RU[b.reason]}{b.detour > 0 ? ` (+${Math.round(b.detour * 100)} %)` : ''}</span>
+                ))}
+                {frame.members.some((m) => m.cornerWatch) && <span>угол проверяет: {frame.members.filter((m) => m.cornerWatch).map((m) => ROLE_RU[m.role]).join(', ')}</span>}
               </div>
             )}
           </div>
           <input type="range" min={0} max={frames.length ? frames[frames.length - 1].t : 0} step={1 / 30} value={t}
             onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} aria-label="Время прогона" />
-          <p className="text-xs text-slate-500">К — командир, П — правый, Л — левый, З — замыкающий. Белое кольцо: боец идёт задом. Крестик: его слот (оранжевый — запасной, слот был в стене).</p>
+          <p className="text-xs text-slate-500">К — командир, П — правый, Л — левый, З — замыкающий. Белое кольцо: боец идёт задом. Жёлтое кольцо: проверяет угол. Крестик: его слот (оранжевый — запасной, слот был в стене). Красный ромб: известная угроза.</p>
         </Panel>
       </div>
 

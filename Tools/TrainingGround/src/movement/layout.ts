@@ -32,11 +32,26 @@ export interface RouteExpect {
   formation: Formation;
 }
 
+/** v2.1: a threat known to the squad on this route (an enemy seen, or heard / last known position) from since_s on. */
+export interface RouteThreat {
+  pos: Vec2;
+  /** Sim time of the contact, s (0 = known from the start); it counts while younger than bypass.threat_memory_s. */
+  since_s: number;
+}
+
+/** v2.1, bot check 8: the side the squad must pass this wall on (the wall on its left / right as it goes by). */
+export interface RouteBypassExpect {
+  wall: string;
+  wall_on: 'left' | 'right';
+}
+
 export interface LayoutRoute {
   id: string;
   pace: 'walk' | 'run';
   points: Vec2[];
   expect?: RouteExpect[];
+  threats?: RouteThreat[];
+  expect_bypass?: RouteBypassExpect[];
 }
 
 export const PROP_KINDS = ['heat_source'] as const;
@@ -129,6 +144,22 @@ export function validateLayout(data: unknown): string[] {
       else r.expect.forEach((x, j) => {
         if (!zoneIds.has(x?.zone)) e.push(`${where}.expect[${j}]: unknown zone "${x?.zone}"`);
         if (!FORMATIONS.includes(x?.formation as Formation)) e.push(`${where}.expect[${j}]: formation must be one of ${FORMATIONS.join(' | ')}`);
+      });
+    }
+    if (r?.threats !== undefined) {
+      if (!Array.isArray(r.threats)) e.push(`${where}: threats must be an array`);
+      else r.threats.forEach((t, j) => {
+        if (!isVec(t?.pos)) e.push(`${where}.threats[${j}]: pos must be [x, y]`);
+        else if (!inBounds(t.pos)) e.push(`${where}.threats[${j}]: outside bounds`);
+        if (!isNum(t?.since_s) || t.since_s < 0) e.push(`${where}.threats[${j}]: since_s must be a number >= 0`);
+      });
+    }
+    if (r?.expect_bypass !== undefined) {
+      const wallIds = new Set(Array.isArray(l.walls) ? l.walls.map((w) => w?.id) : []);
+      if (!Array.isArray(r.expect_bypass)) e.push(`${where}: expect_bypass must be an array`);
+      else r.expect_bypass.forEach((x, j) => {
+        if (!wallIds.has(x?.wall)) e.push(`${where}.expect_bypass[${j}]: unknown wall "${x?.wall}"`);
+        if (x?.wall_on !== 'left' && x?.wall_on !== 'right') e.push(`${where}.expect_bypass[${j}]: wall_on must be left | right`);
       });
     }
   });

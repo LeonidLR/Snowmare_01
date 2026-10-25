@@ -92,6 +92,14 @@ export const SquadView: React.FC<Props> = ({ layout, frame, routeId, fov = 140, 
       g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     }
 
+    // v2.1: the selected route's known threats (red diamonds).
+    for (const r of layout.routes) if (routeId && r.id === routeId) for (const th of r.threats ?? []) {
+      const q = P(th.pos), d = 8;
+      g.fillStyle = 'rgba(239,68,68,0.25)'; g.strokeStyle = '#ef4444'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(q[0], q[1] - d); g.lineTo(q[0] + d, q[1]); g.lineTo(q[0], q[1] + d); g.lineTo(q[0] - d, q[1]); g.closePath(); g.fill(); g.stroke();
+      if (frame && frame.t >= th.since_s) { g.fillStyle = '#fca5a5'; g.font = '10px ui-monospace, monospace'; g.textAlign = 'center'; g.fillText('угроза', q[0], q[1] - d - 4); }
+    }
+
     for (const m of marks ?? []) {
       const q = P(m);
       g.strokeStyle = '#f97316'; g.lineWidth = 2;
@@ -115,6 +123,7 @@ export const SquadView: React.FC<Props> = ({ layout, frame, routeId, fov = 140, 
         g.fillStyle = ROLE_COLOR[m.role];
         g.beginPath(); g.arc(q[0], q[1], rad, 0, Math.PI * 2); g.fill();
         if (m.backwards) { g.strokeStyle = '#f8fafc'; g.lineWidth = 1.5; g.beginPath(); g.arc(q[0], q[1], rad + 3, 0, Math.PI * 2); g.stroke(); }
+        if (m.cornerWatch) { g.strokeStyle = '#facc15'; g.lineWidth = 2; g.beginPath(); g.arc(q[0], q[1], rad + 6, 0, Math.PI * 2); g.stroke(); }
         g.fillStyle = '#020617'; g.font = `bold ${Math.max(9, rad * 1.2)}px ui-monospace, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(ROLE_LABEL[m.role] ?? m.role, q[0], q[1] + 0.5);
         g.textBaseline = 'alphabetic';

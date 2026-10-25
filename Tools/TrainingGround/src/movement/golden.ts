@@ -7,13 +7,17 @@ import type { Segment, Vec2 } from './geometry.ts';
 import { round } from './geometry.ts';
 import type { Formation } from './layout.ts';
 import { FORMATIONS } from './layout.ts';
-import type { ClassifyState, Mode, Role, TerrainClass } from './rules.ts';
-import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, FormationWallRules, rolesFor } from './rules.ts';
+import type { ClassifyState, CornerState, GuardState, Mode, Role, TerrainClass, Threat } from './rules.ts';
+import {
+  CORNER_START, FormationBypassRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
+  FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor,
+} from './rules.ts';
 import { FormationMenuRules, MENU_ITEMS } from './menu.ts';
 import type { MenuChoice } from './menu.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
-export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu'] as const;
+export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu',
+  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -57,7 +61,15 @@ const SCENES: Record<string, Segment[]> = {
   oblique_left_50: [{ a: [-1200, -1800], b: [400, 107], thickness: 40 }],
   // v1.1 edge: a wall 70 deg off the heading (inside the band) ahead-left is ignored by the side probes.
   oblique_left_70: [{ a: [100, -1700], b: [700, -50], thickness: 40 }],
+  // v2.1 guard: a wall 4 m to the left - the echelon LEFT's tail is beyond it, the echelon right is whole.
+  echelon_cut_left: [{ a: [-2000, -400], b: [2000, -400], thickness: 40 }],
+  // v2.1 guard: a passage entrance 3 m ahead (walls from x 300 on): whole here, cut at the lookahead pose.
+  entrance_ahead: [{ a: [300, -250], b: [3000, -250], thickness: 40 }, { a: [300, 250], b: [3000, 250], thickness: 40 }],
 };
+
+/** v2.1 scenes for the guard (the leader's frame). */
+const GUARD_SCENES = ['none', 'wall_left', 'wall_right', 'corridor', 'gap_left', 'corner_left_ahead', 'wall_end_behind_left',
+  'far_left', 'echelon_cut_left', 'entrance_ahead'];
 
 export function buildGolden(config: FormationConfig, configPath: string): Record<GoldenRule, GoldenFile> {
   const base = (rule: GoldenRule, notes: string): GoldenFile => ({
@@ -160,7 +172,100 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     menu.cases.push({ in: { op: 'resolve', choice, memberCount }, out: FormationMenuRules.Resolve(choice, memberCount) });
   }
 
-  return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall };
+  // --- v2.1 (FORMATION_CONTRACT.md 10)
+  const guard = base('Guard', 'in: walls, requested, memberCount, leaderPos, leaderYaw, ahead ({pos, yaw} | null), state {requested, level, effective, candidate, candidateDistance}, stepDistance -> out.blocked (BlockedRoles at the leader) + out.state (Resolve).');
+  const guardFormations: Formation[] = ['diamond', 'line', 'column', 'echelon_right', 'echelon_left', 'hedgehog', 'blizzard'];
+  for (const scene of GUARD_SCENES) {
+    for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
+      const placed = place(SCENES[scene], yaw, offset);
+      const ahead = { pos: r2([offset[0] + Math.cos((yaw * Math.PI) / 180) * 500, offset[1] + Math.sin((yaw * Math.PI) / 180) * 500]), yaw };
+      for (const requested of guardFormations) for (const memberCount of requested.startsWith('echelon') ? [3, 4] : [4]) {
+        const states: GuardState[] = [
+          GUARD_START,
+          { requested, level: 2, effective: 'column', candidate: null, candidateDistance: 0 },
+          { requested, level: 2, effective: 'column', candidate: 0, candidateDistance: hold - 30 },
+        ];
+        for (const aheadIn of [null, ahead]) for (const state of states) {
+          const blocked = FormationGuardRules.BlockedRoles(placed, requested, memberCount, offset, yaw, config);
+          const out = FormationGuardRules.Resolve(placed, requested, memberCount, offset, yaw, aheadIn, state, 60, config);
+          guard.cases.push({ in: { scene, walls: placed.map(seg), requested, memberCount, leaderPos: r2(offset), leaderYaw: yaw, ahead: aheadIn, state, stepDistance: 60 },
+            out: { blocked, state: { ...out, candidateDistance: round(out.candidateDistance) } } });
+        }
+      }
+    }
+  }
+
+  const trail = base('TrailSlots', 'in: trail [[x, y]] (oldest first, last = the leader), leaderYaw, memberCount, requested -> out.slots [{role, pos, yaw}] (the column along the path; yaw = the trail direction there).');
+  const TRAILS: Record<string, Vec2[]> = {
+    straight: [[-2000, 0], [-1000, 0], [0, 0]],
+    turn_left_90: [[-1500, 600], [-600, 600], [-300, 300], [0, 0]],
+    short: [[-100, 0], [0, 0]],
+    single: [[0, 0]],
+    zigzag: [[-1200, -200], [-800, 200], [-400, -200], [0, 0]],
+  };
+  for (const [name, pts] of Object.entries(TRAILS)) for (const [yaw, offset] of [[0, [0, 0]], [-120, [800, 300]]] as [number, Vec2][]) {
+    const tr = pts.map((p) => r2([offset[0] + p[0] * Math.cos((yaw * Math.PI) / 180) - p[1] * Math.sin((yaw * Math.PI) / 180), offset[1] + p[0] * Math.sin((yaw * Math.PI) / 180) + p[1] * Math.cos((yaw * Math.PI) / 180)]));
+    for (const memberCount of [2, 3, 4]) for (const requested of ['column', 'echelon_right', 'echelon_left'] as Formation[]) {
+      const out = FormationShapeRules.TrailSlots(tr, yaw, memberCount, requested, config).map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
+      trail.cases.push({ in: { trail: name, points: tr, leaderYaw: yaw, memberCount, requested }, out: { slots: out } });
+    }
+  }
+
+  const side = base('SideWidth', 'in: walls, pos, yaw -> out.width (cm; null = no wall body within classify.probe_side on either side).');
+  for (const [scene, walls] of Object.entries(SCENES)) for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]], [-140, [-1200, 800]]] as [number, Vec2][]) {
+    const placed = place(walls, yaw, offset);
+    const w = FormationTerrainRules.SideWidth(placed, offset, yaw, config);
+    side.cases.push({ in: { scene, walls: placed.map(seg), pos: r2(offset), yaw }, out: { width: w === null ? null : round(w) } });
+  }
+
+  const bypass = base('Bypass', 'in: wall {a, b, thickness}, leaderPos, destination, threats [{pos, ageS}] -> out {wallOn, detour, shortest, reason, path} (ChooseSide; compare path points in cm, detour to 1e-3).');
+  const BYPASS: { name: string; wall: Segment; from: Vec2; to: Vec2 }[] = [
+    { name: 'oblique', wall: { a: [600, -100], b: [2000, 200], thickness: 40 }, from: [0, 0], to: [3200, 0] },
+    { name: 'square_lopsided', wall: { a: [900, -200], b: [900, 1100], thickness: 40 }, from: [0, 0], to: [1700, 0] },
+    { name: 'parallel_offset', wall: { a: [500, -80], b: [2500, 60], thickness: 30 }, from: [0, 0], to: [3000, 0] },
+  ];
+  const memory = config['bypass.threat_memory_s'];
+  for (const b of BYPASS) for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
+    const [w] = place([b.wall], yaw, offset);
+    const tp = (p: Vec2) => place([{ a: p, b: p }], yaw, offset)[0].a;
+    const threatSets: Record<string, Threat[]> = {
+      none: [],
+      left: [{ pos: r2(tp([1300, -900])), ageS: 0 }],
+      right: [{ pos: r2(tp([1300, 900])), ageS: 3 }],
+      right_far: [{ pos: r2(tp([1600, 700])), ageS: 1 }],
+      forgotten: [{ pos: r2(tp([1300, -900])), ageS: memory + 1 }],
+    };
+    for (const [threatName, threats] of Object.entries(threatSets)) {
+      const out = FormationBypassRules.ChooseSide({ a: r2(w.a), b: r2(w.b), thickness: w.thickness }, r2(tp(b.from)), r2(tp(b.to)), threats, config);
+      bypass.cases.push({ in: { scene: b.name, threat: threatName, wall: seg(w), leaderPos: r2(tp(b.from)), destination: r2(tp(b.to)), threats },
+        out: { wallOn: out.wallOn, detour: round(out.detour, 4), shortest: out.shortest, reason: out.reason, path: out.path.map(r2) } });
+    }
+  }
+
+  const corner = base('Corner', 'in: walls, leaderPos, leaderYaw, members [{role, pos}] (K first), state {left, right: {wall, end, role} | null} -> out {state, looks [{role, yaw}]} (Watch).');
+  const CORNER_SCENES: Record<string, Segment[]> = {
+    wall_end_left: [{ a: [-2000, -300], b: [200, -300], thickness: 40 }],
+    wall_end_right: [{ a: [-2000, 300], b: [150, 300], thickness: 40 }],
+    corridor_exit: [{ a: [-2000, -250], b: [100, -250], thickness: 40 }, { a: [-2000, 250], b: [250, 250], thickness: 40 }],
+    room_corner: [{ a: [-2000, -300], b: [200, -300], thickness: 40 }, { a: [200, -300], b: [200, -1500], thickness: 40 }],
+  };
+  for (const [scene, walls] of Object.entries(CORNER_SCENES)) for (const [yaw, offset] of [[0, [0, 0]], [-120, [700, 400]]] as [number, Vec2][]) {
+    const placed = place(walls, yaw, offset);
+    const tp = (p: Vec2) => r2(place([{ a: p, b: p }], yaw, offset)[0].a);
+    for (const leaderX of [-400, 0, 150, 300, 500]) for (const memberCount of [2, 4]) {
+      const local: Record<Role, Vec2> = { K: [leaderX, 0], P: [leaderX - 280, 200], L: [leaderX - 280, -200], Z: [leaderX - 560, 0] };
+      const members = rolesFor(memberCount).map((role) => ({ role, pos: tp(local[role]) }));
+      const states: CornerState[] = [CORNER_START, { left: { wall: 0, end: 1, role: memberCount >= 4 ? 'L' : 'Z' }, right: null }];
+      for (const state of states) {
+        const out = FormationCornerRules.Watch(placed, tp([leaderX, 0]), yaw, members, state, config);
+        corner.cases.push({ in: { scene, walls: placed.map(seg), leaderPos: tp([leaderX, 0]), leaderYaw: yaw, members, state },
+          out: { state: out.state, looks: out.looks.map((l) => ({ role: l.role, yaw: round(l.yaw) })) } });
+      }
+    }
+  }
+
+  return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
+    Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner };
 }
 
 export const goldenFileName = (rule: GoldenRule): string => `formation_${rule}.json`;

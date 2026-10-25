@@ -46,7 +46,8 @@ export function auditLayout(data: unknown, config: FormationConfig, nav?: NavGri
       const path = grid.path(route.points[i - 1], route.points[i]);
       const straight = dist(route.points[i - 1], route.points[i]);
       if (!path) issues.push({ severity: 'error', where: `${route.id} leg ${i}`, message: 'unreachable: walls block the leg completely' });
-      else if (path.length > 2) {
+      else if (path.length > 2 && !(route.expect_bypass ?? []).length) {
+        // v2.1: a route with expect_bypass crosses its free-standing wall on purpose (FormationBypassRules picks the side).
         const L = path.slice(1).reduce((acc, p, k) => acc + dist(path[k], p), 0);
         issues.push({ severity: 'warning', where: `${route.id} leg ${i}`, message: `the leg crosses a wall; the leader detours ${Math.round(L - straight)} cm (add a route point?)` });
       }

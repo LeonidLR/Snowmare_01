@@ -57,6 +57,13 @@
   "classify.at_wall_dist": 150,
   "classify.arrive_dist": 50,
   "classify.side_ignore_perp_deg": 30,
+  "guard.clearance": 10,
+  "guard.lookahead": 500,
+  "bypass.max_detour": 0.3,
+  "bypass.threat_memory_s": 20,
+  "corner.lead_dist": 300,
+  "corner.hold_dist": 200,
+  "corner.peek_dist": 300,
   "sight.fov": 140
  },
  "notes": "in: walls, leaderPos, leaderYaw -> out.width (cm, null = a side is open).",
@@ -1379,6 +1386,195 @@
       "b": [
        -1768.37,
        388.351
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140
+   },
+   "out": {
+    "width": null
+   }
+  },
+  {
+   "in": {
+    "scene": "echelon_cut_left",
+    "walls": [
+     {
+      "a": [
+       -2000,
+       -400
+      ],
+      "b": [
+       2000,
+       -400
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "width": null
+   }
+  },
+  {
+   "in": {
+    "scene": "echelon_cut_left",
+    "walls": [
+     {
+      "a": [
+       -51.578,
+       -2213.609
+      ],
+      "b": [
+       1764.384,
+       1350.417
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63
+   },
+   "out": {
+    "width": null
+   }
+  },
+  {
+   "in": {
+    "scene": "echelon_cut_left",
+    "walls": [
+     {
+      "a": [
+       74.974,
+       2391.993
+      ],
+      "b": [
+       -2989.204,
+       -179.157
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140
+   },
+   "out": {
+    "width": null
+   }
+  },
+  {
+   "in": {
+    "scene": "entrance_ahead",
+    "walls": [
+     {
+      "a": [
+       300,
+       -250
+      ],
+      "b": [
+       3000,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       300,
+       250
+      ],
+      "b": [
+       3000,
+       250
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "width": null
+   }
+  },
+  {
+   "in": {
+    "scene": "entrance_ahead",
+    "walls": [
+     {
+      "a": [
+       858.949,
+       -96.196
+      ],
+      "b": [
+       2084.723,
+       2309.522
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       413.446,
+       130.8
+      ],
+      "b": [
+       1639.22,
+       2536.517
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63
+   },
+   "out": {
+    "width": null
+   }
+  },
+  {
+   "in": {
+    "scene": "entrance_ahead",
+    "walls": [
+     {
+      "a": [
+       -1590.51,
+       798.675
+      ],
+      "b": [
+       -3658.83,
+       -936.852
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1269.116,
+       415.653
+      ],
+      "b": [
+       -3337.436,
+       -1319.874
       ],
       "thickness": 40
      }

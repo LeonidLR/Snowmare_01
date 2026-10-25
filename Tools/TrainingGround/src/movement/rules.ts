@@ -6,7 +6,7 @@
 import type { FormationConfig } from './config.ts';
 import { cfg } from './config.ts';
 import type { Segment, Vec2 } from './geometry.ts';
-import { add, closestOnSegment, dirOf, dist, localToWorld, normYaw, raycastWalls, scale, sub, yawOf } from './geometry.ts';
+import { add, closestOnSegment, dirOf, dist, distToWall, localToWorld, normYaw, raycastWalls, scale, segmentBlocked, sub, yawOf } from './geometry.ts';
 import type { Formation } from './layout.ts';
 
 /** K commander (leader), P right, L left, Z rear (with 2 members: the pair partner behind the right shoulder). */
@@ -121,7 +121,45 @@ function HedgehogSlots(center: Vec2, memberCount: number, yaw: number, config: F
   }));
 }
 
-export const FormationShapeRules = { Slots, HedgehogSlots };
+/**
+ * v2.1: the trail column - the column's slots (column.base_back + i x column.spacing back, column.stagger aside) measured ALONG
+ * the leader's path instead of straight back, so the column bends round a corner and passes a wall on his side. trail = the
+ * leader's recent positions, oldest first, the last one = the leader now; a trail shorter than the column is extended straight
+ * back from its oldest point (along its oldest segment, or against leaderYaw for a single point). Each slot carries the trail's
+ * direction there (yaw) - the reference for its look (LookYaw's leaderYaw). `requested` = the formation the guard folded: an
+ * echelon keeps its order in the column (echelon right K-L-P-Z), so folding and opening it again crosses nobody's path;
+ * otherwise the column's own order K-P-L-Z.
+ */
+function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: number, requested: Formation,
+  config: FormationConfig): (Slot & { yaw: number })[] {
+  const leaderPos = trail[trail.length - 1];
+  // Segments newest -> oldest, each with its travel direction.
+  const segs: { from: Vec2; to: Vec2; len: number; yaw: number }[] = [];
+  for (let i = trail.length - 1; i > 0; i--) {
+    const L = dist(trail[i - 1], trail[i]);
+    if (L > 1e-6) segs.push({ from: trail[i], to: trail[i - 1], len: L, yaw: yawOf(sub(trail[i], trail[i - 1])) });
+  }
+  const tailYaw = segs.length ? segs[segs.length - 1].yaw : leaderYaw;
+  const tail = segs.length ? segs[segs.length - 1].to : leaderPos;
+  const back = (d: number): { pos: Vec2; yaw: number } => {
+    let left = d;
+    for (const sg of segs) {
+      if (left <= sg.len) return { pos: add(sg.from, scale(sub(sg.to, sg.from), left / sg.len)), yaw: sg.yaw };
+      left -= sg.len;
+    }
+    return { pos: add(tail, scale(dirOf(tailYaw), -left)), yaw: tailYaw };
+  };
+  return rolesFor(memberCount).map((role) => {
+    if (role === 'K') return { role, pos: leaderPos, yaw: leaderYaw };
+    // The role standing at this role's place in the column's own order K-P-L-Z (P <-> L for the echelon right).
+    const place: Role = requested === 'echelon_right' && memberCount >= 3 && (role === 'P' || role === 'L') ? (role === 'P' ? 'L' : 'P') : role;
+    const local = localSlot('column', place, memberCount, config);
+    const at = back(-local[0]);
+    return { role, pos: add(at.pos, scale(dirOf(at.yaw + 90), local[1])), yaw: at.yaw };
+  });
+}
+
+export const FormationShapeRules = { Slots, HedgehogSlots, TrailSlots };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationSectorRules::LookYaw
@@ -334,7 +372,28 @@ function FormationFor(terrain: TerrainClass, memberCount: number, blizzard: bool
   }
 }
 
-export const FormationTerrainRules = { Classify, FormationFor, PassageWidth };
+/**
+ * v2.1: the free width round a man when at least ONE side has a wall body within classify.probe_side, null when both sides are
+ * open. Measured to each wall's closest point (body distance; the side = which side of the heading that point lies), so a
+ * wall END beside him counts as well as a wall along him - the side rays of the classifier slip past a 40 cm end. An open side
+ * counts as probe_side. The trail column's sectors use it per member (a wall beside a man -> the narrow column's sectors,
+ * nobody's herringbone look into it).
+ */
+function SideWidth(walls: readonly Segment[], pos: Vec2, yaw: number, c: FormationConfig): number | null {
+  const reach = cfg(c, 'classify.probe_side');
+  const h = dirOf(yaw);
+  let right = Infinity, left = Infinity;
+  for (const w of walls) {
+    const q = closestOnSegment(pos, w.a, w.b).point;
+    const d = Math.max(0, dist(pos, q) - (w.thickness ?? 0) / 2);
+    if (d > reach) continue;
+    if (h[0] * (q[1] - pos[1]) - h[1] * (q[0] - pos[0]) >= 0) right = Math.min(right, d); else left = Math.min(left, d);
+  }
+  if (right > reach && left > reach) return null;
+  return Math.min(right, reach) + Math.min(left, reach);
+}
+
+export const FormationTerrainRules = { Classify, FormationFor, PassageWidth, SideWidth };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationWallRules::Layout
@@ -399,6 +458,341 @@ function BreakRoomTie(roomLeft: number, roomRight: number, travelLeft: number, t
 }
 
 export const FormationWallRules = { Layout, BreakRoomTie };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// FormationGuardRules (v2.1, FORMATION_CONTRACT.md 10): no formation may cut the squad in two with a wall
+
+/**
+ * Neighbours in a formation's chain (pairs of roles, the leader's own segments to every slot come on top): echelon in its
+ * order, column K-P-L-Z, line L-K-P-Z, diamond / wedge / blizzard P-Z and L-Z, hedgehog round the ring. Roles the member count
+ * lacks are skipped (the chain closes over them). 'wall' has none (FormationWallRules.Layout stands along the wall face).
+ */
+function ChainPairs(formation: Formation, memberCount: number): [Role, Role][] {
+  const have = rolesFor(memberCount);
+  const chain = (order: Role[], ring = false): [Role, Role][] => {
+    const o = order.filter((r) => have.includes(r));
+    const pairs: [Role, Role][] = o.slice(1).map((r, i) => [o[i], r]);
+    if (ring && o.length > 2) pairs.push([o[o.length - 1], o[0]]);
+    return pairs;
+  };
+  if (memberCount <= 2) return [];
+  switch (formation) {
+    case 'echelon_right': return chain(['K', 'L', 'P', 'Z']);
+    case 'echelon_left': return chain(['K', 'P', 'L', 'Z']);
+    case 'column': return chain(['K', 'P', 'L', 'Z']);
+    case 'line': return chain(['L', 'K', 'P', 'Z']);
+    case 'hedgehog': return chain(['K', 'P', 'Z', 'L'], true);
+    case 'diamond':
+    case 'wedge':
+    case 'blizzard': return memberCount >= 4 ? [['P', 'Z'], ['L', 'Z']] : [];
+    case 'wall': return [];
+  }
+}
+
+/**
+ * The roles whose slot a wall cuts off: the segment from the leader to the slot, or a chain segment (ChainPairs) touching it,
+ * crosses a wall body widened by guard.clearance. Empty = the formation is whole here. 'wall' is never blocked.
+ */
+function BlockedRoles(walls: readonly Segment[], formation: Formation, memberCount: number, leaderPos: Vec2, leaderYaw: number,
+  config: FormationConfig): Role[] {
+  if (formation === 'wall') return [];
+  const r = cfg(config, 'guard.clearance');
+  const slots = Slots(formation, memberCount, leaderPos, leaderYaw, config);
+  const at = (role: Role) => slots.find((s) => s.role === role)!.pos;
+  const blocked = new Set<Role>();
+  for (const s of slots.slice(1)) if (segmentBlocked(leaderPos, s.pos, walls, r)) blocked.add(s.role);
+  for (const [a, b] of ChainPairs(formation, memberCount)) {
+    if (!segmentBlocked(at(a), at(b), walls, r)) continue;
+    if (a !== 'K') blocked.add(a);
+    if (b !== 'K') blocked.add(b);
+  }
+  return slots.map((s) => s.role).filter((role) => blocked.has(role));
+}
+
+/** 0 = the requested formation, 1 = the mirror echelon, 2 = the trail column (FormationShapeRules.TrailSlots). */
+export type GuardLevel = 0 | 1 | 2;
+
+export interface GuardState {
+  /** The formation asked for (the menu's manual choice, or FormationFor of the terrain); null before the first tick. */
+  requested: Formation | null;
+  level: GuardLevel;
+  /** The formation in effect (= requested at level 0). */
+  effective: Formation | null;
+  /** A looser level waiting for its path distance (as ClassifyState.candidate), and the leader path walked meanwhile, cm. */
+  candidate: GuardLevel | null;
+  candidateDistance: number;
+}
+
+export const GUARD_START: GuardState = { requested: null, level: 0, effective: null, candidate: null, candidateDistance: 0 };
+
+const mirrorOf = (f: Formation): Formation | null => (f === 'echelon_right' ? 'echelon_left' : f === 'echelon_left' ? 'echelon_right' : null);
+
+function formationAt(requested: Formation, level: GuardLevel): Formation {
+  return level === 0 ? requested : level === 1 ? mirrorOf(requested) ?? 'column' : 'column';
+}
+
+/** The formation in effect at a guard state, and whether its slots are the trail column's (level 2). */
+function Effective(state: GuardState): { formation: Formation | null; trail: boolean } {
+  return { formation: state.effective, trail: state.level === 2 };
+}
+
+/**
+ * v2.1 (user decision 2026-10-25: "either the echelon right, or the herringbone, round the wall right or left"): the formation in
+ * effect for a requested one. When a wall cuts the requested formation (BlockedRoles not empty): an echelon takes its mirror if
+ * the mirror is whole, anything else (or a cut mirror, or a cut straight column) the TRAIL column: the column whose slots follow
+ * the leader's own path (FormationShapeRules.TrailSlots), so it passes the wall - and bends round a corner - on his side (narrow /
+ * herringbone sectors by PassageWidth, relative to the trail's direction at each slot). It is the last resort, whole by
+ * construction (the leader walked it); 'wall' is never guarded.
+ * Anticipation: `ahead` = the leader's pose guard.lookahead further along his path (the caller's path; null = none / standing):
+ * a formation counts as whole only when it is whole both here and there, so the squad folds BEFORE a passage entrance (the far
+ * man walks into the column outside the passage instead of round its wall end) and opens only when the way ahead is clear too.
+ * Hysteresis as the classifier (v2): a fallback (higher level) at once; back towards the request (lower level) only after it has
+ * been whole for classify.hold_distance of the leader's path (stepDistance per tick), unless the fallback itself is cut - then
+ * at once. A new request (menu pick, terrain class change) starts over at its own level. The request itself is never cleared.
+ */
+function Resolve(walls: readonly Segment[], requested: Formation, memberCount: number, leaderPos: Vec2, leaderYaw: number,
+  ahead: { pos: Vec2; yaw: number } | null, state: GuardState, stepDistance: number, config: FormationConfig): GuardState {
+  const whole = (f: Formation) => BlockedRoles(walls, f, memberCount, leaderPos, leaderYaw, config).length === 0 &&
+    (!ahead || BlockedRoles(walls, f, memberCount, ahead.pos, ahead.yaw, config).length === 0);
+  let raw: GuardLevel = 0;
+  if (requested !== 'wall' && !whole(requested)) {
+    const mirror = mirrorOf(requested);
+    raw = mirror && whole(mirror) ? 1 : 2;
+  }
+  const at = (level: GuardLevel, candidate: GuardLevel | null = null, candidateDistance = 0): GuardState =>
+    ({ requested, level, effective: formationAt(requested, level), candidate, candidateDistance });
+  if (state.requested !== requested || raw >= state.level) return at(raw);
+  if (state.level !== 2 && !whole(formationAt(requested, state.level))) return at(raw);
+  const walked = (state.candidate === raw ? state.candidateDistance : 0) + Math.max(0, stepDistance);
+  if (walked >= cfg(config, 'classify.hold_distance')) return at(raw);
+  return at(state.level, raw, walked);
+}
+
+export const FormationGuardRules = { ChainPairs, BlockedRoles, Resolve, Effective };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// FormationBypassRules (v2.1, FORMATION_CONTRACT.md 10.2): which side of a wall the leader - and with him the whole squad - passes
+
+/** A known threat (an enemy seen, or heard / last known position) and the seconds since that contact. */
+export interface Threat {
+  pos: Vec2;
+  ageS: number;
+}
+
+/** Wall on the squad's left or right as it goes by (passing round the wall's left end = the wall on the right). */
+export type WallSide = 'left' | 'right';
+
+export interface BypassChoice {
+  wallOn: WallSide;
+  /** The chosen path's length over the shortest one's, minus 1 (0 = the shortest). */
+  detour: number;
+  /** Which side the shortest path takes. */
+  shortest: WallSide;
+  /** shortest = no known threat, or the wall hides it on neither / the shortest side; shielded = the detour to hide was taken;
+   *  too_long = a side would hide the threat but its detour exceeds bypass.max_detour. */
+  reason: 'shortest' | 'shielded' | 'too_long';
+  /** The chosen path round the wall, leader to destination (corners BYPASS_RADIUS off the wall body). */
+  path: Vec2[];
+}
+
+/**
+ * cm: the bypass paths round a wall keep this far off its body (corners) - room for the column to wrap the end without its
+ * members cutting the corner (and the corner man's distance from the corner when slicing the pie).
+ */
+export const BYPASS_RADIUS = 150;
+/** cm: shielding is sampled along a candidate path at this step. */
+const BYPASS_SAMPLE = 50;
+
+/** Winding number of the closed polygon `poly` round point p. */
+function winding(poly: readonly Vec2[], p: Vec2): number {
+  let w = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const side = (b[0] - a[0]) * (p[1] - a[1]) - (p[0] - a[0]) * (b[1] - a[1]);
+    if (a[1] <= p[1]) { if (b[1] > p[1] && side > 0) w++; } else if (b[1] <= p[1] && side < 0) w--;
+  }
+  return w;
+}
+
+/**
+ * Which side a path from its first to its last point passes a wall (the path must not cross the wall body): the wall end
+ * farther off the straight line first -> last is the reference R; the straight line has R on its left or right, and the path
+ * keeps that side unless the loop path + straight line back winds round R (it went round the other way). For the bot's
+ * check 8 too (the leader's real trajectory).
+ */
+export function wallSideOf(path: readonly Vec2[], wall: Segment): WallSide {
+  const P = path[0], D = path[path.length - 1];
+  const d = sub(D, P);
+  const off = (q: Vec2) => d[0] * (q[1] - P[1]) - d[1] * (q[0] - P[0]);
+  const R = Math.abs(off(wall.a)) >= Math.abs(off(wall.b)) ? wall.a : wall.b;
+  // UE frame (x forward, y right): a positive cross (d x (R - P)) puts R on the right of the line.
+  const straight: WallSide = off(R) > 0 ? 'right' : 'left';
+  if (winding(path, R) === 0) return straight;
+  return straight === 'right' ? 'left' : 'right';
+}
+
+const polyLength = (p: readonly Vec2[]) => p.slice(1).reduce((acc, q, i) => acc + dist(p[i], q), 0);
+
+function samplePolyline(p: readonly Vec2[], step: number): Vec2[] {
+  const out: Vec2[] = [p[0]];
+  for (let i = 1; i < p.length; i++) {
+    const L = dist(p[i - 1], p[i]);
+    for (let s = step; s < L; s += step) out.push(add(p[i - 1], scale(sub(p[i], p[i - 1]), s / L)));
+    out.push(p[i]);
+  }
+  return out;
+}
+
+/**
+ * User decisions 2026-10-25 ("B", "the squad never splits"): the side of `wall` the leader passes on his way to `destination`.
+ * Candidates: the straight line and the paths over one or two of the wall's four corners (BYPASS_RADIUS off the body), no leg
+ * coming closer to the body than BYPASS_RADIUS (or than its own end point is); the shortest per side. No known threat (ageS within bypass.threat_memory_s) -> the shortest side. With threats:
+ * the side whose path has the larger share of samples (BYPASS_SAMPLE) hidden from every known threat by this wall is the
+ * shielded one; it is taken when its length is at most (1 + bypass.max_detour) x the shortest, else the shortest stays.
+ */
+function ChooseSide(wall: Segment, leaderPos: Vec2, destination: Vec2, threats: readonly Threat[], config: FormationConfig): BypassChoice {
+  const L = dist(wall.a, wall.b);
+  const u: Vec2 = L > 1e-6 ? scale(sub(wall.b, wall.a), 1 / L) : [1, 0];
+  const n: Vec2 = [-u[1], u[0]];
+  const m = (wall.thickness ?? 0) / 2 + BYPASS_RADIUS;
+  const corners: Vec2[] = [
+    add(add(wall.a, scale(u, -m)), scale(n, m)), add(add(wall.a, scale(u, -m)), scale(n, -m)),
+    add(add(wall.b, scale(u, m)), scale(n, m)), add(add(wall.b, scale(u, m)), scale(n, -m)),
+  ];
+  // A leg keeps BYPASS_RADIUS off the body (less only as close as its own end - the leader / the destination - already is).
+  const body = (p: Vec2) => Math.max(0, distToWall(p, wall) - (wall.thickness ?? 0) / 2);
+  const clear = (p: Vec2, q: Vec2) => !segmentBlocked(p, q, [wall], Math.max(0, Math.min(BYPASS_RADIUS, body(p), body(q)) - 1));
+  const candidates: Vec2[][] = [[leaderPos, destination]];
+  for (const c1 of corners) {
+    candidates.push([leaderPos, c1, destination]);
+    for (const c2 of corners) if (c2 !== c1) candidates.push([leaderPos, c1, c2, destination]);
+  }
+  const best: Record<WallSide, { path: Vec2[]; len: number } | null> = { left: null, right: null };
+  for (const path of candidates) {
+    if (!path.slice(1).every((q, i) => clear(path[i], q))) continue;
+    const side = wallSideOf(path, wall), len = polyLength(path);
+    if (!best[side] || len < best[side]!.len - 1e-6) best[side] = { path, len };
+  }
+  const sides = (['left', 'right'] as WallSide[]).filter((s) => best[s]);
+  if (sides.length === 0) return { wallOn: 'left', detour: 0, shortest: 'left', reason: 'shortest', path: [leaderPos, destination] };
+  const shortest = sides.reduce((a, b) => (best[b]!.len < best[a]!.len - 1e-6 ? b : a));
+  const minLen = best[shortest]!.len;
+  const pick = (s: WallSide, reason: BypassChoice['reason']): BypassChoice =>
+    ({ wallOn: s, detour: minLen > 0 ? best[s]!.len / minLen - 1 : 0, shortest, reason, path: best[s]!.path });
+  const known = threats.filter((t) => t.ageS >= 0 && t.ageS <= cfg(config, 'bypass.threat_memory_s'));
+  if (known.length === 0 || sides.length < 2) return pick(shortest, 'shortest');
+  const hidden = (s: WallSide) => {
+    const pts = samplePolyline(best[s]!.path, BYPASS_SAMPLE);
+    return pts.filter((p) => known.every((t) => segmentBlocked(p, t.pos, [wall], 0))).length / pts.length;
+  };
+  const other: WallSide = shortest === 'left' ? 'right' : 'left';
+  if (hidden(other) <= hidden(shortest)) return pick(shortest, 'shortest');
+  return best[other]!.len <= (1 + cfg(config, 'bypass.max_detour')) * minLen + 1e-6 ? pick(other, 'shielded') : pick(shortest, 'too_long');
+}
+
+export const FormationBypassRules = { ChooseSide };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// FormationCornerRules (v2.1, FORMATION_CONTRACT.md 10.3): slicing the pie at the end of a wall the squad passes along
+
+/** cm: the corner man's look grazes the wall end this far beyond its body. */
+export const CORNER_GRAZE = 50;
+/** cm: a wall end within this of another wall is a joint (a corner of a room / corridor), not a free end to look round. */
+const CORNER_JOINT = 20;
+
+/** One watched wall end: the wall (index into the walls array), its end (0 = a, 1 = b) and the member looking round it. */
+export interface CornerWatch {
+  wall: number;
+  end: 0 | 1;
+  /** Chosen once per corner: the member closest to the end when the watch starts (not the other side's watcher). */
+  role: Role;
+}
+
+/** At most one watched end on each side of the leader (a corridor exit has two corners). */
+export interface CornerState {
+  left: CornerWatch | null;
+  right: CornerWatch | null;
+}
+
+export const CORNER_START: CornerState = { left: null, right: null };
+
+/** Leader distance along the heading to a free wall end beside him that the wall runs back from, or null. */
+export function cornerAhead(walls: readonly Segment[], i: number, end: 0 | 1, leaderPos: Vec2, leaderYaw: number, c: FormationConfig): number | null {
+  const w = walls[i];
+  if (isAcrossHeading(w, leaderYaw, cfg(c, 'classify.side_ignore_perp_deg'))) return null;
+  const E = end === 0 ? w.a : w.b, O = end === 0 ? w.b : w.a;
+  const h = dirOf(leaderYaw);
+  const s = (E[0] - leaderPos[0]) * h[0] + (E[1] - leaderPos[1]) * h[1];
+  const back = (O[0] - leaderPos[0]) * h[0] + (O[1] - leaderPos[1]) * h[1];
+  const lateral = Math.abs(h[0] * (E[1] - leaderPos[1]) - h[1] * (E[0] - leaderPos[0]));
+  if (back >= s || lateral > cfg(c, 'classify.probe_side')) return null;
+  for (let j = 0; j < walls.length; j++) {
+    if (j === i) continue;
+    const o = walls[j];
+    const d = dist(E, closestOnSegment(E, o.a, o.b).point);
+    if (d <= (o.thickness ?? 0) / 2 + (w.thickness ?? 0) / 2 + CORNER_JOINT) return null;
+  }
+  return s;
+}
+
+/**
+ * User decision 2026-10-25 ("corner: yes"): while the squad passes along a wall and nears its free end (the leader within
+ * corner.lead_dist before it, until corner.hold_dist past it along his heading), ONE member per side of the leader - the one
+ * closest to the end when the watch starts - looks round it: before he is past the end, at the corner itself (CORNER_GRAZE
+ * beyond the body); past it, at the point corner.peek_dist behind the wall's far face at the end (the area the wall hid). The
+ * nearest such end on each side wins (a corridor exit: the left and the right corner, two different men).
+ * Returns the next state and the watchers' look yaws: each overrides that member's patrol sector only; a combat target or an
+ * explicit facing order keeps priority (the integration).
+ */
+function Watch(walls: readonly Segment[], leaderPos: Vec2, leaderYaw: number, members: readonly Slot[], state: CornerState,
+  config: FormationConfig): { state: CornerState; looks: { role: Role; yaw: number }[] } {
+  const lead = cfg(config, 'corner.lead_dist'), hold = cfg(config, 'corner.hold_dist');
+  const h = dirOf(leaderYaw);
+  const endOf = (w: CornerWatch) => (w.end === 0 ? walls[w.wall].a : walls[w.wall].b);
+  const sideOf = (E: Vec2): 'left' | 'right' => (h[0] * (E[1] - leaderPos[1]) - h[1] * (E[0] - leaderPos[0]) > 0 ? 'right' : 'left');
+  const keep = (w: CornerWatch | null, side: 'left' | 'right'): CornerWatch | null => {
+    if (!w || w.wall >= walls.length || !members.some((m) => m.role === w.role)) return null;
+    const s = cornerAhead(walls, w.wall, w.end, leaderPos, leaderYaw, config);
+    return s === null || s < -hold || s > lead || sideOf(endOf(w)) !== side ? null : w;
+  };
+  const next: CornerState = { left: keep(state.left, 'left'), right: keep(state.right, 'right') };
+  for (const side of ['left', 'right'] as const) {
+    if (next[side]) continue;
+    let bestS = Infinity, found: { wall: number; end: 0 | 1 } | null = null;
+    for (let i = 0; i < walls.length; i++) for (const end of [0, 1] as const) {
+      const s = cornerAhead(walls, i, end, leaderPos, leaderYaw, config);
+      if (s === null || s <= 0 || s > lead || s >= bestS) continue;
+      if (sideOf(end === 0 ? walls[i].a : walls[i].b) !== side) continue;
+      bestS = s; found = { wall: i, end };
+    }
+    if (!found) continue;
+    const E = found.end === 0 ? walls[found.wall].a : walls[found.wall].b;
+    const other = next[side === 'left' ? 'right' : 'left']?.role;
+    const free = members.filter((m) => m.role !== other);
+    if (!free.length) continue;
+    const closest = free.reduce((a, b) => (dist(b.pos, E) < dist(a.pos, E) - 1e-6 ? b : a));
+    next[side] = { ...found, role: closest.role };
+  }
+  const looks: { role: Role; yaw: number }[] = [];
+  for (const side of ['left', 'right'] as const) {
+    const cw = next[side];
+    if (!cw) continue;
+    const w = walls[cw.wall];
+    const E = endOf(cw), O = cw.end === 0 ? w.b : w.a;
+    const watcher = members.find((m) => m.role === cw.role)!;
+    const L = dist(E, O);
+    const u: Vec2 = L > 1e-6 ? scale(sub(E, O), 1 / L) : h;
+    const nRaw: Vec2 = [-u[1], u[0]];
+    const squadSide = (leaderPos[0] - E[0]) * nRaw[0] + (leaderPos[1] - E[1]) * nRaw[1] >= 0 ? 1 : -1;
+    const graze = add(E, scale(u, (w.thickness ?? 0) / 2 + CORNER_GRAZE));
+    const past = (watcher.pos[0] - E[0]) * u[0] + (watcher.pos[1] - E[1]) * u[1] >= 0;
+    const target = past ? add(graze, scale(nRaw, -squadSide * cfg(config, 'corner.peek_dist'))) : graze;
+    looks.push({ role: cw.role, yaw: normYaw(yawOf(sub(target, watcher.pos))) });
+  }
+  return { state: next, looks };
+}
+
+export const FormationCornerRules = { Watch };
 
 /** Distance helper re-exported for the checks. */
 export { dist };

@@ -7,7 +7,10 @@
 //   E an inner 90 deg corner, the wall on the left on both legs (echelon right round the turn)
 //   F a dead-end wall with UNEQUAL room (the 4th at the roomier end)
 // plus a fast route (run) over the open field, a heat source (hedgehog, manual in game) and the v2 lane (R_v2_*: 4.5 / 6 m gaps
-// that v1's time hysteresis flipped; v2's path hold must keep the echelon - FORMATION_CONTRACT.md 8). Re-run after editing this file; the JSON is the source the
+// that v1's time hysteresis flipped; v2's path hold must keep the echelon - FORMATION_CONTRACT.md 8), and the v2.1 lane G
+// (FORMATION_CONTRACT.md 10): free-standing walls ACROSS the route - G1 oblique (both sides about as long: no threat -> the
+// shortest side; a threat on the left / right -> the side the wall hides it from), G2 square to the route and lopsided (the
+// side that hides the threat is ~70 % longer -> too long, the shortest side). Re-run after editing this file; the JSON is the source the
 // Unreal builder (Scripts/Editor/build_formation_lab.py) and the simulator read.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,7 +26,7 @@ const zones: { id: string; kind: string; poly: V[] }[] = [];
 const zone = (id: string, kind: string, poly: V[]) => zones.push({ id, kind, poly });
 
 // Lane y positions (route axis). Neighbouring lanes stay > 10 m apart from each other's walls.
-const A = -4500, B = -3000, C = -1200, D = 800, E = 2800, F = 4500, V2 = 5600;
+const A = -4500, B = -3000, C = -1200, D = 800, E = 2800, F = 4500, V2 = 5600, G = 2900;
 
 // A - open field, dead end with equal room (wall x 4500, y -5400..-3600; the route ends ON the leader's wall slot: face - 45 cm,
 // the click on the cover = where K stands)
@@ -77,6 +80,14 @@ wall('V2', [-3050, vw], [-2400, vw]);
 wall('V2', [-1800, vw], [-800, vw]);
 zone('Z_V2_gaps', 'gap_run', rect(-3900, V2 - 250, -1000, V2 + 250));
 
+// G lane (v2.1, east of lane E's corner wall): G1 oblique across the route (1 m to the left of the axis at its near end, 2 m
+// to the right at its far end: round the near end = the wall on the right is the shorter side), G2 square to the route at
+// x 4800, 2 m past the axis on the left (-Y), 11 m on the right (+Y).
+wall('G', [1700, G - 100], [3100, G + 200]);
+wall('G', [4800, G - 200], [4800, G + 1100]);
+zone('Z_G1', 'wall_run', rect(1800, G - 450, 3400, G + 450));
+zone('Z_G2', 'wall_end', rect(4500, G - 500, 5100, G + 300));
+
 const layout = {
   schema: 'codex.formation_layout/1',
   name: 'formation_lab_01',
@@ -104,6 +115,14 @@ const layout = {
       expect: [{ zone: 'Z_F_end', formation: 'wall' }] },
     { id: 'R_v2_gaps', pace: 'walk', points: [[-5500, V2], [-300, V2]],
       expect: [{ zone: 'Z_V2_gaps', formation: 'echelon_right' }] },
+    // v2.1 bypass (check 8): no threat -> the shortest side; a threat seen behind the wall -> the side it hides; too long -> shortest
+    { id: 'R_G_free', pace: 'walk', points: [[1100, G], [4300, G]], expect_bypass: [{ wall: 'W_G_19', wall_on: 'right' }] },
+    { id: 'R_G_threat_right', pace: 'walk', points: [[1100, G], [4300, G]], threats: [{ pos: [2600, G + 900], since_s: 0 }],
+      expect_bypass: [{ wall: 'W_G_19', wall_on: 'right' }] },
+    { id: 'R_G_threat_left', pace: 'walk', points: [[1100, G], [4300, G]], threats: [{ pos: [2600, G - 900], since_s: 0 }],
+      expect_bypass: [{ wall: 'W_G_19', wall_on: 'left' }] },
+    { id: 'R_G_far', pace: 'walk', points: [[3900, G], [5900, G]], threats: [{ pos: [5500, G + 700], since_s: 0 }],
+      expect_bypass: [{ wall: 'W_G_20', wall_on: 'right' }] },
   ],
 };
 
