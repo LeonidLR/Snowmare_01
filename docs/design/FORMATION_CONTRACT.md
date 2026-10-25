@@ -102,6 +102,7 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_PassageWidth.json` / `Parity.PassageWidth` (v1.1) | `walls[]`, `leaderPos`, `leaderYaw` | `width` (number or `null`; the field must be present) |
 | `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount`, `blizzard` (v1.2; bool, missing = false) | `formation` |
 | `formation_WallLayout.json` / `Parity.WallLayout` | `wall`, `clickedSlot`, `memberCount`, `roomLeft`, `roomRight` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
+| `formation_Menu.json` / `Parity.Menu` (section 9; no `config_values` needed) | `op`: `itemAt` (`dx`, `dy`, `deadZonePx`) / `release` (`state: { open, choice ("auto" or item id), highlighted (item id or null) }`, `memberCount`) / `resolve` (`choice`, `memberCount`) | itemAt: `item` (id or null = Auto); release: `state` + `effect` (`none / opened / picked / auto / cancelled / disabled`); resolve: `manualFormation` (formation or null), `allForward` |
 
 C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
 config)`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`,
@@ -111,8 +112,9 @@ config) -> FFormationClassifyState` (v2, the TS order) / `AdvanceState(raw, meas
 `FormationFor(class, memberCount, bBlizzard = false)`; the runtime entry `FFormationTerrainTracker::Step(walls, leaderPos, leaderYaw,
 TOptional destination, stepDistance, config)` + `GetClass()` / `GetPassageWidth()` / `Reset()`;
 `FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)` / `BreakRoomTie`; config `FFormationConfig` +
-`FormationTuning`. Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2 (b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333 - each 0
-mismatched.
+`FormationTuning`; the menu `FormationMenuRules::ItemAt / IsEnabled / Open / Move / Release / Cancel / Resolve` on
+`FFormationMenuState` (Choice unset = Auto; no display text in C++ - the widget owns English FText labels). Runs: v1 (ead0faf) 4563
+cases, v1.1 (b4dcf9b) 5568, v1.2 (b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234 - each 0 mismatched.
 
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):
