@@ -10,6 +10,13 @@
 // route faces 12, the narrow column's sectors (P +15, L -165). At the two dead ends (R_A_open, R_F_deadend) the wall layout: everyone on his
 // FormationWallRules slot, nobody faces the wall. Then the group cover order in group mode at the R_F dead end = the wall layout
 // (crouched, facing out, not in cover), the leader's next order ends it (they stand up and follow), and R_F with 3 men (wedge, 3-man wall).
+// Rules v2.1 (contract 10, checks.ts): check 4 judges the REQUESTED formation (the guard's fallbacks are geometry); check 7 on every run (no
+// wall between the leader and a member's slot / position, or between chain neighbours, for >= 0.3 s); check 9 (when the leader passes a free
+// wall end beside him on patrol someone looks round it); the corner watcher's look at a wall end is no stare; the turn fold on R_E_corner (the
+// player clicks ahead along the route, round its corners); the guard with the hold-G menu's manual choices (Codex.Formation.Menu): R_B_walls
+// with "echelon left" (the user's bug: the mirror echelon right, HUD "Echelon left -> Echelon right (wall)"), R_D_corridors with "line" (the
+// trail column, HUD "Line -> Column (wall)"); a smoke-own pass of W_E_14's free end (R_E_corner_pass: the corner watch). "shot" also saves
+// the v2.1 stills to Saved/Screenshots/FormationV21/ (the guard switch with the HUD line, the trail column round the corner, the corner watch).
 // Known rules v1.1 limits the simulator shows too are reported, not failed (FormationLabSmoke::Known; rules v1.2 is being ported).
 // "shot" (rendered: UnrealEditor.exe <uproject> /Game/Maps/L_FormationLab -game -RenderOffscreen -ResX=1280 -ResY=720
 // "-LevelJson=L_FormationLab.json" "-ExecCmds=CodexTactics.FormationLabSmoke shot") saves stills to Saved/Screenshots/FormationLab/
@@ -33,6 +40,9 @@
 #include "Engine/TargetPoint.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Formation/FormationCornerRules.h"
+#include "Formation/FormationGuardRuntimeRules.h"
+#include "Formation/FormationMenuRules.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationShapeRules.h"
 #include "Formation/FormationTuning.h"
@@ -148,6 +158,15 @@ namespace FormationLabSmoke
 		FString RouteId;
 		int32 MemberCount = 4;
 		bool bWallOrderAfter = false;
+		/** Rules v2.1: the hold-G menu's choice for this run (FormationMenuRules id; empty = auto). A manual run is gated like checks.ts gates
+		 * manual formations (1 stare, 7 split; the zone expectations and the rear man's pace are reported, not failed). */
+		FString Menu;
+		/** The HUD line that must show while the wall guard falls back on this run (empty = none expected). */
+		FString ExpectHud;
+		/** The sharp-turn fold must fold the formation into the trail column near this route's corner (R_E_corner). */
+		bool bExpectFold = false;
+		/** At least one free wall end is passed on this run: check 9 must have counted it. */
+		bool bExpectCorner = false;
 	};
 
 	enum class EStage : uint8
@@ -180,6 +199,9 @@ namespace FormationLabSmoke
 		int32 Frames = 0;
 		int32 TakenFrame = 0;
 		bool bTaken = false;
+		/** Rules v2.1 stills: the HUD stays on (the guard's line) and the still goes to Saved/Screenshots/FormationV21/. */
+		bool bShowHud = false;
+		FString Folder = TEXT("FormationLab");
 	};
 
 	struct FState
@@ -218,6 +240,21 @@ namespace FormationLabSmoke
 		int32 NarrowSamples = 0;
 		int32 NarrowOk = 0;
 		FString NarrowWorst;
+		// Rules v2.1 (checks 7 / 9, the guard).
+		float SplitTimer = 0.f;
+		bool bSplitCounted = false;
+		int32 SplitEvents = 0;
+		FString SplitWorst;
+		float SplitWorstSeconds = 0.f;
+		TMap<FString, float> CornerPrev;
+		int32 CornerEnds = 0;
+		int32 CornerMissed = 0;
+		FString CornerWorst;
+		int32 MaxGuardLevel = 0;
+		float TrailSeconds = 0.f;
+		float TrailNearCorner = 0.f;
+		TSet<FString> HudSeen;
+		float CornerWatchSeconds = 0.f;
 		// Photos ("shot").
 		bool bShot = false;
 		TSet<FString> PhotosTaken;
@@ -454,6 +491,53 @@ namespace FormationLabSmoke
 		State.NarrowSamples = 0;
 		State.NarrowOk = 0;
 		State.NarrowWorst.Reset();
+		State.SplitTimer = 0.f;
+		State.bSplitCounted = false;
+		State.SplitEvents = 0;
+		State.SplitWorst.Reset();
+		State.SplitWorstSeconds = 0.f;
+		State.CornerPrev.Reset();
+		State.CornerEnds = 0;
+		State.CornerMissed = 0;
+		State.CornerWorst.Reset();
+		State.MaxGuardLevel = 0;
+		State.TrailSeconds = 0.f;
+		State.TrailNearCorner = 0.f;
+		State.HudSeen.Reset();
+		State.CornerWatchSeconds = 0.f;
+	}
+
+	/** The layout's walls as the rules see them (checks 7 / 9 use the layout, like checks.ts). */
+	TArray<FFormationWall> LayoutWalls(const FState& State)
+	{
+		TArray<FFormationWall> Out;
+		for (const FLabWall& Each : State.Layout.Walls)
+		{
+			FFormationWall Wall;
+			Wall.A = Each.A;
+			Wall.B = Each.B;
+			Wall.Thickness = Each.Thickness;
+			Out.Add(Wall);
+		}
+		return Out;
+	}
+
+	/** The members whose look is the corner watch this frame (their look at a wall end is no stare). */
+	TSet<const AOperativeCharacter*> CornerWatchers(const USquadSubsystem& Squad, const TArray<AOperativeCharacter*>& All)
+	{
+		TSet<const AOperativeCharacter*> Out;
+		for (const FFormationCornerLook& Look : Squad.GetFormationCornerLooks())
+		{
+			for (const AOperativeCharacter* Each : All)
+			{
+				EFormationRole Role;
+				if (Squad.GetFormationRole(Each, Role) && Role == Look.Role)
+				{
+					Out.Add(Each);
+				}
+			}
+		}
+		return Out;
 	}
 
 	FVector Centroid(const FState& State)
@@ -467,7 +551,8 @@ namespace FormationLabSmoke
 		return All.IsEmpty() ? Sum : Sum / All.Num();
 	}
 
-	void QueuePhoto(FState& State, const FString& Name, const FVector& Target, float ViewYaw, float Pitch = -55.f, float Distance = 1500.f)
+	void QueuePhoto(FState& State, const FString& Name, const FVector& Target, float ViewYaw, float Pitch = -55.f, float Distance = 1500.f,
+		bool bV21 = false)
 	{
 		if (!State.bShot || State.PhotosTaken.Contains(Name))
 		{
@@ -479,6 +564,11 @@ namespace FormationLabSmoke
 		Photo.Target = Target;
 		Photo.View = FRotator(Pitch, ViewYaw, 0.f);
 		Photo.Distance = Distance;
+		if (bV21)
+		{
+			Photo.bShowHud = true;
+			Photo.Folder = TEXT("FormationV21");
+		}
 		State.Photos.Add(Photo);
 	}
 
@@ -502,7 +592,7 @@ namespace FormationLabSmoke
 			State.bPausedForPhoto = true;
 			if (AHUD* Hud = PC->GetHUD())
 			{
-				Hud->bShowHUD = false;
+				Hud->bShowHUD = Photo.bShowHud;
 			}
 			GEngine->Exec(World, TEXT("DisableAllScreenMessages"));
 			if (!State.Camera.IsValid())
@@ -526,8 +616,8 @@ namespace FormationLabSmoke
 		{
 			Photo.bTaken = true;
 			Photo.TakenFrame = Photo.Frames;
-			const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("FormationLab") / (Photo.Name + TEXT(".png"));
-			FScreenshotRequest::RequestScreenshot(Path, /*bInShowUI*/ false, /*bAddFilenameSuffix*/ false);
+			const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / Photo.Folder / (Photo.Name + TEXT(".png"));
+			FScreenshotRequest::RequestScreenshot(Path, /*bInShowUI*/ Photo.bShowHud, /*bAddFilenameSuffix*/ false);
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke screenshot %s"), *Path);
 		}
 		if (Photo.bTaken && Photo.Frames >= Photo.TakenFrame + 15)
@@ -554,6 +644,8 @@ namespace FormationLabSmoke
 		}
 		const FFormationConfig& Config = FormationTuning::Get();
 		const EFormationKind Formation = Squad->GetFormationKind();
+		// Rules v2.1 (checks.ts): checks 3 / 4 judge the REQUESTED formation (the terrain's / the menu's); the guard's fallbacks are geometry.
+		const EFormationKind Requested = Squad->GetFormationRequested();
 		const EFormationMode Mode = Squad->GetFormationMode();
 		const float Heading = Squad->GetFormationHeadingYaw();
 		const FVector2D LeaderPos(Leader->GetActorLocation());
@@ -590,8 +682,8 @@ namespace FormationLabSmoke
 				{
 					FZoneAcc& Acc = State.Zones.FindOrAdd(Expect.Zone);
 					Acc.Settled += Dt;
-					Acc.Match += SameFormation(Expect.Formation, Formation) ? Dt : 0.f;
-					Acc.Seen.FindOrAdd(FormationNames::ToString(Formation)) += Dt;
+					Acc.Match += SameFormation(Expect.Formation, Requested) ? Dt : 0.f;
+					Acc.Seen.FindOrAdd(FormationNames::ToString(Requested)) += Dt;
 				}
 			}
 			else
@@ -600,15 +692,18 @@ namespace FormationLabSmoke
 			}
 		}
 
-		// 1. Wall stare: facing within 45 deg of a wall closer than 200 cm for >= 0.3 s, unless he walks that way.
+		// 1. Wall stare: facing within 45 deg of a wall closer than 200 cm for >= 0.3 s, unless he walks that way (v2.1: or looks round a wall
+		// end on purpose - the corner watch, checks.ts).
 		const TArray<AOperativeCharacter*> All = Living(State);
+		const TSet<const AOperativeCharacter*> Watchers = CornerWatchers(*Squad, All);
 		for (int32 Index = 0; Index < All.Num(); ++Index)
 		{
 			const AOperativeCharacter* Each = All[Index];
 			const FVector2D Pos(Each->GetActorLocation());
 			const float Facing = Yaw2D(Each->GetSightFacing());
 			const FVector Velocity = Each->GetVelocity();
-			const bool bApproaching = Velocity.Size2D() > 15.f && FormationMath::AngleBetween(Facing, Yaw2D(Velocity)) <= StareAngleDeg;
+			const bool bApproaching = (Velocity.Size2D() > 15.f && FormationMath::AngleBetween(Facing, Yaw2D(Velocity)) <= StareAngleDeg)
+				|| Watchers.Contains(Each);
 			FString Staring;
 			for (const FLabWall& Wall : bApproaching ? TArray<FLabWall>() : State.Layout.Walls)
 			{
@@ -694,9 +789,9 @@ namespace FormationLabSmoke
 				EFormationRole Role;
 				FVector Slot;
 				float Look = 0.f;
-				if (!Squad->GetFormationRole(Each, Role) || !Squad->GetFormationTarget(Each, Slot, Look))
+				if (!Squad->GetFormationRole(Each, Role) || !Squad->GetFormationTarget(Each, Slot, Look) || Watchers.Contains(Each))
 				{
-					continue;
+					continue; // (v2.1: the corner watcher looks round the corridor's end, not into his sector)
 				}
 				float Want = 0.f;
 				float Tolerance = 2.f;
@@ -732,6 +827,147 @@ namespace FormationLabSmoke
 					State.NarrowWorst = FString::Printf(TEXT("%s looks %.0f off the heading (want %.0f +- %.0f)"), FormationNames::ToString(Role),
 						FMath::FindDeltaAngleDegrees(Heading, Look), Want, Tolerance);
 				}
+			}
+		}
+
+		// Rules v2.1, 7. squad split by a wall (checks.ts): the leader -> each follower's slot / position (outside the trail column) and the
+		// chain neighbours by place (positions; in the trail column also their slots), for >= 0.3 s. Only while the squad walks / halts on its
+		// route (not the wall order stages).
+		const TArray<FFormationWall> Walls = LayoutWalls(State);
+		if (State.Stage == EStage::RouteWalk || State.Stage == EStage::RouteHalt)
+		{
+			TArray<FormationGuardRuntime::FSplitMember> Split;
+			FormationGuardRuntime::FSplitMember Lead;
+			Lead.Place = EFormationRole::Commander;
+			Lead.Pos = LeaderPos;
+			Lead.Slot = LeaderPos;
+			Split.Add(Lead);
+			for (const AOperativeCharacter* Each : All)
+			{
+				EFormationRole Role;
+				FVector Slot;
+				float Look = 0.f;
+				if (Each != Leader && Squad->GetFormationRole(Each, Role) && Squad->GetFormationTarget(Each, Slot, Look))
+				{
+					FormationGuardRuntime::FSplitMember Member;
+					Member.Place = Role;
+					Member.Pos = FVector2D(Each->GetActorLocation());
+					Member.Slot = FVector2D(Slot);
+					Split.Add(Member);
+				}
+			}
+			const TArray<FString> Cuts = FormationGuardRuntime::SplitCuts(Walls, Formation, Squad->IsFormationTrail(), Squad->GetFormationMemberCount(), Split);
+			if (Cuts.Num() > 0)
+			{
+				State.SplitTimer += Dt;
+				if (State.SplitTimer >= FormationGuardRuntime::SplitSeconds && !State.bSplitCounted)
+				{
+					State.bSplitCounted = true;
+					++State.SplitEvents;
+				}
+				if (State.SplitTimer >= FormationGuardRuntime::SplitSeconds && State.SplitTimer > State.SplitWorstSeconds)
+				{
+					State.SplitWorstSeconds = State.SplitTimer;
+					State.SplitWorst = FString::Printf(TEXT("%s%s: wall cuts %s at (%.0f, %.0f), t=%.1f"), FormationNames::ToString(Formation),
+						Requested != Formation ? *FString::Printf(TEXT(" (asked %s)"), FormationNames::ToString(Requested)) : TEXT(""),
+						*FString::Join(Cuts, TEXT(", ")), LeaderPos.X, LeaderPos.Y, State.StageTime);
+				}
+			}
+			else
+			{
+				State.SplitTimer = 0.f;
+				State.bSplitCounted = false;
+			}
+		}
+
+		// Rules v2.1, 9. the corner (checks.ts): the leader passes a free wall end beside him on patrol -> at that moment somebody looks at
+		// the corner (G, CornerGraze past the end) or round it (H, 200 cm behind the far face), within fov / 2 - 10 of his facing.
+		if (Mode == EFormationMode::Walk)
+		{
+			const float Fov = Config.SightFov;
+			for (int32 WallIndex = 0; WallIndex < Walls.Num(); ++WallIndex)
+			{
+				for (int32 End = 0; End < 2; ++End)
+				{
+					const FString Key = FString::Printf(TEXT("%d:%d"), WallIndex, End);
+					const TOptional<float> S = FormationCornerRules::CornerAhead(Walls, WallIndex, End, LeaderPos, Heading, Config);
+					const float* Prev = State.CornerPrev.Find(Key);
+					const TOptional<float> Before = Prev ? TOptional<float>(*Prev) : TOptional<float>();
+					if (!S.IsSet())
+					{
+						State.CornerPrev.Remove(Key);
+						continue;
+					}
+					State.CornerPrev.Add(Key, S.GetValue());
+					if (!Before.IsSet() || !(Before.GetValue() > 0.f && S.GetValue() <= 0.f))
+					{
+						continue;
+					}
+					FVector2D Graze;
+					FVector2D Hidden;
+					FormationGuardRuntime::CornerCheckPoints(Walls[WallIndex], End, LeaderPos, Graze, Hidden);
+					const auto Sees = [&All, Fov](const FVector2D& Point)
+					{
+						return All.ContainsByPredicate([&Point, Fov](const AOperativeCharacter* Each)
+						{
+							return FormationMath::AngleBetween(Yaw2D(Each->GetSightFacing()), FormationMath::YawOf(Point - FVector2D(Each->GetActorLocation())))
+								<= 0.5f * Fov - FormationGuardRuntime::CornerCheckMarginDeg;
+						});
+					};
+					++State.CornerEnds;
+					const bool bSeen = Sees(Graze) || Sees(Hidden);
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace: %s t=%.1f passes the %s end of %s - %s"), *Route.Id, State.StageTime, End == 0 ? TEXT("a") : TEXT("b"),
+						*State.Layout.Walls[WallIndex].Id, bSeen ? TEXT("somebody looks round it") : TEXT("NOBODY looks round it"));
+					if (!bSeen)
+					{
+						++State.CornerMissed;
+						if (State.CornerWorst.IsEmpty())
+						{
+							State.CornerWorst = FString::Printf(TEXT("nobody looked round the %s end of %s (t=%.1f)"), End == 0 ? TEXT("a") : TEXT("b"),
+								*State.Layout.Walls[WallIndex].Id, State.StageTime);
+						}
+					}
+				}
+			}
+		}
+
+		// Rules v2.1: the guard as it ran (its level, the HUD line while it falls back, the trail column near the route's corner).
+		State.MaxGuardLevel = FMath::Max(State.MaxGuardLevel, static_cast<int32>(Squad->GetFormationGuardLevel()));
+		if (Squad->GetFormationGuardLevel() != EFormationGuardLevel::Requested)
+		{
+			State.HudSeen.Add(Squad->GetFormationHudText());
+		}
+		if (Squad->IsFormationTrail())
+		{
+			State.TrailSeconds += Dt;
+			for (int32 Corner = 1; Corner + 1 < Route.Points.Num(); ++Corner)
+			{
+				State.TrailNearCorner += FVector2D::Distance(LeaderPos, Route.Points[Corner]) <= 1000.0 ? Dt : 0.f;
+			}
+		}
+		State.CornerWatchSeconds += Squad->GetFormationCornerLooks().Num() > 0 ? Dt : 0.f;
+
+		// Rules v2.1 stills (Saved/Screenshots/FormationV21/).
+		if (State.bShot && State.Photos.IsEmpty())
+		{
+			const FVector Center = Centroid(State);
+			if (Squad->GetFormationGuardLevel() == EFormationGuardLevel::Mirror && Zone && Zone->Id == TEXT("Z_B_left"))
+			{
+				QueuePhoto(State, TEXT("01_guard_echelon_left_to_right_hud"), Center, Heading + 35.f, -60.f, 1500.f, /*bV21*/ true);
+			}
+			else if (Squad->IsFormationTrail() && Route.Id == TEXT("R_D_corridors") && Zone && Zone->Id == TEXT("Z_D_narrow"))
+			{
+				QueuePhoto(State, TEXT("02_guard_line_to_trail_column_hud"), Center, Heading + 20.f, -60.f, 1300.f, true);
+			}
+			else if (Squad->IsFormationTrail() && Route.Id == TEXT("R_E_corner") && Route.Points.Num() > 2
+				&& FVector2D::Distance(LeaderPos, Route.Points[1]) <= 400.0 && LeaderPos.Y > Route.Points[1].Y + 150.0)
+			{
+				QueuePhoto(State, TEXT("03_trail_column_round_the_corner"), FVector(Route.Points[1].X, Route.Points[1].Y, Center.Z), 225.f, -65.f, 1600.f, true);
+			}
+			else if (Route.Id == TEXT("R_E_corner_pass") && Squad->GetFormationCornerLooks().Num() > 0 && LeaderPos.Y > 5150.0)
+			{
+				// From the south, steep: the squad walking north (up the image), W_E_14's free end beside it, the watcher's look round it.
+				QueuePhoto(State, TEXT("04_corner_watch_slicing_the_pie"), FVector(150.0, 5000.0, Center.Z), 90.f, -72.f, 1500.f, true);
 			}
 		}
 
@@ -798,10 +1034,49 @@ namespace FormationLabSmoke
 	}
 
 	/** Route checks after the halt. */
-	void CheckRoute(UWorld* World, FState& State, const FLabRoute& Route, int32 MemberCount, bool bWallEnd)
+	void CheckRoute(UWorld* World, FState& State, const FLabRoute& Route, const FRun& Run, bool bWallEnd)
 	{
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
-		const FString Name = FString::Printf(TEXT("%s n%d"), *Route.Id, MemberCount);
+		const int32 MemberCount = Run.MemberCount;
+		const bool bManual = !Run.Menu.IsEmpty();
+		const FString Name = FString::Printf(TEXT("%s n%d%s"), *Route.Id, MemberCount, bManual ? *FString::Printf(TEXT(" menu %s"), *Run.Menu) : TEXT(""));
+		// Rules v2.1 (checks.ts gate for manual formations): a manual run is judged by the stare, the split and the guard - its zone
+		// expectations and the rear man's pace are reported only.
+		const auto Gate = [&State, bManual](bool bOk, const FString& What)
+		{
+			if (bManual && !bOk)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: (manual, not gated) %s"), *What);
+				return;
+			}
+			Check(State, bOk, What);
+		};
+		// Rules v2.1, 7: the squad never splits round a wall.
+		Check(State, State.SplitEvents == 0, FString::Printf(TEXT("%s: the squad never splits round a wall (%d splits >= %.1f s%s)"), *Name, State.SplitEvents,
+			FormationGuardRuntime::SplitSeconds, State.SplitWorst.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", worst %.1f s %s"), State.SplitWorstSeconds, *State.SplitWorst)));
+		// 9: somebody looks round every free wall end the leader passes.
+		if (State.CornerEnds > 0 || Run.bExpectCorner)
+		{
+			Check(State, State.CornerEnds > 0 && State.CornerMissed == 0, FString::Printf(TEXT("%s: somebody looks round each passed wall end (%d ends, %d missed%s; corner watch %.1f s)"),
+				*Name, State.CornerEnds, State.CornerMissed, State.CornerWorst.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", %s"), *State.CornerWorst), State.CornerWatchSeconds));
+		}
+		FString Huds;
+		for (const FString& Hud : State.HudSeen)
+		{
+			Huds += FString::Printf(TEXT(" \"%s\""), *Hud);
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s: guard max level %d, trail column %.1f s (%.1f s near the route's corners), HUD while guarded:%s"), *Name,
+			State.MaxGuardLevel, State.TrailSeconds, State.TrailNearCorner, Huds.IsEmpty() ? TEXT(" -") : *Huds);
+		if (!Run.ExpectHud.IsEmpty())
+		{
+			Check(State, State.HudSeen.Contains(Run.ExpectHud), FString::Printf(TEXT("%s: the wall guard keeps the squad whole - the HUD shows \"%s\" (seen:%s)"), *Name,
+				*Run.ExpectHud, Huds.IsEmpty() ? TEXT(" none") : *Huds));
+		}
+		if (Run.bExpectFold)
+		{
+			Check(State, State.TrailNearCorner >= 1.f, FString::Printf(TEXT("%s: the sharp-turn fold - the trail column round the route's corner (%.1f s within 10 m of it)"),
+				*Name, State.TrailNearCorner));
+		}
 		for (const FLabExpect& Expect : Route.Expect)
 		{
 			const FZoneAcc* Acc = State.Zones.Find(Expect.Zone);
@@ -814,9 +1089,16 @@ namespace FormationLabSmoke
 				}
 			}
 			const float Pct = Acc && Acc->Settled > 0.f ? 100.f * Acc->Match / Acc->Settled : 0.f;
-			CheckKnown(State, Route.Id, TEXT("expect"), Acc && Acc->Settled > 0.f && Pct >= ExpectPct,
-				FString::Printf(TEXT("%s: zone %s wants %s - %.0f %% of %.1f s settled [%s ]"), *Name, *Expect.Zone, *Expect.Formation, Pct,
-					Acc ? Acc->Settled : 0.f, *Seen));
+			const FString What = FString::Printf(TEXT("%s: zone %s wants %s (requested) - %.0f %% of %.1f s settled [%s ]"), *Name, *Expect.Zone, *Expect.Formation, Pct,
+				Acc ? Acc->Settled : 0.f, *Seen);
+			if (bManual)
+			{
+				Gate(Acc && Acc->Settled > 0.f && Pct >= ExpectPct, What);
+			}
+			else
+			{
+				CheckKnown(State, Route.Id, TEXT("expect"), Acc && Acc->Settled > 0.f && Pct >= ExpectPct, What);
+			}
 		}
 		CheckKnown(State, Route.Id, TEXT("stare"), State.StareEvents == 0, FString::Printf(TEXT("%s: nobody faces a wall within 200 cm for >= 0.3 s (%d events%s)"),
 			*Name, State.StareEvents, State.StareWorst.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", worst %.1f s %s"), State.StareWorstSeconds, *State.StareWorst)));
@@ -825,8 +1107,16 @@ namespace FormationLabSmoke
 			TArray<float> Sorted = State.Behind;
 			Sorted.Sort();
 			const float P95 = Sorted[FMath::Clamp(FMath::FloorToInt32(0.95f * Sorted.Num()), 0, Sorted.Num() - 1)];
-			CheckKnown(State, Route.Id, TEXT("pace"), P95 <= PaceBehindCm, FString::Printf(TEXT("%s: the rear man keeps up - p95 %.0f cm behind his slot (max %.0f, <= %.0f)"),
-				*Name, P95, Sorted.Last(), PaceBehindCm));
+			const FString What = FString::Printf(TEXT("%s: the rear man keeps up - p95 %.0f cm behind his slot (max %.0f, <= %.0f)"), *Name, P95, Sorted.Last(),
+				PaceBehindCm);
+			if (bManual)
+			{
+				Gate(P95 <= PaceBehindCm, What);
+			}
+			else
+			{
+				CheckKnown(State, Route.Id, TEXT("pace"), P95 <= PaceBehindCm, What);
+			}
 		}
 		if (!Route.bRun && State.PaceTime > 3.f)
 		{
@@ -930,8 +1220,10 @@ namespace FormationLabSmoke
 		{
 			if (!FormationRuntime::IsEnabled())
 			{
-				Check(State, false, TEXT("Codex.Formation.Sectors is 0: nothing to check on the lab"));
-				return Finish(State, false);
+				// The A/B batch (smoke_parallel -PreCmds "Codex.Formation.Sectors 0"): the lab checks the formation rules only - skipped, not
+				// failed (the default 1 is what the normal run checks).
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: Codex.Formation.Sectors is 0 - the formation lab checks the formation rules only: skipped"));
+				return Finish(State, true);
 			}
 			Check(State, Flow && Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("exploration phase on the lab"));
 			if (Squad->IsSoloMode())
@@ -991,9 +1283,13 @@ namespace FormationLabSmoke
 				State.Members.Add(Back);
 			}
 			const float Yaw = FormationMath::YawOf(Route->Points[1] - Route->Points[0]);
+			// Rules v2.1: the hold-G menu's choice for this run (auto unless the run names one).
+			TOptional<EFormationMenuItem> Menu;
+			FormationMenuRules::ParseChoice(Run->Menu.IsEmpty() ? FString(TEXT("auto")) : Run->Menu, Menu);
+			Squad->SetFormationMenuChoice(Menu);
 			PlaceSquad(World, State, Route->Points[0], Yaw);
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: route %s (%s, %d points) with %d members"), *Route->Id, Route->bRun ? TEXT("run") : TEXT("walk"),
-				Route->Points.Num(), Run->MemberCount);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: route %s (%s, %d points) with %d members, menu %s"), *Route->Id, Route->bRun ? TEXT("run") : TEXT("walk"),
+				Route->Points.Num(), Run->MemberCount, Run->Menu.IsEmpty() ? TEXT("auto") : *Run->Menu);
 			Enter(State, EStage::RouteSettle);
 			return true;
 		}
@@ -1021,7 +1317,9 @@ namespace FormationLabSmoke
 			const float Dist = static_cast<float>(FVector2D::Distance(Here, To));
 			const bool bLast = State.Point == Route->Points.Num() - 1;
 			State.StillTime = Leader->IsMoving() ? 0.f : State.StillTime + Dt;
-			if (!bLast && Dist <= CornerTurnCm)
+			const double LegLength = FVector2D::Distance(From, To);
+			const double LegAlong = FVector2D::DotProduct(Here - From, (To - From).GetSafeNormal());
+			if (!bLast && (Dist <= CornerTurnCm || LegAlong >= LegLength - CornerTurnCm))
 			{
 				// A corner of the route: on to the next leg without a stop (the bot's leader walks through it).
 				++State.Point;
@@ -1035,15 +1333,27 @@ namespace FormationLabSmoke
 				return true;
 			}
 			// The player clicks ahead along the route (crowd separation from the followers would let the leader drift off the line
-			// over a long leg): a point CarrotAheadCm ahead of his projection on the leg, the leg's end for the last stretch.
+			// over a long leg): a point CarrotAheadCm ahead of his projection on the leg - rules v2.1: carried on round the route's corner
+			// (the click lies round it: his path shows the turn ahead, the sharp-turn fold sees it), the route's end for the last stretch.
 			if (State.CarrotTime >= CarrotSeconds || State.StillTime > 1.f)
 			{
 				State.CarrotTime = 0.f;
 				State.StillTime = 0.f;
 				const FVector2D Leg = (To - From).GetSafeNormal();
 				const double Along = FMath::Clamp(FVector2D::DotProduct(Here - From, Leg), 0.0, FVector2D::Distance(From, To));
-				const double Remaining = FVector2D::Distance(From, To) - Along;
-				const FVector2D Goal = Remaining <= CarrotAheadCm + 200.0 ? To : From + Leg * (Along + CarrotAheadCm);
+				double Remaining = FVector2D::Distance(From, To) - Along;
+				FVector2D Goal = From + Leg * (Along + CarrotAheadCm);
+				if (Remaining <= CarrotAheadCm + 200.0)
+				{
+					Goal = To;
+					if (!bLast)
+					{
+						// Round the corner: the rest of the click distance along the next leg.
+						const FVector2D Next = Route->Points[State.Point + 1];
+						const double Rest = FMath::Clamp(CarrotAheadCm - Remaining, 0.0, FVector2D::Distance(To, Next));
+						Goal = To + (Next - To).GetSafeNormal() * Rest;
+					}
+				}
 				Leader->OrderMoveTo(FVector(Goal.X, Goal.Y, Leader->GetActorLocation().Z), Route->bRun);
 			}
 			const float LegCap = static_cast<float>(FVector2D::Distance(From, To)) / 100.f + 20.f;
@@ -1073,7 +1383,7 @@ namespace FormationLabSmoke
 					QueuePhoto(State, FString::Printf(TEXT("04_wall_layout_%s_n%d"), *Route->Id, Run->MemberCount), Centroid(State), NormalYaw + 180.f + 20.f, -45.f, 1100.f);
 				}
 			}
-			CheckRoute(World, State, *Route, Run->MemberCount, bWallEnd);
+			CheckRoute(World, State, *Route, *Run, bWallEnd);
 			if (Run->bWallOrderAfter)
 			{
 				// Back off the dead end, then the group cover order at its wall.
@@ -1215,6 +1525,11 @@ namespace FormationLabSmoke
 			return;
 		}
 		ApplyTargetPoints(World, State->Layout);
+		// Rules v2.1: a smoke-own walk past W_E_14's free north end (300, 5300) - the corner watch (slicing the pie) and check 9.
+		FLabRoute Pass;
+		Pass.Id = TEXT("R_E_corner_pass");
+		Pass.Points = { FVector2D(0.0, 4300.0), FVector2D(0.0, 5800.0) };
+		State->Layout.Routes.Add(Pass);
 		const TCHAR* Order[] = { TEXT("R_A_open"), TEXT("R_A_run"), TEXT("R_B_walls"), TEXT("R_C_gaps"), TEXT("R_D_corridors"), TEXT("R_E_corner"),
 			TEXT("R_F_deadend"), TEXT("R_v2_gaps") };
 		for (const TCHAR* Id : Order)
@@ -1224,6 +1539,35 @@ namespace FormationLabSmoke
 				FRun Run;
 				Run.RouteId = Id;
 				Run.bWallOrderAfter = FCString::Strcmp(Id, TEXT("R_F_deadend")) == 0;
+				Run.bExpectFold = FCString::Strcmp(Id, TEXT("R_E_corner")) == 0; // the echelon right folds round the 90 deg corner
+				State->Plan.Add(Run);
+			}
+		}
+		// Rules v2.1: the guard with the hold-G menu's manual choices, and the corner watch.
+		struct FV21Run
+		{
+			const TCHAR* Label;
+			const TCHAR* Route;
+			const TCHAR* Menu;
+			const TCHAR* Hud;
+			bool bCorner;
+		};
+		const FV21Run V21Runs[] = {
+			// The user's bug: lane B, manual echelon left with the wall on the left -> the mirror (the squad stays on the leader's side).
+			{ TEXT("R_B_walls@echelon_left"), TEXT("R_B_walls"), TEXT("echelon_left"), TEXT("Echelon left -> Echelon right (wall)"), false },
+			// A manual line through the corridors -> the trail column.
+			{ TEXT("R_D_corridors@line"), TEXT("R_D_corridors"), TEXT("line"), TEXT("Line -> Column (wall)"), false },
+			{ TEXT("R_E_corner_pass"), TEXT("R_E_corner_pass"), TEXT(""), TEXT(""), true },
+		};
+		for (const FV21Run& Each : V21Runs)
+		{
+			if (Only.IsEmpty() || Only.Contains(Each.Label))
+			{
+				FRun Run;
+				Run.RouteId = Each.Route;
+				Run.Menu = Each.Menu;
+				Run.ExpectHud = Each.Hud;
+				Run.bExpectCorner = Each.bCorner;
 				State->Plan.Add(Run);
 			}
 		}

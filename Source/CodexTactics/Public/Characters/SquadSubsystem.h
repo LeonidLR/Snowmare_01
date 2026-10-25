@@ -5,6 +5,10 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadFormation.h"
 #include "Characters/FirePostureRules.h"
+#include "Formation/FormationBypassRules.h"
+#include "Formation/FormationCornerRules.h"
+#include "Formation/FormationGuardRules.h"
+#include "Formation/FormationMenuRules.h"
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTypes.h"
 #include "Formation/FormationWallGroupRules.h"
@@ -364,6 +368,38 @@ public:
 	/** The last coverage allocation on the move (FormationCoverRules::Allocate): its rear guard; false when the allocator did not run. */
 	bool GetFormationRearGuard(EFormationRole& OutRole) const;
 
+	// --- Rules v2.1 in the runtime (Codex.Formation.Sectors + Codex.Formation.V21; SquadSubsystemFormationGuard.cpp) ---
+
+	/**
+	 * The formation asked for this frame: the hold-G menu's manual choice (SetFormationMenuChoice), else the terrain's (ChooseFormation).
+	 * GetFormationKind is the formation in EFFECT - it differs while the wall guard falls back (FormationGuardRules::Resolve: the mirror
+	 * echelon, or the trail column along the leader's path; the request comes back by itself after classify.hold_distance of path).
+	 */
+	EFormationKind GetFormationRequested() const { return Sectors.Requested; }
+	/** The wall guard's level this frame (the request / its mirror echelon / the trail column). */
+	EFormationGuardLevel GetFormationGuardLevel() const { return Sectors.Guard.Level; }
+	/** The slots are the trail column's (FormationShapeRules::TrailSlots on the leader's recorded path) - the guard's level 2 or the turn fold. */
+	bool IsFormationTrail() const { return Sectors.bTrail; }
+	/**
+	 * HUD line (English, labels.ts guardHudText): the formation in effect ("Diamond"), or "Echelon left -> Column (wall)" while the guard
+	 * falls back; empty while the formation sectors do not drive the squad.
+	 */
+	FString GetFormationHudText() const;
+
+	/**
+	 * The hold-G menu's choice (FormationMenuRules; unset = Auto: the terrain decides). A manual formation holds until Auto (too few
+	 * members -> Auto, FormationMenuRules::Resolve); "All forward" = the terrain's formation with everybody looking at 12. The radial
+	 * menu itself is not built yet: the dev console Codex.Formation.Menu sets it.
+	 */
+	void SetFormationMenuChoice(const TOptional<EFormationMenuItem>& Choice);
+	TOptional<EFormationMenuItem> GetFormationMenuChoice() const { return Sectors.MenuChoice; }
+
+
+	/** The corner watch this frame (FormationCornerRules::Watch: the member looking round a wall end and his look); empty when none. */
+	const TArray<FFormationCornerLook>& GetFormationCornerLooks() const { return Sectors.CornerLooks; }
+	/** The world walls the v2.1 rules see round the leader (box collision -> FormationGuardRuntime::WallsFromBox). */
+	const TArray<FFormationWall>& GetFormationWorldWalls() const { return Sectors.WorldWalls; }
+
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
 
@@ -485,6 +521,32 @@ private:
 		TArray<FFormationWall> LookWalls;
 		/** The last coverage allocation on the move: its rear guard. */
 		TOptional<EFormationRole> RearGuard;
+
+		// --- Rules v2.1 (SquadSubsystemFormationGuard.cpp) ---
+		/** The formation asked for (menu / terrain) and the wall guard's state over frames. */
+		EFormationKind Requested = EFormationKind::Wedge;
+		FFormationGuardState Guard;
+		/** The slots are the trail column's this frame. */
+		bool bTrail = false;
+		/** The leader's path this tick (StepFormationTerrain), cm. */
+		float LastStepDistance = 0.f;
+		/** The leader's recorded path, oldest first (FormationGuardRuntime::PushTrail). */
+		TArray<FVector2D> Trail;
+		/** The formation (+ trail flag) the followers' places were last assigned for: a change re-assigns them (contract 10.6). */
+		EFormationKind PlacesFormation = EFormationKind::Wedge;
+		bool bPlacesTrail = false;
+		bool bPlacesKeyValid = false;
+		/** The world's box walls round the leader, where they were gathered and how long ago. */
+		TArray<FFormationWall> WorldWalls;
+		FVector2D WorldWallsCenter = FVector2D::ZeroVector;
+		float WorldWallsAge = 0.f;
+		bool bWorldWallsValid = false;
+		/** Slicing the pie (FormationCornerRules::Watch). */
+		FFormationCornerState Corner;
+		TArray<FFormationCornerLook> CornerLooks;
+		/** The hold-G menu's choice (unset = Auto) and its "All forward". */
+		TOptional<EFormationMenuItem> MenuChoice;
+		bool bAllForward = false;
 	};
 
 	/** Rules v2.2 wall group (ReallocateWallGroup; SquadSubsystemWallGroup.cpp). */
@@ -530,9 +592,32 @@ private:
 	bool AllocateFormationLooks(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos);
 	/**
 	 * Places, not fixed slots (contract 10.6 / 11.6): the followers' slot indices (= roles) re-assigned by minimal travel to this frame's
-	 * places when that saves FormationRuntime::ReassignGainCm (after a turn the man nearest the rear place becomes the rear man).
+	 * places when that saves FormationRuntime::ReassignGainCm (after a turn the man nearest the rear place becomes the rear man); rules
+	 * v2.1: also whenever the formation in effect changes (a fold, the mirror, the trail column on / off), whatever the saving.
 	 */
 	void ReassignFormationPlaces();
+
+	// --- Rules v2.1 in the runtime (SquadSubsystemFormationGuard.cpp) ---
+	/** The leader's trail (PushTrail; a teleport starts it afresh) and the world walls round him (refreshed as he walks). */
+	void UpdateFormationTrailAndWalls(const AOperativeCharacter& LeaderRef, float DeltaTime);
+	/**
+	 * Box-collision walls (FormationGuardRuntime::WallsFromBox) of the blocking world geometry crossing the horizontal plane PlaneZ inside
+	 * the rectangle Center +- HalfExtents turned by Yaw (static and dynamic world objects; pawns and boxes not standing upright left out).
+	 */
+	TArray<FFormationWall> GatherFormationWalls(const FVector2D& Center, const FVector2D& HalfExtents, float Yaw, float PlaneZ) const;
+	/**
+	 * The leader's path ahead for the guard / turn fold: [his position, the rest of his nav path, his destination]; [his position] when he is not walking an order of his own.
+	 */
+	TArray<FVector2D> LeaderPathAhead(const AOperativeCharacter& LeaderRef, bool bLeaderMoving) const;
+	/** The v2.1 guard step: Sectors.Requested -> Sectors.Formation (in effect) and Sectors.bTrail (FormationGuardRules::Resolve / Effective). */
+	void StepFormationGuard(const AOperativeCharacter& LeaderRef, bool bLeaderMoving, int32 Count);
+	/** The trail column's slots and looks this frame (FormationShapeRules::TrailSlots, LookYaw column by each man's room). */
+	void BuildTrailFrameSlots(const FVector2D& LeaderPos, int32 Count);
+	/** Slicing the pie: FormationCornerRules::Watch on this frame's places; the watchers' looks replace their slot yaws (walk mode). */
+	void ApplyFormationCornerWatch(const FVector2D& LeaderPos);
+	/** v2.1.1 (user "6A"): Look through FormationSectorRules::ClearLook unless the member is exempt (FormationGuardRuntime::ShouldClearLook). */
+	float ClearFormationLook(const AOperativeCharacter& Member, EFormationRole Role, bool bLeader, float Look) const;
+
 
 	struct FGroupCoverProneOrder
 	{
@@ -631,9 +716,11 @@ private:
 	/**
 	 * Bug 2026-10-23: a formation slot off the navmesh (inside a wall, the generator, a fallen mate's remains crate) was unreachable
 	 * for good - while the leader stood still the follower never came back. Returns Slot when it lies on the navmesh, else the
-	 * nearest candidate round the leader that does (SquadFormation::ComputeFallbackSlots), else Slot.
+	 * nearest candidate round the leader that does (SquadFormation::ComputeFallbackSlots), else Slot. bLeaderSide (rules v2.1, contract 7): a
+	 * candidate must also be on the leader's side - nothing blocks the straight line from him to it (a walkable point behind a wall splits
+	 * the squad).
 	 */
-	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot) const;
+	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide = false) const;
 
 	TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 	TWeakObjectPtr<AOperativeCharacter> Leader;

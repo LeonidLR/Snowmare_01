@@ -1209,7 +1209,7 @@ bool USquadSubsystem::HoldsCoverOrLeavesIt(FFollowerState& Follower, AOperativeC
 	return false;
 }
 
-FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot) const
+FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide) const
 {
 	UNavigationSystemV1* Nav = CVarSquadSlotFallback.GetValueOnGameThread() != 0 ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()) : nullptr;
 	FNavLocation OnNav;
@@ -1219,6 +1219,11 @@ FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderR
 	}
 	for (const FVector& Candidate : SquadFormation::ComputeFallbackSlots(LeaderRef.GetActorLocation(), Slot, FormationConfig.StopRadius * 2.f))
 	{
+		// Rules v2.1 (contract 7): never a walkable point on the far side of a wall from the leader.
+		if (bLeaderSide && IsSlotPathBlocked(LeaderRef, FVector(Candidate.X, Candidate.Y, LeaderRef.GetActorLocation().Z)))
+		{
+			continue;
+		}
 		if (Nav->ProjectPointToNavigation(Candidate, OnNav))
 		{
 			return FVector(OnNav.Location.X, OnNav.Location.Y, Slot.Z);
