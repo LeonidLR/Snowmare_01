@@ -287,6 +287,7 @@ namespace TrapSoloSmoke
 			State.F = Leader->GetActorForwardVector().GetSafeNormal2D();
 			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
 			State.AutoMine = SpawnHiddenMine(World, Ground + State.F * 1100.f - State.R * 250.f);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: AUTO pass from (%.0f, %.0f) facing %.0f"), Ground.X, Ground.Y, State.F.Rotation().Yaw);
 			ClickGround(PC, SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Ground + State.F * 2000.f));
 			Next(State);
 			return true;

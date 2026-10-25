@@ -2916,9 +2916,19 @@ namespace TutorialSmoke
 			}
 			Squad->SetLeaderByIndex(0);
 			Leader = Squad->GetLeader();
-			State.CourseOrigin = Leader->GetActorLocation();
-			State.CourseForward = Leader->GetActorForwardVector().GetSafeNormal2D();
-			State.CourseRight = FVector::CrossProduct(FVector::UpVector, State.CourseForward).GetSafeNormal();
+			// 2026-10-25 (formation sectors): the course starts at a fixed design spot (where the earlier stages used to leave the leader) - with
+			// the formation's patrol pace / look sectors the squad ends the stages above elsewhere, and a course laid from there ran into the
+			// earlier stages' lesson mines.
+			{
+				const FTransform Layout = SmokeUtils::LayoutTransform(World);
+				State.CourseOrigin = Layout.TransformPosition(FVector(2180.f, 386.f, 92.f));
+				State.CourseForward = Layout.TransformVectorNoScale(FRotator(0.f, 131.f, 0.f).Vector()).GetSafeNormal2D();
+				State.CourseRight = FVector::CrossProduct(FVector::UpVector, State.CourseForward).GetSafeNormal();
+				TeleportSquadTo(Squad, State.CourseOrigin, State.CourseRight);
+				Leader->SetActorRotation(State.CourseForward.Rotation());
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: guide course from (%.0f, %.0f) along yaw %.0f"), State.CourseOrigin.X, State.CourseOrigin.Y,
+					State.CourseForward.Rotation().Yaw);
+			}
 			const FVector O = State.CourseOrigin;
 			const FVector F = State.CourseForward;
 			const FVector R = State.CourseRight;

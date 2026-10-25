@@ -79,6 +79,33 @@
   mode defaults (balance assets, `LevelJsonFile`, enemy classes) are editable in the same Class Defaults. No map overrides the
   game mode; code reads it through `GetAuthGameMode<ACodexTacticsGameMode>()` (works for the child).
 
+## Formation look sectors (stage 6, 2026-10-25; design docs/design/FORMATION_SECTORS.md, contract FORMATION_CONTRACT.md)
+
+Console `Codex.Formation.Sectors` (default 1; **0 = the old triangle formation, facing and speeds - every old path untouched**). `Codex.Formation.Debug 1`
+logs every raw terrain class change with its probe hits, `2` also every follower repath (role, distance, slot speed, speed, backwards).
+- **What the player sees:** exploring in group mode the squad picks its formation by the ground round the leader - diamond (4) / wedge (3) / pair (2) in the
+  open, echelon away from a wall on one side, column in any passage (narrow: P looks over the leader's shoulder, L back at a slant, the rear man back),
+  the wall layout when the leader stops at a wall; the blizzard tight diamond in a blizzard. Each man looks into his sector: patrol (walk) = scans (leader
+  11-1, P 12-3, L 9-12, the 4th walks BACKWARDS looking at 6), run (double click) = everyone his path, halt = the sector centres. The squad walks at
+  `pace.patrol` (0.8) x walk speed. A group cover order in group mode = the wall layout: all along the wall 1 m apart, crouched, backs to it, facing OUT
+  (nobody looks into the wall); the leader's next order ends it, the others stand up and follow. A box selection keeps the old orders (each to his point /
+  the cover slots), Solo keeps everyone where he is.
+- **Code:** `USquadSubsystem::UpdateFormationSectors` / `UpdateSectorFollower` / `OrderFormationWall` (`Private/Characters/SquadSubsystemFormation.cpp`);
+  the pure glue `Formation/FormationRuntimeRules` (`CodexTactics.Formation.Runtime.*`): slot -> role (0 L, 1 P, 2 Z = the old 2nd-row-left becomes the rear
+  man; 2 members: Z), the 9 probe rays at 120 cm (lower obstacles are looked over), hits -> thin walls read from the probe origin, a one-probe glitch
+  debounced, the v2 tracker fed the leader's path and move destination (`StepFormationTerrain`: the ONE adapter - keep it thin), the wall layout only on
+  arrival, contract 7 follower speed (slot velocity lead + FOLLOW_GAIN 2/s, capped by catchup / backwards 0.9, lead <= 120 cm, repath 0.1 s; crawling: no
+  backward cap), walking into the wall layout = his path until 1 m from the slot. Facing: `AOperativeCharacter::SetFormationLookYaw` (set / cleared by the
+  squad every tick; `UpdateCombatFacing`: combat target > facing order / quick fire > cover > an order's idle facing (group cover, warm spot) > formation
+  sector > movement; not prone / sprinting / carrying / on the grid). A halted leader turns back to 12 for 1 s, then his facing is his own and the halted
+  heading follows it (a teleport, a load or a facing order turns the squad as before). `SetFormationPaceMultiplier` (the leader's walk only),
+  `SetFormationWallPose` (his next own order stands him up when the crouch was the squad's). The tutorial's `squad_not_in_cover_at` counts the wall pose as in cover.
+- **Checks:** `FormationLabSmoke` (L_FormationLab, `-LevelJson=L_FormationLab.json`; `shot` = stills in `Saved/Screenshots/FormationLab/`); GroupCoverSmoke
+  scene W. A/B: `smoke_parallel.ps1 -PreCmds "Codex.Formation.Sectors 0" -Commands ...`.
+- **Open:** the hold-G radial menu (manual formations, `EFormationMode::Forward`), the hedgehog at a fire (`FormationShapeRules::HedgehogSlots`), the
+  designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
+  simulator ~1 m) - a Training Ground tuning point.
+
 ### After a retreat: face the enemy again (user request 2026-10-22)
 
 `ThreatFacingRules` (pure, `CodexTactics.Squad.ThreatFacing.*`), applied in `AOperativeCharacter::UpdateCombatFacing`: in a real-time wave fight

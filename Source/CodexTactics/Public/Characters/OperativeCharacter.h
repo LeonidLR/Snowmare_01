@@ -1811,6 +1811,35 @@ public:
 	double GetLastShotTime() const { return LastShotTime; }
 	void ClearIdleFacing() { bHasIdleFacing = false; }
 
+	// --- Formation look sectors (Codex.Formation.Sectors, docs/design/FORMATION_SECTORS.md; driven by USquadSubsystem) -------------
+
+	/**
+	 * The yaw his formation sector asks for this frame (FormationSectorRules::LookYaw / the wall layout); unset = none. USquadSubsystem
+	 * sets or clears it every tick. UpdateCombatFacing turns the body to it, walking or standing (the Rifle_2 8-direction locomotion
+	 * then strafes / walks backwards), below a combat target, an explicit facing order (SetFacingPoint, quick fire), the cover and an
+	 * idle facing set by an order (group cover, the warm spot) - design priority combat target > facing order > cover > formation sector
+	 * > movement direction. Not prone, sprinting, carrying or on the turn-based grid.
+	 */
+	void SetFormationLookYaw(const TOptional<float>& Yaw) { FormationLookYaw = Yaw; }
+	TOptional<float> GetFormationLookYaw() const { return FormationLookYaw; }
+
+	/** True while the formation sector drives his facing (last UpdateCombatFacing). */
+	bool IsFacingFormationSector() const { return bFacingFormationSector; }
+
+	/**
+	 * Patrol pace (FORMATION_SECTORS.md: the whole squad walks at pace.patrol x walk speed in patrol mode, so the rear man keeps up
+	 * walking backwards): his walk speed (not the sprint, not a formation move's own speed) is scaled by this. 1 = none.
+	 */
+	void SetFormationPaceMultiplier(float Multiplier);
+	float GetFormationPaceMultiplier() const { return FormationPaceMultiplier; }
+
+	/**
+	 * The formation wall layout's baseline pose (a group cover order in group mode, FORMATION_SECTORS.md "Wall"): crouched, back to the
+	 * wall, facing out. His next own move order stands him up again when the crouch was the squad's (IsStanceFromSquad).
+	 */
+	void SetFormationWallPose(bool bInPose) { bFormationWallPose = bInPose; }
+	bool IsInFormationWallPose() const { return bFormationWallPose; }
+
 	/** Current barrel-to-body yaw correction, degrees. */
 	float GetBarrelYawOffset() const { return BarrelYawOffset; }
 
@@ -1967,6 +1996,11 @@ private:
 	FVector SmoothedVelocity = FVector::ZeroVector;
 	float IdleFacingYaw = 0.f;
 	bool bHasIdleFacing = false;
+	/** Formation look sectors (SetFormationLookYaw / SetFormationPaceMultiplier / SetFormationWallPose). */
+	TOptional<float> FormationLookYaw;
+	bool bFacingFormationSector = false;
+	float FormationPaceMultiplier = 1.f;
+	bool bFormationWallPose = false;
 	/** ThreatFacingRules: the enemy he last faced in this fight and where he last saw it; a facing order of his own (SetFacingPoint). */
 	TWeakObjectPtr<AActor> LastThreat;
 	FVector LastThreatLocation = FVector::ZeroVector;

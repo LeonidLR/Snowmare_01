@@ -14,6 +14,7 @@
 # [-FixedSeed]): each frame advances the game by exactly 1/FPS whatever the machine load, so 3 games side by side see the same
 # frames as one alone (no frame-time dependent results) and, unthrottled, a smoke runs several times faster than real time.
 # -RealTime (all) or a smoke's "realTime": true option runs it on the wall clock as before.
+# -PreCmds "Codex.Formation.Sectors 0" runs console commands before each smoke (an A/B of a console switch).
 # Build lock: taken ONCE for the whole batch (children are plain engine processes, they never touch it). If the caller already holds it
 # (CODEX_LOCK_HELD=1: verify_all, test.ps1 -Changed) nothing is taken here.
 param(
@@ -24,7 +25,9 @@ param(
     [switch]$Serial,
     [switch]$NoRetry,
     [switch]$RealTime,
-    [string]$ResultJson = ""
+    [string]$ResultJson = "",
+    # Console commands run before each smoke (e.g. "Codex.Formation.Sectors 0" for the A/B of a console switch); comma-separated.
+    [string]$PreCmds = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -69,7 +72,8 @@ function Start-SmokeProcess([string]$Name, [string]$Suffix) {
     # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
     $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })
     # Start-Process takes one argument string: quote the paths (the project path has a space).
-    $gameArgs = "`"$Project`" $map -game $rhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=CodexTactics.$Name`" `"-abslog=$log`" $extra"
+    $exec = $(if ($PreCmds) { "$PreCmds,CodexTactics.$Name" } else { "CodexTactics.$Name" })
+    $gameArgs = "`"$Project`" $map -game $rhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=$exec`" `"-abslog=$log`" $extra"
     $proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $gameArgs -WindowStyle Hidden -PassThru
     return [pscustomobject]@{ Name = $Name; Suffix = $Suffix; Proc = $proc; Log = $log; Started = Get-Date; Timeout = [int](Get-Option $Name "timeout" $TimeoutSeconds) }
 }

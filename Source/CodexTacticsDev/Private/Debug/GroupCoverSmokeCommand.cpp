@@ -11,6 +11,9 @@
 //    leader stays; the leader walks 8 m away -> they get up and follow the formation;
 //  P a wave fight, tactical pause, all three box-selected, the barricade: the order is only planned (3 planned moves: one slot,
 //    two prone); the release -> leader in cover, the two prone behind it.
+//  W (2026-10-25, Codex.Formation.Sectors 1, first): group mode = the formation wall layout (FORMATION_SECTORS.md "Wall"): all three
+//    crouched along the wall 1 m apart, backs to it, facing out, not in the cover pose; the leader walks on -> they stand up and follow.
+//    A .. P then run on the cover-slot order (Codex.Formation.Sectors 0: the console-off behaviour, which a box selection keeps anyway).
 
 #include "CoreMinimal.h"
 
@@ -33,6 +36,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GroupCoverRules.h"
+#include "Formation/FormationRuntimeRules.h"
+#include "Formation/FormationTypes.h"
 
 namespace GroupCoverSmoke
 {
@@ -62,8 +67,34 @@ namespace GroupCoverSmoke
 		State.Failures += bOk ? 0 : 1;
 	}
 
+	/**
+	 * Formation sectors (2026-10-25): the cover-slot group order (slots shoulder to shoulder, prone behind, leader priority) runs for a box
+	 * selection and with Codex.Formation.Sectors 0; in group mode with the console on the order is the formation wall layout
+	 * (FORMATION_SECTORS.md "Wall", FormationLabSmoke). bOld saves the console's value and sets 0, false restores it.
+	 */
+	void UseCoverSlotOrder(bool bOld)
+	{
+		static int32 Saved = -1;
+		IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Sectors"));
+		if (!CVar)
+		{
+			return;
+		}
+		if (bOld && Saved < 0)
+		{
+			Saved = CVar->GetInt();
+			CVar->Set(0, ECVF_SetByConsole);
+		}
+		else if (!bOld && Saved >= 0)
+		{
+			CVar->Set(Saved, ECVF_SetByConsole);
+			Saved = -1;
+		}
+	}
+
 	bool Finish(FState& State, bool bComplete)
 	{
+		UseCoverSlotOrder(false);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		if (State.Wall.IsValid())
 		{
@@ -213,6 +244,69 @@ namespace GroupCoverSmoke
 			ResetSquad(Squad, State);
 			SpawnWall(World, State, 800.f, 300.f);
 			Check(State, State.Wall.IsValid(), TEXT("A: an 8 m high wall 6 m ahead"));
+			// Formation sectors on: scene W first (the group mode order is the wall layout), then A.. on the cover-slot order.
+			Next(State, FormationRuntime::IsEnabled() ? 100 : 1);
+			return true;
+		}
+		// --- W: group mode with Codex.Formation.Sectors 1 = the formation wall layout (FORMATION_SECTORS.md "Wall") ------------------
+		case 100:
+		{
+			if (State.StageTime < 2.5f)
+			{
+				return true;
+			}
+			if (!FindMiddleSlot(World, State, 90.f))
+			{
+				Check(State, false, TEXT("W: a cover slot in the middle of the wall"));
+				return Finish(State, false);
+			}
+			PC->ShowCoverPreview(A, State.Slot);
+			PC->ConfirmCoverPreview();
+			Check(State, Squad->HasFormationWallOrder(), TEXT("W: group mode, sectors on - the group cover order is the formation wall layout"));
+			Next(State, 101);
+			return true;
+		}
+		case 101:
+		{
+			const bool bAll = A->IsInFormationWallPose() && B->IsInFormationWallPose() && C->IsInFormationWallPose();
+			if (!bAll && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, bAll, FString::Printf(TEXT("W: all three crouched at the wall facing out (%d %d %d) after %.1f s"), A->IsInFormationWallPose(),
+				B->IsInFormationWallPose(), C->IsInFormationWallPose(), State.StageTime));
+			const AOperativeCharacter* Three[] = { A, B, C };
+			float MinGap = 1.0e9f;
+			for (int32 I = 0; I < 3; ++I)
+			{
+				const float Facing = static_cast<float>(Three[I]->GetActorRotation().Yaw);
+				const float Out = static_cast<float>((-State.F).Rotation().Yaw);
+				Check(State, !Three[I]->bInCover && Three[I]->GetStance() == EOperativeStance::Crouching && FormationMath::AngleBetween(Facing, Out) < 90.f
+					&& Depth(State, Three[I]->GetActorLocation()) < 140.f,
+					FString::Printf(TEXT("W: %s along the wall (%.0f cm off its face), crouched, back to it, facing out (facing %.0f, out %.0f), not in the cover pose"),
+						*Three[I]->DisplayName.ToString(), Depth(State, Three[I]->GetActorLocation()), Facing, Out));
+				for (int32 J = I + 1; J < 3; ++J)
+				{
+					MinGap = FMath::Min(MinGap, static_cast<float>(FVector::Dist2D(Three[I]->GetActorLocation(), Three[J]->GetActorLocation())));
+				}
+			}
+			Check(State, MinGap >= 80.f, FString::Printf(TEXT("W: 1 m apart (closest two %.0f cm)"), MinGap));
+			A->OrderMoveTo(State.P - State.F * 400.f, false);
+			Next(State, 102);
+			return true;
+		}
+		case 102:
+		{
+			if (State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, !Squad->HasFormationWallOrder() && !B->IsInFormationWallPose() && !C->IsInFormationWallPose()
+				&& B->GetStance() == EOperativeStance::Standing && C->GetStance() == EOperativeStance::Standing,
+				TEXT("W: the leader walks on - the wall order is over, the others stand up and follow"));
+			// A.. check the cover-slot order (a box selection / the console off) on the old rule.
+			UseCoverSlotOrder(true);
+			ResetSquad(Squad, State);
 			Next(State, 1);
 			return true;
 		}

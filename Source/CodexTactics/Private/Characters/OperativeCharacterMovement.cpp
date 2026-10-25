@@ -113,6 +113,16 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	{
 		SetStance(EOperativeStance::Standing);
 	}
+	// Formation wall layout (Codex.Formation.Sectors): crouched there by the squad, his next own order stands him up first (the stance clip
+	// defers the move below, as the rise from prone).
+	if (bFormationWallPose && !bPendingMoveReplay)
+	{
+		bFormationWallPose = false;
+		if (Stance == EOperativeStance::Crouching && IsStanceFromSquad() && !bCarrying)
+		{
+			SetStance(EOperativeStance::Standing);
+		}
+	}
 	const float RiseDelay = GetMoveHoldSeconds();
 	if (OperativeMovementRules::ShouldDeferMove(RiseDelay) && GetWorld())
 	{
@@ -494,8 +504,24 @@ bool AOperativeCharacter::IsMoving() const
 void AOperativeCharacter::ApplyMovementParams(float SpeedOverride)
 {
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
-	Movement->MaxWalkSpeed = SpeedOverride >= 0.f ? SpeedOverride : GetMaxSpeed();
+	// Formation patrol pace (Codex.Formation.Sectors): the walk of the leader in a patrol formation, never the sprint nor a formation move's
+	// own speed (FormationPaceMultiplier stays 1 with the console off).
+	Movement->MaxWalkSpeed = SpeedOverride >= 0.f ? SpeedOverride : GetMaxSpeed() * (bSprinting ? 1.f : FormationPaceMultiplier);
 	Movement->RotationRate = FRotator(0.f, OperativeMovementRules::GetTurnRate(MovementConfig, Stance), 0.f);
+}
+
+void AOperativeCharacter::SetFormationPaceMultiplier(float Multiplier)
+{
+	if (FMath::IsNearlyEqual(FormationPaceMultiplier, Multiplier))
+	{
+		return;
+	}
+	FormationPaceMultiplier = Multiplier;
+	// A formation move (FollowTo) runs at its own speed: only his own walk (or standing) takes the new pace now.
+	if (!bHasMoveOrder || bOwnMoveOrder)
+	{
+		ApplyMovementParams();
+	}
 }
 
 EOperativeOrderResult AOperativeCharacter::AutonomousMoveTo(const FVector& Destination)

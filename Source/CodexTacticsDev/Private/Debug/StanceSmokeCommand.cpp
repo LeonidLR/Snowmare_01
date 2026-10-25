@@ -38,6 +38,27 @@
 
 namespace StanceSmoke
 {
+	/** The slow walk check (case 32 / 33) runs with Codex.Formation.Sectors 0 (no patrol pace); bOff saves and sets 0, false restores. */
+	void SetFormationSectorsForSlowWalk(bool bOff)
+	{
+		static int32 Saved = -1;
+		IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Sectors"));
+		if (!CVar)
+		{
+			return;
+		}
+		if (bOff && Saved < 0)
+		{
+			Saved = CVar->GetInt();
+			CVar->Set(0, ECVF_SetByConsole);
+		}
+		else if (!bOff && Saved >= 0)
+		{
+			CVar->Set(Saved, ECVF_SetByConsole);
+			Saved = -1;
+		}
+	}
+
 	constexpr float NavWarmupSeconds = 3.f;
 	constexpr float FeetTolerance = 3.f;
 
@@ -419,6 +440,9 @@ namespace StanceSmoke
 		}
 		case 32:
 			Check(State, Leader, EOperativeStance::Standing);
+			// Formation sectors (2026-10-25): the patrol pace re-applies the walk speed when the squad starts to walk - this check forces a slow
+			// walk by hand, so it runs without the patrol pace (restored in case 33).
+			SetFormationSectorsForSlowWalk(true);
 			Leader->OrderMoveTo(SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector() * 600.f), false);
 			Leader->GetCharacterMovement()->MaxWalkSpeed = 20.f; // a slow walk, below the 30 cm/s dive threshold
 			return false;
@@ -433,6 +457,7 @@ namespace StanceSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke slow walk %.0f cm/s -> prone order: stopped first, lies down in place (entry %d) -> %s"),
 				State.DiveSpeedAtOrder, static_cast<int32>(State.DiveEntry), bOk ? TEXT("ok") : TEXT("BAD"));
 			State.bOk &= bOk;
+			SetFormationSectorsForSlowWalk(false);
 			return false;
 		}
 		case 35:

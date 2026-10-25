@@ -97,6 +97,30 @@ namespace SoloRejoinSmoke
 		bool bStoodUp[2] = { false, false };
 	};
 
+	/**
+	 * Formation sectors (2026-10-25): an "old rule" reproduction of a pre-sectors bug runs on the old formation too (its slots, speeds and
+	 * facing; Codex.Formation.Sectors 0) - bOld saves the console's value and sets 0, false restores it.
+	 */
+	void UseOldFormationRuleSolo(bool bOld)
+	{
+		static int32 Saved = -1;
+		IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Sectors"));
+		if (!CVar)
+		{
+			return;
+		}
+		if (bOld && Saved < 0)
+		{
+			Saved = CVar->GetInt();
+			CVar->Set(0, ECVF_SetByConsole);
+		}
+		else if (!bOld && Saved >= 0)
+		{
+			CVar->Set(Saved, ECVF_SetByConsole);
+			Saved = -1;
+		}
+	}
+
 	void SetSprintStandUp(int32 Value)
 	{
 		if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Squad.SprintStandUp")))
@@ -414,6 +438,7 @@ namespace SoloRejoinSmoke
 		case 117:
 			// Regroup + sprint (bug 2026-10-20): a fresh start at the wall; pass 0 = the old rule, pass 1 = the fix.
 			SetSprintStandUp(State.SprintPass == 0 ? 0 : 1);
+			UseOldFormationRuleSolo(State.SprintPass == 0); // the old rule's reproduction on the old formation
 			ResetSquad(World, Squad, State);
 			NextStage(State);
 			return true;
@@ -513,6 +538,7 @@ namespace SoloRejoinSmoke
 				return true;
 			}
 			SetSprintStandUp(1);
+			UseOldFormationRuleSolo(false);
 			State.bFlag = false;
 			NextStage(State);
 			return true;

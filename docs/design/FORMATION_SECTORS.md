@@ -1,6 +1,10 @@
 # Formation look sectors & tactical movement — design decisions (session 2026-10-25)
 
-Status: **design agreed with the user, no code yet.** Next session (local, with the model router / Jev / Unreal) starts here.
+Status: **implemented in the game (stage 6, 2026-10-25, branch formation/integration)** behind `Codex.Formation.Sectors` (default 1; 0 = the
+old triangle formation): pure rules v2 (`Source/CodexTactics/*/Formation/`), runtime in `USquadSubsystem` (`SquadSubsystemFormation.cpp`), facing in
+`AOperativeCharacter`, the group cover order in group mode = the wall layout; smoke `CodexTactics.FormationLabSmoke`; details
+`docs/systems/squad-and-orders.md` "Formation look sectors". Not yet: the hold-G radial menu (manual formations, "All forward"), the hedgehog at a
+heat source (`HedgehogSlots` exists), the designer's own back-to-the-wall clip (baseline: crouch idle facing out).
 Visual reference with interactive schemes and 3-second clips: `docs/design/formation-sectors.html` (open in a browser;
 same page as the claude.ai artifact https://claude.ai/artifact/ErDQfTKvYcV1Q3YzaA19HT). Keep the page, the clips and this
 file in sync with every design change (user request: "update the animations with every fix").

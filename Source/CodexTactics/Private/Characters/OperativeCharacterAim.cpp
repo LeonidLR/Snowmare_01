@@ -81,6 +81,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// (_face_movement_target) while not sprinting, so a single-click move walks sideways / backs off facing the enemy;
 	// a sprint turns to the movement and stops the fire.
 	bFacingCombatTarget = false;
+	bFacingFormationSector = false;
 	if (bInCover)
 	{
 		// User design rule 2026-10-06: the back stays against the wall (actor yaw = wall normal); the threat side only picks the _L/_R clip
@@ -132,7 +133,17 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		bFacingWall = true; // the movement facing below stays out of it this frame
 	}
 	const float TurnSpeed = OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f; // stored as deg/s, Godot rad/s
-	if (!bFacingCombatTarget && !bFacingWall && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f)
+	// Formation look sectors (Codex.Formation.Sectors; USquadSubsystem sets the yaw only with the console on): below the combat target, a
+	// facing order, the cover (returned above / the approach to a pending slot) and an order's idle facing; above the movement direction.
+	// He keeps walking his path - the 8-direction locomotion strafes / walks backwards (the rear man looks at 6).
+	bFacingFormationSector = !bFacingCombatTarget && !bFacingWall && FormationLookYaw.IsSet() && !bExplicitFacing && !bQuickFireActive
+		&& !bGridOwnsFacing && !bHasIdleFacing && !bHasPendingCover && !bSprinting && !bCarrying && Stance != EOperativeStance::Prone
+		&& !IsPanicking();
+	if (bFacingFormationSector)
+	{
+		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, FormationLookYaw.GetValue(), TurnSpeed, DeltaTime), 0.f));
+	}
+	else if (!bFacingCombatTarget && !bFacingWall && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f)
 	{
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, SmoothedVelocity.Rotation().Yaw, TurnSpeed, DeltaTime), 0.f));
 	}

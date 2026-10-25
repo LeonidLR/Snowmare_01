@@ -5,6 +5,8 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadFormation.h"
 #include "Characters/FirePostureRules.h"
+#include "Formation/FormationTerrainRules.h"
+#include "Formation/FormationTypes.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Tactics/CoverTypes.h"
 #include "SquadSubsystem.generated.h"
@@ -281,6 +283,51 @@ public:
 	/** He waits off the wall for the leader of his group cover order (on the way to the wait point or standing there). */
 	bool IsWaitingForGroupCoverLeader(const AOperativeCharacter* Operative) const;
 
+	// --- Formation look sectors (Codex.Formation.Sectors; docs/design/FORMATION_SECTORS.md, FORMATION_CONTRACT.md 7; SquadSubsystemFormation.cpp) ---
+
+	/**
+	 * The formation in force (console on, exploration formation): picked by the terrain round the leader (FormationTerrainRules::Classify
+	 * with hysteresis over a trace probe, FormationRuntime::ChooseFormation: the wall layout only on arrival) or the wall order.
+	 */
+	EFormationKind GetFormationKind() const { return Sectors.Formation; }
+	/** Walk (patrol) / run / halt / wall. */
+	EFormationMode GetFormationMode() const { return Sectors.Mode; }
+	/** The terrain class in force (unset before the first probe). */
+	TOptional<EFormationTerrainClass> GetFormationTerrainClass() const { return Sectors.Terrain.State.Current; }
+	/** The free passage width round the leader (FormationTerrainRules::PassageWidth), unset when a side is open. */
+	TOptional<float> GetFormationPassageWidth() const { return Sectors.PassageWidth; }
+	/** The formation heading (the leader's smoothed travel direction), UE yaw. */
+	float GetFormationHeadingYaw() const { return Sectors.HeadingYaw; }
+	/** Members in the formation (the leader and his followers, at most 4 roles). */
+	int32 GetFormationMemberCount() const { return Sectors.MemberCount; }
+	/** True while the console is on and this frame drove the formation (exploration formation, group mode). */
+	bool IsFormationSectorsActive() const { return Sectors.bActiveThisFrame; }
+
+	/** Operative's formation role this frame (the leader K; a follower by his slot / the wall order); false when he has none. */
+	bool GetFormationRole(const AOperativeCharacter* Operative, EFormationRole& OutRole) const;
+
+	/** Operative's formation slot (Z = his feet height) and look yaw this frame; false when he has none (no role, console off, ...). */
+	bool GetFormationTarget(const AOperativeCharacter* Operative, FVector& OutSlot, float& OutLookYaw) const;
+
+	/** A group cover order in group mode runs as the formation wall layout (OrderFormationWall) and has not ended. */
+	bool HasFormationWallOrder() const { return Sectors.bWallOrder; }
+
+	/** The outward normal's yaw of the wall layout in force (the automatic one or the order); false when none. */
+	bool GetFormationWallNormalYaw(float& OutYaw) const;
+
+	/**
+	 * FORMATION_SECTORS.md "Wall" (console on): a group cover order given in group mode (Solo off, no box selection, exploration
+	 * formation; not planned in the pause, not a cover switch / wrap) - nobody looks through the wall: Direct (the leader, K) runs to the
+	 * clicked slot, Others (his formation followers) to the FormationWallRules::Layout slots along the same wall 1 m apart (the 4th at the
+	 * roomier end); each turns to his layout yaw within 1 m of his slot (facing his path before), then crouches facing OUT, back to the
+	 * wall (the baseline pose; AOperativeCharacter::IsInFormationWallPose). Ends with the leader's next order (the others follow him
+	 * again, standing up). False (nothing ordered) when the layout cannot be made (no wall behind the slot, more than 4 members).
+	 */
+	bool OrderFormationWall(AOperativeCharacter* Direct, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot);
+
+	/** Smokes / teleports: the formation heading snaps to Forward, the terrain history and the slot velocities start afresh, a wall order ends. */
+	void ResetFormationState(const FVector& Forward);
+
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
 
@@ -323,6 +370,56 @@ private:
 		float ColumnTimeRemaining = 0.f;
 		float RepathTimeRemaining = 0.f;
 		bool bParked = false;
+		/** Formation sectors: his slot at the last repath and when (the slot's velocity for the follower speed, contract 7). */
+		FVector2D PrevSectorSlot = FVector2D::ZeroVector;
+		double PrevSectorSlotTime = -1.0;
+	};
+
+	/** Formation look sectors: the state over frames (SquadSubsystemFormation.cpp). */
+	struct FFormationSectorState
+	{
+		FFormationTerrainTracker Terrain;
+		EFormationKind Formation = EFormationKind::Wedge;
+		/** The formation the leader last walked in (kept while a wall ahead is still a corner to turn). */
+		EFormationKind MoveFormation = EFormationKind::Wedge;
+		EFormationMode Mode = EFormationMode::Halt;
+		TOptional<float> PassageWidth;
+		float HeadingYaw = 0.f;
+		bool bHeadingValid = false;
+		float PatrolTime = 0.f;
+		/** Seconds the leader has stood still (the wall layout only on arrival). */
+		float LeaderStillSeconds = 0.f;
+		float ProbeTimeRemaining = 0.f;
+		/** The probe walls (thin segments at the trace hits), the leader position and heading they were traced from. */
+		TArray<FFormationWall> ProbeWalls;
+		FVector2D ProbeOrigin = FVector2D::ZeroVector;
+		float ProbeHeadingYaw = 0.f;
+		/** The leader's position last tick (the path the v2 hysteresis counts). */
+		FVector2D LastLeaderPos = FVector2D::ZeroVector;
+		bool bLastLeaderPosValid = false;
+		/** The raw class of the last probe (FormationRuntime::AcceptProbe). */
+		TOptional<EFormationTerrainClass> LastProbeRaw;
+		int32 MemberCount = 1;
+		bool bActiveThisFrame = false;
+		/** The leader's position at the last heading update (a jump = a teleport snaps the heading to his facing). */
+		FVector2D HeadingTickPos = FVector2D::ZeroVector;
+		float HeadingTickYaw = 0.f;
+		bool bHeadingTickPosValid = false;
+		/** Codex.Formation.Sectors last tick (a switch snaps the heading). */
+		bool bWasEnabled = true;
+		/** This frame's slots and look yaws by role (Slots / LookYaw, or the wall layout). */
+		TArray<FFormationSlot> FrameSlots;
+		/** The wall layout in force (the automatic one on arrival or the order's). */
+		bool bWallLayoutValid = false;
+		TArray<FFormationSlot> WallSlots;
+		FVector2D WallAnchor = FVector2D::ZeroVector;
+		float WallNormalYaw = 0.f;
+		/** The group cover order in group mode as the wall layout (OrderFormationWall). */
+		bool bWallOrder = false;
+		TWeakObjectPtr<AOperativeCharacter> WallOrderLeader;
+		uint32 WallOrderSerial = 0;
+		float WallOrderSeconds = 0.f;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, EFormationRole> WallOrderRoles;
 	};
 
 	struct FGroupCoverProneOrder
@@ -366,9 +463,59 @@ private:
 	void StartPlannedGroupCoverProne();
 
 	void RebuildFollowers();
+	/** The follower part of Tick (formation follow); Tick applies the frame's formation looks / pace after it. */
+	void TickFormationFollow(float DeltaTime);
+	/** Formation sectors: heading, probe, terrain class, formation, mode, this frame's slots / looks, the leader's look and pace. */
+	void UpdateFormationSectors(AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime);
+	/** Sets every member's formation look / pace from this frame (none for a member not in it). */
+	void ApplyFormationFrame();
+	/** v1.2: the leader's move destination for Classify (at_wall only on arrival); unset before his first move order. */
+	static TOptional<FVector2D> LeaderDestination(const AOperativeCharacter& LeaderRef);
+	/** v1.2: the weather is a blizzard (FormationFor's blizzard tight diamond). */
+	bool IsFormationBlizzard() const;
+	/** The one adapter over FFormationTerrainTracker::Step (rules v2 changes it again). */
+	EFormationTerrainClass StepFormationTerrain(const AOperativeCharacter& LeaderRef);
+	/** Traces the probe rays round the leader into Sectors.ProbeWalls. */
+	void ProbeFormationWalls(const AOperativeCharacter& LeaderRef);
+	/**
+	 * Finds the wall face along TowardsWall from Origin within MaxDistance (its point, outward normal) and its free room each side
+	 * (left / right of a man facing it); false when there is none.
+	 */
+	bool BuildFormationWall(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, FVector2D& OutFace, float& OutNormalYaw,
+		float& OutRoomLeft, float& OutRoomRight) const;
+	/** The wall layout for the members at a wall (Others' roles by minimal travel when bAssignRoles); false when no wall is found. */
+	bool ComputeWallLayout(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, const FVector2D& ClickedSlot, int32 MemberCount,
+		const AOperativeCharacter* FourthMan);
+	/** The wall order: the members' arrival (crouch facing out), its end on the leader's next order / Solo / the formation off. */
+	void UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, float DeltaTime);
+	void EndFormationWallOrder(const TCHAR* Why);
+	/** A member of the wall order at his slot and turned: the baseline pose (crouch facing out). */
+	void SettleFormationWallPose(AOperativeCharacter& Member);
+	/**
+	 * Formation sectors part of UpdateFollower: his slot / look this frame, the facing, the speed with the slot's velocity lead.
+	 * Returns false when the old slot math should run instead (no role).
+	 */
+	bool UpdateSectorFollower(FFollowerState& Follower, AOperativeCharacter& Operative, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime,
+		float TimeSeconds);
+	/** His role this frame (the wall order's, else by his follower slot); unset = none. */
+	TOptional<EFormationRole> SectorRoleOf(const FFollowerState& Follower) const;
+	const FFormationSlot* FindFrameSlot(EFormationRole Role) const;
+	/** The looks this frame (applied to every member at the end of Tick; a member not in it gets none) and the leader's patrol pace. */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, float> FrameLooks;
+	TWeakObjectPtr<AOperativeCharacter> FramePaceLeader;
+	float FramePace = 1.f;
+	FFormationSectorState Sectors;
 	void UpdateSlotSwap(float DeltaTime);
 	void UpdateFollower(FFollowerState& Follower, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime, float TimeSeconds);
 	bool IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, const FVector& SlotLocation) const;
+	/**
+	 * A follower in cover / lying behind it on a group cover order (rev 5g, 2026-10-20): holds it (true) or leaves it to follow the
+	 * leader walking away (stands up from a squad-given low stance; true while that clip roots him). Distance = to his slot, cm.
+	 */
+	/** Squad gathers at the fire (2026-10-12): walks him to the warm source's ring the leader warms at; true when that pull drives him. */
+	bool TryWarmPull(FFollowerState& Follower, AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef);
+	bool HoldsCoverOrLeavesIt(FFollowerState& Follower, AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef, bool bLeaderMoving,
+		float Distance);
 	/**
 	 * Bug 2026-10-23: a formation slot off the navmesh (inside a wall, the generator, a fallen mate's remains crate) was unreachable
 	 * for good - while the leader stood still the follower never came back. Returns Slot when it lies on the navmesh, else the

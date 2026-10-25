@@ -4,6 +4,7 @@
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadOrderRules.h"
+#include "Formation/FormationRuntimeRules.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TrapSpotRules.h"
@@ -168,6 +169,7 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 			NewLeader->StopOperative();
 		}
 		FormationHeading = NewLeader->GetActorForwardVector();
+		Sectors.bHeadingValid = false; // formation sectors: the heading starts from the new leader's facing
 		RebuildFollowers();
 		if (bIsSoloMode)
 		{
@@ -834,6 +836,18 @@ void USquadSubsystem::Tick(float DeltaTime)
 	UpdateGroupCoverProne(DeltaTime); // fights too (the formation is off there, a prone order still lies down on arrival)
 	UpdateGroupCoverWait(DeltaTime); // group cover leader priority (2026-10-23)
 
+	// Formation look sectors (Codex.Formation.Sectors): the follow below fills this frame's looks / the leader's pace; every member not
+	// given one this frame (console off, Solo, a fight, an order of his own, ...) gets none - his old facing and speed.
+	FrameLooks.Reset();
+	FramePaceLeader.Reset();
+	FramePace = 1.f;
+	Sectors.bActiveThisFrame = false;
+	TickFormationFollow(DeltaTime);
+	ApplyFormationFrame();
+}
+
+void USquadSubsystem::TickFormationFollow(float DeltaTime)
+{
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (!LeaderRef)
 	{
@@ -861,11 +875,63 @@ void USquadSubsystem::Tick(float DeltaTime)
 		}
 	}
 
-	FormationHeading = SquadFormation::SmoothHeading(FormationConfig, FormationHeading, LeaderRef->GetActorForwardVector(), DeltaTime);
+	// Formation sectors: the heading is the leader's smoothed TRAVEL direction (his body scans his sector while he walks).
+	const bool bSectors = FormationRuntime::IsEnabled();
+	if (bSectors != Sectors.bWasEnabled)
+	{
+		// The console switched (an A/B in a smoke): each formation starts from its own heading - the old one the leader's facing.
+		Sectors.bWasEnabled = bSectors;
+		Sectors.bHeadingValid = false;
+		FormationHeading = LeaderRef->GetActorForwardVector();
+		for (FFollowerState& Follower : Followers)
+		{
+			AOperativeCharacter* Operative = Follower.Operative.Get();
+			if (Operative && Operative->IsMoving() && !IsOnOwnOrder(Operative) && !Operative->bInCover)
+			{
+				Operative->StopOperative(); // the other formation's move does not run on
+			}
+			Follower.RepathTimeRemaining = 0.f;
+			Follower.PrevSectorSlotTime = -1.0;
+		}
+	}
+	FVector HeadingTarget = LeaderRef->GetActorForwardVector();
+	if (bSectors)
+	{
+		// A leader put somewhere (a teleport, a load) did not walk there: the heading starts from his facing, not his old travel.
+		const FVector2D LeaderHere(LeaderRef->GetActorLocation());
+		const float LeaderYaw = static_cast<float>(LeaderRef->GetActorRotation().Yaw);
+		if (Sectors.bHeadingTickPosValid && (FVector2D::Distance(LeaderHere, Sectors.HeadingTickPos) > FormationRuntime::MaxStepDistanceCm
+			|| FMath::Abs(FMath::FindDeltaAngleDegrees(Sectors.HeadingTickYaw, LeaderYaw)) > FormationRuntime::MaxTurnStepDeg))
+		{
+			FormationHeading = LeaderRef->GetActorForwardVector();
+			Sectors.LeaderStillSeconds = FormationRuntime::LeaderHaltLookSeconds; // no turn back to an old heading
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[Formation] %s was set to (%.0f, %.0f) yaw %.0f: the heading follows his facing"),
+				*LeaderRef->DisplayName.ToString(), LeaderHere.X, LeaderHere.Y, LeaderYaw);
+		}
+		Sectors.HeadingTickPos = LeaderHere;
+		Sectors.HeadingTickYaw = LeaderYaw;
+		Sectors.bHeadingTickPosValid = true;
+		const TOptional<float> TravelYaw = FormationRuntime::HeadingFromVelocity(FVector2D(LeaderRef->GetVelocity()));
+		if (TravelYaw.IsSet())
+		{
+			HeadingTarget = FRotator(0.f, TravelYaw.GetValue(), 0.f).Vector();
+		}
+		else if (Sectors.bHeadingValid && !FormationHeading.IsNearlyZero()
+			&& (Sectors.LeaderStillSeconds < FormationRuntime::LeaderHaltLookSeconds || Sectors.Formation == EFormationKind::Wall))
+		{
+			HeadingTarget = FormationHeading; // just stopped: the last travel direction holds while he turns his search back to 12
+		}
+		// (At a wall the heading stays into the wall while he faces out.) Standing longer: the heading follows his facing again (the old formation's rule) - a turn, a facing order, a teleport turn the squad.
+	}
+	FormationHeading = SquadFormation::SmoothHeading(FormationConfig, FormationHeading, HeadingTarget, DeltaTime);
 	UpdateSlotSwap(DeltaTime);
 
 	if (!IsFormationActive())
 	{
+		if (Sectors.bWallOrder)
+		{
+			EndFormationWallOrder(TEXT("the formation is off (a fight)"));
+		}
 		return;
 	}
 
@@ -874,6 +940,14 @@ void USquadSubsystem::Tick(float DeltaTime)
 	if (bPostFightHold)
 	{
 		return;
+	}
+	if (bSectors)
+	{
+		UpdateFormationSectors(*LeaderRef, bLeaderMoving, DeltaTime);
+	}
+	else if (Sectors.bWallOrder)
+	{
+		EndFormationWallOrder(TEXT("Codex.Formation.Sectors 0"));
 	}
 	const float TimeSeconds = GetWorld()->GetTimeSeconds();
 	for (FFollowerState& Follower : Followers)
@@ -974,6 +1048,12 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		return;
 	}
 
+	// Formation look sectors (Codex.Formation.Sectors): slots by role, his sector look, the speed with the slot's velocity lead.
+	if (Sectors.bActiveThisFrame && UpdateSectorFollower(Follower, *Operative, LeaderRef, bLeaderMoving, DeltaTime, TimeSeconds))
+	{
+		return;
+	}
+
 	Follower.RepathTimeRemaining -= DeltaTime;
 	Follower.ColumnTimeRemaining = FMath::Max(0.f, Follower.ColumnTimeRemaining - DeltaTime);
 	if (Follower.RepathTimeRemaining > 0.f)
@@ -982,6 +1062,61 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	}
 	Follower.RepathTimeRemaining = FormationConfig.RepathInterval;
 
+	if (TryWarmPull(Follower, *Operative, LeaderRef))
+	{
+		return;
+	}
+
+	const FVector LeaderLocation = LeaderRef.GetActorLocation();
+	FVector SlotLocation = SquadFormation::ComputeSlotPosition(FormationConfig, LeaderLocation, FormationHeading, Follower.Slot, false);
+	if (IsSlotPathBlocked(LeaderRef, SlotLocation))
+	{
+		Follower.ColumnTimeRemaining = FormationConfig.ColumnHoldTime;
+	}
+	if (Follower.ColumnTimeRemaining > 0.f)
+	{
+		SlotLocation = SquadFormation::ComputeSlotPosition(FormationConfig, LeaderLocation, FormationHeading, Follower.Slot, true);
+	}
+	if (bLeaderMoving)
+	{
+		SlotLocation += SquadFormation::ComputeWanderOffset(FormationConfig, FormationHeading, Follower.Slot, TimeSeconds);
+	}
+	SlotLocation.Z = Operative->GetActorLocation().Z;
+	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation);
+
+	const float Distance = FVector::Dist2D(Operative->GetActorLocation(), SlotLocation);
+	if (HoldsCoverOrLeavesIt(Follower, *Operative, LeaderRef, bLeaderMoving, Distance))
+	{
+		return;
+	}
+	float Speed = SquadFormation::ComputeFollowerSpeed(FormationConfig, Operative->GetMaxSpeed(), Distance, Follower.Slot, TimeSeconds, bLeaderMoving);
+	// A parked follower restarts only once the slot (it wanders) is clearly away: stopping and restarting every repath
+	// made the legs tremble between the idle and the walk (user report 2026-10-01).
+	if (Follower.bParked && Distance < FormationConfig.StopRadius + ParkedRestartMargin)
+	{
+		Speed = 0.f;
+	}
+
+	if (Speed <= 0.f)
+	{
+		if (!Follower.bParked)
+		{
+			Operative->StopOperative();
+			Follower.bParked = true;
+		}
+		// Parked followers face where the leader faces (Godot _align_rotation_with_leader), turned every frame by the
+		// operative's facing (FacingRules).
+		Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
+		return;
+	}
+
+	Follower.bParked = false;
+	Operative->FollowTo(SlotLocation, Speed);
+}
+
+bool USquadSubsystem::TryWarmPull(FFollowerState& Follower, AOperativeCharacter& OperativeRef, const AOperativeCharacter& LeaderRef)
+{
+	AOperativeCharacter* Operative = &OperativeRef;
 	// Squad gathers at the fire (user decision 2026-10-12): while the leader warms at a barrel / campfire / stove the follower's follow
 	// target is that source's ring instead of his formation slot; once he stands in the zone the weather idle gives him a seat / place.
 	// Exploration formation only (solo and held followers returned above, guards are not followers); an explicit order to him leaves
@@ -1007,28 +1142,16 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 				const FVector Past = Pull.Target + (Pull.Target - Operative->GetActorLocation()).GetSafeNormal2D() * Operative->MovementConfig.AcceptanceRadius;
 				Operative->FollowTo(Past, TacticalHeatTuning::Get().WarmSpotWalkSpeed);
 			}
-			return;
+			return true;
 		}
 	}
+	return false;
+}
 
-	const FVector LeaderLocation = LeaderRef.GetActorLocation();
-	FVector SlotLocation = SquadFormation::ComputeSlotPosition(FormationConfig, LeaderLocation, FormationHeading, Follower.Slot, false);
-	if (IsSlotPathBlocked(LeaderRef, SlotLocation))
-	{
-		Follower.ColumnTimeRemaining = FormationConfig.ColumnHoldTime;
-	}
-	if (Follower.ColumnTimeRemaining > 0.f)
-	{
-		SlotLocation = SquadFormation::ComputeSlotPosition(FormationConfig, LeaderLocation, FormationHeading, Follower.Slot, true);
-	}
-	if (bLeaderMoving)
-	{
-		SlotLocation += SquadFormation::ComputeWanderOffset(FormationConfig, FormationHeading, Follower.Slot, TimeSeconds);
-	}
-	SlotLocation.Z = Operative->GetActorLocation().Z;
-	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation);
-
-	const float Distance = FVector::Dist2D(Operative->GetActorLocation(), SlotLocation);
+bool USquadSubsystem::HoldsCoverOrLeavesIt(FFollowerState& Follower, AOperativeCharacter& OperativeRef, const AOperativeCharacter& LeaderRef,
+	bool bLeaderMoving, float Distance)
+{
+	AOperativeCharacter* Operative = &OperativeRef;
 	// Rev 5g (game designer 2026-10-14): in group mode a follower hugging a wall leaves the cover and follows once the leader walks
 	// away (Solo / holding returned above, guards are no followers, the formation is off in a fight - the autonomy / ROE rules
 	// decide there). A leader stacking up at cover himself keeps the ones already in cover where they are.
@@ -1046,7 +1169,7 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		CoverFacts.DistanceToSlotCm = Distance;
 		if (!SquadOrderRules::ShouldLeaveCoverToFollow(CoverFacts))
 		{
-			return; // he holds his wall (FollowTo would refuse anyway)
+			return true; // he holds his wall (FollowTo would refuse anyway)
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: the leader walks away (slot %.0f cm off) - leaves the cover and follows"),
 			*Operative->DisplayName.ToString(), Distance);
@@ -1069,32 +1192,10 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		{
 			Follower.bParked = false;
 			Follower.RepathTimeRemaining = LeaveHold;
-			return;
+			return true;
 		}
 	}
-	float Speed = SquadFormation::ComputeFollowerSpeed(FormationConfig, Operative->GetMaxSpeed(), Distance, Follower.Slot, TimeSeconds, bLeaderMoving);
-	// A parked follower restarts only once the slot (it wanders) is clearly away: stopping and restarting every repath
-	// made the legs tremble between the idle and the walk (user report 2026-10-01).
-	if (Follower.bParked && Distance < FormationConfig.StopRadius + ParkedRestartMargin)
-	{
-		Speed = 0.f;
-	}
-
-	if (Speed <= 0.f)
-	{
-		if (!Follower.bParked)
-		{
-			Operative->StopOperative();
-			Follower.bParked = true;
-		}
-		// Parked followers face where the leader faces (Godot _align_rotation_with_leader), turned every frame by the
-		// operative's facing (FacingRules).
-		Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
-		return;
-	}
-
-	Follower.bParked = false;
-	Operative->FollowTo(SlotLocation, Speed);
+	return false;
 }
 
 FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot) const

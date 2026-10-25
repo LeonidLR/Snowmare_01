@@ -35,6 +35,7 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Formation/FormationRuntimeRules.h"
 #include "Kismet/GameplayStatics.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tutorial/TutorialSubsystem.h"
@@ -65,10 +66,35 @@ namespace RegroupAfterLossesSmoke
 	void SetPostCombatFormation(int32 Value);
 	void SetSlotFallback(int32 Value);
 
+	/**
+	 * Formation sectors (2026-10-25): an "old rule" reproduction of a pre-sectors bug runs on the old formation too (its slots, speeds and
+	 * facing; Codex.Formation.Sectors 0) - bOld saves the console's value and sets 0, false restores it.
+	 */
+	void UseOldFormationRuleRegroup(bool bOld)
+	{
+		static int32 Saved = -1;
+		IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Sectors"));
+		if (!CVar)
+		{
+			return;
+		}
+		if (bOld && Saved < 0)
+		{
+			Saved = CVar->GetInt();
+			CVar->Set(0, ECVF_SetByConsole);
+		}
+		else if (!bOld && Saved >= 0)
+		{
+			CVar->Set(Saved, ECVF_SetByConsole);
+			Saved = -1;
+		}
+	}
+
 	bool Finish(const FState& State, bool bComplete)
 	{
 		SetPostCombatFormation(1);
 		SetSlotFallback(1);
+		UseOldFormationRuleRegroup(false);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("RegroupAfterLossesSmoke"));
 		return false;
@@ -241,6 +267,7 @@ namespace RegroupAfterLossesSmoke
 			}
 			// A/B: the old rule reproduces the bug.
 			SetPostCombatFormation(0);
+			UseOldFormationRuleRegroup(true); // the old rules' reproductions (to the slot fallback off) run on the old formation
 			State.MedicStart = Medic->GetActorLocation();
 			Squad->ToggleSoloMode(); // B: Regroup
 			Check(State, !Squad->IsSoloMode(), TEXT("[old rule] B: Solo off"));
@@ -289,6 +316,7 @@ namespace RegroupAfterLossesSmoke
 			Check(State, State.StartGap - Gap() < 30.f, FString::Printf(TEXT("[slot fallback off] the second cause reproduces: her slot is off the navmesh "
 				"(the Engineer's remains %.0f cm from the leader), she stays (%.0f -> %.0f cm)"), RemainsToLeader, State.StartGap, Gap()));
 			SetSlotFallback(1);
+			UseOldFormationRuleRegroup(false);
 			State.StartGap = Gap();
 			Next();
 			return true;
@@ -298,7 +326,10 @@ namespace RegroupAfterLossesSmoke
 			{
 				return true;
 			}
-			Check(State, State.StartGap - Gap() >= 120.f && Medic->ColdSurvival->IsFrostbitten() && Medic->GetStance() == EOperativeStance::Prone,
+			// Formation sectors: with two left she is the pair's partner behind the leader's right shoulder (FORMATION_SECTORS.md "Pair"), not on
+			// the old left slot - the gap to the leader closes a little slower on the way there (100 cm then).
+			Check(State, State.StartGap - Gap() >= (FormationRuntime::IsEnabled() ? 100.f : 120.f) && Medic->ColdSurvival->IsFrostbitten()
+				&& Medic->GetStance() == EOperativeStance::Prone,
 				FString::Printf(TEXT("[fix] the frostbitten Medic crawls back to the leader (%.0f -> %.0f cm in %.1f s, still prone)"),
 					State.StartGap, Gap(), State.StageTime));
 			// Warmed: a heat pack clears the frostbite (she gets up to a crouch).
