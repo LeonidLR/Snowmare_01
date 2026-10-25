@@ -80,6 +80,17 @@ namespace FormationSectorRules
 	CODEXTACTICS_API float LookYaw(EFormationRole Role, EFormationKind Formation, EFormationMode Mode, int32 MemberCount, float TimeInPatrol,
 		float LeaderYaw, const TOptional<float>& PassageWidth = TOptional<float>(), const FFormationConfig& Config = FFormationConfig());
 
+	/**
+	 * v2.1.1 (user decision: nobody looks into a wall, in ANY formation): a wall whose surface is within LookWallDist of Pos blocks
+	 * the directions within LookWallAngle of the direction to its closest point. A blocked Yaw turns to a free span edge: first the
+	 * edges reachable from CurrentYaw (his facing now) WITHOUT sweeping across a wall direction, then the nearest to Yaw; ties keep
+	 * the first (walls in order, the minus edge first). Not blocked or enclosed on all sides -> Yaw (normalized). The integration
+	 * applies it to patrol / halt / all-forward looks - not to the wall layout, running, the corner watcher or the leader looking
+	 * within 35 deg of his travel.
+	 */
+	CODEXTACTICS_API float ClearLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, float CurrentYaw,
+		const FFormationConfig& Config = FFormationConfig());
+
 	/** The squad's pace for a mode, cm/s: walk = PaceWalkSpeed * PacePatrol, run = PaceRunSpeed, halt / wall = 0. */
 	CODEXTACTICS_API float SquadPace(EFormationMode Mode, const FFormationConfig& Config = FFormationConfig());
 

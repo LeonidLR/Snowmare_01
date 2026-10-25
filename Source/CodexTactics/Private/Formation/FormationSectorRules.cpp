@@ -1,6 +1,7 @@
 #include "Formation/FormationSectorRules.h"
 
 #include "Formation/FormationShapeRules.h"
+#include "Formation/FormationTypes.h"
 
 namespace FormationSectorRules
 {
@@ -147,6 +148,74 @@ namespace FormationSectorRules
 		const TOptional<float>& PassageWidth, const FFormationConfig& Config)
 	{
 		return FRotator::NormalizeAxis(LeaderYaw + LookOffset(Role, Formation, Mode, MemberCount, TimeInPatrol, PassageWidth, Config));
+	}
+
+	float ClearLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, float CurrentYaw, const FFormationConfig& Config)
+	{
+		using FormationMath::NormYaw;
+		const double Reach = Config.LookWallDist;
+		const double Half = Config.LookWallAngle;
+		const double Wanted = Yaw;
+		const double Current = CurrentYaw;
+		TArray<double> Centers;
+		for (const FFormationWall& Wall : Walls)
+		{
+			const FVector2D Closest = FormationMath::ClosestOnSegment(Pos, Wall.A, Wall.B);
+			const double Distance = FVector2D::Distance(Pos, Closest);
+			if (FMath::Max(0.0, Distance - 0.5 * Wall.Thickness) > Reach || Distance < 1e-6)
+			{
+				continue;
+			}
+			Centers.Add(FormationMath::YawOfD(Closest - Pos));
+		}
+		const auto Blocked = [&Centers, Half](double Angle)
+		{
+			for (const double Center : Centers)
+			{
+				if (FMath::Abs(NormYaw(Angle - Center)) < Half - 1e-6)
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+		if (!Blocked(Wanted))
+		{
+			return static_cast<float>(NormYaw(Wanted));
+		}
+		// A turn from Current to To (the short way) sweeps across a wall direction strictly inside it.
+		const auto Sweeps = [&Centers, Current](double To)
+		{
+			const double Turn = NormYaw(To - Current);
+			for (const double Center : Centers)
+			{
+				const double K = NormYaw(Center - Current);
+				if (FMath::Sign(K) == FMath::Sign(Turn) && FMath::Abs(K) < FMath::Abs(Turn) - 1e-6)
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+		TOptional<double> Best;
+		double BestScore = TNumericLimits<double>::Max();
+		for (const double Center : Centers)
+		{
+			for (const double Edge : { Center - Half, Center + Half })
+			{
+				if (Blocked(Edge))
+				{
+					continue;
+				}
+				const double Score = FMath::Abs(NormYaw(Edge - Wanted)) + (Sweeps(Edge) ? 360.0 : 0.0);
+				if (Score < BestScore - 1e-9)
+				{
+					BestScore = Score;
+					Best = NormYaw(Edge);
+				}
+			}
+		}
+		return static_cast<float>(Best.IsSet() ? Best.GetValue() : NormYaw(Wanted));
 	}
 
 	float SquadPace(EFormationMode Mode, const FFormationConfig& Config)

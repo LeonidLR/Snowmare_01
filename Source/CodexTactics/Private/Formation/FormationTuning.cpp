@@ -68,7 +68,18 @@ namespace FormationTuning
 		{ TEXT("classify.at_wall_dist"), &FFormationConfig::ClassifyAtWallDist },
 		{ TEXT("classify.arrive_dist"), &FFormationConfig::ClassifyArriveDist },
 		{ TEXT("classify.side_ignore_perp_deg"), &FFormationConfig::ClassifySideIgnorePerpDeg },
-		{ TEXT("sight.fov"), &FFormationConfig::SightFov } };
+		{ TEXT("sight.fov"), &FFormationConfig::SightFov },
+		{ TEXT("look.wall_dist"), &FFormationConfig::LookWallDist },
+		{ TEXT("look.wall_angle"), &FFormationConfig::LookWallAngle },
+		{ TEXT("guard.clearance"), &FFormationConfig::GuardClearance },
+		{ TEXT("guard.lookahead"), &FFormationConfig::GuardLookahead },
+		{ TEXT("turn.fold_deg"), &FFormationConfig::TurnFoldDeg },
+		{ TEXT("turn.lookahead"), &FFormationConfig::TurnLookahead },
+		{ TEXT("bypass.max_detour"), &FFormationConfig::BypassMaxDetour },
+		{ TEXT("bypass.threat_memory_s"), &FFormationConfig::BypassThreatMemoryS },
+		{ TEXT("corner.lead_dist"), &FFormationConfig::CornerLeadDist },
+		{ TEXT("corner.hold_dist"), &FFormationConfig::CornerHoldDist },
+		{ TEXT("corner.peek_dist"), &FFormationConfig::CornerPeekDist } };
 
 	static const TCHAR* FormationConfigSchema = TEXT("codex.formation_config/1");
 

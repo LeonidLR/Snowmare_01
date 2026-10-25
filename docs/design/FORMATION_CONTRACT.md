@@ -108,6 +108,14 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_FormationFor.json` / `Parity.FormationFor` | `class`, `memberCount`, `blizzard` (v1.2; bool, missing = false) | `formation` |
 | `formation_WallLayout.json` / `Parity.WallLayout` | `wall`, `clickedSlot`, `memberCount`, `roomLeft`, `roomRight` | `slots: [{ role, pos, yaw }]` - same count / role order, pos, yaw |
 | `formation_Menu.json` / `Parity.Menu` (section 9; no `config_values` needed) | `op`: `itemAt` (`dx`, `dy`, `deadZonePx`) / `release` (`state: { open, choice ("auto" or item id), highlighted (item id or null) }`, `memberCount`) / `resolve` (`choice`, `memberCount`) | itemAt: `item` (id or null = Auto); release: `state` + `effect` (`none / opened / picked / auto / cancelled / disabled`); resolve: `manualFormation` (formation or null), `allForward` |
+| `formation_Guard.json` / `Parity.Guard` (10.1, 10.7) | `walls[]`, `requested`, `memberCount`, `leaderPos`, `leaderYaw`, `ahead` (`{ pos, yaw }` or null), `turnAhead`, `state: { requested, level (0/1/2), effective, candidate (level or null), candidateDistance }`, `stepDistance` | `blocked` (roles, slot order: BlockedRoles at the leader) + `state` (Resolve) |
+| `formation_TurnAhead.json` / `Parity.TurnAhead` (10.7) | `points` (the path; `path` is the scene's name), `heading` | `deg` |
+| `formation_TrailSlots.json` / `Parity.TrailSlots` (10.1) | `points` (the trail, oldest first; `trail` is the scene's name), `leaderYaw`, `memberCount` | `slots: [{ role, pos, yaw }]` |
+| `formation_SideWidth.json` / `Parity.SideWidth` (10.1) | `walls[]`, `pos`, `yaw` | `width` (number or null). A wall whose closest point lies on the heading line (within 1e-2 cm) has no side in the rounded file: such a case passes when flipping only that wall's side gives the golden width, with a warning (2 cases at 308667a: the golden is computed from the unrounded scene) |
+| `formation_ClearLook.json` / `Parity.ClearLook` (10.8) | `walls[]`, `pos`, `yaw`, `currentYaw` | `yaw` |
+| `formation_Bypass.json` / `Parity.Bypass` (10.2) | `wall`, `leaderPos`, `destination`, `threats: [{ pos, ageS }]` | `wallOn`, `shortest`, `reason` exactly, `detour` within 1e-3, `path` (same count, points within cm) |
+| `formation_Corner.json` / `Parity.Corner` (10.3) | `walls[]`, `leaderPos`, `leaderYaw`, `members: [{ role, pos }]`, `state: { left, right: { wall, end, role } or null }` | `state` exactly, `looks: [{ role, yaw }]` (same order: left first) |
+| `formation_Assign.json` / `Parity.Assign` (10.6) | `members`, `places` (`[[x, y]]`) | `places` (index per member) exactly |
 
 C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
 config)`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`,
@@ -118,8 +126,15 @@ config) -> FFormationClassifyState` (v2, the TS order) / `AdvanceState(raw, meas
 TOptional destination, stepDistance, config)` + `GetClass()` / `GetPassageWidth()` / `Reset()`;
 `FormationWallRules::Layout(wall, clickedSlot, memberCount, roomLeft, roomRight, config)` / `BreakRoomTie`; config `FFormationConfig` +
 `FormationTuning`; the menu `FormationMenuRules::ItemAt / IsEnabled / Open / Move / Release / Cancel / Resolve` on
-`FFormationMenuState` (Choice unset = Auto; no display text in C++ - the widget owns English FText labels). Runs: v1 (ead0faf) 4563
-cases, v1.1 (b4dcf9b) 5568, v1.2 (b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234 - each 0 mismatched.
+`FFormationMenuState` (Choice unset = Auto; no display text in C++ - the widget owns English FText labels); v2.1 / v2.1.1:
+`FormationGuardRules::ChainPairs / BlockedRoles / TurnAhead / Resolve(walls, requested, memberCount, leaderPos, leaderYaw, TOptional
+FFormationPose ahead, turnAheadDeg, FFormationGuardState state, stepDistance, config) / Effective`, `FormationShapeRules::TrailSlots(trail,
+leaderYaw, memberCount, config)`, `FormationTerrainRules::SideWidth(walls, pos, yaw, config)`, `FormationSectorRules::ClearLook(walls, pos,
+yaw, currentYaw, config)`, `FormationBypassRules::ChooseSide(wall, leaderPos, destination, threats, config) / WallSideOf`,
+`FormationCornerRules::Watch(walls, leaderPos, leaderYaw, members, FFormationCornerState state, config) / CornerAhead`,
+`FormationAssignRules::AssignPlaces(members, places)`; geometry `FormationMath::SegmentBlocked / SegSegDist / DistToWall /
+ClosestOnSegment / NormYaw / DirOf / YawOfD` (double, = geometry.ts). Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2
+(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515 - each 0 mismatched.
 
 ## 4. Movement bot report - `Saved/TrainingGround/movement/report.md` (<= 30 lines; the ONLY thing a coding agent reads)
 Header: layout, routes, runs, seed. Then one line per check with pass / fail counts and the worst case (route id, time):

@@ -148,6 +148,72 @@ namespace FormationShapeRules
 		return Result;
 	}
 
+	TArray<FFormationSlot> TrailSlots(const TArray<FVector2D>& Trail, float LeaderYaw, int32 MemberCount, const FFormationConfig& Config)
+	{
+		TArray<FFormationSlot> Result;
+		if (Trail.Num() == 0)
+		{
+			return Result;
+		}
+		struct FTrailPiece
+		{
+			FVector2D From;
+			FVector2D To;
+			double Length;
+			double Yaw;
+		};
+		const FVector2D LeaderPos = Trail.Last();
+		// Pieces newest -> oldest, each with its travel direction.
+		TArray<FTrailPiece> Pieces;
+		for (int32 Index = Trail.Num() - 1; Index > 0; --Index)
+		{
+			const double Length = FVector2D::Distance(Trail[Index - 1], Trail[Index]);
+			if (Length > 1e-6)
+			{
+				Pieces.Add({ Trail[Index], Trail[Index - 1], Length, FormationMath::YawOfD(Trail[Index] - Trail[Index - 1]) });
+			}
+		}
+		const double TailYaw = Pieces.Num() > 0 ? Pieces.Last().Yaw : static_cast<double>(LeaderYaw);
+		const FVector2D Tail = Pieces.Num() > 0 ? Pieces.Last().To : LeaderPos;
+		const auto Back = [&Pieces, TailYaw, &Tail](double Distance, FVector2D& OutPos, double& OutYaw)
+		{
+			double Left = Distance;
+			for (const FTrailPiece& Piece : Pieces)
+			{
+				if (Left <= Piece.Length)
+				{
+					OutPos = Piece.From + (Piece.To - Piece.From) * (Left / Piece.Length);
+					OutYaw = Piece.Yaw;
+					return;
+				}
+				Left -= Piece.Length;
+			}
+			OutPos = Tail + FormationMath::DirOf(TailYaw) * -Left;
+			OutYaw = TailYaw;
+		};
+		for (const EFormationRole Role : Roles(MemberCount))
+		{
+			FFormationSlot Slot;
+			Slot.Role = Role;
+			if (Role == EFormationRole::Commander)
+			{
+				Slot.Position = LeaderPos;
+				Slot.Yaw = LeaderYaw;
+			}
+			else
+			{
+				const FVector2D Local = LocalSlot(EFormationKind::Column, Role, MemberCount, Config);
+				FVector2D At;
+				double AtYaw = 0.0;
+				Back(-Local.X, At, AtYaw);
+				Slot.Position = At + FormationMath::DirOf(AtYaw + 90.0) * Local.Y;
+				Slot.Yaw = static_cast<float>(AtYaw);
+			}
+			Result.Add(Slot);
+		}
+		return Result;
+	}
+
 	TArray<FFormationSlot> HedgehogSlots(const FVector2D& Center, int32 MemberCount, float Yaw, const FFormationConfig& Config)
 	{
 		const FVector2D LeaderPos = Center + FormationMath::Forward(Yaw) * static_cast<double>(Config.HedgehogRadius);

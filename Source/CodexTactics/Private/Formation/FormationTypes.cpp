@@ -137,4 +137,86 @@ namespace FormationMath
 	{
 		return LeaderPos + Forward(LeaderYaw) * ForwardCm + Right(LeaderYaw) * RightCm;
 	}
+
+	double NormYaw(double Yaw)
+	{
+		double Result = FMath::Fmod(FMath::Fmod(Yaw + 180.0, 360.0) + 360.0, 360.0) - 180.0;
+		if (Result == -180.0)
+		{
+			Result = 180.0;
+		}
+		return Result;
+	}
+
+	FVector2D DirOf(double Yaw)
+	{
+		const double Radians = FMath::DegreesToRadians(Yaw);
+		return FVector2D(FMath::Cos(Radians), FMath::Sin(Radians));
+	}
+
+	double YawOfD(const FVector2D& V)
+	{
+		return (V.X == 0.0 && V.Y == 0.0) ? 0.0 : FMath::RadiansToDegrees(FMath::Atan2(V.Y, V.X));
+	}
+
+	FVector2D ClosestOnSegment(const FVector2D& P, const FVector2D& A, const FVector2D& B, double* OutT)
+	{
+		const FVector2D Edge = B - A;
+		const double LengthSquared = FVector2D::DotProduct(Edge, Edge);
+		const double T = LengthSquared == 0.0 ? 0.0 : FMath::Clamp(FVector2D::DotProduct(P - A, Edge) / LengthSquared, 0.0, 1.0);
+		if (OutT)
+		{
+			*OutT = T;
+		}
+		return A + Edge * T;
+	}
+
+	double DistToWall(const FVector2D& P, const FFormationWall& Wall)
+	{
+		return FMath::Max(0.0, FVector2D::Distance(P, ClosestOnSegment(P, Wall.A, Wall.B)) - 0.5 * Wall.Thickness);
+	}
+
+	/** Proper crossing of P -> Q and A -> B (strict signs; touching / collinear does not count). */
+	static bool FormationSegmentsIntersect(const FVector2D& P, const FVector2D& Q, const FVector2D& A, const FVector2D& B)
+	{
+		const auto Cross = [](const FVector2D& U, const FVector2D& V) { return U.X * V.Y - U.Y * V.X; };
+		const double D1 = Cross(Q - P, A - P);
+		const double D2 = Cross(Q - P, B - P);
+		const double D3 = Cross(B - A, P - A);
+		const double D4 = Cross(B - A, Q - A);
+		return ((D1 > 0.0 && D2 < 0.0) || (D1 < 0.0 && D2 > 0.0)) && ((D3 > 0.0 && D4 < 0.0) || (D3 < 0.0 && D4 > 0.0));
+	}
+
+	double SegSegDist(const FVector2D& P, const FVector2D& Q, const FVector2D& A, const FVector2D& B)
+	{
+		if (FormationSegmentsIntersect(P, Q, A, B))
+		{
+			return 0.0;
+		}
+		return FMath::Min(FMath::Min(FVector2D::Distance(P, ClosestOnSegment(P, A, B)), FVector2D::Distance(Q, ClosestOnSegment(Q, A, B))),
+			FMath::Min(FVector2D::Distance(A, ClosestOnSegment(A, P, Q)), FVector2D::Distance(B, ClosestOnSegment(B, P, Q))));
+	}
+
+	bool SegmentBlocked(const FVector2D& P, const FVector2D& Q, const TArray<FFormationWall>& Walls, double Radius)
+	{
+		if (FVector2D::Distance(P, Q) < 1e-6)
+		{
+			for (const FFormationWall& Wall : Walls)
+			{
+				if (DistToWall(P, Wall) < Radius)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		for (const FFormationWall& Wall : Walls)
+		{
+			if (SegSegDist(P, Q, Wall.A, Wall.B) < 0.5 * Wall.Thickness + Radius)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 }
