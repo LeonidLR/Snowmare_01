@@ -11,7 +11,8 @@ import type { Formation } from './layout.ts';
 
 /** K commander (leader), P right, L left, Z rear (with 2 members: the pair partner behind the right shoulder). */
 export type Role = 'K' | 'P' | 'L' | 'Z';
-export type Mode = 'walk' | 'run' | 'halt' | 'wall';
+/** v1.2: 'forward' = the menu's "All forward" (10:30) - walking, everyone looks at 12 whatever the formation. */
+export type Mode = 'walk' | 'run' | 'halt' | 'wall' | 'forward';
 export type TerrainClass = 'open' | 'wall_left' | 'wall_right' | 'corridor' | 'at_wall';
 
 export interface Slot {
@@ -108,7 +109,19 @@ function Slots(formation: Formation, memberCount: number, leaderPos: Vec2, leade
   }));
 }
 
-export const FormationShapeRules = { Slots };
+/**
+ * v1.2: the hedgehog round a centre point (the heat source): the leader stands hedgehog.radius in front of the centre along yaw,
+ * every member on the ring with his back to the centre, looking out (K yaw, P yaw + 90 / L yaw - 90 / Z yaw + 180 with 4;
+ * 3: +-120; 2: K and Z opposite). The integration moves the leader to slot 0 so the centre is the fire.
+ */
+function HedgehogSlots(center: Vec2, memberCount: number, yaw: number, config: FormationConfig): (Slot & { yaw: number })[] {
+  const leaderPos = add(center, scale(dirOf(yaw), cfg(config, 'hedgehog.radius')));
+  return Slots('hedgehog', memberCount, leaderPos, yaw, config).map((s) => ({
+    ...s, yaw: FormationSectorRules.LookYaw(s.role, 'hedgehog', 'halt', memberCount, 0, yaw, null, config),
+  }));
+}
+
+export const FormationShapeRules = { Slots, HedgehogSlots };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationSectorRules::LookYaw
@@ -125,7 +138,7 @@ function scanValue(center: number, amp: number, period: number, phase: number, t
 /** Sector centre / scan of a role relative to the reference yaw (heading, or the wall normal in mode 'wall'), degrees. */
 function relativeLook(role: Role, formation: Formation, mode: Mode, n: number, t: number, passageWidth: number | null,
   c: FormationConfig): number {
-  if (mode === 'run') return 0;
+  if (mode === 'run' || mode === 'forward') return 0;
   if (mode === 'wall' || formation === 'wall') {
     if (n === 2) return role === 'K' ? 45 : -45;
     if (role === 'K') return 0;
@@ -224,15 +237,21 @@ export function sideClearance(walls: readonly Segment[], pos: Vec2, yaw: number,
 }
 
 /** The raw class of the spot (no hysteresis). v1.1: the ahead / at_wall rays first, then the side rays (walls across ignored). */
-export function rawClass(walls: readonly Segment[], pos: Vec2, yaw: number, c: FormationConfig): TerrainClass {
-  const atWall = cfg(c, 'classify.at_wall_dist');
-  for (const a of AHEAD_RAYS) if (Number.isFinite(raycastWalls(pos, dirOf(yaw + a), walls, atWall))) return 'at_wall';
+export function rawClass(walls: readonly Segment[], pos: Vec2, yaw: number, destination: Vec2 | null, c: FormationConfig): TerrainClass {
+  // v1.2: at_wall only on ARRIVAL - the leader's move ends (he is within classify.arrive_dist of his destination) with a wall
+  // ahead within at_wall_dist; walking past a wall or turning at a corridor bend never triggers the wall layout.
+  if (isArriving(pos, destination, c)) {
+    const atWall = cfg(c, 'classify.at_wall_dist');
+    for (const a of AHEAD_RAYS) if (Number.isFinite(raycastWalls(pos, dirOf(yaw + a), walls, atWall))) return 'at_wall';
+  }
   const reach = cfg(c, 'classify.probe_side');
   const ignore = cfg(c, 'classify.side_ignore_perp_deg');
   const right = sideClearance(walls, pos, yaw, 1, reach, ignore);
   const left = sideClearance(walls, pos, yaw, -1, reach, ignore);
   const rightBlocked = right <= reach, leftBlocked = left <= reach;
-  if (rightBlocked && leftBlocked) return left + right < cfg(c, 'classify.corridor_width') ? 'corridor' : 'open';
+  // v1.2 (user Q3 = A): ANY passage between two walls (both sides blocked within probe_side) is a corridor -> column; the
+  // narrow / wide column sectors follow PassageWidth (column.narrow_width). The old width limit (classify.corridor_width) is gone.
+  if (rightBlocked && leftBlocked) return 'corridor';
   if (leftBlocked) return 'wall_left';
   if (rightBlocked) return 'wall_right';
   return 'open';
@@ -249,21 +268,31 @@ function PassageWidth(walls: readonly Segment[], pos: Vec2, yaw: number, c: Form
   return right <= reach && left <= reach ? left + right : null;
 }
 
+/** v1.2: the leader is arriving = his move's destination is set and he is within classify.arrive_dist of it. */
+export function isArriving(pos: Vec2, destination: Vec2 | null, c: FormationConfig): boolean {
+  return destination !== null && dist(pos, destination) <= cfg(c, 'classify.arrive_dist');
+}
+
 /**
  * Terrain class at the leader with hysteresis: a class is kept for at least classify.hold_time before it may change
- * (previousClass null = no history, the raw class at once).
+ * (previousClass null = no history, the raw class at once). destination (v1.2) = where the leader's current move ends (null =
+ * none); at_wall is an arrival EVENT and is returned at once, without the hold.
  */
-function Classify(walls: readonly Segment[], leaderPos: Vec2, leaderYaw: number, previousClass: TerrainClass | null,
-  timeInClass: number, config: FormationConfig): TerrainClass {
-  const raw = rawClass(walls, leaderPos, leaderYaw, config);
-  if (previousClass === null || raw === previousClass) return raw;
+function Classify(walls: readonly Segment[], leaderPos: Vec2, leaderYaw: number, destination: Vec2 | null,
+  previousClass: TerrainClass | null, timeInClass: number, config: FormationConfig): TerrainClass {
+  const raw = rawClass(walls, leaderPos, leaderYaw, destination, config);
+  if (previousClass === null || raw === previousClass || raw === 'at_wall') return raw;
   return timeInClass < cfg(config, 'classify.hold_time') ? previousClass : raw;
 }
 
-/** Formation for a terrain class: open -> diamond (4) / wedge (3 or fewer), a wall on one side -> echelon to the open side. */
-function FormationFor(terrain: TerrainClass, memberCount: number): Formation {
+/**
+ * Formation for a terrain class: open -> diamond (4) / wedge (3 or fewer), or the blizzard tight diamond in a blizzard (v1.2,
+ * user Q4 = A: weather = blizzard on OPEN ground only - walls / passages keep their rules); a wall on one side -> echelon to
+ * the open side; a passage -> column; arrival at a wall -> the wall layout. The menu choice (hold G) overrides all of it.
+ */
+function FormationFor(terrain: TerrainClass, memberCount: number, blizzard: boolean): Formation {
   switch (terrain) {
-    case 'open': return memberCount >= 4 ? 'diamond' : 'wedge';
+    case 'open': return blizzard ? 'blizzard' : memberCount >= 4 ? 'diamond' : 'wedge';
     case 'wall_left': return 'echelon_right';
     case 'wall_right': return 'echelon_left';
     case 'corridor': return 'column';
@@ -327,7 +356,15 @@ export function wallRoom(wall: Segment, clickedSlot: Vec2): { roomLeft: number; 
   return { roomRight: Math.max(ra, rb, 0), roomLeft: Math.max(-ra, -rb, 0) };
 }
 
-export const FormationWallRules = { Layout };
+/**
+ * Design "tie -> the side he reaches with less travel" (C++ FormationWallRules::BreakRoomTie): when the rooms are equal and the
+ * 4th man's travel to the left end is shorter, RoomLeft gets 1 cm more so Layout puts him left (Layout sends a tie right).
+ */
+function BreakRoomTie(roomLeft: number, roomRight: number, travelLeft: number, travelRight: number): { roomLeft: number; roomRight: number } {
+  return roomLeft === roomRight && travelLeft < travelRight ? { roomLeft: roomLeft + 1, roomRight } : { roomLeft, roomRight };
+}
+
+export const FormationWallRules = { Layout, BreakRoomTie };
 
 /** Distance helper re-exported for the checks. */
 export { dist };

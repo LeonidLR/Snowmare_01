@@ -52,12 +52,19 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 - **Q2 = A** (user): echelon last man 150° (was 125°); the rear-cover check stays in force for the echelon.
 - **Q3** (coordinator, classifier bug): a dead-end wall ahead no longer reads as side walls (classifier v1.1: ahead rays first,
   side probes ignore walls within 30° of perpendicular to the heading) — no column / echelon flip before the wall layout.
-- **Open (Q4)**: a wide passage (both sides walled, wider than 6 m, e.g. 7.6 m) is still "open" → diamond, whose side men scan
-  3 / 9 o'clock straight into walls 1.2 m away. Proposal: any passage between two walls → column (narrow / wide sectors by width).
+- **v1.2** (coordinator, design-doc fidelity): the leader's patrol search is ±30° (11–1 o'clock, as above); "All forward" (menu
+  10:30) = walking with everyone looking at 12 in any formation; the wall layout triggers only on ARRIVAL at a wall (not when
+  walking past it or turning at a bend); the hedgehog is centred on the heat source; a column of three keeps the triad's open
+  rear in the wide herringbone (in a narrow column L's back-slant look covers it).
+- **Wide passage = column (user, 2026-10-25, "3А")**: ANY passage between two walls (both sides walled within the probe reach,
+  4 m) is a column — narrow sectors below 6 m (above), the ±70° herringbone in a wider one (e.g. 7.6 m); the diamond no longer
+  walks a wide street with its side men scanning into walls 1.2 m away.
+- **Blizzard (user, 2026-10-25, "4А")**: in a blizzard the squad picks the tight blizzard diamond automatically on OPEN ground;
+  walls and passages keep their normal rules; the hold-G menu still overrides.
 
 ## Selection
-- **Automatic by level geometry** (default): open ground → diamond / wedge; wall on one side → echelon away from it;
-  narrow passage → column (narrow sectors); arrival at a wall → the wall layout. Needs hysteresis (like today's
+- **Automatic by level geometry** (default): open ground → diamond / wedge (blizzard tight diamond in a blizzard); wall on one
+  side → echelon away from it; any passage between two walls → column (narrow sectors / herringbone by width); arrival at a wall → the wall layout. Needs hysteresis (like today's
   `ColumnHoldTime`) so it does not flicker at wall gaps.
 - **Manual: hold G** → radial menu with schematic icons; move the cursor to a sector, release G. Centre = **Auto**.
   A manual choice holds until Auto is picked. Proposed layout (user named 12 line, 3 echelon right, 10 echelon left,

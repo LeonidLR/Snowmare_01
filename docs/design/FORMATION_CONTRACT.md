@@ -48,6 +48,25 @@ outward normal for `wall.*`), positive = right. Owned by the cloud session (Trai
     the heading (`isAcrossHeading`); the ahead / at_wall rays are evaluated first.
   - `echelon.sector_4` default 150 (was 125). Config v1.1: 51 keys (+ classify.side_ignore_perp_deg, column.narrow_width,
     column.narrow_fwd_deg, column.narrow_back_deg). Golden: + `formation_PassageWidth.json`; LookYaw cases carry passageWidth.
+- **v1.2 (2026-10-25, coordinator's decisions on the C++ agent's questions; design-doc fidelity)** - supersedes v1.1 where it differs:
+  - `scan.amp_lead` default 30 (range 10-40): the leader's patrol search 11-1 o'clock.
+  - LookYaw mode `forward` = the menu's "All forward" (10:30): walking, everyone looks at the heading whatever the formation.
+  - `Classify(walls, leaderPos, leaderYaw, destination, previousClass, timeInClass, config)`: `destination` = where the leader's
+    current move ends (null = none). at_wall ONLY on arrival: the leader within `classify.arrive_dist` (50) of the destination
+    AND a wall ahead within at_wall_dist (forward rays first, as v1.1); at_wall skips the hold (an arrival event). In the wall
+    layout the leader's own wall slot is his destination (his last step must not drop the layout). `rawClass` likewise.
+  - New `FormationShapeRules::HedgehogSlots(center, memberCount, yaw, config) -> [{role, pos, yaw}]`: the ring round the heat
+    source (leader = center + radius along yaw, then Slots('hedgehog'), look yaws = LookYaw halt). Golden
+    `formation_HedgehogSlots.json`.
+  - Column of three: no change (documented by a test): the wide herringbone keeps the triad rear gap; in a NARROW column of
+    three L's -165 (user Q1 = A) covers 5-7 o'clock.
+  - Wall tie: unchanged - Layout sends a tie right; the caller breaks travel ties with `FormationWallRules::BreakRoomTie` (TS too).
+  - User Q3 = A: `rawClass` - both sides blocked within classify.probe_side -> `corridor` regardless of width (the
+    `classify.corridor_width` condition and key are removed); PassageWidth / column.narrow_width pick narrow vs herringbone.
+  - User Q4 = A: `FormationFor(class, memberCount, blizzard)` - open + blizzard -> `blizzard`; every other class unchanged; the
+    menu choice overrides. The runtime passes the weather (blizzard phase) in.
+  - Config v1.2: 51 keys (+ classify.arrive_dist, - classify.corridor_width). Golden: Classify cases carry `destination` (1080),
+    LookYaw has mode forward, FormationFor has `blizzard` (30).
 - `FormationTerrainRules::Classify(layout walls, leaderPos, leaderYaw, previousClass, timeInClass, config) -> class`
   (open / wall_left / wall_right / corridor / at_wall) with hysteresis (like ColumnHoldTime) -> formation choice.
 - `FormationWallRules::Layout(wall segment, clickedSlot, memberCount, roomLeft, roomRight) -> slots[] + look yaws`
