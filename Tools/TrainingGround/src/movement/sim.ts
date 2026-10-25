@@ -16,6 +16,7 @@ import { FormationSectorRules, FormationShapeRules, FormationTerrainRules, Forma
 export const SIM_DT = 1 / 30;
 const HEADING_SMOOTHING = 3.5; // FSquadFormationConfig::RotationSmoothing
 const STOP_RADIUS = 25;
+const WALL_TURN_DIST = 100; // cm: a member walking to his wall-layout slot turns to the layout yaw this close to it
 const FOLLOW_GAIN = 2.0; // 1/s: a 1 m gap to the (moving) slot adds 2 m/s on top of the slot's own velocity
 const REPATH_INTERVAL = 0.2;
 
@@ -30,6 +31,8 @@ export interface MemberFrame {
   slotInvalid: boolean;
   /** Moving backwards relative to his facing (> 120 deg). */
   backwards: boolean;
+  /** Travel direction this tick (null when standing). */
+  moveYaw: number | null;
 }
 
 export interface Frame {
@@ -140,6 +143,7 @@ export function simulate(o: SimOptions): number {
 
     // --- terrain / formation
     const next = FormationTerrainRules.Classify(walls, leader.pos, heading, terrain, timeInClass, c);
+    const passage = FormationTerrainRules.PassageWidth(walls, leader.pos, heading, c);
     if (next !== terrain) { terrain = next; timeInClass = 0; } else timeInClass += SIM_DT;
     if (!o.manualFormation) {
       const wanted = FormationTerrainRules.FormationFor(terrain, n);
@@ -167,7 +171,7 @@ export function simulate(o: SimOptions): number {
       }
     } else {
       targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
-        ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, c),
+        ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),
       }));
     }
 
@@ -191,11 +195,16 @@ export function simulate(o: SimOptions): number {
         m.pos = stepTowards(m, slot, nav, c, run, i === 0 ? 1 : m.jitter);
         moveDir = sub(m.pos, before);
       }
-      // Facing: run = travel direction for everyone; otherwise the rule's look yaw.
-      const desired = run && !arrived ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : target.yaw;
+      // Facing: run = travel direction for everyone; walking to a wall-layout slot = travel direction until within
+      // WALL_TURN_DIST of it, then the layout yaw (as an operative walking into cover; FORMATION_CONTRACT.md 7);
+      // otherwise the rule's look yaw.
+      const toWallSlot = formation === 'wall' && dist(m.pos, slot) > WALL_TURN_DIST && len(moveDir) > 0.5;
+      const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : target.yaw;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
-      const backwards = len(moveDir) > 0.5 && angleDiff(yawOf(moveDir), m.yaw) > 120;
-      frames.push({ role: m.role, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards });
+      if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
+      const moving = len(moveDir) > 0.5;
+      const backwards = moving && angleDiff(yawOf(moveDir), m.yaw) > 120;
+      frames.push({ role: m.role, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null });
     }
     o.onFrame({ t, mode, formation, terrain, heading, leaderDistance: travelled, members: frames });
 

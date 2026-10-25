@@ -38,6 +38,16 @@ outward normal for `wall.*`), positive = right. Owned by the cloud session (Trai
   (patrol scans: P 12->3, L 9->12 counter-phase, dwell; Z walks backwards looking at 6; with memberCount 2 the partner is
   role Z behind the right shoulder and SWEEPS 3 -> 6 -> 9 (`pair.scan_period / scan_from / scan_to`), user decision in
   FORMATION_SECTORS.md; coordinator 2026-10-25). In mode `wall` leaderYaw is the wall's outward normal.
+- **v1.1 (2026-10-25, coordinator; user Q1 = A / Q2 = A; Q3 classifier fix)** - supersedes the v1 lines below where they differ:
+  - `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, passageWidth, config)`:
+    `passageWidth` (cm, null = not between two walls); a `column` with passageWidth < `column.narrow_width` looks P
+    +`column.narrow_fwd_deg` (15), L -`column.narrow_back_deg` (-165), Z 180, K 0; else the herringbone (+-`column.side_deg`).
+  - New `FormationTerrainRules::PassageWidth(walls, leaderPos, leaderYaw, config) -> cm | null` (left + right side clearance
+    when both sides are blocked, else null) - the runtime passes it to LookYaw every tick.
+  - `Classify` / `PassageWidth` side probes ignore wall segments within `classify.side_ignore_perp_deg` (30) of perpendicular to
+    the heading (`isAcrossHeading`); the ahead / at_wall rays are evaluated first.
+  - `echelon.sector_4` default 150 (was 125). Config v1.1: 51 keys (+ classify.side_ignore_perp_deg, column.narrow_width,
+    column.narrow_fwd_deg, column.narrow_back_deg). Golden: + `formation_PassageWidth.json`; LookYaw cases carry passageWidth.
 - `FormationTerrainRules::Classify(layout walls, leaderPos, leaderYaw, previousClass, timeInClass, config) -> class`
   (open / wall_left / wall_right / corridor / at_wall) with hysteresis (like ColumnHoldTime) -> formation choice.
 - `FormationWallRules::Layout(wall segment, clickedSlot, memberCount, roomLeft, roomRight) -> slots[] + look yaws`
@@ -98,6 +108,8 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
   dir * min(top * catchup_mult, d * FOLLOW_GAIN)`, `FOLLOW_GAIN = 2 / s`, capped by `top * move.catchup_mult` and, walking
   backwards (> 120 deg off his facing), by `pace.walk_speed * move.backward_mult`; stop only when within 25 cm AND the slot is
   still. Reference: `Tools/TrainingGround/src/movement/sim.ts` `stepTowards`.
+- **Walking into the wall layout:** a member walking to his wall slot faces his travel direction and turns to the layout yaw
+  only within 100 cm of the slot (else he looks into the passage walls on the way; sim `WALL_TURN_DIST`).
 - **The wall layout only on arrival.** A wall straight ahead (`at_wall`) while the leader still walks is a corner to turn: keep
   the previous formation; switch to `FormationWallRules::Layout` when the leader stops at the wall (or on a cover order).
 

@@ -123,7 +123,8 @@ function scanValue(center: number, amp: number, period: number, phase: number, t
 }
 
 /** Sector centre / scan of a role relative to the reference yaw (heading, or the wall normal in mode 'wall'), degrees. */
-function relativeLook(role: Role, formation: Formation, mode: Mode, n: number, t: number, c: FormationConfig): number {
+function relativeLook(role: Role, formation: Formation, mode: Mode, n: number, t: number, passageWidth: number | null,
+  c: FormationConfig): number {
   if (mode === 'run') return 0;
   if (mode === 'wall' || formation === 'wall') {
     if (n === 2) return role === 'K' ? 45 : -45;
@@ -152,6 +153,11 @@ function relativeLook(role: Role, formation: Formation, mode: Mode, n: number, t
     case 'column':
       if (role === 'K') return 0;
       if (role === 'Z') return 180;
+      // User decision 2026-10-25 (Q1 = A): in a NARROW passage the side men do not look into the walls - P forward over the
+      // shoulder, L back at a slant; the +-70 deg herringbone only in a wide column (manual, or no passage at all).
+      if (passageWidth !== null && passageWidth < cfg(c, 'column.narrow_width')) {
+        return role === 'P' ? cfg(c, 'column.narrow_fwd_deg') : -cfg(c, 'column.narrow_back_deg');
+      }
       return (role === 'P' ? 1 : -1) * cfg(c, 'column.side_deg');
     case 'line': {
       const inner = cfg(c, 'line.fan_inner'), outer = cfg(c, 'line.fan_outer');
@@ -176,11 +182,13 @@ function relativeLook(role: Role, formation: Formation, mode: Mode, n: number, t
 /**
  * World yaw a member looks at. timeInPatrol drives the patrol scans (side men 12 -> 3 / 9 -> 12 in counter-phase with dwell,
  * the pair partner 3 -> 6 -> 9); mode 'run' = everyone on the heading; mode 'halt' = sector centres; mode 'wall': leaderYaw is
- * the wall's outward normal (FormationWallRules.Layout gives the full 4-man wall answer).
+ * the wall's outward normal (FormationWallRules.Layout gives the full 4-man wall answer). passageWidth: the free width of the
+ * passage the leader is in (FormationTerrainRules.PassageWidth; null = not between two walls) - a column narrower than
+ * column.narrow_width uses the narrow sectors (v1.1).
  */
 function LookYaw(role: Role, formation: Formation, mode: Mode, memberCount: number, timeInPatrol: number, leaderYaw: number,
-  config: FormationConfig): number {
-  return normYaw(leaderYaw + relativeLook(role, formation, mode, memberCount, timeInPatrol, config));
+  passageWidth: number | null, config: FormationConfig): number {
+  return normYaw(leaderYaw + relativeLook(role, formation, mode, memberCount, timeInPatrol, passageWidth, config));
 }
 
 export const FormationSectorRules = { LookYaw };
@@ -192,29 +200,53 @@ export const FormationSectorRules = { LookYaw };
 const SIDE_RAYS = [60, 90, 120];
 const AHEAD_RAYS = [0, -20, 20];
 
+/**
+ * v1.1 (coordinator 2026-10-25, Q3): a wall segment whose direction is within `ignorePerpDeg` of perpendicular to the heading is
+ * a wall AHEAD (or behind), not beside - the side probes ignore it (else a dead end ahead read as side walls and flipped the
+ * diamond into a column / echelon just before arriving).
+ */
+export function isAcrossHeading(w: Segment, yaw: number, ignorePerpDeg: number): boolean {
+  const along = Math.abs(normYaw(yawOf(sub(w.b, w.a)) - yaw)); // 0..180
+  const offParallel = Math.min(along, 180 - along); // 0 = parallel to the heading, 90 = perpendicular
+  return offParallel >= 90 - ignorePerpDeg;
+}
+
 /** Free lateral distance to a wall on one side (min over the side rays, measured across the heading), or Infinity. */
-export function sideClearance(walls: readonly Segment[], pos: Vec2, yaw: number, side: 1 | -1, reach: number): number {
+export function sideClearance(walls: readonly Segment[], pos: Vec2, yaw: number, side: 1 | -1, reach: number, ignorePerpDeg = 0): number {
+  const beside = ignorePerpDeg > 0 ? walls.filter((w) => !isAcrossHeading(w, yaw, ignorePerpDeg)) : walls;
   let best = Infinity;
   for (const a of SIDE_RAYS) {
     const s = Math.sin((a * Math.PI) / 180);
-    const hit = raycastWalls(pos, dirOf(yaw + side * a), walls, reach / s);
+    const hit = raycastWalls(pos, dirOf(yaw + side * a), beside, reach / s);
     if (Number.isFinite(hit)) best = Math.min(best, hit * s);
   }
   return best;
 }
 
-/** The raw class of the spot (no hysteresis). */
+/** The raw class of the spot (no hysteresis). v1.1: the ahead / at_wall rays first, then the side rays (walls across ignored). */
 export function rawClass(walls: readonly Segment[], pos: Vec2, yaw: number, c: FormationConfig): TerrainClass {
   const atWall = cfg(c, 'classify.at_wall_dist');
   for (const a of AHEAD_RAYS) if (Number.isFinite(raycastWalls(pos, dirOf(yaw + a), walls, atWall))) return 'at_wall';
   const reach = cfg(c, 'classify.probe_side');
-  const right = sideClearance(walls, pos, yaw, 1, reach);
-  const left = sideClearance(walls, pos, yaw, -1, reach);
+  const ignore = cfg(c, 'classify.side_ignore_perp_deg');
+  const right = sideClearance(walls, pos, yaw, 1, reach, ignore);
+  const left = sideClearance(walls, pos, yaw, -1, reach, ignore);
   const rightBlocked = right <= reach, leftBlocked = left <= reach;
   if (rightBlocked && leftBlocked) return left + right < cfg(c, 'classify.corridor_width') ? 'corridor' : 'open';
   if (leftBlocked) return 'wall_left';
   if (rightBlocked) return 'wall_right';
   return 'open';
+}
+
+/**
+ * v1.1: the free width between the walls on both sides (left + right clearance, walls across the heading ignored), or null
+ * when a side is open (not in a passage). Feeds LookYaw's narrow / wide column.
+ */
+function PassageWidth(walls: readonly Segment[], pos: Vec2, yaw: number, c: FormationConfig): number | null {
+  const reach = cfg(c, 'classify.probe_side'), ignore = cfg(c, 'classify.side_ignore_perp_deg');
+  const right = sideClearance(walls, pos, yaw, 1, reach, ignore);
+  const left = sideClearance(walls, pos, yaw, -1, reach, ignore);
+  return right <= reach && left <= reach ? left + right : null;
 }
 
 /**
@@ -239,7 +271,7 @@ function FormationFor(terrain: TerrainClass, memberCount: number): Formation {
   }
 }
 
-export const FormationTerrainRules = { Classify, FormationFor };
+export const FormationTerrainRules = { Classify, FormationFor, PassageWidth };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationWallRules::Layout

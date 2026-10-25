@@ -42,3 +42,16 @@ test('formation_lab_01 (the big lab): audit clean and every zone gets its expect
   assert.equal(expect.fail, 0, expect.worst);
   assert.equal(summary.checks.find((c) => c.id === 5)!.fail <= 1, true, 'slots: at most the known pair-at-the-wall spacing blip');
 });
+
+test('formation_lab_01 v1.1: both dead ends settle into the wall layout - no column / echelon flip, no wall stare', async () => {
+  const lab = readLayout('formation_lab_01');
+  const { runSeries } = await import('./bot.ts');
+  const { runs } = runSeries({ layout: lab, config, members: [2, 3, 4], seeds: 2, seedBase: 1, routes: ['R_A_open', 'R_F_deadend'] });
+  for (const r of runs) {
+    const tag = `${r.route} n${r.members} s${r.seed}`;
+    assert.equal(r.flicker.unexpected, 0, `${tag}: ${r.flicker.worst?.what}`);
+    assert.equal(r.wallStare.events, 0, `${tag}: ${r.wallStare.worst?.what}`);
+    for (const e of r.expect) assert.ok(e.pct >= 80, `${tag} ${e.zone}: ${e.pct} %`);
+  }
+});
+

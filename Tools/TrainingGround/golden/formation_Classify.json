@@ -20,6 +20,9 @@
   "column.spacing": 150,
   "column.stagger": 60,
   "column.side_deg": 70,
+  "column.narrow_width": 600,
+  "column.narrow_fwd_deg": 15,
+  "column.narrow_back_deg": 165,
   "line.spacing": 260,
   "line.fan_inner": 5,
   "line.fan_outer": 25,
@@ -27,7 +30,7 @@
   "echelon.sector_lead": 10,
   "echelon.sector_2": 45,
   "echelon.sector_3": 80,
-  "echelon.sector_4": 125,
+  "echelon.sector_4": 150,
   "blizzard.side_offset": 110,
   "blizzard.back_offset": 120,
   "hedgehog.radius": 130,
@@ -53,6 +56,7 @@
   "classify.corridor_width": 600,
   "classify.hold_time": 1,
   "classify.at_wall_dist": 150,
+  "classify.side_ignore_perp_deg": 30,
   "sight.fov": 140
  },
  "notes": "in: walls [{a, b, thickness}], leaderPos, leaderYaw, previousClass (null = none), timeInClass -> out.class.",
@@ -8465,6 +8469,2958 @@
       "b": [
        -3182.04,
        50.656
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_300",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       250,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       250,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       250,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       250,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       250,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       250,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       250,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       300,
+       -2000
+      ],
+      "b": [
+       300,
+       2000
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -2000,
+       -300
+      ],
+      "b": [
+       250,
+       -300
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       880.8,
+       -163.446
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       880.8,
+       -163.446
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       880.8,
+       -163.446
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       880.8,
+       -163.446
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       880.8,
+       -163.446
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       880.8,
+       -163.446
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       880.8,
+       -163.446
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       2418.21,
+       -890.679
+      ],
+      "b": [
+       -1145.816,
+       925.283
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -140.679,
+       -2168.21
+      ],
+      "b": [
+       880.8,
+       -163.446
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       139.253,
+       2315.389
+      ],
+      "b": [
+       -1584.347,
+       869.116
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       139.253,
+       2315.389
+      ],
+      "b": [
+       -1584.347,
+       869.116
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       139.253,
+       2315.389
+      ],
+      "b": [
+       -1584.347,
+       869.116
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       139.253,
+       2315.389
+      ],
+      "b": [
+       -1584.347,
+       869.116
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       139.253,
+       2315.389
+      ],
+      "b": [
+       -1584.347,
+       869.116
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       139.253,
+       2315.389
+      ],
+      "b": [
+       -1584.347,
+       869.116
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       139.253,
+       2315.389
+      ],
+      "b": [
+       -1584.347,
+       869.116
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "deadend_ahead_wall_left",
+    "walls": [
+     {
+      "a": [
+       -2715.389,
+       2139.253
+      ],
+      "b": [
+       -144.238,
+       -924.925
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       139.253,
+       2315.389
+      ],
+      "b": [
+       -1584.347,
+       869.116
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1200,
+       -1800
+      ],
+      "b": [
+       400,
+       107
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1200,
+       -1800
+      ],
+      "b": [
+       400,
+       107
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1200,
+       -1800
+      ],
+      "b": [
+       400,
+       107
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1200,
+       -1800
+      ],
+      "b": [
+       400,
+       107
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1200,
+       -1800
+      ],
+      "b": [
+       400,
+       107
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1200,
+       -1800
+      ],
+      "b": [
+       400,
+       107
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1200,
+       -1800
+      ],
+      "b": [
+       400,
+       107
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1200,
+       -1800
+      ],
+      "b": [
+       400,
+       107
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       1559.023,
+       -2136.391
+      ],
+      "b": [
+       586.259,
+       154.98
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       1559.023,
+       -2136.391
+      ],
+      "b": [
+       586.259,
+       154.98
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       1559.023,
+       -2136.391
+      ],
+      "b": [
+       586.259,
+       154.98
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       1559.023,
+       -2136.391
+      ],
+      "b": [
+       586.259,
+       154.98
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       1559.023,
+       -2136.391
+      ],
+      "b": [
+       586.259,
+       154.98
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       1559.023,
+       -2136.391
+      ],
+      "b": [
+       586.259,
+       154.98
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       1559.023,
+       -2136.391
+      ],
+      "b": [
+       586.259,
+       154.98
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       1559.023,
+       -2136.391
+      ],
+      "b": [
+       586.259,
+       154.98
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1437.764,
+       2950.225
+      ],
+      "b": [
+       -1437.64,
+       460.918
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1437.764,
+       2950.225
+      ],
+      "b": [
+       -1437.64,
+       460.918
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1437.764,
+       2950.225
+      ],
+      "b": [
+       -1437.64,
+       460.918
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1437.764,
+       2950.225
+      ],
+      "b": [
+       -1437.64,
+       460.918
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1437.764,
+       2950.225
+      ],
+      "b": [
+       -1437.64,
+       460.918
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1437.764,
+       2950.225
+      ],
+      "b": [
+       -1437.64,
+       460.918
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1437.764,
+       2950.225
+      ],
+      "b": [
+       -1437.64,
+       460.918
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_50",
+    "walls": [
+     {
+      "a": [
+       -1437.764,
+       2950.225
+      ],
+      "b": [
+       -1437.64,
+       460.918
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       100,
+       -1700
+      ],
+      "b": [
+       700,
+       -50
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       100,
+       -1700
+      ],
+      "b": [
+       700,
+       -50
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       100,
+       -1700
+      ],
+      "b": [
+       700,
+       -50
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       100,
+       -1700
+      ],
+      "b": [
+       700,
+       -50
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       100,
+       -1700
+      ],
+      "b": [
+       700,
+       -50
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       100,
+       -1700
+      ],
+      "b": [
+       700,
+       -50
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       100,
+       -1700
+      ],
+      "b": [
+       700,
+       -50
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       100,
+       -1700
+      ],
+      "b": [
+       700,
+       -50
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       2060.11,
+       -932.683
+      ],
+      "b": [
+       862.344,
+       351.005
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       2060.11,
+       -932.683
+      ],
+      "b": [
+       862.344,
+       351.005
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       2060.11,
+       -932.683
+      ],
+      "b": [
+       862.344,
+       351.005
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       2060.11,
+       -932.683
+      ],
+      "b": [
+       862.344,
+       351.005
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       2060.11,
+       -932.683
+      ],
+      "b": [
+       862.344,
+       351.005
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       2060.11,
+       -932.683
+      ],
+      "b": [
+       862.344,
+       351.005
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       2060.11,
+       -932.683
+      ],
+      "b": [
+       862.344,
+       351.005
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       2060.11,
+       -932.683
+      ],
+      "b": [
+       862.344,
+       351.005
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     500,
+     -250
+    ],
+    "leaderYaw": 63,
+    "previousClass": "corridor",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       -2369.343,
+       2037.997
+      ],
+      "b": [
+       -1768.37,
+       388.351
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": null,
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       -2369.343,
+       2037.997
+      ],
+      "b": [
+       -1768.37,
+       388.351
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": null,
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       -2369.343,
+       2037.997
+      ],
+      "b": [
+       -1768.37,
+       388.351
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "open",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       -2369.343,
+       2037.997
+      ],
+      "b": [
+       -1768.37,
+       388.351
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "open",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       -2369.343,
+       2037.997
+      ],
+      "b": [
+       -1768.37,
+       388.351
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "wall_left",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "wall_left"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       -2369.343,
+       2037.997
+      ],
+      "b": [
+       -1768.37,
+       388.351
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "wall_left",
+    "timeInClass": 1.5
+   },
+   "out": {
+    "class": "open"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       -2369.343,
+       2037.997
+      ],
+      "b": [
+       -1768.37,
+       388.351
+      ],
+      "thickness": 40
+     }
+    ],
+    "leaderPos": [
+     -1200,
+     800
+    ],
+    "leaderYaw": -140,
+    "previousClass": "corridor",
+    "timeInClass": 0.3
+   },
+   "out": {
+    "class": "corridor"
+   }
+  },
+  {
+   "in": {
+    "scene": "oblique_left_70",
+    "walls": [
+     {
+      "a": [
+       -2369.343,
+       2037.997
+      ],
+      "b": [
+       -1768.37,
+       388.351
       ],
       "thickness": 40
      }

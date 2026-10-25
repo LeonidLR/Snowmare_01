@@ -44,10 +44,12 @@ test('frames: run = everyone faces the travel direction; patrol = the rear man w
 });
 
 test('the tuner levers move the checks (rear cover follows echelon.sector_4)', () => {
-  const base = runSeries({ layout, config, members: [4], seeds: 1, seedBase: 1 }).summary;
-  const tuned = runSeries({ layout, config: configValues(withValues(file, { 'echelon.sector_4': 150 }).file), members: [4], seeds: 1, seedBase: 1 }).summary;
-  const rear = (s: typeof base) => s.checks.find((c) => c.id === 2)!;
-  assert.ok(rear(tuned).pass > rear(base).pass);
+  // The pre-decision value (125) leaves 5-7 o'clock unwatched in the echelon; the user's 150 (Q2 = A) watches it.
+  const old = runSeries({ layout, config: configValues(withValues(file, { 'echelon.sector_4': 125 }).file), members: [4], seeds: 1, seedBase: 1 }).summary;
+  const now = runSeries({ layout, config, members: [4], seeds: 1, seedBase: 1 }).summary;
+  const rear = (s: typeof now) => s.checks.find((c) => c.id === 2)!;
+  assert.equal(config['echelon.sector_4'], 150);
+  assert.ok(rear(now).pass > rear(old).pass);
 });
 
 test('report: <= 30 lines, header, one line per check, advice section', () => {
