@@ -102,6 +102,10 @@ bool FFormationRuntimeChooseTest::RunTest(const FString&)
 	TestTrue(TEXT("open, 4: diamond"), ChooseFormation(EFormationTerrainClass::Open, 4, false, EFormationKind::Column) == EFormationKind::Diamond);
 	TestTrue(TEXT("wall on the left: echelon right"), ChooseFormation(EFormationTerrainClass::WallLeft, 4, true, EFormationKind::Diamond) == EFormationKind::EchelonRight);
 	TestTrue(TEXT("corridor: column"), ChooseFormation(EFormationTerrainClass::Corridor, 3, false, EFormationKind::Wedge) == EFormationKind::Column);
+	TestTrue(TEXT("v1.2: open in a blizzard: the blizzard tight diamond"),
+		ChooseFormation(EFormationTerrainClass::Open, 4, false, EFormationKind::Column, true) == EFormationKind::Blizzard);
+	TestTrue(TEXT("v1.2: a corridor in a blizzard stays a column"),
+		ChooseFormation(EFormationTerrainClass::Corridor, 4, false, EFormationKind::Diamond, true) == EFormationKind::Column);
 	return true;
 }
 
@@ -155,8 +159,9 @@ bool FFormationRuntimeProbeClassifyTest::RunTest(const FString&)
 	};
 	for (const FCase& Case : Cases)
 	{
-		const EFormationTerrainClass Expected = FormationTerrainRules::ClassifyRaw(Truth, Case.Pos, Case.Heading, Config);
-		const EFormationTerrainClass Probed = FormationTerrainRules::ClassifyRaw(ProbeWalls(Truth, Case.Pos, Case.Heading, Config), Case.Pos, Case.Heading, Config);
+		const EFormationTerrainClass Expected = FormationTerrainRules::ClassifyRaw(Truth, Case.Pos, Case.Heading, Config, TOptional<FVector2D>(Case.Pos));
+		const EFormationTerrainClass Probed = FormationTerrainRules::ClassifyRaw(ProbeWalls(Truth, Case.Pos, Case.Heading, Config), Case.Pos, Case.Heading, Config,
+			TOptional<FVector2D>(Case.Pos)); // v1.2: standing on his destination (at_wall only on arrival)
 		TestEqual(FString::Printf(TEXT("%s: probe class %s = layout class %s"), Case.Name, FormationNames::ToString(Probed), FormationNames::ToString(Expected)),
 			static_cast<int32>(Probed), static_cast<int32>(Expected));
 		const TOptional<float> WidthTruth = FormationTerrainRules::PassageWidth(Truth, Case.Pos, Case.Heading, Config);
@@ -170,7 +175,9 @@ bool FFormationRuntimeProbeClassifyTest::RunTest(const FString&)
 	TestEqual(TEXT("the corridor reads as a corridor"), static_cast<int32>(FormationTerrainRules::ClassifyRaw(ProbeWalls(Truth, FVector2D(1000, 0), 0.f, Config),
 		FVector2D(1000, 0), 0.f, Config)), static_cast<int32>(EFormationTerrainClass::Corridor));
 	TestEqual(TEXT("the dead end reads as at_wall"), static_cast<int32>(FormationTerrainRules::ClassifyRaw(ProbeWalls(Truth, FVector2D(7900, 0), 0.f, Config),
-		FVector2D(7900, 0), 0.f, Config)), static_cast<int32>(EFormationTerrainClass::AtWall));
+		FVector2D(7900, 0), 0.f, Config, TOptional<FVector2D>(FVector2D(7900, 0)))), static_cast<int32>(EFormationTerrainClass::AtWall));
+	TestEqual(TEXT("v1.2: walking past it (no destination there) it is no at_wall"), static_cast<int32>(FormationTerrainRules::ClassifyRaw(
+		ProbeWalls(Truth, FVector2D(7900, 0), 0.f, Config), FVector2D(7900, 0), 0.f, Config, TOptional<FVector2D>(FVector2D(7900, 3000)))) != static_cast<int32>(EFormationTerrainClass::AtWall), true);
 	return true;
 }
 

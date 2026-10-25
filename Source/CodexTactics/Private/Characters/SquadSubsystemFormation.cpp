@@ -21,6 +21,7 @@
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTuning.h"
 #include "Formation/FormationWallRules.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "HAL/IConsoleManager.h"
 
 namespace SquadSubsystemFormationLocal
@@ -147,6 +148,29 @@ bool USquadSubsystem::GetFormationWallNormalYaw(float& OutYaw) const
 	return true;
 }
 
+TOptional<FVector2D> USquadSubsystem::LeaderDestination(const AOperativeCharacter& LeaderRef)
+{
+	// v1.2: at_wall only on arrival - his move's destination (also after he arrived: he stands on it; in the wall order his own wall slot).
+	// Before his first move order there is none.
+	const FVector Destination = LeaderRef.GetLastMoveDestination();
+	return Destination.IsZero() ? TOptional<FVector2D>() : TOptional<FVector2D>(FVector2D(Destination));
+}
+
+bool USquadSubsystem::IsFormationBlizzard() const
+{
+	// v1.2 (user Q4 = A): open ground in a blizzard -> the blizzard tight diamond.
+	const UEnvironmentSubsystem* Environment = GetWorld() ? GetWorld()->GetSubsystem<UEnvironmentSubsystem>() : nullptr;
+	return Environment && Environment->GetWeather() == EWeatherState::Blizzard;
+}
+
+EFormationTerrainClass USquadSubsystem::StepFormationTerrain(const AOperativeCharacter& LeaderRef, float DeltaTime)
+{
+	// The one adapter over FFormationTerrainTracker (its Step changes again with rules v2: hold distance, stateful Classify): the accepted
+	// probe's walls, read from where they were traced, and the leader's destination.
+	return Sectors.Terrain.Step(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, DeltaTime, FormationTuning::Get(),
+		LeaderDestination(LeaderRef));
+}
+
 void USquadSubsystem::ProbeFormationWalls(const AOperativeCharacter& LeaderRef)
 {
 	using namespace SquadSubsystemFormationLocal;
@@ -175,7 +199,8 @@ void USquadSubsystem::ProbeFormationWalls(const AOperativeCharacter& LeaderRef)
 	}
 	// One probe alone does not change the class (a ray grazing a wall's end cap reads it as a wall across the heading): a probe whose raw
 	// class differs from the class in force is taken only when the probe before said the same (FormationRuntime::AcceptProbe).
-	const EFormationTerrainClass Raw = FormationTerrainRules::ClassifyRaw(Walls, FVector2D(Origin), Sectors.HeadingYaw, FormationTuning::Get());
+	const EFormationTerrainClass Raw = FormationTerrainRules::ClassifyRaw(Walls, FVector2D(Origin), Sectors.HeadingYaw, FormationTuning::Get(),
+		LeaderDestination(LeaderRef));
 	const bool bAccept = FormationRuntime::AcceptProbe(Raw, Sectors.LastProbeRaw, Sectors.Terrain.Class);
 	Sectors.LastProbeRaw = Raw;
 	if (bAccept)
@@ -308,7 +333,8 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		ProbeFormationWalls(LeaderRef);
 		if (CVarFormationDebug.GetValueOnGameThread() != 0)
 		{
-			const EFormationTerrainClass Raw = FormationTerrainRules::ClassifyRaw(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, Config);
+			const EFormationTerrainClass Raw = FormationTerrainRules::ClassifyRaw(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, Config,
+				LeaderDestination(LeaderRef));
 			if (!LastLoggedRawClass.IsSet() || LastLoggedRawClass.GetValue() != Raw)
 			{
 				LastLoggedRawClass = Raw;
@@ -324,7 +350,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 			}
 		}
 	}
-	const EFormationTerrainClass Class = Sectors.Terrain.Step(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, DeltaTime, Config);
+	const EFormationTerrainClass Class = StepFormationTerrain(LeaderRef, DeltaTime);
 	Sectors.PassageWidth = FormationTerrainRules::PassageWidth(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, Config);
 
 	if (Sectors.bWallOrder)
@@ -342,7 +368,8 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	else
 	{
 		const EFormationKind Previous = Sectors.Formation;
-		Sectors.Formation = FormationRuntime::ChooseFormation(Class, Count, Sectors.LeaderStillSeconds >= WallArrivalStillSeconds, Sectors.MoveFormation);
+		Sectors.Formation = FormationRuntime::ChooseFormation(Class, Count, Sectors.LeaderStillSeconds >= WallArrivalStillSeconds, Sectors.MoveFormation,
+			IsFormationBlizzard());
 		if (bLeaderMoving)
 		{
 			Sectors.MoveFormation = Sectors.Formation;
@@ -360,7 +387,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 			}
 			if (!Sectors.bWallLayoutValid)
 			{
-				Sectors.Formation = FormationTerrainRules::FormationFor(EFormationTerrainClass::Open, Count);
+				Sectors.Formation = FormationTerrainRules::FormationFor(EFormationTerrainClass::Open, Count, IsFormationBlizzard());
 			}
 		}
 		else
@@ -501,7 +528,13 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	}
 	Follower.bParked = false;
 	const FVector2D Destination = FormationRuntime::LeadDestination(Target, SlotVelocity);
-	Operative.FollowTo(FVector(Destination.X, Destination.Y, SlotLocation.Z), Move.Speed);
+	const EOperativeOrderResult Result = Operative.FollowTo(FVector(Destination.X, Destination.Y, SlotLocation.Z), Move.Speed);
+	if (CVarFormationDebug.GetValueOnGameThread() >= 2)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s %s: %.0f cm off his slot, slot %.0f cm/s, speed %.0f%s -> %d"), *Operative.DisplayName.ToString(),
+			FormationNames::ToString(Role.GetValue()), Distance, SlotVelocity.Size(), Move.Speed, Move.bBackward ? TEXT(" (backwards)") : TEXT(""),
+			static_cast<int32>(Result));
+	}
 	return true;
 }
 

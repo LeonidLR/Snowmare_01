@@ -59,8 +59,11 @@ namespace FormationRuntime
 	/**
 	 * The formation for the terrain class (FormationTerrainRules::FormationFor) with contract 7's "the wall layout only on ARRIVAL": a
 	 * wall straight ahead (at_wall) while the leader still walks is a corner to turn - Previous (the formation he walked in) is kept.
+	 * (v1.2 fires at_wall only within classify.arrive_dist of his destination; the stop is still waited for.) bBlizzard (v1.2): open
+	 * ground in a blizzard -> the blizzard tight diamond.
 	 */
-	CODEXTACTICS_API EFormationKind ChooseFormation(EFormationTerrainClass Class, int32 MemberCount, bool bLeaderStopped, EFormationKind Previous);
+	CODEXTACTICS_API EFormationKind ChooseFormation(EFormationTerrainClass Class, int32 MemberCount, bool bLeaderStopped, EFormationKind Previous,
+		bool bBlizzard = false);
 
 	/**
 	 * Probe debounce: a world probe whose raw class (FormationTerrainRules::ClassifyRaw) differs from the class in force feeds the

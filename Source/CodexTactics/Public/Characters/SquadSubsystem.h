@@ -460,6 +460,12 @@ private:
 	void UpdateFormationSectors(AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime);
 	/** Sets every member's formation look / pace from this frame (none for a member not in it). */
 	void ApplyFormationFrame();
+	/** v1.2: the leader's move destination for Classify (at_wall only on arrival); unset before his first move order. */
+	static TOptional<FVector2D> LeaderDestination(const AOperativeCharacter& LeaderRef);
+	/** v1.2: the weather is a blizzard (FormationFor's blizzard tight diamond). */
+	bool IsFormationBlizzard() const;
+	/** The one adapter over FFormationTerrainTracker::Step (rules v2 changes it again). */
+	EFormationTerrainClass StepFormationTerrain(const AOperativeCharacter& LeaderRef, float DeltaTime);
 	/** Traces the probe rays round the leader into Sectors.ProbeWalls. */
 	void ProbeFormationWalls(const AOperativeCharacter& LeaderRef);
 	/**

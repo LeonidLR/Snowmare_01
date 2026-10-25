@@ -84,7 +84,6 @@ namespace FormationLabSmoke
 		const TCHAR* Why;
 	};
 	const FKnown Known[] = {
-		{ TEXT("R_D_corridors"), TEXT("stare"), TEXT("rules v1.1 Q4: the wide passage (7.6 m) reads open -> diamond, its side men scan 3 / 9 into the walls (the simulator fails it too; v1.2: a passage between two walls -> column)") },
 		{ TEXT("R_B_walls"), TEXT("pace"), TEXT("rules v1.1: the 4th man of an echelon (540 cm behind) trails his slot after the switch (the simulator fails it too)") },
 		{ TEXT("R_C_gaps"), TEXT("pace"), TEXT("rules v1.1: the 4th man of an echelon trails his slot (the simulator fails it too)") },
 		{ TEXT("R_v2_gaps"), TEXT("pace"), TEXT("rules v1.1: the 4th man of an echelon trails his slot (the simulator fails it too)") },

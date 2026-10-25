@@ -48,12 +48,12 @@ namespace FormationRuntime
 		return bLeaderSprinting ? EFormationMode::Run : EFormationMode::Walk;
 	}
 
-	EFormationKind ChooseFormation(EFormationTerrainClass Class, int32 MemberCount, bool bLeaderStopped, EFormationKind Previous)
+	EFormationKind ChooseFormation(EFormationTerrainClass Class, int32 MemberCount, bool bLeaderStopped, EFormationKind Previous, bool bBlizzard)
 	{
-		const EFormationKind Wanted = FormationTerrainRules::FormationFor(Class, MemberCount);
+		const EFormationKind Wanted = FormationTerrainRules::FormationFor(Class, MemberCount, bBlizzard);
 		if (Wanted == EFormationKind::Wall && !bLeaderStopped)
 		{
-			return Previous == EFormationKind::Wall ? FormationTerrainRules::FormationFor(EFormationTerrainClass::Open, MemberCount) : Previous;
+			return Previous == EFormationKind::Wall ? FormationTerrainRules::FormationFor(EFormationTerrainClass::Open, MemberCount, bBlizzard) : Previous;
 		}
 		return Wanted;
 	}
