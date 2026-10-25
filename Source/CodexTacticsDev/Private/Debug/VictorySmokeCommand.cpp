@@ -1,8 +1,10 @@
 // Dev-only console command for a headless wave-victory check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.VictorySmoke
 // Godot main.gd register_enemy_kill / _on_wave_cleared / _on_next_wave_pressed / _start_post_combat_sequence /
-// _auto_recover_all_deployables: kill statistics, the victory panel between waves, the next-wave button, and after the
-// last wave the squad back at its preparation spots, the commander leading and the deployables back in the supply.
+// _auto_recover_all_deployables: kill statistics; between waves NO victory panel / next-wave button since 2026-10-25 (game
+// designer: "the waves must break through on their own" - the rest starts by itself, the "wave cleared" feed line still comes; cut
+// short here like the bot does, HordeIntroSmoke waits one out); after the last wave the squad stays where it fought, the commander
+// leads and the deployables are back in the supply.
 
 #include "CoreMinimal.h"
 
@@ -39,6 +41,8 @@ namespace VictorySmoke
 		int32 Failures = 0;
 		int32 Wave = 0;
 		int32 TurretsBefore = 0;
+		/** Waves whose rest (no panel) was checked. */
+		int32 RestsChecked = 0;
 		TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> Stations;
 		TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> EndSpots;
 	};
@@ -191,6 +195,25 @@ namespace VictorySmoke
 			}
 			if (Flow->GetPhase() == ECodexGamePhase::Preparation)
 			{
+				if (Flow->IsRestBetweenWaves())
+				{
+					// 2026-10-25: a cleared wave goes straight into the rest before the next one - no panel, no button.
+					const int32 Cleared = Flow->GetWaveIndex() - 1;
+					Check(State, !Panel->IsShown() && Flow->GetWaveIndex() == State.Wave + 1,
+						FString::Printf(TEXT("wave %d cleared: the rest before wave %d, no victory panel / \"Start the next wave\""), Cleared,
+							Flow->GetWaveIndex()));
+					Check(State, Flow->GetPreparationTimeRemaining() > 0.f && Flow->GetPreparationTimeRemaining() <= Flow->GetConfig().WaveRestDuration,
+						FString::Printf(TEXT("the rest counts down by itself (%.1f s left)"), Flow->GetPreparationTimeRemaining()));
+					if (Cleared == 1)
+					{
+						// The statistics the panel used to show are still kept (saved, the bot's report).
+						const FSquadKillStats& Stats = Victory->GetKillStats();
+						Check(State, Stats.Commander.TurretKills == 1 && Stats.Medic.MineKills == 1 && Stats.GetTotal() >= 3
+							&& Stats.Commander.Total == Stats.GetTotal() - 1,
+							FString::Printf(TEXT("kill stats: total %d, turret %d, mine %d"), Stats.GetTotal(), Stats.Commander.TurretKills, Stats.Medic.MineKills));
+					}
+					++State.RestsChecked;
+				}
 				Flow->FinishPreparation();
 				State.Wave = Flow->GetWaveIndex();
 				if (State.Wave >= Total)
@@ -210,6 +233,7 @@ namespace VictorySmoke
 					MaxJump = FMath::Max(MaxJump, Spot.Key.IsValid() ? FVector::Dist2D(Spot.Value, Spot.Key->GetActorLocation()) : 99999.f);
 				}
 				Check(State, MaxJump < 200.f, FString::Printf(TEXT("the fight's end teleports nobody (max %.0f cm from where they stood)"), MaxJump));
+				Check(State, State.RestsChecked == Total - 1, FString::Printf(TEXT("%d rests between %d waves, none with a panel"), State.RestsChecked, Total));
 				State.EndSpots.Reset();
 				for (AOperativeCharacter* Member : Squad->GetMembers())
 				{
@@ -225,32 +249,9 @@ namespace VictorySmoke
 			}
 			if (Flow->GetPhase() == ECodexGamePhase::WaveCleared)
 			{
-				if (State.StageTime < 0.3f)
-				{
-					return true;
-				}
-				const FString Text = Panel->GetShownText();
-				Check(State, Panel->IsShown(), FString::Printf(TEXT("wave %d: panel shown"), State.Wave));
-				if (State.Wave == 1)
-				{
-					const FSquadKillStats& Stats = Victory->GetKillStats();
-					Check(State, Text.Contains(TEXT("WAVE 1 REPELLED")) && Text.Contains(FString::Printf(TEXT("Start the next wave (2/%d)"), Total)),
-						TEXT("title and «next wave (2/N)»"));
-					Check(State, Stats.Commander.TurretKills == 1 && Stats.Medic.MineKills == 1 && Stats.GetTotal() >= 3
-						&& Stats.Commander.Total == Stats.GetTotal() - 1,
-						FString::Printf(TEXT("kill stats: total %d, turret %d, mine %d"), Stats.GetTotal(), Stats.Commander.TurretKills, Stats.Medic.MineKills));
-					Check(State, Text.Contains(FString::Printf(TEXT("TOTAL KILLED: %d"), Stats.GetTotal())), TEXT("stats card text"));
-				}
-				if (State.Wave >= Total)
-				{
-					Check(State, false, TEXT("the last wave must not stop on the victory panel (2026-10-22)"));
-					return Finish(State, false);
-				}
-				Panel->PressNext();
-				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro() && Flow->GetWaveIndex() == State.Wave + 1
-					&& !Panel->IsShown(), FString::Printf(TEXT("next wave: wave %d comes at once (no rest), panel hidden"),
-						Flow->GetWaveIndex()));
-				return true;
+				Check(State, false, FString::Printf(TEXT("wave %d stopped on the victory panel - since 2026-10-25 the next wave comes by itself"),
+					State.Wave));
+				return Finish(State, false);
 			}
 			return true;
 		}

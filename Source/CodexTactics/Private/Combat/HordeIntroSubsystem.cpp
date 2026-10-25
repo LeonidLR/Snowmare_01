@@ -69,11 +69,7 @@ void UHordeIntroSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 		return; // our own RealTime -> free pause
 	}
 	UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	// A new fight (or a load before the first wave): every type is new again.
-	if (Phase == ECodexGamePhase::Exploration || (Phase == ECodexGamePhase::Preparation && Flow && Flow->GetWaveIndex() <= 1))
-	{
-		ShownTypes.Reset();
-	}
+	// Game designer 2026-10-25: what was flown over stays shown for the whole level (Memory, saved) - no reset per fight any more.
 	if (!Flow)
 	{
 		return;
@@ -304,7 +300,7 @@ void UHordeIntroSubsystem::OpenPause(bool bFlyover)
 		{
 			Types.Add(Enemy->GetArchetype());
 		}
-		Shots = HordeIntroRules::BuildShotList(HordeIntroRules::UniqueTypesInOrder(Types), ShownTypes, Config);
+		Shots = HordeIntroRules::BuildShotList(HordeIntroRules::UniqueTypesInOrder(Types), Memory, Config);
 	}
 	else
 	{
@@ -315,9 +311,12 @@ void UHordeIntroSubsystem::OpenPause(bool bFlyover)
 		Stage = EHordeIntroStage::Idle;
 		OnHordeIntroStarted.Broadcast(WaveIndex, false);
 		OnHordeIntroFinished.Broadcast(WaveIndex, false);
-		UE_LOG(LogCodexTactics, Display, TEXT("[HordeIntro] free pause without a flyover"));
+		UE_LOG(LogCodexTactics, Display, TEXT("[HordeIntro] free pause without a flyover%s"),
+			bFlyover && Memory.bWideShotShown ? TEXT(" (every type of the wave was shown on this level before)") : TEXT(""));
 		return;
 	}
+	// The level's memory (2026-10-25): this flyover's wide shot and types count as shown from now on, a skip included.
+	HordeIntroRules::RememberShots(Memory, Shots);
 	FString Plan;
 	for (const FHordeIntroShot& Shot : Shots)
 	{
@@ -434,7 +433,6 @@ void UHordeIntroSubsystem::StartShot(int32 Index)
 			Target = OfType[Pick];
 			Camera->SetCinematicYaw(HordeIntroRules::ViewYawAt(Squad, Target->GetActorLocation(), Config.ViewSideDegrees));
 			Camera->SmoothFocusOnTarget(Target, Config.ShotBlendSeconds, Config.TypeShotDistance);
-			ShownTypes.Add(Shot.Archetype);
 		}
 		break;
 	}

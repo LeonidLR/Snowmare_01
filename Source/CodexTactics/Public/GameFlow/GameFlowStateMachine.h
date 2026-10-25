@@ -51,6 +51,16 @@ public:
 	{
 		return Phase == ECodexGamePhase::WaveCombat || (Phase == ECodexGamePhase::Preparation && WaveIndex > 1);
 	}
+	/**
+	 * The rest between two waves of a fight (Preparation of wave 2+): since 2026-10-25 it starts by itself when a wave is cleared and
+	 * the next wave comes when it runs out - nothing to click (game designer: "the waves must break through on their own").
+	 */
+	bool IsRestBetweenWaves() const { return Phase == ECodexGamePhase::Preparation && WaveIndex > 1; }
+	/**
+	 * The HUD offers the «Start Battle» button: only in the preparation before the FIRST wave of a prepared start (a level's own design);
+	 * never in the rest between waves (2026-10-25).
+	 */
+	bool OffersStartBattle() const { return Phase == ECodexGamePhase::Preparation && WaveIndex <= 1; }
 	/** World time dilation the current state requires (0 = stopped). */
 	float GetTimeDilation() const;
 	/**
@@ -86,7 +96,8 @@ public:
 	EGameFlowResult FinishCutscene();
 	/**
 	 * Preparation -> WaveCombat/RealTime (timer expired or player pressed "ready"); a sudden wave (a loaded save resumes
-	 * in its preparation) awaits its horde intro instead.
+	 * in its preparation) awaits its horde intro instead. The HUD offers it only before the first wave (OffersStartBattle); the bot
+	 * and the smokes still cut the rest between waves short with it.
 	 */
 	EGameFlowResult FinishPreparation();
 	/**
@@ -123,15 +134,17 @@ public:
 	 */
 	EGameFlowResult FinishSkirmish();
 	/**
-	 * WaveCombat (any sub-mode) -> WaveCleared (the victory panel); the fight's last wave / a single ambush fight goes straight to
-	 * PostCombat unless Config.bVictoryPanelAfterLastWave (game designer 2026-10-22: no end-of-fight button).
+	 * WaveCombat (any sub-mode) -> the rest before the next wave (Preparation of WaveIndex + 1, WaveRestDuration, the charges back; the
+	 * wave starts by itself when the rest runs out - game designer 2026-10-25: no "Start the next wave" panel) unless
+	 * Config.bVictoryPanelBetweenWaves (then WaveCleared = the Godot victory panel); the fight's last wave / a single ambush fight goes
+	 * straight to PostCombat unless Config.bVictoryPanelAfterLastWave (game designer 2026-10-22: no end-of-fight button).
 	 */
 	EGameFlowResult NotifyWaveCleared();
 	/** The current wave is the fight's last: the level's final wave, or an ambush fight that is the whole battle. */
 	bool IsFinalFight() const;
 	/**
-	 * WaveCleared -> Preparation for the next wave (a sudden next wave: WaveCombat at once, awaiting its horde intro), or
-	 * PostCombat after the last wave.
+	 * The victory panel's button (only with Config.bVictoryPanelBetweenWaves / bVictoryPanelAfterLastWave): WaveCleared -> Preparation
+	 * for the next wave (a sudden next wave: WaveCombat at once, awaiting its horde intro), or PostCombat after the last wave.
 	 */
 	EGameFlowResult AdvanceAfterWave();
 	/** PostCombat -> Exploration; the combat zone can be triggered again. */
@@ -142,14 +155,16 @@ public:
 	/**
 	 * Save-game load (Godot SaveManager _deserialize_game_state sets is_combat_phase_unlocked / is_preparation_active /
 	 * is_wave_active / current_wave_index): Exploration before the combat, otherwise the preparation of the saved wave
-	 * (an active wave is resumed from its preparation — enemies are not saved, like in Godot). bInAmbushFight: the fight
+	 * (an active wave is resumed from its preparation — enemies are not saved, like in Godot; a save from the rest between waves,
+	 * InPreparationSeconds > 0 and wave 2+, resumes that rest, 2026-10-25). bInAmbushFight: the fight
 	 * being resumed started by ambush (audit 2026-10-19: saved as is_ambush_fight, it was never read back).
 	 */
 	void RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex, float InPreparationSeconds = -1.f, bool bInAmbushFight = false);
 
 	/**
-	 * Advances real-time timers: pause cooldown, tactical pause (not the free one), preparation. A preparation of a
-	 * sudden wave (restored by a save load) ends on the first tick: the wave starts suddenly (awaiting its intro).
+	 * Advances real-time timers: pause cooldown, tactical pause (not the free one), preparation / rest (when it runs out the wave
+	 * starts, a sudden one awaiting its horde intro). A preparation of a sudden wave restored by a save load from its fight (not
+	 * from its rest) ends on the first tick: the wave starts suddenly.
 	 */
 	void Tick(float RealDeltaSeconds);
 
@@ -162,6 +177,8 @@ private:
 	void SetState(ECodexGamePhase NewPhase, ECodexCombatMode NewMode);
 	/** Starts wave WaveIndex in real time; bSudden arms the horde intro (IsAwaitingHordeIntro). */
 	void StartWave(bool bSudden = false);
+	/** A cleared wave that is not the fight's last: Preparation (the rest) of the next wave, which starts on its own (2026-10-25). */
+	void BeginRestBeforeNextWave();
 	void ReleaseTacticalPause();
 
 	FGameFlowConfig Config;
@@ -180,5 +197,7 @@ private:
 	bool bFreePause = false;
 	/** A sudden wave started and its free pause has not opened yet. */
 	bool bAwaitingHordeIntro = false;
+	/** The running Preparation is the rest between waves: it counts down for a sudden wave too (else such a wave starts at once). */
+	bool bRestCountdown = false;
 	int32 SuddenStartOverride = -1;
 };

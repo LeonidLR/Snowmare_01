@@ -22,8 +22,9 @@ bool FFightEndLastWaveTest::RunTest(const FString&)
 	TestEqual(TEXT("wave 1 starts"), Machine.TriggerCombatZone(), EGameFlowResult::Ok);
 	TestFalse(TEXT("wave 1 of 2 is not the final fight"), Machine.IsFinalFight());
 	TestEqual(TEXT("wave 1 cleared"), Machine.NotifyWaveCleared(), EGameFlowResult::Ok);
-	TestEqual(TEXT("... between waves the panel (\"Start the next wave\") stays"), Machine.GetPhase(), ECodexGamePhase::WaveCleared);
-	TestEqual(TEXT("next wave"), Machine.AdvanceAfterWave(), EGameFlowResult::Ok);
+	// 2026-10-25: no panel between waves either (CodexTactics.GameFlow.AutoNextWave.*): the rest, then the wave by itself.
+	TestTrue(TEXT("... between waves: the rest, no panel"), Machine.IsRestBetweenWaves());
+	Machine.Tick(Config.WaveRestDuration + 0.1f);
 	TestTrue(TEXT("wave 2 is the final fight"), Machine.IsFinalFight() && Machine.GetPhase() == ECodexGamePhase::WaveCombat);
 	TestEqual(TEXT("the last wave cleared"), Machine.NotifyWaveCleared(), EGameFlowResult::Ok);
 	TestEqual(TEXT("... straight to PostCombat: no panel, no button"), Machine.GetPhase(), ECodexGamePhase::PostCombat);

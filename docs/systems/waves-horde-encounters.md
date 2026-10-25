@@ -1,6 +1,8 @@
 # Game flow, waves, horde intro and encounters
 
-> `GameFlow/*` runs the phases and time dilation; a wave starts suddenly (the horde intro opens a free tactical pause with a flyover). Enemies placed in a
+> `GameFlow/*` runs the phases and time dilation; a wave starts suddenly (the horde intro opens a free tactical pause; the camera flyover only for the
+> level's first horde and for enemy types never shown on the level, 2026-10-25); between waves the rest runs and the next wave comes by itself (no
+> "Start the next wave", 2026-10-25). Enemies placed in a
 > map start the ambush fight on contact (`ULevelEncounterSubsystem`); placed enemies without a route guard their post.
 >
 > Key files:
@@ -21,6 +23,48 @@ guide arrow's rule), in the WaveCombat phase (turn-based fights too: the guide a
 regroup 10 Hz (`RefreshIntervalSeconds`), the projection every frame, no world scans. The three tunables are UPROPERTYs of the widget (a Widget
 Blueprint subclass / the HUD class sets them). Tips are spread (`SpreadTips`, 56 px) so two red arrows or a red + the amber guide arrow never sit on
 one spot. Tests `CodexTactics.UI.HordeArrows.Groups / SpreadTips`; smoke `HordeArrowsSmoke` (`shot` argument: a rendered still).
+## Waves break through on their own: no "Start the next wave" (game designer 2026-10-25)
+"When a wave ends, remove the plate with the text «Start the next wave». The waves must break through on their own."
+`FGameFlowStateMachine::NotifyWaveCleared` of a wave that is NOT the fight's last (`IsFinalFight` false) now goes **WaveCombat -> the rest
+before the next wave** (`BeginRestBeforeNextWave`: `WaveIndex + 1`, `Preparation`, `PreparationTimeRemaining = WaveRestDuration` = level
+JSON `wave_rest_duration` (20 s on every level), pause charges back, the world runs - no `WaveCleared` phase, no victory panel, time never
+stopped). When the rest runs out (`Tick`) the wave starts by itself: a sudden wave (`UsesSuddenStart`) awaiting its horde intro, a prepared
+one (`"sudden_start": false`) in real time. A sudden wave counts the rest down too (`bRestCountdown`; before, a sudden wave never had a rest:
+it started on the click). The last wave still goes straight to PostCombat (2026-10-22), a single ambush fight too, skirmishes to Exploration.
+| Where | What changed |
+|---|---|
+| `FGameFlowConfig::bVictoryPanelBetweenWaves` | default false; true restores Godot's panel between waves (`WaveCleared`, time stopped, «Start the next wave (N/M)» -> `AdvanceAfterWave`). |
+| HUD (`UPhaseBannersWidget`) | the «Start Battle» button only in the preparation before the FIRST wave (`OffersStartBattle`: a level's own prepared start stays as designed); in the rest the combat banner reads `NEXT WAVE IN: NN sec` (`IsRestBetweenWaves`), no button. The victory panel (`UVictoryPanelWidget`) only shows in `WaveCleared`, which the default flow never reaches. |
+| Feed / mission | "Wave N cleared. Regroup!" (`UWaveVictorySubsystem`, also on WaveCombat -> Preparation), the HQ rest radio "Prepare for the next wave! You have N seconds to regroup." and the objective "PREPARATION: N sec until wave M" (`UMissionSubsystem`, unchanged - they already belonged to the rest). |
+| Fire posture | `FirePostureRules::ClearsProvocation(Preparation)`: the fight's provocation ends in the rest (it ended on the panel before). |
+| Saves | a save in the rest (allowed: Preparation) stores `preparation_time_left`; the load resumes THAT rest (`RestoreForLoad`: wave 2+ with seconds left -> `bRestCountdown`), then the wave comes by itself. A save from the fight still resumes the wave at once (sudden) as before. |
+| Bot / smokes | `FinishPreparation` still cuts the rest short (the bot does, as it used to click at once); the HUD no longer offers it there. |
+| Unchanged | the first fight start per level (the lake: the console quest `QuestStep.GatePowered` -> `combat_start: "button"` level, sudden wave 1; a level with a prepared start keeps cutscene + «Start Battle»), the gate (`IsFinalWaveCleared` only after the final wave; in the rest the wave index is already the next one, like the old rest), the exit flows (PostCombat), the tutorial (no step waited for the button - checked `demo_01_steps.json`). |
+Tests `CodexTactics.GameFlow.AutoNextWave.*` (`ClearedWaveRestsThenTheNextBreaksThrough`, `PreparedStartKeepsItsFirstButtonOnly`,
+`AmbushPanelOptionAndRestRules`), `CodexTactics.Combat.HordeIntro.FreePause.NextWaveComesSuddenlyAfterTheRest` / `.LoadedPreparationStartsTheWaveSuddenly`,
+`GameFlow.FightEnd.LastWaveNoPanel`; the classic `GameFlow.Phases.*` tests run with the Godot panel on. Smokes: `HordeIntroSmoke` stage 4-5 (wave 1 cleared ->
+rest, no panel / button / `WaveCleared`, banner "NEXT WAVE IN", nobody clicks, wave 2 breaks through after the 20 s rest), `GateExitLakeSmoke` (the lake's two
+rests run out by themselves, then the exit), `VictorySmoke`, `GateGeneratorSmoke`, `SaveRoundTripSmoke` (F5 in the rest resumes the rest).
+## The horde flyover only once per level (game designer 2026-10-25)
+"When the horde approaches, the camera flyover must happen only once. It shows the first wave, shows its enemies, and that's it. All
+following waves are no longer shown. Only if there are new unique enemies, show that new unique enemy. Nothing else is shown."
+`UHordeIntroSubsystem` keeps a per-LEVEL memory (`FHordeIntroMemory`: `bWideShotShown`, `ShownTypes`; it was a per-fight set reset in
+Exploration / the first preparation). `HordeIntroRules::BuildShotList(Types, Memory, Config)`:
+| Wave | Flyover |
+|---|---|
+| the level's first horde (no wide shot flown yet) | wide shot of the running mass + a close shot per type (spawn order, `MaxTypeShots`) + return - as before |
+| later, with a type never shown on this level | ONLY that type's close shot(s) + return - no wide shot |
+| later, every type known | no flyover at all |
+`HordeIntroRules::RememberShots` marks the wide shot / the types when a flyover STARTS (a skip by Esc / a click / Space counts as shown); a free pause
+opened before the trigger (Space / Esc) flies nothing and remembers nothing. `RepeatWideShotSeconds` (and `Codex.HordeIntro.RepeatWideShotSeconds`) is gone.
+**Kept on every sudden wave (choice 2026-10-25):** the trigger when the horde becomes a running mass, the «HORDE INCOMING / TACTICAL PAUSE - GIVE YOUR ORDERS»
+alert, the HQ feed line and the FREE tactical pause (no charge, no timer) - the designer named only the camera; the pause is the player's planning moment of
+every wave and the alert says why time stopped. `OnHordeIntroStarted(Wave, bFlyover)` fires with `bFlyover` false for a wave without a flyover.
+**Saved:** `game_state.horde_intro` {`wide_shown`, `shown_types` [enum names]} (`USaveGameSubsystem`, restore step 6 GameState; older saves: empty = the
+level's first horde flies over again) - a load / checkpoint retry / F9 never repeats a flyover already seen; a level restart or the next campaign level
+starts with an empty memory. Tests `CodexTactics.Combat.HordeIntro.ShotList.WideOnceThenOnlyNewTypesOnThisLevel`; smokes `HordeIntroSmoke` (wave 1: wide +
+hound + frostbitten; wave 2: only the new cutter / marksman shots, no wide; wave 3 of known types after a load: alert + free pause, NO flyover),
+`SaveRoundTripSmoke` / `SaveCoverageSmoke` (the memory round trip).
 
 ## Skirmishes and the Susanin switch (2026-10-21)
 
@@ -48,8 +92,8 @@ other zombie keeps patrolling), `AmbushSmoke`, `PatrolAmbushSmoke`, `LevelWaveSm
 when the cleared wave is the fight's last (`IsFinalFight`: wave >= `TotalWaves`, or an ambush fight with `bAmbushSingleFight`) the flow goes
 **WaveCombat -> PostCombat at once** (time keeps running, the squad stays put, enemies / deployables cleaned up, victory dialogue in the feed,
 HQ "all N waves repelled" line - `UWaveVictorySubsystem` posts it on that path too). `FGameFlowConfig::bVictoryPanelAfterLastWave` (default
-false) restores the Godot panel. Skirmishes were already panel-less (straight to Exploration). **Unchanged:** the panel BETWEEN waves of a
-multi-wave fight ("Start the next wave (N/M)", time stopped until the click) - the lake's waves 1 and 2 still show it. What other levels rely on:
+false) restores the Godot panel. Skirmishes were already panel-less (straight to Exploration). The panel BETWEEN waves of a
+multi-wave fight ("Start the next wave (N/M)") stayed until 2026-10-25 - gone too since (section "Waves break through on their own" above). What other levels rely on:
 PostCombat itself (victory dialogue, "after victory" objective, the gate's "final wave cleared" latch, the bot's VICTORY, saves) - all reached
 the same way; only the kill-statistics card of the last wave is no longer shown. The level end through the open gate: [demo01-lake](demo01-lake.md)
 block 2026-10-22 c. Tests `CodexTactics.GameFlow.FightEnd.LastWaveNoPanel`; smokes `VictorySmoke`, `GateGeneratorSmoke`, `HordeIntroSmoke`, `GateExitLakeSmoke`.
@@ -94,7 +138,9 @@ block 2026-10-22 c. Tests `CodexTactics.GameFlow.FightEnd.LastWaveNoPanel`; smok
   on real time at `FlyoverTimeDilation` 0.2: wide shot of the running mass (moving anchor 80 % towards it, 20..40 m, seen from the
   squad's side turned 25 deg: `ATacticalCameraPawn::SetCinematicYaw`, 3 s), a close tracking shot (7 m, 2.5 s) of a running
   front-runner per type not shown in this fight (spawn order), the glide back to the leader (1 s, player yaw restored); (4) the
-  world settles into the free pause (0.02). Known types only: a 2.5 s wide shot + return. Esc / click skip the flyover (camera
+  world settles into the free pause (0.02). Known types only: a 2.5 s wide shot + return. **Superseded 2026-10-25:** the memory is the
+  level's (not the fight's), the wide shot only on the level's first flyover, later waves only a new type's shot, known types no flyover
+  (section "The horde flyover only once per level" above). Esc / click skip the flyover (camera
   snaps to the leader, free pause). Camera input locked meanwhile, camera zones step aside, the line of sight shows the whole
   horde (`UTacticalSightSubsystem::SetCinematicReveal`). Hooks for a later HUD effect: `OnHordeIntroStarted(Wave, bFlyover)` /
   `OnHordeIntroFinished(Wave, bSkipped)` (BlueprintAssignable). The bot orders its defences and dismisses the intro (real time).
@@ -104,9 +150,10 @@ block 2026-10-22 c. Tests `CodexTactics.GameFlow.FightEnd.LastWaveNoPanel`; smok
 - **Sudden horde start data (2026-10-11).** Level JSON per wave `"sudden_start"` (bool, default true when missing; Wave Editor
   card button «ВНЕЗАПНАЯ АТАКА» / «С ПОДГОТОВКОЙ»): false keeps the old start of that wave. `prep_phase_duration` /
   `wave_rest_duration` stay parsed but only matter for such waves. No level sets it yet, so every horde wave starts suddenly.
+  (2026-10-25: `wave_rest_duration` is now the rest between ANY two waves - the next wave comes by itself when it runs out.)
   Tuning is console-only for now (`Codex.HordeIntro.*`): SuddenStart -1, Enabled -1, PreTriggerTimeDilation 1, MassMovingFraction
   0.6, MassMinSpeed 250, MassHoldSeconds 0.4, MinDelaySeconds 2.5, MaxWaitSeconds 6, FlyoverTimeDilation 0.2, WideShotSeconds 3,
-  RepeatWideShotSeconds 2.5, TypeShotSeconds 2.5, ShotBlendSeconds 0.7, ReturnBlendSeconds 1, TypeShotDistance 700,
+  (RepeatWideShotSeconds removed 2026-10-25) TypeShotSeconds 2.5, ShotBlendSeconds 0.7, ReturnBlendSeconds 1, TypeShotDistance 700,
   WideMinDistance 2000, WideMaxDistance 4000, WideFocusBias 0.8, ViewSideDegrees 25, AlertSeconds 3. Each wave logs a
   `[HordeIntro] N s: ... moving, mean ... cm/s, ... % running at the squad` trace for tuning.
 

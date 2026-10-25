@@ -12,7 +12,9 @@
  *     MassMinSpeed for MassHoldSeconds, not before MinDelaySeconds; MaxWaitSeconds at the latest) the free tactical pause
  *     opens, the big «HORDE INCOMING» alert shows and the camera flies over the horde in dramatic slow motion
  *     (FlyoverTimeDilation, not the 0.02 pause): a wide shot of the running mass seen from in front, then a close tracking
- *     shot of a running front-runner of every type not yet shown in this fight, then back to the leader;
+ *     shot of a running front-runner of every type not yet shown on this level, then back to the leader. Game designer
+ *     2026-10-25: the wide shot only for the level's FIRST flyover; a later wave flies only to the types never shown on the level
+ *     (no wide shot), a wave of known types has no flyover (the alert and the free pause stay) - FHordeIntroMemory, saved;
  *  3. the world settles into the free pause (0.02, no charge, no timer).
  * Esc / a click skip the flyover (camera back on the leader, free pause). Applied by UHordeIntroSubsystem; tested in
  * CodexTactics.Combat.HordeIntro.*; console overrides Codex.HordeIntro.*.
@@ -35,10 +37,8 @@ struct CODEXTACTICS_API FHordeIntroConfig
 	float MaxWaitSeconds = 6.f;
 	/** World time dilation during the flyover: the horde visibly runs in slow motion. */
 	float FlyoverTimeDilation = 0.2f;
-	/** Real seconds of the wide shot of the running mass. */
+	/** Real seconds of the wide shot of the running mass (the level's first flyover only, 2026-10-25). */
 	float WideShotSeconds = 3.f;
-	/** Real seconds of the wide shot of a wave whose types were all shown before in this fight. */
-	float RepeatWideShotSeconds = 2.5f;
 	/** Real seconds of each per-type tracking shot. */
 	float TypeShotSeconds = 2.5f;
 	/** The camera glides into each shot over this many real seconds (part of the shot's time). */
@@ -76,6 +76,19 @@ struct CODEXTACTICS_API FHordeIntroConfig
 	/** The «HORDE INCOMING» alert stays at least this long (real s), fading in / out over AlertFadeSeconds. */
 	float AlertSeconds = 3.f;
 	float AlertFadeSeconds = 0.5f;
+};
+
+/**
+ * What the horde intro has shown on THIS level (game designer 2026-10-25: "the flyover happens only once - it shows the first wave
+ * and its enemies; the following waves are not shown, only a new unique enemy"). Lives as long as the level (UHordeIntroSubsystem)
+ * and goes into the save (game_state.horde_intro), so a load / a checkpoint retry does not fly over again.
+ */
+struct FHordeIntroMemory
+{
+	/** The wide shot of the running horde was flown (the level's first flyover started). */
+	bool bWideShotShown = false;
+	/** Enemy types whose close shot was flown on this level. */
+	TSet<EEnemyArchetype> ShownTypes;
 };
 
 /** A camera view for the framing rules: where it stands, where it looks, its vertical field of view and aspect. */
@@ -148,12 +161,19 @@ namespace HordeIntroRules
 	CODEXTACTICS_API TArray<EEnemyArchetype> UniqueTypesInOrder(const TArray<EEnemyArchetype>& Spawned);
 
 	/**
-	 * The flyover of a wave: a wide shot of the running mass (WideShotSeconds, or RepeatWideShotSeconds when no type is
-	 * new), one Type shot per type of PresentTypes not in AlreadyShown (MaxTypeShots at most), then Return. Nothing
-	 * without enemies or with the flyover off.
+	 * The flyover of a wave (game designer 2026-10-25): the level's first one = a wide shot of the running mass (WideShotSeconds),
+	 * one Type shot per type of PresentTypes (MaxTypeShots at most), then Return; once Shown.bWideShotShown only a Type shot per
+	 * type not in Shown.ShownTypes, then Return - and nothing at all when every type is known. Nothing without enemies or with the
+	 * flyover off.
 	 */
 	CODEXTACTICS_API TArray<FHordeIntroShot> BuildShotList(const TArray<EEnemyArchetype>& PresentTypes,
-		const TSet<EEnemyArchetype>& AlreadyShown, const FHordeIntroConfig& Config);
+		const FHordeIntroMemory& Shown, const FHordeIntroConfig& Config);
+
+	/**
+	 * A flyover of Shots started: its wide shot and every type it flies to count as shown on the level from now on (also when the
+	 * player skips it - Esc / a click / Space; a free pause opened without a flyover remembers nothing).
+	 */
+	CODEXTACTICS_API void RememberShots(FHordeIntroMemory& Memory, const TArray<FHordeIntroShot>& Shots);
 
 	/** Real seconds of all shots. */
 	CODEXTACTICS_API float GetShotsSeconds(const TArray<FHordeIntroShot>& Shots);

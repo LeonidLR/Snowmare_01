@@ -9,7 +9,8 @@
 class AOperativeCharacter;
 
 /**
- * What happens around a cleared wave: the squad kill statistics, the victory panel's «next wave» button, and the
+ * What happens around a cleared wave: the squad kill statistics, the "wave cleared" feed line, the victory panel's «next wave»
+ * button (only with FGameFlowConfig::bVictoryPanelBetweenWaves - off since 2026-10-25, the next wave comes by itself), and the
  * post-combat sequence after the last wave (enemies removed, the squad back at its preparation spots, the commander
  * leads, surviving turrets / barricades / mines back into the supply with the engineer's feed line).
  * Godot reference: Scenes/movements/main.gd register_enemy_kill, _format_kill_stats_bbcode, _on_wave_cleared,

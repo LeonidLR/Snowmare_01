@@ -21,6 +21,7 @@ void FGameFlowStateMachine::Reset(const FGameFlowConfig& InConfig)
 	bAmbushFight = false;
 	bFreePause = false;
 	bAwaitingHordeIntro = false;
+	bRestCountdown = false;
 }
 
 bool FGameFlowStateMachine::UsesSuddenStart(int32 InWaveIndex) const
@@ -220,8 +221,25 @@ EGameFlowResult FGameFlowStateMachine::NotifyWaveCleared()
 		SetState(ECodexGamePhase::PostCombat, ECodexCombatMode::None);
 		return EGameFlowResult::Ok;
 	}
+	// Game designer 2026-10-25: no "Start the next wave" panel either - the rest before the next wave runs by itself and the wave
+	// breaks through when it is over (Tick).
+	if (!IsFinalFight() && !Config.bVictoryPanelBetweenWaves)
+	{
+		BeginRestBeforeNextWave();
+		return EGameFlowResult::Ok;
+	}
 	SetState(ECodexGamePhase::WaveCleared, ECodexCombatMode::None);
 	return EGameFlowResult::Ok;
+}
+
+void FGameFlowStateMachine::BeginRestBeforeNextWave()
+{
+	++WaveIndex;
+	PauseCharges = Config.TacticalPauseMaxCharges;
+	PauseCooldownRemaining = 0.f;
+	PreparationTimeRemaining = Config.WaveRestDuration;
+	bRestCountdown = true; // a sudden wave too waits for the rest to run out
+	SetState(ECodexGamePhase::Preparation, ECodexCombatMode::None);
 }
 
 bool FGameFlowStateMachine::IsFinalFight() const
@@ -278,6 +296,8 @@ void FGameFlowStateMachine::RestoreForLoad(bool bInCombatUnlocked, bool bInComba
 		if (InPreparationSeconds > 0.f)
 		{
 			PreparationTimeRemaining = FMath::Min(InPreparationSeconds, PreparationTimeRemaining);
+			// 2026-10-25: a save taken in the rest between waves resumes that rest (then the wave comes by itself, a sudden one too).
+			bRestCountdown = WaveIndex > 1;
 		}
 		SetState(ECodexGamePhase::Preparation, ECodexCombatMode::None);
 	}
@@ -292,6 +312,7 @@ void FGameFlowStateMachine::TriggerGameOver()
 {
 	PauseTimeRemaining = 0.f;
 	PreparationTimeRemaining = 0.f;
+	bRestCountdown = false;
 	bFreePause = false;
 	bAwaitingHordeIntro = false;
 	SetState(ECodexGamePhase::GameOver, ECodexCombatMode::None);
@@ -333,15 +354,15 @@ void FGameFlowStateMachine::Tick(float RealDeltaSeconds)
 	}
 	else if (Phase == ECodexGamePhase::Preparation)
 	{
-		if (UsesSuddenStart(WaveIndex))
+		if (UsesSuddenStart(WaveIndex) && !bRestCountdown)
 		{
-			StartWave(true); // a save load resumed this wave in its preparation: the horde comes now
+			StartWave(true); // a save load resumed this wave (taken in its fight / after it): the horde comes now
 			return;
 		}
 		PreparationTimeRemaining -= RealDeltaSeconds;
 		if (PreparationTimeRemaining <= 0.f)
 		{
-			StartWave();
+			StartWave(UsesSuddenStart(WaveIndex)); // the rest is over: the next wave breaks through on its own (2026-10-25)
 		}
 	}
 }
@@ -360,6 +381,7 @@ void FGameFlowStateMachine::SetState(ECodexGamePhase NewPhase, ECodexCombatMode 
 void FGameFlowStateMachine::StartWave(bool bSudden)
 {
 	PreparationTimeRemaining = 0.f;
+	bRestCountdown = false;
 	PauseCharges = Config.TacticalPauseMaxCharges;
 	PauseCooldownRemaining = 0.f;
 	TurnBasedUsesThisWave = 0;

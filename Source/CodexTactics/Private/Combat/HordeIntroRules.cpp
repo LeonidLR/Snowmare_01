@@ -25,8 +25,6 @@ namespace
 		TEXT("Horde flyover: world time scale while the camera flies over the horde (<0 = default 0.2)."));
 	TAutoConsoleVariable<float> CVarHordeIntroWide(TEXT("Codex.HordeIntro.WideShotSeconds"), -1.f,
 		TEXT("Horde flyover: real seconds of the wide shot before the per-type shots (<0 = default 3)."));
-	TAutoConsoleVariable<float> CVarHordeIntroRepeatWide(TEXT("Codex.HordeIntro.RepeatWideShotSeconds"), -1.f,
-		TEXT("Horde flyover: wide shot of a wave with no new enemy types, real s (<0 = default 2.5; 0 = no flyover then)."));
 	TAutoConsoleVariable<float> CVarHordeIntroType(TEXT("Codex.HordeIntro.TypeShotSeconds"), -1.f,
 		TEXT("Horde flyover: real seconds of each per-type shot (<0 = default 2.5)."));
 	TAutoConsoleVariable<float> CVarHordeIntroBlend(TEXT("Codex.HordeIntro.ShotBlendSeconds"), -1.f,
@@ -77,7 +75,6 @@ FHordeIntroConfig HordeIntroRules::GetConfig()
 	HordeIntroOverride(Config.MaxWaitSeconds, CVarHordeIntroMaxWait);
 	HordeIntroOverride(Config.FlyoverTimeDilation, CVarHordeIntroFlyoverDilation);
 	HordeIntroOverride(Config.WideShotSeconds, CVarHordeIntroWide);
-	HordeIntroOverride(Config.RepeatWideShotSeconds, CVarHordeIntroRepeatWide);
 	HordeIntroOverride(Config.TypeShotSeconds, CVarHordeIntroType);
 	HordeIntroOverride(Config.ShotBlendSeconds, CVarHordeIntroBlend);
 	HordeIntroOverride(Config.ReturnBlendSeconds, CVarHordeIntroReturn);
@@ -115,7 +112,7 @@ TArray<EEnemyArchetype> HordeIntroRules::UniqueTypesInOrder(const TArray<EEnemyA
 }
 
 TArray<FHordeIntroShot> HordeIntroRules::BuildShotList(const TArray<EEnemyArchetype>& PresentTypes,
-	const TSet<EEnemyArchetype>& AlreadyShown, const FHordeIntroConfig& Config)
+	const FHordeIntroMemory& Shown, const FHordeIntroConfig& Config)
 {
 	TArray<FHordeIntroShot> Shots;
 	if (!Config.bEnabled || PresentTypes.IsEmpty())
@@ -125,19 +122,24 @@ TArray<FHordeIntroShot> HordeIntroRules::BuildShotList(const TArray<EEnemyArchet
 	TArray<EEnemyArchetype> NewTypes;
 	for (const EEnemyArchetype Type : UniqueTypesInOrder(PresentTypes))
 	{
-		if (!AlreadyShown.Contains(Type) && NewTypes.Num() < FMath::Max(0, Config.MaxTypeShots))
+		if (!Shown.ShownTypes.Contains(Type) && NewTypes.Num() < FMath::Max(0, Config.MaxTypeShots))
 		{
 			NewTypes.Add(Type);
 		}
 	}
-	const float WideSeconds = NewTypes.IsEmpty() ? Config.RepeatWideShotSeconds : Config.WideShotSeconds;
-	if (WideSeconds <= 0.f && NewTypes.IsEmpty())
+	// Game designer 2026-10-25: the wide shot of the running horde only for the level's first flyover; later waves fly only to a
+	// type never shown on this level - and a wave of known types has no flyover at all.
+	if (Shown.bWideShotShown && NewTypes.IsEmpty())
 	{
-		return Shots; // a wave of known types without a repeat wide shot: no flyover
+		return Shots;
 	}
-	if (WideSeconds > 0.f)
+	if (!Shown.bWideShotShown && Config.WideShotSeconds > 0.f)
 	{
-		Shots.Add({ EHordeIntroShotKind::Wide, EEnemyArchetype::Base, WideSeconds });
+		Shots.Add({ EHordeIntroShotKind::Wide, EEnemyArchetype::Base, Config.WideShotSeconds });
+	}
+	if (Shots.IsEmpty() && NewTypes.IsEmpty())
+	{
+		return Shots; // the first flyover with the wide shot switched off and nothing new: nothing to show
 	}
 	for (const EEnemyArchetype Type : NewTypes)
 	{
@@ -145,6 +147,21 @@ TArray<FHordeIntroShot> HordeIntroRules::BuildShotList(const TArray<EEnemyArchet
 	}
 	Shots.Add({ EHordeIntroShotKind::Return, EEnemyArchetype::Base, FMath::Max(0.1f, Config.ReturnBlendSeconds) });
 	return Shots;
+}
+
+void HordeIntroRules::RememberShots(FHordeIntroMemory& Memory, const TArray<FHordeIntroShot>& Shots)
+{
+	for (const FHordeIntroShot& Shot : Shots)
+	{
+		if (Shot.Kind == EHordeIntroShotKind::Wide)
+		{
+			Memory.bWideShotShown = true;
+		}
+		else if (Shot.Kind == EHordeIntroShotKind::Type)
+		{
+			Memory.ShownTypes.Add(Shot.Archetype);
+		}
+	}
 }
 
 float HordeIntroRules::GetShotsSeconds(const TArray<FHordeIntroShot>& Shots)

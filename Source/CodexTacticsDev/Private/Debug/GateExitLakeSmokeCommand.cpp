@@ -7,8 +7,9 @@
 //  0. the lake: one blast door (generator_waves), the exit enabled, not armed; the A4 zombies parked, the tutorial skipped (its cards
 //     and locks are not part of this check), the beat checkpoints off;
 //  1. the quest chain done through the dev shortcut (UQuestSubsystem::RestoreState: jerrycan, diesel, generator, console) - the door
-//     only unlocks; the squad in the yard; the sudden waves 1..3 started and killed: between waves the panel ("next wave"), after the
-//     LAST wave no panel / button - straight to post-combat (2026-10-22);
+//     only unlocks; the squad in the yard; the sudden waves 1..3 started and killed: between waves NO panel (2026-10-25) - the rest
+//     runs out and the next wave breaks through on its own (nobody clicks), after the LAST wave no panel / button - straight to
+//     post-combat (2026-10-22);
 //  2. the generator is up: the door opens fully after the last wave; the exit arms only once the leaves are fully open (never while
 //     they slide); the exit line's outward side is the road (the gate's +X, away from the yard's CombatStart);
 //  3. the squad 8 m inside; the leader and the second run out through the doorway, the third holds (guard) - two of three out: no
@@ -129,7 +130,9 @@ namespace GateExitLakeSmoke
 		float FirstArrivalFade = -1.f;
 		float FirstArrivalRealTime = -1.f;
 		int32 LastWave = 0;
-		bool bPanelBetweenWaves = false;
+		/** Rests between waves that ran out by themselves (2026-10-25: no "next wave" panel). */
+		int32 RestsRunOut = 0;
+		bool bInRest = false;
 		bool bSawTwoOutNoFade = false;
 		bool bFirstTwoOrdered = false;
 		bool bArmedWhileSliding = false;
@@ -606,30 +609,41 @@ namespace GateExitLakeSmoke
 				{
 					SmokeUtils::ReleaseHordeIntroPause(Flow);
 				}
+				if (State.bInRest)
+				{
+					State.bInRest = false;
+					++State.RestsRunOut;
+					Check(State, Flow->GetWaveIndex() == State.LastWave + 1, FString::Printf(TEXT("the rest ran out: wave %d broke through on its own"),
+						Flow->GetWaveIndex()));
+				}
 				State.LastWave = Flow->GetWaveIndex();
 				KillWave(World);
 				return true;
 			}
 			if (Flow->GetPhase() == ECodexGamePhase::WaveCleared)
 			{
-				if (State.StageTime < 0.3f)
+				Check(State, false, FString::Printf(TEXT("wave %d stopped on the victory panel (2026-10-25: the next wave comes by itself)"),
+					Flow->GetWaveIndex()));
+				return Finish(State, false);
+			}
+			if (Flow->IsRestBetweenWaves())
+			{
+				if (!State.bInRest)
 				{
-					return true;
+					const APlayerController* PC = World->GetFirstPlayerController();
+					const ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+					const UVictoryPanelWidget* Panel = Hud ? Hud->GetVictoryPanel() : nullptr;
+					Check(State, (!Panel || !Panel->IsShown()) && Flow->GetWaveIndex() == State.LastWave + 1,
+						FString::Printf(TEXT("wave %d of %d cleared: the rest before wave %d (%.0f s), no \"next wave\" panel"), State.LastWave,
+							Flow->GetConfig().TotalWaves, Flow->GetWaveIndex(), Flow->GetPreparationTimeRemaining()));
+					State.bInRest = true;
 				}
-				const APlayerController* PC = World->GetFirstPlayerController();
-				const ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
-				const UVictoryPanelWidget* Panel = Hud ? Hud->GetVictoryPanel() : nullptr;
-				const bool bLast = Flow->GetWaveIndex() >= Flow->GetConfig().TotalWaves;
-				Check(State, !bLast && (!Panel || Panel->IsShown()), FString::Printf(TEXT("wave %d of %d cleared: the between-waves panel (\"next wave\")"),
-					Flow->GetWaveIndex(), Flow->GetConfig().TotalWaves));
-				State.bPanelBetweenWaves = true;
-				Victory->ContinueAfterWave();
-				State.StageTime = 0.f;
-				return true;
+				// Nobody clicks: the rest runs out and the wave breaks through on its own.
+				return State.StageTime < 120.f || Finish(State, false);
 			}
 			if (Flow->GetPhase() == ECodexGamePhase::PostCombat)
 			{
-				Check(State, State.LastWave == Flow->GetConfig().TotalWaves && State.LastWave == 3 && State.bPanelBetweenWaves,
+				Check(State, State.LastWave == Flow->GetConfig().TotalWaves && State.LastWave == 3 && State.RestsRunOut == 2,
 					FString::Printf(TEXT("the last wave (%d of %d) went straight to post-combat - no panel, no \"End combat\" button"), State.LastWave,
 						Flow->GetConfig().TotalWaves));
 				Next(State, EStage::GateOpening);

@@ -33,6 +33,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/SplineComponent.h"
 #include "Containers/Ticker.h"
@@ -640,6 +641,14 @@ namespace SaveRoundTripSmoke
 			Tutorial->HandlePlayerCommand(PlayerCommands::Guard, FPlayerCommandContext());
 			Tutorial->SkipStep(TEXT("rt_skip"));
 		}
+		// 2026-10-25: the level's horde flyover memory (the wide shot flown, two types shown) - a load must not fly over again.
+		if (UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+		{
+			FHordeIntroMemory Memory;
+			Memory.bWideShotShown = true;
+			Memory.ShownTypes = { EEnemyArchetype::FrostHound, EEnemyArchetype::Brute };
+			Intro->RestoreMemory(Memory);
+		}
 		return true;
 	}
 
@@ -668,6 +677,10 @@ namespace SaveRoundTripSmoke
 			FString::Printf(TEXT("save info: version %d, map %s"), Info.Version, *Info.MapName));
 
 		// Mutate everything.
+		if (UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+		{
+			Intro->RestoreMemory(FHordeIntroMemory()); // the level's horde flyover memory forgotten
+		}
 		UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>();
 		if (Tutorial)
 		{
@@ -868,6 +881,10 @@ namespace SaveRoundTripSmoke
 		Check(State, Searcher && Searcher->IsSearching(), TEXT("frostbitten still searching"));
 		Check(State, Squad->GetEffectivePosture(Engineer) == ESquadFirePosture::Defensive && Squad->GetSquadPosture() == ESquadFirePosture::Passive,
 			TEXT("postures back (squad Passive, engineer Defensive)"));
+		const UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>();
+		Check(State, Intro && Intro->GetMemory().bWideShotShown && Intro->GetMemory().ShownTypes.Num() == 2
+			&& Intro->GetMemory().ShownTypes.Contains(EEnemyArchetype::Brute),
+			TEXT("the level's horde flyover memory back (wide shot flown, hound + brute shown: no second flyover after a load)"));
 	}
 
 	// --- Stage 2: save policy; rev 5f: no automatic saves ---
@@ -917,15 +934,21 @@ namespace SaveRoundTripSmoke
 
 		Check(State, Flow->NotifyWaveCleared() == EGameFlowResult::Ok && Saves->GetWrittenSaveCount() == WrittenBefore && CountSaveFiles(*Saves) == FilesBefore,
 			TEXT("no autosave when the wave is cleared (rev 5f)"));
-		Check(State, Saves->CanSaveNow() && Saves->QuickSave() && SavedPhase(ReadSaveFile(*Saves, TEXT("quicksave"))) == TEXT("WaveCleared"),
-			TEXT("after the wave: F5 allowed, the quicksave holds WaveCleared"));
+		// 2026-10-25: no victory panel between waves - the cleared wave is the rest before wave 2 (Preparation, the countdown running).
+		const float RestLeft = Flow->GetPreparationTimeRemaining();
+		Check(State, Flow->IsRestBetweenWaves() && Saves->CanSaveNow() && Saves->QuickSave()
+			&& SavedPhase(ReadSaveFile(*Saves, TEXT("quicksave"))) == TEXT("Preparation"),
+			TEXT("after the wave: the rest before wave 2, F5 allowed, the quicksave holds Preparation"));
 		const FGameFlowConfig& Config = Flow->GetConfig();
-		const FSaveLoadFlow Expected = SaveGameRules::ResolveLoadFlow(2, ECodexGamePhase::WaveCleared, true, false, false, 1, Config.TotalWaves, false,
+		const FSaveLoadFlow Expected = SaveGameRules::ResolveLoadFlow(2, ECodexGamePhase::Preparation, true, true, false, 2, Config.TotalWaves, false,
 			Config.bAmbushSingleFight);
 		const int32 WrittenBeforeLoad = Saves->GetWrittenSaveCount();
 		const bool bQuickLoaded = Saves->LoadGame(TEXT("quicksave"));
 		Check(State, bQuickLoaded && Flow->GetPhase() == Expected.Phase && Flow->GetWaveIndex() == Expected.WaveIndex,
 			FString::Printf(TEXT("the after-the-wave quicksave resumes %s of wave %d"), *UEnum::GetValueAsString(Flow->GetPhase()), Flow->GetWaveIndex()));
+		Check(State, Flow->IsRestBetweenWaves() && FMath::Abs(Flow->GetPreparationTimeRemaining() - RestLeft) < 0.5f,
+			FString::Printf(TEXT("... the rest goes on where it was saved (%.1f s left, saved %.1f): the wave then comes by itself"),
+				Flow->GetPreparationTimeRemaining(), RestLeft));
 		Check(State, Saves->GetWrittenSaveCount() == WrittenBeforeLoad, TEXT("loading writes no save"));
 
 		// Rev 5f: a legacy autosave file (written by an older build) stays on disk but is never listed / continued / F9-loaded.

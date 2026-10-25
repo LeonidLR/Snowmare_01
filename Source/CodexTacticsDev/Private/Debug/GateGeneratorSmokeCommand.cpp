@@ -343,13 +343,14 @@ namespace GateGeneratorSmoke
 				KillAll(World); // late spawns
 				return true;
 			}
-			if (Flow->GetPhase() != ECodexGamePhase::WaveCleared || State.StageTime < 0.5f)
+			// 2026-10-25: no victory panel between waves - the cleared wave goes into the rest before the next one (cut short here).
+			if (!Flow->IsRestBetweenWaves() || State.StageTime < 0.5f)
 			{
 				return true;
 			}
 			Check(State, !Gate->IsOpening() && !Gate->IsOpen() && Gate->GetOpenProgress() < 1.f,
-				FString::Printf(TEXT("wave %d cleared (not the last): the door stays shut (%.3f)"), Flow->GetWaveIndex(), Gate->GetOpenProgress()));
-			Victory->ContinueAfterWave();
+				FString::Printf(TEXT("wave %d cleared (not the last): the door stays shut in the rest (%.3f)"), Flow->GetWaveIndex() - 1, Gate->GetOpenProgress()));
+			Flow->FinishPreparation();
 			SmokeUtils::ReleaseHordeIntroPause(Flow);
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat, FString::Printf(TEXT("wave %d started"), Flow->GetWaveIndex()));
 			ParkEnemies(World);

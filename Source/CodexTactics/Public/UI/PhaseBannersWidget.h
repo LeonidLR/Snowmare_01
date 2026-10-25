@@ -12,7 +12,8 @@ class UTextBlock;
  * Game-phase banners, refreshed every frame from the game flow:
  * - pause banner (top centre): "ORDER MODE | Charges per wave: N/3 | Planning time: T s [SPACE to execute]";
  * - combat banner (below it): "BATTLE PREPARATION: NN sec | [SPACE] for the bottom menu" + "Start Battle" during the
- *   preparation, "WAVE N | ENEMIES LEFT: M" during a wave;
+ *   preparation before the first wave, "NEXT WAVE IN: NN sec" (no button: the wave comes by itself, game designer 2026-10-25)
+ *   during the rest between waves, "WAVE N | ENEMIES LEFT: M" during a wave;
  * - pre-combat cutscene: letterbox bars, card "[CUTSCENE: BREAKTHROUGH INTO THE QUARANTINE COURTYARD]", countdown; a click skips it.
  * Godot reference: movements_demo.tscn UI/PauseBanner, UI/CombatBanner, UI/CutscenePanel; main.gd _process banner
  * texts, _update_pause_banner_ui, _end_cutscene_and_start_pause.
@@ -30,6 +31,8 @@ public:
 	FText GetPauseText() const;
 	FText GetCombatText() const;
 	bool IsCutsceneShown() const;
+	/** The «Start Battle» button is visible (only before the first wave: UGameFlowSubsystem::OffersStartBattle). */
+	bool IsStartBattleShown() const;
 
 protected:
 	virtual void NativeOnInitialized() override;

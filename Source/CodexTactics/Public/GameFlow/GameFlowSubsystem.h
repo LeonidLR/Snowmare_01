@@ -68,6 +68,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	bool IsWaveActive() const { return Machine.IsWaveActive(); }
 
+	/** The rest between two waves (FGameFlowStateMachine::IsRestBetweenWaves): the next wave comes by itself, nothing to click. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	bool IsRestBetweenWaves() const { return Machine.IsRestBetweenWaves(); }
+
+	/** The HUD offers «Start Battle» now (FGameFlowStateMachine::OffersStartBattle: the preparation before the first wave only). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	bool OffersStartBattle() const { return Machine.OffersStartBattle(); }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	int32 GetPauseCharges() const { return Machine.GetPauseCharges(); }
 

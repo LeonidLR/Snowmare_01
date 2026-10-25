@@ -11,7 +11,8 @@
 
 // Sudden horde start (user decisions / feedback 2026-10-11; UE-only): the wave spawns at once into the running fight;
 // once the horde has become a running mass the FREE, untimed tactical pause opens (no charge spent) and a slow-motion
-// camera flyover shows the charging mass, then a running front-runner of every type not yet shown in this fight.
+// camera flyover shows the charging mass, then a running front-runner of every type not yet shown on this level. Game designer
+// 2026-10-25: the flyover with its wide shot only ONCE per level; later waves only fly to a type never shown on the level.
 
 #define HORDEINTRO_TEST(TestClass, TestPath) \
 	IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, "CodexTactics.Combat.HordeIntro." TestPath, \
@@ -49,7 +50,7 @@ bool FHordeIntroFirstWaveShotsTest::RunTest(const FString&)
 		EEnemyArchetype::FrostHound, EEnemyArchetype::Brute };
 	const TArray<EEnemyArchetype> Types = HordeIntroRules::UniqueTypesInOrder(Spawned);
 	TestEqual(TEXT("unique types in spawn order"), Types.Num(), 3);
-	const TArray<FHordeIntroShot> Shots = HordeIntroRules::BuildShotList(Types, TSet<EEnemyArchetype>(), Config);
+	const TArray<FHordeIntroShot> Shots = HordeIntroRules::BuildShotList(Types, FHordeIntroMemory(), Config);
 	TestEqual(TEXT("wide, hound, frostbitten, brute, return"), Labels(Shots),
 		FString(TEXT("wide type:FrostHound type:Frostbitten type:Brute return")));
 	TestEqual(TEXT("wide shot length"), Shots[0].Seconds, Config.WideShotSeconds);
@@ -63,36 +64,57 @@ bool FHordeIntroFirstWaveShotsTest::RunTest(const FString&)
 	return true;
 }
 
-HORDEINTRO_TEST(FHordeIntroShownTypesTest, "ShotList.OnlyTypesNotShownInThisFight")
+HORDEINTRO_TEST(FHordeIntroShownTypesTest, "ShotList.WideOnceThenOnlyNewTypesOnThisLevel")
 bool FHordeIntroShownTypesTest::RunTest(const FString&)
 {
+	// Game designer 2026-10-25: "the flyover happens only once - it shows the first wave and its enemies, and that's it. The following
+	// waves are not shown; only a new unique enemy is shown, nothing else."
 	const FHordeIntroConfig Config;
-	const TSet<EEnemyArchetype> Shown = { EEnemyArchetype::FrostHound };
-	const TArray<FHordeIntroShot> Shots = HordeIntroRules::BuildShotList({ EEnemyArchetype::FrostHound, EEnemyArchetype::Frostbitten }, Shown, Config);
-	TestEqual(TEXT("the hound was shown in wave 1: only the frostbitten"), Labels(Shots), FString(TEXT("wide type:Frostbitten return")));
-	TestEqual(TEXT("new types keep the full wide shot"), Shots[0].Seconds, Config.WideShotSeconds);
+	FHordeIntroMemory Level;
+	const TArray<FHordeIntroShot> First = HordeIntroRules::BuildShotList({ EEnemyArchetype::FrostHound, EEnemyArchetype::Frostbitten }, Level, Config);
+	TestEqual(TEXT("the level's first horde: wide + every type + return"), Labels(First),
+		FString(TEXT("wide type:FrostHound type:Frostbitten return")));
+	HordeIntroRules::RememberShots(Level, First);
+	TestTrue(TEXT("... remembered: the wide shot and both types"), Level.bWideShotShown && Level.ShownTypes.Num() == 2
+		&& Level.ShownTypes.Contains(EEnemyArchetype::FrostHound) && Level.ShownTypes.Contains(EEnemyArchetype::Frostbitten));
 
-	// Wave 2 with the same types: the wide shot of the running mass only, then back.
-	const TSet<EEnemyArchetype> All = { EEnemyArchetype::FrostHound, EEnemyArchetype::Frostbitten };
-	const TArray<FHordeIntroShot> Repeat = HordeIntroRules::BuildShotList({ EEnemyArchetype::Frostbitten, EEnemyArchetype::FrostHound }, All, Config);
-	TestEqual(TEXT("known types: short wide + return"), Labels(Repeat), FString(TEXT("wide return")));
-	TestEqual(TEXT("short wide shot"), Repeat[0].Seconds, Config.RepeatWideShotSeconds);
+	// Wave 2 with the same types: no flyover at all (the alert / free pause are the subsystem's).
+	TestEqual(TEXT("known types: no flyover"), HordeIntroRules::BuildShotList({ EEnemyArchetype::Frostbitten, EEnemyArchetype::FrostHound },
+		Level, Config).Num(), 0);
 
-	FHordeIntroConfig NoRepeat = Config;
-	NoRepeat.RepeatWideShotSeconds = 0.f;
-	TestEqual(TEXT("repeat wide 0: no flyover for known types"), HordeIntroRules::BuildShotList({ EEnemyArchetype::FrostHound }, All, NoRepeat).Num(), 0);
-	TestEqual(TEXT("but new types still get theirs"), Labels(HordeIntroRules::BuildShotList({ EEnemyArchetype::Cutter }, All, NoRepeat)),
-		FString(TEXT("wide type:Cutter return")));
+	// Wave 3 brings a cutter among known types: only the cutter's close shot, no wide shot.
+	const TArray<FHordeIntroShot> New = HordeIntroRules::BuildShotList({ EEnemyArchetype::FrostHound, EEnemyArchetype::Cutter,
+		EEnemyArchetype::Frostbitten }, Level, Config);
+	TestEqual(TEXT("a new type: only its shot, then back"), Labels(New), FString(TEXT("type:Cutter return")));
+	TestEqual(TEXT("... a full type shot"), New.IsEmpty() ? 0.f : New[0].Seconds, Config.TypeShotSeconds);
+	HordeIntroRules::RememberShots(Level, New);
+	TestTrue(TEXT("... the cutter is known now"), Level.ShownTypes.Contains(EEnemyArchetype::Cutter) && Level.ShownTypes.Num() == 3);
+	TestEqual(TEXT("the cutter again: nothing"), HordeIntroRules::BuildShotList({ EEnemyArchetype::Cutter }, Level, Config).Num(), 0);
+
+	// No wide shot flown yet (a free pause opened by Space before the trigger remembers nothing): the first real flyover has it.
+	FHordeIntroMemory Partial;
+	Partial.ShownTypes = { EEnemyArchetype::FrostHound };
+	TestEqual(TEXT("the first real flyover keeps its wide shot"),
+		Labels(HordeIntroRules::BuildShotList({ EEnemyArchetype::FrostHound, EEnemyArchetype::Spitter }, Partial, Config)),
+		FString(TEXT("wide type:Spitter return")));
+	FHordeIntroMemory Empty;
+	HordeIntroRules::RememberShots(Empty, {});
+	TestTrue(TEXT("no flyover: nothing remembered"), !Empty.bWideShotShown && Empty.ShownTypes.IsEmpty());
+
+	FHordeIntroConfig NoWide = Config;
+	NoWide.WideShotSeconds = 0.f;
+	TestEqual(TEXT("wide shot off: the first flyover = its types"), Labels(HordeIntroRules::BuildShotList({ EEnemyArchetype::Brute },
+		FHordeIntroMemory(), NoWide)), FString(TEXT("type:Brute return")));
 
 	FHordeIntroConfig Off = Config;
 	Off.bEnabled = false;
-	TestEqual(TEXT("flyover off: no shots"), HordeIntroRules::BuildShotList({ EEnemyArchetype::Brute }, TSet<EEnemyArchetype>(), Off).Num(), 0);
-	TestEqual(TEXT("no enemies: no shots"), HordeIntroRules::BuildShotList({}, TSet<EEnemyArchetype>(), Config).Num(), 0);
+	TestEqual(TEXT("flyover off: no shots"), HordeIntroRules::BuildShotList({ EEnemyArchetype::Brute }, FHordeIntroMemory(), Off).Num(), 0);
+	TestEqual(TEXT("no enemies: no shots"), HordeIntroRules::BuildShotList({}, FHordeIntroMemory(), Config).Num(), 0);
 
 	FHordeIntroConfig Capped = Config;
 	Capped.MaxTypeShots = 2;
 	TestEqual(TEXT("type shots capped"), Labels(HordeIntroRules::BuildShotList({ EEnemyArchetype::FrostHound, EEnemyArchetype::Spitter,
-		EEnemyArchetype::Brute }, TSet<EEnemyArchetype>(), Capped)), FString(TEXT("wide type:FrostHound type:Spitter return")));
+		EEnemyArchetype::Brute }, FHordeIntroMemory(), Capped)), FString(TEXT("wide type:FrostHound type:Spitter return")));
 	return true;
 }
 
@@ -243,7 +265,7 @@ bool FHordeIntroSpaceBeforeTriggerTest::RunTest(const FString&)
 	return true;
 }
 
-HORDEINTRO_TEST(FHordeIntroNextWaveTest, "FreePause.NextWaveComesSuddenlyWithoutRest")
+HORDEINTRO_TEST(FHordeIntroNextWaveTest, "FreePause.NextWaveComesSuddenlyAfterTheRest")
 bool FHordeIntroNextWaveTest::RunTest(const FString&)
 {
 	FGameFlowConfig Config;
@@ -254,12 +276,19 @@ bool FHordeIntroNextWaveTest::RunTest(const FString&)
 	Machine.ToggleTacticalPause();
 	Machine.ToggleTacticalPause(); // a normal pause: 2/3
 	TestEqual(TEXT("wave cleared from a pause"), Machine.NotifyWaveCleared(), EGameFlowResult::Ok);
-	TestEqual(TEXT("next wave"), Machine.AdvanceAfterWave(), EGameFlowResult::Ok);
-	TestEqual(TEXT("wave 2 at once"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
-	TestEqual(TEXT("wave index 2"), Machine.GetWaveIndex(), 2);
-	TestTrue(TEXT("its horde intro armed, real time"), Machine.IsAwaitingHordeIntro());
+	// Game designer 2026-10-25: no "Start the next wave" panel - the rest runs, then the wave breaks through on its own.
+	TestTrue(TEXT("the rest before wave 2 (no panel)"), Machine.IsRestBetweenWaves() && Machine.GetWaveIndex() == 2);
+	TestEqual(TEXT("the world runs in the rest"), Machine.GetTimeDilation(), 1.f);
 	TestEqual(TEXT("charges back to 3/3"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
-	TestEqual(TEXT("no rest countdown"), Machine.GetPreparationTimeRemaining(), 0.f);
+	TestEqual(TEXT("the rest countdown"), Machine.GetPreparationTimeRemaining(), Config.WaveRestDuration);
+	for (float Time = 0.f; Time < Config.WaveRestDuration - 0.5f; Time += 0.25f)
+	{
+		Machine.Tick(0.25f);
+	}
+	TestEqual(TEXT("a sudden wave waits for the rest"), Machine.GetPhase(), ECodexGamePhase::Preparation);
+	Machine.Tick(1.f);
+	TestEqual(TEXT("wave 2 comes by itself"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
+	TestTrue(TEXT("its horde intro armed, real time"), Machine.IsAwaitingHordeIntro() && Machine.GetWaveIndex() == 2);
 	Machine.EnterFreeTacticalPause();
 	TestEqual(TEXT("hold -> turn-based from the free pause"), Machine.RequestEnterTurnBased(true), EGameFlowResult::Ok);
 	TestEqual(TEXT("charges untouched"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
@@ -267,7 +296,7 @@ bool FHordeIntroNextWaveTest::RunTest(const FString&)
 	TestFalse(TEXT("not free in the grid"), Machine.IsFreePause());
 	Machine.ExitTurnBasedToRealTime();
 	Machine.NotifyWaveCleared();
-	Machine.AdvanceAfterWave();
+	TestEqual(TEXT("the bot / smokes may cut the rest short"), Machine.FinishPreparation(), EGameFlowResult::Ok);
 	TestTrue(TEXT("wave 3 armed"), Machine.IsAwaitingHordeIntro() && Machine.GetWaveIndex() == 3);
 	Machine.TriggerGameOver();
 	TestFalse(TEXT("game over: nothing armed"), Machine.IsAwaitingHordeIntro() || Machine.IsFreePause());
@@ -286,11 +315,11 @@ bool FHordeIntroPreparedWaveTest::RunTest(const FString&)
 	Machine.TriggerCombatZone();
 	TestTrue(TEXT("wave 1 armed"), Machine.IsAwaitingHordeIntro());
 	Machine.NotifyWaveCleared();
-	Machine.AdvanceAfterWave();
 	TestEqual(TEXT("wave 2: the rest countdown"), Machine.GetPhase(), ECodexGamePhase::Preparation);
 	TestEqual(TEXT("rest seconds"), Machine.GetPreparationTimeRemaining(), Config.WaveRestDuration);
-	TestEqual(TEXT("rest ends"), Machine.FinishPreparation(), EGameFlowResult::Ok);
-	TestEqual(TEXT("wave 2 in real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
+	TestFalse(TEXT("no Start Battle in the rest"), Machine.OffersStartBattle());
+	Machine.Tick(Config.WaveRestDuration + 0.1f);
+	TestEqual(TEXT("the rest ran out: wave 2 in real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
 	TestFalse(TEXT("no horde intro"), Machine.IsAwaitingHordeIntro());
 	FGameFlowStateMachine Old(Config);
 	Old.SetSuddenStartOverride(0);
@@ -310,12 +339,20 @@ bool FHordeIntroLoadTest::RunTest(const FString&)
 	FGameFlowConfig Config;
 	Config.TotalWaves = 3;
 	FGameFlowStateMachine Machine(Config);
-	Machine.RestoreForLoad(true, true, 2, 15.f);
+	// A save from the fight / after it (no rest seconds): the wave comes at once.
+	Machine.RestoreForLoad(true, true, 2);
 	TestEqual(TEXT("restored in the preparation"), Machine.GetPhase(), ECodexGamePhase::Preparation);
 	Machine.Tick(0.016f);
 	TestEqual(TEXT("wave 2 comes at once"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
 	TestTrue(TEXT("its horde intro armed"), Machine.IsAwaitingHordeIntro());
 	TestEqual(TEXT("wave index kept"), Machine.GetWaveIndex(), 2);
+	// 2026-10-25: a save from the rest between waves resumes that rest, then the wave comes by itself.
+	FGameFlowStateMachine Rest(Config);
+	Rest.RestoreForLoad(true, true, 2, 12.f);
+	Rest.Tick(0.016f);
+	TestTrue(TEXT("the saved rest resumes (12 s)"), Rest.IsRestBetweenWaves() && FMath::IsNearlyEqual(Rest.GetPreparationTimeRemaining(), 12.f - 0.016f, 0.01f));
+	Rest.Tick(12.f);
+	TestTrue(TEXT("... then wave 2 breaks through, horde intro armed"), Rest.GetPhase() == ECodexGamePhase::WaveCombat && Rest.IsAwaitingHordeIntro());
 	return true;
 }
 

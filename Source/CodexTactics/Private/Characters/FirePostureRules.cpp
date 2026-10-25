@@ -55,7 +55,8 @@ namespace FirePostureRules
 
 	bool ClearsProvocation(ECodexGamePhase NewPhase)
 	{
-		return NewPhase == ECodexGamePhase::WaveCleared || NewPhase == ECodexGamePhase::PostCombat
+		// 2026-10-25: a cleared wave goes straight into the rest before the next one (Preparation) - the provocation ends there too.
+		return NewPhase == ECodexGamePhase::WaveCleared || NewPhase == ECodexGamePhase::PostCombat || NewPhase == ECodexGamePhase::Preparation
 			|| NewPhase == ECodexGamePhase::Exploration || NewPhase == ECodexGamePhase::GameOver;
 	}
 

@@ -15,12 +15,14 @@ namespace GameFlowTest
 	/**
 	 * These tests cover the classic prepared start (cutscene -> preparation countdown -> wave), still used by a level
 	 * wave with "sudden_start": false. The sudden horde start (the default since 2026-10-11) is tested in
-	 * CodexTactics.Combat.HordeIntro.*.
+	 * CodexTactics.Combat.HordeIntro.*. They keep Godot's victory panel between waves (bVictoryPanelBetweenWaves): the default since
+	 * 2026-10-25 (the rest starts by itself, no "Start the next wave") is tested in CodexTactics.GameFlow.AutoNextWave.*.
 	 */
 	FGameFlowConfig PreparedConfig()
 	{
 		FGameFlowConfig Config;
 		Config.bSuddenWaveStart = false;
+		Config.bVictoryPanelBetweenWaves = true;
 		return Config;
 	}
 

@@ -177,6 +177,12 @@ FText UPhaseBannersWidget::GetCombatText() const
 	{
 		return FText::GetEmpty();
 	}
+	if (Flow->IsRestBetweenWaves())
+	{
+		// Game designer 2026-10-25: no "start the next wave" button - the wave breaks through on its own when the rest runs out.
+		return FText::FromString(FString::Printf(TEXT("⏱ NEXT WAVE IN: %02d sec | [SPACE] for the bottom menu"),
+			FMath::CeilToInt(Flow->GetPreparationTimeRemaining())));
+	}
 	if (Flow->GetPhase() == ECodexGamePhase::Preparation)
 	{
 		return FText::FromString(FString::Printf(TEXT("⏱ BATTLE PREPARATION: %02d sec | [SPACE] for the bottom menu"),
@@ -193,6 +199,11 @@ FText UPhaseBannersWidget::GetCombatText() const
 			Waves ? Waves->GetAliveEnemyCount() : 0));
 	}
 	return FText::GetEmpty();
+}
+
+bool UPhaseBannersWidget::IsStartBattleShown() const
+{
+	return FinishPrepButton && FinishPrepButton->GetVisibility() == ESlateVisibility::Visible;
 }
 
 bool UPhaseBannersWidget::IsCutsceneShown() const
@@ -224,7 +235,8 @@ void UPhaseBannersWidget::Refresh()
 	}
 	if (FinishPrepButton)
 	{
-		FinishPrepButton->SetVisibility(Flow && Flow->GetPhase() == ECodexGamePhase::Preparation ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		// 2026-10-25: only before the first wave - never in the rest between waves.
+		FinishPrepButton->SetVisibility(Flow && Flow->OffersStartBattle() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 	const bool bCutscene = IsCutsceneShown();
 	if (CutscenePanel)
@@ -254,7 +266,7 @@ FReply UPhaseBannersWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
 
 void UPhaseBannersWidget::HandleFinishPreparation()
 {
-	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())
+	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->OffersStartBattle())
 	{
 		Flow->FinishPreparation();
 	}
