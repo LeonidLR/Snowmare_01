@@ -6,6 +6,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Combat/GrenadeRules.h"
 #include "Combat/HealthComponent.h"
+#include "Core/PlayerCommands.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -143,6 +144,7 @@ void AGrenadeActor::Detonate()
 	}
 	bDetonated = true;
 	ApplyAreaEffect();
+	GameplayEvents::RaiseExplosion(this, GameplayEvents::ExplosionKinds::Grenade, GetActorLocation(), EffectRadius, this); // visual listeners only (snow crater)
 	ReceiveDetonated(GetActorLocation());
 	Destroy();
 }

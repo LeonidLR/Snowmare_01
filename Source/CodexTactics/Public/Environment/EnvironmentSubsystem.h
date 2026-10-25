@@ -186,9 +186,42 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
 	float GetSnowAmount() const { return State.SnowAmount; }
 
-	/** Debug (console Codex.Env.SnowCover): sets the snow cover (clamped 0..1; may lower it, unlike the weather); broadcasts OnStateSet. */
+	/**
+	 * Debug (console Codex.Env.SnowCover): sets the snow cover (clamped 0..1; may lower it, unlike the weather) and the objects' TOP pocket
+	 * to the same value (their sides are kept); broadcasts OnStateSet.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
 	void SetSnowAmount(float Amount);
+
+	/** Section 15: the directional snow on static objects (world axes; FEnvironmentState::ObjectSnow). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	FDirectionalSnow GetObjectSnow() const { return State.ObjectSnow; }
+
+	/** Debug (console Codex.Env.ObjectSnow): sets the objects' pockets (clamped 0..1); broadcasts OnStateSet. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
+	void SetObjectSnow(const FDirectionalSnow& Pockets);
+
+	/**
+	 * Section 15: the horizontal unit wind TRAVEL direction in force (where the snow is blown to; MPC WindDirection.xyz): the debug
+	 * override when set (SetWindDirectionOverride, console Codex.Env.WindFrom), else the presenter's slow drift
+	 * (AWeatherPresenterActor::ComputeWindDirection with its WindBaseYaw / WindDriftDegrees / WindDriftPeriodSeconds, the C++ defaults
+	 * without a presenter) at the world time. Visual (and the directional snow); never read by gameplay.
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	FVector GetWindDirection() const;
+
+	/** Debug: fixes the wind travel direction (z dropped, normalised; zero clears the override). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
+	void SetWindDirectionOverride(const FVector& Direction);
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
+	void ClearWindDirectionOverride() { WindOverride.Reset(); }
+
+	bool HasWindDirectionOverride() const { return WindOverride.IsSet(); }
+
+	/** Section 15: sun elevation above the horizon in degrees at the current hour (the presenter's DayCurves, else the C++ defaults). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	float GetSunElevation() const;
 
 	/** Debug speed-up of the clock and the weather (1 = design speed; clamped to >= 0). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
@@ -230,4 +263,6 @@ private:
 	bool bHandedOver = false;
 	/** The presenter spawned for this world (GetWindStrength reads its presets; weak: it may be destroyed first). */
 	TWeakObjectPtr<AWeatherPresenterActor> Presenter;
+	/** Debug wind travel direction (GetWindDirection). */
+	TOptional<FVector> WindOverride;
 };

@@ -154,7 +154,8 @@ public:
 
 	/**
 	 * Phase 4: MPC_Environment, written every application: scalars SnowAmount (persistent cover), FrostAmount, WindStrength, IsSnowing
-	 * (0..1, ComputeIsSnowing), vector WindDirection (xyz direction, w strength). Missing asset -> nothing written.
+	 * (0..1, ComputeIsSnowing), vector WindDirection (xyz direction, w strength); section 15: SnowTop / SnowPX / SnowNX / SnowPY / SnowNY
+	 * (FEnvironmentState::ObjectSnow, world axes). Missing asset -> nothing written.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
 	TSoftObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
@@ -175,7 +176,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Phase4", meta = (ClampMin = "1"))
 	float WindDriftPeriodSeconds = 180.f;
 
-	/** Horizontal unit wind direction at TimeSeconds: BaseYaw + DriftDegrees x sin(2 pi t / Period) (pure; tests). */
+	/**
+	 * Horizontal unit wind TRAVEL direction at TimeSeconds (where the flakes are blown to): BaseYaw + DriftDegrees x sin(2 pi t / Period)
+	 * (pure; tests). The presenter applies UEnvironmentSubsystem::GetWindDirection (this formula unless a debug override is set).
+	 */
 	static FVector ComputeWindDirection(float TimeSeconds, float BaseYaw, float DriftDegrees, float PeriodSeconds);
 
 	/** MPC IsSnowing 0..1 from the blended preset SnowIntensity: smooth, 1 from SnowIntensity 0.25 up (any real snowfall). */
@@ -199,10 +203,6 @@ public:
 	/** A sky light without real-time capture is recaptured at most this often (seconds), only when the look changed. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather", meta = (ClampMin = "0.25"))
 	float SkyRecaptureInterval = 2.f;
-
-	/** The first application waits (at most this long) for the minimap's captures, so the minimap shows the authored lighting. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather", meta = (ClampMin = "0"))
-	float MinimapHoldSeconds = 4.f;
 
 	/** Switch the map's AVolumetricCloud off while the visuals run (user decision 2026-10-22: invisible from the tactical camera). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather")
@@ -256,12 +256,12 @@ private:
 	/** Phase 4: falling snow, snow cover, MPC_Environment. */
 	void ApplySnow(const FWeatherVisualFrame& Frame, float SnowAmount);
 	void WriteParameters(float SnowAmount, float FrostAmount, float WindStrength, float IsSnowing, const FVector& WindDirection);
+	/** Section 15: MPC_Environment.SnowTop / SnowPX / SnowNX / SnowPY / SnowNY. */
+	void WriteObjectSnow(const FDirectionalSnow& Pockets);
 	void SetSnowVisualsEnabled(bool bEnabled);
 	void SetCloudsOff(bool bOff);
 	void RestoreAuthored();
 	void RecaptureSkyIfNeeded(const FWeatherVisualFrame& Frame, bool bForce);
-	/** The minimap captures are done (or the hold timed out): the first application may run. */
-	bool IsMinimapHoldOver() const;
 	void HandleStateSet(const FEnvironmentState& State);
 
 	UPROPERTY(Transient) TObjectPtr<ADirectionalLight> Sun;

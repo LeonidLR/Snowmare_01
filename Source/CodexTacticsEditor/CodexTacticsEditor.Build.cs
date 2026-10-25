@@ -26,6 +26,8 @@ public class CodexTacticsEditor : ModuleRules
 			"NiagaraEditor",
 			"NavigationSystem",
 			"BSPUtils",
+			"Landscape",
+			"RHI",
 			"CodexTactics"
 		});
 	}

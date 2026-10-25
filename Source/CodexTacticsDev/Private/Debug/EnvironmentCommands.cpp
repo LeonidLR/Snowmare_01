@@ -9,7 +9,7 @@
 #include "HAL/IConsoleManager.h"
 
 // Dev console of the day cycle / weather (docs/systems/environment-weather.md, phase 1): Codex.Env.Dump / SetWeather / SetHour /
-// ClockScale / Seed / SnowCover. Not smokes (nothing is verified); test_map.json lists them under nonSmokeDebugCommands.
+// ClockScale / Seed / SnowCover / ObjectSnow / WindFrom. Not smokes (nothing is verified); test_map.json lists them under nonSmokeDebugCommands.
 namespace EnvironmentCommands
 {
 	UEnvironmentSubsystem* Env(const UWorld* World, const TCHAR* Command)
@@ -97,6 +97,63 @@ namespace EnvironmentCommands
 			UE_LOG(LogCodexTactics, Display, TEXT("Codex.Env.SnowCover: %s"), *Environment->Describe());
 		}
 	}
+
+	void ObjectSnow(const TArray<FString>& Args, UWorld* World)
+	{
+		if (Args.Num() < 5)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Codex.Env.ObjectSnow <top> <px> <nx> <py> <ny>: sets the objects' directional snow pockets (0..1, world axes)"));
+			return;
+		}
+		if (UEnvironmentSubsystem* Environment = Env(World, TEXT("Codex.Env.ObjectSnow")))
+		{
+			FDirectionalSnow Pockets;
+			for (int32 Index = 0; Index < FDirectionalSnow::PocketCount; ++Index)
+			{
+				Pockets.Set(Index, FCString::Atof(*Args[Index]));
+			}
+			Environment->SetObjectSnow(Pockets);
+			UE_LOG(LogCodexTactics, Display, TEXT("Codex.Env.ObjectSnow: %s"), *Environment->Describe());
+		}
+	}
+
+	void WindFrom(const TArray<FString>& Args, UWorld* World)
+	{
+		UEnvironmentSubsystem* Environment = Env(World, TEXT("Codex.Env.WindFrom"));
+		if (!Environment)
+		{
+			return;
+		}
+		if (Args.Num() < 1 || Args[0].Equals(TEXT("off"), ESearchCase::IgnoreCase))
+		{
+			Environment->ClearWindDirectionOverride();
+			UE_LOG(LogCodexTactics, Display, TEXT("Codex.Env.WindFrom: off (the presenter's drifting wind)"));
+			return;
+		}
+		// The wind comes FROM this side: +X / -X / +Y / -Y or a yaw in degrees; it travels the opposite way.
+		FVector From = FVector::ZeroVector;
+		const FString& Arg = Args[0];
+		if (Arg.Equals(TEXT("+X"), ESearchCase::IgnoreCase) || Arg.Equals(TEXT("X"), ESearchCase::IgnoreCase)) { From = FVector(1.0, 0.0, 0.0); }
+		else if (Arg.Equals(TEXT("-X"), ESearchCase::IgnoreCase)) { From = FVector(-1.0, 0.0, 0.0); }
+		else if (Arg.Equals(TEXT("+Y"), ESearchCase::IgnoreCase) || Arg.Equals(TEXT("Y"), ESearchCase::IgnoreCase)) { From = FVector(0.0, 1.0, 0.0); }
+		else if (Arg.Equals(TEXT("-Y"), ESearchCase::IgnoreCase)) { From = FVector(0.0, -1.0, 0.0); }
+		else if (Arg.IsNumeric()) { From = FRotator(0.f, FCString::Atof(*Arg), 0.f).Vector(); }
+		if (From.IsNearlyZero())
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Codex.Env.WindFrom <+X|-X|+Y|-Y|yaw|off>: the side the wind comes from (debug override of the drifting wind)"));
+			return;
+		}
+		Environment->SetWindDirectionOverride(-From);
+		UE_LOG(LogCodexTactics, Display, TEXT("Codex.Env.WindFrom %s: wind travels %s"), *Arg, *Environment->GetWindDirection().ToCompactString());
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs CommandObjectSnow(TEXT("Codex.Env.ObjectSnow"),
+		TEXT("Codex.Env.ObjectSnow <top> <px> <nx> <py> <ny>: sets the objects' directional snow pockets (FEnvironmentState::ObjectSnow, world axes, 0..1)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ObjectSnow));
+
+	static FAutoConsoleCommandWithWorldAndArgs CommandWindFrom(TEXT("Codex.Env.WindFrom"),
+		TEXT("Codex.Env.WindFrom <+X|-X|+Y|-Y|yaw deg|off>: the wind comes from that side (debug override of the presenter's drifting wind; directional snow, flakes, MPC)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&WindFrom));
 
 	static FAutoConsoleCommandWithWorldAndArgs CommandSnowCover(TEXT("Codex.Env.SnowCover"),
 		TEXT("Codex.Env.SnowCover <0..1>: sets the persistent snow cover (FEnvironmentState::SnowAmount; it then grows while it snows, never recedes)."),

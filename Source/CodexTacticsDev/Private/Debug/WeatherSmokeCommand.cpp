@@ -10,6 +10,9 @@
 //   3. ForceWeather Clear / Blizzard (instant) -> the fog density follows the presets, Blizzard > Clear, volumetric fog on in Blizzard;
 //   S. phase 4 snow cover: the presenter has its snow components and MPC_Environment; a forced Blizzard at ClockScale 20 raises
 //      FEnvironmentState::SnowAmount by the Blizzard rate, a forced Clear holds it (never recedes), the MPC SnowAmount equals the state;
+//      section 15 directional snow (objects, world axes): with the wind FROM +X the blizzard fills the top + the +X pocket by the rate x the
+//      wind strength and leaves -X / +Y / -Y bare (MPC SnowPX = the state); in Clear at 12:00 the top melts down to exactly
+//      object_snow_melt_floor x the ground cover and the +X pocket to 0 while the ground cover stays (MPC SnowTop = the state);
 //   4. Codex.Env.Visuals 0 -> every authored value is back (sun, moon, fog, post-process off, clouds as authored, MPC SnowAmount 0);
 //      1 -> applied again.
 // WeatherLakeSmoke: the Demo 01 lake locked at 23:00 Snowfall -> night (sun hidden, moon lit, full night grade) + the Snowfall fog,
@@ -73,6 +76,8 @@ namespace WeatherSmoke
 		float SnowStart = 0.f;
 		float SnowAdvancedStart = 0.f;
 		float SnowHeld = 0.f;
+		FDirectionalSnow ObjectStart;
+		FDirectionalSnow MeltStart;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -254,11 +259,29 @@ namespace WeatherSmoke
 		}
 		Check(State, Env.GetSnowAmount() >= 0.f && Env.GetSnowAmount() <= 1.f,
 			FString::Printf(TEXT("S start snow cover %.3f (neutral start: snow_cover_start %.2f)"), Env.GetSnowAmount(), Env.GetConfig().SnowCoverStart));
+		if (const UMaterialParameterCollection* Collection = Presenter.GetEnvironmentCollection())
+		{
+			TSet<FGuid> Ids;
+			for (const TCHAR* Name : { TEXT("SnowTop"), TEXT("SnowPX"), TEXT("SnowNX"), TEXT("SnowPY"), TEXT("SnowNY") })
+			{
+				if (const FCollectionScalarParameter* Param = Collection->GetScalarParameterByName(FName(Name)))
+				{
+					Ids.Add(Param->Id);
+				}
+			}
+			Check(State, Ids.Num() == 5 && !Ids.Contains(FGuid()), FString::Printf(TEXT("S MPC_Environment: the 5 directional snow scalars with distinct ids (%d)"), Ids.Num()));
+		}
 		Env.ForceWeather(EWeatherState::Blizzard, true);
 		if (Env.GetSnowAmount() > 0.8f)
 		{
 			Env.SetSnowAmount(0.3f); // room to grow
 		}
+		// Section 15: the wind FROM +X (it travels -X); the objects start with the ground cover on top, bare sides.
+		Env.SetWindDirectionOverride(FVector(-1.f, 0.f, 0.f));
+		FDirectionalSnow Objects;
+		Objects.Top = Env.GetSnowAmount();
+		Env.SetObjectSnow(Objects);
+		State.ObjectStart = Env.GetObjectSnow();
 		State.SnowStart = Env.GetSnowAmount();
 		State.SnowAdvancedStart = Env.GetAdvancedSeconds();
 		Env.SetClockScale(SnowClockScale);
@@ -277,8 +300,28 @@ namespace WeatherSmoke
 		float Snowing = -1.f;
 		const bool bSnowingRead = Presenter.GetEnvironmentScalar(MpcIsSnowing, Snowing); // read before the message is formatted
 		Check(State, bSnowingRead && Snowing > 0.99f, FString::Printf(TEXT("S Blizzard: MPC IsSnowing %.2f"), Snowing));
+		// Section 15: the objects' pockets - the top and the windward +X side grew, the other sides stayed bare.
+		const FDirectionalSnow Objects = Env.GetObjectSnow();
+		const float Rate = EnvironmentRules::GetSnowCoverRate(Env.GetConfig(), EWeatherState::Blizzard);
+		const float Side = FMath::Min(1.f, Ran * Rate * Env.GetConfig().ObjectSnowSideRateScale * Env.GetWindStrength());
+		Check(State, FMath::IsNearlyEqual(Objects.Top, FMath::Min(1.f, State.ObjectStart.Top + Ran * Rate), 0.01f),
+			FString::Printf(TEXT("S objects: the top grew with the cover rate (%.3f)"), Objects.Top));
+		Check(State, Objects.PX > 0.05f && FMath::IsNearlyEqual(Objects.PX, Side, 0.01f),
+			FString::Printf(TEXT("S objects: the windward +X pocket filled %.3f (rate x wind %.2f: %.3f)"), Objects.PX, Env.GetWindStrength(), Side));
+		Check(State, Objects.NX == 0.f && Objects.PY == 0.f && Objects.NY == 0.f,
+			FString::Printf(TEXT("S objects: -X / +Y / -Y stay bare (%.3f %.3f %.3f)"), Objects.NX, Objects.PY, Objects.NY));
+		float MpcPX = -1.f;
+		const bool bPXRead = Presenter.GetEnvironmentScalar(FName(TEXT("SnowPX")), MpcPX);
+		Check(State, bPXRead && FMath::IsNearlyEqual(MpcPX, Objects.PX, 0.002f), FString::Printf(TEXT("S MPC_Environment.SnowPX %.3f = %.3f"), MpcPX, Objects.PX));
 		Env.ForceWeather(EWeatherState::Clear, true);
 		State.SnowHeld = Env.GetSnowAmount();
+		// The melt: Clear at 12:00, the top just above its floor (0.5 x the ground), a little on +X.
+		Env.SetHour(12.f);
+		FDirectionalSnow Melt;
+		Melt.Top = FMath::Min(1.f, Env.GetConfig().ObjectSnowMeltFloor * State.SnowHeld + 0.02f);
+		Melt.PX = 0.03f;
+		Env.SetObjectSnow(Melt);
+		State.MeltStart = Env.GetObjectSnow();
 		State.SnowAdvancedStart = Env.GetAdvancedSeconds();
 	}
 
@@ -292,6 +335,21 @@ namespace WeatherSmoke
 		float Snowing = -1.f;
 		const bool bSnowingRead = Presenter.GetEnvironmentScalar(MpcIsSnowing, Snowing);
 		Check(State, bSnowingRead && Snowing < 0.01f, FString::Printf(TEXT("S Clear: MPC IsSnowing %.2f"), Snowing));
+		// Section 15: in Clear daylight the objects' snow melts - the top down to the floor, the side to 0; the ground keeps its cover.
+		const FDirectionalSnow Objects = Env.GetObjectSnow();
+		const float Floor = Env.GetConfig().ObjectSnowMeltFloor * Env.GetSnowAmount();
+		const float Melted = Ran * EnvironmentRules::GetObjectSnowMeltRate(Env.GetConfig(), Env.GetStateRef(), Env.GetSunElevation());
+		Check(State, Env.GetSunElevation() > 0.f && Melted > 0.03f,
+			FString::Printf(TEXT("S Clear 12:00: the sun is up (%.1f deg), %.3f melted over %.1f design s"), Env.GetSunElevation(), Melted, Ran));
+		Check(State, FMath::IsNearlyEqual(Objects.Top, FMath::Max(Floor, State.MeltStart.Top - Melted), 1.e-3f) && FMath::IsNearlyEqual(Objects.Top, Floor, 1.e-4f),
+			FString::Printf(TEXT("S Clear: the objects' top melted %.3f -> %.3f = the floor %.2f x ground %.3f"), State.MeltStart.Top, Objects.Top,
+				Env.GetConfig().ObjectSnowMeltFloor, Env.GetSnowAmount()));
+		Check(State, Objects.PX == 0.f, FString::Printf(TEXT("S Clear: the +X pocket melted away (%.3f)"), Objects.PX));
+		Check(State, Env.GetSnowAmount() == State.SnowHeld, FString::Printf(TEXT("S Clear: the ground cover is unchanged by the melt (%.3f)"), Env.GetSnowAmount()));
+		float MpcTop = -1.f;
+		const bool bTopRead = Presenter.GetEnvironmentScalar(FName(TEXT("SnowTop")), MpcTop);
+		Check(State, bTopRead && FMath::IsNearlyEqual(MpcTop, Objects.Top, 0.002f), FString::Printf(TEXT("S MPC_Environment.SnowTop %.3f = %.3f"), MpcTop, Objects.Top));
+		Env.ClearWindDirectionOverride();
 		Env.SetClockScale(0.f);
 		// Back to the Blizzard look the visuals-on check of stage 4 expects.
 		Env.ForceWeather(EWeatherState::Blizzard, true);

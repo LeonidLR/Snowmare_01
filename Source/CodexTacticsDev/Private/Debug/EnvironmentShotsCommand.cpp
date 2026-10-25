@@ -20,7 +20,7 @@
 // UI removed); timelapse_<map>/frame_NNNN.png at 10 fps (encode: ffmpeg -y -framerate 10 -i frame_%04d.png -vf scale=960:-2 -c:v libx264
 // -pix_fmt yuv420p -crf 26 out.mp4).
 //
-// Mode "snowperf" (falling snow cost): -ExecCmds="CodexTactics.EnvironmentShots snowperf" -> log lines "[SnowFxPerf]" (GPU / render / game ms, draws)
+// Mode "snowperf" (falling snow cost): -ExecCmds="CodexTactics.EnvironmentShots snowperf [<subdir>]" -> log lines "[SnowFxPerf]" (GPU / render / game ms, draws)
 // and stills Saved/Screenshots/Environment/snowperf/<map>_<state>[_far].png for snow FX off / Snowfall / Blizzard at the default and the max zoom
 // (MovementTest: wave 2 is started first).
 //
@@ -32,6 +32,14 @@
 // A/B at SnowAmount 0.7 (Codex.Env.SnowOverlay 0 vs 1: GPU / render / game ms, RHI draws / primitives, log lines "[SnowPerf]") on the still
 // view and in the level's largest wave when it has 13+ enemies (still <map>_wave<N>_snow_070.png). A presenter without an overlay
 // component gets one from this command (which then writes MPC_Environment.SnowAmount / FrostAmount itself).
+//
+// Mode "grounddust" (environment phase 4d, the snow GROUND overlay M_SnowGroundOverlay - docs/systems/environment-weather.md section 12.d):
+//   -ExecCmds="CodexTactics.EnvironmentShots grounddust [nomovie] [noperf] [notracks]"   on the map it was started on (the lake: add -LevelJson=...)
+// Output (Saved/Screenshots/Environment/grounddust/): <map>_ground_000 / _035 / _070 / _100.png - Clear 12:00, the tactical camera's numbers
+// (pitch -35.26, vertical FOV 30, 26 m) on the squad leader; movie_<map>/frame_NNNN.png - SnowAmount 0 -> 1 in 10 s at 15 fps; a GPU A/B at
+// SnowAmount 0.7 (Codex.Env.SnowGround 0 vs 1, off / on / off / on at 26 m and 40 m, log lines "[GroundDustPerf]"; L_MovementTest: in wave 2,
+// still <map>_wave2_ground_070.png); <map>_tracks_loop[_close].png - the leader walked a 4.5 m loop (interactive snow tracks when
+// MPC_Environment.SnowTrackWindow is on).
 
 #include "CoreMinimal.h"
 
@@ -82,6 +90,31 @@
 #include "Survival/ColdRules.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UnrealClient.h"
+
+// Mode "terrain" (environment §13, the landscape material + snow functions) lives in EnvironmentTerrainShotsCommand.cpp.
+namespace EnvironmentTerrainShots
+{
+	void Run(const TArray<FString>& Args);
+}
+
+// Mode "tracks" (environment §14, interactive snow stills + clip) lives in EnvironmentTracksShotsCommand.cpp.
+namespace EnvironmentTracksShots
+{
+	void Run(const TArray<FString>& Args);
+}
+
+// Mode "charsnow" (environment section 15, directional snow on characters / objects) lives in EnvironmentCharSnowShotsCommand.cpp.
+namespace EnvironmentCharSnowShots
+{
+	void Run(const TArray<FString>& Args);
+}
+
+// Mode "snowfx2" (environment section 12.b, the falling snow after the 2026-10-23 feedback: DA_SnowFX, smaller flakes, no snow indoors)
+// lives in EnvironmentSnowFx2ShotsCommand.cpp.
+namespace EnvironmentSnowFx2Shots
+{
+	void Run(const TArray<FString>& Args);
+}
 
 namespace EnvironmentShots
 {
@@ -1354,12 +1387,13 @@ namespace EnvironmentShots
 			}
 		}
 
-		void Run()
+		/** OutSubDir: the folder under Saved/Screenshots/Environment (default "snowperf"; e.g. "snowfx2/perf"). */
+		void Run(const FString& OutSubDir)
 		{
 			Runner = MakeShared<FRunner>();
 			Snow::FxRunner = MakeShared<Snow::FSnowFxRunner>();
 			PRunner = MakeShared<FPerfRunner>();
-			PRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / TEXT("snowperf"));
+			PRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / OutSubDir);
 			FPaths::CollapseRelativeDirectories(PRunner->Dir);
 			IFileManager::Get().MakeDirectory(*PRunner->Dir, true);
 			Runner->Dir = PRunner->Dir;
@@ -1846,16 +1880,466 @@ namespace EnvironmentShots
 		}
 	}
 
+	// --- Mode "grounddust": the snow ground overlay on the floor slabs (environment phase 4d, docs/systems/environment-weather.md section 12.d) ---
+
+	namespace GroundDust
+	{
+		constexpr int32 WarmupFrames = 150;
+		constexpr int32 SettleFrames = 60;      // the overlay re-scan, TSR resolving the translucent layer, eye adaptation
+		constexpr int32 MovieFrames = 300;      // 10 s at -fps=30: SnowAmount 0 -> 1
+		constexpr int32 MovieEvery = 2;         // 15 fps video
+		constexpr int32 PerfSettleFrames = 60;
+		constexpr int32 PerfFrames = 150;
+		constexpr int32 PerfRepeats = 2;        // off / on / off / on per camera distance (GPU noise)
+		constexpr float PerfSnowAmount = 0.7f;
+		constexpr float TrackSnowAmount = 0.7f;
+		constexpr int32 WaveIndex = 2;
+		constexpr int32 LoopPoints = 8;
+		constexpr float LoopRadiusCm = 450.f;
+		constexpr int32 LoopPointFrames = 180;  // at most 6 s per waypoint at -fps=30
+		const float Amounts[] = { 0.f, 0.35f, 0.7f, 1.f };
+		const float PerfDistances[] = { Snow::ViewDistance, Snow::FarDistance };
+		const TCHAR* MpcPath = TEXT("/Game/Environment/Weather/MPC/MPC_Environment.MPC_Environment");
+
+		enum class EStep : uint8 { Warmup, Setup, Settle, Write, MovieSetup, Movie, WaveSetup, Perf, TrackSetup, TrackWalk, TrackSettle, Done };
+
+		struct FDustRunner
+		{
+			EStep Step = EStep::Warmup;
+			int32 Frame = 0;
+			int32 StepFrame = 0;
+			int32 ShotIndex = 0;
+			int32 ClipCount = 0;
+			int32 PerfIndex = 0;
+			int32 LoopIndex = 0;
+			bool bMovie = true;
+			bool bPerf = true;
+			bool bTracks = true;
+			bool bWave = false;
+			float ViewYaw = 45.f;
+			FString MapName;
+			FString Dir;
+			FVector Focus = FVector::ZeroVector;
+			SnowCover::FPerfSample Samples[UE_ARRAY_COUNT(PerfDistances)][2];
+			TArray<FString> Report;
+			TWeakObjectPtr<UWeatherSnowOverlayComponent> Overlay;
+			TWeakObjectPtr<UMaterialParameterCollection> Mpc;
+			FDelegateHandle EndFrameHandle;
+		};
+
+		TSharedPtr<FDustRunner> DRunner;
+
+		/** The tactical camera's numbers (pitch -35.26, vertical FOV 30) on Focus from Distance, an own camera actor. */
+		void ViewPoint(UWorld* World, const FVector& Focus, float Distance)
+		{
+			APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+			if (!PC)
+			{
+				return;
+			}
+			if (AHUD* Hud = PC->GetHUD())
+			{
+				Hud->bShowHUD = false;
+			}
+			const FRotator Rotation(Snow::ViewPitch, DRunner->ViewYaw, 0.f);
+			const FVector Eye = Focus - Rotation.Vector() * Distance;
+			if (!Runner->Camera.IsValid())
+			{
+				Runner->Camera = World->SpawnActor<ACameraActor>(Eye, Rotation);
+			}
+			if (ACameraActor* Camera = Runner->Camera.Get())
+			{
+				const FVector2D Size = UWidgetLayoutLibrary::GetViewportSize(World);
+				const float Aspect = Size.Y > 1.f ? Size.X / Size.Y : 16.f / 9.f;
+				const float HorizontalFov = FMath::RadiansToDegrees(2.f * FMath::Atan(FMath::Tan(FMath::DegreesToRadians(Snow::ViewVerticalFov) * 0.5f) * Aspect));
+				Camera->SetActorLocationAndRotation(Eye, Rotation);
+				Camera->GetCameraComponent()->SetFieldOfView(HorizontalFov);
+				Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+				if (PC->GetViewTarget() != Camera)
+				{
+					PC->SetViewTarget(Camera);
+				}
+			}
+		}
+
+		void SetGroundCVar(bool bOn)
+		{
+			if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Env.SnowGround")))
+			{
+				Variable->Set(bOn ? 1 : 0, ECVF_SetByConsole);
+			}
+		}
+
+		void SetSnow(UEnvironmentSubsystem& Environment, float Amount)
+		{
+			if (!FMath::IsNearlyEqual(Environment.GetSnowAmount(), Amount, 0.0005f))
+			{
+				Environment.SetSnowAmount(Amount);
+			}
+		}
+
+		int32 GroundSlabs()
+		{
+			const UWeatherSnowOverlayComponent* Overlay = DRunner->Overlay.Get();
+			return Overlay ? Overlay->GetGroundTargetCount() : 0;
+		}
+
+		int32 ObjectMeshes()
+		{
+			const UWeatherSnowOverlayComponent* Overlay = DRunner->Overlay.Get();
+			return Overlay ? Overlay->GetObjectTargetCount() : 0;
+		}
+
+		void Label(UEnvironmentSubsystem& Environment, const TCHAR* Extra = TEXT(""))
+		{
+			Runner->Lines.Reset();
+			Runner->Lines.Add({ FString::Printf(TEXT("%s - %s %s - snow cover %.0f%% - ground overlay on %d slab(s), objects %d%s"), *DRunner->MapName,
+				*EnvironmentRules::WeatherToString(Environment.GetWeather()), *HourText(Environment.GetHour()), Environment.GetSnowAmount() * 100.f,
+				GroundSlabs(), ObjectMeshes(), Extra), FLinearColor(1.f, 0.9f, 0.3f) });
+		}
+
+		/** MPC_Environment.SnowTrackWindow.w (the interactive snow writes it; 0 when off or the parameter is missing). */
+		float TrackWindowEnabled(UWorld* World)
+		{
+			UMaterialParameterCollection* Mpc = DRunner->Mpc.Get();
+			if (!Mpc || !Mpc->GetVectorParameterByName(TEXT("SnowTrackWindow")))
+			{
+				return -1.f;
+			}
+			return UKismetMaterialLibrary::GetVectorParameterValue(World, Mpc, TEXT("SnowTrackWindow")).A;
+		}
+
+		void Finish()
+		{
+			FDustRunner& D = *DRunner;
+			for (const FString& Line : D.Report)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[GroundDustPerf] %s"), *Line);
+			}
+			SetGroundCVar(true);
+			UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots grounddust: done (%d stills, %d movie frames) -> %s"), D.ShotIndex, D.ClipCount, *D.Dir);
+			FCoreDelegates::OnEndFrame.Remove(D.EndFrameHandle);
+			UDebugDrawService::Unregister(Runner->DrawHandle);
+			FPlatformMisc::RequestExit(false, TEXT("EnvironmentShots"));
+		}
+
+		EStep AfterPerf()
+		{
+			return DRunner->bTracks ? EStep::TrackSetup : EStep::Done;
+		}
+
+		EStep AfterMovie()
+		{
+			return DRunner->bPerf ? (DRunner->bWave ? EStep::WaveSetup : EStep::Perf) : AfterPerf();
+		}
+
+		void Tick()
+		{
+			FDustRunner& D = *DRunner;
+			++D.Frame;
+			++D.StepFrame;
+			UWorld* World = FrontendSmokeUtils::FindGameWorld();
+			if (D.Frame > MaxFrames)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots grounddust: timeout in step %d"), static_cast<int32>(D.Step));
+				Finish();
+				return;
+			}
+			UEnvironmentSubsystem* Environment = World ? UEnvironmentSubsystem::Get(World) : nullptr;
+			USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+			if (!World || !Environment || !Environment->IsInitialised() || !Squad || !Squad->GetLeader())
+			{
+				return;
+			}
+			Runner->World = World;
+			KeepSquadSafe(World);
+			UWidgetLayoutLibrary::RemoveAllWidgets(World);
+			AWeatherPresenterActor* Presenter = AWeatherPresenterActor::Find(World);
+			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+			AOperativeCharacter* Leader = Squad->GetLeader();
+
+			switch (D.Step)
+			{
+			case EStep::Warmup:
+				if (D.StepFrame >= WarmupFrames && Presenter && Presenter->IsApplying() && Snow::ShadersPending() == 0)
+				{
+					D.MapName = World->GetMapName();
+					D.MapName.RemoveFromStart(World->StreamingLevelsPrefix);
+					D.bWave = D.MapName.Contains(TEXT("MovementTest"));
+					if (D.bWave)
+					{
+						SmokeUtils::PlaceSquadAtTestStart(World);
+					}
+					if (const APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+					{
+						D.ViewYaw = PC->PlayerCameraManager ? PC->PlayerCameraManager->GetCameraRotation().Yaw : D.ViewYaw;
+					}
+					D.Overlay = Presenter->GetSnowOverlay();
+					D.Mpc = LoadObject<UMaterialParameterCollection>(nullptr, MpcPath);
+					Environment->SetClockScale(0.f);
+					Environment->ForceWeather(EWeatherState::Clear, true);
+					Environment->SetHour(12.f);
+					D.Focus = Leader->GetActorLocation();
+					UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots grounddust: %s, overlay component %s, focus %s, view yaw %.0f"), *D.MapName,
+						D.Overlay.IsValid() ? TEXT("ok") : TEXT("MISSING"), *D.Focus.ToCompactString(), D.ViewYaw);
+					D.Step = EStep::Setup;
+					D.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Setup:
+			case EStep::Settle:
+			case EStep::Write:
+				ViewPoint(World, D.Focus, Snow::ViewDistance);
+				SetSnow(*Environment, Amounts[D.ShotIndex]);
+				Label(*Environment);
+				if (D.Step == EStep::Setup)
+				{
+					D.Step = EStep::Settle;
+					D.StepFrame = 0;
+				}
+				else if (D.Step == EStep::Settle)
+				{
+					// The first still also waits for the ground overlay's shaders / PSOs (compiled on first use in an editor build).
+					if (D.StepFrame >= SettleFrames * (D.ShotIndex == 0 ? 4 : 1) && (Snow::ShadersPending() == 0 || D.StepFrame >= SettleFrames * 12))
+					{
+						const FString File = FString::Printf(TEXT("%s_ground_%03d.png"), *D.MapName, FMath::RoundToInt(Amounts[D.ShotIndex] * 100.f));
+						Capture(D.Dir / File);
+						UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots grounddust: %s (%d ground slabs, %d object meshes, %s)"), *File, GroundSlabs(), ObjectMeshes(),
+							*Environment->Describe());
+						D.Step = EStep::Write;
+						D.StepFrame = 0;
+					}
+				}
+				else if (D.StepFrame >= 10)
+				{
+					++D.ShotIndex;
+					D.Step = D.ShotIndex < UE_ARRAY_COUNT(Amounts) ? EStep::Setup : (D.bMovie ? EStep::MovieSetup : AfterMovie());
+					D.StepFrame = 0;
+				}
+				break;
+
+			case EStep::MovieSetup:
+				ViewPoint(World, D.Focus, Snow::ViewDistance);
+				SetSnow(*Environment, 0.f);
+				Label(*Environment);
+				if (D.StepFrame >= 30)
+				{
+					D.Step = EStep::Movie;
+					D.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Movie:
+				ViewPoint(World, D.Focus, Snow::ViewDistance);
+				SetSnow(*Environment, FMath::Clamp(static_cast<float>(D.StepFrame) / MovieFrames, 0.f, 1.f));
+				Label(*Environment);
+				if (D.StepFrame % MovieEvery == 0 && D.StepFrame <= MovieFrames)
+				{
+					Capture(D.Dir / (TEXT("movie_") + D.MapName) / FString::Printf(TEXT("frame_%04d.png"), D.ClipCount++));
+				}
+				if (D.StepFrame > MovieFrames + 3)
+				{
+					D.Step = AfterMovie();
+					D.StepFrame = 0;
+				}
+				break;
+
+			case EStep::WaveSetup:
+				// L_MovementTest: the cost in the wave fight (as snowperf: the squad away from the spawns, wave 2 started).
+				if (D.StepFrame == 1 && Waves)
+				{
+					SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f);
+					Waves->ClearAllEnemies();
+					Waves->StartWave(WaveIndex);
+					D.MapName += FString::Printf(TEXT("_wave%d"), WaveIndex);
+					UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots grounddust: wave %d started (%d alive)"), WaveIndex, Waves->GetAliveEnemyCount());
+				}
+				ViewPoint(World, Leader->GetActorLocation(), Snow::ViewDistance);
+				SetSnow(*Environment, PerfSnowAmount);
+				Label(*Environment, TEXT(" - wave 2"));
+				if (D.StepFrame >= 120)
+				{
+					Capture(D.Dir / FString::Printf(TEXT("%s_ground_070.png"), *D.MapName));
+					D.Step = EStep::Perf;
+					D.StepFrame = 0;
+				}
+				break;
+
+			// Perf A/B at SnowAmount 0.7: Codex.Env.SnowGround 0 vs 1 (the object overlay stays on in both), off / on / off / on per distance.
+			case EStep::Perf:
+			{
+				const int32 PerDistance = PerfRepeats * 2;
+				const int32 DistanceIndex = D.PerfIndex / PerDistance;
+				const bool bOn = (D.PerfIndex % 2) == 1;
+				const float Distance = PerfDistances[DistanceIndex];
+				if (D.StepFrame == 1)
+				{
+					SetGroundCVar(bOn);
+					Runner->Lines.Reset();
+				}
+				ViewPoint(World, D.bWave ? Leader->GetActorLocation() : D.Focus, Distance);
+				SetSnow(*Environment, PerfSnowAmount);
+				if (D.StepFrame > PerfSettleFrames)
+				{
+					D.Samples[DistanceIndex][bOn ? 1 : 0].Add();
+				}
+				if (D.StepFrame >= PerfSettleFrames + PerfFrames)
+				{
+					if (D.PerfIndex % PerDistance == PerDistance - 1)
+					{
+						const SnowCover::FPerfSample& Off = D.Samples[DistanceIndex][0];
+						const SnowCover::FPerfSample& On = D.Samples[DistanceIndex][1];
+						const double Delta = On.Gpu / FMath::Max(On.Count, 1) - Off.Gpu / FMath::Max(Off.Count, 1);
+						const FString Alive = D.bWave && Waves ? FString::Printf(TEXT(", %d enemies alive"), Waves->GetAliveEnemyCount()) : FString();
+						D.Report.Add(FString::Printf(TEXT("%s | camera %.0f m | snow %.1f | ground OFF %s | ON (%d slabs) %s | GPU delta %+.2f ms%s"), *D.MapName,
+							Distance / 100.f, PerfSnowAmount, *Off.Describe(), GroundSlabs(), *On.Describe(), Delta, *Alive));
+					}
+					++D.PerfIndex;
+					D.Step = D.PerfIndex < PerDistance * static_cast<int32>(UE_ARRAY_COUNT(PerfDistances)) ? EStep::Perf : AfterPerf();
+					if (D.Step != EStep::Perf)
+					{
+						SetGroundCVar(true);
+					}
+					D.StepFrame = 0;
+				}
+				break;
+			}
+
+			// Tracks (interactive snow): the leader walks a loop around the focus; the squad follows.
+			case EStep::TrackSetup:
+				SetSnow(*Environment, TrackSnowAmount);
+				if (D.StepFrame == 1)
+				{
+					const float Enabled = TrackWindowEnabled(World);
+					D.Focus = Leader->GetActorLocation();
+					UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots grounddust: tracks - SnowTrackWindow.w %.2f (%s)"), Enabled,
+						Enabled < 0.f ? TEXT("no parameter") : (Enabled > 0.5f ? TEXT("on") : TEXT("off")));
+				}
+				ViewPoint(World, D.Focus, Snow::ViewDistance);
+				Label(*Environment, TEXT(" - walking a loop"));
+				if (D.StepFrame >= 30)
+				{
+					D.LoopIndex = 0;
+					D.Step = EStep::TrackWalk;
+					D.StepFrame = 0;
+				}
+				break;
+
+			case EStep::TrackWalk:
+			{
+				ViewPoint(World, D.Focus, Snow::ViewDistance);
+				SetSnow(*Environment, TrackSnowAmount);
+				const float Angle = 2.f * PI * static_cast<float>(D.LoopIndex) / LoopPoints;
+				const FVector Wanted = D.LoopIndex >= LoopPoints ? D.Focus : D.Focus + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * LoopRadiusCm;
+				const FVector Target = SmokeUtils::ClearPoint(World, D.Focus, Wanted);
+				if (D.StepFrame == 1)
+				{
+					Leader->OrderMoveTo(Target, false);
+				}
+				if (D.StepFrame > 10 && (FVector::Dist2D(Leader->GetActorLocation(), Target) < 90.f || D.StepFrame >= LoopPointFrames))
+				{
+					++D.LoopIndex;
+					D.Step = D.LoopIndex <= LoopPoints ? EStep::TrackWalk : EStep::TrackSettle;
+					D.StepFrame = 0;
+				}
+				break;
+			}
+
+			case EStep::TrackSettle:
+				ViewPoint(World, D.Focus, Snow::ViewDistance);
+				SetSnow(*Environment, TrackSnowAmount);
+				Label(*Environment, *FString::Printf(TEXT(" - after a loop, track window %.0f"), TrackWindowEnabled(World)));
+				if (D.StepFrame == 45)
+				{
+					Capture(D.Dir / FString::Printf(TEXT("%s_tracks_loop.png"), *D.MapName));
+				}
+				if (D.StepFrame == 60)
+				{
+					ViewPoint(World, D.Focus, 1400.f);
+				}
+				if (D.StepFrame > 60)
+				{
+					ViewPoint(World, D.Focus, 1400.f);
+				}
+				if (D.StepFrame == 100)
+				{
+					Capture(D.Dir / FString::Printf(TEXT("%s_tracks_loop_close.png"), *D.MapName));
+				}
+				if (D.StepFrame >= 115)
+				{
+					D.Step = EStep::Done;
+					D.StepFrame = 0;
+				}
+				break;
+
+			case EStep::Done:
+				if (D.StepFrame >= 10)
+				{
+					Finish();
+				}
+				break;
+			}
+		}
+
+		void Run(const TArray<FString>& Args)
+		{
+			auto Has = [&Args](const TCHAR* Word)
+			{
+				return Args.ContainsByPredicate([Word](const FString& Arg) { return Arg.Equals(Word, ESearchCase::IgnoreCase); });
+			};
+			Runner = MakeShared<FRunner>();
+			DRunner = MakeShared<FDustRunner>();
+			DRunner->bMovie = !Has(TEXT("nomovie"));
+			DRunner->bPerf = !Has(TEXT("noperf"));
+			DRunner->bTracks = !Has(TEXT("notracks"));
+			DRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / TEXT("grounddust"));
+			FPaths::CollapseRelativeDirectories(DRunner->Dir);
+			IFileManager::Get().MakeDirectory(*DRunner->Dir, true);
+			Runner->Dir = DRunner->Dir;
+			Runner->DrawHandle = UDebugDrawService::Register(TEXT("Game"), FDebugDrawDelegate::CreateStatic(&OnDraw));
+			DRunner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
+			UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots grounddust: %d stills%s%s%s -> %s"), static_cast<int32>(UE_ARRAY_COUNT(Amounts)),
+				DRunner->bMovie ? TEXT(" + movie") : TEXT(""), DRunner->bPerf ? TEXT(" + perf A/B") : TEXT(""), DRunner->bTracks ? TEXT(" + tracks loop") : TEXT(""),
+				*DRunner->Dir);
+		}
+	}
+
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("charsnow"), ESearchCase::IgnoreCase))
+		{
+			EnvironmentCharSnowShots::Run(Args);
+			return;
+		}
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("terrain"), ESearchCase::IgnoreCase))
+		{
+			EnvironmentTerrainShots::Run(Args);
+			return;
+		}
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("tracks"), ESearchCase::IgnoreCase))
+		{
+			EnvironmentTracksShots::Run(Args);
+			return;
+		}
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("grounddust"), ESearchCase::IgnoreCase))
+		{
+			GroundDust::Run(Args);
+			return;
+		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("snowcover"), ESearchCase::IgnoreCase))
 		{
 			SnowCover::Run(Args);
 			return;
 		}
+		if (Args.Num() > 0 && Args[0].Equals(TEXT("snowfx2"), ESearchCase::IgnoreCase))
+		{
+			EnvironmentSnowFx2Shots::Run(Args);
+			return;
+		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("snowperf"), ESearchCase::IgnoreCase))
 		{
-			SnowPerf::Run();
+			SnowPerf::Run(Args.Num() > 1 ? Args[1] : FString(TEXT("snowperf")));
 			return;
 		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("snow"), ESearchCase::IgnoreCase))
@@ -1880,7 +2364,7 @@ namespace EnvironmentShots
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.EnvironmentShots"),
-		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse]': the weather presenter stills (+ a day at x60) into Environment/visuals; 'snowcover [nomovie] [noperf]': the snow cover overlay stills, movie and perf A/B into Environment/snowcover; 'snowperf': the falling snow GPU cost off / Snowfall / Blizzard at 2 camera distances into Environment/snowperf; 'snow': the falling snow stills + 10 s clips into Environment/snow; needs rendering, then exits."),
+		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse]': the weather presenter stills (+ a day at x60) into Environment/visuals; 'snowcover [nomovie] [noperf]': the snow cover overlay stills, movie and perf A/B into Environment/snowcover; 'snowperf [<subdir>]': the falling snow GPU cost off / Snowfall / Blizzard at 2 camera distances into Environment/snowperf (or <subdir>); 'snow': the falling snow stills + 10 s clips into Environment/snow; 'snowfx2 [noclip]' (the lake): DA_SnowFX before / after flake size, the fishermen's hut in a blizzard (indoor kill off / on) and a clip into Environment/snowfx2; 'grounddust [nomovie] [noperf] [notracks]': the snow ground overlay stills (Clear 12:00, cover 0 / 0.35 / 0.7 / 1), the 0 -> 1 movie, the GPU A/B (Codex.Env.SnowGround 0 / 1; MovementTest: in wave 2) and a tracks loop into Environment/grounddust; 'terrain [nomovie] [notracks]' (on /Game/Environment/Weather/Test/L_SnowTerrainTest): the landscape material stills, night fresh / frost, interactive tracks and a 10 s movie into Environment/terrain; needs rendering, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

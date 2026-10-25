@@ -27,7 +27,6 @@
 #include "Misc/App.h"
 #include "Misc/PackageName.h"
 #include "NiagaraSystem.h"
-#include "UI/MinimapSubsystem.h"
 
 namespace WeatherPresenterLocal
 {
@@ -54,6 +53,14 @@ namespace WeatherPresenterLocal
 	const FName ParamWindStrength(TEXT("WindStrength"));
 	const FName ParamIsSnowing(TEXT("IsSnowing"));
 	const FName ParamWindDirection(TEXT("WindDirection"));
+	/** A "delta" long enough for the snow FX intensity smoothing to reach its target at once (the first application). */
+	constexpr float SnowJumpStartSeconds = 1000.f;
+	/** Level start: eye adaptation in f-stops per second for the first game seconds (the opening frames show the final exposure). */
+	constexpr float StartExposureSnapSeconds = 1.5f;
+	constexpr float StartExposureSnapSpeed = 60.f;
+	// Section 15: the objects' directional snow pockets (world axes), in FDirectionalSnow pocket order.
+	const FName ParamObjectSnow[FDirectionalSnow::PocketCount] = { FName(TEXT("SnowTop")), FName(TEXT("SnowPX")), FName(TEXT("SnowNX")),
+		FName(TEXT("SnowPY")), FName(TEXT("SnowNY")) };
 
 	/** The soft reference names an existing package (checked first: loading a missing one logs warnings). */
 	bool PackageExists(const FSoftObjectPath& Path)
@@ -260,12 +267,20 @@ void AWeatherPresenterActor::BeginPlay()
 	{
 		UE_LOG(LogCodexTactics, Log, TEXT("[EnvVisuals] %s missing: MPC_Environment is not written"), *EnvironmentParameters.ToString());
 	}
-	// Nothing of the snow shows until the presenter starts applying (minimap hold, visuals toggle).
+	// Nothing of the snow shows until the presenter starts applying (visuals toggle).
 	SetSnowVisualsEnabled(false);
 	Adopt();
 	if (UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(this))
 	{
 		StateSetHandle = Environment->OnStateSet.AddUObject(this, &AWeatherPresenterActor::HandleStateSet);
+	}
+	// The level OPENS in its weather look (user feedback 2026-10-23: the lake first showed the authored daylight, then switched to the
+	// snowy night after the old 4 s minimap hold): the whole state is applied synchronously here, in the same BeginPlay dispatch as the
+	// map's actors (the subsystem spawns the presenter in OnWorldBeginPlay), before the first frame is rendered and before any start fade.
+	// The minimap's one-off captures run on its own tick after this, so the minimap shows the weather look too.
+	if (WantsToApply())
+	{
+		StartApplying();
 	}
 }
 
@@ -454,33 +469,6 @@ bool AWeatherPresenterActor::WantsToApply() const
 	return Environment && Environment->IsInitialised() && Environment->GetLevelSettings().bVisuals;
 }
 
-bool AWeatherPresenterActor::IsMinimapHoldOver() const
-{
-	const UWorld* World = GetWorld();
-	if (!World || StartTime < 0.f || World->GetTimeSeconds() - StartTime >= MinimapHoldSeconds)
-	{
-		return true;
-	}
-	const UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>();
-	if (!Minimap)
-	{
-		return true;
-	}
-	if (!Minimap->IsReady())
-	{
-		return false;
-	}
-	for (int32 Floor = 0; Floor < Minimap->GetFloorCount(); ++Floor)
-	{
-		const FMinimapFloorCapture* Capture = Minimap->GetCaptureInfo(Floor);
-		if (Capture && Capture->PassesLeft > 0)
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
 void AWeatherPresenterActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -491,10 +479,7 @@ void AWeatherPresenterActor::Tick(float DeltaSeconds)
 	const bool bWant = WantsToApply();
 	if (bWant && !bApplying)
 	{
-		if (IsMinimapHoldOver())
-		{
-			StartApplying();
-		}
+		StartApplying();
 		return;
 	}
 	if (!bWant)
@@ -583,6 +568,7 @@ void AWeatherPresenterActor::Apply()
 	ApplyFog(Frame);
 	ApplyPostProcess(Frame);
 	ApplySnow(Frame, Environment->GetSnowAmount());
+	WriteObjectSnow(Environment->GetStateRef().ObjectSnow);
 	RecaptureSkyIfNeeded(Frame, false);
 	LastFrame = Frame;
 	++ApplyCount;
@@ -669,6 +655,13 @@ void AWeatherPresenterActor::ApplyPostProcess(const FWeatherVisualFrame& Frame)
 	const FPostProcessSettings& Base = Authored.PostSettings;
 	Settings.bOverride_AutoExposureBias = true;
 	Settings.AutoExposureBias = Base.AutoExposureBias + Frame.ExposureBias;
+	// Level start: the eye adaptation snaps to the weather look (a night level must not open over-exposed and fade down for a second);
+	// after StartExposureSnapSeconds the authored adaptation speeds are back.
+	const bool bSnapExposure = StartTime >= 0.f && GetWorld()->GetTimeSeconds() - StartTime < WeatherPresenterLocal::StartExposureSnapSeconds;
+	Settings.bOverride_AutoExposureSpeedUp = bSnapExposure || Base.bOverride_AutoExposureSpeedUp;
+	Settings.bOverride_AutoExposureSpeedDown = bSnapExposure || Base.bOverride_AutoExposureSpeedDown;
+	Settings.AutoExposureSpeedUp = bSnapExposure ? WeatherPresenterLocal::StartExposureSnapSpeed : Base.AutoExposureSpeedUp;
+	Settings.AutoExposureSpeedDown = bSnapExposure ? WeatherPresenterLocal::StartExposureSnapSpeed : Base.AutoExposureSpeedDown;
 	const FVector4 BaseSaturation = Base.bOverride_ColorSaturation ? Base.ColorSaturation : FVector4(1.f, 1.f, 1.f, 1.f);
 	Settings.bOverride_ColorSaturation = true;
 	Settings.ColorSaturation = FVector4(BaseSaturation.X, BaseSaturation.Y, BaseSaturation.Z, BaseSaturation.W * Frame.Saturation);
@@ -680,17 +673,22 @@ void AWeatherPresenterActor::ApplyPostProcess(const FWeatherVisualFrame& Frame)
 void AWeatherPresenterActor::ApplySnow(const FWeatherVisualFrame& Frame, float SnowAmount)
 {
 	const float Now = GetWorld()->GetTimeSeconds();
-	const float Delta = LastSnowApplyTime < 0.f ? 0.f : FMath::Max(0.f, Now - LastSnowApplyTime);
+	// The first application after StartApplying jump-starts the falling snow at its target intensity (no ramp from 0 at level start).
+	const float Delta = LastSnowApplyTime < 0.f ? WeatherPresenterLocal::SnowJumpStartSeconds : FMath::Max(0.f, Now - LastSnowApplyTime);
 	LastSnowApplyTime = Now;
 	const FWeatherVisualPreset& P = Frame.Preset;
-	LastWindDirection = ComputeWindDirection(Now, WindBaseYaw, WindDriftDegrees, WindDriftPeriodSeconds);
+	// Section 15: one wind for the flakes, the MPC and the directional snow (the subsystem adds the debug override).
+	const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(this);
+	LastWindDirection = Environment ? Environment->GetWindDirection() : ComputeWindDirection(Now, WindBaseYaw, WindDriftDegrees, WindDriftPeriodSeconds);
+	// The overlay shows while any object pocket (or the ground) holds snow: a top melted to 0 with snow on a windward side still shows.
+	const float ObjectSnowMax = Environment ? Environment->GetStateRef().ObjectSnow.GetMax() : 0.f;
 	if (SnowFx)
 	{
 		SnowFx->ApplySnowFx(FMath::Clamp(P.SnowIntensity, 0.f, 1.f), FMath::Clamp(P.WindStrength, 0.f, 1.f), LastWindDirection, Delta);
 	}
 	if (SnowOverlay)
 	{
-		SnowOverlay->ApplySnowCover(FMath::Clamp(SnowAmount, 0.f, 1.f), FMath::Clamp(P.FrostAmount, 0.f, 1.f));
+		SnowOverlay->ApplySnowCover(FMath::Clamp(FMath::Max(SnowAmount, ObjectSnowMax), 0.f, 1.f), FMath::Clamp(P.FrostAmount, 0.f, 1.f));
 	}
 	WriteParameters(SnowAmount, P.FrostAmount, P.WindStrength, ComputeIsSnowing(P.SnowIntensity), LastWindDirection);
 }
@@ -711,6 +709,21 @@ void AWeatherPresenterActor::WriteParameters(float SnowAmount, float FrostAmount
 	Instance->SetVectorParameterValue(WeatherPresenterLocal::ParamWindDirection, FLinearColor(WindDirection.X, WindDirection.Y, WindDirection.Z, Wind));
 }
 
+void AWeatherPresenterActor::WriteObjectSnow(const FDirectionalSnow& Pockets)
+{
+	UWorld* World = GetWorld();
+	UMaterialParameterCollectionInstance* Instance = World && LoadedParameters ? World->GetParameterCollectionInstance(LoadedParameters) : nullptr;
+	if (!Instance)
+	{
+		return;
+	}
+	for (int32 Index = 0; Index < FDirectionalSnow::PocketCount; ++Index)
+	{
+		// A missing parameter (an MPC from before section 15) is skipped by the engine (returns false); the others are still written.
+		Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamObjectSnow[Index], FMath::Clamp(Pockets.Get(Index), 0.f, 1.f));
+	}
+}
+
 void AWeatherPresenterActor::SetSnowVisualsEnabled(bool bEnabled)
 {
 	if (SnowFx)
@@ -725,6 +738,7 @@ void AWeatherPresenterActor::SetSnowVisualsEnabled(bool bEnabled)
 	{
 		// The authored look: no weather snow / frost / wind in the materials.
 		WriteParameters(0.f, 0.f, 0.f, 0.f, LastWindDirection);
+		WriteObjectSnow(FDirectionalSnow());
 	}
 }
 
