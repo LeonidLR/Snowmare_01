@@ -33,10 +33,14 @@ export interface GoldenFile {
 const r2 = (v: Vec2): Vec2 => [round(v[0]), round(v[1])];
 const seg = (s: Segment) => ({ a: r2(s.a), b: r2(s.b), thickness: s.thickness ?? 0 });
 
-/** Rotates and moves a scene so the parity tests also cover arbitrary headings / positions. */
+/**
+ * Rotates and moves a scene so the parity tests also cover arbitrary headings / positions. The points come back ROUNDED to the
+ * precision the files hold (`r2`): every output is computed from exactly the inputs written (a wall whose nearest point lies
+ * on the heading line flipped sides between the unrounded and the written coordinates - C++ port, SideWidth cases 37 / 38).
+ */
 function place(walls: Segment[], yaw: number, offset: Vec2): Segment[] {
   const c = Math.cos((yaw * Math.PI) / 180), s = Math.sin((yaw * Math.PI) / 180);
-  const t = (p: Vec2): Vec2 => [offset[0] + p[0] * c - p[1] * s, offset[1] + p[0] * s + p[1] * c];
+  const t = (p: Vec2): Vec2 => r2([offset[0] + p[0] * c - p[1] * s, offset[1] + p[0] * s + p[1] * c]);
   return walls.map((w) => ({ a: t(w.a), b: t(w.b), thickness: w.thickness }));
 }
 
