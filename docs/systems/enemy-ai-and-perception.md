@@ -139,7 +139,7 @@ within 10 m (Godot `_find_closest_squad_member`), so a lone enemy left the opera
   the nearest navmesh point round it) and hits it from there.
 
 **Tunable:** `Codex.Enemy.OperativeAttackersBeforeObjects` - code default **2**, game value in `Content/Data/AI/ai_tuning.json` "cvars"
-(`"2"`), editable in the Wave Editor stealth / combat tab (`Tools/WaveEditor/src/utils/stealthCombat.ts` `CVARS`); `-dpcvars=` wins;
+(`"2"`), editable in the Wave Editor stealth / combat tab (`Tools/TrainingGround/src/utils/stealthCombat.ts` `CVARS`); `-dpcvars=` wins;
 **0 = the old Godot weighting** (A/B). Turn-based enemies only ever target operatives (`TurnBasedCombatSubsystem` `ChooseTarget`), unchanged.
 
 **Checks:** unit tests `CodexTactics.Characters.EnemyAI.OperativesFirst.{Saturation, TargetPick, BlockingObstacle, Reachability,

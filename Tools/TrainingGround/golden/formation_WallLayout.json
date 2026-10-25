@@ -1,0 +1,5029 @@
+{
+ "schema": "codex.formation_golden/1",
+ "rule": "WallLayout",
+ "tolerance": {
+  "cm": 0.5,
+  "deg": 0.5
+ },
+ "config": "Content/Data/FormationLab/formation_config.json",
+ "config_values": {
+  "slot.side_offset": 260,
+  "slot.back_offset": 280,
+  "slot.min_spacing": 80,
+  "diamond.rear_back": 560,
+  "pair.side_offset": 180,
+  "pair.back_offset": 220,
+  "pair.scan_period": 5,
+  "pair.scan_from": 90,
+  "pair.scan_to": 270,
+  "column.base_back": 180,
+  "column.spacing": 150,
+  "column.stagger": 60,
+  "column.side_deg": 70,
+  "line.spacing": 260,
+  "line.fan_inner": 5,
+  "line.fan_outer": 25,
+  "echelon.step": 180,
+  "echelon.sector_lead": 10,
+  "echelon.sector_2": 45,
+  "echelon.sector_3": 80,
+  "echelon.sector_4": 125,
+  "blizzard.side_offset": 110,
+  "blizzard.back_offset": 120,
+  "hedgehog.radius": 130,
+  "wall.spacing": 100,
+  "wall.face_offset": 45,
+  "wall.flank_deg": 60,
+  "wall.neighbour_deg": 30,
+  "wall.end_deg": 75,
+  "pace.patrol": 0.8,
+  "pace.walk_speed": 220,
+  "pace.run_speed": 480,
+  "move.backward_mult": 0.8,
+  "move.catchup_mult": 1.25,
+  "facing.turn_speed": 10,
+  "scan.period": 3,
+  "scan.center_side": 45,
+  "scan.amp_side": 45,
+  "scan.amp_lead": 12,
+  "scan.dwell_exp": 0.45,
+  "halt.side_deg": 60,
+  "classify.probe_side": 400,
+  "classify.probe_ahead": 600,
+  "classify.corridor_width": 600,
+  "classify.hold_time": 1,
+  "classify.at_wall_dist": 150,
+  "sight.fov": 140
+ },
+ "notes": "in: wall {a, b, thickness}, clickedSlot, memberCount, roomLeft, roomRight -> out.slots [{role, pos, yaw}].",
+ "cases": [
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -100,
+       135
+      ],
+      "yaw": -135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       100,
+       135
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -100,
+       135
+      ],
+      "yaw": -135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       135
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "L",
+      "pos": [
+       100,
+       135
+      ],
+      "yaw": -30
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       135
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "L",
+      "pos": [
+       100,
+       135
+      ],
+      "yaw": -30
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       135
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "L",
+      "pos": [
+       100,
+       135
+      ],
+      "yaw": -30
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       135
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "L",
+      "pos": [
+       100,
+       135
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -200,
+       135
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       135
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "L",
+      "pos": [
+       100,
+       135
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       200,
+       135
+      ],
+      "yaw": -15
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       135
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "L",
+      "pos": [
+       100,
+       135
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -200,
+       135
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       500,
+       135
+      ],
+      "yaw": -135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       700,
+       135
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       500,
+       135
+      ],
+      "yaw": -135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       500,
+       135
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "L",
+      "pos": [
+       700,
+       135
+      ],
+      "yaw": -30
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       500,
+       135
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "L",
+      "pos": [
+       700,
+       135
+      ],
+      "yaw": -30
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       500,
+       135
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "L",
+      "pos": [
+       700,
+       135
+      ],
+      "yaw": -30
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       500,
+       135
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "L",
+      "pos": [
+       700,
+       135
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       400,
+       135
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       500,
+       135
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "L",
+      "pos": [
+       700,
+       135
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       800,
+       135
+      ],
+      "yaw": -15
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       600,
+       135
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "P",
+      "pos": [
+       500,
+       135
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "L",
+      "pos": [
+       700,
+       135
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       400,
+       135
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -100,
+       265
+      ],
+      "yaw": 45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -300,
+       265
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -100,
+       265
+      ],
+      "yaw": 45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       265
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "L",
+      "pos": [
+       -300,
+       265
+      ],
+      "yaw": 150
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       265
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "L",
+      "pos": [
+       -300,
+       265
+      ],
+      "yaw": 150
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       265
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "L",
+      "pos": [
+       -300,
+       265
+      ],
+      "yaw": 150
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       265
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "L",
+      "pos": [
+       -300,
+       265
+      ],
+      "yaw": 150
+     },
+     {
+      "role": "Z",
+      "pos": [
+       0,
+       265
+      ],
+      "yaw": 15
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       265
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "L",
+      "pos": [
+       -300,
+       265
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -400,
+       265
+      ],
+      "yaw": 165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -1000,
+      200
+     ],
+     "b": [
+      1000,
+      200
+     ],
+     "thickness": 40
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -200,
+       265
+      ],
+      "yaw": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       265
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "L",
+      "pos": [
+       -300,
+       265
+      ],
+      "yaw": 150
+     },
+     {
+      "role": "Z",
+      "pos": [
+       0,
+       265
+      ],
+      "yaw": 15
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": -135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       100
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       -100
+      ],
+      "yaw": -135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": -135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       100
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       100
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       -100
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       100
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       -100
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       100
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       -100
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       100
+      ],
+      "yaw": 150
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       -100
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       200
+      ],
+      "yaw": 105
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       100
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       -100
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       -200
+      ],
+      "yaw": -105
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       0
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       100
+      ],
+      "yaw": 150
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       -100
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       200
+      ],
+      "yaw": 105
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       360,
+       0
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       360,
+       200
+      ],
+      "yaw": 45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       360,
+       0
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       360,
+       0
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "L",
+      "pos": [
+       360,
+       200
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       360,
+       0
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "L",
+      "pos": [
+       360,
+       200
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       360,
+       0
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "L",
+      "pos": [
+       360,
+       200
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       360,
+       0
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       360,
+       200
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       360,
+       -100
+      ],
+      "yaw": -75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       360,
+       0
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "L",
+      "pos": [
+       360,
+       200
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       360,
+       300
+      ],
+      "yaw": 75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       360,
+       100
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       360,
+       0
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       360,
+       200
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       360,
+       -100
+      ],
+      "yaw": -75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": -135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       500
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       300
+      ],
+      "yaw": -135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": -135
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       500
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       500
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       300
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       500
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       300
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       500
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       300
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       500
+      ],
+      "yaw": 150
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       600
+      ],
+      "yaw": 105
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       500
+      ],
+      "yaw": 120
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       300
+      ],
+      "yaw": -150
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       200
+      ],
+      "yaw": -105
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      300,
+      -800
+     ],
+     "b": [
+      300,
+      900
+     ],
+     "thickness": 30
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       240,
+       400
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "P",
+      "pos": [
+       240,
+       500
+      ],
+      "yaw": 150
+     },
+     {
+      "role": "L",
+      "pos": [
+       240,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       240,
+       600
+      ],
+      "yaw": 105
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "Z",
+      "pos": [
+       21.213,
+       120.208
+      ],
+      "yaw": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -120.208,
+       -21.213
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "Z",
+      "pos": [
+       21.213,
+       120.208
+      ],
+      "yaw": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       21.213,
+       120.208
+      ],
+      "yaw": 75
+     },
+     {
+      "role": "L",
+      "pos": [
+       -120.208,
+       -21.213
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       21.213,
+       120.208
+      ],
+      "yaw": 75
+     },
+     {
+      "role": "L",
+      "pos": [
+       -120.208,
+       -21.213
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       21.213,
+       120.208
+      ],
+      "yaw": 75
+     },
+     {
+      "role": "L",
+      "pos": [
+       -120.208,
+       -21.213
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       21.213,
+       120.208
+      ],
+      "yaw": 105
+     },
+     {
+      "role": "L",
+      "pos": [
+       -120.208,
+       -21.213
+      ],
+      "yaw": -165
+     },
+     {
+      "role": "Z",
+      "pos": [
+       91.924,
+       190.919
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       21.213,
+       120.208
+      ],
+      "yaw": 75
+     },
+     {
+      "role": "L",
+      "pos": [
+       -120.208,
+       -21.213
+      ],
+      "yaw": 165
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -190.919,
+       -91.924
+      ],
+      "yaw": -150
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     0,
+     0
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -49.497,
+       49.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       21.213,
+       120.208
+      ],
+      "yaw": 105
+     },
+     {
+      "role": "L",
+      "pos": [
+       -120.208,
+       -21.213
+      ],
+      "yaw": -165
+     },
+     {
+      "role": "Z",
+      "pos": [
+       91.924,
+       190.919
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       328.787,
+       229.792
+      ],
+      "yaw": -90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       470.208,
+       371.213
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       328.787,
+       229.792
+      ],
+      "yaw": -90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "P",
+      "pos": [
+       328.787,
+       229.792
+      ],
+      "yaw": -105
+     },
+     {
+      "role": "L",
+      "pos": [
+       470.208,
+       371.213
+      ],
+      "yaw": 15
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "P",
+      "pos": [
+       328.787,
+       229.792
+      ],
+      "yaw": -105
+     },
+     {
+      "role": "L",
+      "pos": [
+       470.208,
+       371.213
+      ],
+      "yaw": 15
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "P",
+      "pos": [
+       328.787,
+       229.792
+      ],
+      "yaw": -105
+     },
+     {
+      "role": "L",
+      "pos": [
+       470.208,
+       371.213
+      ],
+      "yaw": 15
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "P",
+      "pos": [
+       328.787,
+       229.792
+      ],
+      "yaw": -75
+     },
+     {
+      "role": "L",
+      "pos": [
+       470.208,
+       371.213
+      ],
+      "yaw": 15
+     },
+     {
+      "role": "Z",
+      "pos": [
+       258.076,
+       159.081
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "P",
+      "pos": [
+       328.787,
+       229.792
+      ],
+      "yaw": -105
+     },
+     {
+      "role": "L",
+      "pos": [
+       470.208,
+       371.213
+      ],
+      "yaw": -15
+     },
+     {
+      "role": "Z",
+      "pos": [
+       540.919,
+       441.924
+      ],
+      "yaw": 30
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     600,
+     100
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       399.497,
+       300.503
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "P",
+      "pos": [
+       328.787,
+       229.792
+      ],
+      "yaw": -75
+     },
+     {
+      "role": "L",
+      "pos": [
+       470.208,
+       371.213
+      ],
+      "yaw": 15
+     },
+     {
+      "role": "Z",
+      "pos": [
+       258.076,
+       159.081
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 1,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "Z",
+      "pos": [
+       121.213,
+       220.208
+      ],
+      "yaw": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -20.208,
+       78.787
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 2,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 180
+     },
+     {
+      "role": "Z",
+      "pos": [
+       121.213,
+       220.208
+      ],
+      "yaw": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       121.213,
+       220.208
+      ],
+      "yaw": 75
+     },
+     {
+      "role": "L",
+      "pos": [
+       -20.208,
+       78.787
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       121.213,
+       220.208
+      ],
+      "yaw": 75
+     },
+     {
+      "role": "L",
+      "pos": [
+       -20.208,
+       78.787
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 3,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       121.213,
+       220.208
+      ],
+      "yaw": 75
+     },
+     {
+      "role": "L",
+      "pos": [
+       -20.208,
+       78.787
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 100,
+    "roomRight": 900
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       121.213,
+       220.208
+      ],
+      "yaw": 105
+     },
+     {
+      "role": "L",
+      "pos": [
+       -20.208,
+       78.787
+      ],
+      "yaw": -165
+     },
+     {
+      "role": "Z",
+      "pos": [
+       191.924,
+       290.919
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 900,
+    "roomRight": 100
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       121.213,
+       220.208
+      ],
+      "yaw": 75
+     },
+     {
+      "role": "L",
+      "pos": [
+       -20.208,
+       78.787
+      ],
+      "yaw": 165
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -90.919,
+       8.076
+      ],
+      "yaw": -150
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "wall": {
+     "a": [
+      -500,
+      -500
+     ],
+     "b": [
+      700,
+      700
+     ],
+     "thickness": 50
+    },
+    "clickedSlot": [
+     -200,
+     400
+    ],
+    "memberCount": 4,
+    "roomLeft": 500,
+    "roomRight": 500
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       50.503,
+       149.497
+      ],
+      "yaw": 135
+     },
+     {
+      "role": "P",
+      "pos": [
+       121.213,
+       220.208
+      ],
+      "yaw": 105
+     },
+     {
+      "role": "L",
+      "pos": [
+       -20.208,
+       78.787
+      ],
+      "yaw": -165
+     },
+     {
+      "role": "Z",
+      "pos": [
+       191.924,
+       290.919
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  }
+ ]
+}

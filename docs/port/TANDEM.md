@@ -108,7 +108,7 @@ between 2026-10-06 and 2026-10-08 (details per commit in docs/port/CHANGELOG.md;
   `Quests/QuestSubsystem.h` / `QuestChain.h`, mission flow `Core/MissionSubsystem.h` / `MissionRules.h`, banners
   `UI/PhaseBannersWidget.h`, radio / HUD feed lines (many systems post short Russian feed lines — keep tone consistent).
 - Level data: `Content/Data/LevelJson/*.json` (waves, `combat_start`, `patrol_search_seconds`, `horde*`), edited in the Wave
-  Editor (`Tools/WaveEditor`, tab «Скрытность и бой» for stealth / horde).
+  Editor (`Tools/TrainingGround`, tab «Скрытность и бой» for stealth / horde).
 
 **How to work with us now**
 - **Ownership for narrative:** Gemini owns narrative CONTENT — `Content/Data/Narrative/**` (csv / manifest / new text files),
