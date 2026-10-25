@@ -34,7 +34,7 @@
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
-    "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke"
+    "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -75,6 +75,7 @@
     "GateExitLakeKiaSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "bug 2026-10-23: the lake exit with the Engineer killed in action - the two living cross, the points screen, the factory (the fallen stays behind)" },
     "GateExitLakeKiaNoPointsSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "bug 2026-10-23: the same with no unspent points - the factory opens at once" },
     "FrozenFactoryStartSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 300, "_why": "2026-10-22 b: campaign level 0.1 starts with a fade-in, the squad just outside the lake compound's blast door (set dressing; CLOSED and blocking since 2026-10-22 e), facing away, the door in the start camera" },
+    "FormationLabSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 900, "_why": "formation stage 6 (2026-10-25, docs/design/FORMATION_SECTORS.md): the squad (4th man spawned) walks every lab route - formation per zone, no wall stare, the rear man keeps up, patrol pace, the wall layout at the dead ends, the group cover order as the wall layout, a 3-man wedge" },
     "LadderQueueSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.1): 3 operatives ordered onto the wall ladder's roof together - one on the ladder at a time, the others wait at its foot in the order they came" },
     "LadderEnemySmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.5): the Marksman, the Frozen PMC Fighter and the Military Zombie climb the factory's test ladders through their nav links (knockdown / death on the way down drop them); the Hound, the Frostbitten and the Brute never take a ladder" },
     "LadderClimbSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-22 e (docs/design/LADDERS.md): the factory's two test ladders (against a wall / free-standing) up and down by real clicks through their nav links, rung IK, gates, a decoration ladder, a knockdown mid-climb -> the fall with fall damage" },
@@ -103,7 +104,13 @@
       "name": "formation-sectors-2026-10-25",
       "globs": ["Source/**/Formation/**", "Content/Data/FormationLab/**", "Tools/TrainingGround/golden/formation_*"],
       "tests": ["CodexTactics.Formation"],
-      "smokes": []
+      "smokes": ["FormationLabSmoke"]
+    },
+    {
+      "name": "formation-runtime-2026-10-25",
+      "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Debug/FormationLabSmoke*", "Source/**/Formation/FormationRuntimeRules*"],
+      "tests": ["CodexTactics.Formation", "CodexTactics.Squad"],
+      "smokes": ["FormationLabSmoke", "SquadControlSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "MovementSmoke", "SoloRejoinSmoke", "RegroupAfterLossesSmoke", "WarmIdleSmoke"]
     },
     {
       "name": "orders-pause-relocate-pick-2026-10-25",
@@ -489,7 +496,7 @@
       "name": "operative-movement-squad",
       "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeCrowdFollowing*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
       "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement"],
-      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke"]
+      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke", "FormationLabSmoke"]
     },
     {
       "name": "operative-cover-units",

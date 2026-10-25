@@ -1208,7 +1208,9 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 			{
 				return TutorialConfineLocal::IsInsideBox(*Volume->Box, Member->GetActorLocation(), TutorialConfineLocal::NearVolumeCm, TutorialConfineLocal::AreaMarginZCm);
 			});
-			NotInCover += Member->bInCover && bThere ? 0 : 1;
+			// Formation sectors (Codex.Formation.Sectors): a group cover order in group mode is the wall layout - crouched at the wall facing
+			// out counts as in cover there (the pose is only ever set with the console on).
+			NotInCover += (Member->bInCover || Member->IsInFormationWallPose()) && bThere ? 0 : 1;
 		}
 		return static_cast<float>(NotInCover);
 	}

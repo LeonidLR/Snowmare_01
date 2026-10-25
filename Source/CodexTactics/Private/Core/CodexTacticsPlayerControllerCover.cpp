@@ -16,6 +16,7 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GroupCoverRules.h"
+#include "Formation/FormationRuntimeRules.h"
 #include "Tactics/CoverWrapRules.h"
 #include "NavigationPath.h"
 #include "Characters/SquadOrderRules.h"
@@ -610,6 +611,40 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	if (!SquadOrderRules::IsGroupCoverOrder(Others.Num()))
 	{
 		return false;
+	}
+	// Formation look sectors (Codex.Formation.Sectors, docs/design/FORMATION_SECTORS.md "Wall"): in group mode (no box selection, the
+	// exploration formation; not planned in the pause, not a cover switch / wrap) the group cover order is the formation wall layout -
+	// all along the wall 1 m apart, crouched facing OUT, nobody looks through the wall. Else (or when no layout can be made) as before.
+	if (FormationRuntime::IsEnabled() && !bPlan && !bLeaderSwitch && !LeaderWrap && !Squad->HasMultiSelection() && !Squad->IsSoloMode()
+		&& Squad->IsFormationActive() && Squad->OrderFormationWall(Direct, Others, Slot))
+	{
+		LastGroupCoverSlots = 1 + Others.Num();
+		LastGroupCoverProne = 0;
+		UInteractionSubsystem* WallUseOrders = World->GetSubsystem<UInteractionSubsystem>();
+		UVehicleSubsystem* WallVehicles = World->GetSubsystem<UVehicleSubsystem>();
+		for (AOperativeCharacter* Member : Others)
+		{
+			if (WallUseOrders)
+			{
+				WallUseOrders->CancelUseOrder(Member); // as the cover order: it replaces a planned / running "Ignite"
+			}
+			if (WallVehicles)
+			{
+				WallVehicles->CancelBoarding(Member);
+			}
+			Member->CancelQuickFire();
+		}
+		if (UCombatFeedbackSubsystem* WallFeedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			WallFeedback->SpawnMovePing(Slot.WorldLocation, true);
+		}
+		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, false, true, Direct, Slot.WorldLocation);
+		if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), FText::Format(LOCTEXT("GroupWallOrdered",
+				"🏃 Along the wall ({0} operatives), facing out!"), 1 + Others.Num()));
+		}
+		return true;
 	}
 	const FGroupCoverConfig Config;
 	// The direct order's slot: the clicked one. On a high wall the corner he would walk to by himself right after entering
