@@ -1,7 +1,7 @@
 // Dev-only console command for a headless check of combat-mode input on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.CombatFlowSmoke
 // Drives the player controller's Space path (SpacePressed / SpaceReleased + real-time hold) through:
-// wave start -> no formation following -> tap pause -> planned move clamped to 12 m -> tap release executes it ->
+// wave start -> the formation follows in the fight (user decision 2026-10-26) -> tap pause -> planned move clamped to 12 m -> tap release executes it ->
 // hold without enemies refused -> hold near an enemy enters turn-based -> hold again returns to full real time
 // (FGameFlowConfig::bHoldExitsTurnBasedToRealTime, user request 2026-10-06; with the flag off: the Godot free pause).
 
@@ -116,11 +116,12 @@ namespace CombatFlowSmoke
 			Leader->OrderMoveTo(State.LeaderStart + FVector(0.f, 700.f, 0.f), false);
 			NextStage(State);
 			break;
-		case 1: // Followers act individually in combat.
+		case 1: // User decision 2026-10-26 ("the squad keeps its formation in combat"; it was "followers act individually in combat").
 			if (State.StageTime >= 3.f)
 			{
-				Check(State, !Squad->IsFormationActive(), TEXT("formation off in combat"));
-				Check(State, FVector::Dist2D(Follower->GetActorLocation(), State.FollowerStart) < 50.f, TEXT("follower stayed put while leader moved"));
+				Check(State, Squad->IsFormationActive(), TEXT("formation ON in combat (2026-10-26)"));
+				Check(State, FVector::Dist2D(Follower->GetActorLocation(), State.FollowerStart) > 150.f,
+					*FString::Printf(TEXT("the follower followed the walking leader (%.0f cm)"), FVector::Dist2D(Follower->GetActorLocation(), State.FollowerStart)));
 				PC->SpacePressed();
 				NextStage(State);
 			}

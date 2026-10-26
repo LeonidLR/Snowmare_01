@@ -21,7 +21,7 @@
  *
  * User decisions 2026-10-26 (they override the pause parts above):
  *  - "the tactical pause is entered ONLY by pressing Space": the trigger gives the warning (alert, HQ line, the flyover's slow motion)
- *    and the fight goes on in REAL TIME - no pause (bAutoPause false; the wave's first Space opens the free pause instead);
+ *    and the fight goes on in REAL TIME - no pause (bAutoPause false; Space opens an ordinary pause: no free first pause, also 2026-10-26);
  *  - "the horde warning only for the FIRST wave of the fight; later waves only as the arrows, don't interrupt the fight": a later wave
  *    of the same fight gets no warning at all - no alert, no flyover, no slow motion, no pause (ShouldWarnWave; bWarnLaterWaves false).
  */

@@ -54,7 +54,17 @@ namespace CorpseLootRules
 	/** A weapon id the remains offer as an item: a firearm (not the grenade, the knife or nothing). */
 	CODEXTACTICS_API bool IsLootableWeapon(const FString& WeaponId);
 
-	/** The remains' contents: exactly what he carried (no crate defaults), the grenades and his firearm (Godot get_items_list). */
+	/**
+	 * A carried item the remains hold - user decision 2026-10-26 ("trim the remains to the Godot list", player.gd get_items_list): ammo
+	 * (a weapon's rounds / fuel: clip + reserve), medkits, food (canned food, bread, chocolate). Not the matches, heat packs, firewood,
+	 * flares or the set-up items (mines, barricades, turrets) - those stay with the body. The grenades and the weapon come separately.
+	 */
+	CODEXTACTICS_API bool IsRemainsItem(ETransferItem Item);
+
+	/**
+	 * The remains' contents: what he carried of the Godot list (IsRemainsItem; no crate defaults), the grenades and his firearm (Godot
+	 * get_items_list).
+	 */
 	CODEXTACTICS_API FLootContents BuildRemainsContents(const FCarriedGear& Gear);
 
 	/** "Remains: <name>" (the crate name, glossary «Останки»). */

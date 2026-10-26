@@ -4,6 +4,14 @@
 
 ## 9. Known gaps / tech debt
 
+- **Deliberate deviations (user decisions 2026-10-26, branch `gameflow/user-answers-1026`; the open questions of that day CLOSED):** (1) "the
+  tactical pause only by Space": the grid's own end goes to real time (Godot `_exit_turn_based_combat`: a 20 s pause) and the tutorial never pauses
+  (the A4 `tactical_pause` action retired); (2) no free first pause of a wave - the wave's first Space is an ordinary pause (UE-only feature of
+  2026-10-11 removed); (3) the group cover order runs in the fight too (Godot `is_tactical_mode` gave individual control in the fight); (4) no gear
+  from a knocked-down, living operative (kept); (5) a fallen operative's remains hold the Godot `get_items_list` kinds (ammo, medkits, food,
+  grenades, the weapon) - UE keeps the ammo of EVERY weapon he carried (Godot had one weapon); (6) the squad's corner peek (the peeker stands at
+  a high wall, the others crouched) confirmed. Details: `waves-horde-encounters.md`, `squad-and-orders.md`, `interactables-traps-loot.md`,
+  `combat-and-fire.md`.
 - **`SuppressionSmoke` scene A can flake under load (seen once in a batch 2026-10-26, passed alone; NOT the combat formation).** The log
   (main checkout, 18:57:39): the marksman's second shot came 0.5 s after his first and hit the Commander -> the Commander himself became
   SUPPRESSED (level 0.70), his SUPPRESS rounds went blind ("[suppressed: blind]", none reached the marksman), the marksman's level decayed to

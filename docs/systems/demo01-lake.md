@@ -63,7 +63,7 @@ known trap the selected operative stands at (his own body or the ground within 1
 **DEFENSIVE instead of PASSIVE:** the posture lesson (`A3_posture` / `A4_posture`, text `TUT_A3_POSTURE` "POSTURE: DEFENSIVE", radio
 `WT_A3_POSTURE` "nobody shoots first") completes on `Posture.Defensive`; the lure card sets DEFENSIVE (was PASSIVE). A DEFENSIVE squad never shoots
 first (no auto fire while exploring, none at an enemy that has not detected it - `FirePostureRules`), so the lure still works; it returns
-fire when attacked. `A4_spotted` (lesson pause + "fight back") stays for a squad the player made PASSIVE himself (never precredited now: the
+fire when attacked. `A4_spotted` ("fight back"; its lesson pause removed 2026-10-26) stays for a squad the player made PASSIVE himself (never precredited now: the
 DEFENSIVE key is in the history). (4) **The tripwire lesson for the wire the player actually meets:** `A3_wire` was PRECREDITED and never shown
 (it completed on `Stance.Prone` and the fence crawl had put prone into the history); now BEAT-LESS (any first PMC wire, in any beat - a beat-A3
 step would also have started A3), never precredited, done on a disarm (`TripwireDisarmed` / the disarm order) or after 45 s; text: what it is
@@ -93,7 +93,8 @@ smokes `TutorialAmbushLakeEarlyKillSmoke` (new), `TutorialAmbushLakeSpottedSmoke
 approach the first zombie it may spot us - the attack is ruined and the PASSIVE operatives won't even fire back; put the game into a TACTICAL
 PAUSE and ask for DEFENSIVE or AGGRESSIVE". New card **`A4_spotted`** (`TUT_A4_SPOTTED` "SPOTTED - FIGHT BACK"): when either A4 zombie
 (binding `A4_ANY`) ENGAGES the squad (new event `EnemyAlerted`, `requires: A4_tripwire`) while somebody is PASSIVE (stat `squad_passive`),
-action **`tactical_pause`** (the free pause: no charge, no timer), done on `Posture.Defensive` / `Posture.Aggressive` (Alt = squad) or when
+action ~~**`tactical_pause`** (the free pause: no charge, no timer)~~ (removed 2026-10-26, user decision "the tactical pause only by Space": the
+card shows while the fight runs in real time, `TUT_A4_SPOTTED` "the fight is on ... need a moment to plan? Space pauses the fight"), done on `Posture.Defensive` / `Posture.Aggressive` (Alt = squad) or when
 nobody is PASSIVE any more; once per level (the same card for a part-2 failure). The stealth card of the moment is dropped (`A4_tripwire`,
 `A4_hug_wall`, `A4_round_corner`: `cancel_on` EnemyAlerted; `A4_lure`: `Enemy*` of its zombie); the close-shot card keeps its slot (it already
 says AGGRESSIVE; a spotted card waiting behind it is dropped when it finishes - no late pause). (2) **Part 2 moves tactically:** before the

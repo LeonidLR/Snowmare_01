@@ -34,7 +34,8 @@
 - **When:** the second click on the cover ghost (`ConfirmCoverPreview`) -> `ACodexTacticsPlayerController::OrderGroupCover` when
   `USquadSubsystem::GetGroupCoverMembers(leader)` is not empty (`SquadOrderRules::ShouldJoinGroupCover`): a **box selection of two or
   more** -> the other selected ones (Solo or not, a fight too, busy or not); else **group mode** (Solo off, no camera-zone hold, the
-  exploration formation on) -> every formation follower not busy with an order of his own (`IsOnOwnOrder`), not a guard, not aboard /
+  exploration formation on - user decision 2026-10-26: or the fight's formation, real time / the tactical pause, `IsGroupCoverFormation`,
+  see squad-and-orders.md "Group cover order") -> every formation follower not busy with an order of his own (`IsOnOwnOrder`), not a guard, not aboard /
   boarding, not held by a level obstacle. Nobody joins -> the single cover order as before. A click along the leader's own wall while he
   is in cover stays HIS shimmy (no preview, no group order).
 - **Direct-order operative = the leader** (gold ring): the one the cover ghost is shown for, in both modes (in a box selection the leader

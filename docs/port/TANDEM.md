@@ -1004,6 +1004,7 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-26 d (Claude, `gameflow/user-answers-1026`, worktree `../CodexTactics-answers`): the game designer's answers - `GameFlowStateMachine.*`, `GameFlowSubsystem.*`, `HordeIntroSubsystem.*`, `PhaseBannersWidget.*`, `TurnBasedCombatSubsystem.cpp`, `Tutorial*` (retired action), `SquadOrderRules.*`, `SquadSubsystem*.cpp/.h` (group cover in the fight, the planned wall layout), `CodexTacticsPlayerControllerCover.cpp`, `CorpseLootRules.*`, `OperativeCharacterHealth.cpp`, `demo_01_steps.json` / `demo_01_texts_draft.json`, tests + smokes. No asset change.
 - 2026-10-26 c (Claude, `tactics/turn-arena-buildings`, worktree `../CodexTactics-arena`): turn-based arena relaxed - `TurnArenaRules.*`, `TurnBasedCombatArena.cpp`, `TurnBasedCombatSubsystem.*`, `GorkyGridManager.*` (closed cells), smokes `TurnArenaYardSmoke` / `TurnArenaLakeSmoke` / `TurnArenaSmokeUtils.h`; C++ / docs only, no assets / maps.
 - 2026-10-23 f (Claude, `ladder/work`): ladders - the queue (`Ladders/*`, `OperativeCharacterMovement.cpp` FollowTo guard, `OperativeCharacterLadder.cpp`), smoke `LadderQueueSmoke`. No asset change.
 - 2026-10-23 e (Claude, `ladder/work`): ladders - turning back mid-climb (`Ladders/*`, `OperativeCharacterMovement.cpp` RequestMove's ladder branch). No asset change.

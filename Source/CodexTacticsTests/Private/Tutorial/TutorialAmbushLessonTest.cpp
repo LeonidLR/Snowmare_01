@@ -779,10 +779,11 @@ bool FTutorialAmbushHiddenCardTest::RunTest(const FString&)
 	return true;
 }
 
-// 2026-10-21 (user play-test): a zombie that ENGAGES the PASSIVE squad mid-lesson -> the free tactical pause + the posture card (once per
-// level, either part); the stealth cards of the moment are dropped and the lesson goes on after the skirmish. Part 2's approach along the
-// near container's wall.
-TUTORIAL_AMBUSH_TEST(FTutorialAmbushSpottedTest, "SpottedPausesTheFight")
+// 2026-10-21 (user play-test): a zombie that ENGAGES the PASSIVE squad mid-lesson -> the posture card (once per level, either part); the
+// stealth cards of the moment are dropped and the lesson goes on after the skirmish. Part 2's approach along the near container's wall.
+// User decision 2026-10-26 ("the tactical pause only by Space"): the card no longer pauses the fight (the "tactical_pause" action is
+// retired: it loads with a warning and is dropped); it completes on the posture key in real time.
+TUTORIAL_AMBUSH_TEST(FTutorialAmbushSpottedTest, "SpottedCardKeepsRealTime")
 bool FTutorialAmbushSpottedTest::RunTest(const FString&)
 {
 	using namespace TutorialAmbushTestData;
@@ -792,9 +793,9 @@ bool FTutorialAmbushSpottedTest::RunTest(const FString&)
 		return false;
 	}
 	const FTutorialStep* Card = Data.FindStep(TEXT("A4_spotted"));
-	TestTrue(TEXT("the spotted card: either zombie engages, the tactical pause, DEFENSIVE / AGGRESSIVE, only a PASSIVE squad"), Card
+	TestTrue(TEXT("the spotted card: either zombie engages, NO pause (real time), DEFENSIVE / AGGRESSIVE, only a PASSIVE squad"), Card
 		&& Card->Trigger.Event == GameplayEvents::EnemyAlerted.ToString() && Card->Trigger.EnemyFilter.Enemy == FName(TEXT("A4_ANY"))
-		&& Card->Actions.ContainsByPredicate([](const FTutorialAction& Action) { return Action.Type == FName(TEXT("tactical_pause")); })
+		&& Card->Actions.IsEmpty()
 		&& Card->Complete.Commands.Contains(PlayerCommands::PostureDefensive.ToString()) && Card->Complete.Commands.Contains(PlayerCommands::PostureAggressive.ToString())
 		&& Card->Conditions.Num() == 1 && Card->Conditions[0].Stat == FName(TEXT("squad_passive")) && Card->bOnce);
 	const FTutorialStep* Lure = Data.FindStep(TEXT("A4_lure"));
@@ -802,8 +803,20 @@ bool FTutorialAmbushSpottedTest::RunTest(const FString&)
 	{
 		return Action.Type == FName(TEXT("set_posture")) && Action.Posture == TEXT("defensive");
 	}));
-	TestTrue(TEXT("known: action tactical_pause, stats squad_passive / in_fight"), TutorialRules::IsKnownAction(TEXT("tactical_pause"))
-		&& TutorialRules::IsKnownStat(TEXT("squad_passive")) && TutorialRules::IsKnownStat(TEXT("in_fight")));
+	TestTrue(TEXT("known: stats squad_passive / in_fight; action tactical_pause only as a retired one"), TutorialRules::IsKnownStat(TEXT("squad_passive"))
+		&& TutorialRules::IsKnownStat(TEXT("in_fight")) && TutorialRules::IsKnownAction(TEXT("tactical_pause"))
+		&& TutorialRules::IsRetiredAction(TEXT("tactical_pause")) && !TutorialRules::IsRetiredAction(TEXT("set_posture")));
+	{
+		// An old steps file with the action still loads: the action is dropped with a warning.
+		FTutorialStepsData Old;
+		FString OldError;
+		TArray<FString> OldWarnings;
+		const bool bParsed = TutorialRules::ParseSteps(TEXT(R"JSON({ "steps": [ { "id": "S", "text_id": "T", "action": { "type": "tactical_pause" },
+			"complete": { "event": "E" } } ] })JSON"), Old, OldWarnings, OldError);
+		const FTutorialStep* OldStep = Old.FindStep(TEXT("S"));
+		TestTrue(*FString::Printf(TEXT("the retired action loads and is dropped (%s)"), *OldError), bParsed && OldStep && OldStep->Actions.IsEmpty()
+			&& OldWarnings.ContainsByPredicate([](const FString& Warning) { return Warning.Contains(TEXT("retired")); }));
+	}
 
 	TMap<FName, float> Stats;
 	Stats.Add(TEXT("squad_passive"), 3.f);

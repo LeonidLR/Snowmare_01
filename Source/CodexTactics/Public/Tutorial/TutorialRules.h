@@ -116,8 +116,14 @@ namespace TutorialRules
 	 */
 	CODEXTACTICS_API bool IsKnownStat(FName Stat);
 
-	/** Action types: "cold_bump", "set_posture". */
+	/** Action types: "cold_bump", "set_posture", "solo_focus" (+ the retired ones, IsRetiredAction: they still load). */
 	CODEXTACTICS_API bool IsKnownAction(FName Type);
+
+	/**
+	 * A retired action type: loads with a warning and is dropped. "tactical_pause" (2026-10-21: the fight's free pause when the squad was
+	 * spotted mid-lesson) - user decision 2026-10-26 "the tactical pause only by Space": the tutorial never pauses the game.
+	 */
+	CODEXTACTICS_API bool IsRetiredAction(FName Type);
 
 	/** Focus kinds: "coldest_operative", "wounded_operative". */
 	CODEXTACTICS_API bool IsKnownFocus(FName Focus);

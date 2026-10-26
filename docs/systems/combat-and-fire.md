@@ -62,6 +62,12 @@
 
 ## Turn-based combat (old §5)
 
+**The grid's own end goes to REAL TIME (user decision 2026-10-26, "the tactical pause only by Space"):** every grid enemy down (or no operative
+left on it) -> `UTurnBasedCombatSubsystem::EndCombat` -> `FGameFlowStateMachine::FinishTurnBasedFight` (= `ExitTurnBasedToRealTime`: no pause, no
+charge, dilation 1). It was `ExitTurnBased`: a 20 s free tactical pause "to regroup" (Godot `_exit_turn_based_combat`). The Space hold out of the
+grid is unchanged (real time by default; `bHoldExitsTurnBasedToRealTime` false = the Godot 20 s pause, `PostTurnBasedPauseDuration`). Tests
+`CodexTactics.Combat.TimeMode.*`; smoke `TurnBasedSmoke` (victory -> real time).
+
 **Turn-based combat** — `Tactics/TurnBasedCombatSubsystem` (starts when the flow enters TurnBased, ends on victory /
 defeat / leaving): 14 x 14 grid (1.5 m) around the leader, floor traced under it, static colliders baked as obstacles,
 barricades / barrels / mines / turrets registered, everything else frozen (enemy / turret / mine ticks off, wave

@@ -12,7 +12,9 @@
 //     fight a living mate may stand in front of a part of her body - that part's click is his, never the snow's);
 //  5. the Engineer is selected and the player clicks the body (the controller's click dispatcher, HandleWorldHit): he walks up, the
 //     search (0.6 s) opens the loot window with her gear - medkits, food, the M16 rounds of her clip and reserve, her grenades, her
-//     weapon; Take All moves everything into his inventory and the remains read "searched".
+//     weapon; Take All moves everything into his inventory and the remains read "searched". User decision 2026-10-26 ("trim the remains
+//     to the Godot list", player.gd get_items_list): she also carries matches, heat packs, a flare, firewood and her mines - none of
+//     them is in the remains.
 
 #include "CoreMinimal.h"
 
@@ -211,10 +213,16 @@ namespace FallenGearSmoke
 				// Headless (-nullrhi) nothing is drawn: the bones follow the death clip only when the pose always refreshes (as on screen).
 				Member->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 			}
-			// Her gear, known: 2 medkits, 3 chocolate, 2 grenades, the M16 in her hands with 17 + 45 rounds.
+			// Her gear, known: 2 medkits, 3 chocolate, 2 grenades, the M16 in her hands with 17 + 45 rounds; off the Godot list (2026-10-26):
+			// matches, heat packs, a flare, firewood and at least one mine - they must stay out of the remains.
 			Medic->MedkitsCount = 2;
 			Medic->ChocolateCount = 3;
 			Medic->GrenadesCount = 2;
+			Medic->MatchesCount = 4;
+			Medic->HeatPacksCount = 2;
+			Medic->FlaresCount = 1;
+			Medic->FirewoodCount = 2;
+			Medic->MinesCount = FMath::Max(Medic->MinesCount, 1);
 			if (Medic->CurrentWeapon && Medic->CurrentWeapon->WeaponId == TEXT("m16"))
 			{
 				Medic->CurrentClip = 17;
@@ -412,6 +420,24 @@ namespace FallenGearSmoke
 				&& Remains->Contents.BonusWeaponId == State.MedicWeaponId && Remains->GetStoredCount(ETransferItem::RifleAmmo) == State.MedicRifleRounds,
 				FString::Printf(TEXT("[remains] her gear inside: %d grenades, weapon '%s', %d M16 rounds (Godot get_items_list)"),
 					Remains->Contents.GetCount(ELootItem::Grenade), *Remains->Contents.BonusWeaponId, Remains->GetStoredCount(ETransferItem::RifleAmmo)));
+			Check(State, Remains->GetStoredCount(ETransferItem::Medkit) == State.MedicMedkits && Remains->GetStoredCount(ETransferItem::Chocolate) == State.MedicChocolate,
+				FString::Printf(TEXT("[remains] her medkits (%d) and food (%d chocolate)"), Remains->GetStoredCount(ETransferItem::Medkit),
+					Remains->GetStoredCount(ETransferItem::Chocolate)));
+			{
+				// User decision 2026-10-26: only the Godot list - ammo, medkits, food, grenades, the weapon.
+				FString Extra;
+				for (const ETransferItem Item : { ETransferItem::Matches, ETransferItem::HeatPack, ETransferItem::Flare, ETransferItem::Firewood,
+					ETransferItem::Mine, ETransferItem::Barricade, ETransferItem::Turret })
+				{
+					if (Remains->GetStoredCount(Item) > 0)
+					{
+						Extra += FString::Printf(TEXT(" item %d x%d"), static_cast<int32>(Item), Remains->GetStoredCount(Item));
+					}
+				}
+				Check(State, Extra.IsEmpty(),
+					FString::Printf(TEXT("[remains] only the Godot list (ammo, medkits, food, grenades, weapon: %d stacks) - no matches, heat packs, flares, firewood, mines%s%s"),
+						Remains->GetItems().Num(), Extra.IsEmpty() ? TEXT("") : TEXT(" - FOUND:"), *Extra));
+			}
 			Next();
 			return true;
 		}

@@ -92,4 +92,13 @@ namespace SquadOrderRules
 			return false;
 		}
 	}
+
+	bool IsGroupCoverPhase(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bPostCombatFormation, bool bCombatFormation, bool bGroupCoverInCombat)
+	{
+		if (IsFormationPhase(Phase, bPostCombatFormation))
+		{
+			return true;
+		}
+		return bGroupCoverInCombat && IsFollowPhase(Phase, Mode, bPostCombatFormation, bCombatFormation);
+	}
 }

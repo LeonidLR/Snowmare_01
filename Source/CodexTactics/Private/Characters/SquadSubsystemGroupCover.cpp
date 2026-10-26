@@ -12,6 +12,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/InteractionSubsystem.h"
 #include "NavigationSystem.h"
 #include "Tactics/GroupCoverRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -21,7 +22,9 @@ TArray<AOperativeCharacter*> USquadSubsystem::GetGroupCoverMembers(const AOperat
 {
 	TArray<AOperativeCharacter*> Result;
 	const bool bMulti = HasMultiSelection();
-	const bool bFormation = IsExplorationFormation(); // in a fight the cover orders stay individual (a box selection still joins)
+	// User decision 2026-10-26: group mode takes cover together in the fight too (real time / the tactical pause, not turn-based); the old
+	// rule (Codex.GroupCover.InCombat 0): exploration only - in a fight the cover orders stayed individual (a box selection still joined).
+	const bool bFormation = IsGroupCoverFormation();
 	for (AOperativeCharacter* Member : GetMembers())
 	{
 		if (!Member)
@@ -45,6 +48,75 @@ TArray<AOperativeCharacter*> USquadSubsystem::GetGroupCoverMembers(const AOperat
 		}
 	}
 	return Result;
+}
+
+bool USquadSubsystem::PlanFormationWall(AOperativeCharacter* Direct, const FCoverSlot& Slot, float Radius, FVector& OutPlanned)
+{
+	OutPlanned = Slot.WorldLocation;
+	if (!Direct || !Slot.IsValid() || Direct != Leader.Get())
+	{
+		return false;
+	}
+	FVector Origin = Direct->GetActorLocation();
+	GetPauseOrigin(Direct, Origin);
+	if (FVector::Dist2D(Origin, Slot.WorldLocation) > Radius)
+	{
+		return false; // beyond the pause's order radius: the ordinary (clamped) group cover plan
+	}
+	OutPlanned = PlanMove(Direct, Slot.WorldLocation, true, Radius); // (drops an earlier wall plan of his)
+	Direct->SetPendingCover(Slot); // the fallback when the layout cannot be made on the release: he takes the clicked cover
+	PlannedWallOrder.Direct = Direct;
+	PlannedWallOrder.Slot = Slot;
+	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s: the wall layout planned in the pause (ordered on the release)"), *Direct->DisplayName.ToString());
+	return true;
+}
+
+bool USquadSubsystem::ExecutePlannedFormationWall()
+{
+	AOperativeCharacter* Direct = PlannedWallOrder.Direct.Get();
+	const FCoverSlot Slot = PlannedWallOrder.Slot;
+	PlannedWallOrder = FPlannedWallOrder();
+	if (!Direct)
+	{
+		return false;
+	}
+	if (Direct != Leader.Get() || bIsSoloMode || bFollowersHolding || HasMultiSelection() || !IsGroupCoverFormation())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] the planned wall layout is dropped (no longer group mode): %s takes the cover alone"),
+			*Direct->DisplayName.ToString());
+		return false;
+	}
+	// Members with a plan of their own in this pause carry it out (it runs right after this).
+	TArray<AOperativeCharacter*> Others = GetGroupCoverMembers(Direct);
+	Others.RemoveAll([this](const AOperativeCharacter* Member) { return PlannedOrders.Contains(TWeakObjectPtr<AOperativeCharacter>(const_cast<AOperativeCharacter*>(Member))); });
+	if (Others.IsEmpty() || !OrderFormationWall(Direct, Others, Slot))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] the planned wall layout cannot be made: %s takes the cover (his planned walk)"),
+			*Direct->DisplayName.ToString());
+		return false;
+	}
+	Direct->ClearPendingCover();
+	ClearPlannedOrder(Direct); // OrderFormationWall gave him his own walk to his layout slot
+	UWorld* World = GetWorld();
+	UInteractionSubsystem* UseOrders = World ? World->GetSubsystem<UInteractionSubsystem>() : nullptr;
+	UVehicleSubsystem* Vehicles = World ? World->GetSubsystem<UVehicleSubsystem>() : nullptr;
+	for (AOperativeCharacter* Member : Others)
+	{
+		if (UseOrders)
+		{
+			UseOrders->CancelUseOrder(Member); // as the cover order (ACodexTacticsPlayerController::OrderGroupCover)
+		}
+		if (Vehicles)
+		{
+			Vehicles->CancelBoarding(Member);
+		}
+		Member->CancelQuickFire();
+		Member->CancelSuppressFire(TEXT("a cover order"));
+	}
+	ReallocateWallGroup(Direct, Others, TEXT("the group cover order planned in the pause: the formation wall layout"));
+	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] the release: %s + %d along the wall (the wall layout planned in the pause)"),
+		*Direct->DisplayName.ToString(), Others.Num());
+	return true;
 }
 
 bool USquadSubsystem::OrderGroupCoverProne(AOperativeCharacter* Operative, const FVector& Spot, float FaceYaw, bool bSprint, bool bPlan, float Radius,

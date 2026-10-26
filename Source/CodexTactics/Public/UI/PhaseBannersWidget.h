@@ -33,6 +33,11 @@ public:
 	bool IsCutsceneShown() const;
 	/** The «Start Battle» button is visible (only before the first wave: UGameFlowSubsystem::OffersStartBattle). */
 	bool IsStartBattleShown() const;
+	/**
+	 * The combat banner's pause hint in a real-time wave (user decision 2026-10-26: no free first pause - Space is an ordinary pause):
+	 * "[SPACE] tactical pause N/M" with charges left, "pauses recharge: S s" while they come back, else "no pauses left".
+	 */
+	static FString GetPauseHint(int32 Charges, int32 MaxCharges, float CooldownSeconds);
 
 protected:
 	virtual void NativeOnInitialized() override;

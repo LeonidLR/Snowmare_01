@@ -14,6 +14,12 @@
 //  W (2026-10-25, Codex.Formation.Sectors 1, first): group mode = the formation wall layout (FORMATION_SECTORS.md "Wall"): all three
 //    crouched along the wall 1 m apart, backs to it, facing out, not in the cover pose; the leader walks on -> they stand up and follow.
 //    A .. P then run on the cover-slot order (Codex.Formation.Sectors 0: the console-off behaviour, which a box selection keeps anyway).
+//  User decision 2026-10-26 ("group cover in combat: YES"), after P, still in the wave fight, the console back on, NO box selection:
+//  WF real time, group mode: a cover click is the group order - the formation wall layout, all three crouched along the 8 m wall
+//     facing out (it was the selected operative's own cover order in a fight); the leader walks on -> they follow;
+//  WP the tactical pause, group mode: the layout is only planned (the leader's walk, nobody moves), the release orders it -> all three
+//     along the wall;
+//  WS Solo, only the leader selected, in the fight: the individual cover click stays - he alone takes cover.
 
 #include "CoreMinimal.h"
 
@@ -195,7 +201,7 @@ namespace GroupCoverSmoke
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Time > 200.f)
+		if (!World || State.Time > 320.f)
 		{
 			return World ? Finish(State, false) : false;
 		}
@@ -578,6 +584,156 @@ namespace GroupCoverSmoke
 			}
 			Check(State, bDone, FString::Printf(TEXT("P: after the release - leader in cover (%d), two prone behind it (%d %d)"), A->bInCover,
 				Squad->HasGroupCoverProne(B, true), Squad->HasGroupCoverProne(C, true)));
+			// WF: the fight goes on - the console back on (the wall layout), no box selection (group mode), the 8 m high wall.
+			UseCoverSlotOrder(false);
+			ResetSquad(Squad, State);
+			Squad->SetLeader(A); // drops the box selection
+			SpawnWall(World, State, 800.f, 300.f);
+			Next(State, 14);
+			return true;
+		}
+		// --- WF: the wave fight in real time, group mode (user decision 2026-10-26) ------------------------------------------------
+		case 14:
+		{
+			if (Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
+			{
+				Flow->ToggleTacticalPause();
+			}
+			if (State.StageTime < 2.5f)
+			{
+				return true; // the navmesh rebuilds round the wall, the followers settle
+			}
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime,
+				TEXT("WF: the wave fight runs in real time"));
+			if (!FormationRuntime::IsEnabled())
+			{
+				Check(State, false, TEXT("WF: Codex.Formation.Sectors is on (the wall layout)"));
+				return Finish(State, false);
+			}
+			if (!FindMiddleSlot(World, State, 90.f))
+			{
+				Check(State, false, TEXT("WF: a cover slot in the middle of the wall"));
+				return Finish(State, false);
+			}
+			const TArray<AOperativeCharacter*> Joining = Squad->GetGroupCoverMembers(A);
+			Check(State, !Squad->IsSoloMode() && !Squad->HasMultiSelection() && Squad->IsGroupCoverFormation() && Joining.Num() == 2,
+				FString::Printf(TEXT("WF: group mode in the fight, no box selection - the two followers go along (%d; it was nobody)"), Joining.Num()));
+			PC->ShowCoverPreview(A, State.Slot);
+			PC->ConfirmCoverPreview();
+			Check(State, Squad->HasFormationWallOrder(), TEXT("WF: the cover click in the real-time fight is the group order - the formation wall layout"));
+			Next(State, 15);
+			return true;
+		}
+		case 15:
+		{
+			const bool bAll = A->IsInFormationWallPose() && B->IsInFormationWallPose() && C->IsInFormationWallPose();
+			if (!bAll && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, bAll && Squad->HasFormationWallOrder(), FString::Printf(TEXT("WF: all three crouched along the wall facing out in the fight (%d %d %d) after %.1f s"),
+				A->IsInFormationWallPose(), B->IsInFormationWallPose(), C->IsInFormationWallPose(), State.StageTime));
+			for (const AOperativeCharacter* Each : { A, B, C })
+			{
+				Check(State, Depth(State, Each->GetActorLocation()) < 140.f && !Each->bInCover,
+					FString::Printf(TEXT("WF: %s at the wall (%.0f cm off its face), not in the cover pose"), *Each->DisplayName.ToString(), Depth(State, Each->GetActorLocation())));
+			}
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat, TEXT("WF: the fight still runs (the order did not wait for its end)"));
+			A->OrderMoveTo(State.P - State.F * 400.f, false);
+			Next(State, 16);
+			return true;
+		}
+		case 16:
+		{
+			if (State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, !Squad->HasFormationWallOrder() && !B->IsInFormationWallPose() && !C->IsInFormationWallPose()
+				&& FVector::Dist2D(B->GetActorLocation(), A->GetActorLocation()) < 600.f && FVector::Dist2D(C->GetActorLocation(), A->GetActorLocation()) < 600.f,
+				TEXT("WF: the leader walks on - the wall order is over, the others follow him (the formation in the fight)"));
+			ResetSquad(Squad, State);
+			Next(State, 17);
+			return true;
+		}
+		// --- WP: the tactical pause, group mode ----------------------------------------------------------------------------------
+		case 17:
+		{
+			if (State.StageTime < 2.5f)
+			{
+				return true;
+			}
+			Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause,
+				TEXT("WP: the tactical pause in the fight"));
+			if (!FindMiddleSlot(World, State, 90.f))
+			{
+				Check(State, false, TEXT("WP: a cover slot in the middle of the wall"));
+				return Finish(State, false);
+			}
+			Check(State, Squad->GetGroupCoverMembers(A).Num() == 2, TEXT("WP: group mode in the pause - the two followers go along"));
+			PC->ShowCoverPreview(A, State.Slot);
+			PC->ConfirmCoverPreview();
+			Check(State, Squad->HasPlannedFormationWall() && !Squad->HasFormationWallOrder() && Squad->GetPlannedOrderCount() == 1 && A->HasPendingCover(),
+				FString::Printf(TEXT("WP: the wall layout is only planned (%d planned walk: the leader's; ordered on the release)"), Squad->GetPlannedOrderCount()));
+			Next(State, 18);
+			return true;
+		}
+		case 18:
+		{
+			if (State.StageTime < 1.f)
+			{
+				return true; // a second of the pause
+			}
+			if (Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
+			{
+				Check(State, !A->IsMoving() && !Squad->HasFormationWallOrder(), TEXT("WP: nothing ordered during the pause (the leader waits for the release)"));
+				Flow->ToggleTacticalPause();
+				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && Squad->HasFormationWallOrder() && !Squad->HasPlannedFormationWall()
+					&& !A->HasPendingCover(), TEXT("WP: the release orders the planned wall layout (the leader's cover fallback dropped)"));
+				State.StageTime = 1.f;
+				return true;
+			}
+			const bool bAll = A->IsInFormationWallPose() && B->IsInFormationWallPose() && C->IsInFormationWallPose();
+			if (!bAll && State.StageTime < 16.f)
+			{
+				return true;
+			}
+			Check(State, bAll, FString::Printf(TEXT("WP: after the release all three crouched along the wall facing out (%d %d %d)"),
+				A->IsInFormationWallPose(), B->IsInFormationWallPose(), C->IsInFormationWallPose()));
+			// WS: Solo, only the leader selected.
+			ResetSquad(Squad, State);
+			Squad->EnterSoloMode();
+			Squad->SetLeader(A);
+			Next(State, 19);
+			return true;
+		}
+		// --- WS: Solo, single selection, in the fight ----------------------------------------------------------------------------
+		case 19:
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			Check(State, Squad->IsSoloMode() && !Squad->HasMultiSelection() && Squad->GetGroupCoverMembers(A).IsEmpty(),
+				TEXT("WS: Solo, only A selected, in the fight: nobody goes along"));
+			PC->ShowCoverPreview(A, State.Slot);
+			PC->ConfirmCoverPreview();
+			Check(State, !Squad->HasFormationWallOrder(), TEXT("WS: no wall layout - the individual cover order"));
+			Next(State, 20);
+			return true;
+		}
+		case 20:
+		{
+			TrackRun(State);
+			if (!A->bInCover && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			// (B / C keep the crouch the ended wall order left them in - Solo holds them where they are; what counts: no cover order, no move.)
+			Check(State, A->bInCover && !B->bInCover && !C->bInCover && !B->HasPendingCover() && !C->HasPendingCover() && !State.SawMove[1]
+				&& !State.SawMove[2] && !Squad->HasFormationWallOrder(), FString::Printf(TEXT("WS: A alone in cover (%d), the other two stay out of it (cover %d %d, pending %d %d, moved %d %d)"),
+					A->bInCover, B->bInCover, C->bInCover, B->HasPendingCover(), C->HasPendingCover(), State.SawMove[1], State.SawMove[2]));
+			Squad->ExitSoloMode(false, 0.f);
 			return Finish(State, true);
 		}
 		default:

@@ -72,13 +72,27 @@ bool CorpseLootRules::IsLootableWeapon(const FString& WeaponId)
 	return !WeaponId.IsEmpty() && WeaponId != TEXT("grenade") && WeaponId != TEXT("knife");
 }
 
+bool CorpseLootRules::IsRemainsItem(ETransferItem Item)
+{
+	switch (Item)
+	{
+	case ETransferItem::Medkit:
+	case ETransferItem::CannedFood:
+	case ETransferItem::Bread:
+	case ETransferItem::Chocolate:
+		return true;
+	default:
+		return !TransferRules::GetAmmoWeaponId(Item).IsEmpty(); // a weapon's ammo (M16 / pistol / shotgun rounds, flame fuel, cryo, plasma)
+	}
+}
+
 FLootContents CorpseLootRules::BuildRemainsContents(const FCarriedGear& Gear)
 {
 	FLootContents Contents;
 	Contents.DestroyAll(); // no supply-crate defaults: only what he carried
 	for (const TPair<ETransferItem, int32>& Pair : Gear.Items)
 	{
-		if (Pair.Value > 0)
+		if (Pair.Value > 0 && IsRemainsItem(Pair.Key))
 		{
 			Contents.AddCount(ItemStash::ToLootItem(Pair.Key), Pair.Value);
 		}

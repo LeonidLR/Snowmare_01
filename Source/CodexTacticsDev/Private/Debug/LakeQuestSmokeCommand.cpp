@@ -295,7 +295,7 @@ namespace LakeQuestSmoke
 	}
 
 	/**
-	 * Bug 2026-10-25 (game designer, packaged build): at the console's wave the horde's free tactical pause opens; a move order there,
+	 * Bug 2026-10-25 (game designer, packaged build): at the console's wave the horde's tactical pause opens (2026-10-26: the player's Space, an ordinary pause); a move order there,
 	 * Space -> the Commander and the Engineer walked, the Medic-Sapper stayed, and after that NO click order was taken in real time
 	 * (an object relocation in a new pause unstuck it). Gives the pause order like the player, resumes, then gives real-time orders.
 	 */
@@ -346,7 +346,8 @@ namespace LakeQuestSmoke
 				}
 				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime,
 					TEXT("the horde warning over: the fight runs in real time (no pause by itself, 2026-10-26)"));
-				Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->IsFreePause(), TEXT("the player's Space: the free tactical pause"));
+				Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause && !Flow->IsFreePause(),
+					TEXT("the player's Space: an ordinary tactical pause (no free first pause, 2026-10-26)"));
 				State.PauseStageTime = 0.f;
 				return true;
 			}
