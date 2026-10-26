@@ -45,8 +45,9 @@ test('frames: run = everyone faces the travel direction; patrol = the rear man w
 
 test('the tuner levers move the checks (the wall stare follows look.wall_dist)', () => {
   // v2.2: the walking sectors of 3-4 come from the coverage allocator; ClearLook's reach is a lever the checks feel - below the
-  // stare check's 200 cm the side men look into the corridor walls, the shipped 260 keeps them out.
-  const old = runSeries({ layout, config: configValues(withValues(file, { 'look.wall_dist': 100 }).file), members: [4], seeds: 1, seedBase: 1 }).summary;
+  // stare check's 200 cm the side men look into the corridor walls, the shipped 260 keeps them out. v2.3: in a corridor the
+  // column keeps the user's 1A looks (along it), so the lever is tested with the allocator there (column.narrow_width 100).
+  const old = runSeries({ layout, config: configValues(withValues(file, { 'look.wall_dist': 100, 'column.narrow_width': 100 }).file), members: [4], seeds: 1, seedBase: 1 }).summary;
   const now = runSeries({ layout, config, members: [4], seeds: 1, seedBase: 1 }).summary;
   const stare = (s: typeof now) => s.checks.find((c) => c.id === 1)!;
   assert.equal(config['look.wall_dist'], 260);

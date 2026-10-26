@@ -116,6 +116,7 @@ interface Member {
   path: Vec2[] | null;
   repathIn: number;
   prevSlot: Vec2 | null;
+  clearHeld: number | null; // v2.3: the last ClearLook result (its hysteresis input); null while ClearLook does not apply
 }
 
 /** Builds the nav grid for a layout (reuse it across runs). */
@@ -172,6 +173,7 @@ export function simulate(o: SimOptions): number {
     path: null,
     repathIn: 0,
     prevSlot: null,
+    clearHeld: null,
   }));
 
   let leg = 1;
@@ -279,7 +281,7 @@ export function simulate(o: SimOptions): number {
     const mode: Mode = slide ? 'walk' : arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
     // --- targets and look yaws
-    let targets: { role: Role; pos: Vec2; yaw: number }[];
+    let targets: { role: Role; pos: Vec2; yaw: number; decided?: boolean }[]; // decided: a user-decided look (v2.3, Decided)
     let slideLead: Role | null = null, slideRear: Role | null = null;
     if (slide) {
       const res = FormationWallRules.Slide(slide.wall, slide.start, leader.pos, slide.dest, t, c);
@@ -313,13 +315,17 @@ export function simulate(o: SimOptions): number {
       const path = dist(trail[trail.length - 1], leader.pos) > 1e-6 ? [...trail, leader.pos] : trail;
       // Each man's sectors by his own surroundings (the corridor's held width, else a wall beside his slot -> narrow), relative
       // to the trail's direction at his slot; the rear man keeps the squad's 6 o'clock (the leader's heading).
-      targets = FormationShapeRules.TrailSlots(path, heading, n, c).map((s) => ({
-        ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw,
-          passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c), c),
-      }));
+      targets = FormationShapeRules.TrailSlots(path, heading, n, c, walls).map((s) => {
+        const width = passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c);
+        return { ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw, width, c),
+          // 1A is a corridor decision: only the classifier's held corridor width counts - a slot's side width at a doorway
+          // crossed obliquely is not a corridor (P's "forward over the shoulder" aimed at the door's wall end 0.5 m away).
+          decided: FormationSectorRules.Decided(s.role, 'column', n, passage, c) };
+      });
     } else {
       targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
         ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),
+        decided: FormationSectorRules.Decided(s.role, formation, n, passage, c),
       }));
     }
     // v2.1: slicing the pie - one member looks round the end of the wall the squad passes (patrol only; not in the wall layout).
@@ -353,10 +359,12 @@ export function simulate(o: SimOptions): number {
     if (n >= 3 && (mode === 'walk' || (mode === 'halt' && formation !== 'hedgehog')) && formation !== 'wall') {
       const trailOn = FormationGuardRules.Effective(guard).trail;
       const hv = dirOf(heading);
+      // v2.3 (1A clarified): the looks the user decided for the formation (the narrow column's K / P / L) are fixed looks too.
+      const fixed = [...looks, ...targets.filter((x) => x.decided && !looks.some((l) => l.role === x.role)).map((x) => ({ role: x.role, yaw: x.yaw }))];
       const cover = FormationCoverRules.Allocate(walls, leader.pos, heading, targets.map((x, k) => ({
         role: x.role, pos: x.pos,
         back: trailOn ? k : -((x.pos[0] - leader.pos[0]) * hv[0] + (x.pos[1] - leader.pos[1]) * hv[1]),
-      })), mode, t, c, looks);
+      })), mode, t, c, fixed);
       if (cover) {
         rearGuard = cover.rearGuard;
         targets = targets.map((x) => ({ ...x, yaw: cover.looks.find((l) => l.role === x.role)?.yaw ?? x.yaw }));
@@ -366,6 +374,7 @@ export function simulate(o: SimOptions): number {
 
     // --- members
     const frames: MemberFrame[] = [];
+    const given: Vec2[] = []; // v2.3: slots given out this frame (a fallback never lands on one)
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
       const target = targets.find((x) => x.role === m.place) ?? { role: m.place, pos: m.pos, yaw: m.yaw };
@@ -374,10 +383,11 @@ export function simulate(o: SimOptions): number {
       if (i > 0 || formation === 'wall') {
         if (!nav.walkable(slot)) {
           slotFallback = true;
-          const alt = fallbackSlot(nav, walls, leader.pos, slot);
+          const alt = fallbackSlot(nav, walls, leader.pos, slot, given, cfg(c, 'slot.min_spacing'));
           if (alt) slot = alt; else { slotInvalid = true; slot = m.pos; }
         }
       }
+      given.push(slot);
       let moveDir: Vec2 = [0, 0];
       if (i > 0 || formation === 'wall') {
         const before = m.pos;
@@ -393,8 +403,9 @@ export function simulate(o: SimOptions): number {
       // wall they hug, which made an exemption for them flip on and off).
       const watching = looks.some((l) => l.role === m.place);
       const walking = i === 0 && len(leaderVel) > 1 ? yawOf(leaderVel) : null;
-      const free = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG)
-        ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c);
+      const exempt = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG);
+      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld);
+      m.clearHeld = exempt ? null : free;
       const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
       if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
@@ -454,8 +465,10 @@ function wallAhead(walls: readonly Segment[], pos: Vec2, heading: number): Segme
  * SquadFormation::ComputeFallbackSlots: the slot offset turned round the leader in 30 deg steps, at 100 % and 60 %.
  * v2.1: a candidate must also be on the leader's side - the straight line leader -> candidate crosses no wall (a walkable point
  * behind a wall splits the squad: FORMATION_CONTRACT.md 7 / 10).
+ * v2.3 (red team #5): not within `spacing` of a slot already given out this frame (else two unwalkable slots - the hedgehog of
+ * three in a 3 m corridor - got the SAME point and the two men walked into each other); none such -> the nearest as before.
  */
-function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2): Vec2 | null {
+function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2, given: readonly Vec2[] = [], spacing = 0): Vec2 | null {
   const off = sub(slot, leader);
   const r = len(off), base = yawOf(off);
   const cands: Vec2[] = [];
@@ -463,7 +476,8 @@ function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slo
     cands.push(localToWorld(leader, base + s * 30 * k, [Math.max(r * f, 120), 0]));
   }
   cands.sort((a, b) => dist(a, slot) - dist(b, slot));
-  return cands.find((p) => nav.walkable(p) && !segmentBlocked(leader, p, walls, 0)) ?? null;
+  const ok = cands.filter((p) => nav.walkable(p) && !segmentBlocked(leader, p, walls, 0));
+  return ok.find((p) => given.every((g) => dist(g, p) >= spacing)) ?? ok[0] ?? null;
 }
 
 /**

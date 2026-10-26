@@ -128,18 +128,7 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
-    {
-      "check": 7,
-      "choice": "all_forward",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 13.1,
-      "what": "column: wall cuts Z",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    }
-  ],
+  "expected_fail": [],
   "fixed_entries": [
     {
       "check": 5,
@@ -148,6 +137,15 @@
       "route": "R1",
       "seed": 2,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
     }
-  ]
+  ],
+  "fixed_in": "v2.3"
 }

@@ -215,3 +215,11 @@ test('refreshKept: still-failing entries kept with new reasons, passing ones -> 
   assert.deepEqual(done.expected_fail, []);
   assert.equal(done.fixed_in, 'v9');
 });
+
+test('v2.3 refreshKept: a still-failing entry keeps its since tag and triage note; a new one gets the new tag', () => {
+  const f = (check: number, members: number) => ({ check, choice: 'auto' as const, members, route: 'R1', seed: 1, t: 3, what: 'x' });
+  const data = { name: 'n', expected_fail: [{ ...f(7, 4), since: 'v2.2', triage: 'layout artefact: x', reason: 'old' }, { ...f(1, 3), reason: 'old' }] };
+  const row = { file: 'n.json', known: 2, fixed: [], fresh: [f(5, 2)], runs: 1, current: [f(7, 4), f(1, 3), f(5, 2)], fixedChecks: [], knownChecks: [7, 1] };
+  const out = refreshKept(data, row, 'v9') as { expected_fail: { check: number; since?: string; triage?: string }[] };
+  assert.deepEqual(out.expected_fail.map((e) => [e.check, e.since, e.triage]), [[7, 'v2.2', 'layout artefact: x'], [1, undefined, undefined], [5, 'v9', undefined]]);
+});
