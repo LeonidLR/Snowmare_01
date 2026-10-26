@@ -4,6 +4,7 @@
 
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
+#include "Camera/TacticalCameraPawn.h"
 #include "Combat/HordeIntroSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/GrenadeSubsystem.h"
@@ -256,6 +257,10 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 		ACodexTacticsHUD* Hud = GetHUD<ACodexTacticsHUD>();
 		if (Target && Target == Squad->GetLeader())
 		{
+			if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+			{
+				CameraPawn->ReattachToFollowTarget(); // the number key brings a panned-away camera back over him (2026-10-26)
+			}
 			if (Hud)
 			{
 				Hud->OpenProfileDialog(Target);

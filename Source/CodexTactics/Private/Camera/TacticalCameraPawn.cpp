@@ -71,6 +71,7 @@ void ATacticalCameraPawn::Tick(float DeltaSeconds)
 
 	if (!FollowTarget.IsValid())
 	{
+		bDetached = false; // the followed actor is gone: whoever is picked up next is followed
 		// The squad may spawn after the camera; pick up the leader once it exists.
 		if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 		{
@@ -158,6 +159,7 @@ void ATacticalCameraPawn::SnapToFollowTarget()
 	PanOffset = FVector::ZeroVector;
 	TargetPanOffset = FVector::ZeroVector;
 	bLookAtPoint = false;
+	bDetached = false;
 	bInitialized = false;
 }
 
@@ -184,6 +186,7 @@ void ATacticalCameraPawn::SetCinematicLock(bool bLocked)
 	{
 		PreCinematicYaw = TargetYaw;
 		bLookAtPoint = false;
+		bDetached = false;
 	}
 	bCinematicLock = bLocked;
 	if (bLocked)
@@ -284,6 +287,7 @@ void ATacticalCameraPawn::LookAtPoint(const FVector& WorldPoint)
 		return;
 	}
 	bLookAtPoint = true;
+	DetachFromFollow(); // the map spot is held while the leader walks on
 	LookAtTarget = WorldPoint;
 	bPanReturning = false;
 	bDragPanning = false;
@@ -293,8 +297,50 @@ void ATacticalCameraPawn::HandleLeaderChanged(AOperativeCharacter* NewLeader)
 {
 	bLookAtPoint = false;
 	SetFollowTarget(NewLeader);
+	// A frozen focus is baked into the pan against the NEW leader: the view stays put, then glides onto him.
 	// User report 2026-10-05: picking an operative (1-4, a click) centres the camera on him — a WASD / drag pan kept
 	// in the fight view used to leave him off screen.
+	ReattachToFollowTarget();
+}
+
+bool ATacticalCameraPawn::IsDetachedFromFollow() const
+{
+	return bDetached && !bCinematicLock && !IsTurnBased();
+}
+
+void ATacticalCameraPawn::DetachFromFollow()
+{
+	if (!bCinematicLock && !IsTurnBased() && IsFreePanView())
+	{
+		bDetached = true;
+	}
+}
+
+void ATacticalCameraPawn::NudgePan(const FVector& WorldDelta)
+{
+	if (bCinematicLock)
+	{
+		return;
+	}
+	bLookAtPoint = false;
+	bPanReturning = false;
+	DetachFromFollow();
+	TargetPanOffset = TacticalCameraRules::ClampPan(TargetPanOffset + FVector(WorldDelta.X, WorldDelta.Y, 0.f), Config.MaxPanCombat);
+}
+
+void ATacticalCameraPawn::ReattachToFollowTarget()
+{
+	const bool bWasDetached = bDetached;
+	bDetached = false;
+	bLookAtPoint = false;
+	if (bWasDetached && bInitialized && !bSmoothFocusing && FollowTarget.IsValid())
+	{
+		// The focus sat still while he walked: move it onto him and keep the view where it is by growing the pan.
+		const FVector Frozen = Focus - FollowTarget->GetActorLocation();
+		Focus = FollowTarget->GetActorLocation();
+		PanOffset += Frozen;
+		TargetPanOffset += Frozen;
+	}
 	if (!bDragPanning && !PanOffset.IsNearlyZero(1.f))
 	{
 		bPanReturning = true;
@@ -349,6 +395,10 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 		const FVector Right = FRotationMatrix(Yaw).GetScaledAxis(EAxis::Y);
 		const float Scale = Config.DragPanSensitivity * (CurrentDistance / Config.BaseDistance);
 		// Grab-and-drag: the world follows the cursor (Godot: -right * relative.x + forward * relative.y).
+		if (!Delta.IsNearlyZero())
+		{
+			DetachFromFollow();
+		}
 		TargetPanOffset += (-Right * Delta.X + Forward * Delta.Y) * Scale;
 		TargetPanOffset = TacticalCameraRules::ClampPan(TargetPanOffset, Config.MaxPanCombat);
 		PanOffset = FMath::Lerp(PanOffset, TargetPanOffset, PanAlpha);
@@ -399,6 +449,7 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 	if (!Input.IsNearlyZero())
 	{
 		bLookAtPoint = false; // the player pans on from the map spot
+		DetachFromFollow(); // the camera stays where the player leaves it - only a number key (ReattachToFollowTarget) brings it back
 	}
 	if (bLookAtPoint)
 	{
@@ -457,6 +508,10 @@ void ATacticalCameraPawn::UpdateRotation(float RealDelta)
 
 FVector ATacticalCameraPawn::ComputeFocus(float RealDelta)
 {
+	if (IsDetachedFromFollow())
+	{
+		return Focus; // frozen by a manual pan
+	}
 	FVector TargetLocation = FollowTarget->GetActorLocation();
 	TargetLocation.Z = SmoothLadderZ(TargetLocation.Z, RealDelta);
 	// Godot: a turn-based target that is not the leader (an enemy on its turn) sits exactly in the centre.
@@ -500,6 +555,7 @@ bool ATacticalCameraPawn::IsFollowingLeader() const
 void ATacticalCameraPawn::BeginSmoothFocus(float Duration, float TargetDist)
 {
 	bSmoothFocusing = true;
+	bDetached = false; // the glide measures from the current view (Focus + PanOffset) and takes the camera over
 	SmoothTime = 0.f;
 	SmoothDuration = FMath::Max(0.1f, Duration);
 	SmoothStartFocus = Focus;
@@ -554,6 +610,7 @@ void ATacticalCameraPawn::EnterTurnBasedZoom(float Distance)
 void ATacticalCameraPawn::ExitTurnBasedZoom()
 {
 	bDramaticShot = false;
+	bDetached = false;
 	if (bTurnBasedZoom)
 	{
 		TargetDistance = PreTurnBasedDistance;
