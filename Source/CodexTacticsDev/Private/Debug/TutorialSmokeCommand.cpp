@@ -2076,6 +2076,12 @@ namespace TutorialSmoke
 		case 114:
 		{
 			PressKey(PC, EKeys::B, IE_Released);
+			// Stage 7 of the formation system (2026-10-26): the B tap acts on the RELEASE (a hold opens the formation menu), so the
+			// refusal comes when the injected release is processed - one game tick later.
+			if (State.StageTime < 0.3f)
+			{
+				return true;
+			}
 			Check(State, Squad->IsSoloMode() && Tutorial->GetLockedRefusalCount() == State.RefusalsBefore + 1
 				&& CountMessages(World, TEXT("Not yet - each operative crosses")) == State.NotYetBefore + 1,
 				TEXT("rev 5i: B (regroup) refused after the crossing - 'Not yet - each operative crosses ...', still in Solo"));

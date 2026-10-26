@@ -257,6 +257,40 @@ namespace FormationWallEnd
 		return Fitted;
 	}
 
+	FFormationSquadPeek PlanSquadPeek(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& StartSlots, float NormalYaw, const FVector2D& EdgeOnFace,
+		const TArray<FFormationSlot>& Members, const FFormationConfig& Config)
+	{
+		FFormationSquadPeek Plan;
+		Plan.StackDestination = EdgeOnFace + FormationMath::Forward(NormalYaw) * PeekDestinationOutCm;
+		const TOptional<FFormationStackEnd> Stack = StartSlots.IsEmpty() || StartSlots[0].Role != EFormationRole::Commander
+			? TOptional<FFormationStackEnd>() : FindStackEnd(Walls, StartSlots[0].Position, NormalYaw, Plan.StackDestination, Config);
+		if (Stack.IsSet())
+		{
+			Plan.bStack = true;
+			Plan.End = Stack.GetValue();
+			Plan.StackSlots = StackSlots(StartSlots, Plan.End, NormalYaw, Config);
+			Plan.Peeker = PointRole(Plan.StackSlots, Plan.End);
+			// The point man must be one of the members (a place nobody holds: the nearest member instead, no stack).
+			if (Members.ContainsByPredicate([&Plan](const FFormationSlot& Each) { return Each.Role == Plan.Peeker; }))
+			{
+				return Plan;
+			}
+			Plan = FFormationSquadPeek();
+			Plan.StackDestination = EdgeOnFace + FormationMath::Forward(NormalYaw) * PeekDestinationOutCm;
+		}
+		double Nearest = TNumericLimits<double>::Max();
+		for (const FFormationSlot& Each : Members)
+		{
+			const double Distance = FVector2D::Distance(Each.Position, EdgeOnFace);
+			if (Distance < Nearest)
+			{
+				Nearest = Distance;
+				Plan.Peeker = Each.Role;
+			}
+		}
+		return Plan;
+	}
+
 	TOptional<FVector2D> StepRound(const FVector2D& Here, const FVector2D& Place, const TArray<FVector2D>& Others, float NormalYaw)
 	{
 		const FVector2D Way = Place - Here;

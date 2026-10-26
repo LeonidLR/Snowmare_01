@@ -180,6 +180,54 @@ bool FFormationWallEndStepRoundTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_WALL_END_TEST(FFormationWallEndSquadPeekTest, "SquadPeek")
+bool FFormationWallEndSquadPeekTest::RunTest(const FString&)
+{
+	using namespace FormationWallEndTestUtil;
+	// User bug report 2026-10-26: the squad hugging the long wall, the cursor on its end - the member nearest that end peeks, the others stack
+	// behind him (K second), at either end.
+	const TArray<FFormationWall> Walls = { WallEndSeg(-600.0, 0.0, 600.0, 0.0) };
+	const TArray<FFormationSlot> Start = WallEndLayoutOfThree();
+	const TArray<FFormationSlot> Members = Start; // everyone stands on his place
+	// The left end (x -600): its face point on the squad's side (y -20).
+	const FFormationSquadPeek Left = FormationWallEnd::PlanSquadPeek(Walls, Start, WallEndNormalYaw, FVector2D(-600.0, -20.0), Members);
+	TestTrue(TEXT("Left end: the corner stack"), Left.bStack);
+	TestEqual(TEXT("Left end: P (nearest it) peeks"), Left.Peeker, EFormationRole::Right);
+	TestTrue(TEXT("Left end: the stack's end"), Left.End.End.Equals(FVector2D(-600.0, 0.0), 0.01));
+	TestTrue(TEXT("Left end: the leader's move 60 cm out from the face at the end"), Left.StackDestination.Equals(FVector2D(-600.0, -80.0), 0.01));
+	{
+		TArray<FFormationSlot> Line = Left.StackSlots;
+		Line.Sort([](const FFormationSlot& A, const FFormationSlot& B) { return A.Position.X < B.Position.X; });
+		TestTrue(TEXT("Left end: P at the edge, K second, Z last"), Line.Num() == 3 && Line[0].Role == EFormationRole::Right && Line[1].Role == EFormationRole::Commander
+			&& Line[2].Role == EFormationRole::Rear);
+	}
+	// The right end (x 600): Z peeks.
+	const FFormationSquadPeek Right = FormationWallEnd::PlanSquadPeek(Walls, Start, WallEndNormalYaw, FVector2D(600.0, -20.0), Members);
+	TestTrue(TEXT("Right end: the corner stack"), Right.bStack);
+	TestEqual(TEXT("Right end: Z (nearest it) peeks"), Right.Peeker, EFormationRole::Rear);
+	{
+		TArray<FFormationSlot> Line = Right.StackSlots;
+		Line.Sort([](const FFormationSlot& A, const FFormationSlot& B) { return A.Position.X > B.Position.X; });
+		TestTrue(TEXT("Right end: Z at the edge, K second, P last"), Line.Num() == 3 && Line[0].Role == EFormationRole::Rear && Line[1].Role == EFormationRole::Commander
+			&& Line[2].Role == EFormationRole::Right);
+	}
+	// An L corner at the left end (a joint): nothing to stack at - the member nearest the end peeks alone, the others hold.
+	const TArray<FFormationWall> Corner = { WallEndSeg(-600.0, 0.0, 600.0, 0.0), WallEndSeg(-620.0, 0.0, -620.0, 800.0) };
+	const FFormationSquadPeek Joint = FormationWallEnd::PlanSquadPeek(Corner, Start, WallEndNormalYaw, FVector2D(-600.0, -20.0), Members);
+	TestFalse(TEXT("A joint: no stack"), Joint.bStack);
+	TestEqual(TEXT("A joint: the member nearest the end peeks"), Joint.Peeker, EFormationRole::Right);
+	// The pair with K at the end (K within SlideMin of it): no stack, K himself is nearest.
+	const TArray<FFormationSlot> Pair = { WallEndSlot(EFormationRole::Commander, -560.0, -65.0, -45.f), WallEndSlot(EFormationRole::Rear, -460.0, -65.0, -135.f) };
+	const FFormationSquadPeek AtEnd = FormationWallEnd::PlanSquadPeek(Walls, Pair, WallEndNormalYaw, FVector2D(-600.0, -20.0), Pair);
+	TestFalse(TEXT("K already at the end: no stack to slide into"), AtEnd.bStack);
+	TestEqual(TEXT("... the leader peeks"), AtEnd.Peeker, EFormationRole::Commander);
+	// Members off their places: without a stack the nearest by position wins.
+	const TArray<FFormationSlot> Moved = { WallEndSlot(EFormationRole::Commander, -560.0, -65.0, 0.f), WallEndSlot(EFormationRole::Rear, -580.0, -150.0, 0.f) };
+	TestEqual(TEXT("No stack: the nearest member by position"), FormationWallEnd::PlanSquadPeek(Corner, Pair, WallEndNormalYaw, FVector2D(-600.0, -20.0), Moved).Peeker,
+		EFormationRole::Commander);
+	return true;
+}
+
 #undef FORMATION_WALL_END_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS
