@@ -43,6 +43,8 @@ namespace
 		TEXT("1 (default): the formation runs after the final fight too (PostCombat) and Regroup (B) ends the post-fight hold (bug 2026-10-23); 0: the old rule (no follower walks after the final fight, B leaves the hold)."));
 	TAutoConsoleVariable<int32> CVarSquadCombatFormation(TEXT("Codex.Squad.CombatFormation"), 1,
 		TEXT("1 (default, user decision 2026-10-26): the squad stays in formation through the fight (only B switches to Solo; ordered members rejoin when their order is done); 0: the old rule (Godot is_tactical_mode: nobody follows from the preparation to the fight's end)."));
+	TAutoConsoleVariable<int32> CVarSquadGroupCoverInCombat(TEXT("Codex.GroupCover.InCombat"), 1,
+		TEXT("1 (default, user decision 2026-10-26): the group cover order without a box selection (the others take cover too, the wall layout, the corner stack) runs in the fight too - real time and the tactical pause, not turn-based; 0: the old rule (exploration only - in a fight a cover click is the selected operative's own order)."));
 	TAutoConsoleVariable<int32> CVarSquadSlotFallback(TEXT("Codex.Squad.SlotFallback"), 1,
 		TEXT("1 (default): a formation slot off the navmesh (wall, generator, a fallen mate's remains) is replaced by the nearest navigable spot round the leader (bug 2026-10-23); 0: the old rule (the follower stays where he is)."));
 }
@@ -647,6 +649,19 @@ bool USquadSubsystem::IsExplorationFormation() const
 	return !Flow || SquadOrderRules::IsFormationPhase(Flow->GetPhase(), CVarSquadPostCombatFormation.GetValueOnGameThread() != 0);
 }
 
+bool USquadSubsystem::IsGroupCoverFormation() const
+{
+	if (IsExplorationFormation())
+	{
+		return true;
+	}
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	// In the fight as the formation itself (IsFormationActive): not while Commander Mode's autonomy owns the members.
+	return Flow && !Flow->IsSquadAutonomyActive() && SquadOrderRules::IsGroupCoverPhase(Flow->GetPhase(), Flow->GetCombatMode(),
+		CVarSquadPostCombatFormation.GetValueOnGameThread() != 0, CVarSquadCombatFormation.GetValueOnGameThread() != 0,
+		CVarSquadGroupCoverInCombat.GetValueOnGameThread() != 0);
+}
+
 void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
 {
 	// Fire posture: a provocation lasts for one fight (user request 2026-10-06).
@@ -667,6 +682,7 @@ void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatM
 		// Leaving the pause into turn-based combat or out of the wave drops the plans; a release to real time
 		// is followed by OnTacticalPauseReleased, which executes them.
 		PlannedOrders.Reset();
+		PlannedWallOrder = FPlannedWallOrder();
 		PauseOrigins.Reset();
 		for (AOperativeCharacter* Member : GetMembers())
 		{
@@ -716,6 +732,8 @@ void USquadSubsystem::HandleTacticalPauseReleased()
 				"⏳ Weapon not ready - I'll take the shot as soon as I can!"));
 		}
 	}
+	// User decision 2026-10-26 (group cover in combat): the wall layout planned in this pause, before the planned walks.
+	ExecutePlannedFormationWall();
 	ExecutePlannedOrders();
 }
 
@@ -776,6 +794,7 @@ void USquadSubsystem::RetryPlannedShots(float DeltaTime)
 void USquadSubsystem::BeginOrderPlanning()
 {
 	PlannedOrders.Reset();
+	PlannedWallOrder = FPlannedWallOrder();
 	for (auto It = GroupCoverProneOrders.CreateIterator(); It; ++It)
 	{
 		if (It->Value.Phase == ESquadGroupCoverPronePhase::Planned)
@@ -803,6 +822,10 @@ FVector USquadSubsystem::PlanMove(AOperativeCharacter* Operative, const FVector&
 	}
 	const FVector* Origin = PauseOrigins.Find(Operative);
 	const FVector Planned = SquadFormation::ClampToRadius2D(Origin ? *Origin : Operative->GetActorLocation(), Destination, Radius);
+	if (PlannedWallOrder.Direct.Get() == Operative)
+	{
+		PlannedWallOrder = FPlannedWallOrder(); // a new plan for him in this pause replaces the planned wall layout
+	}
 	FPlannedOrder& Order = PlannedOrders.FindOrAdd(Operative);
 	Order.Destination = Planned;
 	Order.bSprint = bSprint;
@@ -1024,9 +1047,10 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 		Sectors.bSlide = false;
 		return;
 	}
-	if (Sectors.bWallOrder && !IsExplorationFormation())
+	if (Sectors.bWallOrder && !IsGroupCoverFormation())
 	{
-		EndFormationWallOrder(TEXT("a fight (the wall layout is the exploration formation's)")); // as before 2026-10-26
+		// User decision 2026-10-26: the wall layout runs in the fight too (Codex.GroupCover.InCombat 0: it ends when the fight starts).
+		EndFormationWallOrder(TEXT("a fight (Codex.GroupCover.InCombat 0: the wall layout is the exploration formation's)"));
 	}
 
 	const bool bLeaderMoving = LeaderRef->IsMoving();

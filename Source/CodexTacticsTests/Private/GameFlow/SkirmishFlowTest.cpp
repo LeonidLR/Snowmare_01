@@ -56,16 +56,15 @@ bool FSkirmishFlowTest::RunTest(const FString&)
 	Machine.Reset(Config);
 	TestFalse(TEXT("exploring: no skirmish"), Machine.IsSkirmish());
 	TestEqual(TEXT("exploring: FinishSkirmish refused"), Machine.FinishSkirmish(), EGameFlowResult::WrongPhase);
-	TestEqual(TEXT("exploring: no lesson pause"), Machine.EnterLessonPause(), EGameFlowResult::NotInWave);
 	TestEqual(TEXT("a zombie spots the squad: the ambush fight"), Machine.StartAmbushCombat(), EGameFlowResult::Ok);
 	TestTrue(TEXT("... a skirmish in real time"), Machine.IsSkirmish() && Machine.GetPhase() == ECodexGamePhase::WaveCombat
 		&& Machine.GetCombatMode() == ECodexCombatMode::RealTime);
+	// User decision 2026-10-26 ("the tactical pause only by Space"): the tutorial's lesson pause is gone - the player's Space is an
+	// ordinary pause (a charge, the timer).
 	const int32 Charges = Machine.GetPauseCharges();
-	TestEqual(TEXT("the tutorial's lesson pause"), Machine.EnterLessonPause(), EGameFlowResult::Ok);
-	TestTrue(TEXT("... free (no charge, no timer)"), Machine.GetCombatMode() == ECodexCombatMode::TacticalPause && Machine.IsFreePause()
-		&& Machine.GetPauseCharges() == Charges);
-	Machine.Tick(120.f);
-	TestEqual(TEXT("... it does not run out"), Machine.GetCombatMode(), ECodexCombatMode::TacticalPause);
+	TestEqual(TEXT("the player's Space"), Machine.ToggleTacticalPause(), EGameFlowResult::Ok);
+	TestTrue(TEXT("... an ordinary pause"), Machine.GetCombatMode() == ECodexCombatMode::TacticalPause && !Machine.IsFreePause()
+		&& Machine.GetPauseCharges() == Charges - 1);
 	TestEqual(TEXT("the player resumes (Space)"), Machine.ToggleTacticalPause(), EGameFlowResult::Ok);
 	TestEqual(TEXT("... real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
 	TestEqual(TEXT("its zombie is down: straight back to exploring"), Machine.FinishSkirmish(), EGameFlowResult::Ok);

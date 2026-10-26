@@ -241,15 +241,17 @@ bool FHordeIntroFreePauseTest::RunTest(const FString&)
 	return true;
 }
 
-HORDEINTRO_TEST(FHordeIntroSpaceBeforeTriggerTest, "FreePause.SpaceBeforeTheTriggerOpensItFree")
+HORDEINTRO_TEST(FHordeIntroSpaceBeforeTriggerTest, "FreePause.SpaceBeforeTheTriggerIsAnOrdinaryPause")
 bool FHordeIntroSpaceBeforeTriggerTest::RunTest(const FString&)
 {
 	FGameFlowConfig Config;
 	FGameFlowStateMachine Machine(Config);
 	Machine.TriggerCombatZone();
 	TestEqual(TEXT("Space tap while the horde forms"), Machine.ToggleTacticalPause(), EGameFlowResult::Ok);
-	TestTrue(TEXT("the free pause, not a charged one"), Machine.IsFreePause());
-	TestEqual(TEXT("charges 3/3"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
+	// User decision 2026-10-26 ("the first pause of a wave being free: NO"): it was the free pause.
+	TestTrue(TEXT("an ordinary pause, not the free one"), !Machine.IsFreePause() && Machine.GetCombatMode() == ECodexCombatMode::TacticalPause);
+	TestEqual(TEXT("charges 2/3"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges - 1);
+	TestFalse(TEXT("the intro is no longer awaited"), Machine.IsAwaitingHordeIntro());
 	FGameFlowStateMachine Hold(Config);
 	Hold.TriggerCombatZone();
 	TestEqual(TEXT("hold -> turn-based"), Hold.RequestEnterTurnBased(true), EGameFlowResult::Ok);

@@ -41,6 +41,20 @@
   orders are the usual own orders (`OrderTakeCover`, the prone walk = `OrderMoveTo`), so they survive selection changes; the group stays
   selected; formation following resumes when the leader walks away (the followers-in-cover rule, also for the prone ones) or on Regroup.
   Pause: planned; turn-based: only the active unit. Details: [cover-and-peek](cover-and-peek.md) "Group cover order".
+- **In the fight too (user decision 2026-10-26, "group cover in combat: YES"):** group mode without a box selection was exploration-only
+  (`USquadSubsystem::IsExplorationFormation`): in a fight a cover click was the selected operative's own order. Now
+  `USquadSubsystem::IsGroupCoverFormation` (pure `SquadOrderRules::IsGroupCoverPhase`: the exploration formation, and in the fight wherever the
+  formation follows - real time, the tactical pause, the preparation / rest; never turn-based, never under Commander Mode's autonomy) gates the
+  whole group cover family: who joins (`GetGroupCoverMembers`), the formation wall layout (`ACodexTacticsPlayerController::OrderGroupCover`), the
+  wall order no longer ending when a fight starts, the wall group (`ReallocateWallGroup` / its tick), the slide / corner-stack preview
+  (`PreviewFormationMove`); the squad's corner peek already ran on `IsFormationActive`. **The tactical pause:** the wall layout is planned
+  (`USquadSubsystem::PlanFormationWall`: the leader's walk to the clicked slot planned within the pause radius, the slot pending as the fallback,
+  message "[PLAN] Along the wall (N operatives), facing out!") and ordered on the release (`ExecutePlannedFormationWall`, before the planned
+  walks: `OrderFormationWall` with the followers then - members with a plan of their own in that pause keep it -, the wall group); a new plan for
+  the leader in the same pause drops it; a slot beyond the radius falls back to the classic planned group cover. Solo with a single selection
+  stays the individual cover click everywhere; a box selection works as before. Console `Codex.GroupCover.InCombat 0` = the old rule (A/B). Test
+  `CodexTactics.Squad.Orders.CombatFormation.GroupCoverInTheFight`; smoke `GroupCoverSmoke` scenes WF (real time: the wall layout), WP (the
+  pause: planned, ordered on the release), WS (Solo, single selection: he alone).
 
 ## Operative assets (old §5)
 
@@ -108,6 +122,8 @@ member's formation look whenever it changes (with his facing) and every look Cle
   simulator ~1 m) - a Training Ground tuning point.
 
 ### The squad's corner peek (2026-10-26, branch formation/v24-squad-peek; user bug report; behind `Codex.Formation.Sectors`)
+
+**CONFIRMED by the user 2026-10-26:** at a high wall the peeker stands (his cover entry's stance) and the others stay crouched (the order's crouch).
 
 User bug report 2026-10-26: one operative hugging a wall shows the peek silhouette when the cursor is on the wall's corner and peeks round it on
 the click; the squad hugging it in formation ("Along the wall (3 operatives), facing out!") showed neither. **Root cause:** since stage 6
@@ -397,9 +413,11 @@ otherwise on 2026-10-26** - implemented:
 - `UpdateFollower` leaves a panicking / raging / knocked-down follower alone (panic and rage move him themselves; `StopOperative` would cut the flight).
 - In the real-time fight a parked follower gets no "face where the leader faces" idle facing, and the threat turn (`ThreatFacingRules`, a standing member
   who fought turns back to the threat) wins over the formation look sector (`AOperativeCharacter::UpdateCombatFacing`).
-- The exploration-only group features keep the old rule (`USquadSubsystem::IsExplorationFormation`): the group cover order without a box selection, the
+- ~~The exploration-only group features keep the old rule (`USquadSubsystem::IsExplorationFormation`): the group cover order without a box selection, the
   formation wall layout / wall group / slide preview (a wall order ends when the fight starts, as before). In the fight a cover click stays the single
-  order of the selected operative (a box selection still takes cover together) - so individual cover orders in the pause stay individual.
+  order of the selected operative (a box selection still takes cover together) - so individual cover orders in the pause stay individual.~~
+  SUPERSEDED the same day (user decision 2026-10-26 "group cover in combat: YES"): the group cover family runs in the fight too
+  (`USquadSubsystem::IsGroupCoverFormation`, "Group cover order" above); only a spotted trap's Solo keeps `IsExplorationFormation`.
 - The B handler (`ACodexTacticsPlayerController::ToggleSoloMode`, `IA_SoloMode`) is unchanged.
 Tests `CodexTactics.Squad.Orders.CombatFormation.SquadStaysInFormationThroughTheFight`; smoke `CombatFormationSmoke` (the wave fight starts: Solo off,
 formation on - `CombatFormation 0` reproduces the bug; pause, B and C ordered 6 m to the sides, A selected again, resume: both carry their orders out, then

@@ -279,6 +279,14 @@ public:
 	 */
 	bool IsExplorationFormation() const;
 
+	/**
+	 * User decision 2026-10-26 ("group cover in combat: YES"): the group cover order in group mode (no box selection) and its wall features
+	 * - the formation wall layout, the wall group, the slide / corner stack along the wall - run here: the exploration formation and, in the
+	 * fight, wherever the formation follows (real time, the tactical pause; not turn-based, not under Commander Mode's autonomy;
+	 * SquadOrderRules::IsGroupCoverPhase). Console Codex.GroupCover.InCombat 0: the old rule (IsExplorationFormation).
+	 */
+	bool IsGroupCoverFormation() const;
+
 	// --- Group cover order (game designer 2026-10-20; GroupCoverRules, SquadOrderRules::ShouldJoinGroupCover) -------------
 
 	/**
@@ -366,6 +374,17 @@ public:
 	 * again, standing up). False (nothing ordered) when the layout cannot be made (no wall behind the slot, more than 4 members).
 	 */
 	bool OrderFormationWall(AOperativeCharacter* Direct, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot);
+
+	/**
+	 * User decision 2026-10-26 (group cover in combat): the group-mode wall layout ordered in the TACTICAL PAUSE - Direct's walk to Slot is
+	 * planned (PlanMove within Radius, the cover slot pending: the fallback) and the wall order itself runs on the release
+	 * (ExecutePlannedFormationWall: OrderFormationWall with the followers then, the wall group). A new plan for Direct in this pause (PlanMove)
+	 * drops it. False (nothing planned) when Slot lies beyond the pause's order radius. OutPlanned = Direct's planned destination.
+	 */
+	bool PlanFormationWall(AOperativeCharacter* Direct, const FCoverSlot& Slot, float Radius, FVector& OutPlanned);
+
+	/** A wall layout planned in this pause waits for the release (PlanFormationWall; smokes). */
+	bool HasPlannedFormationWall() const { return PlannedWallOrder.Direct.IsValid(); }
 
 	/** Smokes / teleports: the formation heading snaps to Forward, the terrain history and the slot velocities start afresh, a wall order ends. */
 	void ResetFormationState(const FVector& Forward);
@@ -516,6 +535,16 @@ private:
 		FVector Destination = FVector::ZeroVector;
 		bool bSprint = false;
 	};
+
+	/** The group-mode wall layout planned in the tactical pause (PlanFormationWall), ordered on the release. */
+	struct FPlannedWallOrder
+	{
+		TWeakObjectPtr<AOperativeCharacter> Direct;
+		FCoverSlot Slot;
+	};
+	FPlannedWallOrder PlannedWallOrder;
+	/** The release: the planned wall layout (OrderFormationWall with the followers now, the wall group); false when none / refused. */
+	bool ExecutePlannedFormationWall();
 
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);

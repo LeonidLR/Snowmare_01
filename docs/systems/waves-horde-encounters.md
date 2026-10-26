@@ -72,26 +72,38 @@ hound + frostbitten; wave 2: only the new cutter / marksman shots, no wide; wave
    instead of `EnterFreeTacticalPause`: the alert («HORDE INCOMING | THE FIGHT IS ON | [SPACE] FREE TACTICAL PAUSE»), the HQ line and the flyover (its
    slow motion `FlyoverTimeDilation`, the camera locked, Esc / a click skip) play while the flow stays `WaveCombat / RealTime`; after the flyover the world
    is back at dilation 1. The flyover ends when the flow leaves real time (`FlyoverMode`): a Space tap during it opens the pause. Esc before the trigger gives
-   the warning at once (no flyover, no pause). The wave's FIRST Space - before or after the warning - is still the free pause (no charge, no timer, no
-   radius): `bFreePauseOffered` / `IsFreePauseOffered()` (armed by `StartWave(bSudden)`, used up by the free pause, the grid, the lesson pause, the wave's
-   end, game over, `CancelHordeIntro`); the combat banner says "| [SPACE] free tactical pause". The tutorial's pause lesson (`X_pause`, event
-   `TacticalPauseStarted`) now comes with the player's own Space (or the A4 lesson pause); `TUT_PAUSE_RESUME` says "your first pause after a horde arrives
-   is free". Old rule: `Codex.HordeIntro.AutoPause 1`.
+   the warning at once (no flyover, no pause). ~~The wave's FIRST Space - before or after the warning - is still the free pause (no charge, no timer, no
+   radius)~~ - **user decision 2026-10-26 ("the first pause of a wave being free: NO"): the wave's first Space is an ORDINARY pause** (a charge, the
+   timer, the order radius - `FGameFlowStateMachine::ToggleTacticalPause`; `bFreePauseOffered` / `IsFreePauseOffered()` are gone); a Space before the
+   trigger also ends the wait (the alert without a flyover, `UHordeIntroSubsystem::HandleGameFlowChanged`). The combat banner's "| [SPACE] free
+   tactical pause" became "| [SPACE] tactical pause N/M" in real time ("pauses recharge: S s" / "no pauses left": `UPhaseBannersWidget::GetPauseHint`);
+   the alert «HORDE INCOMING | THE FIGHT IS ON | [SPACE] TACTICAL PAUSE - GIVE YOUR ORDERS», the HQ line "[SPACE] - tactical pause". The tutorial's
+   pause lesson (`X_pause`, event `TacticalPauseStarted`) comes with the player's own Space; `TUT_PAUSE_RESUME` no longer promises a free first pause.
+   Old rule: `Codex.HordeIntro.AutoPause 1` (the warning opens the free pause - kept for A/B; nothing else opens a free pause any more).
 2. **Only the fight's first wave is warned** ("give the horde warning only for the FIRST wave; all following waves - no warnings, only the arrows; don't
    interrupt the fight, it's too choppy"). `HordeIntroRules::ShouldWarnWave(WaveIndex, Config)` (wave 1 of the fight, or `bWarnLaterWaves`): a later wave
    (`UHordeIntroSubsystem::BeginWaiting`) is acknowledged at once (`NotifyHordeWarned`, `GetSilentWaveCount`) - no alert, no HQ line, no flyover / camera
    framing, no pre-trigger slow-down, no pause; the HUD's incoming arrows (`UHordeArrowsWidget`) show it as before. A save resumed in a later wave is no
    first wave either. Nothing else interrupts a wave start (checked: `UWaveSubsystem` posts a chat line only for the balance-fallback wave, no tutorial
    card listens to a wave start, no sound sting). Old rule: `Codex.HordeIntro.LaterWaves 1`.
-Tests `CodexTactics.Combat.HordeIntro.RealTime.*` (`WarningKeepsTheFightInRealTime`, `FreePauseOfferEndsWithTheWave`, `WarningOnlyForTheFightsFirstWave`).
-Smokes: `HordeIntroSmoke` (rewritten: wave 1's warning and flyover in real time, 2 s with no pause, then the player's Space = the free pause; wave 2 comes
+Tests `CodexTactics.Combat.HordeIntro.RealTime.*` (`WarningKeepsTheFightInRealTime`, `FirstSpaceOfEveryWaveIsAnOrdinaryPause`, `BannerShowsTheOrdinaryPause`,
+`WarningOnlyForTheFightsFirstWave`), `CodexTactics.Combat.HordeIntro.FreePause.SpaceBeforeTheTriggerIsAnOrdinaryPause`.
+Smokes: `HordeIntroSmoke` (rewritten: wave 1's warning and flyover in real time, 2 s with no pause, then the player's Space = an ordinary pause - 2/3
+charges, its timer, the order radius (a far move clamped), the banner "[SPACE] tactical pause 3/3" before it (2026-10-26: it was the free pause); wave 2 comes
 silently - no alert / flyover / slow motion / pause / camera take-over for as long as a warning could take; wave 3 with `LaterWaves 1` for the Esc / new-type /
 known-type paths, all in real time), `LakePauseOrdersSmoke` (the lake horde: the warning, real time, then the player's Space).
 
-**Other automatic tactical pauses (listed 2026-10-26 for the user; unchanged):** (a) the tutorial action `tactical_pause` (`UTutorialSubsystem::TickLessonPause`
--> `EnterLessonPause`: A4, a PASSIVE squad spotted mid-lesson - a free pause with the "switch the posture" card); (b) the turn-based grid's own end (all grid
-enemies down, `UTurnBasedCombatSubsystem` -> `ExitTurnBased`: a 20 s tactical pause "to regroup"); (c) Space HOLD in the grid with
-`bHoldExitsTurnBasedToRealTime` false (default true = real time; a player key anyway). Not tactical pauses but stops / slow-downs of time: the horde flyover's
+**The other automatic tactical pauses - removed (user decision 2026-10-26, "the tactical pause only by Space": YES):** (a) the tutorial action
+`tactical_pause` (A4, a PASSIVE squad spotted mid-lesson: a free pause with the "switch the posture" card) is RETIRED - `TutorialRules::IsRetiredAction`
+(an old steps file still loads: a warning, the action dropped), `UTutorialSubsystem::TickLessonPause` / `FGameFlowStateMachine::EnterLessonPause` deleted,
+`demo_01_steps.json` `A4_spotted` has no action: the card shows while the fight runs in real time and still completes on the posture key / when nobody
+is PASSIVE (or 60 s), text `TUT_A4_SPOTTED` "the fight is on ... need a moment to plan? Space pauses the fight"; (b) the turn-based grid's own end (all
+grid enemies down / no operative left: `UTurnBasedCombatSubsystem::EndCombat`) goes straight to REAL TIME (`FGameFlowStateMachine::FinishTurnBasedFight`
+= `ExitTurnBasedToRealTime`; it was `ExitTurnBased`: a 20 s tactical pause "to regroup"), log "TURN-BASED VICTORY! ... Real time - [SPACE] for a tactical
+pause". Unchanged (a player key): (c) Space HOLD in the grid with `bHoldExitsTurnBasedToRealTime` false (default true = real time) still gives the Godot
+20 s pause (`ExitTurnBased`, `PostTurnBasedPauseDuration`). The player's own Space handling is unchanged. Tests `CodexTactics.Combat.TimeMode.*` (the grid
+end), `CodexTactics.Tutorial.AmbushLesson.SpottedCardKeepsRealTime`; smokes `TurnBasedSmoke` (victory -> real time, dilation 1), `TutorialAmbushLakeSpottedSmoke`
+/ `TutorialAmbushLakeLureSpottedSmoke` (the SPOTTED card in real time; the pause lesson after the player's own Space). Not tactical pauses but stops / slow-downs of time: the horde flyover's
 slow motion (above), the death cinematic's slow motion (`UDeathCinematicSubsystem`), the recruit's narrative pause (`URecruitSubsystem::BeginNarrativePause`,
 time 0 during his dialogue), `WaveCleared` / `GameOver` (dilation 0; `WaveCleared` only with the victory panel configs). Changed now: the horde warning and
 Esc before its trigger (both opened the free pause).
@@ -109,7 +121,7 @@ placed-enemy fights of the lake (A4, the A5 base) are skirmishes; the A6 scripte
 
 Also (every level): the victory panel's button of a single ambush fight (`bAmbushSingleFight`, "level" mode) read "End combat and continue
 exploring" (2026-10-22: that panel is gone, see "Fight end" below) (it was "Start the next wave (2/3)" while it led to PostCombat anyway). The tutorial's lesson pause: `FGameFlowStateMachine::EnterLessonPause`
-= RealTime -> the FREE tactical pause (no charge, no timer) in any wave fight (`UTutorialSubsystem` action `tactical_pause`). 2026-10-22: the edges of the
+= RealTime -> the FREE tactical pause (no charge, no timer) in any wave fight (`UTutorialSubsystem` action `tactical_pause`; REMOVED 2026-10-26, see "The other automatic tactical pauses"). 2026-10-22: the edges of the
 tactical pause are gameplay events `TacticalPauseStarted` (+ `.Free` first) / `TacticalPauseEnded` (`UGameFlowSubsystem::HandleStateChanged`) - the tutorial's pause lesson.
 Data: `Content/Data/LevelJson/L_Demo01_A_FrozenLake.json` (`"ambush_fight": "skirmish"`, `"susanin_wave": 0`), schema
 `Content/Data/Schemas/level_config.schema.json`, Wave Editor `types.ts`. Tests `CodexTactics.GameFlow.Skirmish.LevelJson / Flow`; smokes

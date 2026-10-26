@@ -160,8 +160,19 @@ namespace SquadOrderRules
 	 * turn-based grid (it moves everyone itself) and not after a game over. Root cause of the report: the old rule (IsFormationPhase,
 	 * Godot main.gd is_tactical_mode = individual control from the preparation to the fight's end; TANDEM Sprint 03 "formation only in
 	 * exploration") switched the formation off for the whole fight, so Solo on / off (B) had no visible effect there.
-	 * bCombatFormation false = that old rule (console Codex.Squad.CombatFormation 0, A/B). The exploration-only group features (the group
-	 * cover order without a box selection, the formation wall layout, a spotted trap's Solo) keep IsFormationPhase.
+	 * bCombatFormation false = that old rule (console Codex.Squad.CombatFormation 0, A/B). A spotted trap's Solo keeps IsFormationPhase;
+	 * the group cover order follows IsGroupCoverPhase.
 	 */
 	CODEXTACTICS_API bool IsFollowPhase(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bPostCombatFormation = true, bool bCombatFormation = true);
+
+	/**
+	 * User decision 2026-10-26 ("group cover in combat: YES"): the GROUP cover order without a box selection (the others take cover too, the
+	 * formation wall layout, the wall group, the corner stack / slide along the wall) runs wherever the formation follows
+	 * (IsFollowPhase: exploring, after the final fight, and in the fight - real time and the tactical pause; never on the turn-based
+	 * grid). It was exploration-only (IsFormationPhase): in a fight a cover click stayed the single order of the selected operative.
+	 * bGroupCoverInCombat false = that old rule (console Codex.GroupCover.InCombat 0, A/B). Solo with a single selection stays the
+	 * single order everywhere (ShouldJoinGroupCover).
+	 */
+	CODEXTACTICS_API bool IsGroupCoverPhase(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bPostCombatFormation = true, bool bCombatFormation = true,
+		bool bGroupCoverInCombat = true);
 }

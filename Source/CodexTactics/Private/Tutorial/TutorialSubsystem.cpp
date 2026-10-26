@@ -473,7 +473,6 @@ void UTutorialSubsystem::Tick(float DeltaTime)
 		bInitDone = true; // the game mode read the level in StartPlay; the demo flags are applied on the first tick
 		InitFromLevel();
 	}
-	TickLessonPause(FApp::GetDeltaTime());
 	SquadBindTimer -= DeltaTime;
 	if (SquadBindTimer <= 0.f)
 	{
@@ -970,16 +969,8 @@ void UTutorialSubsystem::RunActions(const FTutorialStep& Step)
 	USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	for (const FTutorialAction& Action : Step.Actions)
 	{
-		if (Action.Type == FName(TEXT("tactical_pause")))
-		{
-			// 2026-10-21 (A4: spotted mid-lesson): the fight's free tactical pause. The card is often shown in the very call that is about to
-			// start the fight (EnemyAlerted comes first): then the pause waits for the fight (TickLessonPause, up to 3 s).
-			LessonPauseWait = 3.f;
-			TickLessonPause(0.f);
-			WriteTelemetry(TEXT("action_tactical_pause"), Step.Id, Step.Beat, 0.f);
-			continue;
-		}
-		ESquadFirePosture Posture = ESquadFirePosture::Aggressive;
+		ESquadFirePosture
+ Posture = ESquadFirePosture::Aggressive;
 		if (Action.Type == FName(TEXT("set_posture")) && Squad && FirePostureRules::ParseName(Action.Posture, Posture))
 		{
 			// 2026-10-19: the Demo 01 squad enters the complex DEFENSIVE (no fire on enemies that have not spotted it) until the posture
@@ -2127,32 +2118,6 @@ bool UTutorialSubsystem::PassesEnemyFilterNow(const FTutorialEnemyFilter& Filter
 		*Filter.Enemy.ToString(), *SubjectId.ToString(), bBound ? 1 : 0, NearestCm / 100.f, Filter.WithinMetres, OffRouteCm / 100.f, Filter.OffRouteMetres,
 		bPasses ? TEXT("counts") : TEXT("does not count"));
 	return bPasses;
-}
-
-void UTutorialSubsystem::TickLessonPause(float RealDelta)
-{
-	if (LessonPauseWait <= 0.f)
-	{
-		return;
-	}
-	UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	if (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime)
-	{
-		LessonPauseWait = 0.f;
-		const EGameFlowResult Result = Flow->EnterLessonPause();
-		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: tactical_pause -> %s"), Result == EGameFlowResult::Ok ? TEXT("paused (free)") : TEXT("refused"));
-		return;
-	}
-	if (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
-	{
-		LessonPauseWait = 0.f; // already paused
-		return;
-	}
-	LessonPauseWait -= RealDelta;
-	if (LessonPauseWait <= 0.f)
-	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: tactical_pause dropped - no fight started"));
-	}
 }
 
 void UTutorialSubsystem::LogEnemyBindings() const

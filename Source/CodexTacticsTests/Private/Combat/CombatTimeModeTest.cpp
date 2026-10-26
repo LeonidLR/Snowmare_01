@@ -152,12 +152,17 @@ bool FTimeModeHoldInTurnBasedReturnsToRealTimeTest::RunTest(const FString&)
 		FCombatTimeModeRules::ResolveSpace(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased, ESpaceInputAction::Hold, Tuned),
 		ECombatTimeModeRequest::ExitTurnBasedToPause);
 
-	// The grid's own end (victory) keeps the free tactical pause.
+	// The grid's own end (victory): user decision 2026-10-26 ("the tactical pause only by Space") - straight to real time (it was a
+	// 20 s pause to regroup, Godot _exit_turn_based_combat).
 	FGameFlowStateMachine Victory;
 	StartFight(Victory);
 	Victory.RequestEnterTurnBased(true);
-	TestEqual(TEXT("Grid end"), Victory.ExitTurnBased(), EGameFlowResult::Ok);
-	TestEqual(TEXT("Grid end gives the free pause"), Victory.GetCombatMode(), ECodexCombatMode::TacticalPause);
+	const int32 VictoryCharges = Victory.GetPauseCharges();
+	TestEqual(TEXT("Grid end"), Victory.FinishTurnBasedFight(), EGameFlowResult::Ok);
+	TestEqual(TEXT("Grid end: real time, no pause"), Victory.GetCombatMode(), ECodexCombatMode::RealTime);
+	TestTrue(TEXT("... full speed, no pause timer, no charge spent"), Victory.GetTimeDilation() == 1.f && Victory.GetPauseTimeRemaining() == 0.f
+		&& Victory.GetPauseCharges() == VictoryCharges);
+	TestEqual(TEXT("Grid end needs turn-based"), Victory.FinishTurnBasedFight(), EGameFlowResult::NotInTurnBased);
 	TestEqual(TEXT("Exit to real time needs turn-based"), Victory.ExitTurnBasedToRealTime(), EGameFlowResult::NotInTurnBased);
 	return true;
 }

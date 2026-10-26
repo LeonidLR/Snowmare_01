@@ -83,23 +83,49 @@ bool FCorpseLootContentsTest::RunTest(const FString&)
 	Gear.Items.Add(ETransferItem::Chocolate, 3);
 	Gear.Items.Add(ETransferItem::RifleAmmo, 62); // clip 17 + reserve 45
 	Gear.Items.Add(ETransferItem::PistolAmmo, 0);
+	Gear.Items.Add(ETransferItem::CannedFood, 1);
+	// User decision 2026-10-26 ("trim the remains to the Godot list"): none of these is in the remains any more.
 	Gear.Items.Add(ETransferItem::Mine, 1);
+	Gear.Items.Add(ETransferItem::Barricade, 1);
+	Gear.Items.Add(ETransferItem::Turret, 1);
+	Gear.Items.Add(ETransferItem::Matches, 4);
+	Gear.Items.Add(ETransferItem::HeatPack, 2);
+	Gear.Items.Add(ETransferItem::Firewood, 3);
+	Gear.Items.Add(ETransferItem::Flare, 1);
 	Gear.Grenades = 2;
 	Gear.WeaponId = TEXT("m16");
 	const FLootContents Contents = CorpseLootRules::BuildRemainsContents(Gear);
 	TestEqual(TEXT("Medkits"), Contents.GetCount(ELootItem::Medkit), 2);
 	TestEqual(TEXT("Chocolate"), Contents.GetCount(ELootItem::Chocolate), 3);
+	TestEqual(TEXT("Canned food"), Contents.GetCount(ELootItem::CannedFood), 1);
 	TestEqual(TEXT("M16 rounds"), Contents.GetCount(ELootItem::RifleAmmo), 62);
-	TestEqual(TEXT("Mine"), Contents.GetCount(ELootItem::Mine), 1);
 	TestEqual(TEXT("Grenades (Godot get_items_list)"), Contents.GetCount(ELootItem::Grenade), 2);
 	TestEqual(TEXT("His weapon (Godot get_items_list)"), Contents.BonusWeaponId, FString(TEXT("m16")));
+	TestEqual(TEXT("No mine (not on the Godot list)"), Contents.GetCount(ELootItem::Mine), 0);
+	TestEqual(TEXT("No barricade"), Contents.GetCount(ELootItem::Barricade), 0);
+	TestEqual(TEXT("No turret"), Contents.GetCount(ELootItem::Turret), 0);
+	TestEqual(TEXT("No matches"), Contents.GetCount(ELootItem::Matches), 0);
+	TestEqual(TEXT("No heat pack"), Contents.GetCount(ELootItem::HeatPack), 0);
+	TestEqual(TEXT("No firewood"), Contents.GetCount(ELootItem::Firewood), 0);
+	TestEqual(TEXT("No flare"), Contents.GetCount(ELootItem::Flare), 0);
 	// No supply-crate defaults (a default crate holds 60 M16 rounds, 24 pistol rounds, a heat pack...).
 	TestEqual(TEXT("No pistol rounds"), Contents.GetCount(ELootItem::PistolAmmo), 0);
-	TestEqual(TEXT("No heat pack"), Contents.GetCount(ELootItem::HeatPack), 0);
 	TestEqual(TEXT("No shotgun shells"), Contents.GetCount(ELootItem::ShotgunAmmo), 0);
-	TestEqual(TEXT("Six stacks: medkit, chocolate, M16, mine, grenades, weapon"), Contents.GetItems().Num(), 6);
+	TestEqual(TEXT("Six stacks: medkit, canned food, chocolate, M16, grenades, weapon"), Contents.GetItems().Num(), 6);
 	const TArray<FLootEntry> Items = Contents.GetItems();
 	TestTrue(TEXT("Grenades before the weapon"), Items.Num() == 6 && Items[4].Item == ELootItem::Grenade && Items[5].Item == ELootItem::BonusWeapon);
+	// The Godot list (player.gd get_items_list): ammo of every weapon (clip + reserve), medkits, food.
+	for (const ETransferItem Item : { ETransferItem::Medkit, ETransferItem::CannedFood, ETransferItem::Bread, ETransferItem::Chocolate,
+		ETransferItem::RifleAmmo, ETransferItem::PistolAmmo, ETransferItem::ShotgunAmmo, ETransferItem::FlameFuel, ETransferItem::CryoAmmo,
+		ETransferItem::PlasmaAmmo })
+	{
+		TestTrue(*FString::Printf(TEXT("item %d is a remains item"), static_cast<int32>(Item)), CorpseLootRules::IsRemainsItem(Item));
+	}
+	for (const ETransferItem Item : { ETransferItem::Turret, ETransferItem::Barricade, ETransferItem::Mine, ETransferItem::Matches,
+		ETransferItem::HeatPack, ETransferItem::Firewood, ETransferItem::Flare })
+	{
+		TestFalse(*FString::Printf(TEXT("item %d stays off the remains"), static_cast<int32>(Item)), CorpseLootRules::IsRemainsItem(Item));
+	}
 	FLootContents Taken = Contents;
 	TestEqual(TEXT("Take the grenades"), Taken.Take(ELootItem::Grenade), 2);
 	TestEqual(TEXT("Grenades gone"), Taken.GetCount(ELootItem::Grenade), 0);

@@ -273,9 +273,9 @@ neither comparator: error. Stats (`UTutorialSubsystem::GetConditionStat`, "livin
 `{"type": "cold_bump", "amount": 20, "min_level": 42}` - every squad member's cold + amount, raised to at least `min_level` (0-100; a cold shock, not
 scaled by the level's cold rate); `{"type": "solo_focus"}` (2026-10-20) - Solo ON and the step's focus operative selected (he alone takes the orders);
 `{"type": "set_posture", "posture": "passive" | "defensive" | "aggressive"}` - the whole squad's fire posture
-(overrides cleared; missing / unknown posture: error); `{"type": "tactical_pause"}` (2026-10-21) - the fight's FREE tactical pause
-(`UGameFlowSubsystem::EnterLessonPause`: no charge, no timer, the player resumes with Space); shown a moment before the fight starts (the
-card about being spotted comes with `EnemyAlerted`), it opens as soon as the fight runs in real time, within 3 s, else it is dropped. Unknown type: error.
+(overrides cleared; missing / unknown posture: error); `{"type": "tactical_pause"}` (2026-10-21: the fight's free tactical pause) is **RETIRED**
+since the user decision 2026-10-26 ("the tactical pause only by Space"): it still loads (`TutorialRules::IsRetiredAction`) with a warning and is
+dropped - the tutorial never pauses the game (the player's Space is the only way in). Unknown type: error.
 
 **Focus:** `role:<EOperativeRole>` (2026-10-20, the A4 ambusher) = the living operative of that role, chosen when the step is TRIGGERED (so a
 confinement's `free` operative is known at once), else the leader; a floating "<NAME>: YOUR TASK" over him when shown; `{focus}` also works in

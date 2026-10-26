@@ -167,8 +167,9 @@ void AOperativeCharacter::BecomeCorpse()
 void AOperativeCharacter::SpawnRemainsLoot()
 {
 	// Godot corpse_loot / player.gd get_items_list: the ammo of his weapons (clip + reserve), medkits, food, grenades and the weapon in
-	// his hands - plus everything else he carried in UE (matches, heat packs, flares, firewood, set-up items). 2026-10-26: the M16 rounds
-	// were read from AmmoInventory, which holds only the weapons NOT in his hands (the M16 in hand gave 0 / stale rounds).
+	// his hands - only those (user decision 2026-10-26, CorpseLootRules::IsRemainsItem: no matches, heat packs, flares, firewood or
+	// set-up items). 2026-10-26: the M16 rounds were read from AmmoInventory, which holds only the weapons NOT in his hands (the M16 in
+	// hand gave 0 / stale rounds).
 	CorpseLootRules::FCarriedGear Gear;
 	for (uint8 Index = 0; Index <= static_cast<uint8>(LastTransferItem); ++Index)
 	{

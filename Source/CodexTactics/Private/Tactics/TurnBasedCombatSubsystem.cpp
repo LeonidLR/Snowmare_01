@@ -457,13 +457,15 @@ void UTurnBasedCombatSubsystem::EndCombat(bool bVictory, bool bLeaveFlow)
 	Grid = nullptr;
 	if (bVictory)
 	{
-		Log(TEXT("🏆 TURN-BASED VICTORY! Enemies down. Tactical pause (20s) to regroup [SPACE]."));
+		Log(TEXT("🏆 TURN-BASED VICTORY! Enemies down. Real time - [SPACE] for a tactical pause."));
 	}
 	if (bLeaveFlow)
 	{
 		if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
 		{
-			Flow->ExitTurnBased();
+			// User decision 2026-10-26 ("the tactical pause only by Space"): the grid's own end goes straight to real time (it opened a 20 s
+			// tactical pause "to regroup", Godot _exit_turn_based_combat); the player's Space pauses if he wants.
+			Flow->FinishTurnBasedFight();
 		}
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Turn-based combat ended (%s)"), bVictory ? TEXT("victory") : TEXT("exit"));

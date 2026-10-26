@@ -374,6 +374,8 @@ bool FGameFlowTurnBasedUnlimitedTest::RunTest(const FString&)
 	return true;
 }
 
+// The Space hold with bHoldExitsTurnBasedToRealTime false (the Godot path) - the grid's own end goes to real time since 2026-10-26
+// (CombatTimeModeTest, FinishTurnBasedFight).
 GAMEFLOW_TEST(FGameFlowTurnBasedExitToFreePauseTest, "TurnBased.ExitGivesFreeTacticalPause")
 bool FGameFlowTurnBasedExitToFreePauseTest::RunTest(const FString&)
 {

@@ -108,7 +108,10 @@ struct CODEXTACTICS_API FGameFlowConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tactical Pause", meta = (ClampMin = "0", ClampMax = "1"))
 	float TacticalPauseTimeDilation = 0.02f;
 
-	/** Real seconds of free tactical pause after leaving turn-based combat (no charge spent). */
+	/**
+	 * Real seconds of free tactical pause after leaving turn-based combat (no charge spent) - only the Space hold with
+	 * bHoldExitsTurnBasedToRealTime false; the grid's own end goes to real time (user decision 2026-10-26).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based", meta = (ClampMin = "0"))
 	float PostTurnBasedPauseDuration = 20.f;
 
@@ -125,7 +128,7 @@ struct CODEXTACTICS_API FGameFlowConfig
 
 	/**
 	 * The Space hold in the turn-based fight returns to full real time (user request 2026-10-06). False restores the
-	 * Godot path: a free tactical pause of PostTurnBasedPauseDuration. The grid's own end (victory) keeps the free pause.
+	 * Godot path: a free tactical pause of PostTurnBasedPauseDuration. The grid's own end goes to real time either way (2026-10-26).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based")
 	bool bHoldExitsTurnBasedToRealTime = true;

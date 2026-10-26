@@ -2,16 +2,18 @@
 // L_MovementTest with its level waves (wave 1: hounds + frostbitten; wave 2 adds cutters + marksmen; wave 3: hounds,
 // cutters, marksmen); the squad waits 30 m from the spawn points so the horde has a run-up:
 //   Scripts/smoke.ps1 -Command CodexTactics.HordeIntroSmoke
-// User decisions 2026-10-26: (a) the warning never opens the tactical pause - only the player's Space does (the wave's first Space is the
-// free pause); (b) only the fight's FIRST wave is warned - later waves come silently (only the HUD's incoming arrows).
+// User decisions 2026-10-26: (a) the warning never opens the tactical pause - only the player's Space does; (b) only the fight's FIRST
+// wave is warned - later waves come silently (only the HUD's incoming arrows); (c) "the first pause of a wave being free: NO" - the
+// wave's first Space is an ordinary pause (a charge, the timer, the order radius), the combat banner shows the charges.
 // 1. the combat zone -> wave 1 spawns AT ONCE (no cutscene / preparation phase, nothing queued) into the RUNNING fight:
 //    real time, no pause, the camera stays on the squad, saving refused, the horde intro waits;
 // 2. the horde becomes a running mass -> trigger (not before MinDelaySeconds, at MaxWaitSeconds at the latest): the warning - the
 //    «HORDE INCOMING» alert, the flyover in slow motion (FlyoverTimeDilation): wide shot on the running mass, a close tracking shot
 //    (7 m) of a running front-runner per type in spawn order (hound, frostbitten), back to the leader (camera locked meanwhile, the
 //    whole horde revealed) - and NO pause: the flow stays in real time; after the flyover real time (dilation 1), camera unlocked;
-// 3. 2 s of real time - nothing pauses by itself; the player's Space opens the FREE pause (charges 3/3);
-// 4. orders in the free pause: a planned move and a barricade set-up; a Space tap releases it: real time, charges 3/3;
+// 3. 2 s of real time - nothing pauses by itself; the player's Space opens an ORDINARY pause (charges 2/3, its timer);
+// 4. orders in the pause: a far move is clamped to the pause's order radius, a planned move and a barricade set-up; a Space tap
+//    releases it: real time, charges 2/3;
 // 5. (game designer 2026-10-25: no "Start the next wave" plate) wave 1 cleared -> straight into the rest before wave 2: no victory
 //    panel / WaveCleared phase, no «Start Battle» button, the banner counts down "NEXT WAVE IN", the world runs; NOBODY clicks
 //    anything and wave 2 breaks through on its own when the rest runs out;
@@ -21,7 +23,7 @@
 //    before the trigger is a normal click, Esc gives the warning at once (no flyover, no pause);
 // 8. a load resumes wave 3 (RestoreForLoad): its flyover flies only to the types never shown on the level (cutter, marksman - wave 2
 //    came silently), no wide shot (2026-10-25), in real time; Esc during its last type shot skips it: camera on the leader, real time;
-// 9. a second load of wave 3: every type known -> at the trigger the alert, NO flyover, real time; Space: the free pause; Space: real time.
+// 9. a second load of wave 3: every type known -> at the trigger the alert, NO flyover, real time; Space: an ordinary pause; Space: real time.
 // Framing (game designer play-test 2026-10-22, "the fly-in sometimes shows nothing"): a level hound parked 60 m away (NOT part
 // of the wave, like the lake's patrols) must not pull the frame; every settled wide shot holds the wave's main cluster in the
 // camera frustum (feet and heads), visible, each at least 2.5 % of the frame height; a type shot holds its runner, >= 12 %.
@@ -50,7 +52,6 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/WorldSettings.h"
 #include "HAL/IConsoleManager.h"
-#include "Interactables/RadiusRingSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -280,14 +281,14 @@ namespace HordeIntroSmoke
 			FString::Printf(TEXT("trigger %.2f game s after the spawn (%s, %.0f %% running)"), Intro.GetTriggerGameSeconds(),
 				Intro.WasTriggerByMass() ? TEXT("running mass") : TEXT("timeout"), Intro.GetTriggerRunningFraction() * 100.f));
 		Check(State, Flow.GetCombatMode() == ECodexCombatMode::RealTime && !Flow.IsFreePause() && !Flow.IsAwaitingHordeIntro()
-			&& Flow.IsFreePauseOffered() && Flow.GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges,
-			TEXT("the warning keeps the fight in REAL TIME: no pause opened (2026-10-26), the first Space stays free, charges 3/3"));
+			&& Flow.GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges,
+			TEXT("the warning keeps the fight in REAL TIME: no pause opened (2026-10-26), charges 3/3"));
 		Check(State, FMath::IsNearlyEqual(WorldDilation(World), Config.FlyoverTimeDilation, 0.001f)
 			&& WorldDilation(World) > FlowConfig.TacticalPauseTimeDilation * 2.f,
 			FString::Printf(TEXT("flyover slow motion %.2f (the pause would be %.2f)"), WorldDilation(World), FlowConfig.TacticalPauseTimeDilation));
 		const UHordeAlertWidget* Alert = Intro.GetAlertWidget();
 		Check(State, Alert && Alert->IsInViewport() && Intro.GetAlertTitle().ToString() == TEXT("HORDE INCOMING")
-			&& Intro.GetAlertSubtitle().ToString().Contains(TEXT("[SPACE] FREE TACTICAL PAUSE")),
+			&& Intro.GetAlertSubtitle().ToString().Contains(TEXT("[SPACE] TACTICAL PAUSE")) && !Intro.GetAlertSubtitle().ToString().Contains(TEXT("FREE")),
 			FString::Printf(TEXT("alert \"%s\" / \"%s\""), *Intro.GetAlertTitle().ToString(), *Intro.GetAlertSubtitle().ToString()));
 		Check(State, Camera.IsCinematicLocked(), TEXT("camera input locked during the flyover"));
 		const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
@@ -385,8 +386,8 @@ namespace HordeIntroSmoke
 			Check(State, State.PhasesSeen.Num() == 1 && State.PhasesSeen[0] == ECodexGamePhase::WaveCombat,
 				FString::Printf(TEXT("straight into the wave: %d phase change(s), no cutscene / preparation"), State.PhasesSeen.Num()));
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && Flow->IsAwaitingHordeIntro() && !Flow->IsFreePause()
-				&& Flow->IsFreePauseOffered() && FMath::IsNearlyEqual(WorldDilation(World), Config.PreTriggerTimeDilation, 0.001f),
-				TEXT("no pause at the spawn: the fight runs, horde intro armed, the first Space offered free"));
+				&& FMath::IsNearlyEqual(WorldDilation(World), Config.PreTriggerTimeDilation, 0.001f),
+				TEXT("no pause at the spawn: the fight runs, horde intro armed"));
 			Check(State, Intro->GetStage() == EHordeIntroStage::Waiting && !Camera->IsCinematicLocked(), TEXT("intro waits, camera free"));
 			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
@@ -457,8 +458,8 @@ namespace HordeIntroSmoke
 				{
 					Banners->Refresh();
 					const FString Combat = Banners->GetCombatText().ToString();
-					Check(State, Banners->GetPauseText().IsEmpty() && Combat.Contains(TEXT("[SPACE] free tactical pause")),
-						FString::Printf(TEXT("banners: no pause banner, the combat banner offers the free pause (\"%s\")"), *Combat));
+					Check(State, Banners->GetPauseText().IsEmpty() && Combat.Contains(TEXT("[SPACE] tactical pause 3/3")) && !Combat.Contains(TEXT("free")),
+						FString::Printf(TEXT("banners: no pause banner, the combat banner shows the ordinary pause's charges, no free pause (\"%s\")"), *Combat));
 				}
 				for (const EEnemyArchetype Type : LiveTypes(World))
 				{
@@ -488,19 +489,23 @@ namespace HordeIntroSmoke
 			Check(State, true, TEXT("2 s of real time after the warning, no pause"));
 			PC->SpacePressed();
 			PC->SpaceReleased();
-			Check(State, Flow->IsFreePause() && !Flow->IsFreePauseOffered() && Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges
+			// User decision 2026-10-26 ("the first pause of a wave being free: NO"): an ordinary pause - a charge, the timer.
+			Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause && !Flow->IsFreePause()
+				&& Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges - 1
+				&& FMath::IsNearlyEqual(Flow->GetPauseTimeRemaining(), FlowConfig.TacticalPauseDuration, 0.5f)
 				&& FMath::IsNearlyEqual(WorldDilation(World), FlowConfig.TacticalPauseTimeDilation, 0.001f),
-				TEXT("the player's Space: the FREE tactical pause (no charge, the pause dilation)"));
+				FString::Printf(TEXT("the player's Space: an ORDINARY tactical pause (charges %d/%d, %.1f s on its timer, the pause dilation)"),
+					Flow->GetPauseCharges(), FlowConfig.TacticalPauseMaxCharges, Flow->GetPauseTimeRemaining()));
 			if (UPhaseBannersWidget* Banners = State.Banners.Get())
 			{
 				const FString Banner = Banners->GetPauseText().ToString();
-				Check(State, Banner.Contains(TEXT("free pause")), FString::Printf(TEXT("banner: %s"), *Banner));
+				Check(State, !Banner.Contains(TEXT("free pause")) && Banner.Contains(TEXT("Planning time")), FString::Printf(TEXT("banner: %s"), *Banner));
 			}
 			Next(State);
 			return true;
 		case 3:
 		{
-			// Orders in the free pause: a planned move and a barricade set-up.
+			// Orders in the pause: a planned move and a barricade set-up.
 			AOperativeCharacter* Mover = nullptr;
 			AOperativeCharacter* Engineer = nullptr;
 			for (AOperativeCharacter* Member : Squad->GetMembers())
@@ -514,24 +519,19 @@ namespace HordeIntroSmoke
 				Mover = Member != Leader && Member != Engineer && !Mover ? Member : Mover;
 			}
 			State.Mover = Mover;
-			// User decision 2026-10-11: the free pause is an unrestricted preparation - no radius ring, no distance limit on orders
-			// and placements (the paid pause keeps its 12 m ring and limit: RadiusRingSmoke).
+			// User decision 2026-10-26: no free first pause - the wave's first Space is an ordinary pause with its order radius (it was the
+			// unrestricted free pause of 2026-10-11: no ring, no distance limit). The ring itself: RadiusRingSmoke.
 			{
-				const URadiusRingSubsystem* Rings = World->GetSubsystem<URadiusRingSubsystem>();
-				// (The selection rings / defence markers are radius ring actors too: only the pause's own ring counts.)
-				const ARadiusRingActor* PauseRing = Rings ? Rings->GetRing() : nullptr;
-				Check(State, Rings && Rings->GetMode() == ERadiusRingMode::Hidden && (!PauseRing || PauseRing->IsHidden()),
-					FString::Printf(TEXT("free pause: no radius ring (mode %d, ring %s)"), Rings ? static_cast<int32>(Rings->GetMode()) : -1,
-						!PauseRing ? TEXT("not spawned") : (PauseRing->IsHidden() ? TEXT("hidden") : TEXT("VISIBLE"))));
-				Check(State, !Flow->IsPauseRadiusLimited() && Flow->GetPauseOrderRadius() > FlowConfig.PauseOrderRadius * 100.f,
-					FString::Printf(TEXT("free pause: order radius %.0f cm (a paid pause: %.0f)"), Flow->GetPauseOrderRadius(), FlowConfig.PauseOrderRadius));
+				Check(State, Flow->IsPauseRadiusLimited() && FMath::IsNearlyEqual(Flow->GetPauseOrderRadius(), FlowConfig.PauseOrderRadius, 1.f),
+					FString::Printf(TEXT("the pause: order radius %.0f cm (the ordinary pause's %.0f)"), Flow->GetPauseOrderRadius(), FlowConfig.PauseOrderRadius));
 				if (Mover)
 				{
 					const FVector Far = Mover->GetActorLocation() - Mover->GetActorForwardVector() * (FlowConfig.PauseOrderRadius * 3.f);
 					const FVector FarPlanned = Squad->PlanMove(Mover, Far, false, Flow->GetPauseOrderRadius());
-					Check(State, FVector::Dist2D(FarPlanned, Far) < 1.f,
-						FString::Printf(TEXT("free pause: a move order %.0f m away is planned as given (planned %.0f m)"),
-							FlowConfig.PauseOrderRadius * 3.f / 100.f, FVector::Dist2D(FarPlanned, Mover->GetActorLocation()) / 100.f));
+					const float PlannedCm = static_cast<float>(FVector::Dist2D(FarPlanned, Mover->GetActorLocation()));
+					Check(State, PlannedCm <= FlowConfig.PauseOrderRadius + 5.f,
+						FString::Printf(TEXT("the pause: a move order %.0f m away is clamped to the radius (planned %.0f m)"),
+							FlowConfig.PauseOrderRadius * 3.f / 100.f, PlannedCm / 100.f));
 					Squad->ClearPlannedOrder(Mover);
 				}
 			}
@@ -541,17 +541,15 @@ namespace HordeIntroSmoke
 					Flow->GetPauseOrderRadius());
 				State.MoveStartDistance = FVector::Dist2D(Mover->GetActorLocation(), State.PlannedMove);
 			}
-			Check(State, Squad->GetPlannedOrderCount() >= 1, TEXT("a move order planned in the free pause"));
+			Check(State, Squad->GetPlannedOrderCount() >= 1, TEXT("a move order planned in the pause"));
 			URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>();
 			Engineer->BarricadesCount = FMath::Max(Engineer->BarricadesCount, 1);
 			if (Relocation && Relocation->StartDeployPlacement(EDeployableType::Barricade, Engineer))
 			{
-				// A spot beyond the old pause radius is a valid barricade spot in the free pause.
-				const FVector FarSpot = Engineer->GetActorLocation() + Engineer->GetActorForwardVector() * (FlowConfig.PauseOrderRadius * 2.5f);
-				Relocation->UpdatePreview(FarSpot);
-				Check(State, Relocation->IsGhostValid() && Relocation->GetRadius(*Engineer) > FlowConfig.PauseOrderRadius * 100.f,
-					FString::Printf(TEXT("free pause: a barricade %.0f m away is valid (radius %.0f cm)"), FlowConfig.PauseOrderRadius * 2.5f / 100.f,
-						Relocation->GetRadius(*Engineer)));
+				// The ordinary pause keeps its placement radius (the free pause had none).
+				Check(State, Relocation->GetRadius(*Engineer) <= FlowConfig.PauseOrderRadius + 1.f,
+					FString::Printf(TEXT("the pause: the barricade placement radius %.0f cm (the pause's %.0f)"), Relocation->GetRadius(*Engineer),
+						FlowConfig.PauseOrderRadius));
 				Relocation->CancelPlacement();
 			}
 			const FVector Spot = Engineer->GetActorLocation() - Engineer->GetActorForwardVector() * 300.f;
@@ -563,12 +561,12 @@ namespace HordeIntroSmoke
 				Relocation->ConfirmPlacement(Spot); // confirm: planned in the pause
 			}
 			Check(State, bStarted && !Relocation->IsPlacingDeployable() && Relocation->GetActiveDeployCount() == 0,
-				TEXT("barricade placement works in the free pause (planned, not started yet)"));
+				TEXT("barricade placement works in the pause (planned, not started yet)"));
 			PC->SpacePressed();
 			PC->SpaceReleased();
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && !Flow->IsFreePause(), TEXT("Space: real time"));
-			Check(State, Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges && Flow->GetPauseCooldownRemaining() <= 0.f,
-				FString::Printf(TEXT("pause budget untouched: %d/%d, no cooldown"), Flow->GetPauseCharges(), FlowConfig.TacticalPauseMaxCharges));
+			Check(State, Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges - 1 && Flow->GetPauseCooldownRemaining() <= 0.f,
+				FString::Printf(TEXT("pause budget: the one charge spent (%d/%d), no cooldown"), Flow->GetPauseCharges(), FlowConfig.TacticalPauseMaxCharges));
 			Check(State, FMath::IsNearlyEqual(WorldDilation(World), 1.f, 0.001f), TEXT("real time dilation 1"));
 			Check(State, Relocation && Relocation->GetActiveDeployCount() >= 1, TEXT("the planned barricade set-up runs"));
 			Check(State, Squad->GetPlannedOrderCount() == 0, TEXT("the planned move was handed out on release"));
@@ -646,8 +644,8 @@ namespace HordeIntroSmoke
 			}
 			// User decision 2026-10-26: a later wave of the fight - no warning at all, only the incoming arrows.
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime
-				&& Flow->GetWaveIndex() == 2 && !Flow->IsAwaitingHordeIntro() && Flow->IsFreePauseOffered(),
-				FString::Printf(TEXT("wave 2 broke through on its own after the %.1f s rest: real time, no intro armed (the first Space still free)"),
+				&& Flow->GetWaveIndex() == 2 && !Flow->IsAwaitingHordeIntro() && Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges,
+				FString::Printf(TEXT("wave 2 broke through on its own after the %.1f s rest: real time, no intro armed, charges back to 3/3"),
 					State.RestSeconds));
 			Check(State, State.RestSeconds > FlowConfig.WaveRestDuration - 2.f, FString::Printf(TEXT("... after the level's rest (%.0f s)"),
 				FlowConfig.WaveRestDuration));
@@ -716,7 +714,7 @@ namespace HordeIntroSmoke
 				PressKey(PC, EKeys::Escape, IE_Released);
 				const ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(PC->GetHUD());
 				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && !Flow->IsFreePause() && bRealTimeDilation
-					&& Flow->IsFreePauseOffered() && Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges,
+					&& Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges,
 					TEXT("Esc before the trigger: the warning at once, the fight stays in real time (no pause)"));
 				Check(State, Intro->GetStage() == EHordeIntroStage::Idle && Intro->GetStartedCount() == State.StartedBefore
 					&& Intro->GetAlertAlpha() > 0.f && (!Hud || !Hud->IsPauseMenuOpen()),
@@ -849,12 +847,13 @@ namespace HordeIntroSmoke
 				FString::Printf(TEXT("wave 3 of known types: no flyover (%d flyovers in all)"), Intro->GetStartedCount()));
 			Check(State, Intro->GetAlertWidget() && Intro->GetAlertWidget()->IsInViewport() && Intro->GetAlertTitle().ToString() == TEXT("HORDE INCOMING"),
 				TEXT("... the «HORDE INCOMING» alert still shows"));
-			Check(State, bRealTimeDilation && Flow->GetCombatMode() == ECodexCombatMode::RealTime && Flow->IsFreePauseOffered(),
-				TEXT("... real time, no pause (the first Space offered free)"));
+			Check(State, bRealTimeDilation && Flow->GetCombatMode() == ECodexCombatMode::RealTime,
+				TEXT("... real time, no pause"));
 			Check(State, !Camera->IsCinematicLocked() && Camera->GetFollowTarget() == Leader, TEXT("... the camera stays on the squad, unlocked"));
 			PC->SpacePressed();
 			PC->SpaceReleased();
-			Check(State, Flow->IsFreePause() && Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges, TEXT("Space: the free pause"));
+			Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause && !Flow->IsFreePause()
+				&& Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges - 1, TEXT("Space: an ordinary pause (a charge spent, no free pause)"));
 			PC->SpacePressed();
 			PC->SpaceReleased();
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && FMath::IsNearlyEqual(WorldDilation(World), 1.f, 0.001f),

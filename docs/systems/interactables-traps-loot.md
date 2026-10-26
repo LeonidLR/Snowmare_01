@@ -109,16 +109,24 @@
   `FitBoxToBody` = 2D principal axis + padding 20 cm, min 40 x 30 x 25 cm; `IsBodyBone` drops root / ik_* / VB / attach helpers), refitted every
   0.25 s for 10 s while the death clip settles; QueryOnly, blocks only `ECC_Visibility` (the cursor), never pawns, the camera or the navmesh; not
   relocatable; no crate mesh but a label "[Click] Search the body: <name>" / "[Searched] Body: <name> (empty)" (Godot CorpseLootPrompt, 60 cm up);
-  the hand cursor over it (`PlayerTick`); a search of 0.6 s then the loot window. Contents (`CorpseLootRules::BuildRemainsContents`): everything he
-  carried - every hand-over item (ammo = clip + reserve), the new `ELootItem::Grenade` (`FLootContents::Grenades`, no carry limit) and his firearm
-  as the bonus weapon (Godot: added to the looter only if he lacks it). Save: runtime corpse crates keep `grenades`, `bonus_weapon`, `remains_of`
+  the hand cursor over it (`PlayerTick`); a search of 0.6 s then the loot window. Contents (`CorpseLootRules::BuildRemainsContents`): the Godot
+  list only (user decision 2026-10-26, below) - ammo (clip + reserve), medkits, food, the new `ELootItem::Grenade` (`FLootContents::Grenades`, no
+  carry limit) and his firearm as the bonus weapon (Godot: added to the looter only if he lacks it). Save: runtime corpse crates keep `grenades`, `bonus_weapon`, `remains_of`
   and re-bind to the nearest killed-in-action body on load. Tests `CodexTactics.Loot.Remains.*`; smoke `FallenGearSmoke`. With the formation kept
   in the fight (gameflow 2026-10-26) a living mate often stands between the camera and part of the body (the Engineer, ~1.9 m off: 3-5 of 10
   rays); his capsule rightly takes that part's click (it selects him). The smoke checks the click box with the living ignored and that no ray at
   the body reaches the snow.
 - **Knocked down (not dead):** the knockdown is temporary (0.6 s down in real time; on the grid until his turn's get-up). A fight that ends while he
-  lies on the grid releases him: he gets up by himself in PostCombat (`FallenGearSmoke` stage 7). Taking a downed (living) operative's gear is not
-  defined by Godot or the GDDs - not implemented (open question).
+  lies on the grid releases him: he gets up by himself in PostCombat (`FallenGearSmoke` stage 7). **User decision 2026-10-26: taking gear from a
+  knocked-down, still living operative - NO** (kept as it was: only a killed-in-action operative leaves searchable remains; the living hand items
+  over with the transfer / give orders as usual).
+- **The remains hold the Godot list (user decision 2026-10-26, "trim the remains to the Godot list"):** Godot `player.gd get_items_list` /
+  `loot_single_item`: ammo of the weapon (clip + reserve), medkits, canned food, bread, chocolate, grenades, the weapon. UE:
+  `CorpseLootRules::IsRemainsItem` = every weapon's ammo (`TransferRules::GetAmmoWeaponId`: M16 / pistol / shotgun rounds, flame fuel, cryo, plasma
+  - each its clip + reserve; Godot had one weapon), medkits, canned food, bread, chocolate; the grenades and the weapon in hand as before. Out of
+  the remains (they stay with the body): matches, heat packs, firewood, flares and the set-up items (mines, barricades, turrets). Save: no key
+  change (a remains crate saves its stash as before; an older save keeps what it saved). Tests `CodexTactics.Loot.Remains.ContentsAreHisGear`;
+  smoke `FallenGearSmoke` (she also carries matches, heat packs, a flare, firewood and a mine - none in the remains).
 
 ## Retry after a failed disarm; a visible PMC wire is noticed (game designer 2026-10-22)
 

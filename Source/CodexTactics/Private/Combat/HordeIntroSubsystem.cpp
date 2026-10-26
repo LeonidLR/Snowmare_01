@@ -78,7 +78,7 @@ void UHordeIntroSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 	{
 		if (!(Phase == ECodexGamePhase::WaveCombat && CombatMode == FlyoverMode))
 		{
-			// The flow left the mode the flyover runs in: 2026-10-26 (real-time flyover) a Space tap opened the free pause, a hold the
+			// The flow left the mode the flyover runs in: 2026-10-26 (real-time flyover) a Space tap opened the pause, a hold the
 			// grid; the old auto-pause rule: the pause ended under the flyover. The wave cleared, game over: both.
 			EndFlyover(true, true, FlyoverMode == ECodexCombatMode::RealTime ? TEXT("the fight left real time") : TEXT("the free pause ended"));
 		}
@@ -86,9 +86,10 @@ void UHordeIntroSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 	}
 	if (Stage == EHordeIntroStage::Waiting && !Flow->IsAwaitingHordeIntro())
 	{
-		if (Flow->IsFreePause())
+		if (CombatMode == ECodexCombatMode::TacticalPause)
 		{
-			// A Space tap before the trigger: the free pause at once, the alert explains it, no flyover.
+			// A Space tap before the trigger: the pause at once (user decision 2026-10-26: an ordinary one - a charge, the timer; it was the
+			// free pause), the alert explains it, no flyover.
 			Stage = EHordeIntroStage::Idle;
 			bPreTriggerSlowed = false;
 			FlyoverMode = ECodexCombatMode::TacticalPause; // the alert's line: the pause is open
@@ -96,7 +97,7 @@ void UHordeIntroSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 			ShowAlert();
 			OnHordeIntroStarted.Broadcast(WaveIndex, false);
 			OnHordeIntroFinished.Broadcast(WaveIndex, true);
-			UE_LOG(LogCodexTactics, Display, TEXT("[HordeIntro] free pause opened by the player before the trigger (%.2f s)"), GameSinceSpawn);
+			UE_LOG(LogCodexTactics, Display, TEXT("[HordeIntro] the player's pause before the trigger (%.2f s): the warning without a flyover"), GameSinceSpawn);
 		}
 		else
 		{
@@ -121,7 +122,7 @@ void UHordeIntroSubsystem::BeginWaiting()
 	if (!HordeIntroRules::ShouldWarnWave(WaveIndex, Config))
 	{
 		// User decision 2026-10-26: "the horde warning only for the FIRST wave; the later waves only as the arrows, don't interrupt the
-		// fight" - no alert, no flyover, no slow motion, no pause. The wave's first Space still opens the free pause.
+		// fight" - no alert, no flyover, no slow motion, no pause. Space opens an ordinary pause (no free one, 2026-10-26).
 		Stage = EHordeIntroStage::Idle;
 		bPreTriggerSlowed = false;
 		++SilentWaveCount;
@@ -174,7 +175,7 @@ void UHordeIntroSubsystem::DismissIntro()
 		}
 		if (Flow)
 		{
-			Flow->CancelHordeIntro(); // no free pause offered any more either
+			Flow->CancelHordeIntro();
 		}
 	}
 	else if (Flow)
@@ -316,7 +317,7 @@ void UHordeIntroSubsystem::GiveWarning(bool bFlyover)
 	{
 		Messages->PostMessage(LOCTEXT("HQ", "HQ"), Config.bAutoPause
 			? LOCTEXT("Contact", "⚠️ HORDE INCOMING! Free tactical pause: give your orders, place barricades - [SPACE] to engage.")
-			: LOCTEXT("ContactRealTime", "⚠️ HORDE INCOMING! [SPACE] - a free tactical pause: give your orders, place barricades."));
+			: LOCTEXT("ContactRealTimePaid", "⚠️ HORDE INCOMING! [SPACE] - tactical pause: give your orders, place barricades."));
 	}
 	if (bWasSlowed && !Config.bAutoPause && !(bFlyover && Config.bEnabled))
 	{
@@ -620,7 +621,7 @@ FText UHordeIntroSubsystem::GetAlertSubtitle() const
 		return FText::GetEmpty();
 	}
 	return FlyoverMode == ECodexCombatMode::TacticalPause ? LOCTEXT("AlertSubtitle", "TACTICAL PAUSE - GIVE YOUR ORDERS  |  [SPACE] TO ENGAGE")
-		: LOCTEXT("AlertSubtitleRealTime", "THE FIGHT IS ON  |  [SPACE] FREE TACTICAL PAUSE - GIVE YOUR ORDERS");
+		: LOCTEXT("AlertSubtitleRealTimePaid", "THE FIGHT IS ON  |  [SPACE] TACTICAL PAUSE - GIVE YOUR ORDERS");
 }
 
 FText UHordeIntroSubsystem::GetCaption() const

@@ -25,11 +25,12 @@
 // "ambush_fight": "skirmish": every fight above is a skirmish of the zombie that engaged (the other keeps patrolling) and ends straight
 // in exploration (no WaveCleared / PostCombat, no teleport, no cleanup).
 //   CodexTactics.TutorialAmbushLakeSpottedSmoke     = PART 1 FAILS: the perimeter zombie spots her at the wire card (BreakPatrol, Sight):
-//     the wire card is dropped, the SPOTTED card + the free tactical pause, a skirmish of that zombie alone (the far one keeps patrolling);
-//     AGGRESSIVE completes the card, Space resumes, she shoots him dead -> straight back to exploring (no wave panel, the squad not
-//     teleported, the far zombie still there and patrolling) -> part 2 goes on (wall, corner, lure, close shot).
+//     the wire card is dropped, the SPOTTED card IN REAL TIME (user decision 2026-10-26 "the tactical pause only by Space": the card's
+//     lesson pause is gone), a skirmish of that zombie alone (the far one keeps patrolling); AGGRESSIVE completes the card, the player's
+//     own Space opens an ordinary pause (the pause lesson), Space resumes, she shoots him dead -> straight back to exploring (no wave
+//     panel, the squad not teleported, the far zombie still there and patrolling) -> part 2 goes on (wall, corner, lure, close shot).
 //   CodexTactics.TutorialAmbushLakeLureSpottedSmoke = PART 2 FAILS: after the wire, the far zombie spots her at the wall card: the SPOTTED
-//     card + pause (first time on the level), the corner / lure cards skip themselves, a skirmish of the far zombie alone, killed -> exploring.
+//     card in real time (no pause), the corner / lure cards skip themselves, a skirmish of the far zombie alone, killed -> exploring.
 // 2026-10-22 (game designer play-test): the posture lesson asks for DEFENSIVE (the squad is DEFENSIVE through the lessons; the SPOTTED
 // runs set PASSIVE themselves - the card only comes for a PASSIVE squad); the SPOTTED run also shows the TACTICAL PAUSE lesson (card 1:
 // time stops / orders, two orders; card 2: resume and the limits; Space) - rendered frames of both cards.
@@ -118,6 +119,8 @@ namespace TutorialAmbushLakeSmoke
 		FVector LureSpot = FVector::ZeroVector;
 		/** The flow went through WaveCleared / PostCombat during a skirmish (it must not). */
 		bool bSawWavePanel = false;
+		/** 2026-10-26: the fight left real time while the SPOTTED card was up (the retired lesson pause; it must not). */
+		bool bSpottedPaused = false;
 		FVector BeforeKill = FVector::ZeroVector;
 		float Time = 0.f;
 		float StageTime = 0.f;
@@ -1186,15 +1189,17 @@ namespace TutorialAmbushLakeSmoke
 		case 21:
 		{
 			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			if ((Tutorial->GetStepState(TEXT("A4_spotted")) != ETutorialStepState::Active || Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
-				&& State.StageTime < 5.f)
+			// User decision 2026-10-26: the card no longer pauses the fight - watch it run in real time for a while after the card.
+			State.bSpottedPaused |= Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->GetCombatMode() != ECodexCombatMode::RealTime;
+			if ((Tutorial->GetStepState(TEXT("A4_spotted")) != ETutorialStepState::Active || Flow->GetPhase() != ECodexGamePhase::WaveCombat
+				|| State.StageTime < 2.f) && State.StageTime < 6.f)
 			{
 				return true;
 			}
 			Check(State, State.Probe->EventNames.Contains(GameplayEvents::EnemyAlerted), TEXT("EnemyAlerted raised by the perimeter zombie"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Skipped, TEXT("PART 1 FAILS: the wire card is dropped"));
-			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause
-				&& Flow->IsFreePause(), TEXT("... the SPOTTED card and the FREE tactical pause"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->GetCombatMode() == ECodexCombatMode::RealTime
+				&& !State.bSpottedPaused, TEXT("... the SPOTTED card and the fight runs on in REAL TIME (no lesson pause, 2026-10-26)"));
 			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
 			Check(State, Flow->IsSkirmish() && Waves && Waves->GetAliveEnemyCount() == 1 && Lured->IsOnPatrol(),
 				FString::Printf(TEXT("... a SKIRMISH of that zombie alone (%d enemies); the far zombie keeps patrolling"), Waves ? Waves->GetAliveEnemyCount() : -1));
@@ -1210,8 +1215,16 @@ namespace TutorialAmbushLakeSmoke
 			}
 			Tutorial->HandlePlayerCommand(PlayerCommands::PostureAggressive, FPlayerCommandContext());
 			Squad->SetSquadPosture(ESquadFirePosture::Aggressive); // Alt + /
-			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Completed, TEXT("AGGRESSIVE (Alt + /) completes the card"));
-			State.Stage = 50; // 2026-10-22: the tactical pause lesson before Space
+			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Completed, TEXT("AGGRESSIVE (Alt + /) completes the card (in real time)"));
+			{
+				// The player's own Space (2026-10-26: the only way into the pause): an ordinary pause - the pause lesson follows.
+				UGameFlowSubsystem* PauseFlow = World->GetSubsystem<UGameFlowSubsystem>();
+				const int32 Charges = PauseFlow->GetPauseCharges();
+				Check(State, PauseFlow->ToggleTacticalPause() == EGameFlowResult::Ok && PauseFlow->GetCombatMode() == ECodexCombatMode::TacticalPause
+					&& !PauseFlow->IsFreePause() && PauseFlow->GetPauseCharges() == Charges - 1, TEXT("the player's Space: an ordinary tactical pause (a charge)"));
+				Tutorial->HandlePlayerCommand(PlayerCommands::TacticalPause, FPlayerCommandContext());
+			}
+			State.Stage = 50; // 2026-10-22: the tactical pause lesson
 			State.StageTime = 0.f;
 			return true;
 		}
@@ -1542,21 +1555,21 @@ namespace TutorialAmbushLakeSmoke
 		case 31:
 		{
 			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			if ((Tutorial->GetStepState(TEXT("A4_spotted")) != ETutorialStepState::Active || Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
-				&& State.StageTime < 5.f)
+			State.bSpottedPaused |= Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->GetCombatMode() != ECodexCombatMode::RealTime;
+			if ((Tutorial->GetStepState(TEXT("A4_spotted")) != ETutorialStepState::Active || Flow->GetPhase() != ECodexGamePhase::WaveCombat
+				|| State.StageTime < 2.f) && State.StageTime < 6.f)
 			{
 				return true;
 			}
 			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
 			Check(State, Tutorial->GetStepState(TEXT("A4_hug_wall")) == ETutorialStepState::Skipped, TEXT("PART 2 FAILS: the wall card is dropped"));
-			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->IsFreePause(),
-				TEXT("... the SPOTTED card and the free tactical pause (the first time on this level)"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Active && Flow->GetCombatMode() == ECodexCombatMode::RealTime
+				&& !State.bSpottedPaused, TEXT("... the SPOTTED card (the first time on this level) and the fight runs on in REAL TIME (no lesson pause, 2026-10-26)"));
 			Check(State, Flow->IsSkirmish() && Waves && Waves->GetAliveEnemyCount() == 1 && (IsDead(Perimeter) || Perimeter->IsOnPatrol()),
 				TEXT("... a skirmish of the far zombie alone (the perimeter zombie died in the trap - 2026-10-23 - or patrols on)"));
 			Tutorial->HandlePlayerCommand(PlayerCommands::PostureDefensive, FPlayerCommandContext());
 			Squad->SetSquadPosture(ESquadFirePosture::Defensive);
-			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Completed, TEXT("DEFENSIVE completes the card"));
-			World->GetSubsystem<UGameFlowSubsystem>()->ToggleTacticalPause();
+			Check(State, Tutorial->GetStepState(TEXT("A4_spotted")) == ETutorialStepState::Completed, TEXT("DEFENSIVE completes the card (in real time)"));
 			Lured->GetHealthComponent()->SetMaxHealth(20.f);
 			State.LastShotAt = -10.f;
 			Next(State);
@@ -1652,12 +1665,12 @@ namespace TutorialAmbushLakeSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs SpottedCommand(
 		TEXT("CodexTactics.TutorialAmbushLakeSpottedSmoke"),
-		TEXT("Dev check (Demo 01 A4, 2026-10-21 b): part 1 fails - the perimeter zombie spots the squad: the SPOTTED card + free pause, a skirmish of that zombie alone, straight back to exploring, part 2 goes on. 'Shot' = rendered frames."),
+		TEXT("Dev check (Demo 01 A4, 2026-10-21 b): part 1 fails - the perimeter zombie spots the squad: the SPOTTED card in real time (no pause, 2026-10-26), a skirmish of that zombie alone, straight back to exploring, part 2 goes on. 'Shot' = rendered frames."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunSpotted));
 
 	static FAutoConsoleCommandWithWorldAndArgs LureSpottedCommand(
 		TEXT("CodexTactics.TutorialAmbushLakeLureSpottedSmoke"),
-		TEXT("Dev check (Demo 01 A4, 2026-10-21 b): part 2 fails - the far zombie spots her at the wall: the SPOTTED card + pause, the stealth cards skip, a skirmish of that zombie alone, straight back to exploring."),
+		TEXT("Dev check (Demo 01 A4, 2026-10-21 b): part 2 fails - the far zombie spots her at the wall: the SPOTTED card in real time (no pause, 2026-10-26), the stealth cards skip, a skirmish of that zombie alone, straight back to exploring."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunLureSpotted));
 
 	static FAutoConsoleCommandWithWorldAndArgs EarlyKillCommand(

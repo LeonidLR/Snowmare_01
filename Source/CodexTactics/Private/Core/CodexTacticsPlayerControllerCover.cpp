@@ -745,10 +745,29 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		return false;
 	}
 	// Formation look sectors (Codex.Formation.Sectors, docs/design/FORMATION_SECTORS.md "Wall"): in group mode (no box selection, the
-	// exploration formation; not planned in the pause, not a cover switch / wrap) the group cover order is the formation wall layout -
-	// all along the wall 1 m apart, crouched facing OUT, nobody looks through the wall. Else (or when no layout can be made) as before.
-	if (FormationRuntime::IsEnabled() && !bPlan && !bLeaderSwitch && !LeaderWrap && !Squad->HasMultiSelection() && !Squad->IsSoloMode()
-		&& Squad->IsExplorationFormation() && Squad->OrderFormationWall(Direct, Others, Slot))
+	// group cover formation; not a cover switch / wrap) the group cover order is the formation wall layout - all along the wall 1 m apart,
+	// crouched facing OUT, nobody looks through the wall. Else (or when no layout can be made) as before. User decision 2026-10-26: also in
+	// the fight (USquadSubsystem::IsGroupCoverFormation) - in the tactical pause the layout is planned and ordered on the release.
+	const bool bWallLayout = FormationRuntime::IsEnabled() && !bLeaderSwitch && !LeaderWrap && !Squad->HasMultiSelection() && !Squad->IsSoloMode()
+		&& Squad->IsGroupCoverFormation();
+	FVector PlannedWall = Slot.WorldLocation;
+	if (bWallLayout && bPlan && Squad->PlanFormationWall(Direct, Slot, Radius, PlannedWall))
+	{
+		LastGroupCoverSlots = 1 + Others.Num();
+		LastGroupCoverProne = 0;
+		if (UCombatFeedbackSubsystem* PlanFeedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			PlanFeedback->SpawnWaypointMarker(PlannedWall);
+		}
+		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, true, true, Direct, Slot.WorldLocation);
+		if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), FText::Format(LOCTEXT("GroupWallPlanned",
+				"📋 [PLAN] Along the wall ({0} operatives), facing out!"), 1 + Others.Num()));
+		}
+		return true;
+	}
+	if (bWallLayout && !bPlan && Squad->OrderFormationWall(Direct, Others, Slot))
 	{
 		LastGroupCoverSlots = 1 + Others.Num();
 		LastGroupCoverProne = 0;

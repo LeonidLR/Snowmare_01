@@ -40,7 +40,8 @@ enum class EHordeIntroStage : uint8
  * zones step aside, the line of sight shows the whole horde. Pattern: UDeathCinematicSubsystem.
  * Hooks for a later HUD effect: OnHordeIntroStarted / OnHordeIntroFinished.
  * User decisions 2026-10-26: (1) the trigger no longer opens the pause - the alert, the HQ line and the flyover (its slow motion) play
- * while the fight runs on; the world returns to real time after the flyover; the wave's first Space opens the free pause; Esc before the
+ * while the fight runs on; the world returns to real time after the flyover; the wave's first Space opens an ORDINARY pause (no free first
+ * pause, also 2026-10-26: a charge, the timer; a Space before the trigger gives the warning without a flyover); Esc before the
  * trigger gives the warning at once (no pause). (2) Only the fight's FIRST wave is warned: a later wave of the same fight gets nothing
  * (HordeIntroRules::ShouldWarnWave) - the HUD's incoming arrows show it. Codex.HordeIntro.AutoPause / LaterWaves 1 restore the old rules.
  */

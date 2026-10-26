@@ -201,11 +201,28 @@ FText UPhaseBannersWidget::GetCombatText() const
 		{
 			return FText::FromString(FString::Printf(TEXT("⚔️ CONTACT | HOSTILES: %d"), Waves ? Waves->GetAliveEnemyCount() : 0)); // 2026-10-21: no waves
 		}
-		// 2026-10-26: the sudden wave's first pause is free and only the player's Space opens it - the banner says so.
+		// User decision 2026-10-26 ("the first pause of a wave being free: NO"): Space opens an ordinary pause - in real time the banner
+		// shows the charges (it said "[SPACE] free tactical pause" before the wave's first pause).
+		const FString Hint = Flow->GetCombatMode() == ECodexCombatMode::RealTime
+			? TEXT(" | ") + GetPauseHint(Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges, Flow->GetPauseCooldownRemaining())
+			: FString();
 		return FText::FromString(FString::Printf(TEXT("⚔️ WAVE %d | ENEMIES LEFT: %d%s"), Flow->GetWaveIndex(),
-			Waves ? Waves->GetAliveEnemyCount() : 0, Flow->IsFreePauseOffered() ? TEXT(" | [SPACE] free tactical pause") : TEXT("")));
+			Waves ? Waves->GetAliveEnemyCount() : 0, *Hint));
 	}
 	return FText::GetEmpty();
+}
+
+FString UPhaseBannersWidget::GetPauseHint(int32 Charges, int32 MaxCharges, float CooldownSeconds)
+{
+	if (Charges > 0)
+	{
+		return FString::Printf(TEXT("[SPACE] tactical pause %d/%d"), Charges, MaxCharges);
+	}
+	if (CooldownSeconds > 0.f)
+	{
+		return FString::Printf(TEXT("pauses recharge: %d s"), FMath::CeilToInt(CooldownSeconds));
+	}
+	return TEXT("no pauses left");
 }
 
 bool UPhaseBannersWidget::IsStartBattleShown() const

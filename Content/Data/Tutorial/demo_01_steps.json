@@ -643,8 +643,8 @@
     {
       "_comment": "2026-10-21 (user play-test: 'while we approach the zombie it may spot us - the attack is ruined and the PASSIVE squad will not even fire back'): when either A4 zombie ENGAGES the squad (EnemyAlerted: it saw / heard / was hit - the fight starts right after) while the squad holds fire, the game goes into the FREE tactical pause ('tactical_pause': no charge, no timer) and the card asks for DEFENSIVE or AGGRESSIVE (done on the key or when nobody is PASSIVE any more). Once per level for both parts; the stealth cards of the moment are dropped (their cancel_on), the close-shot card keeps its slot (it already says AGGRESSIVE: this card is dropped when it finishes). A failed ambush is no game over: the skirmish ('ambush_fight': 'skirmish') ends when that zombie is down and the lesson goes on.",
       "id": "A4_spotted", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_SPOTTED",
+      "_comment_realtime": "User decision 2026-10-26 ('the tactical pause only by Space'): the card no longer pauses the game (the 'tactical_pause' action is retired) - the fight runs in real time while the card shows; it still completes on the posture key / when nobody is PASSIVE (or 60 s), and the player's own Space opens an ordinary pause (key Time.Pause on the card).",
       "keys": ["Posture.Defensive", "Posture.Aggressive", "Time.Pause"],
-      "action": { "type": "tactical_pause" },
       "precredit": false,
       "trigger": { "type": "event", "event": "EnemyAlerted", "enemy": "A4_ANY", "requires": ["A4_tripwire"] },
       "condition": { "stat": "squad_passive", "at_least": 1 },
@@ -778,7 +778,7 @@
     },
 
     {
-      "_comment": "2026-10-22 (game designer play-test: 'the tactical pause is not explained'): THE TACTICAL PAUSE LESSON in two cards, the first time the game goes into the tactical pause in any fight (BEAT-LESS: the A4 lesson pause, or the player's Space - since 2026-10-26 the horde warning keeps the fight in real time and the wave's first Space opens its free pause) - event TacticalPauseStarted (UGameFlowSubsystem). Card 1: time stops, give each operative his order (they queue). Done after two orders in the pause (move / cover / shot / interact), else 40 s; dropped when the pause ends first (TacticalPauseEnded).",
+      "_comment": "2026-10-22 (game designer play-test: 'the tactical pause is not explained'): THE TACTICAL PAUSE LESSON in two cards, the first time the game goes into the tactical pause in any fight (BEAT-LESS: since the user decisions of 2026-10-26 only the player's Space opens it - the horde warning, the A4 spotted card and the grid's end keep the fight in real time, and the wave's first Space is an ordinary pause) - event TacticalPauseStarted (UGameFlowSubsystem). Card 1: time stops, give each operative his order (they queue). Done after two orders in the pause (move / cover / shot / interact), else 40 s; dropped when the pause ends first (TacticalPauseEnded).",
       "id": "X_pause", "kind": "hint_card", "text_id": "TUT_PAUSE_ORDERS",
       "keys": ["Select.Member", "Order.Move", "Cover.Enter", "Attack.TargetedShot"],
       "unlock": ["Time.*"],
@@ -789,7 +789,7 @@
         "count": 2, "timeout_s": 40 }
     },
     {
-      "_comment": "Card 2: Space resumes - every queued order starts at once; the limits ({pause_charges} pauses per wave, {pause_seconds} s each, {pause_cooldown} s recharge, the horde's free pause, hold Space = turn-based). Only while the pause still holds (condition tactical_pause); done on the resume (Time.Resume / the pause ended any way), else 60 s.",
+      "_comment": "Card 2: Space resumes - every queued order starts at once; the limits ({pause_charges} pauses per wave, {pause_seconds} s each, {pause_cooldown} s recharge, hold Space = turn-based; 2026-10-26: no free first pause any more). Only while the pause still holds (condition tactical_pause); done on the resume (Time.Resume / the pause ended any way), else 60 s.",
       "id": "X_pause_resume", "kind": "hint_card", "text_id": "TUT_PAUSE_RESUME",
       "keys": ["Time.Resume", "Time.TurnBased"],
       "precredit": false,

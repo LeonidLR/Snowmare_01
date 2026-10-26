@@ -87,7 +87,8 @@ bool FSquadOrderGroupCoverJoinTest::RunTest(const FString&)
 	TestFalse(TEXT("Solo, single selection: only the direct order"), ShouldJoinGroupCover(Case));
 	Case = Follower;
 	Case.bFormationActive = false;
-	TestFalse(TEXT("A fight without a box selection: only the direct order"), ShouldJoinGroupCover(Case));
+	TestFalse(TEXT("No group cover formation (turn-based / Codex.GroupCover.InCombat 0 in a fight) without a box selection: only the direct order"),
+		ShouldJoinGroupCover(Case));
 	Case = Follower;
 	Case.bOnOwnOrder = true;
 	TestFalse(TEXT("Group mode: one busy with his own order finishes it"), ShouldJoinGroupCover(Case));
@@ -218,6 +219,40 @@ bool FSquadOrderCombatFormationTest::RunTest(const FString&)
 	TestTrue(TEXT("The leader walks away: he leaves the cover and follows (the fight too)"), ShouldLeaveCoverToFollow(Cover));
 	Cover.bFormationActive = IsFollowPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, true, false);
 	TestFalse(TEXT("Old rule: he stayed in cover for the whole fight"), ShouldLeaveCoverToFollow(Cover));
+	return true;
+}
+
+SQUAD_ORDER_TEST(FSquadOrderGroupCoverInCombatTest, "CombatFormation.GroupCoverInTheFight")
+bool FSquadOrderGroupCoverInCombatTest::RunTest(const FString&)
+{
+	// User decision 2026-10-26 ("group cover in combat: YES"): the group cover order without a box selection (the others take cover too,
+	// the wall layout, the corner stack) runs in the real-time fight and the tactical pause, as outside the fight; turn-based stays as it is.
+	using namespace SquadOrderRules;
+	TestTrue(TEXT("Exploration"), IsGroupCoverPhase(ECodexGamePhase::Exploration, ECodexCombatMode::None));
+	TestTrue(TEXT("After the final fight"), IsGroupCoverPhase(ECodexGamePhase::PostCombat, ECodexCombatMode::None));
+	TestTrue(TEXT("The real-time fight"), IsGroupCoverPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime));
+	TestTrue(TEXT("The tactical pause"), IsGroupCoverPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause));
+	TestTrue(TEXT("The preparation / the rest between waves"), IsGroupCoverPhase(ECodexGamePhase::Preparation, ECodexCombatMode::None));
+	TestFalse(TEXT("Not on the turn-based grid"), IsGroupCoverPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased));
+	TestFalse(TEXT("Not after a game over"), IsGroupCoverPhase(ECodexGamePhase::GameOver, ECodexCombatMode::None));
+	// The old rule (Codex.GroupCover.InCombat 0) and a fight without the formation (Codex.Squad.CombatFormation 0): exploration only.
+	TestFalse(TEXT("Old rule: a fight's cover click is individual"), IsGroupCoverPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, true, true, false));
+	TestTrue(TEXT("Old rule: exploration unchanged"), IsGroupCoverPhase(ECodexGamePhase::Exploration, ECodexCombatMode::None, true, true, false));
+	TestFalse(TEXT("No formation in the fight: no group cover either"), IsGroupCoverPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause, true, false));
+
+	// Who goes along in the fight: group mode -> the followers; Solo with a single selection -> nobody (the individual cover click).
+	FGroupCoverJoinFacts Follower;
+	Follower.bAlive = true;
+	Follower.bFollower = true;
+	Follower.bFormationActive = IsGroupCoverPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime);
+	TestTrue(TEXT("Group mode in the real-time fight: a follower joins"), ShouldJoinGroupCover(Follower));
+	Follower.bFormationActive = IsGroupCoverPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause);
+	TestTrue(TEXT("... and in the tactical pause"), ShouldJoinGroupCover(Follower));
+	FGroupCoverJoinFacts Solo = Follower;
+	Solo.bSoloMode = true;
+	TestFalse(TEXT("Solo, single selection, in the fight: only the direct order"), ShouldJoinGroupCover(Solo));
+	Follower.bFormationActive = IsGroupCoverPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, true, true, false);
+	TestFalse(TEXT("Old rule: nobody joins in the fight"), ShouldJoinGroupCover(Follower));
 	return true;
 }
 

@@ -3,7 +3,8 @@
 // 1. a wave starts, one brute 6 m ahead; Space-hold equivalent enters turn-based: squad and enemy on the grid, overlay;
 // 2. stance change costs 1 AP; 3. the squad passes the turn: the enemy walks up, bites (attack clip), steps back,
 // round 2 starts;
-// 4. an operative moves into a fire lane and shoots the (weakened) enemy -> victory -> tactical pause.
+// 4. an operative moves into a fire lane and shoots the (weakened) enemy -> victory -> straight to REAL TIME (user decision 2026-10-26,
+//    "the tactical pause only by Space": the grid's own end opened a 20 s tactical pause before).
 
 #include "CoreMinimal.h"
 
@@ -23,6 +24,7 @@
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/WorldSettings.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Tactics/GorkyGridManager.h"
@@ -275,7 +277,10 @@ namespace TurnBasedSmoke
 				const ATacticalCameraPawn* ShotCamera = ShotPC ? Cast<ATacticalCameraPawn>(ShotPC->GetPawn()) : nullptr;
 				Check(State, ShotCamera && State.ShotTrauma > 0.3f, TEXT("the shot shakes the camera at the shot (Godot trigger_weapon_shake)"));
 				Check(State, !TurnBased->IsActive(), TEXT("last enemy down -> combat over"));
-				Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("victory returns to the tactical pause"));
+				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && !Flow->IsFreePause() && Flow->GetPauseTimeRemaining() <= 0.f
+					&& FMath::IsNearlyEqual(World->GetWorldSettings()->TimeDilation, 1.f, 0.001f),
+					FString::Printf(TEXT("victory returns straight to real time - no tactical pause (mode %d, dilation %.3f; 2026-10-26)"),
+						static_cast<int32>(Flow->GetCombatMode()), World->GetWorldSettings()->TimeDilation));
 				const UMeshComponent* FarMesh = VisibleMesh(State.FarEnemy.Get());
 				Check(State, TurnBased->GetStasisMeshCount() == 0 && FarMesh && FarMesh->GetMaterial(0) != TurnBased->StasisMaterial,
 					TEXT("stasis look restored after the fight"));

@@ -108,14 +108,10 @@ public:
 	/** 2026-10-26: the horde warning was given, real time runs on (FGameFlowStateMachine::NotifyHordeWarned). */
 	EGameFlowResult NotifyHordeWarned() { return Machine.NotifyHordeWarned(); }
 
-	/** The wave's first Space will open the free pause (FGameFlowStateMachine::IsFreePauseOffered). */
-	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
-	bool IsFreePauseOffered() const { return Machine.IsFreePauseOffered(); }
-
 	/** The sudden wave stays in real time without a horde intro (smokes, the bot). */
 	void CancelHordeIntro() { Machine.CancelHordeIntro(); }
 
-	/** Wave WaveIndex starts suddenly (no cutscene / countdown, free pause); see FGameFlowStateMachine::UsesSuddenStart. */
+	/** Wave WaveIndex starts suddenly (no cutscene / countdown); see FGameFlowStateMachine::UsesSuddenStart. */
 	bool UsesSuddenStart(int32 InWaveIndex) const { return Machine.UsesSuddenStart(InWaveIndex); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
@@ -143,8 +139,6 @@ public:
 	bool IsSkirmish() const { return Machine.IsSkirmish(); }
 	/** 2026-10-21: the skirmish is over - straight back to Exploration (FGameFlowStateMachine::FinishSkirmish). */
 	EGameFlowResult FinishSkirmish() { return Machine.FinishSkirmish(); }
-	/** 2026-10-21: the tutorial's free pause in a fight (FGameFlowStateMachine::EnterLessonPause). */
-	EGameFlowResult EnterLessonPause() { return Machine.EnterLessonPause(); }
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult FinishPreparation() { SyncSuddenStartOverride(); return Machine.FinishPreparation(); }
@@ -160,6 +154,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult ExitTurnBased() { return Machine.ExitTurnBased(); }
+
+	/** The grid's own end: straight to real time (user decision 2026-10-26; FGameFlowStateMachine::FinishTurnBasedFight). */
+	EGameFlowResult FinishTurnBasedFight() { return Machine.FinishTurnBasedFight(); }
 
 	/** Turn-based fight -> full real time (the Space hold; see FGameFlowStateMachine::ExitTurnBasedToRealTime). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")

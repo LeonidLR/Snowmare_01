@@ -631,8 +631,16 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Action.Type = FName(*JsonString(ActionObject, TEXT("type")));
 			if (!IsKnownAction(Action.Type))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump, set_posture, solo_focus, tactical_pause)"), *Where, *Action.Type.ToString());
+				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump, set_posture, solo_focus)"), *Where, *Action.Type.ToString());
 				return false;
+			}
+			if (IsRetiredAction(Action.Type))
+			{
+				// User decision 2026-10-26 ("the tactical pause only by Space"): the tutorial no longer pauses the game - an old steps file
+				// still loads, the action is dropped.
+				OutWarnings.Add(FString::Printf(TEXT("%s: action \"%s\" is retired (the tactical pause only by Space, 2026-10-26) - ignored"), *Where,
+					*Action.Type.ToString()));
+				continue;
 			}
 			Action.Posture = JsonString(ActionObject, TEXT("posture"));
 			ESquadFirePosture ParsedPosture = ESquadFirePosture::Aggressive;
@@ -1587,8 +1595,12 @@ bool TutorialRules::IsKnownStat(FName Stat)
 
 bool TutorialRules::IsKnownAction(FName Type)
 {
-	return Type == FName(TEXT("cold_bump")) || Type == FName(TEXT("set_posture")) || Type == FName(TEXT("solo_focus"))
-		|| Type == FName(TEXT("tactical_pause"));
+	return Type == FName(TEXT("cold_bump")) || Type == FName(TEXT("set_posture")) || Type == FName(TEXT("solo_focus")) || IsRetiredAction(Type);
+}
+
+bool TutorialRules::IsRetiredAction(FName Type)
+{
+	return Type == FName(TEXT("tactical_pause"));
 }
 
 bool TutorialRules::IsKnownFocus(FName Focus)

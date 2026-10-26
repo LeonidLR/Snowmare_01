@@ -353,7 +353,7 @@
     },
     "TUT_A4_SPOTTED": {
       "title": "SPOTTED - FIGHT BACK",
-      "text": "He has seen you and the game is paused. The squad is PASSIVE - they will not fire back. Switch to DEFENSIVE (Alt + {key:Posture.Defensive}) or AGGRESSIVE (Alt + {key:Posture.Aggressive}), then press {key:Time.Pause} to fight on. A failed ambush is no game over - kill him and the game simply goes on."
+      "text": "He has seen you - the fight is on. The squad is PASSIVE - they will not fire back. Switch to DEFENSIVE (Alt + {key:Posture.Defensive}) or AGGRESSIVE (Alt + {key:Posture.Aggressive}); need a moment to plan? {key:Time.Pause} pauses the fight. A failed ambush is no game over - kill him and the game simply goes on."
     },
     "TUT_A4_HUG_WALL": {
       "title": "PART 2: MOVE TACTICALLY - {focus}",
@@ -380,7 +380,7 @@
     },
     "TUT_PAUSE_RESUME": {
       "title": "TACTICAL PAUSE 2/2: RESUME",
-      "text": "Press {key:Time.Resume} to resume - every waiting order starts at once, all together. {key:Time.Pause} pauses again: {pause_charges} pauses per wave (the counter at the top), each ends by itself after {pause_seconds} s; when all are used, they come back {pause_cooldown} s later. Your first pause after a horde arrives is free and has no time limit. Hold {key:Time.Pause} for the turn-based mode."
+      "text": "Press {key:Time.Resume} to resume - every waiting order starts at once, all together. {key:Time.Pause} pauses again: {pause_charges} pauses per wave (the counter at the top), each ends by itself after {pause_seconds} s; when all are used, they come back {pause_cooldown} s later. Hold {key:Time.Pause} for the turn-based mode."
     },
     "TUT_MEDKIT": {
       "title": "MEDKIT",
