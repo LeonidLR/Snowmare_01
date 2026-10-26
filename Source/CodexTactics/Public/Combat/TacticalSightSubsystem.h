@@ -26,6 +26,17 @@ struct CODEXTACTICS_API FTacticalSightStats
 	int32 Forgotten = 0;
 };
 
+/** An enemy the squad knows of (UTacticalSightSubsystem::GetSquadKnownEnemies): where, and how long ago it was seen / heard. */
+struct FSquadKnownEnemy
+{
+	/** Its position while shown, else its last-known silhouette's feet. */
+	FVector Location = FVector::ZeroVector;
+	/** Seconds since it was last seen or heard (0 while shown). */
+	float SecondsSince = 0.f;
+	/** Shown right now (seen by an operative). */
+	bool bSeenNow = false;
+};
+
 /**
  * Tactical line of sight (Sprint 08, TANDEM «SPRINT 08 DIRECTIVE»; UE-only, no Godot reference). In a wave fight
  * (real time and the tactical pause, not the turn-based grid fight, which keeps its own rules) every 0.2 s:
@@ -93,6 +104,13 @@ public:
 	AEnemyGhostActor* GetGhost(const AActor* Enemy) const;
 	/** The silhouette closest to Point within RadiusCm (planar), for a click. */
 	AEnemyGhostActor* FindGhostNear(const FVector& Point, float RadiusCm) const;
+
+	/**
+	 * Formation rules v2.1 bypass "B" (USquadSubsystem; docs/design/FORMATION_CONTRACT.md 10.2): the enemies the squad knows of while its own
+	 * sight runs (IsSquadSightActive) - every live enemy shown now (its position, 0 s) and every hidden one with a last-known silhouette (that
+	 * spot, the seconds since it was last seen or heard). False (Out untouched) while the squad's sight does not run.
+	 */
+	bool GetSquadKnownEnemies(TArray<FSquadKnownEnemy>& Out) const;
 
 	/** Sight trace between two points, pawns ignored: true when nothing blocks. */
 	bool HasClearSight(const FVector& From, const FVector& To) const;

@@ -1,0 +1,613 @@
+// Dev-only headless check of the rules v2.2 WALL GROUP (behind Codex.Formation.Sectors; USquadSubsystem::ReallocateWallGroup) - the user's
+// playtest bug 2026-10-25: "in group cover at a wall corner the leader dashed (the cover switch) to another wall's edge and held his new corner
+// correctly, but the two others stayed 'Hugging the wall, holding the corner!' looking the same way as he - a wide gap opened":
+//   powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands FormationWallGroupSmoke [-PreCmds "Codex.Formation.Sectors 0"]
+//   rendered stills: UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound
+//     "-ExecCmds=CodexTactics.FormationWallGroupSmoke Shot" -> Saved/Screenshots/FormationV22/wallgroup_*.png (the squad's vision cones on)
+// A runtime arena on L_MovementTest (SmokeUtils::FindClearArena, nothing saved; walls as CoverSwitchSmoke / CoverWrapSmoke): wall A (3 m high,
+// 6 m, near face 3 m ahead), wall B (3 m, its near face 4.5 m ahead beyond A's right end), the short wall D (2 m, beyond A's left end) and the
+// box H (3 x 3 x 3 m, behind the start on the right). Group mode (Solo off, the exploration formation), every order through the controller:
+//  1 the leader in cover at A's right end, the two others in the formation; a double-click on B = the cover switch with the group (the
+//    others wait off the wall, then re-enter their slots after him) -> the wall group re-allocates: the leader keeps the corner he arrived
+//    at, the others close the open arc - no uncovered open gap over coverage.max_gap_deg, nobody faces a wall, not all the same way;
+//  2 from A's left end the switch to the short wall D: one goes prone behind it - same checks with the prone look;
+//  3 the wrap round H: the leader goes round its corner along the wall, the others take its side face - same checks.
+// Codex.Formation.Sectors 0: the old facing untouched (no wall group, nobody taken out of his slot, every follower in cover or prone with
+// his own CoverFacingRules); the gap is logged only. Godot reference: none (UE-only).
+
+#include "CoreMinimal.h"
+
+#if !UE_BUILD_SHIPPING
+
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
+#include "Combat/VisionConeComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Containers/Ticker.h"
+#include "Core/CodexTacticsPlayerController.h"
+#include "Debug/SmokeUtils.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Formation/FormationRuntimeRules.h"
+#include "Formation/FormationTuning.h"
+#include "Formation/FormationWallGroupRules.h"
+#include "GameFramework/HUD.h"
+#include "Kismet/GameplayStatics.h"
+#include "Misc/Paths.h"
+#include "Tactics/CoverGhostActor.h"
+#include "Tactics/CoverTraceRules.h"
+#include "UnrealClient.h"
+
+namespace FormationWallGroupSmoke
+{
+	constexpr float StepSeconds = 0.05f;
+	/** Everyone settled this long before the scene is judged (the looks turn, the allocation re-runs), s. */
+	constexpr float SettleHoldSeconds = 2.5f;
+	constexpr float SceneCapSeconds = 30.f;
+
+	struct FState
+	{
+		float Time = 0.f;
+		float StageTime = 0.f;
+		int32 Stage = 0;
+		int32 Failures = 0;
+		bool bShot = false;
+		bool bSectors = true;
+		FVector P = FVector::ZeroVector;
+		FVector F = FVector::ForwardVector;
+		FVector R = FVector::RightVector;
+		float GroundZ = 0.f;
+		TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
+		TArray<TWeakObjectPtr<AStaticMeshActor>> Boxes;
+		FCoverSlot SlotAEnd;
+		FCoverSlot SlotAOther;
+		FCoverSlot SlotB;
+		FCoverSlot SlotD;
+		FCoverSlot SlotH;
+		/** The scene being judged: its wall actor, when everyone was first seen settled, the leader's look then. */
+		TWeakObjectPtr<AActor> SceneWall;
+		float StableSince = -1.f;
+		float LeaderYawAtArrival = 0.f;
+		bool bLeaderArrived = false;
+		ECoverFacing WrapGoalFacing = ECoverFacing::Right;
+		int32 ShotsTaken = 0;
+		TWeakObjectPtr<ACameraActor> Camera;
+	};
+
+	void Check(FState& State, bool bOk, const FString& What)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s"), bOk ? TEXT("ok  ") : TEXT("FAIL"), *What);
+		State.Failures += bOk ? 0 : 1;
+	}
+
+	bool Finish(FState& State, bool bComplete)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
+		for (const TWeakObjectPtr<AStaticMeshActor>& Box : State.Boxes)
+		{
+			if (Box.IsValid())
+			{
+				Box->Destroy();
+			}
+		}
+		FPlatformMisc::RequestExit(false, TEXT("FormationWallGroupSmoke"));
+		return false;
+	}
+
+	void Next(FState& State, int32 Stage)
+	{
+		State.Stage = Stage;
+		State.StageTime = 0.f;
+	}
+
+	AOperativeCharacter* Member(const FState& State, int32 Index)
+	{
+		return State.Members.IsValidIndex(Index) ? State.Members[Index].Get() : nullptr;
+	}
+
+	FVector Local(const FState& State, float AlongF, float AlongR, float Up = 0.f)
+	{
+		return State.P + State.F * AlongF + State.R * AlongR + FVector(0.f, 0.f, State.GroundZ - State.P.Z + Up);
+	}
+
+	/** A box centred (CentreF, CentreR) in the arena frame, SizeF x SizeR, HeightCm high. */
+	void SpawnBox(UWorld* World, FState& State, float CentreF, float CentreR, float SizeF, float SizeR, float HeightCm)
+	{
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		const FTransform Transform(State.F.Rotation(), Local(State, CentreF, CentreR, HeightCm * 0.5f), FVector(SizeF / 100.f, SizeR / 100.f, HeightCm / 100.f));
+		AStaticMeshActor* Block = Cube ? World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn) : nullptr;
+		if (Block)
+		{
+			Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+			Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+			Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+			Block->GetStaticMeshComponent()->SetCanEverAffectNavigation(true);
+			Block->FinishSpawning(Transform);
+		}
+		State.Boxes.Add(Block);
+	}
+
+	/** The cover slot a click on a face at (AtF, AtR), 90 cm up, looking along Into gives. */
+	bool FindSlot(UWorld* World, const FState& State, float AtF, float AtR, const FVector& Into, FCoverSlot& OutSlot)
+	{
+		return CoverTraceRules::FindCoverSlotAt(World, Local(State, AtF, AtR, 90.f), Into, OutSlot);
+	}
+
+	FHitResult GroundHit(UWorld* World, const FState& State, float AtF, float AtR)
+	{
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(FormationWallGroupSmokeGround), false);
+		for (const TWeakObjectPtr<AOperativeCharacter>& Each : State.Members)
+		{
+			Params.AddIgnoredActor(Each.Get());
+		}
+		for (TActorIterator<ACoverGhostActor> It(World); It; ++It)
+		{
+			Params.AddIgnoredActor(*It);
+		}
+		FHitResult Hit;
+		const FVector Top = Local(State, AtF, AtR, 300.f);
+		World->LineTraceSingleByChannel(Hit, Top, Top - FVector(0.f, 0.f, 600.f), ECC_Visibility, Params);
+		return Hit;
+	}
+
+	/** Everyone out of cover, standing; the leader at Start (arena frame), the others parked behind him. */
+	void ResetSquad(USquadSubsystem* Squad, FState& State, const FVector2D& Start)
+	{
+		Squad->EnterSoloMode();
+		for (int32 Index = 0; Index < State.Members.Num(); ++Index)
+		{
+			AOperativeCharacter* Each = Member(State, Index);
+			if (!Each)
+			{
+				continue;
+			}
+			Each->LeaveCover(TEXT("smoke reset"));
+			Each->SetFormationWallPose(false);
+			Each->ClearPendingCover();
+			Each->StopOperative();
+			Each->SetStance(EOperativeStance::Standing);
+			const FVector2D At = Index == 0 ? Start : FVector2D(Start.X - 300.f, Start.Y + (Index == 1 ? -150.f : 150.f));
+			Each->TeleportTo(Local(State, At.X, At.Y, Each->GetSimpleCollisionHalfHeight() + 5.f), State.F.Rotation(), false, true);
+		}
+		Squad->SetLeader(Member(State, 0));
+	}
+
+	/** At his place by the wall and still: in a cover slot, the back-to-wall pose or lying behind the cover. */
+	bool AtWall(const USquadSubsystem* Squad, const AOperativeCharacter* Op)
+	{
+		const bool bStill = Op && !Op->IsMoving() && Op->GetVelocity().Size2D() < 5.f && Op->GetMoveHoldSeconds() <= 0.f;
+		return bStill && !Squad->IsWaitingForGroupCoverLeader(Op)
+			&& ((Op->bInCover && !Op->bShimmying && Op->GetCoverEntryMeshOffset().Size() < 1.f) || Op->IsInFormationWallPose() || Squad->HasGroupCoverProne(Op, true));
+	}
+
+	/**
+	 * Check 1 (contract 4: "facing within 45 deg of the wall normal, towards it", a surface closer than 200 cm) from 16 rays round him: the
+	 * hits' own normals (thin probe segments would read a face he looks ALONG as a wall ahead).
+	 */
+	bool StaresAtWall(UWorld* World, const FState& State, const FVector& Feet, float LookYaw)
+	{
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(FormationWallGroupSmokeStare), false);
+		for (const TWeakObjectPtr<AOperativeCharacter>& Each : State.Members)
+		{
+			Params.AddIgnoredActor(Each.Get());
+		}
+		const FVector Origin = Feet + FVector(0.f, 0.f, 50.f);
+		for (int32 Ray = 0; Ray < 16; ++Ray)
+		{
+			FHitResult Hit;
+			const FVector Direction = FRotator(0.f, Ray * 22.5f, 0.f).Vector();
+			if (World->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * FormationWallGroup::StareDistCm * 1.5f, ECC_Visibility, Params)
+				&& FMath::Abs(Hit.ImpactNormal.Z) < 0.7f)
+			{
+				const FVector2D Normal = FVector2D(Hit.ImpactNormal).GetSafeNormal();
+				const double Off = FVector2D::DotProduct(FVector2D(Origin) - FVector2D(Hit.ImpactPoint), Normal);
+				if (Off <= FormationWallGroup::StareDistCm && FormationMath::AngleBetween(LookYaw, FormationMath::YawOf(-Normal)) < FormationWallGroup::StareAngleDeg)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Thin walls from 16 rays round each member (50 cm up, look.wall_dist long) - what the checks call "a wall near him". */
+	TArray<FFormationWall> TraceWalls(UWorld* World, const FState& State, const TArray<FVector>& Feet)
+	{
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(FormationWallGroupSmokeWalls), false);
+		for (const TWeakObjectPtr<AOperativeCharacter>& Each : State.Members)
+		{
+			Params.AddIgnoredActor(Each.Get());
+		}
+		TArray<FFormationWall> Walls;
+		const float Reach = FormationTuning::Get().LookWallDist;
+		for (const FVector& At : Feet)
+		{
+			const FVector Origin = At + FVector(0.f, 0.f, 50.f);
+			for (int32 Ray = 0; Ray < 16; ++Ray)
+			{
+				FHitResult Hit;
+				const FVector Direction = FRotator(0.f, Ray * 22.5f, 0.f).Vector();
+				if (World->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * Reach, ECC_Visibility, Params) && FMath::Abs(Hit.ImpactNormal.Z) < 0.7f)
+				{
+					Walls.Add(FormationRuntime::WallFromHit(FVector2D(Hit.ImpactPoint), FVector2D(Hit.ImpactNormal), 30.f));
+				}
+			}
+		}
+		return Walls;
+	}
+
+	float Fov(const AOperativeCharacter* Op)
+	{
+		return Op->GetStance() == EOperativeStance::Prone ? 110.f : FormationTuning::Get().SightFov;
+	}
+
+	void PlaceCamera(UWorld* World, FState& State, const FVector& Eye, const FVector& LookAt)
+	{
+		if (!State.Camera.IsValid())
+		{
+			State.Camera = World->SpawnActor<ACameraActor>(Eye, (LookAt - Eye).Rotation());
+			if (ACameraActor* Created = State.Camera.Get())
+			{
+				Created->GetCameraComponent()->SetFieldOfView(60.f);
+				Created->GetCameraComponent()->bConstrainAspectRatio = false;
+			}
+		}
+		if (ACameraActor* Cam = State.Camera.Get())
+		{
+			Cam->SetActorLocationAndRotation(Eye, (LookAt - Eye).Rotation());
+			if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+			{
+				PC->SetViewTarget(Cam);
+				if (AHUD* Hud = PC->GetHUD())
+				{
+					Hud->bShowHUD = false;
+				}
+			}
+		}
+	}
+
+	void RequestShot(FState& State, const TCHAR* Name)
+	{
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("FormationV22") / FString::Printf(TEXT("%s.png"), Name);
+		FScreenshotRequest::RequestScreenshot(Path, /*bShowUI*/ false, /*bAddFilenameSuffix*/ false);
+		++State.ShotsTaken;
+		UE_LOG(LogCodexTactics, Display, TEXT("FormationWallGroup: screenshot %s"), *Path);
+	}
+
+	/** Waits for the scene to settle (true when it is judged): the leader in cover at SceneWall, the others at the wall, SettleHoldSeconds. */
+	bool SceneSettled(FState& State, USquadSubsystem* Squad)
+	{
+		AOperativeCharacter* Op = Member(State, 0);
+		const bool bLeader = Op && Op->bInCover && !Op->bShimmying && !Op->IsCoverWrapping() && Op->GetCoverSlot().WallActor.Get() == State.SceneWall.Get()
+			&& Op->GetVelocity().Size2D() < 5.f;
+		if (bLeader && !State.bLeaderArrived)
+		{
+			State.bLeaderArrived = true;
+			State.LeaderYawAtArrival = static_cast<float>(Op->GetSightFacing().Rotation().Yaw);
+		}
+		const bool bAll = bLeader && AtWall(Squad, Member(State, 1)) && AtWall(Squad, Member(State, 2));
+		if (!bAll)
+		{
+			State.StableSince = -1.f;
+			return State.StageTime >= SceneCapSeconds;
+		}
+		if (State.StableSince < 0.f)
+		{
+			State.StableSince = State.StageTime;
+		}
+		return State.StageTime - State.StableSince >= SettleHoldSeconds;
+	}
+
+	/** The wall group's checks over the settled scene (Label); bSceneOk = everyone got there. */
+	void CheckScene(UWorld* World, FState& State, USquadSubsystem* Squad, const TCHAR* Label)
+	{
+		AOperativeCharacter* Op = Member(State, 0);
+		const bool bLeader = Op && Op->bInCover && Op->GetCoverSlot().WallActor.Get() == State.SceneWall.Get();
+		Check(State, bLeader && AtWall(Squad, Member(State, 1)) && AtWall(Squad, Member(State, 2)) && State.StableSince >= 0.f,
+			FString::Printf(TEXT("%s: the leader in cover at the new wall, the others at it (in a slot, back to the wall, or prone) after %.1f s"), Label, State.StageTime));
+		if (!bLeader)
+		{
+			return;
+		}
+		const float LeaderYaw = static_cast<float>(Op->GetSightFacing().Rotation().Yaw);
+		Check(State, FormationMath::AngleBetween(LeaderYaw, State.LeaderYawAtArrival) <= 10.f && !Op->GetCoverLookSide().IsSet(),
+			FString::Printf(TEXT("%s: the leader keeps his own look at his corner (%.0f, arrived %.0f)"), Label, LeaderYaw, State.LeaderYawAtArrival));
+		TArray<FVector> Feet;
+		TArray<FVector2D> Positions;
+		TArray<float> Looks;
+		TArray<float> Fovs;
+		FString Line;
+		float MostApart = 0.f;
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			const AOperativeCharacter* Each = Member(State, Index);
+			if (!Each)
+			{
+				continue;
+			}
+			Feet.Add(Each->GetActorLocation() - FVector(0.f, 0.f, Each->GetSimpleCollisionHalfHeight()));
+			Positions.Add(FVector2D(Each->GetActorLocation()));
+			Looks.Add(static_cast<float>(Each->GetSightFacing().Rotation().Yaw));
+			Fovs.Add(Fov(Each));
+			MostApart = FMath::Max(MostApart, FormationMath::AngleBetween(Looks.Last(), LeaderYaw));
+			float Allocated = 0.f;
+			EWallGroupLook Kind = EWallGroupLook::Free;
+			const bool bAllocated = Squad->GetWallGroupLook(Each, Allocated, Kind);
+			Line += FString::Printf(TEXT(" [%s: %s, look %.0f%s]"), *Each->DisplayName.ToString(), Each->bInCover ? TEXT("in cover") : Each->IsInFormationWallPose()
+				? TEXT("back to the wall") : Squad->HasGroupCoverProne(Each) ? TEXT("prone") : TEXT("?"), Looks.Last(),
+				bAllocated ? *FString::Printf(TEXT(", allocated %.0f"), Allocated) : TEXT(""));
+		}
+		const TArray<FFormationWall> Walls = TraceWalls(World, State, Feet);
+		const float Gap = FormationWallGroup::LargestOpenGap(Walls, Positions, Looks, Fovs, FormationTuning::Get().LookWallDist);
+		int32 Stares = 0;
+		for (int32 Index = 0; Index < Positions.Num(); ++Index)
+		{
+			if (StaresAtWall(World, State, Feet[Index], Looks[Index]))
+			{
+				++Stares;
+				Line += FString::Printf(TEXT(" STARE: %s (look %.0f)"), *Member(State, Index)->DisplayName.ToString(), Looks[Index]);
+			}
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s:%s; largest open gap %.0f deg, %d stare(s), wall group %d (%d allocations, %d re-entries)"), Label,
+			*Line, Gap, Stares, Squad->HasWallGroup() ? 1 : 0, Squad->GetWallGroupAllocationCount(), Squad->GetWallGroupReentryCount());
+		if (!State.bSectors)
+		{
+			// Codex.Formation.Sectors 0: the old path untouched.
+			bool bOld = !Squad->HasWallGroup();
+			for (int32 Index = 1; Index < 3; ++Index)
+			{
+				const AOperativeCharacter* Each = Member(State, Index);
+				bOld &= Each && !Each->IsInFormationWallPose() && !Each->GetCoverLookSide().IsSet() && (Each->bInCover || Squad->HasGroupCoverProne(Each, true));
+			}
+			Check(State, bOld, FString::Printf(TEXT("%s [Sectors 0]: the old facing - no wall group, every follower in his slot / prone with his own cover facing"), Label));
+			return;
+		}
+		Check(State, Squad->HasWallGroup() && Squad->GetWallGroupAllocationCount() >= 1,
+			FString::Printf(TEXT("%s: the wall group re-allocated the looks (%d allocations)"), Label, Squad->GetWallGroupAllocationCount()));
+		Check(State, Gap <= FormationTuning::Get().CoverageMaxGapDeg,
+			FString::Printf(TEXT("%s: no uncovered open gap over coverage.max_gap_deg (%.0f <= %.0f deg)"), Label, Gap, FormationTuning::Get().CoverageMaxGapDeg));
+		Check(State, Stares == 0, FString::Printf(TEXT("%s: nobody faces a wall within 200 cm (%d)"), Label, Stares));
+		Check(State, MostApart > 60.f, FString::Printf(TEXT("%s: not all looking the leader's way (the widest %.0f deg from his look)"), Label, MostApart));
+	}
+
+	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
+	{
+		State.Time += StepSeconds;
+		State.StageTime += StepSeconds;
+		UWorld* World = WeakWorld.Get();
+		if (!World || State.Time > 240.f)
+		{
+			Check(State, false, FString::Printf(TEXT("timeout (stage %d)"), State.Stage));
+			return World ? Finish(State, false) : false;
+		}
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(World, 0));
+		AOperativeCharacter* Op = Member(State, 0);
+		switch (State.Stage)
+		{
+		case 0:
+		{
+			if (State.StageTime < 3.f || !Squad || !PC || Squad->GetMembers().Num() < 3)
+			{
+				return true;
+			}
+			State.bSectors = FormationRuntime::IsEnabled();
+			TArray<AOperativeCharacter*> Roster = Squad->GetMembers();
+			Roster.Sort([](const AOperativeCharacter& X, const AOperativeCharacter& Y) { return X.SquadIndex < Y.SquadIndex; });
+			TArray<const AActor*> Ignore;
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				State.Members.Add(Roster[Index]);
+				Ignore.Add(Roster[Index]);
+			}
+			Ignore.Add(PC->GetPawn());
+			const FVector Feet = Roster[0]->GetActorLocation() - FVector(0.f, 0.f, Roster[0]->GetSimpleCollisionHalfHeight());
+			const SmokeUtils::FClearArena Arena = SmokeUtils::FindClearArena(World, Feet, Roster[0]->GetActorForwardVector(),
+				FBox2D(FVector2D(-500.f, -950.f), FVector2D(800.f, 950.f)), Ignore);
+			if (!Arena.bFound)
+			{
+				Check(State, false, TEXT("an empty, flat, navigable 13 x 19 m spot for the smoke's own set-up"));
+				return Finish(State, false);
+			}
+			State.P = Arena.Origin;
+			State.F = Arena.Forward;
+			State.R = Arena.Right;
+			State.GroundZ = Arena.Origin.Z;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: arena at %s, Codex.Formation.Sectors %d"), *Arena.Origin.ToCompactString(), State.bSectors ? 1 : 0);
+			ResetSquad(Squad, State, FVector2D(0.f, 100.f));
+			SpawnBox(World, State, 320.f, 0.f, 40.f, 600.f, 300.f);     // A: near face F 300, R -300..300
+			SpawnBox(World, State, 470.f, 700.f, 40.f, 300.f, 300.f);   // B: near face F 450, R 550..850
+			SpawnBox(World, State, 470.f, -750.f, 40.f, 200.f, 300.f);  // D: near face F 450, R -850..-650 (short: one prone)
+			SpawnBox(World, State, -300.f, 700.f, 300.f, 300.f, 300.f); // H: faces F -450 / -150, R 550 / 850 (the wrap)
+			if (State.bShot)
+			{
+				UVisionConeComponent::SetPlayerSquadCones(true);
+			}
+			Next(State, 1);
+			return true;
+		}
+		case 1:
+		{
+			if (State.StageTime < 2.5f)
+			{
+				return true; // the navmesh rebuilds round the walls
+			}
+			const bool bFound = FindSlot(World, State, 300.f, 250.f, State.F, State.SlotAEnd) && FindSlot(World, State, 300.f, -250.f, State.F, State.SlotAOther)
+				&& FindSlot(World, State, 450.f, 650.f, State.F, State.SlotB) && FindSlot(World, State, 450.f, -700.f, State.F, State.SlotD)
+				&& FindSlot(World, State, -150.f, 780.f, -State.F, State.SlotH);
+			Check(State, bFound, TEXT("set-up: cover slots at A (both ends), B, D and H's front face"));
+			if (!bFound)
+			{
+				return Finish(State, false);
+			}
+			Op->OrderTakeCover(State.SlotAEnd, false);
+			Next(State, 2);
+			return true;
+		}
+		case 2:
+		case 6:
+		case 10:
+		{
+			// The leader settled in his first cover (Solo): group mode, the others come up in the formation.
+			const bool bSettled = Op->bInCover && !Op->IsMoving() && Op->GetVelocity().Size2D() < 5.f && Op->GetCoverEntryMeshOffset().Size() < 1.f;
+			if ((!bSettled || State.StageTime < 1.5f) && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, bSettled, FString::Printf(TEXT("stage %d: the leader in cover at his first wall"), State.Stage));
+			Squad->ExitSoloMode(false, 0.f);
+			Next(State, State.Stage + 1);
+			return true;
+		}
+		case 3:
+		case 7:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true;
+			}
+			const bool bToB = State.Stage == 3;
+			const TArray<AOperativeCharacter*> Joining = Squad->GetGroupCoverMembers(Op);
+			Check(State, Joining.Num() == 2 && !Squad->IsSoloMode(), FString::Printf(TEXT("%s: group mode, %d go along"), bToB ? TEXT("1 switch to B") : TEXT("2 switch to D"),
+				Joining.Num()));
+			PC->ShowCoverPreview(Op, bToB ? State.SlotB : State.SlotD);
+			PC->ConfirmCoverPreview(true);
+			Check(State, PC->WasLastCoverConfirmSwitch(), FString::Printf(TEXT("%s: the double-click is the cover switch with the group (%d at the wall, %d prone)"),
+				bToB ? TEXT("1") : TEXT("2"), PC->GetLastGroupCoverSlotCount(), PC->GetLastGroupCoverProneCount()));
+			State.SceneWall = bToB ? State.Boxes[1].Get() : State.Boxes[2].Get();
+			State.StableSince = -1.f;
+			State.bLeaderArrived = false;
+			Next(State, State.Stage + 1);
+			return true;
+		}
+		case 4:
+		case 8:
+		case 12:
+		{
+			if (!SceneSettled(State, Squad))
+			{
+				return true;
+			}
+			const TCHAR* Label = State.Stage == 4 ? TEXT("1 the corner switch to B") : State.Stage == 8 ? TEXT("2 the switch to the short wall D") : TEXT("3 the wrap round H");
+			CheckScene(World, State, Squad, Label);
+			if (State.Stage == 4 && State.bSectors)
+			{
+				Check(State, Squad->GetWallGroupReentryCount() >= 1, FString::Printf(TEXT("1: the followers' re-entry after the leader re-allocated (%d)"),
+					Squad->GetWallGroupReentryCount()));
+			}
+			if (State.Stage == 8)
+			{
+				const bool bProne = Squad->HasGroupCoverProne(Member(State, 1), true) || Squad->HasGroupCoverProne(Member(State, 2), true);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: 2: %s"), bProne ? TEXT("one lies prone behind the short wall") : TEXT("nobody prone (both fitted at the wall)"));
+			}
+			if (State.Stage == 12)
+			{
+				// The wrap's own end facing is CoverWrapSmoke's check; here only logged (the leader's look is checked above: unchanged since he arrived).
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: 3: the leader ends the wrap facing %s (his plan: %s)"),
+					Op->CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), State.WrapGoalFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"));
+			}
+			if (State.bShot)
+			{
+				const FVector Centre = (Member(State, 0)->GetActorLocation() + Member(State, 1)->GetActorLocation() + Member(State, 2)->GetActorLocation()) / 3.f;
+				const FVector Out = State.Stage == 12 ? State.R : -State.F;
+				PlaceCamera(World, State, Centre + Out * 650.f + FVector(0.f, 0.f, 900.f), Centre + Out * 150.f);
+				Next(State, State.Stage + 1);
+				return true;
+			}
+			Next(State, State.Stage == 12 ? 99 : State.Stage + 1);
+			return true;
+		}
+		case 5:
+		case 9:
+		case 13:
+		{
+			// The still (shot mode only reaches here after a judged scene) - or straight on to the next scene.
+			if (State.bShot)
+			{
+				if (State.StageTime < 2.f)
+				{
+					return true;
+				}
+				const int32 Wanted = State.Stage == 5 ? 1 : State.Stage == 9 ? 2 : 3;
+				if (State.ShotsTaken < Wanted)
+				{
+					RequestShot(State, State.Stage == 5 ? TEXT("wallgroup_1_corner_switch") : State.Stage == 9 ? TEXT("wallgroup_2_short_wall") : TEXT("wallgroup_3_wrap"));
+					return true;
+				}
+				if (State.StageTime < 3.f)
+				{
+					return true;
+				}
+				if (APlayerController* Player = UGameplayStatics::GetPlayerController(World, 0))
+				{
+					Player->SetViewTarget(Player->GetPawn());
+				}
+			}
+			if (State.Stage == 13)
+			{
+				return Finish(State, true);
+			}
+			if (State.Stage == 5)
+			{
+				ResetSquad(Squad, State, FVector2D(0.f, -100.f));
+				Op->OrderTakeCover(State.SlotAOther, false);
+				Next(State, 6);
+				return true;
+			}
+			ResetSquad(Squad, State, FVector2D(150.f, 650.f));
+			Op->OrderTakeCover(State.SlotH, false);
+			Next(State, 10);
+			return true;
+		}
+		case 11:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, Squad->GetGroupCoverMembers(Op).Num() == 2, TEXT("3: group mode, the two others go along"));
+			PC->HandleWorldHit(GroundHit(World, State, -300.f, 910.f));
+			Check(State, Op->IsCoverWrapping(), FString::Printf(TEXT("3: the ground click by H's side face is the wrap with the group (%d at the wall, %d prone)"),
+				PC->GetLastGroupCoverSlotCount(), PC->GetLastGroupCoverProneCount()));
+			State.WrapGoalFacing = Op->GetCoverWrapPlan().GoalFacing;
+			State.SceneWall = State.Boxes[3].Get();
+			State.StableSince = -1.f;
+			State.bLeaderArrived = false;
+			Next(State, 12);
+			return true;
+		}
+		case 99:
+			return Finish(State, true);
+		default:
+			return Finish(State, false);
+		}
+	}
+
+	void Run(const TArray<FString>& Args, UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+		TSharedRef<FState> State = MakeShared<FState>();
+		State->bShot = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); });
+		TWeakObjectPtr<UWorld> WeakWorld(World);
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
+		{
+			return Step(WeakWorld, *State);
+		}), StepSeconds);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs Command(
+		TEXT("CodexTactics.FormationWallGroupSmoke"),
+		TEXT("Dev check (rules v2.2 wall group): after a cover switch / a wrap with the group the leader keeps his corner, the others close the open arc; logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
+}
+
+#endif // !UE_BUILD_SHIPPING

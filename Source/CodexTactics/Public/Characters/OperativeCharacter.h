@@ -180,6 +180,18 @@ public:
 	void ReleaseOwnMoveOrder() { bOwnMoveOrder = false; }
 
 	/**
+	 * Formation rules v2.1 bypass (USquadSubsystem, contract docs/design/FORMATION_CONTRACT.md 10.2): his running own move order is steered
+	 * through Via first - the order stays his (GetLastMoveDestination, the serial and HasOwnMoveOrder are kept); reaching Via (or failing
+	 * there) the walk goes on to the order's own destination by itself. False (nothing changed) without an own order running, under a
+	 * tutorial confinement, or when no path to Via is found.
+	 */
+	bool SteerOwnMoveVia(const FVector& Via);
+	/** The steered own order goes straight on to its destination (the next waypoint passed / the last one done); false without one. */
+	bool ResumeOwnMove();
+	/** His own order is being steered through a bypass waypoint (SteerOwnMoveVia). */
+	bool IsOwnMoveSteered() const { return bSteeringOwnMove && HasOwnMoveOrder(); }
+
+	/**
 	 * The squad automation set his current stance (Regroup's copy of the leader's stance, Solo's guard crouch, a tutorial confinement's
 	 * copy), not the player's stance key: the formation may stand him up to sprint with the leader (SquadOrderRules::
 	 * ShouldStandToSprintWithLeader, bug 2026-10-20). Any later stance change (the player's) makes it his own again.
@@ -1840,6 +1852,25 @@ public:
 	void SetFormationWallPose(bool bInPose) { bFormationWallPose = bInPose; }
 	bool IsInFormationWallPose() const { return bFormationWallPose; }
 
+	/**
+	 * Formation wall group (Codex.Formation.Sectors, rules v2.2, USquadSubsystem::ReallocateWallGroup): the side along the wall the
+	 * squad's coverage allocator gives this FOLLOWER in his cover slot (unset = his own CoverFacingRules: threat side, corner hold, nearest
+	 * edge). Above the threat side and the corner hold, below a manual corner peek; no automatic walk to a corner for it. Cleared when he
+	 * leaves the cover.
+	 */
+	void SetCoverLookSide(const TOptional<ECoverFacing>& Side);
+	TOptional<ECoverFacing> GetCoverLookSide() const { return CoverLookSide; }
+
+	/**
+	 * Formation wall group: out of his cover slot (quietly - no CoverLeft event) into the back-to-wall pose where he stands: crouched (the
+	 * squad's crouch), facing out - his look then comes from the squad every tick (SetFormationLookYaw). False when he is not in cover or
+	 * is busy (side-stepping, aiming round the corner, moving, knocked down, the entry glide not over).
+	 */
+	bool LeaveCoverForWallPose();
+
+	/** He has a facing order of his own (SetFacingPoint) or a quick fire: a look decided elsewhere (the coverage allocator's fixed look). */
+	bool HasOwnFacing() const { return bExplicitFacing || bQuickFireActive; }
+
 	/** Current barrel-to-body yaw correction, degrees. */
 	float GetBarrelYawOffset() const { return BarrelYawOffset; }
 
@@ -1950,6 +1981,8 @@ private:
 	 * pulled into the holding area instead.
 	 */
 	EOperativeOrderResult RequestMove(const FVector& Destination, bool bFormationMove = false);
+	/** The nav query filter of his moves (crawl-only areas, known traps: TripwireRules::ChooseOperativeMoveFilter); none = the default. */
+	TSubclassOf<class UNavigationQueryFilter> ChooseMoveFilter() const;
 	/** Resizes the capsule for the stance, keeping the feet in place and the skeletal mesh on the ground. */
 	void ApplyStanceCapsule();
 	/** Shows the placeholder only without a skeletal mesh. */
@@ -2001,6 +2034,8 @@ private:
 	bool bFacingFormationSector = false;
 	float FormationPaceMultiplier = 1.f;
 	bool bFormationWallPose = false;
+	/** SetCoverLookSide: the wall group's side along the wall in cover. */
+	TOptional<ECoverFacing> CoverLookSide;
 	/** ThreatFacingRules: the enemy he last faced in this fight and where he last saw it; a facing order of his own (SetFacingPoint). */
 	TWeakObjectPtr<AActor> LastThreat;
 	FVector LastThreatLocation = FVector::ZeroVector;
@@ -2281,6 +2316,8 @@ private:
 	bool bHasMoveOrder = false;
 	/** The running move is an order of his own (OrderMoveTo), not a formation move (HasOwnMoveOrder). */
 	bool bOwnMoveOrder = false;
+	/** His own order's path following goes to a bypass waypoint first (SteerOwnMoveVia); its end resumes the order. */
+	bool bSteeringOwnMove = false;
 	/** Counts his stance changes; SquadStanceSerial = the count when the squad automation set it (IsStanceFromSquad). */
 	uint32 StanceSerial = 0;
 	uint32 SquadStanceSerial = MAX_uint32;

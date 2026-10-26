@@ -134,6 +134,10 @@
   `UOperativeAnimInstance::CoverStandSwitchEnter` / `CoverCrouchSwitchEnter` are empty (nothing saved, no .uasset touched).
 - **Group:** with a box selection / in group mode the switch is the group cover order (section above) with the **leader** dashing in through
   the run-in clip; the others take their slots / prone spots at the target cover by the group rules (ordinary runs).
+  **Rules v2.2 wall group (2026-10-25, user playtest: "the two others looked the same way as the leader at his new corner"; `Codex.Formation.Sectors` 1,
+  group mode):** the switch, the wrap and every member's (re-)entry call `USquadSubsystem::ReallocateWallGroup` - the leader's own facing / corner aim
+  stays his, the others get the looks that close the open arc: their cover side along the wall, or out of the slot into the back-to-wall pose facing out
+  when the look points away from the wall (`docs/systems/squad-and-orders.md` "Rules v2.2 in the runtime", smoke `FormationWallGroupSmoke`).
 - **Tactical pause:** planned like any cover order (`SetPendingCover` + `SetPendingCoverSwitch` + `PlanMove`; "[PLAN] Dash to the other
   cover!"); the release runs the switch. Found on the way: the release of a planned walk to ANOTHER cover used to keep the old cover
   (`OrderMoveTo` kept `bInCover` for any walk to the pending slot: the cover pose slid across, no enter clip) - it leaves it now (same wall =

@@ -90,6 +90,14 @@ namespace SightRules
 	 */
 	CODEXTACTICS_API float LineHeightAt(float EyeHeightCm, float TargetHeightCm, float CoverDistanceCm, float TargetDistanceCm);
 
+	/**
+	 * The bearings to try round a preferred one, nearest first: Preferred, +Step, -Step, +2 Step, -2 Step, ... up to 180 deg off (each
+	 * normalized to (-180, 180]); a non-positive Step: just Preferred. For laying out a sight test where a line is clear (the tutorial's
+	 * "standing you see over the low wall" scene, 2026-10-26: laid out straight along the leader's facing it could fall behind a 2.4 m
+	 * container 5 m away - the leader's facing is whatever his last formation look left).
+	 */
+	CODEXTACTICS_API TArray<float> BearingsNearestFirst(float PreferredYaw, float StepDeg);
+
 	/** The line passes over a cover of CoverTopCm at that point (flat ground model; the game traces the real geometry). */
 	CODEXTACTICS_API bool ClearsCover(float EyeHeightCm, float TargetHeightCm, float CoverDistanceCm, float TargetDistanceCm,
 		float CoverTopCm = CoverHeightCm);

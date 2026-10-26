@@ -56,6 +56,9 @@ namespace FormationRuntime
 	/** Console Codex.Formation.Sectors != 0 (default 1). */
 	CODEXTACTICS_API bool IsEnabled();
 
+	/** Console Codex.Formation.CoverAllocator != 0 (default 1; 0 = the v2.1 LookYaw tables on the move, an A/B switch). */
+	CODEXTACTICS_API bool IsCoverAllocatorEnabled();
+
 	/**
 	 * The role of the follower in formation slot SlotIndex (SquadFormation slots: 0 left, 1 right, 2 the second row) in a squad of
 	 * MemberCount (leader included): 2 -> slot 0 is the pair's partner Z; 3 -> slot 0 L, slot 1 P; 4 -> slot 0 L, slot 1 P, slot 2 Z
@@ -161,4 +164,78 @@ namespace FormationRuntime
 
 	/** The leader's heading from his planar velocity: its yaw above MinSpeed (cm/s), else unset (keep the old heading). */
 	CODEXTACTICS_API TOptional<float> HeadingFromVelocity(const FVector2D& Velocity, float MinSpeed = 30.f);
+
+	/** Sim REASSIGN_GAIN (contract 11.6): the followers swap places only when that saves at least this much total travel, cm. */
+	inline constexpr float ReassignGainCm = 100.f;
+
+	/**
+	 * Places, not fixed slots (contract 10.6 / 11.6, rules v2.2): Positions[i] = follower i, CurrentPlace[i] = the place (follower slot index)
+	 * he holds, Places[p] = where place p stands now. The minimal-travel assignment (AssignByTravel, <= 4 places) replaces the current one
+	 * when its total straight travel is at least GainCm shorter - e.g. after a turn the man nearest the rear place becomes the rear man who
+	 * walks backwards. Returns the new place per follower, unset = keep (no cheaper assignment, bad input).
+	 */
+	CODEXTACTICS_API TOptional<TArray<int32>> ReassignPlaces(const TArray<FVector2D>& Positions, const TArray<int32>& CurrentPlace,
+		const TArray<FVector2D>& Places, float GainCm = ReassignGainCm);
+
+	/** Contract 11.2: how far back a place stands along the heading (-dot(slot - leader, heading)), cm - Allocate's FFormationCoverMember::Back. */
+	CODEXTACTICS_API float PlaceBack(const FVector2D& Slot, const FVector2D& LeaderPos, float HeadingYaw);
+
+	/**
+	 * Rules v2.2 (contract 11.2): the patrol / halt looks come from the coverage allocator (FormationCoverRules::Allocate) with 3+ members,
+	 * walking or halted, in every formation but the wall layout and the hedgehog ring; the pair, a run and the wall layout keep
+	 * FormationSectorRules::LookYaw.
+	 */
+	CODEXTACTICS_API bool UsesCoverAllocator(EFormationKind Formation, EFormationMode Mode, int32 MemberCount);
+
+	/**
+	 * Contract 11.5 integration: the wall layout again after a slide - the 4th man (with 2: the pair's partner) keeps the end he is at when
+	 * it has room for him (>= 2 x Spacing; the partner 1 x), else Layout's roomier end (re-choosing it would send him through the line).
+	 * Adjusts the rooms so FormationWallRules::Layout puts him on bOnRight's side; 3 members: unchanged (Layout's places are fixed).
+	 */
+	CODEXTACTICS_API void KeepEndAfterSlide(float& RoomLeft, float& RoomRight, bool bOnRight, int32 MemberCount, float Spacing);
+
+	/** The rear guard eases his look towards his catch-up only this far off his slot (a settled rear guard keeps the allocator's look), cm. */
+	inline constexpr float RearCatchUpCm = 100.f;
+	/** ... and keeps his move this far under BackwardAngleDeg off his look (his body lags the look), deg. */
+	inline constexpr float RearCatchUpMarginDeg = 15.f;
+
+	/**
+	 * Rules v2.2 runtime: the rear guard catching up to his slot (a formation switch moved it metres sideways) turns his look within his
+	 * rear band - HeadingYaw + 180 +- BandHalfDeg (FormationCoverRules: fov / 2 - RearSector, so 5-7 o'clock stays in his cone) - to the
+	 * yaw nearest LookYaw from which his move (MoveYaw) is not walking backwards (<= BackwardAngleDeg - RearCatchUpMarginDeg off it): sideways he then
+	 * catches up at the catch-up speed instead of the backward cap (walk x move.backward_mult). A move the band cannot face (straight
+	 * forward) keeps LookYaw - he walks backwards, as designed.
+	 */
+	CODEXTACTICS_API float RearGuardCatchUpLook(float LookYaw, float HeadingYaw, float BandHalfDeg, float MoveYaw);
+
+	/** How long a leader's own facing is remembered after another member was made the leader (a brief switch away and back), s. */
+	inline constexpr float NewLeaderRememberSeconds = 10.f;
+	/** A pending order's destination closer than this gives no direction (he stands on it), cm. */
+	inline constexpr float NewLeaderOrderMinCm = 50.f;
+
+	/** What decides the look of a member who just became the leader (NewLeaderLookYaw); unset = does not apply. */
+	struct FNewLeaderLookInputs
+	{
+		/** He walks: his travel direction. */
+		TOptional<float> TravelYaw;
+		/** An order of his own is pending / running: the direction to its destination. */
+		TOptional<float> PendingOrderYaw;
+		/** His own facing when he last stopped being the leader (within NewLeaderRememberSeconds). */
+		TOptional<float> FacingAsLeaderYaw;
+		/** The squad's formation heading before the switch. */
+		TOptional<float> SquadHeadingYaw;
+		/** His facing now (the follower look he may still hold). */
+		float FacingYaw = 0.f;
+	};
+
+	/**
+	 * Bug 2026-10-26 (TutorialSmoke; the coordinator: "the leader's sector is forward (12) by the contract"): a member made the leader keeps
+	 * no follower look (the rear guard's 6 o'clock). His look on becoming the leader - the formation heading the squad then turns round:
+	 * walking, his travel; else the order he has pending; else, standing, his own facing from when he last led (a switch away and back);
+	 * else the squad's heading; only without any of them his facing now.
+	 */
+	CODEXTACTICS_API float NewLeaderLookYaw(const FNewLeaderLookInputs& In);
+
+	/** A slide's room probe along the wall: far enough for the destination (AlongCm) plus the line's ends, at least RoomMaxCm, at most 30 m. */
+	CODEXTACTICS_API float SlideRoomCm(float AlongCm, float Spacing);
 }

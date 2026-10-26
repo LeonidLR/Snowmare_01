@@ -1357,6 +1357,13 @@ void ACodexTacticsHUD::DrawSquadPanel(float Top)
 	if (Squad)
 	{
 		Lines.Emplace(Squad->IsSoloMode() ? TEXT("Mode: SOLO [B]") : TEXT("Mode: squad [B]"), TextColor);
+		// Formation rules v2.1 (Codex.Formation.Sectors): the formation in effect, "Echelon left -> Column (wall)" while the wall guard falls back.
+		const FString FormationText = Squad->GetFormationHudText();
+		if (!FormationText.IsEmpty())
+		{
+			const bool bGuarded = Squad->GetFormationGuardLevel() != EFormationGuardLevel::Requested && Squad->GetFormationRequested() != Squad->GetFormationKind();
+			Lines.Emplace(FString::Printf(TEXT("Formation: %s"), *FormationText), bGuarded ? WarningColor : TextColor);
+		}
 		// Commander Mode (Sprint 07-A): «paused» while a tactical pause / turn-based fight freezes it.
 		const bool bAutonomy = Squad->IsAutonomousSquadCombat();
 		const bool bFrozenAutonomy = bAutonomy && Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && !Flow->IsSquadAutonomyActive();

@@ -273,6 +273,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		}
 	}
 	LastMoveDestination = Destination;
+	bSteeringOwnMove = false; // a new path request (a bypass steers again after it)
 	ClearIdleFacing();
 	bExplicitFacing = false; // a new move: no ordered facing any more (ThreatFacingRules may turn him after it)
 	AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
@@ -280,22 +281,9 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	{
 		return EOperativeOrderResult::NoController;
 	}
-	// Low fences (ACrawlGapActor, 2026-10-13): only a prone body may path through a crawl-only area; standing / crouched the
-	// path goes round (or ends at the fence as a partial path, where the fence refuses him with the "go prone" hint).
-	// Known traps (rev 5e, game designer 2026-10-14): only the squad AUTO mode (Ctrl+T) paths round a spotted / own wire or mine;
-	// a player's order is literal - through the wire if that is the way (TripwireRules::ChooseOperativeMoveFilter).
-	const USquadSubsystem* MoveSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-	TSubclassOf<UNavigationQueryFilter> Filter;
-	switch (TripwireRules::ChooseOperativeMoveFilter(Stance == EOperativeStance::Prone, MoveSquad && MoveSquad->IsAutonomousSquadCombat()))
-	{
-	case TripwireRules::EOperativeMoveFilter::NoCrawl: Filter = UNavFilter_NoCrawl::StaticClass(); break;
-	case TripwireRules::EOperativeMoveFilter::TrapLiteral: Filter = UNavFilter_TrapLiteral::StaticClass(); break;
-	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: Filter = UNavFilter_NoCrawlTrapLiteral::StaticClass(); break;
-	default: break;
-	}
 	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
 		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
-		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, Filter);
+		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter());
 	if (Result == EPathFollowingRequestResult::Failed)
 	{
 		bHasMoveOrder = false;
@@ -335,6 +323,67 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	return EOperativeOrderResult::Accepted;
 }
 
+TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() const
+{
+	// Low fences (ACrawlGapActor, 2026-10-13): only a prone body may path through a crawl-only area; standing / crouched the
+	// path goes round (or ends at the fence as a partial path, where the fence refuses him with the "go prone" hint).
+	// Known traps (rev 5e, game designer 2026-10-14): only the squad AUTO mode (Ctrl+T) paths round a spotted / own wire or mine;
+	// a player's order is literal - through the wire if that is the way (TripwireRules::ChooseOperativeMoveFilter).
+	const USquadSubsystem* MoveSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	switch (TripwireRules::ChooseOperativeMoveFilter(Stance == EOperativeStance::Prone, MoveSquad && MoveSquad->IsAutonomousSquadCombat()))
+	{
+	case TripwireRules::EOperativeMoveFilter::NoCrawl: return UNavFilter_NoCrawl::StaticClass();
+	case TripwireRules::EOperativeMoveFilter::TrapLiteral: return UNavFilter_TrapLiteral::StaticClass();
+	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: return UNavFilter_NoCrawlTrapLiteral::StaticClass();
+	default: return nullptr;
+	}
+}
+
+bool AOperativeCharacter::SteerOwnMoveVia(const FVector& Via)
+{
+	if (!HasOwnMoveOrder())
+	{
+		return false;
+	}
+	const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	if (Tutorial && (Tutorial->IsConfining() || Tutorial->IsHeldInPlace(*this)))
+	{
+		return false; // a confinement judges his own path; the bypass never bends it
+	}
+	AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
+	if (!AIController)
+	{
+		return false;
+	}
+	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(Via, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false,
+		/*bUsePathfinding*/ true, /*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter(), /*bAllowPartialPath*/ false);
+	if (Result != EPathFollowingRequestResult::RequestSuccessful)
+	{
+		// The old request was replaced by the failed one: the order goes on to its own destination.
+		bSteeringOwnMove = false;
+		RequestMove(LastMoveDestination);
+		return false;
+	}
+	bSteeringOwnMove = true;
+	return true;
+}
+
+bool AOperativeCharacter::ResumeOwnMove()
+{
+	if (!bSteeringOwnMove)
+	{
+		return false;
+	}
+	bSteeringOwnMove = false;
+	if (!HasOwnMoveOrder())
+	{
+		return false;
+	}
+	const EOperativeOrderResult Result = RequestMove(LastMoveDestination);
+	bOwnMoveOrder = bHasMoveOrder;
+	return Result == EOperativeOrderResult::Accepted;
+}
+
 void AOperativeCharacter::SetTrafficHold(const AActor* Source, bool bHeld)
 {
 	if (!Source)
@@ -369,6 +418,7 @@ void AOperativeCharacter::StopOperative()
 	GetCharacterMovement()->StopMovementImmediately();
 	bHasMoveOrder = false;
 	bOwnMoveOrder = false;
+	bSteeringOwnMove = false;
 	bSprinting = false;
 	if (UWorld* World = GetWorld())
 	{
@@ -394,6 +444,12 @@ void AOperativeCharacter::HandleMoveFinished()
 	{
 		return;
 	}
+	// Formation rules v2.1 bypass: the end of the walk to a waypoint round a wall is no arrival - the order goes on to its destination.
+	if (bSteeringOwnMove && ResumeOwnMove())
+	{
+		return;
+	}
+	bSteeringOwnMove = false;
 	bHasMoveOrder = false;
 	bOwnMoveOrder = false;
 	bSprinting = false;

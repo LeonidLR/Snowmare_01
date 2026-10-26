@@ -319,6 +319,33 @@ bool FFormationRuntimeAcceptProbeTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_RUNTIME_TEST(FFormationRuntimeNewLeaderLookTest, "NewLeaderLook")
+bool FFormationRuntimeNewLeaderLookTest::RunTest(const FString&)
+{
+	using FormationRuntime::FNewLeaderLookInputs;
+	// Bug 2026-10-26: the Commander led facing -118, the medkit lesson made the Engineer the leader for a moment, the Commander as the rear
+	// guard turned to ~86 (6 o'clock) and kept it when he led again. As the leader his sector is 12.
+	FNewLeaderLookInputs Back;
+	Back.FacingYaw = 86.f;
+	Back.FacingAsLeaderYaw = -118.f;
+	Back.SquadHeadingYaw = 100.f;
+	TestEqual(TEXT("standing, switched away and back: his own facing as the leader, not the rear guard's look"), FormationRuntime::NewLeaderLookYaw(Back), -118.f);
+	FNewLeaderLookInputs Fresh;
+	Fresh.FacingYaw = 170.f;
+	Fresh.SquadHeadingYaw = -10.f;
+	TestEqual(TEXT("never led (or long ago): the squad's heading"), FormationRuntime::NewLeaderLookYaw(Fresh), -10.f);
+	FNewLeaderLookInputs Ordered = Back;
+	Ordered.PendingOrderYaw = 45.f;
+	TestEqual(TEXT("an order of his own pending: its direction"), FormationRuntime::NewLeaderLookYaw(Ordered), 45.f);
+	FNewLeaderLookInputs Walking = Ordered;
+	Walking.TravelYaw = 30.f;
+	TestEqual(TEXT("walking: his travel"), FormationRuntime::NewLeaderLookYaw(Walking), 30.f);
+	FNewLeaderLookInputs Nothing;
+	Nothing.FacingYaw = 200.f;
+	TestEqual(TEXT("nothing else known: his facing (normalized)"), FormationRuntime::NewLeaderLookYaw(Nothing), -160.f);
+	return true;
+}
+
 #undef FORMATION_RUNTIME_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

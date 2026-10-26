@@ -82,7 +82,8 @@
 ## Formation look sectors (stage 6, 2026-10-25; design docs/design/FORMATION_SECTORS.md, contract FORMATION_CONTRACT.md)
 
 Console `Codex.Formation.Sectors` (default 1; **0 = the old triangle formation, facing and speeds - every old path untouched**). `Codex.Formation.Debug 1`
-logs every raw terrain class change with its probe hits, `2` also every follower repath (role, distance, slot speed, speed, backwards).
+logs every raw terrain class change with its probe hits, `2` also every follower repath (role, distance, slot speed, speed, backwards), `3` also each
+member's formation look whenever it changes (with his facing) and every look ClearLook turns (2026-10-26).
 - **What the player sees:** exploring in group mode the squad picks its formation by the ground round the leader - diamond (4) / wedge (3) / pair (2) in the
   open, echelon away from a wall on one side, column in any passage (narrow: P looks over the leader's shoulder, L back at a slant, the rear man back),
   the wall layout when the leader stops at a wall; the blizzard tight diamond in a blizzard. Each man looks into his sector: patrol (walk) = scans (leader
@@ -105,6 +106,115 @@ logs every raw terrain class change with its probe hits, `2` also every follower
 - **Open:** the hold-G radial menu (manual formations, `EFormationMode::Forward`), the hedgehog at a fire (`FormationShapeRules::HedgehogSlots`), the
   designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
   simulator ~1 m) - a Training Ground tuning point.
+
+### Rules v2.2 in the runtime (2026-10-25, branch formation/runtime-v22; behind `Codex.Formation.Sectors`)
+
+User decisions of FORMATION_SECTORS.md v2.2 (contract 11). With the console 0 every path below is off (the old formation / cover facing).
+- **The triad K, P, Z:** `FormationRuntime::RoleForFollowerSlot(·, 3)` = slot 0 -> Z (the rear man straight behind, he walks backwards), slot 1 -> P (right).
+  Slot 0 was the old LEFT slot, so the man who walked left goes to the centre-rear and the right man stays right (the least travel from the old
+  triangle); the automatic 3-man wall layout puts Z at the left end - the same man. **Places, not fixed slots** (contract 10.6 / 11.6):
+  `USquadSubsystem::ReassignFormationPlaces` re-assigns the follower slots (= roles) by minimal travel (`FormationRuntime::ReassignPlaces`,
+  `AssignByTravel`) whenever that saves `ReassignGainCm` 100 cm (cooldown `FSquadFormationConfig::SlotSwapCooldown`; not in the wall layout / slide,
+  nobody busy) - after a turn the man nearest the rear place becomes the rear man; it replaces the old left / right `UpdateSlotSwap` under the console.
+- **Patrol / halt looks through the coverage allocator:** walking or halted with 3+ members (`FormationRuntime::UsesCoverAllocator`: every formation but
+  the wall layout and the hedgehog; the pair and a run keep `FormationSectorRules::LookYaw`) `USquadSubsystem::AllocateFormationLooks` feeds
+  `FormationCoverRules::Allocate` the places (K first, `PlaceBack` = how far back along the heading), the leader's probe walls + look probes round every
+  follower slot (8 rays x `look.wall_dist` at 120 cm, `Sectors.LookWalls`) and the FIXED looks (a member's own facing order / quick fire / combat target):
+  the rear guard (the place farthest back) holds 5-7 o'clock (shifted 30 deg to the open side by a wall on one side), K his search 11-1, the others the
+  open-arc shares. The narrow column's P +15 / L -165 table is gone on the move (the allocator gives the corridor's open front to K and the rear to the
+  rear guard; P / L double the nearer share). `Codex.Formation.CoverAllocator 0` = the v2.1 tables (A/B). A rear guard catching up sideways after a
+  formation switch eases his look inside his rear band (`FormationRuntime::RearGuardCatchUpLook`: 180 +- (fov / 2 - 30), 15 deg under the backward
+  angle) so he moves at the catch-up speed, not the backward cap (FormationLabSmoke R_E_corner p95 164 -> 101 cm; a straight-forward catch-up stays
+  backwards).
+- **The wall group (the user's playtest bug: after a group cover switch the followers looked the same way as the leader):** ONE squad call
+  `USquadSubsystem::ReallocateWallGroup(Leader, Members, Why)` (`SquadSubsystemWallGroup.cpp`), fired from every group-cover path - the group cover order
+  (`OrderGroupCover`: the formation wall layout, whose Layout looks already are the user's rule; the cover switch / the wrap / the slot path), the leader's
+  switch / wrap arrival and any member's (re-)entry (`AOperativeCharacter::EnterCover` -> `NotifyWallGroupCoverEntered`; `ReleaseGroupCoverWait`, the prone
+  fallbacks -> `ReallocateWallGroupForMember`). Group mode only (no Solo / box selection, the exploration formation). Once the leader is in his slot,
+  `FormationWallGroup::Allocate` (pure, `Formation/FormationWallGroupRules`, `CodexTactics.Formation.WallGroup.*`) runs `FormationCoverRules::AllocateStatic`
+  with the leader's look FIXED (`GetSightFacing`: his cover facing / corner aim stays his) over the walls probed round every member (16 rays at 50 cm), then
+  holds each follower's look: in his cover slot the cover side along the wall (`AOperativeCharacter::SetCoverLookSide`, above the threat side and the
+  corner hold, below a manual peek), or - a look within 45 deg of the outward normal ("away from the wall"), or along the wall into an inner corner - out
+  of the slot into the back-to-wall pose facing that look (`LeaveCoverForWallPose`: quiet leave, the squad's crouch; held by `HoldsWallGroupPose`); prone
+  members lie facing their look. A snapped cover look becomes fixed and the others are allocated again (no second rear man). Re-runs every 0.5 s and on
+  every event; ends with the leader's next order, the leader out of cover > 1 s, Solo, a fight, the console 0 (cover sides cleared; the back-to-wall men
+  stand up and follow as after the wall order).
+- **The wall slide (user-approved):** from the wall layout (the group cover order's or the automatic one) the leader's next WALK order whose destination
+  lies at the same wall (`FormationWallRules::Slide`: <= `slide.max_off_wall` 200 cm off it, on the squad's side, inside its measured length) side-steps
+  the whole line: `TryStartFormationSlide` measures the wall along far enough (`BuildFormationWall` room up to `SlideRoomCm`), re-orders the leader to
+  his slot moved along the wall (his offset kept) at the patrol pace, stands the crouched members up; per frame `UpdateFormationSlide` gives every place
+  the slide's target (the start layout moved by the leader's progress - the order kept, nobody passes, nobody goes round) and look (the leading end
+  ahead along the wall 20 deg out, K out with his search, the trailing end back = the rear guard). The leader's stop -> `HoldWallLayoutAt`: the wall
+  layout again at the new place (the 4th / the pair's partner keeps his end when it has room, `KeepEndAfterSlide`), crouched again after an order's
+  slide; the next order ends it or slides again. A run (double click) along the wall is the normal formation. A new order's decision waits for his
+  stand-up clip (`LeaderOrderDecideMaxSeconds` 2 s) - its destination is not known before.
+- **Checks:** `FormationWallGroupSmoke` (the corner switch / the short wall with one prone / the wrap: the leader keeps his look, no open gap over
+  `coverage.max_gap_deg`, nobody faces a wall, not all the same way), `FormationSlideSmoke` (5 m right and 7 m left along a 17 m wall), FormationLabSmoke
+  (the narrow column by the allocator: the rear guard 5-7, the leader 11-1).
+
+### Rules v2.1 in the runtime (2026-10-26, branch formation/runtime-v21; behind `Codex.Formation.Sectors` and `Codex.Formation.V21`)
+
+User decisions of FORMATION_SECTORS.md v2.1 / v2.1.1 (contract 10): the squad never splits round a wall, the bypass side "B", the corner check,
+the sharp-turn fold "5Б", nobody looks into a wall "6А". `Codex.Formation.V21 0` = the v2.2 runtime without any of it (A/B); `Codex.Formation.Sectors 0`
+= the old formation, untouched. Code: `Private/Characters/SquadSubsystemFormationGuard.cpp` (walls, trail, guard, trail column, corner watch,
+ClearLook, HUD text), `SquadSubsystemFormationBypass.cpp` (bypass), the pure glue `Formation/FormationGuardRuntimeRules`
+(`CodexTactics.Formation.GuardRuntime.*`); the pipeline stays in `USquadSubsystem::UpdateFormationSectors`.
+- **What the player sees:** whatever formation is asked for (the terrain's, or a manual one), nobody is ever sent to the far side of a wall: an
+  echelon whose men would stand behind a wall takes its mirror ("Echelon left -> Echelon right (wall)"), anything else folds into a column that
+  walks the leader's own path - it bends round a corner and wraps a wall end ("Line -> Column (wall)"); the HUD's squad panel shows the line
+  `Formation: ...` (amber while the guard falls back; English, `labels.ts guardHudText`). The request comes back by itself 5 m of path after it is
+  whole again. Before a sharp turn (over 25 deg within 8 m of the leader's path) an echelon / line folds into that column too and opens after it.
+  Clicking a point behind a free-standing wall: the squad passes it on the shortest side - or, with an enemy seen / heard (or a reported threat)
+  within 20 s, on the side where the wall stands between it and the threat if that is at most 30 % longer. Passing a free wall end on patrol,
+  the man closest to it looks round the corner (slicing the pie; also the leading man of a wall slide). Nobody looks into a wall closer than
+  2.6 m, in manual formations too.
+- **The level as walls:** the v2.1 rules read FFormationWall, not traces: `USquadSubsystem::GatherFormationWalls` overlaps a thin slab at the probe
+  height (120 cm over the leader's feet) and turns every upright BOX of the blocking world collision into walls (`FormationGuardRuntime::WallsFromBox`:
+  `UBoxComponent`s and the simple box collision of static meshes / instances, e.g. the lab's engine cubes; up to 3 m thick = one wall along the
+  long axis in the layout convention, bulkier = its four sides as thin walls, so their corners are joints; a box must reach 15 cm above the probe
+  plane - lower ones are looked over). Gathered 16 m round the leader every 0.25 s / 3 m (`Sectors.WorldWalls`). Complex-collision meshes are not read
+  (the trace probes still feed the terrain classifier and the allocator).
+- **Wall guard + trail column:** per frame `StepFormationGuard`: `FormationGuardRules::Resolve(WorldWalls, Requested, n, leader, heading, Ahead,
+  TurnAhead, state, the leader's path this tick)` - Ahead = his pose `guard.lookahead` (500 cm) further along his path (`LeaderPathAhead`: his
+  path following's points from the piece he walks on, `FormationGuardRuntime::PathAheadFrom`, then the bypass's waypoints and his destination).
+  Level 2 -> `BuildTrailFrameSlots`: `FormationShapeRules::TrailSlots` on the leader's RECORDED path (`Sectors.Trail`, a point every 25 cm, 15 m
+  kept, a teleport restarts it), the column's sectors per man by his room (`SideWidth`), the allocator's `back` = the column order. The requested
+  formation is `GetFormationRequested()` (the menu's manual choice, else the terrain's), `GetFormationKind()` is the one in effect.
+- **Places on a formation change (contract 10.6):** a new formation in effect (fold, mirror, trail column on / off) re-assigns the followers'
+  places at once by minimal travel (`ReassignFormationPlaces`, no cooldown, any saving > 1 cm); the 100 cm gain rule stays for the way.
+- **Fallback slots on the leader's side (contract 7):** `ResolveReachableSlot(..., bLeaderSide)` rejects a fallback candidate a trace from the leader
+  cannot reach (a walkable point behind a wall).
+- **Bypass "B":** a new own order of the leader in group mode (no box selection, no slide / wall order): `PlanFormationBypass` gathers the walls
+  along the leg, the first FREE-STANDING one blocking it (`FirstBlockingWall`, agent radius 35 cm; walls of rooms / corridors stay the nav mesh's
+  business) -> `FormationBypassRules::ChooseSide` with the known threats (`ReportFormationThreat` + `UTacticalSightSubsystem::GetSquadKnownEnemies`:
+  the enemies shown now and the last-known silhouettes with their age; without the squad's sight an enemy an operative has a clear line to) ->
+  the leader's order is steered through the chosen side's corners (`AOperativeCharacter::SteerOwnMoveVia` / `ResumeOwnMove`: his order, its
+  destination and serial stay his; a waypoint reached -> the next, the last -> on to his destination; his next order drops it). Every decision is
+  logged (`[Formation] bypass N: wall ... on the left (shielded, ...)`) and kept for smokes (`GetLastFormationBypass`). Not under a tutorial
+  confinement (its own path judgement wins).
+- **Corner watch:** `ApplyFormationCornerWatch` - `FormationCornerRules::Watch` on the places (actual positions) every frame of the move and of a
+  wall slide; in walk mode the watcher's look replaces his slot's and is a FIXED look for the coverage allocator (the others cover what he leaves);
+  a combat target / facing order still wins (the operative's facing priority). `GetFormationCornerLooks()`.
+- **ClearLook:** every follower's look and the leader's go through `FormationSectorRules::ClearLook` (the world walls only: a wall lower than
+  135 cm is looked over and never turns a look - the tutorial's 1.2 m sight wall) unless exempt (`FormationGuardRuntime::ShouldClearLook`: the wall
+  layout / slide, run, the corner watcher, the leader looking within 35 deg of his travel).
+- **The hold-G menu stand-in:** `USquadSubsystem::SetFormationMenuChoice` (FormationMenuRules: a manual choice holds until auto; "all forward" = the
+  terrain's formation, mode Forward); dev console `Codex.Formation.Menu <auto|line|diamond|echelon_right|blizzard|column|hedgehog|echelon_left|all_forward>`.
+  The radial menu UI is still open.
+- **Checks:** `FormationLabSmoke` (check 4 on the requested formation; check 7 "never split" and check 9 "somebody looks round each passed wall end" on
+  every run; R_E_corner: the turn fold; manual runs R_B_walls "echelon left" -> the mirror + HUD line, R_D_corridors "line" -> the trail column + HUD
+  line; R_E_corner_pass: the corner watch at W_E_14's free end), `FormationBypassSmoke` (lane G: the four routes + the shielded side from the squad's
+  own sight of a parked hound). Stills: `Saved/Screenshots/FormationV21/` (`FormationLabSmoke shot`, `FormationBypassSmoke shot`).
+- **A new leader looks forward (bug 2026-10-26, found by TutorialSmoke; the coordinator: "the leader's sector is 12"):** a member made the leader
+  (`SetLeader`, e.g. the tutorial's medkit lesson selects another operative and back) no longer keeps the follower look he turned to (the rear
+  guard's 6 o'clock): the formation heading - his halt look for 1 s - starts from `FormationRuntime::NewLeaderLookYaw` (walking: his travel; an
+  order of his own pending: its direction; standing: his own facing from when he last led, within 10 s; else the squad's heading). Under
+  `Codex.Formation.Sectors` only. Smoke `SquadControlSmoke` (switch away and back: forward again within 0.5 s); test
+  `CodexTactics.Formation.Runtime.NewLeaderLook`.
+- **Known limits / open:** the world walls are boxes only (a building made of one complex mesh is not seen by the guard / corner / bypass); the
+  corner watch flips between the two exits of the lab's wide corridor when the leader walks exactly `classify.probe_side` (400 cm) from both walls (the
+  rule's `Lateral > probe_side` edge); the HUD says "(wall)" for the turn fold too (labels.ts wording); a manual line's rear guard walks backwards
+  to catch up a slot that jumps forward (rules v2.2 rear guard) and trails up to 5 m (not gated for manual formations, as in checks.ts).
 
 ### After a retreat: face the enemy again (user request 2026-10-22)
 

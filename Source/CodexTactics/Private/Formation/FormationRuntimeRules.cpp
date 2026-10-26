@@ -11,9 +11,18 @@ namespace FormationRuntime
 		TEXT("each member looks into his sector (patrol scans, rear man backwards), the squad patrols at pace.patrol, the follower speed leads with the slot's ")
 		TEXT("velocity, a group cover order in group mode = the wall layout (crouched, facing out); 0: the old triangle formation, facing and speeds."));
 
+	static TAutoConsoleVariable<int32> CVarFormationCoverAllocator(TEXT("Codex.Formation.CoverAllocator"), 1,
+		TEXT("Rules v2.2 (with Codex.Formation.Sectors 1): 1 (default) the patrol / halt looks of 3+ members come from the coverage allocator ")
+		TEXT("(FormationCoverRules::Allocate: the rear guard holds 5-7, the others share the open arc); 0: the v2.1 per-formation LookYaw tables (A/B)."));
+
 	bool IsEnabled()
 	{
 		return CVarFormationSectors.GetValueOnGameThread() != 0;
+	}
+
+	bool IsCoverAllocatorEnabled()
+	{
+		return CVarFormationCoverAllocator.GetValueOnGameThread() != 0;
 	}
 
 	TOptional<EFormationRole> RoleForFollowerSlot(int32 SlotIndex, int32 MemberCount)
@@ -229,5 +238,96 @@ namespace FormationRuntime
 	TOptional<float> HeadingFromVelocity(const FVector2D& Velocity, float MinSpeed)
 	{
 		return Velocity.Size() > MinSpeed ? TOptional<float>(FormationMath::YawOf(Velocity)) : TOptional<float>();
+	}
+
+	TOptional<TArray<int32>> ReassignPlaces(const TArray<FVector2D>& Positions, const TArray<int32>& CurrentPlace, const TArray<FVector2D>& Places, float GainCm)
+	{
+		if (Positions.Num() != CurrentPlace.Num() || Positions.Num() < 2 || Positions.Num() > Places.Num())
+		{
+			return TOptional<TArray<int32>>();
+		}
+		double Current = 0.0;
+		for (int32 Index = 0; Index < Positions.Num(); ++Index)
+		{
+			if (!Places.IsValidIndex(CurrentPlace[Index]))
+			{
+				return TOptional<TArray<int32>>();
+			}
+			Current += FVector2D::Distance(Positions[Index], Places[CurrentPlace[Index]]);
+		}
+		const TArray<int32> Best = AssignByTravel(Positions, Places);
+		if (Best.Num() != Positions.Num() || Best == CurrentPlace)
+		{
+			return TOptional<TArray<int32>>();
+		}
+		double Cost = 0.0;
+		for (int32 Index = 0; Index < Positions.Num(); ++Index)
+		{
+			Cost += FVector2D::Distance(Positions[Index], Places[Best[Index]]);
+		}
+		return Cost <= Current - GainCm ? TOptional<TArray<int32>>(Best) : TOptional<TArray<int32>>();
+	}
+
+	float PlaceBack(const FVector2D& Slot, const FVector2D& LeaderPos, float HeadingYaw)
+	{
+		return static_cast<float>(-FVector2D::DotProduct(Slot - LeaderPos, FormationMath::Forward(HeadingYaw)));
+	}
+
+	void KeepEndAfterSlide(float& RoomLeft, float& RoomRight, bool bOnRight, int32 MemberCount, float Spacing)
+	{
+		if (MemberCount != 2 && MemberCount < 4)
+		{
+			return;
+		}
+		const float Need = (MemberCount == 2 ? 1.f : 2.f) * Spacing;
+		if (bOnRight && RoomRight >= Need && RoomRight < RoomLeft)
+		{
+			RoomRight = RoomLeft; // Layout: a tie goes right
+		}
+		else if (!bOnRight && RoomLeft >= Need && RoomLeft <= RoomRight)
+		{
+			RoomLeft = RoomRight + 1.f;
+		}
+	}
+
+	float RearGuardCatchUpLook(float LookYaw, float HeadingYaw, float BandHalfDeg, float MoveYaw)
+	{
+		// A margin under the backward angle: his body lags the look (turn speed) and the move turns as the gap closes.
+		const float Limit = BackwardAngleDeg - RearCatchUpMarginDeg;
+		if (FormationMath::AngleBetween(MoveYaw, LookYaw) <= Limit)
+		{
+			return LookYaw;
+		}
+		const float Centre = HeadingYaw + 180.f;
+		const int32 Band = FMath::Max(0, FMath::FloorToInt32(BandHalfDeg));
+		TOptional<float> Best;
+		for (int32 Offset = -Band; Offset <= Band; ++Offset)
+		{
+			const float Facing = FRotator::NormalizeAxis(Centre + static_cast<float>(Offset));
+			if (FormationMath::AngleBetween(MoveYaw, Facing) <= Limit
+				&& (!Best.IsSet() || FormationMath::AngleBetween(Facing, LookYaw) < FormationMath::AngleBetween(Best.GetValue(), LookYaw)))
+			{
+				Best = Facing;
+			}
+		}
+		return Best.Get(LookYaw);
+	}
+
+	float SlideRoomCm(float AlongCm, float Spacing)
+	{
+		return FMath::Clamp(FMath::Abs(AlongCm) + 3.f * Spacing + RoomStepCm, RoomMaxCm, 3000.f);
+	}
+
+	bool UsesCoverAllocator(EFormationKind Formation, EFormationMode Mode, int32 MemberCount)
+	{
+		return MemberCount >= 3 && (Mode == EFormationMode::Walk || Mode == EFormationMode::Halt) && Formation != EFormationKind::Wall
+			&& Formation != EFormationKind::Hedgehog;
+	}
+
+	float NewLeaderLookYaw(const FNewLeaderLookInputs& In)
+	{
+		const TOptional<float> Pick = In.TravelYaw.IsSet() ? In.TravelYaw : In.PendingOrderYaw.IsSet() ? In.PendingOrderYaw
+			: In.FacingAsLeaderYaw.IsSet() ? In.FacingAsLeaderYaw : In.SquadHeadingYaw;
+		return FRotator::NormalizeAxis(Pick.Get(In.FacingYaw));
 	}
 }
