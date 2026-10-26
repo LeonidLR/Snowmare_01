@@ -10,6 +10,10 @@
 #            after; visual only)
 # Directional snow (docs/systems/environment-weather.md section 15, AWeatherPresenterActor writes them from FEnvironmentState::ObjectSnow):
 #   scalars: SnowTop, SnowPX, SnowNX, SnowPY, SnowNY (0..1 snow held by faces pointing up / +X / -X / +Y / -Y, world axes)
+# Climate profiles (docs/systems/environment-weather.md section 17, AWeatherPresenterActor writes them on TEMPERATE levels only; an arctic
+# level never writes them, so they stay at the default 0 there):
+#   scalars: RainIntensity (0 SunnyDay / Overcast, ~0.6 Rain, 1 Storm, blended), Wetness, PuddleAmount (FEnvironmentState), IsRaining (0..1,
+#            smooth), ClimateTemperate (0/1), ScreenDrops (0/1: raindrops on the tactical camera while it rains, user decision 2026-10-26)
 # AWeatherPresenterActor writes it every application (UMaterialParameterCollectionInstance). The migrated MPC_WeatherSettings is
 # left untouched. IDEMPOTENT: an existing MPC_Environment keeps every parameter it has (names, defaults and ids) and only gets the
 # missing ones appended (then it is saved); nothing else is changed.
@@ -22,7 +26,8 @@ import unreal
 PATH = "/Game/Environment/Weather/MPC"
 NAME = "MPC_Environment"
 SCALARS = [("SnowAmount", 0.0), ("FrostAmount", 0.0), ("WindStrength", 0.0), ("IsSnowing", 0.0), ("SnowRefill", 0.0), ("FreshSnow", 0.0),
-           ("SnowTop", 0.0), ("SnowPX", 0.0), ("SnowNX", 0.0), ("SnowPY", 0.0), ("SnowNY", 0.0)]
+           ("SnowTop", 0.0), ("SnowPX", 0.0), ("SnowNX", 0.0), ("SnowPY", 0.0), ("SnowNY", 0.0),
+           ("RainIntensity", 0.0), ("Wetness", 0.0), ("PuddleAmount", 0.0), ("IsRaining", 0.0), ("ClimateTemperate", 0.0), ("ScreenDrops", 0.0)]
 VECTORS = [("WindDirection", unreal.LinearColor(1.0, 0.0, 0.0, 0.0)), ("SnowTrackWindow", unreal.LinearColor(0.0, 0.0, 0.0, 0.0))]
 
 log_lines = []

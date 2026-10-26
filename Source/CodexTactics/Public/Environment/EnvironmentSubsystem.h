@@ -97,6 +97,8 @@ public:
 	 * The start state of a level (pure, unit-tested): Level.bLocked -> Level's hour (else Config.DefaultStartHour) and weather
 	 * (else PickStartWeather), locked; else Carried when set (continued exactly, UNLOCKED even after a locked tutorial); else fresh:
 	 * Level's hour / weather / seed, Config.DefaultStartHour, PickStartWeather, RandomSeedIfNeeded when the level fixes no seed.
+	 * Section 17: the state takes Level.Climate; a Carried state of ANOTHER climate is not continued but re-initialised for this level's
+	 * profile (fresh weather / snow / wetness from the level's keys or the defaults, seeded by the carried RNG) at the carried hour.
 	 */
 	static FEnvironmentState ResolveInitialState(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level,
 		const TOptional<FEnvironmentState>& Carried, int32 RandomSeedIfNeeded);
@@ -193,12 +195,46 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
 	float GetSnowAmount() const { return State.SnowAmount; }
 
+	/** Section 17: the climate profile in force (the level's "climate"; Arctic everywhere but the narrative temperate levels). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	EClimateProfile GetClimate() const { return State.Climate; }
+
+	/** Section 17: the weather's name on this climate for the UI / logs ("Snowfall" on arctic, "Rain" on temperate, ...). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	FString GetWeatherDisplayName() const;
+
+	/** Section 17: rain 0..1 in force (0 SunnyDay / Overcast, ~0.6 Rain, 1 Storm, blended; always 0 on arctic levels). For the rain FX. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	float GetRainIntensity() const;
+
+	/** Section 17: how wet the ground is, 0..1 (temperate; 0 on arctic levels). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	float GetWetness() const { return State.Wetness; }
+
+	/** Section 17: standing water 0..1 (lags the wetness; temperate only). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")
+	float GetPuddleAmount() const { return State.PuddleAmount; }
+
+	/**
+	 * Debug (console Codex.Env.Climate): switches the climate profile at runtime and re-initialises the weather for it like a level of
+	 * that climate would (ResolveInitialState with this state as the carry: the time of day continues); snaps the visuals (SetState).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
+	void SetClimate(EClimateProfile Climate);
+
 	/**
 	 * Debug (console Codex.Env.SnowCover): sets the snow cover (clamped 0..1; may lower it, unlike the weather) and the objects' TOP pocket
 	 * to the same value (their sides are kept); broadcasts OnStateSet.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
 	void SetSnowAmount(float Amount);
+
+	/**
+	 * Section 18, debug / captures (console Codex.Env.Wetness): sets the ground wetness and the puddles (clamped 0..1; a temperate level then
+	 * keeps stepping them with the weather); broadcasts OnStateSet (no snap). Visual tuning only - an arctic level keeps them at 0 anyway.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Environment")
+	void SetWetness(float Wetness, float PuddleAmount);
 
 	/** Section 15: the directional snow on static objects (world axes; FEnvironmentState::ObjectSnow). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Environment")

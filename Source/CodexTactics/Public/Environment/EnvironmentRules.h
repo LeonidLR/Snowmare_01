@@ -98,7 +98,7 @@ namespace EnvironmentRules
 
 	/**
 	 * The weather cold multiplier in force: State.Weather's, lerped toward State.NextWeather's by GetTransitionBlend (the cold rises /
-	 * falls smoothly through a transition; a locked state never blends).
+	 * falls smoothly through a transition; a locked state never blends). Section 17: of State.Climate's table.
 	 */
 	CODEXTACTICS_API float GetBlendedColdWeatherMultiplier(const FEnvironmentConfig& Config, const FEnvironmentState& State);
 
@@ -113,7 +113,10 @@ namespace EnvironmentRules
 	/** Snow cover gained per real second in Weather: Snowfall / Blizzard their rates, Clear / Overcast 0 (negative clamps to 0). */
 	CODEXTACTICS_API float GetSnowCoverRate(const FEnvironmentConfig& Config, EWeatherState Weather);
 
-	/** The rate in force: State.Weather's lerped toward State.NextWeather's by GetTransitionBlend (a locked state never blends). */
+	/**
+	 * The rate in force: State.Weather's lerped toward State.NextWeather's by GetTransitionBlend (a locked state never blends).
+	 * Section 17: 0 on a Temperate state (it rains there: the ground cover, the objects' and the characters' snow never grow).
+	 */
 	CODEXTACTICS_API float GetBlendedSnowCoverRate(const FEnvironmentConfig& Config, const FEnvironmentState& State);
 
 	/**
@@ -124,7 +127,10 @@ namespace EnvironmentRules
 	 */
 	CODEXTACTICS_API float StepSnowCover(const FEnvironmentConfig& Config, FEnvironmentState& State, float DeltaSeconds);
 
-	/** The start snow cover of a fresh / locked level: the level's "snow_cover" when present, else Config.SnowCoverStart; clamped 0..1. */
+	/**
+	 * The start snow cover of a fresh / locked level: the level's "snow_cover" when present, else Config.SnowCoverStart (Arctic) / 0
+	 * (Temperate, section 17); clamped 0..1.
+	 */
 	CODEXTACTICS_API float GetInitialSnowCover(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level);
 
 	// --- Directional snow on objects / characters (FEnvironmentState::ObjectSnow, UCharacterSnowSubsystem; design §15) ---
@@ -168,11 +174,83 @@ namespace EnvironmentRules
 	 */
 	CODEXTACTICS_API bool SeedObjectSnow(FEnvironmentState& State);
 
+	// --- Section 17: climate profiles (EClimateProfile; Arctic = everything above unchanged) ---
+
+	/** "arctic" / "temperate". */
+	CODEXTACTICS_API FString ClimateToString(EClimateProfile Climate);
+
+	/** "arctic" / "temperate" (case-insensitive, trimmed); false when unknown. */
+	CODEXTACTICS_API bool ClimateFromString(const FString& Text, EClimateProfile& OutClimate);
+
+	/**
+	 * The name of Weather on Climate for the UI / logs: Arctic = WeatherToString ("Clear" / "Overcast" / "Snowfall" / "Blizzard");
+	 * Temperate = "SunnyDay" / "Overcast" / "Rain" / "Storm". Saves and environment.json keep the ladder names (WeatherToString).
+	 */
+	CODEXTACTICS_API FString GetWeatherDisplayName(EClimateProfile Climate, EWeatherState Weather);
+
+	/**
+	 * WeatherFromString (the ladder names, any climate) plus, on a Temperate climate only, its own names: "Sunny" / "SunnyDay" -> Clear,
+	 * "Rain" -> Snowfall, "Storm" -> Blizzard (case-insensitive). On Arctic "Rain" is unknown (false).
+	 */
+	CODEXTACTICS_API bool WeatherFromString(EClimateProfile Climate, const FString& Text, EWeatherState& OutWeather);
+
+	/** Open-air cold multiplier of Weather on Climate: Arctic = GetColdWeatherMultiplier(Config, Weather); Temperate = Config.Temperate.ColdMult*. */
+	CODEXTACTICS_API float GetColdWeatherMultiplier(const FEnvironmentConfig& Config, EClimateProfile Climate, EWeatherState Weather);
+
+	/** Open-air cold multiplier of Phase on Climate (Arctic = GetColdPhaseMultiplier(Config, Phase); Temperate its own block). */
+	CODEXTACTICS_API float GetColdPhaseMultiplier(const FEnvironmentConfig& Config, EClimateProfile Climate, ETimeOfDayPhase Phase);
+
+	/** The weather / time-of-day roster runs on Climate: Arctic always (Config.Roster.bEnabled is applied by EnvironmentRosterRules); Temperate when Config.Temperate.bRosterEnabled. */
+	CODEXTACTICS_API bool IsRosterActive(const FEnvironmentConfig& Config, EClimateProfile Climate);
+
+	/** Falling snow may show on Climate (Arctic always; Temperate only with Config.Temperate.bFallingSnow). */
+	CODEXTACTICS_API bool IsFallingSnowAllowed(const FEnvironmentConfig& Config, EClimateProfile Climate);
+
+	/**
+	 * Rain 0..1 in force (UEnvironmentSubsystem::GetRainIntensity, MPC RainIntensity): Temperate only - Rain (the Snowfall rung)
+	 * Config.Temperate.RainIntensityRain, Storm (Blizzard) RainIntensityStorm, SunnyDay / Overcast 0, weighted by GetWeatherAmount
+	 * (blended through a transition). 0 on an Arctic state.
+	 */
+	CODEXTACTICS_API float GetRainIntensity(const FEnvironmentConfig& Config, const FEnvironmentState& State);
+
+	/** MPC IsRaining 0..1 from the rain intensity: smooth, 1 from 0.25 up (the IsSnowing rule). */
+	CODEXTACTICS_API float ComputeIsRaining(float RainIntensity);
+
+	/** MPC ScreenDrops: a Temperate state while it rains (IsRaining >= 0.5) and Config.Temperate.bScreenDrops (user decision: ON). */
+	CODEXTACTICS_API bool ShouldShowScreenDrops(const FEnvironmentConfig& Config, const FEnvironmentState& State);
+
+	/** How much it SNOWS now, 0..1: the Snowfall + Blizzard amounts on an Arctic state; 0 on a Temperate one (those rungs are rain). */
+	CODEXTACTICS_API float GetSnowingAmount(const FEnvironmentConfig& Config, const FEnvironmentState& State);
+
+	/**
+	 * Wetness change per real second now (Temperate; 0 on Arctic): Rain +WetnessRateRain, Storm +WetnessRateStorm, Overcast
+	 * -DryingRateOvercast, SunnyDay -lerp(DryingRateOvercast, DryingRateSunny, sun ramp 0 at the horizon -> 1 at DryingFullSunElevation),
+	 * weighted by GetWeatherAmount (blended through a transition).
+	 */
+	CODEXTACTICS_API float GetWetnessRate(const FEnvironmentConfig& Config, const FEnvironmentState& State, float SunElevationDegrees);
+
+	/** The puddle level the ground supports at Wetness: (wetness - PuddleWetnessThreshold) / (1 - threshold), clamped 0..1. */
+	CODEXTACTICS_API float GetPuddleTarget(const FEnvironmentConfig& Config, float Wetness);
+
+	/**
+	 * Advances State.Wetness / State.PuddleAmount by DeltaSeconds of running clock (Temperate only; an Arctic or locked state never
+	 * changes): Wetness += GetWetnessRate x Dt (clamped 0..1); the puddles move toward GetPuddleTarget - up at PuddleFillRate only while
+	 * the ground gets wetter, down at PuddleDrainRate (slower than it dries). Called by the subsystem after the snow steps.
+	 */
+	CODEXTACTICS_API void StepWetness(const FEnvironmentConfig& Config, FEnvironmentState& State, float DeltaSeconds, float SunElevationDegrees);
+
+	/**
+	 * Start wetness / puddles of a state that starts on Level.Climate in Weather: Arctic 0 / 0; Temperate SunnyDay / Overcast 0 / 0,
+	 * Rain StartWetnessRain / StartPuddlesRain, Storm StartWetnessStorm / StartPuddlesStorm; the level's "wetness" / "puddles" win.
+	 */
+	CODEXTACTICS_API void GetInitialWetness(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level, EWeatherState Weather,
+		float& OutWetness, float& OutPuddles);
+
 	// --- Save (docs/systems/save-load.md, key "game_state.environment") ---
 
 	/**
-	 * The whole state as the save object: hour, weather, next_weather, weather_elapsed, weather_dwell, seed, locked, snow_amount and
-	 * object_snow {top, px, nx, py, ny}.
+	 * The whole state as the save object: hour, weather, next_weather, weather_elapsed, weather_dwell, seed, locked, snow_amount,
+	 * object_snow {top, px, nx, py, ny} and (section 17) climate ("arctic" / "temperate"), wetness, puddles.
 	 */
 	CODEXTACTICS_API TSharedRef<FJsonObject> StateToSaveJson(const FEnvironmentState& State);
 
@@ -180,6 +258,7 @@ namespace EnvironmentRules
 	 * The state of a save object over Fallback: every key is optional (a missing / mistyped key keeps Fallback's value; an unknown weather
 	 * name too); the hour is wrapped into [0, 24), the snow cover clamped to [0, 1], dwell / elapsed to >= 0. object_snow: each pocket
 	 * optional (clamped 0..1); a save WITHOUT object_snow (older builds) gets Top = the loaded snow_amount, sides 0 (SeedObjectSnow).
+	 * Section 17: climate / wetness / puddles optional (an unknown climate name keeps Fallback's; wetness / puddles clamped 0..1).
 	 */
 	CODEXTACTICS_API FEnvironmentState StateFromSaveJson(const FJsonObject& Json, const FEnvironmentState& Fallback);
 }

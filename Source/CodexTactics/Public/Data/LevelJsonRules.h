@@ -44,6 +44,8 @@ namespace LevelJsonRules
 	 * "visuals": false, "snow_cover": 0.6} ("visuals" phase 3, default true: false keeps the map's authored lighting, no weather presenter;
 	 * "snow_cover" phase 4: the start snow cover 0..1 of a locked / fresh level, clamped);
 	 * absent keys keep the procedural default, an unknown weather name is ignored (bHasWeather false) and reported in OutError.
+	 * Section 17: "climate": "arctic" (default) | "temperate" (parsed first; a temperate level also takes the weather names Sunny / SunnyDay /
+	 * Rain / Storm), "wetness" / "puddles" 0..1 (temperate start values); an unknown climate is reported and stays arctic.
 	 */
 	CODEXTACTICS_API FEnvironmentLevelSettings ParseEnvironmentSettings(const FJsonObject& Environment, FString* OutError = nullptr);
 

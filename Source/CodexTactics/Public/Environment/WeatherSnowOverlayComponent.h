@@ -20,6 +20,10 @@ class UStaticMeshComponent;
  * flat slabs over 20 m, meshes wider than 60 m that stay low) get the NEW M_SnowGroundOverlay instead (a world-XY snow layer, coverage
  * by SnowAmount, the interactive-snow track read), through one dynamic instance per world that also carries the nearest interior-zone
  * rectangles (kept bare). Same rules otherwise; own cap / switch (Codex.Env.SnowGroundMax / Codex.Env.SnowGround).
+ * Wet mode (section 18, temperate levels: no snow there): the SAME targets get the wet materials instead - M_WetOverlay on objects
+ * (darker, glossy upward faces) and M_WetGroundOverlay on the ground slabs (a wet film, puddles, rain ripples; the interior zones stay
+ * dry), driven by MPC_Environment Wetness / PuddleAmount / RainIntensity. The presenter picks the mode by the climate (ApplyWetCover vs
+ * ApplySnowCover); an arctic level never enters it and never loads the wet materials.
  */
 UCLASS(ClassGroup = (Environment), meta = (BlueprintSpawnableComponent))
 class CODEXTACTICS_API UWeatherSnowOverlayComponent : public UActorComponent
@@ -31,6 +35,15 @@ public:
 
 	/** Called by the presenter: SnowAmount 0..1 (persistent cover, FEnvironmentState), FrostAmount 0..1 (blended preset). */
 	void ApplySnowCover(float SnowAmount, float FrostAmount);
+
+	/**
+	 * Section 18, temperate levels: Wetness / PuddleAmount 0..1 (FEnvironmentState). Switches to the wet materials (the snow overlays are
+	 * taken off first); shown while ShouldShowWetOverlay. ApplySnowCover switches back.
+	 */
+	void ApplyWetCover(float Wetness, float PuddleAmount);
+
+	/** The wet materials are in use (section 18). */
+	bool IsWetMode() const { return bWetMode; }
 
 	/** Visuals on / off: off removes the overlay from every component it added it to. */
 	void SetVisualsEnabled(bool bEnabled);
@@ -45,6 +58,13 @@ public:
 	/** Ground overlay material (default MI_SnowGroundOverlay); a dynamic instance of it is put on the ground slabs. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment|Snow")
 	TSoftObjectPtr<UMaterialInterface> GroundMaterial;
+
+	/** Section 18: the wet object / ground overlay materials (defaults MI_WetOverlay / MI_WetGroundOverlay in /Game/Environment/Weather/Rain/Materials). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment|Rain")
+	TSoftObjectPtr<UMaterialInterface> WetOverlayMaterial;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment|Rain")
+	TSoftObjectPtr<UMaterialInterface> WetGroundMaterial;
 
 	/** Ground slabs holding the ground overlay now. */
 	int32 GetGroundTargetCount() const { return GroundTouched.Num(); }
@@ -69,10 +89,20 @@ private:
 	UMaterialInterface* ResolveOverlayMaterial();
 	/** The ground overlay's dynamic instance, made once from GroundMaterial (null when the asset is missing). */
 	UMaterialInstanceDynamic* ResolveGroundMaterial();
+	/** The materials of the mode in force (snow or wet, section 18). */
+	UMaterialInterface* ActiveOverlay() const;
+	UMaterialInstanceDynamic* ActiveGround() const;
+	/** Section 18: switches the mode (the previous mode's overlays are taken off first). */
+	void SetWetMode(bool bWet);
+	/** Section 18: the wet materials (loaded once; null when missing - an arctic level never calls these). */
+	UMaterialInterface* ResolveWetOverlayMaterial();
+	UMaterialInstanceDynamic* ResolveWetGroundMaterial();
 	/** Writes the nearest interior zones (closed / shelter camera zones) into the ground instance's Zone<i>A / Zone<i>B. */
 	void UpdateGroundZones(const TArray<TPair<FTransform, FVector>>& Zones);
 	/** The point the player's view looks at (the tactical camera's focus, else the ground under the view centre). */
 	FVector GetViewFocus() const;
+	/** Shows (scan / sync) or removes the overlays of the mode in force (bCanShow: visuals on and the mode's amounts above zero). */
+	void ApplyShown(bool bCanShow);
 	/** Puts the overlay on every target / takes it off the components that are no target any more (or all when hidden). */
 	void SyncOverlays();
 	/** Puts Material on Wanted (bShow) / takes it off the components in InOutTouched that are no target any more (or all when hidden). */
@@ -101,10 +131,19 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> GroundInstance;
 
+	/** Section 18: the wet object overlay and the wet ground dynamic instance. */
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> LoadedWetOverlay;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> WetGroundInstance;
+
 	FVector LastRefreshFocus = FVector::ZeroVector;
 	double LastRefreshSeconds = -1.0e9;
 	float LastSnow = 0.f;
 	float LastFrost = 0.f;
+	float LastWetness = 0.f;
+	float LastPuddles = 0.f;
 	int32 LastMaxMeshes = -1;
 	int32 LastGroundMax = -1;
 	int32 LastLoggedGroundSummary = -1;
@@ -115,4 +154,7 @@ private:
 	bool bScanned = false;
 	bool bMaterialResolved = false;
 	bool bGroundResolved = false;
+	bool bWetMode = false;
+	bool bWetResolved = false;
+	bool bWetGroundResolved = false;
 };

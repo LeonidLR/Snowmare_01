@@ -1,6 +1,16 @@
-# Migrates the reusable sky / snow assets of the old project WeatherSystem_01 into /Game/Environment/Weather/
-# (docs/systems/environment-weather.md section 10). Rain, lightning, examples, footprints, landscape automaterial,
-# Houdini / Gaea / maps and "(1)" duplicates are NOT migrated. The old project is READ-ONLY: this script only copies from it.
+# Migrates the reusable assets of the old project WeatherSystem_01 into /Game/Environment/Weather/
+# (docs/systems/environment-weather.md sections 10 and 16). The old project is READ-ONLY: this script only copies from it.
+#
+# Two batches (env CODEX_WEATHER_BATCH or the argument after "stage"; default "sky"):
+#   sky  - sky sphere + snow (section 10, migrated 2026-10-22; a finished batch is detected and skipped)
+#   rain - rain, puddles, rain-on-screen, lightning, rain presets (section 16, 2026-10-26). Its closure also contains assets
+#          that the sky batch already moved (marked below as already migrated): they are staged and moved too, in a
+#          SCRATCH content-only project, so the reference fixup is exact; "export" then copies only the new ones.
+#
+# Rain batch workflow (the project's Content has junctioned top folders, so nothing is staged there):
+#   python Scripts/Editor/migrate_weather_assets.py stage rain <scratch project>/Content
+#   UnrealEditor-Cmd.exe <scratch project>.uproject -run=pythonscript -script=<this file> -unattended -nullrhi   (CODEX_WEATHER_BATCH=rain)
+#   python Scripts/Editor/migrate_weather_assets.py export rain <scratch project>/Content <this project>/Content
 #
 # Two stages, one file (re-runnable: a finished migration is detected and skipped):
 #
@@ -27,7 +37,7 @@ OLD = "/Game/"
 NEW = "/Game/Environment/Weather/"
 
 # (old package, new subfolder under /Game/Environment/Weather, new name)
-MANIFEST = [
+MANIFEST_SKY = [
     # Sky sphere (BP_DynamivSky's SM_SkySphere + dynamic material and the textures it uses)
     ("_BP/SM_SkySphere", "Sky", "SM_SkySphere"),
     ("Materials/Sky/M_DynSkySphere", "Sky", "M_DynSkySphere"),
@@ -73,6 +83,57 @@ MANIFEST = [
     ("Enums/EWeatherType", "Reference", "EWeatherType"),
 ]
 
+# Rain batch (section 16). Closure of NS_Raindrops, NS_PuddleSplashes, MF_GenerateRainyWeatherPuddles, PPM(I)_RainDropsOnScreen,
+# PM_Puddle_01, DA_Rainy, S_RainyWeatherSettings, NS_Lightning (+ M_Lightning_Master, MI_LightningBolt_01).
+MANIFEST_RAIN = [
+    # Rain particles (Niagara): rain streaks, ground splashes, shared liquid particle material and its instances
+    ("_Niagara/_Niagara/NS_Raindrops", "Rain/Niagara", "NS_Raindrops"),
+    ("_Niagara/_Niagara/NS_PuddleSplashes", "Rain/Niagara", "NS_PuddleSplashes"),
+    ("_Niagara/_Niagara/MLiquidMaster", "Rain/Niagara", "MLiquidMaster"),
+    ("_Niagara/_Niagara/MI_Raindrops", "Rain/Niagara", "MI_Raindrops"),
+    ("_Niagara/_Niagara/MI_TainSplashes", "Rain/Niagara", "MI_TainSplashes"),
+    ("_Niagara/_Niagara/MI_PuddleSplash_01", "Rain/Niagara", "MI_PuddleSplash_01"),
+    ("_Niagara/_Templates/NDI_RandomOpacity", "Rain/Niagara", "NDI_RandomOpacity"),
+    ("_Niagara/_Templates/FollowCameraTemplate", "Snow/Niagara", "FollowCameraTemplate"),  # already migrated (sky batch)
+    # Puddles / ripples on surfaces (material functions)
+    ("Materials/MaterialFunction/Weather/MF_GenerateRainyWeatherPuddles", "Rain/Materials", "MF_GenerateRainyWeatherPuddles"),
+    ("Materials/MaterialFunction/Weather/MF_Motion4WayChaos_Fixed", "Rain/Materials", "MF_Motion4WayChaos_Fixed"),
+    # Rain on the screen (post process)
+    ("Materials/PostProcessMaterial/PPM_RainDropsOnScreen", "Rain/PostProcess", "PPM_RainDropsOnScreen"),
+    ("Materials/PostProcessMaterial/PPMI_RainDropsOnSreen", "Rain/PostProcess", "PPMI_RainDropsOnScreen"),  # typo fixed
+    ("Materials/PhysicalMaterial/PM_Puddle_01", "Rain/Physical", "PM_Puddle_01"),
+    # Rain textures (T_RainDropsPacked / T_Water_N come from the paths the materials reference, not the unreferenced Textures/Liquid copies)
+    ("Textures/Liquid/T_DetailedNormal", "Rain/Textures", "T_DetailedNormal"),
+    ("Textures/Liquid/T_DropletsMasks_Packed", "Rain/Textures", "T_DropletsMasks_Packed"),
+    ("Textures/Liquid/T_Droplets_Normal", "Rain/Textures", "T_Droplets_Normal"),
+    ("Textures/Liquid/T_SpalshVariations", "Rain/Textures", "T_SpalshVariations"),
+    ("Textures/Liquid/T_SplashBig", "Rain/Textures", "T_SplashBig"),
+    ("Textures/Liquid/T_RippleNormal_FlipBook", "Rain/Textures", "T_RippleNormal_FlipBook"),
+    ("Examples/RainDropsOnSurface/T_RainDropsPacked", "Rain/Textures", "T_RainDropsPacked"),
+    ("StarterContent/Textures/T_Water_N", "Rain/Textures", "T_Water_N"),
+    # Lightning (storm)
+    ("_Niagara/_Lightning/NS_Lightning", "Storm", "NS_Lightning"),
+    ("_Niagara/_Lightning/M_Lightning_Master", "Storm", "M_Lightning_Master"),
+    ("_Niagara/_Lightning/MI_LightningBolt_01", "Storm", "MI_LightningBolt_01"),
+    ("Textures/Lightning/T_Lightning_Bolt_01", "Storm/Textures", "T_Lightning_Bolt_01"),
+    # Rain presets of the old BP_DynamivSky (look reference)
+    ("_DataAssets/DA_Rainy", "Reference", "DA_Rainy"),
+    ("_DataAssets/S_RainyWeatherSettings", "Reference", "S_RainyWeatherSettings"),
+    # Already migrated by the sky batch (same new path): needed so the fixup of the rain assets lands on the final paths.
+    ("Materials/MaterialParameterCollection/MPC_WeatherSettings", "MPC", "MPC_WeatherSettings"),
+    ("Textures/Noise/T_TilingNoisePacked", "Common/Textures", "T_TilingNoisePacked"),
+    ("_DataAssets/BP_WeatheDataAsset_Base", "Reference", "BP_WeatheDataAsset_Base"),
+    ("_DataAssets/S_SkyAtmosphereSettings", "Reference", "S_SkyAtmosphereSettings"),
+    ("_DataAssets/S_DirectionalLightSettings", "Reference", "S_DirectionalLightSettings"),
+    ("_DataAssets/S_SkyLightSettings", "Reference", "S_SkyLightSettings"),
+    ("_DataAssets/S_ExponentialHeightFogSettings", "Reference", "S_ExponentialHeightFogSettings"),
+    ("Enums/EWeatherType", "Reference", "EWeatherType"),
+]
+
+BATCHES = {"sky": MANIFEST_SKY, "rain": MANIFEST_RAIN}
+BATCH = (sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] in ("stage", "export") else os.environ.get("CODEX_WEATHER_BATCH", "sky"))
+MANIFEST = BATCHES[BATCH]
+
 OLD_SOURCE_PROJECT = r"C:\Users\Zephyrus15Duo\Documents\Unreal Projects\WeatherSystem_01 5.4"
 SIDECAR_EXTS = (".uasset", ".uexp", ".ubulk", ".uptnl", ".umap")
 
@@ -83,6 +144,42 @@ def old_pkg(entry):
 
 def new_pkg(entry):
     return NEW + entry[1] + "/" + entry[2]
+
+
+def new_pkgs_of(manifest):
+    return {NEW + e[1] + "/" + e[2] for e in manifest}
+
+
+def already_migrated(entry):
+    """True when the entry's new path is also produced by another batch (it was moved before; export skips it)."""
+    others = set()
+    for name, m in BATCHES.items():
+        if m is not MANIFEST:
+            others |= new_pkgs_of(m)
+    return new_pkg(entry) in others
+
+
+def export(scratch_content, target_content):
+    """Copies the NEW assets (not already migrated by another batch) from the scratch project into the real one. Aborts on collision."""
+    todo = [e for e in MANIFEST if not already_migrated(e)]
+    rels = []
+    for e in todo:
+        rel = new_pkg(e)[len(OLD):].replace("/", os.sep)
+        for ext in SIDECAR_EXTS:
+            if os.path.isfile(os.path.join(scratch_content, rel + ext)):
+                rels.append(rel + ext)
+    clash = [r for r in rels if os.path.exists(os.path.join(target_content, r))]
+    if clash:
+        print("[export] ABORT, target files exist: %s" % clash[:5])
+        return False
+    total = 0
+    for r in rels:
+        d = os.path.join(target_content, r)
+        os.makedirs(os.path.dirname(d), exist_ok=True)
+        shutil.copyfile(os.path.join(scratch_content, r), d)
+        total += os.path.getsize(d)
+    print("[export] copied %d files (%d assets), %.1f MB into %s" % (len(rels), len(todo), total / 1048576.0, target_content))
+    return True
 
 
 def temp_top_dirs():
@@ -255,7 +352,9 @@ except ImportError:
 if _in_editor:
     run_editor()
 elif len(sys.argv) > 1 and sys.argv[1] == "stage":
-    content = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Content")
+    content = sys.argv[3] if len(sys.argv) > 3 else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Content")
     sys.exit(0 if stage(content) else 1)
+elif len(sys.argv) > 4 and sys.argv[1] == "export":
+    sys.exit(0 if export(sys.argv[3], sys.argv[4]) else 1)
 else:
     print(__doc__)

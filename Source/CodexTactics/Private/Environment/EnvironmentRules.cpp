@@ -418,7 +418,8 @@ namespace EnvironmentRules
 
 	float GetBlendedColdWeatherMultiplier(const FEnvironmentConfig& Config, const FEnvironmentState& State)
 	{
-		return FMath::Lerp(GetColdWeatherMultiplier(Config, State.Weather), GetColdWeatherMultiplier(Config, State.NextWeather),
+		// Section 17: the state's climate picks the table (Arctic = the top-level cold_mult_* exactly as before).
+		return FMath::Lerp(GetColdWeatherMultiplier(Config, State.Climate, State.Weather), GetColdWeatherMultiplier(Config, State.Climate, State.NextWeather),
 			GetTransitionBlend(Config, State));
 	}
 
@@ -442,6 +443,10 @@ namespace EnvironmentRules
 
 	float GetBlendedSnowCoverRate(const FEnvironmentConfig& Config, const FEnvironmentState& State)
 	{
+		if (State.Climate == EClimateProfile::Temperate)
+		{
+			return 0.f; // section 17: the Snowfall / Blizzard rungs are rain and storm there - nothing whitens
+		}
 		return FMath::Lerp(GetSnowCoverRate(Config, State.Weather), GetSnowCoverRate(Config, State.NextWeather), GetTransitionBlend(Config, State));
 	}
 
@@ -459,7 +464,8 @@ namespace EnvironmentRules
 
 	float GetInitialSnowCover(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level)
 	{
-		return FMath::Clamp(Level.bHasSnowCover ? Level.SnowCover : Config.SnowCoverStart, 0.f, 1.f);
+		const float Default = Level.Climate == EClimateProfile::Temperate ? 0.f : Config.SnowCoverStart;
+		return FMath::Clamp(Level.bHasSnowCover ? Level.SnowCover : Default, 0.f, 1.f);
 	}
 
 	float GetSideWindFactor(const FVector2D& WindDirection, int32 PocketIndex)
@@ -563,6 +569,10 @@ namespace EnvironmentRules
 			Pockets->SetNumberField(ObjectSnowKeys[Index], State.ObjectSnow.Get(Index));
 		}
 		Json->SetObjectField(TEXT("object_snow"), Pockets);
+		// Section 17: the climate profile and its wet ground (0 / 0 on arctic levels).
+		Json->SetStringField(TEXT("climate"), ClimateToString(State.Climate));
+		Json->SetNumberField(TEXT("wetness"), State.Wetness);
+		Json->SetNumberField(TEXT("puddles"), State.PuddleAmount);
 		return Json;
 	}
 
@@ -622,7 +632,251 @@ namespace EnvironmentRules
 			State.ObjectSnow = FDirectionalSnow();
 			SeedObjectSnow(State);
 		}
+		EClimateProfile Climate = EClimateProfile::Arctic;
+		if (Json.TryGetStringField(TEXT("climate"), Name) && ClimateFromString(Name, Climate))
+		{
+			State.Climate = Climate;
+		}
+		if (Json.TryGetNumberField(TEXT("wetness"), Number))
+		{
+			State.Wetness = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
+		}
+		if (Json.TryGetNumberField(TEXT("puddles"), Number))
+		{
+			State.PuddleAmount = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
+		}
 		return State;
+	}
+
+	// --- Section 17: climate profiles ---
+
+	FString ClimateToString(EClimateProfile Climate)
+	{
+		return Climate == EClimateProfile::Temperate ? TEXT("temperate") : TEXT("arctic");
+	}
+
+	bool ClimateFromString(const FString& Text, EClimateProfile& OutClimate)
+	{
+		const FString Trimmed = Text.TrimStartAndEnd();
+		if (Trimmed.Equals(TEXT("arctic"), ESearchCase::IgnoreCase))
+		{
+			OutClimate = EClimateProfile::Arctic;
+			return true;
+		}
+		if (Trimmed.Equals(TEXT("temperate"), ESearchCase::IgnoreCase))
+		{
+			OutClimate = EClimateProfile::Temperate;
+			return true;
+		}
+		return false;
+	}
+
+	FString GetWeatherDisplayName(EClimateProfile Climate, EWeatherState Weather)
+	{
+		if (Climate != EClimateProfile::Temperate)
+		{
+			return WeatherToString(Weather);
+		}
+		switch (Weather)
+		{
+		case EWeatherState::Clear:
+			return TEXT("SunnyDay");
+		case EWeatherState::Overcast:
+			return TEXT("Overcast");
+		case EWeatherState::Snowfall:
+			return TEXT("Rain");
+		case EWeatherState::Blizzard:
+			return TEXT("Storm");
+		}
+		return TEXT("Overcast");
+	}
+
+	bool WeatherFromString(EClimateProfile Climate, const FString& Text, EWeatherState& OutWeather)
+	{
+		if (WeatherFromString(Text, OutWeather))
+		{
+			return true;
+		}
+		if (Climate != EClimateProfile::Temperate)
+		{
+			return false;
+		}
+		const FString Trimmed = Text.TrimStartAndEnd();
+		if (Trimmed.Equals(TEXT("Sunny"), ESearchCase::IgnoreCase) || Trimmed.Equals(TEXT("SunnyDay"), ESearchCase::IgnoreCase))
+		{
+			OutWeather = EWeatherState::Clear;
+			return true;
+		}
+		if (Trimmed.Equals(TEXT("Rain"), ESearchCase::IgnoreCase))
+		{
+			OutWeather = EWeatherState::Snowfall;
+			return true;
+		}
+		if (Trimmed.Equals(TEXT("Storm"), ESearchCase::IgnoreCase))
+		{
+			OutWeather = EWeatherState::Blizzard;
+			return true;
+		}
+		return false;
+	}
+
+	float GetColdWeatherMultiplier(const FEnvironmentConfig& Config, EClimateProfile Climate, EWeatherState Weather)
+	{
+		if (Climate != EClimateProfile::Temperate)
+		{
+			return GetColdWeatherMultiplier(Config, Weather);
+		}
+		const FTemperateClimateConfig& T = Config.Temperate;
+		float Multiplier = 1.f;
+		switch (Weather)
+		{
+		case EWeatherState::Clear:
+			Multiplier = T.ColdMultSunny;
+			break;
+		case EWeatherState::Overcast:
+			Multiplier = T.ColdMultOvercast;
+			break;
+		case EWeatherState::Snowfall:
+			Multiplier = T.ColdMultRain;
+			break;
+		case EWeatherState::Blizzard:
+			Multiplier = T.ColdMultStorm;
+			break;
+		}
+		return FMath::Max(0.f, Multiplier);
+	}
+
+	float GetColdPhaseMultiplier(const FEnvironmentConfig& Config, EClimateProfile Climate, ETimeOfDayPhase Phase)
+	{
+		if (Climate != EClimateProfile::Temperate)
+		{
+			return GetColdPhaseMultiplier(Config, Phase);
+		}
+		const FTemperateClimateConfig& T = Config.Temperate;
+		float Multiplier = 1.f;
+		switch (Phase)
+		{
+		case ETimeOfDayPhase::EarlyMorning:
+			Multiplier = T.ColdMultEarlyMorning;
+			break;
+		case ETimeOfDayPhase::Midday:
+			Multiplier = T.ColdMultMidday;
+			break;
+		case ETimeOfDayPhase::Afternoon:
+			Multiplier = T.ColdMultAfternoon;
+			break;
+		case ETimeOfDayPhase::Night:
+			Multiplier = T.ColdMultNight;
+			break;
+		}
+		return FMath::Max(0.f, Multiplier);
+	}
+
+	bool IsRosterActive(const FEnvironmentConfig& Config, EClimateProfile Climate)
+	{
+		return Climate != EClimateProfile::Temperate || Config.Temperate.bRosterEnabled;
+	}
+
+	bool IsFallingSnowAllowed(const FEnvironmentConfig& Config, EClimateProfile Climate)
+	{
+		return Climate != EClimateProfile::Temperate || Config.Temperate.bFallingSnow;
+	}
+
+	float GetRainIntensity(const FEnvironmentConfig& Config, const FEnvironmentState& State)
+	{
+		if (State.Climate != EClimateProfile::Temperate)
+		{
+			return 0.f;
+		}
+		const float Rain = FMath::Clamp(Config.Temperate.RainIntensityRain, 0.f, 1.f) * GetWeatherAmount(Config, State, EWeatherState::Snowfall);
+		const float Storm = FMath::Clamp(Config.Temperate.RainIntensityStorm, 0.f, 1.f) * GetWeatherAmount(Config, State, EWeatherState::Blizzard);
+		return FMath::Clamp(Rain + Storm, 0.f, 1.f);
+	}
+
+	float ComputeIsRaining(float RainIntensity)
+	{
+		return FMath::Clamp(RainIntensity / 0.25f, 0.f, 1.f);
+	}
+
+	bool ShouldShowScreenDrops(const FEnvironmentConfig& Config, const FEnvironmentState& State)
+	{
+		return State.Climate == EClimateProfile::Temperate && Config.Temperate.bScreenDrops && ComputeIsRaining(GetRainIntensity(Config, State)) >= 0.5f;
+	}
+
+	float GetSnowingAmount(const FEnvironmentConfig& Config, const FEnvironmentState& State)
+	{
+		if (State.Climate == EClimateProfile::Temperate)
+		{
+			return 0.f;
+		}
+		return FMath::Clamp(GetWeatherAmount(Config, State, EWeatherState::Snowfall) + GetWeatherAmount(Config, State, EWeatherState::Blizzard), 0.f, 1.f);
+	}
+
+	float GetWetnessRate(const FEnvironmentConfig& Config, const FEnvironmentState& State, float SunElevationDegrees)
+	{
+		if (State.Climate != EClimateProfile::Temperate)
+		{
+			return 0.f;
+		}
+		const FTemperateClimateConfig& T = Config.Temperate;
+		const float Overcast = FMath::Max(0.f, T.DryingRateOvercast);
+		const float SunRamp = FMath::Clamp(SunElevationDegrees / FMath::Max(0.1f, T.DryingFullSunElevation), 0.f, 1.f);
+		const float Sunny = FMath::Lerp(Overcast, FMath::Max(0.f, T.DryingRateSunny), SunRamp);
+		return GetWeatherAmount(Config, State, EWeatherState::Snowfall) * FMath::Max(0.f, T.WetnessRateRain)
+			+ GetWeatherAmount(Config, State, EWeatherState::Blizzard) * FMath::Max(0.f, T.WetnessRateStorm)
+			- GetWeatherAmount(Config, State, EWeatherState::Overcast) * Overcast
+			- GetWeatherAmount(Config, State, EWeatherState::Clear) * Sunny;
+	}
+
+	float GetPuddleTarget(const FEnvironmentConfig& Config, float Wetness)
+	{
+		const float Threshold = FMath::Clamp(Config.Temperate.PuddleWetnessThreshold, 0.f, 0.99f);
+		return FMath::Clamp((Wetness - Threshold) / (1.f - Threshold), 0.f, 1.f);
+	}
+
+	void StepWetness(const FEnvironmentConfig& Config, FEnvironmentState& State, float DeltaSeconds, float SunElevationDegrees)
+	{
+		if (State.Climate != EClimateProfile::Temperate || State.bLocked || DeltaSeconds <= 0.f)
+		{
+			return;
+		}
+		const FTemperateClimateConfig& T = Config.Temperate;
+		const float Rate = GetWetnessRate(Config, State, SunElevationDegrees);
+		State.Wetness = FMath::Clamp(State.Wetness + Rate * DeltaSeconds, 0.f, 1.f);
+		const float Target = GetPuddleTarget(Config, State.Wetness);
+		const float Puddles = FMath::Clamp(State.PuddleAmount, 0.f, 1.f);
+		if (Target > Puddles)
+		{
+			// Standing water only collects while the ground gets wetter (it rains); a drying ground never fills a puddle.
+			State.PuddleAmount = Rate > 0.f ? FMath::Min(Target, Puddles + FMath::Max(0.f, T.PuddleFillRate) * DeltaSeconds) : Puddles;
+		}
+		else
+		{
+			State.PuddleAmount = FMath::Max(Target, Puddles - FMath::Max(0.f, T.PuddleDrainRate) * DeltaSeconds);
+		}
+	}
+
+	void GetInitialWetness(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level, EWeatherState Weather, float& OutWetness, float& OutPuddles)
+	{
+		OutWetness = 0.f;
+		OutPuddles = 0.f;
+		if (Level.Climate != EClimateProfile::Temperate)
+		{
+			return;
+		}
+		const FTemperateClimateConfig& T = Config.Temperate;
+		if (Weather == EWeatherState::Snowfall)
+		{
+			OutWetness = T.StartWetnessRain;
+			OutPuddles = T.StartPuddlesRain;
+		}
+		else if (Weather == EWeatherState::Blizzard)
+		{
+			OutWetness = T.StartWetnessStorm;
+			OutPuddles = T.StartPuddlesStorm;
+		}
+		OutWetness = FMath::Clamp(Level.bHasWetness ? Level.Wetness : OutWetness, 0.f, 1.f);
+		OutPuddles = FMath::Clamp(Level.bHasPuddles ? Level.Puddles : OutPuddles, 0.f, 1.f);
 	}
 
 	FString WeatherToString(EWeatherState Weather)

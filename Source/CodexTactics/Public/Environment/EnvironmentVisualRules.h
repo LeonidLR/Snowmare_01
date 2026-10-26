@@ -15,6 +15,12 @@ namespace EnvironmentVisualRules
 	/** The C++ fallback preset of Weather (used when /Game/Environment/Weather/Presets/DA_Weather_* is missing; the assets start from these). */
 	CODEXTACTICS_API FWeatherVisualPreset GetDefaultPreset(EWeatherState Weather);
 
+	/**
+	 * Section 17: the C++ fallback preset of Weather on Climate: Arctic = GetDefaultPreset(Weather); Temperate = SunnyDay / mild Overcast /
+	 * Rain / Storm (DA_Weather_Temperate_Sunny / _Overcast / _Rain / _Storm start from these; no snow, no frost).
+	 */
+	CODEXTACTICS_API FWeatherVisualPreset GetDefaultPreset(EClimateProfile Climate, EWeatherState Weather);
+
 	/** A -> B by Alpha (clamped 0..1): numbers and colours lerp, bVolumetricFog switches at Alpha 0.5. */
 	CODEXTACTICS_API FWeatherVisualPreset LerpPresets(const FWeatherVisualPreset& A, const FWeatherVisualPreset& B, float Alpha);
 

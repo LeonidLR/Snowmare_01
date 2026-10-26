@@ -20,7 +20,8 @@ enum class ETimeOfDayPhase : uint8
 
 /**
  * The four winter weather states, in LADDER order: weather only ever moves one step (Clear <-> Overcast <-> Snowfall <-> Blizzard).
- * Clear = clear sky and hard frost (not "sunny").
+ * Clear = clear sky and hard frost (not "sunny"). A Temperate level (EClimateProfile) runs the SAME ladder with another meaning:
+ * Clear = SunnyDay, Overcast = mild overcast, Snowfall = Rain, Blizzard = Storm (EnvironmentRules::GetWeatherDisplayName).
  */
 UENUM(BlueprintType)
 enum class EWeatherState : uint8
@@ -29,6 +30,18 @@ enum class EWeatherState : uint8
 	Overcast,
 	Snowfall,
 	Blizzard
+};
+
+/**
+ * The climate of a level (design §17, user decision 2026-10-26): the whole game is Arctic (the winter ladder, snow, cold); only
+ * specific narrative levels are Temperate (level JSON "environment": {"climate": "temperate"}): a sunny day and rain on the same
+ * one-step ladder, no snow growth, mild cold, wetness / puddles. Absent = Arctic.
+ */
+UENUM(BlueprintType)
+enum class EClimateProfile : uint8
+{
+	Arctic,
+	Temperate
 };
 
 /** Phase 2: one pair of the roster (design §4.2): the good-conditions form From becomes Ratio x To when From's suitability is low. */
@@ -207,6 +220,112 @@ struct FDirectionalSnowInputs
 	float ClearRate = 0.f;
 };
 
+/**
+ * Section 17: the Temperate climate profile (environment.json block "temperate"; the Arctic values stay the top-level keys). The ladder
+ * states mean SunnyDay / Overcast / Rain / Storm here (Clear / Overcast / Snowfall / Blizzard). Defaults are the design proposal.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FTemperateClimateConfig
+{
+	GENERATED_BODY()
+
+	// --- Cold: open-air cold x weather (blended) x phase, mild (~0.25-0.3 of the arctic values; rain colder than sun) ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultSunny = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultOvercast = 0.3f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultRain = 0.4f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultStorm = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultEarlyMorning = 1.1f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultMidday = 0.85f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultAfternoon = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float ColdMultNight = 1.2f;
+
+	/** The weather / time-of-day roster on a temperate level (false = the waves as written: narrative levels are hand-authored). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	bool bRosterEnabled = false;
+
+	/** Falling snow on a temperate level (false = the snow Niagara system stays off whatever the preset says). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visuals")
+	bool bFallingSnow = false;
+
+	/** Screen raindrops on the tactical camera while it rains (MPC ScreenDrops; user decision 2026-10-26: ON). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visuals")
+	bool bScreenDrops = true;
+
+	// --- Rain (UEnvironmentSubsystem::GetRainIntensity, MPC RainIntensity; 0 in SunnyDay / Overcast, blended through a transition) ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rain", meta = (ClampMin = "0", ClampMax = "1"))
+	float RainIntensityRain = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rain", meta = (ClampMin = "0", ClampMax = "1"))
+	float RainIntensityStorm = 1.f;
+
+	// --- Wetness (FEnvironmentState::Wetness 0..1) and puddles (PuddleAmount 0..1), per REAL second of running clock ---
+
+	/** Wetness gained per second in Rain (1 / 120: dry to soaked in 2 real minutes). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0"))
+	float WetnessRateRain = 1.f / 120.f;
+
+	/** Wetness gained per second in a Storm (1 / 45). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0"))
+	float WetnessRateStorm = 1.f / 45.f;
+
+	/** Wetness lost per second in SunnyDay with the sun high (1 / 240: soaked to dry in 4 real minutes); at night like overcast. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0"))
+	float DryingRateSunny = 1.f / 240.f;
+
+	/** Wetness lost per second under Overcast (and in SunnyDay with the sun down): 1 / 900. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0"))
+	float DryingRateOvercast = 1.f / 900.f;
+
+	/** Sun elevation (degrees) from which SunnyDay dries at the full sunny rate (linear ramp from the horizon). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0.1", ClampMax = "90"))
+	float DryingFullSunElevation = 20.f;
+
+	/** Puddles form once the ground is wetter than this (target = (wetness - threshold) / (1 - threshold)). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0", ClampMax = "0.99"))
+	float PuddleWetnessThreshold = 0.5f;
+
+	/** Puddles fill toward the target at this rate per second, only while the ground gets wetter (1 / 90). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0"))
+	float PuddleFillRate = 1.f / 90.f;
+
+	/** Puddles drain toward the target at this rate per second, slower than the ground dries (1 / 600). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0"))
+	float PuddleDrainRate = 1.f / 600.f;
+
+	/**
+	 * A temperate level that starts (fresh / locked / arriving from an arctic level) in Rain or Storm is already wet: these start values
+	 * (SunnyDay / Overcast start dry). A level JSON "wetness" / "puddles" overrides them.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0", ClampMax = "1"))
+	float StartWetnessRain = 1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0", ClampMax = "1"))
+	float StartPuddlesRain = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0", ClampMax = "1"))
+	float StartWetnessStorm = 1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wetness", meta = (ClampMin = "0", ClampMax = "1"))
+	float StartPuddlesStorm = 1.f;
+};
+
 /** Tuning of the day cycle and the weather ladder (environment.json; snake_case keys of these fields). */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FEnvironmentConfig
@@ -361,6 +480,10 @@ struct CODEXTACTICS_API FEnvironmentConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
 	FEnvironmentRosterConfig Roster;
+
+	/** Section 17: the Temperate climate profile (block "temperate"); every value above stays the Arctic one. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Climate")
+	FTemperateClimateConfig Temperate;
 };
 
 /**
@@ -415,6 +538,21 @@ struct CODEXTACTICS_API FEnvironmentState
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
 	FDirectionalSnow ObjectSnow;
+
+	/**
+	 * Section 17: the climate this state belongs to (the level's profile). A carried state of another climate is re-initialised for
+	 * the new level's profile (the time of day continues). Arctic for every state of an arctic level (and for older saves / carries).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	EClimateProfile Climate = EClimateProfile::Arctic;
+
+	/** Section 17 (Temperate only, 0 on arctic levels): how wet the ground is, 0 dry .. 1 soaked (EnvironmentRules::StepWetness). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
+	float Wetness = 0.f;
+
+	/** Section 17 (Temperate only): standing water 0..1; lags Wetness (fills once the ground is wet, drains slower than it dries). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
+	float PuddleAmount = 0.f;
 };
 
 /** What one weather step of EnvironmentRules::StepWeather did. */
@@ -472,4 +610,22 @@ struct CODEXTACTICS_API FEnvironmentLevelSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
 	float SnowCover = 0.35f;
+
+	/** Section 17: "climate": "arctic" (default) | "temperate" (a narrative level with a sunny day / rain; no snow growth). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	EClimateProfile Climate = EClimateProfile::Arctic;
+
+	/** Section 17 (temperate): "wetness" present (0..1): the start wetness when the level is locked / starts fresh for its climate. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	bool bHasWetness = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
+	float Wetness = 0.f;
+
+	/** Section 17 (temperate): "puddles" present (0..1): the start puddle amount (same rule as Wetness). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	bool bHasPuddles = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
+	float Puddles = 0.f;
 };

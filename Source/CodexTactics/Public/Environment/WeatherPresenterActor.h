@@ -20,6 +20,7 @@ class UPostProcessComponent;
 class USkyAtmosphereComponent;
 class USkyLightComponent;
 class UWeatherPresetAsset;
+class UWeatherRainFxComponent;
 class UWeatherSnowFxComponent;
 class UWeatherSnowOverlayComponent;
 struct FEnvironmentState;
@@ -128,9 +129,16 @@ public:
 	const FWeatherAuthoredLighting& GetAuthored() const { return Authored; }
 	int32 GetApplyCount() const { return ApplyCount; }
 
-	/** The preset in force for Weather (asset when loaded, else the C++ default). */
+	/** The preset in force for Weather on the climate in force (asset when loaded, else the C++ default). */
 	const FWeatherVisualPreset& GetPreset(EWeatherState Weather) const;
 	bool IsPresetFromAsset(EWeatherState Weather) const;
+
+	/** Section 17: the preset of Weather on Climate (Arctic = DA_Weather_*, Temperate = DA_Weather_Temperate_*; C++ defaults when missing). */
+	const FWeatherVisualPreset& GetPreset(EClimateProfile Climate, EWeatherState Weather) const;
+	bool IsPresetFromAsset(EClimateProfile Climate, EWeatherState Weather) const;
+
+	/** Section 17: the climate profile in force (the environment's state; Arctic without an initialised environment). */
+	EClimateProfile GetActiveClimate() const;
 
 	/** The level's sun actor when adopted (null with the own sun: GetSunLight). */
 	ADirectionalLight* GetSun() const { return Sun; }
@@ -191,10 +199,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets")
 	TSoftObjectPtr<UWeatherPresetAsset> PresetBlizzard;
 
+	/** Section 17: the Temperate profile's presets (SunnyDay / Overcast / Rain / Storm on the Clear / Overcast / Snowfall / Blizzard rungs). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets|Temperate")
+	TSoftObjectPtr<UWeatherPresetAsset> PresetTemperateSunny;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets|Temperate")
+	TSoftObjectPtr<UWeatherPresetAsset> PresetTemperateOvercast;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets|Temperate")
+	TSoftObjectPtr<UWeatherPresetAsset> PresetTemperateRain;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Presets|Temperate")
+	TSoftObjectPtr<UWeatherPresetAsset> PresetTemperateStorm;
+
 	/**
 	 * Phase 4: MPC_Environment, written every application: scalars SnowAmount (persistent cover), FrostAmount, WindStrength, IsSnowing
 	 * (0..1, ComputeIsSnowing), vector WindDirection (xyz direction, w strength); section 15: SnowTop / SnowPX / SnowNX / SnowPY / SnowNY
-	 * (FEnvironmentState::ObjectSnow, world axes). Missing asset -> nothing written.
+	 * (FEnvironmentState::ObjectSnow, world axes). Section 17 (temperate levels only; never written on an arctic level, so they stay at their
+	 * default 0 there): RainIntensity, Wetness, PuddleAmount, IsRaining, ClimateTemperate, ScreenDrops. Missing asset -> nothing written.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
 	TSoftObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
@@ -231,6 +253,8 @@ public:
 	bool GetEnvironmentScalar(FName Name, float& OutValue) const;
 
 	UWeatherSnowFxComponent* GetSnowFx() const { return SnowFx; }
+	/** Section 18: the rain of a temperate level (null on an arctic level: it is only created when the climate is Temperate). */
+	UWeatherRainFxComponent* GetRainFx() const { return RainFx; }
 	UWeatherSnowOverlayComponent* GetSnowOverlay() const { return SnowOverlay; }
 	/** The wind direction of the last application. */
 	const FVector& GetLastWindDirection() const { return LastWindDirection; }
@@ -268,6 +292,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Editor preview")
 	EWeatherState PreviewWeather = EWeatherState::Clear;
 
+	/** Section 17: the climate of the editor preview (Temperate previews the DA_Weather_Temperate_* looks). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weather|Editor preview")
+	EClimateProfile PreviewClimate = EClimateProfile::Arctic;
+
 	/** After every application: the frame that was applied (art tweaks in the BP subclass). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Environment")
 	void OnEnvironmentApplied(const FWeatherVisualFrame& Frame);
@@ -297,9 +325,16 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
 	TObjectPtr<UWeatherSnowFxComponent> SnowFx;
 
-	/** Phase 4: the gradual snow cover on outdoor meshes (overlay material M_SnowOverlay by default). */
+	/** Phase 4: the gradual snow cover on outdoor meshes (overlay material M_SnowOverlay by default); section 18: the wet look on temperate levels. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weather|Phase4")
 	TObjectPtr<UWeatherSnowOverlayComponent> SnowOverlay;
+
+	/**
+	 * Section 18: the rain (falling rain, puddle splashes, screen drops, storm lightning), created at runtime the first time the climate in
+	 * force is Temperate (an arctic level never has one). Its look: DA_RainFX.
+	 */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category = "Weather|Rain")
+	TObjectPtr<UWeatherRainFxComponent> RainFx;
 
 	/**
 	 * Section 16, the own rig (hidden unless the level lacks that part). Its class-default values are the "authored" baseline the hour /
@@ -350,6 +385,11 @@ private:
 	void WriteParameters(float SnowAmount, float FrostAmount, float WindStrength, float IsSnowing, const FVector& WindDirection);
 	/** Section 15: MPC_Environment.SnowTop / SnowPX / SnowNX / SnowPY / SnowNY. */
 	void WriteObjectSnow(const FDirectionalSnow& Pockets);
+	/** Section 17: MPC_Environment rain scalars of a temperate level (zeros once when the climate leaves Temperate / the visuals turn off). */
+	void ApplyRain(EClimateProfile Climate, const FWeatherVisualFrame& Frame);
+	/** Section 18: the rain component, created on first need (a temperate climate) when rendering is possible. */
+	UWeatherRainFxComponent* EnsureRainFx();
+	void WriteRainParameters(float RainIntensity, float Wetness, float PuddleAmount, float IsRaining, float ClimateTemperate, float ScreenDrops);
 	void SetSnowVisualsEnabled(bool bEnabled);
 	void SetCloudsOff(bool bOff);
 	void RestoreAuthored();
@@ -374,8 +414,11 @@ private:
 	UPROPERTY(Transient) FWeatherVisualFrame LastFrame;
 	UPROPERTY(Transient) TObjectPtr<UMaterialParameterCollection> LoadedParameters;
 
-	FWeatherVisualPreset Presets[4];
-	bool bPresetFromAsset[4] = { false, false, false, false };
+	/** [climate][weather]: Arctic, Temperate (section 17). */
+	FWeatherVisualPreset Presets[2][4];
+	bool bPresetFromAsset[2][4] = { { false, false, false, false }, { false, false, false, false } };
+	/** Section 17: the rain scalars hold non-zero values (written on a temperate level). */
+	bool bRainParamsWritten = false;
 
 	FDelegateHandle StateSetHandle;
 	float SinceApply = 0.f;
@@ -395,6 +438,10 @@ private:
 	int32 ApplyCount = 0;
 	FVector LastWindDirection = FVector::ForwardVector;
 	float LastSnowApplyTime = -1.f;
+	/** Section 18: DA_RainFX.WetExposureBias x Wetness on a temperate level (0 elsewhere), added to the exposure bias. */
+	float WetExposureBias = 0.f;
+	/** Section 18: the previous rain FX application (-1 = jump to the target at once). */
+	float LastRainApplyTime = -1.f;
 	float SinceTargetRefresh = 0.f;
 	bool bAdopted = false;
 	bool bApplying = false;

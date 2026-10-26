@@ -1578,6 +1578,8 @@ void USaveGameSubsystem::RestoreEnvironment(FSaveRestoreContext& Context)
 	FEnvironmentState State = EnvironmentRules::StateFromSaveJson(**Saved, Environment->GetStateRef());
 	// The lock belongs to the level (its JSON), not to the file: the reopened level decides whether the clock may run.
 	State.bLocked = Environment->IsLocked();
+	// Section 17: so does the climate (a debug Codex.Env.Climate switch is not saved into the level's profile).
+	State.Climate = Environment->GetLevelSettings().Climate;
 	Environment->SetState(State);
 }
 

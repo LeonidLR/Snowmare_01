@@ -56,6 +56,9 @@ namespace
 		// Section 15: the objects start with the ground cover on their tops (no side snow yet).
 		State.ObjectSnow = FDirectionalSnow();
 		EnvironmentRules::SeedObjectSnow(State);
+		// Section 17: the level's climate; a temperate level that starts in rain is already wet (arctic: 0 / 0).
+		State.Climate = Level.Climate;
+		EnvironmentRules::GetInitialWetness(Config, Level, Weather, State.Wetness, State.PuddleAmount);
 		return State;
 	}
 
@@ -71,7 +74,8 @@ namespace
 		if (FParse::Value(CommandLine, TEXT("-EnvWeather="), WeatherName))
 		{
 			EWeatherState Weather;
-			if (EnvironmentRules::WeatherFromString(WeatherName, Weather))
+			// Section 17: a temperate level also takes its own names (-EnvWeather=Rain).
+			if (EnvironmentRules::WeatherFromString(Level.Climate, WeatherName, Weather))
 			{
 				Level.bHasWeather = true;
 				Level.Weather = Weather;
@@ -177,13 +181,27 @@ FEnvironmentState UEnvironmentSubsystem::ResolveInitialState(const FEnvironmentC
 		// The tutorial: its own fixed hour / weather, nothing moves. (It still hands its end state to the next level.)
 		return MakeFreshState(Config, Level, RandomSeedIfNeeded, true);
 	}
-	if (Carried.IsSet())
+	if (Carried.IsSet() && Carried->Climate == Level.Climate)
 	{
 		// User decision 17: continue the previous level exactly - its end hour, weather, blend, dwell and RNG - but unlocked.
 		FEnvironmentState State = Carried.GetValue();
 		State.Hour = WrapHour(State.Hour);
 		State.bLocked = false;
 		return State;
+	}
+	if (Carried.IsSet())
+	{
+		// Section 17: arriving from another climate (arctic -> a temperate narrative level, or back): the weather, the snow and the wet
+		// ground start over for this level's profile (its "weather" / "snow_cover" / "wetness" when set); the time of day continues and
+		// the start is drawn from the carried RNG (deterministic).
+		FEnvironmentLevelSettings Reinit = Level;
+		Reinit.bHasStartHour = true;
+		Reinit.StartHour = Carried->Hour;
+		if (Reinit.Seed == 0)
+		{
+			Reinit.Seed = Carried->RandomSeed;
+		}
+		return MakeFreshState(Config, Reinit, RandomSeedIfNeeded, false);
 	}
 	return MakeFreshState(Config, Level, RandomSeedIfNeeded, false);
 }
@@ -227,8 +245,17 @@ void UEnvironmentSubsystem::Resolve()
 	State = ResolveInitialState(GetConfig(), StartSettings, Carried, 0);
 	if (Carried.IsSet() && !LevelSettings.bLocked)
 	{
-		UE_LOG(LogCodexTactics, Log, TEXT("[Env] continuing the previous level's environment (hour %.2f, %s)"), Carried->Hour,
-			*EnvironmentRules::WeatherToString(Carried->Weather));
+		if (Carried->Climate == StartSettings.Climate)
+		{
+			UE_LOG(LogCodexTactics, Log, TEXT("[Env] continuing the previous level's environment (hour %.2f, %s)"), Carried->Hour,
+				*EnvironmentRules::GetWeatherDisplayName(Carried->Climate, Carried->Weather));
+		}
+		else
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Env] climate %s -> %s: the weather starts over for this level (hour %.2f continues): %s"),
+				*EnvironmentRules::ClimateToString(Carried->Climate), *EnvironmentRules::ClimateToString(StartSettings.Climate), Carried->Hour,
+				*EnvironmentRules::GetWeatherDisplayName(State.Climate, State.Weather));
+		}
 	}
 }
 
@@ -294,6 +321,11 @@ void UEnvironmentSubsystem::Tick(float DeltaTime)
 	// Section 15: the objects' directional pockets (top with the cover rates, windward sides with the wind, melt in Clear daylight).
 	const FVector Wind = GetWindDirection();
 	EnvironmentRules::StepObjectSnow(Config, State, Delta, FVector2D(Wind.X, Wind.Y), GetWindStrength(), GetSunElevation());
+	// Section 17: the wet ground of a temperate level (an arctic state never changes here).
+	if (State.Climate == EClimateProfile::Temperate)
+	{
+		EnvironmentRules::StepWetness(Config, State, Delta, GetSunElevation());
+	}
 	bClockRan = true;
 	AdvancedSeconds += Delta;
 
@@ -339,7 +371,7 @@ void UEnvironmentSubsystem::ForceWeather(EWeatherState Weather, bool bInstant)
 		State.WeatherElapsedSeconds = 0.f;
 		State.WeatherDwellSeconds = EnvironmentRules::GetWeatherDwellSeconds(Config, GetPhase());
 		State.RandomSeed = Stream.GetCurrentSeed();
-		UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather forced to %s: %s"), *EnvironmentRules::WeatherToString(Weather), *Describe());
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather forced to %s: %s"), *EnvironmentRules::GetWeatherDisplayName(State.Climate, Weather), *Describe());
 		BroadcastDifferences(Old, true);
 		return;
 	}
@@ -352,7 +384,7 @@ void UEnvironmentSubsystem::ForceWeather(EWeatherState Weather, bool bInstant)
 	}
 	State.NextWeather = Weather;
 	State.WeatherElapsedSeconds = FMath::Max(0.f, State.WeatherDwellSeconds - EnvironmentRules::GetTransitionSeconds(Config, State.WeatherDwellSeconds));
-	UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather blending to %s: %s"), *EnvironmentRules::WeatherToString(Weather), *Describe());
+	UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather blending to %s: %s"), *EnvironmentRules::GetWeatherDisplayName(State.Climate, Weather), *Describe());
 	OnStateSet.Broadcast(State);
 	BroadcastTransitionStarted(State.Weather, State.NextWeather);
 }
@@ -382,6 +414,10 @@ void UEnvironmentSubsystem::RestartWeatherSequence(int32 Seed)
 	State = EnvironmentRules::MakeInitialState(Config, State.Hour, DrawStartWeather(Config, Seed), Seed);
 	State.bLocked = Old.bLocked;
 	State.SnowAmount = Old.SnowAmount; // a new weather sequence never clears the snow already lying
+	// Section 17: the climate and the wet ground stay.
+	State.Climate = Old.Climate;
+	State.Wetness = Old.Wetness;
+	State.PuddleAmount = Old.PuddleAmount;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather sequence restarted with seed %d: %s"), Seed, *Describe());
 	BroadcastDifferences(Old, true);
 }
@@ -392,12 +428,55 @@ float UEnvironmentSubsystem::GetWindStrength() const
 	{
 		return 0.f;
 	}
+	// Section 17: the presets of the state's climate (Arctic = DA_Weather_* / the arctic C++ defaults, as before).
 	if (const AWeatherPresenterActor* Visuals = Presenter.Get())
 	{
-		return EnvironmentVisualRules::GetBlendedWindStrength(Visuals->GetPreset(State.Weather), Visuals->GetPreset(State.NextWeather), GetTransitionBlend());
+		return EnvironmentVisualRules::GetBlendedWindStrength(Visuals->GetPreset(State.Climate, State.Weather), Visuals->GetPreset(State.Climate, State.NextWeather),
+			GetTransitionBlend());
 	}
-	return EnvironmentVisualRules::GetBlendedWindStrength(EnvironmentVisualRules::GetDefaultPreset(State.Weather),
-		EnvironmentVisualRules::GetDefaultPreset(State.NextWeather), GetTransitionBlend());
+	return EnvironmentVisualRules::GetBlendedWindStrength(EnvironmentVisualRules::GetDefaultPreset(State.Climate, State.Weather),
+		EnvironmentVisualRules::GetDefaultPreset(State.Climate, State.NextWeather), GetTransitionBlend());
+}
+
+float UEnvironmentSubsystem::GetRainIntensity() const
+{
+	return bInitialised ? EnvironmentRules::GetRainIntensity(GetConfig(), State) : 0.f;
+}
+
+FString UEnvironmentSubsystem::GetWeatherDisplayName() const
+{
+	return EnvironmentRules::GetWeatherDisplayName(State.Climate, State.Weather);
+}
+
+void UEnvironmentSubsystem::SetClimate(EClimateProfile Climate)
+{
+	if (!bInitialised)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Env] climate: the environment is not initialised"));
+		return;
+	}
+	if (State.Climate == Climate)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] climate already %s: %s"), *EnvironmentRules::ClimateToString(Climate), *Describe());
+		return;
+	}
+	// Debug: the same re-initialisation as a level of another climate (ResolveInitialState with this state as the carry): the time of
+	// day continues; the level's own weather / snow / wetness apply only when switching back to the level's own climate.
+	FEnvironmentLevelSettings Settings = LevelSettings;
+	if (Climate != LevelSettings.Climate)
+	{
+		Settings.bHasWeather = false;
+		Settings.bHasSnowCover = false;
+		Settings.bHasWetness = false;
+		Settings.bHasPuddles = false;
+	}
+	Settings.Climate = Climate;
+	Settings.bLocked = false;
+	FEnvironmentState NewState = ResolveInitialState(GetConfig(), Settings, TOptional<FEnvironmentState>(State), 0);
+	NewState.bLocked = State.bLocked;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Env] climate %s -> %s (debug)"), *EnvironmentRules::ClimateToString(State.Climate),
+		*EnvironmentRules::ClimateToString(Climate));
+	SetState(NewState);
 }
 
 float UEnvironmentSubsystem::GetWeatherAmount(EWeatherState Weather) const
@@ -410,6 +489,14 @@ void UEnvironmentSubsystem::SetSnowAmount(float Amount)
 	State.SnowAmount = FMath::Clamp(Amount, 0.f, 1.f);
 	State.ObjectSnow.Top = State.SnowAmount;
 	UE_LOG(LogCodexTactics, Log, TEXT("[Env] snow cover set to %.3f"), State.SnowAmount);
+	OnStateSet.Broadcast(State);
+}
+
+void UEnvironmentSubsystem::SetWetness(float Wetness, float PuddleAmount)
+{
+	State.Wetness = FMath::Clamp(Wetness, 0.f, 1.f);
+	State.PuddleAmount = FMath::Clamp(PuddleAmount, 0.f, 1.f);
+	UE_LOG(LogCodexTactics, Log, TEXT("[Env] wetness set to %.3f, puddles %.3f"), State.Wetness, State.PuddleAmount);
 	OnStateSet.Broadcast(State);
 }
 
@@ -460,11 +547,16 @@ float UEnvironmentSubsystem::GetSunElevation() const
 FString UEnvironmentSubsystem::Describe() const
 {
 	const FDirectionalSnow& Objects = State.ObjectSnow;
-	return FString::Printf(TEXT("hour %.2f (%s), weather %s -> %s, blend %.2f, dwell %.0f/%.0f s, seed %d%s, snow %.3f, objects top %.3f px %.3f nx %.3f py %.3f ny %.3f, clock x%.2f%s"),
-		State.Hour, *EnvironmentRules::PhaseToString(GetPhase()), *EnvironmentRules::WeatherToString(State.Weather),
-		*EnvironmentRules::WeatherToString(State.NextWeather), GetTransitionBlend(), State.WeatherElapsedSeconds, State.WeatherDwellSeconds,
+	// Section 17: arctic lines stay exactly as before; a temperate state names its weather (SunnyDay / Rain / Storm) and adds the wet ground.
+	const FString ClimatePart = State.Climate == EClimateProfile::Temperate
+		? FString::Printf(TEXT(", climate temperate, rain %.2f, wetness %.3f, puddles %.3f"), EnvironmentRules::GetRainIntensity(GetConfig(), State),
+			State.Wetness, State.PuddleAmount)
+		: FString();
+	return FString::Printf(TEXT("hour %.2f (%s), weather %s -> %s, blend %.2f, dwell %.0f/%.0f s, seed %d%s, snow %.3f, objects top %.3f px %.3f nx %.3f py %.3f ny %.3f%s, clock x%.2f%s"),
+		State.Hour, *EnvironmentRules::PhaseToString(GetPhase()), *EnvironmentRules::GetWeatherDisplayName(State.Climate, State.Weather),
+		*EnvironmentRules::GetWeatherDisplayName(State.Climate, State.NextWeather), GetTransitionBlend(), State.WeatherElapsedSeconds, State.WeatherDwellSeconds,
 		State.RandomSeed, State.bLocked ? TEXT(", LOCKED") : TEXT(""), State.SnowAmount, Objects.Top, Objects.PX, Objects.NX, Objects.PY, Objects.NY,
-		ClockScale, bInitialised ? TEXT("") : TEXT(" (not initialised)"));
+		*ClimatePart, ClockScale, bInitialised ? TEXT("") : TEXT(" (not initialised)"));
 }
 
 void UEnvironmentSubsystem::BroadcastDifferences(const FEnvironmentState& Old, bool bStateSet)
@@ -499,8 +591,8 @@ void UEnvironmentSubsystem::BroadcastPhaseChanged(ETimeOfDayPhase OldPhase, ETim
 
 void UEnvironmentSubsystem::BroadcastTransitionStarted(EWeatherState From, EWeatherState To)
 {
-	UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather blend %s -> %s starts at hour %.2f"), *EnvironmentRules::WeatherToString(From),
-		*EnvironmentRules::WeatherToString(To), State.Hour);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather blend %s -> %s starts at hour %.2f"), *EnvironmentRules::GetWeatherDisplayName(State.Climate, From),
+		*EnvironmentRules::GetWeatherDisplayName(State.Climate, To), State.Hour);
 	OnWeatherTransitionStarted.Broadcast(From, To);
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
 	{
@@ -510,8 +602,8 @@ void UEnvironmentSubsystem::BroadcastTransitionStarted(EWeatherState From, EWeat
 
 void UEnvironmentSubsystem::BroadcastWeatherChanged(EWeatherState OldWeather, EWeatherState NewWeather)
 {
-	UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather %s -> %s at hour %.2f (next %s, dwell %.0f s)"), *EnvironmentRules::WeatherToString(OldWeather),
-		*EnvironmentRules::WeatherToString(NewWeather), State.Hour, *EnvironmentRules::WeatherToString(State.NextWeather), State.WeatherDwellSeconds);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Env] weather %s -> %s at hour %.2f (next %s, dwell %.0f s)"), *EnvironmentRules::GetWeatherDisplayName(State.Climate, OldWeather),
+		*EnvironmentRules::GetWeatherDisplayName(State.Climate, NewWeather), State.Hour, *EnvironmentRules::GetWeatherDisplayName(State.Climate, State.NextWeather), State.WeatherDwellSeconds);
 	OnWeatherChanged.Broadcast(OldWeather, NewWeather);
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
 	{

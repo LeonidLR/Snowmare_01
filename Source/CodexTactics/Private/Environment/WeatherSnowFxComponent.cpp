@@ -378,6 +378,45 @@ bool UWeatherSnowFxComponent::UpdatePlacement()
 	return true;
 }
 
+TArray<FBox> UWeatherSnowFxComponent::GatherIndoorKillBoxCandidates(UWorld& World, const FVector& Focus, const FWeatherSnowFxTuning& Indoor)
+{
+	TArray<FBox> Candidates;
+	for (TActorIterator<ACameraZoneVolume> It(&World); It; ++It)
+	{
+		if (It->Environment == ECameraZoneEnvironment::Closed || It->Environment == ECameraZoneEnvironment::Shelter)
+		{
+			Candidates.Add(WeatherSnowFxRules::MakeZoneKillBox(It->GetZoneTransform(), It->GetZoneHalfExtent(), Indoor.IndoorMarginCm,
+				Indoor.IndoorBelowCm));
+		}
+	}
+	if (Indoor.bKillUnderRoofs)
+	{
+		TArray<FVector, TInlineAllocator<2>> Points;
+		Points.Add(Focus);
+		const USquadSubsystem* Squad = World.GetSubsystem<USquadSubsystem>();
+		if (const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr)
+		{
+			Points.Add(Leader->GetActorLocation());
+		}
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(WeatherSnowFxRoof), false);
+		for (const FVector& Point : Points)
+		{
+			FHitResult Hit;
+			const FVector From = Point + FVector(0., 0., 30.);
+			if (World.LineTraceSingleByObjectType(Hit, From, From + FVector(0., 0., Indoor.RoofTraceHeight), FCollisionObjectQueryParams(ECC_WorldStatic), Params))
+			{
+				const UPrimitiveComponent* Roof = Hit.GetComponent();
+				const FBox RoofBounds = Roof ? Roof->Bounds.GetBox() : FBox(ForceInit);
+				if (WeatherSnowFxRules::IsRoofCandidate(RoofBounds, Hit.ImpactPoint.Z, Point.Z, Indoor))
+				{
+					Candidates.Add(WeatherSnowFxRules::MakeRoofKillBox(RoofBounds, Point.Z, Indoor.IndoorMarginCm, Indoor.IndoorBelowCm));
+				}
+			}
+		}
+	}
+	return Candidates;
+}
+
 void UWeatherSnowFxComponent::UpdateKillBoxes()
 {
 	UWorld* World = GetWorld();
@@ -389,39 +428,7 @@ void UWeatherSnowFxComponent::UpdateKillBoxes()
 	TArray<FBox> Candidates;
 	if (Active.bNoSnowIndoors && WeatherSnowFx::CVarSnowIndoorKill.GetValueOnGameThread() != 0 && bHasFocus)
 	{
-		for (TActorIterator<ACameraZoneVolume> It(World); It; ++It)
-		{
-			if (It->Environment == ECameraZoneEnvironment::Closed || It->Environment == ECameraZoneEnvironment::Shelter)
-			{
-				Candidates.Add(WeatherSnowFxRules::MakeZoneKillBox(It->GetZoneTransform(), It->GetZoneHalfExtent(), Active.IndoorMarginCm,
-					Active.IndoorBelowCm));
-			}
-		}
-		if (Active.bKillUnderRoofs)
-		{
-			TArray<FVector, TInlineAllocator<2>> Points;
-			Points.Add(LastFocus);
-			const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
-			if (const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr)
-			{
-				Points.Add(Leader->GetActorLocation());
-			}
-			FCollisionQueryParams Params(SCENE_QUERY_STAT(WeatherSnowFxRoof), false);
-			for (const FVector& Point : Points)
-			{
-				FHitResult Hit;
-				const FVector From = Point + FVector(0., 0., 30.);
-				if (World->LineTraceSingleByObjectType(Hit, From, From + FVector(0., 0., Active.RoofTraceHeight), FCollisionObjectQueryParams(ECC_WorldStatic), Params))
-				{
-					const UPrimitiveComponent* Roof = Hit.GetComponent();
-					const FBox RoofBounds = Roof ? Roof->Bounds.GetBox() : FBox(ForceInit);
-					if (WeatherSnowFxRules::IsRoofCandidate(RoofBounds, Hit.ImpactPoint.Z, Point.Z, Active))
-					{
-						Candidates.Add(WeatherSnowFxRules::MakeRoofKillBox(RoofBounds, Point.Z, Active.IndoorMarginCm, Active.IndoorBelowCm));
-					}
-				}
-			}
-		}
+		Candidates = GatherIndoorKillBoxCandidates(*World, LastFocus, Active);
 	}
 	KillBoxes = WeatherSnowFxRules::SelectKillBoxes(Candidates, LastFocus, Active.IndoorSearchRadius, WeatherSnowFxRules::KillBoxCount);
 	for (int32 Index = 0; Index < WeatherSnowFxRules::KillBoxCount; ++Index)

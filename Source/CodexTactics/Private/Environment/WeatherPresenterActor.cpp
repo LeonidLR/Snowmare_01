@@ -21,6 +21,7 @@
 #include "Environment/EnvironmentVisualRules.h"
 #include "Environment/EnvironmentVisualSettings.h"
 #include "Environment/WeatherPresetAsset.h"
+#include "Environment/WeatherRainFxComponent.h"
 #include "Environment/WeatherSnowFxComponent.h"
 #include "Environment/WeatherSnowOverlayComponent.h"
 #include "HAL/IConsoleManager.h"
@@ -51,6 +52,19 @@ namespace WeatherPresenterLocal
 		TEXT("/Game/Environment/Weather/Presets/DA_Weather_Blizzard.DA_Weather_Blizzard"),
 	};
 
+	// Section 17: the Temperate profile's presets (Clear = SunnyDay, Snowfall = Rain, Blizzard = Storm).
+	const TCHAR* TemperatePresetPaths[4] = {
+		TEXT("/Game/Environment/Weather/Presets/DA_Weather_Temperate_Sunny.DA_Weather_Temperate_Sunny"),
+		TEXT("/Game/Environment/Weather/Presets/DA_Weather_Temperate_Overcast.DA_Weather_Temperate_Overcast"),
+		TEXT("/Game/Environment/Weather/Presets/DA_Weather_Temperate_Rain.DA_Weather_Temperate_Rain"),
+		TEXT("/Game/Environment/Weather/Presets/DA_Weather_Temperate_Storm.DA_Weather_Temperate_Storm"),
+	};
+
+	int32 ClimateIndex(EClimateProfile Climate)
+	{
+		return Climate == EClimateProfile::Temperate ? 1 : 0;
+	}
+
 	const TCHAR* EnvironmentCollectionPath = TEXT("/Game/Environment/Weather/MPC/MPC_Environment.MPC_Environment");
 	const TCHAR* SnowSystemPath = TEXT("/Game/Environment/Weather/Snow/Niagara/NS_Weather_Snow.NS_Weather_Snow");
 	const TCHAR* SnowOverlayPath = TEXT("/Game/Environment/Weather/Snow/Materials/M_SnowOverlay.M_SnowOverlay");
@@ -61,6 +75,13 @@ namespace WeatherPresenterLocal
 	const FName ParamWindStrength(TEXT("WindStrength"));
 	const FName ParamIsSnowing(TEXT("IsSnowing"));
 	const FName ParamWindDirection(TEXT("WindDirection"));
+	// Section 17: the rain scalars (temperate levels; the rain FX / wet materials read them).
+	const FName ParamRainIntensity(TEXT("RainIntensity"));
+	const FName ParamWetness(TEXT("Wetness"));
+	const FName ParamPuddleAmount(TEXT("PuddleAmount"));
+	const FName ParamIsRaining(TEXT("IsRaining"));
+	const FName ParamClimateTemperate(TEXT("ClimateTemperate"));
+	const FName ParamScreenDrops(TEXT("ScreenDrops"));
 	/** A "delta" long enough for the snow FX intensity smoothing to reach its target at once (the first application after a snap). */
 	constexpr float SnowJumpStartSeconds = 1000.f;
 	/** Frames after a snap rendered as camera cuts: the level's first frames carry no temporal history (TAA / motion blur) of the view jump. */
@@ -199,10 +220,13 @@ AWeatherPresenterActor::AWeatherPresenterActor()
 	OwnHeightFog->SetVisibleFlag(false);
 
 	TSoftObjectPtr<UWeatherPresetAsset>* Refs[4] = { &PresetClear, &PresetOvercast, &PresetSnowfall, &PresetBlizzard };
+	TSoftObjectPtr<UWeatherPresetAsset>* TemperateRefs[4] = { &PresetTemperateSunny, &PresetTemperateOvercast, &PresetTemperateRain, &PresetTemperateStorm };
 	for (int32 Index = 0; Index < 4; ++Index)
 	{
 		*Refs[Index] = TSoftObjectPtr<UWeatherPresetAsset>(FSoftObjectPath(WeatherPresenterLocal::PresetPaths[Index]));
-		Presets[Index] = EnvironmentVisualRules::GetDefaultPreset(static_cast<EWeatherState>(Index));
+		*TemperateRefs[Index] = TSoftObjectPtr<UWeatherPresetAsset>(FSoftObjectPath(WeatherPresenterLocal::TemperatePresetPaths[Index]));
+		Presets[0][Index] = EnvironmentVisualRules::GetDefaultPreset(static_cast<EWeatherState>(Index));
+		Presets[1][Index] = EnvironmentVisualRules::GetDefaultPreset(EClimateProfile::Temperate, static_cast<EWeatherState>(Index));
 	}
 
 	// Phase 4: falling snow + gradual snow cover (separate components; the presenter only feeds them) and the MPC.
@@ -303,12 +327,28 @@ void AWeatherPresenterActor::SetVisualsEnabled(bool bEnabled)
 
 const FWeatherVisualPreset& AWeatherPresenterActor::GetPreset(EWeatherState Weather) const
 {
-	return Presets[FMath::Clamp(static_cast<int32>(Weather), 0, 3)];
+	return GetPreset(GetActiveClimate(), Weather);
 }
 
 bool AWeatherPresenterActor::IsPresetFromAsset(EWeatherState Weather) const
 {
-	return bPresetFromAsset[FMath::Clamp(static_cast<int32>(Weather), 0, 3)];
+	return IsPresetFromAsset(GetActiveClimate(), Weather);
+}
+
+const FWeatherVisualPreset& AWeatherPresenterActor::GetPreset(EClimateProfile Climate, EWeatherState Weather) const
+{
+	return Presets[WeatherPresenterLocal::ClimateIndex(Climate)][FMath::Clamp(static_cast<int32>(Weather), 0, 3)];
+}
+
+bool AWeatherPresenterActor::IsPresetFromAsset(EClimateProfile Climate, EWeatherState Weather) const
+{
+	return bPresetFromAsset[WeatherPresenterLocal::ClimateIndex(Climate)][FMath::Clamp(static_cast<int32>(Weather), 0, 3)];
+}
+
+EClimateProfile AWeatherPresenterActor::GetActiveClimate() const
+{
+	const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(this);
+	return Environment && Environment->IsInitialised() ? Environment->GetClimate() : EClimateProfile::Arctic;
 }
 
 UDirectionalLightComponent* AWeatherPresenterActor::GetActiveMoon() const
@@ -332,17 +372,25 @@ FString AWeatherPresenterActor::DescribeAdopted() const
 	using WeatherPresenterLocal::PartName;
 	const UDirectionalLightComponent* SunLight = SunComp.Get();
 	const USkyLightComponent* Sky = SkyLightComp.Get();
+	// The arctic presets (the line every arctic level logged before section 17); a temperate level adds its own count.
 	int32 AssetCount = 0;
-	for (const bool bAsset : bPresetFromAsset)
+	for (const bool bAsset : bPresetFromAsset[0])
 	{
 		AssetCount += bAsset ? 1 : 0;
 	}
-	return FString::Printf(TEXT("rig %s: sun %s%s, moon %s, sky atmosphere %s, sky light %s%s, height fog %s, post-process %s, volumetric clouds %d%s, presets %d/4 from assets"),
+	int32 TemperateCount = 0;
+	for (const bool bAsset : bPresetFromAsset[1])
+	{
+		TemperateCount += bAsset ? 1 : 0;
+	}
+	const bool bTemperate = GetActiveClimate() == EClimateProfile::Temperate;
+	return FString::Printf(TEXT("rig %s: sun %s%s, moon %s, sky atmosphere %s, sky light %s%s, height fog %s, post-process %s, volumetric clouds %d%s, presets %d/4 from assets%s"),
 		*EnvironmentStartRules::RigModeToString(RigPlan.Mode), *PartName(Sun, SunLight != nullptr),
 		SunLight ? *FString::Printf(TEXT(" (%s)"), *WeatherPresenterLocal::MobilityName(SunLight->Mobility)) : TEXT(""),
 		AdoptedMoon ? *AdoptedMoon->GetName() : TEXT("own"), *PartName(SkyAtmosphere, SkyAtmosphereComp != nullptr), *PartName(SkyLight, Sky != nullptr),
 		Sky ? (Sky->bRealTimeCapture ? TEXT(" (real-time capture)") : TEXT(" (recaptured)")) : TEXT(""), *PartName(HeightFog, FogComp != nullptr),
-		AdoptedPostProcess ? *AdoptedPostProcess->GetName() : TEXT("own"), Clouds.Num(), bCloudsOff ? TEXT(" off") : TEXT(""), AssetCount);
+		AdoptedPostProcess ? *AdoptedPostProcess->GetName() : TEXT("own"), Clouds.Num(), bCloudsOff ? TEXT(" off") : TEXT(""), AssetCount,
+		bTemperate ? *FString::Printf(TEXT(", climate temperate: presets %d/4 from assets"), TemperateCount) : TEXT(""));
 }
 
 void AWeatherPresenterActor::BeginPlay()
@@ -438,24 +486,32 @@ void AWeatherPresenterActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AWeatherPresenterActor::LoadPresets()
 {
-	const TSoftObjectPtr<UWeatherPresetAsset>* Refs[4] = { &PresetClear, &PresetOvercast, &PresetSnowfall, &PresetBlizzard };
-	for (int32 Index = 0; Index < 4; ++Index)
+	// Section 17: both profiles (four small data assets each), so a debug climate switch (Codex.Env.Climate) needs no load later.
+	const TSoftObjectPtr<UWeatherPresetAsset>* Refs[2][4] = { { &PresetClear, &PresetOvercast, &PresetSnowfall, &PresetBlizzard },
+		{ &PresetTemperateSunny, &PresetTemperateOvercast, &PresetTemperateRain, &PresetTemperateStorm } };
+	const EClimateProfile Climates[2] = { EClimateProfile::Arctic, EClimateProfile::Temperate };
+	for (int32 ClimateSlot = 0; ClimateSlot < 2; ++ClimateSlot)
 	{
-		const EWeatherState Weather = static_cast<EWeatherState>(Index);
-		Presets[Index] = EnvironmentVisualRules::GetDefaultPreset(Weather);
-		bPresetFromAsset[Index] = false;
-		if (!WeatherPresenterLocal::PackageExists(Refs[Index]->ToSoftObjectPath()))
+		const EClimateProfile Climate = Climates[ClimateSlot];
+		for (int32 Index = 0; Index < 4; ++Index)
 		{
-			continue;
-		}
-		if (const UWeatherPresetAsset* Asset = Refs[Index]->LoadSynchronous())
-		{
-			Presets[Index] = Asset->Visual;
-			bPresetFromAsset[Index] = true;
-			if (Asset->Weather != Weather)
+			const EWeatherState Weather = static_cast<EWeatherState>(Index);
+			Presets[ClimateSlot][Index] = EnvironmentVisualRules::GetDefaultPreset(Climate, Weather);
+			bPresetFromAsset[ClimateSlot][Index] = false;
+			if (!WeatherPresenterLocal::PackageExists(Refs[ClimateSlot][Index]->ToSoftObjectPath()))
 			{
-				UE_LOG(LogCodexTactics, Warning, TEXT("[EnvVisuals] preset %s says %s but is used for %s"), *Asset->GetName(),
-					*EnvironmentRules::WeatherToString(Asset->Weather), *EnvironmentRules::WeatherToString(Weather));
+				continue;
+			}
+			if (const UWeatherPresetAsset* Asset = Refs[ClimateSlot][Index]->LoadSynchronous())
+			{
+				Presets[ClimateSlot][Index] = Asset->Visual;
+				bPresetFromAsset[ClimateSlot][Index] = true;
+				if (Asset->Weather != Weather || Asset->Climate != Climate)
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("[EnvVisuals] preset %s says %s / %s but is used for %s / %s"), *Asset->GetName(),
+						*EnvironmentRules::ClimateToString(Asset->Climate), *EnvironmentRules::WeatherToString(Asset->Weather),
+						*EnvironmentRules::ClimateToString(Climate), *EnvironmentRules::WeatherToString(Weather));
+				}
 			}
 		}
 	}
@@ -711,6 +767,15 @@ void AWeatherPresenterActor::BeginSnap()
 	{
 		SnowFx->RequestStartWarmup();
 	}
+	// Section 18: a temperate level starting in rain shows it on the first frame too.
+	LastRainApplyTime = -1.f;
+	if (GetActiveClimate() == EClimateProfile::Temperate)
+	{
+		if (UWeatherRainFxComponent* Rain = EnsureRainFx())
+		{
+			Rain->RequestStartWarmup();
+		}
+	}
 }
 
 void AWeatherPresenterActor::ApplyNow()
@@ -758,16 +823,22 @@ void AWeatherPresenterActor::Apply()
 	{
 		return;
 	}
-	const FWeatherVisualFrame Frame = EnvironmentVisualRules::ComputeFrame(DayCurves, GetPreset(Environment->GetWeather()),
-		GetPreset(Environment->GetNextWeather()), Environment->GetWeather(), Environment->GetNextWeather(), Environment->GetTransitionBlend(),
+	// Section 17: the presets of the climate in force (an arctic level: DA_Weather_* exactly as before).
+	const EClimateProfile Climate = Environment->GetClimate();
+	const FWeatherVisualFrame Frame = EnvironmentVisualRules::ComputeFrame(DayCurves, GetPreset(Climate, Environment->GetWeather()),
+		GetPreset(Climate, Environment->GetNextWeather()), Environment->GetWeather(), Environment->GetNextWeather(), Environment->GetTransitionBlend(),
 		Environment->GetHour());
 	ApplySun(Frame);
 	ApplyMoon(Frame);
 	ApplySky(Frame);
 	ApplyFog(Frame);
+	// Section 18: a soaked temperate level keeps its wet darkening under the auto exposure (0 on arctic: no rain component there).
+	WetExposureBias = Climate == EClimateProfile::Temperate && RainFx
+		? RainFx->GetActiveTuning().WetExposureBias * FMath::Clamp(Environment->GetStateRef().Wetness, 0.f, 1.f) : 0.f;
 	ApplyPostProcess(Frame);
 	ApplySnow(Frame, Environment->GetSnowAmount());
 	WriteObjectSnow(Environment->GetStateRef().ObjectSnow);
+	ApplyRain(Climate, Frame);
 	RecaptureSkyIfNeeded(Frame, false);
 	LastFrame = Frame;
 	if (ApplyCount == 0)
@@ -857,7 +928,7 @@ void AWeatherPresenterActor::ApplyPostProcess(const FWeatherVisualFrame& Frame)
 	FPostProcessSettings& Settings = AdoptedPostProcess ? AdoptedPostProcess->Settings : PostProcess->Settings;
 	const FPostProcessSettings& Base = Authored.PostSettings;
 	Settings.bOverride_AutoExposureBias = true;
-	Settings.AutoExposureBias = Base.AutoExposureBias + Frame.ExposureBias;
+	Settings.AutoExposureBias = Base.AutoExposureBias + Frame.ExposureBias + WetExposureBias;
 	// Level start / state jump (section 16): the eye adaptation settles on the first frame (a night level must not open over-exposed and
 	// fade down); after EnvironmentStartRules::ExposureSnapSeconds the authored adaptation speeds are back.
 	const bool bSnapExposure = IsExposureSnapping();
@@ -885,15 +956,102 @@ void AWeatherPresenterActor::ApplySnow(const FWeatherVisualFrame& Frame, float S
 	LastWindDirection = Environment ? Environment->GetWindDirection() : ComputeWindDirection(Now, WindBaseYaw, WindDriftDegrees, WindDriftPeriodSeconds);
 	// The overlay shows while any object pocket (or the ground) holds snow: a top melted to 0 with snow on a windward side still shows.
 	const float ObjectSnowMax = Environment ? Environment->GetStateRef().ObjectSnow.GetMax() : 0.f;
+	// Section 17: a temperate level shows no falling snow (environment.json temperate.falling_snow) whatever its preset says.
+	const bool bSnowAllowed = !Environment || EnvironmentRules::IsFallingSnowAllowed(Environment->GetConfig(), Environment->GetClimate());
+	const float SnowIntensity = bSnowAllowed ? FMath::Clamp(P.SnowIntensity, 0.f, 1.f) : 0.f;
 	if (SnowFx)
 	{
-		SnowFx->ApplySnowFx(FMath::Clamp(P.SnowIntensity, 0.f, 1.f), FMath::Clamp(P.WindStrength, 0.f, 1.f), LastWindDirection, Delta);
+		SnowFx->ApplySnowFx(SnowIntensity, FMath::Clamp(P.WindStrength, 0.f, 1.f), LastWindDirection, Delta);
 	}
 	if (SnowOverlay)
 	{
-		SnowOverlay->ApplySnowCover(FMath::Clamp(FMath::Max(SnowAmount, ObjectSnowMax), 0.f, 1.f), FMath::Clamp(P.FrostAmount, 0.f, 1.f));
+		if (Environment && Environment->GetClimate() == EClimateProfile::Temperate)
+		{
+			// Section 18: a temperate level has no snow; the same overlay targets show the wet look (wetness, puddles on the ground slabs).
+			const FEnvironmentState& State = Environment->GetStateRef();
+			SnowOverlay->ApplyWetCover(State.Wetness, State.PuddleAmount);
+		}
+		else
+		{
+			SnowOverlay->ApplySnowCover(FMath::Clamp(FMath::Max(SnowAmount, ObjectSnowMax), 0.f, 1.f), FMath::Clamp(P.FrostAmount, 0.f, 1.f));
+		}
 	}
-	WriteParameters(SnowAmount, P.FrostAmount, P.WindStrength, ComputeIsSnowing(P.SnowIntensity), LastWindDirection);
+	WriteParameters(SnowAmount, P.FrostAmount, P.WindStrength, ComputeIsSnowing(SnowIntensity), LastWindDirection);
+}
+
+UWeatherRainFxComponent* AWeatherPresenterActor::EnsureRainFx()
+{
+	if (!RainFx && FApp::CanEverRender() && GetWorld() && GetWorld()->IsGameWorld())
+	{
+		RainFx = NewObject<UWeatherRainFxComponent>(this, TEXT("RainFx"));
+		RainFx->SetupAttachment(Root);
+		RainFx->RegisterComponent();
+		RainFx->SetVisualsEnabled(bApplying);
+		UE_LOG(LogCodexTactics, Log, TEXT("[EnvVisuals] rain FX component created (temperate climate)"));
+	}
+	return RainFx;
+}
+
+void AWeatherPresenterActor::ApplyRain(EClimateProfile Climate, const FWeatherVisualFrame& Frame)
+{
+	const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(this);
+	if (!Environment || Climate != EClimateProfile::Temperate)
+	{
+		// Section 18: after a debug switch back to arctic the rain stops at once (an arctic level never created it).
+		if (RainFx)
+		{
+			RainFx->ApplyRainFx(FWeatherRainFxInput(), WeatherPresenterLocal::SnowJumpStartSeconds);
+		}
+		LastRainApplyTime = -1.f;
+		// An arctic level never writes them (they keep the MPC default 0); after a debug switch back from temperate: zeros once.
+		if (bRainParamsWritten)
+		{
+			WriteRainParameters(0.f, 0.f, 0.f, 0.f, 0.f, 0.f);
+			bRainParamsWritten = false;
+		}
+		return;
+	}
+	const FEnvironmentConfig& Config = Environment->GetConfig();
+	const FEnvironmentState& State = Environment->GetStateRef();
+	const float Rain = EnvironmentRules::GetRainIntensity(Config, State);
+	const float ScreenDrops = EnvironmentRules::ShouldShowScreenDrops(Config, State) ? 1.f : 0.f;
+	WriteRainParameters(Rain, State.Wetness, State.PuddleAmount, EnvironmentRules::ComputeIsRaining(Rain), 1.f, ScreenDrops);
+	bRainParamsWritten = true;
+
+	// Section 18: the rain visuals (the look per rung from DA_RainFX; the amounts blend through a transition).
+	if (UWeatherRainFxComponent* RainComponent = EnsureRainFx())
+	{
+		const float Now = GetWorld()->GetTimeSeconds();
+		const float Delta = LastRainApplyTime < 0.f ? WeatherPresenterLocal::SnowJumpStartSeconds : FMath::Max(0.f, Now - LastRainApplyTime);
+		LastRainApplyTime = Now;
+		FWeatherRainFxInput Input;
+		Input.RainAmount = EnvironmentRules::GetWeatherAmount(Config, State, EWeatherState::Snowfall);
+		Input.StormAmount = EnvironmentRules::GetWeatherAmount(Config, State, EWeatherState::Blizzard);
+		Input.RainIntensity = Rain;
+		Input.PuddleAmount = State.PuddleAmount;
+		Input.ScreenDrops = ScreenDrops;
+		Input.WindStrength = FMath::Clamp(Frame.Preset.WindStrength, 0.f, 1.f);
+		Input.WindDirection = LastWindDirection;
+		Input.Seed = State.RandomSeed;
+		RainComponent->ApplyRainFx(Input, Delta);
+	}
+}
+
+void AWeatherPresenterActor::WriteRainParameters(float RainIntensity, float Wetness, float PuddleAmount, float IsRaining, float ClimateTemperate, float ScreenDrops)
+{
+	UWorld* World = GetWorld();
+	UMaterialParameterCollectionInstance* Instance = World && LoadedParameters ? World->GetParameterCollectionInstance(LoadedParameters) : nullptr;
+	if (!Instance)
+	{
+		return;
+	}
+	// A missing parameter (an MPC from before section 17) is skipped by the engine; the others are still written.
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamRainIntensity, FMath::Clamp(RainIntensity, 0.f, 1.f));
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamWetness, FMath::Clamp(Wetness, 0.f, 1.f));
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamPuddleAmount, FMath::Clamp(PuddleAmount, 0.f, 1.f));
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamIsRaining, FMath::Clamp(IsRaining, 0.f, 1.f));
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamClimateTemperate, FMath::Clamp(ClimateTemperate, 0.f, 1.f));
+	Instance->SetScalarParameterValue(WeatherPresenterLocal::ParamScreenDrops, FMath::Clamp(ScreenDrops, 0.f, 1.f));
 }
 
 void AWeatherPresenterActor::WriteParameters(float SnowAmount, float FrostAmount, float WindStrength, float IsSnowing, const FVector& WindDirection)
@@ -937,11 +1095,21 @@ void AWeatherPresenterActor::SetSnowVisualsEnabled(bool bEnabled)
 	{
 		SnowOverlay->SetVisualsEnabled(bEnabled);
 	}
+	if (RainFx)
+	{
+		RainFx->SetVisualsEnabled(bEnabled);
+	}
 	if (!bEnabled)
 	{
 		// The authored look: no weather snow / frost / wind in the materials.
 		WriteParameters(0.f, 0.f, 0.f, 0.f, LastWindDirection);
 		WriteObjectSnow(FDirectionalSnow());
+		// Section 17: no rain either (only ever written on a temperate level).
+		if (bRainParamsWritten)
+		{
+			WriteRainParameters(0.f, 0.f, 0.f, 0.f, 0.f, 0.f);
+			bRainParamsWritten = false;
+		}
 	}
 }
 
@@ -1090,8 +1258,8 @@ void AWeatherPresenterActor::ApplyEditorPreview()
 	}
 	LoadPresets();
 	const float Hour = FMath::Fmod(FMath::Max(PreviewHour, 0.f), 24.f);
-	const FWeatherVisualFrame Frame = EnvironmentVisualRules::ComputeFrame(DayCurves, GetPreset(PreviewWeather), GetPreset(PreviewWeather),
-		PreviewWeather, PreviewWeather, 0.f, Hour);
+	const FWeatherVisualFrame Frame = EnvironmentVisualRules::ComputeFrame(DayCurves, GetPreset(PreviewClimate, PreviewWeather),
+		GetPreset(PreviewClimate, PreviewWeather), PreviewWeather, PreviewWeather, 0.f, Hour);
 	ApplySun(Frame);
 	if (RigPlan.bOwnMoon && Inventory.DirectionalLights == 0)
 	{

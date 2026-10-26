@@ -16,6 +16,7 @@
 #include "Data/EnemyArchetypeAsset.h"
 #include "Data/EnvironmentTuning.h"
 #include "Environment/EnvironmentRosterRules.h"
+#include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -223,6 +224,12 @@ TArray<FEnemySpawnEntry> UWaveSubsystem::ResolveRoster(const TArray<FEnemySpawnE
 	if (Environment->IsLocked())
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Env] roster wave %d (%s): locked level - the wave stays as written"), WaveIndex, *Conditions);
+		return Spawns;
+	}
+	// Section 17: a temperate (narrative) level keeps its hand-authored waves unless environment.json temperate.roster_enabled.
+	if (!EnvironmentRules::IsRosterActive(EnvironmentTuning::Get(), Environment->GetClimate()))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] roster wave %d (%s): temperate level - the wave stays as written"), WaveIndex, *Conditions);
 		return Spawns;
 	}
 	auto Total = [](const TArray<FEnemySpawnEntry>& Entries)

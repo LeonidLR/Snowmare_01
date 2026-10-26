@@ -67,6 +67,86 @@ namespace EnvironmentTuning
 
 	static const TCHAR* ColdOnLockedKey = TEXT("cold_on_locked_levels");
 
+	// --- Section 17: the Temperate climate block ("temperate") ---
+
+	struct FTemperateFloatKey
+	{
+		const TCHAR* Key;
+		float FTemperateClimateConfig::* Member;
+		float Min;
+		float Max;
+	};
+
+	static const FTemperateFloatKey TemperateFloatKeys[] = {
+		{ TEXT("cold_mult_sunny"), &FTemperateClimateConfig::ColdMultSunny, 0.f, BIG_NUMBER },
+		{ TEXT("cold_mult_overcast"), &FTemperateClimateConfig::ColdMultOvercast, 0.f, BIG_NUMBER },
+		{ TEXT("cold_mult_rain"), &FTemperateClimateConfig::ColdMultRain, 0.f, BIG_NUMBER },
+		{ TEXT("cold_mult_storm"), &FTemperateClimateConfig::ColdMultStorm, 0.f, BIG_NUMBER },
+		{ TEXT("cold_mult_early_morning"), &FTemperateClimateConfig::ColdMultEarlyMorning, 0.f, BIG_NUMBER },
+		{ TEXT("cold_mult_midday"), &FTemperateClimateConfig::ColdMultMidday, 0.f, BIG_NUMBER },
+		{ TEXT("cold_mult_afternoon"), &FTemperateClimateConfig::ColdMultAfternoon, 0.f, BIG_NUMBER },
+		{ TEXT("cold_mult_night"), &FTemperateClimateConfig::ColdMultNight, 0.f, BIG_NUMBER },
+		{ TEXT("rain_intensity_rain"), &FTemperateClimateConfig::RainIntensityRain, 0.f, 1.f },
+		{ TEXT("rain_intensity_storm"), &FTemperateClimateConfig::RainIntensityStorm, 0.f, 1.f },
+		{ TEXT("wetness_rate_rain"), &FTemperateClimateConfig::WetnessRateRain, 0.f, BIG_NUMBER },
+		{ TEXT("wetness_rate_storm"), &FTemperateClimateConfig::WetnessRateStorm, 0.f, BIG_NUMBER },
+		{ TEXT("drying_rate_sunny"), &FTemperateClimateConfig::DryingRateSunny, 0.f, BIG_NUMBER },
+		{ TEXT("drying_rate_overcast"), &FTemperateClimateConfig::DryingRateOvercast, 0.f, BIG_NUMBER },
+		{ TEXT("drying_full_sun_elevation"), &FTemperateClimateConfig::DryingFullSunElevation, 0.1f, 90.f },
+		{ TEXT("puddle_wetness_threshold"), &FTemperateClimateConfig::PuddleWetnessThreshold, 0.f, 0.99f },
+		{ TEXT("puddle_fill_rate"), &FTemperateClimateConfig::PuddleFillRate, 0.f, BIG_NUMBER },
+		{ TEXT("puddle_drain_rate"), &FTemperateClimateConfig::PuddleDrainRate, 0.f, BIG_NUMBER },
+		{ TEXT("start_wetness_rain"), &FTemperateClimateConfig::StartWetnessRain, 0.f, 1.f },
+		{ TEXT("start_puddles_rain"), &FTemperateClimateConfig::StartPuddlesRain, 0.f, 1.f },
+		{ TEXT("start_wetness_storm"), &FTemperateClimateConfig::StartWetnessStorm, 0.f, 1.f },
+		{ TEXT("start_puddles_storm"), &FTemperateClimateConfig::StartPuddlesStorm, 0.f, 1.f } };
+
+	struct FTemperateBoolKey
+	{
+		const TCHAR* Key;
+		bool FTemperateClimateConfig::* Member;
+	};
+
+	static const FTemperateBoolKey TemperateBoolKeys[] = {
+		{ TEXT("roster_enabled"), &FTemperateClimateConfig::bRosterEnabled },
+		{ TEXT("falling_snow"), &FTemperateClimateConfig::bFallingSnow },
+		{ TEXT("screen_drops"), &FTemperateClimateConfig::bScreenDrops } };
+
+	/** The "temperate" block over Temperate (absent keys keep the current value). */
+	static void ParseTemperate(const FJsonObject& Json, FTemperateClimateConfig& Temperate)
+	{
+		for (const FTemperateFloatKey& Entry : TemperateFloatKeys)
+		{
+			double Value = 0.0;
+			if (Json.TryGetNumberField(Entry.Key, Value))
+			{
+				Temperate.*Entry.Member = FMath::Clamp(static_cast<float>(Value), Entry.Min, Entry.Max);
+			}
+		}
+		for (const FTemperateBoolKey& Entry : TemperateBoolKeys)
+		{
+			bool bValue = false;
+			if (Json.TryGetBoolField(Entry.Key, bValue))
+			{
+				Temperate.*Entry.Member = bValue;
+			}
+		}
+	}
+
+	static TSharedRef<FJsonObject> TemperateToJson(const FTemperateClimateConfig& Temperate)
+	{
+		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+		for (const FTemperateFloatKey& Entry : TemperateFloatKeys)
+		{
+			Json->SetNumberField(Entry.Key, Temperate.*Entry.Member);
+		}
+		for (const FTemperateBoolKey& Entry : TemperateBoolKeys)
+		{
+			Json->SetBoolField(Entry.Key, Temperate.*Entry.Member);
+		}
+		return Json;
+	}
+
 	// --- Roster (design section 4.2) ---
 
 	struct FRosterFloatKey
@@ -312,6 +392,11 @@ FEnvironmentConfig EnvironmentTuning::FromJson(const FJsonObject& Json, const FE
 	{
 		ParseRoster(**RosterJson, Config.Roster);
 	}
+	const TSharedPtr<FJsonObject>* TemperateJson = nullptr;
+	if (Json.TryGetObjectField(TEXT("temperate"), TemperateJson))
+	{
+		ParseTemperate(**TemperateJson, Config.Temperate);
+	}
 	return Config;
 }
 
@@ -324,6 +409,7 @@ TSharedRef<FJsonObject> EnvironmentTuning::ToJson(const FEnvironmentConfig& Conf
 	}
 	Json->SetBoolField(ColdOnLockedKey, Config.bColdOnLockedLevels);
 	Json->SetObjectField(TEXT("roster"), RosterToJson(Config.Roster));
+	Json->SetObjectField(TEXT("temperate"), TemperateToJson(Config.Temperate));
 	return Json;
 }
 
@@ -372,6 +458,12 @@ namespace EnvironmentTuning
 		UE_LOG(LogCodexTactics, Display, TEXT("Environment roster: %s, half < %.2f, all < %.2f, bonus > %.2f x%.2f; pairs:%s; bonus types:%s; %d suitability rows:%s"),
 			C.Roster.bEnabled ? TEXT("enabled") : TEXT("disabled"), C.Roster.HalfBelow, C.Roster.AllBelow, C.Roster.BonusAbove, C.Roster.BonusMultiplier,
 			*Pairs, *Bonus, C.Roster.Suitability.Num(), *Rows);
+		const FTemperateClimateConfig& T = C.Temperate;
+		UE_LOG(LogCodexTactics, Display, TEXT("Environment temperate: cold x%.2f/%.2f/%.2f/%.2f (SunnyDay/Overcast/Rain/Storm), phase x%.2f/%.2f/%.2f/%.2f, roster %s, falling snow %s, screen drops %s, rain %.2f/%.2f, wetness +%.4f/+%.4f -%.4f/-%.4f per s, puddles > %.2f +%.4f -%.4f per s"),
+			T.ColdMultSunny, T.ColdMultOvercast, T.ColdMultRain, T.ColdMultStorm, T.ColdMultEarlyMorning, T.ColdMultMidday, T.ColdMultAfternoon, T.ColdMultNight,
+			T.bRosterEnabled ? TEXT("on") : TEXT("off"), T.bFallingSnow ? TEXT("on") : TEXT("off"), T.bScreenDrops ? TEXT("on") : TEXT("off"),
+			T.RainIntensityRain, T.RainIntensityStorm, T.WetnessRateRain, T.WetnessRateStorm, T.DryingRateSunny, T.DryingRateOvercast,
+			T.PuddleWetnessThreshold, T.PuddleFillRate, T.PuddleDrainRate);
 	}
 
 	static FAutoConsoleCommand DumpEnvironment(TEXT("CodexTactics.DumpEnvironment"), TEXT("Logs the day cycle / weather values in force (environment.json)."),

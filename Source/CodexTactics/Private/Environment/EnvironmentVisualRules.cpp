@@ -175,6 +175,116 @@ FWeatherVisualPreset EnvironmentVisualRules::GetDefaultPreset(EWeatherState Weat
 	return P;
 }
 
+FWeatherVisualPreset EnvironmentVisualRules::GetDefaultPreset(EClimateProfile Climate, EWeatherState Weather)
+{
+	if (Climate != EClimateProfile::Temperate)
+	{
+		return GetDefaultPreset(Weather);
+	}
+	// Section 17: the temperate looks (DA_Weather_Temperate_*). The day curves are the arctic ones: the sun temperature curve peaks at
+	// 6400 K at noon, so SunnyDay's -600 K offset gives a warm ~5800 K sun; no snow, no frost on any of them.
+	FWeatherVisualPreset P;
+	P.SnowIntensity = 0.f;
+	P.FrostAmount = 0.f;
+	switch (Weather)
+	{
+	case EWeatherState::Clear:
+		// SunnyDay: a bright warm day - strong sun, hard shadows, a normal blue sky, little haze, saturated colour.
+		P.SunIntensityScale = 1.35f;
+		P.SunTint = FLinearColor(1.f, 0.97f, 0.91f);
+		P.SunTemperatureOffset = -600.f;
+		P.SunSourceAngle = 0.5357f;
+		P.MoonIntensityScale = 1.f;
+		P.SkyLightIntensityScale = 1.f;
+		P.RayleighScatteringScale = 1.f;
+		P.MieScatteringScale = 0.5f;
+		P.FogDensity = 0.006f;
+		P.FogHeightFalloff = 0.3f;
+		P.FogColor = FLinearColor(0.5f, 0.66f, 0.92f);
+		P.FogBrightnessScale = 0.8f;
+		P.FogStartDistance = 3000.f;
+		P.FogMaxOpacity = 0.8f;
+		P.bVolumetricFog = false;
+		P.VolumetricFogExtinctionScale = 1.f;
+		P.ExposureBias = 0.f;
+		P.Saturation = 1.1f;
+		P.ColorTint = FLinearColor(1.02f, 1.f, 0.96f);
+		P.WindStrength = 0.1f;
+		break;
+	case EWeatherState::Overcast:
+		// Mild overcast: grey and soft, the sky light carries the scene.
+		P.SunIntensityScale = 0.4f;
+		P.SunTint = FLinearColor(0.9f, 0.92f, 0.94f);
+		P.SunTemperatureOffset = 500.f;
+		P.SunSourceAngle = 6.f;
+		P.MoonIntensityScale = 0.5f;
+		P.SkyLightIntensityScale = 1.35f;
+		P.RayleighScatteringScale = 0.65f;
+		P.MieScatteringScale = 2.2f;
+		P.FogDensity = 0.025f;
+		P.FogHeightFalloff = 0.2f;
+		P.FogColor = FLinearColor(0.58f, 0.6f, 0.62f);
+		P.FogBrightnessScale = 1.f;
+		P.FogStartDistance = 1500.f;
+		P.FogMaxOpacity = 0.9f;
+		P.bVolumetricFog = false;
+		P.VolumetricFogExtinctionScale = 1.f;
+		P.ExposureBias = 0.f;
+		P.Saturation = 0.8f;
+		P.ColorTint = FLinearColor(0.97f, 0.98f, 0.99f);
+		P.WindStrength = 0.3f;
+		break;
+	case EWeatherState::Snowfall:
+		// Rain: dim, wet blue-grey, moderate fog.
+		P.SunIntensityScale = 0.15f;
+		P.SunTint = FLinearColor(0.82f, 0.86f, 0.92f);
+		P.SunTemperatureOffset = 1200.f;
+		P.SunSourceAngle = 10.f;
+		P.MoonIntensityScale = 0.35f;
+		P.SkyLightIntensityScale = 1.f;
+		P.RayleighScatteringScale = 0.5f;
+		P.MieScatteringScale = 3.5f;
+		P.FogDensity = 0.035f;
+		P.FogHeightFalloff = 0.18f;
+		P.FogColor = FLinearColor(0.5f, 0.56f, 0.63f);
+		P.FogBrightnessScale = 0.7f;
+		P.FogStartDistance = 1500.f;
+		P.FogMaxOpacity = 0.95f;
+		P.bVolumetricFog = true;
+		P.VolumetricFogExtinctionScale = 0.6f;
+		P.ExposureBias = -0.6f;
+		P.Saturation = 0.72f;
+		P.ColorTint = FLinearColor(0.92f, 0.96f, 1.02f);
+		P.WindStrength = 0.45f;
+		break;
+	case EWeatherState::Blizzard:
+	default:
+		// Storm: darker, denser fog, strong wind (lightning later).
+		P.SunIntensityScale = 0.06f;
+		P.SunTint = FLinearColor(0.78f, 0.82f, 0.9f);
+		P.SunTemperatureOffset = 1500.f;
+		P.SunSourceAngle = 15.f;
+		P.MoonIntensityScale = 0.2f;
+		P.SkyLightIntensityScale = 0.8f;
+		P.RayleighScatteringScale = 0.4f;
+		P.MieScatteringScale = 5.f;
+		P.FogDensity = 0.055f;
+		P.FogHeightFalloff = 0.15f;
+		P.FogColor = FLinearColor(0.42f, 0.47f, 0.55f);
+		P.FogBrightnessScale = 0.55f;
+		P.FogStartDistance = 900.f;
+		P.FogMaxOpacity = 0.97f;
+		P.bVolumetricFog = true;
+		P.VolumetricFogExtinctionScale = 0.8f;
+		P.ExposureBias = -1.2f;
+		P.Saturation = 0.6f;
+		P.ColorTint = FLinearColor(0.88f, 0.93f, 1.f);
+		P.WindStrength = 0.9f;
+		break;
+	}
+	return P;
+}
+
 float EnvironmentVisualRules::GetBlendedWindStrength(const FWeatherVisualPreset& From, const FWeatherVisualPreset& To, float Blend)
 {
 	return FMath::Clamp(FMath::Lerp(From.WindStrength, To.WindStrength, FMath::Clamp(Blend, 0.f, 1.f)), 0.f, 1.f);

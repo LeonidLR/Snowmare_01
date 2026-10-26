@@ -5,5 +5,5 @@
 void UWeatherPresetAsset::ResetToDefaults()
 {
 	Modify();
-	Visual = EnvironmentVisualRules::GetDefaultPreset(Weather);
+	Visual = EnvironmentVisualRules::GetDefaultPreset(Climate, Weather);
 }

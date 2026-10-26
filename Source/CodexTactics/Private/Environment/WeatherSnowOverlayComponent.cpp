@@ -20,6 +20,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/App.h"
+#include "Misc/PackageName.h"
 
 namespace WeatherSnowOverlay
 {
@@ -52,6 +53,15 @@ namespace WeatherSnowOverlay
 
 	const TCHAR* DefaultMaterialPath = TEXT("/Game/Environment/Weather/Snow/Materials/MI_SnowOverlay.MI_SnowOverlay");
 	const TCHAR* DefaultGroundMaterialPath = TEXT("/Game/Environment/Weather/Snow/Materials/MI_SnowGroundOverlay.MI_SnowGroundOverlay");
+	// Section 18: the wet look of temperate levels.
+	const TCHAR* DefaultWetMaterialPath = TEXT("/Game/Environment/Weather/Rain/Materials/MI_WetOverlay.MI_WetOverlay");
+	const TCHAR* DefaultWetGroundMaterialPath = TEXT("/Game/Environment/Weather/Rain/Materials/MI_WetGroundOverlay.MI_WetGroundOverlay");
+
+	/** The soft reference names an existing package (a missing wet material is skipped without load warnings). */
+	bool PackageExists(const FSoftObjectPath& Path)
+	{
+		return !Path.IsNull() && FPackageName::DoesPackageExist(Path.GetLongPackageName());
+	}
 
 	bool ClassNameContains(const UObject* Object, const TCHAR* Text)
 	{
@@ -134,6 +144,8 @@ UWeatherSnowOverlayComponent::UWeatherSnowOverlayComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 	OverlayMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(WeatherSnowOverlay::DefaultMaterialPath));
 	GroundMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(WeatherSnowOverlay::DefaultGroundMaterialPath));
+	WetOverlayMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(WeatherSnowOverlay::DefaultWetMaterialPath));
+	WetGroundMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(WeatherSnowOverlay::DefaultWetGroundMaterialPath));
 	// The tactical view: ~60 m around its focus covers the screen with margin (orchestrator cap, 2026-10-22).
 	MaxDistance = 6000.f;
 }
@@ -173,14 +185,67 @@ UMaterialInstanceDynamic* UWeatherSnowOverlayComponent::ResolveGroundMaterial()
 	return GroundInstance;
 }
 
+UMaterialInterface* UWeatherSnowOverlayComponent::ResolveWetOverlayMaterial()
+{
+	if (!bWetResolved)
+	{
+		bWetResolved = true;
+		LoadedWetOverlay = WeatherSnowOverlay::PackageExists(WetOverlayMaterial.ToSoftObjectPath()) ? WetOverlayMaterial.LoadSynchronous() : nullptr;
+		if (!LoadedWetOverlay)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Env] wet overlay: material %s not found - no wet look on objects"), *WetOverlayMaterial.ToString());
+		}
+	}
+	return LoadedWetOverlay;
+}
+
+UMaterialInstanceDynamic* UWeatherSnowOverlayComponent::ResolveWetGroundMaterial()
+{
+	if (!bWetGroundResolved)
+	{
+		bWetGroundResolved = true;
+		UMaterialInterface* Base = WeatherSnowOverlay::PackageExists(WetGroundMaterial.ToSoftObjectPath()) ? WetGroundMaterial.LoadSynchronous() : nullptr;
+		WetGroundInstance = Base ? UMaterialInstanceDynamic::Create(Base, this, TEXT("WetGroundOverlay")) : nullptr;
+		if (!WetGroundInstance)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Env] wet overlay: ground material %s not found - no wet look on the ground slabs"), *WetGroundMaterial.ToString());
+		}
+	}
+	return WetGroundInstance;
+}
+
+UMaterialInterface* UWeatherSnowOverlayComponent::ActiveOverlay() const
+{
+	return bWetMode ? LoadedWetOverlay.Get() : LoadedOverlay.Get();
+}
+
+UMaterialInstanceDynamic* UWeatherSnowOverlayComponent::ActiveGround() const
+{
+	return bWetMode ? WetGroundInstance.Get() : GroundInstance.Get();
+}
+
+void UWeatherSnowOverlayComponent::SetWetMode(bool bWet)
+{
+	if (bWetMode == bWet)
+	{
+		return;
+	}
+	// The previous mode's materials come off first (RemoveOverlays compares against the materials of the mode in force).
+	RemoveOverlays();
+	bWetMode = bWet;
+	bScanned = false;
+	LastLoggedSummary = -1;
+}
+
 UMaterialInterface* UWeatherSnowOverlayComponent::GetGroundOverlayMaterial() const
 {
-	return GroundInstance;
+	return ActiveGround();
 }
 
 void UWeatherSnowOverlayComponent::UpdateGroundZones(const TArray<TPair<FTransform, FVector>>& Zones)
 {
-	if (!GroundInstance)
+	UMaterialInstanceDynamic* Ground = ActiveGround();
+	if (!Ground)
 	{
 		return;
 	}
@@ -192,9 +257,21 @@ void UWeatherSnowOverlayComponent::UpdateGroundZones(const TArray<TPair<FTransfo
 		{
 			SnowOverlayRules::MakeGroundZoneParams(Zones[Index].Key, Zones[Index].Value, A, B);
 		}
-		GroundInstance->SetVectorParameterValue(*FString::Printf(TEXT("Zone%dA"), Index), A);
-		GroundInstance->SetVectorParameterValue(*FString::Printf(TEXT("Zone%dB"), Index), B);
+		Ground->SetVectorParameterValue(*FString::Printf(TEXT("Zone%dA"), Index), A);
+		Ground->SetVectorParameterValue(*FString::Printf(TEXT("Zone%dB"), Index), B);
 	}
+}
+
+void UWeatherSnowOverlayComponent::ApplyWetCover(float Wetness, float PuddleAmount)
+{
+	LastWetness = Wetness;
+	LastPuddles = PuddleAmount;
+	if (!CanDraw())
+	{
+		return;
+	}
+	SetWetMode(true);
+	ApplyShown(bVisuals && SnowOverlayRules::ShouldShowWetOverlay(Wetness, PuddleAmount));
 }
 
 void UWeatherSnowOverlayComponent::ApplySnowCover(float SnowAmount, float FrostAmount)
@@ -205,7 +282,12 @@ void UWeatherSnowOverlayComponent::ApplySnowCover(float SnowAmount, float FrostA
 	{
 		return;
 	}
-	const bool bCanShow = bVisuals && SnowOverlayRules::ShouldShowOverlay(SnowAmount, FrostAmount);
+	SetWetMode(false);
+	ApplyShown(bVisuals && SnowOverlayRules::ShouldShowOverlay(SnowAmount, FrostAmount));
+}
+
+void UWeatherSnowOverlayComponent::ApplyShown(bool bCanShow)
+{
 	const bool bWantObjects = bCanShow && WeatherSnowOverlay::GEnabled != 0 && WeatherSnowOverlay::GMaxMeshes > 0;
 	const bool bWantGround = bCanShow && WeatherSnowOverlay::GGroundEnabled != 0 && WeatherSnowOverlay::GGroundMax > 0;
 	if (!bWantObjects && !bWantGround)
@@ -238,6 +320,10 @@ void UWeatherSnowOverlayComponent::SetVisualsEnabled(bool bEnabled)
 	if (!bEnabled)
 	{
 		RemoveOverlays();
+	}
+	else if (bWetMode)
+	{
+		ApplyWetCover(LastWetness, LastPuddles);
 	}
 	else
 	{
@@ -281,8 +367,9 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 		return;
 	}
 	const double StartSeconds = FPlatformTime::Seconds();
-	UMaterialInterface* Material = ResolveOverlayMaterial();
-	UMaterialInstanceDynamic* Ground = ResolveGroundMaterial();
+	// Section 18: the wet materials on a temperate level, the snow ones otherwise (same targets).
+	UMaterialInterface* Material = bWetMode ? ResolveWetOverlayMaterial() : ResolveOverlayMaterial();
+	UMaterialInstanceDynamic* Ground = bWetMode ? ResolveWetGroundMaterial() : ResolveGroundMaterial();
 	bScanned = true;
 	LastRefreshSeconds = World->GetRealTimeSeconds();
 	LastRefreshFocus = GetViewFocus();
@@ -518,11 +605,11 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 			}
 			return Text.IsEmpty() ? FString(TEXT(" none")) : Text;
 		};
-		UE_LOG(LogCodexTactics, Display, TEXT("[Env] snow overlay: %d mesh(es) (cap %d, radius %.0f m, %s); out of range %d, over cap %d; rejected:%s; scan %.2f ms"),
-			Targets.Num(), WeatherSnowOverlay::GMaxMeshes, MaxDistance / 100.f, bOverlayShown ? TEXT("shown") : TEXT("hidden"), OutOfRange, OverCap,
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] %s overlay: %d mesh(es) (cap %d, radius %.0f m, %s); out of range %d, over cap %d; rejected:%s; scan %.2f ms"),
+			bWetMode ? TEXT("wet") : TEXT("snow"), Targets.Num(), WeatherSnowOverlay::GMaxMeshes, MaxDistance / 100.f, bOverlayShown ? TEXT("shown") : TEXT("hidden"), OutOfRange, OverCap,
 			*Describe(VerdictCounts), Ms);
-		UE_LOG(LogCodexTactics, Display, TEXT("[Env] snow ground: %d slab(s) of %d ground candidate(s) (cap %d, %s); out of range %d, over cap %d; rejected:%s"),
-			GroundTargets.Num(), GroundCandidates.Num(), WeatherSnowOverlay::GGroundMax, bGroundShown ? TEXT("shown") : TEXT("hidden"), GroundOutOfRange,
+		UE_LOG(LogCodexTactics, Display, TEXT("[Env] %s ground: %d slab(s) of %d ground candidate(s) (cap %d, %s); out of range %d, over cap %d; rejected:%s"),
+			bWetMode ? TEXT("wet") : TEXT("snow"), GroundTargets.Num(), GroundCandidates.Num(), WeatherSnowOverlay::GGroundMax, bGroundShown ? TEXT("shown") : TEXT("hidden"), GroundOutOfRange,
 			GroundOverCap, *Describe(GroundVerdictCounts));
 	}
 }
@@ -570,8 +657,8 @@ void UWeatherSnowOverlayComponent::SyncList(const TArray<TWeakObjectPtr<UMeshCom
 
 void UWeatherSnowOverlayComponent::SyncOverlays()
 {
-	SyncList(Targets, Touched, LoadedOverlay, bOverlayShown);
-	SyncList(GroundTargets, GroundTouched, GroundInstance, bGroundShown);
+	SyncList(Targets, Touched, ActiveOverlay(), bOverlayShown);
+	SyncList(GroundTargets, GroundTouched, ActiveGround(), bGroundShown);
 }
 
 void UWeatherSnowOverlayComponent::RemoveOverlays()
@@ -591,8 +678,8 @@ void UWeatherSnowOverlayComponent::RemoveOverlays()
 		}
 		List.Reset();
 	};
-	Remove(Touched, LoadedOverlay);
-	Remove(GroundTouched, GroundInstance);
+	Remove(Touched, ActiveOverlay());
+	Remove(GroundTouched, ActiveGround());
 	NaniteForced.Reset();
 }
 

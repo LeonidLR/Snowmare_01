@@ -88,6 +88,13 @@ public:
 	/** Particles alive over all emitters (0 without an active system). */
 	int32 GetParticleCount() const;
 
+	/**
+	 * The indoor kill-box candidates near Focus by the Indoors rules of Indoor (bKillUnderRoofs, margins, roof trace / size): every Closed /
+	 * Shelter camera zone, and the roof over Focus / the squad leader (an upward trace). Shared by the falling snow and the rain (section 18);
+	 * the caller picks the nearest with WeatherSnowFxRules::SelectKillBoxes.
+	 */
+	static TArray<FBox> GatherIndoorKillBoxCandidates(UWorld& World, const FVector& Focus, const FWeatherSnowFxTuning& Indoor);
+
 	/** The system to spawn (default NS_Weather_Snow; a user BP presenter may override). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment|Snow")
 	TSoftObjectPtr<UNiagaraSystem> SnowSystem;
