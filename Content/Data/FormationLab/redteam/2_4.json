@@ -139,17 +139,6 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 2,
-      "route": "R1",
-      "seed": 1,
-      "t": 13.9,
-      "what": "Z at S5",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
       "check": 6,
       "choice": "auto",
       "members": 4,
@@ -253,6 +242,14 @@
       "check": 7,
       "choice": "echelon_right",
       "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 2,
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.3"

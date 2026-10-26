@@ -229,7 +229,11 @@ The five overnight questions below were answered; the question texts stay for th
   `look.over_shoulder_max_deg` (110°) off his direction of travel - so he still walks forwards at the squad's pace instead of
   backwards at the backward cap; his wall-avoiding look (ClearLook) stays inside that limit too. The rear guard (Z) keeps walking
   backwards at 6 as decided.
-- **Q4 = b (decided 2026-10-26)**: ClearLook anticipates the man's motion - see v2.3 part 8.
+- **Q4 = b (decided 2026-10-26, implemented in v2.3 part 8)**: ClearLook anticipates the man's motion - the walls are also
+  seen from where he will be in `look.anticipate_s` (0.5 s), so walking past a wall end within ~1 m he turns his look away
+  from where the end will be, instead of an edge that swings round behind him faster than he turns (red team #1: 3_4, 11_8,
+  1_4, 8_2, 9_4, 12_3). His held look is still judged from where he is now (else, leaving a corridor, the two wall ends behind
+  him closed the gap he looked through and his look swung across the wall beside him).
 - **Q5 = a (decided 2026-10-26)**: the pair's rear man keeps his 3 → 6 → 9 sweep at a narrow mouth (the decision for the pair stays);
   those #1 entries are accepted.
 - The HUD line of the turn fold says "(turn)", e.g. "Line -> Column (turn)"; the wall guard keeps "(wall)" - v2.3 part 9.

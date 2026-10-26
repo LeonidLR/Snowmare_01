@@ -55,6 +55,7 @@ reflected in the page's schemes / clips the same day** ("все, что мы и�
 | part 5 fallback stand-ins keep spacing | 109 (109 + 0) | 26 | 34 | 23 |
 | part 6 guard: a man cut off brings the trail column | 102 (101 + 1) | 26 | 34 | 17 |
 | part 7 (Q3 = c) over-the-shoulder look, only Z walks backwards | 89 (84 + 5) | 26 | 26 | 12 |
+| part 8 (Q4 = b) ClearLook anticipates 0.5 s | 70 (65 + 5) | 5 | 27 | 12 |
 - v2.2-introduced regressions (`since: 'v2.2'`): 58 -> 26 open after part 1 -> 23 after part 2.
 - The user answered the five questions on 2026-10-26 (FORMATION_SECTORS.md "v2.3 - the user's answers"): Q1 a, Q2 a, Q3 c
   (part 7), Q4 b (part 8), Q5 a; the turn fold's HUD says "(turn)" (part 9). PC session (sim worktree, branch formation/sim-local).

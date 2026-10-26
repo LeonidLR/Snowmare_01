@@ -199,3 +199,28 @@ test('v2.3 part 7 sim (Q3 = c): at oblique wall gaps the followers who are not t
     assert.ok(after * 5 < before, `${name}: ${before} -> ${after} frames`);
   }
 });
+
+// --- v2.3 part 8 (user decision 2026-10-26, Q4 = b): ClearLook anticipates the man's motion.
+test('v2.3 part 8 (Q4 = b): ClearLook also blocks the wall directions seen from where he will be (passing a wall end within 1 m)', () => {
+  // He walks +X past the end of a wall standing to his right (end at (0, 90)); in 0.5 s he is at (-10, 0).
+  const wall: Segment[] = [{ a: [0, 90], b: [0, 1000], thickness: 0 }];
+  const pos: [number, number] = [-60, 0], ahead: [number, number] = [-10, 0];
+  const endNow = (Math.atan2(90, 60) * 180) / Math.PI, endAhead = (Math.atan2(90, 10) * 180) / Math.PI;
+  const half = C['look.wall_angle'];
+  assert.equal(L(wall, pos, 120, 120, C), 120, 'without anticipation 120 is free now ...');
+  assert.ok(angleDiff(120, endAhead) < 45, '... and 0.5 s later he stares at the end (within the check\'s 45 deg)');
+  const got = L(wall, pos, 120, 120, C, null, null, ahead);
+  assert.ok(angleDiff(got, endAhead) >= half - 1e-6 && angleDiff(got, endNow) >= half - 1e-6, `anticipated: ${got}`);
+  near(got, endAhead + half, 1e-6); // the far edge, reached without sweeping across the end
+  // A step line through a wall body: no anticipation.
+  const across: Segment[] = [{ a: [-30, -500], b: [-30, 500], thickness: 20 }];
+  assert.equal(L(across, pos, 180, 180, C, null, null, ahead), L(across, pos, 180, 180, C));
+  assert.equal(L(wall, pos, 120, 120, C, null, null, null), 120, 'null = v2.3 part 7');
+});
+
+test('v2.3 part 8 sim (Q4 = b): no wall stare passing the corridor-mouth wall ends (red team 8_2)', () => {
+  const layout = readLayout('redteam/8_2');
+  const stares = (config: typeof C) => runSeries({ layout, config, members: [4], seeds: 2, seedBase: 1, manual: 'auto' }).summary.checks.find((c) => c.id === 1)!.fail;
+  assert.ok(stares({ ...C, 'look.anticipate_s': 0 }) > 0, 'precondition: without anticipation the 4th man stares at a wall end');
+  assert.equal(stares(C), 0);
+});

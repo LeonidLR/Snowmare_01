@@ -275,19 +275,32 @@ export interface LookLimit { yaw: number; half: number }
  * v2.3 part 7 (user decision 2026-10-26, Q3 = c): `limit` (null = none) = the arc his look must stay in (the allocator's
  * over-the-shoulder members on the move: his step direction, standing his place's travel direction, +- look.over_shoulder_max_deg):
  * a wanted yaw outside it is first clamped to its nearer edge; a held look, edge or enclosed ray outside it is no candidate.
+ * v2.3 part 8 (user decision 2026-10-26, Q4 = b): `ahead` (null = none) = his position look.anticipate_s ahead (pos + his
+ * velocity x look.anticipate_s): the blocked spans are the union of those seen from pos and from ahead (each wall within
+ * look.wall_dist of either; directions from that point to its closest point), so passing a wall end within ~1 m he does not
+ * stare at it while its direction swings round faster than he turns (red team #1: 3_4, 11_8, 1_4, 8_2, 9_4, 12_3). Ignored
+ * when the line pos -> ahead crosses a wall body. The hold test (a held look dropped near a wall direction) uses only the
+ * directions seen from pos (the anticipated ones closed a narrow gap between two wall ends behind a man leaving a corridor
+ * and swung his look across the wall beside him - red team 9_4); edges, sweeps and rays as before (rays from pos).
  */
 function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw: number, config: FormationConfig, held: number | null = null,
-  limit: LookLimit | null = null): number {
+  limit: LookLimit | null = null, ahead: Vec2 | null = null): number {
   const reach = cfg(config, 'look.wall_dist'), half = cfg(config, 'look.wall_angle'), minFree = cfg(config, 'look.min_free_deg');
   // v2.3 part 7 (Q3 = c): with a limit, no candidate outside +-limit.half of limit.yaw (the over-the-shoulder look stays one).
   const inLimit = (a: number) => !limit || Math.abs(normYaw(a - limit.yaw)) <= limit.half + 1e-6;
   if (limit && !inLimit(yaw)) yaw = limit.yaw + (normYaw(yaw - limit.yaw) < 0 ? -limit.half : limit.half); // clamped to the nearer edge
   const centers: number[] = [];
-  for (const w of walls) {
-    const q = closestOnSegment(pos, w.a, w.b).point;
-    if (Math.max(0, dist(pos, q) - (w.thickness ?? 0) / 2) > reach) continue;
-    if (dist(pos, q) < 1e-6) continue;
-    centers.push(yawOf(sub(q, pos)));
+  let nowCount = 0; // centers[0 .. nowCount) are seen from pos itself (the hold test uses only those)
+  // v2.3 part 8 (Q4 = b): the walls are also seen from `ahead` (where he will be in look.anticipate_s) - the direction from
+  // there to each wall's closest point blocks as well, so a wall end he passes within ~1 m is avoided before it swings round.
+  // `ahead` is ignored when the step line from pos to it crosses a wall body (he will not walk through it).
+  const from = ahead && dist(ahead, pos) > 1e-6 && !segmentBlocked(pos, ahead, walls, 0) ? [pos, ahead] : [pos];
+  for (const o of from) for (const w of walls) {
+    const q = closestOnSegment(o, w.a, w.b).point;
+    if (Math.max(0, dist(o, q) - (w.thickness ?? 0) / 2) > reach) continue;
+    if (dist(o, q) < 1e-6) continue;
+    centers.push(yawOf(sub(q, o)));
+    if (o === pos) nowCount = centers.length;
   }
   const blocked = (a: number) => centers.some((c) => Math.abs(normYaw(a - c)) < half - 1e-6);
   // v2.3: the free arc a direction lies in, measured in whole degrees both ways (a sliver between two wall spans is no place
@@ -312,7 +325,7 @@ function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw
   // at the width threshold flips his look between two far directions every few steps - red team 2_8, 11_8, 8_2).
   let best: number | null = null, bestScore = Infinity;
   const holdDeg = cfg(config, 'look.hold_deg'), holdHalf = half - cfg(config, 'look.hold_margin_deg');
-  if (held !== null && holdDeg > 0 && inLimit(held) && !centers.some((c) => Math.abs(normYaw(held - c)) < holdHalf - 1e-6)) {
+  if (held !== null && holdDeg > 0 && inLimit(held) && !centers.slice(0, nowCount).some((c) => Math.abs(normYaw(held - c)) < holdHalf - 1e-6)) {
     best = normYaw(held); bestScore = Math.abs(normYaw(held - yaw)) - holdDeg;
   }
   // v2.3 part 4: a free but NARROW direction (the wanted yaw, an edge) still competes, look.narrow_penalty worse - so a narrow

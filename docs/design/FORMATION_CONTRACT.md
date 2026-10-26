@@ -525,3 +525,18 @@ ones carry `since: 'v2.3'`).
 - Golden: `formation_Cover.json` gains `in.members[].travel` (the last case per scene: the followers' travel = heading + 35) and
   `out.shoulder`; `formation_ClearLook.json` gains `in.limit` (null, and {yaw: the scene heading, half 110} on the cases without
   a turn).
+
+### 13.8 v2.3 part 8 - ClearLook anticipates the man's motion (user decision 2026-10-26, Q4 = b)
+- New key `look.anticipate_s` 0.5 (0-1.5 s; 0 = off).
+- `ClearLook(walls, pos, yaw, currentYaw, config, held, limit, ahead)`: `ahead` = [x, y] | null = his position look.anticipate_s
+  ahead (pos + velocity x look.anticipate_s). When ahead is given, differs from pos and the segment pos -> ahead crosses no wall
+  body (segmentBlocked radius 0), the wall directions are collected from pos AND from ahead (for each point: every wall whose
+  surface is within look.wall_dist of it, the direction from that point to its closest point; pos's first, then ahead's, each
+  in wall order) and all of them block (+-look.wall_angle), count for `swept` and bound the free arcs. The hold test (13.1: the
+  held look dropped when a wall direction is within look.wall_angle - look.hold_margin_deg of it) uses ONLY the directions
+  from pos. The enclosed rays stay from pos. Null = 13.7 unchanged.
+- Integration: velocity = the member's own velocity (the runtime: the character's velocity; the sim: his steps smoothed with
+  a 0.3 s time constant, VEL_SMOOTH_S - a raw sim step jitters +-50 % and flipped the anticipated spans; the leader: his walking
+  velocity); none (null) below 1 cm/s.
+- Golden `formation_ClearLook.json` gains `in.ahead` (null; and pos + 100 cm/s x anticipate_s along the scene heading on the
+  cases without a turn and without a limit) and the scene `end_right_ahead` (a wall end 0.6 m ahead, 0.9 m to the right).

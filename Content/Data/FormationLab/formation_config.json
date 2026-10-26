@@ -415,6 +415,13 @@
       "unit": "deg",
       "doc": "v2.3 part 7 (user decision 2026-10-26, Q3 = c): on the move a member who is not the rear guard (nor K, nor a fixed look) looks at most this far off the heading - a coverage share in the rear is watched over the shoulder, so he walks forwards (not backwards at move.backward_mult); ClearLook keeps his wall-avoiding look inside it too. 180 = off (v2.2)."
     },
+    "look.anticipate_s": {
+      "value": 0.5,
+      "min": 0,
+      "max": 1.5,
+      "unit": "s",
+      "doc": "v2.3 part 8 (user decision 2026-10-26, Q4 = b): ClearLook also sees the walls from where the man will be this long ahead (his position + velocity x this), so passing a wall end within ~1 m he does not stare at it while its direction swings round. 0 = off."
+    },
     "classify.probe_side": {
       "value": 400,
       "min": 200,

@@ -28,6 +28,7 @@ const SEPARATION_MARGIN = 10; // cm beyond slot.min_spacing the separation aims 
 const SEPARATION_SPEED = 60; // cm/s: members closer than slot.min_spacing drift apart (stands in for the engine's avoidance)
 const REASSIGN_GAIN = 100; // cm: on the way, places are reassigned when the minimal assignment is this much cheaper (v2.2)
 const SHOULDER_STEP_DEG = 90; // v2.3 part 7: a step within this of his place's travel centres his over-the-shoulder limit
+const VEL_SMOOTH_S = 0.3; // v2.3 part 8: the sim's per-step velocity jitters (+-50 %); the anticipation uses it smoothed
 const WALK_LOOK_DEG = 35; // the leader's look within this of his travel = looking where he walks (exempt from ClearLook; the check allows 45)
 
 export interface MemberFrame {
@@ -118,6 +119,7 @@ interface Member {
   repathIn: number;
   prevSlot: Vec2 | null;
   clearHeld: number | null; // v2.3: the last ClearLook result (its hysteresis input); null while ClearLook does not apply
+  vel: Vec2; // v2.3 part 8: his smoothed velocity (VEL_SMOOTH_S), as the engine's character velocity - ClearLook's anticipation
 }
 
 /** Builds the nav grid for a layout (reuse it across runs). */
@@ -175,6 +177,7 @@ export function simulate(o: SimOptions): number {
     repathIn: 0,
     prevSlot: null,
     clearHeld: null,
+    vel: [0, 0],
   }));
 
   let leg = 1;
@@ -416,7 +419,12 @@ export function simulate(o: SimOptions): number {
       const sl = shoulder.find((x) => x.role === m.place);
       const stepYaw = len(moveDir) > 0.5 ? yawOf(moveDir) : null;
       const limit = sl ? { yaw: stepYaw !== null && angleDiff(stepYaw, sl.yaw) <= SHOULDER_STEP_DEG ? stepYaw : sl.yaw, half: cfg(c, 'look.over_shoulder_max_deg') } : null;
-      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld, limit);
+      // v2.3 part 8 (Q4 = b): ClearLook also sees the walls from where he will be in look.anticipate_s (his velocity this step;
+      // the leader's walking velocity).
+      const stepVel = i === 0 && formation !== 'wall' ? leaderVel : scale(moveDir, 1 / SIM_DT);
+      m.vel = add(m.vel, scale(sub(stepVel, m.vel), clamp(SIM_DT / VEL_SMOOTH_S, 0, 1)));
+      const ahead = len(m.vel) > 1 ? add(m.pos, scale(m.vel, cfg(c, 'look.anticipate_s'))) : null;
+      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld, limit, ahead);
       m.clearHeld = exempt ? null : free;
       const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));

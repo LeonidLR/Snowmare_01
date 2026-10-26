@@ -74,6 +74,8 @@ const SCENES: Record<string, Segment[]> = {
   // v2.3 ClearLook: a 2 x 2 m pocket - every direction blocked; the longest clear ray is a diagonal.
   pocket: [{ a: [-100, -100], b: [100, -100], thickness: 20 }, { a: [100, -100], b: [100, 100], thickness: 20 },
     { a: [100, 100], b: [-100, 100], thickness: 20 }, { a: [-100, 100], b: [-100, -100], thickness: 20 }],
+  // v2.3 part 8 ClearLook: the end of a wall to the right, 0.6 m ahead and 0.9 m aside - he walks past it (the anticipation).
+  end_right_ahead: [{ a: [60, 90], b: [60, 1000], thickness: 20 }],
 };
 
 /** v2.1 scenes for the guard (the leader's frame). */
@@ -312,19 +314,22 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     for (const heading of [yaw, yaw + 12]) turnAhead.cases.push({ in: { path: name, points: path, heading }, out: { deg: round(FormationGuardRules.TurnAhead(path, heading, config)) } });
   }
   const shoulderMax = config['look.over_shoulder_max_deg'];
-  const clear = base('ClearLook', 'in: walls, pos, yaw, currentYaw, held (null = none), limit ({yaw, half} | null; v2.3 part 7) -> out.yaw (FormationSectorRules.ClearLook: compare as angles).');
-  for (const scene of ['none', 'wall_left', 'wall_right', 'corridor', 'ahead', 'corner_left_ahead', 'wall_end_behind_left', 'far_left', 'sliver_left', 'pocket']) {
+  const clear = base('ClearLook', 'in: walls, pos, yaw, currentYaw, held (null = none), limit ({yaw, half} | null; v2.3 part 7), ahead ([x, y] | null; v2.3 part 8) -> out.yaw (FormationSectorRules.ClearLook: compare as angles).');
+  for (const scene of ['none', 'wall_left', 'wall_right', 'corridor', 'ahead', 'corner_left_ahead', 'wall_end_behind_left', 'far_left', 'sliver_left', 'pocket', 'end_right_ahead']) {
     for (const [yaw0, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
       const placed = place(SCENES[scene], yaw0, offset);
+      // v2.3 part 8: his position look.anticipate_s ahead at 100 cm/s along the scene heading (rounded as written).
+      const aheadPt = r2([offset[0] + Math.cos((yaw0 * Math.PI) / 180) * 100 * config['look.anticipate_s'], offset[1] + Math.sin((yaw0 * Math.PI) / 180) * 100 * config['look.anticipate_s']]);
       for (let rel = -165; rel <= 180; rel += 30) {
         const yaw = round(yaw0 + rel + 2.5);
         for (const turned of [0, 70, -70]) for (const heldRel of [null, -40, 100]) {
           const currentYaw = round(yaw + turned);
           const held = heldRel === null ? null : round(yaw + heldRel); // v2.3: the previous result (hysteresis)
           // v2.3 part 7: the over-the-shoulder limit (his travel = the scene's heading) only without a turn (keeps the file small).
-          for (const limit of turned === 0 ? [null, { yaw: yaw0, half: shoulderMax }] : [null]) {
-            clear.cases.push({ in: { scene, walls: placed.map(seg), pos: r2(offset), yaw, currentYaw, held, limit },
-              out: { yaw: round(FormationSectorRules.ClearLook(placed, offset, yaw, currentYaw, config, held, limit)) } });
+          // v2.3 part 8: the anticipation (ahead) on the cases without a turn and without a limit.
+          for (const limit of turned === 0 ? [null, { yaw: yaw0, half: shoulderMax }] : [null]) for (const ahead of turned === 0 && !limit ? [null, aheadPt] : [null]) {
+            clear.cases.push({ in: { scene, walls: placed.map(seg), pos: r2(offset), yaw, currentYaw, held, limit, ahead },
+              out: { yaw: round(FormationSectorRules.ClearLook(placed, offset, yaw, currentYaw, config, held, limit, ahead)) } });
           }
         }
       }
