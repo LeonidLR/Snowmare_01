@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import type { Segment } from './geometry.ts';
 import { distToWall } from './geometry.ts';
 import { configValues } from './config.ts';
-import { readConfigFile } from './cli/paths.ts';
+import { readConfigFile, readLayout } from './cli/paths.ts';
+import { runSeries } from './bot.ts';
 import { FormationCoverRules, FormationSectorRules, FormationShapeRules } from './rules.ts';
 
 const C = configValues(readConfigFile());
@@ -104,4 +105,11 @@ test('v2.3 narrow tier: entering a corridor, a narrow arc he reaches without a s
   assert.ok(L(entrance, [0, 0], 15, -25, { ...C, 'look.narrow_penalty': 0 }) > 100, 'without the tier: the far edge (the part-3 stare)');
   // A wide arc without a sweep still beats a narrow one (the sliver of 2_8).
   near(L(sliver, [0, 0], -100, 10, C), 10, 1e-6);
+});
+
+test('v2.3 sim: two unwalkable slots never get the same fallback point (red team 6_8: hedgehog of three in a 3 m corridor)', () => {
+  const layout = readLayout('redteam/6_8');
+  const s = runSeries({ layout, config: C, members: [3], seeds: 1, seedBase: 1, manual: 'hedgehog' }).summary;
+  const spacing = s.checks.find((c) => c.id === 5)!;
+  assert.equal(spacing.fail, 0, spacing.worst ?? '');
 });

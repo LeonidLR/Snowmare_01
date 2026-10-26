@@ -274,7 +274,7 @@
       "t": 20.8,
       "what": "Z at A4",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 1,
@@ -285,7 +285,7 @@
       "t": 20.8,
       "what": "Z at A4",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 1,
@@ -314,8 +314,8 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 19.4,
-      "what": "blizzard: wall cuts Z",
+      "t": 25.1,
+      "what": "blizzard: wall cuts L-Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],

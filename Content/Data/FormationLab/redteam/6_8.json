@@ -128,18 +128,7 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
-    {
-      "check": 5,
-      "choice": "hedgehog",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 13.5,
-      "what": "P-Z 69 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    }
-  ],
+  "expected_fail": [],
   "fixed_entries": [
     {
       "check": 1,
@@ -196,6 +185,15 @@
       "route": "R1",
       "seed": 2,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
     }
-  ]
+  ],
+  "fixed_in": "v2.3"
 }

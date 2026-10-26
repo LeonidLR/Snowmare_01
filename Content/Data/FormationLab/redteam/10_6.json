@@ -109,7 +109,7 @@
       "t": 19.2,
       "what": "P-L 35 cm apart",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -130,7 +130,7 @@
       "t": 19.2,
       "what": "L-Z 69 cm apart",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -141,7 +141,7 @@
       "t": 19.2,
       "what": "L-Z 35 cm apart",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -152,7 +152,7 @@
       "t": 19.2,
       "what": "L-Z 68 cm apart",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,

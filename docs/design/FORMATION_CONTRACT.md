@@ -482,3 +482,11 @@ ones carry `since: 'v2.3'`).
 - Why: entering a corridor with 13.3's "forward over the shoulder", P's +15 hit the corridor wall's end; the near arc was 21 deg
   and the only wide edge lay across the wall end - he swung 110 deg across it and back (red team 8_5, 4_8, 11_8).
 - Golden: `formation_ClearLook.json` (same cases, the new key in the config header).
+
+### 13.5 Integration: two unwalkable slots never share a stand-in (red team #5; simulator, runtime requirement)
+- The simulator's fallback for an unwalkable slot (`fallbackSlot`: the slot offset turned round the leader in 30 deg steps, in
+  his line of sight) skips candidates within `slot.min_spacing` of a slot already given out this frame; only when none is left
+  does it take the nearest as before. (A manual hedgehog of three in a 3 m corridor: P's and Z's ring slots were both in the
+  wall, both got the same point and the two men walked into each other - 22 cm apart.)
+- Runtime: the same requirement for `SquadFormation::ComputeFallbackSlots` - the stand-ins of one frame keep `slot.min_spacing`
+  from each other and from the walkable slots.

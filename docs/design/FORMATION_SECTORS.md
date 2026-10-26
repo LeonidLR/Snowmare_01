@@ -197,6 +197,8 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   look (forward over the shoulder) hit the end of the corridor wall; he swung 110° across that wall end to the far side and back.
   Now a narrow free gap he reaches without passing the wall is preferred to a wide one behind the wall; a wide gap without a
   sweep still wins, so the zigzag-corridor slivers stay out.
+- **No two men sent to the same spot (red team #5)**: when a formation's places don't fit (a hedgehog of three in a 3 m corridor),
+  the stand-in places now keep the normal spacing from each other - two men were sent to the same point and walked into each other.
 
 ## Open for the user (v2.3)
 Picked overnight by the most conservative reading of the recorded decisions (coordinator 2026-10-26: "don't wait"); each can be
@@ -207,3 +209,9 @@ flipped in the morning.
    passage width) - a doorway crossed at an angle is shared out by the allocator, which sees the walls; (b) any narrow side
    room, as before (more stares at door edges); (c) 1A at a doorway too, but P's +15 turned away from the near wall end.
    **Picked (a)** - 1A was decided for a narrow passage (a corridor), and (a) changes nothing in a real corridor.
+2. **A hairpin round a wall end in a manual hedgehog / blizzard / column (red team 12_6, #5)**: the route turns 180° round the end
+   of a wall; the squad's places swing round the leader and two men cut across each other (22-79 cm apart). The turn fold ("5Б")
+   folds only the line and the echelons into the trail column. Options: (a) **leave it** - a manual formation through a hairpin
+   is the player's choice; (b) fold every manual formation of 3+ into the trail column before a turn sharper than ~120°;
+   (c) fold only the hedgehog / blizzard (the tight shapes). **Picked (a)** (keeps "5Б" as decided); 12_6's #5 entries stay
+   open as a design question.

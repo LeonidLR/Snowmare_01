@@ -374,6 +374,7 @@ export function simulate(o: SimOptions): number {
 
     // --- members
     const frames: MemberFrame[] = [];
+    const given: Vec2[] = []; // v2.3: slots given out this frame (a fallback never lands on one)
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
       const target = targets.find((x) => x.role === m.place) ?? { role: m.place, pos: m.pos, yaw: m.yaw };
@@ -382,10 +383,11 @@ export function simulate(o: SimOptions): number {
       if (i > 0 || formation === 'wall') {
         if (!nav.walkable(slot)) {
           slotFallback = true;
-          const alt = fallbackSlot(nav, walls, leader.pos, slot);
+          const alt = fallbackSlot(nav, walls, leader.pos, slot, given, cfg(c, 'slot.min_spacing'));
           if (alt) slot = alt; else { slotInvalid = true; slot = m.pos; }
         }
       }
+      given.push(slot);
       let moveDir: Vec2 = [0, 0];
       if (i > 0 || formation === 'wall') {
         const before = m.pos;
@@ -463,8 +465,10 @@ function wallAhead(walls: readonly Segment[], pos: Vec2, heading: number): Segme
  * SquadFormation::ComputeFallbackSlots: the slot offset turned round the leader in 30 deg steps, at 100 % and 60 %.
  * v2.1: a candidate must also be on the leader's side - the straight line leader -> candidate crosses no wall (a walkable point
  * behind a wall splits the squad: FORMATION_CONTRACT.md 7 / 10).
+ * v2.3 (red team #5): not within `spacing` of a slot already given out this frame (else two unwalkable slots - the hedgehog of
+ * three in a 3 m corridor - got the SAME point and the two men walked into each other); none such -> the nearest as before.
  */
-function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2): Vec2 | null {
+function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2, given: readonly Vec2[] = [], spacing = 0): Vec2 | null {
   const off = sub(slot, leader);
   const r = len(off), base = yawOf(off);
   const cands: Vec2[] = [];
@@ -472,7 +476,8 @@ function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slo
     cands.push(localToWorld(leader, base + s * 30 * k, [Math.max(r * f, 120), 0]));
   }
   cands.sort((a, b) => dist(a, slot) - dist(b, slot));
-  return cands.find((p) => nav.walkable(p) && !segmentBlocked(leader, p, walls, 0)) ?? null;
+  const ok = cands.filter((p) => nav.walkable(p) && !segmentBlocked(leader, p, walls, 0));
+  return ok.find((p) => given.every((g) => dist(g, p) >= spacing)) ?? ok[0] ?? null;
 }
 
 /**
