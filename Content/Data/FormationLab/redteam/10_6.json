@@ -109,16 +109,6 @@
       "t": 20.1,
       "what": "Z at W1",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 5,
-      "choice": "line",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 19.3,
-      "what": "P-L 63 cm apart",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
@@ -127,88 +117,8 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 19.3,
-      "what": "L-Z 61 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 19,
-      "what": "L-Z 66 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "column",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 19.3,
-      "what": "L-Z 60 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "hedgehog",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 19,
-      "what": "L-Z 66 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "auto",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column (asked echelon_left): wall cuts P-Z slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.8,
-      "what": "column (asked echelon_left): wall cuts P-L slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "line",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column (asked line): wall cuts P-Z slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "line",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.8,
-      "what": "column (asked line): wall cuts P-L slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "diamond",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column (asked wedge): wall cuts P-Z slots",
+      "t": 19.2,
+      "what": "L-Z 35 cm apart",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
@@ -217,18 +127,8 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 16.8,
-      "what": "column (asked diamond): wall cuts P-L slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "echelon_right",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column (asked echelon_right): wall cuts P-Z slots",
+      "t": 16.6,
+      "what": "column (asked diamond): wall cuts K-P",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
@@ -236,79 +136,9 @@
       "choice": "echelon_right",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 16.8,
-      "what": "column (asked echelon_right): wall cuts P-L slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "blizzard",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column (asked blizzard): wall cuts P-Z slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.8,
-      "what": "column (asked blizzard): wall cuts P-L slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "column",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column: wall cuts P-Z slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "column",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.8,
-      "what": "column: wall cuts P-L slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "hedgehog",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column (asked hedgehog): wall cuts P-Z slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "hedgehog",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.8,
-      "what": "column (asked hedgehog): wall cuts P-L slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "echelon_left",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column (asked echelon_left): wall cuts P-Z slots",
+      "seed": 2,
+      "t": 18.7,
+      "what": "column (asked echelon_right): wall cuts L-Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
@@ -316,29 +146,9 @@
       "choice": "echelon_left",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 16.8,
-      "what": "column (asked echelon_left): wall cuts P-L slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "all_forward",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.9,
-      "what": "column (asked echelon_left): wall cuts P-Z slots",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "all_forward",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 16.8,
-      "what": "column (asked echelon_left): wall cuts P-L slots",
+      "seed": 2,
+      "t": 19.6,
+      "what": "echelon_right (asked echelon_left): wall cuts Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
@@ -358,6 +168,158 @@
       "route": "R1",
       "seed": 2,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 5,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 5,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "line",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "column",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "column",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "all_forward",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
     }
   ]
 }

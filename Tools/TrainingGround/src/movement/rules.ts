@@ -136,8 +136,11 @@ function HedgehogSlots(center: Vec2, memberCount: number, yaw: number, config: F
  * back from its oldest point (along its oldest segment, or against leaderYaw for a single point). Each slot carries the trail's
  * direction there (yaw) - the reference for its look (LookYaw's leaderYaw). Who stands where is FormationAssignRules'
  * job (minimal travel on every formation change), not the slot order's.
+ * v2.3 (red team #7): the stagger aside shrinks (5 cm steps, down to 0 = on the trail) until the slot keeps
+ * column.stagger_clear from every wall surface and the line from its trail point to it is clear - a 60 cm stagger in a
+ * 1.2-2 m wall gap crossed obliquely put the slot inside the wall's clearance (no wall given -> the full stagger, as v2.1).
  */
-function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: number, config: FormationConfig): (Slot & { yaw: number })[] {
+function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: number, config: FormationConfig, walls: readonly Segment[] = []): (Slot & { yaw: number })[] {
   const leaderPos = trail[trail.length - 1];
   // Segments newest -> oldest, each with its travel direction.
   const segs: { from: Vec2; to: Vec2; len: number; yaw: number }[] = [];
@@ -159,7 +162,11 @@ function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: numb
     if (role === 'K') return { role, pos: leaderPos, yaw: leaderYaw };
     const local = localSlot('column', role, memberCount, config);
     const at = back(-local[0]);
-    return { role, pos: add(at.pos, scale(dirOf(at.yaw + 90), local[1])), yaw: at.yaw };
+    const side = dirOf(at.yaw + 90), clear = cfg(config, 'column.stagger_clear');
+    const fits = (p: Vec2) => walls.every((w) => distToWall(p, w) >= clear - 1e-6) && !segmentBlocked(at.pos, p, walls, 0);
+    let st = Math.abs(local[1]);
+    while (st > 0 && !fits(add(at.pos, scale(side, Math.sign(local[1]) * st)))) st = Math.max(0, st - 5);
+    return { role, pos: add(at.pos, scale(side, Math.sign(local[1]) * st)), yaw: at.yaw };
   });
 }
 

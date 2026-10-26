@@ -49,10 +49,10 @@ reflected in the page's schemes / clips the same day** ("все, что мы и�
 |---|---|---|---|---|
 | v2.2 (1f8bc25) | 210 | 38 | 70 | 78 |
 | part 1 ClearLook min arc + hysteresis | 186 (169 + 17) | 20 | 65 | 77 |
-- v2.2-introduced regressions (`since: 'v2.2'`): 58 -> 26 open after part 1.
-- Next: #7 (trail column keeps its 60 cm stagger in 1.2-2 m wall gaps crossed obliquely -> the slot is unwalkable, the sim's
-  fallback re-places it round the leader -> chain cut; 12_3, 8_7, 10_6, 7_5, 9_3, 11_8, 2_2); allocator fixed looks for the
-  narrow column 1A (coordinator); then #5, the rest of #1.
+| part 2 trail-column stagger clamp | 113 (95 + 18) | 33 | 34 | 22 |
+- v2.2-introduced regressions (`since: 'v2.2'`): 58 -> 26 open after part 1 -> 23 after part 2.
+- Next: allocator fixed looks for the narrow column 1A (coordinator); then #5, the rest of #1 (idea tested: a narrow arc reachable
+  WITHOUT a sweep beats a wide one behind a sweep - `NARROW` 180 penalty instead of the hard min-arc cut; subset 17 -> 13 new).
 
 ## Checklist per rules change (do all of it, same commit)
 1. Rule in `rules.ts` (pure; doc comment states the user decision + date); config keys with ranges in formation_config.json.

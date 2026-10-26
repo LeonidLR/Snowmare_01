@@ -205,7 +205,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  const trail = base('TrailSlots', 'in: trail [[x, y]] (oldest first, last = the leader), leaderYaw, memberCount -> out.slots [{role, pos, yaw}] (the column along the path; yaw = the trail direction there).');
+  const trail = base('TrailSlots', 'in: trail [[x, y]] (oldest first, last = the leader), leaderYaw, memberCount, walls (v2.3; [] = none) -> out.slots [{role, pos, yaw}] (the column along the path; yaw = the trail direction there).');
   const TRAILS: Record<string, Vec2[]> = {
     straight: [[-2000, 0], [-1000, 0], [0, 0]],
     turn_left_90: [[-1500, 600], [-600, 600], [-300, 300], [0, 0]],
@@ -213,11 +213,21 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     single: [[0, 0]],
     zigzag: [[-1200, -200], [-800, 200], [-400, -200], [0, 0]],
   };
+  // v2.3: walls round the trail - the stagger shrinks to keep column.stagger_clear (none = the full stagger).
+  const TRAIL_WALLS: Record<string, Segment[]> = {
+    none: [],
+    corridor_200: [{ a: [-3000, -100], b: [1000, -100], thickness: 20 }, { a: [-3000, 100], b: [1000, 100], thickness: 20 }],
+    gap_oblique: [{ a: [-700, -1500], b: [-560, -80], thickness: 40 }, { a: [-540, 80], b: [-400, 1500], thickness: 40 }],
+  };
   for (const [name, pts] of Object.entries(TRAILS)) for (const [yaw, offset] of [[0, [0, 0]], [-120, [800, 300]]] as [number, Vec2][]) {
     const tr = pts.map((p) => r2([offset[0] + p[0] * Math.cos((yaw * Math.PI) / 180) - p[1] * Math.sin((yaw * Math.PI) / 180), offset[1] + p[0] * Math.sin((yaw * Math.PI) / 180) + p[1] * Math.cos((yaw * Math.PI) / 180)]));
-    for (const memberCount of [2, 3, 4]) {
-      const out = FormationShapeRules.TrailSlots(tr, yaw, memberCount, config).map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
-      trail.cases.push({ in: { trail: name, points: tr, leaderYaw: yaw, memberCount }, out: { slots: out } });
+    for (const [wname, ws] of Object.entries(TRAIL_WALLS)) {
+      if (wname !== 'none' && name !== 'straight' && name !== 'zigzag') continue;
+      const placed = place(ws, yaw, offset);
+      for (const memberCount of [2, 3, 4]) {
+        const out = FormationShapeRules.TrailSlots(tr, yaw, memberCount, config, placed).map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
+        trail.cases.push({ in: { trail: name, points: tr, leaderYaw: yaw, memberCount, scene: wname, walls: placed.map(seg) }, out: { slots: out } });
+      }
     }
   }
 

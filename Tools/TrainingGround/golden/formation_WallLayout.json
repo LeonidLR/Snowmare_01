@@ -20,6 +20,7 @@
   "column.base_back": 180,
   "column.spacing": 150,
   "column.stagger": 60,
+  "column.stagger_clear": 45,
   "column.side_deg": 70,
   "column.narrow_width": 600,
   "column.narrow_fwd_deg": 15,

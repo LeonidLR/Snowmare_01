@@ -3,9 +3,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Segment } from './geometry.ts';
+import { distToWall } from './geometry.ts';
 import { configValues } from './config.ts';
 import { readConfigFile } from './cli/paths.ts';
-import { FormationSectorRules } from './rules.ts';
+import { FormationSectorRules, FormationShapeRules } from './rules.ts';
 
 const C = configValues(readConfigFile());
 const L = FormationSectorRules.ClearLook;
@@ -53,4 +54,24 @@ test('v2.3: ClearLook hysteresis - the held result stays while it is clear of th
   // A free wanted yaw always wins over the held one; hold 0 = the v2.2 memoryless rule.
   assert.equal(L(behind, [0, 0], 0, -150, C, -120), 0);
   near(Math.abs(L(behind, [0, 0], 180, -150, { ...C, 'look.hold_deg': 0 }, -120)), 180 - half, 1e-6);
+});
+
+test('v2.3: the trail column stagger shrinks in a narrow passage so every slot keeps column.stagger_clear (red team #7)', () => {
+  const trail: [number, number][] = [[-3000, 0], [0, 0]];
+  const free = FormationShapeRules.TrailSlots(trail, 0, 4, C);
+  assert.deepEqual(free, FormationShapeRules.TrailSlots(trail, 0, 4, C, []), 'no walls -> v2.1 slots');
+  const corridor: Segment[] = [{ a: [-4000, -100], b: [1000, -100], thickness: 20 }, { a: [-4000, 100], b: [1000, 100], thickness: 20 }];
+  const tight = FormationShapeRules.TrailSlots(trail, 0, 4, C, corridor);
+  const clear = C['column.stagger_clear'];
+  for (const s of tight) {
+    for (const w of corridor) assert.ok(distToWall(s.pos, w) >= clear - 1e-6, `${s.role} ${s.pos} too close`);
+    const f = free.find((x) => x.role === s.role)!;
+    assert.equal(s.pos[0], f.pos[0], 'only the stagger changes');
+    assert.ok(Math.abs(s.pos[1]) <= Math.abs(f.pos[1]) + 1e-9 && Math.sign(s.pos[1]) * Math.sign(f.pos[1]) >= 0);
+  }
+  // 90 cm surface room - 45 clearance = 45 cm, rounded down to the 5 cm step from 60: 45.
+  assert.equal(Math.abs(tight.find((s) => s.role === 'P')!.pos[1]), 45);
+  // A wide corridor: unchanged.
+  const wide: Segment[] = [{ a: [-4000, -300], b: [1000, -300], thickness: 20 }, { a: [-4000, 300], b: [1000, 300], thickness: 20 }];
+  assert.deepEqual(FormationShapeRules.TrailSlots(trail, 0, 4, C, wide), free);
 });

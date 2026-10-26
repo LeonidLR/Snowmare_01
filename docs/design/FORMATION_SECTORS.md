@@ -184,3 +184,6 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   30° (`look.min_free_deg`) is no place to look, and a man keeps his previous clear look (60° preference, `look.hold_deg`)
   until a wall comes close to it — no more jumping between two far directions. Boxed in on all sides: he looks along the
   longest clear line instead of into a wall. Refines "6А" (nobody looks into a wall); nothing else changes.
+- **The trail column narrows in a tight gap (red team #7)**: crossing a 1.2–2 m opening at an angle, the column's zigzag
+  (60 cm aside) put a man inside the wall; now his offset aside shrinks until he keeps 45 cm from the wall (on the leader's
+  track at worst). Nothing changes where there is room.

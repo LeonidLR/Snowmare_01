@@ -93,6 +93,13 @@
       "unit": "cm",
       "doc": "Column herringbone: alternate followers this far right / left of the axis."
     },
+    "column.stagger_clear": {
+      "value": 45,
+      "min": 20,
+      "max": 100,
+      "unit": "cm",
+      "doc": "v2.3 (red team #7): the trail column's stagger aside shrinks until the slot keeps this from every wall surface (agent radius 35 + 10)."
+    },
     "column.side_deg": {
       "value": 70,
       "min": 40,

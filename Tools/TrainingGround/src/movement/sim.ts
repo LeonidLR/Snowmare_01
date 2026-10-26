@@ -315,7 +315,7 @@ export function simulate(o: SimOptions): number {
       const path = dist(trail[trail.length - 1], leader.pos) > 1e-6 ? [...trail, leader.pos] : trail;
       // Each man's sectors by his own surroundings (the corridor's held width, else a wall beside his slot -> narrow), relative
       // to the trail's direction at his slot; the rear man keeps the squad's 6 o'clock (the leader's heading).
-      targets = FormationShapeRules.TrailSlots(path, heading, n, c).map((s) => ({
+      targets = FormationShapeRules.TrailSlots(path, heading, n, c, walls).map((s) => ({
         ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw,
           passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c), c),
       }));

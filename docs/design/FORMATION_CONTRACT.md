@@ -454,3 +454,13 @@ ones carry `since: 'v2.3'`).
   ways (+ before -), rays capped at 2 x `look.wall_dist`; ties: the nearest the wanted yaw (was: the wanted yaw unchanged).
 - Golden `formation_ClearLook.json`: `in.held` (null / yaw - 40 / yaw + 100) on every case; scenes `sliver_left`, `pocket`.
 - Runtime: keep the last result per member (`clearHeld`), reset it to none whenever ClearLook is not applied.
+
+### 13.2 `TrailSlots(trail, leaderYaw, memberCount, config, walls)` - the stagger shrinks in a narrow passage (red team #7)
+- Each staggered slot's offset aside (`column.stagger`, 60) shrinks in 5 cm steps (down to 0 = on the trail) until the slot keeps
+  `column.stagger_clear` (45 cm, 20-100: agent radius 35 + 10) from every wall SURFACE and the line from its trail point to it is
+  clear. No walls (`[]`, the default) = the full stagger, as v2.1.
+- Why: crossing a 1.2-2 m wall gap obliquely (red team 12_3, 8_7, 10_6, 7_5) or a funnel (9_3), the 60 cm stagger put the slot
+  inside the wall's clearance; the slot was unwalkable and the simulator's fallback re-placed it round the leader (ahead of him
+  past the bend), so the chain cut a wall (check 7). The runtime has the same hazard (an unreachable slot -> the
+  navigation's nearest point).
+- Golden `formation_TrailSlots.json`: `in.walls` + `in.scene` (`none`, `corridor_200`, `gap_oblique`).
