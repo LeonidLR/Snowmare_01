@@ -5,7 +5,7 @@
 // UEnvironmentSubsystem::ForceWeather (= Codex.Env.SetWeather <w> instant):
 //  1. Clear: the storm layer is off (weight 0); the hands' forward offset from the chest (spine_03, along his facing) is measured;
 //  2. Blizzard: the storm upper body is in (weight > 0.8) within 0.5 s, both hands > 25 cm in front of the chest and > 15 cm above it
-//     (shielding the face; the rifle walk holds them at chest height, hand_l already 55 cm out on the handguard), the weapon is hidden,
+//     (shielding the face; the rifle walk holds them at chest height, hand_l already 55 cm out on the handguard), the weapon stays visible (2026-10-26),
 //     the left-hand IK is off - and the legs still walk (the feet swing fore and aft, no full-body clip, speed kept);
 //  3. a shot (combat aim) -> weight 0 within 0.5 s and stays 0 while the aim holds; the aim over -> back in;
 //  4. indoors (a Closed camera zone spawned over the lane) -> 0; out again -> back in;
@@ -99,7 +99,7 @@ namespace BlizzardWalkSmoke
 		float MinSpeed = 1e9f;
 		float MinStormWeight = 1.f;
 		float MaxIKAlpha = 0.f;
-		bool bWeaponHiddenSeen = true;
+		bool bWeaponShownAlways = true;
 		float MarkTime = 0.f;
 		float MaxWeight = 0.f;
 		double LastWorldTime = -1.0;
@@ -379,7 +379,7 @@ namespace BlizzardWalkSmoke
 			State.MinSpeed = FMath::Min(State.MinSpeed, static_cast<float>(Op->GetVelocity().Size2D()));
 			State.MinStormWeight = FMath::Min(State.MinStormWeight, Anim->GetBlizzardWalkWeight());
 			State.MaxIKAlpha = FMath::Max(State.MaxIKAlpha, Anim->LeftHandIKAlpha);
-			State.bWeaponHiddenSeen &= !(Op->WeaponMesh && Op->WeaponMesh->IsVisible());
+			State.bWeaponShownAlways &= (Op->WeaponMesh && Op->WeaponMesh->IsVisible());
 			State.StormHands += HandsForward(*Op);
 			++State.StormSamples;
 			if (State.StormSamples < 30)
@@ -403,8 +403,8 @@ namespace BlizzardWalkSmoke
 			Check(State, State.FeetMax - State.FeetMin > 20.f && State.MaxFullBody < 0.01f && State.MinSpeed > 100.f,
 				FString::Printf(TEXT("lower body still walks: feet swing %.0f cm (> 20), full-body slot %.2f (0), speed >= %.0f"),
 					State.FeetMax - State.FeetMin, State.MaxFullBody, State.MinSpeed));
-			Check(State, State.bWeaponHiddenSeen && State.MaxIKAlpha < 0.05f,
-				FString::Printf(TEXT("weapon hidden, left-hand IK off (max alpha %.2f) during the storm pose"), State.MaxIKAlpha));
+			Check(State, State.bWeaponShownAlways && State.MaxIKAlpha < 0.05f,
+				FString::Printf(TEXT("weapon stays in the hand (game designer 2026-10-26), left-hand IK off (max alpha %.2f) during the storm pose"), State.MaxIKAlpha));
 			State.Target = SpawnTarget(World, State, *Op);
 			Op->bForceHitForTesting = true;
 			const bool bShot = Op->ShootAtTarget(State.Target.Get(), 0.f);
