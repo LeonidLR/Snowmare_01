@@ -1,4 +1,4 @@
-// CodexTactics.Formation.Menu.* - the hold-G radial formation menu (Formation/FormationMenuRules; design docs/design/FORMATION_SECTORS.md
+// CodexTactics.Formation.Menu.* - the hold-B radial formation menu (Formation/FormationMenuRules; design docs/design/FORMATION_SECTORS.md
 // "Selection", contract docs/design/FORMATION_CONTRACT.md 9, mirrors Tools/TrainingGround/src/movement/menu.ts). UE-only (no Godot
 // reference). Screen px, x right, y DOWN, 12 o'clock = up.
 
@@ -75,13 +75,13 @@ bool FFormationMenuFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("Closed: Release does nothing"), FormationMenuRules::Release(State, 4), EFormationMenuEffect::None);
 	TestEqual(TEXT("Closed: Cancel does nothing"), FormationMenuRules::Cancel(State), EFormationMenuEffect::None);
 
-	// Hold G, move to 3 o'clock, release: echelon right, held.
-	TestEqual(TEXT("G pressed: opened"), FormationMenuRules::Open(State), EFormationMenuEffect::Opened);
+	// Hold B, move to 3 o'clock, release: echelon right, held.
+	TestEqual(TEXT("B held: opened"), FormationMenuRules::Open(State), EFormationMenuEffect::Opened);
 	TestTrue(TEXT("Opened with Auto highlighted"), State.bOpen && !State.Highlighted.IsSet());
 	FormationMenuRules::Move(State, 100.f, 0.f, DeadZone);
 	TestTrue(TEXT("Highlight follows the cursor"), State.Highlighted == TOptional<EI>(EI::EchelonRight));
 	TestFalse(TEXT("Nothing chosen before the release"), State.Choice.IsSet());
-	TestEqual(TEXT("G released: picked"), FormationMenuRules::Release(State, 4), EFormationMenuEffect::Picked);
+	TestEqual(TEXT("B released: picked"), FormationMenuRules::Release(State, 4), EFormationMenuEffect::Picked);
 	TestTrue(TEXT("Closed, echelon right holds"), !State.bOpen && State.Choice == TOptional<EI>(EI::EchelonRight) && !State.Highlighted.IsSet());
 
 	// Esc / RMB keeps the previous choice.

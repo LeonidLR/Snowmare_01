@@ -428,7 +428,7 @@ public:
 	// --- Rules v2.1 in the runtime (Codex.Formation.Sectors + Codex.Formation.V21; SquadSubsystemFormationGuard.cpp, SquadSubsystemFormationBypass.cpp) ---
 
 	/**
-	 * The formation asked for this frame: the hold-G menu's manual choice (SetFormationMenuChoice), else the terrain's (ChooseFormation).
+	 * The formation asked for this frame: the hold-B menu's manual choice (SetFormationMenuChoice), else the terrain's (ChooseFormation).
 	 * GetFormationKind is the formation in EFFECT - it differs while the wall guard falls back (FormationGuardRules::Resolve: the mirror
 	 * echelon, or the trail column along the leader's path; the request comes back by itself after classify.hold_distance of path).
 	 */
@@ -444,9 +444,9 @@ public:
 	FString GetFormationHudText() const;
 
 	/**
-	 * The hold-G menu's choice (FormationMenuRules; unset = Auto: the terrain decides). A manual formation holds until Auto (too few
+	 * The hold-B menu's choice (FormationMenuRules; unset = Auto: the terrain decides). A manual formation holds until Auto (too few
 	 * members -> Auto, FormationMenuRules::Resolve); "All forward" = the terrain's formation with everybody looking at 12. The radial
-	 * menu itself is not built yet: the dev console Codex.Formation.Menu sets it.
+	 * menu (hold B, ACodexTacticsPlayerController, stage 7) and the dev console Codex.Formation.Menu set it.
 	 */
 	void SetFormationMenuChoice(const TOptional<EFormationMenuItem>& Choice);
 	TOptional<EFormationMenuItem> GetFormationMenuChoice() const { return Sectors.MenuChoice; }
@@ -649,7 +649,7 @@ private:
 		/** Slicing the pie (FormationCornerRules::Watch). */
 		FFormationCornerState Corner;
 		TArray<FFormationCornerLook> CornerLooks;
-		/** The hold-G menu's choice (unset = Auto) and its "All forward". */
+		/** The hold-B menu's choice (unset = Auto) and its "All forward". */
 		TOptional<EFormationMenuItem> MenuChoice;
 		bool bAllForward = false;
 		/** The bypass steering of the leader's own order through the corners of the chosen side. */

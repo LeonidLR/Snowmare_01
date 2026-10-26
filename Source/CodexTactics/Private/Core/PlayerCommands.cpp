@@ -38,6 +38,7 @@ namespace PlayerCommands
 	const FName SquadStanceProne(TEXT("Stance.Squad.Prone"));
 	const FName SoloOn(TEXT("Squad.Solo"));
 	const FName Regroup(TEXT("Squad.Regroup"));
+	const FName FormationMenu(TEXT("Squad.Formation"));
 	const FName Guard(TEXT("Squad.Guard"));
 	const FName Autonomy(TEXT("Squad.Autonomy"));
 	const FName HoldLine(TEXT("Squad.HoldLine"));
@@ -180,6 +181,7 @@ namespace PlayerCommands
 			{ SquadStanceProne, TEXT("Alt+V"), TEXT("Stances"), TEXT("Whole squad: go prone") },
 			{ SoloOn, TEXT("B"), TEXT("Squad"), TEXT("Solo: the others hold their spots") },
 			{ Regroup, TEXT("B"), TEXT("Squad"), TEXT("Regroup into the formation") },
+			{ FormationMenu, TEXT("Hold B"), TEXT("Squad"), TEXT("Formation menu: move the cursor to a formation, release B (centre = Auto: the terrain decides)") },
 			{ Guard, TEXT("T"), TEXT("Squad"), TEXT("Guard this spot / rejoin") },
 			{ Autonomy, TEXT("Ctrl+T"), TEXT("Squad"), TEXT("Commander Mode (autonomous squad)") },
 			{ HoldLine, TEXT("Shift+RMB"), TEXT("Squad"), TEXT("Hold this line at all costs (green; on enemies: suppressive fire)") },

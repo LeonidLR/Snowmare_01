@@ -103,7 +103,7 @@ member's formation look whenever it changes (with his facing) and every look Cle
   `SetFormationWallPose` (his next own order stands him up when the crouch was the squad's). The tutorial's `squad_not_in_cover_at` counts the wall pose as in cover.
 - **Checks:** `FormationLabSmoke` (L_FormationLab, `-LevelJson=L_FormationLab.json`; `shot` = stills in `Saved/Screenshots/FormationLab/`); GroupCoverSmoke
   scene W. A/B: `smoke_parallel.ps1 -PreCmds "Codex.Formation.Sectors 0" -Commands ...`.
-- **Open:** the hold-G radial menu (manual formations, `EFormationMode::Forward`), the hedgehog at a fire (`FormationShapeRules::HedgehogSlots`), the
+- **Open:** the hedgehog at a fire (`FormationShapeRules::HedgehogSlots`), the
   designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
   simulator ~1 m) - a Training Ground tuning point.
 
@@ -332,9 +332,19 @@ ClearLook, HUD text), `SquadSubsystemFormationBypass.cpp` (bypass), the pure glu
 - **ClearLook:** every follower's look and the leader's go through `FormationSectorRules::ClearLook` (the world walls only: a wall lower than
   135 cm is looked over and never turns a look - the tutorial's 1.2 m sight wall) unless exempt (`FormationGuardRuntime::ShouldClearLook`: the wall
   layout / slide, run, the corner watcher, the leader looking within 35 deg of his travel).
-- **The hold-G menu stand-in:** `USquadSubsystem::SetFormationMenuChoice` (FormationMenuRules: a manual choice holds until auto; "all forward" = the
+- **The menu's choice:** `USquadSubsystem::SetFormationMenuChoice` (FormationMenuRules: a manual choice holds until auto; "all forward" = the
   terrain's formation, mode Forward); dev console `Codex.Formation.Menu <auto|line|diamond|echelon_right|blizzard|column|hedgehog|echelon_left|all_forward>`.
-  The radial menu UI is still open.
+- **The hold-B radial menu (stage 7, 2026-10-26; user decision: G is the grenade, the menu moved to B):** `ACodexTacticsPlayerController`
+  (`CodexTacticsPlayerControllerFormationMenu.cpp`): IA_SoloMode Started / Completed -> `SoloModePressed` / `SoloModeReleased`, the tap / hold on
+  real time by `FFormationMenuKeyTracker` (`UI/FormationMenuInputRules`). TAP B (released before `FormationMenuHoldSeconds` = 0.25 s) = the solo /
+  squad toggle (now on the RELEASE, was on the press); HOLD B = the menu, only while `CanOpenFormationMenu` (squad mode, >= 2 members, not
+  turn-based, orders not locked, no dialogue, `Squad.Formation` not tutorial-locked - asked silently); otherwise the hold is a plain tap (the
+  toggle on the release). The menu (`UFormationMenuWidget`, NativePaint, created lazily, z 30, never pauses) opens at the cursor pulled in to keep
+  the ring + labels on screen (the OS cursor follows a pulled centre); the cursor offset from its centre -> `FormationMenuRules::Move`; the B
+  release -> `Release` -> `SetFormationMenuChoice` + `PlayerCommands::FormationMenu` ("Squad.Formation"; F1 row "Hold B"); Esc (`DialogueSkip`
+  first) / RMB (`CameraDragRotateStart` first) -> `Cancel` (the later release does nothing); LMB does nothing while open; the camera's edge pan
+  stops while open; the menu closes by itself when it becomes unavailable (solo, a dialogue, members lost). Smokes:
+  `SetFormationMenuCursorOffset` = a virtual cursor (the menu then opens at the view centre). Check: `FormationMenuSmoke`.
 - **Checks:** `FormationLabSmoke` (check 4 on the requested formation; check 7 "never split" and check 9 "somebody looks round each passed wall end" on
   every run; R_E_corner: the turn fold; manual runs R_B_walls "echelon left" -> the mirror + HUD line, R_D_corridors "line" -> the trail column + HUD
   line; R_E_corner_pass: the corner watch at W_E_14's free end), `FormationBypassSmoke` (lane G: the four routes + the shielded side from the squad's

@@ -242,7 +242,9 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(StanceActions[0], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceStand);
 	Input->BindAction(StanceActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceCrouch);
 	Input->BindAction(StanceActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceProne);
-	Input->BindAction(SoloModeAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::ToggleSoloMode);
+	// B: tap = solo / squad (on the release), hold = the formation radial menu (stage 7, user decision 2026-10-26).
+	Input->BindAction(SoloModeAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SoloModePressed);
+	Input->BindAction(SoloModeAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::SoloModeReleased);
 
 	Input->BindAction(CameraRotateLeftAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraRotateLeft);
 	Input->BindAction(CameraRotateRightAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraRotateRight);
@@ -330,6 +332,9 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		}
 		HandleSpaceHold();
 	}
+
+	// Formation radial menu: B held past FormationMenuHoldSeconds opens it, the cursor moves its highlight (real time).
+	TickFormationMenu(static_cast<float>(FApp::GetDeltaTime()));
 
 	// Sprint 12: RMB / Esc drop the cover preview.
 	if (HasCoverPreview() && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape)))

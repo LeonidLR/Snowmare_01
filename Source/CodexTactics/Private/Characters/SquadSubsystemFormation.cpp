@@ -626,7 +626,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		{
 			Sectors.MoveFormation = Terrain;
 		}
-		// The hold-G menu's manual choice holds until Auto (FormationMenuRules::Resolve: too few members -> Auto); else the terrain's.
+		// The hold-B menu's manual choice holds until Auto (FormationMenuRules::Resolve: too few members -> Auto); else the terrain's.
 		const FFormationMenuResolved Menu = FormationMenuRules::Resolve(Sectors.MenuChoice, Count);
 		Sectors.bAllForward = Menu.bAllForward;
 		Sectors.Requested = Menu.ManualFormation.Get(Terrain);

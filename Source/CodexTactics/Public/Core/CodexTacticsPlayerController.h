@@ -11,12 +11,14 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
 #include "Tactics/CoverWrapRules.h"
+#include "UI/FormationMenuInputRules.h"
 #include "CodexTacticsPlayerController.generated.h"
 
 class UInputAction;
 class UInputMappingContext;
 class USquadSubsystem;
 class AOperativeCharacter;
+class UFormationMenuWidget;
 
 /**
  * The squad's corner peek under the cursor (ACodexTacticsPlayerController::FindSquadCornerPeekForHit; user bug report 2026-10-26): who peeks
@@ -374,6 +376,36 @@ public:
 	/** Esc: closes the full map; true when it was open. */
 	bool CloseFullMap();
 
+	// --- Formation radial menu (stage 7, hold B; user decision 2026-10-26; CodexTacticsPlayerControllerFormationMenu.cpp) ---
+
+	/** Real seconds B must be held to open the formation menu; a release before it is a tap (the solo / squad toggle). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "0.05"))
+	float FormationMenuHoldSeconds = FormationMenuInput::DefaultHoldSeconds;
+	/** Widget class of the formation radial menu (default UFormationMenuWidget). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input")
+	TSubclassOf<UFormationMenuWidget> FormationMenuWidgetClass;
+
+	/** B down / up (IA_SoloMode Started / Completed): tap = ToggleSoloMode, hold = the formation menu. Public for the smokes. */
+	void SoloModePressed();
+	void SoloModeReleased();
+	/**
+	 * The hold may open the menu now: exploration or the tactical pause (not turn-based, orders not locked), squad mode with
+	 * >= 2 members (FormationMenuRules::IsEnabled), no dialogue, Squad.Formation not tutorial-locked.
+	 */
+	bool CanOpenFormationMenu() const;
+	bool IsFormationMenuOpen() const { return FormationMenuState.bOpen; }
+	/** Esc / RMB: closes the open menu, the previous choice stays (FormationMenuRules::Cancel); true when it was open. */
+	bool CancelFormationMenu();
+	/**
+	 * Smokes / shots: a virtual cursor at this offset from the menu centre (widget units, y down) instead of the mouse; while set the
+	 * menu opens at the view centre. Unset = the real mouse.
+	 */
+	void SetFormationMenuCursorOffset(const TOptional<FVector2D>& Offset) { FormationMenuCursorOffset = Offset; }
+	/** What the last release / cancel did (smokes). */
+	EFormationMenuEffect GetLastFormationMenuEffect() const { return LastFormationMenuEffect; }
+	/** The menu widget (null until the menu first opened). */
+	UFormationMenuWidget* GetFormationMenuWidget() const { return FormationMenuWidget; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -606,6 +638,19 @@ private:
 	void UseHeatPackKey() { UseSquadItem(EPersonalItem::HeatPack); }
 
 	FSpaceInputTracker SpaceInput;
+
+	/** Formation radial menu (CodexTacticsPlayerControllerFormationMenu.cpp): the B key's tap / hold, the menu rules' state, the widget. */
+	void TickFormationMenu(float RealDeltaSeconds);
+	void OpenFormationMenu();
+	void UpdateFormationMenu();
+	void ReleaseFormationMenu();
+	int32 GetFormationMenuMemberCount() const;
+	FFormationMenuKeyTracker FormationMenuKey;
+	FFormationMenuState FormationMenuState;
+	TOptional<FVector2D> FormationMenuCursorOffset;
+	EFormationMenuEffect LastFormationMenuEffect = EFormationMenuEffect::None;
+	UPROPERTY(Transient)
+	TObjectPtr<UFormationMenuWidget> FormationMenuWidget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class AHoldSphereActor> HoldSphere;
