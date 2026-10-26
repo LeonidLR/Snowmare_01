@@ -490,6 +490,10 @@ ones carry `since: 'v2.3'`).
   wall, both got the same point and the two men walked into each other - 22 cm apart.)
 - Runtime: the same requirement for `SquadFormation::ComputeFallbackSlots` - the stand-ins of one frame keep `slot.min_spacing`
   from each other and from the walkable slots.
+- v2.3 part 9 (coordinator 2026-10-26, the C++ runtime's order-free reading): the simulator's `resolveFrameSlots` gives out every
+  slot that needs no stand-in first (the leader's, every walkable slot of the frame), then resolves the unwalkable ones in member
+  order, each stand-in (or the man's position when none) given out in turn - a stand-in no longer lands on a walkable slot of a
+  member resolved after it (it used to fill `given` in member order).
 
 ### 13.6 `FormationGuardRules::Resolve(..., config, allInSight)` - a man cut off brings the trail column back (red team #7)
 - `allInSight` (default true = v2.2) = every member has a clear line (no wall body, radius 0) to the leader. False -> raw level 2
@@ -540,3 +544,13 @@ ones carry `since: 'v2.3'`).
   velocity); none (null) below 1 cm/s.
 - Golden `formation_ClearLook.json` gains `in.ahead` (null; and pos + 100 cm/s x anticipate_s along the scene heading on the
   cases without a turn and without a limit) and the scene `end_right_ahead` (a wall end 0.6 m ahead, 0.9 m to the right).
+
+### 13.9 v2.3 part 9 - the turn fold's HUD says "(turn)" (user 2026-10-26); order-free stand-ins (13.5)
+- `GuardState.cause` = 'wall' | 'turn' | null (absent in an input state = null). Resolve: a wall cutting the requested formation
+  (BlockedRoles here or at the lookahead pose) -> 'wall' (the level as before: during a sharp turn 2, else the mirror's 1 / 2);
+  else the turn fold (a WIDE formation, turnAhead > turn.fold_deg) -> 'turn'; a member cut off (allInSight false) -> 'wall'.
+  The new state's cause = that raw cause when the state takes the raw level (any of the three "at(raw)" returns), the held
+  state's own cause while a looser level waits for its hold distance; null whenever the level is 0. Levels are unchanged.
+- `guardHudText(requested, effective, level, memberCount, cause = null)`: "(turn)" for 'turn', "(wall)" otherwise, e.g.
+  "Line -> Column (turn)". The C++ HUD (`FormationGuardRuntime` label) needs the same cause.
+- Golden `formation_Guard.json`: the input states carry `cause` (level 2 'wall' / the waiting one 'turn'), `out.state.cause`.

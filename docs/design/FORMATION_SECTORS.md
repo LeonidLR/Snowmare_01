@@ -236,7 +236,8 @@ The five overnight questions below were answered; the question texts stay for th
   him closed the gap he looked through and his look swung across the wall beside him).
 - **Q5 = a (decided 2026-10-26)**: the pair's rear man keeps his 3 → 6 → 9 sweep at a narrow mouth (the decision for the pair stays);
   those #1 entries are accepted.
-- The HUD line of the turn fold says "(turn)", e.g. "Line -> Column (turn)"; the wall guard keeps "(wall)" - v2.3 part 9.
+- The HUD line of the turn fold says "(turn)", e.g. "Line -> Column (turn)"; the wall guard keeps "(wall)" (also when a wall
+  cuts the formation during a turn, and for a man cut off) - v2.3 part 9 (`GuardState.cause`).
 - No tuning for the manual line's rear man (its pace, #6 in parentheses, stays not gating).
 
 ## Open for the user (v2.3) - answered 2026-10-26 (above)

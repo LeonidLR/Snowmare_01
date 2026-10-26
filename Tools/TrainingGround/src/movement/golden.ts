@@ -184,7 +184,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
   }
 
   // --- v2.1 (FORMATION_CONTRACT.md 10)
-  const guard = base('Guard', 'in: walls, requested, memberCount, leaderPos, leaderYaw, ahead ({pos, yaw} | null), turnAhead (deg, v2.1.1), state {requested, level, effective, candidate, candidateDistance}, stepDistance, allInSight (v2.3) -> out.blocked (BlockedRoles at the leader) + out.state (Resolve).');
+  const guard = base('Guard', 'in: walls, requested, memberCount, leaderPos, leaderYaw, ahead ({pos, yaw} | null), turnAhead (deg, v2.1.1), state {requested, level, effective, candidate, candidateDistance, cause (wall | turn | null; v2.3 part 9)}, stepDistance, allInSight (v2.3) -> out.blocked (BlockedRoles at the leader) + out.state (Resolve).');
   const guardFormations: Formation[] = ['diamond', 'line', 'column', 'echelon_right', 'echelon_left', 'hedgehog', 'blizzard'];
   for (const scene of GUARD_SCENES) {
     for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
@@ -193,8 +193,8 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
       for (const requested of guardFormations) for (const memberCount of requested.startsWith('echelon') ? [3, 4] : [4]) {
         const states: GuardState[] = [
           GUARD_START,
-          { requested, level: 2, effective: 'column', candidate: null, candidateDistance: 0 },
-          { requested, level: 2, effective: 'column', candidate: 0, candidateDistance: hold - 30 },
+          { requested, level: 2, effective: 'column', candidate: null, candidateDistance: 0, cause: 'wall' },
+          { requested, level: 2, effective: 'column', candidate: 0, candidateDistance: hold - 30, cause: 'turn' },
         ];
         // v2.1.1: turnAhead 40 (> turn.fold_deg) only without the lookahead pose (keeps the file small).
         // v2.3: allInSight false (a member cut off) only with the lookahead pose (keeps the file small).

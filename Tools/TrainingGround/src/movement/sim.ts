@@ -10,7 +10,7 @@ import { add, angleDiff, clamp, closestOnSegment, deltaYaw, dirOf, dist, dot, le
 import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments } from './layout.ts';
 import { AGENT_RADIUS, NavGrid } from './nav.ts';
-import type { GuardLevel, Mode, Role, TerrainClass, WallSide } from './rules.ts';
+import type { GuardCause, GuardLevel, Mode, Role, TerrainClass, WallSide } from './rules.ts';
 import {
   CLASSIFY_START, CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
   FormationShapeRules, FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
@@ -80,6 +80,8 @@ export interface Frame {
   requested: Formation;
   /** v2.1: 0 = as requested, 1 = the mirror echelon, 2 = the column (FormationGuardRules.Resolve). */
   guardLevel: GuardLevel;
+  /** v2.3 part 9: why the guard falls back ('wall' / 'turn'; null at level 0) - the HUD line's "(wall)" / "(turn)". */
+  guardCause: GuardCause | null;
   terrain: TerrainClass;
   heading: number;
   leaderDistance: number;
@@ -382,20 +384,15 @@ export function simulate(o: SimOptions): number {
 
     // --- members
     const frames: MemberFrame[] = [];
-    const given: Vec2[] = []; // v2.3: slots given out this frame (a fallback never lands on one)
+    // v2.3 part 9 (contract 13.5, order-free): every walkable slot of the frame is given out first, then the unwalkable ones get
+    // their stand-ins (in member order) - a stand-in never lands within slot.min_spacing of a slot resolved after it.
+    const frameTargets = members.map((m) => targets.find((x) => x.role === m.place) ?? { role: m.place, pos: m.pos, yaw: m.yaw });
+    const resolved = resolveFrameSlots(nav, walls, leader.pos,
+      members.map((m, i) => ({ pos: frameTargets[i].pos, resolve: i > 0 || formation === 'wall', here: m.pos })), cfg(c, 'slot.min_spacing'));
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
-      const target = targets.find((x) => x.role === m.place) ?? { role: m.place, pos: m.pos, yaw: m.yaw };
-      let slot = target.pos;
-      let slotFallback = false, slotInvalid = false;
-      if (i > 0 || formation === 'wall') {
-        if (!nav.walkable(slot)) {
-          slotFallback = true;
-          const alt = fallbackSlot(nav, walls, leader.pos, slot, given, cfg(c, 'slot.min_spacing'));
-          if (alt) slot = alt; else { slotInvalid = true; slot = m.pos; }
-        }
-      }
-      given.push(slot);
+      const target = frameTargets[i];
+      const { slot, fallback: slotFallback, invalid: slotInvalid } = resolved[i];
       let moveDir: Vec2 = [0, 0];
       if (i > 0 || formation === 'wall') {
         const before = m.pos;
@@ -447,7 +444,7 @@ export function simulate(o: SimOptions): number {
       }
     }
     frames.forEach((fr, i) => { fr.pos = members[i].pos; });
-    o.onFrame({ t, mode, formation, requested, guardLevel: guard.level, terrain, heading, leaderDistance: travelled, members: frames, bypasses, slide: slideFrame });
+    o.onFrame({ t, mode, formation, requested, guardLevel: guard.level, guardCause: guard.cause ?? null, terrain, heading, leaderDistance: travelled, members: frames, bypasses, slide: slideFrame });
     lastTargets = targets;
     void slideLead;
 
@@ -488,7 +485,7 @@ function wallAhead(walls: readonly Segment[], pos: Vec2, heading: number): Segme
  * v2.3 (red team #5): not within `spacing` of a slot already given out this frame (else two unwalkable slots - the hedgehog of
  * three in a 3 m corridor - got the SAME point and the two men walked into each other); none such -> the nearest as before.
  */
-function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2, given: readonly Vec2[] = [], spacing = 0): Vec2 | null {
+export function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2, given: readonly Vec2[] = [], spacing = 0): Vec2 | null {
   const off = sub(slot, leader);
   const r = len(off), base = yawOf(off);
   const cands: Vec2[] = [];
@@ -498,6 +495,27 @@ function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slo
   cands.sort((a, b) => dist(a, slot) - dist(b, slot));
   const ok = cands.filter((p) => nav.walkable(p) && !segmentBlocked(leader, p, walls, 0));
   return ok.find((p) => given.every((g) => dist(g, p) >= spacing)) ?? ok[0] ?? null;
+}
+
+/**
+ * v2.3 part 9 (FORMATION_CONTRACT.md 13.5, order-free - the C++ runtime's reading, formation/runtime-v23): the slots of one frame.
+ * `slots[i].resolve` = the slot must be walkable (every follower; the leader too in the wall layout), `here` = the man's position
+ * (an unresolvable slot keeps him there). First every slot that needs no stand-in is given out (the leader's, the walkable ones),
+ * then each unwalkable slot, in list order, gets fallbackSlot's stand-in keeping `spacing` from everything given out so far; the
+ * stand-in (or `here` when none) is given out in turn. A walkable slot later in the list is never ignored (member order used to
+ * let Z, resolved before P, take the stand-in on P's spot).
+ */
+export function resolveFrameSlots(nav: NavGrid, walls: readonly Segment[], leader: Vec2,
+  slots: readonly { pos: Vec2; resolve: boolean; here: Vec2 }[], spacing: number): { slot: Vec2; fallback: boolean; invalid: boolean }[] {
+  const needs = slots.map((x) => x.resolve && !nav.walkable(x.pos));
+  const given: Vec2[] = slots.filter((_, i) => !needs[i]).map((x) => x.pos);
+  return slots.map((x, i) => {
+    if (!needs[i]) return { slot: x.pos, fallback: false, invalid: false };
+    const alt = fallbackSlot(nav, walls, leader, x.pos, given, spacing);
+    const slot = alt ?? x.here;
+    given.push(slot);
+    return { slot, fallback: true, invalid: !alt };
+  });
 }
 
 /**

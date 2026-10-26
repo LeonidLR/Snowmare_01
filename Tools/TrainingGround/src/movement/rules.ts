@@ -645,6 +645,9 @@ function BlockedRoles(walls: readonly Segment[], formation: Formation, memberCou
 /** 0 = the requested formation, 1 = the mirror echelon, 2 = the trail column (FormationShapeRules.TrailSlots). */
 export type GuardLevel = 0 | 1 | 2;
 
+/** v2.3 part 9: why the guard falls back - a wall cuts the formation (or a man off) / a sharp turn ahead ("5Б"). */
+export type GuardCause = 'wall' | 'turn';
+
 export interface GuardState {
   /** The formation asked for (the menu's manual choice, or FormationFor of the terrain); null before the first tick. */
   requested: Formation | null;
@@ -654,9 +657,15 @@ export interface GuardState {
   /** A looser level waiting for its path distance (as ClassifyState.candidate), and the leader path walked meanwhile, cm. */
   candidate: GuardLevel | null;
   candidateDistance: number;
+  /**
+   * v2.3 part 9 (user 2026-10-26: the turn fold's HUD says "(turn)"): why the level in force is above 0 - 'wall' when a wall cuts
+   * the requested formation or a member is cut off (it wins over a turn at the same time), 'turn' for the turn fold alone; null
+   * at level 0. Kept while a fallback is held; absent = null.
+   */
+  cause?: GuardCause | null;
 }
 
-export const GUARD_START: GuardState = { requested: null, level: 0, effective: null, candidate: null, candidateDistance: 0 };
+export const GUARD_START: GuardState = { requested: null, level: 0, effective: null, candidate: null, candidateDistance: 0, cause: null };
 
 /** v2.1.1: formations whose far end swings metres on a turn (the trail column takes the turn for them). */
 const WIDE: readonly Formation[] = ['echelon_right', 'echelon_left', 'line'];
@@ -707,6 +716,8 @@ function Effective(state: GuardState): { formation: Formation | null; trail: boo
  * and opens again after hold_distance of path once the turn is behind (the same hysteresis).
  * v2.3 (red team #7): allInSight = every member has a clear line (no wall body) to the leader; false -> the trail column at
  * once (a man already cut off is led round the corner on the leader's path), released by the usual hold. Default true = v2.2.
+ * v2.3 part 9: the state names its cause ('wall' / 'turn', null at level 0) for the HUD line (labels.ts guardHudText); the levels
+ * are unchanged.
  */
 function Resolve(walls: readonly Segment[], requested: Formation, memberCount: number, leaderPos: Vec2, leaderYaw: number,
   ahead: { pos: Vec2; yaw: number } | null, turnAhead: number, state: GuardState, stepDistance: number,
@@ -714,23 +725,26 @@ function Resolve(walls: readonly Segment[], requested: Formation, memberCount: n
   const whole = (f: Formation) => BlockedRoles(walls, f, memberCount, leaderPos, leaderYaw, config).length === 0 &&
     (!ahead || BlockedRoles(walls, f, memberCount, ahead.pos, ahead.yaw, config).length === 0);
   let raw: GuardLevel = 0;
+  let cause: GuardCause | null = null;
   // v2.1.1 (user "5Б"): a sharp turn ahead folds a wide formation into the trail column (no long swing of its far end).
-  if (WIDE.includes(requested) && turnAhead > cfg(config, 'turn.fold_deg')) raw = 2;
-  else if (requested !== 'wall' && !whole(requested)) {
+  // v2.3 part 9: a wall cutting the formation at the same time names the cause 'wall' (the guard-by-wall case keeps "(wall)").
+  const turning = WIDE.includes(requested) && turnAhead > cfg(config, 'turn.fold_deg');
+  if (requested !== 'wall' && !whole(requested)) {
     const mirror = mirrorOf(requested);
-    raw = mirror && whole(mirror) ? 1 : 2;
-  }
+    raw = turning ? 2 : mirror && whole(mirror) ? 1 : 2;
+    cause = 'wall';
+  } else if (turning) { raw = 2; cause = 'turn'; }
   // v2.3 (red team #7): a member already cut off from the leader -> the trail column at once (it leads him round the corner
   // on the leader's own path); the slots being whole is not enough - the hold distance ran out as the leader turned into a side
   // passage and the blizzard's far man was left round the corner.
-  if (requested !== 'wall' && !allInSight) raw = 2;
-  const at = (level: GuardLevel, candidate: GuardLevel | null = null, candidateDistance = 0): GuardState =>
-    ({ requested, level, effective: formationAt(requested, level), candidate, candidateDistance });
-  if (state.requested !== requested || raw >= state.level) return at(raw);
-  if (state.level !== 2 && !whole(formationAt(requested, state.level))) return at(raw);
+  if (requested !== 'wall' && !allInSight) { raw = 2; cause = 'wall'; }
+  const at = (level: GuardLevel, why: GuardCause | null, candidate: GuardLevel | null = null, candidateDistance = 0): GuardState =>
+    ({ requested, level, effective: formationAt(requested, level), candidate, candidateDistance, cause: level === 0 ? null : why });
+  if (state.requested !== requested || raw >= state.level) return at(raw, cause);
+  if (state.level !== 2 && !whole(formationAt(requested, state.level))) return at(raw, cause);
   const walked = (state.candidate === raw ? state.candidateDistance : 0) + Math.max(0, stepDistance);
-  if (walked >= cfg(config, 'classify.hold_distance')) return at(raw);
-  return at(state.level, raw, walked);
+  if (walked >= cfg(config, 'classify.hold_distance')) return at(raw, cause);
+  return at(state.level, state.cause ?? null, raw, walked);
 }
 
 export const FormationGuardRules = { ChainPairs, BlockedRoles, Resolve, Effective, TurnAhead };

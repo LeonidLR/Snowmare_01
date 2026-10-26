@@ -3,12 +3,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Segment } from './geometry.ts';
-import { angleDiff, distToWall } from './geometry.ts';
+import { angleDiff, dist as distTo, distToWall } from './geometry.ts';
 import { configValues } from './config.ts';
 import { readConfigFile, readLayout } from './cli/paths.ts';
 import { runSeries } from './bot.ts';
-import { simulate } from './sim.ts';
-import { FormationCoverRules, FormationGuardRules, FormationSectorRules, FormationShapeRules, REAR_SECTOR } from './rules.ts';
+import { fallbackSlot, resolveFrameSlots, simulate } from './sim.ts';
+import { NavGrid } from './nav.ts';
+import { FormationCoverRules, FormationGuardRules, FormationSectorRules, FormationShapeRules, GUARD_START, REAR_SECTOR } from './rules.ts';
 
 const C = configValues(readConfigFile());
 const L = FormationSectorRules.ClearLook;
@@ -223,4 +224,48 @@ test('v2.3 part 8 sim (Q4 = b): no wall stare passing the corridor-mouth wall en
   const stares = (config: typeof C) => runSeries({ layout, config, members: [4], seeds: 2, seedBase: 1, manual: 'auto' }).summary.checks.find((c) => c.id === 1)!.fail;
   assert.ok(stares({ ...C, 'look.anticipate_s': 0 }) > 0, 'precondition: without anticipation the 4th man stares at a wall end');
   assert.equal(stares(C), 0);
+});
+
+// --- v2.3 part 9: fallback stand-ins are order-free (contract 13.5, the C++ runtime's reading) and the turn fold's HUD says "(turn)".
+test('v2.3 part 9: a stand-in keeps slot.min_spacing from every walkable slot of the frame, whatever the member order', () => {
+  // Slot A sits in a wall; its nearest stand-in (A turned +30 deg round the leader) is where walkable slot B stands.
+  const walls: Segment[] = [{ a: [300, -40], b: [300, 40], thickness: 60 }];
+  const nav = new NavGrid(walls, [-1000, -1000], [1000, 1000]);
+  const leader: [number, number] = [0, 0], A: [number, number] = [300, 0];
+  const B: [number, number] = [Math.round(300 * Math.cos(Math.PI / 6) * 1000) / 1000, 150];
+  assert.ok(!nav.walkable(A) && nav.walkable(B), 'precondition');
+  const spacing = C['slot.min_spacing'];
+  assert.ok(distTo(fallbackSlot(nav, walls, leader, A, [leader], spacing)!, B) < spacing, 'precondition: given in member order, A lands on B');
+  const lead = { pos: leader, resolve: false, here: leader };
+  const a = { pos: A, resolve: true, here: [250, 0] as [number, number] }, b = { pos: B, resolve: true, here: B };
+  const ab = resolveFrameSlots(nav, walls, leader, [lead, a, b], spacing), ba = resolveFrameSlots(nav, walls, leader, [lead, b, a], spacing);
+  assert.deepEqual(ab[1], ba[2], 'order-free');
+  assert.deepEqual(ab[2], { slot: B, fallback: false, invalid: false });
+  assert.ok(ab[1].fallback && !ab[1].invalid);
+  assert.ok(distTo(ab[1].slot, B) >= spacing && distTo(ab[1].slot, leader) >= spacing, `stand-in ${ab[1].slot}`);
+});
+
+test('v2.3 part 9: the guard names its cause - the turn fold "(turn)", a wall "(wall)" (also when both)', async () => {
+  const { guardHudText } = await import('./labels.ts');
+  const G = FormationGuardRules;
+  const sharp = C['turn.fold_deg'] + 10;
+  const turn = G.Resolve([], 'line', 4, [0, 0], 0, null, sharp, GUARD_START, 0, C);
+  assert.equal(turn.level, 2);
+  assert.equal(turn.cause, 'turn');
+  assert.equal(guardHudText('line', turn.effective!, turn.level, 4, turn.cause), 'Line -> Column (turn)');
+  // The turn behind: the fold is held for classify.hold_distance - still "(turn)".
+  const held = G.Resolve([], 'line', 4, [0, 0], 0, null, 0, turn, 50, C);
+  assert.equal(held.level, 2);
+  assert.equal(held.cause, 'turn');
+  // A wall cutting the formation: "(wall)", also during a sharp turn.
+  const wallLeft: Segment[] = [{ a: [-2000, -300], b: [2000, -300], thickness: 40 }];
+  const cut = G.Resolve(wallLeft, 'echelon_left', 4, [0, 0], 0, null, 0, GUARD_START, 0, C);
+  assert.ok(cut.level > 0);
+  assert.equal(cut.cause, 'wall');
+  assert.equal(guardHudText('echelon_left', cut.effective!, cut.level, 4, cut.cause), `Echelon left -> ${cut.level === 1 ? 'Echelon right' : 'Column'} (wall)`);
+  assert.equal(G.Resolve(wallLeft, 'echelon_left', 4, [0, 0], 0, null, sharp, GUARD_START, 0, C).cause, 'wall');
+  assert.equal(G.Resolve([], 'diamond', 4, [0, 0], 0, null, 0, GUARD_START, 0, C, false).cause, 'wall', 'a man cut off: a wall');
+  assert.equal(G.Resolve([], 'line', 4, [0, 0], 0, null, 0, GUARD_START, 0, C).cause, null, 'level 0: none');
+  assert.equal(guardHudText('line', 'line', 0, 4, null), 'Line');
+  assert.equal(guardHudText('echelon_left', 'column', 2, 4), 'Echelon left -> Column (wall)', 'no cause given: (wall) as v2.1');
 });
