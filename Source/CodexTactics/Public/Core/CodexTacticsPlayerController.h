@@ -19,6 +19,20 @@ class USquadSubsystem;
 class AOperativeCharacter;
 
 /**
+ * The squad's corner peek under the cursor (ACodexTacticsPlayerController::FindSquadCornerPeekForHit; user bug report 2026-10-26): who peeks
+ * round the hovered end of the squad's wall, his corner slot (the stand point short of that end), the end's side from that slot, the end on
+ * the wall's face line, and the stance his peek will have (the ghost's pose).
+ */
+struct FSquadCornerPeekTarget
+{
+	TWeakObjectPtr<AOperativeCharacter> Peeker;
+	FCoverSlot CornerSlot;
+	ECoverFacing Side = ECoverFacing::Right;
+	FVector EdgeOnFace = FVector::ZeroVector;
+	bool bCrouched = false;
+};
+
+/**
  * Squad orders from mouse and keyboard. The controller possesses the camera pawn, never an operative.
  * Click ground: leader moves there; double click: sprint; click an operative: make it leader;
  * 1..3: select leader; Z / C / X: stand / crouch / prone (with Alt: whole squad).
@@ -321,6 +335,20 @@ public:
 
 	/** The corner peek preview ghost is up (smokes). */
 	bool IsCornerPeekPreviewShown() const;
+	/** The corner peek preview ghost (smokes: whose silhouette, its pose and slot); null before the first hover. */
+	const class ACoverGhostActor* GetCornerPeekGhost() const { return CornerPeekGhost; }
+
+	/**
+	 * The squad's corner peek (user bug report 2026-10-26: "solo the corner shows the peek silhouette and a click peeks; in formation it is
+	 * gone"): the squad in group mode stands in the formation wall layout (USquadSubsystem::PlanFormationCornerPeek; the leader in no cover -
+	 * else the single operative's peek above) and Hit lies on the exposed END of its wall (the same window as the single peek:
+	 * CoverFacingRules::FindPeekEdge from the wall slot behind the leader) -> who peeks there and his corner. UpdateCornerPeekHover shows the
+	 * ghost for him, the click (TryHandleCoverClick) orders USquadSubsystem::OrderFormationCornerPeek.
+	 */
+	bool FindSquadCornerPeekForHit(const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget) const;
+
+	/** Smokes (rendered stills): the corner peek hover set by the smoke stays up (PlayerTick does not follow the real cursor for it). */
+	bool bFreezeCornerPeekHoverForTesting = false;
 
 	/** Godot Alt + Z / C / V: the whole squad changes stance (prone refused while anyone moves). */
 	void SetEntireSquadStance(EOperativeStance Stance);
@@ -653,6 +681,19 @@ private:
 	bool bPeekHoverEdge = false;
 	ECoverFacing PeekHoverSide = ECoverFacing::Right;
 	float PeekHoverEdgeAlong = 0.f;
+	/** The squad's corner peek under the cursor (FindSquadCornerPeekForHit; cached while the cursor and the leader rest). */
+	TWeakObjectPtr<AActor> SquadPeekHoverActor;
+	FVector SquadPeekHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector SquadPeekHoverLeaderAt = FVector::ZeroVector;
+	bool bSquadPeekHoverValid = false;
+	FSquadCornerPeekTarget SquadPeekHoverTarget;
+	/** The squad's wall slot behind the leader (FindSquadCornerPeekForHit traces it again only when he moved). */
+	mutable FCoverSlot SquadPeekBaseSlot;
+	mutable FVector SquadPeekBaseLeaderAt = FVector(TNumericLimits<float>::Max());
+	mutable bool bSquadPeekBaseValid = false;
+	mutable float SquadPeekBaseYaw = 0.f;
+	/** FindCornerPeekForHit's rule from a given wall slot (the operative's own, or the squad's wall behind the leader). */
+	bool FindCornerPeekForSlot(const FCoverSlot& Slot, const FHitResult& Hit, ECoverFacing& OutSide, float& OutEdgeAlongCm) const;
 
 	/** Godot _set_squad_tactical_cease_fire. */
 	void SetSquadCeaseFire(bool bCease);

@@ -61,12 +61,12 @@ void ACoverGhostActor::ShowForFacing(const AOperativeCharacter& InOperative, con
 	ShowPose(InOperative, InSlot, Facing, false);
 }
 
-void ACoverGhostActor::ShowCornerPeekFor(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Side)
+void ACoverGhostActor::ShowCornerPeekFor(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Side, TOptional<bool> CrouchedOverride)
 {
-	ShowPose(InOperative, InSlot, Side, true);
+	ShowPose(InOperative, InSlot, Side, true, CrouchedOverride);
 }
 
-void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Facing, bool bFireIdle)
+void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Facing, bool bFireIdle, TOptional<bool> CrouchedOverride)
 {
 	Operative = const_cast<AOperativeCharacter*>(&InOperative);
 	Slot = InSlot;
@@ -103,7 +103,8 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 		// The cover idle of the slot's height and facing side (the plain idle while no cover clips are assigned).
 		const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Source->GetAnimInstance());
 		// The peek is taken in his current stance; a cover entry in the slot height's default one.
-		const bool bCrouched = bFireIdle ? InOperative.GetStance() == EOperativeStance::Crouching || InSlot.Height == ECoverHeight::LowCover
+		const bool bCrouched = CrouchedOverride.IsSet() ? CrouchedOverride.GetValue()
+			: bFireIdle ? InOperative.GetStance() == EOperativeStance::Crouching || InSlot.Height == ECoverHeight::LowCover
 			: CoverRules::DefaultStanceFor(InSlot.Height) == EOperativeStance::Crouching;
 		UAnimSequenceBase* Clip = nullptr;
 		if (Anim)

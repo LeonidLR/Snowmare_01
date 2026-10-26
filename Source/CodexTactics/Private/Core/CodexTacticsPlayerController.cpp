@@ -345,16 +345,23 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		AOperativeCharacter* PeekOperative = PeekTurnBased ? PeekTurnBased->GetActiveUnit() : (PeekSquad ? PeekSquad->GetLeader() : nullptr);
 		// The minimap is UI: nothing in the world is hovered through it.
 		const bool bOverMinimap = IsCursorOverMinimap();
+		// 2026-10-26 (user bug report): the squad in the formation wall layout (nobody in a cover slot) previews its corner peek too - the ghost of
+		// the member nearest the hovered end of its wall (FindSquadCornerPeekForHit).
+		const bool bSquadPeek = !PeekTurnBased && PeekSquad && PeekOperative && !PeekOperative->bInCover && PeekSquad->GetFormationKind() == EFormationKind::Wall;
 		FHitResult PeekHit;
-		const bool bPeekHit = PeekOperative && PeekOperative->IsInPeekableCover() && !IsDialogueOpen() && !bRelocateSelectMode && !bOverMinimap
+		const bool bPeekHit = PeekOperative && (PeekOperative->IsInPeekableCover() || bSquadPeek) && !IsDialogueOpen() && !bRelocateSelectMode && !bOverMinimap
 			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
-		UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
+		if (!bFreezeCornerPeekHoverForTesting)
+		{
+			UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
+		}
+		const bool bCoverPeekHit = bPeekHit && PeekOperative->IsInPeekableCover();
 		// 2026-10-20: from a wall edge, another cover under the cursor previews the cover switch (ghost + dash line; real time only).
 		if (!bFreezeCoverHoverForTesting)
 		{
-			UpdateCoverSwitchHover(PeekTurnBased ? nullptr : PeekOperative, bPeekHit && !PeekTurnBased ? &PeekHit : nullptr);
+			UpdateCoverSwitchHover(PeekTurnBased ? nullptr : PeekOperative, bCoverPeekHit && !PeekTurnBased ? &PeekHit : nullptr);
 			// 2026-10-20: round his own cover object (another face, the ground next to it) previews the way along its wall (ghost + path).
-			UpdateCoverWrapHover(PeekTurnBased ? nullptr : PeekOperative, bPeekHit && !PeekTurnBased ? &PeekHit : nullptr);
+			UpdateCoverWrapHover(PeekTurnBased ? nullptr : PeekOperative, bCoverPeekHit && !PeekTurnBased ? &PeekHit : nullptr);
 		}
 		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
 		FHitResult TrapHit;

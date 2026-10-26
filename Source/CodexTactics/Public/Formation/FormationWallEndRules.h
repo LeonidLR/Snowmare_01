@@ -35,8 +35,37 @@ struct FFormationStackEnd
 	int32 Wall = INDEX_NONE;
 };
 
+/**
+ * The squad's corner peek in the wall layout (user bug report 2026-10-26: "solo, hovering the wall's corner shows the peek silhouette and a
+ * click peeks round it; in formation that is gone"): who peeks round the hovered end and whether the others form the corner stack there.
+ */
+struct FFormationSquadPeek
+{
+	/** The member who peeks (his role in the layout). */
+	EFormationRole Peeker = EFormationRole::Commander;
+	/** The others form the v2.4 corner stack at End (FindStackEnd held): the leader's move to StackDestination asks the slide for it. */
+	bool bStack = false;
+	FFormationStackEnd End;
+	FVector2D StackDestination = FVector2D::ZeroVector;
+	/** The stack's places (StackSlots; empty without a stack). */
+	TArray<FFormationSlot> StackSlots;
+};
+
 namespace FormationWallEnd
 {
+	/** The squad peek's stack destination lies this far out from the wall face at the hovered end (inside slide.max_off_wall), cm. */
+	inline constexpr float PeekDestinationOutCm = 60.f;
+
+	/**
+	 * The squad's corner peek round the end at EdgeOnFace (the exposed end of the squad's wall on its face line - the cover rules' peek edge):
+	 * with the corner stack there (FindStackEnd for the move PeekDestinationOutCm out from the face at that end) the peeker is the stack's
+	 * point man - the place nearest that end, so with three K is second; without a stack (a joint, K already within FormationWallRules::SlideMin
+	 * of the end, no squad wall) the member nearest EdgeOnFace peeks and the others hold. StartSlots = the layout in force (K first), Members =
+	 * each member's role and where he stands (Yaw unused), NormalYaw = the layout's outward normal.
+	 */
+	CODEXTACTICS_API FFormationSquadPeek PlanSquadPeek(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& StartSlots, float NormalYaw,
+		const FVector2D& EdgeOnFace, const TArray<FFormationSlot>& Members, const FFormationConfig& Config = FFormationConfig());
+
 	/** A destination this far short of the free end still asks for the edge, cm. */
 	inline constexpr float StackReachCm = 125.f;
 	/** ... or this far past it (the ghost at the corner), cm. */

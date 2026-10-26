@@ -13,6 +13,7 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverGhostActor.h"
+#include "Tactics/CoverRules.h"
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GroupCoverRules.h"
@@ -135,6 +136,35 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 			return true;
 		}
 	}
+	// The squad's corner peek (user bug report 2026-10-26): the squad in the formation wall layout stands in no cover slot, so the peek above
+	// never applied to it - a click on the END of the squad's wall (the window the single peek uses) sends the member nearest that end to peek
+	// round it, the others stack behind him (USquadSubsystem::OrderFormationCornerPeek). Before the proximity pick, as the single peek.
+	if (!TurnBased && !bAlt && !Operative->bInCover && !HitActor->IsA<APawn>())
+	{
+		const UTutorialSubsystem* SquadPeekTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
+		FSquadCornerPeekTarget Target;
+		if (!(SquadPeekTutorial && SquadPeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek)) && FindSquadCornerPeekForHit(Hit, Target))
+		{
+			HideCoverPreview();
+			UpdateCornerPeekHover(Operative, nullptr);
+			AOperativeCharacter* Peeker = Target.Peeker.Get();
+			const bool bOrdered = Squad && Squad->OrderFormationCornerPeek(Peeker, Target.CornerSlot, Target.EdgeOnFace);
+			UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+			if (bOrdered)
+			{
+				ControllerCommands::Report(this, PlayerCommands::CoverCornerPeek, nullptr, false, true, Peeker, Hit.ImpactPoint);
+				if (Messages)
+				{
+					Messages->PostMessage(Peeker->DisplayName, LOCTEXT("SquadCornerPeek", "🎯 Covering the corner - the squad stacks up behind me."));
+				}
+			}
+			else if (Messages)
+			{
+				Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("CornerPeekRefused", "⚠️ Can't get to that corner."));
+			}
+			return true;
+		}
+	}
 	// Objects (barricades, barrels, crates, quest objects) keep their click meaning; Alt + click takes cover at them. (Rev 5e: checked
 	// after the corner peek - the end of the barricade he crouches behind is a peek edge, its middle still opens its menu.)
 	if (HitActor->IsA<AInteractableActor>() && !bAlt)
@@ -236,7 +266,11 @@ bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharact
 	{
 		return false;
 	}
-	const FCoverSlot& Slot = Operative->GetCoverSlot();
+	return FindCornerPeekForSlot(Operative->GetCoverSlot(), Hit, OutSide, OutEdgeAlongCm);
+}
+
+bool ACodexTacticsPlayerController::FindCornerPeekForSlot(const FCoverSlot& Slot, const FHitResult& Hit, ECoverFacing& OutSide, float& OutEdgeAlongCm) const
+{
 	const AActor* HitActor = Hit.GetActor();
 	if (!HitActor || (Slot.WallActor.IsValid() && HitActor != Slot.WallActor.Get()))
 	{
@@ -261,6 +295,80 @@ bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharact
 	return false;
 }
 
+bool ACodexTacticsPlayerController::FindSquadCornerPeekForHit(const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget) const
+{
+	OutTarget = FSquadCornerPeekTarget();
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UWorld* World = GetWorld();
+	const AActor* HitActor = Hit.GetActor();
+	float NormalYaw = 0.f;
+	if (!Leader || !World || !HitActor || Leader->bInCover || GetActiveTurnBased() || HitActor->IsA<APawn>() || HitActor->IsA<AInteractableActor>()
+		|| HitActor->ActorHasTag(FName(TEXT("Enemy"))) || Squad->GetFormationKind() != EFormationKind::Wall || !Squad->GetFormationWallNormalYaw(NormalYaw))
+	{
+		return false;
+	}
+	// The squad's wall: the cover slot a man would take behind the leader (he stands ~45 cm off its face, his back to it).
+	const FVector Normal = FRotator(0.f, NormalYaw, 0.f).Vector();
+	const FVector Feet = Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight());
+	if (FVector::DistSquared2D(Leader->GetActorLocation(), SquadPeekBaseLeaderAt) > FMath::Square(5.f) || !FMath::IsNearlyEqual(NormalYaw, SquadPeekBaseYaw, 1.f))
+	{
+		SquadPeekBaseLeaderAt = Leader->GetActorLocation();
+		SquadPeekBaseYaw = NormalYaw;
+		bSquadPeekBaseValid = CoverTraceRules::FindCoverSlotAt(World, Feet + FVector(0.f, 0.f, 90.f) - Normal * 45.f, -Normal, SquadPeekBaseSlot)
+			&& SquadPeekBaseSlot.IsValid();
+	}
+	if (!bSquadPeekBaseValid)
+	{
+		return false;
+	}
+	const FCoverSlot Base = SquadPeekBaseSlot;
+	const bool bSquadWall = Base.WallComponent.IsValid() ? Hit.GetComponent() == Base.WallComponent.Get() : HitActor == Base.WallActor.Get();
+	ECoverFacing Side = ECoverFacing::Right;
+	float EdgeAlong = 0.f;
+	if (!bSquadWall || !FindCornerPeekForSlot(Base, Hit, Side, EdgeAlong))
+	{
+		return false; // not the end of the squad's own wall (another wall is a cover click there)
+	}
+	const FVector Right = Base.RightTangent();
+	const FVector EdgeOnFace = Base.WallPoint + Right * EdgeAlong;
+	AOperativeCharacter* Peeker = nullptr;
+	FFormationSquadPeek Plan;
+	if (!Squad->PlanFormationCornerPeek(EdgeOnFace, Peeker, Plan) || !Peeker)
+	{
+		return false;
+	}
+	// His corner: the single peek's stand point short of that end, in the stance his cover entry gives him there (high: standing, low:
+	// crouched; already in cover at that wall: his own).
+	const bool bCrouched = Base.Height == ECoverHeight::LowCover || (Peeker->bInCover ? Peeker->GetStance() == EOperativeStance::Crouching
+		: CoverRules::DefaultStanceFor(Base.Height) == EOperativeStance::Crouching);
+	const float Stand = CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlong, CoverFacingRules::CornerStandOff(Side, bCrouched, Peeker->GetCoverFacingConfig()));
+	FCoverSlot Corner;
+	bool bCorner = false;
+	for (const float Back : { 0.f, 20.f, 40.f, 60.f })
+	{
+		// The wall's last few cm may not probe: a little further in.
+		const float Along = Stand + (Side == ECoverFacing::Right ? -Back : Back);
+		if (CoverTraceRules::FindShimmySlot(World, Base, Base.WallPoint + Right * Along, Corner) && (!Base.WallActor.IsValid() || Corner.WallActor == Base.WallActor))
+		{
+			bCorner = true;
+			break;
+		}
+	}
+	if (!bCorner)
+	{
+		Corner = Base;
+		Corner.WorldLocation += Right * Stand;
+		Corner.WallPoint += Right * Stand;
+	}
+	OutTarget.Peeker = Peeker;
+	OutTarget.CornerSlot = Corner;
+	OutTarget.Side = Side;
+	OutTarget.EdgeOnFace = EdgeOnFace;
+	OutTarget.bCrouched = bCrouched;
+	return true;
+}
+
 bool ACodexTacticsPlayerController::IsCornerPeekPreviewShown() const
 {
 	return CornerPeekGhost && CornerPeekGhost->IsShown();
@@ -270,8 +378,23 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 {
 	bool bEdge = false;
 	const UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
-	if (Operative && Hit && Operative->IsInPeekableCover() && !Operative->bShimmying
-		&& !(Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek)))
+	const bool bPeekLocked = Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek);
+	// The squad's corner peek (2026-10-26): the ghost is the peeker's (the member nearest the hovered end), not the leader's.
+	const FSquadCornerPeekTarget* SquadTarget = nullptr;
+	if (Operative && Hit && !Operative->bInCover && !bPeekLocked && !GetActiveTurnBased())
+	{
+		if (Hit->GetActor() != SquadPeekHoverActor.Get() || FVector::DistSquared(Hit->ImpactPoint, SquadPeekHoverPoint) > FMath::Square(5.f)
+			|| FVector::DistSquared2D(Operative->GetActorLocation(), SquadPeekHoverLeaderAt) > FMath::Square(5.f))
+		{
+			SquadPeekHoverActor = Hit->GetActor();
+			SquadPeekHoverPoint = Hit->ImpactPoint;
+			SquadPeekHoverLeaderAt = Operative->GetActorLocation();
+			bSquadPeekHoverValid = FindSquadCornerPeekForHit(*Hit, SquadPeekHoverTarget);
+		}
+		SquadTarget = bSquadPeekHoverValid && SquadPeekHoverTarget.Peeker.IsValid() ? &SquadPeekHoverTarget : nullptr;
+		bEdge = SquadTarget != nullptr;
+	}
+	else if (Operative && Hit && Operative->IsInPeekableCover() && !Operative->bShimmying && !bPeekLocked)
 	{
 		// The probe traces only when the cursor moved over the wall (or he moved): cached while it rests.
 		if (Hit->GetActor() != PeekHoverActor.Get() || Operative != PeekHoverOperative.Get()
@@ -305,7 +428,16 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		CornerPeekGhost = GetWorld()->SpawnActor<ACoverGhostActor>(Operative->GetActorLocation(), FRotator::ZeroRotator, Params);
 	}
-	if (CornerPeekGhost)
+	if (CornerPeekGhost && SquadTarget)
+	{
+		AOperativeCharacter* Peeker = SquadTarget->Peeker.Get();
+		if (!CornerPeekGhost->IsShown() || !CornerPeekGhost->IsCornerPeekPose() || CornerPeekGhost->GetOperative() != Peeker
+			|| FVector::DistSquared2D(CornerPeekGhost->GetSlot().WorldLocation, SquadTarget->CornerSlot.WorldLocation) > 1.f)
+		{
+			CornerPeekGhost->ShowCornerPeekFor(*Peeker, SquadTarget->CornerSlot, SquadTarget->Side, SquadTarget->bCrouched);
+		}
+	}
+	else if (CornerPeekGhost)
 	{
 		// The corner stand point: the cover slot moved along the wall to the stand-off from that edge.
 		FCoverSlot Corner = Operative->GetCoverSlot();
@@ -314,7 +446,7 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 		const FVector Shift = Corner.RightTangent() * CoverFacingRules::CornerPeekStandAlong(PeekHoverSide, PeekHoverEdgeAlong, StandOff);
 		Corner.WorldLocation += Shift;
 		Corner.WallPoint += Shift;
-		if (!CornerPeekGhost->IsShown() || !CornerPeekGhost->IsCornerPeekPose()
+		if (!CornerPeekGhost->IsShown() || !CornerPeekGhost->IsCornerPeekPose() || CornerPeekGhost->GetOperative() != Operative
 			|| FVector::DistSquared2D(CornerPeekGhost->GetSlot().WorldLocation, Corner.WorldLocation) > 1.f)
 		{
 			CornerPeekGhost->ShowCornerPeekFor(*Operative, Corner, PeekHoverSide);

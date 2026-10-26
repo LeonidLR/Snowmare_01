@@ -402,6 +402,26 @@ public:
 	 * leader's navmesh path (round the wall's end). False (none) otherwise.
 	 */
 	bool PreviewFormationMove(const FVector& Destination, TArray<TArray<FVector>>& OutPaths) const;
+	/**
+	 * The squad's corner peek (user bug report 2026-10-26: "one operative at a wall shows the peek silhouette at its corner and peeks on a
+	 * click; the squad in formation does not"): the squad in group mode stands in the formation wall layout (nobody in a cover slot, the
+	 * leader not in cover - else the single operative's peek) -> who peeks round the end of its wall at EdgeOnFace (the exposed end on the
+	 * face line; FormationWallEnd::PlanSquadPeek: the corner stack's point man - the member nearest that end, K second - else the member
+	 * nearest it). False when the squad cannot peek as a group. SquadSubsystemFormationPeek.cpp.
+	 */
+	bool PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperativeCharacter*& OutPeeker, FFormationSquadPeek& OutPlan) const;
+	/**
+	 * The squad's corner peek order (the click on the end of the squad's wall): Peeker - PlanFormationCornerPeek's - takes CornerSlot (his own
+	 * cover order; the corner stand point) and, once in cover, the manual corner peek round that end (AOperativeCharacter::OrderCornerPeek, the
+	 * single operative's order); the others form the v2.4 corner stack there (the leader's move into it: the wall slide, K second, the rear man
+	 * back along the wall) or, without a stack, hold. Over with the leader's next order, a leader switch or the end of the wall layout (the
+	 * peeker then follows the leader out of his cover as any follower in cover). False: nothing was ordered.
+	 */
+	bool OrderFormationCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace);
+	/** The squad's corner peek in force: its peeker (null when none) - smokes. */
+	AOperativeCharacter* GetFormationPeeker() const { return Sectors.Peek.Peeker.Get(); }
+	/** Squad corner peeks whose peek order was given (the peeker reached his corner) since the level began - smokes. */
+	int32 GetFormationPeekCount() const { return Sectors.PeekCount; }
 	/** The last coverage allocation on the move (FormationCoverRules::Allocate): its rear guard; false when the allocator did not run. */
 	bool GetFormationRearGuard(EFormationRole& OutRole) const;
 
@@ -646,6 +666,25 @@ private:
 		TArray<TPair<FVector2D, double>> ReportedThreats;
 		FFormationBypassRecord LastBypass;
 		int32 BypassCount = 0;
+		/** The squad's corner peek (OrderFormationCornerPeek; SquadSubsystemFormationPeek.cpp). */
+		struct FSquadPeek
+		{
+			TWeakObjectPtr<AOperativeCharacter> Peeker;
+			/** The leader who ordered it (a switch ends it). */
+			TWeakObjectPtr<AOperativeCharacter> Leader;
+			/** The wall's end on its face line and the side it lies on from the corner slot. */
+			FVector EdgeOnFace = FVector::ZeroVector;
+			ECoverFacing Side = ECoverFacing::Right;
+			/** The leader's move order serial the peek belongs to (another order ends it; the squad's move into the stack is adopted once). */
+			uint32 LeaderSerial = 0;
+			/** The peek order is still due (he walks to the corner). */
+			bool bPending = false;
+			/** The leader's move into the corner stack has not become the slide / the stack yet. */
+			bool bAwaitStack = false;
+			float Seconds = 0.f;
+		};
+		FSquadPeek Peek;
+		int32 PeekCount = 0;
 	};
 
 	/** Rules v2.2 wall group (ReallocateWallGroup; SquadSubsystemWallGroup.cpp). */
@@ -703,6 +742,11 @@ private:
 	TArray<FFormationSlot> FitWallLayoutToWorld(const TArray<FFormationSlot>& Slots, float NormalYaw, float FeetZ) const;
 	/** The world walls round Center within HalfExtentCm at the formation probe height over FeetZ (GatherFormationWalls). */
 	TArray<FFormationWall> GatherWallsAround(const FVector2D& Center, float HalfExtentCm, float FeetZ) const;
+	/** The squad's corner peek per tick: the peek order once the peeker is in cover at the corner; its end (SquadSubsystemFormationPeek.cpp). */
+	void UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, float DeltaTime);
+	void EndFormationCornerPeek(const TCHAR* Why);
+	/** Operative is the squad corner peek's peeker (the formation leaves him to his corner: no follow, no wall pose, no sector look). */
+	bool IsFormationPeeker(const AOperativeCharacter* Operative) const { return Operative && Sectors.Peek.Peeker.Get() == Operative; }
 	/** The patrol / halt looks of FrameSlots from FormationCoverRules::Allocate (rules v2.2); false when the allocator does not apply. */
 	bool AllocateFormationLooks(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos);
 	/**
