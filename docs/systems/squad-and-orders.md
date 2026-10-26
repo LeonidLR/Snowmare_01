@@ -107,6 +107,33 @@ member's formation look whenever it changes (with his facing) and every look Cle
   designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
   simulator ~1 m) - a Training Ground tuning point.
 
+### The squad's corner peek (2026-10-26, branch formation/v24-squad-peek; user bug report; behind `Codex.Formation.Sectors`)
+
+User bug report 2026-10-26: one operative hugging a wall shows the peek silhouette when the cursor is on the wall's corner and peeks round it on
+the click; the squad hugging it in formation ("Along the wall (3 operatives), facing out!") showed neither. **Root cause:** since stage 6
+(b75e3ce, 2026-10-25) the group cover order in group mode is the formation wall layout (`OrderFormationWall`: the leader's `OrderMoveTo`, the
+others the formation drive) - nobody is in a cover slot, and the corner peek, hover and click, was gated on the leader's own cover slot
+(`IsInPeekableCover()` in `PlayerTick`, `UpdateCornerPeekHover`, `TryHandleCoverClick` / `FindCornerPeekForHit`). The v2.4 merges (6e85b95,
+511c45f) did not take the hover / click: `UpdateSquadMoveHover` reads ground hits only.
+- **Hover zones** (the squad in the wall layout, the leader in no cover): (1) the squad's wall within its peek window at a free end - the same
+  window as the single peek (`CoverFacingRules::FindPeekEdge`: the face / the end face / the top within 75 cm inside the edge .. 60 cm past it) ->
+  the peek ghost of the member nearest that end in the corner-aim pose, the crosshair; a click = the squad's corner peek; (2) the ground along the
+  wall within `slide.max_off_wall` -> the dashed slide / corner-stack lines (unchanged); (3) the ground round the end -> the leader's path round it
+  (unchanged); (4) the rest of the wall -> nothing on hover, the click = the cover ghost / group cover order (unchanged). The ghost lives on the
+  wall body, the guide lines on the ground: they never compete (the guide lines are also off while the peek crosshair is up).
+- **The order** (`USquadSubsystem::OrderFormationCornerPeek`, `SquadSubsystemFormationPeek.cpp`): who peeks = `FormationWallEnd::PlanSquadPeek`
+  (pure, tests `CodexTactics.Formation.WallEnd.SquadPeek`): with the v2.4 corner stack at that end (`FindStackEnd`) the stack's point man - the
+  place nearest the end, so with three K is second and the rear man looks back; without a stack (K already within `SlideMin` of the end, no
+  world walls) the member nearest the end, the others hold. The peeker takes the corner stand point in cover (`OrderTakeCover`; the stance his
+  cover entry gives him: high = standing, low = crouched - the ghost shows that) and, once in cover, gets the single operative's
+  `OrderCornerPeek` (corner aim, leaning out, held with no target). The others: the leader's move to the end (`PeekDestinationOutCm` 60 off the
+  face) = the existing wall slide into the corner stack (`TryStartFormationSlide` -> `HoldCornerStack`), the order's crouch kept; the peeker is
+  left to his corner (no follow, no wall pose, no sector look; the covered approach counts him at his place). A leader who is the point man
+  himself (a pair with K at the end) peeks and the stack forms round his corner. Over with the leader's next order (not the stack's own move),
+  a leader switch, Solo or the end of the wall layout - the peeker then follows out of his cover as any follower in cover.
+- **Checks:** `FormationSquadPeekSmoke` (both ends of the long wall; the hover through `UpdateCornerPeekHover`, the clicks through
+  `HandleWorldHit`; `Shot` = `Saved/Screenshots/Formation/squad_peek_ghost.png` / `squad_peek_held.png`).
+
 ### Rules v2.5 in the runtime - the covered approach to the wall (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.Approach`)
 
 New user rule 2026-10-26: on the order to hug a wall (the group cover order in group mode, or the arrival layout) everyone used to drop his sector

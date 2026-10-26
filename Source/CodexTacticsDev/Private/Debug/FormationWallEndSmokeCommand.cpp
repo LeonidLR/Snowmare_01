@@ -11,6 +11,12 @@
 //   CodexTactics.FormationLeaderSwapSlideSmoke bug D: the wall layout, ONE leader switch (the others re-form round the new leader), then a move
 //                                               along the same wall -> the squad slides (it moved, the wall layout again); then a click 4 m off
 //                                               the wall -> a normal move.
+//   CodexTactics.FormationSquadPeekSmoke       the squad's corner peek (user bug report 2026-10-26: "solo the wall's corner shows the peek
+//                                               silhouette and a click peeks; in formation it is gone"): the squad hugging the long wall, the
+//                                               cursor on its END (PlayerTick's hover, UpdateCornerPeekHover) -> the peek ghost of the member
+//                                               nearest that end; the ground along the wall keeps the squad's guide lines; the click there
+//                                               (HandleWorldHit) -> that member at the corner in the manual corner peek (corner aim, leaning
+//                                               out), the leader second, nobody beyond the wall; held 3 s; then the same at the other end.
 //   powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands FormationCornerPeekSmoke,FormationWallSwitchSmoke,...
 //   rendered stills ("Shot" argument; -RenderOffscreen): Saved/Screenshots/Formation/<scenario>_*.png, a camera straight above the squad.
 // A runtime arena on L_MovementTest (SmokeUtils::FindClearArena, nothing saved); the walls are spawned cubes (box collision: the world walls the
@@ -39,6 +45,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
+#include "Tactics/CoverGhostActor.h"
 #include "Tactics/CoverTraceRules.h"
 #include "UnrealClient.h"
 
@@ -58,6 +65,7 @@ namespace FormationWallEndSmoke
 		WallSwitch,
 		PathPreview,
 		LeaderSwap,
+		SquadPeek,
 	};
 
 	const TCHAR* ScenarioName(EScenario Scenario)
@@ -67,6 +75,7 @@ namespace FormationWallEndSmoke
 		case EScenario::CornerPeek: return TEXT("FormationCornerPeekSmoke");
 		case EScenario::WallSwitch: return TEXT("FormationWallSwitchSmoke");
 		case EScenario::PathPreview: return TEXT("FormationSquadPathPreviewSmoke");
+		case EScenario::SquadPeek: return TEXT("FormationSquadPeekSmoke");
 		default: return TEXT("FormationLeaderSwapSlideSmoke");
 		}
 	}
@@ -78,6 +87,7 @@ namespace FormationWallEndSmoke
 		case EScenario::CornerPeek: return TEXT("corner_stack");
 		case EScenario::WallSwitch: return TEXT("wall_switch");
 		case EScenario::PathPreview: return TEXT("path_preview");
+		case EScenario::SquadPeek: return TEXT("squad_peek");
 		default: return TEXT("leader_swap");
 		}
 	}
@@ -110,6 +120,9 @@ namespace FormationWallEndSmoke
 		TWeakObjectPtr<ACameraActor> Camera;
 		float ShotFreezeTime = -1.f;
 		bool bShotTaken = false;
+		/** The squad peek: the member the hover showed (the one nearest the end), the peeks the squad counted before the click. */
+		TWeakObjectPtr<AOperativeCharacter> Peeker;
+		int32 PeeksBefore = 0;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -937,6 +950,244 @@ namespace FormationWallEndSmoke
 		}
 	}
 
+	// ---------------------------------------------------------------------------------------------------------------------------------
+	// The squad's corner peek (user bug report 2026-10-26): the hover ghost and the click, at both ends of the long wall.
+
+	/** The end the variant peeks round: R of the wall's end (variant 0: the LEFT end, -R; 1: the right end). */
+	float PeekEndR(const FState& State)
+	{
+		return State.Variant == 0 ? -WallHalfLength : WallHalfLength;
+	}
+
+	/** One frame of the squad peek: the peeker at the end leaning out round it, the leader second from the end, nobody beyond the wall. */
+	bool SquadPeekFrame(const USquadSubsystem* Squad, const FState& State, FString& OutWhy)
+	{
+		const AOperativeCharacter* Peeker = State.Peeker.Get();
+		TArray<const AOperativeCharacter*> Order;
+		bool bNearSide = true;
+		for (const TWeakObjectPtr<AOperativeCharacter>& Weak : State.Members)
+		{
+			if (const AOperativeCharacter* Each = Weak.Get())
+			{
+				Order.Add(Each);
+				bNearSide &= AlongF(State, Each->GetActorLocation()) < WallNearF;
+			}
+		}
+		if (!Peeker || Order.Num() != 3)
+		{
+			OutWhy = TEXT("a member is missing");
+			return false;
+		}
+		const float EndR = PeekEndR(State);
+		Order.Sort([&State, EndR](const AOperativeCharacter& A, const AOperativeCharacter& B)
+		{
+			return FMath::Abs(AlongR(State, A.GetActorLocation()) - EndR) < FMath::Abs(AlongR(State, B.GetActorLocation()) - EndR);
+		});
+		const float PeekerToEnd = FMath::Abs(AlongR(State, Peeker->GetActorLocation()) - EndR);
+		const bool bPose = Peeker->bInCover && Peeker->bAtCoverCorner && Peeker->IsCornerAimActive() && Peeker->IsManualCornerPeek() && Peeker->bIsCornerLeaning;
+		const bool bFirst = Order[0] == Peeker && PeekerToEnd <= 130.f;
+		const bool bLeaderSecond = Order[1] == Squad->GetLeader();
+		OutWhy = FString::Printf(TEXT("peeker %s %.0f cm from the end (first %d), in cover %d, at the corner %d, corner aim %d, manual peek %d, leaning %d (peeking %d); second %s (leader %d); all on the near side %d"),
+			*Peeker->DisplayName.ToString(), PeekerToEnd, bFirst ? 1 : 0, Peeker->bInCover ? 1 : 0, Peeker->bAtCoverCorner ? 1 : 0, Peeker->IsCornerAimActive() ? 1 : 0,
+			Peeker->IsManualCornerPeek() ? 1 : 0, Peeker->bIsCornerLeaning ? 1 : 0, Peeker->IsPeekingRoundCorner() ? 1 : 0, *Order[1]->DisplayName.ToString(),
+			bLeaderSecond ? 1 : 0, bNearSide ? 1 : 0);
+		return bPose && bFirst && bLeaderSecond && bNearSide;
+	}
+
+	bool StepSquadPeek(UWorld* World, FState& State, USquadSubsystem* Squad, ACodexTacticsPlayerController* PC)
+	{
+		switch (State.Stage)
+		{
+		case 1:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true; // the navmesh rebuilds round the wall
+			}
+			// The player's two clicks on the wall: the cover ghost, then its confirm (the group cover order = the formation wall layout).
+			PC->HandleWorldHit(WallClick(State, 100.f));
+			Next(State, 10);
+			return true;
+		}
+		case 10:
+		{
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			PC->HandleWorldHit(WallClick(State, 100.f));
+			Check(State, Squad->HasFormationWallOrder(), TEXT("the clicks on the wall: the group cover order as the formation wall layout"));
+			Next(State, 2);
+			return true;
+		}
+		case 2:
+		{
+			FString Why;
+			const bool bLayout = InWallLayout(Squad, State, &Why) || (State.Variant > 0 && Squad->GetFormationKind() == EFormationKind::Wall && State.StageTime > 1.f);
+			if ((!bLayout || State.StageTime < 1.f) && State.StageTime < 25.f)
+			{
+				return true;
+			}
+			if (State.Variant == 0)
+			{
+				Check(State, bLayout, FString::Printf(TEXT("start: the wall layout, crouched facing out, nobody in a cover slot [%s ]"), *Why));
+			}
+			AOperativeCharacter* Leader = Squad->GetLeader();
+			const float EndR = PeekEndR(State);
+			const float Inward = State.Variant == 0 ? 1.f : -1.f;
+			// The member nearest that end (where they stand now).
+			AOperativeCharacter* Nearest = nullptr;
+			for (const TWeakObjectPtr<AOperativeCharacter>& Weak : State.Members)
+			{
+				if (AOperativeCharacter* Each = Weak.Get(); Each && (!Nearest || FMath::Abs(AlongR(State, Each->GetActorLocation()) - EndR) < FMath::Abs(AlongR(State, Nearest->GetActorLocation()) - EndR)))
+				{
+					Nearest = Each;
+				}
+			}
+			// Hover 1: the wall's end (its near face 20 cm in from the end) - the peek ghost of the member nearest it, the crosshair.
+			const FHitResult EndHit = WallClick(State, EndR + Inward * 20.f);
+			const bool bGhost = PC->UpdateCornerPeekHover(Leader, &EndHit);
+			const ACoverGhostActor* Ghost = PC->GetCornerPeekGhost();
+			const AOperativeCharacter* GhostOf = Ghost ? Ghost->GetOperative() : nullptr;
+			Check(State, !Leader->bInCover, TEXT("the squad hugs the wall in the formation layout: the leader is in no cover slot (the single peek cannot apply)"));
+			Check(State, bGhost && PC->IsCornerPeekPreviewShown() && Ghost && Ghost->IsCornerPeekPose() && GhostOf == Nearest && PC->CurrentMouseCursor == EMouseCursor::Crosshairs,
+				FString::Printf(TEXT("end %d: hovering the wall's end shows the peek ghost (shown %d, corner-peek pose %d) of the member nearest it (%s; ghost of %s), the crosshair %d"),
+					State.Variant, bGhost ? 1 : 0, Ghost && Ghost->IsCornerPeekPose() ? 1 : 0, Nearest ? *Nearest->DisplayName.ToString() : TEXT("-"),
+					GhostOf ? *GhostOf->DisplayName.ToString() : TEXT("-"), PC->CurrentMouseCursor == EMouseCursor::Crosshairs ? 1 : 0));
+			if (Ghost)
+			{
+				Check(State, FMath::Abs(AlongR(State, Ghost->GetSlot().WorldLocation) - EndR) <= 110.f && AlongF(State, Ghost->GetSlot().WorldLocation) < WallNearF,
+					FString::Printf(TEXT("end %d: the ghost stands at the corner on the squad's side (R %.0f, F %.0f)"), State.Variant,
+						AlongR(State, Ghost->GetSlot().WorldLocation), AlongF(State, Ghost->GetSlot().WorldLocation)));
+			}
+			// Hover 2: the ground along the wall 2.5 m from the end - no ghost; the squad's guide lines stay (the slide / the corner stack).
+			const FHitResult Along = GroundClick(State, WallNearF - 100.f, EndR + Inward * 250.f);
+			const bool bAlongGhost = PC->UpdateCornerPeekHover(Leader, &Along);
+			const bool bLines = PC->UpdateSquadMoveHover(&Along);
+			Check(State, !bAlongGhost && !PC->IsCornerPeekPreviewShown() && bLines,
+				FString::Printf(TEXT("end %d: the ground along the wall: no peek ghost (%d), the squad's guide lines (%d)"), State.Variant, bAlongGhost ? 1 : 0, bLines ? 1 : 0));
+			PC->UpdateSquadMoveHover(nullptr);
+			// Hover 3: the wall's middle - no ghost (a click there is the cover order).
+			const FHitResult Middle = WallClick(State, State.Variant == 0 ? 300.f : -300.f);
+			Check(State, !PC->UpdateCornerPeekHover(Leader, &Middle) && !PC->IsCornerPeekPreviewShown(), FString::Printf(TEXT("end %d: the wall's middle: no peek ghost"), State.Variant));
+			// Back on the end (the still shows the ghost), then the click.
+			PC->UpdateCornerPeekHover(Leader, &EndHit);
+			State.Peeker = Nearest;
+			Next(State, 3);
+			return true;
+		}
+		case 3:
+		{
+			if (State.Variant == 0)
+			{
+				PC->bFreezeCornerPeekHoverForTesting = true;
+				if (TakeShot(World, State, TEXT("ghost")))
+				{
+					return true;
+				}
+				if (ReleaseShot(World, State))
+				{
+					return true;
+				}
+				PC->bFreezeCornerPeekHoverForTesting = false;
+				State.bShotTaken = false; // the next still: the peek
+			}
+			State.PeeksBefore = Squad->GetFormationPeekCount();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: end %d: the click on the wall's end:%s"), State.Variant, *DescribeSquad(Squad, State));
+			PC->HandleWorldHit(WallClick(State, PeekEndR(State) + (State.Variant == 0 ? 20.f : -20.f)));
+			Check(State, Squad->GetFormationPeeker() == State.Peeker.Get() && !PC->HasCoverPreview(),
+				FString::Printf(TEXT("end %d: the click on the end orders the squad's corner peek for %s (peeker %s, no cover ghost %d)"), State.Variant,
+					State.Peeker.IsValid() ? *State.Peeker->DisplayName.ToString() : TEXT("-"),
+					Squad->GetFormationPeeker() ? *Squad->GetFormationPeeker()->DisplayName.ToString() : TEXT("-"), PC->HasCoverPreview() ? 0 : 1));
+			State.HoldTime = 0.f;
+			State.HoldGood = 0.f;
+			State.HoldWhy.Reset();
+			Next(State, 4);
+			return true;
+		}
+		case 4:
+		{
+			FString Why;
+			const bool bGood = SquadPeekFrame(Squad, State, Why);
+			if (FMath::IsNearlyEqual(FMath::Fmod(State.StageTime, 1.f), 0.f, StepSeconds * 0.5f))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: t %.1f: %s;%s"), State.StageTime, *Why, *DescribeSquad(Squad, State));
+			}
+			// Everyone settled (the peeker leaning out, the others at their stack places).
+			bool bStill = true;
+			for (const TWeakObjectPtr<AOperativeCharacter>& Weak : State.Members)
+			{
+				bStill &= Weak.IsValid() && Weak->GetVelocity().Size2D() < 5.f;
+			}
+			if (!(bGood && bStill && State.StageTime > 1.f) && State.StageTime < 45.f)
+			{
+				return true;
+			}
+			Check(State, bGood, FString::Printf(TEXT("end %d: the nearest member peeks round the corner, the leader second, nobody beyond the wall (%.1f s): %s"), State.Variant,
+				State.StageTime, *Why));
+			Check(State, Squad->GetFormationPeekCount() == State.PeeksBefore + 1, FString::Printf(TEXT("end %d: one squad peek order given (%d -> %d)"), State.Variant,
+				State.PeeksBefore, Squad->GetFormationPeekCount()));
+			Next(State, 5);
+			return true;
+		}
+		case 5:
+		{
+			if (State.Variant == 0)
+			{
+				if (TakeShot(World, State, TEXT("held")))
+				{
+					return true;
+				}
+				if (ReleaseShot(World, State))
+				{
+					return true;
+				}
+			}
+			FString Why;
+			const bool bGood = SquadPeekFrame(Squad, State, Why);
+			State.HoldTime += StepSeconds;
+			State.HoldGood += bGood ? StepSeconds : 0.f;
+			if (!bGood && State.HoldWhy.IsEmpty())
+			{
+				State.HoldWhy = Why;
+			}
+			if (State.HoldTime < HoldSeconds)
+			{
+				return true;
+			}
+			Check(State, State.HoldGood >= 0.9f * State.HoldTime, FString::Printf(TEXT("end %d: the peek held %.1f of %.1f s: %s%s"), State.Variant, State.HoldGood, State.HoldTime,
+				*Why, State.HoldWhy.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (first miss: %s)"), *State.HoldWhy)));
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: end %d held:%s"), State.Variant, *DescribeSquad(Squad, State));
+			if (State.Variant == 0)
+			{
+				++State.Variant;
+				Next(State, 2);
+				return true;
+			}
+			// The leader's next order (a click 8 m off the wall: beyond SquadOrderRules::CoverLeaveSlotDistanceCm of the corner) ends the peek: the
+			// peeker follows out of his corner (the followers-in-cover rule).
+			AOperativeCharacter* Op = Squad->GetLeader();
+			PC->HandleWorldHit(GroundClick(State, WallNearF - 800.f, AlongR(State, Op->GetActorLocation())));
+			Next(State, 6);
+			return true;
+		}
+		case 6:
+		{
+			const AOperativeCharacter* Peeker = State.Peeker.Get();
+			const bool bOut = !Squad->GetFormationPeeker() && Peeker && !Peeker->bInCover;
+			if (!bOut && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, bOut, FString::Printf(TEXT("the leader's next order ends the squad peek: the peeker leaves his corner and follows (peek %d, in cover %d)"),
+				Squad->GetFormationPeeker() ? 1 : 0, Peeker && Peeker->bInCover ? 1 : 0));
+			return Finish(State, true);
+		}
+		default:
+			return Finish(State, false);
+		}
+	}
+
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
 	{
 		State.Time += StepSeconds;
@@ -976,6 +1227,7 @@ namespace FormationWallEndSmoke
 		case EScenario::CornerPeek: return StepCornerPeek(World, State, Squad, PC);
 		case EScenario::WallSwitch: return StepWallSwitch(World, State, Squad, PC);
 		case EScenario::PathPreview: return StepPathPreview(World, State, Squad, PC);
+		case EScenario::SquadPeek: return StepSquadPeek(World, State, Squad, PC);
 		default: return StepLeaderSwap(World, State, Squad, PC);
 		}
 	}
@@ -1014,6 +1266,11 @@ namespace FormationWallEndSmoke
 		TEXT("CodexTactics.FormationSquadPathPreviewSmoke"),
 		TEXT("Dev check (bug C 2026-10-26): the squad at a wall shows its dashed guide lines along / round the wall; PASS/FAIL, exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(EScenario::PathPreview, Args, World); }));
+
+	static FAutoConsoleCommandWithWorldAndArgs SquadPeekCommand(
+		TEXT("CodexTactics.FormationSquadPeekSmoke"),
+		TEXT("Dev check (user bug report 2026-10-26): the squad hugging a wall - the hover on its end shows the peek ghost of the nearest member, the click makes him peek round the corner (the leader second), at both ends; PASS/FAIL, exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(EScenario::SquadPeek, Args, World); }));
 
 	static FAutoConsoleCommandWithWorldAndArgs LeaderSwapCommand(
 		TEXT("CodexTactics.FormationLeaderSwapSlideSmoke"),
