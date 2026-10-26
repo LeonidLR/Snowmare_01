@@ -257,6 +257,18 @@ public:
 	/** The switch hover ghost is up (smokes). */
 	bool IsCoverSwitchHoverShown() const;
 
+	/**
+	 * The squad's guide lines along / round its wall (bug C, game designer 2026-10-26: "one operative moving along a wall shows the dashed
+	 * line of his path round it; the squad shows none"): the squad in group mode standing in the formation wall layout (nobody in a cover slot,
+	 * so the single operative's wrap preview never shows), the cursor on the ground within reach of that wall or round its end -> the paths
+	 * USquadSubsystem::PreviewFormationMove predicts (a slide: each member's line along the wall; else the leader's navmesh path, which wraps
+	 * the wall's end). PlayerTick; smokes call it with their own hit. Null Hit = clear. True while lines are shown.
+	 */
+	bool UpdateSquadMoveHover(const FHitResult* Hit);
+
+	/** The squad guide lines the HUD draws (UpdateSquadMoveHover): one polyline per member, the leader first. False when none is shown. */
+	bool GetSquadMovePreviewPaths(TArray<TArray<FVector>>& OutPaths) const;
+
 	/** The last cover confirm (smokes / log): its switch verdict and whether it became a switch. */
 	ECoverSwitchVerdict GetLastCoverSwitchVerdict() const { return LastCoverSwitchVerdict; }
 	bool WasLastCoverConfirmSwitch() const { return bLastCoverConfirmSwitch; }
@@ -603,6 +615,12 @@ private:
 	FVector WrapHoverSlotLocation = FVector::ZeroVector;
 	bool bWrapHoverValid = false;
 	ECoverWrapVerdict LastCoverWrapVerdict = ECoverWrapVerdict::NotInCover;
+
+	/** The squad's guide lines along / round its wall (UpdateSquadMoveHover; cached while the cursor rests and the squad stands). */
+	TArray<TArray<FVector>> SquadMovePreviewPaths;
+	FVector SquadMoveHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector SquadMoveHoverLeaderAt = FVector::ZeroVector;
+	bool bSquadMoveHoverShown = false;
 
 	/** Rev 5c manual corner peek preview: its own ghost, the cursor, the last hover probe (cached while the cursor rests). */
 	UPROPERTY(Transient)
