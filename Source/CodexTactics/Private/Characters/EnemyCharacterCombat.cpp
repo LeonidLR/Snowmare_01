@@ -24,6 +24,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
+#include "Combat/SuppressionSubsystem.h"
 
 void AEnemyCharacter::TryKnockDownOperative(AOperativeCharacter* Operative, float DamageDealt)
 {
@@ -151,6 +152,16 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	}
 	const float Distance = FVector::Dist(Feet, GodotPosition(Target));
 	FaceYaw((Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw, DeltaTime, 8.f);
+	// Suppressive fire (game designer decision 2026-10-26): suppressed / pinned he does not fire back at all and holds his spot.
+	if (IsHeldBySuppression())
+	{
+		SuppressionHoldSeconds += DeltaTime;
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		return;
+	}
 	switch (EnemyAIRules::SpitterMove(Line.bHasLos, Distance, AIConfig.SpitterPreferredRange))
 	{
 	case ESpitterMove::Approach:
@@ -197,6 +208,8 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 		{
 			Feedback->SpawnTracer(Feet + FVector(0.f, 0.f, 90.f), End, FLinearColor(1.f, 0.2f, 0.2f));
 		}
+		// Suppression (2026-10-26): the acid that hits him suppresses him (and anyone it passes near).
+		ReportRoundAtSquad(Feet + FVector(0.f, 0.f, 90.f), End, Target, true, false, ESuppressionWeapon::Acid);
 	}
 }
 
@@ -210,6 +223,16 @@ void AEnemyCharacter::TickRangedVsVehicle(AVehiclePawn& Vehicle, float DeltaTime
 	const float Distance = Vehicle.GetHullDistance2D(Feet);
 	const FVector Aim = FVector(FVector2D(HullPoint), Vehicle.GetHullCentreWorld().Z);
 	FaceYaw((Aim - GetActorLocation()).Rotation().Yaw, DeltaTime, 8.f);
+	// Suppressive fire (2026-10-26): the APC's MG suppresses him too - no fire, he holds his spot.
+	if (IsHeldBySuppression())
+	{
+		SuppressionHoldSeconds += DeltaTime;
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		return;
+	}
 	// The line: the hull must be the first thing the shot meets (walls / rocks in between block it; other enemies do not).
 	const FVector Start = Feet + FVector(0.f, 0.f, MuzzleHeightCm);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(EnemyVehicleLine), false, this);
@@ -322,6 +345,32 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	{
 		TargetHealth->ApplyDamage(Spec, this);
 	}
+}
+
+bool AEnemyCharacter::IsHeldBySuppression() const
+{
+	// Only the shooters fire back; the melee archetypes are not held (docs/design/SUPPRESSION.md, open question).
+	const bool bRanged = Archetype == EEnemyArchetype::Spitter || Archetype == EEnemyArchetype::CryoDrone || Archetype == EEnemyArchetype::Marksman;
+	return bRanged && !bIsDying && !USuppressionSubsystem::MayEnemyFire(this);
+}
+
+void AEnemyCharacter::ReportRoundAtSquad(const FVector& Start, const FVector& End, const AActor* Target, bool bHit, bool bStruckCover,
+	ESuppressionWeapon Weapon)
+{
+	ShotsWhileSuppressed += IsHeldBySuppression() ? 1 : 0;
+	FSuppressionRound Round;
+	Round.Shooter = this;
+	Round.bAtEnemies = false;
+	Round.Start = Start;
+	Round.End = End;
+	Round.Target = Target;
+	Round.bHitTarget = bHit;
+	Round.bStruckCover = bStruckCover;
+	Round.Weapon = Weapon;
+	// The enemy-AI hook: a deliberate "suppress target" intent on this target weighs more.
+	const USuppressionSubsystem* Suppression = USuppressionSubsystem::Get(this);
+	Round.bDeliberate = Suppression && Target && Suppression->GetSuppressIntent(this) == Target;
+	USuppressionSubsystem::Report(this, Round);
 }
 
 void AEnemyCharacter::NotifySquadAttacked(AActor* Target)

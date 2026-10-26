@@ -101,7 +101,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		LastThreat.Reset();
 	}
 	bTurningToThreat = false;
-	if (bRealTimeFight && !bQuickFireActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	if (bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
 		bFacingCombatTarget = true;
 		LastThreat = Target;
@@ -137,7 +137,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// facing order, the cover (returned above / the approach to a pending slot) and an order's idle facing; above the movement direction.
 	// He keeps walking his path - the 8-direction locomotion strafes / walks backwards (the rear man looks at 6).
 	bFacingFormationSector = !bFacingCombatTarget && !bFacingWall && FormationLookYaw.IsSet() && !bExplicitFacing && !bQuickFireActive
-		&& !bGridOwnsFacing && !bHasIdleFacing && !bHasPendingCover && !bSprinting && !bCarrying && Stance != EOperativeStance::Prone
+		&& !bSuppressActive && !bGridOwnsFacing && !bHasIdleFacing && !bHasPendingCover && !bSprinting && !bCarrying && Stance != EOperativeStance::Prone
 		&& !IsPanicking();
 	if (bFacingFormationSector)
 	{
@@ -161,7 +161,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		Facts.bStanding = GetVelocity().SizeSquared2D() < 10.f * 10.f && !bHasMoveOrder;
 		Facts.bInCover = bInCover || bHasPendingCover;
 		Facts.bFacingCombatTarget = bFacingCombatTarget;
-		Facts.bExplicitFacing = bExplicitFacing || bHasIdleFacing || bQuickFireActive;
+		Facts.bExplicitFacing = bExplicitFacing || bHasIdleFacing || bQuickFireActive || bSuppressActive;
 		Facts.bGridOwnsFacing = bGridOwnsFacing;
 		Facts.bFoughtThisFight = bFoughtThisFight;
 		FVector Threat;

@@ -1,5 +1,6 @@
 #include "Characters/SquadAutonomySubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 #include "Algo/AnyOf.h"
@@ -760,7 +761,8 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 		}
 	}
 	const float Health = Operative.HealthComponent ? Operative.HealthComponent->GetHealthFraction() : 1.f;
-	const float Suppression = CoverDecisionRules::SuppressionFromShooters(Config, Shooters);
+	// Suppressive fire (2026-10-26): the measured suppression level counts too (the stronger of the two).
+	const float Suppression = FMath::Max(CoverDecisionRules::SuppressionFromShooters(Config, Shooters), USuppressionSubsystem::GetLevelOf(&Operative));
 	const bool bLaser = SniperOnMe != nullptr;
 
 	// The facing (the side along the wall towards the threat) is the operative's own (AOperativeCharacter::UpdateCoverFacing,

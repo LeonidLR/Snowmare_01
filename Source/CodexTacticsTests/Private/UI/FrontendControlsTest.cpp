@@ -44,7 +44,7 @@ namespace ControlsTest
 		PlayerCommands::DialogueNext, PlayerCommands::DialogueSkip, PlayerCommands::CameraInteriorView, PlayerCommands::ExitBuilding,
 		PlayerCommands::SkipTutorial, PlayerCommands::StealthWhistle, PlayerCommands::StealthThrow,
 		PlayerCommands::MapPanel, PlayerCommands::MapFull, PlayerCommands::MapCamera, PlayerCommands::MapMove, PlayerCommands::MapZoom,
-		PlayerCommands::QuickFire,
+		PlayerCommands::QuickFire, PlayerCommands::Suppress,
 		};
 	}
 }

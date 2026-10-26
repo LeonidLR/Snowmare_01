@@ -95,6 +95,7 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	{
 		return false;
 	}
+	CancelSuppressFire(TEXT("a new attack order")); // a new attack order replaces suppressive fire (2026-10-26)
 	if (IsSniperWeaponEquipped())
 	{
 		// Sniper rifle (user request 2026-10-09): she stops / kneels first; the shot waits for her (UpdateSniperPendingShot).
@@ -237,6 +238,7 @@ void AOperativeCharacter::SetManualPriorityTarget(AActor* Enemy)
 		return;
 	}
 	ManualPriorityTarget = Enemy;
+	CancelSuppressFire(TEXT("a new attack order")); // a new attack order replaces suppressive fire (2026-10-26)
 	if (Enemy && !bInCover) // in cover the body stays along the wall (user report 2026-10-09: the order snapped her round, then back)
 	{
 		const FVector Direction = (Enemy->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();

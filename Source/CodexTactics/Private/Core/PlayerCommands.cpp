@@ -1,5 +1,6 @@
 #include "Core/PlayerCommands.h"
 #include "CodexTactics.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "GameFramework/Actor.h"
 #include "Interactables/BarrelActor.h"
 #include "Interactables/ProximityMineActor.h"
@@ -74,6 +75,7 @@ namespace PlayerCommands
 
 	const FName TargetedShot(TEXT("Attack.TargetedShot"));
 	const FName QuickFire(TEXT("Attack.QuickFire"));
+	const FName Suppress(TEXT("Attack.Suppress"));
 	const FName PriorityTarget(TEXT("Attack.Priority"));
 	const FName GrenadeAim(TEXT("Grenade.Aim"));
 	const FName GrenadeThrow(TEXT("Grenade.Throw"));
@@ -166,7 +168,7 @@ namespace PlayerCommands
 			{ Move, TEXT("LMB"), TEXT("Movement & camera"), TEXT("Move to the clicked spot") },
 			{ ExitBuilding, TEXT("LMB on EXIT"), TEXT("Movement & camera"), TEXT("Inside a building: click an EXIT arrow at a door - the squad (Solo: the selected operative) walks out") },
 			{ Sprint, TEXT("Double-click"), TEXT("Movement & camera"), TEXT("Sprint to the clicked spot") },
-			{ WatchSector, TEXT("Shift+Click"), TEXT("Movement & camera"), TEXT("Watch a sector") },
+			{ WatchSector, TEXT("Shift+Click"), TEXT("Movement & camera"), TEXT("Watch a sector (Shift + click away from enemies)") },
 			{ SelectMember, TEXT("1-4"), TEXT("Squad"), TEXT("Select an operative") },
 			{ SelectBox, TEXT("Drag"), TEXT("Squad"), TEXT("Box-select a group") },
 			{ Interact, TEXT("LMB"), TEXT("Movement & camera"), TEXT("Walk up to an object") },
@@ -180,7 +182,7 @@ namespace PlayerCommands
 			{ Regroup, TEXT("B"), TEXT("Squad"), TEXT("Regroup into the formation") },
 			{ Guard, TEXT("T"), TEXT("Squad"), TEXT("Guard this spot / rejoin") },
 			{ Autonomy, TEXT("Ctrl+T"), TEXT("Squad"), TEXT("Commander Mode (autonomous squad)") },
-			{ HoldLine, TEXT("Shift+RMB"), TEXT("Squad"), TEXT("Hold this line at all costs") },
+			{ HoldLine, TEXT("Shift+RMB"), TEXT("Squad"), TEXT("Hold this line at all costs (green; on enemies: suppressive fire)") },
 			{ StealthWhistle, TEXT("5"), TEXT("Squad"), TEXT("Whistle: enemies within earshot come to look at this spot (only while exploring undetected)") },
 			{ StealthThrow, TEXT("6"), TEXT("Squad"), TEXT("Throw a stone: aim, click - enemies near the impact come to look (only while exploring undetected)") },
 			{ PosturePassive, TEXT(","), TEXT("Combat"), TEXT("Fire posture: passive (Alt = squad)") },
@@ -214,6 +216,7 @@ namespace PlayerCommands
 			{ DeployOther, TEXT("Inventory"), TEXT("Items & traps"), TEXT("Set up a campfire / stove") },
 			{ TargetedShot, TEXT("Ctrl+Click"), TEXT("Combat"), TEXT("Fire at the enemy: targeted shot at an enemy (or the snow at his feet), a barrel, a mine or a trapped object") },
 			{ QuickFire, TEXT("Ctrl+Click"), TEXT("Combat"), TEXT("Fire at the point: anywhere else the selected operative(s) turn and fire there at once") },
+			{ Suppress, TEXT("Shift+Click"), TEXT("Combat"), TEXT("Shift + click on enemies: suppressive fire (red)") },
 			{ PriorityTarget, TEXT("Click enemy"), TEXT("Combat"), TEXT("Priority target") },
 			{ ToggleVisionCones, TEXT("O"), TEXT("Combat"), TEXT("Show / hide the enemies' vision cones on the ground") },
 			{ ToggleSquadVisionCones, TEXT("Shift+O"), TEXT("Combat"), TEXT("Show / hide your squad's vision cones: what your operatives can see") },
@@ -498,6 +501,8 @@ namespace GameplayEvents
 		Context.Location = Location;
 		Context.Radius = FMath::Max(Radius, 0.f);
 		RaiseWithContext(WorldContext, Explosion, Context);
+		// Suppressive fire (user decision 2026-10-26): every blast suppresses the units round it, briefly (ignored in turn-based combat).
+		USuppressionSubsystem::ReportExplosionIn(WorldContext, Location, Radius);
 	}
 
 	FName GetExplosionKind(const AActor* Source)

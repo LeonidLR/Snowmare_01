@@ -433,6 +433,11 @@ bool ACodexTacticsPlayerController::IsAttackModifierDown() const
 	return bSimulatedAttackModifier || IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
 }
 
+bool ACodexTacticsPlayerController::IsShiftModifierDown() const
+{
+	return bSimulatedShiftModifier || IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
+}
+
 bool ACodexTacticsPlayerController::IsSquadWideModifierDown() const
 {
 	return IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt);

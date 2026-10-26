@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "SuppressionSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
@@ -433,7 +433,14 @@
       "name": "quick-fire",
       "globs": ["Source/**/Combat/QuickFireRules*", "Source/**/Characters/OperativeCharacterQuickFire*", "Source/**/Debug/QuickFireSmoke*"],
       "tests": ["CodexTactics.Combat.QuickFire"],
-      "smokes": ["QuickFireSmoke", "TargetedShotSmoke", "SquadFireSmoke", "PostureSmoke"]
+      "smokes": ["QuickFireSmoke", "SuppressionSmoke", "TargetedShotSmoke", "SquadFireSmoke", "PostureSmoke"]
+    },
+    {
+      "name": "suppression-2026-10-26",
+      "globs": ["Source/**/Combat/SuppressionRules*", "Source/**/Combat/SuppressionSubsystem*", "Source/**/Characters/OperativeCharacterSuppression*",
+        "Source/**/Debug/SuppressionSmoke*", "Content/Data/Combat/**", "Source/**/Vehicles/VehicleTurretComponent*", "Source/**/Interactables/TurretActor*"],
+      "tests": ["CodexTactics.Combat.Suppression", "CodexTactics.Combat.QuickFire", "CodexTactics.UI.Frontend.Controls"],
+      "smokes": ["SuppressionSmoke", "QuickFireSmoke", "CoverSmoke", "CornerHoldSmoke", "MarksmanSmoke", "TurretSmoke", "SquadFireSmoke", "CommanderModeSmoke"]
     },
     {
       "name": "real-time-fire",

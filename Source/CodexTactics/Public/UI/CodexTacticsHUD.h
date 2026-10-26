@@ -285,7 +285,7 @@ private:
 	void DrawSelectionBox();
 	/** Wall-edge cover switch preview (2026-10-20): the dashed run line from the operative to the other cover's slot. */
 	void DrawCoverSwitchPreview();
-	/** Sprint 10: a green shield «HOLD LINE» over every defended object / point (UDefenseMarkerSubsystem). */
+	/** Sprint 10: a green shield «HOLD LINE» over every defended object / point; 2026-10-26: a red «SUPPRESS» one per SUPPRESS order (UDefenseMarkerSubsystem). */
 	void DrawDefenseMarkers();
 	UPROPERTY(Transient)
 	TObjectPtr<class UFrostVignetteWidget> FrostVignette;
@@ -310,6 +310,8 @@ private:
 	void DrawStealthLureMarkers();
 	/** Sprint 14: «[KNOCKED DOWN]» badge + recovery bar over every knocked-down unit (squad and enemies). */
 	void DrawKnockdownBars();
+	/** Suppressive fire (2026-10-26): "SUPPRESSED" (amber) / "PINNED" (red) over every suppressed unit, with its level bar. */
+	void DrawSuppressionBadges();
 	/** Horde warning (UHordeSubsystem): «HORDE!» banner, distance, and an arrow at the screen edge towards it. */
 	void DrawHordeWarning();
 	/** Colour of a fire posture on the HUD (Passive grey, Defensive amber, Aggressive red). */

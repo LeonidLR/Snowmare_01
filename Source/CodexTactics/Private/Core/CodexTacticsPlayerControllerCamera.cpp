@@ -134,9 +134,9 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 		return;
 	}
 	// Sprint 10: Shift + RMB assigns a defense line instead of the camera drag.
-	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+	if (IsShiftModifierDown())
 	{
-		AssignDefenseUnderCursor();
+		AssignDefenseUnderCursor(); // (on enemies: the SUPPRESS order, 2026-10-26)
 		return;
 	}
 	// Godot: RMB drops a selection box being dragged.

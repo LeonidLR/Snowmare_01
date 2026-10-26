@@ -13,6 +13,7 @@
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -668,6 +669,34 @@ void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanL
 	{
 		Feedback->SpawnTracer(Line.Start, End, FLinearColor(1.f, 0.85f, 0.3f));
 	}
+	// Suppression (2026-10-26): the rifle round suppresses him - a hit, or a near miss / a strike on the cover he is behind.
+	ReportRoundAtSquad(Line.Start, End, Target, bHit, !bHit && Line.bTargetInCover, ESuppressionWeapon::Sniper);
+}
+
+void AMarksmanEnemyCharacter::TickSuppressedHold(float DeltaTime, AOperativeCharacter* Target)
+{
+	// Game designer decision 2026-10-26: suppressed / pinned he does not fire back at all and hugs his cover - the aim breaks, he stays
+	// where he is (no advance, flank or kiting run), head down: crouched while suppressed, prone when pinned.
+	SuppressionHoldSeconds += DeltaTime;
+	if (bIsAimingAtTarget)
+	{
+		CancelAim();
+	}
+	GetWorldTimerManager().ClearTimer(RiseTimerHandle);
+	if (AAIController* AIC = Cast<AAIController>(GetController()))
+	{
+		AIC->StopMovement();
+	}
+	const EOperativeStance Wanted = USuppressionSubsystem::GetTierOf(this) == ESuppressionTier::Pinned ? EOperativeStance::Prone : EOperativeStance::Crouching;
+	if (Stance == EOperativeStance::Standing || (Wanted == EOperativeStance::Prone && Stance != EOperativeStance::Prone))
+	{
+		SetMarksmanStance(Wanted);
+	}
+	bHolding = false; // free again: he re-settles (stance, aim) through TickEngage
+	if (Target)
+	{
+		FaceYaw((Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw, DeltaTime, 6.f);
+	}
 }
 
 void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
@@ -744,6 +773,12 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 		}
 	}
 
+	// Suppressive fire (2026-10-26): in a fight, suppressed / pinned = no fire, he hugs his cover (the flanking window).
+	if (AIState != EMarksmanAIState::Patrol && IsHeldBySuppression())
+	{
+		TickSuppressedHold(DeltaTime, Target);
+		return;
+	}
 	switch (AIState)
 	{
 	case EMarksmanAIState::Patrol:

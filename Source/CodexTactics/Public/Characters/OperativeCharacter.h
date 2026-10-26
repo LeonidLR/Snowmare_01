@@ -21,10 +21,26 @@
 #include "Combat/KnockdownTypes.h"
 #include "Combat/SniperRules.h"
 #include "Combat/PeekSightRules.h"
+#include "Combat/SuppressionRules.h"
 #include "OperativeCharacter.generated.h"
 
 class UMaterialInterface;
 enum class EOperativeHitKind : uint8; // Characters/OperativeHitRules.h
+
+/** One area-fire round (AOperativeCharacter::FireAreaRound): quick fire or the SUPPRESS order (2026-10-26). */
+struct CODEXTACTICS_API FOperativeAreaRound
+{
+	/** Spray cone half-angle, degrees (x the suppression spread when he is suppressed). */
+	float SpreadDeg = 1.5f;
+	/** An enemy the round crosses is hit by the weapon's chance x this. */
+	float HitMultiplier = 0.5f;
+	/** Shoot timer after the round, s. */
+	float NextRoundDelay = 0.65f;
+	/** Fired on full-auto (the round's suppression class, the full-auto counter). */
+	bool bFullAuto = false;
+	/** Log prefix ("QuickFire" / "Suppress"). */
+	const TCHAR* LogTag = TEXT("QuickFire");
+};
 
 /** Materials of one squad member's outfit, by skeletal mesh material slot name. */
 USTRUCT(BlueprintType)
@@ -1690,7 +1706,7 @@ public:
 	void SetManualPriorityTarget(AActor* Enemy);
 
 	/** Godot main.gd plain click on an enemy in a wave: current_leader.manual_priority_target = enemy (no checks, no turn). */
-	void AssignPriorityTarget(AActor* Enemy) { ManualPriorityTarget = Enemy; }
+	void AssignPriorityTarget(AActor* Enemy) { ManualPriorityTarget = Enemy; CancelSuppressFire(TEXT("a new attack order")); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
 	AActor* GetManualPriorityTarget() const { return ManualPriorityTarget.Get(); }
@@ -1739,8 +1755,8 @@ public:
 	 */
 	bool ExecutePlannedTargetedShots();
 
-	/** Drops the planned targeted shots and the planned quick fire (pause plans dropped / restarted). */
-	void ClearPlannedTargetedShots() { PlannedShots.Reset(); bQuickFirePlanned = false; }
+	/** Drops the planned targeted shots, the planned quick fire and the planned SUPPRESS order (pause plans dropped / restarted). */
+	void ClearPlannedTargetedShots() { PlannedShots.Reset(); bQuickFirePlanned = false; bSuppressPlanned = false; }
 
 	int32 GetPlannedTargetedShotCount() const { return PlannedShots.Num(); }
 
@@ -1774,6 +1790,45 @@ public:
 	int32 GetQuickFireRoundsFired() const { return QuickFireRoundsFired; }
 	/** Planar angle between his aim direction and the point at his last quick fire round, degrees (smokes). */
 	float GetLastQuickFireAimErrorDeg() const { return LastQuickFireAimErrorDeg; }
+
+	// --- Suppressive fire (game designer decisions 2026-10-26; SuppressionRules, OperativeCharacterSuppression.cpp; UE-only) ---
+
+	/**
+	 * SUPPRESS order: sustained bursts at Target (a live enemy; his cover takes the rounds when he hides) or at Point (a spot), full-auto
+	 * with an assault rifle (UWeaponDataAsset::FullAutoInterval; any other ammo weapon at its own cadence), spending ammo fast, reloading
+	 * as needed, until magazine + reserve run low, the target dies or the order is cancelled (a move / cover order, the 7 key again,
+	 * turn-based combat). Every round suppresses what it passes / strikes (USuppressionSubsystem). An explicit order: any fire posture.
+	 * False when he cannot take it (as quick fire: dead, knocked down, aboard, raging, panicking, the knife, a frozen weapon, hands busy)
+	 * or the ammo is already low, or Codex.Combat.Suppression is 0.
+	 */
+	bool OrderSuppress(AActor* Target, const FVector& Point);
+	/** Tactical pause: remembers the order; ExecutePlannedSuppress (pause release) gives it. */
+	bool PlanSuppress(AActor* Target, const FVector& Point);
+	bool ExecutePlannedSuppress();
+	/** Ends a running SUPPRESS order (Why: the log line); a planned one goes with ClearPlannedTargetedShots. */
+	void CancelSuppressFire(const TCHAR* Why = TEXT("cancelled"));
+	/** Drops a planned SUPPRESS order (the 7 key ceasing it in the tactical pause). */
+	void ClearPlannedSuppress() { bSuppressPlanned = false; PlannedSuppressTarget.Reset(); }
+	bool HasSuppressOrder() const { return bSuppressActive; }
+	bool HasPlannedSuppress() const { return bSuppressPlanned; }
+	AActor* GetSuppressTarget() const { return SuppressTarget.Get(); }
+	FVector GetSuppressPoint() const { return SuppressPoint; }
+	AActor* GetPlannedSuppressTarget() const { return PlannedSuppressTarget.Get(); }
+	FVector GetPlannedSuppressPoint() const { return PlannedSuppressPoint; }
+	/** Rounds fired by SUPPRESS orders since spawn / on full-auto (smokes). */
+	int32 GetSuppressRoundsFired() const { return SuppressRoundsFired; }
+	int32 GetFullAutoRoundsFired() const { return FullAutoRoundsFired; }
+	/** Why the last SUPPRESS order ended. */
+	ESuppressOrderStop GetLastSuppressStop() const { return LastSuppressStop; }
+
+	/** His suppression tier now (USuppressionSubsystem; None in turn-based combat / with the CVar off). */
+	ESuppressionTier GetSuppressionTier() const;
+	/** Shots fired blind because he was suppressed / frames his fire was held because he was pinned / shots that left while pinned (0). */
+	int32 GetSuppressedBlindShots() const { return SuppressedBlindShots; }
+	int32 GetPinnedFireHolds() const { return PinnedFireHolds; }
+	int32 GetShotsWhilePinned() const { return ShotsWhilePinned; }
+	/** Hit chance of his last aimed shot (ShootAtTarget, after cold / blind / suppression; smokes). */
+	float GetLastShotHitChance() const { return LastShotHitChance; }
 
 	/** Line-of-fire origin: the feet plus the Godot muzzle height of the stance (1.4 / 0.85 / 0.25 m). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
@@ -1868,8 +1923,11 @@ public:
 	 */
 	bool LeaveCoverForWallPose();
 
-	/** He has a facing order of his own (SetFacingPoint) or a quick fire: a look decided elsewhere (the coverage allocator's fixed look). */
-	bool HasOwnFacing() const { return bExplicitFacing || bQuickFireActive; }
+	/**
+	 * He has a facing order of his own (SetFacingPoint), a quick fire or a SUPPRESS order: a look decided elsewhere (the coverage
+	 * allocator's fixed look).
+	 */
+	bool HasOwnFacing() const { return bExplicitFacing || bQuickFireActive || bSuppressActive; }
 
 	/** Current barrel-to-body yaw correction, degrees. */
 	float GetBarrelYawOffset() const { return BarrelYawOffset; }
@@ -2269,8 +2327,41 @@ private:
 
 	/** Quick fire (OperativeCharacterQuickFire.cpp): the running order, called from RunCombatShooting; returns its reason. */
 	const TCHAR* RunQuickFire(float DeltaTime, AActor*& OutTarget);
-	/** One area-fire round towards Aim (no aimed target): ammo, misfire, noise, the trace and what it crosses. */
+	/** One quick fire area round towards Aim (no aimed target): FireAreaRound with the quick fire spread / hit factor / cadence. */
 	void FireQuickFireRound(const FVector& Aim);
+	/**
+	 * One area-fire round towards Aim (quick fire, the SUPPRESS order): ammo, misfire, noise, the spread trace (x the suppression
+	 * spread when he is suppressed), what it crosses (an enemy by its chance x Spec.HitMultiplier, a barrel / mine / trapped object
+	 * goes off) and the suppression it causes.
+	 */
+	void FireAreaRound(const FVector& Aim, const FOperativeAreaRound& Spec);
+	/** The SUPPRESS order (OperativeCharacterSuppression.cpp), called from RunCombatShooting; returns its reason. */
+	const TCHAR* RunSuppressFire(float DeltaTime, AActor*& OutTarget);
+	/** The SUPPRESS order can be taken now (refusal floating text when bExplain). */
+	bool CanTakeSuppress(bool bExplain);
+	/** His round's suppression class: full-auto, the sniper rifle, else semi-auto. */
+	ESuppressionWeapon GetOwnRoundClass(bool bFullAuto) const;
+	/** Reports one of his rounds to USuppressionSubsystem (the weapon's suppression_weight). */
+	void ReportOwnRound(const FVector& Start, const FVector& End, const AActor* Target, bool bHit, bool bStruckCover, bool bFullAuto) const;
+	bool bSuppressActive = false;
+	bool bSuppressPlanned = false;
+	/** The order is at an enemy (not a spot): it ends when he dies (the weak pointer alone cannot tell a dead target from none). */
+	bool bSuppressAtTarget = false;
+	FVector SuppressPoint = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> SuppressTarget;
+	FVector PlannedSuppressPoint = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> PlannedSuppressTarget;
+	/** Rounds of the current full-auto burst (SuppressionRules::NextOrderRoundDelay). */
+	int32 SuppressBurstCount = 0;
+	/** World time of the order / its last round (the order's timeout counts from it). */
+	double SuppressLastProgressTime = 0.0;
+	int32 SuppressRoundsFired = 0;
+	int32 FullAutoRoundsFired = 0;
+	ESuppressOrderStop LastSuppressStop = ESuppressOrderStop::None;
+	int32 SuppressedBlindShots = 0;
+	int32 PinnedFireHolds = 0;
+	int32 ShotsWhilePinned = 0;
+	float LastShotHitChance = 0.f;
 	/** ShootAtTarget's hit: damage (crit, elevation, stance, cover, distance), telemetry, the weapon's self cold / warmth. */
 	void ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot);
 	/** The order can be taken now (OrderQuickFire / PlanQuickFire); spawns the refusal floating text when bExplain. */

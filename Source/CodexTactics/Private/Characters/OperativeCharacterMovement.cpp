@@ -176,9 +176,9 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	{
 		return EOperativeOrderResult::Refused; // kneeling for an ordered sniper shot: the formation waits for her
 	}
-	if (bQuickFireActive)
+	if (bQuickFireActive || bSuppressActive)
 	{
-		return EOperativeOrderResult::Refused; // firing a quick fire burst (2026-10-19): the formation waits for him
+		return EOperativeOrderResult::Refused; // firing a quick fire burst (2026-10-19) / suppressing (2026-10-26): the formation waits for him
 	}
 	if (LadderClimb && LadderClimb->IsBusy())
 	{

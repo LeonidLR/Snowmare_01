@@ -133,6 +133,8 @@ private:
 	float FiringSearchCooldown = 0.f;
 	void TickPatrol(float DeltaTime, AOperativeCharacter* Target, float Distance);
 	void TickEngage(float DeltaTime, AOperativeCharacter* Target, float Distance);
+	/** Suppressive fire (2026-10-26): suppressed / pinned in a fight - no aim / fire, no move, head down, facing Target. */
+	void TickSuppressedHold(float DeltaTime, AOperativeCharacter* Target);
 	/**
 	 * Sprint 06-H: from prone he first stands up (RiseDelay, movement stopped) and only then runs — no sliding on his
 	 * stomach. Standing or crouching he moves at once.

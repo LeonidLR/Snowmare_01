@@ -16,6 +16,7 @@
 #include "GameFramework/Character.h"
 #include "EngineUtils.h"
 #include "Combat/KnockdownComponent.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "GameFramework/Character.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/GateActor.h"
@@ -429,6 +430,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawPostureMarkers();
 	DrawStealthLureMarkers();
 	DrawKnockdownBars();
+	DrawSuppressionBadges();
 	DrawHordeWarning();
 	DrawHitChanceLabel();
 	DrawSelectionBox();
@@ -478,8 +480,9 @@ void ACodexTacticsHUD::DrawDefenseMarkers()
 		const float Top = 18.f * Scale;
 		const float Tip = 16.f * Scale;
 		const FVector2D C(Screen.X, Screen.Y);
-		const FLinearColor Fill(0.1f, 0.85f, 0.35f, 0.75f * Marker.Alpha);
-		const FLinearColor Rim(0.85f, 1.f, 0.9f, Marker.Alpha);
+		// Suppressive fire (user decision 2026-10-26): a SUPPRESS order's marker is the same shield in RED.
+		const FLinearColor Fill = Marker.bSuppress ? FLinearColor(0.95f, 0.15f, 0.1f, 0.75f * Marker.Alpha) : FLinearColor(0.1f, 0.85f, 0.35f, 0.75f * Marker.Alpha);
+		const FLinearColor Rim = Marker.bSuppress ? FLinearColor(1.f, 0.85f, 0.8f, Marker.Alpha) : FLinearColor(0.85f, 1.f, 0.9f, Marker.Alpha);
 		auto Shape = [&](float Grow, const FLinearColor& Color)
 		{
 			const FVector2D TL(C.X - W * 0.5f - Grow, C.Y - Top - Grow);
@@ -503,11 +506,13 @@ void ACodexTacticsHUD::DrawDefenseMarkers()
 		Canvas->DrawItem(Post);
 		// «HOLD LINE ×N» under it.
 		UFont* Font = GEngine->GetSmallFont();
-		const FString Text = Marker.Defenders > 1 ? FString::Printf(TEXT("HOLD LINE x%d"), Marker.Defenders) : FString(TEXT("HOLD LINE"));
+		const TCHAR* Caption = Marker.bSuppress ? TEXT("SUPPRESS") : TEXT("HOLD LINE");
+		const FString Text = Marker.Defenders > 1 ? FString::Printf(TEXT("%s x%d"), Caption, Marker.Defenders) : FString(Caption);
 		float TW = 0.f;
 		float TH = 0.f;
 		Canvas->StrLen(Font, Text, TW, TH);
-		FCanvasTextItem Label(FVector2D(C.X - TW * 0.5f, C.Y + Tip + 6.f), FText::FromString(Text), Font, FLinearColor(0.6f, 1.f, 0.7f, Marker.Alpha));
+		FCanvasTextItem Label(FVector2D(C.X - TW * 0.5f, C.Y + Tip + 6.f), FText::FromString(Text), Font,
+			Marker.bSuppress ? FLinearColor(1.f, 0.55f, 0.5f, Marker.Alpha) : FLinearColor(0.6f, 1.f, 0.7f, Marker.Alpha));
 		Label.bOutlined = true;
 		Label.OutlineColor = FLinearColor(0.f, 0.f, 0.f, Marker.Alpha);
 		Canvas->DrawItem(Label);
@@ -968,6 +973,46 @@ void ACodexTacticsHUD::DrawKnockdownBars()
 		DrawRect(FLinearColor(0.15f, 0.15f, 0.18f, 0.9f), X, Screen.Y, BarWidth, BarHeight);
 		DrawRect(Knockdown->GetPhase() == EKnockdownPhase::GettingUp ? FLinearColor(0.35f, 0.95f, 0.45f) : BadgeColor,
 			X, Screen.Y, BarWidth * Fill, BarHeight);
+	}
+}
+
+void ACodexTacticsHUD::DrawSuppressionBadges()
+{
+	UFont* Font = GEngine->GetSmallFont();
+	const USuppressionSubsystem* Suppression = GetWorld()->GetSubsystem<USuppressionSubsystem>();
+	if (!Suppression)
+	{
+		return;
+	}
+	TArray<TPair<AActor*, FSuppressionState>> Tracked;
+	Suppression->GetTracked(Tracked);
+	for (const TPair<AActor*, FSuppressionState>& Each : Tracked)
+	{
+		const AActor* Unit = Each.Key;
+		if (Each.Value.Tier == ESuppressionTier::None || !Unit || Unit->IsHidden())
+		{
+			continue;
+		}
+		// Over the head, above the name plate / posture marker and the knockdown badge's place.
+		const FVector Screen = Project(Unit->GetActorLocation() + FVector(0.f, 0.f, Unit->GetSimpleCollisionHalfHeight() + 40.f), true);
+		if (Screen.Z <= 0.f)
+		{
+			continue;
+		}
+		const FString Badge = SuppressionRules::TierBadge(Each.Value.Tier);
+		float W = 0.f;
+		float H = 0.f;
+		Canvas->StrLen(Font, Badge, W, H);
+		const bool bPinned = Each.Value.Tier == ESuppressionTier::Pinned;
+		const FLinearColor BadgeColor = bPinned ? FLinearColor(1.f, 0.25f, 0.2f) : FLinearColor(1.f, 0.7f, 0.15f);
+		const float BarWidth = FMath::Max(W, 60.f);
+		const float BarHeight = 4.f;
+		const float Top = Screen.Y - 2.f * (H + 14.f);
+		const float X = Screen.X - BarWidth * 0.5f;
+		DrawRect(PanelColor, X - 4.f, Top - H - 6.f, BarWidth + 8.f, H + BarHeight + 10.f);
+		DrawText(Badge, BadgeColor, Screen.X - W * 0.5f, Top - H - 4.f, Font);
+		DrawRect(FLinearColor(0.15f, 0.15f, 0.18f, 0.9f), X, Top, BarWidth, BarHeight);
+		DrawRect(BadgeColor, X, Top, BarWidth * FMath::Clamp(Each.Value.Level, 0.f, 1.f), BarHeight);
 	}
 }
 
