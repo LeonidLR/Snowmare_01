@@ -156,8 +156,10 @@ bool URelocationSubsystem::StartRelocate(AInteractableActor* Target, AOperativeC
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	if (Flow && !CanRelocateNow())
 	{
-		Post(LOCTEXT("HQ", "HQ"), LOCTEXT("NotInCombat",
-			"⚠️ Objects can't be moved during combat! Use the tactical pause [SPACE]."));
+		// 2026-10-26: only the turn-based grid refuses (it has its own push); the old rule (Codex.Relocation.RealTimeCombat 0) the live fight too.
+		Post(LOCTEXT("HQ", "HQ"), RelocationRules::IsRealTimeCombatRelocationEnabled()
+			? LOCTEXT("NotInTurnBased", "⚠️ Objects cannot be relocated in turn-based combat - use the grid's push.")
+			: LOCTEXT("NotInCombat", "⚠️ Objects can't be moved during combat! Use the tactical pause [SPACE]."));
 		return false;
 	}
 	if (!Target->bCanBeRelocated)
@@ -735,7 +737,9 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 	}
 	else
 	{
-		Post(LOCTEXT("HQ", "HQ"), LOCTEXT("ForbiddenInCombat", "⚠️ Moving objects is forbidden during combat! Use the tactical pause [SPACE]."));
+		Post(LOCTEXT("HQ", "HQ"), RelocationRules::IsRealTimeCombatRelocationEnabled()
+			? LOCTEXT("ForbiddenInTurnBased", "⚠️ Objects cannot be relocated in turn-based combat - use the grid's push.")
+			: LOCTEXT("ForbiddenInCombat", "⚠️ Moving objects is forbidden during combat! Use the tactical pause [SPACE]."));
 	}
 	CancelPlacement();
 }
@@ -985,7 +989,8 @@ bool URelocationSubsystem::CanRelocateNow() const
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	return !Flow || RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode(), Leader && Leader->bInCameraZone);
+	return !Flow || RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode(), Leader && Leader->bInCameraZone,
+		RelocationRules::IsRealTimeCombatRelocationEnabled());
 }
 
 void URelocationSubsystem::DropAllForCombat()
@@ -1114,15 +1119,17 @@ void URelocationSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
-	// Live combat drops the carries started outside the pause; a carry ordered in the pause runs on after the release
-	// (bug 2026-10-08: the resume dropped it the next frame, so the paused order never ran).
+	// The turn-based grid drops every carry (it has its own push). User decision 2026-10-26: the real-time fight drops nothing (the old rule,
+	// Codex.Relocation.RealTimeCombat 0: live combat drops the carries started outside the pause; one ordered in the pause runs on - bug
+	// 2026-10-08).
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	const bool bZoneSolo = Leader && Leader->bInCameraZone;
 	for (int32 Index = Tasks.Num() - 1; Index >= 0; --Index)
 	{
-		if (Flow && RelocationRules::ShouldDropActiveTask(Flow->GetPhase(), Flow->GetCombatMode(), bZoneSolo, Tasks[Index].bPlannedInPause))
+		if (Flow && RelocationRules::ShouldDropActiveTask(Flow->GetPhase(), Flow->GetCombatMode(), bZoneSolo, Tasks[Index].bPlannedInPause,
+			RelocationRules::IsRealTimeCombatRelocationEnabled()))
 		{
 			DropTask(Tasks[Index], LOCTEXT("Alarm", "⚠️ Combat alert! Dropping {0} and taking a defensive position!"));
 			Tasks.RemoveAt(Index);

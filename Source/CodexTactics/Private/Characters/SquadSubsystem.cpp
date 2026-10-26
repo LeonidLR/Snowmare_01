@@ -41,6 +41,8 @@ namespace
 		TEXT("1 (default): a follower crouched by the squad (Regroup's copy, Solo's guard crouch, a confinement) stands up to sprint with the sprinting leader (bug 2026-10-20); 0: the old rule (he walks crouched behind him)."));
 	TAutoConsoleVariable<int32> CVarSquadPostCombatFormation(TEXT("Codex.Squad.PostCombatFormation"), 1,
 		TEXT("1 (default): the formation runs after the final fight too (PostCombat) and Regroup (B) ends the post-fight hold (bug 2026-10-23); 0: the old rule (no follower walks after the final fight, B leaves the hold)."));
+	TAutoConsoleVariable<int32> CVarSquadCombatFormation(TEXT("Codex.Squad.CombatFormation"), 1,
+		TEXT("1 (default, user decision 2026-10-26): the squad stays in formation through the fight (only B switches to Solo; ordered members rejoin when their order is done); 0: the old rule (Godot is_tactical_mode: nobody follows from the preparation to the fight's end)."));
 	TAutoConsoleVariable<int32> CVarSquadSlotFallback(TEXT("Codex.Squad.SlotFallback"), 1,
 		TEXT("1 (default): a formation slot off the navmesh (wall, generator, a fallen mate's remains) is replaced by the nearest navigable spot round the leader (bug 2026-10-23); 0: the old rule (the follower stays where he is)."));
 }
@@ -506,7 +508,8 @@ void USquadSubsystem::HoldForSpottedTrap(AOperativeCharacter* Spotter, const FTe
 		Member->StopOperative();
 		Living += Member->HealthComponent && Member->HealthComponent->IsAlive() ? 1 : 0;
 	}
-	const ETrapSpotResponse Response = TrapSpotRules::DecideSquadResponse(IsFormationActive(), bAutonomousSquadCombat, Living);
+	// (The exploration formation: a trap spotted in a fight never switches to Solo - user decision 2026-10-26, Solo only on B there.)
+	const ETrapSpotResponse Response = TrapSpotRules::DecideSquadResponse(IsExplorationFormation(), bAutonomousSquadCombat, Living);
 	UE_LOG(LogCodexTactics, Display, TEXT("Trap spotted (%s) by %s: squad holds%s"), *TrapName.ToString(),
 		Spotter ? *Spotter->DisplayName.ToString() : TEXT("-"), Response == ETrapSpotResponse::HoldAndSolo ? TEXT(", Solo on")
 		: bAutonomousSquadCombat ? TEXT(" (AUTO: paths go round it, no Solo)") : TEXT(" (no Solo)"));
@@ -617,8 +620,30 @@ void USquadSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 bool USquadSubsystem::IsFormationActive() const
 {
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	// Godot: `is_tactical_mode` is set for everyone when preparation starts and cleared at the fight's end: the formation runs while
-	// exploring and after the final fight (PostCombat, bug 2026-10-23).
+	if (!Flow)
+	{
+		return true;
+	}
+	// Godot: `is_tactical_mode` was set for everyone when the preparation started and cleared at the fight's end (individual control in
+	// the fight). User decision 2026-10-26: the squad stays in formation through the fight - only B (Solo) or Commander Mode's own fight
+	// (the autonomy owns the members in real time) take it out.
+	if (Flow->IsSquadAutonomyActive())
+	{
+		return false;
+	}
+	return SquadOrderRules::IsFollowPhase(Flow->GetPhase(), Flow->GetCombatMode(), CVarSquadPostCombatFormation.GetValueOnGameThread() != 0,
+		CVarSquadCombatFormation.GetValueOnGameThread() != 0);
+}
+
+bool USquadSubsystem::IsRealTimeFight() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime;
+}
+
+bool USquadSubsystem::IsExplorationFormation() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	return !Flow || SquadOrderRules::IsFormationPhase(Flow->GetPhase(), CVarSquadPostCombatFormation.GetValueOnGameThread() != 0);
 }
 
@@ -832,6 +857,8 @@ bool USquadSubsystem::IsOnOwnOrder(const AOperativeCharacter* Operative) const
 	}
 	// Group cover leader priority (2026-10-23): waiting off the wall for the leader is his order too (the formation leaves him alone).
 	Facts.bObjectTask |= IsWaitingForGroupCoverLeader(Operative);
+	// User decision 2026-10-26 (the formation in the fight): a SUPPRESS order / a quick-fire burst runs to its end, then he rejoins.
+	Facts.bFireOrder = Operative->HasSuppressOrder() || Operative->HasQuickFireOrder();
 	return SquadOrderRules::IsOnOwnOrder(Facts);
 }
 
@@ -992,10 +1019,14 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 	{
 		if (Sectors.bWallOrder)
 		{
-			EndFormationWallOrder(TEXT("the formation is off (a fight)"));
+			EndFormationWallOrder(TEXT("the formation is off (turn-based / Commander Mode / Codex.Squad.CombatFormation 0)"));
 		}
 		Sectors.bSlide = false;
 		return;
+	}
+	if (Sectors.bWallOrder && !IsExplorationFormation())
+	{
+		EndFormationWallOrder(TEXT("a fight (the wall layout is the exploration formation's)")); // as before 2026-10-26
 	}
 
 	const bool bLeaderMoving = LeaderRef->IsMoving();
@@ -1063,6 +1094,14 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	AOperativeCharacter* Operative = Follower.Operative.Get();
 	if (!Operative || bFollowersHolding)
 	{
+		return;
+	}
+	// The formation in the fight (2026-10-26): panic / rage move him themselves, a knockdown keeps him down - the formation never stops
+	// or re-paths him then (StopOperative would cut the panic flight); he rejoins on the first repath after it.
+	if (Operative->IsPanicking() || Operative->IsRaging() || Operative->IsKnockedDown())
+	{
+		Follower.bParked = false;
+		Follower.RepathTimeRemaining = 0.f;
 		return;
 	}
 	// APC P1: aboard a vehicle he rides; with the leader aboard the ones outside hold their spots. P2: walking to a door
@@ -1199,8 +1238,12 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 			Follower.bParked = true;
 		}
 		// Parked followers face where the leader faces (Godot _align_rotation_with_leader), turned every frame by the
-		// operative's facing (FacingRules).
-		Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
+		// operative's facing (FacingRules). In the real-time fight (2026-10-26) not: his combat target / the threat he fought
+		// (ThreatFacingRules) turn him there.
+		if (!IsRealTimeFight())
+		{
+			Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
+		}
 		return;
 	}
 

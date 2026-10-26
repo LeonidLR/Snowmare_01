@@ -4,7 +4,7 @@ namespace SquadOrderRules
 {
 	bool IsOnOwnOrder(const FOwnOrderFacts& Facts)
 	{
-		return Facts.bOwnMoveOrder || Facts.bUseOrder || Facts.bObjectTask;
+		return Facts.bOwnMoveOrder || Facts.bUseOrder || Facts.bObjectTask || Facts.bFireOrder;
 	}
 
 	bool ShouldStopOnBecomingLeader(bool bOnOwnOrder)
@@ -68,5 +68,28 @@ namespace SquadOrderRules
 	bool IsFormationPhase(ECodexGamePhase Phase, bool bPostCombatFormation)
 	{
 		return Phase == ECodexGamePhase::Exploration || (bPostCombatFormation && Phase == ECodexGamePhase::PostCombat);
+	}
+
+	bool IsFollowPhase(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bPostCombatFormation, bool bCombatFormation)
+	{
+		if (IsFormationPhase(Phase, bPostCombatFormation))
+		{
+			return true;
+		}
+		if (!bCombatFormation)
+		{
+			return false;
+		}
+		switch (Phase)
+		{
+		case ECodexGamePhase::Cutscene:
+		case ECodexGamePhase::Preparation:
+		case ECodexGamePhase::WaveCleared:
+			return true;
+		case ECodexGamePhase::WaveCombat:
+			return Mode != ECodexCombatMode::TurnBased;
+		default:
+			return false;
+		}
 	}
 }

@@ -29,7 +29,7 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
+    "HordeIntroSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "SuppressionSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
@@ -436,7 +436,7 @@
       "name": "horde-intro",
       "globs": ["Source/**/Combat/HordeIntro*", "Source/**/Debug/HordeIntroSmoke*", "Source/**/Debug/SmokeUtils.h", "Source/**/GameFlow/PauseOrderRules*"],
       "tests": ["CodexTactics.Combat.HordeIntro", "CodexTactics.GameFlow", "CodexTactics.Combat.TimeMode"],
-      "smokes": ["HordeIntroSmoke", "RadiusRingSmoke", "LevelWaveSmoke", "MissionSmoke", "VictorySmoke", "QuestChainSmoke", "MainMenuSmoke", "SaveRoundTripSmoke", "CombatFlowSmoke"]
+      "smokes": ["HordeIntroSmoke", "LakePauseOrdersSmoke", "RadiusRingSmoke", "LevelWaveSmoke", "MissionSmoke", "VictorySmoke", "QuestChainSmoke", "MainMenuSmoke", "SaveRoundTripSmoke", "CombatFlowSmoke"]
     },
     {
       "name": "sight",
@@ -534,7 +534,13 @@
       "name": "operative-movement-squad",
       "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeCrowdFollowing*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
       "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement"],
-      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke", "FormationLabSmoke"]
+      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke", "FormationLabSmoke"]
+    },
+    {
+      "name": "combat-formation-2026-10-26",
+      "globs": ["Source/**/Debug/CombatFormationSmoke*"],
+      "tests": ["CodexTactics.Squad.Orders"],
+      "smokes": ["CombatFormationSmoke", "SoloRejoinSmoke", "RetreatFacingSmoke"]
     },
     {
       "name": "operative-cover-units",

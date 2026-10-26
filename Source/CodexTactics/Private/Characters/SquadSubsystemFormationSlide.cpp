@@ -650,7 +650,7 @@ bool USquadSubsystem::PreviewFormationMove(const FVector& Destination, TArray<TA
 	OutPaths.Reset();
 	const AOperativeCharacter* LeaderRef = Leader.Get();
 	UWorld* World = GetWorld();
-	if (!LeaderRef || !World || !FormationRuntime::IsEnabled() || bIsSoloMode || bFollowersHolding || HasMultiSelection() || !IsFormationActive()
+	if (!LeaderRef || !World || !FormationRuntime::IsEnabled() || bIsSoloMode || bFollowersHolding || HasMultiSelection() || !IsExplorationFormation()
 		|| Sectors.Formation != EFormationKind::Wall || !Sectors.bWallLayoutValid || LeaderRef->bInCover)
 	{
 		return false;

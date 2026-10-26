@@ -1,13 +1,30 @@
 #include "Interactables/RelocationRules.h"
 
-bool RelocationRules::CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo)
+#include "HAL/IConsoleManager.h"
+
+namespace
 {
-	return Phase != ECodexGamePhase::WaveCombat || Mode == ECodexCombatMode::TacticalPause || bLeaderZoneSolo;
+	TAutoConsoleVariable<int32> CVarRelocationRealTimeCombat(TEXT("Codex.Relocation.RealTimeCombat"), 1,
+		TEXT("1 (default, user decision 2026-10-26): objects / barricades can be moved in the real-time fight too; 0: the old rule (only in the tactical pause)."));
 }
 
-bool RelocationRules::ShouldDropActiveTask(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo, bool bPlannedInPause)
+bool RelocationRules::IsRealTimeCombatRelocationEnabled()
 {
-	if (CanRelocateNow(Phase, Mode, bLeaderZoneSolo))
+	return CVarRelocationRealTimeCombat.GetValueOnAnyThread() != 0;
+}
+
+bool RelocationRules::CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo, bool bRealTimeCombat)
+{
+	if (Phase != ECodexGamePhase::WaveCombat || Mode == ECodexCombatMode::TacticalPause || bLeaderZoneSolo)
+	{
+		return true;
+	}
+	return bRealTimeCombat && Mode == ECodexCombatMode::RealTime;
+}
+
+bool RelocationRules::ShouldDropActiveTask(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo, bool bPlannedInPause, bool bRealTimeCombat)
+{
+	if (CanRelocateNow(Phase, Mode, bLeaderZoneSolo, bRealTimeCombat))
 	{
 		return false;
 	}

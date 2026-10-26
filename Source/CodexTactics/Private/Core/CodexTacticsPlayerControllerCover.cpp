@@ -748,7 +748,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	// exploration formation; not planned in the pause, not a cover switch / wrap) the group cover order is the formation wall layout -
 	// all along the wall 1 m apart, crouched facing OUT, nobody looks through the wall. Else (or when no layout can be made) as before.
 	if (FormationRuntime::IsEnabled() && !bPlan && !bLeaderSwitch && !LeaderWrap && !Squad->HasMultiSelection() && !Squad->IsSoloMode()
-		&& Squad->IsFormationActive() && Squad->OrderFormationWall(Direct, Others, Slot))
+		&& Squad->IsExplorationFormation() && Squad->OrderFormationWall(Direct, Others, Slot))
 	{
 		LastGroupCoverSlots = 1 + Others.Num();
 		LastGroupCoverProne = 0;

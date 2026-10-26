@@ -29,6 +29,8 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/EnemySpawnPoint.h"
+#include "Combat/HordeIntroSubsystem.h"
+#include "Combat/KnockdownComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -297,6 +299,16 @@ namespace LakeQuestSmoke
 	 * Space -> the Commander and the Engineer walked, the Medic-Sapper stayed, and after that NO click order was taken in real time
 	 * (an object relocation in a new pause unstuck it). Gives the pause order like the player, resumes, then gives real-time orders.
 	 */
+	/**
+	 * He took a move order: it runs, or (Sprint 14) he lies knocked down by a pounce and the order waits in his buffer until he is up.
+	 * 2026-10-26: with the squad in formation in the fight the horde's hounds reach the formed-up squad at the wall - a pounce right
+	 * before the click (19:00:29.52, the click 0.3 s later) buffered the Engineer's order and the plain HasOwnMoveOrder check failed.
+	 */
+	bool TookMoveOrder(const AOperativeCharacter& Member)
+	{
+		return Member.HasOwnMoveOrder() || (Member.IsKnockedDown() && Member.KnockdownComponent && Member.KnockdownComponent->HasBufferedOrder());
+	}
+
 	bool PauseOrdersStep(UWorld* World, FState& State)
 	{
 		UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
@@ -324,8 +336,21 @@ namespace LakeQuestSmoke
 		}
 		switch (State.PauseStage)
 		{
-		case 0: // the horde intro runs on its own up to the free pause (no skip), like a player watching it
-			if (Flow->GetCombatMode() != ECodexCombatMode::TacticalPause || State.PauseStageTime < 1.f)
+		case 0: // the horde warning runs on its own (no skip), like a player watching it; 2026-10-26: then the PLAYER presses Space
+			if (Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
+			{
+				const UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>();
+				if (Flow->GetPhase() != ECodexGamePhase::WaveCombat || Flow->IsAwaitingHordeIntro() || (Intro && Intro->IsFlyoverActive()))
+				{
+					return true;
+				}
+				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime,
+					TEXT("the horde warning over: the fight runs in real time (no pause by itself, 2026-10-26)"));
+				Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->IsFreePause(), TEXT("the player's Space: the free tactical pause"));
+				State.PauseStageTime = 0.f;
+				return true;
+			}
+			if (State.PauseStageTime < 1.f)
 			{
 				return true;
 			}
@@ -366,7 +391,8 @@ namespace LakeQuestSmoke
 			LogSquad(TEXT("resumed"));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
-				Check(State, Member->HasOwnMoveOrder(), FString::Printf(TEXT("%s runs the planned pause order"), *Member->DisplayName.ToString()));
+				Check(State, TookMoveOrder(*Member), FString::Printf(TEXT("%s runs the planned pause order%s"), *Member->DisplayName.ToString(),
+					Member->IsKnockedDown() ? TEXT(" (knocked down: buffered until he is up)") : TEXT("")));
 			}
 			NextPause();
 			return true;
@@ -393,7 +419,8 @@ namespace LakeQuestSmoke
 			LogSquad(TEXT("after the real-time click"));
 			for (AOperativeCharacter* Member : Members)
 			{
-				Check(State, Member->HasOwnMoveOrder(), FString::Printf(TEXT("%s took the real-time move order"), *Member->DisplayName.ToString()));
+				Check(State, TookMoveOrder(*Member), FString::Printf(TEXT("%s took the real-time move order%s"), *Member->DisplayName.ToString(),
+					Member->IsKnockedDown() ? TEXT(" (knocked down: buffered until he is up)") : TEXT("")));
 			}
 			NextPause();
 			return true;

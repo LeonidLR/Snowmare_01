@@ -8,7 +8,11 @@ namespace
 	TAutoConsoleVariable<int32> CVarHordeIntroSuddenStart(TEXT("Codex.HordeIntro.SuddenStart"), -1,
 		TEXT("Horde waves: -1 = the data decides (default: sudden), 0 = old start (cutscene + preparation countdown), 1 = always sudden."));
 	TAutoConsoleVariable<int32> CVarHordeIntroEnabled(TEXT("Codex.HordeIntro.Enabled"), -1,
-		TEXT("Horde start camera flyover: -1 = default (on), 0 = off (the free tactical pause still opens at the trigger), 1 = on."));
+		TEXT("Horde start camera flyover: -1 = default (on), 0 = off (only the alert at the trigger), 1 = on."));
+	TAutoConsoleVariable<int32> CVarHordeIntroAutoPause(TEXT("Codex.HordeIntro.AutoPause"), 0,
+		TEXT("0 (default, user decision 2026-10-26): the horde warning keeps the fight in real time (the pause only on Space); 1: the old rule (the warning opens the free tactical pause)."));
+	TAutoConsoleVariable<int32> CVarHordeIntroLaterWaves(TEXT("Codex.HordeIntro.LaterWaves"), 0,
+		TEXT("0 (default, user decision 2026-10-26): only the fight's first wave is warned (later waves: only the arrows); 1: the old rule (every sudden wave)."));
 	TAutoConsoleVariable<float> CVarHordeIntroPreDilation(TEXT("Codex.HordeIntro.PreTriggerTimeDilation"), -1.f,
 		TEXT("Horde start: world time scale between the spawn and the flyover (<0 = default 1, real time)."));
 	TAutoConsoleVariable<float> CVarHordeIntroMassFraction(TEXT("Codex.HordeIntro.MassMovingFraction"), -1.f,
@@ -67,6 +71,8 @@ FHordeIntroConfig HordeIntroRules::GetConfig()
 	{
 		Config.bEnabled = Enabled > 0;
 	}
+	Config.bAutoPause = CVarHordeIntroAutoPause.GetValueOnGameThread() != 0;
+	Config.bWarnLaterWaves = CVarHordeIntroLaterWaves.GetValueOnGameThread() != 0;
 	HordeIntroOverride(Config.PreTriggerTimeDilation, CVarHordeIntroPreDilation);
 	HordeIntroOverride(Config.MassMovingFraction, CVarHordeIntroMassFraction);
 	HordeIntroOverride(Config.MassMinSpeed, CVarHordeIntroMassSpeed);
@@ -94,6 +100,11 @@ FHordeIntroConfig HordeIntroRules::GetConfig()
 	Config.WideFocusBias = FMath::Clamp(Config.WideFocusBias, 0.f, 1.f);
 	Config.WideMaxDistance = FMath::Max(Config.WideMaxDistance, Config.WideMinDistance);
 	return Config;
+}
+
+bool HordeIntroRules::ShouldWarnWave(int32 WaveIndex, const FHordeIntroConfig& Config)
+{
+	return WaveIndex <= 1 || Config.bWarnLaterWaves;
 }
 
 int32 HordeIntroRules::GetSuddenStartOverride()
