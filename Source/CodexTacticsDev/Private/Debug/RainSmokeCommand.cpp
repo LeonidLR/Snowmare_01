@@ -57,6 +57,8 @@ namespace RainSmoke
 		float RainSpawnRate = 0.f;
 		float RainScreenDrops = 0.f;
 		int32 StrikesBefore = 0;
+		float MaxFlash = 0.f;
+		bool bFlashChecked = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -303,9 +305,15 @@ namespace RainSmoke
 			}
 			return true;
 		case EStage::Hut:
-			if (State.StageTime >= 0.1f && State.StageTime < 0.2f)
+			// The flash of the forced strike: its peak over the first 0.3 s (the pulses flicker; one sample may fall into a dark gap).
+			if (State.StageTime < 0.3f)
 			{
-				Check(State, Rain->GetFlashScale() > 0.f, FString::Printf(TEXT("3 the strike flashes (scale %.2f)"), Rain->GetFlashScale()));
+				State.MaxFlash = FMath::Max(State.MaxFlash, Rain->GetFlashScale());
+			}
+			else if (!State.bFlashChecked)
+			{
+				State.bFlashChecked = true;
+				Check(State, State.MaxFlash > 0.01f, FString::Printf(TEXT("3 the strike flashes (peak scale %.2f)"), State.MaxFlash));
 			}
 			if (State.StageTime >= 1.5f)
 			{
