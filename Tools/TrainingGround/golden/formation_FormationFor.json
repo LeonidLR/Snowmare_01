@@ -65,6 +65,7 @@
   "look.hold_deg": 60,
   "look.hold_margin_deg": 5,
   "look.narrow_penalty": 180,
+  "look.over_shoulder_max_deg": 110,
   "classify.probe_side": 400,
   "classify.probe_ahead": 600,
   "classify.hold_distance": 500,

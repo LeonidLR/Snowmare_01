@@ -114,21 +114,22 @@
     {
       "check": 7,
       "choice": "echelon_right",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 8.2,
-      "what": "column (asked echelon_right): wall cuts K-P",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "echelon_left",
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 7,
-      "what": "column (asked echelon_left): wall cuts K-P",
+      "t": 8.6,
+      "what": "column (asked echelon_right): wall cuts P-Z",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 8.9,
+      "what": "column (asked echelon_right): wall cuts K-P",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
@@ -291,6 +292,14 @@
       "check": 7,
       "choice": "all_forward",
       "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 3,
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.3"

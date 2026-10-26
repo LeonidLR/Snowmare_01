@@ -408,6 +408,13 @@
       "unit": "deg",
       "doc": "v2.3 (red team #1): a free arc narrower than look.min_free_deg still competes in ClearLook this much worse (0 = never; < 360 so a narrow arc without a sweep beats a wide one behind a sweep)."
     },
+    "look.over_shoulder_max_deg": {
+      "value": 110,
+      "min": 90,
+      "max": 180,
+      "unit": "deg",
+      "doc": "v2.3 part 7 (user decision 2026-10-26, Q3 = c): on the move a member who is not the rear guard (nor K, nor a fixed look) looks at most this far off the heading - a coverage share in the rear is watched over the shoulder, so he walks forwards (not backwards at move.backward_mult); ClearLook keeps his wall-avoiding look inside it too. 180 = off (v2.2)."
+    },
     "classify.probe_side": {
       "value": 400,
       "min": 200,

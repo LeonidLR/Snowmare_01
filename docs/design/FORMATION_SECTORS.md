@@ -218,7 +218,24 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   is back in sight. (The leader turned into a side passage just as a manual blizzard re-opened; its far man was left round the
   corner.)
 
-## Open for the user (v2.3)
+## v2.3 — the user's answers (2026-10-26 morning, via the coordinator; contract 13.7-13.9)
+The five overnight questions below were answered; the question texts stay for the record.
+- **Q1 = a (decided 2026-10-26)**: only a corridor the terrain classifier holds counts as the 1A narrow passage - a doorway crossed
+  at an angle is shared out by the allocator, which sees the walls. Already what the rules do (contract 13.3).
+- **Q2 = a (decided 2026-10-26)**: a manual hedgehog / blizzard / column through a hairpin is left as it is - the player's choice;
+  "5Б" folds only the line and the echelons. 12_6's #5 entries are accepted (no rule bug).
+- **Q3 = c (decided 2026-10-26, implemented in v2.3 part 7)**: only the rear guard walks backwards. A member who is not the rear
+  guard (nor the leader, nor a fixed look) and whose coverage share is the rear looks back over the shoulder - at most
+  `look.over_shoulder_max_deg` (110°) off his direction of travel - so he still walks forwards at the squad's pace instead of
+  backwards at the backward cap; his wall-avoiding look (ClearLook) stays inside that limit too. The rear guard (Z) keeps walking
+  backwards at 6 as decided.
+- **Q4 = b (decided 2026-10-26)**: ClearLook anticipates the man's motion - see v2.3 part 8.
+- **Q5 = a (decided 2026-10-26)**: the pair's rear man keeps his 3 → 6 → 9 sweep at a narrow mouth (the decision for the pair stays);
+  those #1 entries are accepted.
+- The HUD line of the turn fold says "(turn)", e.g. "Line -> Column (turn)"; the wall guard keeps "(wall)" - v2.3 part 9.
+- No tuning for the manual line's rear man (its pace, #6 in parentheses, stays not gating).
+
+## Open for the user (v2.3) - answered 2026-10-26 (above)
 Picked overnight by the most conservative reading of the recorded decisions (coordinator 2026-10-26: "don't wait"); each can be
 flipped in the morning.
 1. **What counts as the "narrow passage" of 1A for the trail column?** The trail column measured each man's side room; crossing a

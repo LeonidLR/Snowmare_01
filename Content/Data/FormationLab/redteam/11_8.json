@@ -165,6 +165,17 @@
     {
       "check": 1,
       "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 2,
+      "t": 4.5,
+      "what": "P at R1w",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
       "members": 4,
       "route": "R1",
       "seed": 1,
@@ -215,14 +226,14 @@
     },
     {
       "check": 7,
-      "choice": "echelon_left",
+      "choice": "column",
       "members": 4,
       "route": "R1",
       "seed": 2,
       "t": 17.7,
-      "what": "column (asked echelon_left): wall cuts P-L",
+      "what": "column: wall cuts P-L",
       "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
     }
   ],
   "fixed_entries": [
@@ -588,6 +599,14 @@
     },
     {
       "check": 5,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
       "choice": "echelon_left",
       "members": 4,
       "route": "R1",

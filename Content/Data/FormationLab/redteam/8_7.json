@@ -85,51 +85,7 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
-    {
-      "check": 1,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 15.1,
-      "what": "P at W2",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 14,
-      "what": "L-Z 41 cm apart",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "auto",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 25.7,
-      "what": "column (asked wedge): wall cuts K-P, P-Z",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 12.8,
-      "what": "column (asked echelon_right): wall cuts K-P",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    }
-  ],
+  "expected_fail": [],
   "fixed_entries": [
     {
       "check": 1,
@@ -282,6 +238,39 @@
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
     }
-  ]
+  ],
+  "fixed_in": "v2.3"
 }

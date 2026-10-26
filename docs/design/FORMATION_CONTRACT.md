@@ -499,5 +499,29 @@ ones carry `since: 'v2.3'`).
   were whole at his pose, so the guard opened while the far man was still round the corner - and stayed open as he lost the
   leader (check 7).
 - Golden `formation_Guard.json`: `in.allInSight` (false only with the lookahead pose).
-- Open (FORMATION_SECTORS "Open for the user (v2.3)" 3): the trail column's 2nd / 3rd men double the rear at a wall gap and
-  walk backwards (the backward speed cap) - they fall 2 m behind and their line to the leader cuts the gap's wall end.
+- Decided 2026-10-26 (FORMATION_SECTORS Q3 = c): the trail column's 2nd / 3rd men doubling the rear at a wall gap no longer walk
+  backwards - 13.7.
+
+### 13.7 v2.3 part 7 - only the rear guard walks backwards (user decision 2026-10-26, Q3 = c)
+- New key `look.over_shoulder_max_deg` 110 (90-180; 180 = off = v2.2).
+- `CoverMember.travel` (optional world yaw): the direction his place travels along - the trail column's TrailSlots yaw at his slot;
+  absent = the heading.
+- `FormationCoverRules::Allocate` step 5, walk only: every member who is not K, not the rear guard and not fixed (`others`) has his
+  sweep confined to [o - lim, o + lim] relative to the heading (o = normYaw(travel - heading), lim = the key): of [mid - amp,
+  mid + amp] shifted by 0, -360, +360 (in that order) the largest overlap with it wins (ties: the first) and the sweep becomes
+  its centre +- half its width (same period and phase as the unconfined sweep); no overlap -> amplitude 0 at a shoulder o + lim
+  or o - lim: the one not within look.wall_angle of a blocked direction first, then the one nearer the share's mid, then the side
+  of his bearing from the leader (bearing < 0 -> -lim), then +lim. The shares are unchanged. Halt: unchanged, `shoulder` empty.
+- `CoverResult.shoulder` = [{role, yaw}] for those members, yaw = his travel (world).
+- `ClearLook(walls, pos, yaw, currentYaw, config, held, limit)`: `limit` = {yaw, half} | null. With a limit the wanted yaw is first
+  clamped to the nearer edge (yaw +- half); the held look, the narrow wanted yaw, the edges and the enclosed rays outside
+  +-half of limit.yaw are no candidates. Null = 13.1 / 13.4 unchanged.
+- Integration (sim, runtime): for a member in `shoulder` pass limit = {yaw: his ACTUAL step direction while he moves (the sim:
+  the step's direction when > 0.5 cm; the runtime: his velocity direction) if it is within SHOULDER_STEP_DEG (90) of the shoulder
+  entry's yaw, else (a step back to a slot behind him, a stand-in place; standing) the entry's yaw; half: the key}. (A man
+  threading a wall gap steps up to 60 deg off the squad's heading and the step decides whether he walks backwards; a step back
+  to his slot flipped the limit and swung his look round across a wall - lab R_C_gaps, line of 4.)
+  The rear guard, K, the fixed looks (the narrow column's decided L at -165 included - a user decision) keep no limit.
+- Golden: `formation_Cover.json` gains `in.members[].travel` (the last case per scene: the followers' travel = heading + 35) and
+  `out.shoulder`; `formation_ClearLook.json` gains `in.limit` (null, and {yaw: the scene heading, half 110} on the cases without
+  a turn).

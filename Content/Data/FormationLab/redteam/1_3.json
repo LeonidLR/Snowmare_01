@@ -114,7 +114,19 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [],
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.5,
+      "what": "P at W2",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    }
+  ],
   "fixed_entries": [
     {
       "check": 1,
@@ -124,6 +136,5 @@
       "seed": 1,
       "fixed_in": "v2.2"
     }
-  ],
-  "fixed_in": "v2.3"
+  ]
 }

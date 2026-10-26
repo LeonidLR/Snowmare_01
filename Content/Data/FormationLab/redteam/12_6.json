@@ -96,7 +96,7 @@
       "route": "R1",
       "seed": 2,
       "t": 26,
-      "what": "P-Z 70 cm apart",
+      "what": "P-Z 79 cm apart",
       "since": "v2.2",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
@@ -130,17 +130,6 @@
       "what": "P-Z 22 cm apart",
       "since": "v2.2",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 5,
-      "choice": "hedgehog",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 26,
-      "what": "P-Z 79 cm apart",
-      "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [
@@ -159,6 +148,14 @@
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 5,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
     }
   ]
 }

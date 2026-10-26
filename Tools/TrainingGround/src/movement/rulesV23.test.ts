@@ -3,11 +3,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Segment } from './geometry.ts';
-import { distToWall } from './geometry.ts';
+import { angleDiff, distToWall } from './geometry.ts';
 import { configValues } from './config.ts';
 import { readConfigFile, readLayout } from './cli/paths.ts';
 import { runSeries } from './bot.ts';
-import { FormationCoverRules, FormationGuardRules, FormationSectorRules, FormationShapeRules } from './rules.ts';
+import { simulate } from './sim.ts';
+import { FormationCoverRules, FormationGuardRules, FormationSectorRules, FormationShapeRules, REAR_SECTOR } from './rules.ts';
 
 const C = configValues(readConfigFile());
 const L = FormationSectorRules.ClearLook;
@@ -128,4 +129,73 @@ test('v2.3 guard: a member cut off from the leader -> the trail column at once, 
   st = G.Resolve([], 'blizzard', 4, [0, 0], 0, null, 0, st, C['classify.hold_distance'] / 2 + 1, C);
   assert.equal(st.level, 0);
   assert.equal(G.Resolve([], 'wall', 4, [0, 0], 0, null, 0, { ...start, requested: 'wall', effective: 'wall' }, 20, C, false).level, 0, 'the wall layout is never guarded');
+});
+
+// --- v2.3 part 7 (user decision 2026-10-26, Q3 = c): only the rear guard walks backwards; the others look over the shoulder.
+// A column of four in a 2.6 m corridor: both flanks are walls, K holds the front and Z the rear - P and L have no gap of their
+// own and (v2.2) doubled the rear, walking backwards.
+const flanks: Segment[] = [{ a: [-3000, -130], b: [1000, -130], thickness: 20 }, { a: [-3000, 130], b: [1000, 130], thickness: 20 }];
+const columnPlaces = () => FormationShapeRules.Slots('column', 4, [0, 0], 0, C).map((s) => ({ role: s.role, pos: s.pos, back: -s.pos[0] }));
+
+test('v2.3 part 7 (Q3 = c): on the move a member doubling the rear looks over the shoulder (<= look.over_shoulder_max_deg), the rear guard still back', () => {
+  const lim = C['look.over_shoulder_max_deg'];
+  assert.equal(lim, 110);
+  const off = { ...C, 'look.over_shoulder_max_deg': 180 };
+  let v22Back = 0;
+  for (let t = 0; t < 6; t += 0.25) {
+    const old = FormationCoverRules.Allocate(flanks, [0, 0], 0, columnPlaces(), 'walk', t, off)!;
+    for (const r of ['P', 'L'] as const) if (Math.abs(old.looks.find((l) => l.role === r)!.yaw) > 120) v22Back++;
+    assert.deepEqual(old.shoulder, [], '180 = off (v2.2)');
+    const now = FormationCoverRules.Allocate(flanks, [0, 0], 0, columnPlaces(), 'walk', t, C)!;
+    assert.equal(now.rearGuard, 'Z');
+    assert.deepEqual(now.shoulder.map((x) => x.role).sort(), ['L', 'P'], 'everyone but K and the rear guard');
+    for (const x of now.shoulder) near(x.yaw, 0);
+    for (const r of ['P', 'L'] as const) assert.ok(Math.abs(now.looks.find((l) => l.role === r)!.yaw) <= lim + 1e-6, `${r} at t ${t}`);
+    assert.ok(Math.abs(now.looks.find((l) => l.role === 'Z')!.yaw) >= 180 - REAR_SECTOR - 1e-6, 'the rear guard keeps 6 o\'clock (he walks backwards as decided)');
+    assert.deepEqual(now.shares, old.shares, 'the shares stay as allocated');
+  }
+  assert.ok(v22Back > 0, 'precondition: v2.2 looked > 120 deg back (walking backwards)');
+  // Halt: unchanged (standing, nobody walks backwards).
+  assert.deepEqual(FormationCoverRules.Allocate(flanks, [0, 0], 0, columnPlaces(), 'halt', 0, C), FormationCoverRules.Allocate(flanks, [0, 0], 0, columnPlaces(), 'halt', 0, off));
+  // The limit follows his place's travel direction (the trail column at a bend): travel +40 -> within 40 +- 110.
+  const bent = columnPlaces().map((m) => (m.role === 'P' ? { ...m, travel: 40 } : m));
+  for (let t = 0; t < 6; t += 0.5) {
+    const r = FormationCoverRules.Allocate(flanks, [0, 0], 0, bent, 'walk', t, C)!;
+    assert.ok(angleDiff(r.looks.find((l) => l.role === 'P')!.yaw, 40) <= lim + 1e-6);
+    near(r.shoulder.find((x) => x.role === 'P')!.yaw, 40);
+  }
+});
+
+test('v2.3 part 7 (Q3 = c): ClearLook with a limit - the wanted yaw is clamped and no edge outside the limit is taken', () => {
+  const lim = { yaw: 0, half: 110 };
+  const right: Segment[] = [{ a: [-2000, 100], b: [2000, 100], thickness: 20 }]; // blocks 35..145
+  assert.equal(L(right, [0, 0], 150, 150, C), 150, 'no limit: 150 is free');
+  const got = L(right, [0, 0], 150, 150, C, null, lim);
+  near(got, 90 - C['look.wall_angle'], 1e-6); // 110 is blocked; the edge at 145 lies outside the limit -> 35
+  near(L([], [0, 0], 150, 150, C, null, lim), 110, 1e-6); // no walls: clamped to the nearer edge
+  near(L([], [0, 0], -170, -170, C, null, lim), -110, 1e-6);
+  assert.equal(L([], [0, 0], 80, 80, C, null, lim), 80, 'inside the limit: unchanged');
+  // A held look outside the limit is no candidate.
+  const behind: Segment[] = [{ a: [-170, -2000], b: [-170, 2000], thickness: 20 }];
+  assert.equal(L(behind, [0, 0], 180, -150, C, -120), -120);
+  assert.ok(Math.abs(L(behind, [0, 0], 180, -150, C, -120, lim)) <= 110 + 1e-6);
+});
+
+test('v2.3 part 7 sim (Q3 = c): at oblique wall gaps the followers who are not the rear guard stop walking backwards (red team 10_6, 8_7)', () => {
+  for (const name of ['10_6', '8_7']) {
+    const layout = readLayout(`redteam/${name}`);
+    const count = (config: typeof C) => {
+      let back = 0;
+      for (const n of [3, 4]) for (const route of layout.routes) {
+        simulate({ layout, route, memberCount: n, config, seed: 1, onFrame: (f) => {
+          if (f.mode !== 'walk') return;
+          for (const m of f.members.slice(1)) if (m.backwards && !m.rearGuard && !m.cornerWatch) back++;
+        } });
+      }
+      return back;
+    };
+    const before = count({ ...C, 'look.over_shoulder_max_deg': 180 }), after = count(C);
+    assert.ok(before > 200, `${name}: precondition, v2.2 walked backwards (${before} frames)`);
+    assert.ok(after * 5 < before, `${name}: ${before} -> ${after} frames`);
+  }
 });

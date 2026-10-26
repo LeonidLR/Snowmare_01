@@ -27,6 +27,7 @@ const TRAIL_KEEP = 1500; // cm of trail kept
 const SEPARATION_MARGIN = 10; // cm beyond slot.min_spacing the separation aims for
 const SEPARATION_SPEED = 60; // cm/s: members closer than slot.min_spacing drift apart (stands in for the engine's avoidance)
 const REASSIGN_GAIN = 100; // cm: on the way, places are reassigned when the minimal assignment is this much cheaper (v2.2)
+const SHOULDER_STEP_DEG = 90; // v2.3 part 7: a step within this of his place's travel centres his over-the-shoulder limit
 const WALK_LOOK_DEG = 35; // the leader's look within this of his travel = looking where he walks (exempt from ClearLook; the check allows 45)
 
 export interface MemberFrame {
@@ -282,7 +283,8 @@ export function simulate(o: SimOptions): number {
     const mode: Mode = slide ? 'walk' : arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
     // --- targets and look yaws
-    let targets: { role: Role; pos: Vec2; yaw: number; decided?: boolean }[]; // decided: a user-decided look (v2.3, Decided)
+    // decided: a user-decided look (v2.3, Decided); travel: the trail's direction at a trail-column slot (v2.3 part 7)
+    let targets: { role: Role; pos: Vec2; yaw: number; decided?: boolean; travel?: number }[];
     let slideLead: Role | null = null, slideRear: Role | null = null;
     if (slide) {
       const res = FormationWallRules.Slide(slide.wall, slide.start, leader.pos, slide.dest, t, c);
@@ -318,7 +320,7 @@ export function simulate(o: SimOptions): number {
       // to the trail's direction at his slot; the rear man keeps the squad's 6 o'clock (the leader's heading).
       targets = FormationShapeRules.TrailSlots(path, heading, n, c, walls).map((s) => {
         const width = passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c);
-        return { ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw, width, c),
+        return { ...s, travel: s.yaw, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw, width, c),
           // 1A is a corridor decision: only the classifier's held corridor width counts - a slot's side width at a doorway
           // crossed obliquely is not a corridor (P's "forward over the shoulder" aimed at the door's wall end 0.5 m away).
           decided: FormationSectorRules.Decided(s.role, 'column', n, passage, c) };
@@ -357,17 +359,19 @@ export function simulate(o: SimOptions): number {
     // place farthest back = the rear guard (6 o'clock), the others split the open arc. The pair, run, "all forward", the wall
     // layout and the STANDING hedgehog ring keep their rules (walking, the hedgehog is just a shape).
     let rearGuard: Role | null = slideRear;
+    let shoulder: { role: Role; yaw: number }[] = []; // v2.3 part 7 (Q3 = c): the allocator's over-the-shoulder members (ClearLook's limit)
     if (n >= 3 && (mode === 'walk' || (mode === 'halt' && formation !== 'hedgehog')) && formation !== 'wall') {
       const trailOn = FormationGuardRules.Effective(guard).trail;
       const hv = dirOf(heading);
       // v2.3 (1A clarified): the looks the user decided for the formation (the narrow column's K / P / L) are fixed looks too.
       const fixed = [...looks, ...targets.filter((x) => x.decided && !looks.some((l) => l.role === x.role)).map((x) => ({ role: x.role, yaw: x.yaw }))];
       const cover = FormationCoverRules.Allocate(walls, leader.pos, heading, targets.map((x, k) => ({
-        role: x.role, pos: x.pos,
+        role: x.role, pos: x.pos, travel: x.travel,
         back: trailOn ? k : -((x.pos[0] - leader.pos[0]) * hv[0] + (x.pos[1] - leader.pos[1]) * hv[1]),
       })), mode, t, c, fixed);
       if (cover) {
         rearGuard = cover.rearGuard;
+        shoulder = cover.shoulder;
         targets = targets.map((x) => ({ ...x, yaw: cover.looks.find((l) => l.role === x.role)?.yaw ?? x.yaw }));
       }
     }
@@ -405,7 +409,14 @@ export function simulate(o: SimOptions): number {
       const watching = looks.some((l) => l.role === m.place);
       const walking = i === 0 && len(leaderVel) > 1 ? yawOf(leaderVel) : null;
       const exempt = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG);
-      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld);
+      // v2.3 part 7 (Q3 = c): an over-the-shoulder member's wall-avoiding look stays within +- the limit of where he steps:
+      // his ACTUAL step decides whether he walks backwards (a man threading a wall gap steps up to 60 deg off the squad's
+      // heading) - unless it is more than SHOULDER_STEP_DEG off his place's travel (a step back to a slot behind him, a
+      // stand-in place): then, and standing, the place's travel direction (else the limit flips and his look swings round).
+      const sl = shoulder.find((x) => x.role === m.place);
+      const stepYaw = len(moveDir) > 0.5 ? yawOf(moveDir) : null;
+      const limit = sl ? { yaw: stepYaw !== null && angleDiff(stepYaw, sl.yaw) <= SHOULDER_STEP_DEG ? stepYaw : sl.yaw, half: cfg(c, 'look.over_shoulder_max_deg') } : null;
+      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld, limit);
       m.clearHeld = exempt ? null : free;
       const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));

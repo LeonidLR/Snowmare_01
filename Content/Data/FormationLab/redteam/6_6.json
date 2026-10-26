@@ -117,7 +117,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 14.4,
+      "t": 14.5,
       "what": "column (asked echelon_right): wall cuts L-Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
@@ -127,7 +127,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 19.2,
+      "t": 19.1,
       "what": "column (asked echelon_left): wall cuts L-Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
