@@ -82,7 +82,8 @@
 ## Formation look sectors (stage 6, 2026-10-25; design docs/design/FORMATION_SECTORS.md, contract FORMATION_CONTRACT.md)
 
 Console `Codex.Formation.Sectors` (default 1; **0 = the old triangle formation, facing and speeds - every old path untouched**). `Codex.Formation.Debug 1`
-logs every raw terrain class change with its probe hits, `2` also every follower repath (role, distance, slot speed, speed, backwards).
+logs every raw terrain class change with its probe hits, `2` also every follower repath (role, distance, slot speed, speed, backwards), `3` also each
+member's formation look whenever it changes (with his facing) and every look ClearLook turns (2026-10-26).
 - **What the player sees:** exploring in group mode the squad picks its formation by the ground round the leader - diamond (4) / wedge (3) / pair (2) in the
   open, echelon away from a wall on one side, column in any passage (narrow: P looks over the leader's shoulder, L back at a slant, the rear man back),
   the wall layout when the leader stops at a wall; the blizzard tight diamond in a blizzard. Each man looks into his sector: patrol (walk) = scans (leader
@@ -204,6 +205,9 @@ ClearLook, HUD text), `SquadSubsystemFormationBypass.cpp` (bypass), the pure glu
   every run; R_E_corner: the turn fold; manual runs R_B_walls "echelon left" -> the mirror + HUD line, R_D_corridors "line" -> the trail column + HUD
   line; R_E_corner_pass: the corner watch at W_E_14's free end), `FormationBypassSmoke` (lane G: the four routes + the shielded side from the squad's
   own sight of a parked hound). Stills: `Saved/Screenshots/FormationV21/` (`FormationLabSmoke shot`, `FormationBypassSmoke shot`).
+- **Note (2026-10-26, TutorialSmoke):** a leader made a follower for a moment (the tutorial's medkit lesson selects another operative and back) turns
+  to his follower place's look (here the rear guard's) and keeps that facing as the halted leader - the formation's design, but a test that lays a
+  scene out along the leader's facing must not trust it (the sight scene now picks a clear bearing).
 - **Known limits / open:** the world walls are boxes only (a building made of one complex mesh is not seen by the guard / corner / bypass); the
   corner watch flips between the two exits of the lab's wide corridor when the leader walks exactly `classify.probe_side` (400 cm) from both walls (the
   rule's `Lateral > probe_side` edge); the HUD says "(wall)" for the turn fold too (labels.ts wording); a manual line's rear guard walks backwards

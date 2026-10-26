@@ -24,6 +24,7 @@
 #include "Formation/FormationShapeRules.h"
 #include "Formation/FormationTuning.h"
 #include "GameFramework/Pawn.h"
+#include "HAL/IConsoleManager.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
 #include "PhysicsEngine/BodySetup.h"
@@ -321,8 +322,16 @@ float USquadSubsystem::ClearFormationLook(const AOperativeCharacter& Member, EFo
 	}
 	// The world walls only (the v2.1 rules' one view of the level): a wall the squad looks over (below FormationRuntime::ProbeHeightCm +
 	// LookedOverMarginCm) never turns a look away - standing, they see across it.
-	return FormationSectorRules::ClearLook(Sectors.WorldWalls, FVector2D(Member.GetActorLocation()), Look, static_cast<float>(Member.GetActorRotation().Yaw),
-		FormationTuning::Get());
+	const float Cleared = FormationSectorRules::ClearLook(Sectors.WorldWalls, FVector2D(Member.GetActorLocation()), Look,
+		static_cast<float>(Member.GetActorRotation().Yaw), FormationTuning::Get());
+	static const IConsoleVariable* DebugVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Debug"));
+	if (DebugVar && DebugVar->GetInt() >= 3 && FMath::Abs(FMath::FindDeltaAngleDegrees(Look, Cleared)) > 1.f)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] look %s %s: %.0f -> ClearLook %.0f (facing %.0f, %s %s, %d walls)"), *Member.DisplayName.ToString(),
+			FormationNames::ToString(Role), Look, Cleared, Member.GetActorRotation().Yaw, FormationNames::ToString(Sectors.Formation),
+			FormationNames::ToString(Sectors.Mode), Sectors.WorldWalls.Num());
+	}
+	return Cleared;
 }
 
 FString USquadSubsystem::GetFormationHudText() const

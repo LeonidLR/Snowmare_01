@@ -171,3 +171,21 @@ bool FSightFieldOfViewTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("facing +Y: a target at -Y"), IsInFieldOfView(Eye, FVector(0.f, 1.f, 0.f), FVector(0.f, -1500.f, 150.f), 140.f));
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightBearingsNearestFirstTest, "CodexTactics.Combat.Sight.BearingsNearestFirst",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FSightBearingsNearestFirstTest::RunTest(const FString&)
+{
+	// 2026-10-26: the TutorialSmoke sight scene (a 1.2 m wall 1 m ahead, an enemy 7 m on) is laid out along the first CLEAR bearing from
+	// the leader's facing - straight along it, the enemy fell behind a 2.4 m container 5 m away (InteractableActor_1) in ~1 run of 4.
+	const TArray<float> Bearings = SightRules::BearingsNearestFirst(115.f, 30.f);
+	TestEqual(TEXT("the preferred bearing first"), Bearings.Num() > 0 ? Bearings[0] : 0.f, 115.f);
+	TestEqual(TEXT("then +step, -step"), Bearings.Num() > 2 ? Bearings[1] : 0.f, 145.f);
+	TestEqual(TEXT("... -step"), Bearings.Num() > 2 ? Bearings[2] : 0.f, 85.f);
+	TestEqual(TEXT("+2 step wraps to (-180, 180]"), Bearings.Num() > 3 ? Bearings[3] : 0.f, 175.f);
+	TestEqual(TEXT("+3 step normalized"), Bearings.Num() > 5 ? Bearings[5] : 0.f, -155.f);
+	TestEqual(TEXT("every bearing once round the circle (180 deg off only once)"), Bearings.Num(), 12);
+	TestEqual(TEXT("the last is straight behind"), Bearings.Last(), -65.f);
+	TestEqual(TEXT("no step: just the preferred"), SightRules::BearingsNearestFirst(10.f, 0.f).Num(), 1);
+	return true;
+}

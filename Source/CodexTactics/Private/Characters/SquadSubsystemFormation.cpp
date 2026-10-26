@@ -29,7 +29,7 @@
 namespace SquadSubsystemFormationLocal
 {
 	TAutoConsoleVariable<int32> CVarFormationDebug(TEXT("Codex.Formation.Debug"), 0,
-		TEXT("1: log the formation probe (each raw terrain class change with its probe hits)"));
+		TEXT("1: log the formation probe (each raw terrain class change with its probe hits); 2: also every follower repath; 3: also each member's formation look whenever it changes, and every look ClearLook turns"));
 	/** The last raw class logged (Codex.Formation.Debug). */
 	TOptional<EFormationTerrainClass> LastLoggedRawClass;
 
@@ -72,6 +72,9 @@ namespace SquadSubsystemFormationLocal
 
 void USquadSubsystem::ApplyFormationFrame()
 {
+	// Codex.Formation.Debug 3: a member's formation look whenever it changes (set / cleared / > 5 deg), with his facing.
+	static TMap<TWeakObjectPtr<AOperativeCharacter>, float> LastLoggedLook;
+	const bool bDebugLooks = SquadSubsystemFormationLocal::CVarFormationDebug.GetValueOnGameThread() >= 3;
 	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
 	{
 		AOperativeCharacter* Operative = Member.Get();
@@ -81,6 +84,15 @@ void USquadSubsystem::ApplyFormationFrame()
 		}
 		const float* Yaw = FrameLooks.Find(Member);
 		Operative->SetFormationLookYaw(Yaw ? TOptional<float>(*Yaw) : TOptional<float>());
+		const float* Logged = LastLoggedLook.Find(Member);
+		const float LookNow = Yaw ? *Yaw : 99999.f;
+		if (bDebugLooks && (!Logged || FMath::Abs(FMath::FindDeltaAngleDegrees(*Logged, LookNow)) > 5.f || (*Logged > 9999.f) != (LookNow > 9999.f)))
+		{
+			LastLoggedLook.Add(Member, LookNow);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] frame %s: look %s, facing %.0f, active %d, %s %s, corner looks %d"), *Operative->DisplayName.ToString(),
+				Yaw ? *FString::Printf(TEXT("%.0f"), *Yaw) : TEXT("-"), Operative->GetActorRotation().Yaw, Sectors.bActiveThisFrame ? 1 : 0,
+				FormationNames::ToString(Sectors.Formation), FormationNames::ToString(Sectors.Mode), Sectors.CornerLooks.Num());
+		}
 		Operative->SetFormationPaceMultiplier(FramePaceLeader.Get() == Operative ? FramePace : 1.f);
 	}
 }
