@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -635,7 +635,7 @@
       "name": "camera",
       "globs": ["Source/**/Camera/**", "Source/**/Debug/InteriorExitSmoke*", "Source/**/Debug/RoofCutawaySmoke*"],
       "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
-      "smokes": ["CameraZoneSmoke", "RoofCutawaySmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
+      "smokes": ["CameraStaySmoke", "CameraZoneSmoke", "RoofCutawaySmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
     },
     {
       "name": "death-cinematic",
@@ -665,7 +665,7 @@
       "name": "controller-selection",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerSelection*"],
       "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": ["RealtimeSelectSmoke", "GroupSelectSmoke", "SoloRejoinSmoke", "ActionBarSmoke", "TrapSoloSmoke"]
+      "smokes": ["CameraStaySmoke", "RealtimeSelectSmoke", "GroupSelectSmoke", "SoloRejoinSmoke", "ActionBarSmoke", "TrapSoloSmoke"]
     },
     {
       "name": "controller-orders",
@@ -701,7 +701,7 @@
       "name": "controller-camera",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerCamera*"],
       "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": ["CameraZoneSmoke", "InteriorExitSmoke", "TurnBasedCameraSmoke", "TutorialSmoke"]
+      "smokes": ["CameraStaySmoke", "CameraZoneSmoke", "InteriorExitSmoke", "TurnBasedCameraSmoke", "TutorialSmoke"]
     },
     {
       "name": "group-cover",
