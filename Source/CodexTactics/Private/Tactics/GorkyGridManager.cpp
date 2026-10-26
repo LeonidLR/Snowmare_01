@@ -73,9 +73,9 @@ void UGorkyGridManager::SetOccupant(const FIntPoint& Pos, AActor* Occupant, EGor
 	if (Data)
 	{
 		Data->Occupant = Occupant;
-		Data->OccupantType = Type;
-		// Mines do not block movement
-		Data->bWalkable = (Type == EGorkyOccupantType::None || Type == EGorkyOccupantType::Mine);
+		Data->OccupantType = Data->bClosed && Type == EGorkyOccupantType::None ? EGorkyOccupantType::Obstacle : Type;
+		// Mines do not block movement; a closed cell never opens.
+		Data->bWalkable = !Data->bClosed && (Type == EGorkyOccupantType::None || Type == EGorkyOccupantType::Mine);
 	}
 }
 
@@ -90,9 +90,27 @@ void UGorkyGridManager::ClearOccupant(const FIntPoint& Pos)
 	if (Data)
 	{
 		Data->Occupant = nullptr;
-		Data->OccupantType = EGorkyOccupantType::None;
-		Data->bWalkable = true;
+		// A closed cell (a building's, a ladder's) stays an obstacle whoever leaves it.
+		Data->OccupantType = Data->bClosed ? EGorkyOccupantType::Obstacle : EGorkyOccupantType::None;
+		Data->bWalkable = !Data->bClosed;
 	}
+}
+
+void UGorkyGridManager::SetClosed(const FIntPoint& Pos)
+{
+	if (FGorkyCellData* Data = IsValidCell(Pos) ? Cells.Find(Pos) : nullptr)
+	{
+		Data->bClosed = true;
+		Data->Occupant = nullptr;
+		Data->OccupantType = EGorkyOccupantType::Obstacle;
+		Data->bWalkable = false;
+	}
+}
+
+bool UGorkyGridManager::IsCellClosed(const FIntPoint& Pos) const
+{
+	const FGorkyCellData* Data = IsValidCell(Pos) ? Cells.Find(Pos) : nullptr;
+	return Data && Data->bClosed;
 }
 
 AActor* UGorkyGridManager::GetOccupant(const FIntPoint& Pos) const

@@ -253,7 +253,7 @@ so the flag is set per Blueprint. It also needs ladder clips usable on that body
 as `false` with a warning. Same component and states; `EnemyAIController` picks the climbing filter.
 
 ### 7.6 Turn-based
-Forbidden (user decision): the grid never registers a ladder link; `TurnArenaRules` sees no ladder moves. A fight that
+Forbidden (user decision): the grid never registers a ladder link; `TurnArenaRules` sees no ladder moves. Since 2026-10-26 the cells within 50 cm of a ladder's rungs, foot and top are subtracted from the grid (closed, never entered; `TurnArenaRules`, docs/systems/combat-and-fire.md "Turn-based arena"). A fight that
 starts while an operative is on a ladder (user decision 2026-10-22): he **finishes the climb to the top at normal speed** -
 no abort, no speed-up, orders to him are buffered until he is off. Real time / tactical pause: he simply takes part once
 off the ladder. Turn-based: the grid forms without him (the entry does not wait - user decision); he joins the turn order on the
