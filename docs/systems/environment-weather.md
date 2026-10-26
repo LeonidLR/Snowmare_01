@@ -949,7 +949,7 @@ born at the top of a 28 m cylinder (~6-9 s to fill the air), and the eye adaptat
   `EditorPreview_L_LakeNoLights*.png` (lit, not black). Ground drift (`SnowSmoke`) stays at 0 particles with the current DA_SnowFX also
   in a blizzard, before and after this change (a tuning matter of the snow FX, not of the start).
 
-## 16. Migrated rain / sunny / storm assets (2026-10-26)
+## 16b. Migrated rain / sunny / storm assets (2026-10-26)
 
 Source: the old `WeatherSystem_01 5.4` (read-only). Script: `Scripts/Editor/migrate_weather_assets.py`, new batch `rain` (`MANIFEST_RAIN`; `sky` is the old batch).
 **Method.** Closure: read-only scan of the `.uasset` name tables for `/Game/` packages, transitive from the requested roots (35 packages; the 9 that the sky batch already
