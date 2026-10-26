@@ -1,4 +1,4 @@
-// Training Ground / movement: the hold-G radial formation menu - pure rules (FORMATION_CONTRACT.md 9, C++ FormationMenuRules).
+// Training Ground / movement: the hold-B radial formation menu (hold G until 2026-10-26: G is the grenade now) - pure rules (FORMATION_CONTRACT.md 9, C++ FormationMenuRules).
 // Layout (docs/design/FORMATION_SECTORS.md "Selection"): 8 items on the clock, 45 deg sectors, the centre = Auto.
 // Screen space: the cursor offset from the menu centre in px, x right, y DOWN (as UMG / Slate); 12 o'clock = up.
 
@@ -58,7 +58,7 @@ export type MenuEffect = 'none' | 'opened' | 'picked' | 'auto' | 'cancelled' | '
 
 export const MENU_START: MenuState = { open: false, choice: 'auto', highlighted: null };
 
-/** G pressed: the menu opens with the cursor at the centre (Auto highlighted); the choice is untouched until release. */
+/** B held: the menu opens with the cursor at the centre (Auto highlighted); the choice is untouched until release. */
 function Open(state: MenuState): { state: MenuState; effect: MenuEffect } {
   return { state: { ...state, open: true, highlighted: null }, effect: 'opened' };
 }
@@ -69,7 +69,7 @@ function Move(state: MenuState, dx: number, dy: number, deadZonePx: number): Men
 }
 
 /**
- * G released: on an enabled item -> that item (manual, holds until Auto); in the centre -> Auto; on a disabled item -> the
+ * B released: on an enabled item -> that item (manual, holds until Auto); in the centre -> Auto; on a disabled item -> the
  * previous choice stays ('disabled': the UI flashes the item / plays the refusal sound). The menu closes in every case.
  */
 function Release(state: MenuState, memberCount: number): { state: MenuState; effect: MenuEffect } {

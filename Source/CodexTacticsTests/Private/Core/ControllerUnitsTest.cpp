@@ -51,6 +51,14 @@ bool FControllerUnitsWorldFreeTest::RunTest(const FString&)
 	// CodexTacticsPlayerControllerCover.cpp: no ghost spawned yet.
 	TestFalse(TEXT("no cover preview"), Controller->HasCoverPreview());
 	TestFalse(TEXT("no corner peek preview"), Controller->IsCornerPeekPreviewShown());
+
+	// CodexTacticsPlayerControllerFormationMenu.cpp (stage 7, hold B): no world -> no squad -> the menu never opens; Esc / RMB have
+	// nothing to cancel; a B tap's release does nothing without a press.
+	TestFalse(TEXT("formation menu closed"), Controller->IsFormationMenuOpen());
+	TestFalse(TEXT("formation menu unavailable without a squad"), Controller->CanOpenFormationMenu());
+	TestFalse(TEXT("nothing to cancel"), Controller->CancelFormationMenu());
+	TestTrue(TEXT("hold threshold 0.25 s by default"), FMath::IsNearlyEqual(Controller->FormationMenuHoldSeconds, 0.25f));
+	TestNull(TEXT("no menu widget before the first open"), Controller->GetFormationMenuWidget());
 	return true;
 }
 
@@ -64,7 +72,8 @@ bool FControllerUnitsSourceLayoutTest::RunTest(const FString&)
 		TEXT("CodexTacticsPlayerControllerOrders.cpp"), TEXT("CodexTacticsPlayerControllerStance.cpp"),
 		TEXT("CodexTacticsPlayerControllerItems.cpp"), TEXT("CodexTacticsPlayerControllerTime.cpp"),
 		TEXT("CodexTacticsPlayerControllerMenus.cpp"), TEXT("CodexTacticsPlayerControllerCamera.cpp"),
-		TEXT("CodexTacticsPlayerControllerCover.cpp"), TEXT("CodexTacticsPlayerControllerMap.cpp") };
+		TEXT("CodexTacticsPlayerControllerCover.cpp"), TEXT("CodexTacticsPlayerControllerMap.cpp"),
+		TEXT("CodexTacticsPlayerControllerFormationMenu.cpp") };
 	const FString CoreDir = FPaths::ConvertRelativePathToFull(FPaths::GameSourceDir() / TEXT("CodexTactics/Private/Core"));
 	TArray<FString> Found;
 	IFileManager::Get().FindFiles(Found, *(CoreDir / TEXT("CodexTacticsPlayerController*.cpp")), true, false);

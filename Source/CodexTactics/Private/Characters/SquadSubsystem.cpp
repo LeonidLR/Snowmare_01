@@ -1136,6 +1136,14 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		Follower.RepathTimeRemaining = 0.f;
 		return;
 	}
+	// The squad's corner peek (2026-10-26): the peeker holds his corner in cover while the others stack / slide past (not taken out of it by the
+	// leader's walk into the stack); its end hands him back to the formation (the followers-in-cover rule).
+	if (IsFormationPeeker(Operative))
+	{
+		Follower.bParked = false;
+		Follower.RepathTimeRemaining = 0.f;
+		return;
+	}
 	// Rules v2.2 wall group (Codex.Formation.Sectors): taken out of his cover slot into the back-to-wall pose, he holds it facing his look.
 	if (HoldsWallGroupPose(Follower, *Operative))
 	{

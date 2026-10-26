@@ -48,6 +48,23 @@ public:
 	/** RMB is held for the free-look drag (smokes). */
 	bool IsDragRotating() const { return bDragRotating; }
 
+	/**
+	 * Detached view (game designer 2026-10-26): a manual pan (WASD / edge / MMB drag / minimap look-at) in the free view -
+	 * exploration or real-time combat - freezes the focus where the player left it: the camera does NOT follow the leader
+	 * while he walks. Re-attached only by ReattachToFollowTarget (the squad number key 1-4, a portrait click), a leader change,
+	 * a glide / snap / cinematic, or turn-based combat (its own camera choreography; never detached there).
+	 */
+	bool IsDetachedFromFollow() const;
+
+	/** A scripted manual pan by WorldDelta (cm, horizontal): detaches like a WASD / drag pan (CameraStaySmoke, tutorial scripts). */
+	void NudgePan(const FVector& WorldDelta);
+
+	/**
+	 * Back over the follow target: the view stays put this frame (the pan absorbs the frozen focus) and then glides onto
+	 * him (the DragPanReturnDuration ease); the camera follows him from then on. Safe to call when not detached.
+	 */
+	void ReattachToFollowTarget();
+
 	/** Middle-mouse drag pan on/off; releasing in exploration returns the view to the leader. */
 	void SetDragPanning(bool bActive);
 
@@ -149,6 +166,8 @@ private:
 	void UpdateSmoothFocus(float RealDelta);
 	void BeginSmoothFocus(float Duration, float TargetDist);
 	bool IsFollowingLeader() const;
+	/** A manual pan froze the view (no-op in turn-based combat, under a cinematic lock, or with the old exploration leash). */
+	void DetachFromFollow();
 
 	bool bSmoothFocusing = false;
 	float SmoothTime = 0.f;
@@ -208,6 +227,8 @@ private:
 	/** Cursor movement since the previous drag frame, pixels (Y down). */
 	FVector2D ConsumeCursorDelta();
 	bool bPanReturning = false;
+	/** Manual pan froze Focus (see IsDetachedFromFollow); cleared by every re-centre. */
+	bool bDetached = false;
 	FVector PanReturnStart = FVector::ZeroVector;
 	float PanReturnTime = 0.f;
 };

@@ -200,6 +200,11 @@ void ACodexTacticsPlayerController::SquadVisionConesKey()
 
 void ACodexTacticsPlayerController::DialogueSkip()
 {
+	// The formation radial menu (hold B) first: Esc cancels it, the previous choice stays.
+	if (CancelFormationMenu())
+	{
+		return;
+	}
 	ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(GetHUD());
 	// Pause menu screens first (they are open while the world is paused).
 	if (Hud && Hud->IsPauseMenuOpen())

@@ -45,9 +45,11 @@ public:
 
 	/**
 	 * The manual corner peek preview (rev 5c, hovering the edge of his own wall): the ghost at the corner stand point Slot in
-	 * the corner-aim pose of Side (cvr_*_fire_idle: leaning out, rifle up) - distinct from the cover-entry ghost.
+	 * the corner-aim pose of Side (cvr_*_fire_idle: leaning out, rifle up) - distinct from the cover-entry ghost. The pose's stance is his
+	 * current one (low cover: crouched); CrouchedOverride sets it instead (the squad's peeker who is not in cover yet: the stance the cover
+	 * entry will give him, 2026-10-26).
 	 */
-	void ShowCornerPeekFor(const AOperativeCharacter& Operative, const FCoverSlot& Slot, ECoverFacing Side);
+	void ShowCornerPeekFor(const AOperativeCharacter& Operative, const FCoverSlot& Slot, ECoverFacing Side, TOptional<bool> CrouchedOverride = TOptional<bool>());
 
 	/** The ghost shows a corner peek pose (ShowCornerPeekFor) rather than a cover entry. */
 	bool IsCornerPeekPose() const { return bShown && bCornerPeekPose; }
@@ -71,7 +73,8 @@ public:
 private:
 	UMaterialInterface* ResolveBaseMaterial(const AOperativeCharacter& InOperative) const;
 	/** ShowFor / ShowCornerPeekFor: the ghost at Slot facing Facing, in the cover idle or (bFireIdle) the corner fire stance. */
-	void ShowPose(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Facing, bool bFireIdle);
+	void ShowPose(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Facing, bool bFireIdle,
+		TOptional<bool> CrouchedOverride = TOptional<bool>());
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Cover")
 	TObjectPtr<USceneComponent> Root;

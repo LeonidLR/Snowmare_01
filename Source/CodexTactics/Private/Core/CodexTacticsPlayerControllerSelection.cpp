@@ -4,6 +4,7 @@
 
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
+#include "Camera/TacticalCameraPawn.h"
 #include "Combat/HordeIntroSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/GrenadeSubsystem.h"
@@ -82,6 +83,10 @@ void ACodexTacticsPlayerController::OnClick()
 	if (IsDialogueOpen())
 	{
 		return; // the dialogue panel handles its own clicks
+	}
+	if (IsFormationMenuOpen())
+	{
+		return; // the formation radial menu (hold B) is picked by releasing B, a click is no order meanwhile
 	}
 	// Minimap (2026-10-18): a click on the corner map / its header / the full map belongs to the map (camera there).
 	if (FVector2D MapMouse; GetMousePosition(MapMouse.X, MapMouse.Y) && HandleMapClick(MapMouse, false))
@@ -256,6 +261,10 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 		ACodexTacticsHUD* Hud = GetHUD<ACodexTacticsHUD>();
 		if (Target && Target == Squad->GetLeader())
 		{
+			if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+			{
+				CameraPawn->ReattachToFollowTarget(); // the number key brings a panned-away camera back over him (2026-10-26)
+			}
 			if (Hud)
 			{
 				Hud->OpenProfileDialog(Target);

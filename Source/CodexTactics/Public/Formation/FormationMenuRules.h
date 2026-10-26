@@ -4,13 +4,13 @@
 #include "Formation/FormationTypes.h"
 
 /**
- * Hold-G radial formation menu - pure rules (Godot reference: none (UE-only, design docs/design/FORMATION_SECTORS.md "Selection",
+ * Hold-B radial formation menu - pure rules (Godot reference: none (UE-only, design docs/design/FORMATION_SECTORS.md "Selection",
  * contract docs/design/FORMATION_CONTRACT.md 9; reference implementation Tools/TrainingGround/src/movement/menu.ts)). Tests:
  * CodexTactics.Formation.Menu.*, parity CodexTactics.Formation.Parity.Menu.
  *
  * 8 items on the clock, 45 deg sectors, clockwise from 12: 12 line, 1:30 diamond (the wedge with 3, the pair with 2), 3 echelon right,
- * 4:30 blizzard, 6 column, 7:30 hedgehog, 9 echelon left, 10:30 all forward; the centre (the dead zone) = Auto. Hold G: the menu opens,
- * the cursor highlights an item, releasing G picks it; a manual choice holds until Auto is picked; Esc / right mouse button closes it
+ * 4:30 blizzard, 6 column, 7:30 hedgehog, 9 echelon left, 10:30 all forward; the centre (the dead zone) = Auto. Hold B (G until 2026-10-26; G is the grenade): the menu opens,
+ * the cursor highlights an item, releasing B picks it; a manual choice holds until Auto is picked; Esc / right mouse button closes it
  * and keeps the previous choice; a disabled item is refused (the previous choice stays).
  *
  * No display text here (in-game text is English and lives in the widget as FText); ToString / Parse give the contract ids.
@@ -51,7 +51,7 @@ enum class EFormationMenuEffect : uint8
 /** The menu's state (contract { open, choice, highlighted }; start: closed, Auto, nothing highlighted). */
 struct FFormationMenuState
 {
-	/** The menu is shown (G held). */
+	/** The menu is shown (B held). */
 	bool bOpen = false;
 	/** The squad's formation choice; unset = Auto (the terrain rules). Holds while the menu is closed. */
 	TOptional<EFormationMenuItem> Choice;
@@ -97,14 +97,14 @@ namespace FormationMenuRules
 	/** Enabled for MemberCount members (>= MinMembers). Auto is always available. */
 	CODEXTACTICS_API bool IsEnabled(EFormationMenuItem Item, int32 MemberCount);
 
-	/** G pressed: opens with Auto highlighted (the cursor at the centre); the choice is untouched. Returns Opened. */
+	/** B held: opens with Auto highlighted (the cursor at the centre); the choice is untouched. Returns Opened. */
 	CODEXTACTICS_API EFormationMenuEffect Open(FFormationMenuState& State);
 
 	/** Cursor moved while open: the highlight follows ItemAt; nothing is chosen yet (closed: no change). */
 	CODEXTACTICS_API void Move(FFormationMenuState& State, float Dx, float Dy, float DeadZonePx);
 
 	/**
-	 * G released: on an enabled item -> it becomes the choice (Picked, holds until Auto); in the centre -> Auto (Auto); on a disabled
+	 * B released: on an enabled item -> it becomes the choice (Picked, holds until Auto); in the centre -> Auto (Auto); on a disabled
 	 * item -> the previous choice stays (Disabled). The menu closes in every case. Closed: None, no change.
 	 */
 	CODEXTACTICS_API EFormationMenuEffect Release(FFormationMenuState& State, int32 MemberCount);

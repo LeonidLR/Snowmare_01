@@ -103,9 +103,36 @@ member's formation look whenever it changes (with his facing) and every look Cle
   `SetFormationWallPose` (his next own order stands him up when the crouch was the squad's). The tutorial's `squad_not_in_cover_at` counts the wall pose as in cover.
 - **Checks:** `FormationLabSmoke` (L_FormationLab, `-LevelJson=L_FormationLab.json`; `shot` = stills in `Saved/Screenshots/FormationLab/`); GroupCoverSmoke
   scene W. A/B: `smoke_parallel.ps1 -PreCmds "Codex.Formation.Sectors 0" -Commands ...`.
-- **Open:** the hold-G radial menu (manual formations, `EFormationMode::Forward`), the hedgehog at a fire (`FormationShapeRules::HedgehogSlots`), the
+- **Open:** the hedgehog at a fire (`FormationShapeRules::HedgehogSlots`), the
   designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
   simulator ~1 m) - a Training Ground tuning point.
+
+### The squad's corner peek (2026-10-26, branch formation/v24-squad-peek; user bug report; behind `Codex.Formation.Sectors`)
+
+User bug report 2026-10-26: one operative hugging a wall shows the peek silhouette when the cursor is on the wall's corner and peeks round it on
+the click; the squad hugging it in formation ("Along the wall (3 operatives), facing out!") showed neither. **Root cause:** since stage 6
+(b75e3ce, 2026-10-25) the group cover order in group mode is the formation wall layout (`OrderFormationWall`: the leader's `OrderMoveTo`, the
+others the formation drive) - nobody is in a cover slot, and the corner peek, hover and click, was gated on the leader's own cover slot
+(`IsInPeekableCover()` in `PlayerTick`, `UpdateCornerPeekHover`, `TryHandleCoverClick` / `FindCornerPeekForHit`). The v2.4 merges (6e85b95,
+511c45f) did not take the hover / click: `UpdateSquadMoveHover` reads ground hits only.
+- **Hover zones** (the squad in the wall layout, the leader in no cover): (1) the squad's wall within its peek window at a free end - the same
+  window as the single peek (`CoverFacingRules::FindPeekEdge`: the face / the end face / the top within 75 cm inside the edge .. 60 cm past it) ->
+  the peek ghost of the member nearest that end in the corner-aim pose, the crosshair; a click = the squad's corner peek; (2) the ground along the
+  wall within `slide.max_off_wall` -> the dashed slide / corner-stack lines (unchanged); (3) the ground round the end -> the leader's path round it
+  (unchanged); (4) the rest of the wall -> nothing on hover, the click = the cover ghost / group cover order (unchanged). The ghost lives on the
+  wall body, the guide lines on the ground: they never compete (the guide lines are also off while the peek crosshair is up).
+- **The order** (`USquadSubsystem::OrderFormationCornerPeek`, `SquadSubsystemFormationPeek.cpp`): who peeks = `FormationWallEnd::PlanSquadPeek`
+  (pure, tests `CodexTactics.Formation.WallEnd.SquadPeek`): with the v2.4 corner stack at that end (`FindStackEnd`) the stack's point man - the
+  place nearest the end, so with three K is second and the rear man looks back; without a stack (K already within `SlideMin` of the end, no
+  world walls) the member nearest the end, the others hold. The peeker takes the corner stand point in cover (`OrderTakeCover`; the stance his
+  cover entry gives him: high = standing, low = crouched - the ghost shows that) and, once in cover, gets the single operative's
+  `OrderCornerPeek` (corner aim, leaning out, held with no target). The others: the leader's move to the end (`PeekDestinationOutCm` 60 off the
+  face) = the existing wall slide into the corner stack (`TryStartFormationSlide` -> `HoldCornerStack`), the order's crouch kept; the peeker is
+  left to his corner (no follow, no wall pose, no sector look; the covered approach counts him at his place). A leader who is the point man
+  himself (a pair with K at the end) peeks and the stack forms round his corner. Over with the leader's next order (not the stack's own move),
+  a leader switch, Solo or the end of the wall layout - the peeker then follows out of his cover as any follower in cover.
+- **Checks:** `FormationSquadPeekSmoke` (both ends of the long wall; the hover through `UpdateCornerPeekHover`, the clicks through
+  `HandleWorldHit`; `Shot` = `Saved/Screenshots/Formation/squad_peek_ghost.png` / `squad_peek_held.png`).
 
 ### Rules v2.5 in the runtime - the covered approach to the wall (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.Approach`)
 
@@ -305,9 +332,19 @@ ClearLook, HUD text), `SquadSubsystemFormationBypass.cpp` (bypass), the pure glu
 - **ClearLook:** every follower's look and the leader's go through `FormationSectorRules::ClearLook` (the world walls only: a wall lower than
   135 cm is looked over and never turns a look - the tutorial's 1.2 m sight wall) unless exempt (`FormationGuardRuntime::ShouldClearLook`: the wall
   layout / slide, run, the corner watcher, the leader looking within 35 deg of his travel).
-- **The hold-G menu stand-in:** `USquadSubsystem::SetFormationMenuChoice` (FormationMenuRules: a manual choice holds until auto; "all forward" = the
+- **The menu's choice:** `USquadSubsystem::SetFormationMenuChoice` (FormationMenuRules: a manual choice holds until auto; "all forward" = the
   terrain's formation, mode Forward); dev console `Codex.Formation.Menu <auto|line|diamond|echelon_right|blizzard|column|hedgehog|echelon_left|all_forward>`.
-  The radial menu UI is still open.
+- **The hold-B radial menu (stage 7, 2026-10-26; user decision: G is the grenade, the menu moved to B):** `ACodexTacticsPlayerController`
+  (`CodexTacticsPlayerControllerFormationMenu.cpp`): IA_SoloMode Started / Completed -> `SoloModePressed` / `SoloModeReleased`, the tap / hold on
+  real time by `FFormationMenuKeyTracker` (`UI/FormationMenuInputRules`). TAP B (released before `FormationMenuHoldSeconds` = 0.25 s) = the solo /
+  squad toggle (now on the RELEASE, was on the press); HOLD B = the menu, only while `CanOpenFormationMenu` (squad mode, >= 2 members, not
+  turn-based, orders not locked, no dialogue, `Squad.Formation` not tutorial-locked - asked silently); otherwise the hold is a plain tap (the
+  toggle on the release). The menu (`UFormationMenuWidget`, NativePaint, created lazily, z 30, never pauses) opens at the cursor pulled in to keep
+  the ring + labels on screen (the OS cursor follows a pulled centre); the cursor offset from its centre -> `FormationMenuRules::Move`; the B
+  release -> `Release` -> `SetFormationMenuChoice` + `PlayerCommands::FormationMenu` ("Squad.Formation"; F1 row "Hold B"); Esc (`DialogueSkip`
+  first) / RMB (`CameraDragRotateStart` first) -> `Cancel` (the later release does nothing); LMB does nothing while open; the camera's edge pan
+  stops while open; the menu closes by itself when it becomes unavailable (solo, a dialogue, members lost). Smokes:
+  `SetFormationMenuCursorOffset` = a virtual cursor (the menu then opens at the view centre). Check: `FormationMenuSmoke`.
 - **Checks:** `FormationLabSmoke` (check 4 on the requested formation; check 7 "never split" and check 9 "somebody looks round each passed wall end" on
   every run; R_E_corner: the turn fold; manual runs R_B_walls "echelon left" -> the mirror + HUD line, R_D_corridors "line" -> the trail column + HUD
   line; R_E_corner_pass: the corner watch at W_E_14's free end), `FormationBypassSmoke` (lane G: the four routes + the shielded side from the squad's
