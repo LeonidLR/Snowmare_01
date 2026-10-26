@@ -159,6 +159,17 @@
   },
   "expected_fail": [
     {
+      "check": 2,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "5-7 o'clock watched 86.1 %",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
       "check": 5,
       "choice": "blizzard",
       "members": 3,

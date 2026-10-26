@@ -6,7 +6,7 @@ import type { Segment } from './geometry.ts';
 import { distToWall } from './geometry.ts';
 import { configValues } from './config.ts';
 import { readConfigFile } from './cli/paths.ts';
-import { FormationSectorRules, FormationShapeRules } from './rules.ts';
+import { FormationCoverRules, FormationSectorRules, FormationShapeRules } from './rules.ts';
 
 const C = configValues(readConfigFile());
 const L = FormationSectorRules.ClearLook;
@@ -74,4 +74,24 @@ test('v2.3: the trail column stagger shrinks in a narrow passage so every slot k
   // A wide corridor: unchanged.
   const wide: Segment[] = [{ a: [-4000, -300], b: [1000, -300], thickness: 20 }, { a: [-4000, 300], b: [1000, 300], thickness: 20 }];
   assert.deepEqual(FormationShapeRules.TrailSlots(trail, 0, 4, C, wide), free);
+});
+
+test('v2.3 (1A clarified): in a NARROW column K, P, L keep the user-decided looks; the allocator gives Z the rear and nothing else', () => {
+  const D = FormationSectorRules.Decided, narrow = C['column.narrow_width'] - 1;
+  assert.deepEqual((['K', 'P', 'L', 'Z'] as const).map((r) => D(r, 'column', 4, narrow, C)), [true, true, true, false]);
+  assert.deepEqual((['K', 'P', 'Z'] as const).map((r) => D(r, 'column', 3, narrow, C)), [true, true, false]);
+  assert.equal(D('P', 'column', 4, C['column.narrow_width'] + 1, C), false, 'a wide column: the allocator shares the arc');
+  assert.equal(D('P', 'column', 4, null, C), false, 'no passage = wide');
+  assert.equal(D('P', 'column', 2, narrow, C), false, 'the pair keeps LookYaw anyway (no allocator)');
+  for (const f of ['line', 'diamond', 'echelon_right', 'wedge', 'wall'] as const) assert.equal(D('P', f, 4, narrow, C), false);
+  // The allocator with those fixed looks in a 2 m corridor: P / L exactly as LookYaw, Z the rear guard at 6 o'clock (halt).
+  const corridor: Segment[] = [{ a: [-3000, -100], b: [1000, -100], thickness: 20 }, { a: [-3000, 100], b: [1000, 100], thickness: 20 }];
+  const slots = FormationShapeRules.Slots('column', 4, [0, 0], 0, C);
+  const fixed = slots.filter((s) => D(s.role, 'column', 4, 200, C)).map((s) => ({ role: s.role, yaw: FormationSectorRules.LookYaw(s.role, 'column', 'halt', 4, 0, 0, 200, C) }));
+  near(fixed.find((x) => x.role === 'P')!.yaw, C['column.narrow_fwd_deg']);
+  near(fixed.find((x) => x.role === 'L')!.yaw, -C['column.narrow_back_deg']);
+  const r = FormationCoverRules.Allocate(corridor, [0, 0], 0, slots.map((s) => ({ role: s.role, pos: s.pos, back: -s.pos[0] })), 'halt', 0, C, fixed)!;
+  assert.equal(r.rearGuard, 'Z');
+  for (const x of fixed) near(r.looks.find((l) => l.role === x.role)!.yaw, x.yaw);
+  near(Math.abs(r.looks.find((l) => l.role === 'Z')!.yaw), 180);
 });

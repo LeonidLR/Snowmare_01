@@ -464,3 +464,12 @@ ones carry `since: 'v2.3'`).
   past the bend), so the chain cut a wall (check 7). The runtime has the same hazard (an unreachable slot -> the
   navigation's nearest point).
 - Golden `formation_TrailSlots.json`: `in.walls` + `in.scene` (`none`, `corridor_200`, `gap_oblique`).
+
+### 13.3 `FormationSectorRules::Decided(role, formation, memberCount, passageWidth) -> bool` - user-decided looks stay (1A clarified)
+- True in a NARROW column (`passageWidth < column.narrow_width`, null = wide) with 3+ members for K, P and L; false for Z (the
+  allocator's rear guard) and in every other case. The integration passes those roles' LookYaw looks to
+  `FormationCoverRules::Allocate` as FIXED looks (with the corner watcher's), so the allocator only shares out what is left.
+- passageWidth = the terrain classifier's held corridor width (`passage`) - for the trail column too (NOT the slot's own side
+  width: a doorway crossed at an angle is no corridor; open question 1 in FORMATION_SECTORS.md, pick (a)).
+- The wall layout and the pair never reach the allocator (3+ members walking / halted, not the wall layout).
+- Golden `formation_Decided.json` (formations x 2-4 members x passage null / 200 / 599 / 600 / 900 x roles).

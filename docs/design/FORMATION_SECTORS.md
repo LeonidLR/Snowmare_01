@@ -54,6 +54,9 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 
 ## Decisions after the bot's first runs (2026-10-25, via the coordinator)
 - **Q1 = A** (user): narrow column = P forward over the shoulder, L back at a slant, Z back; herringbone only in a wide column.
+  *Clarified 2026-10-26 (v2.3, coordinator from the v2.2 runtime review)*: the v2.2 coverage allocator must not override these
+  looks - in a narrow column K (12), P and L are fixed looks and the allocator only shares out what is left; Z keeps the rear
+  (the rear guard). The wall layout (L 8 / K 6 / P 4) and the pair (3 -> 6 -> 9) never go through the allocator.
 - **Q2 = A** (user): echelon last man 150° (was 125°); the rear-cover check stays in force for the echelon.
 - **Q3** (coordinator, classifier bug): a dead-end wall ahead no longer reads as side walls (classifier v1.1: ahead rays first,
   side probes ignore walls within 30° of perpendicular to the heading) — no column / echelon flip before the wall layout.
@@ -187,3 +190,16 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 - **The trail column narrows in a tight gap (red team #7)**: crossing a 1.2–2 m opening at an angle, the column's zigzag
   (60 cm aside) put a man inside the wall; now his offset aside shrinks until he keeps 45 cm from the wall (on the leader's
   track at worst). Nothing changes where there is room.
+- **The narrow column keeps the user's looks (clarification of 1A, coordinator 2026-10-26)**: in a corridor narrower than 6 m
+  the column's K, P and L look as decided in 1A (12, forward over the shoulder, back at a slant) - the coverage allocator no
+  longer re-shares them; Z is the rear guard. (`FormationSectorRules.Decided`; the allocator takes them as fixed looks.)
+
+## Open for the user (v2.3)
+Picked overnight by the most conservative reading of the recorded decisions (coordinator 2026-10-26: "don't wait"); each can be
+flipped in the morning.
+1. **What counts as the "narrow passage" of 1A for the trail column?** The trail column measured each man's side room; crossing a
+   1.2-2 m doorway at an angle that read "narrow", P got 1A's "forward over the shoulder" and looked straight at the door's wall
+   end 0.5 m away (55 new wall stares on the red team). Options: (a) **only a corridor the terrain classifier holds** (the
+   passage width) - a doorway crossed at an angle is shared out by the allocator, which sees the walls; (b) any narrow side
+   room, as before (more stares at door edges); (c) 1A at a doorway too, but P's +15 turned away from the near wall end.
+   **Picked (a)** - 1A was decided for a narrow passage (a corridor), and (a) changes nothing in a real corridor.

@@ -17,7 +17,7 @@ import type { MenuChoice } from './menu.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
 export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu',
-  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide'] as const;
+  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -325,6 +325,16 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
+  // v2.3 (1A clarified): which formation looks are user decisions the allocator keeps as fixed.
+  const decided = base('Decided', 'in: role, formation, memberCount, passageWidth (null = none) -> out.decided (FormationSectorRules.Decided).');
+  for (const formation of ['column', 'line', 'diamond', 'echelon_right', 'echelon_left', 'wedge', 'blizzard', 'hedgehog', 'wall'] as const) {
+    for (const memberCount of [2, 3, 4]) for (const passageWidth of [null, 200, 599, 600, 900]) for (const role of ['K', 'P', 'L', 'Z'] as const) {
+      if (memberCount === 2 && (role === 'P' || role === 'L')) continue;
+      if (memberCount === 3 && role === 'L') continue;
+      decided.cases.push({ in: { role, formation, memberCount, passageWidth }, out: { decided: FormationSectorRules.Decided(role, formation, memberCount, passageWidth, config) } });
+    }
+  }
+
   // v2.2: the coverage allocator (walk / halt, fixed looks) and the static allocation round a standing group.
   const cover = base('Cover', 'in: walls, leaderPos, heading, members [{role, pos, back}] (K first), mode walk|halt, t, fixed [{role, yaw}] -> out {rearGuard, looks [{role, yaw}], shares [{role, from, to, primary}]} (FormationCoverRules.Allocate; yaws compare as angles).');
   const COVER_SCENES = ['none', 'wall_left', 'wall_right', 'corridor', 'wide_street', 'gap_left', 'corner_left_ahead', 'far_left'];
@@ -380,7 +390,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
   }
 
   return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
-    Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign, TurnAhead: turnAhead, ClearLook: clear, Cover: cover, CoverStatic: coverStatic, Slide: slide };
+    Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign, TurnAhead: turnAhead, ClearLook: clear, Cover: cover, CoverStatic: coverStatic, Slide: slide, Decided: decided };
 }
 
 export const goldenFileName = (rule: GoldenRule): string => `formation_${rule}.json`;

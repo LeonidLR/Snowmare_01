@@ -281,7 +281,7 @@ export function simulate(o: SimOptions): number {
     const mode: Mode = slide ? 'walk' : arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
     // --- targets and look yaws
-    let targets: { role: Role; pos: Vec2; yaw: number }[];
+    let targets: { role: Role; pos: Vec2; yaw: number; decided?: boolean }[]; // decided: a user-decided look (v2.3, Decided)
     let slideLead: Role | null = null, slideRear: Role | null = null;
     if (slide) {
       const res = FormationWallRules.Slide(slide.wall, slide.start, leader.pos, slide.dest, t, c);
@@ -315,13 +315,17 @@ export function simulate(o: SimOptions): number {
       const path = dist(trail[trail.length - 1], leader.pos) > 1e-6 ? [...trail, leader.pos] : trail;
       // Each man's sectors by his own surroundings (the corridor's held width, else a wall beside his slot -> narrow), relative
       // to the trail's direction at his slot; the rear man keeps the squad's 6 o'clock (the leader's heading).
-      targets = FormationShapeRules.TrailSlots(path, heading, n, c, walls).map((s) => ({
-        ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw,
-          passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c), c),
-      }));
+      targets = FormationShapeRules.TrailSlots(path, heading, n, c, walls).map((s) => {
+        const width = passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c);
+        return { ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw, width, c),
+          // 1A is a corridor decision: only the classifier's held corridor width counts - a slot's side width at a doorway
+          // crossed obliquely is not a corridor (P's "forward over the shoulder" aimed at the door's wall end 0.5 m away).
+          decided: FormationSectorRules.Decided(s.role, 'column', n, passage, c) };
+      });
     } else {
       targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
         ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),
+        decided: FormationSectorRules.Decided(s.role, formation, n, passage, c),
       }));
     }
     // v2.1: slicing the pie - one member looks round the end of the wall the squad passes (patrol only; not in the wall layout).
@@ -355,10 +359,12 @@ export function simulate(o: SimOptions): number {
     if (n >= 3 && (mode === 'walk' || (mode === 'halt' && formation !== 'hedgehog')) && formation !== 'wall') {
       const trailOn = FormationGuardRules.Effective(guard).trail;
       const hv = dirOf(heading);
+      // v2.3 (1A clarified): the looks the user decided for the formation (the narrow column's K / P / L) are fixed looks too.
+      const fixed = [...looks, ...targets.filter((x) => x.decided && !looks.some((l) => l.role === x.role)).map((x) => ({ role: x.role, yaw: x.yaw }))];
       const cover = FormationCoverRules.Allocate(walls, leader.pos, heading, targets.map((x, k) => ({
         role: x.role, pos: x.pos,
         back: trailOn ? k : -((x.pos[0] - leader.pos[0]) * hv[0] + (x.pos[1] - leader.pos[1]) * hv[1]),
-      })), mode, t, c, looks);
+      })), mode, t, c, fixed);
       if (cover) {
         rearGuard = cover.rearGuard;
         targets = targets.map((x) => ({ ...x, yaw: cover.looks.find((l) => l.role === x.role)?.yaw ?? x.yaw }));

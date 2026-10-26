@@ -322,7 +322,20 @@ function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw
   return best;
 }
 
-export const FormationSectorRules = { LookYaw, ClearLook };
+/**
+ * v2.3 (coordinator 2026-10-26, a clarification of user decision 1A): true when this role's look in this formation is a user
+ * decision that the coverage allocator must keep - the integration passes LookYaw's look to FormationCoverRules.Allocate as a
+ * FIXED look and the allocator only shares out what is left. In a NARROW column (passageWidth < column.narrow_width; null = no
+ * passage = wide) with 3+ members: K (12 + his search), P (+column.narrow_fwd_deg, forward over the shoulder) and L
+ * (-column.narrow_back_deg, back at a slant); Z is not decided - he is the allocator's rear guard (straight back). Wide column,
+ * other formations: false. The wall layout (L 8 / K 6 / P 4) and the pair (3 -> 6 -> 9) never reach the allocator (it runs for
+ * 3+ members walking / halted, not in the wall layout), so their looks stay as decided.
+ */
+function Decided(role: Role, formation: Formation, memberCount: number, passageWidth: number | null, config: FormationConfig): boolean {
+  return formation === 'column' && memberCount >= 3 && role !== 'Z' && passageWidth !== null && passageWidth < cfg(config, 'column.narrow_width');
+}
+
+export const FormationSectorRules = { LookYaw, ClearLook, Decided };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationTerrainRules::Classify
