@@ -4,6 +4,8 @@
 // whole squad («👥 ОТРЯД», order line); Alt + V while the leader walks: rev 5e (user request 2026-10-14) replaced Godot's
 // refusal - a walking / running member dives prone on the move, a slow one stops first, the still ones drop in place;
 // Shift + click turns the leader; an operative arriving next to a barricade in combat crouches in cover («IN COVER»).
+// Formation sectors (bug 2026-10-26): the leader switched to another member and back - as a follower he turned to his place's look; leading
+// again he looks forward (his own facing as the leader) within ~0.5 s (Codex.Formation.Sectors 0: the old facing, reported only).
 
 #include "CoreMinimal.h"
 
@@ -36,9 +38,12 @@ namespace SquadControlSmoke
 	{
 		float Time = 0.f;
 		float StageTime = 0.f;
-		int32 Stage = 0;
+		int32 Stage = 100; // the leader switch first (exploration), then the stance / cover stages 0..3
 		int32 Failures = 0;
 		TWeakObjectPtr<AOperativeCharacter> Mover;
+		TWeakObjectPtr<AOperativeCharacter> FirstLeader;
+		float FirstLeaderYaw = 0.f;
+		double SwitchTime = 0.0;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -80,7 +85,7 @@ namespace SquadControlSmoke
 		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(World, 0));
 		AOperativeCharacter* Leader = Squad->GetLeader();
 		UFloatingTextSubsystem* Floating = World->GetSubsystem<UFloatingTextSubsystem>();
-		if (!Flow || !PC || !Leader || Squad->GetMembers().Num() < 3 || State.Time > 40.f)
+		if (!Flow || !PC || !Leader || Squad->GetMembers().Num() < 3 || State.Time > 50.f)
 		{
 			Check(State, false, FString::Printf(TEXT("controller, squad / timeout (stage %d)"), State.Stage));
 			return Finish(State, false);
@@ -91,6 +96,68 @@ namespace SquadControlSmoke
 		}
 		switch (State.Stage)
 		{
+		case 100:
+		{
+			// Exploration, group mode, everybody standing still: the first leader's own facing.
+			if (Squad->IsSoloMode())
+			{
+				Squad->ExitSoloMode();
+			}
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			State.FirstLeader = Leader;
+			State.FirstLeaderYaw = static_cast<float>(Leader->GetActorRotation().Yaw);
+			AOperativeCharacter* Other = Squad->GetMembers()[0] == Leader ? Squad->GetMembers()[1] : Squad->GetMembers()[0];
+			Squad->SetLeader(Other);
+			State.SwitchTime = World->GetTimeSeconds();
+			++State.Stage;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 101:
+		{
+			// He follows another leader for a moment (his follower look), then leads again.
+			if (World->GetTimeSeconds() - State.SwitchTime < 1.5)
+			{
+				return true;
+			}
+			AOperativeCharacter* First = State.FirstLeader.Get();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s as a follower faces %.0f (led facing %.0f)"), First ? *First->DisplayName.ToString() : TEXT("-"),
+				First ? First->GetActorRotation().Yaw : 0.f, State.FirstLeaderYaw);
+			if (First)
+			{
+				Squad->SetLeader(First);
+			}
+			State.SwitchTime = World->GetTimeSeconds();
+			++State.Stage;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 102:
+		{
+			if (World->GetTimeSeconds() - State.SwitchTime < 0.5)
+			{
+				return true;
+			}
+			const AOperativeCharacter* First = State.FirstLeader.Get();
+			const float Off = First ? FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(First->GetActorRotation().Yaw), State.FirstLeaderYaw)) : 999.f;
+			const FString What = FString::Printf(TEXT("leader switched away and back: %.1f s later he looks forward again (facing %.0f, led facing %.0f, %.0f deg off)"),
+				World->GetTimeSeconds() - State.SwitchTime, First ? First->GetActorRotation().Yaw : 0.f, State.FirstLeaderYaw, Off);
+			static const IConsoleVariable* SectorsVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Sectors"));
+			if (SectorsVar && SectorsVar->GetInt() != 0)
+			{
+				Check(State, First && Squad->GetLeader() == First && Off <= 30.f, What);
+			}
+			else
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: (Codex.Formation.Sectors 0, the old facing) %s"), *What);
+			}
+			State.Stage = 0;
+			State.StageTime = 0.f;
+			return true;
+		}
 		case 0:
 		{
 			// Wounded below 50 %: no sprint, slower.

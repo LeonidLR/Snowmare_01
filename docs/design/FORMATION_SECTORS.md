@@ -1,10 +1,18 @@
 # Formation look sectors & tactical movement — design decisions (session 2026-10-25)
 
+Status v2.1 runtime (2026-10-26, branch formation/runtime-v21): **in the game** behind `Codex.Formation.Sectors` + `Codex.Formation.V21` (0 = the
+v2.2 runtime without it) - the wall guard (mirror echelon / the trail column along the leader's recorded path, checked 5 m ahead on his path, the
+request back after 5 m whole; HUD line "Echelon left -> Column (wall)"), the sharp-turn fold, the bypass side "B" (shortest / shielded by a seen,
+heard or reported threat, steered round the wall end), the corner check (slicing the pie, also the leading man of a wall slide), ClearLook in every
+formation, places re-assigned on every formation change, fallback slots on the leader's side; the level is read as walls from its box collision.
+The hold-G menu's choice exists in the runtime (dev console `Codex.Formation.Menu`), its radial UI does not yet. Smokes `FormationLabSmoke` (checks 7 /
+9, the fold, manual echelon left / line) and `FormationBypassSmoke`; details `docs/systems/squad-and-orders.md` "Rules v2.1 in the runtime".
+
 Status v2.2 (2026-10-25, branch formation/runtime-v22): **in the game** behind `Codex.Formation.Sectors` - the triad K / P / Z, the coverage allocator's
 patrol / halt looks with the rear guard (`Codex.Formation.CoverAllocator 0` = the v2.1 tables), places by minimal travel, the wall group after a group
 cover switch / wrap / re-entry (the leader's look fixed, the others close the open arc - the user's playtest bug), the wall slide; smokes
-`FormationWallGroupSmoke`, `FormationSlideSmoke`; details `docs/systems/squad-and-orders.md` "Rules v2.2 in the runtime". Not yet: the corner check
-(slicing the pie, v2.1) and the guard / trail column in the runtime.
+`FormationWallGroupSmoke`, `FormationSlideSmoke`; details `docs/systems/squad-and-orders.md` "Rules v2.2 in the runtime". (The v2.1 corner check and
+the guard / trail column followed on 2026-10-26, above.)
 
 Status: **implemented in the game (stage 6, 2026-10-25, branch formation/integration)** behind `Codex.Formation.Sectors` (default 1; 0 = the
 old triangle formation): pure rules v2 (`Source/CodexTactics/*/Formation/`), runtime in `USquadSubsystem` (`SquadSubsystemFormation.cpp`), facing in

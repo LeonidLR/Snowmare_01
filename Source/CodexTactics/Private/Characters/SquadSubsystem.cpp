@@ -161,6 +161,15 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 	const bool bDropGroup = bResetGroup && (SelectedGroup.Num() > 1 || (SelectedGroup.Num() == 1 && SelectedGroup[0].Get() != NewLeader));
 	if (Leader.Get() != NewLeader)
 	{
+		AOperativeCharacter* OldLeader = Leader.Get();
+		const bool bSectorLook = FormationRuntime::IsEnabled();
+		const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+		const TOptional<float> SquadHeading = Sectors.bHeadingValid && !FormationHeading.IsNearlyZero()
+			? TOptional<float>(static_cast<float>(FormationHeading.Rotation().Yaw)) : TOptional<float>();
+		if (bSectorLook && OldLeader)
+		{
+			LeaderFacingMemory.Add(OldLeader, { static_cast<float>(OldLeader->GetActorRotation().Yaw), Now }); // his own facing as the leader
+		}
 		Leader = NewLeader;
 		// Drop the formation move the new leader was following; it now waits for player orders. Rev 5g (game designer
 		// 2026-10-14): an order of his own runs on (selecting him must not cancel it - SquadOrderRules).
@@ -168,8 +177,42 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 		{
 			NewLeader->StopOperative();
 		}
-		FormationHeading = NewLeader->GetActorForwardVector();
-		Sectors.bHeadingValid = false; // formation sectors: the heading starts from the new leader's facing
+		if (bSectorLook)
+		{
+			// Bug 2026-10-26 (formation sectors): the leader's sector is 12 - a member made the leader keeps no follower look (the rear guard's
+			// 6 o'clock he turned to while another led). The heading (= his halt look for FormationRuntime::LeaderHaltLookSeconds) starts from
+			// FormationRuntime::NewLeaderLookYaw: his walk, his pending order, his own facing from when he last led, else the squad's heading.
+			FormationRuntime::FNewLeaderLookInputs Look;
+			Look.TravelYaw = FormationRuntime::HeadingFromVelocity(FVector2D(NewLeader->GetVelocity()));
+			const FVector2D ToOrder = FVector2D(NewLeader->GetLastMoveDestination() - NewLeader->GetActorLocation());
+			if (NewLeader->HasOwnMoveOrder() && ToOrder.Size() > FormationRuntime::NewLeaderOrderMinCm)
+			{
+				Look.PendingOrderYaw = FormationMath::YawOf(ToOrder);
+			}
+			if (const TPair<float, double>* Remembered = LeaderFacingMemory.Find(NewLeader);
+				Remembered && Now - Remembered->Value <= FormationRuntime::NewLeaderRememberSeconds)
+			{
+				Look.FacingAsLeaderYaw = Remembered->Key;
+			}
+			Look.SquadHeadingYaw = SquadHeading;
+			Look.FacingYaw = static_cast<float>(NewLeader->GetActorRotation().Yaw);
+			const float Yaw = FormationRuntime::NewLeaderLookYaw(Look);
+			FormationHeading = FRotator(0.f, Yaw, 0.f).Vector();
+			Sectors.HeadingYaw = Yaw;
+			Sectors.bHeadingValid = true;
+			Sectors.LeaderStillSeconds = 0.f; // standing: his halt look at 12 (= Yaw) turns him first
+			Sectors.bHeadingTickPosValid = false; // the switch is no teleport of the leader
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] new leader %s looks %.0f (facing %.0f; walk %s, order %s, as leader %s, squad %s)"),
+				*NewLeader->DisplayName.ToString(), Yaw, Look.FacingYaw, Look.TravelYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.TravelYaw.GetValue()) : TEXT("-"),
+				Look.PendingOrderYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.PendingOrderYaw.GetValue()) : TEXT("-"),
+				Look.FacingAsLeaderYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.FacingAsLeaderYaw.GetValue()) : TEXT("-"),
+				SquadHeading.IsSet() ? *FString::Printf(TEXT("%.0f"), SquadHeading.GetValue()) : TEXT("-"));
+		}
+		else
+		{
+			FormationHeading = NewLeader->GetActorForwardVector();
+			Sectors.bHeadingValid = false; // formation sectors: the heading starts from the new leader's facing
+		}
 		RebuildFollowers();
 		if (bIsSoloMode)
 		{
@@ -1209,7 +1252,7 @@ bool USquadSubsystem::HoldsCoverOrLeavesIt(FFollowerState& Follower, AOperativeC
 	return false;
 }
 
-FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot) const
+FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide) const
 {
 	UNavigationSystemV1* Nav = CVarSquadSlotFallback.GetValueOnGameThread() != 0 ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()) : nullptr;
 	FNavLocation OnNav;
@@ -1219,6 +1262,11 @@ FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderR
 	}
 	for (const FVector& Candidate : SquadFormation::ComputeFallbackSlots(LeaderRef.GetActorLocation(), Slot, FormationConfig.StopRadius * 2.f))
 	{
+		// Rules v2.1 (contract 7): never a walkable point on the far side of a wall from the leader.
+		if (bLeaderSide && IsSlotPathBlocked(LeaderRef, FVector(Candidate.X, Candidate.Y, LeaderRef.GetActorLocation().Z)))
+		{
+			continue;
+		}
 		if (Nav->ProjectPointToNavigation(Candidate, OnNav))
 		{
 			return FVector(OnNav.Location.X, OnNav.Location.Y, Slot.Z);

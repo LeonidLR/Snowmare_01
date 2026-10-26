@@ -69,6 +69,25 @@ float SightRules::ProfileHeight(EOperativeStance Stance)
 	}
 }
 
+TArray<float> SightRules::BearingsNearestFirst(float PreferredYaw, float StepDeg)
+{
+	TArray<float> Out;
+	Out.Add(FRotator::NormalizeAxis(PreferredYaw));
+	if (StepDeg <= 0.f)
+	{
+		return Out;
+	}
+	for (float Off = StepDeg; Off <= 180.f + KINDA_SMALL_NUMBER; Off += StepDeg)
+	{
+		Out.Add(FRotator::NormalizeAxis(PreferredYaw + Off));
+		if (Off < 180.f - KINDA_SMALL_NUMBER)
+		{
+			Out.Add(FRotator::NormalizeAxis(PreferredYaw - Off));
+		}
+	}
+	return Out;
+}
+
 float SightRules::LineHeightAt(float EyeHeightCm, float TargetHeightCm, float CoverDistanceCm, float TargetDistanceCm)
 {
 	if (TargetDistanceCm <= KINDA_SMALL_NUMBER)

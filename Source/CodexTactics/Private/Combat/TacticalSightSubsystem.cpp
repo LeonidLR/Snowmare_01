@@ -280,6 +280,41 @@ AEnemyGhostActor* UTacticalSightSubsystem::GetGhost(const AActor* Enemy) const
 	return State ? State->Ghost.Get() : nullptr;
 }
 
+bool UTacticalSightSubsystem::GetSquadKnownEnemies(TArray<FSquadKnownEnemy>& Out) const
+{
+	if (!bWasActive || !IsSquadSightActive() || !GetWorld())
+	{
+		return false;
+	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	for (const TPair<TWeakObjectPtr<AEnemyCharacter>, FEnemyState>& Pair : EnemyStates)
+	{
+		const AEnemyCharacter* Enemy = Pair.Key.Get();
+		const FEnemyState& State = Pair.Value;
+		if (!TacticalSight::IsLiveEnemy(Enemy) || !State.bEverSeen)
+		{
+			continue;
+		}
+		FSquadKnownEnemy Known;
+		if (!State.bHidden)
+		{
+			Known.Location = Enemy->GetActorLocation();
+			Known.bSeenNow = true;
+		}
+		else if (const AEnemyGhostActor* Ghost = State.Ghost.Get())
+		{
+			Known.Location = Ghost->GetLastKnownFeet();
+		}
+		else
+		{
+			continue; // forgotten (its silhouette faded)
+		}
+		Known.SecondsSince = Known.bSeenNow ? 0.f : static_cast<float>(FMath::Max(0.0, Now - State.LastKnownTime));
+		Out.Add(Known);
+	}
+	return true;
+}
+
 AEnemyGhostActor* UTacticalSightSubsystem::FindGhostNear(const FVector& Point, float RadiusCm) const
 {
 	AEnemyGhostActor* Best = nullptr;

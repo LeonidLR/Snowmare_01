@@ -99,6 +99,7 @@ class APatrolRouteActor;
 #include "Core/SaveGameSubsystem.h"
 #include "Data/TacticalHeatTuning.h"
 #include "Debug/SmokeUtils.h"
+#include "Combat/SightRules.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
@@ -2702,7 +2703,66 @@ namespace TutorialSmoke
 			Squad->SetLeaderByIndex(0);
 			Leader = Squad->GetLeader();
 			// 2026-10-19 b, symmetric sight: a 1.2 m wall 1 m ahead of the leader, a frozen enemy (senses off) 6 m beyond it.
-			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			// 2026-10-26: laid out along the first CLEAR bearing from the leader's facing (SightRules::BearingsNearestFirst) and the leader turned
+			// to it - his facing is whatever his last formation look left (the medkit lesson's leader switch makes him a follower for a moment),
+			// and straight along it the enemy could stand behind the lake set's 2.4 m container 5 m away (the check then failed with the squad
+			// standing and looking at it). Clear = the sight channel's standing eye line to the enemy's head, and nothing static / dynamic at knee
+			// height up to the wall spot.
+			FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			{
+				const float FeetZ = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight();
+				FCollisionObjectQueryParams Statics;
+				Statics.AddObjectTypesToQuery(ECC_WorldStatic);
+				Statics.AddObjectTypesToQuery(ECC_WorldDynamic);
+				FCollisionQueryParams SceneParams(SCENE_QUERY_STAT(TutorialSmokeSightScene), false);
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					SceneParams.AddIgnoredActor(Member);
+				}
+				const FVector Feet(Leader->GetActorLocation().X, Leader->GetActorLocation().Y, FeetZ);
+				const float PreferredYaw = Ahead.Rotation().Yaw;
+				bool bFound = false;
+				bool bFoundEyeLine = false;
+				FVector EyeLineOnly = Ahead;
+				for (const float Yaw : SightRules::BearingsNearestFirst(PreferredYaw, 20.f))
+				{
+					const FVector Dir = FRotator(0.f, Yaw, 0.f).Vector();
+					FHitResult SceneHit;
+					// The eye line on the sight's own channel (UTacticalSightSubsystem::HasClearSight: ECC_Visibility, pawns see-through) - an
+					// interactable's box blocks it without being a static / dynamic world object.
+					const bool bEyeLine = !World->LineTraceSingleByChannel(SceneHit, Feet + FVector(0.f, 0.f, SightRules::EyeHeight(EOperativeStance::Standing)),
+						Feet + Dir * 700.f + FVector(0.f, 0.f, SightRules::ProfileHeight(EOperativeStance::Standing)), ECC_Visibility, SceneParams)
+						|| Cast<APawn>(SceneHit.GetActor()) != nullptr;
+					// The wall spot: nothing that stops a walker at knee height (the tutorial's trigger volumes, which the leader stands in, do not).
+					TArray<FHitResult> SpotHits;
+					World->LineTraceMultiByObjectType(SpotHits, Feet + FVector(0.f, 0.f, 50.f), Feet + Dir * 250.f + FVector(0.f, 0.f, 50.f), Statics, SceneParams);
+					const FHitResult* Solid = SpotHits.FindByPredicate([](const FHitResult& Each)
+					{
+						return Each.GetComponent() && Each.GetComponent()->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Block;
+					});
+					const bool bWallSpot = Solid == nullptr;
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke: sight scene bearing %.0f: eye line %s%s, wall spot %s%s"), Yaw, bEyeLine ? TEXT("clear") : TEXT("blocked by "),
+						bEyeLine ? TEXT("") : (SceneHit.GetActor() ? *SceneHit.GetActor()->GetName() : TEXT("-")), bWallSpot ? TEXT("free") : TEXT("taken by "),
+						bWallSpot ? TEXT("") : (Solid->GetActor() ? *Solid->GetActor()->GetName() : TEXT("-")));
+					if (bEyeLine && !bFoundEyeLine)
+					{
+						bFoundEyeLine = true;
+						EyeLineOnly = Dir; // the fallback: a clear eye line even if the wall spot is tight
+					}
+					if (bEyeLine && bWallSpot)
+					{
+						Ahead = Dir;
+						bFound = true;
+						break;
+					}
+				}
+				if (!bFound && bFoundEyeLine)
+				{
+					Ahead = EyeLineOnly;
+				}
+				Leader->SetActorRotation(FRotator(0.f, Ahead.Rotation().Yaw, 0.f));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the sight scene laid out at yaw %.0f (the leader faced %.0f)"), Ahead.Rotation().Yaw, PreferredYaw);
+			}
 			{
 				// The mates stand where the ambush left them (Solo): put them behind the leader, out of the enemy's line.
 				int32 Behind = 0;
@@ -2786,7 +2846,50 @@ namespace TutorialSmoke
 			const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
 			const AEnemyCharacter* Hidden = State.SightEnemy.Get();
 			Check(State, Tutorial->GetStepState(TEXT("A4_hidden")) == ETutorialStepState::Completed, TEXT("Z (stand up) completes the card"));
-			Check(State, Hidden && Sight && Sight->IsVisibleToSquad(Hidden) && !Hidden->IsHidden(), TEXT("standing: the enemy is seen over the wall"));
+			const bool bSeenOverWall = Hidden && Sight && Sight->IsVisibleToSquad(Hidden) && !Hidden->IsHidden();
+			Check(State, bSeenOverWall, TEXT("standing: the enemy is seen over the wall"));
+			// On a failure: who could see it, from where, facing which way (2026-10-26: the scene is laid out along the leader's facing, so a
+			// leader turned at the overlook put the enemy behind level geometry).
+			if (!bSeenOverWall && Hidden && Sight)
+			{
+				const FVector Profile = UTacticalSightSubsystem::ProfilePoint(*Hidden);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: the sight enemy at %s (profile z %.0f)"), *Hidden->GetActorLocation().ToCompactString(), Profile.Z);
+				if (const AActor* SightWall = State.SightWall.Get())
+				{
+					FVector WallOrigin;
+					FVector WallExtent;
+					SightWall->GetActorBounds(false, WallOrigin, WallExtent);
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: the 1.2 m sight wall bounds %s +- %s"), *WallOrigin.ToCompactString(), *WallExtent.ToCompactString());
+				}
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					const FVector Eye = UTacticalSightSubsystem::EyePoint(*Member);
+					FHitResult Block;
+					FCollisionQueryParams BlockParams(SCENE_QUERY_STAT(TutorialSmokeDiag), false);
+					for (AOperativeCharacter* Mate : Squad->GetMembers())
+					{
+						BlockParams.AddIgnoredActor(Mate);
+					}
+					BlockParams.AddIgnoredActor(Hidden);
+					if (World->LineTraceSingleByChannel(Block, Eye, Profile, ECC_Visibility, BlockParams))
+					{
+						FVector BlockOrigin;
+						FVector BlockExtent;
+						if (Block.GetActor())
+						{
+							Block.GetActor()->GetActorBounds(true, BlockOrigin, BlockExtent);
+						}
+						UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: %s's line is blocked at %s (%.0f cm on) by %s / %s, its bounds %s +- %s"), *Member->DisplayName.ToString(),
+							*Block.ImpactPoint.ToCompactString(), Block.Distance, Block.GetActor() ? *Block.GetActor()->GetName() : TEXT("-"),
+							Block.GetComponent() ? *Block.GetComponent()->GetName() : TEXT("-"), *BlockOrigin.ToCompactString(), *BlockExtent.ToCompactString());
+					}
+					const float ToEnemy = (Profile - Member->GetActorLocation()).Rotation().Yaw;
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: %s at %s yaw %.0f (sight facing %.0f, to the enemy %.0f), stance %d, eye z %.0f, clear line %d, can see %d, fov %.0f"),
+						*Member->DisplayName.ToString(), *Member->GetActorLocation().ToCompactString(), Member->GetActorRotation().Yaw,
+						Member->GetSightFacing().Rotation().Yaw, ToEnemy, static_cast<int32>(Member->GetStance()), Eye.Z, Sight->HasClearSight(Eye, Profile) ? 1 : 0,
+						Sight->CanOperativeSee(*Member, Profile) ? 1 : 0, Sight->GetFovDeg(Member->GetStance()));
+				}
+			}
 			if (AActor* Wall = State.SightWall.Get())
 			{
 				Wall->Destroy();

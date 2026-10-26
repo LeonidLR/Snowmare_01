@@ -323,4 +323,11 @@ namespace FormationRuntime
 		return MemberCount >= 3 && (Mode == EFormationMode::Walk || Mode == EFormationMode::Halt) && Formation != EFormationKind::Wall
 			&& Formation != EFormationKind::Hedgehog;
 	}
+
+	float NewLeaderLookYaw(const FNewLeaderLookInputs& In)
+	{
+		const TOptional<float> Pick = In.TravelYaw.IsSet() ? In.TravelYaw : In.PendingOrderYaw.IsSet() ? In.PendingOrderYaw
+			: In.FacingAsLeaderYaw.IsSet() ? In.FacingAsLeaderYaw : In.SquadHeadingYaw;
+		return FRotator::NormalizeAxis(Pick.Get(In.FacingYaw));
+	}
 }

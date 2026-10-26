@@ -16,6 +16,7 @@
 #include "Engine/HitResult.h"
 #include "Engine/World.h"
 #include "Formation/FormationCoverRules.h"
+#include "Formation/FormationGuardRuntimeRules.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationSectorRules.h"
 #include "Formation/FormationShapeRules.h"
@@ -28,7 +29,7 @@
 namespace SquadSubsystemFormationLocal
 {
 	TAutoConsoleVariable<int32> CVarFormationDebug(TEXT("Codex.Formation.Debug"), 0,
-		TEXT("1: log the formation probe (each raw terrain class change with its probe hits)"));
+		TEXT("1: log the formation probe (each raw terrain class change with its probe hits); 2: also every follower repath; 3: also each member's formation look whenever it changes, and every look ClearLook turns"));
 	/** The last raw class logged (Codex.Formation.Debug). */
 	TOptional<EFormationTerrainClass> LastLoggedRawClass;
 
@@ -71,6 +72,9 @@ namespace SquadSubsystemFormationLocal
 
 void USquadSubsystem::ApplyFormationFrame()
 {
+	// Codex.Formation.Debug 3: a member's formation look whenever it changes (set / cleared / > 5 deg), with his facing.
+	static TMap<TWeakObjectPtr<AOperativeCharacter>, float> LastLoggedLook;
+	const bool bDebugLooks = SquadSubsystemFormationLocal::CVarFormationDebug.GetValueOnGameThread() >= 3;
 	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
 	{
 		AOperativeCharacter* Operative = Member.Get();
@@ -80,6 +84,15 @@ void USquadSubsystem::ApplyFormationFrame()
 		}
 		const float* Yaw = FrameLooks.Find(Member);
 		Operative->SetFormationLookYaw(Yaw ? TOptional<float>(*Yaw) : TOptional<float>());
+		const float* Logged = LastLoggedLook.Find(Member);
+		const float LookNow = Yaw ? *Yaw : 99999.f;
+		if (bDebugLooks && (!Logged || FMath::Abs(FMath::FindDeltaAngleDegrees(*Logged, LookNow)) > 5.f || (*Logged > 9999.f) != (LookNow > 9999.f)))
+		{
+			LastLoggedLook.Add(Member, LookNow);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] frame %s: look %s, facing %.0f, active %d, %s %s, corner looks %d"), *Operative->DisplayName.ToString(),
+				Yaw ? *FString::Printf(TEXT("%.0f"), *Yaw) : TEXT("-"), Operative->GetActorRotation().Yaw, Sectors.bActiveThisFrame ? 1 : 0,
+				FormationNames::ToString(Sectors.Formation), FormationNames::ToString(Sectors.Mode), Sectors.CornerLooks.Num());
+		}
 		Operative->SetFormationPaceMultiplier(FramePaceLeader.Get() == Operative ? FramePace : 1.f);
 	}
 }
@@ -180,6 +193,7 @@ EFormationTerrainClass USquadSubsystem::StepFormationTerrain(const AOperativeCha
 	}
 	Sectors.LastLeaderPos = Here;
 	Sectors.bLastLeaderPosValid = true;
+	Sectors.LastStepDistance = StepDistance; // rules v2.1: the guard's hysteresis counts the same path
 	return Sectors.Terrain.Step(Sectors.ProbeWalls, Sectors.ProbeOrigin, Sectors.ProbeHeadingYaw, LeaderDestination(LeaderRef), StepDistance,
 		FormationTuning::Get());
 }
@@ -381,6 +395,12 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	}
 	const EFormationTerrainClass Class = StepFormationTerrain(LeaderRef);
 	Sectors.PassageWidth = Sectors.Terrain.GetPassageWidth(); // v2: held with the corridor class (the column's tail keeps the narrow sectors)
+	// Rules v2.1: the leader's recorded path (the trail column) and the world's walls round him (the guard, the corner watch, ClearLook).
+	const bool bV21 = FormationGuardRuntime::IsEnabled();
+	if (bV21)
+	{
+		UpdateFormationTrailAndWalls(LeaderRef, DeltaTime);
+	}
 
 	// A new order of the leader's while the wall layout stands: rules v2.2 wall slide when its destination lies along the same wall.
 	const uint32 LeaderSerial = LeaderRef.GetMoveOrderSerial();
@@ -414,10 +434,30 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	{
 		TryStartFormationSlide(LeaderRef, false);
 	}
+	// Rules v2.1 bypass "B": a new own order of the leader (not a slide) - the side round a free-standing wall on his way; then the steering.
+	if (bV21 && bNewLeaderOrder && !Sectors.bSlide && !Sectors.bWallOrder)
+	{
+		PlanFormationBypass(LeaderRef);
+	}
+	if (bV21)
+	{
+		UpdateFormationBypass(LeaderRef);
+	}
+	else
+	{
+		EndFormationBypass(TEXT("Codex.Formation.V21 0"));
+	}
 
 	// The formation: the wall order's wall, else by terrain with the wall layout only on arrival (the leader stood a moment).
 	const bool bLeaderStill = !bLeaderMoving && LeaderRef.GetVelocity().Size2D() < StandingSpeed;
 	Sectors.LeaderStillSeconds = bLeaderStill ? Sectors.LeaderStillSeconds + DeltaTime : 0.f;
+	if (Sectors.bSlide || Sectors.bWallOrder)
+	{
+		// The wall layout (an order's, a held one, its slide) is what is asked for: no guard, no trail column.
+		Sectors.Requested = EFormationKind::Wall;
+		Sectors.Guard = FFormationGuardState();
+		Sectors.bTrail = false;
+	}
 	if (Sectors.bSlide)
 	{
 		UpdateFormationSlide(LeaderRef, DeltaTime); // the wall layout side-steps along its wall (FrameSlots by the leader's progress)
@@ -432,13 +472,20 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		// v1.2: at_wall fires only on arrival (within classify.arrive_dist of his destination) - that, or a short stand, is the arrival.
 		const bool bArrived = FormationTerrainRules::IsArriving(LeaderPos, LeaderDestination(LeaderRef), Config)
 			|| Sectors.LeaderStillSeconds >= WallArrivalStillSeconds;
-		Sectors.Formation = FormationRuntime::ChooseFormation(Class, Count, bArrived, Sectors.MoveFormation, IsFormationBlizzard());
+		const EFormationKind Terrain = FormationRuntime::ChooseFormation(Class, Count, bArrived, Sectors.MoveFormation, IsFormationBlizzard());
 		if (bLeaderMoving)
 		{
-			Sectors.MoveFormation = Sectors.Formation;
+			Sectors.MoveFormation = Terrain;
 		}
+		// The hold-G menu's manual choice holds until Auto (FormationMenuRules::Resolve: too few members -> Auto); else the terrain's.
+		const FFormationMenuResolved Menu = FormationMenuRules::Resolve(Sectors.MenuChoice, Count);
+		Sectors.bAllForward = Menu.bAllForward;
+		Sectors.Requested = Menu.ManualFormation.Get(Terrain);
+		Sectors.Formation = Sectors.Requested;
+		Sectors.bTrail = false;
 		if (Sectors.Formation == EFormationKind::Wall)
 		{
+			Sectors.Guard = FFormationGuardState(); // the wall layout is never guarded (its slots are on the leader's side of his wall)
 			if (!Sectors.bWallLayoutValid || FVector2D::Distance(LeaderPos, Sectors.WallAnchor) > FormationRuntime::WallLayoutRecomputeCm)
 			{
 				const FFollowerState* Fourth = Followers.FindByPredicate([](const FFollowerState& F) { return F.Slot == 2; });
@@ -456,12 +503,22 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		else
 		{
 			Sectors.bWallLayoutValid = false;
+			if (bV21)
+			{
+				// Rules v2.1: the wall guard - the request, its mirror echelon, or the trail column (the sharp-turn fold too).
+				StepFormationGuard(LeaderRef, bLeaderMoving, Count);
+			}
+			else
+			{
+				Sectors.Guard = FFormationGuardState();
+			}
 		}
 		if (Sectors.Formation != Previous)
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s -> %s (terrain %s, passage %s)"), FormationNames::ToString(Previous),
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s -> %s (terrain %s, passage %s%s)"), FormationNames::ToString(Previous),
 				FormationNames::ToString(Sectors.Formation), FormationNames::ToString(Class),
-				Sectors.PassageWidth.IsSet() ? *FString::Printf(TEXT("%.0f cm"), Sectors.PassageWidth.GetValue()) : TEXT("-"));
+				Sectors.PassageWidth.IsSet() ? *FString::Printf(TEXT("%.0f cm"), Sectors.PassageWidth.GetValue()) : TEXT("-"),
+				Sectors.Requested != Sectors.Formation ? *FString::Printf(TEXT(", asked %s"), FormationNames::ToString(Sectors.Requested)) : TEXT(""));
 		}
 	}
 	const bool bWall = Sectors.Formation == EFormationKind::Wall;
@@ -470,28 +527,54 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	if (Sectors.Mode == EFormationMode::Walk)
 	{
 		Sectors.PatrolTime += DeltaTime;
+		if (Sectors.bAllForward && !Sectors.bSlide && !bWall)
+		{
+			Sectors.Mode = EFormationMode::Forward; // the menu's "All forward": walking, everybody looks at 12
+		}
 	}
 
 	// This frame's slots and looks by role.
 	if (Sectors.bSlide)
 	{
-		// UpdateFormationSlide set them.
+		// UpdateFormationSlide set them; rules v2.1: the leading end looks round the wall's end (the corner watch).
+		if (bV21)
+		{
+			ApplyFormationCornerWatch(LeaderPos);
+		}
 	}
 	else if (bWall)
 	{
 		Sectors.FrameSlots = Sectors.WallSlots;
+		Sectors.CornerLooks.Reset();
+		Sectors.Corner = FFormationCornerState();
 	}
 	else
 	{
-		Sectors.FrameSlots = FormationShapeRules::Slots(Sectors.Formation, Count, LeaderPos, Sectors.HeadingYaw, Config);
-		for (FFormationSlot& Slot : Sectors.FrameSlots)
+		if (Sectors.bTrail)
 		{
-			Slot.Yaw = FormationSectorRules::LookYaw(Slot.Role, Sectors.Formation, Sectors.Mode, Count, Sectors.PatrolTime, Sectors.HeadingYaw,
-				Sectors.PassageWidth, Config);
+			BuildTrailFrameSlots(LeaderPos, Count); // rules v2.1: the column along the leader's own path
+		}
+		else
+		{
+			Sectors.FrameSlots = FormationShapeRules::Slots(Sectors.Formation, Count, LeaderPos, Sectors.HeadingYaw, Config);
+			for (FFormationSlot& Slot : Sectors.FrameSlots)
+			{
+				Slot.Yaw = FormationSectorRules::LookYaw(Slot.Role, Sectors.Formation, Sectors.Mode, Count, Sectors.PatrolTime, Sectors.HeadingYaw,
+					Sectors.PassageWidth, Config);
+			}
+		}
+		ReassignFormationPlaces();
+		// Rules v2.1: slicing the pie - the watcher's look is fixed for the allocator (the others cover what he leaves).
+		if (bV21)
+		{
+			ApplyFormationCornerWatch(LeaderPos);
+		}
+		else
+		{
+			Sectors.CornerLooks.Reset();
 		}
 		// Rules v2.2: walking / halted with 3+ the coverage allocator replaces the per-formation tables (the pair and a run keep LookYaw).
 		AllocateFormationLooks(LeaderRef, LeaderPos);
-		ReassignFormationPlaces();
 	}
 
 	// The leader (not with a box selection: each faces his own path): his sector, and the patrol pace while the squad walks.
@@ -507,10 +590,10 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 				&& !FormationRuntime::UseWallLayoutYaw(static_cast<float>(FVector2D::Distance(LeaderPos, Lead->Position)), !bLeaderStill);
 			if (!bWalkingIn)
 			{
-				FrameLooks.Add(&LeaderRef, Lead->Yaw);
+				FrameLooks.Add(&LeaderRef, ClearFormationLook(LeaderRef, EFormationRole::Commander, /*bLeader*/ true, Lead->Yaw));
 			}
 		}
-		if (Sectors.Mode == EFormationMode::Walk)
+		if (Sectors.Mode == EFormationMode::Walk || Sectors.Mode == EFormationMode::Forward)
 		{
 			FramePaceLeader = &LeaderRef;
 			FramePace = Config.PacePatrol;
@@ -530,7 +613,7 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	}
 	const FVector2D Raw = Slot->Position;
 	FVector SlotLocation(Raw.X, Raw.Y, Operative.GetActorLocation().Z);
-	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation);
+	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation, /*bLeaderSide*/ FormationGuardRuntime::IsEnabled());
 	const FVector2D Here(Operative.GetActorLocation());
 	const FVector2D Target(SlotLocation);
 	const float Distance = static_cast<float>(FVector2D::Distance(Here, Target));
@@ -549,7 +632,8 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 			Look = FormationRuntime::RearGuardCatchUpLook(Look, Sectors.HeadingYaw,
 				0.5f * LookConfig.SightFov - static_cast<float>(FormationCoverRules::RearSector), Follower.CatchUpMoveYaw);
 		}
-		FrameLooks.Add(Follower.Operative, Look);
+		// Rules v2.1.1 (user "6A"): nobody looks into a wall - in any formation (not the wall layout, a run, the corner watcher).
+		FrameLooks.Add(Follower.Operative, ClearFormationLook(Operative, Role.GetValue(), /*bLeader*/ false, Look));
 	}
 	if (Sectors.bWallOrder && Sectors.bWallOrderCrouch && !Sectors.bSlide && Distance <= WallSettleCm && !bMoving
 		&& FormationMath::AngleBetween(static_cast<float>(Operative.GetActorRotation().Yaw), Slot->Yaw) <= WallSettleYawDeg)
@@ -789,6 +873,15 @@ void USquadSubsystem::ResetFormationState(const FVector& Forward)
 {
 	EndFormationWallOrder(TEXT("reset"));
 	EndWallGroup(TEXT("reset"));
+	// Rules v2.1: the guard, the trail, the corner watch and the bypass start afresh (the menu's choice and reported threats stay).
+	EndFormationBypass(TEXT("reset"));
+	Sectors.Guard = FFormationGuardState();
+	Sectors.bTrail = false;
+	Sectors.Trail.Reset();
+	Sectors.bPlacesKeyValid = false;
+	Sectors.bWorldWallsValid = false;
+	Sectors.Corner = FFormationCornerState();
+	Sectors.CornerLooks.Reset();
 	Sectors.bSlide = false;
 	Sectors.bLastLeaderSerialValid = false;
 	Sectors.RearGuard.Reset();

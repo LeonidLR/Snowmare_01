@@ -10,6 +10,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "Formation/FormationCoverRules.h"
+#include "Formation/FormationGuardRuntimeRules.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationTuning.h"
 #include "Formation/FormationWallRules.h"
@@ -24,6 +25,8 @@ namespace SquadSubsystemSlideLocal
 	constexpr float SlideArriveStillSeconds = 0.3f;
 	/** A slide that never arrives ends after this, s. */
 	constexpr float SlideMaxSeconds = 60.f;
+	/** Rules v2.1: on a new formation the places change for any real saving (ties keep the places held: no needless swap), cm. */
+	constexpr float NewFormationGainCm = 1.f;
 
 	float SlideFeetZ(const AActor& Actor)
 	{
@@ -52,12 +55,14 @@ bool USquadSubsystem::AllocateFormationLooks(const AOperativeCharacter& LeaderRe
 		return false;
 	}
 	TArray<FFormationCoverMember> Places;
-	for (const FFormationSlot& Slot : Sectors.FrameSlots)
+	for (int32 Index = 0; Index < Sectors.FrameSlots.Num(); ++Index)
 	{
+		const FFormationSlot& Slot = Sectors.FrameSlots[Index];
 		FFormationCoverMember Place;
 		Place.Role = Slot.Role;
 		Place.Pos = Slot.Position;
-		Place.Back = FormationRuntime::PlaceBack(Slot.Position, LeaderPos, Sectors.HeadingYaw);
+		// Rules v2.1 trail column: how far back = the column order (a bent column's tail may stand beside the leader's heading).
+		Place.Back = Sectors.bTrail ? static_cast<float>(Index) : FormationRuntime::PlaceBack(Slot.Position, LeaderPos, Sectors.HeadingYaw);
 		Places.Add(Place);
 	}
 	// A look decided elsewhere (a facing order of his own, a quick fire, a combat target) counts as cover; the others fill the rest.
@@ -76,6 +81,14 @@ bool USquadSubsystem::AllocateFormationLooks(const AOperativeCharacter& LeaderRe
 		if (Role.IsSet() && FindFrameSlot(Role.GetValue()))
 		{
 			AddFixed(Follower.Operative.Get(), Role.GetValue());
+		}
+	}
+	// Rules v2.1: the corner watcher's look round the wall end is fixed too (contract 11.2).
+	for (const FFormationCornerLook& Corner : Sectors.CornerLooks)
+	{
+		if (!Fixed.ContainsByPredicate([&Corner](const FFormationRoleYaw& Each) { return Each.Role == Corner.Role; }))
+		{
+			Fixed.Add({ Corner.Role, Corner.Yaw });
 		}
 	}
 	TArray<FFormationWall> Walls = Sectors.ProbeWalls;
@@ -105,7 +118,12 @@ bool USquadSubsystem::AllocateFormationLooks(const AOperativeCharacter& LeaderRe
 
 void USquadSubsystem::ReassignFormationPlaces()
 {
-	if (SlotSwapCooldownRemaining > 0.f || Sectors.bWallOrder || Sectors.bSlide || Sectors.Formation == EFormationKind::Wall || HasMultiSelection())
+	// Rules v2.1 (contract 10.6): a new formation in effect (a fold, the mirror, the trail column on / off, any switch) re-assigns the places
+	// at once by minimal travel - whatever the saving, the cooldown not waited for.
+	const bool bNewFormation = FormationGuardRuntime::IsEnabled()
+		&& (!Sectors.bPlacesKeyValid || Sectors.PlacesFormation != Sectors.Formation || Sectors.bPlacesTrail != Sectors.bTrail);
+	if ((SlotSwapCooldownRemaining > 0.f && !bNewFormation) || Sectors.bWallOrder || Sectors.bSlide || Sectors.Formation == EFormationKind::Wall
+		|| HasMultiSelection())
 	{
 		return;
 	}
@@ -143,7 +161,12 @@ void USquadSubsystem::ReassignFormationPlaces()
 	{
 		return;
 	}
-	const TOptional<TArray<int32>> Best = FormationRuntime::ReassignPlaces(Positions, Current, Places);
+	// The key is taken once the places were weighed for it (a member busy at the switch: weighed again on the next frame).
+	Sectors.PlacesFormation = Sectors.Formation;
+	Sectors.bPlacesTrail = Sectors.bTrail;
+	Sectors.bPlacesKeyValid = true;
+	const TOptional<TArray<int32>> Best = FormationRuntime::ReassignPlaces(Positions, Current, Places,
+		bNewFormation ? SquadSubsystemSlideLocal::NewFormationGainCm : FormationRuntime::ReassignGainCm);
 	if (!Best.IsSet())
 	{
 		return;
