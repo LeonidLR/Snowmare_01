@@ -91,6 +91,12 @@ bool USquadSubsystem::AllocateFormationLooks(const AOperativeCharacter& LeaderRe
 			Fixed.Add({ Corner.Role, Corner.Yaw });
 		}
 	}
+	// Rules v2.3 (contract 13.3, user decision 1A clarified): the narrow column's K / P / L looks are the user's decision - fixed for the
+	// allocator (P looks forward over the leader's shoulder), which shares out only what is left (Z the rear guard).
+	if (FormationGuardRuntime::IsEnabled())
+	{
+		Fixed.Append(FormationGuardRuntime::DecidedFixedLooks(Sectors.FrameSlots, Sectors.Formation, Sectors.bTrail, Sectors.PassageWidth, Fixed, Config));
+	}
 	TArray<FFormationWall> Walls = Sectors.ProbeWalls;
 	Walls.Append(Sectors.LookWalls);
 	const TOptional<FFormationCoverResult> Result = FormationCoverRules::Allocate(Walls, LeaderPos, Sectors.HeadingYaw, Places, Sectors.Mode,

@@ -507,5 +507,10 @@ ones carry `since: 'v2.3'`).
   order; a follower whose update returns before resolving his slot (cover hold, own order, repath wait) is not in the list for that
   tick; an unresolvable slot (no usable candidate) counts as given at the slot itself (the simulator counts the man's position). Every
   candidate is now projected (up to 23 traces / projections, only for an unwalkable slot) instead of stopping at the first usable one.
-- Not wired into the runtime yet (integration, `SquadSubsystemFormationGuard.cpp`): the walls for `TrailSlots`, the per-member held look
-  for `ClearLook` (`clearHeld`, reset whenever ClearLook does not apply), `Decided` -> the allocator's fixed looks.
+- Wired into the runtime in formation/runtime-v23 (2026-10-26; docs/systems/squad-and-orders.md "Rules v2.3 in the runtime"): the world's walls
+  for `TrailSlots` (`FormationGuardRuntime::TrailFrameSlots`), the per-member held look for `ClearLook` (`clearHeld`: `RememberClearLook` /
+  `AgeClearHeld` - reset whenever ClearLook does not apply or the look is not computed in a frame), `Decided` -> the allocator's fixed looks
+  (`DecidedFixedLooks`). FormationLabSmoke's pace check measures the rear man against the slot he is GIVEN (his slot or its 13.5 stand-in), as
+  checks.ts 6 does. 13.5 "this frame" is now order-free: every WALKABLE slot of the frame is given out before the follow loop (the port's first
+  reading - only the slots resolved before him - let Z, resolved before P, take the stand-in on P's spot at the lab's floor edge, R_v2_gaps).
+  For the simulator: `sim.ts` pushes `given` in member order too - seeding it with the frame's walkable slots would match the contract text.

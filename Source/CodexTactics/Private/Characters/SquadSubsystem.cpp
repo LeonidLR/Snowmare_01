@@ -4,6 +4,7 @@
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadOrderRules.h"
+#include "Formation/FormationGuardRuntimeRules.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationTuning.h"
 #include "Interactables/InteractionSubsystem.h"
@@ -884,6 +885,9 @@ void USquadSubsystem::Tick(float DeltaTime)
 	// Formation look sectors (Codex.Formation.Sectors): the follow below fills this frame's looks / the leader's pace; every member not
 	// given one this frame (console off, Solo, a fight, an order of his own, ...) gets none - his old facing and speed.
 	FrameLooks.Reset();
+	FrameGivenByMember.Reset();
+	// Rules v2.3 (contract 13.1): a ClearLook memory not refreshed last frame is gone (his look was not computed / not cleared then).
+	FormationGuardRuntime::AgeClearHeld(ClearHeld);
 	FramePaceLeader.Reset();
 	FramePace = 1.f;
 	Sectors.bActiveThisFrame = false;
@@ -996,9 +1000,15 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 		EndFormationWallOrder(TEXT("Codex.Formation.Sectors 0"));
 	}
 	const float TimeSeconds = GetWorld()->GetTimeSeconds();
-	// Rules v2.3 (contract 13.5): the slots given out this tick - two unwalkable slots never share a stand-in.
+	// Rules v2.3 (contract 13.5): the slots given out this tick - a stand-in keeps slot.min_spacing from the leader, from every WALKABLE slot of
+	// this frame (whoever resolves it later: FormationLabSmoke R_v2_gaps - Z resolved before P took the stand-in on P's spot) and from the
+	// stand-ins given before it.
 	FrameGivenSlots.Reset();
 	FrameGivenSlots.Add(FVector2D(LeaderRef->GetActorLocation()));
+	if (Sectors.bActiveThisFrame)
+	{
+		SeedFrameGivenSlots(*LeaderRef);
+	}
 	for (FFollowerState& Follower : Followers)
 	{
 		UpdateFollower(Follower, *LeaderRef, bLeaderMoving, DeltaTime, TimeSeconds);
@@ -1281,8 +1291,38 @@ FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderR
 	// Rules v2.3 (contract 13.5): the nearest stand-in that keeps slot.min_spacing from the slots given out this tick.
 	const int32 Chosen = SquadFormation::ChooseFallbackSlot(Usable, FrameGivenSlots, FormationTuning::Get().SlotMinSpacing);
 	const FVector Resolved = Chosen != INDEX_NONE ? Usable[Chosen] : Slot;
+	static const IConsoleVariable* DebugVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Debug"));
+	if (DebugVar && DebugVar->GetInt() >= 2)
+	{
+		FString GivenText;
+		for (const FVector2D& Given : FrameGivenSlots)
+		{
+			GivenText += FString::Printf(TEXT(" (%.0f, %.0f)"), Given.X, Given.Y);
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] fallback: slot (%.0f, %.0f) unwalkable -> (%.0f, %.0f), %.0f cm away; candidate %d of %d usable (nearest (%.0f, %.0f)); given%s"),
+			Slot.X, Slot.Y, Resolved.X, Resolved.Y, FVector::Dist2D(Slot, Resolved), Chosen, Usable.Num(), Usable.Num() > 0 ? Usable[0].X : 0.0,
+			Usable.Num() > 0 ? Usable[0].Y : 0.0, *GivenText);
+	}
 	FrameGivenSlots.Add(FVector2D(Resolved));
 	return Resolved;
+}
+
+void USquadSubsystem::SeedFrameGivenSlots(const AOperativeCharacter& LeaderRef)
+{
+	UNavigationSystemV1* Nav = CVarSquadSlotFallback.GetValueOnGameThread() != 0 ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()) : nullptr;
+	if (!Nav)
+	{
+		return; // no fallback either: nothing to keep apart
+	}
+	const double Z = LeaderRef.GetActorLocation().Z;
+	FNavLocation OnNav;
+	for (const FFormationSlot& Slot : Sectors.FrameSlots)
+	{
+		if (Nav->ProjectPointToNavigation(FVector(Slot.Position.X, Slot.Position.Y, Z), OnNav))
+		{
+			FrameGivenSlots.Add(Slot.Position);
+		}
+	}
 }
 
 bool USquadSubsystem::IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, const FVector& SlotLocation) const

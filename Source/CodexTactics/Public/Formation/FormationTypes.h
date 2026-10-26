@@ -90,6 +90,13 @@ struct FFormationSlot
 	float Yaw = 0.f;
 };
 
+/** v2.3 (contract 13.1): one member's ClearLook memory - his last result and whether it was given this frame (FormationGuardRuntime). */
+struct FFormationClearHeld
+{
+	float Yaw = 0.f;
+	bool bThisFrame = false;
+};
+
 /** A straight wall segment: its centre line A -> B and its thickness (0 = a thin line), cm (layout JSON walls[]). */
 struct FFormationWall
 {

@@ -1,6 +1,9 @@
 #include "Formation/FormationGuardRuntimeRules.h"
 
 #include "Formation/FormationCornerRules.h"
+#include "Formation/FormationSectorRules.h"
+#include "Formation/FormationShapeRules.h"
+#include "Formation/FormationTerrainRules.h"
 #include "HAL/IConsoleManager.h"
 
 namespace FormationGuardRuntime
@@ -235,13 +238,28 @@ namespace FormationGuardRuntime
 		}
 	}
 
-	FString GuardHudText(EFormationKind Requested, EFormationKind Effective, EFormationGuardLevel Level, int32 MemberCount)
+	FString GuardHudText(EFormationKind Requested, EFormationKind Effective, EFormationGuardLevel Level, int32 MemberCount, bool bTurnFold)
 	{
 		if (Level == EFormationGuardLevel::Requested || Requested == Effective)
 		{
 			return FormationLabel(Effective, MemberCount);
 		}
-		return FString::Printf(TEXT("%s -> %s (wall)"), *FormationLabel(Requested, MemberCount), *FormationLabel(Effective, MemberCount));
+		const bool bTurn = bTurnFold && Level == EFormationGuardLevel::Trail;
+		return FString::Printf(TEXT("%s -> %s (%s)"), *FormationLabel(Requested, MemberCount), *FormationLabel(Effective, MemberCount),
+			bTurn ? TEXT("turn") : TEXT("wall"));
+	}
+
+	bool IsTurnFold(EFormationGuardLevel Level, bool bTurnAhead, bool bCutByWalls, bool bWasTurnFold)
+	{
+		if (Level != EFormationGuardLevel::Trail)
+		{
+			return false;
+		}
+		if (bTurnAhead)
+		{
+			return true;
+		}
+		return bCutByWalls ? false : bWasTurnFold;
 	}
 
 	const TCHAR* BypassReasonText(EFormationBypassReason Reason)
@@ -271,6 +289,38 @@ namespace FormationGuardRuntime
 			return false;
 		}
 		return true;
+	}
+
+	TArray<FFormationSlot> TrailFrameSlots(const TArray<FVector2D>& TrailWithLeaderPos, float HeadingYaw, int32 MemberCount,
+		const TArray<FFormationWall>& Walls, EFormationMode Mode, float PatrolTime, const TOptional<float>& PassageWidth, const FFormationConfig& Config)
+	{
+		TArray<FFormationSlot> Slots = FormationShapeRules::TrailSlots(TrailWithLeaderPos, HeadingYaw, MemberCount, Config, Walls);
+		for (FFormationSlot& Slot : Slots)
+		{
+			const float Reference = Slot.Role == EFormationRole::Rear ? HeadingYaw : Slot.Yaw;
+			const TOptional<float> Width = PassageWidth.IsSet() ? PassageWidth : FormationTerrainRules::SideWidth(Walls, Slot.Position, Slot.Yaw, Config);
+			Slot.Yaw = FormationSectorRules::LookYaw(Slot.Role, EFormationKind::Column, Mode, MemberCount, PatrolTime, Reference, Width, Config);
+		}
+		return Slots;
+	}
+
+	TArray<FFormationRoleYaw> DecidedFixedLooks(const TArray<FFormationSlot>& Slots, EFormationKind Formation, bool bTrail,
+		const TOptional<float>& PassageWidth, const TArray<FFormationRoleYaw>& Fixed, const FFormationConfig& Config)
+	{
+		TArray<FFormationRoleYaw> Looks;
+		const EFormationKind Kind = bTrail ? EFormationKind::Column : Formation;
+		for (const FFormationSlot& Slot : Slots)
+		{
+			if (Fixed.ContainsByPredicate([&Slot](const FFormationRoleYaw& Each) { return Each.Role == Slot.Role; }))
+			{
+				continue;
+			}
+			if (FormationSectorRules::Decided(Slot.Role, Kind, Slots.Num(), PassageWidth, Config))
+			{
+				Looks.Add({ Slot.Role, Slot.Yaw });
+			}
+		}
+		return Looks;
 	}
 
 	TArray<FString> SplitCuts(const TArray<FFormationWall>& Walls, EFormationKind Formation, bool bTrail, int32 MemberCount, const TArray<FSplitMember>& Members)

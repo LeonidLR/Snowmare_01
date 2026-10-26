@@ -231,6 +231,8 @@ namespace FormationLabSmoke
 		FString StareWorst;
 		float StareWorstSeconds = 0.f;
 		TArray<float> Behind;
+		/** Pace samples where the rear man's slot was off the navmesh and he walked to its stand-in (rules v2.3, contract 13.5). */
+		int32 BehindStandIn = 0;
 		float PaceTime = 0.f;
 		float PaceDistance = 0.f;
 		int32 FormationChanges = 0;
@@ -482,6 +484,7 @@ namespace FormationLabSmoke
 		State.StareWorst.Reset();
 		State.StareWorstSeconds = 0.f;
 		State.Behind.Reset();
+		State.BehindStandIn = 0;
 		State.PaceTime = 0.f;
 		State.PaceDistance = 0.f;
 		State.FormationChanges = 0;
@@ -753,6 +756,14 @@ namespace FormationLabSmoke
 				float Look = 0.f;
 				if (Squad->GetFormationRole(Each, Role) && Role == EFormationRole::Rear && Squad->GetFormationTarget(Each, Slot, Look))
 				{
+					// checks.ts 6: against the slot he is GIVEN - his formation slot, or its stand-in when it is off the navmesh (a slot past the
+					// lab's floor edge: rules v2.3 13.5 keeps that stand-in slot.min_spacing off the others' slots, so it may lie behind the slot).
+					FVector Given;
+					if (Squad->GetFormationGivenSlot(Each, Given))
+					{
+						State.BehindStandIn += FVector2D::Distance(FVector2D(Given), FVector2D(Slot)) > 1.0 ? 1 : 0;
+						Slot = Given;
+					}
 					const FVector2D ToSlot = FVector2D(Slot) - FVector2D(Each->GetActorLocation());
 					State.Behind.Add(FMath::Max(0.f, static_cast<float>(FVector2D::DotProduct(ToSlot, FormationMath::Forward(Heading)))));
 				}
@@ -1107,8 +1118,8 @@ namespace FormationLabSmoke
 			TArray<float> Sorted = State.Behind;
 			Sorted.Sort();
 			const float P95 = Sorted[FMath::Clamp(FMath::FloorToInt32(0.95f * Sorted.Num()), 0, Sorted.Num() - 1)];
-			const FString What = FString::Printf(TEXT("%s: the rear man keeps up - p95 %.0f cm behind his slot (max %.0f, <= %.0f)"), *Name, P95, Sorted.Last(),
-				PaceBehindCm);
+			const FString What = FString::Printf(TEXT("%s: the rear man keeps up - p95 %.0f cm behind his slot (max %.0f, <= %.0f; %d of %d samples on a stand-in)"), *Name, P95,
+				Sorted.Last(), PaceBehindCm, State.BehindStandIn, Sorted.Num());
 			if (bManual)
 			{
 				Gate(P95 <= PaceBehindCm, What);
