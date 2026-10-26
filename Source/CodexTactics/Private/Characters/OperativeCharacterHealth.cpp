@@ -27,6 +27,10 @@
 #include "Core/MissionSubsystem.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Characters/TransferRules.h"
+#include "Components/BoxComponent.h"
+#include "Data/WeaponDataAsset.h"
+#include "Interactables/CorpseLootRules.h"
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
@@ -162,37 +166,33 @@ void AOperativeCharacter::BecomeCorpse()
 
 void AOperativeCharacter::SpawnRemainsLoot()
 {
-	// Godot corpse_loot / player.gd get_items_list: ammo, medkits, food (grenades / the weapon have no loot stack here).
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	// Godot corpse_loot / player.gd get_items_list: the ammo of his weapons (clip + reserve), medkits, food, grenades and the weapon in
+	// his hands - plus everything else he carried in UE (matches, heat packs, flares, firewood, set-up items). 2026-10-26: the M16 rounds
+	// were read from AmmoInventory, which holds only the weapons NOT in his hands (the M16 in hand gave 0 / stale rounds).
+	CorpseLootRules::FCarriedGear Gear;
+	for (uint8 Index = 0; Index <= static_cast<uint8>(LastTransferItem); ++Index)
+	{
+		const ETransferItem Item = static_cast<ETransferItem>(Index);
+		const FString WeaponId = TransferRules::GetAmmoWeaponId(Item);
+		const int32 Clip = WeaponId.IsEmpty() ? 0 : FMath::Max(0, GetAmmoState(WeaponId).Clip);
+		Gear.Items.Add(Item, FMath::Max(0, TransferRules::GetAvailable(*this, Item)) + Clip);
+	}
+	Gear.Grenades = GrenadesCount;
+	Gear.WeaponId = CurrentWeapon ? CurrentWeapon->WeaponId : FString();
+	// Spawned at his feet, then fitted to his lying body (ALootCrateActor::BindRemainsBody); the box never touches the navmesh.
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
-	ALootCrateActor* Remains = GetWorld()->SpawnActor<ALootCrateActor>(Feet + FVector(0.f, 0.f, 40.f), GetActorRotation(), Params);
+	ALootCrateActor* Remains = GetWorld()->SpawnActorDeferred<ALootCrateActor>(ALootCrateActor::StaticClass(),
+		FTransform(GetActorRotation(), Feet + FVector(0.f, 0.f, 40.f)), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Remains)
 	{
 		return;
 	}
-	Remains->CrateName = FText::FromString(FString::Printf(TEXT("Remains: %s"), *DisplayName.ToString()));
-	FLootContents Contents;
-	auto Ammo = [this](const TCHAR* Id)
-	{
-		const FWeaponAmmoState* State = AmmoInventory.Find(Id);
-		return State ? State->Clip + FMath::Max(0, State->Reserve) : 0;
-	};
-	Contents.Medkits = MedkitsCount;
-	Contents.CannedFood = CannedFoodCount;
-	Contents.Bread = BreadCount;
-	Contents.Chocolate = ChocolateCount;
-	Contents.Matches = 0;
-	Contents.RifleAmmo = Ammo(TEXT("m16"));
-	Contents.PistolAmmo = Ammo(TEXT("pistol"));
-	Contents.ShotgunAmmo = 0;
-	Contents.FlameFuel = 0;
-	Contents.CryoAmmo = 0;
-	Contents.PlasmaAmmo = 0;
-	Remains->Contents = Contents;
-	Remains->OpenSeconds = 0.6f; // searching a body, no lid
-	Remains->SetActorHiddenInGame(true); // the body is what the player sees and clicks; the crate is its hit box
-	Remains->Tags.Add(TEXT("CorpseLoot"));
+	Remains->Box->SetCanEverAffectNavigation(false);
+	Remains->Contents = CorpseLootRules::BuildRemainsContents(Gear);
+	Remains->FinishSpawning(FTransform(GetActorRotation(), Feet + FVector(0.f, 0.f, 40.f)));
+	Remains->BindRemainsBody(GetMesh(), DisplayName);
+	UE_LOG(LogCodexTactics, Display, TEXT("%s's remains: %d item stacks, box %s at %s (capsule at %s)"), *DisplayName.ToString(), Remains->GetItems().Num(),
+		*Remains->Box->GetUnscaledBoxExtent().ToCompactString(), *Remains->GetActorLocation().ToCompactString(), *GetActorLocation().ToCompactString());
 }
 
 float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool bCrit, bool bBypassAvoidance, AActor* AttackerActor,
