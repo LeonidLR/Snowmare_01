@@ -31,6 +31,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "GameFramework/Controller.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/InteractableActor.h"
@@ -60,6 +61,7 @@ namespace TurnArenaYardSmoke
 		FVector Door = FVector::ZeroVector;
 		TWeakObjectPtr<AOperativeCharacter> Indoors;
 		FVector IndoorSpot = FVector::ZeroVector;
+		FVector DeepSpot = FVector::ZeroVector;
 		TWeakObjectPtr<AEnemyCharacter> YardHound;
 		TWeakObjectPtr<AEnemyCharacter> DeepHound;
 		FIntPoint FromCell = FIntPoint(-1, -1);
@@ -220,6 +222,7 @@ namespace TurnArenaYardSmoke
 			}
 			State.YardHound = SpawnHound(*Waves, TurnArenaSmokeUtils::OpenSpot(World, State.Spot + State.Outward * 700.f, nullptr) - FVector(0.f, 0.f, 72.f));
 			State.DeepHound = SpawnHound(*Waves, Base->GetZoneTransform().GetLocation() - FVector(0.f, 0.f, Base->GetZoneHalfExtent().Z - 20.f));
+			State.DeepSpot = State.DeepHound.IsValid() ? State.DeepHound->GetActorLocation() : FVector::ZeroVector;
 			Check(State, State.YardHound.IsValid() && State.DeepHound.IsValid() && Flow->GetCombatMode() == ECodexCombatMode::RealTime,
 				TEXT("the fight runs in real time: a hound in the yard, a hound deep inside the building"));
 			Next(State);
@@ -240,6 +243,23 @@ namespace TurnArenaYardSmoke
 			Check(State, Indoors && State.Base.IsValid() && TurnArenaSmokeUtils::InsideZone(State.Base.Get(), Indoors->GetActorLocation(), 0.f),
 				FString::Printf(TEXT("%s stands INSIDE the building by its door (%s) when the fight goes turn-based"), Indoors ? *Indoors->DisplayName.ToString() : TEXT("-"),
 					Indoors ? *Indoors->GetActorLocation().ToCompactString() : TEXT("-")));
+			// The hound deep inside: a live hound in a real-time fight runs at the squad at once (since the horde warning no longer
+			// pauses the fight, 2026-10-26 gameflow) - 0.5 s later it may stand in the door. Log where it got to, then put it back deep
+			// inside and stop it: the check is about where it stands when the fight goes turn-based.
+			if (AEnemyCharacter* Deep = State.DeepHound.Get())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[TurnArenaYard] the deep hound moved %.0f cm in %.1f s of real-time fight (%s -> %s, speed %.0f cm/s, inside the building: %d)"),
+					FVector::Dist2D(Deep->GetActorLocation(), State.DeepSpot), State.StageTime, *State.DeepSpot.ToCompactString(),
+					*Deep->GetActorLocation().ToCompactString(), Deep->GetVelocity().Size2D(),
+					State.Base.IsValid() && TurnArenaSmokeUtils::InsideZone(State.Base.Get(), Deep->GetActorLocation(), 0.f) ? 1 : 0);
+				if (AController* Controller = Deep->GetController())
+				{
+					Controller->StopMovement();
+				}
+				Deep->SetActorLocation(State.DeepSpot, false, nullptr, ETeleportType::TeleportPhysics);
+			}
+			Check(State, State.DeepHound.IsValid() && State.Base.IsValid() && TurnArenaSmokeUtils::InsideZone(State.Base.Get(), State.DeepHound->GetActorLocation(), -200.f),
+				TEXT("the second hound stands deep inside the building (2 m+ from its walls) when the fight goes turn-based"));
 			const FVector LeaderAt = Squad->GetLeader()->GetActorLocation();
 			const EGameFlowResult Result = Flow->RequestEnterTurnBased(true);
 			Check(State, Result == EGameFlowResult::Ok && TurnBased->IsActive(), TEXT("turn-based combat entered in the yard"));
