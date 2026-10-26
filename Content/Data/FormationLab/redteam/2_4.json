@@ -146,7 +146,7 @@
       "seed": 1,
       "t": 11.4,
       "what": "p95 228 cm; Z 253 cm behind",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

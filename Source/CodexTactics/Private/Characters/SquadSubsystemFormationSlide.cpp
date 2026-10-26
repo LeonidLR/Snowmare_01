@@ -438,6 +438,9 @@ bool USquadSubsystem::HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float Wal
 	AssignWallRolesByTravel(Slots);
 	Sectors.WallSlots = MoveTemp(Slots);
 	Sectors.WallNormalYaw = OutwardYaw;
+	ApplyFormationWallEnd(Origin, -FormationMath::Forward(WallNormalYaw), SlideWallReachCm); // v2.4: a slide that stops at a wall's end face
+	Sectors.Approach.Reset(); // v2.5: the covered approach begins again (everyone is near his slot: it ends at once)
+	Sectors.ApproachLooks.Reset();
 	Sectors.bWallLayoutValid = true;
 	Sectors.WallAnchor = LeaderPos;
 	Sectors.bWallOrder = true;
@@ -532,6 +535,27 @@ void USquadSubsystem::HoldCornerStack(AOperativeCharacter& LeaderRef, const TArr
 	Sectors.Formation = EFormationKind::Wall;
 	Sectors.bCornerStack = true;
 	Sectors.CornerStackEnd = End;
+	{
+		// v2.4 wall end (coordinator 2026-10-26): the open-arc coverage widens only round the stack's fixed looks - the point man round the
+		// corner, K out, the trailing end back along the wall; a fourth member between them may be spread.
+		TArray<EFormationRole> StackFixed = { EFormationRole::Commander, Point };
+		const FFormationSlot* Trailing = nullptr;
+		for (const FFormationSlot& Slot : Sectors.WallSlots)
+		{
+			if (!Trailing || FVector2D::DotProduct(Slot.Position, End.Along) < FVector2D::DotProduct(Trailing->Position, End.Along))
+			{
+				Trailing = &Slot;
+			}
+		}
+		if (Trailing)
+		{
+			StackFixed.AddUnique(Trailing->Role);
+		}
+		const FVector StackOrigin(LeaderPos.X, LeaderPos.Y, SquadSubsystemSlideLocal::SlideFeetZ(LeaderRef) + SquadSubsystemSlideLocal::SlideProbeHeightCm);
+		ApplyFormationWallEnd(StackOrigin, -FormationMath::Forward(Sectors.WallNormalYaw), SquadSubsystemSlideLocal::SlideWallReachCm, StackFixed);
+		Sectors.Approach.Reset();
+		Sectors.ApproachLooks.Reset();
+	}
 	for (FFollowerState& Follower : Followers)
 	{
 		Follower.RepathTimeRemaining = 0.f;

@@ -10,14 +10,14 @@ import { FORMATIONS } from './layout.ts';
 import type { ClassifyState, CornerState, GuardState, Mode, Role, TerrainClass, Threat } from './rules.ts';
 import {
   CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
-  FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor,
+  FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
 } from './rules.ts';
 import { FormationMenuRules, MENU_ITEMS } from './menu.ts';
 import type { MenuChoice } from './menu.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
 export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu',
-  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided'] as const;
+  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided', 'WallEnd', 'Approach'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -403,7 +403,81 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
+  // v2.4 (user bug report 2026-10-26): the wall layout's looks at a wall END (FormationWallRules.EndLooks). Scenes in the wall's
+  // frame (the leader's wall slot near the origin); every scene is placed at three headings / offsets and the Layout slots for
+  // 2-4 members are written ROUNDED (the outputs are computed from exactly those).
+  const wallEnd = base('WallEnd', 'in: walls, slots [{role, pos, yaw}] (FormationWallRules.Layout, K first), fixed (roles whose looks stay besides K; missing = []) -> out {spread, basePct, pct, slots [{role, pos, yaw}]} (FormationWallRules.EndLooks; spread exactly, basePct / pct within 0.01, yaws as angles).');
+  const END_SCENES: Record<string, { walls: Segment[]; wall: number; click: Vec2 }> = {
+    // The user's report: a thin free-standing wall, the squad at its end face (the slot on the wall's axis, 45 cm off the face).
+    end_face: { walls: [{ a: [-1500, 0], b: [0, 0], thickness: 40 }], wall: 0, click: [65, 0] },
+    end_face_thin: { walls: [{ a: [-1500, 0], b: [0, 0], thickness: 20 }], wall: 0, click: [55, 0] },
+    // A 3 m stub: the ring sees past its far end too.
+    end_face_stub: { walls: [{ a: [-300, 0], b: [0, 0], thickness: 40 }], wall: 0, click: [65, 0] },
+    // Wall - gap - wall on one line: at the end face of one wall, the next wall 2.5 m beyond the gap.
+    end_face_gap: { walls: [{ a: [-1500, 0], b: [0, 0], thickness: 40 }, { a: [250, 0], b: [1800, 0], thickness: 40 }], wall: 0, click: [65, 0] },
+    // A face (unchanged), a face whose left man stands past the wall's end, an inner corner (unchanged).
+    face_long: { walls: [{ a: [0, -1500], b: [0, 1500], thickness: 40 }], wall: 0, click: [65, 0] },
+    face_near_end: { walls: [{ a: [0, -60], b: [0, 1500], thickness: 40 }], wall: 0, click: [65, 0] },
+    inner_corner: { walls: [{ a: [0, -1500], b: [0, 1500], thickness: 40 }, { a: [0, -150], b: [1500, -150], thickness: 40 }], wall: 0, click: [65, 0] },
+  };
+  for (const [scene, sc] of Object.entries(END_SCENES)) for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]], [-140, [-1200, 800]]] as [number, Vec2][]) {
+    const placed = place(sc.walls, yaw, offset);
+    const click = r2(place([{ a: sc.click, b: sc.click }], yaw, offset)[0].a);
+    for (const memberCount of [2, 3, 4]) {
+      const room = wallRoom(placed[sc.wall], click);
+      const slots = FormationWallRules.Layout(placed[sc.wall], click, memberCount, room.roomLeft, room.roomRight, config)
+        .map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
+      // v2.4 + the corner stack: also with the second slot's look fixed (a look a higher rule decided - the stack's point man / rear man).
+      for (const fixed of memberCount >= 3 ? [[], [slots[1].role]] : [[]]) {
+        const out = FormationWallRules.EndLooks(placed, slots, config, fixed);
+        wallEnd.cases.push({ in: { scene, walls: placed.map(seg), slots, fixed },
+          out: { spread: out.spread, basePct: round(out.basePct), pct: round(out.pct), slots: out.slots.map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) })) } });
+      }
+    }
+  }
+
+  // v2.5 (user rule 2026-10-26): the covered approach to the wall (FormationWallRules.Approach). A wall face along Y at x 0 (outward +X;
+  // inner_corner: a side wall at y -250 too), the Layout slots for 2-4 members, the members at stages of the approach (local frame),
+  // placed at two headings; state null (the roles assigned from those positions) and the roles assigned at 'start' held.
+  const approachG = base('Approach', 'in: walls, slots [{role, pos, yaw}] (Layout, K first), normalYaw, members [{role, pos, yaw}] (yaw = his look now), state ({runner, rear, flanks [{role, side}], alongSide, done} | null) -> out {state, looks [{role, duty, yaw (null = his travel)}]} (FormationWallRules.Approach; yaws as angles).');
+  const APPROACH_WALLS: Record<string, Segment[]> = {
+    face: [{ a: [0, -1500], b: [0, 1500], thickness: 40 }],
+    inner_corner: [{ a: [0, -1500], b: [0, 1500], thickness: 40 }, { a: [0, -250], b: [1500, -250], thickness: 40 }],
+  };
+  const STAGE_POS: Record<string, Record<Role, Vec2 | 'slot'>> = {
+    start: { K: [400, 0], P: [680, 260], L: [680, -260], Z: [960, 0] },
+    runner_in: { K: 'slot', P: [520, 200], L: [520, -200], Z: [800, 0] },
+    flank_in: { K: 'slot', P: 'slot', L: [300, -150], Z: [600, 0] },
+    all_but_rear: { K: 'slot', P: 'slot', L: 'slot', Z: [400, 30] },
+    all_in: { K: 'slot', P: 'slot', L: 'slot', Z: 'slot' },
+    along_wall: { K: [65, -500], P: [325, -780], L: [-200, -780], Z: [65, -920] },
+    all_forward: { K: [400, 0], P: [680, 260], L: [680, -260], Z: [960, 0] },
+  };
+  for (const [scene, ws] of Object.entries(APPROACH_WALLS)) for (const [yaw, offset] of [[0, [0, 0]], [-120, [800, 300]]] as [number, Vec2][]) {
+    const placed = place(ws, yaw, offset);
+    const tp = (p: Vec2) => r2(place([{ a: p, b: p }], yaw, offset)[0].a);
+    for (const memberCount of [2, 3, 4]) {
+      const slots = FormationWallRules.Layout(placed[0], tp([65, 0]), memberCount, 500, 500, config).map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
+      const normalYaw = round(normYaw(yaw));
+      const at = (stage: string) => slots.map((s) => {
+        const p = STAGE_POS[stage][s.role];
+        // the triad's Z is the wedge's rear man; the pair's Z stands where P would (behind the right shoulder)
+        const local: Vec2 | 'slot' = memberCount === 2 && s.role === 'Z' && p !== 'slot' && stage !== 'all_but_rear' ? (STAGE_POS[stage].P as Vec2 | 'slot') : p;
+        // their looks now: the leader towards the wall, the patrol's flankers scanning, the rear man back (the pair's partner too); all_forward: everyone towards the wall
+        const rel = stage === 'all_forward' ? (s.role === 'P' || (memberCount === 2 && s.role === 'Z') ? 170 : 180) : ({ K: 180, P: -135, L: 135, Z: 0 } as Record<Role, number>)[s.role];
+        return { role: s.role, pos: local === 'slot' ? s.pos : r2(tp(local)), yaw: round(normYaw(yaw + rel)) };
+      });
+      const held = FormationWallRules.Approach(placed, slots, normalYaw, at('start'), null, config).state;
+      for (const stage of Object.keys(STAGE_POS)) for (const state of stage === 'start' || stage === 'along_wall' || stage === 'all_forward' ? [null] : [null, held]) {
+        const members = at(stage);
+        const out = FormationWallRules.Approach(placed, slots, normalYaw, members, state, config);
+        approachG.cases.push({ in: { scene, stage, walls: placed.map(seg), slots, normalYaw, members, state },
+          out: { state: out.state, looks: out.looks.map((l) => ({ role: l.role, duty: l.duty, yaw: l.yaw === null ? null : round(l.yaw) })) } });
+      }
+    }
+  }
+
+  return { Approach: approachG, WallEnd: wallEnd, Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
     Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign, TurnAhead: turnAhead, ClearLook: clear, Cover: cover, CoverStatic: coverStatic, Slide: slide, Decided: decided };
 }
 

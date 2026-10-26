@@ -118,7 +118,7 @@
       "seed": 1,
       "t": 26,
       "what": "echelon_left -> wedge, back after 3.4 s",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 3,
@@ -128,7 +128,7 @@
       "seed": 1,
       "t": 26,
       "what": "echelon_left -> wedge, back after 3.4 s",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 3,
@@ -138,7 +138,7 @@
       "seed": 1,
       "t": 26,
       "what": "echelon_left -> diamond, back after 3.4 s",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -149,7 +149,7 @@
       "t": 26.6,
       "what": "K-Z 53 cm apart",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -160,7 +160,7 @@
       "t": 26.7,
       "what": "K-Z 75 cm apart",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -171,7 +171,7 @@
       "t": 26.6,
       "what": "K-Z 51 cm apart",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ]
 }

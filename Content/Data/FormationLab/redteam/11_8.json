@@ -170,7 +170,7 @@
       "seed": 1,
       "t": 31.8,
       "what": "L has no walkable slot",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -180,7 +180,7 @@
       "seed": 2,
       "t": 27.3,
       "what": "L-Z 78 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -190,7 +190,7 @@
       "seed": 1,
       "t": 8.2,
       "what": "P-L 55 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -200,7 +200,7 @@
       "seed": 1,
       "t": 17.8,
       "what": "column: wall cuts P-L",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -211,7 +211,7 @@
       "t": 17.7,
       "what": "column: wall cuts P-L",
       "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

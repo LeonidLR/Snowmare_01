@@ -9,7 +9,7 @@ import { add, angleDiff, closestOnSegment, dirOf, dist, distToWall, round, scale
 import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments, zoneAt } from './layout.ts';
 import type { WallSide } from './rules.ts';
-import { CORNER_GRAZE, cornerAhead, FormationGuardRules, wallSideOf } from './rules.ts';
+import { CORNER_GRAZE, cornerAhead, FormationGuardRules, openArcCoverage, wallSideOf } from './rules.ts';
 import type { Frame } from './sim.ts';
 import { SIM_DT } from './sim.ts';
 
@@ -35,6 +35,11 @@ export const LIMITS = {
   coverStep: 2, // deg, the arc sampling of check 10
   slideOrderTol: 20, // cm, check 11: two neighbours may be this much out of order along the wall
   slideOpenPct: 90, // %, check 11: the open half (the wall's outward normal +-90) covered by the cones
+  wallArcPct: 95, // %, check 13 (v2.4): the open probe ring round the standing wall layout held by the cones (wall_end.probe_dist)
+  wallArcSettleCm: 50, // cm, check 13: everyone this close to his wall slot - the layout stands
+  wallArcTimePct: 90, // %, check 13: of the standing time with the ring held >= wallArcPct
+  approachGrace: 0.5, // s, check 14 (v2.5): the first moments of the covered approach (the looks turn) are not judged
+  approachFlankPct: 90, // %, check 14: of the approach time a flank (3 men) / each flank (4) inside a cone (+-rearMargin inside it)
 } as const;
 
 export interface Worst { t: number; what: string; value: number }
@@ -66,6 +71,17 @@ export interface RunMetrics {
   cover: { walkTime: number; okTime: number; pct: number; worst: Worst | null } | null;
   /** v2.2 check 11: wall slides - time, order broken (>= 0.3 s), time with the open half covered >= LIMITS.slideOpenPct. */
   slide: { time: number; orderBreaks: number; okTime: number; pct: number; worst: Worst | null };
+  /**
+   * v2.4 check 13 (user bug report 2026-10-26, a wall END): the standing wall layout (3+ members, everyone within
+   * LIMITS.wallArcSettleCm of his slot) - time, time with the open probe ring held >= LIMITS.wallArcPct, the lowest share seen.
+   */
+  wallArc: { time: number; okTime: number; pct: number; worst: Worst | null } | null;
+  /**
+   * v2.5 check 14 (user rule 2026-10-26, the covered approach to the wall; 2+ members): the approach time after LIMITS.approachGrace, the
+   * time nobody's cone held the rear (the wall's outward normal +-rearMargin), the time some / the left / the right flank (normal -/+ 90)
+   * was held; flankPct / leftPct / rightPct of the approach time.
+   */
+  approach: { time: number; rearMiss: number; flankPct: number; leftPct: number; rightPct: number; worst: Worst | null } | null;
 }
 
 /** Collects one run's frames into RunMetrics. */
@@ -94,6 +110,8 @@ export class RunCollector {
   private cornerPrev = new Map<string, number>();
   private slideBreak = 0;
   private slideCounted = false;
+  private approachStart: number | null = null;
+  private approachFlank = { any: 0, left: 0, right: 0 };
 
   constructor(layout: Layout, route: LayoutRoute, memberCount: number, seed: number, config: FormationConfig) {
     this.layout = layout; this.route = route; this.n = memberCount; this.c = config;
@@ -113,6 +131,8 @@ export class RunCollector {
       corner: { ends: 0, missed: 0, worst: null },
       cover: memberCount >= 3 ? { walkTime: 0, okTime: 0, pct: 100, worst: null } : null,
       slide: { time: 0, orderBreaks: 0, okTime: 0, pct: 100, worst: null },
+      wallArc: memberCount >= 3 ? { time: 0, okTime: 0, pct: 100, worst: null } : null,
+      approach: memberCount >= 2 ? { time: 0, rearMiss: 0, flankPct: 100, leftPct: 100, rightPct: 100, worst: null } : null,
     };
   }
 
@@ -322,6 +342,40 @@ export class RunCollector {
       if ((100 * seen) / total >= LIMITS.slideOpenPct) this.m.slide.okTime += SIM_DT;
     }
 
+    // 13. wall end (v2.4, user bug report 2026-10-26): the standing wall layout holds the whole open arc round it - of the probe
+    // ring (wall_end.probe_dist round the members) the points some member sees, inside the cone of one who sees them (the flanks
+    // round a wall's end included)
+    if (this.m.wallArc && f.formation === 'wall' && !f.slide && f.mode === 'wall'
+      && f.members.every((mem) => dist(mem.pos, mem.slot) <= LIMITS.wallArcSettleCm)) {
+      const arc = openArcCoverage(this.segs, f.members.map((mem) => ({ pos: mem.pos, yaw: mem.yaw })), cfg(this.c, 'sight.fov'), cfg(this.c, 'wall_end.probe_dist'));
+      this.m.wallArc.time += SIM_DT;
+      if (arc.pct >= LIMITS.wallArcPct) this.m.wallArc.okTime += SIM_DT;
+      if (!this.m.wallArc.worst || arc.pct < this.m.wallArc.worst.value) {
+        this.m.wallArc.worst = { t: round(f.t, 1), what: `${round(arc.pct, 1)} % of the open arc held (${arc.covered} / ${arc.open} probe points)`, value: round(arc.pct, 1) };
+      }
+    }
+
+    // 14. covered approach (v2.5, user rule 2026-10-26): on the way into the wall layout somebody always holds the rear (away from the
+    // wall, the way they came) and a flank (3 men: one, 4: both - along the wall line)
+    // (A man going round a wall to his slot faces his run - the squad never splits first: those frames are not judged.)
+    const detour = f.members.some((mem) => mem.approachDuty === 'run' && mem.place !== f.members[0].place);
+    if (this.m.approach && f.approach && f.wallNormal !== null && !detour) {
+      this.approachStart ??= f.t;
+      if (f.t - this.approachStart >= LIMITS.approachGrace - 1e-9) {
+        const lim = cfg(this.c, 'sight.fov') / 2 - LIMITS.rearMargin;
+        const held = (yaw: number) => f.members.some((mem) => angleDiff(mem.yaw, yaw) <= lim);
+        this.m.approach.time += SIM_DT;
+        if (!held(f.wallNormal)) {
+          this.m.approach.rearMiss += SIM_DT;
+          this.m.approach.worst ??= { t: round(f.t, 1), what: `nobody holds the rear on the way to the wall (${f.members.map((mem) => `${mem.place} ${mem.approachDuty ?? '-'} ${Math.round(mem.yaw)}`).join(', ')})`, value: 1 };
+        }
+        const left = held(f.wallNormal - 90), right = held(f.wallNormal + 90);
+        if (left || right) this.approachFlank.any += SIM_DT;
+        if (left) this.approachFlank.left += SIM_DT;
+        if (right) this.approachFlank.right += SIM_DT;
+      }
+    } else this.approachStart = null;
+
     // stuck (info)
     for (const mem of f.members.slice(1)) {
       if (dist(mem.pos, mem.slot) > LIMITS.stuckDist) {
@@ -359,6 +413,12 @@ export class RunCollector {
     });
     if (m.cover) m.cover.pct = m.cover.walkTime > 0 ? round((100 * m.cover.okTime) / m.cover.walkTime, 1) : 100;
     m.slide.pct = m.slide.time > 0 ? round((100 * m.slide.okTime) / m.slide.time, 1) : 100;
+    if (m.wallArc) m.wallArc.pct = m.wallArc.time > 0 ? round((100 * m.wallArc.okTime) / m.wallArc.time, 1) : 100;
+    if (m.approach && m.approach.time > 0) {
+      const pct = (v: number) => round((100 * v) / m.approach!.time, 1);
+      m.approach.flankPct = pct(this.approachFlank.any); m.approach.leftPct = pct(this.approachFlank.left); m.approach.rightPct = pct(this.approachFlank.right);
+      m.approach.rearMiss = round(m.approach.rearMiss, 2); m.approach.time = round(m.approach.time, 2);
+    }
     m.duration = round(m.duration, 2);
     m.distance = round(m.distance, 0);
     return m;
@@ -397,7 +457,15 @@ function worstOf(runs: RunMetrics[], pick: (r: RunMetrics) => Worst | null | und
   return best ? `${runTag(best.r)} t=${best.w.t}s ${best.w.what}` : '-';
 }
 
-export const CHECK_WEIGHTS: Record<number, number> = { 1: 2, 2: 2, 3: 1, 4: 2, 5: 2, 6: 1, 7: 3, 8: 2, 9: 1, 10: 2, 11: 2 };
+export const CHECK_WEIGHTS: Record<number, number> = { 1: 2, 2: 2, 3: 1, 4: 2, 5: 2, 6: 1, 7: 3, 8: 2, 9: 1, 10: 2, 11: 2, 13: 2, 14: 2 };
+
+/** v2.5 check 14 passes: the rear always held on the approach; 3+ men a flank, 4+ each flank, >= LIMITS.approachFlankPct of it. */
+export function approachOk(r: RunMetrics): boolean {
+  const a = r.approach;
+  if (!a || a.time <= 0) return true;
+  return a.rearMiss <= 1e-9 && (r.members < 3 || a.flankPct >= LIMITS.approachFlankPct)
+    && (r.members < 4 || (a.leftPct >= LIMITS.approachFlankPct && a.rightPct >= LIMITS.approachFlankPct));
+}
 
 export function summarize(runs: RunMetrics[]): SeriesSummary {
   const line = (id: number, name: string, applicable: RunMetrics[], ok: (r: RunMetrics) => boolean, worst: string, info = false): CheckLine => {
@@ -414,6 +482,8 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
   const cornerRuns = runs.filter((r) => r.corner.ends > 0);
   const coverRuns = runs.filter((r) => r.cover && r.cover.walkTime > 0);
   const slideRuns = runs.filter((r) => r.slide.time > 0);
+  const arcRuns = runs.filter((r) => r.wallArc && r.wallArc.time > 0);
+  const approachRuns = runs.filter((r) => r.approach && r.approach.time > 0);
   const checks: CheckLine[] = [
     line(1, `wall stare (<${LIMITS.stareDist} cm, ${LIMITS.stareAngle} deg, >=${LIMITS.stareMinSeconds} s)`, runs,
       (r) => r.wallStare.events === 0, worstOf(runs, (r) => r.wallStare.worst)),
@@ -442,6 +512,18 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
     line(11, `wall slide: order kept, open half covered (>=${LIMITS.slideOpenPct} % of it, >=90 % of the slide)`, slideRuns,
       (r) => r.slide.orderBreaks === 0 && r.slide.pct >= 90,
       slideRuns.length ? (() => { const w = [...slideRuns].sort((a, b) => a.slide.pct - b.slide.pct - (b.slide.orderBreaks - a.slide.orderBreaks) * 1000)[0]; return `${runTag(w)} ${w.slide.pct} %${w.slide.orderBreaks ? `, order broken ${w.slide.orderBreaks}x` : ''}`; })() : '-'),
+    line(13, `wall end: the standing wall layout holds the open arc round it, 3-4 men (>=${LIMITS.wallArcPct} % of the probe ring, >=${LIMITS.wallArcTimePct} % of the time)`, arcRuns,
+      (r) => r.wallArc!.pct >= LIMITS.wallArcTimePct,
+      arcRuns.length ? (() => {
+        const w = [...arcRuns].sort((a, b) => a.wallArc!.pct - b.wallArc!.pct || (a.wallArc!.worst?.value ?? 100) - (b.wallArc!.worst?.value ?? 100))[0];
+        return `${runTag(w)} ${w.wallArc!.pct} %${w.wallArc!.worst ? `, worst t=${w.wallArc!.worst.t}s ${w.wallArc!.worst.what}` : ''}`;
+      })() : '-'),
+    line(14, `covered approach to the wall: the rear always held, a flank (3) / both (4) >=${LIMITS.approachFlankPct} % of it`, approachRuns, approachOk,
+      approachRuns.length ? (() => {
+        const bad = approachRuns.find((r) => !approachOk(r)) ?? [...approachRuns].sort((a, b) => a.approach!.flankPct - b.approach!.flankPct)[0];
+        const a = bad.approach!;
+        return `${runTag(bad)} rear missed ${a.rearMiss} s of ${a.time} s, flank ${a.flankPct} % (left ${a.leftPct} / right ${a.rightPct})${a.worst ? `, t=${a.worst.t}s ${a.worst.what}` : ''}`;
+      })() : '-'),
     line(12, `info: stuck followers (>${LIMITS.stuckDist} cm for ${LIMITS.stuckSeconds} s), slot fallbacks`, runs, (r) => r.stuck.events === 0,
       `${worstOf(runs, (r) => r.stuck.worst)}; fallback ticks ${runs.reduce((a, r) => a + r.slots.fallbackTicks, 0)}`, true),
   ];
@@ -459,6 +541,8 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
     9: mean(cornerRuns.map((r) => 1 - r.corner.missed / r.corner.ends)),
     10: mean(coverRuns.map((r) => Math.min(1, r.cover!.pct / LIMITS.coverPct))),
     11: mean(slideRuns.map((r) => (r.slide.orderBreaks ? 0.5 : 1) * Math.min(1, r.slide.pct / 90))),
+    13: mean(arcRuns.map((r) => Math.min(1, r.wallArc!.pct / LIMITS.wallArcTimePct))),
+    14: mean(approachRuns.map((r) => (approachOk(r) ? 1 : 0.5))),
   };
   let num = 0, den = 0;
   for (const [id, v] of Object.entries(soft)) {
@@ -503,11 +587,12 @@ export function renderReport(h: ReportHeader, s: SeriesSummary, advice: string[]
 
 /**
  * v2.1: auto + every manual menu item on every route - fail counts per check. A manual formation ignores the terrain on
- * purpose, so only checks 1 (wall stare), 2 (rear cover - v2.2: every formation with 3+ has a rear guard), 5 (slots / spacing), 7 (squad split) and 10 (coverage) gate it; the rest is shown for information.
+ * purpose, so only checks 1 (wall stare), 2 (rear cover - v2.2: every formation with 3+ has a rear guard), 5 (slots / spacing), 7 (squad split), 10 (coverage),
+ * 11 (slide) and 13 (v2.4: the wall layout's open arc - a manual formation never stands in it) gate it; the rest is shown for information.
  */
 export function renderManualMatrix(h: ReportHeader, rows: { choice: string; summary: SeriesSummary }[]): string {
   const ids = rows[0]?.summary.checks.filter((c) => !c.info).map((c) => c.id) ?? [];
-  const gated = (choice: string, id: number) => choice === 'auto' || [1, 2, 5, 7, 10, 11].includes(id);
+  const gated = (choice: string, id: number) => choice === 'auto' || [1, 2, 5, 7, 10, 11, 13, 14].includes(id);
   const cell = (choice: string, ch: CheckLine | undefined) => !ch || ch.pass + ch.fail === 0 ? '-' : gated(choice, ch.id) ? String(ch.fail) : `(${ch.fail})`;
   const lines = [
     `# Movement bot - auto + every manual formation - ${h.layout}`,
@@ -517,7 +602,7 @@ export function renderManualMatrix(h: ReportHeader, rows: { choice: string; summ
     `| choice | runs | ${ids.map((i) => `#${i}`).join(' | ')} | score | gate |`,
     `|---|---|${ids.map(() => '---').join('|')}|---|---|`,
     ...rows.map((r) => {
-      const ok = r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((c) => [1, 2, 5, 7, 10, 11].includes(c.id)).every((c) => c.fail === 0);
+      const ok = r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((c) => [1, 2, 5, 7, 10, 11, 13, 14].includes(c.id)).every((c) => c.fail === 0);
       return `| ${r.choice} | ${r.summary.runs} | ${ids.map((i) => cell(r.choice, r.summary.checks.find((c) => c.id === i))).join(' | ')} | ${r.summary.score} | ${ok ? 'PASS' : 'FAIL'} |`;
     }),
     '',

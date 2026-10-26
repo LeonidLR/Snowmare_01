@@ -314,3 +314,49 @@ Ground simulator does not model the corner stack / the fitted layout yet (follow
   (no crouch), re-formed in the automatic layout. Now a switch is no order, and the wall order (a running slide too) goes on with the new
   leader: the layout round him at the same wall (K in the middle), crouched as before, the places by minimal travel (a man re-forming past a team-mate standing in the
   line steps round him on the open side - the nav mesh ignores bodies); his next click slides the line as with the original leader.
+
+## v2.4 — the wall end's open arc (user bug report 2026-10-26, via the coordinator; contract section 14; branch formation/v24-wall-end)
+- **With the corner stack above (coordinator 2026-10-26)**: the stack's looks are fixed (the point man round the corner, K out, the trailing
+  end back along the wall); the open-arc widening below applies only AROUND them (a fourth man between them may be spread) - `EndLooks`' `fixed` roles.
+- **2026-10-26: wall end: the group covers the whole open arc, flanks included (user bug report)** - in the editor
+  (`Codex.Formation.Debug`) three operatives crouched at the END FACE of a thin free-standing wall left large uncovered zones on both
+  sides of the end, along the wall's two faces ("big uncovered zones form on the sides of the end - stabilise it so they cover the large
+  zones"). Cause: the wall layout's looks (L 8 / K 6 / P 4) are the rule for a wall FACE, where the open side is a half-plane; at the end
+  face the open arc reaches round the end, back along both faces, and those looks (+-130 deg from the normal together) leave both flanks
+  open - ~69 % of the open arc held with 3 men, ~71 % with 4.
+- **The rule (v2.4, `FormationWallRules.EndLooks`)**: the layout's places and K's look (6 o'clock, away from the wall) stay; when the layout's
+  looks hold less than `wall_end.cover_pct` (95 %) of the open ring round the group (`wall_end.probe_dist`, 6 m: the points somebody has a
+  clear line to), the others' looks are spread over what is left - greedily, each the look that holds the most still-open points he can
+  see, the least turn from his layout look on a tie, nobody looking into a wall. At the end face of a thin wall: K out along the wall's
+  axis, the two men beside the end ~118 deg off it, back along "their" face (3 men: 69 -> 100 %; 4 men: the 4th keeps his end look).
+  A face (the half-plane) is held already: nothing changes there - the user's wall rule stands. Computed once per layout from the
+  slots: no flicker, no reshuffle while they hold (`Codex.Formation.WallEnd 0` = the face looks everywhere).
+- Interpretations (coordinator / agent, for the user): the pair keeps its K 7:30 / partner 4:30 at an end too (a user decision; two cones
+  cannot hold the ~330 deg there); a face whose end man stands PAST the wall's end is spread the same way (he looks round the end).
+
+## v2.5 — the covered approach to the wall (user rule 2026-10-26, via the coordinator; contract section 15)
+- **The user's rule (2026-10-26, screenshots `to_wall_1/2`)**: the squad moves calmly (patrol, sectors held), then gets the order to hug a
+  wall ("Formation: Wall"). Before, everyone dropped his sector and dashed to the wall, the rear wide open. Now, until they are settled at
+  the wall (3 men): (1) at least one keeps covering the withdrawal - the rear, the way they came / away from the wall - the rear guard,
+  walking backwards as approved; (2) the second looks to the side (a flank); (3) the third runs to the wall and looks parallel to it, the
+  other way along the wall. As each one arrives he takes his wall-layout look; the rear cover holds until the others are at the wall, then
+  he joins. The pair: one runs + looks along the wall, the other covers the rear. Four: the rear, both flanks, the first at the wall
+  looking along it.
+- **The rule (`FormationWallRules.Approach`)**: roles assigned once when the approach begins and held (no reshuffle): the runner = the
+  leader; the rear cover = the follower whose look is nearest the rear (the patrol's rear guard; ties the farthest back); the others are
+  flank men (one: his side of the leader along the wall; two: one each side). Rear = the wall's outward normal; a flank = along the wall
+  line (normal +-90); the runner at his slot looks along the wall the other way from the first flank man. A member is "at the wall"
+  within `approach.arrive_dist` (100 cm) of his slot; when everyone is, the plain wall layout. Every approach look goes through ClearLook.
+- **Interpretations for the user (please confirm or flip)**:
+  - *Who runs first*: the LEADER - the order is his and he runs to the clicked slot (the alternative: the man nearest the wall).
+  - *The rear*: "away from the wall" (the wall's outward normal), which is the way they came on a straight approach; along a wall they came
+    from the side - the rear is still "away from the wall".
+  - *The rear cover*: the man already looking back (the patrol's rear guard), so there is no gap while somebody turns round; nobody looking
+    back -> the man farthest from the wall. He keeps the rear until everyone else is at the wall AND he is at his slot.
+  - *Pace*: the leader runs (the order's run); the rear cover walks backwards at the backward cap of the walk (`move.backward_mult` 0.9), the
+    flank men walk sideways at the walk pace - neither copies the leader's sprint (a sprinting man faces his run). So the squad settles a
+    little later than before (the game smoke: ~4 s instead of ~2 s from 9 m), the price of the covered rear.
+  - *The first arrival*: the runner looks along the wall from his arrival until everyone is in, then turns to his layout look (K 6 o'clock).
+  - *The squad never splits comes first* (found by FormationWallSwitchSmoke after the merge with the corner stack): a man whose straight way
+    to his slot passes a wall (a switch round a corner to a cross wall) goes round it facing his run at the squad's pace - holding his look he
+    fell 4 s behind the leader round the corner - and takes his approach look again once the way is clear.

@@ -30,7 +30,87 @@
  * outward (the rear guard), K (when not an end) away from the wall with his search (+-ScanAmpLead), the members in between
  * FormationCoverRules::AllocateStatic (the ends and K fixed). Not active -> the targets are the start slots (the caller forms the normal
  * formation). On arrival the caller forms the normal wall layout again.
+ *
+ * EndLooks (v2.4, user bug report 2026-10-26: "at the end face of a wall big uncovered zones form on the sides of the end - stabilise it
+ * so they cover the large zones"; contract 14; reference rules.ts EndLooks / openArcCoverage): Layout's looks are the user's rule for a
+ * wall FACE (the open half-plane shared). At a wall END (the end face of a thin free-standing wall, or a man standing past a wall's end)
+ * the open arc reaches round the end, back along both faces, and those looks leave both flanks open. OpenArcCoverage = of a probe ring
+ * (WallEndProbeDist round the members' mean position, every WallEndStepDeg from -180) the points some member has a clear line to (no
+ * wall body within WallEndRayRadius), and of those the share inside the cone (+-SightFov / 2) of a member with a clear line. EndLooks:
+ * with 3+ slots and that share below WallEndCoverPct the looks are spread - K keeps his (away from the wall); the others greedily: of the
+ * remaining members and their looks (whole degrees -179..180, none within LookWallAngle of the closest point of a wall whose surface is
+ * within LookWallDist of his slot) the one holding the most open ring points he sees and nobody holds yet (ties: nearest his layout
+ * look, then the lower degree; between members the earlier slot); a member who would add nothing keeps his layout look; a spread that
+ * holds less than the base keeps the base. Positions and order never change.
  */
+
+/** v2.5 (user rule 2026-10-26, the covered approach to the wall; contract 15): a member's duty on the way into the wall layout. */
+enum class EFormationApproachDuty : uint8
+{
+	/** The runner on his run: he faces his travel (Yaw unset). */
+	Run,
+	/** The runner at his slot: along the wall, the other way from the first flank man. */
+	Along,
+	/** The rear cover: away from the wall (the way they came) until everyone is in. */
+	Rear,
+	/** A flank man on his way: along the wall line to his side. */
+	Flank,
+	/** At his slot (or the approach is over): his wall-layout look. */
+	Layout
+};
+
+/** Approach's held roles (assigned once when the approach begins: no reshuffle). */
+struct FFormationApproachState
+{
+	EFormationRole Runner = EFormationRole::Commander;
+	TOptional<EFormationRole> Rear;
+	/** The flank men and their side (+1 = the outward normal + 90, -1 = - 90). */
+	TArray<TPair<EFormationRole, int32>> Flanks;
+	/** The side the runner looks along the wall once there. */
+	int32 AlongSide = 1;
+	/** Everyone has reached his slot (sticky): the plain wall layout. */
+	bool bDone = false;
+};
+
+/** One member's approach look. */
+struct FFormationApproachLook
+{
+	EFormationRole Role = EFormationRole::Commander;
+	EFormationApproachDuty Duty = EFormationApproachDuty::Layout;
+	/** World yaw; unset = he faces his travel. */
+	TOptional<float> Yaw;
+};
+
+/** Approach's answer. */
+struct FFormationApproachResult
+{
+	FFormationApproachState State;
+	/** In the slots' order. */
+	TArray<FFormationApproachLook> Looks;
+};
+
+/** OpenArcCoverage's answer (v2.4). */
+struct FFormationArcCoverage
+{
+	/** Probe ring points some member has a clear line to. */
+	int32 Open = 0;
+	/** Of those, the points inside the cone of a member with a clear line to them. */
+	int32 Covered = 0;
+	/** 100 x Covered / Open (100 with nothing open), %. */
+	double Pct = 100.0;
+};
+
+/** EndLooks' answer (v2.4). */
+struct FFormationWallEndResult
+{
+	/** The layout's looks held less than WallEndCoverPct of the open arc (a wall end) and were spread. */
+	bool bSpread = false;
+	/** OpenArcCoverage of the given looks / of the result (the slots, WallEndProbeDist, SightFov), %. */
+	double BasePct = 100.0;
+	double Pct = 100.0;
+	/** The slots with their looks (positions and order unchanged). */
+	TArray<FFormationSlot> Slots;
+};
 
 /** Slide's answer. */
 struct FFormationSlideResult
@@ -81,4 +161,35 @@ namespace FormationWallRules
 	 * shorter, nudges RoomLeft up by 1 cm so Layout puts him left (Layout itself sends a tie right).
 	 */
 	CODEXTACTICS_API void BreakRoomTie(float& RoomLeft, float& RoomRight, float TravelLeft, float TravelRight);
+
+	/** v2.4: the probe ring is sampled this often, deg (rules.ts WALL_END_STEP). */
+	inline constexpr double WallEndStepDeg = 2.0;
+	/** v2.4: a probe line passing this close to a wall body is blocked (a zero-thickness traced face blocks too), cm (WALL_END_RAY_RADIUS). */
+	inline constexpr double WallEndRayRadius = 1.0;
+
+	/** v2.4 (bot check 13, the smokes): how much of the open arc round a standing group its cones hold (see the header comment). */
+	CODEXTACTICS_API FFormationArcCoverage OpenArcCoverage(const TArray<FFormationWall>& Walls, const TArray<FVector2D>& Positions,
+		const TArray<float>& LookYaws, float FovDeg, float ProbeCm);
+
+	/**
+	 * v2.5 (user rule 2026-10-26, "the covered approach to the wall"; contract 15; rules.ts Approach): until every member is within
+	 * ApproachArriveDist of his wall slot - the runner (K, the leader: the order is his) runs facing his travel, at his slot he looks along
+	 * the wall (AlongSide); the rear cover (the follower whose look - Members[].Yaw - is nearest the rear when the approach began: the patrol's
+	 * rear guard; ties the farthest from the wall along the normal, then the later)
+	 * looks away from the wall (NormalYaw) until everyone is in; each flank man looks along the wall line to his side (one flank: the side of
+	 * his offset from the leader along the wall, >= 0 -> +1; two: the lower offset -1, the higher +1) until he reaches his slot, then his
+	 * layout look; AlongSide = the other way from the first flank man (the pair: the other way from the rear man's offset). Every look but
+	 * the layout's goes through FormationSectorRules::ClearLook from his position. The squad never splits first: a follower not at his slot whose
+	 * straight way to it passes a wall body (WallEndRayRadius) has duty Run (facing his travel, the squad's pace) until it is clear, his role kept. Members = where everyone is now and his look (by role; a role missing
+	 * stands at his slot); State unset = the approach begins (the roles are assigned and then held).
+	 */
+	CODEXTACTICS_API FFormationApproachResult Approach(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots, float NormalYaw,
+		const TArray<FFormationSlot>& Members, const TOptional<FFormationApproachState>& State, const FFormationConfig& Config = FFormationConfig());
+
+	/**
+	 * v2.4: the wall layout's looks at a wall end (see the header comment). Slots = Layout's (K first), Walls = the walls round them; Fixed = more
+	 * roles whose looks a higher rule decided (the corner stack's point man and trailing end): like K they keep their looks, their cones held first.
+	 */
+	CODEXTACTICS_API FFormationWallEndResult EndLooks(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots,
+		const FFormationConfig& Config = FFormationConfig(), const TArray<EFormationRole>& Fixed = TArray<EFormationRole>());
 }

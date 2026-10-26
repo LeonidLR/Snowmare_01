@@ -11,7 +11,17 @@
 //    others wait off the wall, then re-enter their slots after him) -> the wall group re-allocates: the leader keeps the corner he arrived
 //    at, the others close the open arc - no uncovered open gap over coverage.max_gap_deg, nobody faces a wall, not all the same way;
 //  2 from A's left end the switch to the short wall D: one goes prone behind it - same checks with the prone look;
-//  3 the wrap round H: the leader goes round its corner along the wall, the others take its side face - same checks.
+//  3 the wrap round H: the leader goes round its corner along the wall, the others take its side face - same checks;
+//  4 (rules v2.4, user bug report 2026-10-26) the wall END: a thin free-standing wall E (4 m x 40 cm) is put up, the squad patrols up in
+//    group mode and the player clicks the cover at E's end face (the group cover order = the formation wall layout): the face looks would
+//    leave both flanks along E's faces open (the layout reports < 80 % held), the spread looks hold >= 95 % of the open ring round the end
+//    (wall_end.probe_dist; the world's box walls), each flank 5 m back along a face is inside the cone of the man on that side, nobody
+//    faces a wall, and for 3 s nobody's look or place moves (no flicker / reshuffle). Codex.Formation.WallEnd 0: the face looks (logged);
+//  5 (rules v2.5, user rule 2026-10-26: the covered approach to the wall) the squad patrols across the arena towards E's long face and the
+//    player clicks the cover in its middle
+//    (the group cover order = the formation wall layout): on the way somebody always holds the rear (away from the wall, after ApproachTurnSeconds (1 s of game time) to
+//    turn), somebody a flank for >= 90 % of the way, the leader at the wall first looks along it; then everyone in the wall layout's look.
+//    Codex.Formation.Approach 0: everyone walks in facing his travel (the rear checks fail - the user's report).
 // Codex.Formation.Sectors 0: the old facing untouched (no wall group, nobody taken out of his slot, every follower in cover or prone with
 // his own CoverFacingRules); the gap is logged only. Godot reference: none (UE-only).
 
@@ -36,6 +46,7 @@
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationTuning.h"
 #include "Formation/FormationWallGroupRules.h"
+#include "Formation/FormationWallRules.h"
 #include "GameFramework/HUD.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
@@ -77,7 +88,36 @@ namespace FormationWallGroupSmoke
 		ECoverFacing WrapGoalFacing = ECoverFacing::Right;
 		int32 ShotsTaken = 0;
 		TWeakObjectPtr<ACameraActor> Camera;
+		/** Scene 4 (v2.4): the end face's cover slot, the settled looks / places, the worst drift while they hold. */
+		FCoverSlot SlotEEnd;
+		TArray<float> HeldLooks;
+		TArray<FVector2D> HeldPlaces;
+		float WorstLookDrift = 0.f;
+		float WorstPlaceDrift = 0.f;
+		/** Scene 5 (v2.5): the cover slot at A's middle, the approach's frames / misses, the leader's best along-the-wall look. */
+		FCoverSlot SlotAMid;
+		bool bApproachSeen = false;
+		float ApproachTime = 0.f;
+		float RearMissTime = 0.f;
+		float FlankTime = 0.f;
+		/** Scene 5: game time judged (after ApproachTurnSeconds), the last sample's game time (the ticker runs on real time, the game on a fixed step). */
+		float JudgedTime = 0.f;
+		double LastGameTime = -1.0;
+		float BestAlongDeg = 180.f;
+		FString FirstRearMiss;
 	};
+
+	/** Scene 4's thin wall E: along F from F -450 to F -50 at R -600 (40 cm thick); its free end face is at F -50, facing +F. */
+	constexpr float WallEFrom = -450.f;
+	constexpr float WallEEnd = -50.f;
+	constexpr float WallER = -600.f;
+	constexpr float WallEThickness = 40.f;
+	/** Scene 4: everyone in the wall pose this long before the coverage is judged; then the hold watched for flicker, s. */
+	constexpr float EndSettleSeconds = 2.f;
+	constexpr float EndHoldSeconds = 3.f;
+	/** Scene 5: the rear cover may need to turn round when the order comes (in this cluttered arena ClearLook keeps the patrol rear guard off
+	 * his 6 o'clock): a 180 deg turn takes the game ~1 s (the simulator turns faster: its check 14 allows 0.5 s) - game time, s. */
+	constexpr float ApproachTurnSeconds = 1.f;
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -520,7 +560,7 @@ namespace FormationWallGroupSmoke
 				Next(State, State.Stage + 1);
 				return true;
 			}
-			Next(State, State.Stage == 12 ? 99 : State.Stage + 1);
+			Next(State, State.Stage == 12 ? 20 : State.Stage + 1);
 			return true;
 		}
 		case 5:
@@ -551,7 +591,8 @@ namespace FormationWallGroupSmoke
 			}
 			if (State.Stage == 13)
 			{
-				return Finish(State, true);
+				Next(State, 20); // rules v2.4: the wall END
+				return true;
 			}
 			if (State.Stage == 5)
 			{
@@ -581,6 +622,343 @@ namespace FormationWallGroupSmoke
 			State.bLeaderArrived = false;
 			Next(State, 12);
 			return true;
+		}
+		case 20:
+		{
+			// Scene 4 (v2.4): the wall END. Out of cover, Solo; the thin wall E goes up; the navmesh rebuilds round it.
+			if (!State.bSectors)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: 4 the wall end: skipped with Codex.Formation.Sectors 0 (no wall layout)"));
+				return Finish(State, true);
+			}
+			ResetSquad(Squad, State, FVector2D(200.f, WallER));
+			SpawnBox(World, State, 0.5f * (WallEFrom + WallEEnd), WallER, WallEEnd - WallEFrom, WallEThickness, 300.f);
+			Next(State, 21);
+			return true;
+		}
+		case 21:
+		{
+			if (State.StageTime < 2.5f)
+			{
+				return true;
+			}
+			const bool bFound = FindSlot(World, State, WallEEnd, WallER, -State.F, State.SlotEEnd);
+			Check(State, bFound, TEXT("4: a cover slot at the thin wall E's end face"));
+			if (!bFound)
+			{
+				return Finish(State, false);
+			}
+			Squad->ExitSoloMode(false, 0.f); // group mode: the two others come up in the formation
+			Next(State, 22);
+			return true;
+		}
+		case 22:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true;
+			}
+			PC->ShowCoverPreview(Op, State.SlotEEnd);
+			PC->ConfirmCoverPreview(false);
+			Check(State, Squad->GetFormationKind() == EFormationKind::Wall && !PC->WasLastCoverConfirmSwitch(),
+				TEXT("4: the click on the end face's cover is the group cover order = the formation wall layout"));
+			State.StableSince = -1.f;
+			Next(State, 23);
+			return true;
+		}
+		case 23:
+		{
+			bool bAll = true;
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				const AOperativeCharacter* Each = Member(State, Index);
+				bAll &= Each && Each->IsInFormationWallPose() && !Each->IsMoving() && Each->GetVelocity().Size2D() < 5.f;
+			}
+			if (!bAll)
+			{
+				State.StableSince = -1.f;
+				if (State.StageTime < SceneCapSeconds)
+				{
+					return true;
+				}
+			}
+			else if (State.StableSince < 0.f)
+			{
+				State.StableSince = State.StageTime;
+			}
+			if (bAll && State.StageTime - State.StableSince < EndSettleSeconds)
+			{
+				return true;
+			}
+			Check(State, bAll, FString::Printf(TEXT("4: all three crouched in the wall layout at E's end after %.1f s"), State.StageTime));
+			float BasePct = 0.f;
+			float SpreadPct = 0.f;
+			const bool bSpread = Squad->IsFormationWallEndSpread(BasePct, SpreadPct);
+			Check(State, bSpread && BasePct < 80.f && SpreadPct >= 95.f, FString::Printf(TEXT("4: the layout knows it stands at a wall END - the face looks would hold %.0f %% "
+				"of the open arc, the spread looks %.0f %%"), BasePct, SpreadPct));
+			// The judged geometry: the world's box walls round the squad (E, A, D, ...) plus E itself (exact).
+			TArray<FFormationWall> Walls = Squad->GetFormationWorldWalls();
+			FFormationWall WallE;
+			WallE.A = FVector2D(Local(State, WallEFrom, WallER));
+			WallE.B = FVector2D(Local(State, WallEEnd, WallER));
+			WallE.Thickness = WallEThickness;
+			Walls.Add(WallE);
+			TArray<FVector2D> Positions;
+			TArray<float> Looks;
+			TArray<FVector> Feet;
+			FString Line;
+			State.HeldLooks.Reset();
+			State.HeldPlaces.Reset();
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				const AOperativeCharacter* Each = Member(State, Index);
+				Positions.Add(FVector2D(Each->GetActorLocation()));
+				Looks.Add(static_cast<float>(Each->GetSightFacing().Rotation().Yaw));
+				Feet.Add(Each->GetActorLocation() - FVector(0.f, 0.f, Each->GetSimpleCollisionHalfHeight()));
+				Line += FString::Printf(TEXT(" [%s look %.0f at (%.0f, %.0f)]"), *Each->DisplayName.ToString(), Looks.Last(), Positions.Last().X, Positions.Last().Y);
+			}
+			State.HeldLooks = Looks;
+			State.HeldPlaces = Positions;
+			const FFormationConfig& Config = FormationTuning::Get();
+			const FFormationArcCoverage Arc = FormationWallRules::OpenArcCoverage(Walls, Positions, Looks, Config.SightFov, Config.WallEndProbeDist);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: 4 the wall end:%s; open arc held %.1f %% (%d / %d probe points), %d walls"), *Line, Arc.Pct, Arc.Covered,
+				Arc.Open, Walls.Num());
+			Check(State, Arc.Pct >= 95.0, FString::Printf(TEXT("4: the open arc round the end is held (%.1f %% >= 95 %%)"), Arc.Pct));
+			for (const float Side : { 1.f, -1.f })
+			{
+				// 5 m back along each face, 1.5 m off it: inside the cone of somebody on that side with a clear line to it.
+				const FVector2D Point(Local(State, WallEEnd - 500.f, WallER + Side * 150.f));
+				bool bHeld = false;
+				for (int32 Index = 0; Index < 3; ++Index)
+				{
+					bHeld |= !FormationMath::SegmentBlocked(Positions[Index], Point, Walls, 1.0)
+						&& FormationMath::AngleBetween(Looks[Index], FormationMath::YawOf(Point - Positions[Index])) <= 0.5f * Fov(Member(State, Index));
+				}
+				Check(State, bHeld, FString::Printf(TEXT("4: the flank along E's %s face (5 m back) is inside a cone"), Side > 0.f ? TEXT("right") : TEXT("left")));
+			}
+			int32 Stares = 0;
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				Stares += StaresAtWall(World, State, Feet[Index], Looks[Index]) ? 1 : 0;
+			}
+			Check(State, Stares == 0, FString::Printf(TEXT("4: nobody faces a wall within 200 cm (%d)"), Stares));
+			State.WorstLookDrift = 0.f;
+			State.WorstPlaceDrift = 0.f;
+			Next(State, 24);
+			return true;
+		}
+		case 24:
+		{
+			// Stable: nobody's look or place moves while they hold (no flicker, no reshuffle).
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				const AOperativeCharacter* Each = Member(State, Index);
+				State.WorstLookDrift = FMath::Max(State.WorstLookDrift, FormationMath::AngleBetween(static_cast<float>(Each->GetSightFacing().Rotation().Yaw), State.HeldLooks[Index]));
+				State.WorstPlaceDrift = FMath::Max(State.WorstPlaceDrift, static_cast<float>(FVector2D::Distance(FVector2D(Each->GetActorLocation()), State.HeldPlaces[Index])));
+			}
+			if (State.StageTime < EndHoldSeconds)
+			{
+				return true;
+			}
+			float BasePct = 0.f;
+			float SpreadPct = 0.f;
+			Check(State, State.WorstLookDrift <= 10.f && State.WorstPlaceDrift <= 30.f && Squad->IsFormationWallEndSpread(BasePct, SpreadPct)
+				&& Squad->GetFormationKind() == EFormationKind::Wall, FString::Printf(TEXT("4: steady for %.0f s - looks moved at most %.1f deg, places %.0f cm, the layout kept"),
+				EndHoldSeconds, State.WorstLookDrift, State.WorstPlaceDrift));
+			if (State.bShot)
+			{
+				const FVector Centre = (Member(State, 0)->GetActorLocation() + Member(State, 1)->GetActorLocation() + Member(State, 2)->GetActorLocation()) / 3.f;
+				PlaceCamera(World, State, Centre - State.F * 650.f + FVector(0.f, 0.f, 1000.f), Centre - State.F * 100.f);
+			}
+			Next(State, 25);
+			return true;
+		}
+		case 25:
+		{
+			if (State.bShot)
+			{
+				if (State.StageTime < 2.f)
+				{
+					return true;
+				}
+				if (State.ShotsTaken < 4)
+				{
+					RequestShot(State, TEXT("wallgroup_4_wall_end"));
+					return true;
+				}
+				if (State.StageTime < 3.f)
+				{
+					return true;
+				}
+			}
+			Next(State, 30); // rules v2.5: the covered approach
+			return true;
+		}
+		case 30:
+		{
+			// Scene 5 (v2.5): patrol across the arena towards the long face of wall E (scene 4's), then the order to hug it (~9 m in).
+			ResetSquad(Squad, State, FVector2D(-200.f, 450.f));
+			Squad->ExitSoloMode(false, 0.f);
+			Next(State, 31);
+			return true;
+		}
+		case 31:
+		{
+			if (State.StageTime < 2.5f)
+			{
+				return true;
+			}
+			const bool bFound = FindSlot(World, State, 0.5f * (WallEFrom + WallEEnd), WallER + 0.5f * WallEThickness, -State.R, State.SlotAMid);
+			Check(State, bFound, TEXT("5: a cover slot in the middle of wall E's long face"));
+			if (!bFound)
+			{
+				return Finish(State, false);
+			}
+			Op->OrderMoveTo(Local(State, -250.f, -300.f, Op->GetSimpleCollisionHalfHeight()), false); // the patrol walk towards E
+			Next(State, 32);
+			return true;
+		}
+		case 32:
+		{
+			if (FVector::DotProduct(Op->GetActorLocation() - State.P, State.R) > 200.f && State.StageTime < 15.f) // on patrol (2.5 m walked): the order comes while he walks
+			{
+				return true;
+			}
+			PC->ShowCoverPreview(Op, State.SlotAMid);
+			PC->ConfirmCoverPreview(false);
+			Check(State, Squad->GetFormationKind() == EFormationKind::Wall, TEXT("5: on patrol, the click on E's cover is the formation wall layout"));
+			State.bApproachSeen = false;
+			State.ApproachTime = 0.f;
+			State.RearMissTime = 0.f;
+			State.FlankTime = 0.f;
+			State.JudgedTime = 0.f;
+			State.LastGameTime = -1.0;
+			State.BestAlongDeg = 180.f;
+			State.FirstRearMiss.Reset();
+			Next(State, 33);
+			return true;
+		}
+		case 33:
+		{
+			const TArray<FFormationApproachLook>& Looks = Squad->GetFormationApproachLooks();
+			const float NormalYaw = static_cast<float>(State.R.Rotation().Yaw); // E's long face's outward normal: back the way they came
+			// The approach = from the order until all three are within approach.arrive_dist of a wall slot (judged the same with the rule off).
+			const TArray<FFormationSlot>& WallSlotsNow = Squad->GetFormationWallSlots();
+			bool bAllIn = WallSlotsNow.Num() > 0;
+			for (int32 Index = 0; Index < 3 && bAllIn; ++Index)
+			{
+				const FVector2D Here(Member(State, Index)->GetActorLocation());
+				bool bNear = false;
+				for (const FFormationSlot& Slot : WallSlotsNow)
+				{
+					bNear |= FVector2D::Distance(Slot.Position, Here) <= FormationTuning::Get().ApproachArriveDist;
+				}
+				bAllIn = bNear;
+			}
+			if (!bAllIn && State.StageTime < SceneCapSeconds)
+			{
+				State.bApproachSeen = true;
+				const double Now = World->GetTimeSeconds();
+				const float Dt = State.LastGameTime < 0.0 ? 0.f : static_cast<float>(Now - State.LastGameTime);
+				State.LastGameTime = Now;
+				State.ApproachTime += Dt;
+				const float Lim = 0.5f * FormationTuning::Get().SightFov - 30.f; // the rear sector +-30 inside a cone (check 2's margin)
+				bool bRear = false;
+				bool bFlank = false;
+				FString Line;
+				for (int32 Index = 0; Index < 3; ++Index)
+				{
+					const float Look = static_cast<float>(Member(State, Index)->GetSightFacing().Rotation().Yaw);
+					bRear |= FormationMath::AngleBetween(Look, NormalYaw) <= Lim;
+					bFlank |= FormationMath::AngleBetween(Look, NormalYaw + 90.f) <= Lim || FormationMath::AngleBetween(Look, NormalYaw - 90.f) <= Lim;
+					Line += FString::Printf(TEXT(" %s %.0f"), *Member(State, Index)->DisplayName.ToString(), Look);
+				}
+				if (State.ApproachTime >= ApproachTurnSeconds)
+				{
+					State.JudgedTime += Dt;
+					State.FlankTime += bFlank ? Dt : 0.f;
+					if (!bRear)
+					{
+						State.RearMissTime += Dt;
+						if (State.FirstRearMiss.IsEmpty())
+						{
+							State.FirstRearMiss = FString::Printf(TEXT("t=%.2f s:%s"), State.ApproachTime, *Line);
+						}
+					}
+				}
+				for (const FFormationApproachLook& Look : Looks)
+				{
+					if (Look.Role == EFormationRole::Commander && Look.Duty == EFormationApproachDuty::Along && Look.Yaw.IsSet())
+					{
+						State.BestAlongDeg = FMath::Min(State.BestAlongDeg, FormationMath::AngleBetween(static_cast<float>(Op->GetSightFacing().Rotation().Yaw), Look.Yaw.GetValue()));
+					}
+				}
+				return true;
+			}
+			if (!State.bApproachSeen && State.StageTime < 3.f)
+			{
+				return true; // the approach begins with the next formation frame
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: 5 the covered approach: %.1f s, rear missed %.2f s%s, a flank held %.0f %%, the leader's best look along the wall %.0f deg off"),
+				State.ApproachTime, State.RearMissTime, State.FirstRearMiss.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (first %s)"), *State.FirstRearMiss),
+				State.JudgedTime > 0.f ? 100.f * State.FlankTime / State.JudgedTime : 0.f, State.BestAlongDeg);
+			Check(State, State.bApproachSeen && State.ApproachTime > 1.f, FString::Printf(TEXT("5: the squad walked a covered approach (%.1f s game time, %.1f s judged)"), State.ApproachTime, State.JudgedTime));
+			Check(State, State.RearMissTime <= 0.f, FString::Printf(TEXT("5: somebody held the rear all the way in (missed %.2f s)"), State.RearMissTime));
+			Check(State, State.JudgedTime > 0.5f && State.FlankTime >= 0.9f * State.JudgedTime,
+				FString::Printf(TEXT("5: somebody held a flank >= 90 %% of the way (%.0f %%)"), State.JudgedTime > 0.f ? 100.f * State.FlankTime / State.JudgedTime : 0.f));
+			Check(State, State.BestAlongDeg <= 30.f, FString::Printf(TEXT("5: the leader, first at the wall, looked along it (within %.0f deg of his along look)"), State.BestAlongDeg));
+			State.StableSince = -1.f;
+			Next(State, 34);
+			return true;
+		}
+		case 34:
+		{
+			// Then the plain wall layout: everyone crouched at the wall facing his layout look.
+			bool bAll = true;
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				const AOperativeCharacter* Each = Member(State, Index);
+				bAll &= Each && Each->IsInFormationWallPose() && !Each->IsMoving();
+			}
+			if (!bAll)
+			{
+				State.StableSince = -1.f;
+				if (State.StageTime < SceneCapSeconds)
+				{
+					return true;
+				}
+			}
+			else if (State.StableSince < 0.f)
+			{
+				State.StableSince = State.StageTime;
+			}
+			if (bAll && State.StageTime - State.StableSince < 1.5f)
+			{
+				return true;
+			}
+			const TArray<FFormationSlot>& Slots = Squad->GetFormationWallSlots();
+			float Worst = 0.f;
+			FString Line;
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				const AOperativeCharacter* Each = Member(State, Index);
+				const FVector2D Here(Each->GetActorLocation());
+				const FFormationSlot* Nearest = nullptr;
+				for (const FFormationSlot& Slot : Slots)
+				{
+					if (!Nearest || FVector2D::Distance(Slot.Position, Here) < FVector2D::Distance(Nearest->Position, Here))
+					{
+						Nearest = &Slot;
+					}
+				}
+				const float Look = static_cast<float>(Each->GetSightFacing().Rotation().Yaw);
+				const float Off = Nearest ? FormationMath::AngleBetween(Look, Nearest->Yaw) : 180.f;
+				Worst = FMath::Max(Worst, Off);
+				Line += FString::Printf(TEXT(" [%s look %.0f, layout %.0f]"), *Each->DisplayName.ToString(), Look, Nearest ? Nearest->Yaw : 0.f);
+			}
+			Check(State, bAll && Squad->GetFormationApproachLooks().Num() == 0 && Worst <= 20.f,
+				FString::Printf(TEXT("5: then the normal wall layout - everyone crouched facing his layout look (worst %.0f deg):%s"), Worst, *Line));
+			return Finish(State, true);
 		}
 		case 99:
 			return Finish(State, true);
