@@ -131,6 +131,25 @@ export interface WeaponTuningFile {
   vehicle_weapons?: Record<string, Record<string, number | boolean>>;
 }
 
+/** UE (docs/systems/environment-weather.md): the level's day cycle / weather start ("environment"); every key optional. */
+export interface EnvironmentConfig {
+  /** Clock and weather never move on this level (Demo 01 tutorial: Night + Snowfall). */
+  locked?: boolean;
+  start_hour?: number;
+  /** Ladder state Clear | Overcast | Snowfall | Blizzard; a temperate level also takes Sunny | SunnyDay | Rain | Storm. */
+  weather?: 'Clear' | 'Overcast' | 'Snowfall' | 'Blizzard' | 'Sunny' | 'SunnyDay' | 'Rain' | 'Storm';
+  seed?: number;
+  /** false = the weather presenter is not spawned (the map's authored lighting stays). */
+  visuals?: boolean;
+  /** Start snow cover 0..1 (arctic default environment.json snow_cover_start; temperate default 0). */
+  snow_cover?: number;
+  /** Section 17 (2026-10-26): arctic (default, the whole game) | temperate (narrative levels: sunny day / rain, no snow growth). */
+  climate?: 'arctic' | 'temperate';
+  /** Section 17 (temperate): start wetness / puddles 0..1 (absent: wet when the level starts in rain / storm). */
+  wetness?: number;
+  puddles?: number;
+}
+
 export interface LevelConfig {
   $schema?: string;
   level_id: string;
@@ -169,6 +188,8 @@ export interface LevelConfig {
   start_fade_seconds?: number;
   /** UE (2026-10-22 d): false = no intro briefing at the mission start of this level (default true). */
   intro_dialogue?: boolean;
+  /** UE: day cycle / weather / climate start of this level (EnvironmentConfig). */
+  environment?: EnvironmentConfig;
   waves: WaveConfig[];
 }
 

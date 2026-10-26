@@ -248,6 +248,11 @@ namespace SnowOverlayRules
 		return FMath::Max(SnowAmount, 0.f) + FMath::Max(FrostAmount, 0.f) > 0.01f;
 	}
 
+	bool ShouldShowWetOverlay(float Wetness, float PuddleAmount)
+	{
+		return FMath::Max(Wetness, 0.f) > 0.005f || FMath::Max(PuddleAmount, 0.f) > 0.005f;
+	}
+
 	TArray<int32> OrderCandidates(const TArray<FSnowCandidate>& Candidates, float MaxDistanceCm, int32 MaxCount, bool bKeepAll)
 	{
 		const double MaxSq = MaxDistanceCm > 0.f ? FMath::Square(static_cast<double>(MaxDistanceCm)) : -1.0;

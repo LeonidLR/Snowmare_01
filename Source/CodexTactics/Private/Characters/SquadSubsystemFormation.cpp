@@ -23,6 +23,7 @@
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTuning.h"
 #include "Formation/FormationWallRules.h"
+#include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
 #include "HAL/IConsoleManager.h"
 
@@ -195,7 +196,8 @@ bool USquadSubsystem::IsFormationBlizzard() const
 {
 	// v1.2 (user Q4 = A): open ground in a blizzard -> the blizzard tight diamond.
 	const UEnvironmentSubsystem* Environment = GetWorld() ? GetWorld()->GetSubsystem<UEnvironmentSubsystem>() : nullptr;
-	return Environment && Environment->GetWeather() == EWeatherState::Blizzard;
+	// User decision 2026-10-26: the blizzard diamond only in the arctic blizzard, never in a temperate Storm (the same ladder rung).
+	return Environment && Environment->GetWeather() == EWeatherState::Blizzard && EnvironmentRules::IsArcticBlizzardClimate(Environment->GetClimate());
 }
 
 EFormationTerrainClass USquadSubsystem::StepFormationTerrain(const AOperativeCharacter& LeaderRef)

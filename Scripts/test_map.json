@@ -36,7 +36,7 @@
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke",
-    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FallenGearSmoke"
+    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -48,6 +48,8 @@
   },
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run; realTime = wall clock instead of the fixed step (smokeDefaults); fixedStepFps = this smoke's own fixed step; rendered = a real RHI offscreen (-RenderOffscreen -ResX=1280 -ResY=720) instead of -nullrhi; _why = the reason of an override",
+    "ClimateSmoke": { "map": "/Game/Environment/Weather/Test/L_WeatherRainTest", "_why": "climate profiles 2026-10-26 (section 17): the temperate test map (its level JSON L_WeatherRainTest.json is read by map name)" },
+    "RainSmoke": { "rendered": true, "map": "/Game/Environment/Weather/Test/L_WeatherRainTest", "timeout": 600, "_why": "rain visuals 2026-10-26 (section 18): the rain / puddle Niagara systems, the screen-drops post process and the wet overlays never load without a renderer" },
     "StartLightingSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 400, "_why": "start lighting 2026-10-25 (designer: a sunset first, then night; snow late): the start state applied before the first world tick, the own rig without the level lights, snap on a state jump" },
     "StartSnowSmoke": { "rendered": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "start lighting 2026-10-25: the falling snow pre-warmed and at full density from the first frames; the snow FX never spawns without a renderer" },
     "SnowIndoorSmoke": { "rendered": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "falling snow 2026-10-23 (user: snow fell INSIDE the hut): a pixel A/B of the snow Niagara system under the fishermen's hut roof in a blizzard, indoor kill off (control) / on / outside; the snow FX never spawns without a renderer" },
@@ -862,6 +864,20 @@
       "globs": ["Source/**/Environment/WeatherPresenterActor*", "Source/**/Environment/WeatherPresetAsset*", "Source/**/Environment/WeatherVisualTypes*", "Source/**/Environment/EnvironmentVisual*", "Source/**/Debug/WeatherSmoke*", "Source/**/Debug/EnvironmentShots*", "Source/CodexTacticsTests/Private/Environment/EnvironmentVisualsTest*", "Content/Environment/Weather/Presets/**", "Scripts/Editor/create_weather_presets.py"],
       "tests": ["CodexTactics.Environment.Visuals", "CodexTactics.LevelJson"],
       "smokes": ["WeatherSmoke", "WeatherLakeSmoke", "EnvironmentSmoke", "HordeIntroSmoke", "LevelWaveSmoke"]
+    },
+    {
+      "name": "climate-profiles",
+      "_comment": "2026-10-26 environment section 17 (user decision: rain / sunny only on specific narrative levels, the game stays arctic): EClimateProfile, the temperate presets DA_Weather_Temperate_*, wetness / puddles, the MPC rain scalars, Codex.Env.Climate, the test map L_WeatherRainTest. Arctic must stay exactly as before: the weather / lake / tutorial / factory smokes run too.",
+      "globs": ["Source/**/Environment/EnvironmentRules*", "Source/**/Environment/EnvironmentTypes*", "Source/**/Environment/EnvironmentSubsystem*", "Source/**/Environment/WeatherPresenterActor*", "Source/**/Environment/WeatherPresetAsset*", "Source/**/Environment/EnvironmentVisualRules*", "Source/**/Data/EnvironmentTuning*", "Source/**/Debug/ClimateSmoke*", "Source/CodexTacticsTests/Private/Environment/EnvironmentClimateTest*", "Content/Data/Environment/environment.json", "Content/Data/LevelJson/L_WeatherRainTest.json", "Content/Environment/Weather/Test/**", "Content/Environment/Weather/Presets/**", "Content/Environment/Weather/MPC/**", "Scripts/Editor/create_weather_rain_test_map.py", "Scripts/Editor/create_weather_presets.py", "Scripts/Editor/create_environment_mpc.py"],
+      "tests": ["CodexTactics.Environment", "CodexTactics.LevelJson", "CodexTactics.Save"],
+      "smokes": ["ClimateSmoke", "ClimateArcticSmoke", "WeatherSmoke", "WeatherLakeSmoke", "TutorialSmoke", "FrozenFactoryStartSmoke"]
+    },
+    {
+      "name": "rain-visuals",
+      "_comment": "2026-10-26 environment section 18 (user decisions: rain only on temperate narrative levels, screen drops ON, tunable without code): UWeatherRainFxComponent + DA_RainFX (falling rain, puddle splashes, screen drops, storm lightning), the wet overlays (UWeatherSnowOverlayComponent wet mode, M_WetOverlay / M_WetGroundOverlay), MF_RainWetSurface in M_Landscape_Master. Arctic must stay exactly as before (no rain component, snow overlays untouched).",
+      "globs": ["Source/**/Environment/WeatherRainFx*", "Source/**/Environment/RainFxSettings*", "Source/**/Environment/WeatherSnowOverlayComponent*", "Source/**/Environment/WeatherSnowFxComponent*", "Source/**/Environment/SnowOverlayRules*", "Source/**/Environment/WeatherPresenterActor*", "Source/**/Debug/RainSmoke*", "Source/**/Debug/EnvironmentRainShots*", "Source/CodexTacticsTests/Private/Environment/EnvironmentRainFxTest*", "Content/Environment/Weather/Rain/**", "Content/VFX/Materials/M_Landscape_Master*", "Scripts/Editor/create_weather_rain_fx.py", "Scripts/Editor/create_wet_surface_materials.py", "Scripts/Editor/landscape_rain_patch.py", "Scripts/Editor/rain_hlsl.py"],
+      "tests": ["CodexTactics.Environment"],
+      "smokes": ["RainSmoke", "ClimateSmoke", "ClimateArcticSmoke", "WeatherSmoke", "WeatherLakeSmoke", "TutorialSmoke", "FrozenFactoryStartSmoke"]
     },
     {
       "name": "blizzard-walk",

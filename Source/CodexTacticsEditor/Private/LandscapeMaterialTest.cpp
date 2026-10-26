@@ -3,6 +3,7 @@
 #include "LandscapeAuthoringLibrary.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionComponentMask.h"
+#include "Materials/MaterialExpressionFunctionInput.h"
 #include "Materials/MaterialExpressionMaterialFunctionCall.h"
 #include "Materials/MaterialExpressionParameter.h"
 #include "Materials/MaterialExpressionPixelNormalWS.h"
@@ -72,6 +73,28 @@ namespace LandscapeMaterialTestLocal
 		const UMaterialExpressionMaterialFunctionCall* Call = Cast<UMaterialExpressionMaterialFunctionCall>(Input.Expression);
 		return Call ? Call->MaterialFunction.Get() : nullptr;
 	}
+
+	/** Section 18: the expression input named InputName of a function call node (null when missing). */
+	const FExpressionInput* CallInput(const FExpressionInput& Output, const TCHAR* InputName)
+	{
+		const UMaterialExpressionMaterialFunctionCall* Call = Cast<UMaterialExpressionMaterialFunctionCall>(Output.Expression);
+		for (const FFunctionExpressionInput& Each : Call ? Call->FunctionInputs : TArray<FFunctionExpressionInput>())
+		{
+			if (Each.ExpressionInput && Each.ExpressionInput->InputName == FName(InputName))
+			{
+				return &Each.Input;
+			}
+		}
+		return nullptr;
+	}
+
+	const UMaterialFunctionInterface* CalledFunctionVia(const FExpressionInput& Output, const TCHAR* InputName)
+	{
+		const FExpressionInput* Input = CallInput(Output, InputName);
+		return Input ? CalledFunction(*Input) : nullptr;
+	}
+
+	const TCHAR* RainFunctionPath = TEXT("/Game/Environment/Weather/Rain/Materials/MF_RainWetSurface.MF_RainWetSurface");
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLandscapeMaterialGraphTest, "CodexTactics.Environment.LandscapeMaterial.Graph",
@@ -165,11 +188,19 @@ bool FLandscapeMaterialGraphTest::RunTest(const FString&)
 	{
 		TestNotNull(*FString::Printf(TEXT("%s exists"), Path), LoadObject<UMaterialFunctionInterface>(nullptr, Path));
 	}
-	TestTrue(TEXT("BaseColor <- MF_SnowInteraction"), Interaction && CalledFunction(Data->BaseColor) == Interaction);
-	TestTrue(TEXT("Roughness <- MF_SnowInteraction"), Interaction && CalledFunction(Data->Roughness) == Interaction);
-	TestTrue(TEXT("Normal <- MF_SnowInteraction"), Interaction && CalledFunction(Data->Normal) == Interaction);
+	// Section 18: BaseColor / Roughness / Normal / Specular go through MF_RainWetSurface (neutral at Wetness 0), fed by the snow functions.
+	const UMaterialFunctionInterface* Rain = LoadObject<UMaterialFunctionInterface>(nullptr, RainFunctionPath);
+	TestNotNull(TEXT("MF_RainWetSurface exists"), Rain);
+	TestTrue(TEXT("BaseColor <- MF_RainWetSurface <- MF_SnowInteraction"), Rain && CalledFunction(Data->BaseColor) == Rain
+		&& Interaction && CalledFunctionVia(Data->BaseColor, TEXT("BaseColor")) == Interaction);
+	TestTrue(TEXT("Roughness <- MF_RainWetSurface <- MF_SnowInteraction"), Rain && CalledFunction(Data->Roughness) == Rain
+		&& Interaction && CalledFunctionVia(Data->Roughness, TEXT("Roughness")) == Interaction);
+	TestTrue(TEXT("Normal <- MF_RainWetSurface <- MF_SnowInteraction"), Rain && CalledFunction(Data->Normal) == Rain
+		&& Interaction && CalledFunctionVia(Data->Normal, TEXT("Normal")) == Interaction);
 	TestTrue(TEXT("AO <- MF_SnowInteraction"), Interaction && CalledFunction(Data->AmbientOcclusion) == Interaction);
-	TestTrue(TEXT("Specular <- MF_SnowSurface"), Surface && CalledFunction(Data->Specular) == Surface);
+	TestTrue(TEXT("Specular <- MF_RainWetSurface <- MF_SnowSurface"), Rain && CalledFunction(Data->Specular) == Rain
+		&& Surface && CalledFunctionVia(Data->Specular, TEXT("Specular")) == Surface);
+	TestTrue(TEXT("Emissive <- MF_SnowSurface (not rerouted)"), Surface && CalledFunction(Data->EmissiveColor) == Surface);
 	int32 PowderCalls = 0;
 	for (UMaterialExpression* Expression : Material->GetExpressions())
 	{

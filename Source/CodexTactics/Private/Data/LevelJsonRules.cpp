@@ -131,18 +131,35 @@ FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonOb
 		Settings.bHasStartHour = true;
 		Settings.StartHour = FMath::Clamp(static_cast<float>(Number), 0.f, 24.f);
 	}
+	// Section 17: the climate first - the weather names a temperate level may use depend on it.
+	FString ClimateName;
+	if (Environment.TryGetStringField(TEXT("climate"), ClimateName))
+	{
+		EClimateProfile Climate = EClimateProfile::Arctic;
+		if (EnvironmentRules::ClimateFromString(ClimateName, Climate))
+		{
+			Settings.Climate = Climate;
+		}
+		else if (OutError)
+		{
+			*OutError = FString::Printf(TEXT("environment.climate: unknown climate '%s' (arctic / temperate); arctic"), *ClimateName);
+		}
+	}
 	FString WeatherName;
 	if (Environment.TryGetStringField(TEXT("weather"), WeatherName))
 	{
 		EWeatherState Weather = EWeatherState::Overcast;
-		if (EnvironmentRules::WeatherFromString(WeatherName, Weather))
+		if (EnvironmentRules::WeatherFromString(Settings.Climate, WeatherName, Weather))
 		{
 			Settings.bHasWeather = true;
 			Settings.Weather = Weather;
 		}
 		else if (OutError)
 		{
-			*OutError = FString::Printf(TEXT("environment.weather: unknown weather '%s' (Clear / Overcast / Snowfall / Blizzard); ignored"), *WeatherName);
+			const FString Error = Settings.Climate == EClimateProfile::Temperate
+				? FString::Printf(TEXT("environment.weather: unknown weather '%s' (Sunny / Overcast / Rain / Storm or Clear / Snowfall / Blizzard); ignored"), *WeatherName)
+				: FString::Printf(TEXT("environment.weather: unknown weather '%s' (Clear / Overcast / Snowfall / Blizzard; Sunny / Rain / Storm only with \"climate\": \"temperate\"); ignored"), *WeatherName);
+			*OutError = OutError->IsEmpty() ? Error : *OutError + TEXT("; ") + Error;
 		}
 	}
 	if (Environment.TryGetNumberField(TEXT("seed"), Number))
@@ -159,6 +176,17 @@ FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonOb
 	{
 		Settings.bHasSnowCover = true;
 		Settings.SnowCover = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
+	}
+	// Section 17 (temperate): the start wetness / puddles of a locked / fresh level (0..1).
+	if (Environment.TryGetNumberField(TEXT("wetness"), Number))
+	{
+		Settings.bHasWetness = true;
+		Settings.Wetness = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
+	}
+	if (Environment.TryGetNumberField(TEXT("puddles"), Number))
+	{
+		Settings.bHasPuddles = true;
+		Settings.Puddles = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
 	}
 	return Settings;
 }

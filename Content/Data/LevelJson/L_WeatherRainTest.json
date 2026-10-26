@@ -1,0 +1,30 @@
+{
+  "$schema": "../Schemas/level_config.schema.json",
+  "level_id": "L_WeatherRainTest",
+  "level_name": "Weather Rain Test",
+  "description": "Agents' test map of the TEMPERATE climate profile (docs/systems/environment-weather.md section 17; /Game/Environment/Weather/Test/L_WeatherRainTest, built by Scripts/Editor/create_weather_rain_test_map.py): a floor, a hut and props, no lighting actors (the weather presenter's own rig lights it). A sunny day / overcast / rain / storm on the same ladder, no snow growth, wetness and puddles. Movement only: the fight never starts by itself (combat_start button), no intro briefing. ONE small wave only because the level file must hold a valid wave (CodexTactics.LevelJson.AllFilesParse). Smoke: CodexTactics.ClimateSmoke.",
+  "combat_start": "button",
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "intro_dialogue": false,
+  "horde_enabled": false,
+  "environment": {
+    "climate": "temperate",
+    "start_hour": 12
+  },
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        { "enemy_type": "FROSTBITTEN", "count": 2, "spawn_lane": "ANY", "spawn_delay_sec": 1, "initial_delay_sec": 0 }
+      ],
+      "wave_modifiers": { "enemy_hp_mult": 1, "enemy_damage_mult": 1, "enemy_speed_mult": 1, "cold_drain_mult": 1 }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  }
+}

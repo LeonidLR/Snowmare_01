@@ -29,7 +29,10 @@
       "properties": {
         "locked": { "type": "boolean", "default": false },
         "start_hour": { "type": "number", "minimum": 0, "maximum": 24 },
-        "weather": { "type": "string", "enum": ["Clear", "Overcast", "Snowfall", "Blizzard"] },
+        "weather": { "type": "string", "enum": ["Clear", "Overcast", "Snowfall", "Blizzard", "Sunny", "SunnyDay", "Rain", "Storm"], "description": "The ladder state (Clear / Overcast / Snowfall / Blizzard); a temperate level (climate) also takes Sunny / SunnyDay (= Clear), Rain (= Snowfall), Storm (= Blizzard)" },
+        "climate": { "type": "string", "enum": ["arctic", "temperate"], "default": "arctic", "description": "Section 17 (user decision 2026-10-26): the climate profile. arctic = the whole game (winter ladder, snow, cold); temperate = a narrative level with a sunny day / overcast / rain / storm on the same ladder, no snow growth, mild cold (environment.json temperate), wetness and puddles. A level entered from a level of another climate starts its weather over (the time of day continues)" },
+        "wetness": { "type": "number", "minimum": 0, "maximum": 1, "description": "Section 17 (temperate): the start wetness of the ground when the level is locked or starts fresh for its climate; absent = environment.json temperate.start_wetness_<rain|storm> in rain / storm, else 0" },
+        "puddles": { "type": "number", "minimum": 0, "maximum": 1, "description": "Section 17 (temperate): the start puddle amount (same rule as wetness)" },
         "seed": { "type": "integer" },
         "visuals": { "type": "boolean", "default": true, "description": "Environment phase 3: the weather presenter drives the lighting (sun / moon / sky light / fog / post-process by hour and weather; volumetric clouds off); false = the map's authored lighting stays" },
         "snow_cover": { "type": "number", "minimum": 0, "maximum": 1, "description": "Environment phase 4: the start snow cover (0 bare .. 1 fully white) when the level is locked or starts fresh (no previous level to continue); absent = environment.json snow_cover_start. It grows while it snows and never recedes" }

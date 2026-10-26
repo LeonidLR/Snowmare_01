@@ -163,6 +163,12 @@ namespace SnowOverlayRules
 	/** The overlay is worth drawing at all: snow + frost above a hair (0 = remove it everywhere, no extra pass). */
 	CODEXTACTICS_API bool ShouldShowOverlay(float SnowAmount, float FrostAmount);
 
+	/**
+	 * Section 18 (temperate levels): the wet overlays (M_WetOverlay on objects, M_WetGroundOverlay on the ground slabs) show while the ground
+	 * is wet or holds puddles (MPC Wetness / PuddleAmount > 0.005); a dry level shows nothing (no extra pass).
+	 */
+	CODEXTACTICS_API bool ShouldShowWetOverlay(float Wetness, float PuddleAmount);
+
 	/** One candidate for the selection: its squared distance to the view focus. */
 	struct FSnowCandidate
 	{

@@ -9,7 +9,7 @@
 #include "HAL/IConsoleManager.h"
 
 // Dev console of the day cycle / weather (docs/systems/environment-weather.md, phase 1): Codex.Env.Dump / SetWeather / SetHour /
-// ClockScale / Seed / SnowCover / ObjectSnow / WindFrom. Not smokes (nothing is verified); test_map.json lists them under nonSmokeDebugCommands.
+// ClockScale / Seed / SnowCover / ObjectSnow / WindFrom; section 17: Climate (and SetWeather takes the temperate names). Not smokes (nothing is verified); test_map.json lists them under nonSmokeDebugCommands.
 namespace EnvironmentCommands
 {
 	UEnvironmentSubsystem* Env(const UWorld* World, const TCHAR* Command)
@@ -32,16 +32,35 @@ namespace EnvironmentCommands
 
 	void SetWeather(const TArray<FString>& Args, UWorld* World)
 	{
+		UEnvironmentSubsystem* Environment = Env(World, TEXT("Codex.Env.SetWeather"));
+		// Section 17: on a temperate level its own names too (Sunny / SunnyDay / Rain / Storm).
+		const EClimateProfile Climate = Environment ? Environment->GetClimate() : EClimateProfile::Arctic;
 		EWeatherState Weather = EWeatherState::Overcast;
-		if (Args.Num() < 1 || !EnvironmentRules::WeatherFromString(Args[0], Weather))
+		if (Args.Num() < 1 || !EnvironmentRules::WeatherFromString(Climate, Args[0], Weather))
 		{
-			UE_LOG(LogCodexTactics, Warning, TEXT("Codex.Env.SetWeather <Clear|Overcast|Snowfall|Blizzard> [instant]"));
+			UE_LOG(LogCodexTactics, Warning, TEXT("Codex.Env.SetWeather <Clear|Overcast|Snowfall|Blizzard> [instant]; on a temperate level also <Sunny|SunnyDay|Rain|Storm> (climate now %s)"),
+				*EnvironmentRules::ClimateToString(Climate));
 			return;
 		}
 		const bool bInstant = Args.Num() >= 2 && (Args[1].Equals(TEXT("instant"), ESearchCase::IgnoreCase) || Args[1] == TEXT("1") || Args[1].Equals(TEXT("true"), ESearchCase::IgnoreCase));
-		if (UEnvironmentSubsystem* Environment = Env(World, TEXT("Codex.Env.SetWeather")))
+		if (Environment)
 		{
 			Environment->ForceWeather(Weather, bInstant);
+		}
+	}
+
+	void SwitchClimate(const TArray<FString>& Args, UWorld* World)
+	{
+		EClimateProfile Climate = EClimateProfile::Arctic;
+		if (Args.Num() < 1 || !EnvironmentRules::ClimateFromString(Args[0], Climate))
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Codex.Env.Climate <arctic|temperate>: switches the climate profile (debug; the weather starts over, the hour continues)"));
+			return;
+		}
+		if (UEnvironmentSubsystem* Environment = Env(World, TEXT("Codex.Env.Climate")))
+		{
+			Environment->SetClimate(Climate);
+			UE_LOG(LogCodexTactics, Display, TEXT("Codex.Env.Climate: %s"), *Environment->Describe());
 		}
 	}
 
@@ -155,6 +174,23 @@ namespace EnvironmentCommands
 		TEXT("Codex.Env.WindFrom <+X|-X|+Y|-Y|yaw deg|off>: the wind comes from that side (debug override of the presenter's drifting wind; directional snow, flakes, MPC)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&WindFrom));
 
+	static FAutoConsoleCommandWithWorldAndArgs CommandWetness(TEXT("Codex.Env.Wetness"),
+		TEXT("Codex.Env.Wetness <0..1> [puddles 0..1]: sets the ground wetness and the puddles of a temperate level (section 18, preview / tuning of the wet look; the weather keeps stepping them)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Codex.Env.Wetness <0..1> [puddles 0..1]"));
+				return;
+			}
+			if (UEnvironmentSubsystem* Environment = Env(World, TEXT("Codex.Env.Wetness")))
+			{
+				const float Wetness = FCString::Atof(*Args[0]);
+				Environment->SetWetness(Wetness, Args.Num() > 1 ? FCString::Atof(*Args[1]) : Environment->GetPuddleAmount());
+				UE_LOG(LogCodexTactics, Display, TEXT("Codex.Env.Wetness: %s"), *Environment->Describe());
+			}
+		}));
+
 	static FAutoConsoleCommandWithWorldAndArgs CommandSnowCover(TEXT("Codex.Env.SnowCover"),
 		TEXT("Codex.Env.SnowCover <0..1>: sets the persistent snow cover (FEnvironmentState::SnowAmount; it then grows while it snows, never recedes)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&SnowCover));
@@ -164,8 +200,12 @@ namespace EnvironmentCommands
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Dump));
 
 	static FAutoConsoleCommandWithWorldAndArgs CommandSetWeather(TEXT("Codex.Env.SetWeather"),
-		TEXT("Codex.Env.SetWeather <Clear|Overcast|Snowfall|Blizzard> [instant]: blends to that weather now (instant: in force at once)."),
+		TEXT("Codex.Env.SetWeather <Clear|Overcast|Snowfall|Blizzard> [instant]: blends to that weather now (instant: in force at once). A temperate level also takes Sunny|SunnyDay|Rain|Storm."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&SetWeather));
+
+	static FAutoConsoleCommandWithWorldAndArgs CommandClimate(TEXT("Codex.Env.Climate"),
+		TEXT("Codex.Env.Climate <arctic|temperate>: switches the climate profile at runtime (debug, section 17): the weather / snow / wetness start over for it, the hour continues."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&SwitchClimate));
 
 	static FAutoConsoleCommandWithWorldAndArgs CommandSetHour(TEXT("Codex.Env.SetHour"),
 		TEXT("Codex.Env.SetHour <h>: sets the game clock (0-24)."),

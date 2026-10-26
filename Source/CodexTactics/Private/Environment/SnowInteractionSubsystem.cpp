@@ -10,6 +10,7 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Environment/SnowInteractionRules.h"
 #include "Environment/SnowStampSet.h"
 #include "Environment/WeatherPresenterActor.h"
@@ -533,7 +534,10 @@ void USnowInteractionSubsystem::Tick(float DeltaTime)
 			Tuning.FreshSnowFadeSeconds)
 		: 0.f;
 
-	const bool bWant = bVisuals && IsFeatureEnabled();
+	// Section 17: no snow on the ground of a temperate level - nothing to stamp (the RT stays empty, the window disabled).
+	const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World);
+	const bool bTemperate = Environment && Environment->IsInitialised() && Environment->GetClimate() == EClimateProfile::Temperate;
+	const bool bWant = bVisuals && IsFeatureEnabled() && !bTemperate;
 	if (bWant && !bActive)
 	{
 		Activate();

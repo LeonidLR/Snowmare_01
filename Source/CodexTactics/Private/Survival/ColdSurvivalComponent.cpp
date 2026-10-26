@@ -198,7 +198,8 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 		if (EnvironmentRules::ShouldApplyCold(EnvironmentConfig, EnvironmentSubsystem->IsLocked()))
 		{
 			Environment.WeatherMultiplier = EnvironmentRules::GetBlendedColdWeatherMultiplier(EnvironmentConfig, EnvironmentSubsystem->GetStateRef());
-			Environment.PhaseMultiplier = EnvironmentRules::GetColdPhaseMultiplier(EnvironmentConfig, EnvironmentSubsystem->GetPhase());
+			// Section 17: a temperate level's mild table (an arctic level: the arctic multipliers exactly as before).
+			Environment.PhaseMultiplier = EnvironmentRules::GetColdPhaseMultiplier(EnvironmentConfig, EnvironmentSubsystem->GetClimate(), EnvironmentSubsystem->GetPhase());
 		}
 	}
 

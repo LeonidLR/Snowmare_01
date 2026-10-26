@@ -252,8 +252,8 @@ void UCharacterSnowSubsystem::Step(float DeltaSeconds)
 	Shared.WindStrength = Environment->GetWindStrength();
 	Shared.ObjectMeltRate = EnvironmentRules::GetObjectSnowMeltRate(Config, State, Environment->GetSunElevation());
 	const FVector WorldWind = Environment->GetWindDirection();
-	const float Snowing = FMath::Clamp(EnvironmentRules::GetWeatherAmount(Config, State, EWeatherState::Snowfall)
-		+ EnvironmentRules::GetWeatherAmount(Config, State, EWeatherState::Blizzard), 0.f, 1.f);
+	// Section 17: 0 on a temperate level (its Snowfall / Blizzard rungs are rain / storm); the arctic sum as before.
+	const float Snowing = EnvironmentRules::GetSnowingAmount(Config, State);
 
 	// Candidates from the registries (no actor scan), nearest the camera first.
 	FVector Eye = FVector::ZeroVector;

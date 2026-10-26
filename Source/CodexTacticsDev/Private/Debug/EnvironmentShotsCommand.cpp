@@ -20,6 +20,10 @@
 // UI removed); timelapse_<map>/frame_NNNN.png at 10 fps (encode: ffmpeg -y -framerate 10 -i frame_%04d.png -vf scale=960:-2 -c:v libx264
 // -pix_fmt yuv420p -crf 26 out.mp4).
 //
+// Mode "visuals climate" (section 17, the Temperate climate profile; on /Game/Environment/Weather/Test/L_WeatherRainTest):
+//   -ExecCmds="CodexTactics.EnvironmentShots visuals climate"  -> Saved/Screenshots/Environment/climate/<map>_<SunnyDay|Overcast|Rain|Storm>_<hhmm>.png
+// for SunnyDay 12:00, Overcast 12:00, Rain 12:00, Storm 12:00, SunnyDay 07:00, Rain 23:00 (the same fixed view; names by the level's climate).
+//
 // Mode "snowperf" (falling snow cost): -ExecCmds="CodexTactics.EnvironmentShots snowperf [<subdir>]" -> log lines "[SnowFxPerf]" (GPU / render / game ms, draws)
 // and stills Saved/Screenshots/Environment/snowperf/<map>_<state>[_far].png for snow FX off / Snowfall / Blizzard at the default and the max zoom
 // (MovementTest: wave 2 is started first).
@@ -112,6 +116,12 @@ namespace EnvironmentCharSnowShots
 // Mode "snowfx2" (environment section 12.b, the falling snow after the 2026-10-23 feedback: DA_SnowFX, smaller flakes, no snow indoors)
 // lives in EnvironmentSnowFx2ShotsCommand.cpp.
 namespace EnvironmentSnowFx2Shots
+{
+	void Run(const TArray<FString>& Args);
+}
+
+// Modes "rain" / "rainperf" (environment section 18, the rain visuals of a temperate level) live in EnvironmentRainShotsCommand.cpp.
+namespace EnvironmentRainShots
 {
 	void Run(const TArray<FString>& Args);
 }
@@ -693,6 +703,12 @@ namespace EnvironmentShots
 			{ EWeatherState::Blizzard, 12.f }, { EWeatherState::Clear, 23.f }, { EWeatherState::Snowfall, 23.f },
 		};
 
+		/** Section 17: the temperate stills (SunnyDay / Overcast / Rain / Storm at noon, a sunny morning, a rainy night). */
+		const FShot ClimateShots[] = {
+			{ EWeatherState::Clear, 12.f }, { EWeatherState::Overcast, 12.f }, { EWeatherState::Snowfall, 12.f }, { EWeatherState::Blizzard, 12.f },
+			{ EWeatherState::Clear, 7.f }, { EWeatherState::Snowfall, 23.f },
+		};
+
 		enum class EStep : uint8 { Warmup, Setup, Settle, Write, DaySetup, Day, Done };
 
 		struct FVisualsRunner
@@ -703,12 +719,24 @@ namespace EnvironmentShots
 			int32 ShotIndex = 0;
 			int32 ClipCount = 0;
 			bool bTimelapse = false;
+			/** Section 17: "visuals climate" (ClimateShots into Environment/climate). */
+			bool bClimate = false;
 			FString MapName;
 			FString Dir;
 			FDelegateHandle EndFrameHandle;
 		};
 
 		TSharedPtr<FVisualsRunner> VRunner;
+
+		int32 ShotCount()
+		{
+			return VRunner && VRunner->bClimate ? static_cast<int32>(UE_ARRAY_COUNT(ClimateShots)) : static_cast<int32>(UE_ARRAY_COUNT(Shots));
+		}
+
+		const FShot& GetShot(int32 Index)
+		{
+			return VRunner && VRunner->bClimate ? ClimateShots[Index] : Shots[Index];
+		}
 
 		/** Camera yaw of the tactical view (taken from the game camera once), pitch and distance of the fixed still camera. */
 		float ViewYaw = 45.f;
@@ -761,11 +789,11 @@ namespace EnvironmentShots
 		{
 			FRunner& R = *Runner;
 			R.Lines.Reset();
-			FString Text = FString::Printf(TEXT("%s - %s %s"), *VRunner->MapName, *EnvironmentRules::WeatherToString(Environment.GetWeather()),
+			FString Text = FString::Printf(TEXT("%s - %s %s"), *VRunner->MapName, *EnvironmentRules::GetWeatherDisplayName(Environment.GetClimate(), Environment.GetWeather()),
 				*HourText(Environment.GetHour()));
 			if (bWithBlend && Environment.GetTransitionBlend() > 0.f)
 			{
-				Text += FString::Printf(TEXT(" -> %s %.0f%%"), *EnvironmentRules::WeatherToString(Environment.GetNextWeather()), Environment.GetTransitionBlend() * 100.f);
+				Text += FString::Printf(TEXT(" -> %s %.0f%%"), *EnvironmentRules::GetWeatherDisplayName(Environment.GetClimate(), Environment.GetNextWeather()), Environment.GetTransitionBlend() * 100.f);
 			}
 			R.Lines.Add({ Text, FLinearColor(1.f, 0.9f, 0.3f) });
 		}
@@ -826,7 +854,7 @@ namespace EnvironmentShots
 
 			case EStep::Setup:
 			{
-				const FShot& Shot = Shots[V.ShotIndex];
+				const FShot& Shot = GetShot(V.ShotIndex);
 				Environment->SetClockScale(0.f);
 				Environment->ForceWeather(Shot.Weather, true);
 				Environment->SetHour(Shot.Hour);
@@ -841,8 +869,10 @@ namespace EnvironmentShots
 				ViewSquad(World);
 				if (V.StepFrame >= SettleFrames)
 				{
-					const FShot& Shot = Shots[V.ShotIndex];
-					const FString File = FString::Printf(TEXT("%s_%s_%s.png"), *V.MapName, *EnvironmentRules::WeatherToString(Shot.Weather), *HourTag(Shot.Hour));
+					const FShot& Shot = GetShot(V.ShotIndex);
+					// Section 17: named by the level's climate (an arctic level: the same names as before).
+					const FString File = FString::Printf(TEXT("%s_%s_%s.png"), *V.MapName, *EnvironmentRules::GetWeatherDisplayName(Environment->GetClimate(), Shot.Weather),
+						*HourTag(Shot.Hour));
 					Capture(V.Dir / File);
 					UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: %s (%s)"), *File, *Environment->Describe());
 					V.Step = EStep::Write;
@@ -854,7 +884,7 @@ namespace EnvironmentShots
 				if (V.StepFrame >= 10)
 				{
 					++V.ShotIndex;
-					V.Step = V.ShotIndex < UE_ARRAY_COUNT(Shots) ? EStep::Setup : (V.bTimelapse ? EStep::DaySetup : EStep::Done);
+					V.Step = V.ShotIndex < ShotCount() ? EStep::Setup : (V.bTimelapse ? EStep::DaySetup : EStep::Done);
 					V.StepFrame = 0;
 				}
 				break;
@@ -900,18 +930,19 @@ namespace EnvironmentShots
 			}
 		}
 
-		void Run(bool bTimelapse)
+		void Run(bool bTimelapse, bool bClimate)
 		{
 			Runner = MakeShared<FRunner>();
 			VRunner = MakeShared<FVisualsRunner>();
 			VRunner->bTimelapse = bTimelapse;
-			VRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / TEXT("visuals"));
+			VRunner->bClimate = bClimate;
+			VRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / (bClimate ? TEXT("climate") : TEXT("visuals")));
 			FPaths::CollapseRelativeDirectories(VRunner->Dir);
 			IFileManager::Get().MakeDirectory(*VRunner->Dir, true);
 			Runner->Dir = VRunner->Dir;
 			Runner->DrawHandle = UDebugDrawService::Register(TEXT("Game"), FDebugDrawDelegate::CreateStatic(&OnDraw));
 			VRunner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
-			UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: %d stills%s -> %s"), static_cast<int32>(UE_ARRAY_COUNT(Shots)),
+			UE_LOG(LogCodexTactics, Display, TEXT("EnvironmentShots visuals: %d stills%s -> %s"), ShotCount(),
 				bTimelapse ? TEXT(" + timelapse") : TEXT(""), *VRunner->Dir);
 		}
 	}
@@ -2332,6 +2363,12 @@ namespace EnvironmentShots
 			SnowCover::Run(Args);
 			return;
 		}
+		if (Args.Num() > 0 && (Args[0].Equals(TEXT("rain"), ESearchCase::IgnoreCase) || Args[0].Equals(TEXT("rainperf"), ESearchCase::IgnoreCase)
+			|| Args[0].Equals(TEXT("rainprobe"), ESearchCase::IgnoreCase) || Args[0].Equals(TEXT("rainterrain"), ESearchCase::IgnoreCase)))
+		{
+			EnvironmentRainShots::Run(Args);
+			return;
+		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("snowfx2"), ESearchCase::IgnoreCase))
 		{
 			EnvironmentSnowFx2Shots::Run(Args);
@@ -2349,7 +2386,8 @@ namespace EnvironmentShots
 		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("visuals"), ESearchCase::IgnoreCase))
 		{
-			Visuals::Run(Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("timelapse"), ESearchCase::IgnoreCase); }));
+			Visuals::Run(Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("timelapse"), ESearchCase::IgnoreCase); }),
+				Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("climate"), ESearchCase::IgnoreCase); }));
 			return;
 		}
 		Runner = MakeShared<FRunner>();
@@ -2364,7 +2402,7 @@ namespace EnvironmentShots
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.EnvironmentShots"),
-		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse]': the weather presenter stills (+ a day at x60) into Environment/visuals; 'snowcover [nomovie] [noperf]': the snow cover overlay stills, movie and perf A/B into Environment/snowcover; 'snowperf [<subdir>]': the falling snow GPU cost off / Snowfall / Blizzard at 2 camera distances into Environment/snowperf (or <subdir>); 'snow': the falling snow stills + 10 s clips into Environment/snow; 'snowfx2 [noclip]' (the lake): DA_SnowFX before / after flake size, the fishermen's hut in a blizzard (indoor kill off / on) and a clip into Environment/snowfx2; 'grounddust [nomovie] [noperf] [notracks]': the snow ground overlay stills (Clear 12:00, cover 0 / 0.35 / 0.7 / 1), the 0 -> 1 movie, the GPU A/B (Codex.Env.SnowGround 0 / 1; MovementTest: in wave 2) and a tracks loop into Environment/grounddust; 'terrain [nomovie] [notracks]' (on /Game/Environment/Weather/Test/L_SnowTerrainTest): the landscape material stills, night fresh / frost, interactive tracks and a 10 s movie into Environment/terrain; needs rendering, then exits."),
+		TEXT("Dev: rendered environment captures into Saved/Screenshots/Environment (timelapse frames + wave stills under Clear midday / Blizzard night); 'visuals [timelapse] [climate]': the weather presenter stills (+ a day at x60) into Environment/visuals (climate: the temperate SunnyDay / Overcast / Rain / Storm stills into Environment/climate); 'snowcover [nomovie] [noperf]': the snow cover overlay stills, movie and perf A/B into Environment/snowcover; 'snowperf [<subdir>]': the falling snow GPU cost off / Snowfall / Blizzard at 2 camera distances into Environment/snowperf (or <subdir>); 'snow': the falling snow stills + 10 s clips into Environment/snow; 'snowfx2 [noclip]' (the lake): DA_SnowFX before / after flake size, the fishermen's hut in a blizzard (indoor kill off / on) and a clip into Environment/snowfx2; 'grounddust [nomovie] [noperf] [notracks]': the snow ground overlay stills (Clear 12:00, cover 0 / 0.35 / 0.7 / 1), the 0 -> 1 movie, the GPU A/B (Codex.Env.SnowGround 0 / 1; MovementTest: in wave 2) and a tracks loop into Environment/grounddust; 'terrain [nomovie] [notracks]' (on /Game/Environment/Weather/Test/L_SnowTerrainTest): the landscape material stills, night fresh / frost, interactive tracks and a 10 s movie into Environment/terrain; 'rain [noclip]' / 'rainperf' (on /Game/Environment/Weather/Test/L_WeatherRainTest, section 18): the rain stills (sunny, dry -> wet -> puddles, storm + lightning, screen drops, night, hut) + a 10 s clip into Environment/rain, the rain GPU cost into Environment/rainperf; needs rendering, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
