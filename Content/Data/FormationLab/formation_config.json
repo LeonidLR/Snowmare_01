@@ -240,6 +240,20 @@
       "unit": "deg",
       "doc": "Wall layout, 4 members: the 4th man at the end looks along the wall (3-4 / 8-9 o'clock)."
     },
+    "wall_end.probe_dist": {
+      "value": 600,
+      "min": 200,
+      "max": 1500,
+      "unit": "cm",
+      "doc": "v2.4 (user bug report 2026-10-26): the wall layout's open-arc coverage probes a ring this far round the group (FormationWallRules.EndLooks, bot check 13)."
+    },
+    "wall_end.cover_pct": {
+      "value": 95,
+      "min": 80,
+      "max": 100,
+      "unit": "%",
+      "doc": "v2.4: the wall layout's looks must hold this share of the open probe ring; below it (a wall END: flanks round the end open) the looks are spread over the open arc. Also bot check 13's bar."
+    },
     "slide.max_off_wall": {
       "value": 200,
       "min": 100,

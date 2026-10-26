@@ -86,6 +86,9 @@ zone('Z_V2_gaps', 'gap_run', rect(-3900, V2 - 250, -1000, V2 + 250));
 wall('G', [1700, G - 100], [3100, G + 200]);
 wall('G', [4800, G - 200], [4800, G + 1100]);
 zone('Z_G1', 'wall_run', rect(1800, G - 450, 3400, G + 450));
+// v2.4 (user bug report 2026-10-26): the squad stops at W_G_20's free END face (R_G_end) - the wall layout must hold the open arc
+// round the end, both flanks along its faces (bot check 13). Listed before Z_G2: zoneAt takes the first zone a point lies in.
+zone('Z_G_end', 'wall_end', rect(4650, G - 340, 4950, G - 210));
 zone('Z_G2', 'wall_end', rect(4500, G - 500, 5100, G + 300));
 
 const layout = {
@@ -125,6 +128,11 @@ const layout = {
       expect_bypass: [{ wall: 'W_G_19', wall_on: 'left' }] },
     { id: 'R_G_far', pace: 'walk', points: [[3900, G], [5900, G]], threats: [{ pos: [5500, G + 700], since_s: 0 }],
       expect_bypass: [{ wall: 'W_G_20', wall_on: 'right' }] },
+    // v2.4 (user bug report 2026-10-26): up to the free end face of W_G_20 (a thin free-standing wall) - the leader's wall slot is
+    // 45 cm off the end face on the wall's axis; the last leg comes in 4 deg off the axis (a ray along the axis slides between the
+    // faces of the simulator's walls - the game's trace hits the end face; the slot is the same).
+    { id: 'R_G_end', pace: 'walk', points: [[4700, 1300], [4800, G - 265]],
+      expect: [{ zone: 'Z_G_end', formation: 'wall' }] },
   ],
 };
 

@@ -30,7 +30,42 @@
  * outward (the rear guard), K (when not an end) away from the wall with his search (+-ScanAmpLead), the members in between
  * FormationCoverRules::AllocateStatic (the ends and K fixed). Not active -> the targets are the start slots (the caller forms the normal
  * formation). On arrival the caller forms the normal wall layout again.
+ *
+ * EndLooks (v2.4, user bug report 2026-10-26: "at the end face of a wall big uncovered zones form on the sides of the end - stabilise it
+ * so they cover the large zones"; contract 14; reference rules.ts EndLooks / openArcCoverage): Layout's looks are the user's rule for a
+ * wall FACE (the open half-plane shared). At a wall END (the end face of a thin free-standing wall, or a man standing past a wall's end)
+ * the open arc reaches round the end, back along both faces, and those looks leave both flanks open. OpenArcCoverage = of a probe ring
+ * (WallEndProbeDist round the members' mean position, every WallEndStepDeg from -180) the points some member has a clear line to (no
+ * wall body within WallEndRayRadius), and of those the share inside the cone (+-SightFov / 2) of a member with a clear line. EndLooks:
+ * with 3+ slots and that share below WallEndCoverPct the looks are spread - K keeps his (away from the wall); the others greedily: of the
+ * remaining members and their looks (whole degrees -179..180, none within LookWallAngle of the closest point of a wall whose surface is
+ * within LookWallDist of his slot) the one holding the most open ring points he sees and nobody holds yet (ties: nearest his layout
+ * look, then the lower degree; between members the earlier slot); a member who would add nothing keeps his layout look; a spread that
+ * holds less than the base keeps the base. Positions and order never change.
  */
+
+/** OpenArcCoverage's answer (v2.4). */
+struct FFormationArcCoverage
+{
+	/** Probe ring points some member has a clear line to. */
+	int32 Open = 0;
+	/** Of those, the points inside the cone of a member with a clear line to them. */
+	int32 Covered = 0;
+	/** 100 x Covered / Open (100 with nothing open), %. */
+	double Pct = 100.0;
+};
+
+/** EndLooks' answer (v2.4). */
+struct FFormationWallEndResult
+{
+	/** The layout's looks held less than WallEndCoverPct of the open arc (a wall end) and were spread. */
+	bool bSpread = false;
+	/** OpenArcCoverage of the given looks / of the result (the slots, WallEndProbeDist, SightFov), %. */
+	double BasePct = 100.0;
+	double Pct = 100.0;
+	/** The slots with their looks (positions and order unchanged). */
+	TArray<FFormationSlot> Slots;
+};
 
 /** Slide's answer. */
 struct FFormationSlideResult
@@ -81,4 +116,17 @@ namespace FormationWallRules
 	 * shorter, nudges RoomLeft up by 1 cm so Layout puts him left (Layout itself sends a tie right).
 	 */
 	CODEXTACTICS_API void BreakRoomTie(float& RoomLeft, float& RoomRight, float TravelLeft, float TravelRight);
+
+	/** v2.4: the probe ring is sampled this often, deg (rules.ts WALL_END_STEP). */
+	inline constexpr double WallEndStepDeg = 2.0;
+	/** v2.4: a probe line passing this close to a wall body is blocked (a zero-thickness traced face blocks too), cm (WALL_END_RAY_RADIUS). */
+	inline constexpr double WallEndRayRadius = 1.0;
+
+	/** v2.4 (bot check 13, the smokes): how much of the open arc round a standing group its cones hold (see the header comment). */
+	CODEXTACTICS_API FFormationArcCoverage OpenArcCoverage(const TArray<FFormationWall>& Walls, const TArray<FVector2D>& Positions,
+		const TArray<float>& LookYaws, float FovDeg, float ProbeCm);
+
+	/** v2.4: the wall layout's looks at a wall end (see the header comment). Slots = Layout's (K first), Walls = the walls round them. */
+	CODEXTACTICS_API FFormationWallEndResult EndLooks(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots,
+		const FFormationConfig& Config = FFormationConfig());
 }

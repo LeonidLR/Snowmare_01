@@ -392,6 +392,7 @@ bool USquadSubsystem::HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float Wal
 	}
 	Sectors.WallSlots = MoveTemp(Slots);
 	Sectors.WallNormalYaw = FormationWallRules::OutwardYaw(Wall, LeaderPos);
+	ApplyFormationWallEnd(Origin, -FormationMath::Forward(WallNormalYaw), SlideWallReachCm); // v2.4: a slide that stops at the wall's end
 	Sectors.bWallLayoutValid = true;
 	Sectors.WallAnchor = LeaderPos;
 	Sectors.bWallOrder = true;

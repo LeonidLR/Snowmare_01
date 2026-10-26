@@ -48,6 +48,8 @@ namespace FormationTuning
 		{ TEXT("wall.flank_deg"), &FFormationConfig::WallFlankDeg },
 		{ TEXT("wall.neighbour_deg"), &FFormationConfig::WallNeighbourDeg },
 		{ TEXT("wall.end_deg"), &FFormationConfig::WallEndDeg },
+		{ TEXT("wall_end.probe_dist"), &FFormationConfig::WallEndProbeDist },
+		{ TEXT("wall_end.cover_pct"), &FFormationConfig::WallEndCoverPct },
 		{ TEXT("pace.patrol"), &FFormationConfig::PacePatrol },
 		{ TEXT("pace.walk_speed"), &FFormationConfig::PaceWalkSpeed },
 		{ TEXT("pace.run_speed"), &FFormationConfig::PaceRunSpeed },

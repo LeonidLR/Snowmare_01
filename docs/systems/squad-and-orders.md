@@ -107,6 +107,18 @@ member's formation look whenever it changes (with his facing) and every look Cle
   designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
   simulator ~1 m) - a Training Ground tuning point.
 
+### Rules v2.4 in the runtime - the wall end (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.WallEnd`)
+
+User bug report 2026-10-26 (the editor, `Codex.Formation.Debug`): three operatives crouched at the END FACE of a thin free-standing wall left large
+uncovered zones on both sides of the end, along the wall's faces. The wall layout's looks (L 8 / K 6 / P 4) share a FACE's half-plane; at an end the
+open arc reaches round it. Now every wall layout (`ComputeWallLayout`: the arrival and the group cover order; `HoldWallLayoutAt`: after a slide) goes
+through `USquadSubsystem::ApplyFormationWallEnd` -> `FormationWallRules::EndLooks` (contract 14): with the looks holding < `wall_end.cover_pct` (95 %) of
+the open ring 6 m round the layout (`OpenArcCoverage`; the world's box walls round it + the traced face measured out past the ring), K keeps 6 o'clock
+and the others are spread over the open arc (at an end face: the two men beside the end ~118 deg off the axis, back along their faces). Once per layout:
+no flicker, no reshuffle. Log `[Formation] wall END: the looks spread over the open arc (62 % -> 98 % held, ...)`. `Codex.Formation.WallEnd 0` = the face
+looks (A/B). Smoke `FormationWallGroupSmoke` scene 4 (a thin wall's end face by the group cover order: 63 % held with the switch 0, 98 % on); tests
+`CodexTactics.Formation.WallEnd.*`, `Parity.WallEnd`.
+
 ### Rules v2.3 in the runtime (2026-10-26, branch formation/runtime-v23; behind `Codex.Formation.Sectors` and `Codex.Formation.V21`)
 
 The red-team fixes of FORMATION_CONTRACT.md 13 (pure rules ported in 61990b7) wired into the runtime; `Codex.Formation.V21 0` = the v2.2 runtime without them.

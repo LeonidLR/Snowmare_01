@@ -95,7 +95,7 @@
       "seed": 1,
       "t": null,
       "what": "W1: wall on the right, wants left",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 8,
@@ -105,7 +105,7 @@
       "seed": 1,
       "t": null,
       "what": "W1: wall on the right, wants left",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 8,
@@ -115,7 +115,7 @@
       "seed": 1,
       "t": null,
       "what": "W1: wall on the right, wants left",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
     }
   ]
 }

@@ -141,7 +141,7 @@
       "t": 30.1,
       "what": "P-Z 69 cm apart",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -152,7 +152,7 @@
       "t": 30.3,
       "what": "K-L 78 cm apart",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 6,
@@ -163,7 +163,7 @@
       "t": 23.8,
       "what": "p95 199 cm; Z 282 cm behind",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

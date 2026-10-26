@@ -48,7 +48,7 @@ bool FFormationTuningDefaultsMirrorFileTest::RunTest(const FString&)
 	{
 		TestTrue(FString::Printf(TEXT("The struct knows the file's key %s"), *Pair.Key), Known.Contains(Pair.Key));
 	}
-	TestEqual(TEXT("76 keys in the struct (contract v2.3 parts 1-9)"), Known.Num(), 76);
+	TestEqual(TEXT("78 keys in the struct (contract v2.4: + wall_end.probe_dist, wall_end.cover_pct)"), Known.Num(), 78);
 	return true;
 }
 

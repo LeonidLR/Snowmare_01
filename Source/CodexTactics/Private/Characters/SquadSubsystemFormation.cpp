@@ -30,6 +30,10 @@ namespace SquadSubsystemFormationLocal
 {
 	TAutoConsoleVariable<int32> CVarFormationDebug(TEXT("Codex.Formation.Debug"), 0,
 		TEXT("1: log the formation probe (each raw terrain class change with its probe hits); 2: also every follower repath; 3: also each member's formation look whenever it changes, and every look ClearLook turns"));
+	TAutoConsoleVariable<int32> CVarFormationWallEnd(TEXT("Codex.Formation.WallEnd"), 1,
+		TEXT("Rules v2.4 (user bug report 2026-10-26): 1 = at a wall END the wall layout's looks are spread over the open arc round it (FormationWallRules::EndLooks); 0 = the face looks (L 8 / K 6 / P 4) everywhere (v2.3)"));
+	/** v2.4: the world walls for EndLooks are gathered this far beyond the probe ring round the layout, cm. */
+	constexpr float WallEndGatherMarginCm = 300.f;
 	/** The last raw class logged (Codex.Formation.Debug). */
 	TOptional<EFormationTerrainClass> LastLoggedRawClass;
 
@@ -353,9 +357,56 @@ bool USquadSubsystem::ComputeWallLayout(const FVector& Origin, const FVector2D& 
 	}
 	Sectors.WallSlots = FormationWallRules::Layout(Wall, ClickedSlot, Count, RoomLeft, RoomRight, Config);
 	Sectors.WallNormalYaw = FormationWallRules::OutwardYaw(Wall, ClickedSlot);
+	ApplyFormationWallEnd(Origin, TowardsWall, MaxDistance);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall layout: %d members, outward yaw %.0f, room left %.0f / right %.0f cm"), Count,
 		Sectors.WallNormalYaw, RoomLeft, RoomRight);
 	return Sectors.WallSlots.Num() > 0;
+}
+
+void USquadSubsystem::ApplyFormationWallEnd(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance)
+{
+	using namespace SquadSubsystemFormationLocal;
+	Sectors.bWallEndSpread = false;
+	Sectors.WallEndBasePct = 100.f;
+	Sectors.WallEndPct = 100.f;
+	if (CVarFormationWallEnd.GetValueOnGameThread() == 0 || Sectors.WallSlots.Num() < 3)
+	{
+		return; // off, or the pair (its wall looks are a user decision)
+	}
+	const FFormationConfig& Config = FormationTuning::Get();
+	// The face measured out past the probe ring: a long wall reads as a face even when its collision is not a box; at an end it is ~0 long.
+	FVector2D Face;
+	float NormalYaw = 0.f;
+	float RoomLeft = 0.f;
+	float RoomRight = 0.f;
+	TArray<FFormationWall> Walls;
+	if (BuildFormationWall(Origin, TowardsWall, MaxDistance, Face, NormalYaw, RoomLeft, RoomRight, Config.WallEndProbeDist + 2.f * Config.WallSpacing))
+	{
+		Walls.Add(FormationRuntime::WallAlong(Face, NormalYaw, RoomLeft, RoomRight));
+	}
+	FVector2D Centre = FVector2D::ZeroVector;
+	for (const FFormationSlot& Slot : Sectors.WallSlots)
+	{
+		Centre += Slot.Position / static_cast<double>(Sectors.WallSlots.Num());
+	}
+	const float Reach = Config.WallEndProbeDist + WallEndGatherMarginCm;
+	Walls.Append(GatherFormationWalls(Centre, FVector2D(Reach, Reach), 0.f, static_cast<float>(Origin.Z)));
+	const FFormationWallEndResult End = FormationWallRules::EndLooks(Walls, Sectors.WallSlots, Config);
+	Sectors.WallEndBasePct = static_cast<float>(End.BasePct);
+	Sectors.WallEndPct = static_cast<float>(End.Pct);
+	if (!End.bSpread)
+	{
+		return;
+	}
+	Sectors.bWallEndSpread = true;
+	FString Line;
+	for (int32 Index = 0; Index < End.Slots.Num(); ++Index)
+	{
+		Line += FString::Printf(TEXT(" %s %.0f -> %.0f;"), FormationNames::ToString(End.Slots[Index].Role), Sectors.WallSlots[Index].Yaw, End.Slots[Index].Yaw);
+	}
+	Sectors.WallSlots = End.Slots;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall END: the looks spread over the open arc (%.0f %% -> %.0f %% held, %d walls):%s"), End.BasePct, End.Pct,
+		Walls.Num(), *Line);
 }
 
 void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime)

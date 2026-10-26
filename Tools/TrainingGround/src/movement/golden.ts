@@ -10,14 +10,14 @@ import { FORMATIONS } from './layout.ts';
 import type { ClassifyState, CornerState, GuardState, Mode, Role, TerrainClass, Threat } from './rules.ts';
 import {
   CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
-  FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor,
+  FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
 } from './rules.ts';
 import { FormationMenuRules, MENU_ITEMS } from './menu.ts';
 import type { MenuChoice } from './menu.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
 export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu',
-  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided'] as const;
+  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided', 'WallEnd'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -403,7 +403,37 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  return { Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
+  // v2.4 (user bug report 2026-10-26): the wall layout's looks at a wall END (FormationWallRules.EndLooks). Scenes in the wall's
+  // frame (the leader's wall slot near the origin); every scene is placed at three headings / offsets and the Layout slots for
+  // 2-4 members are written ROUNDED (the outputs are computed from exactly those).
+  const wallEnd = base('WallEnd', 'in: walls, slots [{role, pos, yaw}] (FormationWallRules.Layout, K first) -> out {spread, basePct, pct, slots [{role, pos, yaw}]} (FormationWallRules.EndLooks; spread exactly, basePct / pct within 0.01, yaws as angles).');
+  const END_SCENES: Record<string, { walls: Segment[]; wall: number; click: Vec2 }> = {
+    // The user's report: a thin free-standing wall, the squad at its end face (the slot on the wall's axis, 45 cm off the face).
+    end_face: { walls: [{ a: [-1500, 0], b: [0, 0], thickness: 40 }], wall: 0, click: [65, 0] },
+    end_face_thin: { walls: [{ a: [-1500, 0], b: [0, 0], thickness: 20 }], wall: 0, click: [55, 0] },
+    // A 3 m stub: the ring sees past its far end too.
+    end_face_stub: { walls: [{ a: [-300, 0], b: [0, 0], thickness: 40 }], wall: 0, click: [65, 0] },
+    // Wall - gap - wall on one line: at the end face of one wall, the next wall 2.5 m beyond the gap.
+    end_face_gap: { walls: [{ a: [-1500, 0], b: [0, 0], thickness: 40 }, { a: [250, 0], b: [1800, 0], thickness: 40 }], wall: 0, click: [65, 0] },
+    // A face (unchanged), a face whose left man stands past the wall's end, an inner corner (unchanged).
+    face_long: { walls: [{ a: [0, -1500], b: [0, 1500], thickness: 40 }], wall: 0, click: [65, 0] },
+    face_near_end: { walls: [{ a: [0, -60], b: [0, 1500], thickness: 40 }], wall: 0, click: [65, 0] },
+    inner_corner: { walls: [{ a: [0, -1500], b: [0, 1500], thickness: 40 }, { a: [0, -150], b: [1500, -150], thickness: 40 }], wall: 0, click: [65, 0] },
+  };
+  for (const [scene, sc] of Object.entries(END_SCENES)) for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]], [-140, [-1200, 800]]] as [number, Vec2][]) {
+    const placed = place(sc.walls, yaw, offset);
+    const click = r2(place([{ a: sc.click, b: sc.click }], yaw, offset)[0].a);
+    for (const memberCount of [2, 3, 4]) {
+      const room = wallRoom(placed[sc.wall], click);
+      const slots = FormationWallRules.Layout(placed[sc.wall], click, memberCount, room.roomLeft, room.roomRight, config)
+        .map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
+      const out = FormationWallRules.EndLooks(placed, slots, config);
+      wallEnd.cases.push({ in: { scene, walls: placed.map(seg), slots },
+        out: { spread: out.spread, basePct: round(out.basePct), pct: round(out.pct), slots: out.slots.map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) })) } });
+    }
+  }
+
+  return { WallEnd: wallEnd, Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
     Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign, TurnAhead: turnAhead, ClearLook: clear, Cover: cover, CoverStatic: coverStatic, Slide: slide, Decided: decided };
 }
 

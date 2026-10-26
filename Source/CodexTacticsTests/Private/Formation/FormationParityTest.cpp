@@ -1595,6 +1595,56 @@ bool FFormationParityDecidedTest::RunTest(const FString&)
 	});
 }
 
+// v2.4 (user bug report 2026-10-26): the wall layout's looks at a wall end (contract 14).
+FORMATION_PARITY_TEST(FFormationParityWallEndTest, "WallEnd")
+bool FFormationParityWallEndTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("WallEnd"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("WallEnd"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* SlotValues = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* OutSlots = nullptr;
+		TArray<FFormationWall> Walls;
+		bool bSpread = false;
+		double BasePct = 0.0;
+		double Pct = 0.0;
+		if (!In->TryGetArrayField(TEXT("walls"), WallValues) || !ReadWalls(*WallValues, Walls) || !In->TryGetArrayField(TEXT("slots"), SlotValues)
+			|| !Out->TryGetBoolField(TEXT("spread"), bSpread) || !Out->TryGetNumberField(TEXT("basePct"), BasePct) || !Out->TryGetNumberField(TEXT("pct"), Pct)
+			|| !Out->TryGetArrayField(TEXT("slots"), OutSlots))
+		{
+			return TEXT("unreadable input / output");
+		}
+		TArray<FFormationSlot> Slots;
+		for (const TSharedPtr<FJsonValue>& Value : *SlotValues)
+		{
+			const TSharedPtr<FJsonObject>* Object = nullptr;
+			FFormationSlot Slot;
+			double Yaw = 0.0;
+			if (!Value->TryGetObject(Object) || !ReadRole((*Object)->TryGetField(TEXT("role")), Slot.Role) || !Vec2((*Object)->TryGetField(TEXT("pos")), Slot.Position)
+				|| !(*Object)->TryGetNumberField(TEXT("yaw"), Yaw))
+			{
+				return TEXT("unreadable slot");
+			}
+			Slot.Yaw = static_cast<float>(Yaw);
+			Slots.Add(Slot);
+		}
+		const FFormationWallEndResult Actual = FormationWallRules::EndLooks(Walls, Slots, Golden.Config);
+		if (Actual.bSpread != bSpread || FMath::Abs(Actual.BasePct - BasePct) > 0.01 || FMath::Abs(Actual.Pct - Pct) > 0.01)
+		{
+			return FString::Printf(TEXT("spread %d base %.3f %% pct %.3f %%, expected %d %.3f %% %.3f %%"), Actual.bSpread ? 1 : 0, Actual.BasePct, Actual.Pct,
+				bSpread ? 1 : 0, BasePct, Pct);
+		}
+		return CompareSlots(Actual.Slots, *OutSlots, Golden, true);
+	});
+}
+
 #undef FORMATION_PARITY_TEST
 
 #endif

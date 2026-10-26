@@ -438,6 +438,18 @@ public:
 	const TArray<FFormationCornerLook>& GetFormationCornerLooks() const { return Sectors.CornerLooks; }
 	/** The world walls the v2.1 rules see round the leader (box collision -> FormationGuardRuntime::WallsFromBox). */
 	const TArray<FFormationWall>& GetFormationWorldWalls() const { return Sectors.WorldWalls; }
+	/**
+	 * Rules v2.4 (user bug report 2026-10-26): the wall layout in force stands at a wall END and its looks were spread over the open arc round
+	 * it (FormationWallRules::EndLooks); OutBasePct / OutPct = the open-arc share the face looks / the spread looks hold (smokes, the HUD log).
+	 */
+	bool IsFormationWallEndSpread(float& OutBasePct, float& OutPct) const
+	{
+		OutBasePct = Sectors.WallEndBasePct;
+		OutPct = Sectors.WallEndPct;
+		return Sectors.bWallLayoutValid && Sectors.bWallEndSpread;
+	}
+	/** The wall layout in force (slots and looks by role; empty when none) - smokes. */
+	const TArray<FFormationSlot>& GetFormationWallSlots() const { return Sectors.WallSlots; }
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
@@ -526,6 +538,10 @@ private:
 		/** The wall layout in force (the automatic one on arrival or the order's). */
 		bool bWallLayoutValid = false;
 		TArray<FFormationSlot> WallSlots;
+		/** Rules v2.4: WallSlots' looks were spread over a wall end's open arc (EndLooks); the shares the face / the spread looks hold, %. */
+		bool bWallEndSpread = false;
+		float WallEndBasePct = 100.f;
+		float WallEndPct = 100.f;
 		FVector2D WallAnchor = FVector2D::ZeroVector;
 		float WallNormalYaw = 0.f;
 		/** The group cover order in group mode as the wall layout (OrderFormationWall). */
@@ -754,6 +770,13 @@ private:
 	/** The wall layout for the members at a wall (Others' roles by minimal travel when bAssignRoles); false when no wall is found. */
 	bool ComputeWallLayout(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, const FVector2D& ClickedSlot, int32 MemberCount,
 		const AOperativeCharacter* FourthMan);
+	/**
+	 * Rules v2.4 (user bug report 2026-10-26, contract 14): at a wall END the wall layout's looks (Sectors.WallSlots, just laid out) are spread
+	 * over the open arc round it - FormationWallRules::EndLooks over the world's box walls round the layout plus the traced face measured out to
+	 * wall_end.probe_dist (so a long wall of complex collision still reads as a face); computed once per layout (no flicker). Codex.Formation.WallEnd 0
+	 * = the face looks everywhere (v2.3).
+	 */
+	void ApplyFormationWallEnd(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance);
 	/** The wall order: the members' arrival (crouch facing out), its end on the leader's next order / Solo / the formation off. */
 	void UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, float DeltaTime);
 	void EndFormationWallOrder(const TCHAR* Why);

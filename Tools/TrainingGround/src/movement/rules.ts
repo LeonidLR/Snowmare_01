@@ -590,7 +590,119 @@ function BreakRoomTie(roomLeft: number, roomRight: number, travelLeft: number, t
   return roomLeft === roomRight && travelLeft < travelRight ? { roomLeft: roomLeft + 1, roomRight } : { roomLeft, roomRight };
 }
 
-export const FormationWallRules = { Layout, BreakRoomTie, Slide };
+// ---------------------------------------------------------------------------------------------------------------------
+// FormationWallRules::EndLooks (v2.4, user bug report 2026-10-26: "at the end face of a wall big uncovered zones form on the
+// sides of the end - stabilise it so they cover the large zones")
+
+/** deg: the probe ring round the group (EndLooks, openArcCoverage, bot check 13) is sampled this often. */
+export const WALL_END_STEP = 2;
+/** cm: a probe line passing this close to a wall body is blocked (a zero-thickness wall - the runtime's traced face - blocks too). */
+export const WALL_END_RAY_RADIUS = 1;
+
+/** A member for the open-arc coverage: where he stands and where he looks (world yaw). */
+export interface ArcMember { pos: Vec2; yaw: number }
+
+/**
+ * The probe ring of the open-arc coverage: points every WALL_END_STEP deg (from -180) at `probe` cm round the members' mean
+ * position; per member and point, whether his straight line to it keeps WALL_END_RAY_RADIUS from every wall body
+ * (segmentBlocked) and its direction from him (world yaw).
+ */
+function probeRing(walls: readonly Segment[], positions: readonly Vec2[], probe: number): { vis: boolean[][]; dirs: number[][] } {
+  const centre: Vec2 = positions.length ? scale(positions.reduce<Vec2>((a, p) => add(a, p), [0, 0]), 1 / positions.length) : [0, 0];
+  const n = Math.round(360 / WALL_END_STEP);
+  const points: Vec2[] = Array.from({ length: n }, (_, k) => add(centre, scale(dirOf(-180 + k * WALL_END_STEP), probe)));
+  return {
+    vis: positions.map((p) => points.map((q) => !segmentBlocked(p, q, walls, WALL_END_RAY_RADIUS))),
+    dirs: positions.map((p) => points.map((q) => yawOf(sub(q, p)))),
+  };
+}
+
+/**
+ * v2.4 (bot check 13, the runtime smoke): how much of the OPEN arc round a standing group its cones hold. The probe ring
+ * (probeRing: `probe` cm round the members' mean position, every WALL_END_STEP deg); a point is open when some member has a
+ * clear line to it, covered when some member with a clear line to it has it within +-fov / 2 of his look. pct = 100 x covered /
+ * open (100 with nothing open).
+ */
+export function openArcCoverage(walls: readonly Segment[], members: readonly ArcMember[], fov: number, probe: number): { open: number; covered: number; pct: number } {
+  const ring = probeRing(walls, members.map((m) => m.pos), probe);
+  let open = 0, covered = 0;
+  for (let k = 0; k < (ring.vis[0]?.length ?? 0); k++) {
+    if (!members.some((_, i) => ring.vis[i][k])) continue;
+    open++;
+    if (members.some((m, i) => ring.vis[i][k] && Math.abs(normYaw(ring.dirs[i][k] - m.yaw)) <= fov / 2 + 1e-9)) covered++;
+  }
+  return { open, covered, pct: open ? (100 * covered) / open : 100 };
+}
+
+export interface WallEndResult {
+  /** The base looks held less than wall_end.cover_pct of the open arc (a wall END: the open arc is wider than the face's half-plane) and were spread. */
+  spread: boolean;
+  /** openArcCoverage of the base looks / of the result, % (the slots, wall_end.probe_dist, sight.fov). */
+  basePct: number;
+  pct: number;
+  /** The slots with their looks (positions and order unchanged). */
+  slots: WallSlot[];
+}
+
+/**
+ * v2.4 (user bug report 2026-10-26): the wall layout's looks (L 8 / K 6 / P 4, the user's rule for a wall FACE: the open
+ * half-plane shared) at a wall END. Standing at the end face of a thin free-standing wall (or with a man past a wall's end) the open
+ * arc reaches round the end, back along both faces; the face looks left both flanks open. With 3+ members: openArcCoverage of the
+ * slots with the given looks (`walls` = the walls round the layout, wall_end.probe_dist, sight.fov); at least wall_end.cover_pct
+ * -> unchanged (every face layout). Else spread: K keeps his look (away from the wall, the user's 6 o'clock); the others, greedily -
+ * of the remaining members and their looks (whole degrees -179..180, none within look.wall_angle of the closest point of a wall
+ * whose surface is within look.wall_dist of his slot: nobody looks into a wall) the one that holds the most open ring points he
+ * sees and nobody holds yet (ties: the look nearest his own layout look, then the lower degree; between members the earlier slot);
+ * those points count as held; a member who would add nothing keeps his layout look. A spread that would hold less than the base
+ * keeps the base. Pure, deterministic; the positions are the SLOTS (the looks never jitter with the men's steps).
+ */
+function EndLooks(walls: readonly Segment[], slots: readonly WallSlot[], config: FormationConfig): WallEndResult {
+  const fov = cfg(config, 'sight.fov'), probe = cfg(config, 'wall_end.probe_dist');
+  const base = openArcCoverage(walls, slots.map((s) => ({ pos: s.pos, yaw: s.yaw })), fov, probe).pct;
+  const unchanged: WallEndResult = { spread: false, basePct: base, pct: base, slots: slots.map((s) => ({ ...s })) };
+  if (slots.length < 3 || base >= cfg(config, 'wall_end.cover_pct') - 1e-9) return unchanged;
+  const ring = probeRing(walls, slots.map((s) => s.pos), probe);
+  const n = ring.vis[0].length, half = fov / 2;
+  const reach = cfg(config, 'look.wall_dist'), wallAngle = cfg(config, 'look.wall_angle');
+  // Directions into a wall next to each slot (ClearLook's blocked spans from his own slot).
+  const centers = slots.map((s) => {
+    const out: number[] = [];
+    for (const w of walls) {
+      const q = closestOnSegment(s.pos, w.a, w.b).point;
+      if (dist(s.pos, q) < 1e-6 || Math.max(0, dist(s.pos, q) - (w.thickness ?? 0) / 2) > reach) continue;
+      out.push(yawOf(sub(q, s.pos)));
+    }
+    return out;
+  });
+  const held = Array.from({ length: n }, () => false);
+  const hold = (i: number, y: number) => { for (let k = 0; k < n; k++) if (ring.vis[i][k] && Math.abs(normYaw(ring.dirs[i][k] - y)) <= half + 1e-9) held[k] = true; };
+  const looks = slots.map((s) => s.yaw);
+  hold(0, looks[0]);
+  const left = slots.map((_, i) => i).slice(1);
+  while (left.length) {
+    let best: { i: number; y: number; gain: number; d: number } | null = null;
+    for (const i of left) {
+      let mine: { y: number; gain: number; d: number } | null = null;
+      for (let y = -179; y <= 180; y++) {
+        if (centers[i].some((c) => Math.abs(normYaw(y - c)) < wallAngle - 1e-6)) continue;
+        let gain = 0;
+        for (let k = 0; k < n; k++) if (!held[k] && ring.vis[i][k] && Math.abs(normYaw(ring.dirs[i][k] - y)) <= half + 1e-9) gain++;
+        const d = Math.abs(normYaw(y - slots[i].yaw));
+        if (!mine || gain > mine.gain || (gain === mine.gain && d < mine.d - 1e-9)) mine = { y, gain, d };
+      }
+      if (mine && (!best || mine.gain > best.gain)) best = { i, ...mine };
+    }
+    if (!best || best.gain === 0) break; // nothing left anybody could add: the rest keep their layout looks
+    looks[best.i] = best.y;
+    hold(best.i, best.y);
+    left.splice(left.indexOf(best.i), 1);
+  }
+  const out = slots.map((s, i) => ({ ...s, yaw: normYaw(looks[i]) }));
+  const pct = openArcCoverage(walls, out.map((s) => ({ pos: s.pos, yaw: s.yaw })), fov, probe).pct;
+  return pct > base + 1e-9 ? { spread: true, basePct: base, pct, slots: out } : unchanged;
+}
+
+export const FormationWallRules = { Layout, BreakRoomTie, Slide, EndLooks };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationGuardRules (v2.1, FORMATION_CONTRACT.md 10): no formation may cut the squad in two with a wall

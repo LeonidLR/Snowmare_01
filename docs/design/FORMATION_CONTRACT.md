@@ -588,3 +588,39 @@ ones carry `since: 'v2.3'`).
   an unresolvable slot (no stand-in): the sim gives out the man's position, the C++ gave out the slot - now the man's position too (the returned
   target stays the slot: the navigation walks him to its nearest reachable point, the sim keeps him in place).
 
+
+## 14. v2.4 - the wall end (user bug report 2026-10-26; FORMATION_SECTORS.md "v2.4")
+The wall layout's looks (`Layout`: L 8 / K 6 / P 4, the 4th along the wall) share the open half-plane of a wall FACE. At the end face of
+a thin free-standing wall (or with a man past a wall's end) the open arc reaches round the end and those looks left both flanks along the
+faces open (the user's report, three men crouched at an end face).
+
+### 14.1 `FormationWallRules::OpenArcCoverage(walls, positions, lookYaws, fov, probe) -> { open, covered, pct }`
+The probe ring: `360 / WALL_END_STEP` (2 deg) points at `probe` cm round the members' mean position, the first at yaw -180. A point is
+open when some member's straight line to it keeps `WALL_END_RAY_RADIUS` (1 cm) from every wall body (`segmentBlocked`; so a zero-thickness
+traced face blocks too); covered when some member with such a line has its direction within fov / 2 (+1e-9) of his look. pct = 100 x
+covered / open (100 when nothing is open). TS `openArcCoverage` (members `{pos, yaw}`).
+
+### 14.2 `FormationWallRules::EndLooks(walls, slots, config) -> { spread, basePct, pct, slots }`
+`slots` = Layout's (K first, with their looks); `walls` = the walls round the layout. basePct = OpenArcCoverage of the slots with their
+looks (`wall_end.probe_dist`, `sight.fov`). Fewer than 3 slots, or basePct >= `wall_end.cover_pct` - 1e-9 -> unchanged (spread false;
+every face layout, the pair). Else: K keeps his look; `held` = the open points K's cone holds (from K's slot); then, while members are left:
+for every remaining member (slot order) and every look y = -179..180 (whole degrees) not within look.wall_angle (- 1e-6) of the direction
+to the closest point of a wall whose surface is within look.wall_dist of his slot (and not 1e-6 from it), gain = the open points he sees,
+not held, inside +-fov / 2 of y; his best = the largest gain, ties the smallest |y - his layout look|, then the first (lower) y; the member
+with the largest best gain wins (ties: the earlier member); a best gain of 0 ends the loop (the rest keep their layout looks); the winner
+takes y, his points become held. pct = OpenArcCoverage of the result; pct <= basePct + 1e-9 -> unchanged (spread false). Positions and order
+never change. Keys `wall_end.probe_dist` 600 (200-1500 cm), `wall_end.cover_pct` 95 (80-100 %); config 78 keys.
+
+### 14.3 Integration, checks, golden
+- Sim: every wall layout (arrival, after a slide) goes through EndLooks with the level's walls, cached by the Layout slots.
+- Runtime (`USquadSubsystem::ApplyFormationWallEnd`, from `ComputeWallLayout` - the arrival and the group cover order - and
+  `HoldWallLayoutAt` - after a slide): walls = the traced face measured out to `wall_end.probe_dist + 2 x wall.spacing` each side (a long wall
+  of complex collision still reads as a face; at an end face it is ~0 long) + the world's box walls round the layout; once per layout (no
+  flicker); `Codex.Formation.WallEnd 0` = the face looks (v2.3). `IsFormationWallEndSpread(base, pct)` / `GetFormationWallSlots()` for smokes.
+- Bot check 13 (gating, 3+ members): while the wall layout stands (mode wall, everyone within 50 cm of his slot) the members' cones hold
+  >= 95 % of the open probe ring (OpenArcCoverage of their positions / yaws, the layout's walls) for >= 90 % of that time. Lab route
+  `R_G_end` (W_G_20's free end face, zone `Z_G_end`). The red team records check 13 too (a rule-bug check).
+- Golden `formation_WallEnd.json` (63 cases: the end face 40 / 20 cm, a 3 m stub, wall-gap-wall, a face, a face whose end man is past the
+  end, an inner corner; 2-4 members; three headings / offsets; in.slots rounded) - C++ `CodexTactics.Formation.Parity.WallEnd` (spread
+  exactly, basePct / pct within 0.01, slots as WallLayout). Unit tests `CodexTactics.Formation.WallEnd.*`; smoke `FormationWallGroupSmoke`
+  scene 4 (a thin wall's end face by the group cover order: open arc >= 95 %, both flanks in a cone, nobody faces a wall, steady 3 s).

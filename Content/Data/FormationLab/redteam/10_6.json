@@ -98,7 +98,7 @@
       "t": 17.1,
       "what": "P at W2",
       "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -108,7 +108,7 @@
       "seed": 2,
       "t": 18.6,
       "what": "column (asked echelon_right): wall cuts L-Z",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -118,7 +118,7 @@
       "seed": 1,
       "t": 19.4,
       "what": "column (asked echelon_left): wall cuts L-Z",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

@@ -205,6 +205,8 @@ export function simulate(o: SimOptions): number {
   let lastTargets: { role: Role; pos: Vec2; yaw: number }[] = [];
   let slide: { wall: Segment; start: { role: Role; pos: Vec2; yaw: number }[]; dest: Vec2; to: Vec2 } | null = null;
   let slideFrame: SlideFrame | null = null;
+  // v2.4: the last wall layout's EndLooks (keyed by the Layout slots it was computed from).
+  let wallEnd: { key: string; slots: { role: Role; pos: Vec2; yaw: number }[] } | null = null;
   const maxTime = 600;
 
   while (t < maxTime) {
@@ -313,6 +315,11 @@ export function simulate(o: SimOptions): number {
           rooms = FormationWallRules.BreakRoomTie(room.roomLeft, room.roomRight, dist(z.pos, endPos(1, 0)), dist(z.pos, endPos(0, 1)));
         }
         targets = FormationWallRules.Layout(wall, leaderWallSlot ? wallClick : leader.pos, n, rooms.roomLeft, rooms.roomRight, c);
+        // v2.4 (user bug report 2026-10-26): at a wall END the looks are spread over the whole open arc round it (the layout's
+        // slots and every wall of the level; a face layout keeps its looks). Cached by the slots: the looks never jitter.
+        const endKey = JSON.stringify(targets);
+        if (!wallEnd || wallEnd.key !== endKey) wallEnd = { key: endKey, slots: FormationWallRules.EndLooks(walls, targets, c).slots };
+        targets = wallEnd.slots;
         leaderWallSlot = targets[0].pos;
         layoutWall = wall;
       } else {

@@ -280,3 +280,20 @@ flipped in the morning.
 - #4 (3: 1_1) and #8 (3: 2_6): the red team's own expectations (zone formation, bypass side) - not investigated; may be layout
   expectations rather than rule bugs.
 - #6 rear pace (5), #2 rear cover (2: 88-89 % vs 90 %): borderline.
+
+## v2.4 — the wall end (user bug report 2026-10-26, via the coordinator; contract section 14)
+- **2026-10-26: wall end: the group covers the whole open arc, flanks included (user bug report)** - in the editor
+  (`Codex.Formation.Debug`) three operatives crouched at the END FACE of a thin free-standing wall left large uncovered zones on both
+  sides of the end, along the wall's two faces ("big uncovered zones form on the sides of the end - stabilise it so they cover the large
+  zones"). Cause: the wall layout's looks (L 8 / K 6 / P 4) are the rule for a wall FACE, where the open side is a half-plane; at the end
+  face the open arc reaches round the end, back along both faces, and those looks (+-130 deg from the normal together) leave both flanks
+  open - ~69 % of the open arc held with 3 men, ~71 % with 4.
+- **The rule (v2.4, `FormationWallRules.EndLooks`)**: the layout's places and K's look (6 o'clock, away from the wall) stay; when the layout's
+  looks hold less than `wall_end.cover_pct` (95 %) of the open ring round the group (`wall_end.probe_dist`, 6 m: the points somebody has a
+  clear line to), the others' looks are spread over what is left - greedily, each the look that holds the most still-open points he can
+  see, the least turn from his layout look on a tie, nobody looking into a wall. At the end face of a thin wall: K out along the wall's
+  axis, the two men beside the end ~118 deg off it, back along "their" face (3 men: 69 -> 100 %; 4 men: the 4th keeps his end look).
+  A face (the half-plane) is held already: nothing changes there - the user's wall rule stands. Computed once per layout from the
+  slots: no flicker, no reshuffle while they hold (`Codex.Formation.WallEnd 0` = the face looks everywhere).
+- Interpretations (coordinator / agent, for the user): the pair keeps its K 7:30 / partner 4:30 at an end too (a user decision; two cones
+  cannot hold the ~330 deg there); a face whose end man stands PAST the wall's end is spread the same way (he looks round the end).

@@ -172,6 +172,10 @@ struct CODEXTACTICS_API FFormationConfig
 	float WallNeighbourDeg = 30.f;
 	/** [wall.end_deg] Wall layout with 4: the 4th man at the end takes the flank along the wall (3-4 / 8-9), deg. */
 	float WallEndDeg = 75.f;
+	/** [wall_end.probe_dist] v2.4 (user bug report 2026-10-26): the wall layout's open-arc coverage probes a ring this far round the group, cm. */
+	float WallEndProbeDist = 600.f;
+	/** [wall_end.cover_pct] v2.4: below this share of the open ring held (a wall END) FormationWallRules::EndLooks spreads the looks, %. */
+	float WallEndCoverPct = 95.f;
 	/** [pace.patrol] Patrol (walk) pace as a fraction of the walk speed. */
 	float PacePatrol = 0.8f;
 	/** [pace.walk_speed] Walk speed (OperativeMovementRules WalkSpeed), cm/s. */

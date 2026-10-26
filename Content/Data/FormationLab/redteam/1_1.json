@@ -111,7 +111,7 @@
       "seed": 1,
       "t": null,
       "what": "Z1 wants echelon_right: 60 %",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 4,
@@ -121,7 +121,7 @@
       "seed": 1,
       "t": null,
       "what": "Z1 wants echelon_right: 60 %",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 4,
@@ -131,7 +131,7 @@
       "seed": 1,
       "t": null,
       "what": "Z1 wants echelon_right: 60 %",
-      "reason": "still failing under v2.3 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
     }
   ]
 }
