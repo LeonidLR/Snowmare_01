@@ -48,6 +48,7 @@ bool USquadSubsystem::AllocateFormationLooks(const AOperativeCharacter& LeaderRe
 {
 	const FFormationConfig& Config = FormationTuning::Get();
 	const int32 Count = Sectors.FrameSlots.Num();
+	Sectors.ShoulderLooks.Reset();
 	if (!FormationRuntime::IsCoverAllocatorEnabled() || !FormationRuntime::UsesCoverAllocator(Sectors.Formation, Sectors.Mode, Count)
 		|| Sectors.FrameSlots[0].Role != EFormationRole::Commander)
 	{
@@ -63,6 +64,14 @@ bool USquadSubsystem::AllocateFormationLooks(const AOperativeCharacter& LeaderRe
 		Place.Pos = Slot.Position;
 		// Rules v2.1 trail column: how far back = the column order (a bent column's tail may stand beside the leader's heading).
 		Place.Back = Sectors.bTrail ? static_cast<float>(Index) : FormationRuntime::PlaceBack(Slot.Position, LeaderPos, Sectors.HeadingYaw);
+		// Rules v2.3 part 7 (contract 13.7): the trail column's places travel along the trail (its direction at the slot); else the heading.
+		if (Sectors.bTrail)
+		{
+			if (const FFormationRoleYaw* Travel = Sectors.TrailTravel.FindByPredicate([&Slot](const FFormationRoleYaw& Each) { return Each.Role == Slot.Role; }))
+			{
+				Place.Travel = Travel->Yaw;
+			}
+		}
 		Places.Add(Place);
 	}
 	// A look decided elsewhere (a facing order of his own, a quick fire, a combat target) counts as cover; the others fill the rest.
@@ -119,6 +128,7 @@ bool USquadSubsystem::AllocateFormationLooks(const AOperativeCharacter& LeaderRe
 			FormationNames::ToString(Sectors.Formation));
 	}
 	Sectors.RearGuard = Result->RearGuard;
+	Sectors.ShoulderLooks = Result->Shoulder;
 	return true;
 }
 

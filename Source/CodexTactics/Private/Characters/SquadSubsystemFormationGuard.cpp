@@ -212,26 +212,28 @@ void USquadSubsystem::StepFormationGuard(const AOperativeCharacter& LeaderRef, b
 		Ahead = FormationGuardRuntime::AheadPose(Path, Sectors.HeadingYaw, Config.GuardLookahead);
 	}
 	const float Turn = FormationGuardRules::TurnAhead(Path, Sectors.HeadingYaw, Config);
+	// Rules v2.3 part 6 (contract 13.6): a formation member cut off from the leader (a wall body on the straight line) brings the trail column
+	// back at once - it leads him round the corner on the leader's own path.
+	TArray<FVector2D> InFormation;
+	for (const FFollowerState& Follower : Followers)
+	{
+		const AOperativeCharacter* Operative = Follower.Operative.Get();
+		if (Operative && SectorRoleOf(Follower).IsSet() && !IsOnOwnOrder(Operative) && !Operative->bInCover)
+		{
+			InFormation.Add(FVector2D(Operative->GetActorLocation()));
+		}
+	}
+	const bool bAllInSight = FormationGuardRuntime::AllInSight(Sectors.WorldWalls, LeaderPos, InFormation);
 	const FFormationGuardState Before = Sectors.Guard;
 	Sectors.Guard = FormationGuardRules::Resolve(Sectors.WorldWalls, Sectors.Requested, Count, LeaderPos, Sectors.HeadingYaw, Ahead, Turn, Sectors.Guard,
-		Sectors.LastStepDistance, Config);
+		Sectors.LastStepDistance, Config, bAllInSight);
 	const FFormationGuardEffective Effective = FormationGuardRules::Effective(Sectors.Guard);
 	Sectors.Formation = Effective.Formation.Get(Sectors.Requested);
 	Sectors.bTrail = Effective.bTrail;
-	// The HUD tells the sharp-turn fold "(turn)" from a wall cut "(wall)" (user decision 2026-10-26).
-	const bool bWide = Sectors.Requested == EFormationKind::EchelonLeft || Sectors.Requested == EFormationKind::EchelonRight
-		|| Sectors.Requested == EFormationKind::Line;
-	bool bCut = false;
-	if (Sectors.Guard.Level == EFormationGuardLevel::Trail)
-	{
-		bCut = FormationGuardRules::BlockedRoles(Sectors.WorldWalls, Sectors.Requested, Count, LeaderPos, Sectors.HeadingYaw, Config).Num() > 0
-			|| (Ahead.IsSet() && FormationGuardRules::BlockedRoles(Sectors.WorldWalls, Sectors.Requested, Count, Ahead->Pos, Ahead->Yaw, Config).Num() > 0);
-	}
-	Sectors.bGuardTurnFold = FormationGuardRuntime::IsTurnFold(Sectors.Guard.Level, bWide && Turn > Config.TurnFoldDeg, bCut, Sectors.bGuardTurnFold);
+	// The HUD tells the sharp-turn fold "(turn)" from a wall cut "(wall)" (user decision 2026-10-26): rules v2.3 part 9, the guard state's Cause.
 	if (Before.Level != Sectors.Guard.Level || Before.Requested != Sectors.Guard.Requested)
 	{
-		const bool bTurn = Sectors.Guard.Level == EFormationGuardLevel::Trail && Turn > Config.TurnFoldDeg
-			&& (Sectors.Requested == EFormationKind::EchelonLeft || Sectors.Requested == EFormationKind::EchelonRight || Sectors.Requested == EFormationKind::Line);
+		const bool bTurn = Sectors.Guard.Cause.IsSet() && Sectors.Guard.Cause.GetValue() == EFormationGuardCause::Turn;
 		// Which places a wall cuts (here / at the pose ahead) - what made the guard fall back.
 		const auto Cut = [&](const FVector2D& Pos, float Yaw)
 		{
@@ -242,10 +244,10 @@ void USquadSubsystem::StepFormationGuard(const AOperativeCharacter& LeaderRef, b
 			}
 			return Roles.IsEmpty() ? FString(TEXT("-")) : Roles;
 		};
-		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] guard: %s (level %d%s, cut here %s / ahead %s, turn ahead %.0f deg, heading %.0f, %d walls) at (%.0f, %.0f)"),
-			*FormationGuardRuntime::GuardHudText(Sectors.Requested, Sectors.Formation, Sectors.Guard.Level, Count, Sectors.bGuardTurnFold),
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] guard: %s (level %d%s%s, cut here %s / ahead %s, turn ahead %.0f deg, heading %.0f, %d walls) at (%.0f, %.0f)"),
+			*FormationGuardRuntime::GuardHudText(Sectors.Requested, Sectors.Formation, Sectors.Guard.Level, Count, Sectors.Guard.Cause),
 			static_cast<int32>(Sectors.Guard.Level),
-			bTurn ? TEXT(", the sharp-turn fold") : TEXT(""), *Cut(LeaderPos, Sectors.HeadingYaw),
+			bTurn ? TEXT(", the sharp-turn fold") : TEXT(""), bAllInSight ? TEXT("") : TEXT(", a member cut off"), *Cut(LeaderPos, Sectors.HeadingYaw),
 			Ahead.IsSet() ? *Cut(Ahead->Pos, Ahead->Yaw) : TEXT("(standing)"), Turn, Sectors.HeadingYaw, Sectors.WorldWalls.Num(), LeaderPos.X, LeaderPos.Y);
 	}
 }
@@ -256,7 +258,7 @@ void USquadSubsystem::BuildTrailFrameSlots(const FVector2D& LeaderPos, int32 Cou
 	// direction at his slot; the rear man keeps the squad's 6 o'clock (sim). Rules v2.3 (contract 13.2): the world's walls go in - the
 	// stagger aside shrinks in a narrow passage so no slot lands in a wall's clearance (an unwalkable slot -> a stand-in round the leader).
 	Sectors.FrameSlots = FormationGuardRuntime::TrailFrameSlots(FormationGuardRuntime::TrailWithLeader(Sectors.Trail, LeaderPos), Sectors.HeadingYaw, Count,
-		Sectors.WorldWalls, Sectors.Mode, Sectors.PatrolTime, Sectors.PassageWidth, FormationTuning::Get());
+		Sectors.WorldWalls, Sectors.Mode, Sectors.PatrolTime, Sectors.PassageWidth, FormationTuning::Get(), &Sectors.TrailTravel);
 }
 
 void USquadSubsystem::ApplyFormationCornerWatch(const FVector2D& LeaderPos)
@@ -333,8 +335,14 @@ float USquadSubsystem::ClearFormationLook(const AOperativeCharacter& Member, EFo
 	// The world walls only (the v2.1 rules' one view of the level): a wall the squad looks over (below FormationRuntime::ProbeHeightCm +
 	// LookedOverMarginCm) never turns a look away - standing, they see across it. Rules v2.3: his last frame's result is the held look.
 	const TOptional<float> Held = FormationGuardRuntime::HeldClearLook(ClearHeld, Who);
-	const float Cleared = FormationSectorRules::ClearLook(Sectors.WorldWalls, FVector2D(Member.GetActorLocation()), Look,
-		static_cast<float>(Member.GetActorRotation().Yaw), FormationTuning::Get(), Held);
+	// Rules v2.3 part 7 (contract 13.7): an over-the-shoulder member's look stays within look.over_shoulder_max_deg of his travel; part 8
+	// (13.8): the walls are also seen from where his own velocity takes him in look.anticipate_s.
+	const FFormationConfig& Config = FormationTuning::Get();
+	const FVector2D Velocity(Member.GetVelocity());
+	const FVector2D Here(Member.GetActorLocation());
+	const TOptional<FFormationLookLimit> Limit = bLeader ? TOptional<FFormationLookLimit>() : FormationGuardRuntime::ShoulderLimit(Sectors.ShoulderLooks, Role, Velocity, Config);
+	const float Cleared = FormationSectorRules::ClearLook(Sectors.WorldWalls, Here, Look, static_cast<float>(Member.GetActorRotation().Yaw), Config, Held,
+		Limit, FormationGuardRuntime::AnticipatedPos(Here, Velocity, Config));
 	FormationGuardRuntime::RememberClearLook(ClearHeld, Who, TOptional<float>(Cleared));
 	static const IConsoleVariable* DebugVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Debug"));
 	if (DebugVar && DebugVar->GetInt() >= 3 && FMath::Abs(FMath::FindDeltaAngleDegrees(Look, Cleared)) > 1.f)
@@ -357,7 +365,7 @@ FString USquadSubsystem::GetFormationHudText() const
 	{
 		return FormationGuardRuntime::FormationLabel(Sectors.Formation, Count);
 	}
-	FString Text = FormationGuardRuntime::GuardHudText(Sectors.Requested, Sectors.Formation, Sectors.Guard.Level, Count, Sectors.bGuardTurnFold);
+	FString Text = FormationGuardRuntime::GuardHudText(Sectors.Requested, Sectors.Formation, Sectors.Guard.Level, Count, Sectors.Guard.Cause);
 	if (Sectors.bAllForward)
 	{
 		Text += TEXT(", all forward");

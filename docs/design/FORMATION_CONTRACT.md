@@ -578,3 +578,13 @@ ones carry `since: 'v2.3'`).
   checks.ts 6 does. 13.5 "this frame" is now order-free: every WALKABLE slot of the frame is given out before the follow loop (the port's first
   reading - only the slots resolved before him - let Z, resolved before P, take the stand-in on P's spot at the lab's floor edge, R_v2_gaps).
   For the simulator: `sim.ts` pushes `given` in member order too - seeding it with the frame's walkable slots would match the contract text.
+- Parts 6-9 (2026-10-26, formation/cpp-rules): `FormationGuardRules::Resolve(..., config, bAllInSight = true)` + `FFormationGuardState::Cause`
+  (`EFormationGuardCause` Wall / Turn), `FormationCoverRules::Allocate` step 5 (`FFormationCoverMember::Travel`, `FFormationCoverResult::Shoulder`),
+  `FormationSectorRules::ClearLook(..., held, TOptional<FFormationLookLimit> limit, TOptional<FVector2D> ahead)`; keys `look.over_shoulder_max_deg`,
+  `look.anticipate_s` (76). Runtime: `FormationGuardRuntime::AllInSight` (followers with a sector role, not on their own order, not in cover),
+  `ShoulderLimit` ("moving" = over 15 cm/s, the step-direction window 90 deg), `AnticipatedPos` (none below 1 cm/s), the trail travel per place,
+  the HUD from `Cause` (the runtime's `IsTurnFold` removed: 13.9 names a wall cut during a sharp turn "(wall)"). 13.5 / part 9 compared with
+  `resolveFrameSlots`: the C++ seeds the leader and every walkable frame slot first (`SeedFrameGivenSlots`) - the same; the one difference was
+  an unresolvable slot (no stand-in): the sim gives out the man's position, the C++ gave out the slot - now the man's position too (the returned
+  target stays the slot: the navigation walks him to its nearest reachable point, the sim keeps him in place).
+

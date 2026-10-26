@@ -624,7 +624,7 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	}
 	const FVector2D Raw = Slot->Position;
 	FVector SlotLocation(Raw.X, Raw.Y, Operative.GetActorLocation().Z);
-	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation, /*bLeaderSide*/ FormationGuardRuntime::IsEnabled());
+	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation, /*bLeaderSide*/ FormationGuardRuntime::IsEnabled(), Operative.GetActorLocation());
 	FrameGivenByMember.Add(Follower.Operative, FVector2D(SlotLocation));
 	const FVector2D Here(Operative.GetActorLocation());
 	const FVector2D Target(SlotLocation);

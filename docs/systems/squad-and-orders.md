@@ -145,6 +145,22 @@ The red-team fixes of FORMATION_CONTRACT.md 13 (pure rules ported in 61990b7) wi
 - Not here (rules from the simulator session, v2.3 part 7+): a non-rear member whose share is the rear looking back over the shoulder (<= ~110 deg,
   walking forwards), ClearLook anticipating the motion; no tuning for the manual line's rear man (FormationLabSmoke reports p95 ~500 cm, not gated).
 
+- **Rules v2.3 parts 6-9 (2026-10-26, formation/cpp-rules; contract 13.6-13.9):**
+  - *A man cut off brings the trail column back (13.6):* `StepFormationGuard` passes `FormationGuardRuntime::AllInSight` (every formation follower -
+    a sector role, not on his own order, not in cover - has a clear line to the leader through the world's walls, radius 0) as `Resolve`'s
+    `bAllInSight`; false -> the trail column at once, released by the usual hold. The guard log adds ", a member cut off".
+  - *Only the rear guard walks backwards (13.7, user Q3 = c):* the trail column's places carry their travel (`Sectors.TrailTravel`, the trail's
+    direction at each slot, from `TrailFrameSlots`) into `FormationCoverRules::Allocate`; the allocator's `Shoulder` list (`Sectors.ShoulderLooks`)
+    gives those members ClearLook's `Limit` (`FormationGuardRuntime::ShoulderLimit`: their velocity direction when moving over 15 cm/s and within
+    90 deg of the entry, else the entry's travel; half `look.over_shoulder_max_deg` 110).
+  - *ClearLook anticipates the motion (13.8, user Q4 = b):* `Ahead` = the member's position + his own velocity x `look.anticipate_s` (0.5 s;
+    `FormationGuardRuntime::AnticipatedPos`, none below 1 cm/s).
+  - *The HUD's "(turn)" (13.9):* `GetFormationHudText` / the guard log take the guard state's `Cause` (`GuardHudText(..., Cause)`); the runtime's own
+    turn-fold flag (`bGuardTurnFold` / `IsTurnFold`) is gone - part 9 also makes a wall cut during a sharp turn "(wall)", where IsTurnFold said
+    "(turn)". 13.5: an unresolvable slot (no stand-in at all) now counts the man's own position as given (sim `resolveFrameSlots`).
+  All behind the existing switches (`Codex.Formation.V21` for the guard / ClearLook parts, the cover allocator's switch for the shoulder list):
+  with them 0 nothing changes.
+
 ### Rules v2.2 in the runtime (2026-10-25, branch formation/runtime-v22; behind `Codex.Formation.Sectors`)
 
 User decisions of FORMATION_SECTORS.md v2.2 (contract 11). With the console 0 every path below is off (the old formation / cover facing).
