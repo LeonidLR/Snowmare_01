@@ -9,8 +9,10 @@
 //   "Push" -> spot; C clicks barrel 3 (menu) -> "Ignite" (planned, marker) -> paused: nothing happens -> tap ->
 //   barrel 1 explodes once A reloaded, barrel 2 stands on the spot, C walks up and lights barrel 3 (one match) ->
 //   tap: pause -> B clicks the barricade (menu) -> "Relocate" -> spot -> tap -> the barricade stands there ->
-//   real time: C clicks barrel 4 -> "Ignite" -> he walks up and lights it; A's Ctrl + click ignites barrel 5 at once; the
-//   real-time barrel menu offers no "Push".
+//   real time: C clicks barrel 4 -> "Ignite" -> he walks up and lights it; A's Ctrl + click ignites barrel 5 at once;
+//   (user decision 2026-10-26: "the tactical pause is an aid, it must not cancel everything else") the real-time barrel menu offers
+//   "Push" too, and in real time B clicks the barricade -> "Relocate" -> spot: the move starts AT ONCE (no plan) and is not dropped
+//   by the running fight - the barricade stands on the new spot.
 
 #include "CoreMinimal.h"
 
@@ -293,8 +295,8 @@ namespace PauseBarrelOrderSmoke
 				State.MatchesBefore = Lighter->MatchesCount;
 				Squad->SetLeader(Lighter);
 				ClickActor(*PC, State.LiveMatchBarrel.Get());
-				Check(State, Interactions->IsActionMenuOpen() && !Interactions->GetActionMenu().bAllowRelocate,
-					TEXT("real time: barrel menu with \"Ignite\", no \"Push\""));
+				Check(State, Interactions->IsActionMenuOpen() && Interactions->GetActionMenu().bAllowRelocate,
+					TEXT("real time: barrel menu with \"Ignite\" and (2026-10-26) \"Push\""));
 				Interactions->ConfirmActionMenu();
 				Check(State, Interactions->GetActiveUseOrderCount() == 1 || State.LiveMatchBarrel->IsBurning(), TEXT("real time: C walks up at once"));
 				NextStage(State);
@@ -311,6 +313,27 @@ namespace PauseBarrelOrderSmoke
 				Shooter->CurrentClip = FMath::Max(Shooter->CurrentClip, 5);
 				PC->IssueTargetedShot(State.LiveShotBarrel.Get());
 				Check(State, State.LiveShotBarrel->IsBurning(), TEXT("real time: the Ctrl + click shot ignites barrel 5 at once"));
+				// User decision 2026-10-26: B moves the barricade in the REAL-TIME fight through its menu.
+				Squad->SetLeader(Carrier);
+				ClickActor(*PC, State.Barricade.Get());
+				Check(State, Interactions->IsActionMenuOpen() && Interactions->GetActionMenu().bAllowRelocate,
+					TEXT("real time: the barricade menu opens with \"Relocate\" (no HQ refusal)"));
+				Interactions->RelocateActionMenu();
+				Check(State, Relocation->IsPlacing(), TEXT("real time: \"Relocate\" starts the barricade placement"));
+				State.BarricadeTarget = SpotBeside(World, *Carrier, *State.Barricade, 70.f, 450.f);
+				Relocation->ConfirmPlacement(State.BarricadeTarget);
+				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && !Relocation->HasPlannedTask(Carrier)
+					&& Relocation->GetActiveTaskCount() == 1, TEXT("real time: the barricade move starts at once (nothing planned)"));
+				NextStage(State);
+			}
+			break;
+		case 9:
+			if (Relocation->GetActiveTaskCount() == 0 || State.StageTime >= ResultTimeout)
+			{
+				const float Error = FVector::Dist2D(State.Barricade->GetActorLocation(), State.BarricadeTarget);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: real-time barricade move %.2f s, %.0f cm from the spot"), State.StageTime, Error);
+				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && Relocation->GetActiveTaskCount() == 0 && Error < PlaceTolerance
+					&& !Carrier->bCarrying, TEXT("real time: the fight did not drop the move - the barricade stands on the spot"));
 				return Finish(State, true);
 			}
 			break;

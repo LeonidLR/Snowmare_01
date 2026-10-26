@@ -26,6 +26,20 @@
 - `Interactables/InteractableActor` — base: quest objects (menus per quest state), **traps on any object**
   (`bTrapped`, defusal attempt on confirm, `TrapWithGrenade`, `DetonateTrap`, `ApplyBlast`). Godot `interactable.gd`.
 - `Interactables/BarrelActor` + `BarrelRules` — match, 35 s fire, fade 7 s, heat 5.5 m, charred, `Explode` (trap / shot).
+- **Objects / barricades move in the real-time fight too (user decision 2026-10-26: "barricades can be moved only in the tactical pause; cancel that.
+  The tactical pause is an auxiliary pause that gives the player a breather; it must not cancel everything else. Maybe these were rules from the Godot
+  days").** It was the Godot rule (`main.gd can_relocate_objects_now`: outside a wave / in the pause). `RelocationRules::CanRelocateNow` now refuses only
+  the turn-based grid (its own push; the camera-zone solo still allowed there); `ShouldDropActiveTask` drops a carry only on the grid (the real-time fight
+  drops nothing). In the real-time fight a click on a movable object picks it up, a click on a barricade / set-up item opens its menu ("Relocate", pick
+  up), the barrel menu offers "Push", the action bar's MOVE OBJ works; the order runs at once with the worker's placement radius (`GetPlacementRadius`:
+  `WorkerPlacementRadius` in real time, the pause radius in the pause); the pause still plans (executed on the release). Deploying, tripwires and
+  "Ignite" already ran in real time (plan in the pause, execute in real time) - unchanged. Console `Codex.Relocation.RealTimeCombat 0` = the old rule.
+  Tests `CodexTactics.Relocation.RealTimeCombat.AllowedExceptTurnBased` (+ the old-rule cases); smokes `PauseBarrelOrderSmoke` (real time: the barrel
+  menu offers "Push"; B relocates the barricade in real time - it starts at once, is not dropped, stands on the spot), `ClickRulesSmoke` (real time: barrel
+  "Push", barricade menu, no HQ refusal; the old rule refuses). Other combat gates that depend on the pause (listed for the user, unchanged): the pause
+  only PLANS orders that real time executes (moves, cover, use orders, targeted shots, quick fire, SUPPRESS, deploy, tripwires); `Codex.RealTimeOrders 0`
+  (off by default) would lock every order to the pause; vehicles refuse to board / drive / leave IN the pause (`VehicleRules`); a disarm from the wall steps
+  off the wall only in real time.
 - `Interactables/RelocationSubsystem` + `RelocationRules` + `RelocationGhostActor` — move objects (ghost, radius,
   push task, pause plans, combat / mine drop) **and set-up from supply** (F, two-click placement, deploy tasks,
   mine mishap). Godot `main.gd` relocation + placement blocks.

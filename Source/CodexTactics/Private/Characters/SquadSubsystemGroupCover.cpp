@@ -21,7 +21,7 @@ TArray<AOperativeCharacter*> USquadSubsystem::GetGroupCoverMembers(const AOperat
 {
 	TArray<AOperativeCharacter*> Result;
 	const bool bMulti = HasMultiSelection();
-	const bool bFormation = IsFormationActive();
+	const bool bFormation = IsExplorationFormation(); // in a fight the cover orders stay individual (a box selection still joins)
 	for (AOperativeCharacter* Member : GetMembers())
 	{
 		if (!Member)

@@ -13,13 +13,35 @@
 RELOCATION_TEST(FRelocationWhenTest, "AllowedOutsideLiveCombat")
 bool FRelocationWhenTest::RunTest(const FString&)
 {
+	// The OLD rule (Godot can_relocate_objects_now; Codex.Relocation.RealTimeCombat 0): never in the live fight.
 	using namespace RelocationRules;
+	TestTrue(TEXT("Exploration"), CanRelocateNow(ECodexGamePhase::Exploration, ECodexCombatMode::None, false, false));
+	TestTrue(TEXT("Preparation"), CanRelocateNow(ECodexGamePhase::Preparation, ECodexCombatMode::None, false, false));
+	TestTrue(TEXT("Tactical pause"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause, false, false));
+	TestFalse(TEXT("Live combat"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, false, false));
+	TestFalse(TEXT("Turn-based combat"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased, false, false));
+	TestTrue(TEXT("Leader alone in a camera zone (Godot is_zone_solo)"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, true, false));
+	return true;
+}
+
+RELOCATION_TEST(FRelocationRealTimeCombatTest, "RealTimeCombat.AllowedExceptTurnBased")
+bool FRelocationRealTimeCombatTest::RunTest(const FString&)
+{
+	// User decision 2026-10-26: "the tactical pause is an aid, it must not cancel everything else" - barricades / objects move in the
+	// real-time fight too; only the turn-based grid (its own push) refuses.
+	using namespace RelocationRules;
+	const ECodexGamePhase Wave = ECodexGamePhase::WaveCombat;
 	TestTrue(TEXT("Exploration"), CanRelocateNow(ECodexGamePhase::Exploration, ECodexCombatMode::None));
-	TestTrue(TEXT("Preparation"), CanRelocateNow(ECodexGamePhase::Preparation, ECodexCombatMode::None));
-	TestTrue(TEXT("Tactical pause"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause));
-	TestFalse(TEXT("Live combat"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime));
-	TestFalse(TEXT("Turn-based combat"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased));
-	TestTrue(TEXT("Leader alone in a camera zone (Godot is_zone_solo)"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, true));
+	TestTrue(TEXT("Tactical pause"), CanRelocateNow(Wave, ECodexCombatMode::TacticalPause));
+	TestTrue(TEXT("Real-time fight: allowed now"), CanRelocateNow(Wave, ECodexCombatMode::RealTime));
+	TestFalse(TEXT("Turn-based combat: still refused"), CanRelocateNow(Wave, ECodexCombatMode::TurnBased));
+	TestTrue(TEXT("Turn-based, zone solo"), CanRelocateNow(Wave, ECodexCombatMode::TurnBased, true));
+	TestFalse(TEXT("A carry started in real time is not dropped in real time"), ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, false, false));
+	TestFalse(TEXT("... nor one planned in the pause"), ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, false, true));
+	TestTrue(TEXT("Turn-based drops any carry"), ShouldDropActiveTask(Wave, ECodexCombatMode::TurnBased, false, false));
+	TestTrue(TEXT("... a planned one too"), ShouldDropActiveTask(Wave, ECodexCombatMode::TurnBased, false, true));
+	TestEqual(TEXT("Real time: the worker's placement radius"), GetPlacementRadius(Wave, ECodexCombatMode::RealTime, 1200.f, 1500.f), 1500.f);
+	TestEqual(TEXT("Pause: the pause radius stays"), GetPlacementRadius(Wave, ECodexCombatMode::TacticalPause, 1200.f, 1500.f), 1200.f);
 	return true;
 }
 
@@ -55,13 +77,14 @@ bool FRelocationPausedCarryTest::RunTest(const FString&)
 	// Bug 2026-10-08: a carry ordered in the tactical pause was dropped the frame after the resume.
 	using namespace RelocationRules;
 	const ECodexGamePhase Wave = ECodexGamePhase::WaveCombat;
-	TestFalse(TEXT("Paused order keeps running in real time"), ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, false, true));
+	// (The old pause-only rule, Codex.Relocation.RealTimeCombat 0.)
+	TestFalse(TEXT("Paused order keeps running in real time"), ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, false, true, false));
 	TestTrue(TEXT("Carry started outside the pause is dropped when live combat begins"),
-		ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, false, false));
-	TestFalse(TEXT("Zone solo keeps any carry"), ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, true, false));
-	TestFalse(TEXT("Paused again: nothing dropped"), ShouldDropActiveTask(Wave, ECodexCombatMode::TacticalPause, false, false));
-	TestTrue(TEXT("Turn-based drops even a paused order"), ShouldDropActiveTask(Wave, ECodexCombatMode::TurnBased, false, true));
-	TestFalse(TEXT("Exploration"), ShouldDropActiveTask(ECodexGamePhase::Exploration, ECodexCombatMode::None, false, false));
+		ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, false, false, false));
+	TestFalse(TEXT("Zone solo keeps any carry"), ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, true, false, false));
+	TestFalse(TEXT("Paused again: nothing dropped"), ShouldDropActiveTask(Wave, ECodexCombatMode::TacticalPause, false, false, false));
+	TestTrue(TEXT("Turn-based drops even a paused order"), ShouldDropActiveTask(Wave, ECodexCombatMode::TurnBased, false, true, false));
+	TestFalse(TEXT("Exploration"), ShouldDropActiveTask(ECodexGamePhase::Exploration, ECodexCombatMode::None, false, false, false));
 	return true;
 }
 

@@ -175,8 +175,49 @@ bool FSquadOrderRegroupAfterFightTest::RunTest(const FString&)
 	for (const ECodexGamePhase Fight : { ECodexGamePhase::Cutscene, ECodexGamePhase::Preparation, ECodexGamePhase::WaveCombat,
 		ECodexGamePhase::WaveCleared, ECodexGamePhase::GameOver })
 	{
-		TestFalse(FString::Printf(TEXT("No formation in phase %d"), static_cast<int32>(Fight)), IsFormationPhase(Fight));
+		TestFalse(FString::Printf(TEXT("No EXPLORATION formation (group cover / wall layout) in phase %d"), static_cast<int32>(Fight)),
+			IsFormationPhase(Fight));
 	}
+	return true;
+}
+
+SQUAD_ORDER_TEST(FSquadOrderCombatFormationTest, "CombatFormation.SquadStaysInFormationThroughTheFight")
+bool FSquadOrderCombatFormationTest::RunTest(const FString&)
+{
+	// User decision 2026-10-26 (game designer: "after the pause the soldiers act SOLO in combat and B does nothing - until I give the order
+	// to switch to solo mode, they must stay in formation"). The old rule (Godot is_tactical_mode, TANDEM Sprint 03 "formation only in
+	// exploration") switched the following off from the preparation to the fight's end.
+	using namespace SquadOrderRules;
+	TestTrue(TEXT("Exploration"), IsFollowPhase(ECodexGamePhase::Exploration, ECodexCombatMode::None));
+	TestTrue(TEXT("Cutscene"), IsFollowPhase(ECodexGamePhase::Cutscene, ECodexCombatMode::None));
+	TestTrue(TEXT("Preparation / the rest between waves"), IsFollowPhase(ECodexGamePhase::Preparation, ECodexCombatMode::None));
+	TestTrue(TEXT("The real-time fight"), IsFollowPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime));
+	TestTrue(TEXT("The tactical pause"), IsFollowPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause));
+	TestTrue(TEXT("The wave-cleared panel"), IsFollowPhase(ECodexGamePhase::WaveCleared, ECodexCombatMode::None));
+	TestTrue(TEXT("After the final fight"), IsFollowPhase(ECodexGamePhase::PostCombat, ECodexCombatMode::None));
+	TestFalse(TEXT("Not on the turn-based grid (it moves everyone)"), IsFollowPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased));
+	TestFalse(TEXT("Not after a game over"), IsFollowPhase(ECodexGamePhase::GameOver, ECodexCombatMode::None));
+	// The old rule (Codex.Squad.CombatFormation 0): individual control in the fight.
+	TestFalse(TEXT("Old rule: no following in the real-time fight"), IsFollowPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, true, false));
+	TestFalse(TEXT("Old rule: none in the preparation"), IsFollowPhase(ECodexGamePhase::Preparation, ECodexCombatMode::None, true, false));
+	TestTrue(TEXT("Old rule: exploration unchanged"), IsFollowPhase(ECodexGamePhase::Exploration, ECodexCombatMode::None, true, false));
+
+	// A member given an attack order in the pause carries it out, then rejoins: a running fire order is his own order.
+	FOwnOrderFacts Fire;
+	Fire.bFireOrder = true;
+	TestTrue(TEXT("Suppressing / a quick-fire burst: the formation leaves him alone"), IsOnOwnOrder(Fire));
+	TestFalse(TEXT("... the order over: he rejoins"), IsOnOwnOrder(FOwnOrderFacts()));
+
+	// A formation member fighting from cover stays there until the leader walks away - then he follows (as out of combat).
+	FCoverFollowFacts Cover;
+	Cover.bInCover = true;
+	Cover.bFormationActive = IsFollowPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime);
+	Cover.DistanceToSlotCm = CoverLeaveSlotDistanceCm + 100.f;
+	TestFalse(TEXT("In cover, the leader standing: he holds his cover in the fight"), ShouldLeaveCoverToFollow(Cover));
+	Cover.bLeaderMoving = true;
+	TestTrue(TEXT("The leader walks away: he leaves the cover and follows (the fight too)"), ShouldLeaveCoverToFollow(Cover));
+	Cover.bFormationActive = IsFollowPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, true, false);
+	TestFalse(TEXT("Old rule: he stayed in cover for the whole fight"), ShouldLeaveCoverToFollow(Cover));
 	return true;
 }
 

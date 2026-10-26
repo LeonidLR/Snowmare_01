@@ -65,8 +65,10 @@ FActionMenuRequest ADeployableActor::BuildActionMenu(const AOperativeCharacter* 
 	const URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	if (Relocation && !Relocation->CanRelocateNow())
 	{
-		return FActionMenuRequest::MakeMessage(LOCTEXT("HQ", "HQ"),
-			LOCTEXT("NotInCombat", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
+		// 2026-10-26: only the turn-based grid refuses now (the old rule, Codex.Relocation.RealTimeCombat 0: the live fight too).
+		return FActionMenuRequest::MakeMessage(LOCTEXT("HQ", "HQ"), RelocationRules::IsRealTimeCombatRelocationEnabled()
+			? LOCTEXT("NotInTurnBased", "⚠️ Objects cannot be relocated in turn-based combat - use the grid's push.")
+			: LOCTEXT("NotInCombat", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
 	}
 	FText Title;
 	FText Description;
