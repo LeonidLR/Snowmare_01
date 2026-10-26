@@ -7,6 +7,7 @@
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/PlayerCommands.h"
 #include "Data/WeaponTuning.h"
@@ -427,6 +428,17 @@ void UVehicleTurretComponent::FireCannon(AEnemyCharacter* Target, AOperativeChar
 		const float Damage = VehicleCombatRules::GetCannonDamage(FVector::Dist(Victim->GetActorLocation(), Impact), bDirect, Config);
 		ApplyHit(Victim, Damage, EDamageType::Explosive, Penetration, Gunner, EVehicleTurretWeapon::Cannon);
 	}
+	// Suppressive fire (user decision 2026-10-26): the shell suppresses everyone round its impact (the explosive near-miss radius).
+	FSuppressionRound Round;
+	Round.Shooter = GetOwner();
+	Round.bAtEnemies = true;
+	Round.Start = Muzzle;
+	Round.End = Impact;
+	Round.Target = Target;
+	Round.bHitTarget = bHit;
+	Round.bStruckCover = !bHit;
+	Round.Weapon = ESuppressionWeapon::Cannon;
+	USuppressionSubsystem::Report(this, Round);
 	GameplayEvents::RaiseExplosion(this, GameplayEvents::ExplosionKinds::Cannon, Impact, Config.CannonSplashRadiusCm, GetOwner()); // visual listeners only (snow crater)
 	if (NoiseTimer <= 0.f)
 	{
@@ -458,9 +470,19 @@ void UVehicleTurretComponent::FireMgRound(AEnemyCharacter* Target, AOperativeCha
 	PlayMuzzleFlash(false);
 	if (bHit)
 	{
-		// User decision 2026-10-12: the MG just deals damage (no suppression stagger).
 		ApplyHit(Target, Config.MgDamage, EDamageType::Kinetic, 0.2f, Gunner, EVehicleTurretWeapon::MachineGun);
 	}
+	// User decision 2026-10-26 (reverses the 2026-10-12 "no suppression stagger"): the MG suppresses - every round, hit or near miss,
+	// through the suppression system with MG weighting (no stagger status).
+	FSuppressionRound Round;
+	Round.Shooter = GetOwner();
+	Round.bAtEnemies = true;
+	Round.Start = Muzzle;
+	Round.End = End;
+	Round.Target = Target;
+	Round.bHitTarget = bHit;
+	Round.Weapon = ESuppressionWeapon::MachineGun;
+	USuppressionSubsystem::Report(this, Round);
 	if (NoiseTimer <= 0.f)
 	{
 		NoiseTimer = 1.f;

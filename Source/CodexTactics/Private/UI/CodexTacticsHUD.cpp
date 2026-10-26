@@ -16,6 +16,7 @@
 #include "GameFramework/Character.h"
 #include "EngineUtils.h"
 #include "Combat/KnockdownComponent.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "GameFramework/Character.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/GateActor.h"
@@ -429,6 +430,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawPostureMarkers();
 	DrawStealthLureMarkers();
 	DrawKnockdownBars();
+	DrawSuppressionBadges();
 	DrawHordeWarning();
 	DrawHitChanceLabel();
 	DrawSelectionBox();
@@ -968,6 +970,61 @@ void ACodexTacticsHUD::DrawKnockdownBars()
 		DrawRect(FLinearColor(0.15f, 0.15f, 0.18f, 0.9f), X, Screen.Y, BarWidth, BarHeight);
 		DrawRect(Knockdown->GetPhase() == EKnockdownPhase::GettingUp ? FLinearColor(0.35f, 0.95f, 0.45f) : BadgeColor,
 			X, Screen.Y, BarWidth * Fill, BarHeight);
+	}
+}
+
+void ACodexTacticsHUD::DrawSuppressionBadges()
+{
+	UFont* Font = GEngine->GetSmallFont();
+	// The suppress aim (key 7 / SUPPRESS): a hint by the cursor until the click.
+	if (const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController()); PC && PC->IsSuppressAimArmed())
+	{
+		float MouseX = 0.f;
+		float MouseY = 0.f;
+		if (PC->GetMousePosition(MouseX, MouseY))
+		{
+			static const FString AimHint = TEXT("SUPPRESS: click an enemy or a spot");
+			float W = 0.f;
+			float H = 0.f;
+			Canvas->StrLen(Font, AimHint, W, H);
+			DrawRect(PanelColor, MouseX + 18.f, MouseY + 14.f, W + 8.f, H + 4.f);
+			DrawText(AimHint, FLinearColor(1.f, 0.7f, 0.15f), MouseX + 22.f, MouseY + 16.f, Font);
+		}
+	}
+	const USuppressionSubsystem* Suppression = GetWorld()->GetSubsystem<USuppressionSubsystem>();
+	if (!Suppression)
+	{
+		return;
+	}
+	TArray<TPair<AActor*, FSuppressionState>> Tracked;
+	Suppression->GetTracked(Tracked);
+	for (const TPair<AActor*, FSuppressionState>& Each : Tracked)
+	{
+		const AActor* Unit = Each.Key;
+		if (Each.Value.Tier == ESuppressionTier::None || !Unit || Unit->IsHidden())
+		{
+			continue;
+		}
+		// Over the head, above the name plate / posture marker and the knockdown badge's place.
+		const FVector Screen = Project(Unit->GetActorLocation() + FVector(0.f, 0.f, Unit->GetSimpleCollisionHalfHeight() + 40.f), true);
+		if (Screen.Z <= 0.f)
+		{
+			continue;
+		}
+		const FString Badge = SuppressionRules::TierBadge(Each.Value.Tier);
+		float W = 0.f;
+		float H = 0.f;
+		Canvas->StrLen(Font, Badge, W, H);
+		const bool bPinned = Each.Value.Tier == ESuppressionTier::Pinned;
+		const FLinearColor BadgeColor = bPinned ? FLinearColor(1.f, 0.25f, 0.2f) : FLinearColor(1.f, 0.7f, 0.15f);
+		const float BarWidth = FMath::Max(W, 60.f);
+		const float BarHeight = 4.f;
+		const float Top = Screen.Y - 2.f * (H + 14.f);
+		const float X = Screen.X - BarWidth * 0.5f;
+		DrawRect(PanelColor, X - 4.f, Top - H - 6.f, BarWidth + 8.f, H + BarHeight + 10.f);
+		DrawText(Badge, BadgeColor, Screen.X - W * 0.5f, Top - H - 4.f, Font);
+		DrawRect(FLinearColor(0.15f, 0.15f, 0.18f, 0.9f), X, Top, BarWidth, BarHeight);
+		DrawRect(BadgeColor, X, Top, BarWidth * FMath::Clamp(Each.Value.Level, 0.f, 1.f), BarHeight);
 	}
 }
 

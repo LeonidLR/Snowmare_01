@@ -19,8 +19,9 @@ class UParticleSystemComponent;
  * (VehicleCombatRules::ChooseTarget: Passive holds, Defensive answers within 20 m once provoked, Aggressive engages
  * anything visible) or the Ctrl+click priority target, slews the turret / gun (vendor ABP TurretHorizontalAngle /
  * GunElevation) and fires the 30 mm autocannon (HE, splash, limited shells per map) or the coaxial MG (unlimited,
- * overheats; it only deals damage: user decision 2026-10-12, no suppression stagger). Line of sight from the muzzle socket gun_jntSocket; nothing within the dead zone
- * round the hull. Shots: tracers + muzzle flash (vendor Cascade PS_MuzzleFire_01), damage numbers through
+ * overheats). User decision 2026-10-26 (reverses the 2026-10-12 "no suppression stagger"): the MG and the cannon SUPPRESS - every
+ * round is reported to USuppressionSubsystem with machine-gun / cannon weighting (docs/design/SUPPRESSION.md; still no stagger
+ * status). Line of sight from the muzzle socket gun_jntSocket; nothing within the dead zone round the hull. Shots: tracers + muzzle flash (vendor Cascade PS_MuzzleFire_01), damage numbers through
  * UHealthComponent, kill credit = the gunner (AttackerSource = his name), noise for enemies.
  * Events VehicleTurretFired (Kind = "Cannon" / "MachineGun") and VehicleTurretKill.
  * P4: silent while the hull is disabled; a Ctrl+click on a barrel / mine / trapped object = one cannon shell at it once

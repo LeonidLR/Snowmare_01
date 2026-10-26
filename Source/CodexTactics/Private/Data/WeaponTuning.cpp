@@ -114,6 +114,8 @@ namespace WeaponTuning
 		Number(Json, TEXT("status_duration"), Weapon.StatusDuration);
 		Number(Json, TEXT("status_tick_damage"), Weapon.StatusTickDamage);
 		Integer(Json, TEXT("max_range_cells"), Weapon.MaxRangeCells);
+		Number(Json, TEXT("full_auto_interval"), Weapon.FullAutoInterval); // suppressive fire (2026-10-26)
+		Number(Json, TEXT("suppression_weight"), Weapon.SuppressionWeight);
 		Floats(Json, TEXT("base_hit_chances"), Weapon.BaseHitChances);
 		Floats(Json, TEXT("distance_damage_multipliers"), Weapon.DistanceDamageMultipliers);
 	}
@@ -132,6 +134,8 @@ namespace WeaponTuning
 		Json->SetNumberField(TEXT("status_duration"), Round4(Weapon.StatusDuration));
 		Json->SetNumberField(TEXT("status_tick_damage"), Round4(Weapon.StatusTickDamage));
 		Json->SetNumberField(TEXT("max_range_cells"), Round4(Weapon.MaxRangeCells));
+		Json->SetNumberField(TEXT("full_auto_interval"), Round4(Weapon.FullAutoInterval));
+		Json->SetNumberField(TEXT("suppression_weight"), Round4(Weapon.SuppressionWeight));
 		Json->SetArrayField(TEXT("base_hit_chances"), ToArray(Weapon.BaseHitChances));
 		Json->SetArrayField(TEXT("distance_damage_multipliers"), ToArray(Weapon.DistanceDamageMultipliers));
 		return Json;

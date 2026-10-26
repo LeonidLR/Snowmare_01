@@ -95,6 +95,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Ammo")
 	float ReloadTime = 2.68f;
 
+	/**
+	 * Seconds between rounds on full-auto, used by the SUPPRESS order (user decision 2026-10-26: assault rifles switch to full-auto
+	 * while suppressing; docs/design/SUPPRESSION.md). 0 = no full-auto: the order fires at FireRate. weapons_tuning.json
+	 * "full_auto_interval" (the master copy; the asset value is the fallback).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Suppression", meta = (ClampMin = "0"))
+	float FullAutoInterval = 0.f;
+
+	/** This weapon's rounds suppress x this (SuppressionRules weight by fire class x it). weapons_tuning.json "suppression_weight". */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Suppression", meta = (ClampMin = "0"))
+	float SuppressionWeight = 1.f;
+
+	bool HasFullAuto() const { return FullAutoInterval > 0.f; }
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Status")
 	EStatusEffect StatusEffect = EStatusEffect::None;
 

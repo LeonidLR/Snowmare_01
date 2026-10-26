@@ -170,6 +170,8 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	// Stealth lure (user decisions 2026-10-18): 5 whistle, 6 stone throw (every letter is taken; 5 / 6 sit next to the squad keys).
 	StealthWhistleAction = MakeAction(TEXT("IA_StealthWhistle"), EKeys::Five);
 	StealthThrowAction = MakeAction(TEXT("IA_StealthThrow"), EKeys::Six);
+	// Suppressive fire (game designer decisions 2026-10-26): 7, the next free number key, arms the suppress aim.
+	SuppressAction = MakeAction(TEXT("IA_Suppress"), EKeys::Seven);
 	QuickSaveAction = MakeAction(TEXT("IA_QuickSave"), EKeys::F5);
 	QuickLoadAction = MakeAction(TEXT("IA_QuickLoad"), EKeys::F9);
 }
@@ -263,6 +265,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(ItemActions[4], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseHeatPackKey);
 	Input->BindAction(StealthWhistleAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StealthWhistleKey);
 	Input->BindAction(StealthThrowAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StealthThrowKey);
+	Input->BindAction(SuppressAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SuppressKey);
 	Input->BindAction(QuickSaveAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickSaveKey);
 	Input->BindAction(QuickLoadAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickLoadKey);
 }
@@ -335,6 +338,11 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (HasCoverPreview() && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape)))
 	{
 		HideCoverPreview();
+	}
+	// Suppressive fire (2026-10-26): RMB / Esc disarm the suppress aim; it does not survive turn-based combat either.
+	if (bSuppressAimArmed && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape) || GetActiveTurnBased()))
+	{
+		bSuppressAimArmed = false;
 	}
 
 	// Rev 5c manual corner peek: hovering the end of the leader's (turn-based: the active unit's) cover - high, or low since rev 5e -

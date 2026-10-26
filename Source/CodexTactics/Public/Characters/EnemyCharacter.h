@@ -18,6 +18,7 @@ class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class UVisionConeComponent;
 enum class ENoiseReaction : uint8;
+enum class ESuppressionWeapon : uint8; // Combat/SuppressionRules.h
 
 /** A loud squad action enemies can hear (PerceptionRules gunshot / grenade radius). */
 enum class ESquadNoise : uint8
@@ -396,6 +397,17 @@ public:
 
 	/** Current victim (operative, turret or generator). */
 	AActor* GetCurrentTarget() const { return CurrentTarget.Get(); }
+
+	/**
+	 * Suppressive fire (game designer decisions 2026-10-26, USuppressionSubsystem): a ranged enemy that is suppressed or pinned does not
+	 * fire at all and hugs his cover (holds his spot, no advance / flank) - the window in which the player flanks him. Melee enemies are
+	 * not held. A deliberate "suppress target" intent for the enemy AI is USuppressionSubsystem::SetSuppressIntent (hook, unused yet).
+	 */
+	bool IsHeldBySuppression() const;
+	/** Seconds this enemy held his fire / spot because of suppression (smokes). */
+	float GetSuppressionHoldSeconds() const { return SuppressionHoldSeconds; }
+	/** Shots this enemy fired while suppressed (0 by the rule; smokes). */
+	int32 GetShotsWhileSuppressed() const { return ShotsWhileSuppressed; }
 
 	/** Smokes: forces the victim (the behaviour tick may re-pick it; freeze the enemy with CustomTimeDilation 0 first). */
 	void SetCurrentTargetForTesting(AActor* Target) { CurrentTarget = Target; }
@@ -995,6 +1007,16 @@ protected:
 	 */
 	void TickRangedVsVehicle(class AVehiclePawn& Vehicle, float DeltaTime, float RangeCm, float Damage, float CooldownSeconds, float MuzzleHeightCm,
 		float HitChance);
+
+	/** Suppressive fire (2026-10-26): seconds held by suppression / shots that left while suppressed (IsHeldBySuppression). */
+	float SuppressionHoldSeconds = 0.f;
+	int32 ShotsWhileSuppressed = 0;
+	/**
+	 * Reports one of this enemy's rounds at the squad to USuppressionSubsystem (Start -> End, hit Target or not; the deliberate intent
+	 * when Target is the one SetSuppressIntent named).
+	 */
+	void ReportRoundAtSquad(const FVector& Start, const FVector& End, const AActor* Target, bool bHit, bool bStruckCover,
+		ESuppressionWeapon Weapon);
 
 	/**
 	 * The behaviour part of Tick (targets, attacks, movement); Tick then turns the body (UpdateMovementFacing).

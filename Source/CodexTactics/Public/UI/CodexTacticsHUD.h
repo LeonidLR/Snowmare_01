@@ -310,6 +310,11 @@ private:
 	void DrawStealthLureMarkers();
 	/** Sprint 14: «[KNOCKED DOWN]» badge + recovery bar over every knocked-down unit (squad and enemies). */
 	void DrawKnockdownBars();
+	/**
+	 * Suppressive fire (2026-10-26): "SUPPRESSED" (amber) / "PINNED" (red) over every suppressed unit, with its level bar; and, while
+	 * the suppress aim is armed (key 7), a hint next to the cursor.
+	 */
+	void DrawSuppressionBadges();
 	/** Horde warning (UHordeSubsystem): «HORDE!» banner, distance, and an arrow at the screen edge towards it. */
 	void DrawHordeWarning();
 	/** Colour of a fire posture on the HUD (Passive grey, Defensive amber, Aggressive red). */

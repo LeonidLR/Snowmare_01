@@ -21,6 +21,7 @@
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/QuickFireRules.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
@@ -166,6 +167,7 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 			Vehicles->CancelBoarding(Group[Index]); // ... and a walk to the APC's door
 		}
 		Group[Index]->CancelQuickFire(); // ... and a quick fire burst (2026-10-19)
+		Group[Index]->CancelSuppressFire(TEXT("a move order")); // ... and suppressive fire (2026-10-26)
 		if (bPlan)
 		{
 			const FVector Planned = Squad->PlanMove(Group[Index], Targets[Index], bSprint, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
@@ -894,6 +896,178 @@ void ACodexTacticsPlayerController::IssueQuickFire(const FHitResult& Hit)
 			: LOCTEXT("QuickFire", "Fire!"));
 	}
 	ControllerCommands::Report(this, PlayerCommands::QuickFire, Enemy, bPlan, Accepted > 1, Leader, Point);
+}
+
+bool ACodexTacticsPlayerController::IsSelectionSuppressing() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader)
+	{
+		return false;
+	}
+	const TArray<AOperativeCharacter*> Shooters = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+	return Shooters.ContainsByPredicate([](const AOperativeCharacter* Member) { return Member && (Member->HasSuppressOrder() || Member->HasPlannedSuppress()); });
+}
+
+void ACodexTacticsPlayerController::SuppressKey()
+{
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGameMessageSubsystem* Messages = World ? World->GetSubsystem<UGameMessageSubsystem>() : nullptr;
+	if (!World || !Leader || IsDialogueOpen() || RefuseIfLocked(PlayerCommands::Suppress))
+	{
+		return;
+	}
+	if (bSuppressAimArmed)
+	{
+		bSuppressAimArmed = false; // the key again: no order
+		return;
+	}
+	// Decision 5: no suppression in turn-based combat; the A/B switch off: no order.
+	if (GetActiveTurnBased() || !USuppressionSubsystem::IsEnabled())
+	{
+		if (Messages)
+		{
+			Messages->PostMessage(LOCTEXT("TacticsSpeaker", "TACTICS"), GetActiveTurnBased()
+				? LOCTEXT("SuppressTurnBased", "Suppressive fire is real time only.")
+				: LOCTEXT("SuppressOff", "Suppressive fire is switched off."));
+		}
+		return;
+	}
+	if (BlockRealTimeOrder())
+	{
+		return;
+	}
+	// The selection is suppressing: the key ceases it (planned ones too).
+	if (IsSelectionSuppressing())
+	{
+		const TArray<AOperativeCharacter*> Shooters = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+		for (AOperativeCharacter* Shooter : Shooters)
+		{
+			Shooter->CancelSuppressFire(TEXT("ceased by the player"));
+			Shooter->ClearPlannedSuppress();
+		}
+		if (Messages)
+		{
+			Messages->PostMessage(Shooters.Num() > 1 ? LOCTEXT("SquadSpeaker", "SQUAD") : Leader->DisplayName, LOCTEXT("SuppressCeased", "Cease suppressive fire."));
+		}
+		ControllerCommands::Report(this, PlayerCommands::Suppress, nullptr, false, Shooters.Num() > 1, Leader);
+		return;
+	}
+	HideCoverPreview();
+	bSuppressAimArmed = true;
+	if (Messages)
+	{
+		Messages->PostMessage(LOCTEXT("TacticsSpeaker", "TACTICS"), LOCTEXT("SuppressAim",
+			"SUPPRESS: click an enemy or a spot (RMB / Esc: cancel). Full-auto bursts - lots of ammo."));
+	}
+}
+
+void ACodexTacticsPlayerController::IssueSuppress(const FHitResult& Hit)
+{
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGameMessageSubsystem* Messages = World ? World->GetSubsystem<UGameMessageSubsystem>() : nullptr;
+	bSuppressAimArmed = false;
+	if (!World || !Leader || IsDialogueOpen() || RefuseIfLocked(PlayerCommands::Suppress))
+	{
+		return;
+	}
+	if (GetActiveTurnBased() || !USuppressionSubsystem::IsEnabled())
+	{
+		if (Messages)
+		{
+			Messages->PostMessage(LOCTEXT("TacticsSpeaker", "TACTICS"), GetActiveTurnBased()
+				? LOCTEXT("SuppressTurnBased", "Suppressive fire is real time only.")
+				: LOCTEXT("SuppressOff", "Suppressive fire is switched off."));
+		}
+		return;
+	}
+	if (BlockRealTimeOrder())
+	{
+		return;
+	}
+	const FVector Point = Hit.ImpactPoint;
+	// The enemy: a live one under the cursor (seen or not - unseen, his spot is the point), else a visible live one near the point.
+	AActor* Enemy = nullptr;
+	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+	if (AActor* HitActor = Hit.GetActor(); HitActor && HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		const UHealthComponent* Health = HitActor->FindComponentByClass<UHealthComponent>();
+		if ((!Health || Health->IsAlive()) && (!Sight || Sight->IsVisibleToSquad(HitActor)))
+		{
+			Enemy = HitActor;
+		}
+	}
+	if (!Enemy)
+	{
+		TArray<AActor*> EnemyActors;
+		TArray<FQuickFireCandidate> Candidates;
+		for (AActor* Each : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
+		{
+			if (!IsValid(Each))
+			{
+				continue;
+			}
+			const UHealthComponent* Health = Each->FindComponentByClass<UHealthComponent>();
+			FQuickFireCandidate Candidate;
+			Candidate.Location = Each->GetActorLocation();
+			Candidate.bAlive = !Health || Health->IsAlive();
+			Candidate.bVisible = !Each->IsHidden() && (!Sight || Sight->IsVisibleToSquad(Each));
+			Candidates.Add(Candidate);
+			EnemyActors.Add(Each);
+		}
+		const int32 Picked = QuickFireRules::PickTarget(Point, Candidates, QuickFireRules::GetConfig().EnemyPickRadiusCm);
+		Enemy = Picked != INDEX_NONE ? EnemyActors[Picked] : nullptr;
+	}
+
+	// Who: the box-selected group, else the operative you control; nobody aboard a vehicle.
+	TArray<AOperativeCharacter*> Shooters = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+	Shooters.RemoveAll([](const AOperativeCharacter* Member) { return !Member || VehicleQueries::IsMounted(Member); });
+	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+	const bool bPlan = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	int32 Accepted = 0;
+	for (AOperativeCharacter* Shooter : Shooters)
+	{
+		Accepted += (bPlan ? Shooter->PlanSuppress(Enemy, Point) : Shooter->OrderSuppress(Enemy, Point)) ? 1 : 0;
+	}
+	if (Accepted == 0)
+	{
+		return; // each refusal shows over the operative (enraged, panicking, knife, frozen weapon, low ammo)
+	}
+	HideCoverPreview();
+	// Firing at a visible enemy is an attack order (an ambush level / a placed enemy: the fight starts, as Ctrl + click).
+	if (Enemy && !bPlan)
+	{
+		ULevelEncounterSubsystem::NotifyHostileContactIn(World, EAmbushTrigger::AttackOrder, Enemy);
+	}
+	if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+	{
+		const FVector Marker = Enemy ? Enemy->GetActorLocation() - FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight()) : Point;
+		if (bPlan)
+		{
+			Feedback->SpawnWaypointMarker(Marker);
+		}
+		else
+		{
+			Feedback->SpawnFirePing(Marker);
+		}
+		if (Enemy)
+		{
+			Feedback->HighlightTarget(Enemy);
+		}
+	}
+	if (Messages)
+	{
+		const FText Speaker = Accepted > 1 ? LOCTEXT("SquadSpeaker", "SQUAD") : Leader->DisplayName;
+		Messages->PostMessage(Speaker, bPlan
+			? FText::Format(LOCTEXT("SuppressPlanned", "[PLAN] Suppressive fire planned ({0})! [SPACE - fire]"), Accepted)
+			: LOCTEXT("SuppressGo", "Suppressive fire! Keep their heads down!"));
+	}
+	ControllerCommands::Report(this, PlayerCommands::Suppress, Enemy, bPlan, Accepted > 1, Leader, Point);
 }
 
 void ACodexTacticsPlayerController::SetSquadCeaseFire(bool bCease)

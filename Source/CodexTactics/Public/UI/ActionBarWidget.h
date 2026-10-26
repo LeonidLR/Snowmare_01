@@ -102,6 +102,13 @@ public:
 	FText GetStealthButtonText(bool bThrow) const;
 	bool IsStealthButtonEnabled(bool bThrow) const;
 
+	/** SUPPRESS button (2026-10-26; smokes): its label ("SUPPRESS [7]" / "AIM... [7]" / "STOP SUPP. [7]") and whether it is enabled. */
+	FText GetSuppressButtonText() const;
+	bool IsSuppressButtonEnabled() const;
+	/** The SUPPRESS button's click (the 7 key: ACodexTacticsPlayerController::SuppressKey). */
+	UFUNCTION()
+	void HandleSuppress();
+
 	/** Sprint 13: an inventory drag dropped on squad slot Index -> ACodexTacticsHUD::HandleTransferDropOnActor. */
 	ETransferRequestOutcome HandleTransferDropOnSlot(int32 Index, AOperativeCharacter* Sender, ETransferItem Item);
 
@@ -189,6 +196,16 @@ private:
 
 	/** Updates both lure buttons (Refresh). */
 	void RefreshStealthButtons(const class AOperativeCharacter& Leader);
+
+	/** Suppressive fire (2026-10-26): the SUPPRESS button (key 7). */
+	UPROPERTY()
+	TObjectPtr<UButton> SuppressButton;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> SuppressText;
+
+	/** Updates the SUPPRESS button (Refresh): armed aim / the selection suppressing / off in turn-based combat. */
+	void RefreshSuppressButton();
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> BarAutonomyText;

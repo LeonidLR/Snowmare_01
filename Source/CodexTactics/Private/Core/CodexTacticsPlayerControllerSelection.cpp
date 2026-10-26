@@ -105,6 +105,17 @@ void ACodexTacticsPlayerController::OnClick()
 		}
 		return;
 	}
+	// Suppressive fire (2026-10-26): with the suppress aim armed (7 / SUPPRESS) the click is the SUPPRESS order (an enemy or a spot).
+	if (bSuppressAimArmed && !bOrdersLocked)
+	{
+		bSuppressAimArmed = false;
+		FHitResult Hit;
+		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		{
+			IssueSuppress(Hit);
+		}
+		return;
+	}
 	// Grenade aim: LMB throws (Godot _handle_grenade_throw_click).
 	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->IsAiming() && !bOrdersLocked)
 	{

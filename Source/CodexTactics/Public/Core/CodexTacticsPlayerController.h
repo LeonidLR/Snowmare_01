@@ -113,6 +113,25 @@ public:
 	 */
 	void IssueQuickFire(const FHitResult& Hit);
 
+	/**
+	 * Key 7 / the action bar's SUPPRESS (game designer decisions 2026-10-26, docs/design/SUPPRESSION.md): arms the suppress aim (the next
+	 * LMB click picks the target: IssueSuppress); again = disarms it. While the selection is suppressing and the aim is not armed: ceases
+	 * their suppressive fire. Refused in turn-based combat (no suppression there) and with Codex.Combat.Suppression 0. Tutorial lock
+	 * "Attack.Suppress" (under "Attack.*").
+	 */
+	void SuppressKey();
+	/** The suppress aim is armed (the next LMB click is the SUPPRESS order); RMB / Esc disarm it. */
+	bool IsSuppressAimArmed() const { return bSuppressAimArmed; }
+	void CancelSuppressAim() { bSuppressAimArmed = false; }
+	/** Any operative of the selection (the box-selected group, else the leader) runs a SUPPRESS order. */
+	bool IsSelectionSuppressing() const;
+	/**
+	 * The SUPPRESS order at Hit: a live enemy under the cursor, else a visible live enemy within ~1.5 m of the point (QuickFireRules::PickTarget),
+	 * is the target (his cover takes the rounds); anything else = suppressive fire at the spot. The selection (box group, else the leader;
+	 * nobody aboard) fires; tactical pause: planned (marker), given on the release; turn-based: a hint, nothing. Public for headless checks.
+	 */
+	void IssueSuppress(const FHitResult& Hit);
+
 	/** RMB pressed / released exactly as the key (IA_CameraDragRotate: the camera drag; it never fires). Headless checks. */
 	void RightMousePressed() { CameraDragRotateStart(); }
 	void RightMouseReleased() { CameraDragRotateStop(); }
@@ -351,6 +370,8 @@ private:
 	bool bRelocateSelectMode = false;
 	/** The combat sub-mode when the "MOVE OBJ" pick started: a pause entered / left drops the pick (bug 2026-10-25). */
 	ECodexCombatMode RelocateSelectCombatMode = ECodexCombatMode::None;
+	/** Key 7 / SUPPRESS armed the suppress aim: the next LMB click is the SUPPRESS order (2026-10-26). */
+	bool bSuppressAimArmed = false;
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */
 	bool IsDialogueOpen() const;
 	void DialogueNext();
@@ -525,6 +546,10 @@ private:
 	/** Stealth lure keys 5 (whistle) / 6 (throw) - free number keys next to the squad keys 1-4. */
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> StealthWhistleAction;
+
+	/** Suppressive fire key 7 (2026-10-26): the next free number key after the stealth lure's 5 / 6 (every letter is taken). */
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> SuppressAction;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> StealthThrowAction;

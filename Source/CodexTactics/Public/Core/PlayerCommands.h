@@ -240,6 +240,11 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName TargetedShot;
 	/** Ctrl + click on a point with nothing to aim at (2026-10-19): the selection fires there at once (a tutorial lock under "Attack.*"). */
 	extern CODEXTACTICS_API const FName QuickFire;
+	/**
+	 * 7 (or the action bar's SUPPRESS), then a click on an enemy or a spot (2026-10-26): the selection lays down suppressive fire
+	 * (full-auto bursts, lots of ammo) - a tutorial lock under "Attack.*". 7 while the selection suppresses: cease it.
+	 */
+	extern CODEXTACTICS_API const FName Suppress;
 	/** Plain click on a live enemy during a wave: priority target. */
 	extern CODEXTACTICS_API const FName PriorityTarget;
 	/** G: grenade in hand / throw aim. */

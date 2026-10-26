@@ -74,6 +74,7 @@ namespace PlayerCommands
 
 	const FName TargetedShot(TEXT("Attack.TargetedShot"));
 	const FName QuickFire(TEXT("Attack.QuickFire"));
+	const FName Suppress(TEXT("Attack.Suppress"));
 	const FName PriorityTarget(TEXT("Attack.Priority"));
 	const FName GrenadeAim(TEXT("Grenade.Aim"));
 	const FName GrenadeThrow(TEXT("Grenade.Throw"));
@@ -214,6 +215,7 @@ namespace PlayerCommands
 			{ DeployOther, TEXT("Inventory"), TEXT("Items & traps"), TEXT("Set up a campfire / stove") },
 			{ TargetedShot, TEXT("Ctrl+Click"), TEXT("Combat"), TEXT("Fire at the enemy: targeted shot at an enemy (or the snow at his feet), a barrel, a mine or a trapped object") },
 			{ QuickFire, TEXT("Ctrl+Click"), TEXT("Combat"), TEXT("Fire at the point: anywhere else the selected operative(s) turn and fire there at once") },
+			{ Suppress, TEXT("7"), TEXT("Combat"), TEXT("Suppressive fire: 7, then click an enemy or a spot - full-auto bursts pin him down (lots of ammo; real time only); 7 again stops it") },
 			{ PriorityTarget, TEXT("Click enemy"), TEXT("Combat"), TEXT("Priority target") },
 			{ ToggleVisionCones, TEXT("O"), TEXT("Combat"), TEXT("Show / hide the enemies' vision cones on the ground") },
 			{ ToggleSquadVisionCones, TEXT("Shift+O"), TEXT("Combat"), TEXT("Show / hide your squad's vision cones: what your operatives can see") },

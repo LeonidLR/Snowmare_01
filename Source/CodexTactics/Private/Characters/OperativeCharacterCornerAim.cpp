@@ -14,6 +14,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/PeekSightRules.h"
 #include "Combat/SightRules.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -170,6 +171,12 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 	if (bIsReloading)
 	{
 		EndCornerAim(ECornerAimDecision::DuckToReload, TEXT("reloading"));
+		return;
+	}
+	// Suppressive fire (game designer decision 2026-10-26): suppressed / pinned he keeps his head down - no peeking.
+	if (!USuppressionSubsystem::MayExposeNow(this))
+	{
+		EndCornerAim(ECornerAimDecision::DuckForSafety, TEXT("suppressed: head down"));
 		return;
 	}
 	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsCornerHoldSpot() && !IsManualCornerPeekSpot())

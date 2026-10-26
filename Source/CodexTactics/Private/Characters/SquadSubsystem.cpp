@@ -660,6 +660,7 @@ void USquadSubsystem::HandleTacticalPauseReleased()
 	for (AOperativeCharacter* Member : GetMembers())
 	{
 		Member->ExecutePlannedQuickFire();
+		Member->ExecutePlannedSuppress(); // the SUPPRESS order planned in the pause (2026-10-26)
 	}
 	for (AOperativeCharacter* Member : GetMembers())
 	{

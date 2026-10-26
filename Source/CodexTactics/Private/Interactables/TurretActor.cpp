@@ -6,6 +6,7 @@
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -222,6 +223,16 @@ void ATurretActor::Fire(AActor* Target, float Cover, const FVector& Aim)
 	{
 		Feedback->SpawnTurretTracer(GetActorLocation() + FVector(0.f, 0.f, 70.f), Aim);
 	}
+	// Suppressive fire (user decision 2026-10-26: turrets suppress, MG weighting): the burst pins its target and whoever it passes.
+	FSuppressionRound Round;
+	Round.Shooter = this;
+	Round.bAtEnemies = true;
+	Round.Start = GetActorLocation() + FVector(0.f, 0.f, 70.f);
+	Round.End = Aim;
+	Round.Target = Target;
+	Round.bHitTarget = true;
+	Round.Weapon = ESuppressionWeapon::MachineGun;
+	USuppressionSubsystem::Report(this, Round);
 	OnFired.Broadcast(this, Target, Aim);
 	ReceiveFired(Target, Aim);
 }

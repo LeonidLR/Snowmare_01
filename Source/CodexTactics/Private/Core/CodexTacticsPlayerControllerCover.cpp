@@ -633,6 +633,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 				WallVehicles->CancelBoarding(Member);
 			}
 			Member->CancelQuickFire();
+			Member->CancelSuppressFire(TEXT("a cover order"));
 		}
 		if (UCombatFeedbackSubsystem* WallFeedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
 		{
@@ -920,6 +921,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 			Vehicles->CancelBoarding(Member);
 		}
 		Member->CancelQuickFire();
+		Member->CancelSuppressFire(TEXT("a group cover order"));
 		const FGroupCoverAssignment& Each = Plan[Index];
 		bool bSent = false;
 		if (Each.Kind == EGroupCoverSpotKind::Slot && ChosenSlots.IsValidIndex(Each.Index))

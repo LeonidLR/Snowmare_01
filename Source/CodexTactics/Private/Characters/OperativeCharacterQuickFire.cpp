@@ -13,6 +13,7 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/QuickFireRules.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -283,6 +284,18 @@ const TCHAR* AOperativeCharacter::RunQuickFire(float DeltaTime, AActor*& OutTarg
 
 void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 {
+	const FQuickFireConfig& Config = QuickFireRules::GetConfig();
+	const int32 StanceIndex = Stance == EOperativeStance::Prone ? 2 : (Stance == EOperativeStance::Crouching ? 1 : 0);
+	FOperativeAreaRound Spec;
+	Spec.SpreadDeg = QuickFireRules::GetSpreadDeg(StanceIndex, Config);
+	Spec.HitMultiplier = Config.AreaFireHitMultiplier;
+	Spec.NextRoundDelay = FMath::Max(0.08f, CurrentWeapon ? CurrentWeapon->FireRate : 0.65f);
+	Spec.LogTag = TEXT("QuickFire");
+	FireAreaRound(Aim, Spec);
+}
+
+void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeAreaRound& Spec)
+{
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -302,16 +315,20 @@ void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 		OnWeaponMisfiredNative.Broadcast(this);
 		return;
 	}
-	ShootTimer = FMath::Max(0.08f, CurrentWeapon ? CurrentWeapon->FireRate : 0.65f);
+	ShootTimer = FMath::Max(0.05f, Spec.NextRoundDelay);
 	// The muzzle flash gives him away, patrols hear the shot (the normal path: an alerted patrol starts the fight).
 	if (UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>())
 	{
 		Sight->NotifyFired(this);
 	}
 	AEnemyCharacter::NotifySquadNoise(World, GetActorLocation(), ESquadNoise::Gunshot);
+	// Suppressed (2026-10-26): blind, with the large spread; pinned he never gets here (RunCombatShooting holds the fire).
+	const FSuppressionFireEffect Suppressed = USuppressionSubsystem::GetOperativeFireOf(this);
+	ShotsWhilePinned += Suppressed.bMayFire ? 0 : 1;
+	SuppressedBlindShots += Suppressed.bBlind ? 1 : 0;
 	if (bInCover)
 	{
-		(CoverFireMode == ECoverFireMode::BlindFire ? CoverBlindShots : CoverLeanShots) += 1;
+		(CoverFireMode == ECoverFireMode::BlindFire || Suppressed.bBlind ? CoverBlindShots : CoverLeanShots) += 1;
 	}
 	else if (bOpenShotReturnPending)
 	{
@@ -326,8 +343,7 @@ void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 	const float Length = static_cast<float>(Direction.Size());
 	if (!bForceHitForTesting && Length > KINDA_SMALL_NUMBER)
 	{
-		const int32 StanceIndex = Stance == EOperativeStance::Prone ? 2 : (Stance == EOperativeStance::Crouching ? 1 : 0);
-		const float SpreadRad = FMath::DegreesToRadians(QuickFireRules::GetSpreadDeg(StanceIndex, Config));
+		const float SpreadRad = FMath::DegreesToRadians(FMath::Clamp(Spec.SpreadDeg * Suppressed.SpreadMultiplier, 0.f, 45.f));
 		Direction = FMath::VRandCone(Direction / Length, SpreadRad) * Length;
 	}
 	const float Range = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f;
@@ -377,7 +393,7 @@ void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 	FVector TracerEnd = Stop;
 	if (Crossed != INDEX_NONE)
 	{
-		// An enemy in the line: the weapon's chance at that distance (cold hands too) times the area-fire factor.
+		// An enemy in the line: the weapon's chance at that distance (cold hands too) times the area-fire factor (and the suppression's).
 		AActor* EnemyHit = CapsuleActors[Crossed];
 		Struck = EnemyHit;
 		TracerEnd = Muzzle + (Stop - Muzzle).GetSafeNormal() * AlongCm;
@@ -388,7 +404,7 @@ void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 		{
 			Chance = FMath::Clamp(Chance - ColdSurvival->GetAimPenalty(), 0.05f, 0.99f);
 		}
-		bHit = bForceHitForTesting || FMath::FRand() <= QuickFireRules::GetAreaHitChance(Chance, Config);
+		bHit = bForceHitForTesting || FMath::FRand() <= FMath::Clamp(Chance * Spec.HitMultiplier * Suppressed.HitMultiplier, 0.f, 1.f);
 		if (bHit)
 		{
 			ApplyRangedHit(EnemyHit, 1.f, DistCells, IsRaging());
@@ -404,6 +420,9 @@ void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 			bHit = DetonateShotTarget(Struck, Kind, DisplayName);
 		}
 	}
+	// Suppression (2026-10-26): the round suppresses the enemy it crossed and every one it passed near or whose cover it struck.
+	ReportOwnRound(Muzzle, TracerEnd, Crossed != INDEX_NONE ? Struck : nullptr, bHit && Crossed != INDEX_NONE, bBlocked && Crossed == INDEX_NONE,
+		Spec.bFullAuto);
 	NoteShotAim(nullptr, Aim, true);
 	OnWeaponFired.Broadcast(this, Struck, bHit);
 	OnWeaponFiredNative.Broadcast(this, Struck, bHit);
@@ -412,9 +431,9 @@ void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 		Feedback->SpawnTracer(GetWeaponMuzzleLocation(), TracerEnd, CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
 			CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic);
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[QuickFire] %s: round to (%.0f, %.0f, %.0f) -> %s%s"), *DisplayName.ToString(), TracerEnd.X, TracerEnd.Y,
-		TracerEnd.Z, Struck ? *Struck->GetName() : (bBlocked && Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("nothing")),
-		Struck ? (bHit ? TEXT(" (hit)") : TEXT(" (no hit)")) : TEXT(""));
+	UE_LOG(LogCodexTactics, Display, TEXT("[%s] %s: round to (%.0f, %.0f, %.0f) -> %s%s%s"), Spec.LogTag, *DisplayName.ToString(), TracerEnd.X,
+		TracerEnd.Y, TracerEnd.Z, Struck ? *Struck->GetName() : (bBlocked && Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("nothing")),
+		Struck ? (bHit ? TEXT(" (hit)") : TEXT(" (no hit)")) : TEXT(""), Suppressed.bBlind ? TEXT(" [suppressed: blind]") : TEXT(""));
 	if (UsesAmmo() && CurrentClip <= 0)
 	{
 		StartReload();
