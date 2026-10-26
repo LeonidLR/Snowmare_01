@@ -295,7 +295,7 @@ blends 0.3 s while he walks).
 ("Fire" = the graph's Layered blend per bone from spine_01, the path the grenade / hit / crouched interaction clips use): the legs keep the locomotion. Loop A
 x 2-4 (`BlizzardWalkLoopsMin/Max`) -> 3Tranzit -> loop B -> 5Tranzit ... (the weather idles' `WarmIdleRules::NextClipStep`), the first loop random (two operatives
 side by side do not mirror). Blend in / out `BlizzardWalkBlendSeconds` 0.3, out `BlizzardWalkInterruptBlendSeconds` 0.15 when the rifle is needed. While it
-shows: weapon hidden (`bHideWeaponInBlizzardWalk`, the clips hold both hands before the face; it shows again as the pose blends out), left-hand IK and aim
+shows: weapon stays in the right hand (`bHideWeaponInBlizzardWalk` = false since 2026-10-26; tick it to hide the rifle while the pose shows), left-hand IK and aim
 offset off. Graph hooks: `bBlizzardWalkActive`, `BlizzardAmount`.
 **Gate (pure `Characters/BlizzardWalkRules`, tests `CodexTactics.Characters.BlizzardWalk.*`):** blizzard amount = (weather == Blizzard ? 1 - blend : 0) + (next ==
 Blizzard ? blend : 0) from `UEnvironmentSubsystem` (`GetWeather` / `GetNextWeather` / `GetTransitionBlend`, per frame) - on at >= 0.5, off below 0.35, so the 45 s
@@ -310,8 +310,7 @@ weight > 0.8 in 0.25 s, both hands > 25 cm before the chest and > 15 cm above it
 handguard at chest height, so "further forward than the normal walk" is not the measure for the left hand - the pose RAISES the hands +18 cm), feet still swing,
 no full-body clip; a shot -> 0 in 0.05 s and stays 0 during the aim hold, back after it; a Closed zone over the lane -> 0; stop -> 0; Clear -> 0; crouch-walk -> 0.
 `CodexTactics.BlizzardWalkSmoke clip` (rendered, `-RenderOffscreen -benchmark -fps=30`) writes ~10 s of frames to `Saved/Screenshots/BlizzardWalk/`.
-**Eyeball in PIE:** the storm pose with the weapon hidden reads as "shielding the face"; if the user prefers the rifle kept, untick `bHideWeaponInBlizzardWalk`
-(the rifle then follows hand_r up to the face) or give the rifle a back socket later.
+**Eyeball in PIE:** the rifle follows hand_r up beside the face (rendered check, no clipping through the head); `bHideWeaponInBlizzardWalk` = true hides it instead.
 
 ## Frozen PMC Fighter: the Frostbitten's animation on the Cyberpunk_Explorer_A body (game designer 2026-10-20)
 

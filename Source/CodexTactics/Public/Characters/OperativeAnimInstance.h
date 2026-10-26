@@ -1306,9 +1306,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk", meta = (ClampMin = "1"))
 	int32 BlizzardWalkLoopsMax = 4;
 
-	/** Hide the weapon while the storm pose holds both hands in front of the face (it shows again as the pose blends out). */
+	/** Hide the weapon while the storm pose holds both hands in front of the face (it shows again as the pose blends out).
+	 *  Default off (game designer 2026-10-26): the rifle stays in the right hand and he shields his face with it in hand. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk")
-	bool bHideWeaponInBlizzardWalk = true;
+	bool bHideWeaponInBlizzardWalk = false;
 
 	/** The storm upper body plays (graph hook). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Blizzard Walk")
