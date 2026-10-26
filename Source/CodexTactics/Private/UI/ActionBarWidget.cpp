@@ -6,7 +6,6 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
-#include "Combat/SuppressionSubsystem.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "UI/CodexButtonFocus.h"
@@ -62,9 +61,6 @@ namespace
 	/** Stealth lure buttons: muted steel blue; brighter while the stone aim runs. */
 	const FLinearColor BarStealthColor = ACodexTacticsHUD::GodotColor(0.18f, 0.32f, 0.42f);
 	const FLinearColor BarStealthActiveColor = ACodexTacticsHUD::GodotColor(0.3f, 0.75f, 0.95f);
-	/** SUPPRESS button (2026-10-26): dark amber; bright while the aim is armed or the selection suppresses. */
-	const FLinearColor BarSuppressColor = ACodexTacticsHUD::GodotColor(0.45f, 0.3f, 0.08f);
-	const FLinearColor BarSuppressActiveColor = ACodexTacticsHUD::GodotColor(0.95f, 0.62f, 0.12f);
 	// Godot WeaponSelectorPanel: bg (0.08, 0.10, 0.14, 0.96), border (0.2, 0.75, 0.95), title (0.4, 0.9, 1.0).
 	const FLinearColor SelectorBack = ACodexTacticsHUD::GodotColor(0.08f, 0.1f, 0.14f, 0.96f);
 	const FLinearColor SelectorBorder = ACodexTacticsHUD::GodotColor(0.2f, 0.75f, 0.95f);
@@ -191,11 +187,6 @@ void UActionBarWidget::BuildDefaultLayout()
 	StealthThrowText = MakeText(TEXT("BarThrowText"), 10, BarTextColor);
 	StealthThrowButton = MakeSlotButton(TEXT("BarThrowButton"), BarStealthColor, 58.f, 56.f, StealthThrowText, Row);
 	StealthThrowButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleStealthThrow);
-
-	// Suppressive fire (game designer decisions 2026-10-26): the SUPPRESS button = key 7 (arm the aim, then click an enemy / a spot).
-	SuppressText = MakeText(TEXT("BarSuppressText"), 10, BarTextColor);
-	SuppressButton = MakeSlotButton(TEXT("BarSuppressButton"), BarSuppressColor, 64.f, 56.f, SuppressText, Row);
-	SuppressButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSuppress);
 
 	// Fire posture (user request 2026-10-06): three direct-select buttons with their keys , . /
 	PostureButtons.Reset();
@@ -454,7 +445,6 @@ void UActionBarWidget::Refresh()
 				: LOCTEXT("VehicleBoardTip", "Board the vehicle [Y] (Alt+Y: whole squad)")));
 	}
 	RefreshStealthButtons(*Leader);
-	RefreshSuppressButton();
 	if (PostureButtons.Num() == 3)
 	{
 		// The posture of the selected operative(s) is highlighted (user decision 2026-10-06; the group's when it shares
@@ -861,54 +851,6 @@ void UActionBarWidget::RefreshStealthButtons(const AOperativeCharacter& Leader)
 	{
 		Lure->UpdatePreview(Leader.GetActorLocation() - FVector(0.f, 0.f, Leader.GetSimpleCollisionHalfHeight()), EStealthLureKind::Whistle, true);
 	}
-}
-
-void UActionBarWidget::RefreshSuppressButton()
-{
-	const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer());
-	if (!SuppressButton || !SuppressText || !PC)
-	{
-		return;
-	}
-	const UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
-	const bool bTurnBased = TurnBased && TurnBased->IsActive();
-	const bool bEnabled = !bTurnBased && USuppressionSubsystem::IsEnabled();
-	const bool bArmed = PC->IsSuppressAimArmed();
-	const bool bSuppressing = !bArmed && PC->IsSelectionSuppressing();
-	const FString Key = PlayerCommands::GetKeyLabel(PlayerCommands::Suppress);
-	ActionBarDirty::SetText(SuppressText, FText::FromString(FString::Printf(TEXT("%s\n[%s]"),
-		bArmed ? TEXT("AIM...") : (bSuppressing ? TEXT("STOP SUPP.") : TEXT("SUPPRESS")), *Key)));
-	if (SuppressButton->GetIsEnabled() != bEnabled)
-	{
-		SuppressButton->SetIsEnabled(bEnabled);
-	}
-	ActionBarDirty::SetBackground(SuppressButton, bArmed || bSuppressing ? BarSuppressActiveColor : BarSuppressColor);
-	SetToolTipIfChanged(SuppressButton, !bEnabled
-		? (bTurnBased ? LOCTEXT("SuppressTipTurnBased", "Suppressive fire: real time only (no suppression in turn-based combat)")
-			: LOCTEXT("SuppressTipOff", "Suppressive fire is switched off"))
-		: (bSuppressing ? FText::Format(LOCTEXT("SuppressTipStop", "The selection lays down suppressive fire. Click / [{0}]: cease fire"), FText::FromString(Key))
-			: FText::Format(LOCTEXT("SuppressTip",
-				"Suppressive fire [{0}]: then click an enemy or a spot - full-auto bursts keep him in cover (a suppressed enemy does not fire back: flank him). Uses a lot of ammo."),
-				FText::FromString(Key))));
-}
-
-FText UActionBarWidget::GetSuppressButtonText() const
-{
-	return SuppressText ? SuppressText->GetText() : FText::GetEmpty();
-}
-
-bool UActionBarWidget::IsSuppressButtonEnabled() const
-{
-	return SuppressButton && SuppressButton->GetIsEnabled();
-}
-
-void UActionBarWidget::HandleSuppress()
-{
-	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
-	{
-		PC->SuppressKey();
-	}
-	Refresh();
 }
 
 FText UActionBarWidget::GetStealthButtonText(bool bThrow) const

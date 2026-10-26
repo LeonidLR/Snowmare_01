@@ -52,6 +52,20 @@ namespace SuppressionRules
 		{ TEXT("order.timeout_seconds"), &FSuppressionConfig::OrderTimeoutSeconds },
 		{ TEXT("order.aim_height_cm"), &FSuppressionConfig::OrderAimHeightCm },
 		{ TEXT("order.spot_scatter_cm"), &FSuppressionConfig::OrderSpotScatterCm },
+		{ TEXT("order.click_radius_cm"), &FSuppressionConfig::OrderClickRadiusCm },
+		{ TEXT("order.marker_radius_cm"), &FSuppressionConfig::OrderMarkerRadiusCm },
+		{ TEXT("explosion.pressure"), &FSuppressionConfig::ExplosionPressure },
+		{ TEXT("explosion.edge_factor"), &FSuppressionConfig::ExplosionEdgeFactor },
+		{ TEXT("explosion.radius_factor"), &FSuppressionConfig::ExplosionRadiusFactor },
+		{ TEXT("explosion.min_radius_cm"), &FSuppressionConfig::ExplosionMinRadiusCm },
+		{ TEXT("explosion.max_burst"), &FSuppressionConfig::ExplosionMaxBurst },
+		{ TEXT("explosion.decay_per_second"), &FSuppressionConfig::ExplosionDecayPerSecond },
+		{ TEXT("zone.cell_cm"), &FSuppressionConfig::ZoneCellCm },
+		{ TEXT("zone.density_threshold"), &FSuppressionConfig::ZoneDensityThreshold },
+		{ TEXT("zone.density_decay_per_second"), &FSuppressionConfig::ZoneDensityDecayPerSecond },
+		{ TEXT("zone.radius_cm"), &FSuppressionConfig::ZoneRadiusCm },
+		{ TEXT("zone.duration_seconds"), &FSuppressionConfig::ZoneDurationSeconds },
+		{ TEXT("zone.min_squad_distance_cm"), &FSuppressionConfig::ZoneMinSquadDistanceCm },
 	};
 
 	/** The values in force (GetConfig / SetConfig); loaded from the file on the first GetConfig. */
@@ -156,7 +170,7 @@ namespace SuppressionRules
 		}
 		State.Level = FMath::Clamp(State.Level + Amount, 0.f, 1.f);
 		State.QuietTime = 0.f;
-		State.Tier = ResolveTier(Config, State.Level, State.Tier);
+		State.Tier = ResolveTier(Config, EffectiveLevel(State), State.Tier);
 	}
 
 	void Step(const FSuppressionConfig& Config, FSuppressionState& State, float DeltaSeconds)
@@ -168,7 +182,112 @@ namespace SuppressionRules
 		State.QuietTime += DeltaSeconds;
 		const float Rate = FMath::Max(0.f, Config.DecayPerSecond) + (State.QuietTime >= Config.QuietSeconds ? FMath::Max(0.f, Config.QuietDecayPerSecond) : 0.f);
 		State.Level = FMath::Max(0.f, State.Level - Rate * DeltaSeconds);
-		State.Tier = ResolveTier(Config, State.Level, State.Tier);
+		State.Burst = FMath::Max(0.f, State.Burst - FMath::Max(0.f, Config.ExplosionDecayPerSecond) * DeltaSeconds);
+		State.Tier = ResolveTier(Config, EffectiveLevel(State), State.Tier);
+	}
+
+	float EffectiveLevel(const FSuppressionState& State)
+	{
+		return FMath::Clamp(State.Level + State.Burst, 0.f, 1.f);
+	}
+
+	float ExplosionReachCm(const FSuppressionConfig& Config, float BlastRadiusCm)
+	{
+		return FMath::Max(Config.ExplosionMinRadiusCm, FMath::Max(0.f, BlastRadiusCm) * Config.ExplosionRadiusFactor);
+	}
+
+	float ExplosionPressure(const FSuppressionConfig& Config, float BlastRadiusCm, float DistanceCm)
+	{
+		const float Reach = ExplosionReachCm(Config, BlastRadiusCm);
+		if (Reach <= 0.f || DistanceCm > Reach)
+		{
+			return 0.f;
+		}
+		return FMath::Max(0.f, Config.ExplosionPressure) * FMath::Lerp(1.f, Config.ExplosionEdgeFactor, FMath::Clamp(DistanceCm / Reach, 0.f, 1.f));
+	}
+
+	void AddBurst(const FSuppressionConfig& Config, FSuppressionState& State, float Amount)
+	{
+		if (Amount <= 0.f)
+		{
+			return;
+		}
+		// Two blasts close together do not stack beyond the cap; the stronger one counts.
+		State.Burst = FMath::Clamp(FMath::Max(State.Burst, Amount), 0.f, FMath::Max(0.f, Config.ExplosionMaxBurst));
+		State.Tier = ResolveTier(Config, EffectiveLevel(State), State.Tier);
+	}
+
+	int32 FindFireCell(const FSuppressionConfig& Config, const TArray<FSuppressionFireCell>& Cells, const FVector& End)
+	{
+		int32 Best = INDEX_NONE;
+		float BestDistSq = FMath::Square(FMath::Max(50.f, Config.ZoneCellCm));
+		for (int32 Index = 0; Index < Cells.Num(); ++Index)
+		{
+			const float DistSq = static_cast<float>(FVector::DistSquared2D(Cells[Index].Centre, End));
+			if (DistSq <= BestDistSq)
+			{
+				BestDistSq = DistSq;
+				Best = Index;
+			}
+		}
+		return Best;
+	}
+
+	void AddFireToCell(FSuppressionFireCell& Cell, const FVector& End)
+	{
+		const float Weight = Cell.Density + 1.f;
+		Cell.Centre = Cell.Density <= 0.f ? End : Cell.Centre + (End - Cell.Centre) / Weight;
+		Cell.Density += 1.f;
+	}
+
+	bool StepFireCell(const FSuppressionConfig& Config, FSuppressionFireCell& Cell, float DeltaSeconds, bool bSquadTooClose)
+	{
+		// Capped at twice the threshold: a long burst does not keep the zone up for long after the fire stops.
+		Cell.Density = FMath::Clamp(Cell.Density - FMath::Max(0.f, Config.ZoneDensityDecayPerSecond) * FMath::Max(0.f, DeltaSeconds), 0.f,
+			2.f * FMath::Max(1.f, Config.ZoneDensityThreshold));
+		if (Cell.Density >= Config.ZoneDensityThreshold && !bSquadTooClose)
+		{
+			Cell.ZoneLeft = FMath::Max(Cell.ZoneLeft, Config.ZoneDurationSeconds);
+		}
+		else
+		{
+			Cell.ZoneLeft = FMath::Max(0.f, Cell.ZoneLeft - FMath::Max(0.f, DeltaSeconds));
+		}
+		if (bSquadTooClose)
+		{
+			Cell.ZoneLeft = 0.f; // the squad moved up to it: no fear zone on top of the squad
+		}
+		return Cell.Density > 0.f || Cell.ZoneLeft > 0.f;
+	}
+
+	bool IsZoneOpen(const FSuppressionFireCell& Cell)
+	{
+		return Cell.ZoneLeft > 0.f;
+	}
+
+	int32 PickClickTarget(const FSuppressionConfig& Config, const FVector& Point, const TArray<FSuppressionClickCandidate>& Candidates)
+	{
+		int32 Best = INDEX_NONE;
+		float BestDistSq = FMath::Square(FMath::Max(0.f, Config.OrderClickRadiusCm));
+		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+		{
+			if (!Candidates[Index].bKnown)
+			{
+				continue;
+			}
+			const float DistSq = static_cast<float>(FVector::DistSquared2D(Point, Candidates[Index].Location));
+			if (DistSq <= BestDistSq)
+			{
+				BestDistSq = DistSq;
+				Best = Index;
+			}
+		}
+		return Best;
+	}
+
+	bool IgnoresSuppression(bool bRaging)
+	{
+		return bRaging;
 	}
 
 	bool EnemyMayFire(ESuppressionTier Tier)

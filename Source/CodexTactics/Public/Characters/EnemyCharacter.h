@@ -408,6 +408,8 @@ public:
 	float GetSuppressionHoldSeconds() const { return SuppressionHoldSeconds; }
 	/** Shots this enemy fired while suppressed (0 by the rule; smokes). */
 	int32 GetShotsWhileSuppressed() const { return ShotsWhileSuppressed; }
+	/** Times this (fire-fearing, melee) enemy fled out of a fear zone of dense fire (user decision 2026-10-26; smokes). */
+	int32 GetScatterCount() const { return ScatterCount; }
 
 	/** Smokes: forces the victim (the behaviour tick may re-pick it; freeze the enemy with CustomTimeDilation 0 first). */
 	void SetCurrentTargetForTesting(AActor* Target) { CurrentTarget = Target; }
@@ -977,7 +979,7 @@ protected:
 	/** Nearest burning barrel / active heat source within the fear radius (Godot _find_nearest_active_fire_source). */
 	bool FindNearestFire(FVector& OutFire) const;
 	/** Nearest burning barrel / active heat zone whose fear radius (OutRadius) reaches within Extra of the feet. */
-	bool FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius) const;
+	bool FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius, bool* bOutSuppressionZone = nullptr) const;
 	/** Location inside a burning barrel's / active heat zone's fear radius (the heat of Candidate itself excluded). */
 	bool IsInFearZone(const FVector& Location, const AActor* Candidate) const;
 	/**
@@ -1011,6 +1013,7 @@ protected:
 	/** Suppressive fire (2026-10-26): seconds held by suppression / shots that left while suppressed (IsHeldBySuppression). */
 	float SuppressionHoldSeconds = 0.f;
 	int32 ShotsWhileSuppressed = 0;
+	int32 ScatterCount = 0;
 	/**
 	 * Reports one of this enemy's rounds at the squad to USuppressionSubsystem (Start -> End, hit Target or not; the deliberate intent
 	 * when Target is the one SetSuppressIntent named).

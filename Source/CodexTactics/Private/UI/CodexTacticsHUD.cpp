@@ -480,8 +480,9 @@ void ACodexTacticsHUD::DrawDefenseMarkers()
 		const float Top = 18.f * Scale;
 		const float Tip = 16.f * Scale;
 		const FVector2D C(Screen.X, Screen.Y);
-		const FLinearColor Fill(0.1f, 0.85f, 0.35f, 0.75f * Marker.Alpha);
-		const FLinearColor Rim(0.85f, 1.f, 0.9f, Marker.Alpha);
+		// Suppressive fire (user decision 2026-10-26): a SUPPRESS order's marker is the same shield in RED.
+		const FLinearColor Fill = Marker.bSuppress ? FLinearColor(0.95f, 0.15f, 0.1f, 0.75f * Marker.Alpha) : FLinearColor(0.1f, 0.85f, 0.35f, 0.75f * Marker.Alpha);
+		const FLinearColor Rim = Marker.bSuppress ? FLinearColor(1.f, 0.85f, 0.8f, Marker.Alpha) : FLinearColor(0.85f, 1.f, 0.9f, Marker.Alpha);
 		auto Shape = [&](float Grow, const FLinearColor& Color)
 		{
 			const FVector2D TL(C.X - W * 0.5f - Grow, C.Y - Top - Grow);
@@ -505,11 +506,13 @@ void ACodexTacticsHUD::DrawDefenseMarkers()
 		Canvas->DrawItem(Post);
 		// «HOLD LINE ×N» under it.
 		UFont* Font = GEngine->GetSmallFont();
-		const FString Text = Marker.Defenders > 1 ? FString::Printf(TEXT("HOLD LINE x%d"), Marker.Defenders) : FString(TEXT("HOLD LINE"));
+		const TCHAR* Caption = Marker.bSuppress ? TEXT("SUPPRESS") : TEXT("HOLD LINE");
+		const FString Text = Marker.Defenders > 1 ? FString::Printf(TEXT("%s x%d"), Caption, Marker.Defenders) : FString(Caption);
 		float TW = 0.f;
 		float TH = 0.f;
 		Canvas->StrLen(Font, Text, TW, TH);
-		FCanvasTextItem Label(FVector2D(C.X - TW * 0.5f, C.Y + Tip + 6.f), FText::FromString(Text), Font, FLinearColor(0.6f, 1.f, 0.7f, Marker.Alpha));
+		FCanvasTextItem Label(FVector2D(C.X - TW * 0.5f, C.Y + Tip + 6.f), FText::FromString(Text), Font,
+			Marker.bSuppress ? FLinearColor(1.f, 0.55f, 0.5f, Marker.Alpha) : FLinearColor(0.6f, 1.f, 0.7f, Marker.Alpha));
 		Label.bOutlined = true;
 		Label.OutlineColor = FLinearColor(0.f, 0.f, 0.f, Marker.Alpha);
 		Canvas->DrawItem(Label);
@@ -976,21 +979,6 @@ void ACodexTacticsHUD::DrawKnockdownBars()
 void ACodexTacticsHUD::DrawSuppressionBadges()
 {
 	UFont* Font = GEngine->GetSmallFont();
-	// The suppress aim (key 7 / SUPPRESS): a hint by the cursor until the click.
-	if (const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController()); PC && PC->IsSuppressAimArmed())
-	{
-		float MouseX = 0.f;
-		float MouseY = 0.f;
-		if (PC->GetMousePosition(MouseX, MouseY))
-		{
-			static const FString AimHint = TEXT("SUPPRESS: click an enemy or a spot");
-			float W = 0.f;
-			float H = 0.f;
-			Canvas->StrLen(Font, AimHint, W, H);
-			DrawRect(PanelColor, MouseX + 18.f, MouseY + 14.f, W + 8.f, H + 4.f);
-			DrawText(AimHint, FLinearColor(1.f, 0.7f, 0.15f), MouseX + 22.f, MouseY + 16.f, Font);
-		}
-	}
 	const USuppressionSubsystem* Suppression = GetWorld()->GetSubsystem<USuppressionSubsystem>();
 	if (!Suppression)
 	{

@@ -2,20 +2,23 @@
 // on L_MovementTest (its own empty ground, SmokeUtils::FindClearArena; the map is never edited):
 //   Scripts/smoke.ps1 -Command CodexTactics.SuppressionSmoke
 // A real-time wave fight (its own enemies parked far away), the squad unkillable:
-//  A the commander gets the SUPPRESS order (key 7 armed, then the order on a marksman 14 m out - IssueSuppress, the click's target):
-//    full-auto bursts, far more rounds than the normal cadence, the marksman becomes SUPPRESSED, stops firing and holds his spot head
-//    down while the engineer sprints round his flank; ceased (key 7 again), the marksman's level decays and he fires again; an order
-//    with only a little ammo left stops itself ("ammo low") and keeps the last rounds;
+//  A Shift + click away from enemies keeps its meaning (watch sector, no suppression); Shift + click on the ground 2 m beside a marksman
+//    14 m out = the SUPPRESS order on him (HandleWorldHit with Shift held) and a RED marker on him: full-auto bursts, far more rounds than
+//    the normal cadence, the marksman becomes SUPPRESSED, stops firing and holds his spot head down while the engineer sprints round his
+//    flank; Shift + click on the marker ceases it (the marker goes), the level decays and he fires again; an order with only a little ammo
+//    left stops itself ("ammo low"); a plain move click cancels a running order;
 //  B the commander alone in the open, firing back at a marksman whose sustained fire suppresses him: his shots go blind (hit chance
-//    x the suppressed multiplier), then PINNED - no round leaves at all;
-//  C a squad turret fires at a (frozen) spitter: its MG rounds suppress it;
-//  D turn-based combat: every level cleared, a running SUPPRESS order ends, a round on the grid counts nothing, the key refuses;
+//    x the suppressed multiplier), then PINNED - no round leaves at all; in RAGE he ignores it and fires normally (user decision 2026-10-26);
+//  C a squad turret fires at a (frozen) spitter: its MG rounds suppress it; a grenade blast next to it suppresses it too, but only briefly;
+//  F a SUPPRESS order on a spot opens a fear zone of dense fire; a hound pack charging through it splits round it (nobody crosses its core);
+//  D turn-based combat: every level cleared, a running SUPPRESS order ends, a round on the grid counts nothing, Shift + click refused;
 //  E Codex.Combat.Suppression 0: no tier, the order refused.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/DefenseMarkerSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -28,6 +31,7 @@
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Core/PlayerCommands.h"
 #include "Data/WeaponDataAsset.h"
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
@@ -38,8 +42,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "TimerManager.h"
-#include "UI/ActionBarWidget.h"
-#include "UI/CodexTacticsHUD.h"
 #include "UI/GameMessageSubsystem.h"
 
 namespace SuppressionSmoke
@@ -77,6 +79,14 @@ namespace SuppressionSmoke
 		int32 CommanderShotsBefore = 0;
 		bool bLeftPinned = false;
 		FSuppressionStats StatsBefore;
+		/** F: the hound pack, the fear zone's centre, per hound its closest approach to it and the side it passed on (0 none, -1 / +1). */
+		TArray<TWeakObjectPtr<AEnemyCharacter>> Pack;
+		FVector Zone = FVector::ZeroVector;
+		TArray<float> PackClosest;
+		TArray<int32> PackSide;
+		int32 RageShotsBefore = 0;
+		int32 BlindBeforeRage = 0;
+		int32 PinnedShotsBeforeRage = 0;
 		FDelegateHandle FiredHandle;
 	};
 
@@ -142,16 +152,33 @@ namespace SuppressionSmoke
 		return Member->CurrentClip + FMath::Max(0, Member->ReserveAmmo);
 	}
 
-	FString BarText(ACodexTacticsPlayerController* PC)
+	/** A click on the ground at Point (no actor). */
+	FHitResult GroundHit(const FVector& Point)
 	{
-		const ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
-		UActionBarWidget* Bar = Hud ? Hud->GetActionBar() : nullptr;
-		if (!Bar)
+		FHitResult Hit(nullptr, nullptr, Point, FVector::UpVector);
+		Hit.bBlockingHit = true;
+		return Hit;
+	}
+
+	/** Shift + LMB through the controller's own click dispatcher (HandleWorldHit with Shift held). */
+	void ShiftClick(ACodexTacticsPlayerController* PC, const FHitResult& Hit)
+	{
+		PC->SetSimulatedShiftModifier(true);
+		PC->HandleWorldHit(Hit);
+		PC->SetSimulatedShiftModifier(false);
+	}
+
+	/** A wanted RED marker (a SUPPRESS order's) on Actor, drawn red. */
+	bool HasRedMarker(UWorld* World, const AActor* Actor)
+	{
+		const UDefenseMarkerSubsystem* Markers = World->GetSubsystem<UDefenseMarkerSubsystem>();
+		if (!Markers || !Markers->HasSuppressMarker(Actor, FVector::ZeroVector))
 		{
-			return TEXT("(no action bar)");
+			return false;
 		}
-		Bar->Refresh();
-		return Bar->GetSuppressButtonText().ToString();
+		const FLinearColor Ring = UDefenseMarkerSubsystem::GetRingColor(true);
+		return Markers->GetMarkers().ContainsByPredicate([](const FDefenseMarkerView& View) { return View.bSuppress && View.Color.R > View.Color.G; })
+			&& Ring.R > Ring.G;
 	}
 
 	void Freeze(AEnemyCharacter* Enemy)
@@ -205,7 +232,9 @@ namespace SuppressionSmoke
 			// The wave's own enemies stay parked far away (only the smoke's marksman / spitter play).
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
-				if (*It != Marksman && *It != State.Spitter.Get() && FVector::Dist2D(It->GetActorLocation(), State.P) < 20000.f)
+				const bool bOwn = *It == Marksman || *It == State.Spitter.Get()
+					|| State.Pack.ContainsByPredicate([&It](const TWeakObjectPtr<AEnemyCharacter>& Hound) { return Hound.Get() == *It; });
+				if (!bOwn && FVector::Dist2D(It->GetActorLocation(), State.P) < 20000.f)
 				{
 					SmokeUtils::ParkEnemyFarAway(*It);
 					It->SetActorTickEnabled(false);
@@ -292,7 +321,7 @@ namespace SuppressionSmoke
 			GoTo(State, 10);
 			return true;
 		}
-		case 10: // A: a free marksman fires; then key 7 arms the aim and the order goes on him.
+		case 10: // A: a free marksman fires; then Shift + click on the snow beside him = the SUPPRESS order on him.
 		{
 			if (!Marksman)
 			{
@@ -306,17 +335,18 @@ namespace SuppressionSmoke
 			Check(State, Marksman->GetShotsFired() >= 1 && Suppression->GetTier(Marksman) == ESuppressionTier::None,
 				FString::Printf(TEXT("A: the free marksman fires (%d shot(s) in %.1f s)"), Marksman->GetShotsFired(), State.StageTime));
 			Squad->SetLeader(Commander);
-			Check(State, BarText(PC).Contains(TEXT("SUPPRESS")), FString::Printf(TEXT("A: the action bar shows SUPPRESS (\"%s\")"), *BarText(PC).Replace(TEXT("\n"), TEXT(" "))));
-			PC->SuppressKey();
-			Check(State, PC->IsSuppressAimArmed(), TEXT("A: key 7 arms the suppress aim"));
-			Check(State, BarText(PC).Contains(TEXT("AIM")), TEXT("A: ... the button reads AIM..."));
+			// Shift + click away from every known enemy: the green meaning (watch sector), no suppression.
+			const int32 Watches = CountMessages(World, TEXT("Watch sector locked"));
+			ShiftClick(PC, GroundHit(Feet(Commander) - State.F * 500.f + State.R * 200.f));
+			Check(State, !Commander->HasSuppressOrder() && CountMessages(World, TEXT("Watch sector locked")) == Watches + 1,
+				TEXT("A: Shift + click away from enemies keeps its meaning (watch sector), no suppression"));
 			const int32 Lines = CountMessages(World, TEXT("Suppressive fire!"));
 			State.AmmoBefore = Ammo(Commander);
 			State.RoundsBefore = Commander->GetSuppressRoundsFired();
 			State.FullAutoBefore = Commander->GetFullAutoRoundsFired();
 			State.OrderTime = State.Time;
-			PC->IssueSuppress(HitOn(Marksman)); // what the armed click on him runs
-			Check(State, !PC->IsSuppressAimArmed(), TEXT("A: the click used the aim"));
+			// Shift + click on the snow 2 m beside the marksman (a point near a known enemy): the SUPPRESS order on him.
+			ShiftClick(PC, GroundHit(Feet(Marksman) + State.R * 200.f));
 			Check(State, Commander->HasSuppressOrder() && Commander->GetSuppressTarget() == Marksman, TEXT("A: the commander suppresses the marksman"));
 			Check(State, !Engineer->HasSuppressOrder(), TEXT("A: ... only the selected operative"));
 			Check(State, CountMessages(World, TEXT("Suppressive fire!")) == Lines + 1, TEXT("A: one 'Suppressive fire!' line"));
@@ -325,6 +355,10 @@ namespace SuppressionSmoke
 		}
 		case 11: // A: the marksman becomes suppressed; full-auto ammo use; the engineer starts round his flank.
 		{
+			if (State.StageTime <= StepSeconds + KINDA_SMALL_NUMBER)
+			{
+				Check(State, HasRedMarker(World, Marksman), TEXT("A: a RED marker on the suppressed target"));
+			}
 			if (Suppression->GetTier(Marksman) == ESuppressionTier::None && State.StageTime < 8.f)
 			{
 				return true;
@@ -366,10 +400,11 @@ namespace SuppressionSmoke
 				&& Marksman->GetStance() != EOperativeStance::Standing,
 				FString::Printf(TEXT("A: he hugs his cover: held %.1f s, no aim, still, stance %d"), Marksman->GetSuppressionHoldSeconds(), static_cast<int32>(Marksman->GetStance())));
 			Check(State, Marksman->IsHeldBySuppression(), TEXT("A: IsHeldBySuppression"));
-			// Key 7 with the commander suppressing: cease fire.
-			Check(State, BarText(PC).Contains(TEXT("STOP")), TEXT("A: the button reads STOP SUPP. while he suppresses"));
-			PC->SuppressKey();
-			Check(State, !Commander->HasSuppressOrder() && !PC->IsSuppressAimArmed(), TEXT("A: key 7 again ceases the suppressive fire"));
+			// Shift + click on the red marker (the target): the toggle ceases the fire.
+			Check(State, HasRedMarker(World, Marksman), TEXT("A: the red marker stays while he suppresses"));
+			ShiftClick(PC, HitOn(Marksman));
+			Check(State, !Commander->HasSuppressOrder() && CountMessages(World, TEXT("Cease suppressive fire")) >= 1,
+				TEXT("A: Shift + click on the red marker ceases the suppressive fire"));
 			State.ShotsBefore = Marksman->GetShotsFired();
 			Next(State);
 			return true;
@@ -382,6 +417,7 @@ namespace SuppressionSmoke
 			}
 			Check(State, Suppression->GetTier(Marksman) == ESuppressionTier::None && Marksman->GetShotsFired() > State.ShotsBefore,
 				FString::Printf(TEXT("A: the level decays and the marksman fires again (%.1f s)"), State.StageTime));
+			Check(State, World->GetSubsystem<UDefenseMarkerSubsystem>()->GetSuppressMarkerCount() == 0, TEXT("A: the red marker went with the order"));
 			// The order stops itself when ammo runs low: 16 rounds, no reserve, the last 10 are kept.
 			Commander->CurrentClip = 16;
 			Commander->ReserveAmmo = 0;
@@ -398,9 +434,13 @@ namespace SuppressionSmoke
 			Check(State, !Commander->HasSuppressOrder() && Commander->GetLastSuppressStop() == ESuppressOrderStop::AmmoLow && Commander->CurrentClip == 10,
 				FString::Printf(TEXT("A: it stops itself on low ammo, keeping %d rounds (stop: %s)"), Commander->CurrentClip, SuppressionRules::StopName(Commander->GetLastSuppressStop())));
 			Check(State, !Commander->OrderSuppress(Marksman, Marksman->GetActorLocation()), TEXT("A: no new order with only the kept rounds"));
-			// B: the commander alone in the open fires back at a marksman whose sustained fire suppresses him.
+			// Any new move order cancels it (a plain click on the ground 4 m behind the squad).
 			Commander->CurrentClip = 30;
 			Commander->ReserveAmmo = 200;
+			Check(State, Commander->OrderSuppress(Marksman, Marksman->GetActorLocation()), TEXT("A: a new order"));
+			PC->HandleWorldHit(GroundHit(Feet(Commander) - State.F * 400.f - State.R * 250.f));
+			Check(State, !Commander->HasSuppressOrder(), TEXT("A: a move click cancels it"));
+			// B: the commander alone in the open fires back at a marksman whose sustained fire suppresses him.
 			Engineer->StopOperative();
 			Engineer->TeleportTo(State.P - State.F * 3000.f + State.R * 300.f + FVector(0.f, 0.f, Engineer->GetSimpleCollisionHalfHeight() + 5.f),
 				State.F.Rotation(), false, true);
@@ -487,6 +527,27 @@ namespace SuppressionSmoke
 				FString::Printf(TEXT("B: pinned, he does not fire at all (%d shot(s))"), State.CommanderShots - State.CommanderShotsBefore));
 			Check(State, Commander->GetPinnedFireHolds() > State.HoldsBefore, TEXT("B: ... his fire is held by the pin"));
 			Check(State, Marksman->GetShotsWhileSuppressed() == 0, TEXT("B: (the marksman was never suppressed meanwhile)"));
+			// Rage (user decision 2026-10-26): pinned, but in rage he ignores it and fires normally.
+			State.RageShotsBefore = State.CommanderShots;
+			State.BlindBeforeRage = Commander->GetSuppressedBlindShots();
+			State.PinnedShotsBeforeRage = Commander->GetShotsWhilePinned();
+			Commander->RageComponent->EnterRage(Marksman);
+			Check(State, Commander->IsRaging() && USuppressionSubsystem::GetActingTierOf(Commander) == ESuppressionTier::None
+				&& Suppression->GetTier(Commander) != ESuppressionTier::None, TEXT("B: in rage the pin no longer acts on him (his level stays)"));
+			GoTo(State, 25);
+			return true;
+		}
+		case 25:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			Check(State, State.CommanderShots > State.RageShotsBefore && Commander->GetSuppressedBlindShots() == State.BlindBeforeRage
+				&& Commander->GetShotsWhilePinned() == State.PinnedShotsBeforeRage,
+				FString::Printf(TEXT("B: raging and %s, he fires normally (%d shot(s), none blind)"), SuppressionRules::TierName(Suppression->GetTier(Commander)),
+					State.CommanderShots - State.RageShotsBefore));
+			Commander->RageComponent->ExitRage(TEXT("smoke"));
 			SmokeUtils::ParkEnemyFarAway(Marksman);
 			Marksman->SetActorTickEnabled(false);
 			Squad->SetSquadPosture(ESquadFirePosture::Passive);
@@ -530,8 +591,140 @@ namespace SuppressionSmoke
 			{
 				Turret->Destroy();
 			}
-			// D: turn-based combat with the spitter pinned and a SUPPRESS order running.
+			GoTo(State, 40);
+			return true;
+		}
+		case 40: // C: a blast (the real explosion event a grenade raises) suppresses the spitter - briefly.
+		{
+			AEnemyCharacter* Spitter = State.Spitter.Get();
+			if (State.StageTime < 4.f && Suppression->GetTier(Spitter) != ESuppressionTier::None)
+			{
+				return true; // the turret's suppression decays first
+			}
+			Suppression->SetLevelForTesting(Spitter, 0.f);
+			State.StatsBefore = Suppression->GetStats();
+			GameplayEvents::RaiseExplosion(World, GameplayEvents::ExplosionKinds::Grenade, Spitter->GetActorLocation() + State.R * 100.f, 400.f);
+			Check(State, Suppression->GetStats().Explosions == State.StatsBefore.Explosions + 1 && Suppression->GetTier(Spitter) != ESuppressionTier::None,
+				FString::Printf(TEXT("C: a grenade blast 1 m off suppresses the spitter (level %.2f)"), Suppression->GetLevel(Spitter)));
+			Check(State, Suppression->GetTier(Commander) == ESuppressionTier::None, TEXT("C: ... not the commander 7 m away"));
+			Next(State);
+			return true;
+		}
+		case 41:
+		{
+			AEnemyCharacter* Spitter = State.Spitter.Get();
+			if (Suppression->GetTier(Spitter) != ESuppressionTier::None && State.StageTime < 5.f)
+			{
+				return true;
+			}
+			Check(State, Suppression->GetTier(Spitter) == ESuppressionTier::None && State.StageTime < 1.5f,
+				FString::Printf(TEXT("C: ... only briefly: free again after %.1f s (gunfire's 0.6 lasts several seconds)"), State.StageTime));
+			// F: a SUPPRESS order on a spot 12 m ahead; a hound pack 24 m out waits (frozen) until its fear zone is open.
+			SmokeUtils::ParkEnemyFarAway(Spitter);
+			Spitter->SetActorTickEnabled(false);
+			Commander->CurrentClip = 30;
+			Commander->ReserveAmmo = 300;
+			State.Zone = Feet(Commander) + State.F * 1200.f;
+			Suppression->SetLevelForTesting(Commander, 0.f);
+			Check(State, Commander->OrderSuppress(nullptr, State.Zone), TEXT("F: suppressive fire on a spot 12 m ahead"));
+			for (int32 Index = 0; Index < 6; ++Index)
+			{
+				const float Side = (Index - 2.5f) * 120.f;
+				AEnemyCharacter* Hound = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound,
+					State.P + State.F * 2400.f + State.R * Side + FVector(0.f, 0.f, 100.f), (-State.F).Rotation());
+				if (Hound)
+				{
+					Hound->GetHealthComponent()->SetMaxHealth(100000.f);
+					Freeze(Hound);
+					State.Pack.Add(Hound);
+					State.PackClosest.Add(TNumericLimits<float>::Max());
+					State.PackSide.Add(0);
+				}
+			}
+			Check(State, State.Pack.Num() == 6, TEXT("F: a pack of 6 hounds 24 m out"));
+			GoTo(State, 50);
+			return true;
+		}
+		case 50: // F: the dense fire opens a fear zone, then the pack charges.
+		{
+			const TArray<FVector> Zones = Suppression->GetOpenFearZones();
+			if (Zones.IsEmpty() && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, !Zones.IsEmpty(), FString::Printf(TEXT("F: the dense fire opens a fear zone (%.1f s)"), State.StageTime));
+			if (Zones.IsEmpty())
+			{
+				return Finish(State, false);
+			}
+			State.Zone = Zones[0];
+			Check(State, FVector::Dist2D(State.Zone, Feet(Commander) + State.F * 1200.f) < 300.f, TEXT("F: ... where the rounds land"));
+			for (const TWeakObjectPtr<AEnemyCharacter>& Hound : State.Pack)
+			{
+				if (Hound.IsValid())
+				{
+					Hound->CustomTimeDilation = 1.f;
+					Hound->SetActorTickEnabled(true);
+				}
+			}
+			Next(State);
+			return true;
+		}
+		case 51: // F: the pack runs at the squad and splits round the zone.
+		{
+			int32 Passed = 0;
+			for (int32 Index = 0; Index < State.Pack.Num(); ++Index)
+			{
+				const AEnemyCharacter* Hound = State.Pack[Index].Get();
+				if (!Hound)
+				{
+					continue;
+				}
+				const FVector Offset = Feet(Hound) - State.Zone;
+				State.PackClosest[Index] = FMath::Min(State.PackClosest[Index], static_cast<float>(Offset.Size2D()));
+				// Past the zone (closer to the squad than it): the side it went round on.
+				if (State.PackSide[Index] == 0 && FVector::DotProduct(Offset, State.F) < 0.f)
+				{
+					State.PackSide[Index] = FVector::DotProduct(Offset, State.R) < 0.f ? -1 : 1;
+				}
+				Passed += State.PackSide[Index] != 0 ? 1 : 0;
+			}
+			if (Passed < State.Pack.Num() && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			const float Core = SuppressionRules::GetConfig().ZoneRadiusCm * 0.6f;
+			float Closest = TNumericLimits<float>::Max();
+			int32 Left = 0;
+			int32 Right = 0;
+			for (int32 Index = 0; Index < State.Pack.Num(); ++Index)
+			{
+				Closest = FMath::Min(Closest, State.PackClosest[Index]);
+				Left += State.PackSide[Index] < 0 ? 1 : 0;
+				Right += State.PackSide[Index] > 0 ? 1 : 0;
+			}
+			Check(State, Passed >= 4, FString::Printf(TEXT("F: the pack still comes on - %d of %d hounds got past the zone (%.1f s)"), Passed, State.Pack.Num(), State.StageTime));
+			Check(State, Closest >= Core, FString::Printf(TEXT("F: no hound crossed the zone's core (closest %.0f cm, core %.0f cm)"), Closest, Core));
+			Check(State, Left >= 1 && Right >= 1, FString::Printf(TEXT("F: the pack splits round it (%d left, %d right)"), Left, Right));
+			Commander->CancelSuppressFire(TEXT("smoke"));
+			for (const TWeakObjectPtr<AEnemyCharacter>& Hound : State.Pack)
+			{
+				if (AEnemyCharacter* Each = Hound.Get())
+				{
+					SmokeUtils::ParkEnemyFarAway(Each);
+					Each->SetActorTickEnabled(false);
+				}
+			}
+			// D: turn-based combat with the spitter (back 7 m out) pinned and a SUPPRESS order running.
+			AEnemyCharacter* Spitter = State.Spitter.Get();
+			if (!Spitter)
+			{
+				return Finish(State, false);
+			}
+			Spitter->TeleportTo(State.P + State.F * 700.f + FVector(0.f, 0.f, 100.f), (-State.F).Rotation(), false, true);
 			Suppression->SetLevelForTesting(Spitter, 0.95f);
+			Commander->StopOperative();
+			Commander->TeleportTo(State.P + FVector(0.f, 0.f, Commander->GetSimpleCollisionHalfHeight() + 5.f), State.F.Rotation(), false, true);
 			Commander->CurrentClip = 30;
 			Commander->ReserveAmmo = 100;
 			Check(State, Commander->OrderSuppress(Spitter, Spitter->GetActorLocation()) && Commander->HasSuppressOrder(), TEXT("D: a SUPPRESS order runs before the grid fight"));
@@ -542,7 +735,7 @@ namespace SuppressionSmoke
 			{
 				return Finish(State, false);
 			}
-			Next(State);
+			GoTo(State, 31);
 			return true;
 		}
 		case 31: // D: no suppression in turn-based combat.
@@ -567,10 +760,10 @@ namespace SuppressionSmoke
 			Suppression->ReportRound(Round);
 			Check(State, Suppression->GetStats().IgnoredRounds == Ignored + 1 && Suppression->GetTier(Spitter) == ESuppressionTier::None,
 				TEXT("D: a round on the grid accumulates nothing"));
-			const int32 Refusals = CountMessages(World, TEXT("Suppressive fire is real time only"));
-			PC->SuppressKey();
-			Check(State, !PC->IsSuppressAimArmed() && CountMessages(World, TEXT("Suppressive fire is real time only")) == Refusals + 1,
-				TEXT("D: key 7 is refused in turn-based combat"));
+			PC->SetSimulatedShiftModifier(true);
+			const bool bShiftSuppress = PC->IssueSuppress(HitOn(Spitter));
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, !bShiftSuppress && !Commander->HasSuppressOrder(), TEXT("D: Shift + click on an enemy orders no suppression in turn-based combat"));
 			Flow->ExitTurnBasedToRealTime();
 			Next(State);
 			return true;
@@ -633,7 +826,7 @@ namespace SuppressionSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.SuppressionSmoke"),
-		TEXT("Dev check (2026-10-26): suppressive fire - the SUPPRESS order (key 7) holds a marksman's fire while a flanker moves, full-auto ammo use, an enemy's fire makes an operative fire blind then pins him, a turret suppresses, none in turn-based, the A/B switch; logs PASS/FAIL, then exits."),
+		TEXT("Dev check (2026-10-26): suppressive fire - the Shift + click SUPPRESS order (red marker, toggle) holds a marksman's fire while a flanker moves, full-auto ammo use, an enemy's fire makes an operative fire blind then pins him (rage ignores it), a turret and a blast suppress, dense fire splits a hound pack, none in turn-based, the A/B switch; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

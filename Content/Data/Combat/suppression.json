@@ -32,6 +32,20 @@
     "order.stop_at_rounds": 10,
     "order.timeout_seconds": 6,
     "order.aim_height_cm": 30,
-    "order.spot_scatter_cm": 120
+    "order.spot_scatter_cm": 120,
+    "order.click_radius_cm": 400,
+    "order.marker_radius_cm": 250,
+    "explosion.pressure": 0.6,
+    "explosion.edge_factor": 0.4,
+    "explosion.radius_factor": 1.5,
+    "explosion.min_radius_cm": 400,
+    "explosion.max_burst": 0.9,
+    "explosion.decay_per_second": 0.6,
+    "zone.cell_cm": 400,
+    "zone.density_threshold": 6,
+    "zone.density_decay_per_second": 2.5,
+    "zone.radius_cm": 350,
+    "zone.duration_seconds": 3,
+    "zone.min_squad_distance_cm": 500
   }
 }

@@ -132,13 +132,70 @@ struct CODEXTACTICS_API FSuppressionConfig
 	float OrderAimHeightCm = 30.f;
 	/** "order.spot_scatter_cm": fire at a spot walks the rounds over a disc of this radius round it. */
 	float OrderSpotScatterCm = 120.f;
+	/**
+	 * "order.click_radius_cm": Shift + click (user decision 2026-10-26) on the ground means "suppress" when a known enemy (seen, or his
+	 * silhouette) is within this distance of the clicked point (planar); else the click keeps its green guard / watch meaning.
+	 */
+	float OrderClickRadiusCm = 400.f;
+	/** "order.marker_radius_cm": the red ground ring of a SUPPRESS order; Shift + click within it toggles the order off. */
+	float OrderMarkerRadiusCm = 250.f;
+
+	// --- Explosions (user decision 2026-10-26: they suppress, shorter than gunfire) ---
+	/** "explosion.pressure": the burst a blast adds at its centre (a separate, fast-decaying part of the level). */
+	float ExplosionPressure = 0.6f;
+	/** "explosion.edge_factor": share of the burst at the edge of the reach. */
+	float ExplosionEdgeFactor = 0.4f;
+	/** "explosion.radius_factor": the blast suppresses within its damage radius x this. */
+	float ExplosionRadiusFactor = 1.5f;
+	/** "explosion.min_radius_cm": reach of a blast whose radius is unknown / small. */
+	float ExplosionMinRadiusCm = 400.f;
+	/** "explosion.max_burst": the burst part never goes above this (a blast alone may pin, briefly). */
+	float ExplosionMaxBurst = 0.9f;
+	/** "explosion.decay_per_second": the burst decays this fast (gunfire's level: 0.1 / 0.4 per second). */
+	float ExplosionDecayPerSecond = 0.6f;
+
+	// --- Dense fire scatters melee packs (user decision 2026-10-26; the burning-barrel fear zone, AEnemyCharacter::FindNearestFireZone) ---
+	/** "zone.cell_cm": the squad's rounds are counted per fire cell - a round ending within this of a cell's centre counts to it. */
+	float ZoneCellCm = 400.f;
+	/** "zone.density_threshold": rounds counted in one cell (after decay) that open a fear zone there. */
+	float ZoneDensityThreshold = 6.f;
+	/** "zone.density_decay_per_second": the cell count decays this fast (sustained fire must beat it: a lone rifleman never does). */
+	float ZoneDensityDecayPerSecond = 2.5f;
+	/** "zone.radius_cm": the fear zone's radius round the cell's fire centre. */
+	float ZoneRadiusCm = 350.f;
+	/** "zone.duration_seconds": the zone stays this long after the fire there drops below the threshold. */
+	float ZoneDurationSeconds = 3.f;
+	/** "zone.min_squad_distance_cm": no zone opens this close to a live operative (a hound biting him is fought, not scattered). */
+	float ZoneMinSquadDistanceCm = 500.f;
+};
+
+/** One ground cell of the squad's fire (the fear zone of dense fire). */
+struct CODEXTACTICS_API FSuppressionFireCell
+{
+	/** Rounds counted (decaying). */
+	float Density = 0.f;
+	/** Where the rounds ended (density-weighted average). */
+	FVector Centre = FVector::ZeroVector;
+	/** Seconds the fear zone stays open (> 0: open). */
+	float ZoneLeft = 0.f;
+};
+
+/** A known enemy a Shift + click may mean (SuppressionRules::PickClickTarget). */
+struct CODEXTACTICS_API FSuppressionClickCandidate
+{
+	/** Its position when seen, else its silhouette's feet. */
+	FVector Location = FVector::ZeroVector;
+	/** The squad knows of it (seen now or a silhouette); unknown enemies are never picked. */
+	bool bKnown = true;
 };
 
 /** One unit's suppression. */
 struct CODEXTACTICS_API FSuppressionState
 {
-	/** 0..1. */
+	/** 0..1, from gunfire. */
 	float Level = 0.f;
+	/** 0..ExplosionMaxBurst, from explosions: added on top of Level, decays fast (EffectiveLevel). */
+	float Burst = 0.f;
 	/** Seconds since the last round near him. */
 	float QuietTime = 0.f;
 	ESuppressionTier Tier = ESuppressionTier::None;
@@ -185,8 +242,47 @@ namespace SuppressionRules
 	/** Adds pressure (level clamped to 1), resets the quiet time, re-resolves the tier. */
 	CODEXTACTICS_API void AddPressure(const FSuppressionConfig& Config, FSuppressionState& State, float Amount);
 
-	/** Time passes: quiet time grows, the level decays (DecayPerSecond, + QuietDecayPerSecond once quiet), the tier re-resolves. */
+	/**
+	 * Time passes: quiet time grows, the gunfire level decays (DecayPerSecond, + QuietDecayPerSecond once quiet), the explosion burst decays
+	 * (ExplosionDecayPerSecond), the tier re-resolves from EffectiveLevel.
+	 */
 	CODEXTACTICS_API void Step(const FSuppressionConfig& Config, FSuppressionState& State, float DeltaSeconds);
+
+	/** Level + Burst, at most 1: what the tier is resolved from (and the HUD bar shows). */
+	CODEXTACTICS_API float EffectiveLevel(const FSuppressionState& State);
+
+	// --- Explosions (user decision 2026-10-26: they suppress, for a shorter time than gunfire) ---
+
+	/** The reach of a blast: its damage radius x ExplosionRadiusFactor, at least ExplosionMinRadiusCm. */
+	CODEXTACTICS_API float ExplosionReachCm(const FSuppressionConfig& Config, float BlastRadiusCm);
+	/** The burst a unit DistanceCm from the blast gets: ExplosionPressure at the centre -> x ExplosionEdgeFactor at the reach, 0 beyond. */
+	CODEXTACTICS_API float ExplosionPressure(const FSuppressionConfig& Config, float BlastRadiusCm, float DistanceCm);
+	/** Adds a burst (capped at ExplosionMaxBurst; the stronger of the two when one is still running), re-resolves the tier. */
+	CODEXTACTICS_API void AddBurst(const FSuppressionConfig& Config, FSuppressionState& State, float Amount);
+
+	// --- Dense fire scatters melee packs (user decision 2026-10-26) ---
+
+	/** The fire cell a round ending at End counts to: the one whose centre is nearest within ZoneCellCm (planar); INDEX_NONE: a new one. */
+	CODEXTACTICS_API int32 FindFireCell(const FSuppressionConfig& Config, const TArray<FSuppressionFireCell>& Cells, const FVector& End);
+	/** One squad round ended at End: the cell's count +1, its centre moves towards End. */
+	CODEXTACTICS_API void AddFireToCell(FSuppressionFireCell& Cell, const FVector& End);
+	/**
+	 * Time passes for a cell: the count decays (ZoneDensityDecayPerSecond; capped at twice the threshold); at / above ZoneDensityThreshold the zone is (re)opened for
+	 * ZoneDurationSeconds - unless bSquadTooClose (an operative within ZoneMinSquadDistanceCm of its centre) - else its time runs out.
+	 * True while the cell is still worth keeping (count or zone left).
+	 */
+	CODEXTACTICS_API bool StepFireCell(const FSuppressionConfig& Config, FSuppressionFireCell& Cell, float DeltaSeconds, bool bSquadTooClose);
+	CODEXTACTICS_API bool IsZoneOpen(const FSuppressionFireCell& Cell);
+
+	// --- The Shift + click order (user decision 2026-10-26) ---
+
+	/** The known candidate nearest to Point (planar) within OrderClickRadiusCm; INDEX_NONE: the click is no suppress order. */
+	CODEXTACTICS_API int32 PickClickTarget(const FSuppressionConfig& Config, const FVector& Point, const TArray<FSuppressionClickCandidate>& Candidates);
+
+	// --- Rage (user decision 2026-10-26; the rage mechanic will be reworked later: keep this one check) ---
+
+	/** An operative in rage ignores suppression: no blind fire, no pin, not held in cover (his level still accumulates). */
+	CODEXTACTICS_API bool IgnoresSuppression(bool bRaging);
 
 	/** The tier of Level coming from Previous (enter / exit thresholds: hysteresis). */
 	CODEXTACTICS_API ESuppressionTier ResolveTier(const FSuppressionConfig& Config, float Level, ESuppressionTier Previous);

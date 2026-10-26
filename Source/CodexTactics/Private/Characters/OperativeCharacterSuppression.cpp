@@ -85,7 +85,8 @@ bool AOperativeCharacter::OrderSuppress(AActor* Target, const FVector& Point)
 	bSuppressPlanned = false;
 	bSuppressAtTarget = Target != nullptr;
 	SuppressTarget = Target;
-	SuppressPoint = Target ? Target->GetActorLocation() : Point;
+	// The caller's point: a seen enemy's position or a hidden one's silhouette (never the hidden enemy's real spot).
+	SuppressPoint = Point;
 	SuppressBurstCount = 0;
 	LastSuppressStop = ESuppressOrderStop::None;
 	SuppressLastProgressTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
@@ -111,7 +112,7 @@ bool AOperativeCharacter::PlanSuppress(AActor* Target, const FVector& Point)
 	}
 	bSuppressPlanned = true;
 	PlannedSuppressTarget = Target;
-	PlannedSuppressPoint = Target ? Target->GetActorLocation() : Point;
+	PlannedSuppressPoint = Point;
 	return true;
 }
 
@@ -126,7 +127,7 @@ bool AOperativeCharacter::ExecutePlannedSuppress()
 	PlannedSuppressTarget.Reset();
 	const UHealthComponent* Health = Target ? Target->FindComponentByClass<UHealthComponent>() : nullptr;
 	const bool bAlive = IsValid(Target) && (!Health || Health->IsAlive());
-	return OrderSuppress(bAlive ? Target : nullptr, bAlive ? Target->GetActorLocation() : PlannedSuppressPoint);
+	return OrderSuppress(bAlive ? Target : nullptr, bAlive && !Target->IsHidden() ? Target->GetActorLocation() : PlannedSuppressPoint);
 }
 
 void AOperativeCharacter::CancelSuppressFire(const TCHAR* Why)

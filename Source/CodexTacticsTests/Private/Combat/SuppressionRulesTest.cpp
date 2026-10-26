@@ -253,6 +253,129 @@ bool FSuppressionTuningTest::RunTest(const FString&)
 	return true;
 }
 
+SUPPRESSION_TEST(FSuppressionExplosionTest, "ExplosionsAreShort")
+bool FSuppressionExplosionTest::RunTest(const FString&)
+{
+	using namespace SuppressionRules;
+	const FSuppressionConfig Config;
+	TestEqual(TEXT("reach = blast radius x factor"), ExplosionReachCm(Config, 400.f), 400.f * Config.ExplosionRadiusFactor);
+	TestEqual(TEXT("an unknown radius uses the minimum reach"), ExplosionReachCm(Config, 0.f), Config.ExplosionMinRadiusCm);
+	TestEqual(TEXT("the centre gets the full burst"), ExplosionPressure(Config, 400.f, 0.f), Config.ExplosionPressure);
+	TestTrue(TEXT("it falls off to the edge"), ExplosionPressure(Config, 400.f, 500.f) < Config.ExplosionPressure);
+	TestEqual(TEXT("beyond the reach: nothing"), ExplosionPressure(Config, 400.f, 601.f), 0.f);
+	// The same 0.6 from a blast and from gunfire: the blast's suppression is gone sooner.
+	FSuppressionState Blast;
+	AddBurst(Config, Blast, 0.6f);
+	FSuppressionState Gunfire;
+	AddPressure(Config, Gunfire, 0.6f);
+	TestEqual(TEXT("a blast suppresses at once"), Blast.Tier, ESuppressionTier::Suppressed);
+	Step(Config, Blast, 0.6f);
+	Step(Config, Gunfire, 0.6f);
+	TestEqual(TEXT("0.6 s later the blast's burst no longer suppresses"), Blast.Tier, ESuppressionTier::None);
+	TestEqual(TEXT("... the gunfire's still does"), Gunfire.Tier, ESuppressionTier::Suppressed);
+	FSuppressionState Capped;
+	AddBurst(Config, Capped, 5.f);
+	AddBurst(Config, Capped, 0.3f);
+	TestEqual(TEXT("the burst is capped and blasts do not stack"), Capped.Burst, Config.ExplosionMaxBurst);
+	TestEqual(TEXT("effective level = gunfire + burst, at most 1"), EffectiveLevel(Capped), Config.ExplosionMaxBurst);
+	return true;
+}
+
+SUPPRESSION_TEST(FSuppressionFearZoneTest, "DenseFireOpensFearZones")
+bool FSuppressionFearZoneTest::RunTest(const FString&)
+{
+	using namespace SuppressionRules;
+	const FSuppressionConfig Config;
+	const float Dt = 1.f / 60.f;
+	auto Fire = [&](float RoundsPerSecond, float Seconds, bool bSquadClose, float& OutOpenedAt)
+	{
+		TArray<FSuppressionFireCell> Cells;
+		float Clock = 0.f;
+		float Next = 0.f;
+		OutOpenedAt = -1.f;
+		int32 Round = 0;
+		while (Clock < Seconds)
+		{
+			if (Clock >= Next)
+			{
+				// Rounds walked over a 1.2 m disc round one spot.
+				const FVector End(1000.f + 120.f * FMath::Sin(Round * 1.7f), 120.f * FMath::Cos(Round * 2.3f), 0.f);
+				const int32 Index = FindFireCell(Config, Cells, End);
+				AddFireToCell(Index != INDEX_NONE ? Cells[Index] : Cells.AddDefaulted_GetRef(), End);
+				Next += 1.f / RoundsPerSecond;
+				++Round;
+			}
+			for (int32 Index = Cells.Num() - 1; Index >= 0; --Index)
+			{
+				if (!StepFireCell(Config, Cells[Index], Dt, bSquadClose))
+				{
+					Cells.RemoveAt(Index);
+				}
+			}
+			Clock += Dt;
+			if (OutOpenedAt < 0.f && Cells.ContainsByPredicate([](const FSuppressionFireCell& Cell) { return IsZoneOpen(Cell); }))
+			{
+				OutOpenedAt = Clock;
+			}
+		}
+		return Cells;
+	};
+	float Opened = 0.f;
+	TArray<FSuppressionFireCell> Cells = Fire(5.f, 6.f, false, Opened);
+	TestTrue(FString::Printf(TEXT("a SUPPRESS order's full-auto fire (5 rounds/s) opens a fear zone within 4 s (%.1f s)"), Opened), Opened > 0.f && Opened < 4.f);
+	TestEqual(TEXT("... one cluster for the walked disc"), Cells.Num(), 1);
+	Fire(1.5f, 20.f, false, Opened);
+	TestTrue(TEXT("one rifleman's normal fire never does"), Opened < 0.f);
+	Fire(5.f, 6.f, true, Opened);
+	TestTrue(TEXT("no zone with an operative right there"), Opened < 0.f);
+	// Fire stops: the zone stays the duration, then closes.
+	Cells = Fire(5.f, 6.f, false, Opened);
+	FSuppressionFireCell Cell = Cells[0];
+	float Open = 0.f;
+	while (IsZoneOpen(Cell) && Open < 30.f)
+	{
+		StepFireCell(Config, Cell, Dt, false);
+		Open += Dt;
+	}
+	TestTrue(FString::Printf(TEXT("the zone closes a while after the fire stops (%.1f s)"), Open), Open >= Config.ZoneDurationSeconds && Open < Config.ZoneDurationSeconds + 4.f);
+	TArray<FSuppressionFireCell> Two;
+	AddFireToCell(Two.AddDefaulted_GetRef(), FVector(0.f, 0.f, 0.f));
+	TestEqual(TEXT("a round 3 m off counts to the same cell"), FindFireCell(Config, Two, FVector(300.f, 0.f, 0.f)), 0);
+	TestEqual(TEXT("a round 6 m off starts another"), FindFireCell(Config, Two, FVector(600.f, 0.f, 0.f)), INDEX_NONE);
+	return true;
+}
+
+SUPPRESSION_TEST(FSuppressionClickTest, "ShiftClickTarget")
+bool FSuppressionClickTest::RunTest(const FString&)
+{
+	using namespace SuppressionRules;
+	const FSuppressionConfig Config;
+	auto Make = [](const FVector& Location, bool bKnown)
+	{
+		FSuppressionClickCandidate Candidate;
+		Candidate.Location = Location;
+		Candidate.bKnown = bKnown;
+		return Candidate;
+	};
+	const FVector Point(0.f, 0.f, 0.f);
+	TestEqual(TEXT("nobody: no suppress order (the green Shift + click)"), PickClickTarget(Config, Point, {}), INDEX_NONE);
+	TestEqual(TEXT("a known enemy 3 m off the point is meant"), PickClickTarget(Config, Point, { Make(FVector(300.f, 0.f, 0.f), true) }), 0);
+	TestEqual(TEXT("5 m off: not"), PickClickTarget(Config, Point, { Make(FVector(500.f, 0.f, 0.f), true) }), INDEX_NONE);
+	TestEqual(TEXT("an enemy the squad does not know of is never meant"), PickClickTarget(Config, Point, { Make(FVector(50.f, 0.f, 0.f), false) }), INDEX_NONE);
+	TestEqual(TEXT("the nearest known one"),
+		PickClickTarget(Config, Point, { Make(FVector(350.f, 0.f, 0.f), true), Make(FVector(100.f, 0.f, 900.f), true), Make(FVector(20.f, 0.f, 0.f), false) }), 1);
+	return true;
+}
+
+SUPPRESSION_TEST(FSuppressionRageTest, "RageIgnoresSuppression")
+bool FSuppressionRageTest::RunTest(const FString&)
+{
+	using namespace SuppressionRules;
+	TestTrue(TEXT("an operative in rage ignores suppression (user decision 2026-10-26)"), IgnoresSuppression(true));
+	TestFalse(TEXT("out of rage it acts on him"), IgnoresSuppression(false));
+	return true;
+}
+
 #undef SUPPRESSION_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

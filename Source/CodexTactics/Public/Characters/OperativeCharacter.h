@@ -1706,7 +1706,7 @@ public:
 	void SetManualPriorityTarget(AActor* Enemy);
 
 	/** Godot main.gd plain click on an enemy in a wave: current_leader.manual_priority_target = enemy (no checks, no turn). */
-	void AssignPriorityTarget(AActor* Enemy) { ManualPriorityTarget = Enemy; }
+	void AssignPriorityTarget(AActor* Enemy) { ManualPriorityTarget = Enemy; CancelSuppressFire(TEXT("a new attack order")); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
 	AActor* GetManualPriorityTarget() const { return ManualPriorityTarget.Get(); }
@@ -1813,6 +1813,8 @@ public:
 	bool HasPlannedSuppress() const { return bSuppressPlanned; }
 	AActor* GetSuppressTarget() const { return SuppressTarget.Get(); }
 	FVector GetSuppressPoint() const { return SuppressPoint; }
+	AActor* GetPlannedSuppressTarget() const { return PlannedSuppressTarget.Get(); }
+	FVector GetPlannedSuppressPoint() const { return PlannedSuppressPoint; }
 	/** Rounds fired by SUPPRESS orders since spawn / on full-auto (smokes). */
 	int32 GetSuppressRoundsFired() const { return SuppressRoundsFired; }
 	int32 GetFullAutoRoundsFired() const { return FullAutoRoundsFired; }

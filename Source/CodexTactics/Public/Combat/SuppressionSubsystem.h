@@ -40,6 +40,11 @@ struct CODEXTACTICS_API FSuppressionStats
 	int32 Clears = 0;
 	/** Rounds dropped because the mode has no suppression (turn-based) or the CVar is 0. */
 	int32 IgnoredRounds = 0;
+	/** Explosions reported (ReportExplosion) / units they suppressed. */
+	int32 Explosions = 0;
+	int32 ExplosionImpacts = 0;
+	/** Fear zones of dense fire opened so far (melee packs scatter from them). */
+	int32 ZonesOpened = 0;
 };
 
 /** A unit's tier changed: Unit, old tier, new tier. */
@@ -80,9 +85,34 @@ public:
 	static FSuppressionFireEffect GetOperativeFireOf(const AActor* Operative);
 	/** The unit may lean / peek / pop up / step off the wall (SuppressionRules::MayExpose). */
 	static bool MayExposeNow(const AActor* Unit);
+	/**
+	 * The tier that ACTS on the unit: GetTierOf, except an operative in rage, who ignores suppression (user decision 2026-10-26,
+	 * SuppressionRules::IgnoresSuppression; his level still accumulates). Used by GetOperativeFireOf / MayExposeNow.
+	 */
+	static ESuppressionTier GetActingTierOf(const AActor* Unit);
+	/** ReportExplosion on the world of WorldContext (GameplayEvents::RaiseExplosion calls it for every blast). */
+	static void ReportExplosionIn(const UObject* WorldContext, const FVector& Location, float BlastRadiusCm);
 
-	/** Applies one round to every unit of the side it flies at that it hit, passed near or struck the cover of. */
+	/**
+	 * Applies one round to every unit of the side it flies at that it hit, passed near or struck the cover of; a squad round also
+	 * counts to the fire cell where it ended (dense fire opens a fear zone for melee packs).
+	 */
 	void ReportRound(const FSuppressionRound& Round);
+
+	/**
+	 * A blast (grenade, mine, barrel, trap, cannon shell; user decision 2026-10-26): every unit of both sides within its reach gets a short
+	 * burst of suppression (SuppressionRules::ExplosionPressure / AddBurst: decays faster than gunfire).
+	 */
+	void ReportExplosion(const FVector& Location, float BlastRadiusCm);
+
+	/**
+	 * Dense fire scatters melee packs (user decision 2026-10-26): the open fear zone nearest to Feet that Feet is within (its radius +
+	 * Extra) - the same use as a burning barrel's zone in AEnemyCharacter::FindNearestFireZone (fire-fearing enemies flee out of it and
+	 * path round it). False: none.
+	 */
+	bool FindFearZone(const FVector& Feet, float Extra, FVector& OutCentre, float& OutRadius) const;
+	/** The centres of every open fear zone (smokes, debugging). */
+	TArray<FVector> GetOpenFearZones() const;
 
 	float GetLevel(const AActor* Unit) const;
 	ESuppressionTier GetTier(const AActor* Unit) const;
@@ -115,6 +145,8 @@ private:
 	void NoteTier(AActor* Unit, ESuppressionTier Old, ESuppressionTier New);
 
 	TMap<TWeakObjectPtr<AActor>, FSuppressionState> States;
+	/** The squad's fire by where it ends (SuppressionRules::FindFireCell / StepFireCell). */
+	TArray<FSuppressionFireCell> FireCells;
 	TMap<TWeakObjectPtr<const AActor>, TWeakObjectPtr<AActor>> Intents;
 	FSuppressionStats Stats;
 };

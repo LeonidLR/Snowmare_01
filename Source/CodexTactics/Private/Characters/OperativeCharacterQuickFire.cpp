@@ -85,6 +85,7 @@ bool AOperativeCharacter::OrderQuickFire(const FVector& Point, AActor* Enemy)
 	{
 		return false;
 	}
+	CancelSuppressFire(TEXT("a new attack order")); // a new attack order replaces suppressive fire (2026-10-26)
 	bQuickFireActive = true;
 	bQuickFirePlanned = false;
 	QuickFirePoint = Point;

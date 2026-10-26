@@ -51,8 +51,8 @@
 ## Suppressive fire (2026-10-26)
 
 - Game designer decisions 2026-10-26, full spec and every tuning value: `docs/design/SUPPRESSION.md`. `Combat/SuppressionRules` (pure) +
-  `USuppressionSubsystem` (a level per unit fed by every reported round; tiers Suppressed / Pinned), the SUPPRESS order (key 7 / action bar
-  SUPPRESS, then click an enemy or a spot; `OperativeCharacterSuppression.cpp`, full-auto via `UWeaponDataAsset::FullAutoInterval`), the
+  `USuppressionSubsystem` (a level per unit fed by every reported round; tiers Suppressed / Pinned), the SUPPRESS order (Shift + click on enemies, a red marker;
+  Shift + click on it again ceases it; `OperativeCharacterSuppression.cpp`, full-auto via `UWeaponDataAsset::FullAutoInterval`), the
   quick fire and the SUPPRESS order share `AOperativeCharacter::FireAreaRound`. A/B `Codex.Combat.Suppression`; none in turn-based.
   Tests `CodexTactics.Combat.Suppression.*`, smoke `SuppressionSmoke`.
 
