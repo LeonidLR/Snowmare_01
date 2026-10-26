@@ -176,7 +176,7 @@ report says "no model advice".
 - Local agent (Opus, worktree): C++ pure rules (2.) + unit tests from the design doc, then parity tests (3.).
 - Local agent (Sonnet, worktree, after 1-2 land): the big lab layout JSON (1.) + Unreal map generator script + navmesh bake.
 - Local agent (Sonnet): the real Claude API / Jev client for the tuner (6.) and the first budget-capped training runs.
-- Later: runtime integration (slots, look yaw, pace, wall pose), hold-G radial menu, in-game smoke on the lab map.
+- Later: runtime integration (slots, look yaw, pace, wall pose), hold-B radial menu (was hold G; done 2026-10-26), in-game smoke on the lab map.
 
 ## 6. Bot training on the user's API tokens (user request 2026-10-25: "use the API tokens as much as possible, train the bot through the cloud APIs")
 The tuner loop - `Tools/TrainingGround` department "movement", `npm run train -- --budget-usd <N> --rounds <N>`:
@@ -228,7 +228,13 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
 - Integration: the click on a cover / wall slot is where K stands - the leader's move ends ON his wall slot (an extra step
   away from the destination would drop the arrival). `formation_lab_01` routes A / F end on the slot (face - 45 cm).
 
-## 9. Hold-G radial menu - `FormationMenuRules` (pure; TS `Tools/TrainingGround/src/movement/menu.ts`, golden `formation_Menu.json`)
+## 9. Hold-B radial menu - `FormationMenuRules` (pure; TS `Tools/TrainingGround/src/movement/menu.ts`, golden `formation_Menu.json`)
+- Key (user decision 2026-10-26): **B**, not G (G is the grenade). TAP B (released before 0.25 s real time,
+  `ACodexTacticsPlayerController::FormationMenuHoldSeconds`) = the solo / squad toggle as before; HOLD B = `Open`, the release =
+  `Release`. The hold opens it only while available (squad mode, >= 2 members, exploration or the tactical pause - not turn-based,
+  orders not locked, no dialogue, `Squad.Formation` not tutorial-locked); otherwise a hold is a plain tap. Pure tracker
+  `FFormationMenuKeyTracker` (`UI/FormationMenuInputRules`, tests `CodexTactics.UI.FormationMenu.*`). The G / B below in the TS
+  reference's comments read "the menu key".
 - Items (`MENU_ITEMS`, clockwise from 12, 45 deg sectors): 12 `line`, 1:30 `diamond` (wedge with 3, pair with 2), 3
   `echelon_right`, 4:30 `blizzard`, 6 `column`, 7:30 `hedgehog`, 9 `echelon_left`, 10:30 `all_forward`; the centre = Auto.
   Choice type: `auto | <item id>`; a manual choice holds until Auto is picked.
@@ -237,14 +243,20 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
   owns +-22.5 deg; a border goes clockwise). Golden avoids exact borders.
 - `IsEnabled(item, memberCount)`: every item needs >= 2 members (one operative has no formation); Auto always.
 - State `{ open, choice, highlighted }` (start `{false, auto, null}`), effects `none | opened | picked | auto | cancelled | disabled`:
-  `Open` (G pressed: open, highlight Auto, choice untouched) / `Move(state, dx, dy, deadZonePx)` (highlight follows the cursor
-  while open) / `Release(state, memberCount)` (G released: on an enabled item -> picked, holds; centre -> auto; disabled item ->
+  `Open` (B held: open, highlight Auto, choice untouched) / `Move(state, dx, dy, deadZonePx)` (highlight follows the cursor
+  while open) / `Release(state, memberCount)` (B released: on an enabled item -> picked, holds; centre -> auto; disabled item ->
   `disabled`, the previous choice stays; always closes) / `Cancel` (Esc / RMB: closes, previous choice stays).
 - `Resolve(choice, memberCount) -> { manualFormation | null, allForward }`: auto -> terrain rules; all_forward -> terrain
   rules + LookYaw mode `forward`; diamond -> `diamond` with 4 else `wedge`; a choice the member count no longer allows -> Auto.
   Hedgehog: the runtime centres it on the nearest heat source when one is near (HedgehogSlots), else round the leader's spot.
 - Icons: `Content/UI/FormationMenu/src/<item|auto>.svg`, 64 x 64, currentColor (tint in UMG), generated from the rules by
   `npm run menu:icons` (`--check`); labels in Russian: `menuLabel` (Авто, Цепь, Ромб / Клин / Пара, Эшелон вправо, ...).
+- Runtime (stage 7, 2026-10-26): `UFormationMenuWidget` (NativePaint; 8 discs on a ring + Auto in the centre, icons
+  `/Game/UI/FormationMenu/T_FormationMenu_<id>` rasterised + imported by `Scripts/Editor/import_formation_menu_icons.py`, English
+  labels `FormationMenuInput::Label`: Auto, Line, Diamond / Wedge / Pair, Echelon right, Blizzard diamond, Column, Hedgehog, Echelon
+  left, All forward; highlighted = amber + enlarged, disabled = grey, current choice = green ring), opened at the cursor (pulled in
+  to stay on screen); the pick goes through `USquadSubsystem::SetFormationMenuChoice` (the path of `Codex.Formation.Menu`); Esc /
+  RMB = `Cancel`; smoke `CodexTactics.FormationMenuSmoke`.
 
 ## 10. v2.1 - the squad never splits (user decisions 2026-10-25; TS `rules.ts`, golden `formation_Guard|TrailSlots|SideWidth|Bypass|Corner.json`)
 User's case: lab lane B, 4 members, manual echelon left, wall on the left - the echelon's slots went through the wall and P / L /

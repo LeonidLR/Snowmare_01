@@ -432,6 +432,16 @@ void USquadSubsystem::ApplyFormationApproach(const AOperativeCharacter& LeaderRe
 	Lead.Role = EFormationRole::Commander;
 	Lead.Position = FVector2D(LeaderRef.GetActorLocation());
 	Lead.Yaw = static_cast<float>(LeaderRef.GetSightFacing().Rotation().Yaw);
+	// The squad's corner peek: the peeker at his corner counts as at his place (he is not walking into the layout).
+	const auto PeekerPlace = [this](const AOperativeCharacter& Member, EFormationRole Role, FVector2D& InOutPosition)
+	{
+		const FFormationSlot* Own = IsFormationPeeker(&Member) ? FindFrameSlot(Role) : nullptr;
+		if (Own)
+		{
+			InOutPosition = Own->Position;
+		}
+	};
+	PeekerPlace(LeaderRef, EFormationRole::Commander, Lead.Position);
 	Places.Add(Lead);
 	for (const FFollowerState& Follower : Followers)
 	{
@@ -441,6 +451,7 @@ void USquadSubsystem::ApplyFormationApproach(const AOperativeCharacter& LeaderRe
 			FFormationSlot Member;
 			Member.Role = Role.GetValue();
 			Member.Position = FVector2D(Follower.Operative->GetActorLocation());
+			PeekerPlace(*Follower.Operative, Member.Role, Member.Position);
 			Member.Yaw = static_cast<float>(Follower.Operative->GetSightFacing().Rotation().Yaw); // his look now: the rear guard already looks back
 			Places.Add(Member);
 		}
@@ -492,6 +503,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		{
 			EndFormationWallOrder(bIsSoloMode ? TEXT("Solo") : TEXT("no followers"));
 		}
+		EndFormationCornerPeek(bIsSoloMode ? TEXT("Solo") : TEXT("no followers"));
 		Sectors.bSlide = false;
 		return;
 	}
@@ -569,6 +581,8 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	{
 		TryStartFormationSlide(LeaderRef, false);
 	}
+	// The squad's corner peek (2026-10-26): the peeker's peek order once he is at the corner; its end with the leader's next order.
+	UpdateFormationCornerPeek(LeaderRef, DeltaTime);
 	// Rules v2.1 bypass "B": a new own order of the leader (not a slide) - the side round a free-standing wall on his way; then the steering.
 	if (bV21 && bNewLeaderOrder && !Sectors.bSlide && !Sectors.bWallOrder)
 	{
@@ -612,7 +626,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		{
 			Sectors.MoveFormation = Terrain;
 		}
-		// The hold-G menu's manual choice holds until Auto (FormationMenuRules::Resolve: too few members -> Auto); else the terrain's.
+		// The hold-B menu's manual choice holds until Auto (FormationMenuRules::Resolve: too few members -> Auto); else the terrain's.
 		const FFormationMenuResolved Menu = FormationMenuRules::Resolve(Sectors.MenuChoice, Count);
 		Sectors.bAllForward = Menu.bAllForward;
 		Sectors.Requested = Menu.ManualFormation.Get(Terrain);
@@ -725,7 +739,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		// Halted: he turns his search back to 12 for a moment, then his facing is his own (the player's, a facing order) and the heading
 		// follows it; the wall layout keeps him facing out.
 		const bool bHaltLookOver = Sectors.Mode == EFormationMode::Halt && Sectors.LeaderStillSeconds >= FormationRuntime::LeaderHaltLookSeconds;
-		if (Lead && Sectors.Mode != EFormationMode::Run && !bHaltLookOver)
+		if (Lead && Sectors.Mode != EFormationMode::Run && !bHaltLookOver && !IsFormationPeeker(&LeaderRef))
 		{
 			const bool bWalkingIn = bWall && Sectors.bWallOrder && !Sectors.bSlide
 				&& !FormationRuntime::UseWallLayoutYaw(static_cast<float>(FVector2D::Distance(LeaderPos, Lead->Position)), !bLeaderStill);
@@ -925,7 +939,8 @@ void USquadSubsystem::UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, f
 	}
 	Sectors.WallOrderSeconds += DeltaTime;
 	const FFormationSlot* Lead = Sectors.WallSlots.FindByPredicate([](const FFormationSlot& Slot) { return Slot.Role == EFormationRole::Commander; });
-	if (Lead && Sectors.bWallOrderCrouch && !Sectors.bSlide && !OrderLeader->IsMoving()
+	// (The squad's corner peek: the leader peeking at the corner holds his cover pose, not the wall layout's.)
+	if (Lead && Sectors.bWallOrderCrouch && !Sectors.bSlide && !OrderLeader->IsMoving() && !IsFormationPeeker(OrderLeader) && !OrderLeader->bInCover
 		&& FVector2D::Distance(FVector2D(OrderLeader->GetActorLocation()), Lead->Position) <= WallLeaderSettleCm
 		&& FormationMath::AngleBetween(static_cast<float>(OrderLeader->GetActorRotation().Yaw), Lead->Yaw) <= WallSettleYawDeg)
 	{
@@ -940,6 +955,7 @@ void USquadSubsystem::EndFormationWallOrder(const TCHAR* Why)
 		return;
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall order over after %.1f s: %s"), Sectors.WallOrderSeconds, Why);
+	EndFormationCornerPeek(Why);
 	Sectors.bWallOrder = false;
 	Sectors.bWallOrderCrouch = true;
 	Sectors.bSlide = false;
@@ -1042,6 +1058,7 @@ bool USquadSubsystem::OrderFormationWall(AOperativeCharacter* Direct, const TArr
 void USquadSubsystem::ResetFormationState(const FVector& Forward)
 {
 	EndFormationWallOrder(TEXT("reset"));
+	EndFormationCornerPeek(TEXT("reset"));
 	EndWallGroup(TEXT("reset"));
 	// Rules v2.1: the guard, the trail, the corner watch and the bypass start afresh (the menu's choice and reported threats stay).
 	EndFormationBypass(TEXT("reset"));

@@ -1,4 +1,4 @@
-// Dev console stand-in for the hold-G radial formation menu (not built yet; docs/design/FORMATION_SECTORS.md "Selection", contract
+// Dev console stand-in for the hold-B radial formation menu (built in stage 7: UFormationMenuWidget on hold B; docs/design/FORMATION_SECTORS.md "Selection", contract
 // docs/design/FORMATION_CONTRACT.md 9): Codex.Formation.Menu <auto | line | diamond | echelon_right | blizzard | column | hedgehog |
 // echelon_left | all_forward> sets the squad's formation choice (USquadSubsystem::SetFormationMenuChoice; a manual choice holds until auto).
 // The rules v2.1 wall guard keeps the squad whole whatever is chosen (the HUD shows "Echelon left -> Column (wall)").
@@ -35,7 +35,7 @@ namespace FormationMenuCommand
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(TEXT("Codex.Formation.Menu"),
-		TEXT("Dev stand-in for the hold-G formation menu: auto | line | diamond | echelon_right | blizzard | column | hedgehog | echelon_left | all_forward ")
+		TEXT("Dev stand-in for the hold-B formation menu: auto | line | diamond | echelon_right | blizzard | column | hedgehog | echelon_left | all_forward ")
 		TEXT("(a manual choice holds until auto; the wall guard keeps the squad whole)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
