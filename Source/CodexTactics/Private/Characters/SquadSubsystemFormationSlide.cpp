@@ -393,6 +393,8 @@ bool USquadSubsystem::HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float Wal
 	Sectors.WallSlots = MoveTemp(Slots);
 	Sectors.WallNormalYaw = FormationWallRules::OutwardYaw(Wall, LeaderPos);
 	ApplyFormationWallEnd(Origin, -FormationMath::Forward(WallNormalYaw), SlideWallReachCm); // v2.4: a slide that stops at the wall's end
+	Sectors.Approach.Reset(); // v2.5: the covered approach begins again (everyone is near his slot: it ends at once)
+	Sectors.ApproachLooks.Reset();
 	Sectors.bWallLayoutValid = true;
 	Sectors.WallAnchor = LeaderPos;
 	Sectors.bWallOrder = true;

@@ -10,7 +10,7 @@ import { add, angleDiff, clamp, closestOnSegment, deltaYaw, dirOf, dist, dot, le
 import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments } from './layout.ts';
 import { AGENT_RADIUS, NavGrid } from './nav.ts';
-import type { GuardCause, GuardLevel, Mode, Role, TerrainClass, WallSide } from './rules.ts';
+import type { ApproachDuty, ApproachState, GuardCause, GuardLevel, Mode, Role, TerrainClass, WallSide } from './rules.ts';
 import {
   CLASSIFY_START, CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
   FormationShapeRules, FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
@@ -51,6 +51,8 @@ export interface MemberFrame {
   cornerWatch: boolean;
   /** v2.2: he holds the rear (the place farthest back; FormationCoverRules.Allocate). */
   rearGuard: boolean;
+  /** v2.5: his duty on the covered approach to the wall (FormationWallRules.Approach); null outside it. */
+  approachDuty: ApproachDuty | null;
 }
 
 /** v2.1: a bypass decision (FormationBypassRules.ChooseSide) taken when a route leg starts and a wall blocks it. */
@@ -90,6 +92,10 @@ export interface Frame {
   bypasses: readonly BypassFrame[];
   /** v2.2: the wall slide in progress, else null. */
   slide: SlideFrame | null;
+  /** v2.5: the wall layout's outward normal (the way they came, away from the wall) while it stands, else null. */
+  wallNormal: number | null;
+  /** v2.5: the covered approach to the wall is on (somebody is not at his wall slot yet). */
+  approach: boolean;
 }
 
 export interface SimOptions {
@@ -207,6 +213,10 @@ export function simulate(o: SimOptions): number {
   let slideFrame: SlideFrame | null = null;
   // v2.4: the last wall layout's EndLooks (keyed by the Layout slots it was computed from).
   let wallEnd: { key: string; slots: { role: Role; pos: Vec2; yaw: number }[] } | null = null;
+  // v2.5: the covered approach to the wall (FormationWallRules.Approach) - its held roles, the layout it is for, this frame's looks.
+  let approach: ApproachState | null = null;
+  let approachKey = '';
+  let wallNormal: number | null = null;
   const maxTime = 600;
 
   while (t < maxTime) {
@@ -322,6 +332,7 @@ export function simulate(o: SimOptions): number {
         targets = wallEnd.slots;
         leaderWallSlot = targets[0].pos;
         layoutWall = wall;
+        wallNormal = yawOf(sub(targets[0].pos, closestOnSegment(targets[0].pos, wall.a, wall.b).point));
       } else {
         targets = FormationShapeRules.Slots(n >= 4 ? 'diamond' : 'wedge', n, leader.pos, heading, c)
           .map((s) => ({ ...s, yaw: heading }));
@@ -355,13 +366,27 @@ export function simulate(o: SimOptions): number {
         const pick = FormationAssignRules.AssignPlaces(followers.map((m) => m.pos), places.map((x) => x!.pos));
         const held = followers.reduce((acc, m, i) => acc + dist(m.pos, places[i]!.pos), 0);
         const best = followers.reduce((acc, m, i) => acc + (pick[i] >= 0 ? dist(m.pos, places[pick[i]]!.pos) : 0), 0);
-        if (key !== placesFor || held - best > REASSIGN_GAIN) {
+        // v2.5: no reassignment on the way while the covered approach holds its roles (no reshuffle; the runtime never reassigns in the wall layout).
+        const approachHeld = key === placesFor && approach !== null && !approach.done;
+        if (key !== placesFor || (held - best > REASSIGN_GAIN && !approachHeld)) {
           const labels = places.map((x) => x!.role);
           followers.forEach((m, i) => { if (pick[i] >= 0 && m.place !== labels[pick[i]]) { m.place = labels[pick[i]]; m.path = null; } });
         }
       }
       placesFor = key;
     }
+    // v2.5 (user rule 2026-10-26, the covered approach to the wall): until everyone is at his wall slot the leader runs in and looks
+    // along the wall, the man farthest back covers the rear, the others a flank each (their layout look once at their slot).
+    let approachLooks: { role: Role; duty: ApproachDuty; yaw: number | null }[] = [];
+    if (formation === 'wall' && !slide && wallNormal !== null && n >= 2) {
+      const layoutKey = wallEnd?.key ?? '';
+      if (layoutKey !== approachKey) { approach = null; approachKey = layoutKey; }
+      const res = FormationWallRules.Approach(walls, targets, wallNormal, members.map((m) => ({ role: m.place, pos: m.pos, yaw: m.yaw })), approach, c);
+      approach = res.state;
+      approachLooks = approach.done ? [] : res.looks;
+      targets = targets.map((x) => { const l = res.looks.find((y) => y.role === x.role); return l && l.yaw !== null ? { ...x, yaw: l.yaw } : x; });
+    } else if (formation !== 'wall' || slide) { approach = null; approachKey = ''; }
+    if (formation !== 'wall') wallNormal = null;
     const watch = FormationCornerRules.Watch(walls, leader.pos, heading, members.map((m) => ({ role: m.place, pos: m.pos })), corner, c);
     corner = watch.state;
     // The corner watch on patrol, and on a wall slide (the leading end at the wall's end) - not in the standing wall layout.
@@ -409,7 +434,9 @@ export function simulate(o: SimOptions): number {
       // Facing: run = travel direction for everyone; walking to a wall-layout slot = travel direction until within
       // WALL_TURN_DIST of it, then the layout yaw (as an operative walking into cover; FORMATION_CONTRACT.md 7);
       // otherwise the rule's look yaw.
-      const toWallSlot = formation === 'wall' && dist(m.pos, slot) > WALL_TURN_DIST && len(moveDir) > 0.5;
+      // v2.5: on the covered approach only the runner on his run faces his travel; the others hold their approach look.
+      const approachLook = approachLooks.find((l) => l.role === m.place);
+      const toWallSlot = formation === 'wall' && dist(m.pos, slot) > WALL_TURN_DIST && len(moveDir) > 0.5 && !(approachLook && approachLook.yaw !== null);
       // v2.1.1 (user "6А"): nobody looks into a wall, manual formations too - not the wall layout, the corner watcher, running,
       // or the LEADER looking where he walks (he must see his way; followers follow him - their step direction jitters along a
       // wall they hug, which made an exemption for them flip on and off).
@@ -435,7 +462,8 @@ export function simulate(o: SimOptions): number {
       if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
       const moving = len(moveDir) > 0.5;
       const backwards = moving && angleDiff(yawOf(moveDir), m.yaw) > 120;
-      frames.push({ role: m.role, place: m.place, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.place), rearGuard: m.place === rearGuard });
+      frames.push({ role: m.role, place: m.place, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.place), rearGuard: m.place === rearGuard,
+        approachDuty: approachLook?.duty ?? null });
     }
     // Light separation standing in for the engine's crowd avoidance (the game's RVO / detour crowd): two members closer than
     // slot.min_spacing drift apart at up to SEPARATION_SPEED; the leader is never pushed (he walks his path).
@@ -451,7 +479,8 @@ export function simulate(o: SimOptions): number {
       }
     }
     frames.forEach((fr, i) => { fr.pos = members[i].pos; });
-    o.onFrame({ t, mode, formation, requested, guardLevel: guard.level, guardCause: guard.cause ?? null, terrain, heading, leaderDistance: travelled, members: frames, bypasses, slide: slideFrame });
+    o.onFrame({ t, mode, formation, requested, guardLevel: guard.level, guardCause: guard.cause ?? null, terrain, heading, leaderDistance: travelled, members: frames, bypasses, slide: slideFrame,
+      wallNormal: formation === 'wall' ? wallNormal : null, approach: approachLooks.length > 0 });
     lastTargets = targets;
     void slideLead;
 

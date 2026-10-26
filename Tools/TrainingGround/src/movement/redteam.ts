@@ -10,7 +10,7 @@ import type { ModelClient, ModelRequest, RedteamPayload } from './ai.ts';
 import { MODELS } from './ai.ts';
 import { runSeries } from './bot.ts';
 import type { RunMetrics } from './checks.ts';
-import { LIMITS } from './checks.ts';
+import { approachOk, LIMITS } from './checks.ts';
 import type { FormationConfig } from './config.ts';
 import { dist, pointInWall, round, segmentBlocked, sub, yawOf } from './geometry.ts';
 import type { Layout } from './layout.ts';
@@ -44,12 +44,12 @@ export const ALL_CHOICES: MenuChoice[] = ['auto', ...MENU_ITEMS.map((i) => i.id)
 export const gated = (choice: MenuChoice, check: number): boolean => choice === 'auto' || [1, 5, 7].includes(check);
 
 /** Checks whose failure breaks a promise the rules make unconditionally (geometry) vs. ones that hinge on written expectations. */
-export const RULE_BUG_CHECKS = [1, 2, 5, 6, 7, 13];
+export const RULE_BUG_CHECKS = [1, 2, 5, 6, 7, 13, 14];
 export const looksLike = (check: number): 'rule bug?' | 'design question' => (RULE_BUG_CHECKS.includes(check) ? 'rule bug?' : 'design question');
 
 export const CHECK_SHORT: Record<number, string> = {
   1: 'wall stare', 2: 'rear cover (4 men)', 3: 'flicker', 4: 'expected formation per zone', 5: 'slots / spacing', 6: 'rear man pace',
-  7: 'squad split by a wall', 8: 'bypass side', 9: 'corner watch', 13: 'wall end: open arc held',
+  7: 'squad split by a wall', 8: 'bypass side', 9: 'corner watch', 13: 'wall end: open arc held', 14: 'covered approach to the wall',
 };
 
 /** Size limits of a red-team layout (keeps the nav grid and the series small). */
@@ -85,6 +85,8 @@ export function runFailures(r: RunMetrics, choice: MenuChoice): Failure[] {
   if (r.corner.missed > 0) add(9, r.corner.worst?.t ?? null, r.corner.worst?.what ?? 'corner');
   // v2.4 (user bug report 2026-10-26): the standing wall layout holds the open arc round it (a wall end's flanks included).
   if (r.wallArc && r.wallArc.time > 0 && r.wallArc.pct < LIMITS.wallArcTimePct) add(13, r.wallArc.worst?.t ?? null, r.wallArc.worst?.what ?? 'wall end');
+  // v2.5 (user rule 2026-10-26): the covered approach to the wall - the rear always held, a flank (3) / both flanks (4).
+  if (!approachOk(r)) add(14, r.approach!.worst?.t ?? null, r.approach!.worst?.what ?? `flank ${r.approach!.flankPct} %`);
   return out;
 }
 
@@ -189,7 +191,8 @@ const SYSTEM = [
   'time; 5 a slot inside a wall / unwalkable, or two men < min spacing for 0.5 s; 6 the rear man > 150 cm behind his slot (p95,',
   "walk, 4 men); 7 a wall between the leader and a member's slot / position, or between chain neighbours, for >= 0.3 s; 8 an",
   'expect_bypass wall passed on the wrong side; 9 passing a free wall end nobody looked round it; 13 the squad standing in the wall',
-  'layout (3-4 men, arrived at a wall) leaves > 5 % of the open ring 6 m round it outside every cone (a wall END: both flanks along its faces).',
+  'layout (3-4 men, arrived at a wall) leaves > 5 % of the open ring 6 m round it outside every cone (a wall END: both flanks along its faces);',
+  '14 on the way into the wall layout nobody holds the rear (away from the wall), or no flank (3 men) / not both (4) for > 10 % of it.',
   'Manual items are gated only by 1, 5, 7.',
 ].join('\n');
 

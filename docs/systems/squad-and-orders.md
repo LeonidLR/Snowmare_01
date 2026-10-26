@@ -107,6 +107,18 @@ member's formation look whenever it changes (with his facing) and every look Cle
   designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
   simulator ~1 m) - a Training Ground tuning point.
 
+### Rules v2.5 in the runtime - the covered approach to the wall (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.Approach`)
+
+New user rule 2026-10-26: on the order to hug a wall (the group cover order in group mode, or the arrival layout) everyone used to drop his sector
+and dash in, the rear wide open. Now `USquadSubsystem::ApplyFormationApproach` runs `FormationWallRules::Approach` (contract 15) every frame of the
+wall layout until everyone is within `approach.arrive_dist` (1 m) of his slot: the leader runs in and, at his slot, looks along the wall; the follower
+already looking back (the patrol's rear guard) covers the rear (away from the wall) walking backwards at the walk's backward cap; the other(s) look along
+the wall line to their side and take their layout look at their slot; then the plain wall layout. The rear cover and the flank men do not copy the
+leader's sprint (a sprinting operative faces his run) - the squad settles ~2 s later from 9 m, the price of the covered rear. Roles held (no reshuffle).
+Log `[Formation] covered approach to the wall: K runs in, rear Z, 1 flank(s)` / `... over`. `Codex.Formation.Approach 0` = v2.4 (A/B). Smoke
+`FormationWallGroupSmoke` scene 5 (a patrol 9 m from E's long face; with the switch 0 the rear / flank / along checks fail); tests
+`CodexTactics.Formation.Approach.*`, `Parity.Approach`.
+
 ### Rules v2.4 in the runtime - the wall end (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.WallEnd`)
 
 User bug report 2026-10-26 (the editor, `Codex.Formation.Debug`): three operatives crouched at the END FACE of a thin free-standing wall left large

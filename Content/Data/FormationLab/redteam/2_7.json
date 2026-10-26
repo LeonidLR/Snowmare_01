@@ -115,7 +115,7 @@
       "seed": 1,
       "t": 23.6,
       "what": "echelon_right -> column, back after 4.8 s",
-      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 3,
@@ -125,7 +125,7 @@
       "seed": 1,
       "t": 23.6,
       "what": "echelon_right -> column, back after 4.8 s",
-      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 3,
@@ -135,7 +135,7 @@
       "seed": 1,
       "t": 23.6,
       "what": "echelon_right -> column, back after 4.8 s",
-      "reason": "still failing under v2.4 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (design question): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

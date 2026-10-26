@@ -624,3 +624,33 @@ never change. Keys `wall_end.probe_dist` 600 (200-1500 cm), `wall_end.cover_pct`
   end, an inner corner; 2-4 members; three headings / offsets; in.slots rounded) - C++ `CodexTactics.Formation.Parity.WallEnd` (spread
   exactly, basePct / pct within 0.01, slots as WallLayout). Unit tests `CodexTactics.Formation.WallEnd.*`; smoke `FormationWallGroupSmoke`
   scene 4 (a thin wall's end face by the group cover order: open arc >= 95 %, both flanks in a cone, nobody faces a wall, steady 3 s).
+
+## 15. v2.5 - the covered approach to the wall (user rule 2026-10-26; FORMATION_SECTORS.md "v2.5")
+### 15.1 `FormationWallRules::Approach(walls, slots, normalYaw, members, state, config) -> { state, looks }`
+`slots` = the wall layout's (K first, with their looks); `normalYaw` = its outward normal; `members` = `[{role, pos, yaw}]` where everyone is
+and looks now (a role missing stands at his slot); `state` = `{ runner, rear (role | null), flanks [{role, side +1 | -1}], alongSide, done }`
+or null = the approach begins. Begin: runner = slots[0].role; rear = of the followers (slots[1..] order) the one with the smallest
+|normYaw(yaw - normalYaw)| (ties within 1e-6: the largest dot(pos - slots[0].pos, dir(normalYaw)), then the later); flanks = the other
+followers with lateral l = dot(pos - runner's pos, dir(normalYaw + 90)): one -> side (l >= 0 ? +1 : -1); two -> the lowest l (the first on
+ties) -1, the other +1; alongSide = -flanks[0].side, else (the pair) the rear man's l >= 0 ? -1 : +1. Arrived = within `approach.arrive_dist`
+(+1e-9) of his slot; everyone arrived -> done (sticky). Looks (slot order): done -> `layout` (the slot's yaw); the runner: arrived -> `along`
+ClearLook(normalYaw + alongSide x 90), else `run` (yaw null: he faces his travel); the rear -> `rear` ClearLook(normalYaw); a flank man not
+arrived -> `flank` ClearLook(normalYaw + side x 90); else `layout`. ClearLook = FormationSectorRules.ClearLook(walls, his pos, normYaw(y),
+normYaw(y), config) (no held / limit / ahead). Key `approach.arrive_dist` 100 (50-200 cm); config 79 keys.
+### 15.2 Integration, checks, golden
+- Sim: while the wall layout stands (not a slide, 2+ members) every frame calls Approach (state reset with a new layout); a look replaces the
+  slot's; a member with a look holds it all the way in (else, as before, his travel until 100 cm off his slot); no gain-based place
+  reassignment while the approach holds its roles. `Frame.wallNormal`, `Frame.approach`, `MemberFrame.approachDuty`.
+- Runtime (`USquadSubsystem::ApplyFormationApproach`, the wall branch of `UpdateFormationSectors`; reset by `ComputeWallLayout` /
+  `HoldWallLayoutAt` and whenever the formation is not the standing wall layout): members = the leader + the followers by their wall roles,
+  looks = `GetSightFacing`; the world walls (v2.1) for ClearLook; the looks go to the frame slots; a follower with an approach look holds it
+  however far from his slot; the rear cover and the flank men do not copy the leader's sprint (a sprinting operative faces his run), the rear
+  cover's backward cap is the walk's. `Codex.Formation.Approach 0` = v2.4. `GetFormationApproachLooks()` for smokes; log
+  `[Formation] covered approach to the wall: K runs in, rear Z, 1 flank(s)` / `... over`.
+- Bot check 14 (gating, 2+ members): on the approach (after `approachGrace` 0.5 s to turn) no frame without a cone holding the rear
+  (normal +-30 inside +-fov / 2); 3+ men a flank (normal +-90 the same way) >= 90 % of it, 4+ each flank. The red team records check 14.
+- Golden `formation_Approach.json` (132 cases: a face / an inner corner, 2-4 members, the stages start / runner_in / flank_in /
+  all_but_rear / all_in / along_wall / all_forward, state null and held, two headings) - C++ `CodexTactics.Formation.Parity.Approach`
+  (state exactly, duties exactly, yaws as angles, null = travel). Unit tests `CodexTactics.Formation.Approach.*`; smoke
+  `FormationWallGroupSmoke` scene 5 (a patrol 9 m from a wall's long face; 1 s of game time to turn round - the game turns slower than the
+  simulator).

@@ -43,6 +43,7 @@
   "wall.end_deg": 75,
   "wall_end.probe_dist": 600,
   "wall_end.cover_pct": 95,
+  "approach.arrive_dist": 100,
   "slide.max_off_wall": 200,
   "slide.lead_out_deg": 20,
   "pace.patrol": 0.8,

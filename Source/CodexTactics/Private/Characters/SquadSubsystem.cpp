@@ -1102,7 +1102,12 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		Operative->SetStance(EOperativeStance::Standing);
 		Operative->MarkStanceFromSquad();
 	}
-	Operative->SetSprinting(LeaderRef.IsSprinting());
+	// Rules v2.5 (the covered approach to the wall): the rear cover and the flank men do not sprint after the leader running in - a sprinting
+	// operative faces his run; they hold their looks at the approach pace (the rear cover walks backwards at the backward cap).
+	const TOptional<EFormationRole> ApproachRole = Sectors.bActiveThisFrame ? SectorRoleOf(Follower) : TOptional<EFormationRole>();
+	const TOptional<EFormationApproachDuty> ApproachDuty = ApproachRole.IsSet() ? FormationApproachDuty(ApproachRole.GetValue()) : TOptional<EFormationApproachDuty>();
+	const bool bHoldsApproachLook = ApproachDuty.IsSet() && (ApproachDuty.GetValue() == EFormationApproachDuty::Rear || ApproachDuty.GetValue() == EFormationApproachDuty::Flank);
+	Operative->SetSprinting(LeaderRef.IsSprinting() && !bHoldsApproachLook);
 
 	// Bug 2026-10-11 (solo off: prone followers slid towards the leader while still rising): a stance change in progress roots
 	// the follower - he stays put until the clip ends, then the next repath sends him to his slot.

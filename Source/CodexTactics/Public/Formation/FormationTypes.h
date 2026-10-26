@@ -176,6 +176,8 @@ struct CODEXTACTICS_API FFormationConfig
 	float WallEndProbeDist = 600.f;
 	/** [wall_end.cover_pct] v2.4: below this share of the open ring held (a wall END) FormationWallRules::EndLooks spreads the looks, %. */
 	float WallEndCoverPct = 95.f;
+	/** [approach.arrive_dist] v2.5 (user rule 2026-10-26, the covered approach): a member is at the wall within this of his wall slot, cm. */
+	float ApproachArriveDist = 100.f;
 	/** [pace.patrol] Patrol (walk) pace as a fraction of the walk speed. */
 	float PacePatrol = 0.8f;
 	/** [pace.walk_speed] Walk speed (OperativeMovementRules WalkSpeed), cm/s. */

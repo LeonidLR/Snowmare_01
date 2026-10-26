@@ -413,6 +413,137 @@ namespace FormationWallRules
 		return Result;
 	}
 
+	FFormationApproachResult Approach(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots, float NormalYaw,
+		const TArray<FFormationSlot>& Members, const TOptional<FFormationApproachState>& InState, const FFormationConfig& Config)
+	{
+		using FormationMath::NormYaw;
+		FFormationApproachResult Result;
+		if (Slots.Num() == 0)
+		{
+			return Result;
+		}
+		const double Normal = static_cast<double>(NormalYaw);
+		const FVector2D N = FormationMath::DirOf(Normal);
+		const FVector2D U = FormationMath::DirOf(Normal + 90.0);
+		const auto PosOf = [&](EFormationRole Role)
+		{
+			if (const FFormationSlot* Member = Members.FindByPredicate([Role](const FFormationSlot& Each) { return Each.Role == Role; }))
+			{
+				return Member->Position;
+			}
+			const FFormationSlot* Slot = Slots.FindByPredicate([Role](const FFormationSlot& Each) { return Each.Role == Role; });
+			return Slot ? Slot->Position : FVector2D::ZeroVector;
+		};
+		FFormationApproachState State;
+		if (InState.IsSet())
+		{
+			State = InState.GetValue();
+		}
+		else
+		{
+			State.Runner = Slots[0].Role;
+			const FVector2D Leader = PosOf(State.Runner);
+			// The rear cover: the follower already looking nearest the rear (the patrol's rear guard - no gap while he turns); ties: the
+			// farthest from the wall along the normal, then the later one.
+			double RearOff = TNumericLimits<double>::Max();
+			double RearD = -TNumericLimits<double>::Max();
+			for (int32 Index = 1; Index < Slots.Num(); ++Index)
+			{
+				const EFormationRole Role = Slots[Index].Role;
+				const FFormationSlot* Member = Members.FindByPredicate([Role](const FFormationSlot& Each) { return Each.Role == Role; });
+				const double Off = Member ? FMath::Abs(NormYaw(static_cast<double>(Member->Yaw) - Normal)) : 180.0;
+				const double D = FVector2D::DotProduct(PosOf(Role) - Slots[0].Position, N);
+				if (!State.Rear.IsSet() || Off < RearOff - 1e-6 || (FMath::Abs(Off - RearOff) <= 1e-6 && D >= RearD - 1e-9))
+				{
+					State.Rear = Role;
+					RearOff = Off;
+					RearD = D;
+				}
+			}
+			const auto Lateral = [&](EFormationRole Role) { return FVector2D::DotProduct(PosOf(Role) - Leader, U); };
+			TArray<TPair<EFormationRole, double>> Others;
+			for (int32 Index = 1; Index < Slots.Num(); ++Index)
+			{
+				if (!State.Rear.IsSet() || Slots[Index].Role != State.Rear.GetValue())
+				{
+					Others.Add({ Slots[Index].Role, Lateral(Slots[Index].Role) });
+				}
+			}
+			// The lowest offset (a stable sort: ties keep the slot order) is the -1 side.
+			int32 Lowest = 0;
+			for (int32 Index = 1; Index < Others.Num(); ++Index)
+			{
+				if (Others[Index].Value < Others[Lowest].Value)
+				{
+					Lowest = Index;
+				}
+			}
+			for (int32 Index = 0; Index < Others.Num(); ++Index)
+			{
+				const int32 Side = Others.Num() == 1 ? (Others[Index].Value >= 0.0 ? 1 : -1) : (Index == Lowest ? -1 : 1);
+				State.Flanks.Add({ Others[Index].Key, Side });
+			}
+			State.AlongSide = State.Flanks.Num() > 0 ? -State.Flanks[0].Value : (State.Rear.IsSet() && Lateral(State.Rear.GetValue()) >= 0.0 ? -1 : 1);
+		}
+		const double Arrive = Config.ApproachArriveDist;
+		const auto Arrived = [&](const FFormationSlot& Slot) { return FVector2D::Distance(PosOf(Slot.Role), Slot.Position) <= Arrive + 1e-9; };
+		if (!State.bDone)
+		{
+			bool bAll = true;
+			for (const FFormationSlot& Slot : Slots)
+			{
+				bAll &= Arrived(Slot);
+			}
+			State.bDone = bAll;
+		}
+		const auto Clear = [&](EFormationRole Role, double Yaw)
+		{
+			const float Wanted = static_cast<float>(NormYaw(Yaw));
+			return static_cast<float>(NormYaw(FormationSectorRules::ClearLook(Walls, PosOf(Role), Wanted, Wanted, Config)));
+		};
+		for (const FFormationSlot& Slot : Slots)
+		{
+			FFormationApproachLook Look;
+			Look.Role = Slot.Role;
+			const TPair<EFormationRole, int32>* Flank = State.Flanks.FindByPredicate([&Slot](const TPair<EFormationRole, int32>& Each) { return Each.Key == Slot.Role; });
+			if (State.bDone)
+			{
+				Look.Duty = EFormationApproachDuty::Layout;
+				Look.Yaw = Slot.Yaw;
+			}
+			else if (Slot.Role == State.Runner)
+			{
+				if (Arrived(Slot))
+				{
+					Look.Duty = EFormationApproachDuty::Along;
+					Look.Yaw = Clear(Slot.Role, Normal + State.AlongSide * 90.0);
+				}
+				else
+				{
+					Look.Duty = EFormationApproachDuty::Run;
+				}
+			}
+			else if (State.Rear.IsSet() && Slot.Role == State.Rear.GetValue())
+			{
+				Look.Duty = EFormationApproachDuty::Rear;
+				Look.Yaw = Clear(Slot.Role, Normal);
+			}
+			else if (Flank && !Arrived(Slot))
+			{
+				Look.Duty = EFormationApproachDuty::Flank;
+				Look.Yaw = Clear(Slot.Role, Normal + Flank->Value * 90.0);
+			}
+			else
+			{
+				Look.Duty = EFormationApproachDuty::Layout;
+				Look.Yaw = Slot.Yaw;
+			}
+			Result.Looks.Add(Look);
+		}
+		Result.State = State;
+		return Result;
+	}
+
 	void BreakRoomTie(float& RoomLeft, float& RoomRight, float TravelLeft, float TravelRight)
 	{
 		if (RoomLeft == RoomRight && TravelLeft < TravelRight)

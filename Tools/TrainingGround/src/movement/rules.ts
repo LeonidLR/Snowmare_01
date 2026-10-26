@@ -702,7 +702,78 @@ function EndLooks(walls: readonly Segment[], slots: readonly WallSlot[], config:
   return pct > base + 1e-9 ? { spread: true, basePct: base, pct, slots: out } : unchanged;
 }
 
-export const FormationWallRules = { Layout, BreakRoomTie, Slide, EndLooks };
+// ---------------------------------------------------------------------------------------------------------------------
+// FormationWallRules::Approach (v2.5, new user rule 2026-10-26: "the covered approach to the wall")
+
+/** The duty a member has on the way into the wall layout. */
+export type ApproachDuty = 'run' | 'along' | 'rear' | 'flank' | 'layout';
+
+export interface ApproachState {
+  /** The runner: the leader (the order is his - he runs to the clicked slot); at the wall he looks along it, `alongSide`. */
+  runner: Role;
+  /** The rear cover: the follower already looking nearest the rear when the approach began (null alone). */
+  rear: Role | null;
+  /** The flank men and their side (+1 = the wall's outward normal + 90, -1 = - 90). */
+  flanks: { role: Role; side: 1 | -1 }[];
+  /** The side the runner looks along the wall once there (the other way from the first flank man). */
+  alongSide: 1 | -1;
+  /** Everyone has reached his slot (sticky): the plain wall layout. */
+  done: boolean;
+}
+
+export interface ApproachLook { role: Role; duty: ApproachDuty; /** World yaw; null = he faces his travel (the runner on his run). */ yaw: number | null }
+
+/**
+ * v2.5 (user rule 2026-10-26, "the covered approach to the wall"; contract 15): the squad is ordered to the wall (the wall layout's slots,
+ * K first, with their looks; `normalYaw` = the wall's outward normal - the way they came, "away from the wall") and walks in. Until
+ * every member is within approach.arrive_dist of his slot (then `done` - the plain layout):
+ * - the runner (K, the leader: the order is his) runs facing his travel; at his slot he looks ALONG the wall, `alongSide`, until done;
+ * - the rear cover (the follower whose look is nearest the rear when the approach began - the patrol's rear guard: no gap while he
+ *   turns; ties: the farthest from the wall along the normal, then the later member) looks at the
+ *   rear (the normal) until done - he walks backwards at the backward cap (the approved rear guard), joining last;
+ * - the flank men look along the wall line to their side (normal +- 90) until each reaches his slot, then his layout look; one flank:
+ *   the side of his offset from the leader along the wall (>= 0 -> +1); two: the lower offset -1, the higher +1;
+ * - alongSide = the other way from the first flank man (the pair: the other way from the rear man's offset).
+ * Every look but the layout's goes through FormationSectorRules.ClearLook (from his position, nobody looks into a wall). `state` null =
+ * the approach begins (the roles are assigned from `members`' positions and then held: no reshuffle).
+ */
+function Approach(walls: readonly Segment[], slots: readonly WallSlot[], normalYaw: number, members: readonly WallSlot[], state: ApproachState | null,
+  config: FormationConfig): { state: ApproachState; looks: ApproachLook[] } {
+  const N = dirOf(normalYaw), U = dirOf(normalYaw + 90);
+  const posOf = (r: Role) => members.find((m) => m.role === r)?.pos ?? slots.find((s) => s.role === r)!.pos;
+  if (!state) {
+    const runner = slots[0].role;
+    const k = posOf(runner);
+    const followers = slots.slice(1).map((s) => s.role);
+    let rear: Role | null = null, rearOff = Infinity, rearD = -Infinity;
+    for (const r of followers) {
+      const m = members.find((x) => x.role === r);
+      const off = m ? Math.abs(normYaw(m.yaw - normalYaw)) : 180, d = dot(sub(posOf(r), slots[0].pos), N);
+      if (off < rearOff - 1e-6 || (Math.abs(off - rearOff) <= 1e-6 && d >= rearD - 1e-9)) { rear = r; rearOff = off; rearD = d; }
+    }
+    const lateral = (r: Role) => dot(sub(posOf(r), k), U);
+    const others = followers.filter((r) => r !== rear).map((r) => ({ r, l: lateral(r) }));
+    const sorted = [...others].sort((a, b) => a.l - b.l);
+    const flanks = others.map(({ r, l }) => ({ role: r, side: (others.length === 1 ? (l >= 0 ? 1 : -1) : sorted[0].r === r ? -1 : 1) as 1 | -1 }));
+    const alongSide = (flanks.length ? -flanks[0].side : rear !== null && lateral(rear) >= 0 ? -1 : 1) as 1 | -1;
+    state = { runner, rear, flanks, alongSide, done: false };
+  }
+  const arrive = cfg(config, 'approach.arrive_dist');
+  const arrived = (s: WallSlot) => dist(posOf(s.role), s.pos) <= arrive + 1e-9;
+  if (!state.done && slots.every(arrived)) state = { ...state, done: true };
+  const clear = (r: Role, y: number) => normYaw(FormationSectorRules.ClearLook(walls, posOf(r), normYaw(y), normYaw(y), config));
+  const looks = slots.map((s): ApproachLook => {
+    if (state!.done) return { role: s.role, duty: 'layout', yaw: s.yaw };
+    if (s.role === state!.runner) return arrived(s) ? { role: s.role, duty: 'along', yaw: clear(s.role, normalYaw + state!.alongSide * 90) } : { role: s.role, duty: 'run', yaw: null };
+    if (s.role === state!.rear) return { role: s.role, duty: 'rear', yaw: clear(s.role, normalYaw) };
+    const f = state!.flanks.find((x) => x.role === s.role);
+    if (f && !arrived(s)) return { role: s.role, duty: 'flank', yaw: clear(s.role, normalYaw + f.side * 90) };
+    return { role: s.role, duty: 'layout', yaw: s.yaw };
+  });
+  return { state, looks };
+}
+
+export const FormationWallRules = { Layout, BreakRoomTie, Slide, EndLooks, Approach };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationGuardRules (v2.1, FORMATION_CONTRACT.md 10): no formation may cut the squad in two with a wall

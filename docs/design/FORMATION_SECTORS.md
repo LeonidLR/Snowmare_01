@@ -297,3 +297,27 @@ flipped in the morning.
   slots: no flicker, no reshuffle while they hold (`Codex.Formation.WallEnd 0` = the face looks everywhere).
 - Interpretations (coordinator / agent, for the user): the pair keeps its K 7:30 / partner 4:30 at an end too (a user decision; two cones
   cannot hold the ~330 deg there); a face whose end man stands PAST the wall's end is spread the same way (he looks round the end).
+
+## v2.5 — the covered approach to the wall (user rule 2026-10-26, via the coordinator; contract section 15)
+- **The user's rule (2026-10-26, screenshots `to_wall_1/2`)**: the squad moves calmly (patrol, sectors held), then gets the order to hug a
+  wall ("Formation: Wall"). Before, everyone dropped his sector and dashed to the wall, the rear wide open. Now, until they are settled at
+  the wall (3 men): (1) at least one keeps covering the withdrawal - the rear, the way they came / away from the wall - the rear guard,
+  walking backwards as approved; (2) the second looks to the side (a flank); (3) the third runs to the wall and looks parallel to it, the
+  other way along the wall. As each one arrives he takes his wall-layout look; the rear cover holds until the others are at the wall, then
+  he joins. The pair: one runs + looks along the wall, the other covers the rear. Four: the rear, both flanks, the first at the wall
+  looking along it.
+- **The rule (`FormationWallRules.Approach`)**: roles assigned once when the approach begins and held (no reshuffle): the runner = the
+  leader; the rear cover = the follower whose look is nearest the rear (the patrol's rear guard; ties the farthest back); the others are
+  flank men (one: his side of the leader along the wall; two: one each side). Rear = the wall's outward normal; a flank = along the wall
+  line (normal +-90); the runner at his slot looks along the wall the other way from the first flank man. A member is "at the wall"
+  within `approach.arrive_dist` (100 cm) of his slot; when everyone is, the plain wall layout. Every approach look goes through ClearLook.
+- **Interpretations for the user (please confirm or flip)**:
+  - *Who runs first*: the LEADER - the order is his and he runs to the clicked slot (the alternative: the man nearest the wall).
+  - *The rear*: "away from the wall" (the wall's outward normal), which is the way they came on a straight approach; along a wall they came
+    from the side - the rear is still "away from the wall".
+  - *The rear cover*: the man already looking back (the patrol's rear guard), so there is no gap while somebody turns round; nobody looking
+    back -> the man farthest from the wall. He keeps the rear until everyone else is at the wall AND he is at his slot.
+  - *Pace*: the leader runs (the order's run); the rear cover walks backwards at the backward cap of the walk (`move.backward_mult` 0.9), the
+    flank men walk sideways at the walk pace - neither copies the leader's sprint (a sprinting man faces his run). So the squad settles a
+    little later than before (the game smoke: ~4 s instead of ~2 s from 9 m), the price of the covered rear.
+  - *The first arrival*: the runner looks along the wall from his arrival until everyone is in, then turns to his layout look (K 6 o'clock).

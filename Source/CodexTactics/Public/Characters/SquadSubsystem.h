@@ -13,6 +13,7 @@
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTypes.h"
 #include "Formation/FormationWallGroupRules.h"
+#include "Formation/FormationWallRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Tactics/CoverTypes.h"
 #include "SquadSubsystem.generated.h"
@@ -448,6 +449,12 @@ public:
 		OutPct = Sectors.WallEndPct;
 		return Sectors.bWallLayoutValid && Sectors.bWallEndSpread;
 	}
+	/**
+	 * Rules v2.5 (user rule 2026-10-26, the covered approach to the wall): this frame's approach looks (FormationWallRules::Approach) while the
+	 * squad walks into the wall layout - the leader runs in and looks along the wall, the rear cover, the flank men; empty once everyone is at
+	 * his slot (the plain layout) or with Codex.Formation.Approach 0.
+	 */
+	const TArray<FFormationApproachLook>& GetFormationApproachLooks() const { return Sectors.ApproachLooks; }
 	/** The wall layout in force (slots and looks by role; empty when none) - smokes. */
 	const TArray<FFormationSlot>& GetFormationWallSlots() const { return Sectors.WallSlots; }
 
@@ -540,6 +547,9 @@ private:
 		TArray<FFormationSlot> WallSlots;
 		/** Rules v2.4: WallSlots' looks were spread over a wall end's open arc (EndLooks); the shares the face / the spread looks hold, %. */
 		bool bWallEndSpread = false;
+		/** Rules v2.5: the covered approach into the wall layout - its held roles (unset = not begun) and this frame's looks (empty = none). */
+		TOptional<FFormationApproachState> Approach;
+		TArray<FFormationApproachLook> ApproachLooks;
 		float WallEndBasePct = 100.f;
 		float WallEndPct = 100.f;
 		FVector2D WallAnchor = FVector2D::ZeroVector;
@@ -777,6 +787,14 @@ private:
 	 * = the face looks everywhere (v2.3).
 	 */
 	void ApplyFormationWallEnd(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance);
+	/**
+	 * Rules v2.5 (user rule 2026-10-26, contract 15): the covered approach into the wall layout - FormationWallRules::Approach over the places'
+	 * actual positions (the leader K, the followers by their wall roles) and the world walls; its looks replace this frame's slot looks
+	 * (unset = the runner faces his run). Codex.Formation.Approach 0 = everyone walks in facing his travel (v2.4).
+	 */
+	void ApplyFormationApproach(const AOperativeCharacter& LeaderRef);
+	/** Rules v2.5: this follower role's approach duty this frame (unset = none). */
+	TOptional<EFormationApproachDuty> FormationApproachDuty(EFormationRole Role) const;
 	/** The wall order: the members' arrival (crouch facing out), its end on the leader's next order / Solo / the formation off. */
 	void UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, float DeltaTime);
 	void EndFormationWallOrder(const TCHAR* Why);

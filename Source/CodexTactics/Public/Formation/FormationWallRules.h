@@ -44,6 +44,51 @@
  * holds less than the base keeps the base. Positions and order never change.
  */
 
+/** v2.5 (user rule 2026-10-26, the covered approach to the wall; contract 15): a member's duty on the way into the wall layout. */
+enum class EFormationApproachDuty : uint8
+{
+	/** The runner on his run: he faces his travel (Yaw unset). */
+	Run,
+	/** The runner at his slot: along the wall, the other way from the first flank man. */
+	Along,
+	/** The rear cover: away from the wall (the way they came) until everyone is in. */
+	Rear,
+	/** A flank man on his way: along the wall line to his side. */
+	Flank,
+	/** At his slot (or the approach is over): his wall-layout look. */
+	Layout
+};
+
+/** Approach's held roles (assigned once when the approach begins: no reshuffle). */
+struct FFormationApproachState
+{
+	EFormationRole Runner = EFormationRole::Commander;
+	TOptional<EFormationRole> Rear;
+	/** The flank men and their side (+1 = the outward normal + 90, -1 = - 90). */
+	TArray<TPair<EFormationRole, int32>> Flanks;
+	/** The side the runner looks along the wall once there. */
+	int32 AlongSide = 1;
+	/** Everyone has reached his slot (sticky): the plain wall layout. */
+	bool bDone = false;
+};
+
+/** One member's approach look. */
+struct FFormationApproachLook
+{
+	EFormationRole Role = EFormationRole::Commander;
+	EFormationApproachDuty Duty = EFormationApproachDuty::Layout;
+	/** World yaw; unset = he faces his travel. */
+	TOptional<float> Yaw;
+};
+
+/** Approach's answer. */
+struct FFormationApproachResult
+{
+	FFormationApproachState State;
+	/** In the slots' order. */
+	TArray<FFormationApproachLook> Looks;
+};
+
 /** OpenArcCoverage's answer (v2.4). */
 struct FFormationArcCoverage
 {
@@ -125,6 +170,20 @@ namespace FormationWallRules
 	/** v2.4 (bot check 13, the smokes): how much of the open arc round a standing group its cones hold (see the header comment). */
 	CODEXTACTICS_API FFormationArcCoverage OpenArcCoverage(const TArray<FFormationWall>& Walls, const TArray<FVector2D>& Positions,
 		const TArray<float>& LookYaws, float FovDeg, float ProbeCm);
+
+	/**
+	 * v2.5 (user rule 2026-10-26, "the covered approach to the wall"; contract 15; rules.ts Approach): until every member is within
+	 * ApproachArriveDist of his wall slot - the runner (K, the leader: the order is his) runs facing his travel, at his slot he looks along
+	 * the wall (AlongSide); the rear cover (the follower whose look - Members[].Yaw - is nearest the rear when the approach began: the patrol's
+	 * rear guard; ties the farthest from the wall along the normal, then the later)
+	 * looks away from the wall (NormalYaw) until everyone is in; each flank man looks along the wall line to his side (one flank: the side of
+	 * his offset from the leader along the wall, >= 0 -> +1; two: the lower offset -1, the higher +1) until he reaches his slot, then his
+	 * layout look; AlongSide = the other way from the first flank man (the pair: the other way from the rear man's offset). Every look but
+	 * the layout's goes through FormationSectorRules::ClearLook from his position. Members = where everyone is now and his look (by role; a role missing
+	 * stands at his slot); State unset = the approach begins (the roles are assigned and then held).
+	 */
+	CODEXTACTICS_API FFormationApproachResult Approach(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots, float NormalYaw,
+		const TArray<FFormationSlot>& Members, const TOptional<FFormationApproachState>& State, const FFormationConfig& Config = FFormationConfig());
 
 	/** v2.4: the wall layout's looks at a wall end (see the header comment). Slots = Layout's (K first), Walls = the walls round them. */
 	CODEXTACTICS_API FFormationWallEndResult EndLooks(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots,

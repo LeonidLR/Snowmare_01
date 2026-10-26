@@ -50,6 +50,7 @@ namespace FormationTuning
 		{ TEXT("wall.end_deg"), &FFormationConfig::WallEndDeg },
 		{ TEXT("wall_end.probe_dist"), &FFormationConfig::WallEndProbeDist },
 		{ TEXT("wall_end.cover_pct"), &FFormationConfig::WallEndCoverPct },
+		{ TEXT("approach.arrive_dist"), &FFormationConfig::ApproachArriveDist },
 		{ TEXT("pace.patrol"), &FFormationConfig::PacePatrol },
 		{ TEXT("pace.walk_speed"), &FFormationConfig::PaceWalkSpeed },
 		{ TEXT("pace.run_speed"), &FFormationConfig::PaceRunSpeed },
