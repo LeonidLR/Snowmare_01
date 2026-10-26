@@ -4,6 +4,12 @@
 
 ## 9. Known gaps / tech debt
 
+- **`SuppressionSmoke` scene A can flake under load (seen once in a batch 2026-10-26, passed alone; NOT the combat formation).** The log
+  (main checkout, 18:57:39): the marksman's second shot came 0.5 s after his first and hit the Commander -> the Commander himself became
+  SUPPRESSED (level 0.70), his SUPPRESS rounds went blind ("[suppressed: blind]", none reached the marksman), the marksman's level decayed to
+  free (0.38) before the Engineer reached the flank. The Commander is the leader and on his own fire order; the followers' movement plays no
+  part. To harden: make the commander immune to suppression in scene A, or retune `TuneMarksman` so two hits cannot land 0.5 s apart.
+
 - **`PauseBarrelOrderSmoke` "B's paused push ran: barrel 2 stands on the marked spot" fails (found 2026-10-26, branch
   `gameflow/realtime-horde-squad-combat`; NOT caused by it - it fails the same with every old rule restored:
   `-PreCmds "Codex.Relocation.RealTimeCombat 0,Codex.Squad.CombatFormation 0,Codex.HordeIntro.AutoPause 1,Codex.HordeIntro.LaterWaves 1"`).**
