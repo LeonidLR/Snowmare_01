@@ -29,6 +29,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/EnemySpawnPoint.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -324,8 +325,21 @@ namespace LakeQuestSmoke
 		}
 		switch (State.PauseStage)
 		{
-		case 0: // the horde intro runs on its own up to the free pause (no skip), like a player watching it
-			if (Flow->GetCombatMode() != ECodexCombatMode::TacticalPause || State.PauseStageTime < 1.f)
+		case 0: // the horde warning runs on its own (no skip), like a player watching it; 2026-10-26: then the PLAYER presses Space
+			if (Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
+			{
+				const UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>();
+				if (Flow->GetPhase() != ECodexGamePhase::WaveCombat || Flow->IsAwaitingHordeIntro() || (Intro && Intro->IsFlyoverActive()))
+				{
+					return true;
+				}
+				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime,
+					TEXT("the horde warning over: the fight runs in real time (no pause by itself, 2026-10-26)"));
+				Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->IsFreePause(), TEXT("the player's Space: the free tactical pause"));
+				State.PauseStageTime = 0.f;
+				return true;
+			}
+			if (State.PauseStageTime < 1.f)
 			{
 				return true;
 			}

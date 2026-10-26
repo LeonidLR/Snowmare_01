@@ -151,9 +151,15 @@ void UPhaseBannersWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 FText UPhaseBannersWidget::GetPauseText() const
 {
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	if (!Flow || Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
+	if (!Flow)
 	{
 		return FText::GetEmpty();
+	}
+	if (Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
+	{
+		// User decision 2026-10-26: the horde flyover runs while the fight goes on in real time - its caption here.
+		const UHordeIntroSubsystem* Intro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>();
+		return Intro && Intro->IsFlyoverActive() ? FText::FromString(TEXT("⚠️ HORDE INCOMING  |  ") + Intro->GetCaption().ToString()) : FText::GetEmpty();
 	}
 	if (Flow->IsFreePause())
 	{
@@ -195,8 +201,9 @@ FText UPhaseBannersWidget::GetCombatText() const
 		{
 			return FText::FromString(FString::Printf(TEXT("⚔️ CONTACT | HOSTILES: %d"), Waves ? Waves->GetAliveEnemyCount() : 0)); // 2026-10-21: no waves
 		}
-		return FText::FromString(FString::Printf(TEXT("⚔️ WAVE %d | ENEMIES LEFT: %d"), Flow->GetWaveIndex(),
-			Waves ? Waves->GetAliveEnemyCount() : 0));
+		// 2026-10-26: the sudden wave's first pause is free and only the player's Space opens it - the banner says so.
+		return FText::FromString(FString::Printf(TEXT("⚔️ WAVE %d | ENEMIES LEFT: %d%s"), Flow->GetWaveIndex(),
+			Waves ? Waves->GetAliveEnemyCount() : 0, Flow->IsFreePauseOffered() ? TEXT(" | [SPACE] free tactical pause") : TEXT("")));
 	}
 	return FText::GetEmpty();
 }

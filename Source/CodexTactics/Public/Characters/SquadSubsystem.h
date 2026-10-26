@@ -264,11 +264,20 @@ public:
 	int32 GetDeferredShotCount() const { return DeferredShots.Num(); }
 
 	/**
-	 * True while formation following is on: exploration and after the final fight (PostCombat, bug 2026-10-23; SquadOrderRules::IsFormationPhase).
-	 * From preparation to the fight's end the operatives act individually.
+	 * True while formation following is on: exploration, after the final fight (PostCombat, bug 2026-10-23) and - user decision
+	 * 2026-10-26 - through the fight too (SquadOrderRules::IsFollowPhase: the preparation, the real-time fight, the tactical pause; not
+	 * the turn-based grid). Off while Commander Mode fights on its own (UGameFlowSubsystem::IsSquadAutonomyActive: the autonomy owns
+	 * the members then). Console Codex.Squad.CombatFormation 0: the old rule (from the preparation to the fight's end nobody follows).
 	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsFormationActive() const;
+
+	/**
+	 * The EXPLORATION formation (SquadOrderRules::IsFormationPhase: exploring, after the final fight): the group features that stay
+	 * out of a fight - the group cover order without a box selection, the formation wall layout and its wall group / slide preview,
+	 * a spotted trap's Solo. In a fight the cover orders stay individual (a box selection still takes cover together).
+	 */
+	bool IsExplorationFormation() const;
 
 	// --- Group cover order (game designer 2026-10-20; GroupCoverRules, SquadOrderRules::ShouldJoinGroupCover) -------------
 
@@ -499,6 +508,9 @@ protected:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
 private:
+	/** A wave fight running in real time (the formation's parked followers then leave their facing to the fight). */
+	bool IsRealTimeFight() const;
+
 	struct FPlannedOrder
 	{
 		FVector Destination = FVector::ZeroVector;

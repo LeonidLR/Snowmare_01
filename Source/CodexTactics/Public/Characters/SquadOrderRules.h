@@ -26,6 +26,11 @@ namespace SquadOrderRules
 		bool bUseOrder = false;
 		/** A relocation / deploy / tripwire task is running for him (URelocationSubsystem). */
 		bool bObjectTask = false;
+		/**
+		 * A fire order of his own is running: suppressive fire or a quick-fire burst (user decision 2026-10-26: a member given an attack
+		 * order in the pause carries it out, then rejoins the formation).
+		 */
+		bool bFireOrder = false;
 	};
 
 	/** He executes an order of his own: the formation leaves him alone until it is done. */
@@ -147,4 +152,16 @@ namespace SquadOrderRules
 	 * bPostCombatFormation false = the old rule (console Codex.Squad.PostCombatFormation 0, A/B).
 	 */
 	CODEXTACTICS_API bool IsFormationPhase(ECodexGamePhase Phase, bool bPostCombatFormation = true);
+
+	/**
+	 * User decision 2026-10-26 (game designer: "in combat the soldiers do NOT return to the formation, B does nothing - until I give the
+	 * order to switch to solo mode, they must stay in formation"): formation FOLLOWING runs in the fight as well - the cutscene, the
+	 * preparation / the rest between waves, the wave fight in real time and in the tactical pause, the wave-cleared panel - not on the
+	 * turn-based grid (it moves everyone itself) and not after a game over. Root cause of the report: the old rule (IsFormationPhase,
+	 * Godot main.gd is_tactical_mode = individual control from the preparation to the fight's end; TANDEM Sprint 03 "formation only in
+	 * exploration") switched the formation off for the whole fight, so Solo on / off (B) had no visible effect there.
+	 * bCombatFormation false = that old rule (console Codex.Squad.CombatFormation 0, A/B). The exploration-only group features (the group
+	 * cover order without a box selection, the formation wall layout, a spotted trap's Solo) keep IsFormationPhase.
+	 */
+	CODEXTACTICS_API bool IsFollowPhase(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bPostCombatFormation = true, bool bCombatFormation = true);
 }

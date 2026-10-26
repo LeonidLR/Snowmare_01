@@ -1,9 +1,10 @@
 // Dev-only console command for a headless click-rule check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.ClickRulesSmoke
-// Godot main.gd plain-click rules in a fight: an enemy becomes the priority target; a barrel / set-up item can't be
-// moved outside the tactical pause (HQ line); a ground click moves the leader at once (RTS control, user request
-// 2026-10-06 — Godot allowed moves only in the pause); a barrel opens its menu (2026-10-08: "Ignite", "Push" in the pause) and a
-// barricade opens its menu at once.
+// Godot main.gd plain-click rules in a fight: an enemy becomes the priority target; a ground click moves the leader at once (RTS
+// control, user request 2026-10-06 — Godot allowed moves only in the pause); a barrel opens its menu (2026-10-08: "Ignite") and a
+// barricade opens its menu at once. User decision 2026-10-26 ("the tactical pause is an aid"): objects move in the real-time fight
+// too - the barrel menu offers "Push", the barricade menu opens (no HQ refusal); the old rule (Codex.Relocation.RealTimeCombat 0)
+// still refuses there.
 
 #include "CoreMinimal.h"
 
@@ -113,14 +114,30 @@ namespace ClickRulesSmoke
 		const int32 Refusals = CountMessages(World, TEXT("Objects cannot be relocated during combat"));
 		UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
 		URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>();
-		// User decision 2026-10-08: a barrel in the fight opens its menu ("Ignite"; "Push" only in the pause).
+		IConsoleVariable* RealTimeRelocation = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Relocation.RealTimeCombat"));
+		// User decision 2026-10-26: a barrel in the real-time fight opens its menu with "Ignite" AND "Push".
 		PC->HandleWorldHit(HitOn(Barrel, Barrel->GetActorLocation()));
-		Check(State, Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Barrel && !Interactions->GetActionMenu().bAllowRelocate,
-			TEXT("barrel in the real-time fight: menu with \"Ignite\", no \"Push\""));
+		Check(State, Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Barrel && Interactions->GetActionMenu().bAllowRelocate,
+			TEXT("barrel in the real-time fight: menu with \"Ignite\" and \"Push\" (2026-10-26)"));
 		Interactions->CancelActionMenu();
 		PC->HandleWorldHit(HitOn(Barricade, Barricade->GetActorLocation()));
-		Check(State, CountMessages(World, TEXT("Objects cannot be relocated during combat")) == Refusals + 1 && !Relocation->IsPlacing(),
-			TEXT("barricade in the fight: HQ refusal"));
+		Check(State, Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Barricade
+			&& CountMessages(World, TEXT("Objects cannot be relocated during combat")) == Refusals,
+			TEXT("barricade in the real-time fight: its menu opens, no HQ refusal (2026-10-26)"));
+		Interactions->CancelActionMenu();
+		// The old rule (A/B): the live fight refuses as before.
+		if (RealTimeRelocation)
+		{
+			RealTimeRelocation->Set(0, ECVF_SetByConsole);
+			PC->HandleWorldHit(HitOn(Barrel, Barrel->GetActorLocation()));
+			Check(State, Interactions->IsActionMenuOpen() && !Interactions->GetActionMenu().bAllowRelocate,
+				TEXT("old rule (Codex.Relocation.RealTimeCombat 0): the barrel menu has no \"Push\""));
+			Interactions->CancelActionMenu();
+			PC->HandleWorldHit(HitOn(Barricade, Barricade->GetActorLocation()));
+			Check(State, CountMessages(World, TEXT("Objects cannot be relocated during combat")) == Refusals + 1 && !Relocation->IsPlacing(),
+				TEXT("old rule: the barricade in the fight - HQ refusal"));
+			RealTimeRelocation->Set(1, ECVF_SetByConsole);
+		}
 		const int32 MoveRefusals = CountMessages(World, TEXT("During combat, moving is only possible"));
 		PC->HandleWorldHit(HitOn(nullptr, Leader->GetActorLocation() + FVector(-300.f, 0.f, -90.f)));
 		Check(State, CountMessages(World, TEXT("During combat, moving is only possible")) == MoveRefusals && Leader->IsMoving(),

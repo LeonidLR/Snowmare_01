@@ -4,6 +4,13 @@
 
 ## 9. Known gaps / tech debt
 
+- **`PauseBarrelOrderSmoke` "B's paused push ran: barrel 2 stands on the marked spot" fails (found 2026-10-26, branch
+  `gameflow/realtime-horde-squad-combat`; NOT caused by it - it fails the same with every old rule restored:
+  `-PreCmds "Codex.Relocation.RealTimeCombat 0,Codex.Squad.CombatFormation 0,Codex.HordeIntro.AutoPause 1,Codex.HordeIntro.LaterWaves 1"`).**
+  The Engineer's walk up to barrel 2 (`URelocationSubsystem::TickTask` stage 1, `GetApproachPoint`) is "move to (-194, 1227) -> unreachable"
+  every retry on the current L_MovementTest; moving the target / the barricade does not change it. Every other check of the smoke passes, the
+  new real-time relocation stages included. To look at: the barrel's spawn spot vs the map's navmesh (the barrel / barricade nav areas).
+
 - **(FIXED 2026-10-18: close-in ON by data, ai_tuning.json; §7 lists its follow-ups.) Melee enemies stopped short of their bite
   (found 2026-10-18, bug hunt; `Codex.Enemy.MeleeCloseIn`).** The close-in move is `MoveToActor(AttackRange x 0.5)` and UE's reach test adds
   both capsule radii: a hound / frostbitten (range 180, radii 40 + 40) stops 1.65-1.75 m from the operative, while

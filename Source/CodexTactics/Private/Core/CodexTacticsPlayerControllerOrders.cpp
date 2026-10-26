@@ -29,6 +29,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/InteractionSubsystem.h"
+#include "Interactables/RelocationRules.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TripwireActor.h"
 #include "Ladders/LadderActor.h"
@@ -413,7 +414,6 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	// Godot main.gd plain-click rules during a fight (before the usual walk-up):
 	const UGameFlowSubsystem* ClickFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const bool bWave = ClickFlow && ClickFlow->GetPhase() == ECodexGamePhase::WaveCombat;
-	const bool bClickPause = ClickFlow && ClickFlow->GetCombatMode() == ECodexCombatMode::TacticalPause;
 	const bool bPreparation = ClickFlow && ClickFlow->GetPhase() == ECodexGamePhase::Preparation;
 	UGameMessageSubsystem* ClickMessages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
 	// 0.5: a live enemy becomes the priority target (no Ctrl needed while a wave is on).
@@ -433,15 +433,18 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			return;
 		}
 	}
-	// 0: set-up items and movable objects can't be moved mid-fight; in the pause / preparation a set-up item opens its
-	// menu at once and a movable object is picked up for relocation right away.
+	// 0: in a wave fight (real time or pause) / the preparation a set-up item opens its menu at once and a movable object is picked up
+	// for relocation right away. User decision 2026-10-26 ("the tactical pause is an aid, it must not cancel everything else"): the
+	// real-time fight too - only where nothing may be moved (the turn-based grid; the old Godot rule, Codex.Relocation.RealTimeCombat 0:
+	// the live fight) the HQ refuses. (Godot is_zone_solo: the leader alone in a camera zone may move / take objects mid-wave -
+	// URelocationSubsystem::CanRelocateNow.)
 	if (AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor()))
 	{
 		const bool bDeployable = Object->IsA<ADeployableActor>();
-		// Godot is_zone_solo: the leader alone in a camera zone may move / take objects mid-wave.
-		const bool bZoneSolo = Leader && Leader->bInCameraZone;
+		const URelocationSubsystem* ClickRelocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+		const bool bMayRelocate = !ClickRelocation || ClickRelocation->CanRelocateNow();
 		// User decision 2026-10-08: a barrel in the fight (real time or pause) opens its menu at once - "Ignite (1 match)"
-		// sends the operative to light it (planned in the pause), "Push out" is offered in the pause only.
+		// sends the operative to light it (planned in the pause), "Push out" wherever objects may be moved (2026-10-26: real time too).
 		if (Object->IsA<ABarrelActor>() && bWave)
 		{
 			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
@@ -450,11 +453,13 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			}
 			return;
 		}
-		if ((bDeployable || Object->bCanBeRelocated) && bWave && !bClickPause && !bZoneSolo)
+		if ((bDeployable || Object->bCanBeRelocated) && bWave && !bMayRelocate)
 		{
 			if (ClickMessages)
 			{
-				ClickMessages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("NoMoveInFight", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
+				ClickMessages->PostMessage(LOCTEXT("HQ", "HQ"), RelocationRules::IsRealTimeCombatRelocationEnabled()
+					? LOCTEXT("NoMoveInGrid", "⚠️ Objects cannot be relocated in turn-based combat - use the grid's push.")
+					: LOCTEXT("NoMoveInFight", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
 			}
 			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
 			{
@@ -462,7 +467,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			}
 			return;
 		}
-		if (bDeployable && (bPreparation || bClickPause))
+		if (bDeployable && (bPreparation || bWave))
 		{
 			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
 			{
@@ -470,7 +475,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			}
 			return;
 		}
-		if (!bDeployable && Object->bCanBeRelocated && (bClickPause || (bWave && bZoneSolo)))
+		if (!bDeployable && Object->bCanBeRelocated && bWave)
 		{
 			if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
 			{
