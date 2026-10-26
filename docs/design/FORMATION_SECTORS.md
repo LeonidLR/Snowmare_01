@@ -193,6 +193,10 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 - **The narrow column keeps the user's looks (clarification of 1A, coordinator 2026-10-26)**: in a corridor narrower than 6 m
   the column's K, P and L look as decided in 1A (12, forward over the shoulder, back at a slant) - the coverage allocator no
   longer re-shares them; Z is the rear guard. (`FormationSectorRules.Decided`; the allocator takes them as fixed looks.)
+- **A narrow gap without a sweep beats a wide one across a wall (ClearLook, red team #1)**: entering a corridor the right man's
+  look (forward over the shoulder) hit the end of the corridor wall; he swung 110° across that wall end to the far side and back.
+  Now a narrow free gap he reaches without passing the wall is preferred to a wide one behind the wall; a wide gap without a
+  sweep still wins, so the zigzag-corridor slivers stay out.
 
 ## Open for the user (v2.3)
 Picked overnight by the most conservative reading of the recorded decisions (coordinator 2026-10-26: "don't wait"); each can be

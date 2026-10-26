@@ -95,3 +95,13 @@ test('v2.3 (1A clarified): in a NARROW column K, P, L keep the user-decided look
   for (const x of fixed) near(r.looks.find((l) => l.role === x.role)!.yaw, x.yaw);
   near(Math.abs(r.looks.find((l) => l.role === 'Z')!.yaw), 180);
 });
+
+test('v2.3 narrow tier: entering a corridor, a narrow arc he reaches without a sweep beats the wide one across the wall end (red team 8_5)', () => {
+  // P 1.6 m before a 4 m corridor, 60 cm right of its axis; its right wall's end is ahead-right (about 59 deg, 1.6 m).
+  const entrance: Segment[] = [{ a: [84, 140], b: [1484, 140], thickness: 40 }, { a: [84, -260], b: [2484, -260], thickness: 40 }];
+  const got = L(entrance, [0, 0], 15, -25, C);
+  assert.ok(got < 10 && got > -20, `the near (narrow) edge, not the far one across the wall end: ${got}`);
+  assert.ok(L(entrance, [0, 0], 15, -25, { ...C, 'look.narrow_penalty': 0 }) > 100, 'without the tier: the far edge (the part-3 stare)');
+  // A wide arc without a sweep still beats a narrow one (the sliver of 2_8).
+  near(L(sliver, [0, 0], -100, 10, C), 10, 1e-6);
+});

@@ -92,7 +92,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 15,
+      "t": 15.1,
       "what": "P at W2",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"

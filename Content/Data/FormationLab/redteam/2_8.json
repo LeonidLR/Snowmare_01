@@ -237,14 +237,14 @@
   "expected_fail": [
     {
       "check": 1,
-      "choice": "auto",
+      "choice": "blizzard",
       "members": 2,
       "route": "R1",
-      "seed": 1,
-      "t": 10,
-      "what": "Z at R2w",
-      "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 2,
+      "t": 9.9,
+      "what": "Z at R1w",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 1,
@@ -334,6 +334,14 @@
     {
       "check": 1,
       "choice": "echelon_left",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
       "members": 2,
       "route": "R1",
       "seed": 1,

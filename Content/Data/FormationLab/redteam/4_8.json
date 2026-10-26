@@ -231,61 +231,6 @@
   "expected_fail": [
     {
       "check": 1,
-      "choice": "auto",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 5.4,
-      "what": "P at R1w",
-      "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 5.4,
-      "what": "P at R1w",
-      "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
-      "choice": "line",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 5.4,
-      "what": "P at R1w",
-      "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
-      "choice": "diamond",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 5.4,
-      "what": "P at R1w",
-      "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
-      "choice": "diamond",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 5.4,
-      "what": "P at R1w",
-      "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
       "choice": "hedgehog",
       "members": 3,
       "route": "R1",
@@ -316,6 +261,46 @@
     {
       "check": 5,
       "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "line",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
       "members": 4,
       "route": "R1",
       "seed": 2,

@@ -265,7 +265,8 @@ function LookYaw(role: Role, formation: Formation, mode: Mode, memberCount: numb
  * (else two edges about as near flip-flop and his look swings through the wall). v2.3 (red team, coordinator 2026-10-25): a free
  * arc narrower than look.min_free_deg does not count (neither for the wanted yaw nor an edge); `held` (his previous result, null
  * when ClearLook did not apply last frame) stays a candidate look.hold_deg better than its distance to the wanted yaw while no
- * wall is within look.wall_angle - look.hold_margin_deg of it (hysteresis); enclosed -> the longest clear ray (see below). Ties: the earlier wall, the left edge
+ * wall is within look.wall_angle - look.hold_margin_deg of it (hysteresis); a free but narrow wanted yaw / edge still competes
+ * look.narrow_penalty worse (+360 per wall swept as for the edges); enclosed -> the longest clear ray (see below). Ties: the earlier wall, the left edge
  * first (the first strictly better edge wins). The integration applies it to the patrol / halt / "all forward" looks - not to
  * the wall layout, the corner watcher (he looks at the corner on purpose) or a man looking where he walks (within 45 deg).
  */
@@ -304,9 +305,19 @@ function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw
   if (held !== null && holdDeg > 0 && !centers.some((c) => Math.abs(normYaw(held - c)) < holdHalf - 1e-6)) {
     best = normYaw(held); bestScore = Math.abs(normYaw(held - yaw)) - holdDeg;
   }
+  // v2.3 part 4: a free but NARROW direction (the wanted yaw, an edge) still competes, look.narrow_penalty worse - so a narrow
+  // arc he reaches without sweeping across a wall beats a wide one behind a sweep (entering a corridor P swung 110 deg across
+  // the end of its wall to the far edge and back - red team 8_5, 4_8), while a wide arc without a sweep still wins.
+  const narrowPenalty = cfg(config, 'look.narrow_penalty');
+  if (narrowPenalty > 0 && !blocked(yaw)) {
+    const score = narrowPenalty + 360 * swept(yaw);
+    if (score < bestScore - 1e-9) { bestScore = score; best = normYaw(yaw); }
+  }
   for (const c of centers) for (const [edge, out] of [[c - half, -1], [c + half, 1]] as [number, 1 | -1][]) {
-    if (!lookable(edge, out)) continue;
-    const score = Math.abs(normYaw(edge - yaw)) + 360 * swept(edge);
+    if (blocked(edge)) continue;
+    const wide = lookable(edge, out);
+    if (!wide && narrowPenalty <= 0) continue;
+    const score = Math.abs(normYaw(edge - yaw)) + 360 * swept(edge) + (wide ? 0 : narrowPenalty);
     if (score < bestScore - 1e-9) { bestScore = score; best = normYaw(edge); }
   }
   if (best !== null) return best;

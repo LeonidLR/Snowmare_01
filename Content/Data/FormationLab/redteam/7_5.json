@@ -87,6 +87,17 @@
   },
   "expected_fail": [
     {
+      "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 17.9,
+      "what": "Z at W1",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
       "check": 6,
       "choice": "auto",
       "members": 4,

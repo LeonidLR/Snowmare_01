@@ -138,7 +138,7 @@
       "t": 4.5,
       "what": "P at WI1",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

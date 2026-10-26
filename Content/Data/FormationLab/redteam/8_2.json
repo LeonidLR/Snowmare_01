@@ -267,6 +267,28 @@
   "expected_fail": [
     {
       "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 20.8,
+      "what": "Z at A4",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 20.8,
+      "what": "Z at A4",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
       "choice": "echelon_right",
       "members": 4,
       "route": "R1",
@@ -274,15 +296,15 @@
       "t": 4,
       "what": "P at B1",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 1,
       "choice": "hedgehog",
       "members": 2,
       "route": "R1",
-      "seed": 1,
-      "t": 13.9,
+      "seed": 2,
+      "t": 14,
       "what": "Z at A2",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },

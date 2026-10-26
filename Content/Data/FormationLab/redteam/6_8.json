@@ -135,8 +135,8 @@
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 13.3,
-      "what": "P-Z 70 cm apart",
+      "t": 13.5,
+      "what": "P-Z 69 cm apart",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],

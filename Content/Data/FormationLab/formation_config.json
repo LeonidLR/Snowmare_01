@@ -401,6 +401,13 @@
       "unit": "deg",
       "doc": "v2.3: the held look is dropped once a wall direction comes within look.wall_angle minus this of it."
     },
+    "look.narrow_penalty": {
+      "value": 180,
+      "min": 0,
+      "max": 360,
+      "unit": "deg",
+      "doc": "v2.3 (red team #1): a free arc narrower than look.min_free_deg still competes in ClearLook this much worse (0 = never; < 360 so a narrow arc without a sweep beats a wide one behind a sweep)."
+    },
     "classify.probe_side": {
       "value": 400,
       "min": 200,

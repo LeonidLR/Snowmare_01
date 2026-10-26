@@ -51,9 +51,11 @@ reflected in the page's schemes / clips the same day** ("все, что мы и�
 | part 1 ClearLook min arc + hysteresis | 186 (169 + 17) | 20 | 65 | 77 |
 | part 2 trail-column stagger clamp | 113 (95 + 18) | 33 | 34 | 22 |
 | part 3 allocator keeps the narrow column's 1A looks | 123 (99 + 24) | 39 | 35 | 23 |
+| part 4 ClearLook narrow tier | 113 (101 + 12) | 26 | 38 | 23 |
 - v2.2-introduced regressions (`since: 'v2.2'`): 58 -> 26 open after part 1 -> 23 after part 2.
 - Open question for the user: FORMATION_SECTORS.md "Open for the user (v2.3)".
-- Next: ClearLook narrow tier (patch ready: corridor-entrance stares from part 3); then #5, the rest of #1 (idea tested: a narrow arc reachable
+- Next: #5 - the sim's fallbackSlot gives two unwalkable slots the SAME point (hedgehog of 3 in a 3 m corridor: P and Z converge);
+  fix = skip candidates within slot.min_spacing of slots already given out; then, the rest of #1 (idea tested: a narrow arc reachable
   WITHOUT a sweep beats a wide one behind a sweep - `NARROW` 180 penalty instead of the hard min-arc cut; subset 17 -> 13 new).
 
 ## Checklist per rules change (do all of it, same commit)

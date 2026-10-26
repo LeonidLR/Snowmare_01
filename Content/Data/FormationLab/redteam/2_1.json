@@ -165,9 +165,9 @@
       "route": "R1",
       "seed": 1,
       "t": null,
-      "what": "5-7 o'clock watched 86.1 %",
+      "what": "5-7 o'clock watched 84.1 %",
       "since": "v2.3",
-      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,

@@ -238,6 +238,17 @@
       "t": 4.6,
       "what": "P at WR1",
       "since": "v2.3",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 2,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.4,
+      "what": "Z at WL2",
+      "since": "v2.3",
       "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
     },
     {

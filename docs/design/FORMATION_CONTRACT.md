@@ -473,3 +473,12 @@ ones carry `since: 'v2.3'`).
   width: a doorway crossed at an angle is no corridor; open question 1 in FORMATION_SECTORS.md, pick (a)).
 - The wall layout and the pair never reach the allocator (3+ members walking / halted, not the wall layout).
 - Golden `formation_Decided.json` (formations x 2-4 members x passage null / 200 / 599 / 600 / 900 x roles).
+
+### 13.4 ClearLook narrow tier (red team #1, after 13.3)
+- A free but NARROW direction (arc < `look.min_free_deg`) is no longer dropped outright: the wanted yaw (score
+  `look.narrow_penalty` + 360 x walls swept) and a narrow edge (`|edge - yaw|` + 360 x swept + `look.narrow_penalty`) compete
+  with the wide edges and the held look. `look.narrow_penalty` 180 (0-360; 0 = 13.1's hard cut): below 360, so a narrow arc he
+  reaches WITHOUT a sweep beats a wide one behind a sweep; a wide arc without a sweep still wins (the 2_8 sliver stays out).
+- Why: entering a corridor with 13.3's "forward over the shoulder", P's +15 hit the corridor wall's end; the near arc was 21 deg
+  and the only wide edge lay across the wall end - he swung 110 deg across it and back (red team 8_5, 4_8, 11_8).
+- Golden: `formation_ClearLook.json` (same cases, the new key in the config header).

@@ -121,7 +121,7 @@
       "members": 2,
       "route": "R1",
       "seed": 1,
-      "t": 24.1,
+      "t": 24.3,
       "what": "Z at W2",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
@@ -132,7 +132,7 @@
       "members": 2,
       "route": "R1",
       "seed": 1,
-      "t": 24.1,
+      "t": 24.3,
       "what": "Z at W2",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
@@ -143,7 +143,7 @@
       "members": 2,
       "route": "R1",
       "seed": 1,
-      "t": 24.1,
+      "t": 24.3,
       "what": "Z at W2",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
@@ -154,7 +154,7 @@
       "members": 2,
       "route": "R1",
       "seed": 1,
-      "t": 24.1,
+      "t": 24.3,
       "what": "Z at W2",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
@@ -165,7 +165,7 @@
       "members": 2,
       "route": "R1",
       "seed": 1,
-      "t": 24.1,
+      "t": 24.3,
       "what": "Z at W2",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
