@@ -490,3 +490,14 @@ ones carry `since: 'v2.3'`).
   wall, both got the same point and the two men walked into each other - 22 cm apart.)
 - Runtime: the same requirement for `SquadFormation::ComputeFallbackSlots` - the stand-ins of one frame keep `slot.min_spacing`
   from each other and from the walkable slots.
+
+### 13.6 `FormationGuardRules::Resolve(..., config, allInSight)` - a man cut off brings the trail column back (red team #7)
+- `allInSight` (default true = v2.2) = every member has a clear line (no wall body, radius 0) to the leader. False -> raw level 2
+  (the trail column) at once, whatever the slots say; released towards the request by the usual hold (classify.hold_distance
+  of the leader's path once the request is whole and everybody is in sight). The wall layout is never guarded.
+- Why: the hold distance ran out exactly as the leader turned into a 3 m side passage (red team 4_3); the blizzard's slots
+  were whole at his pose, so the guard opened while the far man was still round the corner - and stayed open as he lost the
+  leader (check 7).
+- Golden `formation_Guard.json`: `in.allInSight` (false only with the lookahead pose).
+- Open (FORMATION_SECTORS "Open for the user (v2.3)" 3): the trail column's 2nd / 3rd men double the rear at a wall gap and
+  walk backwards (the backward speed cap) - they fall 2 m behind and their line to the leader cuts the gap's wall end.

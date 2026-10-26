@@ -274,7 +274,8 @@ export function simulate(o: SimOptions): number {
       // v2.1: the wall guard - no formation may cut the squad in two (mirror echelon, else the column; the request stays).
       const pathAhead: Vec2[] = arrived ? [leader.pos] : [leader.pos, ...legs.slice(leg), ...points.slice(routeLeg + 1)];
       guard = FormationGuardRules.Resolve(walls, requested, n, leader.pos, heading, arrived ? null : aheadPose(cfg(c, 'guard.lookahead')),
-        FormationGuardRules.TurnAhead(pathAhead, heading, c), guard, stepDistance, c);
+        FormationGuardRules.TurnAhead(pathAhead, heading, c), guard, stepDistance, c,
+        members.every((m) => !segmentBlocked(leader.pos, m.pos, walls, 0))); // v2.3: the squad all on his side of the walls
       formation = guard.effective!;
     } else { formation = 'wall'; terrain = 'at_wall'; }
     lastTravelled = travelled;

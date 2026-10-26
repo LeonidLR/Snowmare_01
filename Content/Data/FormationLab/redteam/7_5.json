@@ -87,35 +87,13 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 17.9,
-      "what": "Z at W1",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 6,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 28.4,
-      "what": "p95 1886 cm; Z 2132 cm behind",
-      "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
       "check": 7,
       "choice": "auto",
       "members": 4,
       "route": "R1",
       "seed": 2,
       "t": 31.4,
-      "what": "diamond: wall cuts L, P-Z, L-Z",
+      "what": "column (asked diamond): wall cuts P-L, L-Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
@@ -123,9 +101,9 @@
       "choice": "echelon_right",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 17.7,
-      "what": "echelon_left (asked echelon_right): wall cuts Z",
+      "seed": 2,
+      "t": 17.9,
+      "what": "column (asked echelon_right): wall cuts L-Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
@@ -135,7 +113,7 @@
       "route": "R1",
       "seed": 1,
       "t": 31.4,
-      "what": "echelon_left: wall cuts Z, P-Z",
+      "what": "column (asked echelon_left): wall cuts P-Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
@@ -145,7 +123,7 @@
       "route": "R1",
       "seed": 1,
       "t": 31.4,
-      "what": "echelon_left: wall cuts L, L-Z",
+      "what": "column (asked echelon_left): wall cuts P-L, L-Z",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
@@ -324,6 +302,22 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
       "fixed_in": "v2.3"
     }
   ]

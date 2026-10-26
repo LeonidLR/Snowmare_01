@@ -199,6 +199,10 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   sweep still wins, so the zigzag-corridor slivers stay out.
 - **No two men sent to the same spot (red team #5)**: when a formation's places don't fit (a hedgehog of three in a 3 m corridor),
   the stand-in places now keep the normal spacing from each other - two men were sent to the same point and walked into each other.
+- **A man cut off brings the column back (red team #7)**: if anyone loses the line to the leader behind a wall, the squad
+  folds into the column along the leader's own path at once (it leads him round the corner); it opens again 5 m after everyone
+  is back in sight. (The leader turned into a side passage just as a manual blizzard re-opened; its far man was left round the
+  corner.)
 
 ## Open for the user (v2.3)
 Picked overnight by the most conservative reading of the recorded decisions (coordinator 2026-10-26: "don't wait"); each can be
@@ -215,3 +219,28 @@ flipped in the morning.
    is the player's choice; (b) fold every manual formation of 3+ into the trail column before a turn sharper than ~120°;
    (c) fold only the hedgehog / blizzard (the tight shapes). **Picked (a)** (keeps "5Б" as decided); 12_6's #5 entries stay
    open as a design question.
+3. **Who may walk backwards besides the rear guard? (red team #7 at oblique wall gaps: 12_3, 8_7, 10_6, 11_8 - 9 entries)**:
+   crossing a gap both flanks are walls, the only open arcs are the front (K) and the rear (the rear guard); the v2.2 allocator
+   gives a man with nothing to cover the share "nearest his bearing" - for the 2nd / 3rd men of the column that is the rear,
+   so they walk backwards (slower), fall ~2 m behind and their line to the leader cuts the gap's wall end. Options: (a) **leave
+   it** (v2.2 as approved); (b) on the move such a man doubles the FRONT instead (tested: fixes 11, but 31 new wall stares - the
+   forward look hits the gap's wall); (c) he looks back over the shoulder, at most ~110° off the heading, so he still walks
+   forwards. **Picked (a)** - (b) is worse on the red team, (c) changes the approved allocator; for the morning.
+4. **Passing a wall end within ~1 m (red team #1, ~10 entries: 3_4, 11_8, 1_4, 8_2, 9_4 at a corridor entrance; 12_3 at a gap)**:
+   the end's direction swings fast as he walks by; ClearLook keeps his look 55° off it on the side reachable without passing it,
+   and that edge swings round behind him faster than he turns - for 0.3 s he is within the check's 45°. Options: (a) **leave**;
+   (b) ClearLook anticipates the man's motion (blocked spans also from his position ~0.5 s ahead - a contract change for C++);
+   (c) the check ignores a wall END he passes within 1 m (only faces count). **Picked (a)** for tonight; (b) recommended for
+   the morning (rule work, not a decision change).
+5. **The pair's rear man leaving a narrow mouth (red team #1, ~10 entries: 9_3 x5, 2_8, 2_4, 12_7, 1_4, 5_7, 5_8, 8_2)**: his
+   3 → 6 → 9 sweep (user decision for the pair) crosses the mouth's wall ends right beside him. Options: (a) **leave** (the sweep as
+   decided); (b) the pair's rear man holds 6 while a wall end is within ~1.5 m. **Picked (a)** (keeps the decision).
+
+### Remaining after v2.3 (101 + 1 red-team entries; triage)
+- #5 spacing (34): mostly 69-80 cm for 0.3 s in tight manual shapes (hedgehog / blizzard of 3) at turns and hairpins (question 2),
+  and two men overtaking in a column after a re-assignment; no single rule bug found tonight.
+- #3 flicker (12: 1_7, 2_7, 3_8, 7_8, auto n2-4): the terrain class flips X -> Y -> X within 3-5 s; pre-v2.2, not investigated yet
+  (classify.hold_distance 500 vs the red team's short zones).
+- #4 (3: 1_1) and #8 (3: 2_6): the red team's own expectations (zone formation, bypass side) - not investigated; may be layout
+  expectations rather than rule bugs.
+- #6 rear pace (5), #2 rear cover (2: 88-89 % vs 90 %): borderline.

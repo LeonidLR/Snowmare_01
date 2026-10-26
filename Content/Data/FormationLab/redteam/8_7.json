@@ -115,7 +115,7 @@
       "route": "R1",
       "seed": 1,
       "t": 25.7,
-      "what": "wedge: wall cuts P, P-Z",
+      "what": "column (asked wedge): wall cuts K-P, P-Z",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },

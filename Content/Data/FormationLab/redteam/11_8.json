@@ -180,7 +180,7 @@
       "route": "R1",
       "seed": 1,
       "t": 31.8,
-      "what": "Z has no walkable slot",
+      "what": "L has no walkable slot",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {

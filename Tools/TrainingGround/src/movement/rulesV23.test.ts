@@ -7,7 +7,7 @@ import { distToWall } from './geometry.ts';
 import { configValues } from './config.ts';
 import { readConfigFile, readLayout } from './cli/paths.ts';
 import { runSeries } from './bot.ts';
-import { FormationCoverRules, FormationSectorRules, FormationShapeRules } from './rules.ts';
+import { FormationCoverRules, FormationGuardRules, FormationSectorRules, FormationShapeRules } from './rules.ts';
 
 const C = configValues(readConfigFile());
 const L = FormationSectorRules.ClearLook;
@@ -112,4 +112,20 @@ test('v2.3 sim: two unwalkable slots never get the same fallback point (red team
   const s = runSeries({ layout, config: C, members: [3], seeds: 1, seedBase: 1, manual: 'hedgehog' }).summary;
   const spacing = s.checks.find((c) => c.id === 5)!;
   assert.equal(spacing.fail, 0, spacing.worst ?? '');
+});
+
+test('v2.3 guard: a member cut off from the leader -> the trail column at once, released by the usual hold (red team 4_3)', () => {
+  const G = FormationGuardRules;
+  const start = { requested: 'blizzard' as const, level: 0 as const, effective: 'blizzard' as const, candidate: null, candidateDistance: 0 };
+  const open = G.Resolve([], 'blizzard', 4, [0, 0], 0, null, 0, start, 20, C);
+  assert.equal(open.level, 0, 'nobody cut off: as requested');
+  const cut = G.Resolve([], 'blizzard', 4, [0, 0], 0, null, 0, start, 20, C, false);
+  assert.equal(cut.level, 2);
+  assert.equal(cut.effective, 'column');
+  // In sight again: back to the request only after classify.hold_distance of the leader's path.
+  let st = G.Resolve([], 'blizzard', 4, [0, 0], 0, null, 0, cut, C['classify.hold_distance'] / 2, C);
+  assert.equal(st.level, 2);
+  st = G.Resolve([], 'blizzard', 4, [0, 0], 0, null, 0, st, C['classify.hold_distance'] / 2 + 1, C);
+  assert.equal(st.level, 0);
+  assert.equal(G.Resolve([], 'wall', 4, [0, 0], 0, null, 0, { ...start, requested: 'wall', effective: 'wall' }, 20, C, false).level, 0, 'the wall layout is never guarded');
 });

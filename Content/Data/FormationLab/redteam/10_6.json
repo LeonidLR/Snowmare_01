@@ -101,6 +101,17 @@
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20,
+      "what": "Z at W2",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
       "check": 5,
       "choice": "line",
       "members": 4,
@@ -180,8 +191,8 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 19.6,
-      "what": "echelon_right (asked echelon_left): wall cuts Z",
+      "t": 19.3,
+      "what": "column (asked echelon_left): wall cuts P-L",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],

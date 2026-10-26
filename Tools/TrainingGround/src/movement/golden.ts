@@ -182,7 +182,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
   }
 
   // --- v2.1 (FORMATION_CONTRACT.md 10)
-  const guard = base('Guard', 'in: walls, requested, memberCount, leaderPos, leaderYaw, ahead ({pos, yaw} | null), turnAhead (deg, v2.1.1), state {requested, level, effective, candidate, candidateDistance}, stepDistance -> out.blocked (BlockedRoles at the leader) + out.state (Resolve).');
+  const guard = base('Guard', 'in: walls, requested, memberCount, leaderPos, leaderYaw, ahead ({pos, yaw} | null), turnAhead (deg, v2.1.1), state {requested, level, effective, candidate, candidateDistance}, stepDistance, allInSight (v2.3) -> out.blocked (BlockedRoles at the leader) + out.state (Resolve).');
   const guardFormations: Formation[] = ['diamond', 'line', 'column', 'echelon_right', 'echelon_left', 'hedgehog', 'blizzard'];
   for (const scene of GUARD_SCENES) {
     for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
@@ -195,10 +195,11 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
           { requested, level: 2, effective: 'column', candidate: 0, candidateDistance: hold - 30 },
         ];
         // v2.1.1: turnAhead 40 (> turn.fold_deg) only without the lookahead pose (keeps the file small).
-        for (const [aheadIn, turn] of [[null, 0], [ahead, 0], [null, 40]] as [typeof ahead | null, number][]) for (const state of states) {
+        // v2.3: allInSight false (a member cut off) only with the lookahead pose (keeps the file small).
+        for (const [aheadIn, turn, allInSight] of [[null, 0, true], [ahead, 0, true], [null, 40, true], [ahead, 0, false]] as [typeof ahead | null, number, boolean][]) for (const state of states) {
           const blocked = FormationGuardRules.BlockedRoles(placed, requested, memberCount, offset, yaw, config);
-          const out = FormationGuardRules.Resolve(placed, requested, memberCount, offset, yaw, aheadIn, turn, state, 60, config);
-          guard.cases.push({ in: { scene, walls: placed.map(seg), requested, memberCount, leaderPos: r2(offset), leaderYaw: yaw, ahead: aheadIn, turnAhead: turn, state, stepDistance: 60 },
+          const out = FormationGuardRules.Resolve(placed, requested, memberCount, offset, yaw, aheadIn, turn, state, 60, config, allInSight);
+          guard.cases.push({ in: { scene, walls: placed.map(seg), requested, memberCount, leaderPos: r2(offset), leaderYaw: yaw, ahead: aheadIn, turnAhead: turn, state, stepDistance: 60, allInSight },
             out: { blocked, state: { ...out, candidateDistance: round(out.candidateDistance) } } });
         }
       }

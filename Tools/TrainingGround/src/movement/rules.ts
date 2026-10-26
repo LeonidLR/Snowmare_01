@@ -681,10 +681,12 @@ function Effective(state: GuardState): { formation: Formation | null; trail: boo
  * v2.1.1 (user decision 2026-10-25, "5Б"): turnAhead = TurnAhead of the leader's path (deg); above turn.fold_deg a WIDE
  * formation (the echelons, the line - their far end would swing metres round the turn) takes the trail column for the turn
  * and opens again after hold_distance of path once the turn is behind (the same hysteresis).
+ * v2.3 (red team #7): allInSight = every member has a clear line (no wall body) to the leader; false -> the trail column at
+ * once (a man already cut off is led round the corner on the leader's path), released by the usual hold. Default true = v2.2.
  */
 function Resolve(walls: readonly Segment[], requested: Formation, memberCount: number, leaderPos: Vec2, leaderYaw: number,
   ahead: { pos: Vec2; yaw: number } | null, turnAhead: number, state: GuardState, stepDistance: number,
-  config: FormationConfig): GuardState {
+  config: FormationConfig, allInSight = true): GuardState {
   const whole = (f: Formation) => BlockedRoles(walls, f, memberCount, leaderPos, leaderYaw, config).length === 0 &&
     (!ahead || BlockedRoles(walls, f, memberCount, ahead.pos, ahead.yaw, config).length === 0);
   let raw: GuardLevel = 0;
@@ -694,6 +696,10 @@ function Resolve(walls: readonly Segment[], requested: Formation, memberCount: n
     const mirror = mirrorOf(requested);
     raw = mirror && whole(mirror) ? 1 : 2;
   }
+  // v2.3 (red team #7): a member already cut off from the leader -> the trail column at once (it leads him round the corner
+  // on the leader's own path); the slots being whole is not enough - the hold distance ran out as the leader turned into a side
+  // passage and the blizzard's far man was left round the corner.
+  if (requested !== 'wall' && !allInSight) raw = 2;
   const at = (level: GuardLevel, candidate: GuardLevel | null = null, candidateDistance = 0): GuardState =>
     ({ requested, level, effective: formationAt(requested, level), candidate, candidateDistance });
   if (state.requested !== requested || raw >= state.level) return at(raw);
