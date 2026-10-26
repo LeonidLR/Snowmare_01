@@ -1,4 +1,4 @@
-# Environment: day cycle, procedural weather, cold and enemy roster (phases 1-3 implemented: clock, weather, cold, roster, visual presenter; phase 4a: snow cover state, MPC, presenter wiring)
+# Environment: day cycle, procedural weather, cold and enemy roster (phases 1-3 implemented: clock, weather, cold, roster, visual presenter; phase 4a: snow cover state, MPC, presenter wiring; section 17-18: temperate climate + rain visuals)
 
 > Design of the time-of-day + weather system and how it drives cold and the enemy roster. Status 2026-10-22: phase 1 (clock, weather ladder,
 > carry-over, tutorial lock, events, console) and phase 2 (cold multipliers, roster by conditions) implemented - see §8 / §9; phase 3 visual presenter (lights / fog / post by hour + weather) §11; Niagara / snow cover phase 4.
@@ -1255,3 +1255,80 @@ index)`: deterministic; the environment's RNG is never advanced). Off on automat
   and a second per-character overlay pass; not cheap enough for this step.
 - **Exposure:** a soaked world is darker; the auto exposure brightened the stills back to the dry look (2026-10-26: wet 1.0 measured as bright as
   dry). `WetExposureBias` (-0.4 EV x Wetness, temperate only) keeps the wet darkening readable.
+
+### 18.8 Scripts (editor commandlets, under the build lock, `-AllowCommandletRendering`)
+- `create_weather_rain_fx.py`: the drop material, `NS_Weather_Rain`, `NS_Weather_PuddleSplashes`, the screen-drops PPM copy, `DA_RainFX`. Keeps
+  every existing asset (hand edits are safe); `CODEX_RAINFX_FORCE=1` (+ optional `CODEX_RAINFX_ONLY=material,rain,puddles,screen,settings`)
+  rebuilds; `CODEX_RAINFX_MODE=dump` writes `Saved/Logs/weather_rain_fx_dump.txt`. Log `Saved/Logs/create_weather_rain_fx.txt`.
+- `create_wet_surface_materials.py`: `M_WetOverlay` / `M_WetGroundOverlay` + MIs (kept unless `CODEX_WET_FORCE=1`).
+- `landscape_rain_patch.py` (`CODEX_LANDRAIN_MODE=patch|stats`): `MF_RainWetSurface` + its one call in `M_Landscape_Master` (own nodes tagged
+  `landrain:`, idempotent). Re-run it after `landscape_snow_patch.py` (that one rebuilds its own nodes and the outputs).
+- `rain_hlsl.py`: the shared HLSL (procedural ripples, puddle field / mask, interior zones).
+- Backups before the first edit: `Saved/Backups/rain_20261026_115538/manifest.txt` (sha1 of every asset that could be touched). Verified at the
+  end: only `M_Landscape_Master` differs (fff01c88... before); `MI_Landscape_Master`, `M_SnowOverlay`, `M_SnowGroundOverlay`, their MIs,
+  `MPC_Environment` and every migrated rain / storm original are byte-identical. Restore = copy the backup file back.
+
+### 18.9 Cost (GPU, 1920x1080, `CodexTactics.EnvironmentShots rainperf` on L_WeatherRainTest, -fps=60, median of 180 frames after a 6 s settle)
+The PC was shared (two other editors open), so the cases run interleaved in two rounds per distance; compare WITHIN a round (the rounds drift
+by ~1 ms). `storm_fxoff` = the rain / puddle systems hidden and the screen drops off; `storm_nooverlay` = `Codex.Env.SnowOverlay 0` +
+`SnowGround 0` (no wet overlays). Log lines `[RainPerf]` in `Saved/Logs/rain_media_perf2.log`, stills `Saved/Screenshots/Environment/rainperf/`.
+
+| Camera / round | Sunny | Rain | Storm | Storm fx off | Storm no overlay | Particles + screen drops | Wet overlays |
+|---|---|---|---|---|---|---|---|
+| 26 m / 1 | 5.60 | 7.40 | 8.03 | 7.94 | 8.17 | +0.09 | (-0.14, noise) |
+| 26 m / 2 | 6.96 | 8.72 | 9.09 | 8.82 | 8.40 | +0.27 | +0.69 |
+| 40 m / 1 | 6.91 | 8.71 | 8.80 | 8.57 | 8.30 | +0.23 | +0.50 |
+| 40 m / 2 | 7.07 | 8.95 | 9.07 | 8.75 | 8.54 | +0.32 | +0.53 |
+
+- The rain visuals cost **~0.1-0.3 ms** (24k drops alive in a storm, 10.5k in rain, + splashes + the screen-drop pass) **+ ~0.5-0.7 ms** for the wet
+  overlays (13 props + the floor slab: one forward-lit translucent pass, like the snow ground overlay, 12.d). Draws +8 (fx) / +14 (overlays).
+- The rest of Sunny -> Rain / Storm (~1.8 ms) is the temperate Rain / Storm look itself (section 17: volumetric fog), not the rain FX.
+- Game thread unchanged (~3.1-3.3 ms). Arctic levels: **0** - no rain component exists there (smoke `ClimateArcticSmoke` checks it), the wet
+  materials are never loaded, the snow overlay path is unchanged; the landscape's extra instructions run with Wetness 0 (see 18.10).
+
+### 18.10 Arctic A/B (every edited material renders identically with the arctic profile / rain 0)
+Method of section 17.7: `Scripts/Tools/image_diff.py`, mean absolute difference (levels of 255) / pixels > 8 levels; two runs before the edit
+(A/A = the noise floor) and runs after it; 1280x720 offscreen. The landscape (`CodexTactics.EnvironmentShots terrain nomovie notracks` on
+L_SnowTerrainTest, the only map with `M_Landscape_Master`; `after_3` = the final material) and the arctic levels (`visuals` on the lake and the
+factory: the presenter / overlay code changes). Stills `Saved/Screenshots/Environment/rain/ab/<terrain|arctic>_<before|after>_N/`, sheet
+`Saved/Screenshots/Environment/rain/rain_ab_sheet.png` (before | after | diff x8).
+
+| Still | A/A before_1 vs before_2 | before_1 vs after_1 | before_2 vs after_2 |
+|---|---|---|---|
+| terrain snow 0.0 / 0.5 / 1.0 (landscape, day) | 0.000 / 0 % | 0.000 / 0 % (max 1-2 levels) | 0.000 / 0 % |
+| terrain night fresh (falling snow) | 0.344 / 0.71 % | 0.329 / 0.70 % | 0.360 / 0.79 % (after_3) |
+| terrain night frost | 0.287 / 0 % | 0.279 / 0 % | 0.280 / 0 % (after_3) |
+| lake Blizzard 12:00 / Snowfall 23:00 | 0.520 / 0.74 %, 0.835 / 1.53 % | 0.542 / 0.82 %, 0.858 / 1.57 % | 0.544 / 0.79 %, 0.832 / 1.51 % |
+| lake Clear 12:00 / 23:00 | 0.254 / 0 %, 1.005 / 2.31 % | 0.194 / 0 %, 1.026 / 2.40 % | 0.230 / 0 %, 0.850 / 2.20 % |
+| factory Clear 07:00 / 12:00 | 4.504 / 0.53 %, 0.217 / 0 % | 0.368 / 0 %, 0.205 / 0 % | 4.493 / 0.18 %, 0.154 / 0 % |
+| factory Blizzard 12:00 / Snowfall 23:00 | 1.752 / 3.33 %, 2.391 / 4.57 % | 1.714 / 3.37 %, 2.311 / 4.53 % | 1.718 / 3.28 %, 2.421 / 4.58 % |
+
+Every still is at the A/A noise level; the lit landscape stills are identical (the rain function's masks are exactly 0). One outlier, as in
+17.7: the factory's first still (Clear 07:00) of the first run after the material changes came out 50 levels darker (exposure not settled while
+the shaders compiled on a loaded PC); the two re-runs (`after_2`, `after_3`) match it to 0.37 / 4.49 (A/A 4.50). Instruction counts of every
+edited material: `M_Landscape_Master` (and through it `MI_Landscape_Master`) VS 148 / PS 355 -> VS 148 / PS 456, samplers 3 -> 3, PS texture
+samples 10 -> 12. No other existing material was edited (the wet / rain materials are new: 18.3, 18.5, 18.7).
+
+### 18.11 Tests, smokes, captures
+- Tests `CodexTactics.Environment.RainFx.*` (7): LookPerWeather, IntensityToSpawn, PuddleSplashDensity, ScreenDrops, KillBoxReuse, Lightning,
+  WetOverlayGate; `CodexTactics.Environment.LandscapeMaterial.Graph` now expects BaseColor / Roughness / Normal / Specular through
+  `MF_RainWetSurface` fed by the snow functions (AO / Emissive direct). `CodexTactics.Environment` 111 / 111.
+- `RainSmoke` (rendered, L_WeatherRainTest; `Scripts/test_map.json` rule `rain-visuals`): SunnyDay - the rain component exists, nothing falls,
+  no screen drops / puddle splashes, the overlay in wet mode shows nothing; Rain - active at RainLookIntensity, ~10.6k drops, screen drops 0.18,
+  puddle splashes = the rule, MPC Wetness / PuddleAmount, wet overlays on 13 props + 1 slab, no snow; Storm - x2.45 spawn, ~24k drops, screen drops
+  0.3, wind slant, no lightning under the smoke until `Codex.Env.Lightning 1`, a strike flashes; the leader in the hut inside a kill box; SunnyDay
+  - stopped; `Codex.Env.Climate arctic` - stops at once, the overlay back in snow mode. `ClimateArcticSmoke` also checks that an arctic level has
+  no rain component. Results 2026-10-26: RainSmoke, ClimateSmoke, ClimateArcticSmoke, WeatherSmoke, WeatherLakeSmoke, TutorialSmoke,
+  FrozenFactoryStartSmoke PASS (`smoke_parallel -Jobs 2`).
+- Captures (`EnvironmentRainShotsCommand.cpp`; run with `r.SetRes 1920x1080w,DisableAllScreenMessages` first in `-ExecCmds` - the project config
+  sets 1280x720): `CodexTactics.EnvironmentShots rain [noclip]` (L_WeatherRainTest) -> `Saved/Screenshots/Environment/rain/` `01_sunny_1200`
+  .. `13_hut_storm` + `clip/` -> `rain_10s.mp4`; `rainterrain` (L_SnowTerrainTest switched to temperate) -> `rain/terrain/t1..t5`; `rainperf`;
+  `rainprobe` (drop look variants for tuning).
+
+### 18.12 Known limits / next
+- Roofs that are no camera zone keep the RAIN out (kill boxes over the view focus / leader) but not the wet ground under them (the snow ground
+  overlay's known limit, 12.d): a hut floor that is part of a big outdoor slab gets the wet film / puddles too.
+- The puddle splashes and the ground splashes sit on the plane of the view focus (no per-drop traces): on crates / roofs there are none.
+- The landscape's wet look was only seen on the arctic terrain test map switched to temperate (its layers are snow / rock / ice): a temperate
+  landscape (grass / soil layers) should be checked once a narrative level has one.
+- Characters get no wet sheen (18.7).
