@@ -1,6 +1,14 @@
-# Formation simulator / rules / bot — handoff (cloud session → PC, 2026-10-25)
+# Formation simulator / rules / bot — handoff (cloud session → PC, 2026-10-25; PC session 2026-10-26)
 
-Branch `claude/stoic-bell-dr29o5`, feature commits **1f8bc25** (v2.2), then v2.3 (red-team fixes, contract section 13) commits on top. Coordinator: session «Дирижер»
+**Now (2026-10-26):** the PC sim worktree `CodexTactics-sim`, branch `formation/sim-local` (= the cloud's `claude/stoic-bell-dr29o5`
+parts 1-6 + origin/main 526e06e merged, then parts 7-9 below; never merge into main yourself - the coordinator does). Parts 7-9
+implement the user's morning answers (FORMATION_SECTORS "v2.3 - the user's answers"; contract 13.7-13.9): new config keys
+`look.over_shoulder_max_deg` 110 and `look.anticipate_s` 0.5; new parameters ClearLook(..., held, limit, ahead),
+CoverMember.travel, CoverResult.shoulder, GuardState.cause, guardHudText(..., cause), sim `resolveFrameSlots` (order-free
+stand-ins, the C++ runtime's 13.5 reading). The C++ port needs all of these (golden Cover / ClearLook / Guard regenerated).
+The artifact page was NOT republished from the PC session (the html bullets are updated; the coordinator republishes).
+
+Cloud branch `claude/stoic-bell-dr29o5`, feature commits **1f8bc25** (v2.2), then v2.3 (red-team fixes, contract section 13) commits on top. Coordinator: session «Дирижер»
 (merges into main, assigns tasks; the C++ agent ports the TS rules from the golden files). Read first:
 `docs/design/FORMATION_SECTORS.md` (every user decision with its date) and `docs/design/FORMATION_CONTRACT.md`
 (the contracts, sections 1–12). The user-facing page: `docs/design/formation-sectors.html` = claude.ai artifact
@@ -53,10 +61,19 @@ reflected in the page's schemes / clips the same day** ("все, что мы и�
 | part 3 allocator keeps the narrow column's 1A looks | 123 (99 + 24) | 39 | 35 | 23 |
 | part 4 ClearLook narrow tier | 113 (101 + 12) | 26 | 38 | 23 |
 | part 5 fallback stand-ins keep spacing | 109 (109 + 0) | 26 | 34 | 23 |
+| part 6 guard: a man cut off brings the trail column | 102 (101 + 1) | 26 | 34 | 17 |
+| part 7 (Q3 = c) over-the-shoulder look, only Z walks backwards | 89 (84 + 5) | 26 | 26 | 12 |
+| part 8 (Q4 = b) ClearLook anticipates 0.5 s | 70 (65 + 5) | 5 | 27 | 12 |
+| part 9 HUD "(turn)" + order-free stand-ins (13.5) | 70 (70 + 0) | 5 | 27 | 12 |
 - v2.2-introduced regressions (`since: 'v2.2'`): 58 -> 26 open after part 1 -> 23 after part 2.
-- Open question for the user: FORMATION_SECTORS.md "Open for the user (v2.3)".
-- Next:, the rest of #1 (idea tested: a narrow arc reachable
-  WITHOUT a sweep beats a wide one behind a sweep - `NARROW` 180 penalty instead of the hard min-arc cut; subset 17 -> 13 new).
+- The user answered the five questions on 2026-10-26 (FORMATION_SECTORS.md "v2.3 - the user's answers"): Q1 a, Q2 a, Q3 c
+  (part 7), Q4 b (part 8), Q5 a; the turn fold's HUD says "(turn)" (part 9). PC session (sim worktree, branch formation/sim-local).
+- Next: the remaining 70 - #5 spacing (27: tight manual shapes at turns / hairpins, 12_6 accepted by Q2 = a), #3 flicker (12, not
+  investigated: classify.hold_distance vs the short red-team zones), #7 split (12: e.g. 12_3 echelon_right n3, 11_8 column n4 -
+  the rear guard walking backwards lags at a gap), #1 (5), #2 / #4 / #6 / #8 (3 / 3 / 5 / 3).
+- Debug recipe used on the PC: a frame dump (per 0.1 s: formation, guard level, each member's place / pos / yaw and step relative to
+  the heading, B = backwards, F = stand-in) via `simulate` + `RunCollector` + `runFailures` from a scratch script; red-team subsets:
+  copy a few `redteam/*.json` into a temp dir and run `--layouts <dir>` (~1.5 min for 8 layouts, no refresh).
 
 ## Checklist per rules change (do all of it, same commit)
 1. Rule in `rules.ts` (pure; doc comment states the user decision + date); config keys with ranges in formation_config.json.

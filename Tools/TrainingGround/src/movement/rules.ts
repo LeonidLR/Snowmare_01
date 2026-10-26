@@ -256,6 +256,9 @@ function LookYaw(role: Role, formation: Formation, mode: Mode, memberCount: numb
   return normYaw(leaderYaw + relativeLook(role, formation, mode, memberCount, timeInPatrol, passageWidth, config));
 }
 
+/** v2.3 part 7: ClearLook's allowed arc - world yaw `yaw` +- `half` degrees (his travel direction +- look.over_shoulder_max_deg). */
+export interface LookLimit { yaw: number; half: number }
+
 /**
  * v2.1.1 (user decision 2026-10-25, "6А"): nobody looks into a wall - in ANY formation, the manual ones too. A wall within
  * look.wall_dist of the member (surface distance) blocks the directions within look.wall_angle of the direction to its closest
@@ -269,15 +272,35 @@ function LookYaw(role: Role, formation: Formation, mode: Mode, memberCount: numb
  * look.narrow_penalty worse (+360 per wall swept as for the edges); enclosed -> the longest clear ray (see below). Ties: the earlier wall, the left edge
  * first (the first strictly better edge wins). The integration applies it to the patrol / halt / "all forward" looks - not to
  * the wall layout, the corner watcher (he looks at the corner on purpose) or a man looking where he walks (within 45 deg).
+ * v2.3 part 7 (user decision 2026-10-26, Q3 = c): `limit` (null = none) = the arc his look must stay in (the allocator's
+ * over-the-shoulder members on the move: his step direction, standing his place's travel direction, +- look.over_shoulder_max_deg):
+ * a wanted yaw outside it is first clamped to its nearer edge; a held look, edge or enclosed ray outside it is no candidate.
+ * v2.3 part 8 (user decision 2026-10-26, Q4 = b): `ahead` (null = none) = his position look.anticipate_s ahead (pos + his
+ * velocity x look.anticipate_s): the blocked spans are the union of those seen from pos and from ahead (each wall within
+ * look.wall_dist of either; directions from that point to its closest point), so passing a wall end within ~1 m he does not
+ * stare at it while its direction swings round faster than he turns (red team #1: 3_4, 11_8, 1_4, 8_2, 9_4, 12_3). Ignored
+ * when the line pos -> ahead crosses a wall body. The hold test (a held look dropped near a wall direction) uses only the
+ * directions seen from pos (the anticipated ones closed a narrow gap between two wall ends behind a man leaving a corridor
+ * and swung his look across the wall beside him - red team 9_4); edges, sweeps and rays as before (rays from pos).
  */
-function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw: number, config: FormationConfig, held: number | null = null): number {
+function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw: number, config: FormationConfig, held: number | null = null,
+  limit: LookLimit | null = null, ahead: Vec2 | null = null): number {
   const reach = cfg(config, 'look.wall_dist'), half = cfg(config, 'look.wall_angle'), minFree = cfg(config, 'look.min_free_deg');
+  // v2.3 part 7 (Q3 = c): with a limit, no candidate outside +-limit.half of limit.yaw (the over-the-shoulder look stays one).
+  const inLimit = (a: number) => !limit || Math.abs(normYaw(a - limit.yaw)) <= limit.half + 1e-6;
+  if (limit && !inLimit(yaw)) yaw = limit.yaw + (normYaw(yaw - limit.yaw) < 0 ? -limit.half : limit.half); // clamped to the nearer edge
   const centers: number[] = [];
-  for (const w of walls) {
-    const q = closestOnSegment(pos, w.a, w.b).point;
-    if (Math.max(0, dist(pos, q) - (w.thickness ?? 0) / 2) > reach) continue;
-    if (dist(pos, q) < 1e-6) continue;
-    centers.push(yawOf(sub(q, pos)));
+  let nowCount = 0; // centers[0 .. nowCount) are seen from pos itself (the hold test uses only those)
+  // v2.3 part 8 (Q4 = b): the walls are also seen from `ahead` (where he will be in look.anticipate_s) - the direction from
+  // there to each wall's closest point blocks as well, so a wall end he passes within ~1 m is avoided before it swings round.
+  // `ahead` is ignored when the step line from pos to it crosses a wall body (he will not walk through it).
+  const from = ahead && dist(ahead, pos) > 1e-6 && !segmentBlocked(pos, ahead, walls, 0) ? [pos, ahead] : [pos];
+  for (const o of from) for (const w of walls) {
+    const q = closestOnSegment(o, w.a, w.b).point;
+    if (Math.max(0, dist(o, q) - (w.thickness ?? 0) / 2) > reach) continue;
+    if (dist(o, q) < 1e-6) continue;
+    centers.push(yawOf(sub(q, o)));
+    if (o === pos) nowCount = centers.length;
   }
   const blocked = (a: number) => centers.some((c) => Math.abs(normYaw(a - c)) < half - 1e-6);
   // v2.3: the free arc a direction lies in, measured in whole degrees both ways (a sliver between two wall spans is no place
@@ -296,25 +319,25 @@ function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw
   // The wanted yaw is taken when it lies in a free arc at least look.min_free_deg wide (v2.3: a sliver between two wall spans
   // does not count - as the man moves it opens and closes and his look swings across the walls to it).
   const lookable = (a: number, dir: 1 | -1 | 0 = 0) => !blocked(a) && freeWidth(a, dir) >= minFree;
-  if (lookable(yaw)) return normYaw(yaw);
+  if (lookable(yaw) && inLimit(yaw)) return normYaw(yaw);
   // v2.3 hysteresis: his previous result (held) stays a candidate, look.hold_deg better than its distance to the wanted yaw,
   // while no wall direction is within look.wall_angle - look.hold_margin_deg of it (else a wall at the reach's edge or an arc
   // at the width threshold flips his look between two far directions every few steps - red team 2_8, 11_8, 8_2).
   let best: number | null = null, bestScore = Infinity;
   const holdDeg = cfg(config, 'look.hold_deg'), holdHalf = half - cfg(config, 'look.hold_margin_deg');
-  if (held !== null && holdDeg > 0 && !centers.some((c) => Math.abs(normYaw(held - c)) < holdHalf - 1e-6)) {
+  if (held !== null && holdDeg > 0 && inLimit(held) && !centers.slice(0, nowCount).some((c) => Math.abs(normYaw(held - c)) < holdHalf - 1e-6)) {
     best = normYaw(held); bestScore = Math.abs(normYaw(held - yaw)) - holdDeg;
   }
   // v2.3 part 4: a free but NARROW direction (the wanted yaw, an edge) still competes, look.narrow_penalty worse - so a narrow
   // arc he reaches without sweeping across a wall beats a wide one behind a sweep (entering a corridor P swung 110 deg across
   // the end of its wall to the far edge and back - red team 8_5, 4_8), while a wide arc without a sweep still wins.
   const narrowPenalty = cfg(config, 'look.narrow_penalty');
-  if (narrowPenalty > 0 && !blocked(yaw)) {
+  if (narrowPenalty > 0 && !blocked(yaw) && inLimit(yaw)) {
     const score = narrowPenalty + 360 * swept(yaw);
     if (score < bestScore - 1e-9) { bestScore = score; best = normYaw(yaw); }
   }
   for (const c of centers) for (const [edge, out] of [[c - half, -1], [c + half, 1]] as [number, 1 | -1][]) {
-    if (blocked(edge)) continue;
+    if (blocked(edge) || !inLimit(edge)) continue;
     const wide = lookable(edge, out);
     if (!wide && narrowPenalty <= 0) continue;
     const score = Math.abs(normYaw(edge - yaw)) + 360 * swept(edge) + (wide ? 0 : narrowPenalty);
@@ -327,6 +350,7 @@ function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw
   best = normYaw(yaw);
   for (let k = 0; k <= 36; k++) for (const sgn of k === 0 || k === 36 ? [1] : [1, -1]) {
     const a = yaw + sgn * 5 * k;
+    if (!inLimit(a)) continue;
     const r = Math.min(2 * reach, raycastWalls(pos, dirOf(a), walls, 2 * reach));
     if (r > bestRay + 1e-6) { bestRay = r; best = normYaw(a); }
   }
@@ -621,6 +645,9 @@ function BlockedRoles(walls: readonly Segment[], formation: Formation, memberCou
 /** 0 = the requested formation, 1 = the mirror echelon, 2 = the trail column (FormationShapeRules.TrailSlots). */
 export type GuardLevel = 0 | 1 | 2;
 
+/** v2.3 part 9: why the guard falls back - a wall cuts the formation (or a man off) / a sharp turn ahead ("5Б"). */
+export type GuardCause = 'wall' | 'turn';
+
 export interface GuardState {
   /** The formation asked for (the menu's manual choice, or FormationFor of the terrain); null before the first tick. */
   requested: Formation | null;
@@ -630,9 +657,15 @@ export interface GuardState {
   /** A looser level waiting for its path distance (as ClassifyState.candidate), and the leader path walked meanwhile, cm. */
   candidate: GuardLevel | null;
   candidateDistance: number;
+  /**
+   * v2.3 part 9 (user 2026-10-26: the turn fold's HUD says "(turn)"): why the level in force is above 0 - 'wall' when a wall cuts
+   * the requested formation or a member is cut off (it wins over a turn at the same time), 'turn' for the turn fold alone; null
+   * at level 0. Kept while a fallback is held; absent = null.
+   */
+  cause?: GuardCause | null;
 }
 
-export const GUARD_START: GuardState = { requested: null, level: 0, effective: null, candidate: null, candidateDistance: 0 };
+export const GUARD_START: GuardState = { requested: null, level: 0, effective: null, candidate: null, candidateDistance: 0, cause: null };
 
 /** v2.1.1: formations whose far end swings metres on a turn (the trail column takes the turn for them). */
 const WIDE: readonly Formation[] = ['echelon_right', 'echelon_left', 'line'];
@@ -681,26 +714,37 @@ function Effective(state: GuardState): { formation: Formation | null; trail: boo
  * v2.1.1 (user decision 2026-10-25, "5Б"): turnAhead = TurnAhead of the leader's path (deg); above turn.fold_deg a WIDE
  * formation (the echelons, the line - their far end would swing metres round the turn) takes the trail column for the turn
  * and opens again after hold_distance of path once the turn is behind (the same hysteresis).
+ * v2.3 (red team #7): allInSight = every member has a clear line (no wall body) to the leader; false -> the trail column at
+ * once (a man already cut off is led round the corner on the leader's path), released by the usual hold. Default true = v2.2.
+ * v2.3 part 9: the state names its cause ('wall' / 'turn', null at level 0) for the HUD line (labels.ts guardHudText); the levels
+ * are unchanged.
  */
 function Resolve(walls: readonly Segment[], requested: Formation, memberCount: number, leaderPos: Vec2, leaderYaw: number,
   ahead: { pos: Vec2; yaw: number } | null, turnAhead: number, state: GuardState, stepDistance: number,
-  config: FormationConfig): GuardState {
+  config: FormationConfig, allInSight = true): GuardState {
   const whole = (f: Formation) => BlockedRoles(walls, f, memberCount, leaderPos, leaderYaw, config).length === 0 &&
     (!ahead || BlockedRoles(walls, f, memberCount, ahead.pos, ahead.yaw, config).length === 0);
   let raw: GuardLevel = 0;
+  let cause: GuardCause | null = null;
   // v2.1.1 (user "5Б"): a sharp turn ahead folds a wide formation into the trail column (no long swing of its far end).
-  if (WIDE.includes(requested) && turnAhead > cfg(config, 'turn.fold_deg')) raw = 2;
-  else if (requested !== 'wall' && !whole(requested)) {
+  // v2.3 part 9: a wall cutting the formation at the same time names the cause 'wall' (the guard-by-wall case keeps "(wall)").
+  const turning = WIDE.includes(requested) && turnAhead > cfg(config, 'turn.fold_deg');
+  if (requested !== 'wall' && !whole(requested)) {
     const mirror = mirrorOf(requested);
-    raw = mirror && whole(mirror) ? 1 : 2;
-  }
-  const at = (level: GuardLevel, candidate: GuardLevel | null = null, candidateDistance = 0): GuardState =>
-    ({ requested, level, effective: formationAt(requested, level), candidate, candidateDistance });
-  if (state.requested !== requested || raw >= state.level) return at(raw);
-  if (state.level !== 2 && !whole(formationAt(requested, state.level))) return at(raw);
+    raw = turning ? 2 : mirror && whole(mirror) ? 1 : 2;
+    cause = 'wall';
+  } else if (turning) { raw = 2; cause = 'turn'; }
+  // v2.3 (red team #7): a member already cut off from the leader -> the trail column at once (it leads him round the corner
+  // on the leader's own path); the slots being whole is not enough - the hold distance ran out as the leader turned into a side
+  // passage and the blizzard's far man was left round the corner.
+  if (requested !== 'wall' && !allInSight) { raw = 2; cause = 'wall'; }
+  const at = (level: GuardLevel, why: GuardCause | null, candidate: GuardLevel | null = null, candidateDistance = 0): GuardState =>
+    ({ requested, level, effective: formationAt(requested, level), candidate, candidateDistance, cause: level === 0 ? null : why });
+  if (state.requested !== requested || raw >= state.level) return at(raw, cause);
+  if (state.level !== 2 && !whole(formationAt(requested, state.level))) return at(raw, cause);
   const walked = (state.candidate === raw ? state.candidateDistance : 0) + Math.max(0, stepDistance);
-  if (walked >= cfg(config, 'classify.hold_distance')) return at(raw);
-  return at(state.level, raw, walked);
+  if (walked >= cfg(config, 'classify.hold_distance')) return at(raw, cause);
+  return at(state.level, state.cause ?? null, raw, walked);
 }
 
 export const FormationGuardRules = { ChainPairs, BlockedRoles, Resolve, Effective, TurnAhead };
@@ -942,6 +986,11 @@ export interface CoverMember {
   pos: Vec2;
   /** How far back the place is along the leader's path / heading (cm; the largest = the rear guard). */
   back: number;
+  /**
+   * v2.3 part 7: the world yaw his place travels along (the trail column: the trail's direction at his slot); undefined = the
+   * heading. The over-the-shoulder limit is centred on it.
+   */
+  travel?: number;
 }
 
 export interface CoverShare {
@@ -958,6 +1007,13 @@ export interface CoverResult {
   /** World look yaws per place. */
   looks: { role: Role; yaw: number }[];
   shares: CoverShare[];
+  /**
+   * v2.3 part 7 (user decision 2026-10-26, Q3 = c): the places whose look is kept within +-look.over_shoulder_max_deg of their
+   * travel direction on the move (walk: everyone but K, the rear guard and the fixed looks), with that direction (world yaw) -
+   * the integration passes { yaw, half: look.over_shoulder_max_deg } to ClearLook as `limit`, so the wall-avoiding look stays
+   * over the shoulder too. Halt: none.
+   */
+  shoulder: { role: Role; yaw: number }[];
 }
 
 /** Relative directions blocked by walls (within look.wall_dist of any place's slot; +-look.wall_angle round the closest point). */
@@ -970,6 +1026,27 @@ function blockedSpans(walls: readonly Segment[], members: readonly CoverMember[]
     centers.push(normYaw(yawOf(sub(q, m.pos)) - heading));
   }
   return centers;
+}
+
+/**
+ * v2.3 part 7 (user decision 2026-10-26, Q3 = c): a sweep (relative centre `mid`, amplitude `amp`, degrees relative to the
+ * heading) confined to [o - lim, o + lim] (o = his travel direction relative to the heading, whole-degree free): the largest
+ * overlap of [mid - amp, mid + amp] shifted by 0 / -360 / +360 (in that order; ties: the first) with it - its centre and half
+ * width; no overlap (a share wholly behind his shoulders) -> held at a shoulder (o + lim or o - lim, amplitude 0): the open one
+ * first (not within look.wall_angle of a blocked direction), then the nearer to `mid`, then `pref` (+1 / -1: the side of his
+ * bearing from the leader, bearing < 0 -> -1), then +1. Pure helper of Allocate.
+ */
+function shoulderSweep(mid: number, amp: number, o: number, lim: number, isBlocked: (r: number) => boolean, pref: 1 | -1): { mid: number; amp: number } {
+  let best: { lo: number; hi: number } | null = null;
+  for (const k of [0, -360, 360]) {
+    const lo = Math.max(mid - amp + k, o - lim), hi = Math.min(mid + amp + k, o + lim);
+    if (hi >= lo - 1e-9 && (!best || hi - lo > best.hi - best.lo + 1e-9)) best = { lo, hi };
+  }
+  if (best) return { mid: (best.lo + best.hi) / 2, amp: Math.max(0, (best.hi - best.lo) / 2) };
+  const score = (sg: 1 | -1) => [isBlocked(o + sg * lim) ? 1 : 0, Math.abs(normYaw(mid - (o + sg * lim))), sg === pref ? 0 : 1];
+  const a = score(1), b = score(-1);
+  for (let i = 0; i < 3; i++) if (Math.abs(a[i] - b[i]) > 1e-9) return { mid: o + (a[i] < b[i] ? 1 : -1) * lim, amp: 0 };
+  return { mid: o + lim, amp: 0 };
 }
 
 /**
@@ -998,6 +1075,13 @@ function blockedSpans(walls: readonly Segment[], members: readonly CoverMember[]
  *    Halt: K 12, the rear guard his centre, the others the centre of the first gap they took.
  * `fixed` = looks set by a higher rule (the corner watcher, v2.1): kept as given; the direction counts as covered and the duty
  * he leaves (K's front, the rear) becomes a gap for the others.
+ * 5. v2.3 part 7 (user decision 2026-10-26, Q3 = c: only the rear guard walks backwards): on the move every other member (not
+ *    K, not the rear guard, not fixed) keeps his look within +-look.over_shoulder_max_deg (110) of his travel direction (the
+ *    member's `travel`, else the heading) - his sweep confined by shoulderSweep (a share in the rear: over the shoulder) - so he
+ *    walks forwards, not backwards at
+ *    move.backward_mult (red team #7 at oblique wall gaps: the 2nd / 3rd men doubled the rear, fell 2 m behind and lost the
+ *    leader round the gap's wall end). The shares stay as allocated; `shoulder` lists those members (ClearLook's `limit`).
+ *    180 = off (v2.2). Halt: unchanged (standing, nobody walks backwards).
  * Fewer than 3 members -> null (LookYaw).
  */
 function Allocate(walls: readonly Segment[], leaderPos: Vec2, heading: number, members: readonly CoverMember[], mode: 'walk' | 'halt',
@@ -1110,13 +1194,24 @@ function Allocate(walls: readonly Segment[], leaderPos: Vec2, heading: number, m
   const rearRel = mode === 'halt' ? rearCentre : scanValue(rearCentre, rearAmp, period, Math.PI / 2, t, exp);
   looks.push({ role: rear.role, yaw: rearFixed ? normYaw(rearFixed.yaw) : normYaw(heading + rearRel) });
   for (const f of fixed) if (f.role !== members[0].role && f.role !== rear.role) looks.push({ role: f.role, yaw: normYaw(f.yaw) });
+  // v2.3 part 7 (Q3 = c): on the move the others look at most look.over_shoulder_max_deg off the heading (over the shoulder).
+  const shoulderMax = cfg(c, 'look.over_shoulder_max_deg');
+  const limitOn = mode !== 'halt' && shoulderMax < 180;
+  const isBlocked = (r: number) => blocked.some((b) => Math.abs(normYaw(r - b)) < wallAngle);
+  const shoulder: { role: Role; yaw: number }[] = [];
   others.forEach((m) => {
     const sh = shares.find((x) => x.role === m.role)!;
     const sw = sweepOf(sh);
+    if (limitOn) {
+      const travel = m.travel ?? heading;
+      const conf = shoulderSweep(sw.mid, sw.amp, normYaw(travel - heading), shoulderMax, isBlocked, bearing(m) < 0 ? -1 : 1);
+      sw.mid = conf.mid; sw.amp = conf.amp;
+      shoulder.push({ role: m.role, yaw: normYaw(travel) });
+    }
     const rel = mode === 'halt' ? sh.primary : scanValue(sw.mid, sw.amp, sw.period, sw.phase, t, exp);
     looks.push({ role: m.role, yaw: normYaw(heading + rel) });
   });
-  return { rearGuard: rear.role, looks, shares };
+  return { rearGuard: rear.role, looks, shares, shoulder };
 }
 
 /**

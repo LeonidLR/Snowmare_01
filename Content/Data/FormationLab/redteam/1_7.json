@@ -175,7 +175,7 @@
       "route": "R1",
       "seed": 2,
       "t": 25.5,
-      "what": "K-Z 30 cm apart",
+      "what": "K-Z 27 cm apart",
       "since": "v2.2",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
@@ -184,9 +184,9 @@
       "choice": "diamond",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 21.1,
-      "what": "K-P 78 cm apart",
+      "seed": 2,
+      "t": 25.5,
+      "what": "K-Z 21 cm apart",
       "since": "v2.2",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },

@@ -146,8 +146,8 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 26.7,
-      "what": "K-Z 54 cm apart",
+      "t": 26.6,
+      "what": "K-Z 53 cm apart",
       "since": "v2.2",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
@@ -158,7 +158,7 @@
       "route": "R1",
       "seed": 1,
       "t": 26.7,
-      "what": "K-P 75 cm apart",
+      "what": "K-Z 75 cm apart",
       "since": "v2.2",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
