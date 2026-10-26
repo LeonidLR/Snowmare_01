@@ -27,7 +27,10 @@ param(
     [switch]$RealTime,
     [string]$ResultJson = "",
     # Console commands run before each smoke (e.g. "Codex.Formation.Sectors 0" for the A/B of a console switch); comma-separated.
-    [string]$PreCmds = ""
+    [string]$PreCmds = "",
+    # Extra engine arguments for every smoke, e.g. "-Multiprocess": the engine then skips its start-up UBT -Mode=ValidatePlatforms call, which
+    # waits on the machine-wide Build.bat lock while other worktrees build (a smoke stalled 25 min at "Launching UnrealBuildTool", 2026-10-26).
+    [string]$ExtraArgs = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,7 +70,7 @@ function Get-ClockArgs([string]$Name) {
 function Start-SmokeProcess([string]$Name, [string]$Suffix) {
     $log = Join-Path $LogDir "Smoke-$Name$Suffix.log"
     Remove-Item $log -ErrorAction SilentlyContinue # a stale log must never pass for this run's result
-    $extra = (Get-Option $Name "extra" "") + " " + (Get-ClockArgs $Name)
+    $extra = (Get-Option $Name "extra" "") + " " + (Get-ClockArgs $Name) + " " + $ExtraArgs
     $map = Get-Option $Name "map" $Map
     # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
     $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })

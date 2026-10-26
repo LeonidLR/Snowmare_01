@@ -20,6 +20,7 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
+#include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TripwireActor.h"
 #include "Misc/App.h"
@@ -370,7 +371,9 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		{
 			Exits->SetHoveredArrow(HoveredExit);
 		}
-		const bool bTrap = bCursorHit && (HoveredExit || Cast<ATripwireActor>(TrapHit.GetActor())
+		// 2026-10-26: a fallen operative's remains (his body) under the cursor show the hand too - a click searches him.
+		const ALootCrateActor* HoveredRemains = bCursorHit ? Cast<ALootCrateActor>(TrapHit.GetActor()) : nullptr;
+		const bool bTrap = bCursorHit && (HoveredExit || Cast<ATripwireActor>(TrapHit.GetActor()) || (HoveredRemains && HoveredRemains->IsRemains())
 			|| (!Cast<APawn>(TrapHit.GetActor()) && !Cast<AInteractableActor>(TrapHit.GetActor())
 				&& ATripwireActor::FindClickableWireNear(GetWorld(), TrapHit.ImpactPoint)));
 		if (bTrap != bTrapHoverCursor)

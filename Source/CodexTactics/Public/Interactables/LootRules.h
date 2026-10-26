@@ -28,7 +28,9 @@ enum class ELootItem : uint8
 	/** Sprint 15: firewood for a campfire. */
 	Firewood,
 	/** Sprint 15: signal flare. */
-	Flare
+	Flare,
+	/** 2026-10-26: frag grenades (a fallen operative's remains, Godot get_items_list "grenades"). */
+	Grenade
 };
 
 /** One line of the loot dialog. */
@@ -118,6 +120,10 @@ struct CODEXTACTICS_API FLootContents
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Heat")
 	int32 Flares = 0;
+
+	/** Frag grenades (2026-10-26: a fallen operative's remains; supply crates hold none by default). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons", meta = (ClampMin = "0"))
+	int32 Grenades = 0;
 
 	/** Extra weapon id (e.g. "plasma_carbine"), empty for none. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Special")

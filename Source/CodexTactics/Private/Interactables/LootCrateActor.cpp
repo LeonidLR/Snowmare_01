@@ -9,8 +9,12 @@
 #include "Combat/HealthComponent.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Components/BoxComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Data/WeaponDataAsset.h"
 #include "EngineUtils.h"
+#include "Interactables/CorpseLootRules.h"
+#include "UI/OverheadLabel.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/ItemStashComponent.h"
 #include "Characters/TransferRules.h"
@@ -45,6 +49,7 @@ namespace
 		case ELootItem::HeatPack: return FText::Format(LOCTEXT("TookHeatPack", "+{0} 🔥 Heat pack"), Count);
 		case ELootItem::Firewood: return FText::Format(LOCTEXT("TookFirewood", "+{0} 🪵 Firewood"), Count);
 		case ELootItem::Flare: return FText::Format(LOCTEXT("TookFlare", "+{0} 🎆 Signal flare"), Count);
+		case ELootItem::Grenade: return FText::Format(LOCTEXT("TookGrenade", "+{0} 🧨 Frag grenade"), Count);
 		default: return FText::Format(LOCTEXT("TookClothing", "🧥 Gear: {0}"), FText::FromString(Id));
 		}
 	}
@@ -165,7 +170,8 @@ FActionMenuRequest ALootCrateActor::BuildActionMenu(const AOperativeCharacter* L
 	}
 	if (IsLooted())
 	{
-		return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("Empty", "This crate is empty. Everything useful has been taken."));
+		return FActionMenuRequest::MakeMessage(Squad, bRemains ? FText::Format(LOCTEXT("RemainsEmpty", "Nothing left on {0}. Everything useful has been taken."),
+			RemainsOwnerName) : LOCTEXT("Empty", "This crate is empty. Everything useful has been taken."));
 	}
 	return FActionMenuRequest::MakeMenu(LOCTEXT("TrappedTitle", "📦 Booby-trapped crate"),
 		FText::Format(LOCTEXT("TrappedDesc", "⚠️ WARNING: The crate is rigged with a tripwire charge!\nAny mistake or blast will destroy all supplies inside!\n{0}"),
@@ -302,7 +308,8 @@ void ALootCrateActor::BeginOpenClip()
 		return;
 	}
 	ReceiveOpening();
-	UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Leader);
+	// A body has no lid: no chest-open clip, the search takes OpenSeconds (0.6 s; Godot opened the corpse's loot dialog at once).
+	UOperativeAnimInstance* Anim = bRemains ? nullptr : UOperativeAnimInstance::Of(Leader);
 	const FInteractionClipTiming Clip = Anim ? Anim->PlayInteractionTimed(EOperativeInteractionAnim::ChestOpen, Leader->GetStance()) : FInteractionClipTiming();
 	LastOpenDelaySeconds = InteractionAnimRules::GetLootWindowDelay(Clip.EffectDelaySeconds, Clip.bPlayed, OpenSeconds);
 	UE_LOG(LogCodexTactics, Display, TEXT("Crate %s: %s opens it, the loot window in %.2f s (%s)"), *GetName(), *Leader->DisplayName.ToString(),
@@ -462,7 +469,15 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	case ELootItem::Turret: Collector->TurretsCount += Count; break;
 	case ELootItem::Barricade: Collector->BarricadesCount += Count; break;
 	case ELootItem::Mine: Collector->MinesCount += Count; break;
+	case ELootItem::Grenade: Collector->GrenadesCount += Count; break; // Godot loot_single_item "grenades": no carry limit
 	case ELootItem::BonusWeapon:
+		// Godot loot_single_item "weapon": added unless he already has it (a fallen mate's M16 is one more of what he carries).
+		if (!Collector->BonusItems.Contains(Id) && !Collector->AvailableWeapons.ContainsByPredicate(
+			[&Id](const UWeaponDataAsset* Weapon) { return Weapon && Weapon->WeaponId == Id; }))
+		{
+			Collector->BonusItems.Add(Id);
+		}
+		break;
 	case ELootItem::BonusClothing: Collector->BonusItems.Add(Id); break;
 	case ELootItem::HeatPack:
 	case ELootItem::Firewood:
@@ -571,6 +586,91 @@ bool ALootCrateActor::IsLooted() const
 int32 ALootCrateActor::GetStoredCount(ETransferItem Item) const
 {
 	return Stash->GetCount(Item) + Contents.GetCount(ItemStash::ToLootItem(Item));
+}
+
+void ALootCrateActor::BindRemainsBody(USkeletalMeshComponent* Body, const FText& OwnerName)
+{
+	bRemains = true;
+	RemainsOwnerName = OwnerName;
+	CrateName = CorpseLootRules::GetRemainsName(OwnerName);
+	DisplayName = CrateName;
+	OpenSeconds = RemainsSearchSeconds; // searching a body, no lid
+	bCanBeRelocated = false;            // a body is no object to push (the fight's "objects cannot be relocated" refusal swallowed the click)
+	Tags.AddUnique(TEXT("CorpseLoot"));
+	// The body is what the player sees: no crate mesh, but the actor stays visible for its label. Root cause of the bug (2026-10-26): the
+	// remains were a 120 x 80 x 80 cm box at the capsule's feet while the death clip lays the body up to ~1.5 m away from the capsule,
+	// so the cursor on the body met the snow (a move order) - the box is the body's own shape now, and it only catches the cursor.
+	SetActorHiddenInGame(false);
+	Mesh->SetHiddenInGame(true);
+	Box->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Box->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Box->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	Box->SetCanEverAffectNavigation(false); // the squad / enemies step over him (AOperativeCharacter::BecomeCorpse)
+	RemainsBody = Body;
+	RemainsFitsLeft = 40; // 10 s of live pose at 0.25 s: the death clip / the load's fall settles meanwhile
+	GetWorldTimerManager().SetTimer(RemainsFitTimer, FTimerDelegate::CreateUObject(this, &ALootCrateActor::TickRemainsFit), 0.25f, true);
+	TickRemainsFit();
+}
+
+void ALootCrateActor::TickRemainsFit()
+{
+	const USkeletalMeshComponent* Body = RemainsBody.Get();
+	if (!Body)
+	{
+		GetWorldTimerManager().ClearTimer(RemainsFitTimer);
+		return;
+	}
+	// The bones are only refreshed while the body is drawn (or always ticks its pose): a body that died / was loaded off screen keeps the
+	// box where it is until the camera sees it, then the fit counts down.
+	if (Body->VisibilityBasedAnimTickOption != EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones && !Body->WasRecentlyRendered(0.5f))
+	{
+		return;
+	}
+	RefitRemainsBox();
+	if (--RemainsFitsLeft <= 0)
+	{
+		GetWorldTimerManager().ClearTimer(RemainsFitTimer);
+	}
+}
+
+bool ALootCrateActor::RefitRemainsBox()
+{
+	const USkeletalMeshComponent* Body = RemainsBody.Get();
+	if (!Body || Body->GetNumBones() <= 0)
+	{
+		return false;
+	}
+	TArray<FVector> Points;
+	Points.Reserve(Body->GetNumBones());
+	for (int32 Index = 0; Index < Body->GetNumBones(); ++Index)
+	{
+		if (CorpseLootRules::IsBodyBone(Body->GetBoneName(Index).ToString()))
+		{
+			Points.Add(Body->GetBoneTransform(Index).GetLocation());
+		}
+	}
+	const CorpseLootRules::FRemainsBox Fit = CorpseLootRules::FitBoxToBody(Points);
+	if (!Fit.bValid)
+	{
+		return false;
+	}
+	SetActorLocationAndRotation(Fit.Center, FRotator(0.f, Fit.Yaw, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
+	Box->SetBoxExtent(Fit.Extent, true);
+	return true;
+}
+
+bool ALootCrateActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
+{
+	if (!bRemains)
+	{
+		return Super::GetOverheadLabel(OutLabel);
+	}
+	// Godot _create_corpse_loot_prompt / _update_corpse_prompt_status: 0.6 m above the body, amber; grey once searched.
+	const bool bEmpty = IsLooted();
+	OutLabel.Text = CorpseLootRules::GetSearchPrompt(RemainsOwnerName, bEmpty);
+	OutLabel.Color = bEmpty ? FLinearColor(0.6f, 0.6f, 0.6f, 0.7f) : FLinearColor(1.f, 0.85f, 0.4f, 0.95f);
+	OutLabel.HeightCm = 60.f;
+	return true;
 }
 
 #undef LOCTEXT_NAMESPACE

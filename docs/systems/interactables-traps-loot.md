@@ -82,6 +82,27 @@
   wire; a detonated mine) or its `bTrapped` changed since the window opened; Cancel always closes (it used to do nothing once the wire was gone).
   `OnActionMenuChanged(false)` is broadcast exactly once per window (the HUD hides `UActionMenuWidget`). A loot dialog whose crate was destroyed closes the same way.
 
+## A fallen operative's gear: the remains on his body (game designer play-test 2026-10-26)
+
+- **Bug:** "the fight is over, one of my fighters is down, but I can't walk up and take his equipment" (the Medic-Sapper killed in action: her
+  portrait slot dimmed = out of the squad). The remains crate (`AOperativeCharacter::SpawnRemainsLoot`) was a hidden 120 x 80 x 80 cm crate box
+  at the capsule's feet; the death clip lays the body up to ~1.5 m away from the capsule, so the cursor on the body met the snow (a move order)
+  - `FallenGearSmoke`'s evidence lines: head 142 cm / right hand 146 cm from the capsule, the old box held 2 of her 10 main bones, the ray at
+  her chest hit the floor and the click was a move order (no interaction). The box also blocked pawns / cut the navmesh, the crate was relocatable (in a wave fight the click
+  answered "objects cannot be relocated during combat"), the M16 rounds were read from `AmmoInventory` (only weapons NOT in hand: 0) and the
+  grenades / the weapon were missing (Godot `player.gd get_items_list` has them).
+- **Now:** `ALootCrateActor::BindRemainsBody(BodyMesh, Name)` - the box is fitted to the lying body's bones (pure `Interactables/CorpseLootRules`:
+  `FitBoxToBody` = 2D principal axis + padding 20 cm, min 40 x 30 x 25 cm; `IsBodyBone` drops root / ik_* / VB / attach helpers), refitted every
+  0.25 s for 10 s while the death clip settles; QueryOnly, blocks only `ECC_Visibility` (the cursor), never pawns, the camera or the navmesh; not
+  relocatable; no crate mesh but a label "[Click] Search the body: <name>" / "[Searched] Body: <name> (empty)" (Godot CorpseLootPrompt, 60 cm up);
+  the hand cursor over it (`PlayerTick`); a search of 0.6 s then the loot window. Contents (`CorpseLootRules::BuildRemainsContents`): everything he
+  carried - every hand-over item (ammo = clip + reserve), the new `ELootItem::Grenade` (`FLootContents::Grenades`, no carry limit) and his firearm
+  as the bonus weapon (Godot: added to the looter only if he lacks it). Save: runtime corpse crates keep `grenades`, `bonus_weapon`, `remains_of`
+  and re-bind to the nearest killed-in-action body on load. Tests `CodexTactics.Loot.Remains.*`; smoke `FallenGearSmoke`.
+- **Knocked down (not dead):** the knockdown is temporary (0.6 s down in real time; on the grid until his turn's get-up). A fight that ends while he
+  lies on the grid releases him: he gets up by himself in PostCombat (`FallenGearSmoke` stage 7). Taking a downed (living) operative's gear is not
+  defined by Godot or the GDDs - not implemented (open question).
+
 ## Retry after a failed disarm; a visible PMC wire is noticed (game designer 2026-10-22)
 
 - **Retry at once:** after a warning / slip the operative still crouches ~60-70 cm from the charge / the wire, so the cursor on the trap landed on

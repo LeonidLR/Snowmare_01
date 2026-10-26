@@ -5,7 +5,8 @@
 // Root causes: (a) the final fight ends in PostCombat, which lasts until the level ends - and the formation ran in Exploration only, so
 // after the horde no follower ever walked again (B toggled Solo on / off without a visible effect); (b) the post-fight hold
 // (2026-10-22) ended only when the leader moved, not on Regroup; (c) a formation slot off the navmesh (here the fallen Engineer's
-// remains crate, at the lake a wall / the generator) was unreachable for good - the follower stood while the leader stood. The smoke puts the
+// remains crate, at the lake a wall / the generator) was unreachable for good - the follower stood while the leader stood. Since
+// 2026-10-26 the remains no longer cut the navmesh (FallenGearSmoke): stage 7 checks his fall spot stays walkable. The smoke puts the
 // Engineer onto the Medic's future old-formation slot before he falls (rules v2.2 moved the triad's third man off it, 2026-10-25).
 //  1. a real-time wave fight, Solo on with the Engineer leading; the Engineer (the leader) is killed: the leadership passes to a
 //     living operative (the Commander), Solo stays on; the Medic-Sapper freezes (frostbite: prone, cannot get up);
@@ -330,14 +331,16 @@ namespace RegroupAfterLossesSmoke
 					RemainsToLeader = FVector::Dist2D(It->GetActorLocation(), Commander->GetActorLocation());
 				}
 			}
-			// Her old-formation slot 0 round the Commander (the Engineer's fall spot) must be off the navmesh: the remains crate's hole.
+			// Her old-formation slot 0 round the Commander (the Engineer's fall spot). Until 2026-10-26 the remains crate (a pawn-blocking box at
+			// his feet) cut it out of the navmesh - the second cause of this bug. The remains are a click-only box fitted to the body now
+			// (FallenGearSmoke): the spot stays walkable, the cause is gone for a body (a wall / the generator still need the slot fallback).
 			const FVector Slot0 = SquadFormation::ComputeSlotPosition(Squad->FormationConfig, Commander->GetActorLocation(),
 				Commander->GetActorForwardVector(), 0, false);
 			const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 			FNavLocation OnNav;
-			const bool bSlotOnNav = Nav && Nav->ProjectPointToNavigation(FVector(Slot0.X, Slot0.Y, State.FallSpot.Z), OnNav);
-			Check(State, State.StartGap - Gap() < 30.f && !bSlotOnNav, FString::Printf(TEXT("[slot fallback off] the second cause reproduces: her slot is "
-				"off the navmesh (on navmesh %d; the Engineer's remains %.0f cm from the leader, %.0f cm from her slot), she stays (%.0f -> %.0f cm)"),
+			const bool bSlotOnNav = Nav && Nav->ProjectPointToNavigation(FVector(Slot0.X, Slot0.Y, State.FallSpot.Z), OnNav, FVector(10.f, 10.f, 150.f));
+			Check(State, bSlotOnNav, FString::Printf(TEXT("[slot fallback off] the remains no longer cut the navmesh: her slot on his body stays walkable "
+				"(on navmesh %d; the Engineer's remains %.0f cm from the leader, %.0f cm from her slot; gap %.0f -> %.0f cm)"),
 				bSlotOnNav ? 1 : 0, RemainsToLeader, FVector::Dist2D(Slot0, State.FallSpot), State.StartGap, Gap()));
 			SetSlotFallback(1);
 			UseOldFormationRuleRegroup(false);
