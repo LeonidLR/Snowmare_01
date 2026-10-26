@@ -26,7 +26,7 @@ namespace ControlsTest
 		PlayerCommands::CameraRotateMouse, PlayerCommands::CameraZoom, PlayerCommands::Move,
 		PlayerCommands::Sprint, PlayerCommands::WatchSector, PlayerCommands::SelectMember, PlayerCommands::SelectBox,
 		PlayerCommands::Interact, PlayerCommands::StanceStand, PlayerCommands::StanceCrouch, PlayerCommands::StanceProne,
-		PlayerCommands::SquadStanceStand, PlayerCommands::SquadStanceCrouch, PlayerCommands::SquadStanceProne, PlayerCommands::SoloOn,
+		PlayerCommands::SquadStanceStand, PlayerCommands::SquadStanceCrouch, PlayerCommands::SquadStanceProne, PlayerCommands::SoloOn, PlayerCommands::FormationMenu,
 		PlayerCommands::Regroup, PlayerCommands::Guard, PlayerCommands::Autonomy, PlayerCommands::HoldLine,
 		PlayerCommands::PosturePassive, PlayerCommands::PostureDefensive, PlayerCommands::PostureAggressive, PlayerCommands::CoverPreview,
 		PlayerCommands::CoverEnter, PlayerCommands::CoverCorner, PlayerCommands::CoverShimmy, PlayerCommands::CoverCornerPeek, PlayerCommands::CoverSwitch, PlayerCommands::CoverFireMode,

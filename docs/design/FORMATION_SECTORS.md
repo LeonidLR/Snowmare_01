@@ -5,7 +5,8 @@ v2.2 runtime without it) - the wall guard (mirror echelon / the trail column alo
 request back after 5 m whole; HUD line "Echelon left -> Column (wall)"), the sharp-turn fold, the bypass side "B" (shortest / shielded by a seen,
 heard or reported threat, steered round the wall end), the corner check (slicing the pie, also the leading man of a wall slide), ClearLook in every
 formation, places re-assigned on every formation change, fallback slots on the leader's side; the level is read as walls from its box collision.
-The hold-G menu's choice exists in the runtime (dev console `Codex.Formation.Menu`), its radial UI does not yet. Smokes `FormationLabSmoke` (checks 7 /
+The menu's choice exists in the runtime (dev console `Codex.Formation.Menu`) and since stage 7 (2026-10-26) the hold-B radial menu sets it (below,
+"Selection"). Smokes `FormationLabSmoke` (checks 7 /
 9, the fold, manual echelon left / line) and `FormationBypassSmoke`; details `docs/systems/squad-and-orders.md` "Rules v2.1 in the runtime".
 
 Status v2.2 (2026-10-25, branch formation/runtime-v22): **in the game** behind `Codex.Formation.Sectors` - the triad K / P / Z, the coverage allocator's
@@ -17,7 +18,8 @@ the guard / trail column followed on 2026-10-26, above.)
 Status: **implemented in the game (stage 6, 2026-10-25, branch formation/integration)** behind `Codex.Formation.Sectors` (default 1; 0 = the
 old triangle formation): pure rules v2 (`Source/CodexTactics/*/Formation/`), runtime in `USquadSubsystem` (`SquadSubsystemFormation.cpp`), facing in
 `AOperativeCharacter`, the group cover order in group mode = the wall layout; smoke `CodexTactics.FormationLabSmoke`; details
-`docs/systems/squad-and-orders.md` "Formation look sectors". Not yet: the hold-G radial menu (manual formations, "All forward"), the hedgehog at a
+`docs/systems/squad-and-orders.md` "Formation look sectors". Not yet (stage 6): the radial menu (manual formations, "All forward"; done in stage 7,
+hold B, 2026-10-26), the hedgehog at a
 heat source (`HedgehogSlots` exists), the designer's own back-to-the-wall clip (baseline: crouch idle facing out).
 Visual reference with interactive schemes and 3-second clips: `docs/design/formation-sectors.html` (open in a browser;
 same page as the claude.ai artifact https://claude.ai/artifact/ErDQfTKvYcV1Q3YzaA19HT). Keep the page, the clips and this
@@ -88,7 +90,7 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   4 m) is a column — narrow sectors below 6 m (above), the ±70° herringbone in a wider one (e.g. 7.6 m); the diamond no longer
   walks a wide street with its side men scanning into walls 1.2 m away.
 - **Blizzard (user, 2026-10-25, "4А")**: in a blizzard the squad picks the tight blizzard diamond automatically on OPEN ground;
-  walls and passages keep their normal rules; the hold-G menu still overrides.
+  walls and passages keep their normal rules; the hold-B menu still overrides.
 
 ## v2.1 — the squad never splits (user decisions 2026-10-25, via the coordinator; contract section 10)
 - **The bug the user found**: lab lane B, 4 men, manual "echelon left" with the wall on the left — the echelon's slots went
@@ -124,7 +126,14 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   Esc / RMB cancels (the previous choice stays); with one operative every item is greyed out (a pick is refused, Auto works);
   the diamond item is the wedge with 3, the pair with 2; too few members for the held choice -> back to Auto. Icons in
   `Content/UI/FormationMenu/src/*.svg`; contract section 9.
-- **Manual: hold G** → radial menu with schematic icons; move the cursor to a sector, release G. Centre = **Auto**.
+- **Manual: hold B** (user decision 2026-10-26: G is the grenade, so the menu moved from G to B) → radial menu with schematic
+  icons; move the cursor to a sector, release B. Centre = **Auto**. A TAP of B (released within 0.25 s,
+  `ACodexTacticsPlayerController::FormationMenuHoldSeconds`) is still the solo / squad toggle; the hold opens the menu only in
+  squad mode with >= 2 members, in exploration or the tactical pause (never in turn-based combat, never while the tutorial locks
+  `Squad.Formation`) - otherwise a hold of B is a plain tap (the toggle on the release). The menu opens at the cursor (pulled in to
+  stay on screen); Esc / RMB cancel it; the camera does not edge-pan while it is open; the game is not paused by it. In the game
+  since stage 7 (2026-10-26, `UFormationMenuWidget`, smoke `FormationMenuSmoke`); English labels in the game (Auto, Line,
+  Diamond / Wedge / Pair, Echelon right, Blizzard diamond, Column, Hedgehog, Echelon left, All forward).
   A manual choice holds until Auto is picked. Proposed layout (user named 12 line, 3 echelon right, 10 echelon left,
   5–6 column; 9 chosen for symmetry — confirm): 12 Line · 1:30 Diamond/wedge · 3 Echelon right · 4:30 Blizzard ·
   6 Column · 7:30 Hedgehog · 9 Echelon left · 10:30 "All forward" (walk, everyone faces 12).
@@ -162,7 +171,7 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
    in TS + movement bot + report (Jev / Claude API distillation).
 2. Formation lab layout JSON + Unreal map generator script + navmesh bake.
 3. C++ pure rules (`FormationShapeRules` / `FormationSectorRules` / terrain classifier) with parity tests from golden
-   vectors; runtime integration (slots, look yaw, patrol pace, wall layout + pose); hold-G radial menu.
+   vectors; runtime integration (slots, look yaw, patrol pace, wall layout + pose); hold-B radial menu (stage 7, done 2026-10-26).
 4. In-game smoke on the lab map.
 
 ## v2.2 — the rear guard and the coverage allocator (user decisions 2026-10-25, via the coordinator; contract section 12)

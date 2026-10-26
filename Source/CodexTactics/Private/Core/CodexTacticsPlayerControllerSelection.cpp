@@ -83,6 +83,10 @@ void ACodexTacticsPlayerController::OnClick()
 	{
 		return; // the dialogue panel handles its own clicks
 	}
+	if (IsFormationMenuOpen())
+	{
+		return; // the formation radial menu (hold B) is picked by releasing B, a click is no order meanwhile
+	}
 	// Minimap (2026-10-18): a click on the corner map / its header / the full map belongs to the map (camera there).
 	if (FVector2D MapMouse; GetMousePosition(MapMouse.X, MapMouse.Y) && HandleMapClick(MapMouse, false))
 	{

@@ -5,6 +5,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Core/CodexTacticsGameMode.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -390,6 +391,11 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 			// Minimap (2026-10-18): the corner map / the full map are UI - the cursor over them never scrolls the view.
 			if (const UMinimapSubsystem* Minimap = UMinimapSubsystem::Get(this);
 				Minimap && (Minimap->IsFullMapOpen() || Minimap->IsScreenPointOverMap(FVector2D(MouseX, MouseY))))
+			{
+				EdgeInput = FVector2D::ZeroVector;
+			}
+			// The formation radial menu (hold B) is UI too: the cursor aiming at its items never scrolls the view.
+			if (const ACodexTacticsPlayerController* CodexController = Cast<ACodexTacticsPlayerController>(PC); CodexController && CodexController->IsFormationMenuOpen())
 			{
 				EdgeInput = FVector2D::ZeroVector;
 			}

@@ -162,6 +162,11 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName SoloOn;
 	/** B again: solo off - the squad regroups into the formation. */
 	extern CODEXTACTICS_API const FName Regroup;
+	/**
+	 * Hold B (stage 7, user decision 2026-10-26: G is the grenade): the formation radial menu - a formation picked (or Auto) on the
+	 * release ("Squad.Formation"). Locked -> a hold of B is a plain tap (the solo / squad toggle).
+	 */
+	extern CODEXTACTICS_API const FName FormationMenu;
 	/** T: the leader guards his spot / rejoins the formation. */
 	extern CODEXTACTICS_API const FName Guard;
 	/** Ctrl + T: Commander Mode (autonomous squad combat) on / off. */
