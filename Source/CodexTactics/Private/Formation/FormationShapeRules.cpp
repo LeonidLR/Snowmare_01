@@ -157,7 +157,8 @@ namespace FormationShapeRules
 		return Result;
 	}
 
-	TArray<FFormationSlot> TrailSlots(const TArray<FVector2D>& Trail, float LeaderYaw, int32 MemberCount, const FFormationConfig& Config)
+	TArray<FFormationSlot> TrailSlots(const TArray<FVector2D>& Trail, float LeaderYaw, int32 MemberCount, const FFormationConfig& Config,
+		const TArray<FFormationWall>& Walls)
 	{
 		TArray<FFormationSlot> Result;
 		if (Trail.Num() == 0)
@@ -215,7 +216,28 @@ namespace FormationShapeRules
 				FVector2D At;
 				double AtYaw = 0.0;
 				Back(-Local.X, At, AtYaw);
-				Slot.Position = At + FormationMath::DirOf(AtYaw + 90.0) * Local.Y;
+				// v2.3: the stagger shrinks (5 cm steps, down to 0) until the slot keeps ColumnStaggerClear off every wall surface and
+				// the line from its trail point to it is clear.
+				const FVector2D Side = FormationMath::DirOf(AtYaw + 90.0);
+				const double Clear = Config.ColumnStaggerClear;
+				const double Sign = FMath::Sign(Local.Y);
+				const auto Fits = [&Walls, &At, Clear](const FVector2D& P)
+				{
+					for (const FFormationWall& Wall : Walls)
+					{
+						if (FormationMath::DistToWall(P, Wall) < Clear - 1e-6)
+						{
+							return false;
+						}
+					}
+					return !FormationMath::SegmentBlocked(At, P, Walls, 0.0);
+				};
+				double Stagger = FMath::Abs(Local.Y);
+				while (Stagger > 0.0 && !Fits(At + Side * (Sign * Stagger)))
+				{
+					Stagger = FMath::Max(0.0, Stagger - 5.0);
+				}
+				Slot.Position = At + Side * (Sign * Stagger);
 				Slot.Yaw = static_cast<float>(AtYaw);
 			}
 			Result.Add(Slot);

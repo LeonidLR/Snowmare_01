@@ -521,14 +521,19 @@ export function regressLayout(file: string, data: Record<string, unknown>, o: Ev
  */
 export function refreshKept(data: Record<string, unknown>, row: RegressionRow, tag: string): Record<string, unknown> {
   const old = (Array.isArray(data.expected_fail) ? data.expected_fail : []) as ExpectedFail[];
-  const oldKeys = new Set(old.map(failureKey));
   const fixedEntries = [
     ...((Array.isArray(data.fixed_entries) ? data.fixed_entries : []) as Record<string, unknown>[]),
     ...old.filter((e) => row.fixed.includes(failureKey(e))).map(({ check, choice, members, route, seed }) => ({ check, choice, members, route, seed, fixed_in: tag })),
   ];
-  const expected = row.current.map((f) => oldKeys.has(failureKey(f))
-    ? { ...f, reason: `still failing under ${tag} (${looksLike(f.check)}): open until the rules are fixed or the layout is judged wrong` }
-    : { ...f, since: tag, reason: `appeared with ${tag} (${looksLike(f.check)}): a new failure on this layout - review` });
+  // v2.3: a still-failing entry keeps its `since` (which rules introduced it) and its `triage` note (layout artefact / design
+  // question) across refreshes - the v2.3 refresh dropped the v2.2 tags of the regressions still open.
+  const oldByKey = new Map(old.map((e) => [failureKey(e), e as ExpectedFail & { since?: string; triage?: string }]));
+  const expected = row.current.map((f) => {
+    const prev = oldByKey.get(failureKey(f));
+    if (!prev) return { ...f, since: tag, reason: `appeared with ${tag} (${looksLike(f.check)}): a new failure on this layout - review` };
+    return { ...f, ...(prev.since ? { since: prev.since } : {}), ...(prev.triage ? { triage: prev.triage } : {}),
+      reason: `still failing under ${tag} (${looksLike(f.check)}): open until the rules are fixed or the layout is judged wrong` };
+  });
   const out: Record<string, unknown> = { ...data, expected_fail: expected };
   if (fixedEntries.length) out.fixed_entries = fixedEntries;
   if (expected.length) delete out.fixed_in; else out.fixed_in = tag;

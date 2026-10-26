@@ -113,15 +113,16 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_Menu.json` / `Parity.Menu` (section 9; no `config_values` needed) | `op`: `itemAt` (`dx`, `dy`, `deadZonePx`) / `release` (`state: { open, choice ("auto" or item id), highlighted (item id or null) }`, `memberCount`) / `resolve` (`choice`, `memberCount`) | itemAt: `item` (id or null = Auto); release: `state` + `effect` (`none / opened / picked / auto / cancelled / disabled`); resolve: `manualFormation` (formation or null), `allForward` |
 | `formation_Guard.json` / `Parity.Guard` (10.1, 10.7) | `walls[]`, `requested`, `memberCount`, `leaderPos`, `leaderYaw`, `ahead` (`{ pos, yaw }` or null), `turnAhead`, `state: { requested, level (0/1/2), effective, candidate (level or null), candidateDistance }`, `stepDistance` | `blocked` (roles, slot order: BlockedRoles at the leader) + `state` (Resolve) |
 | `formation_TurnAhead.json` / `Parity.TurnAhead` (10.7) | `points` (the path; `path` is the scene's name), `heading` | `deg` |
-| `formation_TrailSlots.json` / `Parity.TrailSlots` (10.1) | `points` (the trail, oldest first; `trail` is the scene's name), `leaderYaw`, `memberCount` | `slots: [{ role, pos, yaw }]` |
+| `formation_TrailSlots.json` / `Parity.TrailSlots` (10.1, 13.2) | `points` (the trail, oldest first; `trail` is the scene's name), `leaderYaw`, `memberCount`, `walls` (v2.3; missing / [] = none) | `slots: [{ role, pos, yaw }]` |
 | `formation_SideWidth.json` / `Parity.SideWidth` (10.1) | `walls[]`, `pos`, `yaw` | `width` (number or null); walls across the heading are skipped (491a24d); the golden is computed from the rounded inputs it writes |
-| `formation_ClearLook.json` / `Parity.ClearLook` (10.8) | `walls[]`, `pos`, `yaw`, `currentYaw` | `yaw` |
+| `formation_ClearLook.json` / `Parity.ClearLook` (10.8, 13.1) | `walls[]`, `pos`, `yaw`, `currentYaw`, `held` (v2.3, null = none) | `yaw` |
 | `formation_Bypass.json` / `Parity.Bypass` (10.2) | `wall`, `leaderPos`, `destination`, `threats: [{ pos, ageS }]` | `wallOn`, `shortest`, `reason` exactly, `detour` within 1e-3, `path` (same count, points within cm) |
 | `formation_Corner.json` / `Parity.Corner` (10.3) | `walls[]`, `leaderPos`, `leaderYaw`, `members: [{ role, pos }]`, `state: { left, right: { wall, end, role } or null }` | `state` exactly, `looks: [{ role, yaw }]` (same order: left first) |
 | `formation_Assign.json` / `Parity.Assign` (10.6) | `members`, `places` (`[[x, y]]`) | `places` (index per member) exactly |
 | `formation_Cover.json` / `Parity.Cover` (11.2) | `walls[]`, `leaderPos`, `heading`, `members: [{ role, pos, back }]` (K first), `mode` (walk / halt), `t`, `fixed: [{ role, yaw }]` | `rearGuard`; `looks: [{ role, yaw }]` (same order: K, the rear guard, other fixed, the others); `shares: [{ role, from, to, primary }]` (from / to within deg, primary as an angle) |
 | `formation_CoverStatic.json` / `Parity.CoverStatic` (11.3) | `walls[]`, `members: [{ role, pos }]`, `fixed: [{ role, yaw }]`, `free` (roles) | `looks: [{ role, yaw }]` in `free`'s order |
-| `formation_Slide.json` / `Parity.Slide` (11.5) | `wall`, `startSlots: [{ role, pos, yaw }]` (K first), `leaderPos`, `destination`, `t` | `active`, `lead` / `rearGuard` (role or null), `order` exactly; `leaderTarget` within cm, `normalYaw` as an angle, `targets: [{ role, pos, yaw }]` |
+| `formation_Decided.json` / `Parity.Decided` (13.3) | `role`, `formation`, `memberCount`, `passageWidth` (null = none) | `decided` |
+| `formation_Slide.json` / `Parity.Slide` (12.5) | `wall`, `startSlots: [{ role, pos, yaw }]` (K first), `leaderPos`, `destination`, `t` | `active`, `lead` / `rearGuard` (role or null), `order` exactly; `leaderTarget` within cm, `normalYaw` as an angle, `targets: [{ role, pos, yaw }]` |
 
 C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
 config)`, `FormationSectorRules::LookYaw(role, formation, mode, memberCount, timeInPatrol, leaderYaw, TOptional passageWidth, config)`,
@@ -140,7 +141,7 @@ yaw, currentYaw, config)`, `FormationBypassRules::ChooseSide(wall, leaderPos, de
 `FormationCornerRules::Watch(walls, leaderPos, leaderYaw, members, FFormationCornerState state, config) / CornerAhead`,
 `FormationAssignRules::AssignPlaces(members, places)`; geometry `FormationMath::SegmentBlocked / SegSegDist / DistToWall /
 ClosestOnSegment / NormYaw / DirOf / YawOfD` (double, = geometry.ts). Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2
-(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515, v2.2 (1f8bc25) 12079 - each 0 mismatched. v2.2
+(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515, v2.2 (1f8bc25) 12079, v2.3 parts 1-5 (df3b3da) 14356 - each 0 mismatched. v2.2
 adds `FormationCoverRules::Allocate(walls, leaderPos, heading, members, mode, t, config, fixed) -> TOptional<FFormationCoverResult>` /
 `AllocateStatic(walls, members, fixed, free, config)` and `FormationWallRules::Slide(wall, startSlots, leaderPos, destination, t, config)
 -> FFormationSlideResult`.
@@ -373,14 +374,14 @@ open rear, a gap at a wall corner after a cover switch, the formation breaking a
    key). Budget cap as the tuner (stop before a call whose cost would exceed `--budget-usd`); patience: stop after N rounds in a row
    with no new distinct failure. The red team never changes the rules: its failures go to the coordinator.
 ## 12. v2.2 - the triad K, P, Z, the rear guard, the coverage allocator (user decisions 2026-10-25)
-### 11.1 The triad
+### 12.1 The triad
 `rolesFor(3) = K, P, Z`. Slots: wedge / diamond with 3 = K 0, P (-slot.back_offset, +slot.side_offset), Z (-`triad.rear_back`
 420, 0); blizzard with 3 = P (-back, +side), Z (-2 back, 0); column with 3 = P (-base, +stagger), Z (-base - spacing, 0); line
 with 3 = P (0, +spacing), Z (0, -spacing); echelons with 3 = K, P, Z both ways (sectors lead / 2 / 4 = 10 / 45 / 150 in LookYaw);
 hedgehog with 3 = the triangle (P +120, Z -120). Wall layout with 3 = K, P at the right end (4 o'clock), Z at the LEFT end
 looking 8 (the user's wall rule is by position). ChainPairs with 3: wedge / diamond / blizzard P-Z, line Z-K-P, column / echelon
 K-P-Z, hedgehog the ring. Menu Resolve unchanged (diamond -> wedge with 3).
-### 11.2 `FormationCoverRules::Allocate(walls, leaderPos, heading, members [{role, pos, back}], mode walk|halt, t, fixed [{role, yaw}]) -> { rearGuard, looks, shares } | null`
+### 12.2 `FormationCoverRules::Allocate(walls, leaderPos, heading, members [{role, pos, back}], mode walk|halt, t, fixed [{role, yaw}]) -> { rearGuard, looks, shares } | null`
 For 3+ members walking / halted (the sim / runtime: not running, not "all forward", not the wall layout, not the hedgehog;
 the pair keeps LookYaw). `members` = the PLACES (slot positions, K first), `back` = how far back along the leader's path (sim:
 -dot(slot - leader, heading); the trail column: the column order). Angles relative to the heading, whole degrees -179..180.
@@ -399,20 +400,20 @@ the pair keeps LookYaw). `members` = the PLACES (slot positions, K first), `back
    period, opposite sign). Halt: the centre of each one's first gap.
 A fixed look (the corner watcher, a combat target, an explicit facing order) keeps its yaw; its whole cone counts as covered and
 the duty it leaves (K's front, the rear) goes to the others.
-### 11.3 `FormationCoverRules::AllocateStatic(walls, members [{role, pos}], fixed [{role, yaw}], free [roles]) -> [{role, yaw}]`
+### 12.3 `FormationCoverRules::AllocateStatic(walls, members [{role, pos}], fixed [{role, yaw}], free [roles]) -> [{role, yaw}]`
 A standing group with looks decided elsewhere (the playtest: the leader holds a new corner in group cover). Absolute yaws,
 whole degrees; open as in 11.2 (any member's position). With 3+ members and at least one fixed look, one free member covers the
 REAR = opposite the fixed looks' mean (the free member whose bearing from the group centre is nearest it; the nearest open
 degree if blocked); the others greedily: the widest open gap no cone covers, to the member with the nearest bearing, looking
 at its middle; with no gap left, outward along his bearing (nearest open). Each assigned cone counts as covered for the next.
-### 11.4 Checks, config, golden
+### 12.4 Checks, config, golden
 Check 2 for every formation of 3+ (manual too); check 10: the largest arc no member's cone (+-fov / 2) covers and no wall within
 look.wall_dist of a member blocks (+-45 deg round its closest point), sampled every 2 deg, <= `coverage.max_gap_deg` for >= 90 %
 of patrol (3+ members). Manual formations are gated by 1, 2, 5, 7, 10. Keys: `triad.rear_back` 420 (300-600), `rear.share_half`
 30 (10-60), `rear.wall_shift_deg` 30 (0-60), `coverage.max_sweep` 90 (30-150), `coverage.max_gap_deg` 60 (20-120). LookYaw
 stays the rule for the pair, run, "all forward", the wall mode and the hedgehog. Golden: `formation_Cover.json` (512 cases),
 `formation_CoverStatic.json`. Sim: `MemberFrame.rearGuard`.
-### 11.5 `FormationWallRules::Slide(wall, startSlots [{role, pos, yaw}], leaderPos, destination, t) -> SlideResult` (user: "Все отлично")
+### 12.5 `FormationWallRules::Slide(wall, startSlots [{role, pos, yaw}], leaderPos, destination, t) -> SlideResult` (user: "Все отлично")
 The squad stands in the wall layout (`startSlots` = Layout's slots, K first) and the leader's next destination lies at the SAME
 wall: surface distance <= `slide.max_off_wall` (200, 100-300 cm), on the squad's side, its foot inside the wall, at least
 SLIDE_MIN (50 cm) along it. Then `active`: everyone moves sideways together - each target = his start slot moved along the wall by
@@ -429,8 +430,87 @@ on the slide (the leading end at the wall's end); at the stop the normal wall la
 him through the line. Bot check 11: the order along the wall kept (20 cm tolerance, >= 0.3 s counts) and the open half (normal +-90)
 >= 90 % covered by the cones for >= 90 % of the slide time. Lab route `R_A_slide` (lane A's dead end, 6 m one way, 12 m back);
 map builder TargetPoints `<route id>_slide_<n>` (tag FormationLabSlide). Golden `formation_Slide.json`.
-### 11.6 Simulator notes (v2.2)
+### 12.6 Simulator notes (v2.2)
 - Places are also reassigned on the way (not only on a formation change) when the minimal assignment is REASSIGN_GAIN (100 cm)
   cheaper than the places held (a tight formation pivoting 90 deg sent a flank man across the squad); never during a slide.
 - A light separation stands in for the engine's crowd avoidance: two members closer than slot.min_spacing + 10 cm drift apart at
   up to 60 cm/s (the leader is never pushed). The runtime's RVO / detour crowd does this in the game.
+
+## 13. v2.3 - the red-team rule fixes (coordinator task 2026-10-25; v2.2 behaviour the user approved unchanged)
+The red team (section 11) found layouts that break the rules; v2.3 fixes the rule bugs among them, one commit per fix, each
+followed by `npm run bot:movement -- --layouts redteam --refresh v2.3` (entries a fix clears drop out of `expected_fail`, new
+ones carry `since: 'v2.3'`).
+
+### 13.1 `ClearLook(walls, pos, yaw, currentYaw, config, held) -> yaw` - minimum free arc + hysteresis (red team #1)
+- A free arc (the directions between blocked spans, measured in whole degrees both ways) narrower than `look.min_free_deg`
+  (30, 0-60) does not count - neither for the wanted yaw nor for an edge. (Zigzag corridors: a 5-13 deg sliver between two
+  wall spans opened and closed as the man moved, and his look swung across a wall 1.9 m away to it - red team 2_8, 11_8, 8_2.)
+- `held` = his previous ClearLook result (null when ClearLook did not apply in the previous frame: the integration resets it
+  for the wall layout, running, the corner watcher and the leader looking where he walks). When the wanted yaw is not lookable,
+  `held` competes with the edges with score `|held - yaw| - look.hold_deg` (60, 0-120; 0 = the v2.2 memoryless rule) while no
+  wall direction is within `look.wall_angle - look.hold_margin_deg` (55 - 5) of it. A lookable wanted yaw always wins.
+  (A wall at the reach's edge or an arc at the width threshold flipped a rear man's look 145 deg every few steps.)
+- Edges: unchanged order (fewest wall directions swept from currentYaw - now counted, was yes / no - then the nearest to
+  the wanted yaw; ties: the first). Enclosed (no lookable arc): the longest clear ray, every 5 deg from the wanted yaw both
+  ways (+ before -), rays capped at 2 x `look.wall_dist`; ties: the nearest the wanted yaw (was: the wanted yaw unchanged).
+- Golden `formation_ClearLook.json`: `in.held` (null / yaw - 40 / yaw + 100) on every case; scenes `sliver_left`, `pocket`.
+- Runtime: keep the last result per member (`clearHeld`), reset it to none whenever ClearLook is not applied.
+
+### 13.2 `TrailSlots(trail, leaderYaw, memberCount, config, walls)` - the stagger shrinks in a narrow passage (red team #7)
+- Each staggered slot's offset aside (`column.stagger`, 60) shrinks in 5 cm steps (down to 0 = on the trail) until the slot keeps
+  `column.stagger_clear` (45 cm, 20-100: agent radius 35 + 10) from every wall SURFACE and the line from its trail point to it is
+  clear. No walls (`[]`, the default) = the full stagger, as v2.1.
+- Why: crossing a 1.2-2 m wall gap obliquely (red team 12_3, 8_7, 10_6, 7_5) or a funnel (9_3), the 60 cm stagger put the slot
+  inside the wall's clearance; the slot was unwalkable and the simulator's fallback re-placed it round the leader (ahead of him
+  past the bend), so the chain cut a wall (check 7). The runtime has the same hazard (an unreachable slot -> the
+  navigation's nearest point).
+- Golden `formation_TrailSlots.json`: `in.walls` + `in.scene` (`none`, `corridor_200`, `gap_oblique`).
+
+### 13.3 `FormationSectorRules::Decided(role, formation, memberCount, passageWidth) -> bool` - user-decided looks stay (1A clarified)
+- True in a NARROW column (`passageWidth < column.narrow_width`, null = wide) with 3+ members for K, P and L; false for Z (the
+  allocator's rear guard) and in every other case. The integration passes those roles' LookYaw looks to
+  `FormationCoverRules::Allocate` as FIXED looks (with the corner watcher's), so the allocator only shares out what is left.
+- passageWidth = the terrain classifier's held corridor width (`passage`) - for the trail column too (NOT the slot's own side
+  width: a doorway crossed at an angle is no corridor; open question 1 in FORMATION_SECTORS.md, pick (a)).
+- The wall layout and the pair never reach the allocator (3+ members walking / halted, not the wall layout).
+- Golden `formation_Decided.json` (formations x 2-4 members x passage null / 200 / 599 / 600 / 900 x roles).
+
+### 13.4 ClearLook narrow tier (red team #1, after 13.3)
+- A free but NARROW direction (arc < `look.min_free_deg`) is no longer dropped outright: the wanted yaw (score
+  `look.narrow_penalty` + 360 x walls swept) and a narrow edge (`|edge - yaw|` + 360 x swept + `look.narrow_penalty`) compete
+  with the wide edges and the held look. `look.narrow_penalty` 180 (0-360; 0 = 13.1's hard cut): below 360, so a narrow arc he
+  reaches WITHOUT a sweep beats a wide one behind a sweep; a wide arc without a sweep still wins (the 2_8 sliver stays out).
+- Why: entering a corridor with 13.3's "forward over the shoulder", P's +15 hit the corridor wall's end; the near arc was 21 deg
+  and the only wide edge lay across the wall end - he swung 110 deg across it and back (red team 8_5, 4_8, 11_8).
+- Golden: `formation_ClearLook.json` (same cases, the new key in the config header).
+
+### 13.5 Integration: two unwalkable slots never share a stand-in (red team #5; simulator, runtime requirement)
+- The simulator's fallback for an unwalkable slot (`fallbackSlot`: the slot offset turned round the leader in 30 deg steps, in
+  his line of sight) skips candidates within `slot.min_spacing` of a slot already given out this frame; only when none is left
+  does it take the nearest as before. (A manual hedgehog of three in a 3 m corridor: P's and Z's ring slots were both in the
+  wall, both got the same point and the two men walked into each other - 22 cm apart.)
+- Runtime: the same requirement for `SquadFormation::ComputeFallbackSlots` - the stand-ins of one frame keep `slot.min_spacing`
+  from each other and from the walkable slots.
+
+### 13.6 C++ port of v2.3 (formation/cpp-rules, 2026-10-26)
+- Ported as specified: `FormationSectorRules::ClearLook(walls, pos, yaw, currentYaw, config, TOptional held = unset)` (13.1 + 13.4: the
+  free-arc width, the held look, the narrow tier, the swept count, the longest clear ray when enclosed - the rays use
+  `FormationTerrainRules::RayHit`), `FormationSectorRules::Decided(role, formation, memberCount, TOptional passageWidth, config)` (13.3),
+  `FormationShapeRules::TrailSlots(trail, leaderYaw, memberCount, config, walls = [])` (13.2). New `FFormationConfig` fields
+  `ColumnStaggerClear`, `LookMinFreeDeg`, `LookHoldDeg`, `LookHoldMarginDeg`, `LookNarrowPenalty` (74 keys). All new parameters are
+  trailing and defaulted: the v2.1 runtime keeps compiling and behaves as before until it passes them.
+- 13.5 in the runtime: `SquadFormation::ChooseFallbackSlot(usable, given, spacing)` (pure; test
+  `CodexTactics.Formation.FallbackSlotsKeepSpacing`) picks, of the navmesh / leader-side candidates of `ComputeFallbackSlots` (nearest
+  first), the first that keeps `slot.min_spacing` (FormationTuning) from every slot already given out this formation tick; none such
+  -> the nearest as before. `USquadSubsystem::FrameGivenSlots` = the leader's position, then each slot `ResolveReachableSlot` returns
+  (walkable or stand-in) in the follower loop of `TickFormationFollow`. Interpretation: "this frame" = this formation tick in follower
+  order; a follower whose update returns before resolving his slot (cover hold, own order, repath wait) is not in the list for that
+  tick; an unresolvable slot (no usable candidate) counts as given at the slot itself (the simulator counts the man's position). Every
+  candidate is now projected (up to 23 traces / projections, only for an unwalkable slot) instead of stopping at the first usable one.
+- Wired into the runtime in formation/runtime-v23 (2026-10-26; docs/systems/squad-and-orders.md "Rules v2.3 in the runtime"): the world's walls
+  for `TrailSlots` (`FormationGuardRuntime::TrailFrameSlots`), the per-member held look for `ClearLook` (`clearHeld`: `RememberClearLook` /
+  `AgeClearHeld` - reset whenever ClearLook does not apply or the look is not computed in a frame), `Decided` -> the allocator's fixed looks
+  (`DecidedFixedLooks`). FormationLabSmoke's pace check measures the rear man against the slot he is GIVEN (his slot or its 13.5 stand-in), as
+  checks.ts 6 does. 13.5 "this frame" is now order-free: every WALKABLE slot of the frame is given out before the follow loop (the port's first
+  reading - only the slots resolved before him - let Z, resolved before P, take the stand-in on P's spot at the lab's floor edge, R_v2_gaps).
+  For the simulator: `sim.ts` pushes `given` in member order too - seeding it with the frame's walkable slots would match the contract text.

@@ -90,7 +90,11 @@ namespace
 			Level.bHasSnowCover = true;
 			Level.SnowCover = FMath::Clamp(Snow, 0.f, 1.f);
 		}
-		const bool bAutomated = FString(CommandLine).Contains(TEXT("-ExecCmds=CodexTactics.")) || FParse::Param(CommandLine, TEXT("CodexBot"));
+		// Any CodexTactics.* dev check in -ExecCmds - also after console switches run first (smoke_parallel -PreCmds "Codex.Formation.Sectors 0":
+		// -ExecCmds="Codex.Formation.Sectors 0,CodexTactics.SquadControlSmoke" started on a random procedural weather before 2026-10-26).
+		FString ExecCmds;
+		FParse::Value(CommandLine, TEXT("-ExecCmds="), ExecCmds, /*bShouldStopOnSeparator*/ false);
+		const bool bAutomated = ExecCmds.Contains(TEXT("CodexTactics.")) || FParse::Param(CommandLine, TEXT("CodexBot"));
 		if (bAutomated && !FParse::Param(CommandLine, TEXT("EnvRandom")))
 		{
 			if (!Level.bHasWeather)

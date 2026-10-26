@@ -9,8 +9,9 @@ import { renderTrainReport, train, tunableOf } from './train.ts';
 
 const layout = readLayout('sample_small');
 // The tuner needs something to tune: sample_small is all green with the shipped config, so the tests start from a short
-// ClearLook reach (look.wall_dist 100 < the stare check's 200: check 1 fails) - the lever bot.test.ts also uses.
-const configFile = withValues(readConfigFile(), { 'look.wall_dist': 100 }).file;
+// ClearLook reach (look.wall_dist 100 < the stare check's 200) with the allocator in its corridors (column.narrow_width 100:
+// v2.3 keeps the 1A corridor looks, which stay off the walls whatever the reach) - check 1 fails; the lever bot.test.ts uses.
+const configFile = withValues(readConfigFile(), { 'look.wall_dist': 100, 'column.narrow_width': 100 }).file;
 const base = { layout, configFile, rounds: 6, budgetUsd: 5, patience: 3, members: [3, 4], seeds: 1, seedBase: 1 };
 
 test('dry run: builds the first request, calls nobody, spends nothing', async () => {

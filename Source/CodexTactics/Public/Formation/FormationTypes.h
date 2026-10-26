@@ -90,6 +90,13 @@ struct FFormationSlot
 	float Yaw = 0.f;
 };
 
+/** v2.3 (contract 13.1): one member's ClearLook memory - his last result and whether it was given this frame (FormationGuardRuntime). */
+struct FFormationClearHeld
+{
+	float Yaw = 0.f;
+	bool bThisFrame = false;
+};
+
 /** A straight wall segment: its centre line A -> B and its thickness (0 = a thin line), cm (layout JSON walls[]). */
 struct FFormationWall
 {
@@ -131,6 +138,8 @@ struct CODEXTACTICS_API FFormationConfig
 	float ColumnSpacing = 150.f;
 	/** [column.stagger] Column herringbone: the 2nd man this far right, the 3rd this far left, cm. */
 	float ColumnStagger = 60.f;
+	/** [column.stagger_clear] v2.3: the trail column's stagger shrinks until the slot keeps this from every wall surface, cm. */
+	float ColumnStaggerClear = 45.f;
 	/** [line.spacing] Line: spacing between neighbours, cm. */
 	float LineSpacing = 260.f;
 	/** [line.fan_inner] Line: the inner men look this far out from 12, deg. */
@@ -216,6 +225,14 @@ struct CODEXTACTICS_API FFormationConfig
 	float LookWallDist = 260.f;
 	/** [look.wall_angle] v2.1.1: half-width of the blocked span round the direction to the wall's closest point, deg. */
 	float LookWallAngle = 55.f;
+	/** [look.min_free_deg] v2.3: a free arc narrower than this does not count for ClearLook (a sliver between two wall spans), deg. */
+	float LookMinFreeDeg = 30.f;
+	/** [look.hold_deg] v2.3: ClearLook's held look competes this much better than its distance to the wanted yaw (0 = memoryless), deg. */
+	float LookHoldDeg = 60.f;
+	/** [look.hold_margin_deg] v2.3: the held look stays while no wall direction is within LookWallAngle - this of it, deg. */
+	float LookHoldMarginDeg = 5.f;
+	/** [look.narrow_penalty] v2.3: a free but narrow direction still competes this much worse (0 = the hard cut), deg. */
+	float LookNarrowPenalty = 180.f;
 	/** [guard.clearance] v2.1: a slot is cut off when the leader -> slot / chain segment passes closer than this to a wall body, cm. */
 	float GuardClearance = 10.f;
 	/** [guard.lookahead] v2.1: the guard also checks the formation at the leader's pose this far ahead on his path (0 = only here), cm. */

@@ -81,14 +81,31 @@ namespace FormationSectorRules
 		float LeaderYaw, const TOptional<float>& PassageWidth = TOptional<float>(), const FFormationConfig& Config = FFormationConfig());
 
 	/**
-	 * v2.1.1 (user decision: nobody looks into a wall, in ANY formation): a wall whose surface is within LookWallDist of Pos blocks
-	 * the directions within LookWallAngle of the direction to its closest point. A blocked Yaw turns to a free span edge: first the
-	 * edges reachable from CurrentYaw (his facing now) WITHOUT sweeping across a wall direction, then the nearest to Yaw; ties keep
-	 * the first (walls in order, the minus edge first). Not blocked or enclosed on all sides -> Yaw (normalized). The integration
-	 * applies it to patrol / halt / all-forward looks - not to the wall layout, running, the corner watcher or the leader looking
-	 * within 35 deg of his travel.
+	 * v2.1.1 (user decision: nobody looks into a wall, in ANY formation; v2.3 contract 13.1 / 13.4): a wall whose surface is within
+	 * LookWallDist of Pos blocks the directions within LookWallAngle of the direction to its closest point.
+	 * - Yaw is kept when it is not blocked and lies in a free arc at least LookMinFreeDeg wide (a sliver between two wall spans does
+	 *   not count).
+	 * - Else the candidates compete by score, the lowest wins (ties: the first): Held (his previous result; unset when ClearLook did not
+	 *   apply last frame) = |Held - Yaw| - LookHoldDeg while no wall direction is within LookWallAngle - LookHoldMarginDeg of it; a free
+	 *   but narrow Yaw = LookNarrowPenalty + 360 x walls swept; each free span edge (walls in order, the minus edge first) = |edge - Yaw| +
+	 *   360 x the wall directions a turn from CurrentYaw to it sweeps across + LookNarrowPenalty when its arc is narrow (LookNarrowPenalty
+	 *   0: narrow edges are out).
+	 * - Enclosed (no candidate): the longest clear ray, every 5 deg from Yaw both ways (+ before -), capped at 2 x LookWallDist; ties: the
+	 *   nearest Yaw.
+	 * The integration applies it to patrol / halt / all-forward looks - not to the wall layout, running, the corner watcher or the leader
+	 * looking within 35 deg of his travel - and keeps the last result per member as Held (reset whenever it does not apply).
 	 */
 	CODEXTACTICS_API float ClearLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, float CurrentYaw,
+		const FFormationConfig& Config = FFormationConfig(), const TOptional<float>& Held = TOptional<float>());
+
+	/**
+	 * v2.3 (coordinator 2026-10-26, user decision 1A clarified): true when this role's look in this formation is a user decision the
+	 * coverage allocator must keep - the integration passes LookYaw's look to FormationCoverRules::Allocate as a FIXED look. In a NARROW
+	 * column (PassageWidth set and < ColumnNarrowWidth) with 3+ members: K, P and L; Z is not (he is the allocator's rear guard). Every
+	 * other case: false. PassageWidth = the classifier's held corridor width (FFormationClassifyState::PassageWidth), for the trail
+	 * column too.
+	 */
+	CODEXTACTICS_API bool Decided(EFormationRole Role, EFormationKind Formation, int32 MemberCount, const TOptional<float>& PassageWidth,
 		const FFormationConfig& Config = FFormationConfig());
 
 	/** The squad's pace for a mode, cm/s: walk = PaceWalkSpeed * PacePatrol, run = PaceRunSpeed, halt / wall = 0. */

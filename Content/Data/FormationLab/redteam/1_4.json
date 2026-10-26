@@ -231,24 +231,35 @@
   "expected_fail": [
     {
       "check": 1,
-      "choice": "blizzard",
-      "members": 4,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 4.6,
+      "what": "P at WR1",
+      "since": "v2.3",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 2,
       "route": "R1",
       "seed": 2,
-      "t": 21,
-      "what": "L at WL3",
-      "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+      "t": 20.4,
+      "what": "Z at WL2",
+      "since": "v2.3",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "hedgehog",
       "members": 3,
       "route": "R1",
-      "seed": 2,
+      "seed": 1,
       "t": 33.7,
-      "what": "P-Z 74 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "what": "P-Z 30 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [
@@ -267,6 +278,14 @@
       "route": "R1",
       "seed": 2,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
     }
   ]
 }

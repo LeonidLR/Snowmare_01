@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Formation/FormationBypassRules.h"
+#include "Formation/FormationCoverRules.h"
 #include "Formation/FormationGuardRules.h"
 #include "Formation/FormationTypes.h"
 
@@ -98,8 +99,20 @@ namespace FormationGuardRuntime
 	/** labels.ts FORMATION_LABEL_EN: the formation's English name; the diamond / wedge of 2 is "Pair". */
 	CODEXTACTICS_API FString FormationLabel(EFormationKind Formation, int32 MemberCount);
 
-	/** labels.ts guardHudText: the name in effect, or "Echelon left -> Column (wall)" while the guard falls back (level > 0, a different formation). */
-	CODEXTACTICS_API FString GuardHudText(EFormationKind Requested, EFormationKind Effective, EFormationGuardLevel Level, int32 MemberCount);
+	/**
+	 * labels.ts guardHudText: the name in effect, or "Echelon left -> Column (wall)" while the guard falls back (level > 0, a different formation);
+	 * bTurnFold (the trail column is the sharp-turn fold, not a wall cut; user decision 2026-10-26): "Echelon left -> Column (turn)".
+	 */
+	CODEXTACTICS_API FString GuardHudText(EFormationKind Requested, EFormationKind Effective, EFormationGuardLevel Level, int32 MemberCount,
+		bool bTurnFold = false);
+
+	/**
+	 * Why the trail column stands (the HUD's "(turn)" / "(wall)"): FormationGuardRules::Resolve folds a wide request (echelon / line) into it when
+	 * the turn ahead exceeds turn.fold_deg (bTurnAhead) before it looks at the walls - that is the turn fold; a wall cutting the request
+	 * (bCutByWalls) without such a turn is the wall; neither (the column held for classify.hold_distance) keeps the previous reason. Not at the
+	 * trail level: false.
+	 */
+	CODEXTACTICS_API bool IsTurnFold(EFormationGuardLevel Level, bool bTurnAhead, bool bCutByWalls, bool bWasTurnFold);
 
 	/** The contract name of a bypass reason (sim BypassFrame.reason): "shortest", "shielded", "too_long" (logs / smokes; no player text). */
 	CODEXTACTICS_API const TCHAR* BypassReasonText(EFormationBypassReason Reason);
@@ -114,6 +127,67 @@ namespace FormationGuardRuntime
 	 */
 	CODEXTACTICS_API bool ShouldClearLook(EFormationKind Formation, EFormationMode Mode, bool bCornerWatcher, bool bLeader,
 		const TOptional<float>& LeaderTravelYaw, float LookYaw);
+
+	// --- Rules v2.3 glue (docs/design/FORMATION_CONTRACT.md 13; sim.ts at df3b3da) ---
+
+	/**
+	 * v2.3 (contract 13.1, sim m.clearHeld): start of a frame - a member whose ClearLook memory was not refreshed during the last frame
+	 * (ClearLook did not apply to him, or his look was not computed at all) loses it; the others' memories become last frame's.
+	 */
+	template <typename KeyType>
+	void AgeClearHeld(TMap<KeyType, FFormationClearHeld>& Memory)
+	{
+		for (auto It = Memory.CreateIterator(); It; ++It)
+		{
+			if (!It.Value().bThisFrame)
+			{
+				It.RemoveCurrent();
+				continue;
+			}
+			It.Value().bThisFrame = false;
+		}
+	}
+
+	/** v2.3: ClearLook's Held input for this member - his result of the last frame (unset when ClearLook did not apply to him then). */
+	template <typename KeyType>
+	TOptional<float> HeldClearLook(const TMap<KeyType, FFormationClearHeld>& Memory, const KeyType& Who)
+	{
+		const FFormationClearHeld* Entry = Memory.Find(Who);
+		return Entry && !Entry->bThisFrame ? TOptional<float>(Entry->Yaw) : TOptional<float>();
+	}
+
+	/** v2.3: this frame's ClearLook result for the member (Result unset = ClearLook did not apply: the memory is reset at once). */
+	template <typename KeyType>
+	void RememberClearLook(TMap<KeyType, FFormationClearHeld>& Memory, const KeyType& Who, const TOptional<float>& Result)
+	{
+		if (!Result.IsSet())
+		{
+			Memory.Remove(Who);
+			return;
+		}
+		FFormationClearHeld& Entry = Memory.FindOrAdd(Who);
+		Entry.Yaw = Result.GetValue();
+		Entry.bThisFrame = true;
+	}
+
+	/**
+	 * v2.1 trail column + v2.3 (contract 13.2, sim.ts): this frame's trail-column slots - FormationShapeRules::TrailSlots on the leader's
+	 * trail (TrailWithLeader) with the world's Walls (the stagger shrinks to keep column.stagger_clear off every wall surface), each look
+	 * by LookYaw of the column on his own room (PassageWidth = the classifier's held corridor width, else FormationTerrainRules::SideWidth
+	 * beside his slot) relative to the trail's direction at his slot; the rear man (Z) keeps the squad's 6 o'clock (HeadingYaw).
+	 */
+	CODEXTACTICS_API TArray<FFormationSlot> TrailFrameSlots(const TArray<FVector2D>& TrailWithLeaderPos, float HeadingYaw, int32 MemberCount,
+		const TArray<FFormationWall>& Walls, EFormationMode Mode, float PatrolTime, const TOptional<float>& PassageWidth,
+		const FFormationConfig& Config = FFormationConfig());
+
+	/**
+	 * v2.3 (contract 13.3, user decision 1A clarified; sim.ts "decided"): the looks the coverage allocator must keep as FIXED besides
+	 * Fixed (the looks a higher rule set: an own facing, a combat target, the corner watcher) - each slot whose role FormationSectorRules::
+	 * Decided marks (the narrow column's K / P / L; the trail column counts as the column) and that Fixed does not hold yet, with its slot
+	 * look (LookYaw's). Slots in FrameSlots order; MemberCount = Slots.Num().
+	 */
+	CODEXTACTICS_API TArray<FFormationRoleYaw> DecidedFixedLooks(const TArray<FFormationSlot>& Slots, EFormationKind Formation, bool bTrail,
+		const TOptional<float>& PassageWidth, const TArray<FFormationRoleYaw>& Fixed, const FFormationConfig& Config = FFormationConfig());
 
 	/** One squad member for check 7: the place he holds, where he stands and his slot (the leader: K, his position as both). */
 	struct FSplitMember

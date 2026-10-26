@@ -1,6 +1,7 @@
 #include "Formation/FormationSectorRules.h"
 
 #include "Formation/FormationShapeRules.h"
+#include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTypes.h"
 
 namespace FormationSectorRules
@@ -160,11 +161,13 @@ namespace FormationSectorRules
 		return FRotator::NormalizeAxis(LeaderYaw + LookOffset(Role, Formation, Mode, MemberCount, TimeInPatrol, PassageWidth, Config));
 	}
 
-	float ClearLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, float CurrentYaw, const FFormationConfig& Config)
+	float ClearLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, float CurrentYaw, const FFormationConfig& Config,
+		const TOptional<float>& Held)
 	{
 		using FormationMath::NormYaw;
 		const double Reach = Config.LookWallDist;
 		const double Half = Config.LookWallAngle;
+		const double MinFree = Config.LookMinFreeDeg;
 		const double Wanted = Yaw;
 		const double Current = CurrentYaw;
 		TArray<double> Centers;
@@ -189,35 +192,92 @@ namespace FormationSectorRules
 			}
 			return false;
 		};
-		if (!Blocked(Wanted))
+		// The free arc a direction lies in, whole degrees both ways (Dir 0) or one way.
+		const auto FreeWidth = [&Blocked](double Angle, int32 Dir)
 		{
-			return static_cast<float>(NormYaw(Wanted));
-		}
-		// A turn from Current to To (the short way) sweeps across a wall direction strictly inside it.
-		const auto Sweeps = [&Centers, Current](double To)
+			if (Blocked(Angle))
+			{
+				return 0;
+			}
+			int32 Width = 0;
+			for (const int32 Sign : { 1, -1 })
+			{
+				if (Dir != 0 && Sign != Dir)
+				{
+					continue;
+				}
+				for (int32 Step = 1; Step <= 360 && !Blocked(Angle + Sign * Step); ++Step)
+				{
+					++Width;
+				}
+			}
+			return Width;
+		};
+		// How many wall directions a turn from Current to To (the short way) sweeps across.
+		const auto Swept = [&Centers, Current](double To)
 		{
 			const double Turn = NormYaw(To - Current);
+			int32 Count = 0;
 			for (const double Center : Centers)
 			{
 				const double K = NormYaw(Center - Current);
 				if (FMath::Sign(K) == FMath::Sign(Turn) && FMath::Abs(K) < FMath::Abs(Turn) - 1e-6)
 				{
-					return true;
+					++Count;
 				}
 			}
-			return false;
+			return Count;
 		};
+		const auto Lookable = [&Blocked, &FreeWidth, MinFree](double Angle, int32 Dir) { return !Blocked(Angle) && FreeWidth(Angle, Dir) >= MinFree; };
+		if (Lookable(Wanted, 0))
+		{
+			return static_cast<float>(NormYaw(Wanted));
+		}
 		TOptional<double> Best;
 		double BestScore = TNumericLimits<double>::Max();
+		// The held look (hysteresis) while no wall direction is within LookWallAngle - LookHoldMarginDeg of it.
+		const double HoldDeg = Config.LookHoldDeg;
+		const double HoldHalf = Half - Config.LookHoldMarginDeg;
+		if (Held.IsSet() && HoldDeg > 0.0)
+		{
+			const double HeldYaw = Held.GetValue();
+			bool bNearWall = false;
+			for (const double Center : Centers)
+			{
+				bNearWall |= FMath::Abs(NormYaw(HeldYaw - Center)) < HoldHalf - 1e-6;
+			}
+			if (!bNearWall)
+			{
+				Best = NormYaw(HeldYaw);
+				BestScore = FMath::Abs(NormYaw(HeldYaw - Wanted)) - HoldDeg;
+			}
+		}
+		// A free but narrow wanted yaw still competes, LookNarrowPenalty worse.
+		const double NarrowPenalty = Config.LookNarrowPenalty;
+		if (NarrowPenalty > 0.0 && !Blocked(Wanted))
+		{
+			const double Score = NarrowPenalty + 360.0 * Swept(Wanted);
+			if (Score < BestScore - 1e-9)
+			{
+				BestScore = Score;
+				Best = NormYaw(Wanted);
+			}
+		}
 		for (const double Center : Centers)
 		{
-			for (const double Edge : { Center - Half, Center + Half })
+			for (const int32 Out : { -1, 1 })
 			{
+				const double Edge = Center + Out * Half;
 				if (Blocked(Edge))
 				{
 					continue;
 				}
-				const double Score = FMath::Abs(NormYaw(Edge - Wanted)) + (Sweeps(Edge) ? 360.0 : 0.0);
+				const bool bWide = Lookable(Edge, Out);
+				if (!bWide && NarrowPenalty <= 0.0)
+				{
+					continue;
+				}
+				const double Score = FMath::Abs(NormYaw(Edge - Wanted)) + 360.0 * Swept(Edge) + (bWide ? 0.0 : NarrowPenalty);
 				if (Score < BestScore - 1e-9)
 				{
 					BestScore = Score;
@@ -225,7 +285,38 @@ namespace FormationSectorRules
 				}
 			}
 		}
-		return static_cast<float>(Best.IsSet() ? Best.GetValue() : NormYaw(Wanted));
+		if (Best.IsSet())
+		{
+			return static_cast<float>(Best.GetValue());
+		}
+		// Enclosed: the longest clear ray (every 5 deg from the wanted yaw, + before -, capped at 2 x LookWallDist; ties: the nearest).
+		double BestRay = -1.0;
+		double BestYaw = NormYaw(Wanted);
+		for (int32 Step = 0; Step <= 36; ++Step)
+		{
+			for (const int32 Sign : { 1, -1 })
+			{
+				if (Sign < 0 && (Step == 0 || Step == 36))
+				{
+					continue;
+				}
+				const double Angle = Wanted + Sign * 5.0 * Step;
+				const TOptional<float> Hit = FormationTerrainRules::RayHit(Walls, Pos, FormationMath::DirOf(Angle), static_cast<float>(2.0 * Reach));
+				const double Ray = FMath::Min(2.0 * Reach, Hit.IsSet() ? static_cast<double>(Hit.GetValue()) : TNumericLimits<double>::Max());
+				if (Ray > BestRay + 1e-6)
+				{
+					BestRay = Ray;
+					BestYaw = NormYaw(Angle);
+				}
+			}
+		}
+		return static_cast<float>(BestYaw);
+	}
+
+	bool Decided(EFormationRole Role, EFormationKind Formation, int32 MemberCount, const TOptional<float>& PassageWidth, const FFormationConfig& Config)
+	{
+		return Formation == EFormationKind::Column && MemberCount >= 3 && Role != EFormationRole::Rear && PassageWidth.IsSet()
+			&& PassageWidth.GetValue() < Config.ColumnNarrowWidth;
 	}
 
 	float SquadPace(EFormationMode Mode, const FFormationConfig& Config)

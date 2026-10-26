@@ -107,6 +107,44 @@ member's formation look whenever it changes (with his facing) and every look Cle
   designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
   simulator ~1 m) - a Training Ground tuning point.
 
+### Rules v2.3 in the runtime (2026-10-26, branch formation/runtime-v23; behind `Codex.Formation.Sectors` and `Codex.Formation.V21`)
+
+The red-team fixes of FORMATION_CONTRACT.md 13 (pure rules ported in 61990b7) wired into the runtime; `Codex.Formation.V21 0` = the v2.2 runtime without them.
+- **Fallback stand-ins keep their distance (13.5):** an unwalkable slot's stand-in (`ResolveReachableSlot` -> `SquadFormation::ChooseFallbackSlot`) keeps
+  `slot.min_spacing` (80 cm) from the leader, from EVERY walkable formation slot of this frame (`SeedFrameGivenSlots`, before the follow loop - "and from
+  the walkable slots", contract 13.5) and from the stand-ins given before it (`FrameGivenSlots`) - no two men are sent to one point, whatever the follower
+  order. What a follower really walks to this frame (his slot or its stand-in) is `USquadSubsystem::GetFormationGivenSlot`. `Codex.Formation.Debug 2`
+  logs every stand-in (`[Formation] fallback: slot ... unwalkable -> ..., candidate i of n usable; given ...`).
+  *FormationLabSmoke R_v2_gaps (2026-10-26):* the echelon right walks 3.6 m from the lab floor's edge; Z's slot (5.3 m out on the right diagonal) is off
+  the navmesh for most of the zone. v2.2 gave him the nearest candidate - his own bearing at 60 % - 50 cm from P's slot: Z walked on P's spot, and
+  the smoke (measuring the RAW slot, ~2.2 m behind that stand-in) passed while Z, facing back as the rear guard, walked ~4 m forward to it
+  BACKWARDS at the 0.9 x walk cap (only ~22 cm/s over the patrol pace; 389 -> 246 cm behind the slot he was given). The first v2.3 port counted only
+  the slots resolved before him: with Z resolved after P the next candidate (the leader's back diagonal) was taken and the raw-slot measure failed
+  (p95 212 cm) though Z kept ~10 cm off his stand-in; with Z resolved before P he still took P's spot and lagged (p95 285 cm against his given slot).
+  Now: the walkable slots are given out first (Z always gets the back diagonal, no forward catch-up) and the pace check measures the GIVEN slot, as
+  the bot's check 6 does (checks.ts `z.slot` = the frame's slot after the fallback); the gate stays 150 cm (R_v2_gaps p95 13 cm).
+- **ClearLook's held look (13.1):** each member's last ClearLook result (`USquadSubsystem::ClearHeld`, `FormationGuardRuntime::RememberClearLook`) is the
+  `Held` input of his next frame's ClearLook (hysteresis: a wall at the reach's edge no longer flips the rear man's look 145 deg). Reset when ClearLook does
+  not apply to him (the wall layout, a run, the corner watcher, the leader looking where he walks) and dropped after any frame his look is not computed
+  (`AgeClearHeld` each tick: a fight, an own order, the console off). `Codex.Formation.Debug 3` shows the held look on every ClearLook turn.
+- **The trail column with walls (13.2):** `BuildTrailFrameSlots` = `FormationGuardRuntime::TrailFrameSlots` (pure): `TrailSlots` with the world's walls -
+  the herringbone's 60 cm stagger shrinks in 5 cm steps until each slot keeps `column.stagger_clear` (45 cm) off every wall surface, so no column slot
+  lands in a wall's clearance in a narrow passage / oblique gap (it would become an unwalkable slot and a stand-in round the leader).
+- **The narrow column's decided looks (13.3, user decision 1A):** `AllocateFormationLooks` passes `FormationGuardRuntime::DecidedFixedLooks` to the
+  coverage allocator as FIXED looks - in a narrow column (the classifier's held corridor width < `column.narrow_width`, also as the trail column) with
+  3+ members K, P and L keep their LookYaw looks (P forward over the leader's shoulder), after the own-facing / combat / corner-watcher looks; Z stays the
+  allocator's rear guard.
+- **HUD: the turn fold says "(turn)"** (user decision 2026-10-26): `Echelon right -> Column (turn)` while the trail column is the sharp-turn fold,
+  `(wall)` for a wall cut / the mirror (`FormationGuardRuntime::GuardHudText(..., bTurnFold)`, `IsTurnFold`: the turn ahead decides first, as in
+  `FormationGuardRules::Resolve`; a held column keeps its reason). labels.ts follows in the simulator session.
+- **Smokes with `-PreCmds` start on the neutral environment:** `UEnvironmentSubsystem` took only `-ExecCmds=CodexTactics.*` as a dev check, so
+  `smoke_parallel -PreCmds "Codex.Formation.Sectors 0"` (ExecCmds starting with the switch) ran on a random procedural weather / hour (a blizzard
+  changes the formation); now any `CodexTactics.` command in -ExecCmds counts (Clear, 15:00, seed 1).
+- Tests `CodexTactics.Formation.V23Runtime.*` (ClearHeldMemory, ClearHeldKeepsTheRearMansLook, TrailFrameSlotsWithWalls, DecidedLooksAreFixed,
+  FallbackStandInAtTheFloorEdge, GuardHudTurnFold).
+- Not here (rules from the simulator session, v2.3 part 7+): a non-rear member whose share is the rear looking back over the shoulder (<= ~110 deg,
+  walking forwards), ClearLook anticipating the motion; no tuning for the manual line's rear man (FormationLabSmoke reports p95 ~500 cm, not gated).
+
 ### Rules v2.2 in the runtime (2026-10-25, branch formation/runtime-v22; behind `Codex.Formation.Sectors`)
 
 User decisions of FORMATION_SECTORS.md v2.2 (contract 11). With the console 0 every path below is off (the old formation / cover facing).

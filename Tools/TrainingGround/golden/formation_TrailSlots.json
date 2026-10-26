@@ -20,6 +20,7 @@
   "column.base_back": 180,
   "column.spacing": 150,
   "column.stagger": 60,
+  "column.stagger_clear": 45,
   "column.side_deg": 70,
   "column.narrow_width": 600,
   "column.narrow_fwd_deg": 15,
@@ -60,6 +61,10 @@
   "coverage.max_gap_deg": 60,
   "look.wall_dist": 260,
   "look.wall_angle": 55,
+  "look.min_free_deg": 30,
+  "look.hold_deg": 60,
+  "look.hold_margin_deg": 5,
+  "look.narrow_penalty": 180,
   "classify.probe_side": 400,
   "classify.probe_ahead": 600,
   "classify.hold_distance": 500,
@@ -77,7 +82,7 @@
   "corner.peek_dist": 300,
   "sight.fov": 140
  },
- "notes": "in: trail [[x, y]] (oldest first, last = the leader), leaderYaw, memberCount -> out.slots [{role, pos, yaw}] (the column along the path; yaw = the trail direction there).",
+ "notes": "in: trail [[x, y]] (oldest first, last = the leader), leaderYaw, memberCount, walls (v2.3; [] = none) -> out.slots [{role, pos, yaw}] (the column along the path; yaw = the trail direction there).",
  "cases": [
   {
    "in": {
@@ -97,7 +102,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -138,7 +145,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -187,7 +196,453 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       -180,
+       60
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "L",
+      "pos": [
+       -330,
+       -60
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -480,
+       0
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      -2000,
+      0
+     ],
+     [
+      -1000,
+      0
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 2,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       -3000,
+       -100
+      ],
+      "b": [
+       1000,
+       -100
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       -3000,
+       100
+      ],
+      "b": [
+       1000,
+       100
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -180,
+       45
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      -2000,
+      0
+     ],
+     [
+      -1000,
+      0
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 3,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       -3000,
+       -100
+      ],
+      "b": [
+       1000,
+       -100
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       -3000,
+       100
+      ],
+      "b": [
+       1000,
+       100
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       -180,
+       45
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -330,
+       0
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      -2000,
+      0
+     ],
+     [
+      -1000,
+      0
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 4,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       -3000,
+       -100
+      ],
+      "b": [
+       1000,
+       -100
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       -3000,
+       100
+      ],
+      "b": [
+       1000,
+       100
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       -180,
+       45
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "L",
+      "pos": [
+       -330,
+       -45
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -480,
+       0
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      -2000,
+      0
+     ],
+     [
+      -1000,
+      0
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 2,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -700,
+       -1500
+      ],
+      "b": [
+       -560,
+       -80
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -540,
+       80
+      ],
+      "b": [
+       -400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -180,
+       60
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      -2000,
+      0
+     ],
+     [
+      -1000,
+      0
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 3,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -700,
+       -1500
+      ],
+      "b": [
+       -560,
+       -80
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -540,
+       80
+      ],
+      "b": [
+       -400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       -180,
+       60
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -330,
+       0
+      ],
+      "yaw": 0
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      -2000,
+      0
+     ],
+     [
+      -1000,
+      0
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 4,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -700,
+       -1500
+      ],
+      "b": [
+       -560,
+       -80
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -540,
+       80
+      ],
+      "b": [
+       -400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ]
    },
    "out": {
     "slots": [
@@ -244,7 +699,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -285,7 +742,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -334,7 +793,453 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "P",
+      "pos": [
+       941.962,
+       425.885
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "L",
+      "pos": [
+       913.039,
+       615.788
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1040,
+       715.692
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      1800,
+      2032.051
+     ],
+     [
+      1300,
+      1166.025
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 2,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       2213.397,
+       2948.076
+      ],
+      "b": [
+       213.397,
+       -516.025
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       2386.603,
+       2848.076
+      ],
+      "b": [
+       386.603,
+       -616.025
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       928.971,
+       433.385
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      1800,
+      2032.051
+     ],
+     [
+      1300,
+      1166.025
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 3,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       2213.397,
+       2948.076
+      ],
+      "b": [
+       213.397,
+       -516.025
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       2386.603,
+       2848.076
+      ],
+      "b": [
+       386.603,
+       -616.025
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "P",
+      "pos": [
+       928.971,
+       433.385
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       965,
+       585.788
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      1800,
+      2032.051
+     ],
+     [
+      1300,
+      1166.025
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 4,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       2213.397,
+       2948.076
+      ],
+      "b": [
+       213.397,
+       -516.025
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       2386.603,
+       2848.076
+      ],
+      "b": [
+       386.603,
+       -616.025
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "P",
+      "pos": [
+       928.971,
+       433.385
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "L",
+      "pos": [
+       926.029,
+       608.288
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1040,
+       715.692
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      1800,
+      2032.051
+     ],
+     [
+      1300,
+      1166.025
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 2,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -149.038,
+       1656.218
+      ],
+      "b": [
+       1010.718,
+       824.974
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1139.282,
+       727.654
+      ],
+      "b": [
+       2299.038,
+       -103.59
+      ],
+      "thickness": 40
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       941.962,
+       425.885
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      1800,
+      2032.051
+     ],
+     [
+      1300,
+      1166.025
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 3,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -149.038,
+       1656.218
+      ],
+      "b": [
+       1010.718,
+       824.974
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1139.282,
+       727.654
+      ],
+      "b": [
+       2299.038,
+       -103.59
+      ],
+      "thickness": 40
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "P",
+      "pos": [
+       941.962,
+       425.885
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       965,
+       585.788
+      ],
+      "yaw": -120
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "straight",
+    "points": [
+     [
+      1800,
+      2032.051
+     ],
+     [
+      1300,
+      1166.025
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 4,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -149.038,
+       1656.218
+      ],
+      "b": [
+       1010.718,
+       824.974
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1139.282,
+       727.654
+      ],
+      "b": [
+       2299.038,
+       -103.59
+      ],
+      "thickness": 40
+     }
+    ]
    },
    "out": {
     "slots": [
@@ -395,7 +1300,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -440,7 +1347,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -493,7 +1402,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -554,7 +1465,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -599,7 +1512,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -652,7 +1567,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -705,7 +1622,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -742,7 +1661,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -787,7 +1708,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -840,7 +1763,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -877,7 +1802,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -922,7 +1849,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -971,7 +1900,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1004,7 +1935,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1045,7 +1978,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1094,7 +2029,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1127,7 +2064,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1168,7 +2107,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1229,7 +2170,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1274,7 +2217,9 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1327,7 +2272,477 @@
      ]
     ],
     "leaderYaw": 0,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       -187.83,
+       -26.833
+      ],
+      "yaw": 26.565
+     },
+     {
+      "role": "L",
+      "pos": [
+       -268.328,
+       -201.246
+      ],
+      "yaw": 26.565
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -423.183,
+       -176.817
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      -1200,
+      -200
+     ],
+     [
+      -800,
+      200
+     ],
+     [
+      -400,
+      -200
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 2,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       -3000,
+       -100
+      ],
+      "b": [
+       1000,
+       -100
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       -3000,
+       100
+      ],
+      "b": [
+       1000,
+       100
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -187.83,
+       -26.833
+      ],
+      "yaw": 26.565
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      -1200,
+      -200
+     ],
+     [
+      -800,
+      200
+     ],
+     [
+      -400,
+      -200
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 3,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       -3000,
+       -100
+      ],
+      "b": [
+       1000,
+       -100
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       -3000,
+       100
+      ],
+      "b": [
+       1000,
+       100
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       -187.83,
+       -26.833
+      ],
+      "yaw": 26.565
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -295.161,
+       -147.58
+      ],
+      "yaw": 26.565
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      -1200,
+      -200
+     ],
+     [
+      -800,
+      200
+     ],
+     [
+      -400,
+      -200
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 4,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       -3000,
+       -100
+      ],
+      "b": [
+       1000,
+       -100
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       -3000,
+       100
+      ],
+      "b": [
+       1000,
+       100
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       -187.83,
+       -26.833
+      ],
+      "yaw": 26.565
+     },
+     {
+      "role": "L",
+      "pos": [
+       -268.328,
+       -201.246
+      ],
+      "yaw": 26.565
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -423.183,
+       -176.817
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      -1200,
+      -200
+     ],
+     [
+      -800,
+      200
+     ],
+     [
+      -400,
+      -200
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 2,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -700,
+       -1500
+      ],
+      "b": [
+       -560,
+       -80
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -540,
+       80
+      ],
+      "b": [
+       -400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -187.83,
+       -26.833
+      ],
+      "yaw": 26.565
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      -1200,
+      -200
+     ],
+     [
+      -800,
+      200
+     ],
+     [
+      -400,
+      -200
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 3,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -700,
+       -1500
+      ],
+      "b": [
+       -560,
+       -80
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -540,
+       80
+      ],
+      "b": [
+       -400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       -187.83,
+       -26.833
+      ],
+      "yaw": 26.565
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -295.161,
+       -147.58
+      ],
+      "yaw": 26.565
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      -1200,
+      -200
+     ],
+     [
+      -800,
+      200
+     ],
+     [
+      -400,
+      -200
+     ],
+     [
+      0,
+      0
+     ]
+    ],
+    "leaderYaw": 0,
+    "memberCount": 4,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -700,
+       -1500
+      ],
+      "b": [
+       -560,
+       -80
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -540,
+       80
+      ],
+      "b": [
+       -400,
+       1500
+      ],
+      "thickness": 40
+     }
+    ]
    },
    "out": {
     "slots": [
@@ -1388,7 +2803,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 2
+    "memberCount": 2,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1433,7 +2850,9 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 3
+    "memberCount": 3,
+    "scene": "none",
+    "walls": []
    },
    "out": {
     "slots": [
@@ -1486,7 +2905,477 @@
      ]
     ],
     "leaderYaw": -120,
-    "memberCount": 4
+    "memberCount": 4,
+    "scene": "none",
+    "walls": []
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "P",
+      "pos": [
+       870.677,
+       476.082
+      ],
+      "yaw": -93.435
+     },
+     {
+      "role": "L",
+      "pos": [
+       759.88,
+       633.002
+      ],
+      "yaw": -93.435
+     },
+     {
+      "role": "Z",
+      "pos": [
+       858.464,
+       754.896
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      1226.795,
+      1439.23
+     ],
+     [
+      1373.205,
+      892.82
+     ],
+     [
+      826.795,
+      746.41
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 2,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       2213.397,
+       2948.076
+      ],
+      "b": [
+       213.397,
+       -516.025
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       2386.603,
+       2848.076
+      ],
+      "b": [
+       386.603,
+       -616.025
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       870.677,
+       476.082
+      ],
+      "yaw": -93.435
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      1226.795,
+      1439.23
+     ],
+     [
+      1373.205,
+      892.82
+     ],
+     [
+      826.795,
+      746.41
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 3,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       2213.397,
+       2948.076
+      ],
+      "b": [
+       213.397,
+       -516.025
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       2386.603,
+       2848.076
+      ],
+      "b": [
+       386.603,
+       -616.025
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "P",
+      "pos": [
+       870.677,
+       476.082
+      ],
+      "yaw": -93.435
+     },
+     {
+      "role": "Z",
+      "pos": [
+       819.772,
+       629.407
+      ],
+      "yaw": -93.435
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      1226.795,
+      1439.23
+     ],
+     [
+      1373.205,
+      892.82
+     ],
+     [
+      826.795,
+      746.41
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 4,
+    "scene": "corridor_200",
+    "walls": [
+     {
+      "a": [
+       2213.397,
+       2948.076
+      ],
+      "b": [
+       213.397,
+       -516.025
+      ],
+      "thickness": 20
+     },
+     {
+      "a": [
+       2386.603,
+       2848.076
+      ],
+      "b": [
+       386.603,
+       -616.025
+      ],
+      "thickness": 20
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "P",
+      "pos": [
+       870.677,
+       476.082
+      ],
+      "yaw": -93.435
+     },
+     {
+      "role": "L",
+      "pos": [
+       759.88,
+       633.002
+      ],
+      "yaw": -93.435
+     },
+     {
+      "role": "Z",
+      "pos": [
+       858.464,
+       754.896
+      ],
+      "yaw": -165
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      1226.795,
+      1439.23
+     ],
+     [
+      1373.205,
+      892.82
+     ],
+     [
+      826.795,
+      746.41
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 2,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -149.038,
+       1656.218
+      ],
+      "b": [
+       1010.718,
+       824.974
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1139.282,
+       727.654
+      ],
+      "b": [
+       2299.038,
+       -103.59
+      ],
+      "thickness": 40
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "Z",
+      "pos": [
+       870.677,
+       476.082
+      ],
+      "yaw": -93.435
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      1226.795,
+      1439.23
+     ],
+     [
+      1373.205,
+      892.82
+     ],
+     [
+      826.795,
+      746.41
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 3,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -149.038,
+       1656.218
+      ],
+      "b": [
+       1010.718,
+       824.974
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1139.282,
+       727.654
+      ],
+      "b": [
+       2299.038,
+       -103.59
+      ],
+      "thickness": 40
+     }
+    ]
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       800,
+       300
+      ],
+      "yaw": -120
+     },
+     {
+      "role": "P",
+      "pos": [
+       870.677,
+       476.082
+      ],
+      "yaw": -93.435
+     },
+     {
+      "role": "Z",
+      "pos": [
+       819.772,
+       629.407
+      ],
+      "yaw": -93.435
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "trail": "zigzag",
+    "points": [
+     [
+      1226.795,
+      1439.23
+     ],
+     [
+      1373.205,
+      892.82
+     ],
+     [
+      826.795,
+      746.41
+     ],
+     [
+      800,
+      300
+     ]
+    ],
+    "leaderYaw": -120,
+    "memberCount": 4,
+    "scene": "gap_oblique",
+    "walls": [
+     {
+      "a": [
+       -149.038,
+       1656.218
+      ],
+      "b": [
+       1010.718,
+       824.974
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       1139.282,
+       727.654
+      ],
+      "b": [
+       2299.038,
+       -103.59
+      ],
+      "thickness": 40
+     }
+    ]
    },
    "out": {
     "slots": [

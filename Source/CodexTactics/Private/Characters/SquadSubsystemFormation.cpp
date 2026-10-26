@@ -156,6 +156,17 @@ bool USquadSubsystem::GetFormationTarget(const AOperativeCharacter* Operative, F
 	return true;
 }
 
+bool USquadSubsystem::GetFormationGivenSlot(const AOperativeCharacter* Operative, FVector& OutSlot) const
+{
+	const FVector2D* Given = Operative ? FrameGivenByMember.Find(TWeakObjectPtr<AOperativeCharacter>(const_cast<AOperativeCharacter*>(Operative))) : nullptr;
+	if (!Given)
+	{
+		return false;
+	}
+	OutSlot = FVector(Given->X, Given->Y, SquadSubsystemFormationLocal::FormationFeetZ(*Operative));
+	return true;
+}
+
 bool USquadSubsystem::GetFormationWallNormalYaw(float& OutYaw) const
 {
 	if (!Sectors.bWallLayoutValid)
@@ -614,6 +625,7 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	const FVector2D Raw = Slot->Position;
 	FVector SlotLocation(Raw.X, Raw.Y, Operative.GetActorLocation().Z);
 	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation, /*bLeaderSide*/ FormationGuardRuntime::IsEnabled());
+	FrameGivenByMember.Add(Follower.Operative, FVector2D(SlotLocation));
 	const FVector2D Here(Operative.GetActorLocation());
 	const FVector2D Target(SlotLocation);
 	const float Distance = static_cast<float>(FVector2D::Distance(Here, Target));

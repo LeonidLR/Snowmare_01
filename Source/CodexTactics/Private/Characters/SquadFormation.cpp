@@ -152,6 +152,24 @@ TArray<FVector> SquadFormation::ComputeGroupTargets(const FVector& Center, const
 	return Targets;
 }
 
+int32 SquadFormation::ChooseFallbackSlot(const TArray<FVector>& Usable, const TArray<FVector2D>& Given, float Spacing)
+{
+	for (int32 Index = 0; Index < Usable.Num(); ++Index)
+	{
+		const FVector2D Candidate(Usable[Index]);
+		bool bSpaced = true;
+		for (const FVector2D& Taken : Given)
+		{
+			bSpaced &= FVector2D::Distance(Taken, Candidate) >= Spacing;
+		}
+		if (bSpaced)
+		{
+			return Index;
+		}
+	}
+	return Usable.Num() > 0 ? 0 : INDEX_NONE;
+}
+
 TArray<FVector> SquadFormation::ComputeFallbackSlots(const FVector& LeaderLocation, const FVector& Slot, float MinRadius)
 {
 	TArray<FVector> Candidates;

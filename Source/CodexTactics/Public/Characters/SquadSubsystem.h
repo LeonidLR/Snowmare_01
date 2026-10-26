@@ -331,6 +331,14 @@ public:
 	/** Operative's formation slot (Z = his feet height) and look yaw this frame; false when he has none (no role, console off, ...). */
 	bool GetFormationTarget(const AOperativeCharacter* Operative, FVector& OutSlot, float& OutLookYaw) const;
 
+	/**
+	 * The slot this frame's formation follow step gave a follower (Z = his feet height): his formation slot, or - when it is off the navmesh -
+	 * the stand-in ResolveReachableSlot chose (rules v2.3 contract 13.5: kept slot.min_spacing from the slots given out before him). False
+	 * when the follow step did not resolve one for him this frame (the leader, no role, console off, ...). What he really walks to; the bot's
+	 * pace check (checks.ts 6) measures the rear man against it.
+	 */
+	bool GetFormationGivenSlot(const AOperativeCharacter* Operative, FVector& OutSlot) const;
+
 	/** A group cover order in group mode runs as the formation wall layout (OrderFormationWall) and has not ended. */
 	bool HasFormationWallOrder() const { return Sectors.bWallOrder; }
 
@@ -558,6 +566,8 @@ private:
 		FFormationGuardState Guard;
 		/** The slots are the trail column's this frame. */
 		bool bTrail = false;
+		/** The trail column is the sharp-turn fold, not a wall cut (the HUD's "(turn)"; FormationGuardRuntime::IsTurnFold). */
+		bool bGuardTurnFold = false;
 		/** The leader's path this tick (StepFormationTerrain), cm. */
 		float LastStepDistance = 0.f;
 		/** The leader's recorded path, oldest first (FormationGuardRuntime::PushTrail). */
@@ -661,7 +671,12 @@ private:
 	/** Slicing the pie: FormationCornerRules::Watch on this frame's places; the watchers' looks replace their slot yaws (walk mode). */
 	void ApplyFormationCornerWatch(const FVector2D& LeaderPos);
 	/** v2.1.1 (user "6A"): Look through FormationSectorRules::ClearLook unless the member is exempt (FormationGuardRuntime::ShouldClearLook). */
-	float ClearFormationLook(const AOperativeCharacter& Member, EFormationRole Role, bool bLeader, float Look) const;
+	float ClearFormationLook(const AOperativeCharacter& Member, EFormationRole Role, bool bLeader, float Look);
+	/**
+	 * Rules v2.3 (contract 13.1): each member's last ClearLook result - ClearLook's held look (hysteresis) the next frame; reset when ClearLook
+	 * does not apply to him (FormationGuardRuntime::RememberClearLook) or his look is not computed in a frame (AgeClearHeld each tick).
+	 */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FFormationClearHeld> ClearHeld;
 
 	// --- Rules v2.1 bypass "B" (SquadSubsystemFormationBypass.cpp) ---
 	/** A new own order of the leader: the side round the first free-standing wall on his way (FormationBypassRules::ChooseSide), steered. */
@@ -752,6 +767,8 @@ private:
 	const FFormationSlot* FindFrameSlot(EFormationRole Role) const;
 	/** The looks this frame (applied to every member at the end of Tick; a member not in it gets none) and the leader's patrol pace. */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, float> FrameLooks;
+	/** The slot each follower's sector follow step resolved this frame (GetFormationGivenSlot). */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector2D> FrameGivenByMember;
 	TWeakObjectPtr<AOperativeCharacter> FramePaceLeader;
 	float FramePace = 1.f;
 	FFormationSectorState Sectors;
@@ -776,6 +793,14 @@ private:
 	 * the squad).
 	 */
 	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide = false) const;
+
+	/**
+	 * Rules v2.3 (contract 13.5): the slots given out this formation tick (the leader's position, then each resolved slot): a stand-in for
+	 * an unwalkable slot keeps slot.min_spacing from them (SquadFormation::ChooseFallbackSlot). Reset by TickFormationFollow.
+	 */
+	mutable TArray<FVector2D> FrameGivenSlots;
+	/** Rules v2.3 (contract 13.5 "and from the walkable slots"): this frame's walkable formation slots into FrameGivenSlots before the follow loop. */
+	void SeedFrameGivenSlots(const AOperativeCharacter& LeaderRef);
 
 	TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 	TWeakObjectPtr<AOperativeCharacter> Leader;

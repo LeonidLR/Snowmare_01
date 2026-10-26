@@ -58,7 +58,9 @@ namespace FormationShapeRules
 	 * column is extended straight back from its oldest point (along its oldest segment, or against LeaderYaw for a single point).
 	 * Slot order = Roles; Yaw = the trail's travel direction at the slot (the leader: LeaderYaw) - the reference for its look. Who
 	 * stands at which place: FormationAssignRules::AssignPlaces.
+	 * v2.3 (red team #7): Walls given - the stagger aside shrinks in 5 cm steps (down to 0 = on the trail) until the slot keeps
+	 * ColumnStaggerClear from every wall surface and the line from its trail point to it is clear (no walls = the full stagger).
 	 */
 	CODEXTACTICS_API TArray<FFormationSlot> TrailSlots(const TArray<FVector2D>& Trail, float LeaderYaw, int32 MemberCount,
-		const FFormationConfig& Config = FFormationConfig());
+		const FFormationConfig& Config = FFormationConfig(), const TArray<FFormationWall>& Walls = TArray<FFormationWall>());
 }

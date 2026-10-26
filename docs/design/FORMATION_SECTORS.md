@@ -68,6 +68,9 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
 
 ## Decisions after the bot's first runs (2026-10-25, via the coordinator)
 - **Q1 = A** (user): narrow column = P forward over the shoulder, L back at a slant, Z back; herringbone only in a wide column.
+  *Clarified 2026-10-26 (v2.3, coordinator from the v2.2 runtime review)*: the v2.2 coverage allocator must not override these
+  looks - in a narrow column K (12), P and L are fixed looks and the allocator only shares out what is left; Z keeps the rear
+  (the rear guard). The wall layout (L 8 / K 6 / P 4) and the pair (3 -> 6 -> 9) never go through the allocator.
 - **Q2 = A** (user): echelon last man 150° (was 125°); the rear-cover check stays in force for the echelon.
 - **Q3** (coordinator, classifier bug): a dead-end wall ahead no longer reads as side walls (classifier v1.1: ahead rays first,
   side probes ignore walls within 30° of perpendicular to the heading) — no column / echelon flip before the wall layout.
@@ -162,7 +165,7 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
    vectors; runtime integration (slots, look yaw, patrol pace, wall layout + pose); hold-G radial menu.
 4. In-game smoke on the lab map.
 
-## v2.2 — the rear guard and the coverage allocator (user decisions 2026-10-25, via the coordinator; contract section 11)
+## v2.2 — the rear guard and the coverage allocator (user decisions 2026-10-25, via the coordinator; contract section 12)
 - **The triad = K, P, Z (user, 2026-10-25, after playing the build: "when we walk as three the rear sector is too open; one of
   them must walk backwards, like the four")**: K leads (search 11–1), P right-behind sweeps BOTH flanks 3 → 12 → 9 → 12 → 3
   (K's search runs against him), Z straight behind (`triad.rear_back` 4.2 m) walks backwards at 6. Halt K 12, P 3, Z 6; run
@@ -191,3 +194,38 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   guard. On the stop: the normal wall layout (the 4th stays on his side when there is room - otherwise he would walk through the
   line). A destination farther from the wall: the normal formation. At the wall's end the corner check (the leading end) applies.
 
+
+## v2.3 — red-team fixes (coordinator task 2026-10-25, overnight; contract section 13; the user's v2.2 decisions unchanged)
+- **No looking into slivers, and no look flip-flop (ClearLook, red team #1)**: in zigzag corridors a 5–13° gap between two
+  wall spans opened and closed as a man walked and his look swung across a wall 2 m away to reach it. Now a gap narrower than
+  30° (`look.min_free_deg`) is no place to look, and a man keeps his previous clear look (60° preference, `look.hold_deg`)
+  until a wall comes close to it — no more jumping between two far directions. Boxed in on all sides: he looks along the
+  longest clear line instead of into a wall. Refines "6А" (nobody looks into a wall); nothing else changes.
+- **The trail column narrows in a tight gap (red team #7)**: crossing a 1.2–2 m opening at an angle, the column's zigzag
+  (60 cm aside) put a man inside the wall; now his offset aside shrinks until he keeps 45 cm from the wall (on the leader's
+  track at worst). Nothing changes where there is room.
+- **The narrow column keeps the user's looks (clarification of 1A, coordinator 2026-10-26)**: in a corridor narrower than 6 m
+  the column's K, P and L look as decided in 1A (12, forward over the shoulder, back at a slant) - the coverage allocator no
+  longer re-shares them; Z is the rear guard. (`FormationSectorRules.Decided`; the allocator takes them as fixed looks.)
+- **A narrow gap without a sweep beats a wide one across a wall (ClearLook, red team #1)**: entering a corridor the right man's
+  look (forward over the shoulder) hit the end of the corridor wall; he swung 110° across that wall end to the far side and back.
+  Now a narrow free gap he reaches without passing the wall is preferred to a wide one behind the wall; a wide gap without a
+  sweep still wins, so the zigzag-corridor slivers stay out.
+- **No two men sent to the same spot (red team #5)**: when a formation's places don't fit (a hedgehog of three in a 3 m corridor),
+  the stand-in places now keep the normal spacing from each other - two men were sent to the same point and walked into each other.
+
+## Open for the user (v2.3)
+Picked overnight by the most conservative reading of the recorded decisions (coordinator 2026-10-26: "don't wait"); each can be
+flipped in the morning.
+1. **What counts as the "narrow passage" of 1A for the trail column?** The trail column measured each man's side room; crossing a
+   1.2-2 m doorway at an angle that read "narrow", P got 1A's "forward over the shoulder" and looked straight at the door's wall
+   end 0.5 m away (55 new wall stares on the red team). Options: (a) **only a corridor the terrain classifier holds** (the
+   passage width) - a doorway crossed at an angle is shared out by the allocator, which sees the walls; (b) any narrow side
+   room, as before (more stares at door edges); (c) 1A at a doorway too, but P's +15 turned away from the near wall end.
+   **Picked (a)** - 1A was decided for a narrow passage (a corridor), and (a) changes nothing in a real corridor.
+2. **A hairpin round a wall end in a manual hedgehog / blizzard / column (red team 12_6, #5)**: the route turns 180° round the end
+   of a wall; the squad's places swing round the leader and two men cut across each other (22-79 cm apart). The turn fold ("5Б")
+   folds only the line and the echelons into the trail column. Options: (a) **leave it** - a manual formation through a hairpin
+   is the player's choice; (b) fold every manual formation of 3+ into the trail column before a turn sharper than ~120°;
+   (c) fold only the hedgehog / blizzard (the tight shapes). **Picked (a)** (keeps "5Б" as decided); 12_6's #5 entries stay
+   open as a design question.

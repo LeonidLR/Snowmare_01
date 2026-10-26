@@ -136,8 +136,11 @@ function HedgehogSlots(center: Vec2, memberCount: number, yaw: number, config: F
  * back from its oldest point (along its oldest segment, or against leaderYaw for a single point). Each slot carries the trail's
  * direction there (yaw) - the reference for its look (LookYaw's leaderYaw). Who stands where is FormationAssignRules'
  * job (minimal travel on every formation change), not the slot order's.
+ * v2.3 (red team #7): the stagger aside shrinks (5 cm steps, down to 0 = on the trail) until the slot keeps
+ * column.stagger_clear from every wall surface and the line from its trail point to it is clear - a 60 cm stagger in a
+ * 1.2-2 m wall gap crossed obliquely put the slot inside the wall's clearance (no wall given -> the full stagger, as v2.1).
  */
-function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: number, config: FormationConfig): (Slot & { yaw: number })[] {
+function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: number, config: FormationConfig, walls: readonly Segment[] = []): (Slot & { yaw: number })[] {
   const leaderPos = trail[trail.length - 1];
   // Segments newest -> oldest, each with its travel direction.
   const segs: { from: Vec2; to: Vec2; len: number; yaw: number }[] = [];
@@ -159,7 +162,11 @@ function TrailSlots(trail: readonly Vec2[], leaderYaw: number, memberCount: numb
     if (role === 'K') return { role, pos: leaderPos, yaw: leaderYaw };
     const local = localSlot('column', role, memberCount, config);
     const at = back(-local[0]);
-    return { role, pos: add(at.pos, scale(dirOf(at.yaw + 90), local[1])), yaw: at.yaw };
+    const side = dirOf(at.yaw + 90), clear = cfg(config, 'column.stagger_clear');
+    const fits = (p: Vec2) => walls.every((w) => distToWall(p, w) >= clear - 1e-6) && !segmentBlocked(at.pos, p, walls, 0);
+    let st = Math.abs(local[1]);
+    while (st > 0 && !fits(add(at.pos, scale(side, Math.sign(local[1]) * st)))) st = Math.max(0, st - 5);
+    return { role, pos: add(at.pos, scale(side, Math.sign(local[1]) * st)), yaw: at.yaw };
   });
 }
 
@@ -254,13 +261,17 @@ function LookYaw(role: Role, formation: Formation, mode: Mode, memberCount: numb
  * look.wall_dist of the member (surface distance) blocks the directions within look.wall_angle of the direction to its closest
  * point; a look yaw inside a blocked span turns to the nearest free direction (an edge of the span), so a scan sweeping into
  * the wall stops at the open edge of his sector. Of the free edges he takes the one he reaches from his current facing
- * (currentYaw) WITHOUT sweeping across a wall direction, then the nearest to the wanted yaw (else two edges about as near
- * flip-flop and his look swings through the wall). Enclosed on all sides -> unchanged. Ties: the earlier wall, the left edge
+ * (currentYaw) sweeping across the FEWEST wall directions (v2.3: counted; was yes / no), then the nearest to the wanted yaw
+ * (else two edges about as near flip-flop and his look swings through the wall). v2.3 (red team, coordinator 2026-10-25): a free
+ * arc narrower than look.min_free_deg does not count (neither for the wanted yaw nor an edge); `held` (his previous result, null
+ * when ClearLook did not apply last frame) stays a candidate look.hold_deg better than its distance to the wanted yaw while no
+ * wall is within look.wall_angle - look.hold_margin_deg of it (hysteresis); a free but narrow wanted yaw / edge still competes
+ * look.narrow_penalty worse (+360 per wall swept as for the edges); enclosed -> the longest clear ray (see below). Ties: the earlier wall, the left edge
  * first (the first strictly better edge wins). The integration applies it to the patrol / halt / "all forward" looks - not to
  * the wall layout, the corner watcher (he looks at the corner on purpose) or a man looking where he walks (within 45 deg).
  */
-function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw: number, config: FormationConfig): number {
-  const reach = cfg(config, 'look.wall_dist'), half = cfg(config, 'look.wall_angle');
+function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw: number, config: FormationConfig, held: number | null = null): number {
+  const reach = cfg(config, 'look.wall_dist'), half = cfg(config, 'look.wall_angle'), minFree = cfg(config, 'look.min_free_deg');
   const centers: number[] = [];
   for (const w of walls) {
     const q = closestOnSegment(pos, w.a, w.b).point;
@@ -269,22 +280,73 @@ function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw
     centers.push(yawOf(sub(q, pos)));
   }
   const blocked = (a: number) => centers.some((c) => Math.abs(normYaw(a - c)) < half - 1e-6);
-  if (!blocked(yaw)) return normYaw(yaw);
-  // A turn from currentYaw to `to` (the short way) sweeps across a wall direction strictly inside it.
-  const sweeps = (to: number) => {
-    const turn = normYaw(to - currentYaw);
-    return centers.some((c) => { const k = normYaw(c - currentYaw); return Math.sign(k) === Math.sign(turn) && Math.abs(k) < Math.abs(turn) - 1e-6; });
+  // v2.3: the free arc a direction lies in, measured in whole degrees both ways (a sliver between two wall spans is no place
+  // to look: as the man moves it opens and closes and his look jumps across the walls).
+  const freeWidth = (a: number, dir: 1 | -1 | 0 = 0) => {
+    if (blocked(a)) return 0;
+    let w = 0;
+    for (const sgn of dir === 0 ? [1, -1] : [dir]) for (let k = 1; k <= 360 && !blocked(a + sgn * k); k++) w++;
+    return w;
   };
+  // v2.3: how many wall directions a turn from currentYaw to `to` (the short way) sweeps across - fewest first.
+  const swept = (to: number) => {
+    const turn = normYaw(to - currentYaw);
+    return centers.filter((c) => { const k = normYaw(c - currentYaw); return Math.sign(k) === Math.sign(turn) && Math.abs(k) < Math.abs(turn) - 1e-6; }).length;
+  };
+  // The wanted yaw is taken when it lies in a free arc at least look.min_free_deg wide (v2.3: a sliver between two wall spans
+  // does not count - as the man moves it opens and closes and his look swings across the walls to it).
+  const lookable = (a: number, dir: 1 | -1 | 0 = 0) => !blocked(a) && freeWidth(a, dir) >= minFree;
+  if (lookable(yaw)) return normYaw(yaw);
+  // v2.3 hysteresis: his previous result (held) stays a candidate, look.hold_deg better than its distance to the wanted yaw,
+  // while no wall direction is within look.wall_angle - look.hold_margin_deg of it (else a wall at the reach's edge or an arc
+  // at the width threshold flips his look between two far directions every few steps - red team 2_8, 11_8, 8_2).
   let best: number | null = null, bestScore = Infinity;
-  for (const c of centers) for (const edge of [c - half, c + half]) {
+  const holdDeg = cfg(config, 'look.hold_deg'), holdHalf = half - cfg(config, 'look.hold_margin_deg');
+  if (held !== null && holdDeg > 0 && !centers.some((c) => Math.abs(normYaw(held - c)) < holdHalf - 1e-6)) {
+    best = normYaw(held); bestScore = Math.abs(normYaw(held - yaw)) - holdDeg;
+  }
+  // v2.3 part 4: a free but NARROW direction (the wanted yaw, an edge) still competes, look.narrow_penalty worse - so a narrow
+  // arc he reaches without sweeping across a wall beats a wide one behind a sweep (entering a corridor P swung 110 deg across
+  // the end of its wall to the far edge and back - red team 8_5, 4_8), while a wide arc without a sweep still wins.
+  const narrowPenalty = cfg(config, 'look.narrow_penalty');
+  if (narrowPenalty > 0 && !blocked(yaw)) {
+    const score = narrowPenalty + 360 * swept(yaw);
+    if (score < bestScore - 1e-9) { bestScore = score; best = normYaw(yaw); }
+  }
+  for (const c of centers) for (const [edge, out] of [[c - half, -1], [c + half, 1]] as [number, 1 | -1][]) {
     if (blocked(edge)) continue;
-    const score = Math.abs(normYaw(edge - yaw)) + (sweeps(edge) ? 360 : 0);
+    const wide = lookable(edge, out);
+    if (!wide && narrowPenalty <= 0) continue;
+    const score = Math.abs(normYaw(edge - yaw)) + 360 * swept(edge) + (wide ? 0 : narrowPenalty);
     if (score < bestScore - 1e-9) { bestScore = score; best = normYaw(edge); }
   }
-  return best ?? normYaw(yaw);
+  if (best !== null) return best;
+  // v2.3: enclosed (no free arc of look.min_free_deg): look along the longest clear ray (every 5 deg from the wanted yaw, up to
+  // 2 x look.wall_dist; ties: the nearest the wanted yaw) - the least bad direction, not the wanted one into a wall.
+  let bestRay = -1;
+  best = normYaw(yaw);
+  for (let k = 0; k <= 36; k++) for (const sgn of k === 0 || k === 36 ? [1] : [1, -1]) {
+    const a = yaw + sgn * 5 * k;
+    const r = Math.min(2 * reach, raycastWalls(pos, dirOf(a), walls, 2 * reach));
+    if (r > bestRay + 1e-6) { bestRay = r; best = normYaw(a); }
+  }
+  return best;
 }
 
-export const FormationSectorRules = { LookYaw, ClearLook };
+/**
+ * v2.3 (coordinator 2026-10-26, a clarification of user decision 1A): true when this role's look in this formation is a user
+ * decision that the coverage allocator must keep - the integration passes LookYaw's look to FormationCoverRules.Allocate as a
+ * FIXED look and the allocator only shares out what is left. In a NARROW column (passageWidth < column.narrow_width; null = no
+ * passage = wide) with 3+ members: K (12 + his search), P (+column.narrow_fwd_deg, forward over the shoulder) and L
+ * (-column.narrow_back_deg, back at a slant); Z is not decided - he is the allocator's rear guard (straight back). Wide column,
+ * other formations: false. The wall layout (L 8 / K 6 / P 4) and the pair (3 -> 6 -> 9) never reach the allocator (it runs for
+ * 3+ members walking / halted, not in the wall layout), so their looks stay as decided.
+ */
+function Decided(role: Role, formation: Formation, memberCount: number, passageWidth: number | null, config: FormationConfig): boolean {
+  return formation === 'column' && memberCount >= 3 && role !== 'Z' && passageWidth !== null && passageWidth < cfg(config, 'column.narrow_width');
+}
+
+export const FormationSectorRules = { LookYaw, ClearLook, Decided };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationTerrainRules::Classify
