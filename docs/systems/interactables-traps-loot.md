@@ -112,7 +112,10 @@
   the hand cursor over it (`PlayerTick`); a search of 0.6 s then the loot window. Contents (`CorpseLootRules::BuildRemainsContents`): everything he
   carried - every hand-over item (ammo = clip + reserve), the new `ELootItem::Grenade` (`FLootContents::Grenades`, no carry limit) and his firearm
   as the bonus weapon (Godot: added to the looter only if he lacks it). Save: runtime corpse crates keep `grenades`, `bonus_weapon`, `remains_of`
-  and re-bind to the nearest killed-in-action body on load. Tests `CodexTactics.Loot.Remains.*`; smoke `FallenGearSmoke`.
+  and re-bind to the nearest killed-in-action body on load. Tests `CodexTactics.Loot.Remains.*`; smoke `FallenGearSmoke`. With the formation kept
+  in the fight (gameflow 2026-10-26) a living mate often stands between the camera and part of the body (the Engineer, ~1.9 m off: 3-5 of 10
+  rays); his capsule rightly takes that part's click (it selects him). The smoke checks the click box with the living ignored and that no ray at
+  the body reaches the snow.
 - **Knocked down (not dead):** the knockdown is temporary (0.6 s down in real time; on the grid until his turn's get-up). A fight that ends while he
   lies on the grid releases him: he gets up by himself in PostCombat (`FallenGearSmoke` stage 7). Taking a downed (living) operative's gear is not
   defined by Godot or the GDDs - not implemented (open question).

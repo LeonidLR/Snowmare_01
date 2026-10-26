@@ -8,7 +8,8 @@
 //  3. the fight ends (every enemy dead) -> PostCombat: the knocked-down Engineer gets up by himself (the revive after the fight) and
 //     takes orders;
 //  4. her remains: a searchable crate fitted to the lying body - every bone of the body inside its click box, the cursor ray from the
-//     camera at her pelvis / chest / head hits the remains (evidence log of what each ray hits);
+//     camera at every bone hits the remains past the living (evidence log of what each ray hits; since the formation stays up in the
+//     fight a living mate may stand in front of a part of her body - that part's click is his, never the snow's);
 //  5. the Engineer is selected and the player clicks the body (the controller's click dispatcher, HandleWorldHit): he walks up, the
 //     search (0.6 s) opens the loot window with her gear - medkits, food, the M16 rounds of her clip and reserve, her grenades, her
 //     weapon; Take All moves everything into his inventory and the remains read "searched".
@@ -96,21 +97,28 @@ namespace FallenGearSmoke
 	}
 
 	/** The cursor's ray (APlayerController::GetHitResultAtScreenPosition: ECC_Visibility, simple collision) from the camera at Target. */
-	FHitResult CursorRayAt(UWorld* World, APlayerController* PC, const FVector& Target, FVector& OutEye)
+	FHitResult CursorRayAt(UWorld* World, APlayerController* PC, const FVector& Target, FVector& OutEye, const TArray<AOperativeCharacter*>& Ignore = {})
 	{
 		FRotator Rotation;
 		PC->GetPlayerViewPoint(OutEye, Rotation);
 		const FVector Direction = (Target - OutEye).GetSafeNormal();
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(ClickableTrace), false);
+		for (const AOperativeCharacter* Each : Ignore)
+		{
+			Params.AddIgnoredActor(Each);
+		}
 		FHitResult Hit;
-		World->LineTraceSingleByChannel(Hit, OutEye, OutEye + Direction * (FVector::Dist(OutEye, Target) + 1000.f), ECC_Visibility,
-			FCollisionQueryParams(SCENE_QUERY_STAT(ClickableTrace), false));
+		World->LineTraceSingleByChannel(Hit, OutEye, OutEye + Direction * (FVector::Dist(OutEye, Target) + 1000.f), ECC_Visibility, Params);
 		return Hit;
 	}
 
 	FString DescribeHit(const FHitResult& Hit)
 	{
-		return Hit.bBlockingHit ? FString::Printf(TEXT("%s.%s"), Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("none"),
-			Hit.GetComponent() ? *Hit.GetComponent()->GetName() : TEXT("none")) : FString(TEXT("nothing"));
+		const AOperativeCharacter* Mate = Cast<AOperativeCharacter>(Hit.GetActor());
+		return Hit.bBlockingHit ? FString::Printf(TEXT("%s.%s%s"), Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("none"),
+			Hit.GetComponent() ? *Hit.GetComponent()->GetName() : TEXT("none"),
+			Mate ? *FString::Printf(TEXT(" (the living %s standing at %s)"), *Mate->DisplayName.ToString(), *Mate->GetActorLocation().ToCompactString()) : TEXT(""))
+			: FString(TEXT("nothing"));
 	}
 
 	/** The world points of the body's main bones that exist on this skeleton. */
@@ -354,6 +362,8 @@ namespace FallenGearSmoke
 			int32 BonesIn = 0;
 			int32 BonesInOldBox = 0;
 			int32 RaysOnRemains = 0;
+			int32 RaysBehindMate = 0;
+			int32 RaysClearOnRemains = 0;
 			// The old remains (until 2026-10-26): a 120 x 80 x 80 cm box 40 cm above the capsule's feet, turned like the capsule.
 			const FTransform OldBox(Medic->GetActorRotation(), Medic->GetActorLocation() - FVector(0.f, 0.f, Medic->GetSimpleCollisionHalfHeight() - 40.f));
 			const TArray<TPair<FName, FVector>> Bones = BodyBones(Medic);
@@ -365,11 +375,18 @@ namespace FallenGearSmoke
 				const FVector OldLocal = OldBox.InverseTransformPosition(Bone.Value);
 				BonesInOldBox += FMath::Abs(OldLocal.X) <= 60.f && FMath::Abs(OldLocal.Y) <= 40.f && FMath::Abs(OldLocal.Z) <= 40.f ? 1 : 0;
 				BonesIn += bIn ? 1 : 0;
+				// 2026-10-26 merge with the formation in combat: a living mate may stand between the camera and a part of her body - his own
+				// capsule rightly takes that click (a click on a mate selects him). The click zone itself is checked with the living ignored.
+				const FHitResult Clear = CursorRayAt(World, PC, Bone.Value, Eye, Squad->GetMembers());
 				RaysOnRemains += Hit.GetActor() == Remains ? 1 : 0;
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: bone %-8s at %s (%.0f cm from the capsule, %.0f cm up) in box %d; the cursor ray from %s hits %s"),
+				RaysBehindMate += Cast<AOperativeCharacter>(Hit.GetActor()) ? 1 : 0;
+				RaysClearOnRemains += Clear.GetActor() == Remains ? 1 : 0;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: bone %-8s at %s (%.0f cm from the capsule, %.0f cm up) in box %d; the cursor ray from %s hits %s; past the living: %s"),
 					*Bone.Key.ToString(), *Bone.Value.ToCompactString(), FVector::Dist2D(Bone.Value, Medic->GetActorLocation()),
-					Bone.Value.Z - (Medic->GetActorLocation().Z - Medic->GetSimpleCollisionHalfHeight()), bIn ? 1 : 0, *Eye.ToCompactString(), *DescribeHit(Hit));
-				if (Bone.Key == FName(TEXT("spine_03")) || (!State.BodyClick.bBlockingHit && Bone.Key == FName(TEXT("pelvis"))))
+					Bone.Value.Z - (Medic->GetActorLocation().Z - Medic->GetSimpleCollisionHalfHeight()), bIn ? 1 : 0, *Eye.ToCompactString(), *DescribeHit(Hit),
+					*DescribeHit(Clear));
+				// The click: her chest when the cursor meets the remains there, else the first part of her body that shows.
+				if (Hit.GetActor() == Remains && (Bone.Key == FName(TEXT("spine_03")) || State.BodyClick.GetActor() != Remains))
 				{
 					State.BodyClick = Hit;
 				}
@@ -378,7 +395,11 @@ namespace FallenGearSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: the old remains box (120 x 80 x 80 cm at her feet) would hold %d / %d of her bones"),
 				BonesInOldBox, Bones.Num());
 			Check(State, BonesIn == Bones.Num(), FString::Printf(TEXT("[remains] the click box covers the lying body (%d / %d bones inside)"), BonesIn, Bones.Num()));
-			Check(State, RaysOnRemains == Bones.Num(), FString::Printf(TEXT("[remains] the cursor on her body hits the remains (%d / %d rays)"), RaysOnRemains, Bones.Num()));
+			Check(State, RaysClearOnRemains == Bones.Num(), FString::Printf(TEXT("[remains] the cursor on her body hits the remains (%d / %d rays; living mates ignored)"),
+				RaysClearOnRemains, Bones.Num()));
+			Check(State, RaysOnRemains > 0 && RaysOnRemains + RaysBehindMate == Bones.Num(),
+				FString::Printf(TEXT("[remains] as the player sees it: %d rays on the remains, %d on a living mate standing in front, none on the snow"),
+					RaysOnRemains, RaysBehindMate));
 			Check(State, !Remains->bCanBeRelocated, TEXT("[remains] a body is not an object to relocate"));
 			const ECollisionResponse PawnResponse = Remains->Box->GetCollisionResponseToChannel(ECC_Pawn);
 			Check(State, PawnResponse == ECR_Ignore && !Remains->Box->CanEverAffectNavigation(),
