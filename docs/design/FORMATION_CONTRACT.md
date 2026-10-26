@@ -600,10 +600,12 @@ open when some member's straight line to it keeps `WALL_END_RAY_RADIUS` (1 cm) f
 traced face blocks too); covered when some member with such a line has its direction within fov / 2 (+1e-9) of his look. pct = 100 x
 covered / open (100 when nothing is open). TS `openArcCoverage` (members `{pos, yaw}`).
 
-### 14.2 `FormationWallRules::EndLooks(walls, slots, config) -> { spread, basePct, pct, slots }`
-`slots` = Layout's (K first, with their looks); `walls` = the walls round the layout. basePct = OpenArcCoverage of the slots with their
+### 14.2 `FormationWallRules::EndLooks(walls, slots, config, fixed = []) -> { spread, basePct, pct, slots }`
+`slots` = Layout's (K first, with their looks); `walls` = the walls round the layout; `fixed` = more roles whose looks a higher rule
+decided (merge with formation/v24-corner-peek: the corner stack's point man and trailing end). basePct = OpenArcCoverage of the slots with their
 looks (`wall_end.probe_dist`, `sight.fov`). Fewer than 3 slots, or basePct >= `wall_end.cover_pct` - 1e-9 -> unchanged (spread false;
-every face layout, the pair). Else: K keeps his look; `held` = the open points K's cone holds (from K's slot); then, while members are left:
+every face layout, the pair). Else: K and every `fixed` role keep their looks; `held` = the open points their cones hold (from their slots,
+slot order); then, while the others are left:
 for every remaining member (slot order) and every look y = -179..180 (whole degrees) not within look.wall_angle (- 1e-6) of the direction
 to the closest point of a wall whose surface is within look.wall_dist of his slot (and not 1e-6 from it), gain = the open points he sees,
 not held, inside +-fov / 2 of y; his best = the largest gain, ties the smallest |y - his layout look|, then the first (lower) y; the member
@@ -614,13 +616,13 @@ never change. Keys `wall_end.probe_dist` 600 (200-1500 cm), `wall_end.cover_pct`
 ### 14.3 Integration, checks, golden
 - Sim: every wall layout (arrival, after a slide) goes through EndLooks with the level's walls, cached by the Layout slots.
 - Runtime (`USquadSubsystem::ApplyFormationWallEnd`, from `ComputeWallLayout` - the arrival and the group cover order - and
-  `HoldWallLayoutAt` - after a slide): walls = the traced face measured out to `wall_end.probe_dist + 2 x wall.spacing` each side (a long wall
+  `HoldWallLayoutAt` - after a slide; `HoldCornerStack` with the stack's point man / K / trailing end fixed): walls = the traced face measured out to `wall_end.probe_dist + 2 x wall.spacing` each side (a long wall
   of complex collision still reads as a face; at an end face it is ~0 long) + the world's box walls round the layout; once per layout (no
   flicker); `Codex.Formation.WallEnd 0` = the face looks (v2.3). `IsFormationWallEndSpread(base, pct)` / `GetFormationWallSlots()` for smokes.
 - Bot check 13 (gating, 3+ members): while the wall layout stands (mode wall, everyone within 50 cm of his slot) the members' cones hold
   >= 95 % of the open probe ring (OpenArcCoverage of their positions / yaws, the layout's walls) for >= 90 % of that time. Lab route
   `R_G_end` (W_G_20's free end face, zone `Z_G_end`). The red team records check 13 too (a rule-bug check).
-- Golden `formation_WallEnd.json` (63 cases: the end face 40 / 20 cm, a 3 m stub, wall-gap-wall, a face, a face whose end man is past the
+- Golden `formation_WallEnd.json` (105 cases; v2.4 + the corner stack: with 3+ also the second slot fixed; the end face 40 / 20 cm, a 3 m stub, wall-gap-wall, a face, a face whose end man is past the
   end, an inner corner; 2-4 members; three headings / offsets; in.slots rounded) - C++ `CodexTactics.Formation.Parity.WallEnd` (spread
   exactly, basePct / pct within 0.01, slots as WallLayout). Unit tests `CodexTactics.Formation.WallEnd.*`; smoke `FormationWallGroupSmoke`
   scene 4 (a thin wall's end face by the group cover order: open arc >= 95 %, both flanks in a cone, nobody faces a wall, steady 3 s).
@@ -634,7 +636,9 @@ or null = the approach begins. Begin: runner = slots[0].role; rear = of the foll
 followers with lateral l = dot(pos - runner's pos, dir(normalYaw + 90)): one -> side (l >= 0 ? +1 : -1); two -> the lowest l (the first on
 ties) -1, the other +1; alongSide = -flanks[0].side, else (the pair) the rear man's l >= 0 ? -1 : +1. Arrived = within `approach.arrive_dist`
 (+1e-9) of his slot; everyone arrived -> done (sticky). Looks (slot order): done -> `layout` (the slot's yaw); the runner: arrived -> `along`
-ClearLook(normalYaw + alongSide x 90), else `run` (yaw null: he faces his travel); the rear -> `rear` ClearLook(normalYaw); a flank man not
+ClearLook(normalYaw + alongSide x 90), else `run` (yaw null: he faces his travel); a follower not arrived whose segment pos -> slot is
+blocked (segmentBlocked, WALL_END_RAY_RADIUS) -> `run` (the squad never splits first: round the wall, his role kept); the rear -> `rear`
+ClearLook(normalYaw); a flank man not
 arrived -> `flank` ClearLook(normalYaw + side x 90); else `layout`. ClearLook = FormationSectorRules.ClearLook(walls, his pos, normYaw(y),
 normYaw(y), config) (no held / limit / ahead). Key `approach.arrive_dist` 100 (50-200 cm); config 79 keys.
 ### 15.2 Integration, checks, golden
@@ -647,7 +651,8 @@ normYaw(y), config) (no held / limit / ahead). Key `approach.arrive_dist` 100 (5
   however far from his slot; the rear cover and the flank men do not copy the leader's sprint (a sprinting operative faces his run), the rear
   cover's backward cap is the walk's. `Codex.Formation.Approach 0` = v2.4. `GetFormationApproachLooks()` for smokes; log
   `[Formation] covered approach to the wall: K runs in, rear Z, 1 flank(s)` / `... over`.
-- Bot check 14 (gating, 2+ members): on the approach (after `approachGrace` 0.5 s to turn) no frame without a cone holding the rear
+- Bot check 14 (gating, 2+ members): on the approach (after `approachGrace` 0.5 s to turn; not the frames where a follower goes round a wall
+  with duty `run`) no frame without a cone holding the rear
   (normal +-30 inside +-fov / 2); 3+ men a flank (normal +-90 the same way) >= 90 % of it, 4+ each flank. The red team records check 14.
 - Golden `formation_Approach.json` (132 cases: a face / an inner corner, 2-4 members, the stages start / runner_in / flank_in /
   all_but_rear / all_in / along_wall / all_forward, state null and held, two headings) - C++ `CodexTactics.Formation.Parity.Approach`

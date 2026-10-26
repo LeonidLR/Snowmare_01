@@ -1635,7 +1635,12 @@ bool FFormationParityWallEndTest::RunTest(const FString&)
 			Slot.Yaw = static_cast<float>(Yaw);
 			Slots.Add(Slot);
 		}
-		const FFormationWallEndResult Actual = FormationWallRules::EndLooks(Walls, Slots, Golden.Config);
+		TArray<EFormationRole> Fixed;
+		if (In->HasField(TEXT("fixed")) && !ReadRoles(In->TryGetField(TEXT("fixed")), Fixed))
+		{
+			return TEXT("unreadable fixed");
+		}
+		const FFormationWallEndResult Actual = FormationWallRules::EndLooks(Walls, Slots, Golden.Config, Fixed);
 		if (Actual.bSpread != bSpread || FMath::Abs(Actual.BasePct - BasePct) > 0.01 || FMath::Abs(Actual.Pct - Pct) > 0.01)
 		{
 			return FString::Printf(TEXT("spread %d base %.3f %% pct %.3f %%, expected %d %.3f %% %.3f %%"), Actual.bSpread ? 1 : 0, Actual.BasePct, Actual.Pct,

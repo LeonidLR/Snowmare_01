@@ -13,7 +13,10 @@
 #include "Formation/FormationGuardRuntimeRules.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationTuning.h"
+#include "Formation/FormationWallEndRules.h"
 #include "Formation/FormationWallRules.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 
 namespace SquadSubsystemSlideLocal
 {
@@ -27,6 +30,14 @@ namespace SquadSubsystemSlideLocal
 	constexpr float SlideMaxSeconds = 60.f;
 	/** Rules v2.1: on a new formation the places change for any real saving (ties keep the places held: no needless swap), cm. */
 	constexpr float NewFormationGainCm = 1.f;
+	/** Bug B (2026-10-26) wall layout fit: the world walls round K's place this far, cm. */
+	constexpr float WallFitReachCm = 600.f;
+	/** ... a wall body this close to the line from K's place to a place cuts it off, cm. */
+	constexpr float WallFitPassClearanceCm = 10.f;
+	/** ... a place this close to a wall body cannot be stood on (the capsule), cm. */
+	constexpr float WallFitBodyClearanceCm = 30.f;
+	/** ... and a place must lie on the nav mesh within this, cm. */
+	constexpr float WallFitNavExtentCm = 30.f;
 
 	float SlideFeetZ(const AActor& Actor)
 	{
@@ -237,7 +248,38 @@ bool USquadSubsystem::TryStartFormationSlide(AOperativeCharacter& LeaderRef, boo
 	}
 	const FFormationWall Wall = FormationRuntime::WallAlong(Face, FaceNormalYaw, RoomLeft, RoomRight);
 	const FVector2D LeaderPos(LeaderRef.GetActorLocation());
-	const FFormationSlideResult Slide = FormationWallRules::Slide(Wall, Start, LeaderPos, Destination, Sectors.PatrolTime, Config);
+	const bool bWasSliding = Sectors.bSlide;
+	const bool bCrouchAfter = bFromOrder || (bWasSliding && Sectors.bSlideFromOrder);
+	// Bug A (game designer 2026-10-26): a destination at a FREE end of this wall is the corner stack - the slide runs until the place nearest
+	// the end stands at the edge (the point man), the others keep the order behind him; on the stop he peeks round the corner.
+	FVector2D SlideTo = Destination;
+	const TOptional<FFormationStackEnd> Stack = FormationGuardRuntime::IsEnabled()
+		? FormationWallEnd::FindStackEnd(Sectors.WorldWalls, Start[0].Position, NormalYaw, Destination, Config) : TOptional<FFormationStackEnd>();
+	if (Stack.IsSet())
+	{
+		const float Shift = FormationWallEnd::StackShift(Start, Stack.GetValue());
+		SlideTo = Start[0].Position + Stack->Along * Shift;
+		if (FMath::Abs(Shift) < FormationWallRules::SlideMin)
+		{
+			// Already at the edge: the stack where they stand (the leader to his place in it).
+			const FVector2D KPlace = SlideTo;
+			if (FVector2D::Distance(KPlace, LeaderPos) > FormationRuntime::StopRadiusCm)
+			{
+				LeaderRef.OrderMoveTo(FVector(KPlace.X, KPlace.Y, Destination3.Z), false);
+			}
+			else
+			{
+				LeaderRef.StopOperative();
+			}
+			Sectors.bSlide = false;
+			Sectors.bSlideStack = false;
+			HoldCornerStack(LeaderRef, Start, Stack.GetValue(), bCrouchAfter);
+			Sectors.LastLeaderSerial = LeaderRef.GetMoveOrderSerial();
+			Sectors.bLeaderOrderPending = false;
+			return true;
+		}
+	}
+	const FFormationSlideResult Slide = FormationWallRules::Slide(Wall, Start, LeaderPos, SlideTo, Sectors.PatrolTime, Config);
 	if (!Slide.bActive)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the leader's order from the wall layout is no slide (%.0f cm along, room %.0f / %.0f cm)"), Along,
@@ -247,18 +289,20 @@ bool USquadSubsystem::TryStartFormationSlide(AOperativeCharacter& LeaderRef, boo
 	// The 4th (the pair's partner) keeps the end he is at when the line stops (contract 11.5).
 	const FFormationSlot* Partner = Start.FindByPredicate([](const FFormationSlot& Slot) { return Slot.Role == EFormationRole::Rear; });
 	const bool bEndRight = !Partner || FVector2D::DotProduct(Partner->Position - Start[0].Position, RightAlong) >= 0.0;
-	const bool bWasSliding = Sectors.bSlide;
 	// The leader walks to his slot moved along the wall (his offset from it kept) at the patrol pace; the others side-step with him.
 	if (LeaderRef.OrderMoveTo(FVector(Slide.LeaderTarget.X, Slide.LeaderTarget.Y, Destination3.Z), false) != EOperativeOrderResult::Accepted)
 	{
 		return false;
 	}
 	Sectors.bSlide = true;
-	Sectors.bSlideFromOrder = bFromOrder || (bWasSliding && Sectors.bSlideFromOrder);
+	Sectors.bSlideFromOrder = bCrouchAfter;
 	Sectors.bSlideEndRight = bEndRight;
+	Sectors.bSlideStack = Stack.IsSet();
+	Sectors.SlideStackEnd = Stack.Get(FFormationStackEnd());
+	Sectors.bCornerStack = false;
 	Sectors.SlideWall = Wall;
 	Sectors.SlideStartSlots = Start;
-	Sectors.SlideDestination = Destination;
+	Sectors.SlideDestination = SlideTo;
 	Sectors.SlideLeaderTarget = Slide.LeaderTarget;
 	Sectors.SlideSeconds = 0.f;
 	Sectors.SlideSerial = LeaderRef.GetMoveOrderSerial();
@@ -298,11 +342,13 @@ bool USquadSubsystem::TryStartFormationSlide(AOperativeCharacter& LeaderRef, boo
 	{
 		Order += FormationNames::ToString(Role);
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall slide %d: %d members %.0f cm to the %s along the wall (order %s, lead %s, rear guard %s, room %.0f / %.0f cm)%s"),
+	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall slide %d: %d members %.0f cm to the %s along the wall (order %s, lead %s, rear guard %s, room %.0f / %.0f cm)%s%s"),
 		Sectors.SlideCount, Start.Num(), FMath::Abs(Along), Along >= 0.f ? TEXT("right") : TEXT("left"), *Order,
 		Slide.Lead.IsSet() ? FormationNames::ToString(Slide.Lead.GetValue()) : TEXT("-"),
 		Slide.RearGuard.IsSet() ? FormationNames::ToString(Slide.RearGuard.GetValue()) : TEXT("-"), RoomLeft, RoomRight,
-		bWasSliding ? TEXT(" (restarted)") : TEXT(""));
+		bWasSliding ? TEXT(" (restarted)") : TEXT(""),
+		Stack.IsSet() ? *FString::Printf(TEXT(" - to the free wall end at (%.0f, %.0f): the corner stack, the leader %.0f cm along"), Stack->End.X, Stack->End.Y,
+			FVector2D::Distance(Slide.LeaderTarget, Start[0].Position)) : TEXT(""));
 	return true;
 }
 
@@ -335,8 +381,16 @@ void USquadSubsystem::EndFormationSlide(AOperativeCharacter& LeaderRef, bool bAr
 		return;
 	}
 	Sectors.bSlide = false;
+	const bool bStack = Sectors.bSlideStack;
+	Sectors.bSlideStack = false;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall slide over after %.1f s (%.0f cm off its end): %s"), Sectors.SlideSeconds,
 		FVector2D::Distance(FVector2D(LeaderRef.GetActorLocation()), Sectors.SlideLeaderTarget), Why);
+	if (bArrived && bStack)
+	{
+		// Bug A: the slide to a free wall end stops as the corner stack (the point man at the edge peeks round it).
+		HoldCornerStack(LeaderRef, Sectors.SlideStartSlots, Sectors.SlideStackEnd, Sectors.bSlideFromOrder);
+		return;
+	}
 	if (bArrived && HoldWallLayoutAt(LeaderRef, Sectors.WallNormalYaw, Sectors.bSlideFromOrder, Sectors.bSlideEndRight))
 	{
 		return;
@@ -377,22 +431,14 @@ bool USquadSubsystem::HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float Wal
 	{
 		return false;
 	}
-	if (!Sectors.bWallOrder)
-	{
-		// The automatic layout's places (by follower slot) become the held layout's roles.
-		Sectors.WallOrderRoles.Reset();
-		for (const FFollowerState& Follower : Followers)
-		{
-			const TOptional<EFormationRole> Role = FormationRuntime::RoleForFollowerSlot(Follower.Slot, Sectors.MemberCount);
-			if (Role.IsSet() && Follower.Operative.IsValid())
-			{
-				Sectors.WallOrderRoles.Add(Follower.Operative, Role.GetValue());
-			}
-		}
-	}
+	const float OutwardYaw = FormationWallRules::OutwardYaw(Wall, LeaderPos);
+	// Bug B (2026-10-26): no place on the far side of a wall from K's place (a T / L junction, the wall's end) - such a place moves to K's other side.
+	Slots = FitWallLayoutToWorld(Slots, OutwardYaw, SlideFeetZ(LeaderRef));
+	// The automatic layout's (or a new leader's) places by minimal travel become the held layout's roles; a wall order keeps its own.
+	AssignWallRolesByTravel(Slots);
 	Sectors.WallSlots = MoveTemp(Slots);
-	Sectors.WallNormalYaw = FormationWallRules::OutwardYaw(Wall, LeaderPos);
-	ApplyFormationWallEnd(Origin, -FormationMath::Forward(WallNormalYaw), SlideWallReachCm); // v2.4: a slide that stops at the wall's end
+	Sectors.WallNormalYaw = OutwardYaw;
+	ApplyFormationWallEnd(Origin, -FormationMath::Forward(WallNormalYaw), SlideWallReachCm); // v2.4: a slide that stops at a wall's end face
 	Sectors.Approach.Reset(); // v2.5: the covered approach begins again (everyone is near his slot: it ends at once)
 	Sectors.ApproachLooks.Reset();
 	Sectors.bWallLayoutValid = true;
@@ -403,6 +449,7 @@ bool USquadSubsystem::HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float Wal
 	Sectors.WallOrderSerial = LeaderRef.GetMoveOrderSerial();
 	Sectors.WallOrderSeconds = 0.f;
 	Sectors.Formation = EFormationKind::Wall;
+	Sectors.bCornerStack = false;
 	for (FFollowerState& Follower : Followers)
 	{
 		Follower.RepathTimeRemaining = 0.f;
@@ -410,5 +457,273 @@ bool USquadSubsystem::HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float Wal
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the wall layout again (%d members, outward yaw %.0f, room %.0f / %.0f cm%s)"), Count, Sectors.WallNormalYaw,
 		RoomLeft, RoomRight, bCrouch ? TEXT(", crouched") : TEXT(""));
+	return true;
+}
+
+void USquadSubsystem::AssignWallRolesByTravel(const TArray<FFormationSlot>& Slots)
+{
+	if (Sectors.bWallOrder && Sectors.WallOrderRoles.Num() > 0)
+	{
+		return; // the order's roles (OrderFormationWall's assignment) go on
+	}
+	TArray<FVector2D> To;
+	TArray<EFormationRole> PlaceRoles;
+	for (const FFormationSlot& Slot : Slots)
+	{
+		if (Slot.Role != EFormationRole::Commander)
+		{
+			To.Add(Slot.Position);
+			PlaceRoles.Add(Slot.Role);
+		}
+	}
+	TArray<TWeakObjectPtr<AOperativeCharacter>> Who;
+	TArray<FVector2D> From;
+	for (const FFollowerState& Follower : Followers)
+	{
+		if (Follower.Operative.IsValid() && Who.Num() < To.Num())
+		{
+			Who.Add(Follower.Operative);
+			From.Add(FVector2D(Follower.Operative->GetActorLocation()));
+		}
+	}
+	Sectors.WallOrderRoles.Reset();
+	const TArray<int32> Assignment = FormationRuntime::AssignByTravel(From, To);
+	FString Line;
+	for (int32 Index = 0; Index < Who.Num() && Index < Assignment.Num(); ++Index)
+	{
+		if (PlaceRoles.IsValidIndex(Assignment[Index]))
+		{
+			Sectors.WallOrderRoles.Add(Who[Index], PlaceRoles[Assignment[Index]]);
+			Line += FString::Printf(TEXT(" %s -> %s;"), *Who[Index]->DisplayName.ToString(), FormationNames::ToString(PlaceRoles[Assignment[Index]]));
+		}
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the wall layout's places by travel:%s"), *Line);
+}
+
+void USquadSubsystem::HoldCornerStack(AOperativeCharacter& LeaderRef, const TArray<FFormationSlot>& StartSlots, const FFormationStackEnd& End, bool bCrouch)
+{
+	const FFormationConfig& Config = FormationTuning::Get();
+	TArray<FFormationSlot> Slots = FormationWallEnd::StackSlots(StartSlots, End, Sectors.WallNormalYaw, Config);
+	if (Slots.IsEmpty())
+	{
+		return;
+	}
+	if (!Sectors.bWallOrder)
+	{
+		// The automatic layout's slide: its places are the follower slots' roles (the slide's targets were by those roles).
+		Sectors.WallOrderRoles.Reset();
+		for (const FFollowerState& Follower : Followers)
+		{
+			const TOptional<EFormationRole> Role = FormationRuntime::RoleForFollowerSlot(Follower.Slot, Sectors.MemberCount);
+			if (Role.IsSet() && Follower.Operative.IsValid())
+			{
+				Sectors.WallOrderRoles.Add(Follower.Operative, Role.GetValue());
+			}
+		}
+	}
+	const FVector2D LeaderPos(LeaderRef.GetActorLocation());
+	const EFormationRole Point = FormationWallEnd::PointRole(Slots, End);
+	const FFormationSlot* PointSlot = Slots.FindByPredicate([Point](const FFormationSlot& Each) { return Each.Role == Point; });
+	Sectors.WallSlots = MoveTemp(Slots);
+	Sectors.bWallLayoutValid = true;
+	Sectors.WallAnchor = LeaderPos;
+	Sectors.bWallOrder = true;
+	Sectors.bWallOrderCrouch = bCrouch;
+	Sectors.WallOrderLeader = &LeaderRef;
+	Sectors.WallOrderSerial = LeaderRef.GetMoveOrderSerial();
+	Sectors.WallOrderSeconds = 0.f;
+	Sectors.Formation = EFormationKind::Wall;
+	Sectors.bCornerStack = true;
+	Sectors.CornerStackEnd = End;
+	{
+		// v2.4 wall end (coordinator 2026-10-26): the open-arc coverage widens only round the stack's fixed looks - the point man round the
+		// corner, K out, the trailing end back along the wall; a fourth member between them may be spread.
+		TArray<EFormationRole> StackFixed = { EFormationRole::Commander, Point };
+		const FFormationSlot* Trailing = nullptr;
+		for (const FFormationSlot& Slot : Sectors.WallSlots)
+		{
+			if (!Trailing || FVector2D::DotProduct(Slot.Position, End.Along) < FVector2D::DotProduct(Trailing->Position, End.Along))
+			{
+				Trailing = &Slot;
+			}
+		}
+		if (Trailing)
+		{
+			StackFixed.AddUnique(Trailing->Role);
+		}
+		const FVector StackOrigin(LeaderPos.X, LeaderPos.Y, SquadSubsystemSlideLocal::SlideFeetZ(LeaderRef) + SquadSubsystemSlideLocal::SlideProbeHeightCm);
+		ApplyFormationWallEnd(StackOrigin, -FormationMath::Forward(Sectors.WallNormalYaw), SquadSubsystemSlideLocal::SlideWallReachCm, StackFixed);
+		Sectors.Approach.Reset();
+		Sectors.ApproachLooks.Reset();
+	}
+	for (FFollowerState& Follower : Followers)
+	{
+		Follower.RepathTimeRemaining = 0.f;
+		Follower.bParked = false;
+	}
+	FString Line;
+	for (const FFormationSlot& Slot : Sectors.WallSlots)
+	{
+		Line += FString::Printf(TEXT(" %s (%.0f, %.0f) looks %.0f;"), FormationNames::ToString(Slot.Role), Slot.Position.X, Slot.Position.Y, Slot.Yaw);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the corner stack at the wall's end (%.0f, %.0f): the point man %s peeks round it (yaw %.0f)%s:%s"), End.End.X,
+		End.End.Y, FormationNames::ToString(Point), PointSlot ? PointSlot->Yaw : 0.f, bCrouch ? TEXT(", crouched") : TEXT(""), *Line);
+
+}
+
+void USquadSubsystem::PassWallOrderToLeader(AOperativeCharacter& NewLeader)
+{
+	if (!FormationRuntime::IsEnabled() || !(Sectors.bWallOrder || Sectors.bSlide) || bIsSoloMode || bFollowersHolding || Followers.IsEmpty() || HasMultiSelection())
+	{
+		return;
+	}
+	const bool bCrouch = Sectors.bWallOrder ? Sectors.bWallOrderCrouch : Sectors.bSlideFromOrder;
+	if (IsOnOwnOrder(&NewLeader))
+	{
+		return; // he walks on: the order ends with "the leader changed" (UpdateFormationWallOrder)
+	}
+	// The order goes on with him: the layout again round him at the same wall (K in the middle), the order's crouch kept, the places by
+	// minimal travel. A running slide was the old leader's move: it stops here (he stopped on becoming the leader).
+	Sectors.bSlide = false;
+	Sectors.bSlideStack = false;
+	Sectors.bCornerStack = false;
+	Sectors.bWallOrder = false;
+	Sectors.WallOrderRoles.Reset();
+	if (HoldWallLayoutAt(NewLeader, Sectors.WallNormalYaw, bCrouch, TOptional<bool>()))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the wall order goes on with the new leader %s (the layout round him%s)"), *NewLeader.DisplayName.ToString(),
+			bCrouch ? TEXT(", crouched") : TEXT(""));
+		return;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall order over: the new leader %s has no wall behind him"), *NewLeader.DisplayName.ToString());
+	Sectors.bWallOrderCrouch = true;
+	Sectors.bWallLayoutValid = false;
+	Sectors.WallOrderLeader.Reset();
+	Sectors.Formation = Sectors.MoveFormation;
+}
+
+TArray<FFormationWall> USquadSubsystem::GatherWallsAround(const FVector2D& Center, float HalfExtentCm, float FeetZ) const
+{
+	return GatherFormationWalls(Center, FVector2D(HalfExtentCm, HalfExtentCm), 0.f, FeetZ + FormationRuntime::ProbeHeightCm);
+}
+
+TArray<FFormationSlot> USquadSubsystem::FitWallLayoutToWorld(const TArray<FFormationSlot>& Slots, float NormalYaw, float FeetZ) const
+{
+	using namespace SquadSubsystemSlideLocal;
+	if (Slots.Num() < 2 || !FormationGuardRuntime::IsEnabled())
+	{
+		return Slots;
+	}
+	const TArray<FFormationWall> Walls = GatherWallsAround(Slots[0].Position, WallFitReachCm, FeetZ);
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	const auto Usable = [&Walls, Nav, FeetZ](const FVector2D& KPlace, const FVector2D& Place)
+	{
+		if (FormationMath::SegmentBlocked(KPlace, Place, Walls, WallFitPassClearanceCm))
+		{
+			return false; // a wall body between K's place and this one
+		}
+		for (const FFormationWall& Wall : Walls)
+		{
+			if (FormationMath::DistToWall(Place, Wall) < WallFitBodyClearanceCm)
+			{
+				return false; // in a wall's clearance (a man cannot stand there)
+			}
+		}
+		FNavLocation OnNav;
+		return !Nav || (Nav->ProjectPointToNavigation(FVector(Place, FeetZ), OnNav, FVector(WallFitNavExtentCm, WallFitNavExtentCm, 150.f))
+			&& FVector2D::Distance(FVector2D(OnNav.Location), Place) <= WallFitNavExtentCm);
+	};
+	TArray<FFormationSlot> Fitted = FormationWallEnd::FitLayout(Slots, NormalYaw, Usable, FormationTuning::Get());
+	for (int32 Index = 1; Index < Fitted.Num() && Index < Slots.Num(); ++Index)
+	{
+		if (!Fitted[Index].Position.Equals(Slots[Index].Position, 1.0))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall layout fitted: %s (%.0f, %.0f) is cut off from K's place / no floor -> (%.0f, %.0f) on K's other side"),
+				FormationNames::ToString(Fitted[Index].Role), Slots[Index].Position.X, Slots[Index].Position.Y, Fitted[Index].Position.X, Fitted[Index].Position.Y);
+		}
+	}
+	return Fitted;
+}
+
+bool USquadSubsystem::PreviewFormationMove(const FVector& Destination, TArray<TArray<FVector>>& OutPaths) const
+{
+	OutPaths.Reset();
+	const AOperativeCharacter* LeaderRef = Leader.Get();
+	UWorld* World = GetWorld();
+	if (!LeaderRef || !World || !FormationRuntime::IsEnabled() || bIsSoloMode || bFollowersHolding || HasMultiSelection() || !IsFormationActive()
+		|| Sectors.Formation != EFormationKind::Wall || !Sectors.bWallLayoutValid || LeaderRef->bInCover)
+	{
+		return false;
+	}
+	const TArray<FFormationSlot>& Start = Sectors.bSlide ? Sectors.FrameSlots : Sectors.WallSlots;
+	if (Start.IsEmpty() || Start[0].Role != EFormationRole::Commander)
+	{
+		return false;
+	}
+	const FFormationConfig& Config = FormationTuning::Get();
+	const float FeetZ = static_cast<float>(LeaderRef->GetActorLocation().Z) - LeaderRef->GetSimpleCollisionHalfHeight();
+	const TArray<FFormationWall> Walls = Sectors.bWorldWallsValid ? Sectors.WorldWalls : GatherWallsAround(FVector2D(LeaderRef->GetActorLocation()), 1600.f, FeetZ);
+	const int32 SquadWall = FormationWallEnd::FindSquadWall(Walls, Start[0].Position, Sectors.WallNormalYaw);
+	const FVector2D Target(Destination);
+	if (SquadWall == INDEX_NONE || FormationMath::DistToWall(Target, Walls[SquadWall]) > Config.SlideMaxOffWall)
+	{
+		return false; // not along / round the squad's wall: a plain move
+	}
+	// Who stands at which place (the leader at K).
+	const auto MemberAt = [this, LeaderRef](EFormationRole Role) -> const AOperativeCharacter*
+	{
+		if (Role == EFormationRole::Commander)
+		{
+			return LeaderRef;
+		}
+		for (const FFollowerState& Follower : Followers)
+		{
+			const TOptional<EFormationRole> Each = SectorRoleOf(Follower);
+			if (Each.IsSet() && Each.GetValue() == Role)
+			{
+				return Follower.Operative.Get();
+			}
+		}
+		return nullptr;
+	};
+	const auto Feet = [](const AOperativeCharacter& Member) { return Member.GetActorLocation() - FVector(0.f, 0.f, Member.GetSimpleCollisionHalfHeight()); };
+	// A slide along the wall (to the corner stack at a free end): every member's line to his place.
+	TArray<FFormationSlot> Targets;
+	if (const TOptional<FFormationStackEnd> Stack = FormationWallEnd::FindStackEnd(Walls, Start[0].Position, Sectors.WallNormalYaw, Target, Config); Stack.IsSet())
+	{
+		Targets = FormationWallEnd::StackSlots(Start, Stack.GetValue(), Sectors.WallNormalYaw, Config);
+	}
+	else
+	{
+		const FFormationSlideResult Slide = FormationWallRules::Slide(Walls[SquadWall], Start, Start[0].Position, Target, 0.f, Config);
+		if (Slide.bActive)
+		{
+			Targets = FormationWallRules::Slide(Walls[SquadWall], Start, Slide.LeaderTarget, Target, 0.f, Config).Targets;
+		}
+	}
+	if (!Targets.IsEmpty())
+	{
+		for (const FFormationSlot& Slot : Targets)
+		{
+			if (const AOperativeCharacter* Member = MemberAt(Slot.Role))
+			{
+				OutPaths.Add({ Feet(*Member), FVector(Slot.Position.X, Slot.Position.Y, Feet(*Member).Z) });
+			}
+		}
+		return !OutPaths.IsEmpty();
+	}
+	// Round the wall's end / to its other face: the leader's way there on the nav mesh (the others follow it).
+	TArray<FVector> Path;
+	if (const UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(World, Feet(*LeaderRef), Destination, const_cast<AOperativeCharacter*>(LeaderRef));
+		NavPath && NavPath->IsValid() && NavPath->PathPoints.Num() >= 2)
+	{
+		Path = NavPath->PathPoints;
+		Path[0] = Feet(*LeaderRef);
+	}
+	else
+	{
+		Path = { Feet(*LeaderRef), Destination };
+	}
+	OutPaths.Add(MoveTemp(Path));
 	return true;
 }

@@ -359,6 +359,11 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
 		FHitResult TrapHit;
 		const bool bCursorHit = !bCornerPeekCursor && !IsDialogueOpen() && !bOverMinimap && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit);
+		// Bug C 2026-10-26: the squad in the formation wall layout - its guide lines along / round its wall under the cursor.
+		if (!bFreezeCoverHoverForTesting)
+		{
+			UpdateSquadMoveHover(bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+		}
 		// Rev 5g: an EXIT arrow under the cursor lights up and shows the hand too.
 		AInteriorExitArrowActor* HoveredExit = bCursorHit ? Cast<AInteriorExitArrowActor>(TrapHit.GetActor()) : nullptr;
 		if (UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>())
@@ -431,6 +436,11 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 bool ACodexTacticsPlayerController::IsAttackModifierDown() const
 {
 	return bSimulatedAttackModifier || IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
+}
+
+bool ACodexTacticsPlayerController::IsShiftModifierDown() const
+{
+	return bSimulatedShiftModifier || IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
 }
 
 bool ACodexTacticsPlayerController::IsSquadWideModifierDown() const

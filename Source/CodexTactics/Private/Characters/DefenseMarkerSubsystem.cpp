@@ -2,6 +2,8 @@
 
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/SuppressionRules.h"
+#include "GameFramework/Character.h"
 #include "Combat/HealthComponent.h"
 #include "Components/MeshComponent.h"
 #include "Engine/World.h"
@@ -15,6 +17,9 @@ namespace DefenseMarker
 	const FLinearColor Green(0.15f, 1.f, 0.4f);
 	/** The ring glows additively: a deeper green so it reads green, not white. */
 	const FLinearColor RingGreen(0.05f, 1.f, 0.25f);
+	/** SUPPRESS orders (2026-10-26): red overlay / ring. */
+	const FLinearColor Red(1.f, 0.15f, 0.1f);
+	const FLinearColor RingRed(1.f, 0.08f, 0.04f);
 	/** The ring grows from this share of the radius to the full radius while it fades in. */
 	constexpr float RingStartScale = 0.8f;
 
@@ -39,17 +44,19 @@ void UDefenseMarkerSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-UDefenseMarkerSubsystem::FMarker& UDefenseMarkerSubsystem::FindOrAddMarker(AActor* Actor, const FVector& Location)
+UDefenseMarkerSubsystem::FMarker& UDefenseMarkerSubsystem::FindOrAddMarker(AActor* Actor, const FVector& Location, bool bSuppress)
 {
 	for (FMarker& Marker : Markers)
 	{
-		if (Actor ? Marker.Actor.Get() == Actor : (!Marker.Actor.IsValid() && FVector::Dist2D(Marker.Ground, Location) < 100.f))
+		if (Marker.bSuppress == bSuppress
+			&& (Actor ? Marker.Actor.Get() == Actor : (!Marker.Actor.IsValid() && FVector::Dist2D(Marker.Ground, Location) < 100.f)))
 		{
 			return Marker;
 		}
 	}
 	FMarker& Marker = Markers.AddDefaulted_GetRef();
 	Marker.Actor = Actor;
+	Marker.bSuppress = bSuppress;
 	if (Actor)
 	{
 		FVector Origin;
@@ -83,7 +90,7 @@ void UDefenseMarkerSubsystem::ApplyOverlay(FMarker& Marker)
 		return;
 	}
 	UMaterialInstanceDynamic* Overlay = UMaterialInstanceDynamic::Create(Fresnel, this);
-	FLinearColor Color = DefenseMarker::Green;
+	FLinearColor Color = Marker.bSuppress ? DefenseMarker::Red : DefenseMarker::Green;
 	Color.A = 0.6f;
 	Overlay->SetVectorParameterValue(TEXT("Color"), Color);
 	Overlay->SetScalarParameterValue(TEXT("Intensity"), 0.f);
@@ -150,6 +157,28 @@ void UDefenseMarkerSubsystem::Tick(float DeltaTime)
 			Marker.RadiusCm = Defense.InterceptRadiusCm;
 			++Marker.Defenders;
 		}
+		// SUPPRESS orders (running or planned): red on the enemy the squad sees, else on the spot (never revealing a hidden enemy).
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			const bool bRunning = Member->HasSuppressOrder();
+			if ((!bRunning && !Member->HasPlannedSuppress()) || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+			{
+				continue;
+			}
+			AActor* Target = bRunning ? Member->GetSuppressTarget() : Member->GetPlannedSuppressTarget();
+			const FVector Point = bRunning ? Member->GetSuppressPoint() : Member->GetPlannedSuppressPoint();
+			const bool bShown = Target && !Target->IsHidden();
+			FMarker& Marker = FindOrAddMarker(bShown ? Target : nullptr, Point, true);
+			Marker.bWanted = true;
+			Marker.RadiusCm = SuppressionRules::GetConfig().OrderMarkerRadiusCm;
+			if (bShown)
+			{
+				const ACharacter* Character = Cast<ACharacter>(Target);
+				Marker.Ground = Target->GetActorLocation() - FVector(0.f, 0.f, Character ? Character->GetSimpleCollisionHalfHeight() : 0.f);
+				Marker.TopZ = Target->GetActorLocation().Z + (Character ? Character->GetSimpleCollisionHalfHeight() : 100.f);
+			}
+			++Marker.Defenders;
+		}
 	}
 	for (int32 Index = Markers.Num() - 1; Index >= 0; --Index)
 	{
@@ -167,7 +196,7 @@ void UDefenseMarkerSubsystem::Tick(float DeltaTime)
 		if (ARadiusRingActor* Ring = Marker.Ring.Get())
 		{
 			const float Radius = Marker.RadiusCm * FMath::Lerp(DefenseMarker::RingStartScale, 1.f, Shown);
-			Ring->ShowRing(Marker.Ground, Radius, DefenseMarker::RingGreen * (Shown * Breath), 18.f);
+			Ring->ShowRing(Marker.Ground, Radius, GetRingColor(Marker.bSuppress) * (Shown * Breath), 18.f);
 		}
 		if (UMaterialInstanceDynamic* Overlay = Marker.Overlay.Get())
 		{
@@ -187,8 +216,38 @@ TArray<FDefenseMarkerView> UDefenseMarkerSubsystem::GetMarkers() const
 		View.IconLocation = Base + FVector(0.f, 0.f, 190.f + 8.f * FMath::Sin(Clock * 2.f)); // above the object's own label
 		View.Alpha = DefenseMarker::EaseOut(Marker.Alpha);
 		View.Defenders = Marker.Defenders;
+		View.bSuppress = Marker.bSuppress;
+		View.Color = Marker.bSuppress ? DefenseMarker::Red : DefenseMarker::Green;
 	}
 	return Views;
+}
+
+FLinearColor UDefenseMarkerSubsystem::GetRingColor(bool bSuppress)
+{
+	return bSuppress ? DefenseMarker::RingRed : DefenseMarker::RingGreen;
+}
+
+int32 UDefenseMarkerSubsystem::GetSuppressMarkerCount() const
+{
+	int32 Count = 0;
+	for (const FMarker& Marker : Markers)
+	{
+		Count += Marker.bSuppress && Marker.bWanted ? 1 : 0;
+	}
+	return Count;
+}
+
+bool UDefenseMarkerSubsystem::HasSuppressMarker(const AActor* Actor, const FVector& Point, float ToleranceCm) const
+{
+	for (const FMarker& Marker : Markers)
+	{
+		if (Marker.bSuppress && Marker.bWanted
+			&& (Actor ? Marker.Actor.Get() == Actor : FVector::Dist2D(Marker.Ground, Point) <= ToleranceCm))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 float UDefenseMarkerSubsystem::GetMarkerAlpha(const AActor* Actor) const

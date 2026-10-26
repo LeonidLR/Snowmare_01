@@ -655,8 +655,11 @@ export interface WallEndResult {
  * sees and nobody holds yet (ties: the look nearest his own layout look, then the lower degree; between members the earlier slot);
  * those points count as held; a member who would add nothing keeps his layout look. A spread that would hold less than the base
  * keeps the base. Pure, deterministic; the positions are the SLOTS (the looks never jitter with the men's steps).
+ * `fixed` (coordinator 2026-10-26, the corner stack of formation/v24-corner-peek): more roles whose looks a higher rule decided - the
+ * stack's point man round the corner and its trailing end back along the wall; like K they keep their looks and their cones count as held
+ * first (slot order); only the others are spread.
  */
-function EndLooks(walls: readonly Segment[], slots: readonly WallSlot[], config: FormationConfig): WallEndResult {
+function EndLooks(walls: readonly Segment[], slots: readonly WallSlot[], config: FormationConfig, fixed: readonly Role[] = []): WallEndResult {
   const fov = cfg(config, 'sight.fov'), probe = cfg(config, 'wall_end.probe_dist');
   const base = openArcCoverage(walls, slots.map((s) => ({ pos: s.pos, yaw: s.yaw })), fov, probe).pct;
   const unchanged: WallEndResult = { spread: false, basePct: base, pct: base, slots: slots.map((s) => ({ ...s })) };
@@ -677,8 +680,9 @@ function EndLooks(walls: readonly Segment[], slots: readonly WallSlot[], config:
   const held = Array.from({ length: n }, () => false);
   const hold = (i: number, y: number) => { for (let k = 0; k < n; k++) if (ring.vis[i][k] && Math.abs(normYaw(ring.dirs[i][k] - y)) <= half + 1e-9) held[k] = true; };
   const looks = slots.map((s) => s.yaw);
-  hold(0, looks[0]);
-  const left = slots.map((_, i) => i).slice(1);
+  const kept = (i: number) => i === 0 || fixed.includes(slots[i].role);
+  slots.forEach((_, i) => { if (kept(i)) hold(i, looks[i]); });
+  const left = slots.map((_, i) => i).filter((i) => !kept(i));
   while (left.length) {
     let best: { i: number; y: number; gain: number; d: number } | null = null;
     for (const i of left) {
@@ -734,6 +738,10 @@ export interface ApproachLook { role: Role; duty: ApproachDuty; /** World yaw; n
  * - the flank men look along the wall line to their side (normal +- 90) until each reaches his slot, then his layout look; one flank:
  *   the side of his offset from the leader along the wall (>= 0 -> +1); two: the lower offset -1, the higher +1;
  * - alongSide = the other way from the first flank man (the pair: the other way from the rear man's offset).
+ * The squad never splits (user decision v2.1) comes first: a follower not yet at his slot whose straight way to it passes a wall body
+ * (WALL_END_RAY_RADIUS; he goes round a corner - a switch to a cross wall) has duty 'run' (facing his travel, at the squad's pace) until
+ * the way is clear - his role is kept (merge with formation/v24-corner-peek: FormationWallSwitchSmoke, the men holding looks fell 4 s behind
+ * the leader round the corner).
  * Every look but the layout's goes through FormationSectorRules.ClearLook (from his position, nobody looks into a wall). `state` null =
  * the approach begins (the roles are assigned from `members`' positions and then held: no reshuffle).
  */
@@ -765,6 +773,7 @@ function Approach(walls: readonly Segment[], slots: readonly WallSlot[], normalY
   const looks = slots.map((s): ApproachLook => {
     if (state!.done) return { role: s.role, duty: 'layout', yaw: s.yaw };
     if (s.role === state!.runner) return arrived(s) ? { role: s.role, duty: 'along', yaw: clear(s.role, normalYaw + state!.alongSide * 90) } : { role: s.role, duty: 'run', yaw: null };
+    if (!arrived(s) && segmentBlocked(posOf(s.role), s.pos, walls, WALL_END_RAY_RADIUS)) return { role: s.role, duty: 'run', yaw: null }; // round a wall first
     if (s.role === state!.rear) return { role: s.role, duty: 'rear', yaw: clear(s.role, normalYaw) };
     const f = state!.flanks.find((x) => x.role === s.role);
     if (f && !arrived(s)) return { role: s.role, duty: 'flank', yaw: clear(s.role, normalYaw + f.side * 90) };

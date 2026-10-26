@@ -406,7 +406,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
   // v2.4 (user bug report 2026-10-26): the wall layout's looks at a wall END (FormationWallRules.EndLooks). Scenes in the wall's
   // frame (the leader's wall slot near the origin); every scene is placed at three headings / offsets and the Layout slots for
   // 2-4 members are written ROUNDED (the outputs are computed from exactly those).
-  const wallEnd = base('WallEnd', 'in: walls, slots [{role, pos, yaw}] (FormationWallRules.Layout, K first) -> out {spread, basePct, pct, slots [{role, pos, yaw}]} (FormationWallRules.EndLooks; spread exactly, basePct / pct within 0.01, yaws as angles).');
+  const wallEnd = base('WallEnd', 'in: walls, slots [{role, pos, yaw}] (FormationWallRules.Layout, K first), fixed (roles whose looks stay besides K; missing = []) -> out {spread, basePct, pct, slots [{role, pos, yaw}]} (FormationWallRules.EndLooks; spread exactly, basePct / pct within 0.01, yaws as angles).');
   const END_SCENES: Record<string, { walls: Segment[]; wall: number; click: Vec2 }> = {
     // The user's report: a thin free-standing wall, the squad at its end face (the slot on the wall's axis, 45 cm off the face).
     end_face: { walls: [{ a: [-1500, 0], b: [0, 0], thickness: 40 }], wall: 0, click: [65, 0] },
@@ -427,9 +427,12 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
       const room = wallRoom(placed[sc.wall], click);
       const slots = FormationWallRules.Layout(placed[sc.wall], click, memberCount, room.roomLeft, room.roomRight, config)
         .map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) }));
-      const out = FormationWallRules.EndLooks(placed, slots, config);
-      wallEnd.cases.push({ in: { scene, walls: placed.map(seg), slots },
-        out: { spread: out.spread, basePct: round(out.basePct), pct: round(out.pct), slots: out.slots.map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) })) } });
+      // v2.4 + the corner stack: also with the second slot's look fixed (a look a higher rule decided - the stack's point man / rear man).
+      for (const fixed of memberCount >= 3 ? [[], [slots[1].role]] : [[]]) {
+        const out = FormationWallRules.EndLooks(placed, slots, config, fixed);
+        wallEnd.cases.push({ in: { scene, walls: placed.map(seg), slots, fixed },
+          out: { spread: out.spread, basePct: round(out.basePct), pct: round(out.pct), slots: out.slots.map((x) => ({ role: x.role, pos: r2(x.pos), yaw: round(x.yaw) })) } });
+      }
     }
   }
 

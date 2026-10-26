@@ -113,6 +113,27 @@ bool FFormationApproachPairAndFourTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_APPROACH_TEST(FFormationApproachNeverSplitTest, "NeverSplitFirst")
+bool FFormationApproachNeverSplitTest::RunTest(const FString&)
+{
+	using namespace FormationApproachTestUtil;
+	const FFormationConfig Config;
+	FFormationWall Side;
+	Side.A = FVector2D(0.0, -250.0);
+	Side.B = FVector2D(1500.0, -250.0);
+	Side.Thickness = 40.f;
+	const TArray<FFormationWall> Walls = { Face(), Side };
+	const TArray<FFormationSlot> Slots = Layout(4);
+	const FFormationApproachResult Res = FormationWallRules::Approach(Walls, Slots, 0.f, At(Slots, { { AR::Commander, FVector2D(400.0, 0.0) },
+		{ AR::Right, FVector2D(680.0, 260.0) }, { AR::Left, FVector2D(680.0, -400.0) }, { AR::Rear, FVector2D(960.0, 0.0) } }), {}, Config);
+	TestTrue(TEXT("a man beyond the side wall runs round it (never split first)"), ApproachLookOf(Res, AR::Left).Duty == EFormationApproachDuty::Run
+		&& !ApproachLookOf(Res, AR::Left).Yaw.IsSet());
+	const FFormationApproachResult Back = FormationWallRules::Approach(Walls, Slots, 0.f, At(Slots, { { AR::Right, FVector2D(520.0, 200.0) },
+		{ AR::Left, FVector2D(500.0, -150.0) }, { AR::Rear, FVector2D(800.0, 0.0) } }), Res.State, Config);
+	TestTrue(TEXT("round the wall: his flank look again"), ApproachLookOf(Back, AR::Left).Duty == EFormationApproachDuty::Flank);
+	return true;
+}
+
 #undef FORMATION_APPROACH_TEST
 
 #endif

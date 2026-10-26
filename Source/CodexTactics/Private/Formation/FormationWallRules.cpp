@@ -287,7 +287,8 @@ namespace FormationWallRules
 		return WallEndCoverage(Visible, Directions, Looks, 0.5 * static_cast<double>(FovDeg));
 	}
 
-	FFormationWallEndResult EndLooks(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots, const FFormationConfig& Config)
+	FFormationWallEndResult EndLooks(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots, const FFormationConfig& Config,
+		const TArray<EFormationRole>& Fixed)
 	{
 		using FormationMath::NormYaw;
 		FFormationWallEndResult Result;
@@ -341,11 +342,18 @@ namespace FormationWallRules
 			}
 		};
 		TArray<double> Spread = Looks;
-		Hold(0, Spread[0]); // K keeps his look (away from the wall)
+		// K keeps his look (away from the wall), and so does every Fixed role (the corner stack's); their cones are held first.
 		TArray<int32> Left;
-		for (int32 Member = 1; Member < Slots.Num(); ++Member)
+		for (int32 Member = 0; Member < Slots.Num(); ++Member)
 		{
-			Left.Add(Member);
+			if (Member == 0 || Fixed.Contains(Slots[Member].Role))
+			{
+				Hold(Member, Spread[Member]);
+			}
+			else
+			{
+				Left.Add(Member);
+			}
 		}
 		while (Left.Num() > 0)
 		{
@@ -522,6 +530,10 @@ namespace FormationWallRules
 				{
 					Look.Duty = EFormationApproachDuty::Run;
 				}
+			}
+			else if (!Arrived(Slot) && FormationMath::SegmentBlocked(PosOf(Slot.Role), Slot.Position, Walls, WallEndRayRadius))
+			{
+				Look.Duty = EFormationApproachDuty::Run; // the squad never splits first: round the wall facing his run, his role kept
 			}
 			else if (State.Rear.IsSet() && Slot.Role == State.Rear.GetValue())
 			{

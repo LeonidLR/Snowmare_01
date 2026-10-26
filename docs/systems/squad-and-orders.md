@@ -130,6 +130,35 @@ and the others are spread over the open arc (at an end face: the two men beside 
 no flicker, no reshuffle. Log `[Formation] wall END: the looks spread over the open arc (62 % -> 98 % held, ...)`. `Codex.Formation.WallEnd 0` = the face
 looks (A/B). Smoke `FormationWallGroupSmoke` scene 4 (a thin wall's end face by the group cover order: 63 % held with the switch 0, 98 % on); tests
 `CodexTactics.Formation.WallEnd.*`, `Parity.WallEnd`.
+### Rules v2.4 at a wall's end (2026-10-26, branch formation/v24-corner-peek; the game designer's bug report, FORMATION_SECTORS.md v2.4)
+
+Runtime fixes behind `Codex.Formation.Sectors` (the world-wall parts also behind `Codex.Formation.V21`); pure glue `Formation/FormationWallEndRules`
+(`CodexTactics.Formation.WallEnd.*`), no TS / golden change.
+- **A - the corner stack:** `TryStartFormationSlide` asks `FormationWallEnd::FindStackEnd` (the world walls: the squad's wall parallel to the layout,
+  K's place over its span; the end in the travel direction is free - no other wall within the thicknesses + `CORNER_JOINT`; the destination from
+  `StackReachCm` 125 before to `StackPastCm` 200 past it, on the squad's side, within `slide.max_off_wall`) -> the slide's destination becomes K's
+  place of the stack (`StackShift`: the leading place `EdgeInsetCm` 40 short of the end; already there -> the stack in place). The slide's stop ->
+  `HoldCornerStack` (a wall order: `StackSlots` - the point man `CornerPeekYaw`, the corner watch's look at the corner; the trailing end back along
+  the wall 20 deg out; K the normal; a 4th the normal turned `wall.neighbour_deg` to the rear), crouched after the group cover order. Evidence
+  before the fix (FormationCornerPeekSmoke log): `the leader's order from the wall layout is no slide (-720 cm along, room 650 / 500 cm)` -> the
+  wall order ended, a column / echelon_left walked up, the leader stood at the edge looking along the wall, nobody peeked.
+- **B - the fitted layout:** `ComputeWallLayout` (the group cover order, the automatic layout) and `HoldWallLayoutAt` (after a slide, a leader switch)
+  run `FitWallLayoutToWorld`: `FormationWallEnd::FitLayout` with "usable" = no world wall body within 10 cm of the line from K's place, 30 cm off
+  every wall body, on the nav mesh within 30 cm; a cut place moves to the next free step on K's other side (log `[Formation] wall layout fitted:`).
+  Evidence (FormationWallSwitchSmoke, a T junction): before, K's slot next to the joint put a place inside / behind the long wall - 206 / 182 cm
+  stand-ins round the leader's CURRENT position while he still ran round, a member cut off 1.6 s; after, all four variants settle on their places,
+  0 cut off. The exact split of the user's screenshot (K alone on the far side) was not reproduced; the mechanism (layout places across the
+  junction wall + stand-ins round the running leader) is what the fit removes.
+- **C - the squad's guide lines:** `USquadSubsystem::PreviewFormationMove` (group mode, the wall layout standing, the leader not in a cover slot, the
+  point within `slide.max_off_wall` of the squad's wall): a slide / the stack -> one line per member to his place; else the leader's nav-mesh path
+  (it wraps the wall's end). `ACodexTacticsPlayerController::UpdateSquadMoveHover` (PlayerTick's cursor hit; cached while cursor and leader rest),
+  `GetSquadMovePreviewPaths`; `ACodexTacticsHUD::DrawSquadMovePreview` (the wrap preview's dashes via `DrawDashedGroundPath`).
+- **D - a leader switch at the wall:** `SetLeader` sets `Sectors.LastLeaderSerial` to the new leader's serial (the switch was read as his new order:
+  a phantom slide / bypass to his last formation-follow destination - in the log `wall slide 2 ... 100 cm` right at a switch, the new leader
+  "walking" at 3 cm/s into a team-mate), ends a bypass and calls `PassWallOrderToLeader`: a wall order / slide goes on with him (the layout round
+  him, the crouch kept, `AssignWallRolesByTravel`). `UpdateSectorFollower`: walking into the wall layout, `FormationWallEnd::StepRound` steps round a
+  team-mate standing in the line (out 110 cm, 55 cm past him). Smoke `FormationLeaderSwapSlideSmoke` uses the player's own clicks
+  (`HandleWorldHit`: the wall twice, a member, the ground).
 
 ### Rules v2.3 in the runtime (2026-10-26, branch formation/runtime-v23; behind `Codex.Formation.Sectors` and `Codex.Formation.V21`)
 

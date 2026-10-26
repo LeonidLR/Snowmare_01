@@ -3498,8 +3498,8 @@
      },
      {
       "role": "L",
-      "duty": "flank",
-      "yaw": 90
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
@@ -7047,8 +7047,8 @@
      },
      {
       "role": "L",
-      "duty": "flank",
-      "yaw": -30
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
@@ -8095,8 +8095,8 @@
      },
      {
       "role": "Z",
-      "duty": "rear",
-      "yaw": 0
+      "duty": "run",
+      "yaw": null
      }
     ]
    }
@@ -9373,13 +9373,13 @@
      },
      {
       "role": "P",
-      "duty": "flank",
-      "yaw": -90
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
-      "duty": "rear",
-      "yaw": 0
+      "duty": "run",
+      "yaw": null
      }
     ]
    }
@@ -9628,8 +9628,8 @@
      },
      {
       "role": "L",
-      "duty": "flank",
-      "yaw": -90
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
@@ -10943,18 +10943,18 @@
      },
      {
       "role": "P",
-      "duty": "flank",
-      "yaw": -90
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "L",
-      "duty": "flank",
-      "yaw": 90
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
-      "duty": "rear",
-      "yaw": 0
+      "duty": "run",
+      "yaw": null
      }
     ]
    }
@@ -11088,8 +11088,8 @@
      },
      {
       "role": "L",
-      "duty": "flank",
-      "yaw": -90
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
@@ -12007,8 +12007,8 @@
      },
      {
       "role": "Z",
-      "duty": "rear",
-      "yaw": -120
+      "duty": "run",
+      "yaw": null
      }
     ]
    }
@@ -13285,13 +13285,13 @@
      },
      {
       "role": "P",
-      "duty": "flank",
-      "yaw": 150
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
-      "duty": "rear",
-      "yaw": -120
+      "duty": "run",
+      "yaw": null
      }
     ]
    }
@@ -13540,8 +13540,8 @@
      },
      {
       "role": "L",
-      "duty": "flank",
-      "yaw": 150
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
@@ -14855,18 +14855,18 @@
      },
      {
       "role": "P",
-      "duty": "flank",
-      "yaw": 150
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "L",
-      "duty": "flank",
-      "yaw": -30
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",
-      "duty": "rear",
-      "yaw": -120
+      "duty": "run",
+      "yaw": null
      }
     ]
    }
@@ -15000,8 +15000,8 @@
      },
      {
       "role": "L",
-      "duty": "flank",
-      "yaw": 150
+      "duty": "run",
+      "yaw": null
      },
      {
       "role": "Z",

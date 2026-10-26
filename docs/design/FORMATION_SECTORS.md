@@ -281,7 +281,43 @@ flipped in the morning.
   expectations rather than rule bugs.
 - #6 rear pace (5), #2 rear cover (2: 88-89 % vs 90 %): borderline.
 
-## v2.4 — the wall end (user bug report 2026-10-26, via the coordinator; contract section 14)
+## v2.4 - the squad at a wall's end (user bug report 2026-10-26, game designer testing rules v2.3 in the editor; branch formation/v24-corner-peek)
+Runtime fixes (no change to the TS reference rules / golden; pure glue `Formation/FormationWallEndRules`, tests `CodexTactics.Formation.WallEnd.*`;
+smokes `FormationCornerPeekSmoke`, `FormationWallSwitchSmoke`, `FormationSquadPathPreviewSmoke`, `FormationLeaderSwapSlideSmoke`). The Training
+Ground simulator does not model the corner stack / the fitted layout yet (follow-up for the simulator session).
+- **A - the corner stack (user, 2026-10-26: "the man on the corner side should come up and peek round the corner; the Commander stays behind
+  him; the man on the far side looks back / left along the wall, covering the rear")**: the squad stands in the wall layout and the leader's
+  next destination lies at a FREE end of the same wall (from 1.25 m before the end to 2 m past it, on the squad's side, within
+  slide.max_off_wall of the wall; a joint - an L / T corner - is no free end) -> the wall slide runs to the edge: the place nearest the end (the
+  point man) stops 40 cm short of it and looks round the corner (the corner watch's look at the corner: 50 cm beyond the wall body), the
+  others keep the slide's order behind him (with three, K in the middle = second), the trailing end looks back along the wall turned 20 deg
+  out (the rear guard), K away from the wall; held, crouched after the group cover order, until the leader's next order. The cause: a
+  destination at / just past the end lay outside the measured wall, so the order was "no slide": the wall order ended, the squad walked a
+  normal column / echelon and the leader himself stood at the edge looking along the wall (the corner watch only runs on the move); a click
+  just inside the end slid the line on and re-formed the plain layout (L 8 / K 6 / P 4) - nobody peeked. Interpretation: "K in the middle"
+  of the slide holds - in a stack of three K behind the point man IS the middle; with four the slide's order is kept (nobody passes anybody),
+  so K may be third (a fourth man between them looks out, turned to the rear by wall.neighbour_deg). A click clearly round the corner (behind the wall's face line) stays a normal move (the squad goes round).
+- **B - the wall layout never splits the squad (user: "the team split completely, which must never happen")**: FormationWallRules::Layout
+  put the members a step either side of K whatever stood there - at a T / L junction or the wall's end a place landed inside or behind the
+  other wall (an unwalkable place: a stand-in round the leader's CURRENT position while he still ran round). Now every layout (the group
+  cover order, the automatic one, the one held after a slide or a leader switch) is fitted to the world: a place cut off from K's place by a
+  wall body, inside a wall's clearance or off the nav mesh moves to the next free step on K's other side; the moved line's looks follow the
+  positions (outer end wall.end_deg, its neighbour wall.neighbour_deg, alone wall.flank_deg; the pair +-45 mirrored).
+- **C - the squad's guide lines (user: the dashed line along / round the wall shows for one operative, not for the squad)**: the single
+  operative's wrap preview needs him in a cover slot; the squad in the formation wall layout stands in none. Now, standing in the wall layout
+  in group mode, the ground under the cursor along the wall or round its end (within slide.max_off_wall of it) shows the same dashed lines:
+  a slide (and the corner stack) - each member's line to his place; else the leader's nav-mesh path (it wraps the wall's end).
+- **D - one leader switch at the wall broke the next move (user: "change the leader ONCE: the members swap places, as they should; after
+  that the slide along the wall no longer works")**: (1) the switch itself counted as a new order of the new leader (his move serial was
+  compared with the old leader's): a phantom slide / bypass to his stale formation-follow destination - often a team-mate's spot, so he
+  pushed against him at ~3 cm/s, "walking" in place; (2) the switch ended the wall order ("the leader changed"): the squad lost the hug
+  (no crouch), re-formed in the automatic layout. Now a switch is no order, and the wall order (a running slide too) goes on with the new
+  leader: the layout round him at the same wall (K in the middle), crouched as before, the places by minimal travel (a man re-forming past a team-mate standing in the
+  line steps round him on the open side - the nav mesh ignores bodies); his next click slides the line as with the original leader.
+
+## v2.4 — the wall end's open arc (user bug report 2026-10-26, via the coordinator; contract section 14; branch formation/v24-wall-end)
+- **With the corner stack above (coordinator 2026-10-26)**: the stack's looks are fixed (the point man round the corner, K out, the trailing
+  end back along the wall); the open-arc widening below applies only AROUND them (a fourth man between them may be spread) - `EndLooks`' `fixed` roles.
 - **2026-10-26: wall end: the group covers the whole open arc, flanks included (user bug report)** - in the editor
   (`Codex.Formation.Debug`) three operatives crouched at the END FACE of a thin free-standing wall left large uncovered zones on both
   sides of the end, along the wall's two faces ("big uncovered zones form on the sides of the end - stabilise it so they cover the large
@@ -321,3 +357,6 @@ flipped in the morning.
     flank men walk sideways at the walk pace - neither copies the leader's sprint (a sprinting man faces his run). So the squad settles a
     little later than before (the game smoke: ~4 s instead of ~2 s from 9 m), the price of the covered rear.
   - *The first arrival*: the runner looks along the wall from his arrival until everyone is in, then turns to his layout look (K 6 o'clock).
+  - *The squad never splits comes first* (found by FormationWallSwitchSmoke after the merge with the corner stack): a man whose straight way
+    to his slot passes a wall (a switch round a corner to a cross wall) goes round it facing his run at the squad's pace - holding his look he
+    fell 4 s behind the leader round the corner - and takes his approach look again once the way is clear.

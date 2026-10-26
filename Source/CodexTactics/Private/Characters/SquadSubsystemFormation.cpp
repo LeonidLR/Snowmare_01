@@ -357,9 +357,14 @@ bool USquadSubsystem::ComputeWallLayout(const FVector& Origin, const FVector2D& 
 		FormationWallRules::BreakRoomTie(RoomLeft, RoomRight, FVector2D::Distance(Fourth, Anchor - RightAlong * (2.f * Config.WallSpacing)),
 			FVector2D::Distance(Fourth, Anchor + RightAlong * (2.f * Config.WallSpacing)));
 	}
-	Sectors.WallSlots = FormationWallRules::Layout(Wall, ClickedSlot, Count, RoomLeft, RoomRight, Config);
 	Sectors.WallNormalYaw = FormationWallRules::OutwardYaw(Wall, ClickedSlot);
-	ApplyFormationWallEnd(Origin, TowardsWall, MaxDistance);
+	// Bug B (game designer 2026-10-26, "the team split completely"): no place on the far side of a wall from K's place (a T / L junction at the
+	// clicked slot, the wall's end) - such a place moves to K's other side (FormationWallEnd::FitLayout).
+	const AOperativeCharacter* FitLeader = Leader.Get();
+	Sectors.WallSlots = FitWallLayoutToWorld(FormationWallRules::Layout(Wall, ClickedSlot, Count, RoomLeft, RoomRight, Config), Sectors.WallNormalYaw,
+		FitLeader ? SquadSubsystemFormationLocal::FormationFeetZ(*FitLeader) : static_cast<float>(Origin.Z) - FormationRuntime::ProbeHeightCm);
+	Sectors.bCornerStack = false;
+	ApplyFormationWallEnd(Origin, TowardsWall, MaxDistance); // v2.4 wall end: the open arc round an end face (after the fit)
 	Sectors.Approach.Reset(); // v2.5: a new layout - the covered approach begins again
 	Sectors.ApproachLooks.Reset();
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall layout: %d members, outward yaw %.0f, room left %.0f / right %.0f cm"), Count,
@@ -367,7 +372,7 @@ bool USquadSubsystem::ComputeWallLayout(const FVector& Origin, const FVector2D& 
 	return Sectors.WallSlots.Num() > 0;
 }
 
-void USquadSubsystem::ApplyFormationWallEnd(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance)
+void USquadSubsystem::ApplyFormationWallEnd(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, const TArray<EFormationRole>& FixedRoles)
 {
 	using namespace SquadSubsystemFormationLocal;
 	Sectors.bWallEndSpread = false;
@@ -395,7 +400,7 @@ void USquadSubsystem::ApplyFormationWallEnd(const FVector& Origin, const FVector
 	}
 	const float Reach = Config.WallEndProbeDist + WallEndGatherMarginCm;
 	Walls.Append(GatherFormationWalls(Centre, FVector2D(Reach, Reach), 0.f, static_cast<float>(Origin.Z)));
-	const FFormationWallEndResult End = FormationWallRules::EndLooks(Walls, Sectors.WallSlots, Config);
+	const FFormationWallEndResult End = FormationWallRules::EndLooks(Walls, Sectors.WallSlots, Config, FixedRoles);
 	Sectors.WallEndBasePct = static_cast<float>(End.BasePct);
 	Sectors.WallEndPct = static_cast<float>(End.Pct);
 	if (!End.bSpread)
@@ -825,7 +830,27 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	const bool bRearCover = Duty.IsSet() && Duty.GetValue() == EFormationApproachDuty::Rear && Operative.GetStance() != EOperativeStance::Prone;
 	const bool bRun = !bRearCover && (LeaderRef.IsSprinting() || Operative.GetStance() == EOperativeStance::Prone);
 	const float Top = Operative.GetMaxSpeed(); // his walk / crawl, or the sprint he copies from the leader
-	const FormationRuntime::FFollowerMove Move = FormationRuntime::FollowerMove(Here, static_cast<float>(Operative.GetActorRotation().Yaw), Target,
+	// Bug D (2026-10-26): walking into the wall layout along the wall, a team-mate standing in the line between him and his place is stepped
+	// round on the open side (the nav mesh ignores bodies: a man re-forming past the crouched leader pushed against him for good).
+	FVector2D MoveTarget = Target;
+	if (bWall && !Sectors.bSlide && Distance > WallSettleCm)
+	{
+		TArray<FVector2D> Others;
+		Others.Add(FVector2D(LeaderRef.GetActorLocation()));
+		for (const FFollowerState& Other : Followers)
+		{
+			if (Other.Operative.IsValid() && Other.Operative.Get() != &Operative)
+			{
+				Others.Add(FVector2D(Other.Operative->GetActorLocation()));
+			}
+		}
+		if (const TOptional<FVector2D> Step = FormationWallEnd::StepRound(Here, Target, Others, Sectors.WallNormalYaw); Step.IsSet())
+		{
+			MoveTarget = Step.GetValue();
+			SlotVelocity = FVector2D::ZeroVector;
+		}
+	}
+	const FormationRuntime::FFollowerMove Move = FormationRuntime::FollowerMove(Here, static_cast<float>(Operative.GetActorRotation().Yaw), MoveTarget,
 		SlotVelocity, Jitter, Top, bRearCover ? FMath::Min(Top, FormationTuning::Get().PaceWalkSpeed) : Top, bRun, FormationTuning::Get());
 	Follower.bCatchUp = !Move.bStop && Move.Speed > 1.f;
 	Follower.CatchUpMoveYaw = FormationMath::YawOf(Move.Velocity);
@@ -841,7 +866,7 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		return true;
 	}
 	Follower.bParked = false;
-	const FVector2D Destination = FormationRuntime::LeadDestination(Target, SlotVelocity);
+	const FVector2D Destination = FormationRuntime::LeadDestination(MoveTarget, SlotVelocity);
 	const EOperativeOrderResult Result = Operative.FollowTo(FVector(Destination.X, Destination.Y, SlotLocation.Z), Move.Speed);
 	if (CVarFormationDebug.GetValueOnGameThread() >= 2)
 	{
@@ -918,6 +943,8 @@ void USquadSubsystem::EndFormationWallOrder(const TCHAR* Why)
 	Sectors.bWallOrder = false;
 	Sectors.bWallOrderCrouch = true;
 	Sectors.bSlide = false;
+	Sectors.bSlideStack = false;
+	Sectors.bCornerStack = false;
 	Sectors.bWallLayoutValid = false;
 	Sectors.WallOrderRoles.Reset();
 	Sectors.WallOrderLeader.Reset();
@@ -1026,6 +1053,8 @@ void USquadSubsystem::ResetFormationState(const FVector& Forward)
 	Sectors.Corner = FFormationCornerState();
 	Sectors.CornerLooks.Reset();
 	Sectors.bSlide = false;
+	Sectors.bSlideStack = false;
+	Sectors.bCornerStack = false;
 	Sectors.bLastLeaderSerialValid = false;
 	Sectors.RearGuard.Reset();
 	FormationHeading = FVector(Forward.X, Forward.Y, 0.f).GetSafeNormal();

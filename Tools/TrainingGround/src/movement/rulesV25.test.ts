@@ -107,3 +107,13 @@ test('v2.5: the rear cover is the man already looking back (the patrol rear guar
   assert.equal(FormationWallRules.Approach([face], slots, 0, at(slots, where), null, C).state.rear, 'Z', 'Z looks back, P is farther');
   assert.equal(FormationWallRules.Approach([face], slots, 0, at(slots, where, { P: 180, Z: 180 }), null, C).state.rear, 'P', 'nobody looks back: the farthest');
 });
+
+test('v2.5: the squad never splits first - a man whose way to his slot passes a wall goes round it facing his run, his role kept', () => {
+  const corner: Segment[] = [face, { a: [0, -250], b: [1500, -250], thickness: 40 }];
+  const slots = layout(4);
+  const r = FormationWallRules.Approach(corner, slots, 0, at(slots, { K: [400, 0], P: [680, 260], L: [680, -400], Z: [960, 0] }), null, C);
+  assert.deepEqual(lookOf(r, 'L'), { role: 'L', duty: 'run', yaw: null }, 'L is beyond the side wall');
+  assert.ok(r.state.flanks.some((f) => f.role === 'L'), 'his flank role is kept');
+  const back = FormationWallRules.Approach(corner, slots, 0, at(slots, { K: 'slot', P: [520, 200], L: [500, -150], Z: [800, 0] }), r.state, C);
+  assert.equal(lookOf(back, 'L').duty, 'flank', 'round the wall: his flank look again');
+});

@@ -133,3 +133,12 @@ test('v2.4: the lab route R_G_end (W_G_20\'s free end face) - check 13 green for
   } });
   assert.ok(frames > 60, `${frames} standing frames`);
 });
+
+test('v2.4: looks a higher rule fixed (the corner stack) stay; only the others are spread round them', () => {
+  const slots = layoutAt(thin, [65, 0], 4);
+  const r = FormationWallRules.EndLooks([thin], slots, C, [slots[1].role]);
+  assert.ok(r.spread && r.pct > r.basePct);
+  assert.equal(r.slots[0].yaw, slots[0].yaw);
+  assert.equal(r.slots[1].yaw, slots[1].yaw);
+  assert.equal(FormationWallRules.EndLooks([thin], slots, C, slots.slice(1).map((s) => s.role)).spread, false);
+});

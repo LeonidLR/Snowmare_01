@@ -1,11 +1,10 @@
-// CodexTactics.Formation.WallEnd.* - v2.4 the wall layout at a wall END (FormationWallRules::EndLooks / OpenArcCoverage; user bug report
-// 2026-10-26: three operatives crouched at the end face of a thin free-standing wall left large uncovered zones on both sides of the end;
-// docs/design/FORMATION_CONTRACT.md 14; mirrors Tools/TrainingGround/src/movement/rulesV24.test.ts). UE-only (no Godot reference).
-// The thin wall runs along -X and ends at the origin; the leader's wall slot is 45 cm off its end face on the axis (outward normal +X).
+// CodexTactics.Formation.WallEnd.* - the squad at a wall's end (Formation/FormationWallEndRules; the game designer's bug report 2026-10-26,
+// docs/design/FORMATION_SECTORS.md "v2.4"): the corner stack at a free wall end (bug A: the point man at the edge peeks round the corner, K
+// second, the rear man back along the wall) and the wall layout fitted to the world (bug B: no place on the far side of a wall from K's
+// place). UE-only (no golden: the Training Ground simulator does not model it yet).
 
 #include "Misc/AutomationTest.h"
-#include "Formation/FormationWallGroupRules.h"
-#include "Formation/FormationWallRules.h"
+#include "Formation/FormationWallEndRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -15,144 +14,172 @@
 
 namespace FormationWallEndTestUtil
 {
-	FFormationWall Wall(const FVector2D& A, const FVector2D& B, float Thickness)
+	FFormationWall WallEndSeg(double AX, double AY, double BX, double BY, float Thickness = 40.f)
 	{
 		FFormationWall Out;
-		Out.A = A;
-		Out.B = B;
+		Out.A = FVector2D(AX, AY);
+		Out.B = FVector2D(BX, BY);
 		Out.Thickness = Thickness;
 		return Out;
 	}
 
-	TArray<FFormationSlot> LayoutAt(const FFormationWall& InWall, const FVector2D& Click, int32 Count, const FFormationConfig& Config)
+	FFormationSlot WallEndSlot(EFormationRole Role, double X, double Y, float Yaw)
 	{
-		float RoomLeft = 0.f;
-		float RoomRight = 0.f;
-		FormationWallRules::WallRoom(InWall, Click, RoomLeft, RoomRight);
-		return FormationWallRules::Layout(InWall, Click, Count, RoomLeft, RoomRight, Config);
+		FFormationSlot Slot;
+		Slot.Role = Role;
+		Slot.Position = FVector2D(X, Y);
+		Slot.Yaw = Yaw;
+		return Slot;
 	}
 
-	double Coverage(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots, const FFormationConfig& Config)
+	const FFormationSlot* WallEndSlotOf(const TArray<FFormationSlot>& Slots, EFormationRole Role)
 	{
-		TArray<FVector2D> Positions;
-		TArray<float> Looks;
-		for (const FFormationSlot& Slot : Slots)
-		{
-			Positions.Add(Slot.Position);
-			Looks.Add(Slot.Yaw);
-		}
-		return FormationWallRules::OpenArcCoverage(Walls, Positions, Looks, Config.SightFov, Config.WallEndProbeDist).Pct;
+		return Slots.FindByPredicate([Role](const FFormationSlot& Slot) { return Slot.Role == Role; });
+	}
+
+	/** The long wall along X (-600..600, 40 thick), the squad in front of it at y -65 (the outward normal yaw -90): K at 100, P at 0, Z at 200. */
+	constexpr float WallEndNormalYaw = -90.f;
+
+	TArray<FFormationSlot> WallEndLayoutOfThree()
+	{
+		return { WallEndSlot(EFormationRole::Commander, 100.0, -65.0, -90.f), WallEndSlot(EFormationRole::Right, 0.0, -65.0, -150.f),
+			WallEndSlot(EFormationRole::Rear, 200.0, -65.0, -30.f) };
 	}
 }
 
-FORMATION_WALL_END_TEST(FFormationWallEndBugTest, "FaceLooksLeaveTheEndsFlanksOpen")
-bool FFormationWallEndBugTest::RunTest(const FString&)
+FORMATION_WALL_END_TEST(FFormationWallEndFindStackEndTest, "FindStackEnd")
+bool FFormationWallEndFindStackEndTest::RunTest(const FString&)
 {
 	using namespace FormationWallEndTestUtil;
-	const FFormationConfig Config;
-	const FFormationWall Thin = Wall(FVector2D(-1500.0, 0.0), FVector2D(0.0, 0.0), 40.f);
-	for (int32 Count = 3; Count <= 4; ++Count)
+	const TArray<FFormationWall> Walls = { WallEndSeg(-600.0, 0.0, 600.0, 0.0) };
+	const FVector2D K(100.0, -65.0);
+	TestEqual(TEXT("The squad's wall is the long wall"), FormationWallEnd::FindSquadWall(Walls, K, WallEndNormalYaw), 0);
+	TestEqual(TEXT("No squad wall from its far side"), FormationWallEnd::FindSquadWall(Walls, FVector2D(100.0, 65.0), WallEndNormalYaw), INDEX_NONE);
+	// The user's click: 20 cm past the free end, 90 cm off the face.
+	const TOptional<FFormationStackEnd> Stack = FormationWallEnd::FindStackEnd(Walls, K, WallEndNormalYaw, FVector2D(-620.0, -110.0));
+	if (TestTrue(TEXT("A move to the wall's free end is the corner stack"), Stack.IsSet()))
 	{
-		const TArray<FFormationSlot> Slots = LayoutAt(Thin, FVector2D(65.0, 0.0), Count, Config);
-		TestEqual(FString::Printf(TEXT("%d: K looks away from the end face"), Count), Slots[0].Yaw, 0.f, 0.01f);
-		const double Pct = Coverage({ Thin }, Slots, Config);
-		TestTrue(FString::Printf(TEXT("%d: the face looks hold only %.1f %% of the open arc round the end (the user's report)"), Count, Pct), Pct < 75.0);
+		TestTrue(TEXT("... at the end the move runs to"), Stack->End.Equals(FVector2D(-600.0, 0.0), 0.01));
+		TestTrue(TEXT("... the travel along the wall towards it"), Stack->Along.Equals(FVector2D(-1.0, 0.0), 0.001));
+		TestEqual(TEXT("... the wall's thickness"), Stack->Thickness, 40.f);
 	}
+	TestTrue(TEXT("1 m short of the end still asks for the edge"), FormationWallEnd::FindStackEnd(Walls, K, WallEndNormalYaw, FVector2D(-500.0, -110.0)).IsSet());
+	TestFalse(TEXT("3 m short of the end: a plain slide"), FormationWallEnd::FindStackEnd(Walls, K, WallEndNormalYaw, FVector2D(-300.0, -110.0)).IsSet());
+	TestFalse(TEXT("Round the corner on the far side: no stack (a move round the end)"), FormationWallEnd::FindStackEnd(Walls, K, WallEndNormalYaw, FVector2D(-620.0, 110.0)).IsSet());
+	TestFalse(TEXT("4 m out from the wall: no stack (a plain move)"), FormationWallEnd::FindStackEnd(Walls, K, WallEndNormalYaw, FVector2D(-620.0, -500.0)).IsSet());
+	TestFalse(TEXT("A few cm along: no move at all"), FormationWallEnd::FindStackEnd(Walls, K, WallEndNormalYaw, FVector2D(80.0, -110.0)).IsSet());
+	// The other end, to the right of the squad (seen facing the wall: -X is right).
+	const TOptional<FFormationStackEnd> Other = FormationWallEnd::FindStackEnd(Walls, K, WallEndNormalYaw, FVector2D(610.0, -100.0));
+	TestTrue(TEXT("The other free end too"), Other.IsSet() && Other->End.Equals(FVector2D(600.0, 0.0), 0.01));
+	// A joint: a cross wall at the end (an L corner) - nothing to peek round.
+	const TArray<FFormationWall> Corner = { WallEndSeg(-600.0, 0.0, 600.0, 0.0), WallEndSeg(-620.0, 0.0, -620.0, 800.0) };
+	TestFalse(TEXT("An L corner's end is a joint: no stack"), FormationWallEnd::FindStackEnd(Corner, K, WallEndNormalYaw, FVector2D(-560.0, -110.0)).IsSet());
 	return true;
 }
 
-FORMATION_WALL_END_TEST(FFormationWallEndSpreadTest, "SpreadCoversBothFlanks")
-bool FFormationWallEndSpreadTest::RunTest(const FString&)
+FORMATION_WALL_END_TEST(FFormationWallEndStackSlotsTest, "StackSlots")
+bool FFormationWallEndStackSlotsTest::RunTest(const FString&)
 {
 	using namespace FormationWallEndTestUtil;
-	const FFormationConfig Config;
-	for (const float Thickness : { 40.f, 20.f })
+	FFormationStackEnd End;
+	End.End = FVector2D(-600.0, 0.0);
+	End.Along = FVector2D(-1.0, 0.0);
+	End.Thickness = 40.f;
+	End.Wall = 0;
+	const TArray<FFormationSlot> Start = WallEndLayoutOfThree();
+	// P leads (x 0): he moves to 40 cm short of the end; the line keeps its order and spacing.
+	TestEqual(TEXT("The shift along the wall"), FormationWallEnd::StackShift(Start, End), 560.f);
+	const TArray<FFormationSlot> Stack = FormationWallEnd::StackSlots(Start, End, WallEndNormalYaw);
+	TestEqual(TEXT("K first, in the start order"), Stack[0].Role, EFormationRole::Commander);
+	const FFormationSlot* P = WallEndSlotOf(Stack, EFormationRole::Right);
+	const FFormationSlot* K = WallEndSlotOf(Stack, EFormationRole::Commander);
+	const FFormationSlot* Z = WallEndSlotOf(Stack, EFormationRole::Rear);
+	if (!TestTrue(TEXT("Every place"), P && K && Z))
 	{
-		const FFormationWall Thin = Wall(FVector2D(-1500.0, 0.0), FVector2D(0.0, 0.0), Thickness);
-		const FVector2D Click(0.5 * Thickness + Config.WallFaceOffset, 0.0);
-		for (int32 Count = 3; Count <= 4; ++Count)
-		{
-			const TArray<FFormationSlot> Slots = LayoutAt(Thin, Click, Count, Config);
-			const FFormationWallEndResult Result = FormationWallRules::EndLooks({ Thin }, Slots, Config);
-			const FString Case = FString::Printf(TEXT("%.0f cm wall, %d"), Thickness, Count);
-			TestTrue(Case + TEXT(": spread"), Result.bSpread);
-			TestTrue(FString::Printf(TEXT("%s: %.1f -> %.1f %% (>= 95)"), *Case, Result.BasePct, Result.Pct), Result.BasePct < Config.WallEndCoverPct && Result.Pct >= 95.0);
-			TestEqual(Case + TEXT(": K keeps his look"), Result.Slots[0].Yaw, Slots[0].Yaw, 0.01f);
-			for (int32 Index = 0; Index < Slots.Num(); ++Index)
-			{
-				TestTrue(Case + TEXT(": positions and roles unchanged"), Result.Slots[Index].Role == Slots[Index].Role
-					&& FVector2D::Distance(Result.Slots[Index].Position, Slots[Index].Position) < 0.01);
-				TestFalse(FString::Printf(TEXT("%s: slot %d (look %.0f) does not face the wall"), *Case, Index, Result.Slots[Index].Yaw),
-					FormationWallGroup::FacesWall({ Thin }, Result.Slots[Index].Position, Result.Slots[Index].Yaw));
-			}
-			// Each flank along a face (5 m behind the end, 1.5 m off the face) is inside the cone of the man on that side.
-			for (const double Side : { 1.0, -1.0 })
-			{
-				const FVector2D Target(-500.0, 150.0 * Side);
-				bool bHeld = false;
-				for (const FFormationSlot& Slot : Result.Slots)
-				{
-					bHeld |= FMath::Sign(Slot.Position.Y) == Side
-						&& FormationMath::AngleBetween(Slot.Yaw, FormationMath::YawOf(Target - Slot.Position)) <= 0.5f * Config.SightFov;
-				}
-				TestTrue(FString::Printf(TEXT("%s: the %s flank along the face is held"), *Case, Side > 0.0 ? TEXT("+Y") : TEXT("-Y")), bHeld);
-			}
-		}
+		return false;
 	}
+	TestEqual(TEXT("The point man is the place nearest the end"), FormationWallEnd::PointRole(Stack, End), EFormationRole::Right);
+	TestTrue(TEXT("The point man at the edge (40 cm short of the end)"), P->Position.Equals(FVector2D(-560.0, -65.0), 0.01));
+	TestTrue(TEXT("K second, a step behind him"), K->Position.Equals(FVector2D(-460.0, -65.0), 0.01));
+	TestTrue(TEXT("The rear man last"), Z->Position.Equals(FVector2D(-360.0, -65.0), 0.01));
+	// The point man looks round the corner: at the point 50 cm beyond the wall body at its end -> turned from along the wall (180) towards
+	// the wall's far side (+Y).
+	TestEqual(TEXT("The point man peeks round the corner"), P->Yaw, static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(65.0, -110.0))), 0.01f);
+	TestTrue(TEXT("... turned 10-60 deg from along the wall towards its far side"), FMath::FindDeltaAngleDegrees(180.f, P->Yaw) < -10.f
+		&& FMath::FindDeltaAngleDegrees(180.f, P->Yaw) > -60.f);
+	TestEqual(TEXT("K away from the wall"), K->Yaw, -90.f, 0.01f);
+	TestEqual(TEXT("The rear man back along the wall, turned out (slide.lead_out_deg)"), Z->Yaw, -20.f, 0.01f);
+	// Moving the other way, Z leads.
+	FFormationStackEnd Right = End;
+	Right.End = FVector2D(600.0, 0.0);
+	Right.Along = FVector2D(1.0, 0.0);
+	const TArray<FFormationSlot> Mirror = FormationWallEnd::StackSlots(Start, Right, WallEndNormalYaw);
+	TestEqual(TEXT("The other end: Z is the point man"), FormationWallEnd::PointRole(Mirror, Right), EFormationRole::Rear);
+	TestTrue(TEXT("... at its edge"), WallEndSlotOf(Mirror, EFormationRole::Rear)->Position.Equals(FVector2D(560.0, -65.0), 0.01));
+	TestEqual(TEXT("... P the rear man looks back along the wall, turned out"), WallEndSlotOf(Mirror, EFormationRole::Right)->Yaw, -160.f, 0.01f);
+	// Four: the middle member who is not K looks out, turned towards the rear.
+	TArray<FFormationSlot> Four = Start;
+	Four.Add(WallEndSlot(EFormationRole::Left, 300.0, -65.0, 0.f));
+	const TArray<FFormationSlot> Stack4 = FormationWallEnd::StackSlots(Four, End, WallEndNormalYaw);
+	TestEqual(TEXT("Four: the last man (L) looks back"), WallEndSlotOf(Stack4, EFormationRole::Left)->Yaw, -20.f, 0.01f);
+	TestEqual(TEXT("Four: Z between K and L looks out, turned towards the rear (wall.neighbour_deg)"), WallEndSlotOf(Stack4, EFormationRole::Rear)->Yaw, -60.f, 0.01f);
 	return true;
 }
 
-FORMATION_WALL_END_TEST(FFormationWallEndFaceTest, "FaceAndPairUnchanged")
-bool FFormationWallEndFaceTest::RunTest(const FString&)
+FORMATION_WALL_END_TEST(FFormationWallEndFitLayoutTest, "FitLayout")
+bool FFormationWallEndFitLayoutTest::RunTest(const FString&)
 {
 	using namespace FormationWallEndTestUtil;
-	const FFormationConfig Config;
-	const FFormationWall Face = Wall(FVector2D(0.0, -1500.0), FVector2D(0.0, 1500.0), 40.f);
-	const FFormationWall Side = Wall(FVector2D(0.0, -150.0), FVector2D(1500.0, -150.0), 40.f);
-	for (int32 Count = 2; Count <= 4; ++Count)
-	{
-		for (const bool bCorner : { false, true })
-		{
-			const TArray<FFormationSlot> Slots = LayoutAt(Face, FVector2D(65.0, 0.0), Count, Config);
-			TArray<FFormationWall> Walls = { Face };
-			if (bCorner)
-			{
-				Walls.Add(Side);
-			}
-			const FFormationWallEndResult Result = FormationWallRules::EndLooks(Walls, Slots, Config);
-			TestFalse(FString::Printf(TEXT("%d%s: a face keeps the user's wall rule"), Count, bCorner ? TEXT(" (inner corner)") : TEXT("")), Result.bSpread);
-			for (int32 Index = 0; Index < Slots.Num(); ++Index)
-			{
-				TestEqual(TEXT("look unchanged"), Result.Slots[Index].Yaw, Slots[Index].Yaw, 0.001f);
-			}
-		}
-	}
-	// The pair at the end face: its looks are a user decision (K 7:30 / partner 4:30) - EndLooks needs 3+.
-	const FFormationWall Thin = Wall(FVector2D(-1500.0, 0.0), FVector2D(0.0, 0.0), 40.f);
-	TestFalse(TEXT("the pair keeps its looks"), FormationWallRules::EndLooks({ Thin }, LayoutAt(Thin, FVector2D(65.0, 0.0), 2, Config), Config).bSpread);
+	const TArray<FFormationSlot> Three = WallEndLayoutOfThree();
+	const auto Open = [](const FVector2D&, const FVector2D&) { return true; };
+	const TArray<FFormationSlot> Same = FormationWallEnd::FitLayout(Three, WallEndNormalYaw, Open);
+	TestTrue(TEXT("Every place usable: the layout unchanged"), Same[1].Position.Equals(Three[1].Position) && Same[1].Yaw == Three[1].Yaw);
+	// A cross wall at x 50 (a T junction next to K): P's place (x 0) lies beyond it.
+	const auto Junction = [](const FVector2D&, const FVector2D& Place) { return Place.X > 50.0; };
+	const TArray<FFormationSlot> Fitted = FormationWallEnd::FitLayout(Three, WallEndNormalYaw, Junction);
+	const FFormationSlot* P = WallEndSlotOf(Fitted, EFormationRole::Right);
+	const FFormationSlot* Z = WallEndSlotOf(Fitted, EFormationRole::Rear);
+	TestTrue(TEXT("K keeps the clicked place"), Fitted[0].Position.Equals(Three[0].Position) && Fitted[0].Yaw == Three[0].Yaw);
+	TestTrue(TEXT("P moves to K's other side, beyond Z"), P->Position.Equals(FVector2D(300.0, -65.0), 0.01));
+	TestTrue(TEXT("Z keeps his place"), Z->Position.Equals(FVector2D(200.0, -65.0), 0.01));
+	TestEqual(TEXT("The outer end (P) looks along the wall (wall.end_deg)"), P->Yaw, -15.f, 0.01f);
+	TestEqual(TEXT("His neighbour (Z) half way (wall.neighbour_deg)"), Z->Yaw, -60.f, 0.01f);
+	// Nowhere to go (both sides cut): stays (the runtime's stand-in takes over).
+	const auto Boxed = [](const FVector2D&, const FVector2D& Place) { return FMath::Abs(Place.X - 100.0) < 1.0; };
+	const TArray<FFormationSlot> Kept = FormationWallEnd::FitLayout(Three, WallEndNormalYaw, Boxed);
+	TestTrue(TEXT("Boxed in: the places stay"), Kept[1].Position.Equals(Three[1].Position) && Kept[2].Position.Equals(Three[2].Position));
+	// The pair: the partner on the cut side moves over, the pair's looks mirror (K 7:30 / 4:30 the other way).
+	const TArray<FFormationSlot> Pair = { WallEndSlot(EFormationRole::Commander, 100.0, -65.0, -45.f), WallEndSlot(EFormationRole::Rear, 0.0, -65.0, -135.f) };
+	const TArray<FFormationSlot> PairFitted = FormationWallEnd::FitLayout(Pair, WallEndNormalYaw, Junction);
+	TestTrue(TEXT("Pair: the partner on K's other side"), PairFitted[1].Position.Equals(FVector2D(200.0, -65.0), 0.01));
+	TestEqual(TEXT("Pair: K's look mirrored"), PairFitted[0].Yaw, -135.f, 0.01f);
+	TestEqual(TEXT("Pair: the partner's look mirrored"), PairFitted[1].Yaw, -45.f, 0.01f);
 	return true;
 }
 
-FORMATION_WALL_END_TEST(FFormationWallEndCoverageTest, "OpenArcCoverage")
-bool FFormationWallEndCoverageTest::RunTest(const FString&)
+FORMATION_WALL_END_TEST(FFormationWallEndStepRoundTest, "StepRound")
+bool FFormationWallEndStepRoundTest::RunTest(const FString&)
 {
 	using namespace FormationWallEndTestUtil;
-	const FFormationConfig Config;
-	const FFormationArcCoverage One = FormationWallRules::OpenArcCoverage({}, { FVector2D::ZeroVector }, { 0.f }, 140.f, 600.f);
-	TestEqual(TEXT("an open field: 180 ring points open"), One.Open, 180);
-	TestEqual(TEXT("one 140 deg cone holds 71 of them (-70..70 every 2 deg)"), One.Covered, 71);
-	const FFormationArcCoverage Three = FormationWallRules::OpenArcCoverage({}, { FVector2D::ZeroVector, FVector2D::ZeroVector, FVector2D::ZeroVector },
-		{ 0.f, 120.f, -120.f }, 140.f, 600.f);
-	TestEqual(TEXT("three cones 120 apart hold everything"), Three.Pct, 100.0, 1e-9);
-	// A zero-thickness box (the runtime's traced faces): nothing behind it is open.
-	const TArray<FFormationWall> Box = { Wall(FVector2D(-100.0, -100.0), FVector2D(100.0, -100.0), 0.f), Wall(FVector2D(100.0, -100.0), FVector2D(100.0, 100.0), 0.f),
-		Wall(FVector2D(100.0, 100.0), FVector2D(-100.0, 100.0), 0.f), Wall(FVector2D(-100.0, 100.0), FVector2D(-100.0, -100.0), 0.f) };
-	const FFormationArcCoverage Boxed = FormationWallRules::OpenArcCoverage(Box, { FVector2D::ZeroVector }, { 0.f }, 140.f, 600.f);
-	TestEqual(TEXT("boxed in: nothing open"), Boxed.Open, 0);
-	TestEqual(TEXT("boxed in: 100 % (nothing to hold)"), Boxed.Pct, 100.0, 1e-9);
+	// The re-form after a leader switch (FormationLeaderSwapSlideSmoke): the new leader crouched at x 208 in the line (y -65), the old one at
+	// x 128 must reach his place at x 308 - the leader stands in his way.
+	const FVector2D Here(128.0, -65.0);
+	const FVector2D Place(308.0, -65.0);
+	const TOptional<FVector2D> Step = FormationWallEnd::StepRound(Here, Place, { FVector2D(208.0, -65.0), FVector2D(38.0, -65.0) }, WallEndNormalYaw);
+	if (TestTrue(TEXT("A team-mate in the line between him and his place is stepped round"), Step.IsSet()))
+	{
+		TestTrue(TEXT("... 110 cm out from him on the open side, 55 cm past him"), Step->Equals(FVector2D(263.0, -175.0), 0.01));
+		TestFalse(TEXT("... and from there the way to the place is clear"),
+			FormationWallEnd::StepRound(Step.GetValue(), Place, { FVector2D(208.0, -65.0), FVector2D(38.0, -65.0) }, WallEndNormalYaw).IsSet());
+	}
+	TestFalse(TEXT("A team-mate behind him is no obstacle"), FormationWallEnd::StepRound(Here, Place, { FVector2D(38.0, -65.0) }, WallEndNormalYaw).IsSet());
+	TestFalse(TEXT("One standing on his place is no obstacle to step round (he waits for him)"),
+		FormationWallEnd::StepRound(Here, Place, { FVector2D(290.0, -65.0) }, WallEndNormalYaw).IsSet());
+	TestFalse(TEXT("One a metre out from the line leaves the way clear"), FormationWallEnd::StepRound(Here, Place, { FVector2D(208.0, -165.0) }, WallEndNormalYaw).IsSet());
+	TestFalse(TEXT("A short way: nothing to step round"), FormationWallEnd::StepRound(Here, FVector2D(200.0, -65.0), { FVector2D(170.0, -65.0) }, WallEndNormalYaw).IsSet());
 	return true;
 }
 
 #undef FORMATION_WALL_END_TEST
 
-#endif
+#endif // WITH_DEV_AUTOMATION_TESTS

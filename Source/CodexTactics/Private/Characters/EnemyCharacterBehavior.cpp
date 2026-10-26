@@ -24,6 +24,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "NavigationData.h"
 #include "NavigationSystem.h"
 #include "NavFilters/NavigationQueryFilter.h"
@@ -129,7 +130,9 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	// (without it the fear switched on and off every frame at the edge and the enemy shook on the spot).
 	FVector Fire;
 	float FireRadius = 0.f;
-	const bool bNearFire = bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && FindNearestFireZone(bFleeingFire ? 100.f : 0.f, Fire, FireRadius);
+	bool bSuppressionZone = false;
+	const bool bNearFire = bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire
+		&& FindNearestFireZone(bFleeingFire ? 100.f : 0.f, Fire, FireRadius, &bSuppressionZone);
 	if (bNearFire)
 	{
 		const AActor* Victim = CurrentTarget.Get();
@@ -142,7 +145,8 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		if (!bFleeingFire)
 		{
 			bFleeingFire = true;
-			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("🔥😱 FEAR OF FIRE!"), FLinearColor(1.f, 0.45f, 0.1f));
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, bSuppressionZone ? TEXT("SCATTERS!") : TEXT("🔥😱 FEAR OF FIRE!"), FLinearColor(1.f, 0.45f, 0.1f));
+			ScatterCount += bSuppressionZone ? 1 : 0;
 		}
 		return;
 	}
@@ -693,8 +697,12 @@ bool AEnemyCharacter::IsInFearZone(const FVector& Location, const AActor* Candid
 	return false;
 }
 
-bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius) const
+bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius, bool* bOutSuppressionZone) const
 {
+	if (bOutSuppressionZone)
+	{
+		*bOutSuppressionZone = false;
+	}
 	UWorld* World = GetWorld();
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	float BestMargin = TNumericLimits<float>::Max();
@@ -727,6 +735,26 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 		if (Source.IsValid() && Source->GetWorld() == World && Source->IsHeatActive() && Source->GetOwner() != OwnTarget)
 		{
 			Consider(Source->GetComponentLocation(), FMath::Max(AIConfig.FireFearRadius, Source->Radius), Source->GetOwner());
+		}
+	}
+	// Dense fire scatters melee packs (user decision 2026-10-26): the squad's sustained fire into an area is feared like a burning barrel
+	// (no wall check: the rounds land there). The same fire-fearing enemies: hounds, cutters, the frostbitten and their zombie variants.
+	FVector Zone;
+	float ZoneRadius = 0.f;
+	if (const USuppressionSubsystem* Suppression = World ? World->GetSubsystem<USuppressionSubsystem>() : nullptr;
+		Suppression && Suppression->FindFearZone(Feet, Extra, Zone, ZoneRadius))
+	{
+		const float Distance = FVector::Dist2D(Feet, Zone);
+		if (Distance - ZoneRadius < BestMargin)
+		{
+			BestMargin = Distance - ZoneRadius;
+			OutFire = Zone;
+			OutRadius = ZoneRadius;
+			bFound = true;
+			if (bOutSuppressionZone)
+			{
+				*bOutSuppressionZone = true;
+			}
 		}
 	}
 	return bFound;

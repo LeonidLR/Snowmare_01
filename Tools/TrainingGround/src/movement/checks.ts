@@ -357,7 +357,9 @@ export class RunCollector {
 
     // 14. covered approach (v2.5, user rule 2026-10-26): on the way into the wall layout somebody always holds the rear (away from the
     // wall, the way they came) and a flank (3 men: one, 4: both - along the wall line)
-    if (this.m.approach && f.approach && f.wallNormal !== null) {
+    // (A man going round a wall to his slot faces his run - the squad never splits first: those frames are not judged.)
+    const detour = f.members.some((mem) => mem.approachDuty === 'run' && mem.place !== f.members[0].place);
+    if (this.m.approach && f.approach && f.wallNormal !== null && !detour) {
       this.approachStart ??= f.t;
       if (f.t - this.approachStart >= LIMITS.approachGrace - 1e-9) {
         const lim = cfg(this.c, 'sight.fov') / 2 - LIMITS.rearMargin;

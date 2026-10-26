@@ -179,13 +179,17 @@ namespace FormationWallRules
 	 * looks away from the wall (NormalYaw) until everyone is in; each flank man looks along the wall line to his side (one flank: the side of
 	 * his offset from the leader along the wall, >= 0 -> +1; two: the lower offset -1, the higher +1) until he reaches his slot, then his
 	 * layout look; AlongSide = the other way from the first flank man (the pair: the other way from the rear man's offset). Every look but
-	 * the layout's goes through FormationSectorRules::ClearLook from his position. Members = where everyone is now and his look (by role; a role missing
+	 * the layout's goes through FormationSectorRules::ClearLook from his position. The squad never splits first: a follower not at his slot whose
+	 * straight way to it passes a wall body (WallEndRayRadius) has duty Run (facing his travel, the squad's pace) until it is clear, his role kept. Members = where everyone is now and his look (by role; a role missing
 	 * stands at his slot); State unset = the approach begins (the roles are assigned and then held).
 	 */
 	CODEXTACTICS_API FFormationApproachResult Approach(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots, float NormalYaw,
 		const TArray<FFormationSlot>& Members, const TOptional<FFormationApproachState>& State, const FFormationConfig& Config = FFormationConfig());
 
-	/** v2.4: the wall layout's looks at a wall end (see the header comment). Slots = Layout's (K first), Walls = the walls round them. */
+	/**
+	 * v2.4: the wall layout's looks at a wall end (see the header comment). Slots = Layout's (K first), Walls = the walls round them; Fixed = more
+	 * roles whose looks a higher rule decided (the corner stack's point man and trailing end): like K they keep their looks, their cones held first.
+	 */
 	CODEXTACTICS_API FFormationWallEndResult EndLooks(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& Slots,
-		const FFormationConfig& Config = FFormationConfig());
+		const FFormationConfig& Config = FFormationConfig(), const TArray<EFormationRole>& Fixed = TArray<EFormationRole>());
 }

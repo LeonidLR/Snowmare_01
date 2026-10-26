@@ -48,6 +48,14 @@
   Godot `_spawn_muzzle_tracer` (player / turret), `_spawn_waypoint_marker`, `_clear_planned_markers`,
   `_highlight_target_feedback`.
 
+## Suppressive fire (2026-10-26)
+
+- Game designer decisions 2026-10-26, full spec and every tuning value: `docs/design/SUPPRESSION.md`. `Combat/SuppressionRules` (pure) +
+  `USuppressionSubsystem` (a level per unit fed by every reported round; tiers Suppressed / Pinned), the SUPPRESS order (Shift + click on enemies, a red marker;
+  Shift + click on it again ceases it; `OperativeCharacterSuppression.cpp`, full-auto via `UWeaponDataAsset::FullAutoInterval`), the
+  quick fire and the SUPPRESS order share `AOperativeCharacter::FireAreaRound`. A/B `Codex.Combat.Suppression`; none in turn-based.
+  Tests `CodexTactics.Combat.Suppression.*`, smoke `SuppressionSmoke`.
+
 ## Fire postures / ROE (old §5)
 
 - **Fire postures / ROE (2026-10-06; semantics rev 2026-10-19, game designer play-test):** `FirePostureRules` (tests `CodexTactics.Squad.Posture.*`), per operative (`GetFirePosture`: override, else the squad's). **Passive** = never opens fire on its own (only direct orders: Ctrl + click, blind fire, planned shots, grenades). **Defensive** = returns fire / engages only the enemies that attack or have detected the squad: per target `MayAutoFireAt` - an enemy that hunts the squad (`AEnemyCharacter::IsHuntingSquad`: off patrol duty with a target / an alarm point / the horde's knowledge) is fair game; once the operative is attacked (`bProvokedThisFight`, `Codex.Posture.DefensiveSquadWide`) any enemy for that fight; it never fires at a patrol that has not spotted the squad and throws no autonomous grenade unprovoked. **Aggressive** = fires at any enemy in sight; in EXPLORATION it opens fire where contact starts the fight - an ambush level OR a level with enemies placed in the map (fix 2026-10-19: the gate asked `IsAmbushCombatStart()` only, but the Demo 01 lake is a «button» level whose placed patrols start the fight on contact - `ShouldStartFightOnContact`; so the squad saw them and never fired) - through the normal start path (`ULevelEncounterSubsystem::NotifyHostileContact(SquadAutoFire)`, which still refuses a non-placed enemy on a «button» level). `AOperativeCharacter::MayAutoFireAtEnemy` filters the Commander Mode target and the visible enemies in `FindShootTarget`; `MayAutoFireNow` (provoked) gates the autonomous grenades / the turret gunner. Keys `,` `.` `/` (selected), Alt = squad. Smoke `PostureSmoke`.
