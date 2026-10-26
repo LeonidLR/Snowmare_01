@@ -139,17 +139,6 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 2,
-      "route": "R1",
-      "seed": 1,
-      "t": 13.9,
-      "what": "Z at S5",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
       "check": 6,
       "choice": "auto",
       "members": 4,
@@ -157,18 +146,7 @@
       "seed": 1,
       "t": 11.4,
       "what": "p95 228 cm; Z 253 cm behind",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "echelon_right",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 17.3,
-      "what": "column (asked echelon_right): wall cuts L-Z",
-      "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [
@@ -259,6 +237,22 @@
       "route": "R1",
       "seed": 2,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
     }
   ]
 }

@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -29,13 +29,14 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
+    "HordeIntroSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "SuppressionSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
-    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
+    "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "TurnArenaYardSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
-    "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke",
-    "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke"
+    "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke",
+    "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke",
+    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -70,7 +71,8 @@
     "InteriorExitSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "PeekMinesSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "CoverSwitchLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "_why": "2026-10-21: the cover switch between two buildings in a row (the A3 gap rocks) on the lake layout" },
-    "TurnArenaLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-22: the turn-based grid only on open, level ground in the compound (never in the shed / base building)" },
+    "TurnArenaLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-26: the turn-based grid round the leader in the lake compound, the shed / base building subtracted, the squad moved out of the shed, refused deep in the base" },
+    "TurnArenaYardSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-26 (designer screenshot of the yard): turn-based starts in the yard, the base building's outline and door closed, nobody inside, a move into it refused" },
     "EnvironmentLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "_why": "2026-10-22: the Demo 01 lake is locked at hour 23 + Snowfall (environment block); the clock stays put at ClockScale 20" },
     "WeatherLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "_why": "2026-10-22 environment phase 3: the weather presenter shows the locked 23:00 Snowfall as night (moon, no sun) + the Snowfall fog" },
     "GateExitLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "2026-10-22: the lake ends through the fully opened blast door - the last wave goes straight to post-combat, two of three out = no fade, the third out = fade to black + mission complete; 2026-10-22 b: then the stat-points screen -> Continue -> the factory (campaign 0.1) with the carried squad" },
@@ -105,6 +107,13 @@
   "nonSmokeDebugCommands": ["StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots"],
   "rules": [
     {
+      "name": "formation-radial-menu-2026-10-26",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerFormationMenu*", "Source/**/UI/FormationMenu*", "Source/**/Debug/FormationMenu*",
+        "Source/**/Core/PlayerCommands*", "Scripts/Editor/import_formation_menu_icons.py", "Content/UI/FormationMenu/**"],
+      "tests": ["CodexTactics.UI.FormationMenu", "CodexTactics.Formation.Menu", "CodexTactics.Core.ControllerUnits", "CodexTactics.UI.Frontend.Controls"],
+      "smokes": ["FormationMenuSmoke", "SquadControlSmoke", "SoloRejoinSmoke", "TutorialSmoke", "ControlsScreenSmoke"]
+    },
+    {
       "name": "formation-sectors-2026-10-25",
       "globs": ["Source/**/Formation/**", "Content/Data/FormationLab/**", "Tools/TrainingGround/golden/formation_*"],
       "tests": ["CodexTactics.Formation"],
@@ -129,6 +138,13 @@
         "Source/**/Formation/FormationWallGroupRules*", "Source/**/Debug/FormationWallGroupSmoke*", "Source/**/Debug/FormationSlideSmoke*"],
       "tests": ["CodexTactics.Formation", "CodexTactics.Squad", "CodexTactics.Tactics.GroupCover"],
       "smokes": ["FormationWallGroupSmoke", "FormationSlideSmoke", "FormationLabSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "CoverSwitchSmoke", "CoverWrapSmoke"]
+    },
+    {
+      "name": "formation-wall-end-2026-10-26",
+      "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Characters/SquadSubsystemWallGroup*", "Source/**/Formation/FormationRuntimeRules*",
+        "Source/**/Formation/FormationWallRules*", "Source/**/Formation/FormationWallEndRules*", "Source/**/Core/CodexTacticsPlayerControllerCover*", "Source/**/Tactics/CoverGhostActor*", "Source/**/UI/CodexTacticsHUD*", "Source/**/Debug/FormationWallEndSmoke*"],
+      "tests": ["CodexTactics.Formation"],
+      "smokes": ["FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSlideSmoke", "FormationSquadPeekSmoke", "CornerHoldSmoke"]
     },
     {
       "name": "orders-pause-relocate-pick-2026-10-25",
@@ -202,9 +218,9 @@
     },
     {
       "name": "designer-2026-10-22-turn-arena",
-      "globs": ["Source/**/Tactics/TurnArenaRules*", "Source/**/Tactics/TurnBasedCombatArena*", "Source/**/Tactics/TurnBasedCombatSubsystem*", "Source/**/Core/CodexTacticsPlayerControllerTime*", "Source/**/Debug/TurnArenaLakeSmoke*"],
+      "globs": ["Source/**/Tactics/TurnArenaRules*", "Source/**/Tactics/TurnBasedCombatArena*", "Source/**/Tactics/TurnBasedCombatSubsystem*", "Source/**/Tactics/GorkyGridManager*", "Source/**/Core/CodexTacticsPlayerControllerTime*", "Source/**/Debug/TurnArenaLakeSmoke*", "Source/**/Debug/TurnArenaYardSmoke*", "Source/**/Debug/TurnArenaSmokeUtils*"],
       "tests": ["CodexTactics.Tactics.TurnArena", "CodexTactics.Combat.TimeMode"],
-      "smokes": ["TurnArenaLakeSmoke", "TurnBasedSmoke", "CombatFlowSmoke", "TurnWalkSmoke", "QuickFireSmoke"]
+      "smokes": ["TurnArenaLakeSmoke", "TurnArenaYardSmoke", "TurnBasedSmoke", "CombatFlowSmoke", "TurnWalkSmoke", "QuickFireSmoke"]
     },
     {
       "name": "user-2026-10-22-retreat-facing",
@@ -299,9 +315,9 @@
     },
     {
       "name": "loot",
-      "globs": ["Source/**/Interactables/Loot*", "Source/**/UI/LootDialog*"],
+      "globs": ["Source/**/Interactables/Loot*", "Source/**/UI/LootDialog*", "Source/**/Interactables/CorpseLoot*", "Source/**/Debug/FallenGearSmoke*"],
       "tests": ["CodexTactics.Loot", "CodexTactics.Transfer"],
-      "smokes": ["LootSmoke", "TransferSmoke", "DeployableSmoke"]
+      "smokes": ["LootSmoke", "FallenGearSmoke", "TransferSmoke", "DeployableSmoke", "RecruitDeathSmoke"]
     },
     {
       "name": "weapons-arsenal",
@@ -423,7 +439,7 @@
       "name": "horde-intro",
       "globs": ["Source/**/Combat/HordeIntro*", "Source/**/Debug/HordeIntroSmoke*", "Source/**/Debug/SmokeUtils.h", "Source/**/GameFlow/PauseOrderRules*"],
       "tests": ["CodexTactics.Combat.HordeIntro", "CodexTactics.GameFlow", "CodexTactics.Combat.TimeMode"],
-      "smokes": ["HordeIntroSmoke", "RadiusRingSmoke", "LevelWaveSmoke", "MissionSmoke", "VictorySmoke", "QuestChainSmoke", "MainMenuSmoke", "SaveRoundTripSmoke", "CombatFlowSmoke"]
+      "smokes": ["HordeIntroSmoke", "LakePauseOrdersSmoke", "RadiusRingSmoke", "LevelWaveSmoke", "MissionSmoke", "VictorySmoke", "QuestChainSmoke", "MainMenuSmoke", "SaveRoundTripSmoke", "CombatFlowSmoke"]
     },
     {
       "name": "sight",
@@ -435,7 +451,14 @@
       "name": "quick-fire",
       "globs": ["Source/**/Combat/QuickFireRules*", "Source/**/Characters/OperativeCharacterQuickFire*", "Source/**/Debug/QuickFireSmoke*"],
       "tests": ["CodexTactics.Combat.QuickFire"],
-      "smokes": ["QuickFireSmoke", "TargetedShotSmoke", "SquadFireSmoke", "PostureSmoke"]
+      "smokes": ["QuickFireSmoke", "SuppressionSmoke", "TargetedShotSmoke", "SquadFireSmoke", "PostureSmoke"]
+    },
+    {
+      "name": "suppression-2026-10-26",
+      "globs": ["Source/**/Combat/SuppressionRules*", "Source/**/Combat/SuppressionSubsystem*", "Source/**/Characters/OperativeCharacterSuppression*",
+        "Source/**/Debug/SuppressionSmoke*", "Content/Data/Combat/**", "Source/**/Vehicles/VehicleTurretComponent*", "Source/**/Interactables/TurretActor*"],
+      "tests": ["CodexTactics.Combat.Suppression", "CodexTactics.Combat.QuickFire", "CodexTactics.UI.Frontend.Controls"],
+      "smokes": ["SuppressionSmoke", "QuickFireSmoke", "CoverSmoke", "CornerHoldSmoke", "MarksmanSmoke", "TurretSmoke", "SquadFireSmoke", "CommanderModeSmoke"]
     },
     {
       "name": "real-time-fire",
@@ -514,7 +537,13 @@
       "name": "operative-movement-squad",
       "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeCrowdFollowing*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
       "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement"],
-      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke", "FormationLabSmoke"]
+      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke", "FormationLabSmoke"]
+    },
+    {
+      "name": "combat-formation-2026-10-26",
+      "globs": ["Source/**/Debug/CombatFormationSmoke*"],
+      "tests": ["CodexTactics.Squad.Orders"],
+      "smokes": ["CombatFormationSmoke", "SoloRejoinSmoke", "RetreatFacingSmoke"]
     },
     {
       "name": "operative-cover-units",
@@ -622,7 +651,7 @@
       "name": "camera",
       "globs": ["Source/**/Camera/**", "Source/**/Debug/InteriorExitSmoke*", "Source/**/Debug/RoofCutawaySmoke*"],
       "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
-      "smokes": ["CameraZoneSmoke", "RoofCutawaySmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
+      "smokes": ["CameraStaySmoke", "CameraZoneSmoke", "RoofCutawaySmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
     },
     {
       "name": "death-cinematic",
@@ -652,7 +681,7 @@
       "name": "controller-selection",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerSelection*"],
       "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": ["RealtimeSelectSmoke", "GroupSelectSmoke", "SoloRejoinSmoke", "ActionBarSmoke", "TrapSoloSmoke"]
+      "smokes": ["CameraStaySmoke", "RealtimeSelectSmoke", "GroupSelectSmoke", "SoloRejoinSmoke", "ActionBarSmoke", "TrapSoloSmoke"]
     },
     {
       "name": "controller-orders",
@@ -688,7 +717,7 @@
       "name": "controller-camera",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerCamera*"],
       "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": ["CameraZoneSmoke", "InteriorExitSmoke", "TurnBasedCameraSmoke", "TutorialSmoke"]
+      "smokes": ["CameraStaySmoke", "CameraZoneSmoke", "InteriorExitSmoke", "TurnBasedCameraSmoke", "TutorialSmoke"]
     },
     {
       "name": "group-cover",

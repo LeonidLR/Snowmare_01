@@ -10,9 +10,9 @@ class AEnemyCharacter;
 class ATacticalCameraPawn;
 class UHordeAlertWidget;
 
-/** The horde intro started (the free pause opened): wave index, the flyover runs (false: skipped / off). */
+/** The horde warning started (2026-10-26: in real time; the old rule: the free pause opened): wave index, the flyover runs (false: skipped / off). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHordeIntroStarted, int32, WaveIndex, bool, bFlyover);
-/** The horde intro is over: the camera is back on the squad in the free tactical pause (bSkipped: by Esc / a click). */
+/** The horde intro is over: the camera is back on the squad (bSkipped: by Esc / a click). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHordeIntroFinished, int32, WaveIndex, bool, bSkipped);
 
 /** Where the horde intro of the current wave stands. */
@@ -22,7 +22,7 @@ enum class EHordeIntroStage : uint8
 	Idle,
 	/** The wave spawned; the fight runs, the horde forms its running mass (the camera stays on the squad). */
 	Waiting,
-	/** The free pause opened; the camera flies over the running horde in slow motion. */
+	/** The warning was given; the camera flies over the running horde in slow motion. */
 	Flyover
 };
 
@@ -39,6 +39,10 @@ enum class EHordeIntroStage : uint8
  * before the trigger Esc / a Space tap open the free pause at once. Camera input is locked during the flyover, camera
  * zones step aside, the line of sight shows the whole horde. Pattern: UDeathCinematicSubsystem.
  * Hooks for a later HUD effect: OnHordeIntroStarted / OnHordeIntroFinished.
+ * User decisions 2026-10-26: (1) the trigger no longer opens the pause - the alert, the HQ line and the flyover (its slow motion) play
+ * while the fight runs on; the world returns to real time after the flyover; the wave's first Space opens the free pause; Esc before the
+ * trigger gives the warning at once (no pause). (2) Only the fight's FIRST wave is warned: a later wave of the same fight gets nothing
+ * (HordeIntroRules::ShouldWarnWave) - the HUD's incoming arrows show it. Codex.HordeIntro.AutoPause / LaterWaves 1 restore the old rules.
  */
 UCLASS()
 class CODEXTACTICS_API UHordeIntroSubsystem : public UTickableWorldSubsystem
@@ -54,8 +58,8 @@ public:
 	virtual bool IsTickableWhenPaused() const override { return false; }
 
 	/**
-	 * Esc / a click: skips the flyover (camera straight back on the leader; the free pause stays). Esc before the trigger
-	 * opens the free pause at once (bFromEscape; a click before the trigger is a normal order). True when consumed.
+	 * Esc / a click: skips the flyover (camera straight back on the leader). Esc before the trigger gives the warning at once without
+	 * a flyover (bFromEscape; a click before the trigger is a normal order; the old auto-pause rule: the free pause). True when consumed.
 	 */
 	bool HandleSkipInput(bool bFromEscape = true);
 
@@ -116,6 +120,10 @@ public:
 	int32 GetSkippedCount() const { return SkippedCount; }
 	/** Sudden waves this subsystem saw spawn. */
 	int32 GetIntroCount() const { return IntroCount; }
+	/** Horde warnings given (the alert shown at a trigger / Esc). */
+	int32 GetWarningCount() const { return WarningCount; }
+	/** Sudden waves that came without a warning (a later wave of the fight, 2026-10-26). */
+	int32 GetSilentWaveCount() const { return SilentWaveCount; }
 	/** Game seconds from the spawn to the trigger (last intro), running share of the horde at the trigger. */
 	float GetTriggerGameSeconds() const { return TriggerGameSeconds; }
 	float GetTriggerRunningFraction() const { return TriggerRunningFraction; }
@@ -130,8 +138,8 @@ private:
 
 	void BeginWaiting();
 	void TickWaiting(float RealDelta, float GameDelta);
-	/** The trigger: free pause, alert, flyover (bFlyover false: pause + alert only). */
-	void OpenPause(bool bFlyover);
+	/** The trigger: the warning - alert, HQ line, flyover (bFlyover false: the alert only); the old rule also opens the free pause. */
+	void GiveWarning(bool bFlyover);
 	void StartShot(int32 Index);
 	void UpdateWideAnchor();
 	/** Frames the main cluster of the wave (HordeIntroRules::FrameWide); bNewYaw picks the shot's yaw (else WideYaw stays). */
@@ -172,6 +180,10 @@ private:
 	float AlertSeconds = -1.f;
 	float AlertShowSeconds = 0.f;
 	int32 IntroCount = 0;
+	int32 WarningCount = 0;
+	int32 SilentWaveCount = 0;
+	/** The combat sub-mode the running flyover / last warning belongs to (RealTime since 2026-10-26; TacticalPause with the old rule). */
+	ECodexCombatMode FlyoverMode = ECodexCombatMode::RealTime;
 	int32 StartedCount = 0;
 	int32 CompletedCount = 0;
 	int32 SkippedCount = 0;

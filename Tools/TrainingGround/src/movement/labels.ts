@@ -4,7 +4,7 @@
 
 import type { Formation } from './layout.ts';
 import type { MenuChoice } from './menu.ts';
-import type { GuardLevel } from './rules.ts';
+import type { GuardCause, GuardLevel } from './rules.ts';
 
 /** Formation names as the game shows them. */
 export const FORMATION_LABEL_EN: Record<Formation, string> = {
@@ -30,8 +30,10 @@ export function menuLabelEn(id: MenuChoice, memberCount: number): string {
 /**
  * v2.1 HUD line: the formation in force, and while the wall guard falls back, "requested -> in effect (wall)",
  * e.g. "Echelon left -> Column (wall)". memberCount picks Pair for the 2-man diamond / wedge.
+ * v2.3 part 9 (user 2026-10-26): the turn fold ("5Б", GuardState.cause 'turn') says "(turn)": "Line -> Column (turn)"; a wall
+ * (or no cause given) keeps "(wall)".
  */
-export function guardHudText(requested: Formation, effective: Formation, level: GuardLevel, memberCount: number): string {
+export function guardHudText(requested: Formation, effective: Formation, level: GuardLevel, memberCount: number, cause: GuardCause | null = null): string {
   const name = (f: Formation) => ((f === 'diamond' || f === 'wedge') && memberCount === 2 ? 'Pair' : FORMATION_LABEL_EN[f]);
-  return level === 0 || requested === effective ? name(effective) : `${name(requested)} -> ${name(effective)} (wall)`;
+  return level === 0 || requested === effective ? name(effective) : `${name(requested)} -> ${name(effective)} (${cause === 'turn' ? 'turn' : 'wall'})`;
 }

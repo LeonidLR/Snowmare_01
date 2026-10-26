@@ -176,7 +176,7 @@ report says "no model advice".
 - Local agent (Opus, worktree): C++ pure rules (2.) + unit tests from the design doc, then parity tests (3.).
 - Local agent (Sonnet, worktree, after 1-2 land): the big lab layout JSON (1.) + Unreal map generator script + navmesh bake.
 - Local agent (Sonnet): the real Claude API / Jev client for the tuner (6.) and the first budget-capped training runs.
-- Later: runtime integration (slots, look yaw, pace, wall pose), hold-G radial menu, in-game smoke on the lab map.
+- Later: runtime integration (slots, look yaw, pace, wall pose), hold-B radial menu (was hold G; done 2026-10-26), in-game smoke on the lab map.
 
 ## 6. Bot training on the user's API tokens (user request 2026-10-25: "use the API tokens as much as possible, train the bot through the cloud APIs")
 The tuner loop - `Tools/TrainingGround` department "movement", `npm run train -- --budget-usd <N> --rounds <N>`:
@@ -228,7 +228,13 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
 - Integration: the click on a cover / wall slot is where K stands - the leader's move ends ON his wall slot (an extra step
   away from the destination would drop the arrival). `formation_lab_01` routes A / F end on the slot (face - 45 cm).
 
-## 9. Hold-G radial menu - `FormationMenuRules` (pure; TS `Tools/TrainingGround/src/movement/menu.ts`, golden `formation_Menu.json`)
+## 9. Hold-B radial menu - `FormationMenuRules` (pure; TS `Tools/TrainingGround/src/movement/menu.ts`, golden `formation_Menu.json`)
+- Key (user decision 2026-10-26): **B**, not G (G is the grenade). TAP B (released before 0.25 s real time,
+  `ACodexTacticsPlayerController::FormationMenuHoldSeconds`) = the solo / squad toggle as before; HOLD B = `Open`, the release =
+  `Release`. The hold opens it only while available (squad mode, >= 2 members, exploration or the tactical pause - not turn-based,
+  orders not locked, no dialogue, `Squad.Formation` not tutorial-locked); otherwise a hold is a plain tap. Pure tracker
+  `FFormationMenuKeyTracker` (`UI/FormationMenuInputRules`, tests `CodexTactics.UI.FormationMenu.*`). The G / B below in the TS
+  reference's comments read "the menu key".
 - Items (`MENU_ITEMS`, clockwise from 12, 45 deg sectors): 12 `line`, 1:30 `diamond` (wedge with 3, pair with 2), 3
   `echelon_right`, 4:30 `blizzard`, 6 `column`, 7:30 `hedgehog`, 9 `echelon_left`, 10:30 `all_forward`; the centre = Auto.
   Choice type: `auto | <item id>`; a manual choice holds until Auto is picked.
@@ -237,14 +243,20 @@ and a `--dry-run`; the coordinator's local agent wires the real client and runs 
   owns +-22.5 deg; a border goes clockwise). Golden avoids exact borders.
 - `IsEnabled(item, memberCount)`: every item needs >= 2 members (one operative has no formation); Auto always.
 - State `{ open, choice, highlighted }` (start `{false, auto, null}`), effects `none | opened | picked | auto | cancelled | disabled`:
-  `Open` (G pressed: open, highlight Auto, choice untouched) / `Move(state, dx, dy, deadZonePx)` (highlight follows the cursor
-  while open) / `Release(state, memberCount)` (G released: on an enabled item -> picked, holds; centre -> auto; disabled item ->
+  `Open` (B held: open, highlight Auto, choice untouched) / `Move(state, dx, dy, deadZonePx)` (highlight follows the cursor
+  while open) / `Release(state, memberCount)` (B released: on an enabled item -> picked, holds; centre -> auto; disabled item ->
   `disabled`, the previous choice stays; always closes) / `Cancel` (Esc / RMB: closes, previous choice stays).
 - `Resolve(choice, memberCount) -> { manualFormation | null, allForward }`: auto -> terrain rules; all_forward -> terrain
   rules + LookYaw mode `forward`; diamond -> `diamond` with 4 else `wedge`; a choice the member count no longer allows -> Auto.
   Hedgehog: the runtime centres it on the nearest heat source when one is near (HedgehogSlots), else round the leader's spot.
 - Icons: `Content/UI/FormationMenu/src/<item|auto>.svg`, 64 x 64, currentColor (tint in UMG), generated from the rules by
   `npm run menu:icons` (`--check`); labels in Russian: `menuLabel` (Авто, Цепь, Ромб / Клин / Пара, Эшелон вправо, ...).
+- Runtime (stage 7, 2026-10-26): `UFormationMenuWidget` (NativePaint; 8 discs on a ring + Auto in the centre, icons
+  `/Game/UI/FormationMenu/T_FormationMenu_<id>` rasterised + imported by `Scripts/Editor/import_formation_menu_icons.py`, English
+  labels `FormationMenuInput::Label`: Auto, Line, Diamond / Wedge / Pair, Echelon right, Blizzard diamond, Column, Hedgehog, Echelon
+  left, All forward; highlighted = amber + enlarged, disabled = grey, current choice = green ring), opened at the cursor (pulled in
+  to stay on screen); the pick goes through `USquadSubsystem::SetFormationMenuChoice` (the path of `Codex.Formation.Menu`); Esc /
+  RMB = `Cancel`; smoke `CodexTactics.FormationMenuSmoke`.
 
 ## 10. v2.1 - the squad never splits (user decisions 2026-10-25; TS `rules.ts`, golden `formation_Guard|TrailSlots|SideWidth|Bypass|Corner.json`)
 User's case: lab lane B, 4 members, manual echelon left, wall on the left - the echelon's slots went through the wall and P / L /
@@ -491,8 +503,72 @@ ones carry `since: 'v2.3'`).
   wall, both got the same point and the two men walked into each other - 22 cm apart.)
 - Runtime: the same requirement for `SquadFormation::ComputeFallbackSlots` - the stand-ins of one frame keep `slot.min_spacing`
   from each other and from the walkable slots.
+- v2.3 part 9 (coordinator 2026-10-26, the C++ runtime's order-free reading): the simulator's `resolveFrameSlots` gives out every
+  slot that needs no stand-in first (the leader's, every walkable slot of the frame), then resolves the unwalkable ones in member
+  order, each stand-in (or the man's position when none) given out in turn - a stand-in no longer lands on a walkable slot of a
+  member resolved after it (it used to fill `given` in member order).
 
-### 13.6 C++ port of v2.3 (formation/cpp-rules, 2026-10-26)
+### 13.6 `FormationGuardRules::Resolve(..., config, allInSight)` - a man cut off brings the trail column back (red team #7)
+- `allInSight` (default true = v2.2) = every member has a clear line (no wall body, radius 0) to the leader. False -> raw level 2
+  (the trail column) at once, whatever the slots say; released towards the request by the usual hold (classify.hold_distance
+  of the leader's path once the request is whole and everybody is in sight). The wall layout is never guarded.
+- Why: the hold distance ran out exactly as the leader turned into a 3 m side passage (red team 4_3); the blizzard's slots
+  were whole at his pose, so the guard opened while the far man was still round the corner - and stayed open as he lost the
+  leader (check 7).
+- Golden `formation_Guard.json`: `in.allInSight` (false only with the lookahead pose).
+- Decided 2026-10-26 (FORMATION_SECTORS Q3 = c): the trail column's 2nd / 3rd men doubling the rear at a wall gap no longer walk
+  backwards - 13.7.
+
+### 13.7 v2.3 part 7 - only the rear guard walks backwards (user decision 2026-10-26, Q3 = c)
+- New key `look.over_shoulder_max_deg` 110 (90-180; 180 = off = v2.2).
+- `CoverMember.travel` (optional world yaw): the direction his place travels along - the trail column's TrailSlots yaw at his slot;
+  absent = the heading.
+- `FormationCoverRules::Allocate` step 5, walk only: every member who is not K, not the rear guard and not fixed (`others`) has his
+  sweep confined to [o - lim, o + lim] relative to the heading (o = normYaw(travel - heading), lim = the key): of [mid - amp,
+  mid + amp] shifted by 0, -360, +360 (in that order) the largest overlap with it wins (ties: the first) and the sweep becomes
+  its centre +- half its width (same period and phase as the unconfined sweep); no overlap -> amplitude 0 at a shoulder o + lim
+  or o - lim: the one not within look.wall_angle of a blocked direction first, then the one nearer the share's mid, then the side
+  of his bearing from the leader (bearing < 0 -> -lim), then +lim. The shares are unchanged. Halt: unchanged, `shoulder` empty.
+- `CoverResult.shoulder` = [{role, yaw}] for those members, yaw = his travel (world).
+- `ClearLook(walls, pos, yaw, currentYaw, config, held, limit)`: `limit` = {yaw, half} | null. With a limit the wanted yaw is first
+  clamped to the nearer edge (yaw +- half); the held look, the narrow wanted yaw, the edges and the enclosed rays outside
+  +-half of limit.yaw are no candidates. Null = 13.1 / 13.4 unchanged.
+- Integration (sim, runtime): for a member in `shoulder` pass limit = {yaw: his ACTUAL step direction while he moves (the sim:
+  the step's direction when > 0.5 cm; the runtime: his velocity direction) if it is within SHOULDER_STEP_DEG (90) of the shoulder
+  entry's yaw, else (a step back to a slot behind him, a stand-in place; standing) the entry's yaw; half: the key}. (A man
+  threading a wall gap steps up to 60 deg off the squad's heading and the step decides whether he walks backwards; a step back
+  to his slot flipped the limit and swung his look round across a wall - lab R_C_gaps, line of 4.)
+  The rear guard, K, the fixed looks (the narrow column's decided L at -165 included - a user decision) keep no limit.
+- Golden: `formation_Cover.json` gains `in.members[].travel` (the last case per scene: the followers' travel = heading + 35) and
+  `out.shoulder`; `formation_ClearLook.json` gains `in.limit` (null, and {yaw: the scene heading, half 110} on the cases without
+  a turn).
+
+### 13.8 v2.3 part 8 - ClearLook anticipates the man's motion (user decision 2026-10-26, Q4 = b)
+- New key `look.anticipate_s` 0.5 (0-1.5 s; 0 = off).
+- `ClearLook(walls, pos, yaw, currentYaw, config, held, limit, ahead)`: `ahead` = [x, y] | null = his position look.anticipate_s
+  ahead (pos + velocity x look.anticipate_s). When ahead is given, differs from pos and the segment pos -> ahead crosses no wall
+  body (segmentBlocked radius 0), the wall directions are collected from pos AND from ahead (for each point: every wall whose
+  surface is within look.wall_dist of it, the direction from that point to its closest point; pos's first, then ahead's, each
+  in wall order) and all of them block (+-look.wall_angle), count for `swept` and bound the free arcs. The hold test (13.1: the
+  held look dropped when a wall direction is within look.wall_angle - look.hold_margin_deg of it) uses ONLY the directions
+  from pos. The enclosed rays stay from pos. Null = 13.7 unchanged.
+- Integration: velocity = the member's own velocity (the runtime: the character's velocity; the sim: his steps smoothed with
+  a 0.3 s time constant, VEL_SMOOTH_S - a raw sim step jitters +-50 % and flipped the anticipated spans; the leader: his walking
+  velocity); none (null) below 1 cm/s.
+- Golden `formation_ClearLook.json` gains `in.ahead` (null; and pos + 100 cm/s x anticipate_s along the scene heading on the
+  cases without a turn and without a limit) and the scene `end_right_ahead` (a wall end 0.6 m ahead, 0.9 m to the right).
+
+### 13.9 v2.3 part 9 - the turn fold's HUD says "(turn)" (user 2026-10-26); order-free stand-ins (13.5)
+- `GuardState.cause` = 'wall' | 'turn' | null (absent in an input state = null). Resolve: a wall cutting the requested formation
+  (BlockedRoles here or at the lookahead pose) -> 'wall' (the level as before: during a sharp turn 2, else the mirror's 1 / 2);
+  else the turn fold (a WIDE formation, turnAhead > turn.fold_deg) -> 'turn'; a member cut off (allInSight false) -> 'wall'.
+  The new state's cause = that raw cause when the state takes the raw level (any of the three "at(raw)" returns), the held
+  state's own cause while a looser level waits for its hold distance; null whenever the level is 0. Levels are unchanged.
+- `guardHudText(requested, effective, level, memberCount, cause = null)`: "(turn)" for 'turn', "(wall)" otherwise, e.g.
+  "Line -> Column (turn)". The C++ HUD (`FormationGuardRuntime` label) needs the same cause.
+- Golden `formation_Guard.json`: the input states carry `cause` (level 2 'wall' / the waiting one 'turn'), `out.state.cause`.
+
+### 13.10 C++ port of v2.3 (formation/cpp-rules, 2026-10-26; parts 1-5 - was numbered 13.6 before the simulator's 13.6-13.9)
 - Ported as specified: `FormationSectorRules::ClearLook(walls, pos, yaw, currentYaw, config, TOptional held = unset)` (13.1 + 13.4: the
   free-arc width, the held look, the narrow tier, the swept count, the longest clear ray when enclosed - the rays use
   `FormationTerrainRules::RayHit`), `FormationSectorRules::Decided(role, formation, memberCount, TOptional passageWidth, config)` (13.3),
@@ -514,3 +590,84 @@ ones carry `since: 'v2.3'`).
   checks.ts 6 does. 13.5 "this frame" is now order-free: every WALKABLE slot of the frame is given out before the follow loop (the port's first
   reading - only the slots resolved before him - let Z, resolved before P, take the stand-in on P's spot at the lab's floor edge, R_v2_gaps).
   For the simulator: `sim.ts` pushes `given` in member order too - seeding it with the frame's walkable slots would match the contract text.
+- Parts 6-9 (2026-10-26, formation/cpp-rules): `FormationGuardRules::Resolve(..., config, bAllInSight = true)` + `FFormationGuardState::Cause`
+  (`EFormationGuardCause` Wall / Turn), `FormationCoverRules::Allocate` step 5 (`FFormationCoverMember::Travel`, `FFormationCoverResult::Shoulder`),
+  `FormationSectorRules::ClearLook(..., held, TOptional<FFormationLookLimit> limit, TOptional<FVector2D> ahead)`; keys `look.over_shoulder_max_deg`,
+  `look.anticipate_s` (76). Runtime: `FormationGuardRuntime::AllInSight` (followers with a sector role, not on their own order, not in cover),
+  `ShoulderLimit` ("moving" = over 15 cm/s, the step-direction window 90 deg), `AnticipatedPos` (none below 1 cm/s), the trail travel per place,
+  the HUD from `Cause` (the runtime's `IsTurnFold` removed: 13.9 names a wall cut during a sharp turn "(wall)"). 13.5 / part 9 compared with
+  `resolveFrameSlots`: the C++ seeds the leader and every walkable frame slot first (`SeedFrameGivenSlots`) - the same; the one difference was
+  an unresolvable slot (no stand-in): the sim gives out the man's position, the C++ gave out the slot - now the man's position too (the returned
+  target stays the slot: the navigation walks him to its nearest reachable point, the sim keeps him in place).
+
+
+## 14. v2.4 - the wall end (user bug report 2026-10-26; FORMATION_SECTORS.md "v2.4")
+The wall layout's looks (`Layout`: L 8 / K 6 / P 4, the 4th along the wall) share the open half-plane of a wall FACE. At the end face of
+a thin free-standing wall (or with a man past a wall's end) the open arc reaches round the end and those looks left both flanks along the
+faces open (the user's report, three men crouched at an end face).
+
+### 14.1 `FormationWallRules::OpenArcCoverage(walls, positions, lookYaws, fov, probe) -> { open, covered, pct }`
+The probe ring: `360 / WALL_END_STEP` (2 deg) points at `probe` cm round the members' mean position, the first at yaw -180. A point is
+open when some member's straight line to it keeps `WALL_END_RAY_RADIUS` (1 cm) from every wall body (`segmentBlocked`; so a zero-thickness
+traced face blocks too); covered when some member with such a line has its direction within fov / 2 (+1e-9) of his look. pct = 100 x
+covered / open (100 when nothing is open). TS `openArcCoverage` (members `{pos, yaw}`).
+
+### 14.2 `FormationWallRules::EndLooks(walls, slots, config, fixed = []) -> { spread, basePct, pct, slots }`
+`slots` = Layout's (K first, with their looks); `walls` = the walls round the layout; `fixed` = more roles whose looks a higher rule
+decided (merge with formation/v24-corner-peek: the corner stack's point man and trailing end). basePct = OpenArcCoverage of the slots with their
+looks (`wall_end.probe_dist`, `sight.fov`). Fewer than 3 slots, or basePct >= `wall_end.cover_pct` - 1e-9 -> unchanged (spread false;
+every face layout, the pair). Else: K and every `fixed` role keep their looks; `held` = the open points their cones hold (from their slots,
+slot order); then, while the others are left:
+for every remaining member (slot order) and every look y = -179..180 (whole degrees) not within look.wall_angle (- 1e-6) of the direction
+to the closest point of a wall whose surface is within look.wall_dist of his slot (and not 1e-6 from it), gain = the open points he sees,
+not held, inside +-fov / 2 of y; his best = the largest gain, ties the smallest |y - his layout look|, then the first (lower) y; the member
+with the largest best gain wins (ties: the earlier member); a best gain of 0 ends the loop (the rest keep their layout looks); the winner
+takes y, his points become held. pct = OpenArcCoverage of the result; pct <= basePct + 1e-9 -> unchanged (spread false). Positions and order
+never change. Keys `wall_end.probe_dist` 600 (200-1500 cm), `wall_end.cover_pct` 95 (80-100 %); config 78 keys.
+
+### 14.3 Integration, checks, golden
+- Sim: every wall layout (arrival, after a slide) goes through EndLooks with the level's walls, cached by the Layout slots.
+- Runtime (`USquadSubsystem::ApplyFormationWallEnd`, from `ComputeWallLayout` - the arrival and the group cover order - and
+  `HoldWallLayoutAt` - after a slide; `HoldCornerStack` with the stack's point man / K / trailing end fixed): walls = the traced face measured out to `wall_end.probe_dist + 2 x wall.spacing` each side (a long wall
+  of complex collision still reads as a face; at an end face it is ~0 long) + the world's box walls round the layout; once per layout (no
+  flicker); `Codex.Formation.WallEnd 0` = the face looks (v2.3). `IsFormationWallEndSpread(base, pct)` / `GetFormationWallSlots()` for smokes.
+- Bot check 13 (gating, 3+ members): while the wall layout stands (mode wall, everyone within 50 cm of his slot) the members' cones hold
+  >= 95 % of the open probe ring (OpenArcCoverage of their positions / yaws, the layout's walls) for >= 90 % of that time. Lab route
+  `R_G_end` (W_G_20's free end face, zone `Z_G_end`). The red team records check 13 too (a rule-bug check).
+- Golden `formation_WallEnd.json` (105 cases; v2.4 + the corner stack: with 3+ also the second slot fixed; the end face 40 / 20 cm, a 3 m stub, wall-gap-wall, a face, a face whose end man is past the
+  end, an inner corner; 2-4 members; three headings / offsets; in.slots rounded) - C++ `CodexTactics.Formation.Parity.WallEnd` (spread
+  exactly, basePct / pct within 0.01, slots as WallLayout). Unit tests `CodexTactics.Formation.WallEnd.*`; smoke `FormationWallGroupSmoke`
+  scene 4 (a thin wall's end face by the group cover order: open arc >= 95 %, both flanks in a cone, nobody faces a wall, steady 3 s).
+
+## 15. v2.5 - the covered approach to the wall (user rule 2026-10-26; FORMATION_SECTORS.md "v2.5")
+### 15.1 `FormationWallRules::Approach(walls, slots, normalYaw, members, state, config) -> { state, looks }`
+`slots` = the wall layout's (K first, with their looks); `normalYaw` = its outward normal; `members` = `[{role, pos, yaw}]` where everyone is
+and looks now (a role missing stands at his slot); `state` = `{ runner, rear (role | null), flanks [{role, side +1 | -1}], alongSide, done }`
+or null = the approach begins. Begin: runner = slots[0].role; rear = of the followers (slots[1..] order) the one with the smallest
+|normYaw(yaw - normalYaw)| (ties within 1e-6: the largest dot(pos - slots[0].pos, dir(normalYaw)), then the later); flanks = the other
+followers with lateral l = dot(pos - runner's pos, dir(normalYaw + 90)): one -> side (l >= 0 ? +1 : -1); two -> the lowest l (the first on
+ties) -1, the other +1; alongSide = -flanks[0].side, else (the pair) the rear man's l >= 0 ? -1 : +1. Arrived = within `approach.arrive_dist`
+(+1e-9) of his slot; everyone arrived -> done (sticky). Looks (slot order): done -> `layout` (the slot's yaw); the runner: arrived -> `along`
+ClearLook(normalYaw + alongSide x 90), else `run` (yaw null: he faces his travel); a follower not arrived whose segment pos -> slot is
+blocked (segmentBlocked, WALL_END_RAY_RADIUS) -> `run` (the squad never splits first: round the wall, his role kept); the rear -> `rear`
+ClearLook(normalYaw); a flank man not
+arrived -> `flank` ClearLook(normalYaw + side x 90); else `layout`. ClearLook = FormationSectorRules.ClearLook(walls, his pos, normYaw(y),
+normYaw(y), config) (no held / limit / ahead). Key `approach.arrive_dist` 100 (50-200 cm); config 79 keys.
+### 15.2 Integration, checks, golden
+- Sim: while the wall layout stands (not a slide, 2+ members) every frame calls Approach (state reset with a new layout); a look replaces the
+  slot's; a member with a look holds it all the way in (else, as before, his travel until 100 cm off his slot); no gain-based place
+  reassignment while the approach holds its roles. `Frame.wallNormal`, `Frame.approach`, `MemberFrame.approachDuty`.
+- Runtime (`USquadSubsystem::ApplyFormationApproach`, the wall branch of `UpdateFormationSectors`; reset by `ComputeWallLayout` /
+  `HoldWallLayoutAt` and whenever the formation is not the standing wall layout): members = the leader + the followers by their wall roles,
+  looks = `GetSightFacing`; the world walls (v2.1) for ClearLook; the looks go to the frame slots; a follower with an approach look holds it
+  however far from his slot; the rear cover and the flank men do not copy the leader's sprint (a sprinting operative faces his run), the rear
+  cover's backward cap is the walk's. `Codex.Formation.Approach 0` = v2.4. `GetFormationApproachLooks()` for smokes; log
+  `[Formation] covered approach to the wall: K runs in, rear Z, 1 flank(s)` / `... over`.
+- Bot check 14 (gating, 2+ members): on the approach (after `approachGrace` 0.5 s to turn; not the frames where a follower goes round a wall
+  with duty `run`) no frame without a cone holding the rear
+  (normal +-30 inside +-fov / 2); 3+ men a flank (normal +-90 the same way) >= 90 % of it, 4+ each flank. The red team records check 14.
+- Golden `formation_Approach.json` (132 cases: a face / an inner corner, 2-4 members, the stages start / runner_in / flank_in /
+  all_but_rear / all_in / along_wall / all_forward, state null and held, two headings) - C++ `CodexTactics.Formation.Parity.Approach`
+  (state exactly, duties exactly, yaws as angles, null = travel). Unit tests `CodexTactics.Formation.Approach.*`; smoke
+  `FormationWallGroupSmoke` scene 5 (a patrol 9 m from a wall's long face; 1 s of game time to turn round - the game turns slower than the
+  simulator).

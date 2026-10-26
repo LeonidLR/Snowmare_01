@@ -174,19 +174,7 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
-    {
-      "check": 7,
-      "choice": "hedgehog",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 1.2,
-      "what": "hedgehog: wall cuts L, L-K",
-      "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    }
-  ],
+  "expected_fail": [],
   "fixed_entries": [
     {
       "check": 1,
@@ -235,6 +223,15 @@
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
     }
-  ]
+  ],
+  "fixed_in": "v2.5"
 }

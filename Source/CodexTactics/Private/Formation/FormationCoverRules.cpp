@@ -1,5 +1,7 @@
 #include "Formation/FormationCoverRules.h"
 
+#include "Templates/Function.h"
+
 namespace FormationCoverRules
 {
 	using FormationMath::NormYaw;
@@ -86,6 +88,54 @@ namespace FormationCoverRules
 	{
 		OutClosest = FormationMath::ClosestOnSegment(P, Wall.A, Wall.B);
 		return FMath::Max(0.0, FVector2D::Distance(P, OutClosest) - 0.5 * Wall.Thickness);
+	}
+
+	/** v2.3 part 7: a sweep (Mid +- Amp, relative) confined to [O - Lim, O + Lim] (rules.ts shoulderSweep). */
+	static void CoverShoulderSweep(double& Mid, double& Amp, double O, double Lim, TFunctionRef<bool(double)> IsBlocked, int32 Pref)
+	{
+		bool bFound = false;
+		double BestLo = 0.0;
+		double BestHi = 0.0;
+		for (const double Shift : { 0.0, -360.0, 360.0 })
+		{
+			const double Lo = FMath::Max(Mid - Amp + Shift, O - Lim);
+			const double Hi = FMath::Min(Mid + Amp + Shift, O + Lim);
+			if (Hi >= Lo - 1e-9 && (!bFound || Hi - Lo > BestHi - BestLo + 1e-9))
+			{
+				bFound = true;
+				BestLo = Lo;
+				BestHi = Hi;
+			}
+		}
+		if (bFound)
+		{
+			Mid = 0.5 * (BestLo + BestHi);
+			Amp = FMath::Max(0.0, 0.5 * (BestHi - BestLo));
+			return;
+		}
+		const auto Score = [&](int32 Sign, int32 Index)
+		{
+			const double Shoulder = O + Sign * Lim;
+			switch (Index)
+			{
+			case 0: return IsBlocked(Shoulder) ? 1.0 : 0.0;
+			case 1: return FMath::Abs(NormYaw(Mid - Shoulder));
+			default: return Sign == Pref ? 0.0 : 1.0;
+			}
+		};
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			const double A = Score(1, Index);
+			const double B = Score(-1, Index);
+			if (FMath::Abs(A - B) > 1e-9)
+			{
+				Mid = O + (A < B ? 1.0 : -1.0) * Lim;
+				Amp = 0.0;
+				return;
+			}
+		}
+		Mid = O + Lim;
+		Amp = 0.0;
 	}
 
 	TOptional<FFormationCoverResult> Allocate(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float Heading,
@@ -370,6 +420,9 @@ namespace FormationCoverRules
 				AddLook(Look.Role, Look.Yaw);
 			}
 		}
+		// v2.3 part 7 (Q3 = c): on the move the others look at most LookOverShoulderMaxDeg off their travel (over the shoulder).
+		const double ShoulderMax = Config.LookOverShoulderMaxDeg;
+		const bool bLimitOn = !bHalt && ShoulderMax < 180.0;
 		for (const int32 MemberIndex : Others)
 		{
 			const int32 ShareIndex = Shares.IndexOfByPredicate([&](const FCoverShareD& Share) { return Share.Role == Members[MemberIndex].Role; });
@@ -377,7 +430,13 @@ namespace FormationCoverRules
 			{
 				continue;
 			}
-			const FCoverSweep Sweep = SweepOf(ShareIndex);
+			FCoverSweep Sweep = SweepOf(ShareIndex);
+			if (bLimitOn)
+			{
+				const double Travel = Members[MemberIndex].Travel.IsSet() ? static_cast<double>(Members[MemberIndex].Travel.GetValue()) : H;
+				CoverShoulderSweep(Sweep.Mid, Sweep.Amp, NormYaw(Travel - H), ShoulderMax, IsBlocked, Bearing(Members[MemberIndex]) < 0.0 ? -1 : 1);
+				Result.Shoulder.Add({ Members[MemberIndex].Role, static_cast<float>(NormYaw(Travel)) });
+			}
 			const double Rel = bHalt ? Shares[ShareIndex].Primary : CoverScan(Sweep.Mid, Sweep.Amp, Sweep.Period, Sweep.Phase, Time, Exp);
 			AddLook(Members[MemberIndex].Role, H + Rel);
 		}

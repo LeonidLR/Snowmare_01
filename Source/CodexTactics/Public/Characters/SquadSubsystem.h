@@ -7,11 +7,14 @@
 #include "Characters/FirePostureRules.h"
 #include "Formation/FormationBypassRules.h"
 #include "Formation/FormationCornerRules.h"
+#include "Formation/FormationCoverRules.h"
 #include "Formation/FormationGuardRules.h"
 #include "Formation/FormationMenuRules.h"
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTypes.h"
+#include "Formation/FormationWallEndRules.h"
 #include "Formation/FormationWallGroupRules.h"
+#include "Formation/FormationWallRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Tactics/CoverTypes.h"
 #include "SquadSubsystem.generated.h"
@@ -261,11 +264,20 @@ public:
 	int32 GetDeferredShotCount() const { return DeferredShots.Num(); }
 
 	/**
-	 * True while formation following is on: exploration and after the final fight (PostCombat, bug 2026-10-23; SquadOrderRules::IsFormationPhase).
-	 * From preparation to the fight's end the operatives act individually.
+	 * True while formation following is on: exploration, after the final fight (PostCombat, bug 2026-10-23) and - user decision
+	 * 2026-10-26 - through the fight too (SquadOrderRules::IsFollowPhase: the preparation, the real-time fight, the tactical pause; not
+	 * the turn-based grid). Off while Commander Mode fights on its own (UGameFlowSubsystem::IsSquadAutonomyActive: the autonomy owns
+	 * the members then). Console Codex.Squad.CombatFormation 0: the old rule (from the preparation to the fight's end nobody follows).
 	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsFormationActive() const;
+
+	/**
+	 * The EXPLORATION formation (SquadOrderRules::IsFormationPhase: exploring, after the final fight): the group features that stay
+	 * out of a fight - the group cover order without a box selection, the formation wall layout and its wall group / slide preview,
+	 * a spotted trap's Solo. In a fight the cover orders stay individual (a box selection still takes cover together).
+	 */
+	bool IsExplorationFormation() const;
 
 	// --- Group cover order (game designer 2026-10-20; GroupCoverRules, SquadOrderRules::ShouldJoinGroupCover) -------------
 
@@ -390,13 +402,42 @@ public:
 	bool IsFormationSliding() const { return Sectors.bSlide; }
 	/** Wall slides started since the level began (smokes). */
 	int32 GetFormationSlideCount() const { return Sectors.SlideCount; }
+	/** Bug A 2026-10-26: the held wall layout is the corner stack at a free wall end (or the slide runs into one). */
+	bool IsFormationCornerStack() const { return Sectors.bCornerStack || (Sectors.bSlide && Sectors.bSlideStack); }
+	/**
+	 * Bug C 2026-10-26 (the squad's guide lines): the squad in group mode stands in the formation wall layout and Destination lies along its
+	 * wall or round its end (within slide.max_off_wall of the wall's body) -> the paths a move there would take, one polyline per member,
+	 * the leader first: a wall slide (to the corner stack too) - each member's line from where he stands to his slide target; else the
+	 * leader's navmesh path (round the wall's end). False (none) otherwise.
+	 */
+	bool PreviewFormationMove(const FVector& Destination, TArray<TArray<FVector>>& OutPaths) const;
+	/**
+	 * The squad's corner peek (user bug report 2026-10-26: "one operative at a wall shows the peek silhouette at its corner and peeks on a
+	 * click; the squad in formation does not"): the squad in group mode stands in the formation wall layout (nobody in a cover slot, the
+	 * leader not in cover - else the single operative's peek) -> who peeks round the end of its wall at EdgeOnFace (the exposed end on the
+	 * face line; FormationWallEnd::PlanSquadPeek: the corner stack's point man - the member nearest that end, K second - else the member
+	 * nearest it). False when the squad cannot peek as a group. SquadSubsystemFormationPeek.cpp.
+	 */
+	bool PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperativeCharacter*& OutPeeker, FFormationSquadPeek& OutPlan) const;
+	/**
+	 * The squad's corner peek order (the click on the end of the squad's wall): Peeker - PlanFormationCornerPeek's - takes CornerSlot (his own
+	 * cover order; the corner stand point) and, once in cover, the manual corner peek round that end (AOperativeCharacter::OrderCornerPeek, the
+	 * single operative's order); the others form the v2.4 corner stack there (the leader's move into it: the wall slide, K second, the rear man
+	 * back along the wall) or, without a stack, hold. Over with the leader's next order, a leader switch or the end of the wall layout (the
+	 * peeker then follows the leader out of his cover as any follower in cover). False: nothing was ordered.
+	 */
+	bool OrderFormationCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace);
+	/** The squad's corner peek in force: its peeker (null when none) - smokes. */
+	AOperativeCharacter* GetFormationPeeker() const { return Sectors.Peek.Peeker.Get(); }
+	/** Squad corner peeks whose peek order was given (the peeker reached his corner) since the level began - smokes. */
+	int32 GetFormationPeekCount() const { return Sectors.PeekCount; }
 	/** The last coverage allocation on the move (FormationCoverRules::Allocate): its rear guard; false when the allocator did not run. */
 	bool GetFormationRearGuard(EFormationRole& OutRole) const;
 
 	// --- Rules v2.1 in the runtime (Codex.Formation.Sectors + Codex.Formation.V21; SquadSubsystemFormationGuard.cpp, SquadSubsystemFormationBypass.cpp) ---
 
 	/**
-	 * The formation asked for this frame: the hold-G menu's manual choice (SetFormationMenuChoice), else the terrain's (ChooseFormation).
+	 * The formation asked for this frame: the hold-B menu's manual choice (SetFormationMenuChoice), else the terrain's (ChooseFormation).
 	 * GetFormationKind is the formation in EFFECT - it differs while the wall guard falls back (FormationGuardRules::Resolve: the mirror
 	 * echelon, or the trail column along the leader's path; the request comes back by itself after classify.hold_distance of path).
 	 */
@@ -412,9 +453,9 @@ public:
 	FString GetFormationHudText() const;
 
 	/**
-	 * The hold-G menu's choice (FormationMenuRules; unset = Auto: the terrain decides). A manual formation holds until Auto (too few
+	 * The hold-B menu's choice (FormationMenuRules; unset = Auto: the terrain decides). A manual formation holds until Auto (too few
 	 * members -> Auto, FormationMenuRules::Resolve); "All forward" = the terrain's formation with everybody looking at 12. The radial
-	 * menu itself is not built yet: the dev console Codex.Formation.Menu sets it.
+	 * menu (hold B, ACodexTacticsPlayerController, stage 7) and the dev console Codex.Formation.Menu set it.
 	 */
 	void SetFormationMenuChoice(const TOptional<EFormationMenuItem>& Choice);
 	TOptional<EFormationMenuItem> GetFormationMenuChoice() const { return Sectors.MenuChoice; }
@@ -437,6 +478,24 @@ public:
 	const TArray<FFormationCornerLook>& GetFormationCornerLooks() const { return Sectors.CornerLooks; }
 	/** The world walls the v2.1 rules see round the leader (box collision -> FormationGuardRuntime::WallsFromBox). */
 	const TArray<FFormationWall>& GetFormationWorldWalls() const { return Sectors.WorldWalls; }
+	/**
+	 * Rules v2.4 (user bug report 2026-10-26): the wall layout in force stands at a wall END and its looks were spread over the open arc round
+	 * it (FormationWallRules::EndLooks); OutBasePct / OutPct = the open-arc share the face looks / the spread looks hold (smokes, the HUD log).
+	 */
+	bool IsFormationWallEndSpread(float& OutBasePct, float& OutPct) const
+	{
+		OutBasePct = Sectors.WallEndBasePct;
+		OutPct = Sectors.WallEndPct;
+		return Sectors.bWallLayoutValid && Sectors.bWallEndSpread;
+	}
+	/**
+	 * Rules v2.5 (user rule 2026-10-26, the covered approach to the wall): this frame's approach looks (FormationWallRules::Approach) while the
+	 * squad walks into the wall layout - the leader runs in and looks along the wall, the rear cover, the flank men; empty once everyone is at
+	 * his slot (the plain layout) or with Codex.Formation.Approach 0.
+	 */
+	const TArray<FFormationApproachLook>& GetFormationApproachLooks() const { return Sectors.ApproachLooks; }
+	/** The wall layout in force (slots and looks by role; empty when none) - smokes. */
+	const TArray<FFormationSlot>& GetFormationWallSlots() const { return Sectors.WallSlots; }
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
@@ -449,6 +508,9 @@ protected:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
 private:
+	/** A wave fight running in real time (the formation's parked followers then leave their facing to the fight). */
+	bool IsRealTimeFight() const;
+
 	struct FPlannedOrder
 	{
 		FVector Destination = FVector::ZeroVector;
@@ -525,6 +587,13 @@ private:
 		/** The wall layout in force (the automatic one on arrival or the order's). */
 		bool bWallLayoutValid = false;
 		TArray<FFormationSlot> WallSlots;
+		/** Rules v2.4: WallSlots' looks were spread over a wall end's open arc (EndLooks); the shares the face / the spread looks hold, %. */
+		bool bWallEndSpread = false;
+		/** Rules v2.5: the covered approach into the wall layout - its held roles (unset = not begun) and this frame's looks (empty = none). */
+		TOptional<FFormationApproachState> Approach;
+		TArray<FFormationApproachLook> ApproachLooks;
+		float WallEndBasePct = 100.f;
+		float WallEndPct = 100.f;
 		FVector2D WallAnchor = FVector2D::ZeroVector;
 		float WallNormalYaw = 0.f;
 		/** The group cover order in group mode as the wall layout (OrderFormationWall). */
@@ -555,6 +624,12 @@ private:
 		bool bSlideFromOrder = false;
 		/** The 4th / the pair's partner ends the slide on the right end (keeps it when it has room, contract 11.5). */
 		bool bSlideEndRight = true;
+		/** Bug A 2026-10-26: this slide runs to a free wall end (FormationWallEnd::FindStackEnd) and ends in the corner stack. */
+		bool bSlideStack = false;
+		FFormationStackEnd SlideStackEnd;
+		/** The held wall layout is the corner stack at a free wall end (the point man peeks round it); its end. */
+		bool bCornerStack = false;
+		FFormationStackEnd CornerStackEnd;
 		/** Rules v2.2 look probes round each follower's slot (FormationCoverRules::Allocate's walls next to the slots). */
 		TArray<FFormationWall> LookWalls;
 		/** The last coverage allocation on the move: its rear guard. */
@@ -566,8 +641,10 @@ private:
 		FFormationGuardState Guard;
 		/** The slots are the trail column's this frame. */
 		bool bTrail = false;
-		/** The trail column is the sharp-turn fold, not a wall cut (the HUD's "(turn)"; FormationGuardRuntime::IsTurnFold). */
-		bool bGuardTurnFold = false;
+		/** Rules v2.3 part 7: the trail's direction at each trail slot this frame (the allocator's per-place Travel). */
+		TArray<FFormationRoleYaw> TrailTravel;
+		/** Rules v2.3 part 7: the allocator's over-the-shoulder members on the move (ClearLook's Limit; FormationGuardRuntime::ShoulderLimit). */
+		TArray<FFormationRoleYaw> ShoulderLooks;
 		/** The leader's path this tick (StepFormationTerrain), cm. */
 		float LastStepDistance = 0.f;
 		/** The leader's recorded path, oldest first (FormationGuardRuntime::PushTrail). */
@@ -584,7 +661,7 @@ private:
 		/** Slicing the pie (FormationCornerRules::Watch). */
 		FFormationCornerState Corner;
 		TArray<FFormationCornerLook> CornerLooks;
-		/** The hold-G menu's choice (unset = Auto) and its "All forward". */
+		/** The hold-B menu's choice (unset = Auto) and its "All forward". */
 		TOptional<EFormationMenuItem> MenuChoice;
 		bool bAllForward = false;
 		/** The bypass steering of the leader's own order through the corners of the chosen side. */
@@ -601,6 +678,25 @@ private:
 		TArray<TPair<FVector2D, double>> ReportedThreats;
 		FFormationBypassRecord LastBypass;
 		int32 BypassCount = 0;
+		/** The squad's corner peek (OrderFormationCornerPeek; SquadSubsystemFormationPeek.cpp). */
+		struct FSquadPeek
+		{
+			TWeakObjectPtr<AOperativeCharacter> Peeker;
+			/** The leader who ordered it (a switch ends it). */
+			TWeakObjectPtr<AOperativeCharacter> Leader;
+			/** The wall's end on its face line and the side it lies on from the corner slot. */
+			FVector EdgeOnFace = FVector::ZeroVector;
+			ECoverFacing Side = ECoverFacing::Right;
+			/** The leader's move order serial the peek belongs to (another order ends it; the squad's move into the stack is adopted once). */
+			uint32 LeaderSerial = 0;
+			/** The peek order is still due (he walks to the corner). */
+			bool bPending = false;
+			/** The leader's move into the corner stack has not become the slide / the stack yet. */
+			bool bAwaitStack = false;
+			float Seconds = 0.f;
+		};
+		FSquadPeek Peek;
+		int32 PeekCount = 0;
 	};
 
 	/** Rules v2.2 wall group (ReallocateWallGroup; SquadSubsystemWallGroup.cpp). */
@@ -642,6 +738,27 @@ private:
 	void EndFormationSlide(AOperativeCharacter& LeaderRef, bool bArrived, const TCHAR* Why);
 	/** The wall layout round the leader at his wall (the face behind his back: -WallNormalYaw); keeps the roles of an order. */
 	bool HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float WallNormalYaw, bool bCrouch, const TOptional<bool>& KeepEndRight);
+	/**
+	 * Bug A 2026-10-26: the corner stack held at a free wall end (FormationWallEnd::StackSlots from StartSlots) as the wall order the squad
+	 * keeps until the leader's next order (crouched when bCrouch); the roles of an order are kept, else the follower slots' roles.
+	 */
+	void HoldCornerStack(AOperativeCharacter& LeaderRef, const TArray<FFormationSlot>& StartSlots, const FFormationStackEnd& End, bool bCrouch);
+	/**
+	 * Bug D 2026-10-26: the leader switched while the wall layout stands - the wall order (and a running slide) goes on with the new leader:
+	 * the layout again round him at the same wall (K in the middle), the order's crouch kept, the places by minimal travel.
+	 */
+	void PassWallOrderToLeader(AOperativeCharacter& NewLeader);
+	/** The held wall layout's roles (WallOrderRoles) for the followers by minimal travel to Slots' places (K first; a wall order's own roles kept). */
+	void AssignWallRolesByTravel(const TArray<FFormationSlot>& Slots);
+	/** Bug B 2026-10-26: Slots (FormationWallRules::Layout's, K first) fitted to the world at the wall (FormationWallEnd::FitLayout). */
+	TArray<FFormationSlot> FitWallLayoutToWorld(const TArray<FFormationSlot>& Slots, float NormalYaw, float FeetZ) const;
+	/** The world walls round Center within HalfExtentCm at the formation probe height over FeetZ (GatherFormationWalls). */
+	TArray<FFormationWall> GatherWallsAround(const FVector2D& Center, float HalfExtentCm, float FeetZ) const;
+	/** The squad's corner peek per tick: the peek order once the peeker is in cover at the corner; its end (SquadSubsystemFormationPeek.cpp). */
+	void UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, float DeltaTime);
+	void EndFormationCornerPeek(const TCHAR* Why);
+	/** Operative is the squad corner peek's peeker (the formation leaves him to his corner: no follow, no wall pose, no sector look). */
+	bool IsFormationPeeker(const AOperativeCharacter* Operative) const { return Operative && Sectors.Peek.Peeker.Get() == Operative; }
 	/** The patrol / halt looks of FrameSlots from FormationCoverRules::Allocate (rules v2.2); false when the allocator does not apply. */
 	bool AllocateFormationLooks(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos);
 	/**
@@ -751,6 +868,21 @@ private:
 	/** The wall layout for the members at a wall (Others' roles by minimal travel when bAssignRoles); false when no wall is found. */
 	bool ComputeWallLayout(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, const FVector2D& ClickedSlot, int32 MemberCount,
 		const AOperativeCharacter* FourthMan);
+	/**
+	 * Rules v2.4 (user bug report 2026-10-26, contract 14): at a wall END the wall layout's looks (Sectors.WallSlots, just laid out) are spread
+	 * over the open arc round it - FormationWallRules::EndLooks over the world's box walls round the layout plus the traced face measured out to
+	 * wall_end.probe_dist (so a long wall of complex collision still reads as a face); computed once per layout (no flicker). Codex.Formation.WallEnd 0
+	 * = the face looks everywhere (v2.3).
+	 */
+	void ApplyFormationWallEnd(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, const TArray<EFormationRole>& FixedRoles = TArray<EFormationRole>());
+	/**
+	 * Rules v2.5 (user rule 2026-10-26, contract 15): the covered approach into the wall layout - FormationWallRules::Approach over the places'
+	 * actual positions (the leader K, the followers by their wall roles) and the world walls; its looks replace this frame's slot looks
+	 * (unset = the runner faces his run). Codex.Formation.Approach 0 = everyone walks in facing his travel (v2.4).
+	 */
+	void ApplyFormationApproach(const AOperativeCharacter& LeaderRef);
+	/** Rules v2.5: this follower role's approach duty this frame (unset = none). */
+	TOptional<EFormationApproachDuty> FormationApproachDuty(EFormationRole Role) const;
 	/** The wall order: the members' arrival (crouch facing out), its end on the leader's next order / Solo / the formation off. */
 	void UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, float DeltaTime);
 	void EndFormationWallOrder(const TCHAR* Why);
@@ -792,7 +924,8 @@ private:
 	 * candidate must also be on the leader's side - nothing blocks the straight line from him to it (a walkable point behind a wall splits
 	 * the squad).
 	 */
-	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide = false) const;
+	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide = false,
+		const TOptional<FVector>& Here = TOptional<FVector>()) const;
 
 	/**
 	 * Rules v2.3 (contract 13.5): the slots given out this formation tick (the leader's position, then each resolved slot): a stand-in for

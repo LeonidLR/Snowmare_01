@@ -169,9 +169,9 @@
       "route": "R1",
       "seed": 1,
       "t": null,
-      "what": "5-7 o'clock watched 89.5 %",
+      "what": "5-7 o'clock watched 89.3 %",
       "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

@@ -101,7 +101,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		LastThreat.Reset();
 	}
 	bTurningToThreat = false;
-	if (bRealTimeFight && !bQuickFireActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	if (bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
 		bFacingCombatTarget = true;
 		LastThreat = Target;
@@ -133,12 +133,32 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		bFacingWall = true; // the movement facing below stays out of it this frame
 	}
 	const float TurnSpeed = OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f; // stored as deg/s, Godot rad/s
+	// User request 2026-10-22: after the retreat at a run he does not stand with his back to the enemies chasing him - he turns to the one
+	// he was fighting (its last seen spot), or the nearest live enemy; the fire posture then picks targets as usual (decided here, applied
+	// at the end of the chain). User decision 2026-10-26 (the squad stays in formation in the fight): this turn also wins over the formation
+	// look sector of a standing member (a formation member who fought keeps facing the threat, not his sector).
+	bool bTurnToThreat = false;
+	FVector Threat = FVector::ZeroVector;
+	if (!bFacingCombatTarget && !bFacingWall)
+	{
+		ThreatFacingRules::FFacts Facts;
+		Facts.bRealTimeFight = bRealTimeFight;
+		Facts.bStanding = GetVelocity().SizeSquared2D() < 10.f * 10.f && !bHasMoveOrder;
+		Facts.bInCover = bInCover || bHasPendingCover;
+		Facts.bFacingCombatTarget = bFacingCombatTarget;
+		Facts.bExplicitFacing = bExplicitFacing || bHasIdleFacing || bQuickFireActive || bSuppressActive;
+		Facts.bGridOwnsFacing = bGridOwnsFacing;
+		Facts.bFoughtThisFight = bFoughtThisFight;
+		Facts.bHasThreat = Facts.bRealTimeFight && Facts.bFoughtThisFight && Facts.bStanding && FindThreatPoint(Threat);
+		bTurnToThreat = ThreatFacingRules::ShouldTurnToThreat(Facts);
+	}
 	// Formation look sectors (Codex.Formation.Sectors; USquadSubsystem sets the yaw only with the console on): below the combat target, a
-	// facing order, the cover (returned above / the approach to a pending slot) and an order's idle facing; above the movement direction.
-	// He keeps walking his path - the 8-direction locomotion strafes / walks backwards (the rear man looks at 6).
+	// facing order, the cover (returned above / the approach to a pending slot), an order's idle facing and (2026-10-26) the threat turn
+	// above; above the movement direction. He keeps walking his path - the 8-direction locomotion strafes / walks backwards (the rear man
+	// looks at 6).
 	bFacingFormationSector = !bFacingCombatTarget && !bFacingWall && FormationLookYaw.IsSet() && !bExplicitFacing && !bQuickFireActive
-		&& !bGridOwnsFacing && !bHasIdleFacing && !bHasPendingCover && !bSprinting && !bCarrying && Stance != EOperativeStance::Prone
-		&& !IsPanicking();
+		&& !bSuppressActive && !bGridOwnsFacing && !bHasIdleFacing && !bHasPendingCover && !bSprinting && !bCarrying && Stance != EOperativeStance::Prone
+		&& !IsPanicking() && !bTurnToThreat;
 	if (bFacingFormationSector)
 	{
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, FormationLookYaw.GetValue(), TurnSpeed, DeltaTime), 0.f));
@@ -154,19 +174,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	}
 	else if (!bFacingCombatTarget && !bFacingWall)
 	{
-		// User request 2026-10-22: after the retreat at a run he does not stand with his back to the enemies chasing him - he turns
-		// to the one he was fighting (its last seen spot), or the nearest live enemy; the fire posture then picks targets as usual.
-		ThreatFacingRules::FFacts Facts;
-		Facts.bRealTimeFight = bRealTimeFight;
-		Facts.bStanding = GetVelocity().SizeSquared2D() < 10.f * 10.f && !bHasMoveOrder;
-		Facts.bInCover = bInCover || bHasPendingCover;
-		Facts.bFacingCombatTarget = bFacingCombatTarget;
-		Facts.bExplicitFacing = bExplicitFacing || bHasIdleFacing || bQuickFireActive;
-		Facts.bGridOwnsFacing = bGridOwnsFacing;
-		Facts.bFoughtThisFight = bFoughtThisFight;
-		FVector Threat;
-		Facts.bHasThreat = Facts.bRealTimeFight && Facts.bFoughtThisFight && FindThreatPoint(Threat);
-		if (ThreatFacingRules::ShouldTurnToThreat(Facts))
+		if (bTurnToThreat)
 		{
 			bTurningToThreat = true;
 			const float ThreatYaw = (Threat - GetActorLocation()).Rotation().Yaw;

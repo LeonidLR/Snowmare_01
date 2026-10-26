@@ -167,7 +167,7 @@
       "t": null,
       "what": "5-7 o'clock watched 84.1 %",
       "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -176,9 +176,9 @@
       "route": "R1",
       "seed": 1,
       "t": 10.6,
-      "what": "P-Z 77 cm apart",
+      "what": "P-Z 78 cm apart",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -188,7 +188,7 @@
       "seed": 1,
       "t": 11.2,
       "what": "L-Z 55 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -196,21 +196,10 @@
       "members": 3,
       "route": "R1",
       "seed": 2,
-      "t": 10.1,
-      "what": "P-Z 69 cm apart",
+      "t": 10.2,
+      "what": "P-Z 74 cm apart",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 11.1,
-      "what": "blizzard: wall cuts Z",
-      "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [
@@ -229,6 +218,14 @@
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 7,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
     }
   ]
 }

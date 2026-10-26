@@ -47,7 +47,7 @@ Vehicle». Tests `CodexTactics.Vehicle.*` (10), smoke `VehicleSmoke`; editor scr
 **Vehicles P2 + user requests (2026-10-12, branch `agents/apc2`)** — `Vehicles/VehicleCombatRules` (pure: `FVehicleTurretConfig`
 (cannon 45 dmg + 1.5 m splash 20, 2-shell bursts 0.5 s / pause 1.2 s (nerfed by the user 2026-10-12 from 70 / 35 / 3), 40 m, 60 shells per map, hit 0.9, armour factor 0.25 = the HE
 shell mostly ignores the Brute's hide; MG 18 dmg x 8 rounds/s, 35 m, hit 0.8, overheats in 4 s / cools in 3 s, no suppression
-stagger (removed by the user 2026-10-12: the MG only deals damage); traverse 60 deg/s, elevation -4..+60, dead zone 4 m from the hull side, Defensive radius 20 m),
+stagger (removed by the user 2026-10-12; since 2026-10-26 the MG and the cannon SUPPRESS through the suppression system, docs/design/SUPPRESSION.md); traverse 60 deg/s, elevation -4..+60, dead zone 4 m from the hull side, Defensive radius 20 m),
 `ChooseTarget` (Ctrl+click priority in any posture; Passive holds; Defensive only once provoked and within 20 m; Aggressive any;
 a Brute within 20 m first, else the nearest; never in the dead zone / out of sight / range), `ChooseWeapon` (cannon for a Brute /
 marksman / group of 3 / priority while shells last, MG for the rest; an overheated MG means small targets wait), `StepHeat`,

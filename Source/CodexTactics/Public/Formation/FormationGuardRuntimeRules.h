@@ -4,6 +4,7 @@
 #include "Formation/FormationBypassRules.h"
 #include "Formation/FormationCoverRules.h"
 #include "Formation/FormationGuardRules.h"
+#include "Formation/FormationSectorRules.h"
 #include "Formation/FormationTypes.h"
 
 /**
@@ -101,18 +102,35 @@ namespace FormationGuardRuntime
 
 	/**
 	 * labels.ts guardHudText: the name in effect, or "Echelon left -> Column (wall)" while the guard falls back (level > 0, a different formation);
-	 * bTurnFold (the trail column is the sharp-turn fold, not a wall cut; user decision 2026-10-26): "Echelon left -> Column (turn)".
+	 * Cause (rules v2.3 part 9, FFormationGuardState::Cause): "(turn)" for the sharp-turn fold, "(wall)" otherwise - "Echelon left -> Column (turn)".
 	 */
 	CODEXTACTICS_API FString GuardHudText(EFormationKind Requested, EFormationKind Effective, EFormationGuardLevel Level, int32 MemberCount,
-		bool bTurnFold = false);
+		const TOptional<EFormationGuardCause>& Cause = TOptional<EFormationGuardCause>());
+
+	/** cm/s: a member moving faster than this steers the over-the-shoulder limit with his own step direction (contract 13.7). */
+	inline constexpr double ShoulderMoveCmPerSec = 15.0;
+	/** deg: his step direction counts only within this of his shoulder entry's travel (a step back to a slot behind him does not; SHOULDER_STEP_DEG). */
+	inline constexpr double ShoulderStepDeg = 90.0;
 
 	/**
-	 * Why the trail column stands (the HUD's "(turn)" / "(wall)"): FormationGuardRules::Resolve folds a wide request (echelon / line) into it when
-	 * the turn ahead exceeds turn.fold_deg (bTurnAhead) before it looks at the walls - that is the turn fold; a wall cutting the request
-	 * (bCutByWalls) without such a turn is the wall; neither (the column held for classify.hold_distance) keeps the previous reason. Not at the
-	 * trail level: false.
+	 * Rules v2.3 part 6 (contract 13.6): every member has a clear line (no wall body, radius 0) to the leader - FormationGuardRules::Resolve's
+	 * bAllInSight. No members: true.
 	 */
-	CODEXTACTICS_API bool IsTurnFold(EFormationGuardLevel Level, bool bTurnAhead, bool bCutByWalls, bool bWasTurnFold);
+	CODEXTACTICS_API bool AllInSight(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, const TArray<FVector2D>& Members);
+
+	/**
+	 * Rules v2.3 part 7 (contract 13.7 integration): ClearLook's Limit for a member the allocator listed in Shoulder - {his velocity direction when
+	 * he moves faster than ShoulderMoveCmPerSec and it is within ShoulderStepDeg of the entry's yaw, else the entry's yaw; half:
+	 * LookOverShoulderMaxDeg}. Unset when he is not listed or the rule is off (LookOverShoulderMaxDeg >= 180).
+	 */
+	CODEXTACTICS_API TOptional<FFormationLookLimit> ShoulderLimit(const TArray<FFormationRoleYaw>& Shoulder, EFormationRole Role, const FVector2D& Velocity,
+		const FFormationConfig& Config = FFormationConfig());
+
+	/**
+	 * Rules v2.3 part 8 (contract 13.8 integration): ClearLook's Ahead = Pos + Velocity x LookAnticipateS; unset below 1 cm/s or with the
+	 * rule off (LookAnticipateS 0).
+	 */
+	CODEXTACTICS_API TOptional<FVector2D> AnticipatedPos(const FVector2D& Pos, const FVector2D& Velocity, const FFormationConfig& Config = FFormationConfig());
 
 	/** The contract name of a bypass reason (sim BypassFrame.reason): "shortest", "shielded", "too_long" (logs / smokes; no player text). */
 	CODEXTACTICS_API const TCHAR* BypassReasonText(EFormationBypassReason Reason);
@@ -178,7 +196,7 @@ namespace FormationGuardRuntime
 	 */
 	CODEXTACTICS_API TArray<FFormationSlot> TrailFrameSlots(const TArray<FVector2D>& TrailWithLeaderPos, float HeadingYaw, int32 MemberCount,
 		const TArray<FFormationWall>& Walls, EFormationMode Mode, float PatrolTime, const TOptional<float>& PassageWidth,
-		const FFormationConfig& Config = FFormationConfig());
+		const FFormationConfig& Config = FFormationConfig(), TArray<FFormationRoleYaw>* OutTravel = nullptr);
 
 	/**
 	 * v2.3 (contract 13.3, user decision 1A clarified; sim.ts "decided"): the looks the coverage allocator must keep as FIXED besides

@@ -128,15 +128,20 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 
 void ACodexTacticsPlayerController::CameraDragRotateStart()
 {
+	// The formation radial menu (hold B): RMB cancels it (the previous choice stays), no camera drag.
+	if (CancelFormationMenu())
+	{
+		return;
+	}
 	// Minimap (2026-10-18): RMB on the map = a move order there (the normal ground-click path), never a camera drag.
 	if (FVector2D MapMouse; GetMousePosition(MapMouse.X, MapMouse.Y) && HandleMapClick(MapMouse, true))
 	{
 		return;
 	}
 	// Sprint 10: Shift + RMB assigns a defense line instead of the camera drag.
-	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+	if (IsShiftModifierDown())
 	{
-		AssignDefenseUnderCursor();
+		AssignDefenseUnderCursor(); // (on enemies: the SUPPRESS order, 2026-10-26)
 		return;
 	}
 	// Godot: RMB drops a selection box being dragged.

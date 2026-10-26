@@ -19,6 +19,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/QuickFireRules.h"
 #include "Combat/SightRules.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
@@ -448,6 +449,11 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		UE_LOG(LogCodexTactics, Display, TEXT("[QuickFire] %s: order timed out"), *DisplayName.ToString());
 		CancelQuickFire();
 	}
+	// The SUPPRESS order (2026-10-26): dropped when no round could leave within its budget (turning, no line out of the cover).
+	if (bSuppressActive && GetWorld() && GetWorld()->GetTimeSeconds() - SuppressLastProgressTime > SuppressionRules::GetConfig().OrderTimeoutSeconds)
+	{
+		CancelSuppressFire(TEXT("timed out"));
+	}
 	// Godot: a panicking soldier neither shoots nor reloads (can_shoot = false, _process_reloading skipped).
 	if (!bRecruited || bTacticalCeaseFire || !HealthComponent || !HealthComponent->IsAlive() || (IsPanicking() && !IsRaging()))
 	{
@@ -497,11 +503,28 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 			: TEXT("cannot shoot (frozen weapon)")));
 	}
 
+	// Suppressive fire (game designer decision 2026-10-26): a PINNED operative does not fire at all - orders included (they wait).
+	const FSuppressionFireEffect SuppressionFire = USuppressionSubsystem::GetOperativeFireOf(this);
+	if (!SuppressionFire.bMayFire)
+	{
+		++PinnedFireHolds;
+		const double PinnedNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+		QuickFireLastProgressTime = PinnedNow;
+		SuppressLastProgressTime = PinnedNow;
+		return TEXT("pinned: no fire");
+	}
+	const bool bMayExpose = USuppressionSubsystem::MayExposeNow(this); // suppressed: no peek, no stepping off the wall
+
 	// Quick fire (Ctrl + click on a point, game designer request 2026-10-19): an explicit order - it fires in any phase and under any posture, before
 	// the automatic fire below (OperativeCharacterQuickFire.cpp).
 	if (bQuickFireActive)
 	{
 		return RunQuickFire(DeltaTime, OutTarget);
+	}
+	// The SUPPRESS order (2026-10-26, OperativeCharacterSuppression.cpp): an explicit order too.
+	if (bSuppressActive)
+	{
+		return RunSuppressFire(DeltaTime, OutTarget);
 	}
 
 	// Only auto-shoot when in WaveCombat real-time mode (or if no game flow subsystem exists, e.g. standalone test).
@@ -602,7 +625,8 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 
 	// User decision 2026-10-06: a target out on the open side (in front of the wall) is no corner shot: he steps off the
 	// wall and fires normally, then comes back to the slot (UpdateOpenShotReturn).
-	if (bInCover && !IsCornerShotTarget(Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation()) && !BeginOpenShotFromCover(Target))
+	// Suppressed (2026-10-26): he does not step out - the blind shot from the cover pose below.
+	if (bInCover && bMayExpose && !IsCornerShotTarget(Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation()) && !BeginOpenShotFromCover(Target))
 	{
 		return TEXT("open shot waits (shimmying)");
 	}
@@ -650,9 +674,9 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		{
 			CornerAimLastTargetTime = Now;
 		}
-		else if (Now < CornerAimDuckUntil)
+		else if (bMayExpose && Now < CornerAimDuckUntil)
 		{
-			return TEXT("cover: re-entry delay after a duck");
+			return TEXT("cover: re-entry delay after a duck"); // (suppressed he fires blind without leaning out: no delay)
 		}
 		// Arriving at an edge: no shot until the snap to the corner stand-off is decided / done (CornerEntrySmoke 2026-10-07:
 		// a shot fired from the wall while side-stepping to the corner, the rifle not on the target).
@@ -661,7 +685,7 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 			return TEXT("cover: corner snap pending");
 		}
 		// The corner hold stance fires only once the upper body twisted onto the target (user rule 2026-10-07).
-		if (IsCornerHoldSpot() && (!bCornerAimActive || GetShotAimResidualDeg(AimAt) > AimConeDeg))
+		if (bMayExpose && IsCornerHoldSpot() && (!bCornerAimActive || GetShotAimResidualDeg(AimAt) > AimConeDeg))
 		{
 			return bCornerAimActive ? TEXT("corner hold: outside the aim cone") : TEXT("corner hold: aim not active");
 		}
@@ -676,7 +700,7 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	}
 	TGuardValue<bool> Blind(bBlindShot, Shot.bBlind);
 	TGuardValue<FVector> Aim(BlindAimPoint, Shot.AimPoint);
-	TGuardValue<bool> CoverBlind(bCoverBlindShot, bInCover && CoverFireMode == ECoverFireMode::BlindFire);
+	TGuardValue<bool> CoverBlind(bCoverBlindShot, bInCover && (CoverFireMode == ECoverFireMode::BlindFire || SuppressionFire.bBlind));
 	ShootAtTarget(Target, Shot.Cover);
 	return TEXT("fired");
 }
@@ -784,15 +808,26 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	}
 	// Blind fire at a silhouette: -80 %, and nothing to hit once the enemy left that spot (Sprint 08-F). Cover blind fire
 	// (Sprint 12, head down): -40 %. Both apply multiplied, floored at the tunable minimum (user decision 2026-10-06).
+	// Suppressed (game designer decision 2026-10-26): he fires blind with a large spread - the suppression's hit factor replaces the
+	// cover blind-fire factor (not both); a silhouette's own factor still applies.
+	const FSuppressionFireEffect Suppressed = USuppressionSubsystem::GetOperativeFireOf(this);
+	const bool bCoverBlindFactor = bCoverBlindShot && !Suppressed.bBlind;
 	if (bBlindShot && FVector::Dist2D(OperativeCharacterInternal::ShotFeet(Target), BlindAimPoint) > SightRules::BlindFireHitRadiusCm)
 	{
 		HitChance = 0.f; // the enemy left the silhouette's spot
 	}
-	else if (bBlindShot || bCoverBlindShot)
+	else if (bBlindShot || bCoverBlindFactor)
 	{
-		HitChance = CoverRules::CombinedBlindFireHitChance(CoverRules::GetConfig(), HitChance, bCoverBlindShot, bBlindShot,
+		HitChance = CoverRules::CombinedBlindFireHitChance(CoverRules::GetConfig(), HitChance, bCoverBlindFactor, bBlindShot,
 			SightRules::BlindFireAccuracyMultiplier);
 	}
+	if (Suppressed.bBlind)
+	{
+		HitChance *= Suppressed.HitMultiplier;
+		++SuppressedBlindShots;
+	}
+	ShotsWhilePinned += Suppressed.bMayFire ? 0 : 1;
+	LastShotHitChance = HitChance;
 	if (bInCover)
 	{
 		(bCoverBlindShot ? CoverBlindShots : CoverLeanShots) += 1;
@@ -812,22 +847,25 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
 
-	// Godot _spawn_muzzle_tracer: to the target, or deflected next to it on a miss.
+	// Godot _spawn_muzzle_tracer: to the target, or deflected next to it on a miss (suppressed: x the suppression spread).
+	FVector RoundEnd = bBlindShot ? BlindAimPoint : Target->GetActorLocation();
+	if (!bHit)
+	{
+		FVector Offset(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));
+		if (Offset.SizeSquared() < 50.f * 50.f)
+		{
+			Offset = FVector(100.f, 0.f, 50.f);
+		}
+		RoundEnd += Offset * Suppressed.SpreadMultiplier;
+	}
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
 	{
-		FVector End = bBlindShot ? BlindAimPoint : Target->GetActorLocation();
-		if (!bHit)
-		{
-			FVector Offset(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));
-			if (Offset.SizeSquared() < 50.f * 50.f)
-			{
-				Offset = FVector(100.f, 0.f, 50.f);
-			}
-			End += Offset;
-		}
-		Feedback->SpawnTracer(GetWeaponMuzzleLocation(), End, CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
+		Feedback->SpawnTracer(GetWeaponMuzzleLocation(), RoundEnd, CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
 			CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic);
 	}
+	// Suppression (2026-10-26): the round suppresses its target (hit or near miss; a miss on a target in partial cover strikes it) and
+	// any enemy it passes near.
+	ReportOwnRound(bInCover ? GetCoverFireOrigin() : GetMuzzleLocation(), RoundEnd, Target, bHit, !bHit && Cover < 1.f, false);
 
 	if (bHit)
 	{

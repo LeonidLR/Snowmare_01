@@ -11,12 +11,28 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
 #include "Tactics/CoverWrapRules.h"
+#include "UI/FormationMenuInputRules.h"
 #include "CodexTacticsPlayerController.generated.h"
 
 class UInputAction;
 class UInputMappingContext;
 class USquadSubsystem;
 class AOperativeCharacter;
+class UFormationMenuWidget;
+
+/**
+ * The squad's corner peek under the cursor (ACodexTacticsPlayerController::FindSquadCornerPeekForHit; user bug report 2026-10-26): who peeks
+ * round the hovered end of the squad's wall, his corner slot (the stand point short of that end), the end's side from that slot, the end on
+ * the wall's face line, and the stance his peek will have (the ghost's pose).
+ */
+struct FSquadCornerPeekTarget
+{
+	TWeakObjectPtr<AOperativeCharacter> Peeker;
+	FCoverSlot CornerSlot;
+	ECoverFacing Side = ECoverFacing::Right;
+	FVector EdgeOnFace = FVector::ZeroVector;
+	bool bCrouched = false;
+};
 
 /**
  * Squad orders from mouse and keyboard. The controller possesses the camera pawn, never an operative.
@@ -112,6 +128,22 @@ public:
 	 * object there, else a hint. Tutorial lock "Attack.QuickFire" (under "Attack.*"). Public for headless checks.
 	 */
 	void IssueQuickFire(const FHitResult& Hit);
+
+	/**
+	 * Shift + click (LMB or RMB) on enemies (user decision 2026-10-26, docs/design/SUPPRESSION.md): the SUPPRESS order - an enemy under the
+	 * cursor, a silhouette of a known one, or a ground point within SuppressionRules order.click_radius_cm of a known enemy (seen or a
+	 * silhouette; SuppressionRules::PickClickTarget) is the target (his cover takes the rounds; a hidden one is fired at by his
+	 * silhouette's spot). The selection (box group, else the leader; nobody aboard) fires; the RED marker shows where (UDefenseMarkerSubsystem).
+	 * Shift + click on a red marker of the selection's order ceases it (toggle). Tactical pause: planned, given on the release. Tutorial lock
+	 * "Attack.Suppress" (under "Attack.*"). False when the click means no suppression (no known enemy there, turn-based combat,
+	 * Codex.Combat.Suppression 0): the caller keeps the green Shift + click meaning (watch sector / hold line). Public for headless checks.
+	 */
+	bool IssueSuppress(const FHitResult& Hit);
+
+	/** Shift is held (or simulated: SetSimulatedShiftModifier) - Shift + click = suppress on enemies, else watch sector / hold line. */
+	bool IsShiftModifierDown() const;
+	/** Headless checks: Shift counts as held - the real Shift + click path through HandleWorldHit / AssignDefenseUnderCursor. */
+	void SetSimulatedShiftModifier(bool bDown) { bSimulatedShiftModifier = bDown; }
 
 	/** RMB pressed / released exactly as the key (IA_CameraDragRotate: the camera drag; it never fires). Headless checks. */
 	void RightMousePressed() { CameraDragRotateStart(); }
@@ -257,6 +289,18 @@ public:
 	/** The switch hover ghost is up (smokes). */
 	bool IsCoverSwitchHoverShown() const;
 
+	/**
+	 * The squad's guide lines along / round its wall (bug C, game designer 2026-10-26: "one operative moving along a wall shows the dashed
+	 * line of his path round it; the squad shows none"): the squad in group mode standing in the formation wall layout (nobody in a cover slot,
+	 * so the single operative's wrap preview never shows), the cursor on the ground within reach of that wall or round its end -> the paths
+	 * USquadSubsystem::PreviewFormationMove predicts (a slide: each member's line along the wall; else the leader's navmesh path, which wraps
+	 * the wall's end). PlayerTick; smokes call it with their own hit. Null Hit = clear. True while lines are shown.
+	 */
+	bool UpdateSquadMoveHover(const FHitResult* Hit);
+
+	/** The squad guide lines the HUD draws (UpdateSquadMoveHover): one polyline per member, the leader first. False when none is shown. */
+	bool GetSquadMovePreviewPaths(TArray<TArray<FVector>>& OutPaths) const;
+
 	/** The last cover confirm (smokes / log): its switch verdict and whether it became a switch. */
 	ECoverSwitchVerdict GetLastCoverSwitchVerdict() const { return LastCoverSwitchVerdict; }
 	bool WasLastCoverConfirmSwitch() const { return bLastCoverConfirmSwitch; }
@@ -293,6 +337,20 @@ public:
 
 	/** The corner peek preview ghost is up (smokes). */
 	bool IsCornerPeekPreviewShown() const;
+	/** The corner peek preview ghost (smokes: whose silhouette, its pose and slot); null before the first hover. */
+	const class ACoverGhostActor* GetCornerPeekGhost() const { return CornerPeekGhost; }
+
+	/**
+	 * The squad's corner peek (user bug report 2026-10-26: "solo the corner shows the peek silhouette and a click peeks; in formation it is
+	 * gone"): the squad in group mode stands in the formation wall layout (USquadSubsystem::PlanFormationCornerPeek; the leader in no cover -
+	 * else the single operative's peek above) and Hit lies on the exposed END of its wall (the same window as the single peek:
+	 * CoverFacingRules::FindPeekEdge from the wall slot behind the leader) -> who peeks there and his corner. UpdateCornerPeekHover shows the
+	 * ghost for him, the click (TryHandleCoverClick) orders USquadSubsystem::OrderFormationCornerPeek.
+	 */
+	bool FindSquadCornerPeekForHit(const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget) const;
+
+	/** Smokes (rendered stills): the corner peek hover set by the smoke stays up (PlayerTick does not follow the real cursor for it). */
+	bool bFreezeCornerPeekHoverForTesting = false;
 
 	/** Godot Alt + Z / C / V: the whole squad changes stance (prone refused while anyone moves). */
 	void SetEntireSquadStance(EOperativeStance Stance);
@@ -317,6 +375,36 @@ public:
 	bool IsCursorOverMinimap() const;
 	/** Esc: closes the full map; true when it was open. */
 	bool CloseFullMap();
+
+	// --- Formation radial menu (stage 7, hold B; user decision 2026-10-26; CodexTacticsPlayerControllerFormationMenu.cpp) ---
+
+	/** Real seconds B must be held to open the formation menu; a release before it is a tap (the solo / squad toggle). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "0.05"))
+	float FormationMenuHoldSeconds = FormationMenuInput::DefaultHoldSeconds;
+	/** Widget class of the formation radial menu (default UFormationMenuWidget). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input")
+	TSubclassOf<UFormationMenuWidget> FormationMenuWidgetClass;
+
+	/** B down / up (IA_SoloMode Started / Completed): tap = ToggleSoloMode, hold = the formation menu. Public for the smokes. */
+	void SoloModePressed();
+	void SoloModeReleased();
+	/**
+	 * The hold may open the menu now: exploration or the tactical pause (not turn-based, orders not locked), squad mode with
+	 * >= 2 members (FormationMenuRules::IsEnabled), no dialogue, Squad.Formation not tutorial-locked.
+	 */
+	bool CanOpenFormationMenu() const;
+	bool IsFormationMenuOpen() const { return FormationMenuState.bOpen; }
+	/** Esc / RMB: closes the open menu, the previous choice stays (FormationMenuRules::Cancel); true when it was open. */
+	bool CancelFormationMenu();
+	/**
+	 * Smokes / shots: a virtual cursor at this offset from the menu centre (widget units, y down) instead of the mouse; while set the
+	 * menu opens at the view centre. Unset = the real mouse.
+	 */
+	void SetFormationMenuCursorOffset(const TOptional<FVector2D>& Offset) { FormationMenuCursorOffset = Offset; }
+	/** What the last release / cancel did (smokes). */
+	EFormationMenuEffect GetLastFormationMenuEffect() const { return LastFormationMenuEffect; }
+	/** The menu widget (null until the menu first opened). */
+	UFormationMenuWidget* GetFormationMenuWidget() const { return FormationMenuWidget; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -351,6 +439,8 @@ private:
 	bool bRelocateSelectMode = false;
 	/** The combat sub-mode when the "MOVE OBJ" pick started: a pause entered / left drops the pick (bug 2026-10-25). */
 	ECodexCombatMode RelocateSelectCombatMode = ECodexCombatMode::None;
+	/** SetSimulatedShiftModifier (smokes). */
+	bool bSimulatedShiftModifier = false;
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */
 	bool IsDialogueOpen() const;
 	void DialogueNext();
@@ -549,6 +639,19 @@ private:
 
 	FSpaceInputTracker SpaceInput;
 
+	/** Formation radial menu (CodexTacticsPlayerControllerFormationMenu.cpp): the B key's tap / hold, the menu rules' state, the widget. */
+	void TickFormationMenu(float RealDeltaSeconds);
+	void OpenFormationMenu();
+	void UpdateFormationMenu();
+	void ReleaseFormationMenu();
+	int32 GetFormationMenuMemberCount() const;
+	FFormationMenuKeyTracker FormationMenuKey;
+	FFormationMenuState FormationMenuState;
+	TOptional<FVector2D> FormationMenuCursorOffset;
+	EFormationMenuEffect LastFormationMenuEffect = EFormationMenuEffect::None;
+	UPROPERTY(Transient)
+	TObjectPtr<UFormationMenuWidget> FormationMenuWidget;
+
 	UPROPERTY(Transient)
 	TObjectPtr<class AHoldSphereActor> HoldSphere;
 
@@ -604,6 +707,12 @@ private:
 	bool bWrapHoverValid = false;
 	ECoverWrapVerdict LastCoverWrapVerdict = ECoverWrapVerdict::NotInCover;
 
+	/** The squad's guide lines along / round its wall (UpdateSquadMoveHover; cached while the cursor rests and the squad stands). */
+	TArray<TArray<FVector>> SquadMovePreviewPaths;
+	FVector SquadMoveHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector SquadMoveHoverLeaderAt = FVector::ZeroVector;
+	bool bSquadMoveHoverShown = false;
+
 	/** Rev 5c manual corner peek preview: its own ghost, the cursor, the last hover probe (cached while the cursor rests). */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> CornerPeekGhost;
@@ -617,6 +726,19 @@ private:
 	bool bPeekHoverEdge = false;
 	ECoverFacing PeekHoverSide = ECoverFacing::Right;
 	float PeekHoverEdgeAlong = 0.f;
+	/** The squad's corner peek under the cursor (FindSquadCornerPeekForHit; cached while the cursor and the leader rest). */
+	TWeakObjectPtr<AActor> SquadPeekHoverActor;
+	FVector SquadPeekHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector SquadPeekHoverLeaderAt = FVector::ZeroVector;
+	bool bSquadPeekHoverValid = false;
+	FSquadCornerPeekTarget SquadPeekHoverTarget;
+	/** The squad's wall slot behind the leader (FindSquadCornerPeekForHit traces it again only when he moved). */
+	mutable FCoverSlot SquadPeekBaseSlot;
+	mutable FVector SquadPeekBaseLeaderAt = FVector(TNumericLimits<float>::Max());
+	mutable bool bSquadPeekBaseValid = false;
+	mutable float SquadPeekBaseYaw = 0.f;
+	/** FindCornerPeekForHit's rule from a given wall slot (the operative's own, or the squad's wall behind the leader). */
+	bool FindCornerPeekForSlot(const FCoverSlot& Slot, const FHitResult& Hit, ECoverFacing& OutSide, float& OutEdgeAlongCm) const;
 
 	/** Godot _set_squad_tactical_cease_fire. */
 	void SetSquadCeaseFire(bool bCease);

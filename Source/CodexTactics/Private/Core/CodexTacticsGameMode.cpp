@@ -7,6 +7,7 @@
 #include "Data/DialogueSequenceAsset.h"
 #include "Characters/OperativeBalance.h"
 #include "CodexTactics.h"
+#include "Combat/SuppressionRules.h"
 #include "Combat/WaveSubsystem.h"
 #include "Core/LevelFlowRules.h"
 #include "Core/SquadSpawnRules.h"
@@ -106,6 +107,7 @@ void ACodexTacticsGameMode::StartPlay()
 	SquadROE::ApplyFile(SquadROE::GetDefaultPath()); // Commander Mode tactical ROE (Wave Editor "Squad tactics")
 	EnemyPerception::ApplyFile(EnemyPerception::GetDefaultPath()); // patrol sight / hearing / smell, trap search
 	TacticalHeatTuning::ApplyFile(TacticalHeatTuning::GetDefaultPath()); // Sprint 15 heat sources + their starting loadout
+	SuppressionRules::ReloadConfig(); // suppressive fire tunables (Content/Data/Combat/suppression.json, 2026-10-26)
 	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();

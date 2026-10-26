@@ -25,7 +25,14 @@ enum class EFormationGuardLevel : uint8
 	Trail = 2
 };
 
-/** The guard's state carried tick to tick (contract { requested, level, effective, candidate, candidateDistance }). */
+/** v2.3 part 9: why the guard falls back - a wall cuts the formation (or a man off), or a sharp turn ahead (user "5B"). */
+enum class EFormationGuardCause : uint8
+{
+	Wall,
+	Turn
+};
+
+/** The guard's state carried tick to tick (contract { requested, level, effective, candidate, candidateDistance, cause }). */
 struct FFormationGuardState
 {
 	/** The formation asked for (the menu's manual choice, or FormationFor of the terrain); unset before the first Resolve. */
@@ -37,6 +44,12 @@ struct FFormationGuardState
 	TOptional<EFormationGuardLevel> Candidate;
 	/** Leader path walked while Candidate has been the raw level, cm. */
 	float CandidateDistance = 0.f;
+	/**
+	 * v2.3 part 9 (user 2026-10-26: the turn fold's HUD says "(turn)"): why the level in force is above 0 - Wall when a wall cuts the
+	 * requested formation or a member is cut off (it wins over a turn at the same time), Turn for the turn fold alone; unset at level 0.
+	 * Kept while a fallback is held.
+	 */
+	TOptional<EFormationGuardCause> Cause;
 };
 
 /** A position + heading (the leader's pose ahead on his path). */
@@ -81,10 +94,12 @@ namespace FormationGuardRules
 	/**
 	 * The guard step: the formation in effect for Requested (see the header comment). Ahead = the leader's pose GuardLookahead further
 	 * along his path (unset = standing / arrived); TurnAheadDeg = TurnAhead of his path; StepDistance = his path this tick, cm.
+	 * v2.3 part 6 (contract 13.6): bAllInSight = every member has a clear line (no wall body) to the leader; false -> the trail column at
+	 * once (cause Wall), released by the usual hold. v2.3 part 9: the state names its Cause (unset at level 0).
 	 */
 	CODEXTACTICS_API FFormationGuardState Resolve(const TArray<FFormationWall>& Walls, EFormationKind Requested, int32 MemberCount,
 		const FVector2D& LeaderPos, float LeaderYaw, const TOptional<FFormationPose>& Ahead, float TurnAheadDeg, const FFormationGuardState& State,
-		float StepDistance, const FFormationConfig& Config = FFormationConfig());
+		float StepDistance, const FFormationConfig& Config = FFormationConfig(), bool bAllInSight = true);
 
 	/** The formation in effect at a guard state, and whether its slots are the trail column's (level Trail). */
 	CODEXTACTICS_API FFormationGuardEffective Effective(const FFormationGuardState& State);

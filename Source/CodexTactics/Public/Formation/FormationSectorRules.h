@@ -40,6 +40,13 @@ enum class EFormationFacingSource : uint8
 	Movement
 };
 
+/** v2.3 part 7: ClearLook's allowed arc - world yaw Yaw +- Half degrees (his travel direction +- look.over_shoulder_max_deg). */
+struct FFormationLookLimit
+{
+	float Yaw = 0.f;
+	float Half = 180.f;
+};
+
 /** The facing candidates of one member this frame (unset = that source does not apply). */
 struct FFormationFacingInputs
 {
@@ -92,11 +99,17 @@ namespace FormationSectorRules
 	 *   0: narrow edges are out).
 	 * - Enclosed (no candidate): the longest clear ray, every 5 deg from Yaw both ways (+ before -), capped at 2 x LookWallDist; ties: the
 	 *   nearest Yaw.
+	 * - v2.3 part 7 (contract 13.7): Limit (unset = none) - a wanted yaw outside Yaw +- Half is first clamped to its nearer edge; a held
+	 *   look, the narrow wanted yaw, an edge or an enclosed ray outside it is no candidate.
+	 * - v2.3 part 8 (contract 13.8): Ahead (unset = none) - his position LookAnticipateS ahead; when it differs from Pos and the line Pos ->
+	 *   Ahead crosses no wall body, the wall directions seen from Ahead block too (Pos's first, then Ahead's, each in wall order); the hold
+	 *   test uses only Pos's; the enclosed rays stay from Pos.
 	 * The integration applies it to patrol / halt / all-forward looks - not to the wall layout, running, the corner watcher or the leader
 	 * looking within 35 deg of his travel - and keeps the last result per member as Held (reset whenever it does not apply).
 	 */
 	CODEXTACTICS_API float ClearLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, float CurrentYaw,
-		const FFormationConfig& Config = FFormationConfig(), const TOptional<float>& Held = TOptional<float>());
+		const FFormationConfig& Config = FFormationConfig(), const TOptional<float>& Held = TOptional<float>(),
+		const TOptional<FFormationLookLimit>& Limit = TOptional<FFormationLookLimit>(), const TOptional<FVector2D>& Ahead = TOptional<FVector2D>());
 
 	/**
 	 * v2.3 (coordinator 2026-10-26, user decision 1A clarified): true when this role's look in this formation is a user decision the

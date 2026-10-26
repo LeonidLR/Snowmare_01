@@ -103,9 +103,89 @@ member's formation look whenever it changes (with his facing) and every look Cle
   `SetFormationWallPose` (his next own order stands him up when the crouch was the squad's). The tutorial's `squad_not_in_cover_at` counts the wall pose as in cover.
 - **Checks:** `FormationLabSmoke` (L_FormationLab, `-LevelJson=L_FormationLab.json`; `shot` = stills in `Saved/Screenshots/FormationLab/`); GroupCoverSmoke
   scene W. A/B: `smoke_parallel.ps1 -PreCmds "Codex.Formation.Sectors 0" -Commands ...`.
-- **Open:** the hold-G radial menu (manual formations, `EFormationMode::Forward`), the hedgehog at a fire (`FormationShapeRules::HedgehogSlots`), the
+- **Open:** the hedgehog at a fire (`FormationShapeRules::HedgehogSlots`), the
   designer's back-to-the-wall clip; the 4th man of an echelon trails ~1.6 m after an echelon <-> diamond switch (walks backwards at 0.9 x walk; the
   simulator ~1 m) - a Training Ground tuning point.
+
+### The squad's corner peek (2026-10-26, branch formation/v24-squad-peek; user bug report; behind `Codex.Formation.Sectors`)
+
+User bug report 2026-10-26: one operative hugging a wall shows the peek silhouette when the cursor is on the wall's corner and peeks round it on
+the click; the squad hugging it in formation ("Along the wall (3 operatives), facing out!") showed neither. **Root cause:** since stage 6
+(b75e3ce, 2026-10-25) the group cover order in group mode is the formation wall layout (`OrderFormationWall`: the leader's `OrderMoveTo`, the
+others the formation drive) - nobody is in a cover slot, and the corner peek, hover and click, was gated on the leader's own cover slot
+(`IsInPeekableCover()` in `PlayerTick`, `UpdateCornerPeekHover`, `TryHandleCoverClick` / `FindCornerPeekForHit`). The v2.4 merges (6e85b95,
+511c45f) did not take the hover / click: `UpdateSquadMoveHover` reads ground hits only.
+- **Hover zones** (the squad in the wall layout, the leader in no cover): (1) the squad's wall within its peek window at a free end - the same
+  window as the single peek (`CoverFacingRules::FindPeekEdge`: the face / the end face / the top within 75 cm inside the edge .. 60 cm past it) ->
+  the peek ghost of the member nearest that end in the corner-aim pose, the crosshair; a click = the squad's corner peek; (2) the ground along the
+  wall within `slide.max_off_wall` -> the dashed slide / corner-stack lines (unchanged); (3) the ground round the end -> the leader's path round it
+  (unchanged); (4) the rest of the wall -> nothing on hover, the click = the cover ghost / group cover order (unchanged). The ghost lives on the
+  wall body, the guide lines on the ground: they never compete (the guide lines are also off while the peek crosshair is up).
+- **The order** (`USquadSubsystem::OrderFormationCornerPeek`, `SquadSubsystemFormationPeek.cpp`): who peeks = `FormationWallEnd::PlanSquadPeek`
+  (pure, tests `CodexTactics.Formation.WallEnd.SquadPeek`): with the v2.4 corner stack at that end (`FindStackEnd`) the stack's point man - the
+  place nearest the end, so with three K is second and the rear man looks back; without a stack (K already within `SlideMin` of the end, no
+  world walls) the member nearest the end, the others hold. The peeker takes the corner stand point in cover (`OrderTakeCover`; the stance his
+  cover entry gives him: high = standing, low = crouched - the ghost shows that) and, once in cover, gets the single operative's
+  `OrderCornerPeek` (corner aim, leaning out, held with no target). The others: the leader's move to the end (`PeekDestinationOutCm` 60 off the
+  face) = the existing wall slide into the corner stack (`TryStartFormationSlide` -> `HoldCornerStack`), the order's crouch kept; the peeker is
+  left to his corner (no follow, no wall pose, no sector look; the covered approach counts him at his place). A leader who is the point man
+  himself (a pair with K at the end) peeks and the stack forms round his corner. Over with the leader's next order (not the stack's own move),
+  a leader switch, Solo or the end of the wall layout - the peeker then follows out of his cover as any follower in cover.
+- **Checks:** `FormationSquadPeekSmoke` (both ends of the long wall; the hover through `UpdateCornerPeekHover`, the clicks through
+  `HandleWorldHit`; `Shot` = `Saved/Screenshots/Formation/squad_peek_ghost.png` / `squad_peek_held.png`).
+
+### Rules v2.5 in the runtime - the covered approach to the wall (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.Approach`)
+
+New user rule 2026-10-26: on the order to hug a wall (the group cover order in group mode, or the arrival layout) everyone used to drop his sector
+and dash in, the rear wide open. Now `USquadSubsystem::ApplyFormationApproach` runs `FormationWallRules::Approach` (contract 15) every frame of the
+wall layout until everyone is within `approach.arrive_dist` (1 m) of his slot: the leader runs in and, at his slot, looks along the wall; the follower
+already looking back (the patrol's rear guard) covers the rear (away from the wall) walking backwards at the walk's backward cap; the other(s) look along
+the wall line to their side and take their layout look at their slot; then the plain wall layout. The rear cover and the flank men do not copy the
+leader's sprint (a sprinting operative faces his run) - the squad settles ~2 s later from 9 m, the price of the covered rear. Roles held (no reshuffle).
+Log `[Formation] covered approach to the wall: K runs in, rear Z, 1 flank(s)` / `... over`. `Codex.Formation.Approach 0` = v2.4 (A/B). Smoke
+`FormationWallGroupSmoke` scene 5 (a patrol 9 m from E's long face; with the switch 0 the rear / flank / along checks fail); tests
+`CodexTactics.Formation.Approach.*`, `Parity.Approach`.
+
+### Rules v2.4 in the runtime - the wall end (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.WallEnd`)
+
+User bug report 2026-10-26 (the editor, `Codex.Formation.Debug`): three operatives crouched at the END FACE of a thin free-standing wall left large
+uncovered zones on both sides of the end, along the wall's faces. The wall layout's looks (L 8 / K 6 / P 4) share a FACE's half-plane; at an end the
+open arc reaches round it. Now every wall layout (`ComputeWallLayout`: the arrival and the group cover order; `HoldWallLayoutAt`: after a slide) goes
+through `USquadSubsystem::ApplyFormationWallEnd` -> `FormationWallRules::EndLooks` (contract 14): with the looks holding < `wall_end.cover_pct` (95 %) of
+the open ring 6 m round the layout (`OpenArcCoverage`; the world's box walls round it + the traced face measured out past the ring), K keeps 6 o'clock
+and the others are spread over the open arc (at an end face: the two men beside the end ~118 deg off the axis, back along their faces). Once per layout:
+no flicker, no reshuffle. Log `[Formation] wall END: the looks spread over the open arc (62 % -> 98 % held, ...)`. `Codex.Formation.WallEnd 0` = the face
+looks (A/B). Smoke `FormationWallGroupSmoke` scene 4 (a thin wall's end face by the group cover order: 63 % held with the switch 0, 98 % on); tests
+`CodexTactics.Formation.WallEnd.*`, `Parity.WallEnd`.
+### Rules v2.4 at a wall's end (2026-10-26, branch formation/v24-corner-peek; the game designer's bug report, FORMATION_SECTORS.md v2.4)
+
+Runtime fixes behind `Codex.Formation.Sectors` (the world-wall parts also behind `Codex.Formation.V21`); pure glue `Formation/FormationWallEndRules`
+(`CodexTactics.Formation.WallEnd.*`), no TS / golden change.
+- **A - the corner stack:** `TryStartFormationSlide` asks `FormationWallEnd::FindStackEnd` (the world walls: the squad's wall parallel to the layout,
+  K's place over its span; the end in the travel direction is free - no other wall within the thicknesses + `CORNER_JOINT`; the destination from
+  `StackReachCm` 125 before to `StackPastCm` 200 past it, on the squad's side, within `slide.max_off_wall`) -> the slide's destination becomes K's
+  place of the stack (`StackShift`: the leading place `EdgeInsetCm` 40 short of the end; already there -> the stack in place). The slide's stop ->
+  `HoldCornerStack` (a wall order: `StackSlots` - the point man `CornerPeekYaw`, the corner watch's look at the corner; the trailing end back along
+  the wall 20 deg out; K the normal; a 4th the normal turned `wall.neighbour_deg` to the rear), crouched after the group cover order. Evidence
+  before the fix (FormationCornerPeekSmoke log): `the leader's order from the wall layout is no slide (-720 cm along, room 650 / 500 cm)` -> the
+  wall order ended, a column / echelon_left walked up, the leader stood at the edge looking along the wall, nobody peeked.
+- **B - the fitted layout:** `ComputeWallLayout` (the group cover order, the automatic layout) and `HoldWallLayoutAt` (after a slide, a leader switch)
+  run `FitWallLayoutToWorld`: `FormationWallEnd::FitLayout` with "usable" = no world wall body within 10 cm of the line from K's place, 30 cm off
+  every wall body, on the nav mesh within 30 cm; a cut place moves to the next free step on K's other side (log `[Formation] wall layout fitted:`).
+  Evidence (FormationWallSwitchSmoke, a T junction): before, K's slot next to the joint put a place inside / behind the long wall - 206 / 182 cm
+  stand-ins round the leader's CURRENT position while he still ran round, a member cut off 1.6 s; after, all four variants settle on their places,
+  0 cut off. The exact split of the user's screenshot (K alone on the far side) was not reproduced; the mechanism (layout places across the
+  junction wall + stand-ins round the running leader) is what the fit removes.
+- **C - the squad's guide lines:** `USquadSubsystem::PreviewFormationMove` (group mode, the wall layout standing, the leader not in a cover slot, the
+  point within `slide.max_off_wall` of the squad's wall): a slide / the stack -> one line per member to his place; else the leader's nav-mesh path
+  (it wraps the wall's end). `ACodexTacticsPlayerController::UpdateSquadMoveHover` (PlayerTick's cursor hit; cached while cursor and leader rest),
+  `GetSquadMovePreviewPaths`; `ACodexTacticsHUD::DrawSquadMovePreview` (the wrap preview's dashes via `DrawDashedGroundPath`).
+- **D - a leader switch at the wall:** `SetLeader` sets `Sectors.LastLeaderSerial` to the new leader's serial (the switch was read as his new order:
+  a phantom slide / bypass to his last formation-follow destination - in the log `wall slide 2 ... 100 cm` right at a switch, the new leader
+  "walking" at 3 cm/s into a team-mate), ends a bypass and calls `PassWallOrderToLeader`: a wall order / slide goes on with him (the layout round
+  him, the crouch kept, `AssignWallRolesByTravel`). `UpdateSectorFollower`: walking into the wall layout, `FormationWallEnd::StepRound` steps round a
+  team-mate standing in the line (out 110 cm, 55 cm past him). Smoke `FormationLeaderSwapSlideSmoke` uses the player's own clicks
+  (`HandleWorldHit`: the wall twice, a member, the ground).
 
 ### Rules v2.3 in the runtime (2026-10-26, branch formation/runtime-v23; behind `Codex.Formation.Sectors` and `Codex.Formation.V21`)
 
@@ -144,6 +224,22 @@ The red-team fixes of FORMATION_CONTRACT.md 13 (pure rules ported in 61990b7) wi
   FallbackStandInAtTheFloorEdge, GuardHudTurnFold).
 - Not here (rules from the simulator session, v2.3 part 7+): a non-rear member whose share is the rear looking back over the shoulder (<= ~110 deg,
   walking forwards), ClearLook anticipating the motion; no tuning for the manual line's rear man (FormationLabSmoke reports p95 ~500 cm, not gated).
+
+- **Rules v2.3 parts 6-9 (2026-10-26, formation/cpp-rules; contract 13.6-13.9):**
+  - *A man cut off brings the trail column back (13.6):* `StepFormationGuard` passes `FormationGuardRuntime::AllInSight` (every formation follower -
+    a sector role, not on his own order, not in cover - has a clear line to the leader through the world's walls, radius 0) as `Resolve`'s
+    `bAllInSight`; false -> the trail column at once, released by the usual hold. The guard log adds ", a member cut off".
+  - *Only the rear guard walks backwards (13.7, user Q3 = c):* the trail column's places carry their travel (`Sectors.TrailTravel`, the trail's
+    direction at each slot, from `TrailFrameSlots`) into `FormationCoverRules::Allocate`; the allocator's `Shoulder` list (`Sectors.ShoulderLooks`)
+    gives those members ClearLook's `Limit` (`FormationGuardRuntime::ShoulderLimit`: their velocity direction when moving over 15 cm/s and within
+    90 deg of the entry, else the entry's travel; half `look.over_shoulder_max_deg` 110).
+  - *ClearLook anticipates the motion (13.8, user Q4 = b):* `Ahead` = the member's position + his own velocity x `look.anticipate_s` (0.5 s;
+    `FormationGuardRuntime::AnticipatedPos`, none below 1 cm/s).
+  - *The HUD's "(turn)" (13.9):* `GetFormationHudText` / the guard log take the guard state's `Cause` (`GuardHudText(..., Cause)`); the runtime's own
+    turn-fold flag (`bGuardTurnFold` / `IsTurnFold`) is gone - part 9 also makes a wall cut during a sharp turn "(wall)", where IsTurnFold said
+    "(turn)". 13.5: an unresolvable slot (no stand-in at all) now counts the man's own position as given (sim `resolveFrameSlots`).
+  All behind the existing switches (`Codex.Formation.V21` for the guard / ClearLook parts, the cover allocator's switch for the shoulder list):
+  with them 0 nothing changes.
 
 ### Rules v2.2 in the runtime (2026-10-25, branch formation/runtime-v22; behind `Codex.Formation.Sectors`)
 
@@ -236,9 +332,19 @@ ClearLook, HUD text), `SquadSubsystemFormationBypass.cpp` (bypass), the pure glu
 - **ClearLook:** every follower's look and the leader's go through `FormationSectorRules::ClearLook` (the world walls only: a wall lower than
   135 cm is looked over and never turns a look - the tutorial's 1.2 m sight wall) unless exempt (`FormationGuardRuntime::ShouldClearLook`: the wall
   layout / slide, run, the corner watcher, the leader looking within 35 deg of his travel).
-- **The hold-G menu stand-in:** `USquadSubsystem::SetFormationMenuChoice` (FormationMenuRules: a manual choice holds until auto; "all forward" = the
+- **The menu's choice:** `USquadSubsystem::SetFormationMenuChoice` (FormationMenuRules: a manual choice holds until auto; "all forward" = the
   terrain's formation, mode Forward); dev console `Codex.Formation.Menu <auto|line|diamond|echelon_right|blizzard|column|hedgehog|echelon_left|all_forward>`.
-  The radial menu UI is still open.
+- **The hold-B radial menu (stage 7, 2026-10-26; user decision: G is the grenade, the menu moved to B):** `ACodexTacticsPlayerController`
+  (`CodexTacticsPlayerControllerFormationMenu.cpp`): IA_SoloMode Started / Completed -> `SoloModePressed` / `SoloModeReleased`, the tap / hold on
+  real time by `FFormationMenuKeyTracker` (`UI/FormationMenuInputRules`). TAP B (released before `FormationMenuHoldSeconds` = 0.25 s) = the solo /
+  squad toggle (now on the RELEASE, was on the press); HOLD B = the menu, only while `CanOpenFormationMenu` (squad mode, >= 2 members, not
+  turn-based, orders not locked, no dialogue, `Squad.Formation` not tutorial-locked - asked silently); otherwise the hold is a plain tap (the
+  toggle on the release). The menu (`UFormationMenuWidget`, NativePaint, created lazily, z 30, never pauses) opens at the cursor pulled in to keep
+  the ring + labels on screen (the OS cursor follows a pulled centre); the cursor offset from its centre -> `FormationMenuRules::Move`; the B
+  release -> `Release` -> `SetFormationMenuChoice` + `PlayerCommands::FormationMenu` ("Squad.Formation"; F1 row "Hold B"); Esc (`DialogueSkip`
+  first) / RMB (`CameraDragRotateStart` first) -> `Cancel` (the later release does nothing); LMB does nothing while open; the camera's edge pan
+  stops while open; the menu closes by itself when it becomes unavailable (solo, a dialogue, members lost). Smokes:
+  `SetFormationMenuCursorOffset` = a virtual cursor (the menu then opens at the view centre). Check: `FormationMenuSmoke`.
 - **Checks:** `FormationLabSmoke` (check 4 on the requested formation; check 7 "never split" and check 9 "somebody looks round each passed wall end" on
   every run; R_E_corner: the turn fold; manual runs R_B_walls "echelon left" -> the mirror + HUD line, R_D_corridors "line" -> the trail column + HUD
   line; R_E_corner_pass: the corner watch at W_E_14's free end), `FormationBypassSmoke` (lane G: the four routes + the shielded side from the squad's
@@ -269,6 +375,35 @@ again; a facing order is kept).
 
 See [waves-horde-encounters](waves-horde-encounters.md) "Fight over: the squad stays put": after a fight the followers keep their spots until the
 leader moves - or until Regroup (B) (2026-10-23, below).
+
+### The squad stays in formation in the fight (user decision 2026-10-26)
+
+Designer: "in the tactical pause I give orders to soldiers, then resume. Combat starts, and the soldiers do NOT return to the formation: they keep acting
+SOLO; pressing B several times does nothing; it ends only when the combat ends. Until I give the order to switch to solo mode, they must stay in formation."
+**Root cause:** not the orders and not the B handler - `USquadSubsystem::IsFormationActive` was `SquadOrderRules::IsFormationPhase` (Exploration /
+PostCombat only), so from the preparation to the fight's end no follower ever walked (`TickFormationFollow` returned early), a follower in cover never
+left it, and Solo on / off (B, never refused in the real-time fight - `Codex.RealTimeOrders` 1) only changed a flag nobody read. It was a recorded
+Godot-era rule: Godot `main.gd _end_cutscene_and_start_pause` set `is_tactical_mode = true` (individual control) for every member at the preparation and
+cleared it at the fight's end; ported as "formation only in exploration (Godot is_tactical_mode)" (TANDEM, Sprint 03, 2026-09-29). **The user decided
+otherwise on 2026-10-26** - implemented:
+- `SquadOrderRules::IsFollowPhase(Phase, Mode, bPostCombat, bCombatFormation)`: the following runs in Cutscene, Preparation (and the rest between waves),
+  WaveCombat real time and tactical pause, WaveCleared, PostCombat; not on the turn-based grid, not after game over. `IsFormationActive` uses it and is off
+  while Commander Mode fights on its own (`UGameFlowSubsystem::IsSquadAutonomyActive`: the autonomy owns the members in real time; the pause hands them
+  back). Console `Codex.Squad.CombatFormation` 0 = the old rule (A/B).
+- Combat start never switches to Solo; Solo only on B (the trap Solo stays an exploration rule: `TrapSpotRules::DecideSquadResponse(IsExplorationFormation())`).
+- A member given an individual order (in the pause or in real time) carries it out - his own move / use / object task as before, and now a running
+  SUPPRESS order or quick-fire burst (`FOwnOrderFacts::bFireOrder`) - then rejoins the formation on the next repath, as out of combat. A member fighting
+  from cover holds it until the leader walks away (`ShouldLeaveCoverToFollow`), then follows.
+- `UpdateFollower` leaves a panicking / raging / knocked-down follower alone (panic and rage move him themselves; `StopOperative` would cut the flight).
+- In the real-time fight a parked follower gets no "face where the leader faces" idle facing, and the threat turn (`ThreatFacingRules`, a standing member
+  who fought turns back to the threat) wins over the formation look sector (`AOperativeCharacter::UpdateCombatFacing`).
+- The exploration-only group features keep the old rule (`USquadSubsystem::IsExplorationFormation`): the group cover order without a box selection, the
+  formation wall layout / wall group / slide preview (a wall order ends when the fight starts, as before). In the fight a cover click stays the single
+  order of the selected operative (a box selection still takes cover together) - so individual cover orders in the pause stay individual.
+- The B handler (`ACodexTacticsPlayerController::ToggleSoloMode`, `IA_SoloMode`) is unchanged.
+Tests `CodexTactics.Squad.Orders.CombatFormation.SquadStaysInFormationThroughTheFight`; smoke `CombatFormationSmoke` (the wave fight starts: Solo off,
+formation on - `CombatFormation 0` reproduces the bug; pause, B and C ordered 6 m to the sides, A selected again, resume: both carry their orders out, then
+rejoin round A; A walks 11 m - both follow; B (the key) in the fight: Solo on, A walks 8 m, they hold; B again: Regroup, both back at A).
 
 ### After the final fight: Regroup brings them back (bug 2026-10-23, lake after the horde)
 

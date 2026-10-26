@@ -778,7 +778,7 @@
     },
 
     {
-      "_comment": "2026-10-22 (game designer play-test: 'the tactical pause is not explained'): THE TACTICAL PAUSE LESSON in two cards, the first time the game goes into the tactical pause in any fight (BEAT-LESS: the horde's free pause at the console, the A4 lesson pause, Space) - event TacticalPauseStarted (UGameFlowSubsystem). Card 1: time stops, give each operative his order (they queue). Done after two orders in the pause (move / cover / shot / interact), else 40 s; dropped when the pause ends first (TacticalPauseEnded).",
+      "_comment": "2026-10-22 (game designer play-test: 'the tactical pause is not explained'): THE TACTICAL PAUSE LESSON in two cards, the first time the game goes into the tactical pause in any fight (BEAT-LESS: the A4 lesson pause, or the player's Space - since 2026-10-26 the horde warning keeps the fight in real time and the wave's first Space opens its free pause) - event TacticalPauseStarted (UGameFlowSubsystem). Card 1: time stops, give each operative his order (they queue). Done after two orders in the pause (move / cover / shot / interact), else 40 s; dropped when the pause ends first (TacticalPauseEnded).",
       "id": "X_pause", "kind": "hint_card", "text_id": "TUT_PAUSE_ORDERS",
       "keys": ["Select.Member", "Order.Move", "Cover.Enter", "Attack.TargetedShot"],
       "unlock": ["Time.*"],

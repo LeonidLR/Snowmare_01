@@ -1,0 +1,8823 @@
+{
+ "schema": "codex.formation_golden/1",
+ "rule": "WallEnd",
+ "tolerance": {
+  "cm": 0.5,
+  "deg": 0.5
+ },
+ "config": "Content/Data/FormationLab/formation_config.json",
+ "config_values": {
+  "slot.side_offset": 260,
+  "slot.back_offset": 280,
+  "slot.min_spacing": 80,
+  "diamond.rear_back": 560,
+  "pair.side_offset": 180,
+  "pair.back_offset": 220,
+  "pair.scan_period": 5,
+  "pair.scan_from": 90,
+  "pair.scan_to": 270,
+  "triad.rear_back": 420,
+  "column.base_back": 180,
+  "column.spacing": 150,
+  "column.stagger": 60,
+  "column.stagger_clear": 45,
+  "column.side_deg": 70,
+  "column.narrow_width": 600,
+  "column.narrow_fwd_deg": 15,
+  "column.narrow_back_deg": 165,
+  "line.spacing": 260,
+  "line.fan_inner": 5,
+  "line.fan_outer": 25,
+  "echelon.step": 180,
+  "echelon.sector_lead": 10,
+  "echelon.sector_2": 45,
+  "echelon.sector_3": 80,
+  "echelon.sector_4": 150,
+  "blizzard.side_offset": 110,
+  "blizzard.back_offset": 120,
+  "hedgehog.radius": 130,
+  "wall.spacing": 100,
+  "wall.face_offset": 45,
+  "wall.flank_deg": 60,
+  "wall.neighbour_deg": 30,
+  "wall.end_deg": 75,
+  "wall_end.probe_dist": 600,
+  "wall_end.cover_pct": 95,
+  "approach.arrive_dist": 100,
+  "slide.max_off_wall": 200,
+  "slide.lead_out_deg": 20,
+  "pace.patrol": 0.8,
+  "pace.walk_speed": 220,
+  "pace.run_speed": 480,
+  "move.backward_mult": 0.9,
+  "move.catchup_mult": 1.25,
+  "facing.turn_speed": 10,
+  "scan.period": 3,
+  "scan.center_side": 45,
+  "scan.amp_side": 45,
+  "scan.amp_lead": 30,
+  "scan.dwell_exp": 0.45,
+  "halt.side_deg": 60,
+  "rear.share_half": 30,
+  "rear.wall_shift_deg": 30,
+  "coverage.max_sweep": 90,
+  "coverage.max_gap_deg": 60,
+  "look.wall_dist": 260,
+  "look.wall_angle": 55,
+  "look.min_free_deg": 30,
+  "look.hold_deg": 60,
+  "look.hold_margin_deg": 5,
+  "look.narrow_penalty": 180,
+  "look.over_shoulder_max_deg": 110,
+  "look.anticipate_s": 0.5,
+  "classify.probe_side": 400,
+  "classify.probe_ahead": 600,
+  "classify.hold_distance": 500,
+  "classify.at_wall_dist": 150,
+  "classify.arrive_dist": 50,
+  "classify.side_ignore_perp_deg": 30,
+  "guard.clearance": 10,
+  "guard.lookahead": 500,
+  "turn.fold_deg": 25,
+  "turn.lookahead": 800,
+  "bypass.max_detour": 0.3,
+  "bypass.threat_memory_s": 20,
+  "corner.lead_dist": 300,
+  "corner.hold_dist": 200,
+  "corner.peek_dist": 300,
+  "sight.fov": 140
+ },
+ "notes": "in: walls, slots [{role, pos, yaw}] (FormationWallRules.Layout, K first), fixed (roles whose looks stay besides K; missing = []) -> out {spread, basePct, pct, slots [{role, pos, yaw}]} (FormationWallRules.EndLooks; spread exactly, basePct / pct within 0.01, yaws as angles).",
+ "cases": [
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 66.471,
+    "pct": 66.471,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.492,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -116
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 116
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.492,
+    "pct": 84.746,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 116
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.348,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -117
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 117
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.348,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 117
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -126
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 108
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 66.272,
+    "pct": 66.272,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 108
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.663,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": -54
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.663,
+    "pct": 84.831,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.348,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": -55
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 179
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.348,
+    "pct": 84.831,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 179
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -95
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 175
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 66.471,
+    "pct": 66.471,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -95
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 175
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.492,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 104
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -24
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.492,
+    "pct": 84.746,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -24
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 145
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.348,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 103
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -23
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 145
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 145
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.348,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -23
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 94
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -45
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 65.318,
+    "pct": 65.318,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.715,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -118
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       100
+      ],
+      "yaw": 118
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.715,
+    "pct": 84.358,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       100
+      ],
+      "yaw": 118
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       55,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.95,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -117
+     },
+     {
+      "role": "L",
+      "pos": [
+       55,
+       100
+      ],
+      "yaw": 119
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       -200
+      ],
+      "yaw": -75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       55,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.95,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       55,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       55,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       55,
+       100
+      ],
+      "yaw": 119
+     },
+     {
+      "role": "Z",
+      "pos": [
+       55,
+       -200
+      ],
+      "yaw": -126
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": 108
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 64.368,
+    "pct": 64.368,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": 108
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       614.07,
+       -246.393
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.663,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       614.07,
+       -246.393
+      ],
+      "yaw": -54
+     },
+     {
+      "role": "Z",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       614.07,
+       -246.393
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.663,
+    "pct": 84.831,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       614.07,
+       -246.393
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       614.07,
+       -246.393
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       346.768,
+       -110.197
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.95,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       614.07,
+       -246.393
+      ],
+      "yaw": -55
+     },
+     {
+      "role": "L",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": -179
+     },
+     {
+      "role": "Z",
+      "pos": [
+       346.768,
+       -110.197
+      ],
+      "yaw": 138
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       614.07,
+       -246.393
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       346.768,
+       -110.197
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.95,
+    "pct": 84.916,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       524.969,
+       -200.995
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       614.07,
+       -246.393
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       435.868,
+       -155.596
+      ],
+      "yaw": -179
+     },
+     {
+      "role": "Z",
+      "pos": [
+       346.768,
+       -110.197
+      ],
+      "yaw": 138
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": 175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -95
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 65.318,
+    "pct": 65.318,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": 175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -95
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1306.411,
+       841.251
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.715,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1306.411,
+       841.251
+      ],
+      "yaw": 102
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -22
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1306.411,
+       841.251
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.715,
+    "pct": 84.358,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1306.411,
+       841.251
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -22
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1306.411,
+       841.251
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1113.575,
+       611.438
+      ],
+      "yaw": -65
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.95,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1306.411,
+       841.251
+      ],
+      "yaw": 101
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -23
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1113.575,
+       611.438
+      ],
+      "yaw": -65
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_thin",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 20
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1306.411,
+       841.251
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1113.575,
+       611.438
+      ],
+      "yaw": -65
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.95,
+    "pct": 84.916,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1242.132,
+       764.647
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1306.411,
+       841.251
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1177.854,
+       688.042
+      ],
+      "yaw": -23
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1113.575,
+       611.438
+      ],
+      "yaw": -65
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -300,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 65.698,
+    "pct": 65.698,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -300,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.333,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -122
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 116
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -300,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.333,
+    "pct": 85,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 122
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -300,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.556,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 111
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -136
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -300,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.556,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 121
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -126
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       363.803,
+       -517.302
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 108
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 65.116,
+    "pct": 65.116,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 108
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       363.803,
+       -517.302
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.889,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": -58
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       363.803,
+       -517.302
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.889,
+    "pct": 85,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": -176
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       363.803,
+       -517.302
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.556,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": -53
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": -175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       363.803,
+       -517.302
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.556,
+    "pct": 86.667,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": -175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": -162
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -970.187,
+       992.836
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -95
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 175
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 65.698,
+    "pct": 65.698,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -95
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 175
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -970.187,
+       992.836
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.333,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 98
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -24
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -970.187,
+       992.836
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.333,
+    "pct": 85,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -18
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -970.187,
+       992.836
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 145
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.556,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -29
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 84
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_stub",
+    "walls": [
+     {
+      "a": [
+       -970.187,
+       992.836
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 145
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 70.556,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -19
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 94
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       250,
+       0
+      ],
+      "b": [
+       1800,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 65.663,
+    "pct": 65.663,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       250,
+       0
+      ],
+      "b": [
+       1800,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.966,
+    "pct": 97.701,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -116
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 116
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       250,
+       0
+      ],
+      "b": [
+       1800,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.966,
+    "pct": 83.333,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 116
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       250,
+       0
+      ],
+      "b": [
+       1800,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.023,
+    "pct": 98.864,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -117
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 117
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -54
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -1500,
+       0
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       250,
+       0
+      ],
+      "b": [
+       1800,
+       0
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.023,
+    "pct": 98.864,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 117
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -126
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       613.498,
+       -27.248
+      ],
+      "b": [
+       1317.183,
+       1353.812
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 108
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 65.244,
+    "pct": 65.244,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 108
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       613.498,
+       -27.248
+      ],
+      "b": [
+       1317.183,
+       1353.812
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.318,
+    "pct": 97.727,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": -54
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       613.498,
+       -27.248
+      ],
+      "b": [
+       1317.183,
+       1353.812
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 69.318,
+    "pct": 83.523,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 180
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       613.498,
+       -27.248
+      ],
+      "b": [
+       1317.183,
+       1353.812
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.023,
+    "pct": 98.295,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": -55
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 179
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 118
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -180.986,
+       -1586.51
+      ],
+      "b": [
+       500,
+       -250
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       613.498,
+       -27.248
+      ],
+      "b": [
+       1317.183,
+       1353.812
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.023,
+    "pct": 84.659,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.408,
+       -146.686
+      ],
+      "yaw": 179
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.287
+      ],
+      "yaw": 118
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1391.511,
+       639.303
+      ],
+      "b": [
+       -2578.88,
+       -357.018
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -95
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 175
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 65.663,
+    "pct": 65.663,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -95
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 175
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1391.511,
+       639.303
+      ],
+      "b": [
+       -2578.88,
+       -357.018
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.966,
+    "pct": 97.701,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 104
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -24
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1391.511,
+       639.303
+      ],
+      "b": [
+       -2578.88,
+       -357.018
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 68.966,
+    "pct": 83.333,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -24
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1391.511,
+       639.303
+      ],
+      "b": [
+       -2578.88,
+       -357.018
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 145
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.023,
+    "pct": 98.864,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": 103
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -23
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 166
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "end_face_gap",
+    "walls": [
+     {
+      "a": [
+       -50.933,
+       1764.181
+      ],
+      "b": [
+       -1200,
+       800
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1391.511,
+       639.303
+      ],
+      "b": [
+       -2578.88,
+       -357.018
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -80
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 145
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": true,
+    "basePct": 71.023,
+    "pct": 98.864,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.824
+      ],
+      "yaw": -170
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.515,
+       681.614
+      ],
+      "yaw": -23
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1378.35,
+       911.428
+      ],
+      "yaw": 94
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 108
+     },
+     {
+      "role": "Z",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 18
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 108
+     },
+     {
+      "role": "Z",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 18
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 33
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     },
+     {
+      "role": "Z",
+      "pos": [
+       707.711,
+       -282.883
+      ],
+      "yaw": -12
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 33
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     },
+     {
+      "role": "Z",
+      "pos": [
+       707.711,
+       -282.883
+      ],
+      "yaw": -12
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 33
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     },
+     {
+      "role": "Z",
+      "pos": [
+       707.711,
+       -282.883
+      ],
+      "yaw": -12
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 33
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     },
+     {
+      "role": "Z",
+      "pos": [
+       707.711,
+       -282.883
+      ],
+      "yaw": -12
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": 175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -95
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": 175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -95
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.236,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.236,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_long",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.236,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.236,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       0,
+       -60
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 45
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 96.296,
+    "pct": 96.296,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": -45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       0,
+       -60
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 77.305,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -126
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       0,
+       -60
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 77.305,
+    "pct": 77.305,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       0,
+       -60
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       200
+      ],
+      "yaw": 75
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 78.261,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -125
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       200
+      ],
+      "yaw": 75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       0,
+       -60
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       200
+      ],
+      "yaw": 75
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 78.261,
+    "pct": 78.261,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 30
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       200
+      ],
+      "yaw": 75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       553.46,
+       -277.239
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 108
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 96.262,
+    "pct": 96.262,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 18
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 108
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       553.46,
+       -277.239
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 77.857,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": -62
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       553.46,
+       -277.239
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 77.857,
+    "pct": 77.857,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       553.46,
+       -277.239
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.286
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 77.536,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": -62
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.286
+      ],
+      "yaw": 138
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       553.46,
+       -277.239
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.286
+      ],
+      "yaw": 138
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 77.536,
+    "pct": 77.536,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.084
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.483
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 93
+     },
+     {
+      "role": "Z",
+      "pos": [
+       351.308,
+       -101.286
+      ],
+      "yaw": 138
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       -1238.567,
+       845.963
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": 175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -95
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 96.296,
+    "pct": 96.296,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": 175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -95
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       -1238.567,
+       845.963
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.071,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 77.305,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.071,
+       834.824
+      ],
+      "yaw": 94
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       -1238.567,
+       845.963
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.071,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 77.305,
+    "pct": 77.305,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.071,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       -1238.567,
+       845.963
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.071,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.235,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": true,
+    "basePct": 78.261,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.071,
+       834.824
+      ],
+      "yaw": 95
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.235,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "face_near_end",
+    "walls": [
+     {
+      "a": [
+       -1238.567,
+       845.963
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.071,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.235,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 78.261,
+    "pct": 78.261,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.071,
+       834.824
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.235,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       0,
+       -150
+      ],
+      "b": [
+       1500,
+       -150
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 45
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -45
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       0,
+       -150
+      ],
+      "b": [
+       1500,
+       -150
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       0,
+       -150
+      ],
+      "b": [
+       1500,
+       -150
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       0,
+       -150
+      ],
+      "b": [
+       1500,
+       -150
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 95.699,
+    "pct": 95.699,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       0,
+       -1500
+      ],
+      "b": [
+       0,
+       1500
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       0,
+       -150
+      ],
+      "b": [
+       1500,
+       -150
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 95.699,
+    "pct": 95.699,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       65,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "role": "P",
+      "pos": [
+       65,
+       -100
+      ],
+      "yaw": -30
+     },
+     {
+      "role": "L",
+      "pos": [
+       65,
+       100
+      ],
+      "yaw": 60
+     },
+     {
+      "role": "Z",
+      "pos": [
+       65,
+       -200
+      ],
+      "yaw": -75
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       633.651,
+       -318.099
+      ],
+      "b": [
+       1314.637,
+       1018.411
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 108
+     },
+     {
+      "role": "Z",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 18
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 108
+     },
+     {
+      "role": "Z",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 18
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       633.651,
+       -318.099
+      ],
+      "b": [
+       1314.637,
+       1018.411
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       633.651,
+       -318.099
+      ],
+      "b": [
+       1314.637,
+       1018.411
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 3
+     },
+     {
+      "role": "Z",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       633.651,
+       -318.099
+      ],
+      "b": [
+       1314.637,
+       1018.411
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 33
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     },
+     {
+      "role": "Z",
+      "pos": [
+       707.711,
+       -282.883
+      ],
+      "yaw": -12
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 95.652,
+    "pct": 95.652,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 33
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     },
+     {
+      "role": "Z",
+      "pos": [
+       707.711,
+       -282.883
+      ],
+      "yaw": -12
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       1836.51,
+       -930.986
+      ],
+      "b": [
+       -836.51,
+       430.986
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       633.651,
+       -318.099
+      ],
+      "b": [
+       1314.637,
+       1018.411
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 33
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     },
+     {
+      "role": "Z",
+      "pos": [
+       707.711,
+       -282.883
+      ],
+      "yaw": -12
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 95.652,
+    "pct": 95.652,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       529.509,
+       -192.085
+      ],
+      "yaw": 63
+     },
+     {
+      "role": "P",
+      "pos": [
+       618.61,
+       -237.484
+      ],
+      "yaw": 33
+     },
+     {
+      "role": "L",
+      "pos": [
+       440.409,
+       -146.685
+      ],
+      "yaw": 123
+     },
+     {
+      "role": "Z",
+      "pos": [
+       707.711,
+       -282.883
+      ],
+      "yaw": -12
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1296.418,
+       914.907
+      ],
+      "b": [
+       -2445.485,
+       -49.275
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": 175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -95
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": 175
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -95
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1296.418,
+       914.907
+      ],
+      "b": [
+       -2445.485,
+       -49.275
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1296.418,
+       914.907
+      ],
+      "b": [
+       -2445.485,
+       -49.275
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -80
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1296.418,
+       914.907
+      ],
+      "b": [
+       -2445.485,
+       -49.275
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.236,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ],
+    "fixed": []
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.236,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "scene": "inner_corner",
+    "walls": [
+     {
+      "a": [
+       -2164.181,
+       1949.067
+      ],
+      "b": [
+       -235.819,
+       -349.067
+      ],
+      "thickness": 40
+     },
+     {
+      "a": [
+       -1296.418,
+       914.907
+      ],
+      "b": [
+       -2445.485,
+       -49.275
+      ],
+      "thickness": 40
+     }
+    ],
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.236,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ],
+    "fixed": [
+     "P"
+    ]
+   },
+   "out": {
+    "spread": false,
+    "basePct": 100,
+    "pct": 100,
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -1249.793,
+       758.219
+      ],
+      "yaw": -140
+     },
+     {
+      "role": "P",
+      "pos": [
+       -1314.072,
+       834.823
+      ],
+      "yaw": 160
+     },
+     {
+      "role": "L",
+      "pos": [
+       -1185.514,
+       681.615
+      ],
+      "yaw": -110
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -1121.236,
+       605.01
+      ],
+      "yaw": -65
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -26,6 +26,20 @@
 - `Interactables/InteractableActor` — base: quest objects (menus per quest state), **traps on any object**
   (`bTrapped`, defusal attempt on confirm, `TrapWithGrenade`, `DetonateTrap`, `ApplyBlast`). Godot `interactable.gd`.
 - `Interactables/BarrelActor` + `BarrelRules` — match, 35 s fire, fade 7 s, heat 5.5 m, charred, `Explode` (trap / shot).
+- **Objects / barricades move in the real-time fight too (user decision 2026-10-26: "barricades can be moved only in the tactical pause; cancel that.
+  The tactical pause is an auxiliary pause that gives the player a breather; it must not cancel everything else. Maybe these were rules from the Godot
+  days").** It was the Godot rule (`main.gd can_relocate_objects_now`: outside a wave / in the pause). `RelocationRules::CanRelocateNow` now refuses only
+  the turn-based grid (its own push; the camera-zone solo still allowed there); `ShouldDropActiveTask` drops a carry only on the grid (the real-time fight
+  drops nothing). In the real-time fight a click on a movable object picks it up, a click on a barricade / set-up item opens its menu ("Relocate", pick
+  up), the barrel menu offers "Push", the action bar's MOVE OBJ works; the order runs at once with the worker's placement radius (`GetPlacementRadius`:
+  `WorkerPlacementRadius` in real time, the pause radius in the pause); the pause still plans (executed on the release). Deploying, tripwires and
+  "Ignite" already ran in real time (plan in the pause, execute in real time) - unchanged. Console `Codex.Relocation.RealTimeCombat 0` = the old rule.
+  Tests `CodexTactics.Relocation.RealTimeCombat.AllowedExceptTurnBased` (+ the old-rule cases); smokes `PauseBarrelOrderSmoke` (real time: the barrel
+  menu offers "Push"; B relocates the barricade in real time - it starts at once, is not dropped, stands on the spot), `ClickRulesSmoke` (real time: barrel
+  "Push", barricade menu, no HQ refusal; the old rule refuses). Other combat gates that depend on the pause (listed for the user, unchanged): the pause
+  only PLANS orders that real time executes (moves, cover, use orders, targeted shots, quick fire, SUPPRESS, deploy, tripwires); `Codex.RealTimeOrders 0`
+  (off by default) would lock every order to the pause; vehicles refuse to board / drive / leave IN the pause (`VehicleRules`); a disarm from the wall steps
+  off the wall only in real time.
 - `Interactables/RelocationSubsystem` + `RelocationRules` + `RelocationGhostActor` — move objects (ghost, radius,
   push task, pause plans, combat / mine drop) **and set-up from supply** (F, two-click placement, deploy tasks,
   mine mishap). Godot `main.gd` relocation + placement blocks.
@@ -81,6 +95,30 @@
   `CloseStaleWindows` closes it when the object is destroyed, `AInteractableActor::ShouldCloseActionMenu()` (awaiting the pickup grab; a tripped
   wire; a detonated mine) or its `bTrapped` changed since the window opened; Cancel always closes (it used to do nothing once the wire was gone).
   `OnActionMenuChanged(false)` is broadcast exactly once per window (the HUD hides `UActionMenuWidget`). A loot dialog whose crate was destroyed closes the same way.
+
+## A fallen operative's gear: the remains on his body (game designer play-test 2026-10-26)
+
+- **Bug:** "the fight is over, one of my fighters is down, but I can't walk up and take his equipment" (the Medic-Sapper killed in action: her
+  portrait slot dimmed = out of the squad). The remains crate (`AOperativeCharacter::SpawnRemainsLoot`) was a hidden 120 x 80 x 80 cm crate box
+  at the capsule's feet; the death clip lays the body up to ~1.5 m away from the capsule, so the cursor on the body met the snow (a move order)
+  - `FallenGearSmoke`'s evidence lines: head 142 cm / right hand 146 cm from the capsule, the old box held 2 of her 10 main bones, the ray at
+  her chest hit the floor and the click was a move order (no interaction). The box also blocked pawns / cut the navmesh, the crate was relocatable (in a wave fight the click
+  answered "objects cannot be relocated during combat"), the M16 rounds were read from `AmmoInventory` (only weapons NOT in hand: 0) and the
+  grenades / the weapon were missing (Godot `player.gd get_items_list` has them).
+- **Now:** `ALootCrateActor::BindRemainsBody(BodyMesh, Name)` - the box is fitted to the lying body's bones (pure `Interactables/CorpseLootRules`:
+  `FitBoxToBody` = 2D principal axis + padding 20 cm, min 40 x 30 x 25 cm; `IsBodyBone` drops root / ik_* / VB / attach helpers), refitted every
+  0.25 s for 10 s while the death clip settles; QueryOnly, blocks only `ECC_Visibility` (the cursor), never pawns, the camera or the navmesh; not
+  relocatable; no crate mesh but a label "[Click] Search the body: <name>" / "[Searched] Body: <name> (empty)" (Godot CorpseLootPrompt, 60 cm up);
+  the hand cursor over it (`PlayerTick`); a search of 0.6 s then the loot window. Contents (`CorpseLootRules::BuildRemainsContents`): everything he
+  carried - every hand-over item (ammo = clip + reserve), the new `ELootItem::Grenade` (`FLootContents::Grenades`, no carry limit) and his firearm
+  as the bonus weapon (Godot: added to the looter only if he lacks it). Save: runtime corpse crates keep `grenades`, `bonus_weapon`, `remains_of`
+  and re-bind to the nearest killed-in-action body on load. Tests `CodexTactics.Loot.Remains.*`; smoke `FallenGearSmoke`. With the formation kept
+  in the fight (gameflow 2026-10-26) a living mate often stands between the camera and part of the body (the Engineer, ~1.9 m off: 3-5 of 10
+  rays); his capsule rightly takes that part's click (it selects him). The smoke checks the click box with the living ignored and that no ray at
+  the body reaches the snow.
+- **Knocked down (not dead):** the knockdown is temporary (0.6 s down in real time; on the grid until his turn's get-up). A fight that ends while he
+  lies on the grid releases him: he gets up by himself in PostCombat (`FallenGearSmoke` stage 7). Taking a downed (living) operative's gear is not
+  defined by Godot or the GDDs - not implemented (open question).
 
 ## Retry after a failed disarm; a visible PMC wire is noticed (game designer 2026-10-22)
 

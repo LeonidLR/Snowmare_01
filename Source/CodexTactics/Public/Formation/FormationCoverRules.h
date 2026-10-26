@@ -28,6 +28,10 @@
  *    centre of the first gap they took.
  * Fixed looks (a corner watcher, a combat target, an explicit facing order) are kept as given; their cones count as covered and the
  * duty they leave (K's front, the rear) becomes a gap for the others.
+ * 5. v2.3 part 7 (user Q3 = c, contract 13.7: only the rear guard walks backwards): walking, every other member's sweep is confined to
+ *    his travel (Travel, else the heading) +- LookOverShoulderMaxDeg - of the sweep shifted by 0 / -360 / +360 the largest overlap wins
+ *    (ties: the first); no overlap -> amplitude 0 at a shoulder (the open one first, then the nearer the share's mid, then the side of
+ *    his bearing, then +); Shoulder lists them. 180 = off. Halt: unchanged.
  *
  * AllocateStatic (a STANDING group with looks decided elsewhere, e.g. the leader aiming round a new corner in cover): absolute yaws
  * sampled per whole degree; 1. with 3+ members one free member covers the rear (opposite the fixed looks' mean; the first fixed look if
@@ -45,6 +49,8 @@ struct FFormationCoverMember
 	FVector2D Pos = FVector2D::ZeroVector;
 	/** How far back the place is along the leader's path / heading, cm (the largest = the rear guard). */
 	float Back = 0.f;
+	/** v2.3 part 7: the world yaw his place travels along (the trail column: the trail's direction at his slot); unset = the heading. */
+	TOptional<float> Travel;
 };
 
 /** A role and a world yaw (a look, or a fixed look given to the allocator). */
@@ -71,6 +77,12 @@ struct FFormationCoverResult
 	/** World look yaws: K, the rear guard, the other fixed looks, then the others in assignment order. */
 	TArray<FFormationRoleYaw> Looks;
 	TArray<FFormationCoverShare> Shares;
+	/**
+	 * v2.3 part 7 (user Q3 = c): the places whose look is kept within +-LookOverShoulderMaxDeg of their travel direction on the move (walk:
+	 * everyone but K, the rear guard and the fixed looks), with that direction (world yaw) - the integration passes { yaw, half:
+	 * LookOverShoulderMaxDeg } to ClearLook as its Limit. Halt: none.
+	 */
+	TArray<FFormationRoleYaw> Shoulder;
 };
 
 namespace FormationCoverRules

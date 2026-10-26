@@ -161,7 +161,7 @@ namespace FormationGuardRules
 
 	FFormationGuardState Resolve(const TArray<FFormationWall>& Walls, EFormationKind Requested, int32 MemberCount, const FVector2D& LeaderPos,
 		float LeaderYaw, const TOptional<FFormationPose>& Ahead, float TurnAheadDeg, const FFormationGuardState& State, float StepDistance,
-		const FFormationConfig& Config)
+		const FFormationConfig& Config, bool bAllInSight)
 	{
 		const auto Whole = [&](EFormationKind Formation)
 		{
@@ -169,17 +169,29 @@ namespace FormationGuardRules
 				&& (!Ahead.IsSet() || BlockedRoles(Walls, Formation, MemberCount, Ahead->Pos, Ahead->Yaw, Config).Num() == 0);
 		};
 		EFormationGuardLevel Raw = EFormationGuardLevel::Requested;
-		if (GuardIsWide(Requested) && TurnAheadDeg > Config.TurnFoldDeg)
-		{
-			// A sharp turn ahead folds a wide formation into the trail column (no long swing of its far end).
-			Raw = EFormationGuardLevel::Trail;
-		}
-		else if (Requested != EFormationKind::Wall && !Whole(Requested))
+		TOptional<EFormationGuardCause> Cause;
+		// A sharp turn ahead folds a wide formation into the trail column (no long swing of its far end); v2.3 part 9: a wall cutting the
+		// formation at the same time names the cause Wall.
+		const bool bTurning = GuardIsWide(Requested) && TurnAheadDeg > Config.TurnFoldDeg;
+		if (Requested != EFormationKind::Wall && !Whole(Requested))
 		{
 			const TOptional<EFormationKind> Mirror = GuardMirrorOf(Requested);
-			Raw = (Mirror.IsSet() && Whole(Mirror.GetValue())) ? EFormationGuardLevel::Mirror : EFormationGuardLevel::Trail;
+			Raw = (!bTurning && Mirror.IsSet() && Whole(Mirror.GetValue())) ? EFormationGuardLevel::Mirror : EFormationGuardLevel::Trail;
+			Cause = EFormationGuardCause::Wall;
 		}
-		const auto At = [Requested](EFormationGuardLevel Level, const TOptional<EFormationGuardLevel>& Candidate, float Distance)
+		else if (bTurning)
+		{
+			Raw = EFormationGuardLevel::Trail;
+			Cause = EFormationGuardCause::Turn;
+		}
+		// v2.3 part 6: a member already cut off from the leader -> the trail column at once (it leads him round the corner on the leader's path).
+		if (Requested != EFormationKind::Wall && !bAllInSight)
+		{
+			Raw = EFormationGuardLevel::Trail;
+			Cause = EFormationGuardCause::Wall;
+		}
+		const auto At = [Requested](EFormationGuardLevel Level, const TOptional<EFormationGuardCause>& Why, const TOptional<EFormationGuardLevel>& Candidate,
+			float Distance)
 		{
 			FFormationGuardState Out;
 			Out.Requested = Requested;
@@ -187,24 +199,28 @@ namespace FormationGuardRules
 			Out.Effective = GuardFormationAt(Requested, Level);
 			Out.Candidate = Candidate;
 			Out.CandidateDistance = Distance;
+			if (Level != EFormationGuardLevel::Requested)
+			{
+				Out.Cause = Why;
+			}
 			return Out;
 		};
 		const TOptional<EFormationGuardLevel> NoCandidate;
 		if (!State.Requested.IsSet() || State.Requested.GetValue() != Requested || static_cast<uint8>(Raw) >= static_cast<uint8>(State.Level))
 		{
-			return At(Raw, NoCandidate, 0.f);
+			return At(Raw, Cause, NoCandidate, 0.f);
 		}
 		if (State.Level != EFormationGuardLevel::Trail && !Whole(GuardFormationAt(Requested, State.Level)))
 		{
-			return At(Raw, NoCandidate, 0.f);
+			return At(Raw, Cause, NoCandidate, 0.f);
 		}
 		const bool bSameCandidate = State.Candidate.IsSet() && State.Candidate.GetValue() == Raw;
 		const float Walked = (bSameCandidate ? State.CandidateDistance : 0.f) + FMath::Max(StepDistance, 0.f);
 		if (Walked >= Config.ClassifyHoldDistance)
 		{
-			return At(Raw, NoCandidate, 0.f);
+			return At(Raw, Cause, NoCandidate, 0.f);
 		}
-		return At(State.Level, Raw, Walked);
+		return At(State.Level, State.Cause, Raw, Walked);
 	}
 
 	FFormationGuardEffective Effective(const FFormationGuardState& State)

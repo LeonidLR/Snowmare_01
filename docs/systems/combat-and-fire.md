@@ -48,6 +48,14 @@
   Godot `_spawn_muzzle_tracer` (player / turret), `_spawn_waypoint_marker`, `_clear_planned_markers`,
   `_highlight_target_feedback`.
 
+## Suppressive fire (2026-10-26)
+
+- Game designer decisions 2026-10-26, full spec and every tuning value: `docs/design/SUPPRESSION.md`. `Combat/SuppressionRules` (pure) +
+  `USuppressionSubsystem` (a level per unit fed by every reported round; tiers Suppressed / Pinned), the SUPPRESS order (Shift + click on enemies, a red marker;
+  Shift + click on it again ceases it; `OperativeCharacterSuppression.cpp`, full-auto via `UWeaponDataAsset::FullAutoInterval`), the
+  quick fire and the SUPPRESS order share `AOperativeCharacter::FireAreaRound`. A/B `Codex.Combat.Suppression`; none in turn-based.
+  Tests `CodexTactics.Combat.Suppression.*`, smoke `SuppressionSmoke`.
+
 ## Fire postures / ROE (old §5)
 
 - **Fire postures / ROE (2026-10-06; semantics rev 2026-10-19, game designer play-test):** `FirePostureRules` (tests `CodexTactics.Squad.Posture.*`), per operative (`GetFirePosture`: override, else the squad's). **Passive** = never opens fire on its own (only direct orders: Ctrl + click, blind fire, planned shots, grenades). **Defensive** = returns fire / engages only the enemies that attack or have detected the squad: per target `MayAutoFireAt` - an enemy that hunts the squad (`AEnemyCharacter::IsHuntingSquad`: off patrol duty with a target / an alarm point / the horde's knowledge) is fair game; once the operative is attacked (`bProvokedThisFight`, `Codex.Posture.DefensiveSquadWide`) any enemy for that fight; it never fires at a patrol that has not spotted the squad and throws no autonomous grenade unprovoked. **Aggressive** = fires at any enemy in sight; in EXPLORATION it opens fire where contact starts the fight - an ambush level OR a level with enemies placed in the map (fix 2026-10-19: the gate asked `IsAmbushCombatStart()` only, but the Demo 01 lake is a «button» level whose placed patrols start the fight on contact - `ShouldStartFightOnContact`; so the squad saw them and never fired) - through the normal start path (`ULevelEncounterSubsystem::NotifyHostileContact(SquadAutoFire)`, which still refuses a non-placed enemy on a «button» level). `AOperativeCharacter::MayAutoFireAtEnemy` filters the Commander Mode target and the visible enemies in `FindShootTarget`; `MayAutoFireNow` (provoked) gates the autonomous grenades / the turret gunner. Keys `,` `.` `/` (selected), Alt = squad. Smoke `PostureSmoke`.
@@ -86,7 +94,56 @@ fear). Controller: clicks go to `HandleWorldClick`; 1..3 / Z C V / R / Tab / Ent
 
 **Knockdown values (user decisions 2026-10-11; `FKnockdownConfig` defaults + `Codex.Knockdown.*` CVars, no DataAsset).** Chance `KnockdownChance` 0.5 (`Codex.Knockdown.Chance`) for everyone: a qualifying heavy hit (>= 40 HP, Brute only on a crit) knocks down only when the roll (`FKnockdownHit::ChanceRoll`, rolled in `UKnockdownComponent::TryKnockDown`) is below it; a blast within 2.5 m, a pounce (hound run-up pounce, cutter leap landing) and the Frost Brute's heavy blow (user answer 2026-10-11: guaranteed, like the pounce; its qualify rules unchanged) always knock down. Durations: fall = clip (0.87 / 0.93 s), `DownedSeconds` 0.6, `GetUpSeconds` 0.8 at up to `GetUpMaxPlayRate` 2.1x (Revive_Back 0.8 s, Revive_Front 1.19 s) -> ~2.27 s on the ground (was ~3.35 s). Downed damage: one `DownedDamageMultiplier` 1.33 (`Codex.Knockdown.DownedDamage`) for any blow — shots, melee, blasts / traps — real time (`AOperativeCharacter::TakeHit` incl. its bypass path, `UHealthComponent::TakeDamage`) and turn-based (`ApplySquadHit` -> `TakeHit`, rounded); `EKnockdownBlow`, `DownedRanged/MeleeDamageMultiplier` and their CVars are gone. Turn-based: never a free stand-up; on his turn a lying operative may stay down (x1.33, no move / shot / stance / facing / barrel / relocate / deploy; items, unit switch and ending the turn work) or order «GET UP (2 AP) [Z]» (`UTurnBasedCombatSubsystem::GetUpActiveUnit`; the panel entry replaces the stance button only while he lies — falling / getting up the stance entry stays, disabled, so no empty GET UP button flashes); with < 2 AP it is refused with a feed line and he stays down. Enemies keep spending their whole turn on the get-up (`GetUpForTurn`). Smokes needing a guaranteed knockdown set `Codex.Knockdown.Chance 1` and restore it.
 
-### Turn-based arena: only open, level ground (game designer rule 2026-09-30, repeated 2026-10-22)
+### Turn-based arena: the grid round the leader, buildings subtracted (game designer decision 2026-10-26)
+
+Replaces the 2026-10-22 rule below (kept as history). The designer's screenshot of the lake compound's yard (barrels, the generator shed,
+the PMC base building; objective "EXIT: take the squad out through the blast door"): turn-based combat was refused there - "a perfect
+place for turn-based combat ... the restriction is very harsh. Buildings may be there; we just mustn't be able to enter them ... if an
+8 x 8 or 8 x 4 grid fits, turn-based combat can start, excluding buildings, ladders and the rest ... compute the building's perimeter and
+subtract it from the grid".
+
+- **Placement as before 2026-10-22:** the 14 x 14 grid (1.5 m cells) is centred on the leader. Only when that grid fails are shifted
+  centres tried, up to 4 cells each way, nearest first (an engaged enemy inside is worth one cell); none -> refused.
+- **Cells** (`TurnArenaRules::ClassifyCell` / `Evaluate`, sampled by `UTurnBasedCombatSubsystem::FindTurnArena`,
+  `Private/Tactics/TurnBasedCombatArena.cpp`): `Walkable`; `Building` (subtracted); `Doorway` (subtracted); `Ladder` (subtracted);
+  `NoGround` (subtracted); `Obstacle` (anything blocking pawns at body height: walls, crates, vehicles, closed sheds - barrels, barricades,
+  turrets, mines and wires never count, they are grid occupants as before); `NotLevel` (ground more than 1 m off the grid's median: a
+  platform, a pit, a roof top); `OffNavmesh` (only when the navmesh has data round the leader).
+- **How a building is found** (any of):
+  1. a **roof**: a static mesh 1.8 .. 4.5 m over the cell's ground (object-type trace WorldStatic + WorldDynamic - a roof the cutaway has cut
+     ignores Visibility; no pawn / landscape / foliage, actors tagged `TurnArenaOpen` never count). Its **outline** is the mesh's bounds in its
+     own yaw frame (an ISM kit instance on its own; 1 .. 60 m), so the whole roof footprint is subtracted, not just the probed cells;
+  2. an **indoor camera zone**: `ACameraZoneVolume` of environment `Closed` (always) or `Shelter` (when a roof or walls are found inside it;
+     an open lee shelter is no building) - its box is the outline;
+  3. a **walled interior** without a roof (the generator shed): 7 of 8 horizontal wall probes (1 m up, 4.5 m long) hit;
+  every outline grows by 40 cm (walls and door frames belong to the building). A **doorway** = a cell squeezed between two opposite walls
+  (both within 1.1 m) next to a building cell. Subtracted cells are `UGorkyGridManager::SetClosed`: an obstacle no unit leaving it can open
+  again (`ClearOccupant` keeps it closed), no grid line is drawn there (the overlay's Grid layer skips them), a click on one posts "No way in:
+  buildings and ladders are closed during turn-based combat", `MoveActiveUnitTo` refuses it.
+- **Ladders** (LADDERS.md 7.6): the cells within 50 cm of a ladder's rungs, foot (bottom link), top link and top exit are subtracted.
+- **Minimum size:** the arena is the connected open area (moves as the grid: diagonal past one open orthogonal cell) holding an all-open
+  rectangle of **8 x 8, or 8 x 4 in either orientation** (`FindOpenRect`); of several, the one the squad stands on / reaches with the least
+  moving. None -> "Turn-based combat needs room: at least 8 x 4 cells (12 x 6 m) of open, level ground round the squad - buildings, ladders
+  and walls don't count."
+- **Units inside a building when the fight starts:** an operative is moved onto the arena **out through the door** (breadth-first through
+  the building's floor and doorway cells, at most 3 cells; else the nearest arena cell in a straight line within 3 cells). Deeper inside ->
+  the fight is refused: "Turn-based combat only outside: lead the squad out of the building first!" An enemy near a door is moved out the
+  same way; an enemy deeper inside (or in a building past the grid's edge) is no grid unit - it waits in stasis like an enemy outside the
+  grid. Operatives just outside the grid (up to 3 cells) are pulled in; farther -> "gather the squad first". Climbers are left out (LADDERS.md 7.6).
+- **Kept from 2026-09-30 / 2026-10-22:** every operative's feet within 50 cm of the median ground, else "Turn-based combat can only start
+  on level ground"; `BakeObstacles` counts BLOCKING overlaps only (a tutorial trigger volume over the yard blocked every cell); a direct
+  entry without an arena (smokes, scripted) keeps the leader's grid with its buildings subtracted. `Codex.TurnArena.Debug 1` logs the cell
+  map (`.` arena, `,` open but cut off, `B` building, `D` doorway, `L` ladder, `#` obstacle, `~` not level, `N` off the navmesh, `_` no ground).
+- **Known limits:** a tree whose canopy collides 1.8 .. 4.5 m up counts as a roof (tag it `TurnArenaOpen`); a roofless room wider than
+  ~9 m is not found as a walled interior (its walls are obstacles, its floor stays open).
+
+Checks: `CodexTactics.Tactics.TurnArena.*` (open yard valid round the leader, a building footprint + door subtracted and an operative walked
+out through the door, the 8 x 8 / 8 x 4 minimum, ladders excluded, closed cells stay closed); `TurnArenaYardSmoke` (the designer's yard:
+the fight starts round the leader in front of the base building, its outline and door closed, a mate standing inside moved out, a hound deep
+inside out of the fight, a move order into the building refused, an open one carried out; `Shot` -> `Saved/Screenshots/TurnBased/arena_buildings.png`);
+`TurnArenaLakeSmoke` (round the leader by the shed: valid, no shed cell open; the squad inside the shed: moved out; deep in the base: refused).
+
+### Turn-based arena, history: only open, level ground (game designer rule 2026-09-30, repeated 2026-10-22; superseded 2026-10-26 above)
 
 The rule: "a turn-based fight may start ONLY on absolutely flat open ground, with no obstacles in the middle except barrels, barricades and turrets"
 (2026-09-30 it was only the squad's feet against the median ground height, `OPEN_QUESTIONS.md`). Demo 01 play-test 2026-10-22: in wave 3 on the lake the

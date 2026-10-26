@@ -33,6 +33,7 @@ namespace
 		case ELootItem::HeatPack: return { TEXT("🔥"), LOCTEXT("HeatPack", "Chemical heat pack"), false };
 		case ELootItem::Firewood: return { TEXT("🪵"), LOCTEXT("Firewood", "Firewood"), false };
 		case ELootItem::Flare: return { TEXT("🎆"), LOCTEXT("Flare", "Signal flare"), false };
+		case ELootItem::Grenade: return { TEXT("🧨"), LOCTEXT("Grenade", "Frag grenade"), false };
 		default: return { TEXT("🧥"), LOCTEXT("BonusClothing", "Gear ({0})"), false };
 		}
 	}
@@ -40,7 +41,7 @@ namespace
 	constexpr ELootItem AllItems[] = {
 		ELootItem::Medkit, ELootItem::CannedFood, ELootItem::Bread, ELootItem::Chocolate, ELootItem::Matches,
 		ELootItem::RifleAmmo, ELootItem::PistolAmmo, ELootItem::ShotgunAmmo, ELootItem::FlameFuel, ELootItem::CryoAmmo,
-		ELootItem::PlasmaAmmo, ELootItem::Turret, ELootItem::Barricade, ELootItem::Mine, ELootItem::BonusWeapon,
+		ELootItem::PlasmaAmmo, ELootItem::Turret, ELootItem::Barricade, ELootItem::Mine, ELootItem::Grenade, ELootItem::BonusWeapon,
 		ELootItem::BonusClothing, ELootItem::HeatPack, ELootItem::Firewood, ELootItem::Flare };
 }
 
@@ -74,6 +75,7 @@ int32 FLootContents::GetCount(ELootItem Item) const
 	case ELootItem::HeatPack: return HeatPacks;
 	case ELootItem::Firewood: return Firewood;
 	case ELootItem::Flare: return Flares;
+	case ELootItem::Grenade: return Grenades;
 	default: return BonusClothingId.IsEmpty() ? 0 : 1;
 	}
 }
@@ -134,6 +136,7 @@ void FLootContents::AddCount(ELootItem Item, int32 Count)
 	case ELootItem::HeatPack: HeatPacks += Count; break;
 	case ELootItem::Firewood: Firewood += Count; break;
 	case ELootItem::Flare: Flares += Count; break;
+	case ELootItem::Grenade: Grenades += Count; break;
 	default: break;
 	}
 }
@@ -161,6 +164,7 @@ int32 FLootContents::Take(ELootItem Item)
 	case ELootItem::HeatPack: HeatPacks = 0; break;
 	case ELootItem::Firewood: Firewood = 0; break;
 	case ELootItem::Flare: Flares = 0; break;
+	case ELootItem::Grenade: Grenades = 0; break;
 	default: BonusClothingId.Reset(); break;
 	}
 	return Count;

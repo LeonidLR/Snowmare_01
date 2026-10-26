@@ -1,6 +1,7 @@
 // CodexTactics.Formation.Parity.<Rule> - the C++ formation rules against the golden vectors the Training Ground simulator exports
 // (`npm run golden`; v1.1 adds PassageWidth, v1.2 HedgehogSlots, v2 Classify state in / out, contract 9 Menu, v2.1 / v2.1.1 Guard,
-// TrailSlots, SideWidth, Bypass, Corner, TurnAhead, ClearLook, Assign, v2.2 Cover, CoverStatic, Slide, v2.3 Decided): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
+// TrailSlots, SideWidth, Bypass, Corner, TurnAhead, ClearLook, Assign, v2.2 Cover, CoverStatic, Slide, v2.3 Decided; v2.3 parts 6-9
+// add Guard allInSight / cause, Cover travel / shoulder, ClearLook limit / ahead): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
 // (docs/design/FORMATION_CONTRACT.md 3, field names in 3.1). Same inputs -> same outputs within the file's tolerance (cm / deg; yaws
 // compared as angles). The rules' config is built from the file's "config_values" (the snapshot the vectors were computed with), so
 // later tuning of formation_config.json cannot break parity. A missing file: a warning, the test passes. Every case is checked (none is
@@ -786,14 +787,26 @@ namespace FormationParityUtil
 		}
 		Out.Level = Level.GetValue();
 		Out.CandidateDistance = static_cast<float>(Distance);
+		// v2.3 part 9: the cause ("wall" / "turn"; null / missing = none).
+		const TSharedPtr<FJsonValue> CauseValue = Object.TryGetField(TEXT("cause"));
+		if (CauseValue.IsValid() && !CauseValue->IsNull())
+		{
+			FString Cause;
+			if (!CauseValue->TryGetString(Cause) || (Cause != TEXT("wall") && Cause != TEXT("turn")))
+			{
+				return false;
+			}
+			Out.Cause = Cause == TEXT("wall") ? EFormationGuardCause::Wall : EFormationGuardCause::Turn;
+		}
 		return true;
 	}
 
 	FString ShowGuardState(const FFormationGuardState& State)
 	{
-		return FString::Printf(TEXT("{%s, %d, %s, %s, %.3f}"), State.Requested.IsSet() ? FormationNames::ToString(State.Requested.GetValue()) : TEXT("null"),
+		return FString::Printf(TEXT("{%s, %d, %s, %s, %.3f, %s}"), State.Requested.IsSet() ? FormationNames::ToString(State.Requested.GetValue()) : TEXT("null"),
 			static_cast<int32>(State.Level), State.Effective.IsSet() ? FormationNames::ToString(State.Effective.GetValue()) : TEXT("null"),
-			State.Candidate.IsSet() ? *FString::FromInt(static_cast<int32>(State.Candidate.GetValue())) : TEXT("null"), State.CandidateDistance);
+			State.Candidate.IsSet() ? *FString::FromInt(static_cast<int32>(State.Candidate.GetValue())) : TEXT("null"), State.CandidateDistance,
+			!State.Cause.IsSet() ? TEXT("null") : (State.Cause.GetValue() == EFormationGuardCause::Wall ? TEXT("wall") : TEXT("turn")));
 	}
 
 	bool ReadCornerWatch(const FJsonObject& Object, const TCHAR* Name, TOptional<FFormationCornerWatch>& Out)
@@ -918,10 +931,18 @@ bool FFormationParityGuardTest::RunTest(const FString&)
 			}
 			return FString::Printf(TEXT("blocked [%s], expected [%s]"), *Actual, *Wanted);
 		}
+		// v2.3 part 6: every member in sight of the leader (missing = true).
+		bool bAllInSight = true;
+		const TSharedPtr<FJsonValue> SightValue = Field(*In, TEXT("allInSight"));
+		if (SightValue.IsValid() && !SightValue->TryGetBool(bAllInSight))
+		{
+			return TEXT("allInSight is not a bool");
+		}
 		const FFormationGuardState Actual = FormationGuardRules::Resolve(Walls, Requested.GetValue(), Members, Pos, static_cast<float>(Yaw), Ahead,
-			static_cast<float>(Turn), State, static_cast<float>(Step), Golden.Config);
+			static_cast<float>(Turn), State, static_cast<float>(Step), Golden.Config, bAllInSight);
 		const bool bSame = Actual.Requested == Expected.Requested && Actual.Level == Expected.Level && Actual.Effective == Expected.Effective
-			&& Actual.Candidate == Expected.Candidate && FMath::Abs(Actual.CandidateDistance - Expected.CandidateDistance) <= Golden.TolCm;
+			&& Actual.Candidate == Expected.Candidate && FMath::Abs(Actual.CandidateDistance - Expected.CandidateDistance) <= Golden.TolCm
+			&& Actual.Cause == Expected.Cause;
 		return bSame ? FString() : FString::Printf(TEXT("state %s, expected %s"), *ShowGuardState(Actual), *ShowGuardState(Expected));
 	});
 }
@@ -1039,7 +1060,36 @@ bool FFormationParityClearLookTest::RunTest(const FString&)
 		{
 			return TEXT("held is neither a number nor null");
 		}
-		const float Actual = FormationSectorRules::ClearLook(Walls, Pos, static_cast<float>(Yaw), static_cast<float>(CurrentYaw), Golden.Config, Held);
+		// v2.3 parts 7 / 8: the allowed arc ({yaw, half} / null) and the anticipated position ([x, y] / null).
+		TOptional<FFormationLookLimit> Limit;
+		const TSharedPtr<FJsonValue> LimitValue = Field(*In, TEXT("limit"));
+		if (LimitValue.IsValid() && !LimitValue->IsNull())
+		{
+			const TSharedPtr<FJsonObject>* LimitObject = nullptr;
+			double LimitYaw = 0.0;
+			double LimitHalf = 0.0;
+			if (!LimitValue->TryGetObject(LimitObject) || !(*LimitObject)->TryGetNumberField(TEXT("yaw"), LimitYaw) || !(*LimitObject)->TryGetNumberField(TEXT("half"), LimitHalf))
+			{
+				return TEXT("unreadable limit");
+			}
+			FFormationLookLimit Parsed;
+			Parsed.Yaw = static_cast<float>(LimitYaw);
+			Parsed.Half = static_cast<float>(LimitHalf);
+			Limit = Parsed;
+		}
+		TOptional<FVector2D> AheadPos;
+		const TSharedPtr<FJsonValue> AheadValue = Field(*In, TEXT("ahead"));
+		if (AheadValue.IsValid() && !AheadValue->IsNull())
+		{
+			FVector2D Parsed;
+			if (!Vec2(AheadValue, Parsed))
+			{
+				return TEXT("unreadable ahead");
+			}
+			AheadPos = Parsed;
+		}
+		const float Actual = FormationSectorRules::ClearLook(Walls, Pos, static_cast<float>(Yaw), static_cast<float>(CurrentYaw), Golden.Config, Held,
+			Limit, AheadPos);
 		return AngleDiff(Actual, Expected) <= Golden.TolDeg ? FString() : FString::Printf(TEXT("yaw %.3f, expected %.3f"), Actual, Expected);
 	});
 }
@@ -1357,6 +1407,11 @@ bool FFormationParityCoverTest::RunTest(const FString&)
 				return TEXT("unreadable member");
 			}
 			Member.Back = static_cast<float>(Back);
+			double Travel = 0.0;
+			if ((*Object)->TryGetNumberField(TEXT("travel"), Travel))
+			{
+				Member.Travel = static_cast<float>(Travel);
+			}
 			Members.Add(Member);
 		}
 		const TOptional<FFormationCoverResult> Result = FormationCoverRules::Allocate(Walls, Leader, static_cast<float>(Heading), Members, Mode,
@@ -1373,6 +1428,17 @@ bool FFormationParityCoverTest::RunTest(const FString&)
 		if (!LookProblem.IsEmpty())
 		{
 			return LookProblem;
+		}
+		// v2.3 part 7: the over-the-shoulder members (missing = none).
+		TArray<FFormationRoleYaw> ExpectedShoulder;
+		if (Out->HasField(TEXT("shoulder")) && !ReadRoleYaws(Out->TryGetField(TEXT("shoulder")), ExpectedShoulder))
+		{
+			return TEXT("unreadable shoulder");
+		}
+		const FString ShoulderProblem = CompareLooks(Result->Shoulder, ExpectedShoulder, Golden);
+		if (!ShoulderProblem.IsEmpty())
+		{
+			return FString::Printf(TEXT("shoulder: %s"), *ShoulderProblem);
 		}
 		if (Result->Shares.Num() != ShareValues->Num())
 		{
@@ -1526,6 +1592,209 @@ bool FFormationParityDecidedTest::RunTest(const FString&)
 		}
 		const bool bActual = FormationSectorRules::Decided(Role, Formation.GetValue(), static_cast<int32>(Count), Width, Golden.Config);
 		return bActual == bExpected ? FString() : FString::Printf(TEXT("decided %d, expected %d"), bActual ? 1 : 0, bExpected ? 1 : 0);
+	});
+}
+
+// v2.4 (user bug report 2026-10-26): the wall layout's looks at a wall end (contract 14).
+FORMATION_PARITY_TEST(FFormationParityWallEndTest, "WallEnd")
+bool FFormationParityWallEndTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("WallEnd"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("WallEnd"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* SlotValues = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* OutSlots = nullptr;
+		TArray<FFormationWall> Walls;
+		bool bSpread = false;
+		double BasePct = 0.0;
+		double Pct = 0.0;
+		if (!In->TryGetArrayField(TEXT("walls"), WallValues) || !ReadWalls(*WallValues, Walls) || !In->TryGetArrayField(TEXT("slots"), SlotValues)
+			|| !Out->TryGetBoolField(TEXT("spread"), bSpread) || !Out->TryGetNumberField(TEXT("basePct"), BasePct) || !Out->TryGetNumberField(TEXT("pct"), Pct)
+			|| !Out->TryGetArrayField(TEXT("slots"), OutSlots))
+		{
+			return TEXT("unreadable input / output");
+		}
+		TArray<FFormationSlot> Slots;
+		for (const TSharedPtr<FJsonValue>& Value : *SlotValues)
+		{
+			const TSharedPtr<FJsonObject>* Object = nullptr;
+			FFormationSlot Slot;
+			double Yaw = 0.0;
+			if (!Value->TryGetObject(Object) || !ReadRole((*Object)->TryGetField(TEXT("role")), Slot.Role) || !Vec2((*Object)->TryGetField(TEXT("pos")), Slot.Position)
+				|| !(*Object)->TryGetNumberField(TEXT("yaw"), Yaw))
+			{
+				return TEXT("unreadable slot");
+			}
+			Slot.Yaw = static_cast<float>(Yaw);
+			Slots.Add(Slot);
+		}
+		TArray<EFormationRole> Fixed;
+		if (In->HasField(TEXT("fixed")) && !ReadRoles(In->TryGetField(TEXT("fixed")), Fixed))
+		{
+			return TEXT("unreadable fixed");
+		}
+		const FFormationWallEndResult Actual = FormationWallRules::EndLooks(Walls, Slots, Golden.Config, Fixed);
+		if (Actual.bSpread != bSpread || FMath::Abs(Actual.BasePct - BasePct) > 0.01 || FMath::Abs(Actual.Pct - Pct) > 0.01)
+		{
+			return FString::Printf(TEXT("spread %d base %.3f %% pct %.3f %%, expected %d %.3f %% %.3f %%"), Actual.bSpread ? 1 : 0, Actual.BasePct, Actual.Pct,
+				bSpread ? 1 : 0, BasePct, Pct);
+		}
+		return CompareSlots(Actual.Slots, *OutSlots, Golden, true);
+	});
+}
+
+namespace FormationParityApproach
+{
+	using namespace FormationParityUtil;
+
+	bool ReadRoleSlots(const TArray<TSharedPtr<FJsonValue>>& Values, bool bYaw, TArray<FFormationSlot>& Out)
+	{
+		for (const TSharedPtr<FJsonValue>& Value : Values)
+		{
+			const TSharedPtr<FJsonObject>* Object = nullptr;
+			FFormationSlot Slot;
+			double Yaw = 0.0;
+			if (!Value->TryGetObject(Object) || !ReadRole((*Object)->TryGetField(TEXT("role")), Slot.Role) || !Vec2((*Object)->TryGetField(TEXT("pos")), Slot.Position)
+				|| (bYaw && !(*Object)->TryGetNumberField(TEXT("yaw"), Yaw)))
+			{
+				return false;
+			}
+			Slot.Yaw = static_cast<float>(Yaw);
+			Out.Add(Slot);
+		}
+		return true;
+	}
+
+	/** {runner, rear (role | null), flanks [{role, side}], alongSide, done}. */
+	bool ReadState(const TSharedPtr<FJsonObject>& Object, FFormationApproachState& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Flanks = nullptr;
+		double Along = 0.0;
+		if (!ReadRole(Object->TryGetField(TEXT("runner")), Out.Runner) || !OptionalRole(*Object, TEXT("rear"), Out.Rear)
+			|| !Object->TryGetArrayField(TEXT("flanks"), Flanks) || !Object->TryGetNumberField(TEXT("alongSide"), Along) || !Object->TryGetBoolField(TEXT("done"), Out.bDone))
+		{
+			return false;
+		}
+		Out.AlongSide = static_cast<int32>(Along);
+		for (const TSharedPtr<FJsonValue>& Value : *Flanks)
+		{
+			const TSharedPtr<FJsonObject>* Flank = nullptr;
+			EFormationRole Role = EFormationRole::Commander;
+			double Side = 0.0;
+			if (!Value->TryGetObject(Flank) || !ReadRole((*Flank)->TryGetField(TEXT("role")), Role) || !(*Flank)->TryGetNumberField(TEXT("side"), Side))
+			{
+				return false;
+			}
+			Out.Flanks.Add({ Role, static_cast<int32>(Side) });
+		}
+		return true;
+	}
+
+	const TCHAR* DutyName(EFormationApproachDuty Duty)
+	{
+		switch (Duty)
+		{
+		case EFormationApproachDuty::Run: return TEXT("run");
+		case EFormationApproachDuty::Along: return TEXT("along");
+		case EFormationApproachDuty::Rear: return TEXT("rear");
+		case EFormationApproachDuty::Flank: return TEXT("flank");
+		default: return TEXT("layout");
+		}
+	}
+
+	FString ShowState(const FFormationApproachState& State)
+	{
+		FString Flanks;
+		for (const TPair<EFormationRole, int32>& Flank : State.Flanks)
+		{
+			Flanks += FString::Printf(TEXT(" %s%+d"), *ShowRole(Flank.Key), Flank.Value);
+		}
+		return FString::Printf(TEXT("runner %s rear %s flanks[%s ] along %+d done %d"), *ShowRole(State.Runner), *ShowRole(State.Rear), *Flanks, State.AlongSide,
+			State.bDone ? 1 : 0);
+	}
+}
+
+// v2.5 (user rule 2026-10-26): the covered approach to the wall (contract 15).
+FORMATION_PARITY_TEST(FFormationParityApproachTest, "Approach")
+bool FFormationParityApproachTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	using namespace FormationParityApproach;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("Approach"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("Approach"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* SlotValues = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* MemberValues = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* LookValues = nullptr;
+		const TSharedPtr<FJsonObject>* OutState = nullptr;
+		TArray<FFormationWall> Walls;
+		TArray<FFormationSlot> Slots;
+		TArray<FFormationSlot> Members;
+		double NormalYaw = 0.0;
+		if (!In->TryGetArrayField(TEXT("walls"), WallValues) || !ReadWalls(*WallValues, Walls) || !In->TryGetArrayField(TEXT("slots"), SlotValues)
+			|| !ReadRoleSlots(*SlotValues, true, Slots) || !In->TryGetArrayField(TEXT("members"), MemberValues) || !ReadRoleSlots(*MemberValues, true, Members)
+			|| !In->TryGetNumberField(TEXT("normalYaw"), NormalYaw) || !Out->TryGetObjectField(TEXT("state"), OutState) || !Out->TryGetArrayField(TEXT("looks"), LookValues))
+		{
+			return TEXT("unreadable input / output");
+		}
+		TOptional<FFormationApproachState> State;
+		const TSharedPtr<FJsonObject>* InState = nullptr;
+		if (In->TryGetObjectField(TEXT("state"), InState))
+		{
+			FFormationApproachState Read;
+			if (!ReadState(*InState, Read))
+			{
+				return TEXT("unreadable in.state");
+			}
+			State = Read;
+		}
+		FFormationApproachState Expected;
+		if (!ReadState(*OutState, Expected))
+		{
+			return TEXT("unreadable out.state");
+		}
+		const FFormationApproachResult Actual = FormationWallRules::Approach(Walls, Slots, static_cast<float>(NormalYaw), Members, State, Golden.Config);
+		if (ShowState(Actual.State) != ShowState(Expected))
+		{
+			return FString::Printf(TEXT("state %s, expected %s"), *ShowState(Actual.State), *ShowState(Expected));
+		}
+		if (Actual.Looks.Num() != LookValues->Num())
+		{
+			return FString::Printf(TEXT("%d looks, expected %d"), Actual.Looks.Num(), LookValues->Num());
+		}
+		for (int32 Index = 0; Index < Actual.Looks.Num(); ++Index)
+		{
+			const TSharedPtr<FJsonObject>* Look = nullptr;
+			EFormationRole Role = EFormationRole::Commander;
+			FString Duty;
+			if (!(*LookValues)[Index]->TryGetObject(Look) || !ReadRole((*Look)->TryGetField(TEXT("role")), Role) || !(*Look)->TryGetStringField(TEXT("duty"), Duty))
+			{
+				return TEXT("unreadable look");
+			}
+			const FFormationApproachLook& Got = Actual.Looks[Index];
+			double Yaw = 0.0;
+			const bool bYaw = (*Look)->TryGetNumberField(TEXT("yaw"), Yaw);
+			if (Got.Role != Role || Duty != DutyName(Got.Duty) || Got.Yaw.IsSet() != bYaw || (bYaw && AngleDiff(Got.Yaw.GetValue(), Yaw) > Golden.TolDeg))
+			{
+				return FString::Printf(TEXT("look %d: %s %s %s, expected %s %s %s"), Index, *ShowRole(Got.Role), DutyName(Got.Duty),
+					Got.Yaw.IsSet() ? *FString::Printf(TEXT("%.3f"), Got.Yaw.GetValue()) : TEXT("travel"), *ShowRole(Role), *Duty,
+					bYaw ? *FString::Printf(TEXT("%.3f"), Yaw) : TEXT("travel"));
+			}
+		}
+		return FString();
 	});
 }
 

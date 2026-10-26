@@ -117,9 +117,9 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 10.3,
-      "what": "echelon_right: wall cuts Z",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 14.5,
+      "what": "column (asked echelon_right): wall cuts L-Z",
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -127,9 +127,9 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 14.6,
-      "what": "echelon_left: wall cuts L-Z",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 19.1,
+      "what": "column (asked echelon_left): wall cuts L-Z",
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

@@ -21,6 +21,7 @@ void FGameFlowStateMachine::Reset(const FGameFlowConfig& InConfig)
 	bAmbushFight = false;
 	bFreePause = false;
 	bAwaitingHordeIntro = false;
+	bFreePauseOffered = false;
 	bRestCountdown = false;
 }
 
@@ -60,8 +61,8 @@ EGameFlowResult FGameFlowStateMachine::TriggerCombatZone()
 	bCombatUnlocked = true;
 	if (UsesSuddenStart(1))
 	{
-		// User decision 2026-10-11: the horde comes without intro or countdown; the fight runs at once (the free pause
-		// opens when the horde has become a running mass: EnterFreeTacticalPause).
+		// User decision 2026-10-11: the horde comes without intro or countdown; the fight runs at once. User decision 2026-10-26: the
+		// horde warning no longer opens the pause (NotifyHordeWarned) - the player's first Space of the wave opens it free.
 		WaveIndex = 1;
 		CutsceneTimeRemaining = 0.f;
 		StartWave(true);
@@ -128,9 +129,10 @@ EGameFlowResult FGameFlowStateMachine::ToggleTacticalPause()
 	{
 		return EGameFlowResult::NotInRealTime;
 	}
-	if (bAwaitingHordeIntro)
+	if (bAwaitingHordeIntro || bFreePauseOffered)
 	{
-		return EnterFreeTacticalPause(); // Space before the horde intro: its free pause at once
+		OpenFreePause(); // the first Space of a sudden wave (before or after its warning): the free pause, no charge (2026-10-26)
+		return EGameFlowResult::Ok;
 	}
 	if (PauseCooldownRemaining > 0.f)
 	{
@@ -168,6 +170,7 @@ EGameFlowResult FGameFlowStateMachine::RequestEnterTurnBased(bool bEnemiesInRang
 		return EGameFlowResult::NoEnemiesInRange;
 	}
 	bAwaitingHordeIntro = false;
+	bFreePauseOffered = false;
 	if (bFromPause)
 	{
 		// The pause ends here (its charge stays spent) without running the planned orders: they make no sense on the grid.
@@ -215,6 +218,7 @@ EGameFlowResult FGameFlowStateMachine::NotifyWaveCleared()
 	PauseTimeRemaining = 0.f;
 	bFreePause = false;
 	bAwaitingHordeIntro = false;
+	bFreePauseOffered = false;
 	// Game designer 2026-10-22: no panel / button when the whole fight is over - straight to PostCombat (the world keeps running).
 	if (IsFinalFight() && !Config.bVictoryPanelAfterLastWave)
 	{
@@ -315,6 +319,7 @@ void FGameFlowStateMachine::TriggerGameOver()
 	bRestCountdown = false;
 	bFreePause = false;
 	bAwaitingHordeIntro = false;
+	bFreePauseOffered = false;
 	SetState(ECodexGamePhase::GameOver, ECodexCombatMode::None);
 }
 
@@ -387,8 +392,10 @@ void FGameFlowStateMachine::StartWave(bool bSudden)
 	TurnBasedUsesThisWave = 0;
 	PauseTimeRemaining = 0.f;
 	bFreePause = false;
-	// A sudden wave runs in real time until UHordeIntroSubsystem opens its free pause (user decision 2026-10-11).
+	// A sudden wave runs in real time and waits for its horde warning (UHordeIntroSubsystem; user decision 2026-10-11); its first
+	// tactical pause is free (2026-10-26: only on the player's Space - the warning no longer opens it).
 	bAwaitingHordeIntro = bSudden;
+	bFreePauseOffered = bSudden;
 	SetState(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime);
 }
 
@@ -406,17 +413,42 @@ EGameFlowResult FGameFlowStateMachine::EnterFreeTacticalPause()
 	{
 		return EGameFlowResult::WrongPhase;
 	}
+	OpenFreePause();
+	return EGameFlowResult::Ok;
+}
+
+void FGameFlowStateMachine::OpenFreePause()
+{
 	bAwaitingHordeIntro = false;
+	bFreePauseOffered = false;
 	// The free pause costs no charge and has no timer.
 	bFreePause = true;
 	PauseTimeRemaining = 0.f;
 	SetState(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause);
+}
+
+EGameFlowResult FGameFlowStateMachine::NotifyHordeWarned()
+{
+	if (Phase != ECodexGamePhase::WaveCombat)
+	{
+		return EGameFlowResult::NotInWave;
+	}
+	if (CombatMode != ECodexCombatMode::RealTime)
+	{
+		return EGameFlowResult::NotInRealTime;
+	}
+	if (!bAwaitingHordeIntro)
+	{
+		return EGameFlowResult::WrongPhase;
+	}
+	bAwaitingHordeIntro = false; // the fight runs on in real time; bFreePauseOffered stays for the player's Space
 	return EGameFlowResult::Ok;
 }
 
 void FGameFlowStateMachine::CancelHordeIntro()
 {
 	bAwaitingHordeIntro = false;
+	bFreePauseOffered = false;
 }
 
 EGameFlowResult FGameFlowStateMachine::EnterLessonPause()
@@ -430,6 +462,7 @@ EGameFlowResult FGameFlowStateMachine::EnterLessonPause()
 		return EGameFlowResult::NotInRealTime;
 	}
 	bAwaitingHordeIntro = false;
+	bFreePauseOffered = false;
 	bFreePause = true; // no charge, no timer: the player resumes (Space)
 	PauseTimeRemaining = 0.f;
 	SetState(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause);
@@ -445,6 +478,7 @@ EGameFlowResult FGameFlowStateMachine::FinishSkirmish()
 	PauseTimeRemaining = 0.f;
 	bFreePause = false;
 	bAwaitingHordeIntro = false;
+	bFreePauseOffered = false;
 	bCombatUnlocked = false;
 	bAmbushFight = false;
 	WaveIndex = 0; // a skirmish is no wave: the level's scripted waves still start at 1

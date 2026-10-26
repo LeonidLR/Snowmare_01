@@ -67,6 +67,7 @@ Blueprint can notice the move.
 | `CodexTacticsPlayerControllerCamera.cpp` | `InteriorViewKey`, `GetCameraPawn`, mouse wheel, rotate keys, RMB drag rotate, MMB drag pan |
 | `CodexTacticsPlayerControllerCover.cpp` | cover ghost (`HasCoverPreview`, `FindCoverSlotForHit`, `TryHandleCoverClick`, `ShowCoverPreview`, `HideCoverPreview`, `ConfirmCoverPreview`), corner peek (`FindCornerPeekForHit`, `IsCornerPeekPreviewShown`, `UpdateCornerPeekHover`), `ToggleCoverFireModeKey` |
 | `CodexTacticsPlayerControllerMap.cpp` | (2026-10-18, a new area) the minimap: `MapPanelKey` (F2), `FullMapKey` (Tab outside turn-based / F3), `CloseFullMap` (Esc), `IsCursorOverMinimap`, `HandleMapWheel`, `HandleMapClick` (LMB camera / RMB move via `HandleWorldHit`) - `docs/design/MINIMAP.md` |
+| `CodexTacticsPlayerControllerFormationMenu.cpp` | (2026-10-26, a new area) the formation radial menu on B (stage 7): `SoloModePressed` / `SoloModeReleased` (tap = `ToggleSoloMode`, hold = the menu; `FFormationMenuKeyTracker`), `CanOpenFormationMenu`, `TickFormationMenu` (from `PlayerTick`), `OpenFormationMenu`, `UpdateFormationMenu`, `ReleaseFormationMenu`, `CancelFormationMenu` (Esc in `DialogueSkip`, RMB in `CameraDragRotateStart`) - `docs/design/FORMATION_CONTRACT.md` 9 |
 | `CodexTacticsPlayerControllerInternal.h` | / `ForStance` / `ForDeployable` (inline), `extern OrderLock::CVarRealTimeOrders` |
 
 Where to put new code: the file of its input area; a helper two units need goes into the internal header (`inline`), a

@@ -81,7 +81,8 @@ void UGameFlowSubsystem::HandleStateChanged(ECodexGamePhase Phase, ECodexCombatM
 {
 	UE_LOG(LogCodexTactics, Log, TEXT("GameFlow: %s / %s (wave %d)%s"),
 		*UEnum::GetValueAsString(Phase), *UEnum::GetValueAsString(CombatMode), Machine.GetWaveIndex(),
-		Machine.IsFreePause() ? TEXT(" [free pause: sudden horde]") : (Machine.IsAwaitingHordeIntro() ? TEXT(" [sudden horde: intro armed]") : TEXT("")));
+		Machine.IsFreePause() ? TEXT(" [free pause: sudden horde]") : (Machine.IsAwaitingHordeIntro() ? TEXT(" [sudden horde: intro armed]")
+			: (Machine.IsFreePauseOffered() ? TEXT(" [sudden horde: the first Space is free]") : TEXT(""))));
 	const ECodexGamePhase OldPhase = LastBroadcastPhase;
 	LastBroadcastPhase = Phase;
 	const ECodexCombatMode OldMode = LastBroadcastMode;

@@ -177,9 +177,9 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25.1,
-      "what": "P-L 46 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.4,
+      "what": "P-L 69 cm apart",
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -187,19 +187,19 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25.1,
-      "what": "P-L 46 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.4,
+      "what": "P-L 69 cm apart",
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "all_forward",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 18.4,
-      "what": "P-L 44 cm apart",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 2,
+      "t": 17.5,
+      "what": "P-L 73 cm apart",
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

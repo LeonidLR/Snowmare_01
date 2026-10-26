@@ -98,7 +98,7 @@
       "t": 6.3,
       "what": "p95 152 cm; Z 170 cm behind",
       "since": "v2.2",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -109,27 +109,28 @@
       "t": 8.8,
       "what": "column (asked echelon_right): wall cuts P-Z",
       "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 8.6,
+      "what": "column (asked echelon_right): wall cuts P-Z",
+      "since": "v2.3",
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
       "choice": "echelon_right",
       "members": 4,
       "route": "R1",
-      "seed": 1,
-      "t": 8.2,
+      "seed": 2,
+      "t": 8.9,
       "what": "column (asked echelon_right): wall cuts K-P",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 7,
-      "choice": "echelon_left",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 7,
-      "what": "column (asked echelon_left): wall cuts K-P",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -139,7 +140,7 @@
       "seed": 2,
       "t": 9.8,
       "what": "column (asked echelon_left): wall cuts L-Z",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [
@@ -291,6 +292,14 @@
       "check": 7,
       "choice": "all_forward",
       "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 7,
+      "choice": "echelon_left",
+      "members": 3,
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.3"

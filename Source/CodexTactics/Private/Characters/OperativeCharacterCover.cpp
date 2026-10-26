@@ -15,6 +15,7 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/PlayerCommands.h"
 #include "Engine/World.h"
@@ -465,7 +466,8 @@ void AOperativeCharacter::BeginCoverShot()
 {
 	CoverLastShotTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	const FCoverCombatConfig& Config = CoverRules::GetConfig();
-	if (CoverFireMode == ECoverFireMode::BlindFire)
+	// Suppressed (game designer decision 2026-10-26): head down - blind fire whatever the fire mode, no lean out.
+	if (CoverFireMode == ECoverFireMode::BlindFire || !USuppressionSubsystem::MayExposeNow(this))
 	{
 		bIsBlindFiring = true;
 		bIsCornerLeaning = false;
@@ -505,7 +507,9 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	UpdateCornerAim(DeltaTime);
 	// Corner hold (user decision 2026-10-07): at the exposed edge he steps out into the fire stance at once - also right
 	// after a reload - and holds it; only in a fight / with a known threat (2026-10-11: exploring he hugs the wall).
-	if (!bCornerAimActive && !bIsReloading && WantsCornerHold() && !(bCornerAutoDuck && GetWorld() && GetWorld()->GetTimeSeconds() < CornerAimDuckUntil))
+	// Suppressed (2026-10-26): no stepping out into the fire stance.
+	if (!bCornerAimActive && !bIsReloading && WantsCornerHold() && !(bCornerAutoDuck && GetWorld() && GetWorld()->GetTimeSeconds() < CornerAimDuckUntil)
+		&& USuppressionSubsystem::MayExposeNow(this))
 	{
 		BeginCornerAim();
 	}
@@ -601,6 +605,10 @@ bool AOperativeCharacter::GatherCoverThreat(FVector& OutLocation) const
 	if (bQuickFireActive)
 	{
 		Add(QuickFirePoint, ECoverThreatSource::PriorityTarget);
+	}
+	else if (bSuppressActive)
+	{
+		Add(SuppressPoint, ECoverThreatSource::PriorityTarget); // the SUPPRESS order's target / spot (2026-10-26)
 	}
 	else
 	{

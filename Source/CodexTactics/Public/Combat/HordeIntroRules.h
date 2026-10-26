@@ -18,11 +18,21 @@
  *  3. the world settles into the free pause (0.02, no charge, no timer).
  * Esc / a click skip the flyover (camera back on the leader, free pause). Applied by UHordeIntroSubsystem; tested in
  * CodexTactics.Combat.HordeIntro.*; console overrides Codex.HordeIntro.*.
+ *
+ * User decisions 2026-10-26 (they override the pause parts above):
+ *  - "the tactical pause is entered ONLY by pressing Space": the trigger gives the warning (alert, HQ line, the flyover's slow motion)
+ *    and the fight goes on in REAL TIME - no pause (bAutoPause false; the wave's first Space opens the free pause instead);
+ *  - "the horde warning only for the FIRST wave of the fight; later waves only as the arrows, don't interrupt the fight": a later wave
+ *    of the same fight gets no warning at all - no alert, no flyover, no slow motion, no pause (ShouldWarnWave; bWarnLaterWaves false).
  */
 struct CODEXTACTICS_API FHordeIntroConfig
 {
-	/** The flyover runs at all (without it the free pause opens at the trigger). */
+	/** The flyover runs at all (without it only the alert shows at the trigger). */
 	bool bEnabled = true;
+	/** The OLD rule (Codex.HordeIntro.AutoPause 1): the trigger opens the free tactical pause. User decision 2026-10-26: off. */
+	bool bAutoPause = false;
+	/** The OLD rule (Codex.HordeIntro.LaterWaves 1): every sudden wave of a fight is warned. User decision 2026-10-26: only the first. */
+	bool bWarnLaterWaves = false;
 	/** World time dilation between the spawn and the trigger (1 = real time). */
 	float PreTriggerTimeDilation = 1.f;
 	/** Share of the live enemies that must run at the squad for the trigger. */
@@ -156,6 +166,12 @@ namespace HordeIntroRules
 
 	/** Codex.HordeIntro.SuddenStart: -1 the data decides (default), 0 every wave has the old prepared start, 1 all sudden. */
 	CODEXTACTICS_API int32 GetSuddenStartOverride();
+
+	/**
+	 * User decision 2026-10-26: the horde warning (alert, flyover, slow motion) only for the fight's FIRST wave (WaveIndex 1, 1-based);
+	 * every later wave of the same fight comes without one (only the HUD's incoming arrows). bWarnLaterWaves restores the old rule.
+	 */
+	CODEXTACTICS_API bool ShouldWarnWave(int32 WaveIndex, const FHordeIntroConfig& Config);
 
 	/** The distinct types of Spawned in first-appearance order (the level's spawn order: hounds, then frostbitten, ...). */
 	CODEXTACTICS_API TArray<EEnemyArchetype> UniqueTypesInOrder(const TArray<EEnemyArchetype>& Spawned);

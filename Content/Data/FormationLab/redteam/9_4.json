@@ -131,19 +131,7 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
-    {
-      "check": 1,
-      "choice": "echelon_right",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 4,
-      "what": "P at W2",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    }
-  ],
+  "expected_fail": [],
   "fixed_entries": [
     {
       "check": 5,
@@ -168,6 +156,15 @@
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
     }
-  ]
+  ],
+  "fixed_in": "v2.5"
 }

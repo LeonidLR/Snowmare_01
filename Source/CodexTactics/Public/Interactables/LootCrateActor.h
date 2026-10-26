@@ -8,6 +8,7 @@
 
 class UItemStashComponent;
 class UMaterialInstanceDynamic;
+class USkeletalMeshComponent;
 
 /** Crate look (Godot loot_tier). */
 UENUM(BlueprintType)
@@ -170,6 +171,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot", meta = (ClampMin = "0"))
 	float TrapContactDistance = 180.f;
 
+	/**
+	 * 2026-10-26 (play-test: "the fight is over, one of my fighters is down, but I can't take his equipment"): makes this crate a fallen
+	 * operative's remains (Godot player.gd _die: the body itself is the loot container). No crate mesh, the label "[Click] Search the
+	 * body: <name>" over it, never relocated, a search of 0.6 s instead of a lid, and a click-only box (it blocks the cursor's Visibility
+	 * ray, not pawns, the camera or the navmesh) fitted to Body's lying pose (CorpseLootRules::FitBoxToBody of its bones; refitted while
+	 * the death clip settles). Body may be null (the box stays where it is).
+	 */
+	void BindRemainsBody(USkeletalMeshComponent* Body, const FText& OwnerName);
+
+	/** A fallen operative's remains (BindRemainsBody). */
+	bool IsRemains() const { return bRemains; }
+
+	/** The fallen operative's name (empty for a supply crate). */
+	const FText& GetRemainsOwnerName() const { return RemainsOwnerName; }
+
+	/** Fits the click box to the bound body's bones now; false without a body / bones. */
+	bool RefitRemainsBox();
+
+	/** Remains: the search prompt over the body (Godot CorpseLootPrompt); supply crates: none. */
+	virtual bool GetOverheadLabel(FOverheadLabel& OutLabel) const override;
+
+	/** Searching a body takes this long instead of the lid (no chest clip), s. */
+	static constexpr float RemainsSearchSeconds = 0.6f;
+
 	/** Blueprint hook for the lid animation / sound. */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Loot", meta = (DisplayName = "On Opening"))
 	void ReceiveOpening();
@@ -200,6 +225,15 @@ private:
 
 	UPROPERTY(VisibleInstanceOnly, Category = "CodexTactics|Loot")
 	ELootSessionState SessionState = ELootSessionState::Closed;
+
+	/** Refit tick of the remains' box while the death clip settles. */
+	void TickRemainsFit();
+
+	bool bRemains = false;
+	FText RemainsOwnerName;
+	TWeakObjectPtr<USkeletalMeshComponent> RemainsBody;
+	FTimerHandle RemainsFitTimer;
+	int32 RemainsFitsLeft = 0;
 
 	TWeakObjectPtr<AOperativeCharacter> SessionOperative;
 	ELootItem SearchItem = ELootItem::Medkit;

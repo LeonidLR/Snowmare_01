@@ -10,7 +10,7 @@ import { add, angleDiff, clamp, closestOnSegment, deltaYaw, dirOf, dist, dot, le
 import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments } from './layout.ts';
 import { AGENT_RADIUS, NavGrid } from './nav.ts';
-import type { GuardLevel, Mode, Role, TerrainClass, WallSide } from './rules.ts';
+import type { ApproachDuty, ApproachState, GuardCause, GuardLevel, Mode, Role, TerrainClass, WallSide } from './rules.ts';
 import {
   CLASSIFY_START, CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
   FormationShapeRules, FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
@@ -27,6 +27,8 @@ const TRAIL_KEEP = 1500; // cm of trail kept
 const SEPARATION_MARGIN = 10; // cm beyond slot.min_spacing the separation aims for
 const SEPARATION_SPEED = 60; // cm/s: members closer than slot.min_spacing drift apart (stands in for the engine's avoidance)
 const REASSIGN_GAIN = 100; // cm: on the way, places are reassigned when the minimal assignment is this much cheaper (v2.2)
+const SHOULDER_STEP_DEG = 90; // v2.3 part 7: a step within this of his place's travel centres his over-the-shoulder limit
+const VEL_SMOOTH_S = 0.3; // v2.3 part 8: the sim's per-step velocity jitters (+-50 %); the anticipation uses it smoothed
 const WALK_LOOK_DEG = 35; // the leader's look within this of his travel = looking where he walks (exempt from ClearLook; the check allows 45)
 
 export interface MemberFrame {
@@ -49,6 +51,8 @@ export interface MemberFrame {
   cornerWatch: boolean;
   /** v2.2: he holds the rear (the place farthest back; FormationCoverRules.Allocate). */
   rearGuard: boolean;
+  /** v2.5: his duty on the covered approach to the wall (FormationWallRules.Approach); null outside it. */
+  approachDuty: ApproachDuty | null;
 }
 
 /** v2.1: a bypass decision (FormationBypassRules.ChooseSide) taken when a route leg starts and a wall blocks it. */
@@ -78,6 +82,8 @@ export interface Frame {
   requested: Formation;
   /** v2.1: 0 = as requested, 1 = the mirror echelon, 2 = the column (FormationGuardRules.Resolve). */
   guardLevel: GuardLevel;
+  /** v2.3 part 9: why the guard falls back ('wall' / 'turn'; null at level 0) - the HUD line's "(wall)" / "(turn)". */
+  guardCause: GuardCause | null;
   terrain: TerrainClass;
   heading: number;
   leaderDistance: number;
@@ -86,6 +92,10 @@ export interface Frame {
   bypasses: readonly BypassFrame[];
   /** v2.2: the wall slide in progress, else null. */
   slide: SlideFrame | null;
+  /** v2.5: the wall layout's outward normal (the way they came, away from the wall) while it stands, else null. */
+  wallNormal: number | null;
+  /** v2.5: the covered approach to the wall is on (somebody is not at his wall slot yet). */
+  approach: boolean;
 }
 
 export interface SimOptions {
@@ -117,6 +127,7 @@ interface Member {
   repathIn: number;
   prevSlot: Vec2 | null;
   clearHeld: number | null; // v2.3: the last ClearLook result (its hysteresis input); null while ClearLook does not apply
+  vel: Vec2; // v2.3 part 8: his smoothed velocity (VEL_SMOOTH_S), as the engine's character velocity - ClearLook's anticipation
 }
 
 /** Builds the nav grid for a layout (reuse it across runs). */
@@ -174,6 +185,7 @@ export function simulate(o: SimOptions): number {
     repathIn: 0,
     prevSlot: null,
     clearHeld: null,
+    vel: [0, 0],
   }));
 
   let leg = 1;
@@ -199,6 +211,12 @@ export function simulate(o: SimOptions): number {
   let lastTargets: { role: Role; pos: Vec2; yaw: number }[] = [];
   let slide: { wall: Segment; start: { role: Role; pos: Vec2; yaw: number }[]; dest: Vec2; to: Vec2 } | null = null;
   let slideFrame: SlideFrame | null = null;
+  // v2.4: the last wall layout's EndLooks (keyed by the Layout slots it was computed from).
+  let wallEnd: { key: string; slots: { role: Role; pos: Vec2; yaw: number }[] } | null = null;
+  // v2.5: the covered approach to the wall (FormationWallRules.Approach) - its held roles, the layout it is for, this frame's looks.
+  let approach: ApproachState | null = null;
+  let approachKey = '';
+  let wallNormal: number | null = null;
   const maxTime = 600;
 
   while (t < maxTime) {
@@ -274,14 +292,16 @@ export function simulate(o: SimOptions): number {
       // v2.1: the wall guard - no formation may cut the squad in two (mirror echelon, else the column; the request stays).
       const pathAhead: Vec2[] = arrived ? [leader.pos] : [leader.pos, ...legs.slice(leg), ...points.slice(routeLeg + 1)];
       guard = FormationGuardRules.Resolve(walls, requested, n, leader.pos, heading, arrived ? null : aheadPose(cfg(c, 'guard.lookahead')),
-        FormationGuardRules.TurnAhead(pathAhead, heading, c), guard, stepDistance, c);
+        FormationGuardRules.TurnAhead(pathAhead, heading, c), guard, stepDistance, c,
+        members.every((m) => !segmentBlocked(leader.pos, m.pos, walls, 0))); // v2.3: the squad all on his side of the walls
       formation = guard.effective!;
     } else { formation = 'wall'; terrain = 'at_wall'; }
     lastTravelled = travelled;
     const mode: Mode = slide ? 'walk' : arrived ? (formation === 'wall' ? 'wall' : 'halt') : run ? 'run' : o.allForward ? 'forward' : 'walk';
 
     // --- targets and look yaws
-    let targets: { role: Role; pos: Vec2; yaw: number; decided?: boolean }[]; // decided: a user-decided look (v2.3, Decided)
+    // decided: a user-decided look (v2.3, Decided); travel: the trail's direction at a trail-column slot (v2.3 part 7)
+    let targets: { role: Role; pos: Vec2; yaw: number; decided?: boolean; travel?: number }[];
     let slideLead: Role | null = null, slideRear: Role | null = null;
     if (slide) {
       const res = FormationWallRules.Slide(slide.wall, slide.start, leader.pos, slide.dest, t, c);
@@ -305,8 +325,14 @@ export function simulate(o: SimOptions): number {
           rooms = FormationWallRules.BreakRoomTie(room.roomLeft, room.roomRight, dist(z.pos, endPos(1, 0)), dist(z.pos, endPos(0, 1)));
         }
         targets = FormationWallRules.Layout(wall, leaderWallSlot ? wallClick : leader.pos, n, rooms.roomLeft, rooms.roomRight, c);
+        // v2.4 (user bug report 2026-10-26): at a wall END the looks are spread over the whole open arc round it (the layout's
+        // slots and every wall of the level; a face layout keeps its looks). Cached by the slots: the looks never jitter.
+        const endKey = JSON.stringify(targets);
+        if (!wallEnd || wallEnd.key !== endKey) wallEnd = { key: endKey, slots: FormationWallRules.EndLooks(walls, targets, c).slots };
+        targets = wallEnd.slots;
         leaderWallSlot = targets[0].pos;
         layoutWall = wall;
+        wallNormal = yawOf(sub(targets[0].pos, closestOnSegment(targets[0].pos, wall.a, wall.b).point));
       } else {
         targets = FormationShapeRules.Slots(n >= 4 ? 'diamond' : 'wedge', n, leader.pos, heading, c)
           .map((s) => ({ ...s, yaw: heading }));
@@ -317,7 +343,7 @@ export function simulate(o: SimOptions): number {
       // to the trail's direction at his slot; the rear man keeps the squad's 6 o'clock (the leader's heading).
       targets = FormationShapeRules.TrailSlots(path, heading, n, c, walls).map((s) => {
         const width = passage ?? FormationTerrainRules.SideWidth(walls, s.pos, s.yaw, c);
-        return { ...s, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw, width, c),
+        return { ...s, travel: s.yaw, yaw: FormationSectorRules.LookYaw(s.role, 'column', mode, n, t, s.role === 'Z' ? heading : s.yaw, width, c),
           // 1A is a corridor decision: only the classifier's held corridor width counts - a slot's side width at a doorway
           // crossed obliquely is not a corridor (P's "forward over the shoulder" aimed at the door's wall end 0.5 m away).
           decided: FormationSectorRules.Decided(s.role, 'column', n, passage, c) };
@@ -340,13 +366,27 @@ export function simulate(o: SimOptions): number {
         const pick = FormationAssignRules.AssignPlaces(followers.map((m) => m.pos), places.map((x) => x!.pos));
         const held = followers.reduce((acc, m, i) => acc + dist(m.pos, places[i]!.pos), 0);
         const best = followers.reduce((acc, m, i) => acc + (pick[i] >= 0 ? dist(m.pos, places[pick[i]]!.pos) : 0), 0);
-        if (key !== placesFor || held - best > REASSIGN_GAIN) {
+        // v2.5: no reassignment on the way while the covered approach holds its roles (no reshuffle; the runtime never reassigns in the wall layout).
+        const approachHeld = key === placesFor && approach !== null && !approach.done;
+        if (key !== placesFor || (held - best > REASSIGN_GAIN && !approachHeld)) {
           const labels = places.map((x) => x!.role);
           followers.forEach((m, i) => { if (pick[i] >= 0 && m.place !== labels[pick[i]]) { m.place = labels[pick[i]]; m.path = null; } });
         }
       }
       placesFor = key;
     }
+    // v2.5 (user rule 2026-10-26, the covered approach to the wall): until everyone is at his wall slot the leader runs in and looks
+    // along the wall, the man farthest back covers the rear, the others a flank each (their layout look once at their slot).
+    let approachLooks: { role: Role; duty: ApproachDuty; yaw: number | null }[] = [];
+    if (formation === 'wall' && !slide && wallNormal !== null && n >= 2) {
+      const layoutKey = wallEnd?.key ?? '';
+      if (layoutKey !== approachKey) { approach = null; approachKey = layoutKey; }
+      const res = FormationWallRules.Approach(walls, targets, wallNormal, members.map((m) => ({ role: m.place, pos: m.pos, yaw: m.yaw })), approach, c);
+      approach = res.state;
+      approachLooks = approach.done ? [] : res.looks;
+      targets = targets.map((x) => { const l = res.looks.find((y) => y.role === x.role); return l && l.yaw !== null ? { ...x, yaw: l.yaw } : x; });
+    } else if (formation !== 'wall' || slide) { approach = null; approachKey = ''; }
+    if (formation !== 'wall') wallNormal = null;
     const watch = FormationCornerRules.Watch(walls, leader.pos, heading, members.map((m) => ({ role: m.place, pos: m.pos })), corner, c);
     corner = watch.state;
     // The corner watch on patrol, and on a wall slide (the leading end at the wall's end) - not in the standing wall layout.
@@ -356,17 +396,19 @@ export function simulate(o: SimOptions): number {
     // place farthest back = the rear guard (6 o'clock), the others split the open arc. The pair, run, "all forward", the wall
     // layout and the STANDING hedgehog ring keep their rules (walking, the hedgehog is just a shape).
     let rearGuard: Role | null = slideRear;
+    let shoulder: { role: Role; yaw: number }[] = []; // v2.3 part 7 (Q3 = c): the allocator's over-the-shoulder members (ClearLook's limit)
     if (n >= 3 && (mode === 'walk' || (mode === 'halt' && formation !== 'hedgehog')) && formation !== 'wall') {
       const trailOn = FormationGuardRules.Effective(guard).trail;
       const hv = dirOf(heading);
       // v2.3 (1A clarified): the looks the user decided for the formation (the narrow column's K / P / L) are fixed looks too.
       const fixed = [...looks, ...targets.filter((x) => x.decided && !looks.some((l) => l.role === x.role)).map((x) => ({ role: x.role, yaw: x.yaw }))];
       const cover = FormationCoverRules.Allocate(walls, leader.pos, heading, targets.map((x, k) => ({
-        role: x.role, pos: x.pos,
+        role: x.role, pos: x.pos, travel: x.travel,
         back: trailOn ? k : -((x.pos[0] - leader.pos[0]) * hv[0] + (x.pos[1] - leader.pos[1]) * hv[1]),
       })), mode, t, c, fixed);
       if (cover) {
         rearGuard = cover.rearGuard;
+        shoulder = cover.shoulder;
         targets = targets.map((x) => ({ ...x, yaw: cover.looks.find((l) => l.role === x.role)?.yaw ?? x.yaw }));
       }
     }
@@ -374,20 +416,15 @@ export function simulate(o: SimOptions): number {
 
     // --- members
     const frames: MemberFrame[] = [];
-    const given: Vec2[] = []; // v2.3: slots given out this frame (a fallback never lands on one)
+    // v2.3 part 9 (contract 13.5, order-free): every walkable slot of the frame is given out first, then the unwalkable ones get
+    // their stand-ins (in member order) - a stand-in never lands within slot.min_spacing of a slot resolved after it.
+    const frameTargets = members.map((m) => targets.find((x) => x.role === m.place) ?? { role: m.place, pos: m.pos, yaw: m.yaw });
+    const resolved = resolveFrameSlots(nav, walls, leader.pos,
+      members.map((m, i) => ({ pos: frameTargets[i].pos, resolve: i > 0 || formation === 'wall', here: m.pos })), cfg(c, 'slot.min_spacing'));
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
-      const target = targets.find((x) => x.role === m.place) ?? { role: m.place, pos: m.pos, yaw: m.yaw };
-      let slot = target.pos;
-      let slotFallback = false, slotInvalid = false;
-      if (i > 0 || formation === 'wall') {
-        if (!nav.walkable(slot)) {
-          slotFallback = true;
-          const alt = fallbackSlot(nav, walls, leader.pos, slot, given, cfg(c, 'slot.min_spacing'));
-          if (alt) slot = alt; else { slotInvalid = true; slot = m.pos; }
-        }
-      }
-      given.push(slot);
+      const target = frameTargets[i];
+      const { slot, fallback: slotFallback, invalid: slotInvalid } = resolved[i];
       let moveDir: Vec2 = [0, 0];
       if (i > 0 || formation === 'wall') {
         const before = m.pos;
@@ -397,21 +434,36 @@ export function simulate(o: SimOptions): number {
       // Facing: run = travel direction for everyone; walking to a wall-layout slot = travel direction until within
       // WALL_TURN_DIST of it, then the layout yaw (as an operative walking into cover; FORMATION_CONTRACT.md 7);
       // otherwise the rule's look yaw.
-      const toWallSlot = formation === 'wall' && dist(m.pos, slot) > WALL_TURN_DIST && len(moveDir) > 0.5;
+      // v2.5: on the covered approach only the runner on his run faces his travel; the others hold their approach look.
+      const approachLook = approachLooks.find((l) => l.role === m.place);
+      const toWallSlot = formation === 'wall' && dist(m.pos, slot) > WALL_TURN_DIST && len(moveDir) > 0.5 && !(approachLook && approachLook.yaw !== null);
       // v2.1.1 (user "6А"): nobody looks into a wall, manual formations too - not the wall layout, the corner watcher, running,
       // or the LEADER looking where he walks (he must see his way; followers follow him - their step direction jitters along a
       // wall they hug, which made an exemption for them flip on and off).
       const watching = looks.some((l) => l.role === m.place);
       const walking = i === 0 && len(leaderVel) > 1 ? yawOf(leaderVel) : null;
       const exempt = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG);
-      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld);
+      // v2.3 part 7 (Q3 = c): an over-the-shoulder member's wall-avoiding look stays within +- the limit of where he steps:
+      // his ACTUAL step decides whether he walks backwards (a man threading a wall gap steps up to 60 deg off the squad's
+      // heading) - unless it is more than SHOULDER_STEP_DEG off his place's travel (a step back to a slot behind him, a
+      // stand-in place): then, and standing, the place's travel direction (else the limit flips and his look swings round).
+      const sl = shoulder.find((x) => x.role === m.place);
+      const stepYaw = len(moveDir) > 0.5 ? yawOf(moveDir) : null;
+      const limit = sl ? { yaw: stepYaw !== null && angleDiff(stepYaw, sl.yaw) <= SHOULDER_STEP_DEG ? stepYaw : sl.yaw, half: cfg(c, 'look.over_shoulder_max_deg') } : null;
+      // v2.3 part 8 (Q4 = b): ClearLook also sees the walls from where he will be in look.anticipate_s (his velocity this step;
+      // the leader's walking velocity).
+      const stepVel = i === 0 && formation !== 'wall' ? leaderVel : scale(moveDir, 1 / SIM_DT);
+      m.vel = add(m.vel, scale(sub(stepVel, m.vel), clamp(SIM_DT / VEL_SMOOTH_S, 0, 1)));
+      const ahead = len(m.vel) > 1 ? add(m.pos, scale(m.vel, cfg(c, 'look.anticipate_s'))) : null;
+      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld, limit, ahead);
       m.clearHeld = exempt ? null : free;
       const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
       if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
       const moving = len(moveDir) > 0.5;
       const backwards = moving && angleDiff(yawOf(moveDir), m.yaw) > 120;
-      frames.push({ role: m.role, place: m.place, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.place), rearGuard: m.place === rearGuard });
+      frames.push({ role: m.role, place: m.place, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.place), rearGuard: m.place === rearGuard,
+        approachDuty: approachLook?.duty ?? null });
     }
     // Light separation standing in for the engine's crowd avoidance (the game's RVO / detour crowd): two members closer than
     // slot.min_spacing drift apart at up to SEPARATION_SPEED; the leader is never pushed (he walks his path).
@@ -427,7 +479,8 @@ export function simulate(o: SimOptions): number {
       }
     }
     frames.forEach((fr, i) => { fr.pos = members[i].pos; });
-    o.onFrame({ t, mode, formation, requested, guardLevel: guard.level, terrain, heading, leaderDistance: travelled, members: frames, bypasses, slide: slideFrame });
+    o.onFrame({ t, mode, formation, requested, guardLevel: guard.level, guardCause: guard.cause ?? null, terrain, heading, leaderDistance: travelled, members: frames, bypasses, slide: slideFrame,
+      wallNormal: formation === 'wall' ? wallNormal : null, approach: approachLooks.length > 0 });
     lastTargets = targets;
     void slideLead;
 
@@ -468,7 +521,7 @@ function wallAhead(walls: readonly Segment[], pos: Vec2, heading: number): Segme
  * v2.3 (red team #5): not within `spacing` of a slot already given out this frame (else two unwalkable slots - the hedgehog of
  * three in a 3 m corridor - got the SAME point and the two men walked into each other); none such -> the nearest as before.
  */
-function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2, given: readonly Vec2[] = [], spacing = 0): Vec2 | null {
+export function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slot: Vec2, given: readonly Vec2[] = [], spacing = 0): Vec2 | null {
   const off = sub(slot, leader);
   const r = len(off), base = yawOf(off);
   const cands: Vec2[] = [];
@@ -478,6 +531,27 @@ function fallbackSlot(nav: NavGrid, walls: readonly Segment[], leader: Vec2, slo
   cands.sort((a, b) => dist(a, slot) - dist(b, slot));
   const ok = cands.filter((p) => nav.walkable(p) && !segmentBlocked(leader, p, walls, 0));
   return ok.find((p) => given.every((g) => dist(g, p) >= spacing)) ?? ok[0] ?? null;
+}
+
+/**
+ * v2.3 part 9 (FORMATION_CONTRACT.md 13.5, order-free - the C++ runtime's reading, formation/runtime-v23): the slots of one frame.
+ * `slots[i].resolve` = the slot must be walkable (every follower; the leader too in the wall layout), `here` = the man's position
+ * (an unresolvable slot keeps him there). First every slot that needs no stand-in is given out (the leader's, the walkable ones),
+ * then each unwalkable slot, in list order, gets fallbackSlot's stand-in keeping `spacing` from everything given out so far; the
+ * stand-in (or `here` when none) is given out in turn. A walkable slot later in the list is never ignored (member order used to
+ * let Z, resolved before P, take the stand-in on P's spot).
+ */
+export function resolveFrameSlots(nav: NavGrid, walls: readonly Segment[], leader: Vec2,
+  slots: readonly { pos: Vec2; resolve: boolean; here: Vec2 }[], spacing: number): { slot: Vec2; fallback: boolean; invalid: boolean }[] {
+  const needs = slots.map((x) => x.resolve && !nav.walkable(x.pos));
+  const given: Vec2[] = slots.filter((_, i) => !needs[i]).map((x) => x.pos);
+  return slots.map((x, i) => {
+    if (!needs[i]) return { slot: x.pos, fallback: false, invalid: false };
+    const alt = fallbackSlot(nav, walls, leader, x.pos, given, spacing);
+    const slot = alt ?? x.here;
+    given.push(slot);
+    return { slot, fallback: true, invalid: !alt };
+  });
 }
 
 /**

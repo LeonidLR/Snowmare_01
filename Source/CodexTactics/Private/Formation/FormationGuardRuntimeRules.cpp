@@ -238,28 +238,59 @@ namespace FormationGuardRuntime
 		}
 	}
 
-	FString GuardHudText(EFormationKind Requested, EFormationKind Effective, EFormationGuardLevel Level, int32 MemberCount, bool bTurnFold)
+	FString GuardHudText(EFormationKind Requested, EFormationKind Effective, EFormationGuardLevel Level, int32 MemberCount,
+		const TOptional<EFormationGuardCause>& Cause)
 	{
 		if (Level == EFormationGuardLevel::Requested || Requested == Effective)
 		{
 			return FormationLabel(Effective, MemberCount);
 		}
-		const bool bTurn = bTurnFold && Level == EFormationGuardLevel::Trail;
+		const bool bTurn = Cause.IsSet() && Cause.GetValue() == EFormationGuardCause::Turn;
 		return FString::Printf(TEXT("%s -> %s (%s)"), *FormationLabel(Requested, MemberCount), *FormationLabel(Effective, MemberCount),
 			bTurn ? TEXT("turn") : TEXT("wall"));
 	}
 
-	bool IsTurnFold(EFormationGuardLevel Level, bool bTurnAhead, bool bCutByWalls, bool bWasTurnFold)
+	bool AllInSight(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, const TArray<FVector2D>& Members)
 	{
-		if (Level != EFormationGuardLevel::Trail)
+		for (const FVector2D& Member : Members)
 		{
-			return false;
+			if (FormationMath::SegmentBlocked(LeaderPos, Member, Walls, 0.0))
+			{
+				return false;
+			}
 		}
-		if (bTurnAhead)
+		return true;
+	}
+
+	TOptional<FFormationLookLimit> ShoulderLimit(const TArray<FFormationRoleYaw>& Shoulder, EFormationRole Role, const FVector2D& Velocity,
+		const FFormationConfig& Config)
+	{
+		const FFormationRoleYaw* Entry = Shoulder.FindByPredicate([Role](const FFormationRoleYaw& Each) { return Each.Role == Role; });
+		if (!Entry || Config.LookOverShoulderMaxDeg >= 180.f)
 		{
-			return true;
+			return TOptional<FFormationLookLimit>();
 		}
-		return bCutByWalls ? false : bWasTurnFold;
+		FFormationLookLimit Limit;
+		Limit.Half = Config.LookOverShoulderMaxDeg;
+		Limit.Yaw = Entry->Yaw;
+		if (Velocity.Size() > ShoulderMoveCmPerSec)
+		{
+			const double Step = FormationMath::YawOfD(Velocity);
+			if (FMath::Abs(FormationMath::NormYaw(Step - Entry->Yaw)) <= ShoulderStepDeg)
+			{
+				Limit.Yaw = static_cast<float>(Step);
+			}
+		}
+		return Limit;
+	}
+
+	TOptional<FVector2D> AnticipatedPos(const FVector2D& Pos, const FVector2D& Velocity, const FFormationConfig& Config)
+	{
+		if (Config.LookAnticipateS <= 0.f || Velocity.Size() < 1.0)
+		{
+			return TOptional<FVector2D>();
+		}
+		return Pos + Velocity * static_cast<double>(Config.LookAnticipateS);
 	}
 
 	const TCHAR* BypassReasonText(EFormationBypassReason Reason)
@@ -292,9 +323,19 @@ namespace FormationGuardRuntime
 	}
 
 	TArray<FFormationSlot> TrailFrameSlots(const TArray<FVector2D>& TrailWithLeaderPos, float HeadingYaw, int32 MemberCount,
-		const TArray<FFormationWall>& Walls, EFormationMode Mode, float PatrolTime, const TOptional<float>& PassageWidth, const FFormationConfig& Config)
+		const TArray<FFormationWall>& Walls, EFormationMode Mode, float PatrolTime, const TOptional<float>& PassageWidth, const FFormationConfig& Config,
+		TArray<FFormationRoleYaw>* OutTravel)
 	{
 		TArray<FFormationSlot> Slots = FormationShapeRules::TrailSlots(TrailWithLeaderPos, HeadingYaw, MemberCount, Config, Walls);
+		if (OutTravel)
+		{
+			// Rules v2.3 part 7: the trail's direction at each slot - the allocator's FFormationCoverMember::Travel.
+			OutTravel->Reset();
+			for (const FFormationSlot& Slot : Slots)
+			{
+				OutTravel->Add({ Slot.Role, Slot.Yaw });
+			}
+		}
 		for (FFormationSlot& Slot : Slots)
 		{
 			const float Reference = Slot.Role == EFormationRole::Rear ? HeadingYaw : Slot.Yaw;

@@ -1,7 +1,7 @@
 # Game flow, waves, horde intro and encounters
 
-> `GameFlow/*` runs the phases and time dilation; a wave starts suddenly (the horde intro opens a free tactical pause; the camera flyover only for the
-> level's first horde and for enemy types never shown on the level, 2026-10-25); between waves the rest runs and the next wave comes by itself (no
+> `GameFlow/*` runs the phases and time dilation; a wave starts suddenly (the horde intro gives a warning in REAL TIME - no pause since 2026-10-26, only
+> for the fight's FIRST wave; the camera flyover only for the level's first horde and for enemy types never shown on the level, 2026-10-25); between waves the rest runs and the next wave comes by itself (no
 > "Start the next wave", 2026-10-25). Enemies placed in a
 > map start the ambush fight on contact (`ULevelEncounterSubsystem`); placed enemies without a route guard their post.
 >
@@ -57,7 +57,7 @@ Exploration / the first preparation). `HordeIntroRules::BuildShotList(Types, Mem
 | later, every type known | no flyover at all |
 `HordeIntroRules::RememberShots` marks the wide shot / the types when a flyover STARTS (a skip by Esc / a click / Space counts as shown); a free pause
 opened before the trigger (Space / Esc) flies nothing and remembers nothing. `RepeatWideShotSeconds` (and `Codex.HordeIntro.RepeatWideShotSeconds`) is gone.
-**Kept on every sudden wave (choice 2026-10-25):** the trigger when the horde becomes a running mass, the «HORDE INCOMING / TACTICAL PAUSE - GIVE YOUR ORDERS»
+**Kept on every sudden wave (choice 2026-10-25; SUPERSEDED 2026-10-26 - no pause, only the first wave warned, see below):** the trigger when the horde becomes a running mass, the «HORDE INCOMING / TACTICAL PAUSE - GIVE YOUR ORDERS»
 alert, the HQ feed line and the FREE tactical pause (no charge, no timer) - the designer named only the camera; the pause is the player's planning moment of
 every wave and the alert says why time stopped. `OnHordeIntroStarted(Wave, bFlyover)` fires with `bFlyover` false for a wave without a flyover.
 **Saved:** `game_state.horde_intro` {`wide_shown`, `shown_types` [enum names]} (`USaveGameSubsystem`, restore step 6 GameState; older saves: empty = the
@@ -65,6 +65,36 @@ level's first horde flies over again) - a load / checkpoint retry / F9 never rep
 starts with an empty memory. Tests `CodexTactics.Combat.HordeIntro.ShotList.WideOnceThenOnlyNewTypesOnThisLevel`; smokes `HordeIntroSmoke` (wave 1: wide +
 hound + frostbitten; wave 2: only the new cutter / marksman shots, no wide; wave 3 of known types after a load: alert + free pause, NO flyover),
 `SaveRoundTripSmoke` / `SaveCoverageSmoke` (the memory round trip).
+
+## The horde warning: real time, and only the fight's first wave (user decisions 2026-10-26)
+1. **No automatic tactical pause** ("don't put us into the tactical pause after the horde warning, let the game continue in real time - the tactical pause is
+   entered ONLY by pressing Space"). At the trigger `UHordeIntroSubsystem::GiveWarning` (was `OpenPause`) calls `FGameFlowStateMachine::NotifyHordeWarned`
+   instead of `EnterFreeTacticalPause`: the alert («HORDE INCOMING | THE FIGHT IS ON | [SPACE] FREE TACTICAL PAUSE»), the HQ line and the flyover (its
+   slow motion `FlyoverTimeDilation`, the camera locked, Esc / a click skip) play while the flow stays `WaveCombat / RealTime`; after the flyover the world
+   is back at dilation 1. The flyover ends when the flow leaves real time (`FlyoverMode`): a Space tap during it opens the pause. Esc before the trigger gives
+   the warning at once (no flyover, no pause). The wave's FIRST Space - before or after the warning - is still the free pause (no charge, no timer, no
+   radius): `bFreePauseOffered` / `IsFreePauseOffered()` (armed by `StartWave(bSudden)`, used up by the free pause, the grid, the lesson pause, the wave's
+   end, game over, `CancelHordeIntro`); the combat banner says "| [SPACE] free tactical pause". The tutorial's pause lesson (`X_pause`, event
+   `TacticalPauseStarted`) now comes with the player's own Space (or the A4 lesson pause); `TUT_PAUSE_RESUME` says "your first pause after a horde arrives
+   is free". Old rule: `Codex.HordeIntro.AutoPause 1`.
+2. **Only the fight's first wave is warned** ("give the horde warning only for the FIRST wave; all following waves - no warnings, only the arrows; don't
+   interrupt the fight, it's too choppy"). `HordeIntroRules::ShouldWarnWave(WaveIndex, Config)` (wave 1 of the fight, or `bWarnLaterWaves`): a later wave
+   (`UHordeIntroSubsystem::BeginWaiting`) is acknowledged at once (`NotifyHordeWarned`, `GetSilentWaveCount`) - no alert, no HQ line, no flyover / camera
+   framing, no pre-trigger slow-down, no pause; the HUD's incoming arrows (`UHordeArrowsWidget`) show it as before. A save resumed in a later wave is no
+   first wave either. Nothing else interrupts a wave start (checked: `UWaveSubsystem` posts a chat line only for the balance-fallback wave, no tutorial
+   card listens to a wave start, no sound sting). Old rule: `Codex.HordeIntro.LaterWaves 1`.
+Tests `CodexTactics.Combat.HordeIntro.RealTime.*` (`WarningKeepsTheFightInRealTime`, `FreePauseOfferEndsWithTheWave`, `WarningOnlyForTheFightsFirstWave`).
+Smokes: `HordeIntroSmoke` (rewritten: wave 1's warning and flyover in real time, 2 s with no pause, then the player's Space = the free pause; wave 2 comes
+silently - no alert / flyover / slow motion / pause / camera take-over for as long as a warning could take; wave 3 with `LaterWaves 1` for the Esc / new-type /
+known-type paths, all in real time), `LakePauseOrdersSmoke` (the lake horde: the warning, real time, then the player's Space).
+
+**Other automatic tactical pauses (listed 2026-10-26 for the user; unchanged):** (a) the tutorial action `tactical_pause` (`UTutorialSubsystem::TickLessonPause`
+-> `EnterLessonPause`: A4, a PASSIVE squad spotted mid-lesson - a free pause with the "switch the posture" card); (b) the turn-based grid's own end (all grid
+enemies down, `UTurnBasedCombatSubsystem` -> `ExitTurnBased`: a 20 s tactical pause "to regroup"); (c) Space HOLD in the grid with
+`bHoldExitsTurnBasedToRealTime` false (default true = real time; a player key anyway). Not tactical pauses but stops / slow-downs of time: the horde flyover's
+slow motion (above), the death cinematic's slow motion (`UDeathCinematicSubsystem`), the recruit's narrative pause (`URecruitSubsystem::BeginNarrativePause`,
+time 0 during his dialogue), `WaveCleared` / `GameOver` (dilation 0; `WaveCleared` only with the victory panel configs). Changed now: the horde warning and
+Esc before its trigger (both opened the free pause).
 
 ## Skirmishes and the Susanin switch (2026-10-21)
 

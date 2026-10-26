@@ -162,6 +162,11 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName SoloOn;
 	/** B again: solo off - the squad regroups into the formation. */
 	extern CODEXTACTICS_API const FName Regroup;
+	/**
+	 * Hold B (stage 7, user decision 2026-10-26: G is the grenade): the formation radial menu - a formation picked (or Auto) on the
+	 * release ("Squad.Formation"). Locked -> a hold of B is a plain tap (the solo / squad toggle).
+	 */
+	extern CODEXTACTICS_API const FName FormationMenu;
 	/** T: the leader guards his spot / rejoins the formation. */
 	extern CODEXTACTICS_API const FName Guard;
 	/** Ctrl + T: Commander Mode (autonomous squad combat) on / off. */
@@ -240,6 +245,12 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName TargetedShot;
 	/** Ctrl + click on a point with nothing to aim at (2026-10-19): the selection fires there at once (a tutorial lock under "Attack.*"). */
 	extern CODEXTACTICS_API const FName QuickFire;
+	/**
+	 * Shift + click (LMB / RMB) on enemies - an enemy, a silhouette, a point near known enemies (user decision 2026-10-26): the selection
+	 * lays down suppressive fire (red marker; full-auto bursts, lots of ammo); Shift + click on its red marker ceases it. A tutorial lock
+	 * under "Attack.*".
+	 */
+	extern CODEXTACTICS_API const FName Suppress;
 	/** Plain click on a live enemy during a wave: priority target. */
 	extern CODEXTACTICS_API const FName PriorityTarget;
 	/** G: grenade in hand / throw aim. */
@@ -553,8 +564,8 @@ namespace GameplayEvents
 	CODEXTACTICS_API void RaiseItemGiven(const UObject* WorldContext, AActor* Giver, AActor* Recipient, FName ItemKind, int32 Count);
 
 	/**
-	 * "Explosion" (Kind = ExplosionKinds::*, Location = the centre, Radius cm or 0, Subject = Source). Broadcast only: no gameplay
-	 * reads it (the snow craters of USnowInteractionSubsystem).
+	 * "Explosion" (Kind = ExplosionKinds::*, Location = the centre, Radius cm or 0, Subject = Source). Broadcast for the snow craters of
+	 * USnowInteractionSubsystem; since 2026-10-26 it also reports the blast to USuppressionSubsystem (a short burst of suppression).
 	 */
 	CODEXTACTICS_API void RaiseExplosion(const UObject* WorldContext, FName Kind, const FVector& Location, float Radius, AActor* Source = nullptr);
 

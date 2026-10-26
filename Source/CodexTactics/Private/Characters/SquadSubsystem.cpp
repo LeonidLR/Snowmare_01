@@ -41,6 +41,8 @@ namespace
 		TEXT("1 (default): a follower crouched by the squad (Regroup's copy, Solo's guard crouch, a confinement) stands up to sprint with the sprinting leader (bug 2026-10-20); 0: the old rule (he walks crouched behind him)."));
 	TAutoConsoleVariable<int32> CVarSquadPostCombatFormation(TEXT("Codex.Squad.PostCombatFormation"), 1,
 		TEXT("1 (default): the formation runs after the final fight too (PostCombat) and Regroup (B) ends the post-fight hold (bug 2026-10-23); 0: the old rule (no follower walks after the final fight, B leaves the hold)."));
+	TAutoConsoleVariable<int32> CVarSquadCombatFormation(TEXT("Codex.Squad.CombatFormation"), 1,
+		TEXT("1 (default, user decision 2026-10-26): the squad stays in formation through the fight (only B switches to Solo; ordered members rejoin when their order is done); 0: the old rule (Godot is_tactical_mode: nobody follows from the preparation to the fight's end)."));
 	TAutoConsoleVariable<int32> CVarSquadSlotFallback(TEXT("Codex.Squad.SlotFallback"), 1,
 		TEXT("1 (default): a formation slot off the navmesh (wall, generator, a fallen mate's remains) is replaced by the nearest navigable spot round the leader (bug 2026-10-23); 0: the old rule (the follower stays where he is)."));
 }
@@ -216,6 +218,18 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 			Sectors.bHeadingValid = false; // formation sectors: the heading starts from the new leader's facing
 		}
 		RebuildFollowers();
+		if (bSectorLook)
+		{
+			// Bug D (game designer 2026-10-26: "at the wall, change the leader once - the slide along the wall no longer works"): a switch is no
+			// order of the new leader. His move serial was compared with the old leader's, so the switch itself counted as his new order: a phantom
+			// slide / bypass to his stale formation-follow destination (often a team-mate's spot - he pushed against him, "walking" in place).
+			Sectors.LastLeaderSerial = NewLeader->GetMoveOrderSerial();
+			Sectors.bLastLeaderSerialValid = true;
+			Sectors.bLeaderOrderPending = false;
+			EndFormationBypass(TEXT("the leader changed"));
+			// ... and the wall order (the group cover order's wall layout, a slide) goes on with him instead of ending (the hug, crouched).
+			PassWallOrderToLeader(*NewLeader);
+		}
 		if (bIsSoloMode)
 		{
 			// Reapply holding and crouch to followers in solo mode. Rev 5g: the old leader (or anyone) still executing his own
@@ -494,7 +508,8 @@ void USquadSubsystem::HoldForSpottedTrap(AOperativeCharacter* Spotter, const FTe
 		Member->StopOperative();
 		Living += Member->HealthComponent && Member->HealthComponent->IsAlive() ? 1 : 0;
 	}
-	const ETrapSpotResponse Response = TrapSpotRules::DecideSquadResponse(IsFormationActive(), bAutonomousSquadCombat, Living);
+	// (The exploration formation: a trap spotted in a fight never switches to Solo - user decision 2026-10-26, Solo only on B there.)
+	const ETrapSpotResponse Response = TrapSpotRules::DecideSquadResponse(IsExplorationFormation(), bAutonomousSquadCombat, Living);
 	UE_LOG(LogCodexTactics, Display, TEXT("Trap spotted (%s) by %s: squad holds%s"), *TrapName.ToString(),
 		Spotter ? *Spotter->DisplayName.ToString() : TEXT("-"), Response == ETrapSpotResponse::HoldAndSolo ? TEXT(", Solo on")
 		: bAutonomousSquadCombat ? TEXT(" (AUTO: paths go round it, no Solo)") : TEXT(" (no Solo)"));
@@ -605,8 +620,30 @@ void USquadSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 bool USquadSubsystem::IsFormationActive() const
 {
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	// Godot: `is_tactical_mode` is set for everyone when preparation starts and cleared at the fight's end: the formation runs while
-	// exploring and after the final fight (PostCombat, bug 2026-10-23).
+	if (!Flow)
+	{
+		return true;
+	}
+	// Godot: `is_tactical_mode` was set for everyone when the preparation started and cleared at the fight's end (individual control in
+	// the fight). User decision 2026-10-26: the squad stays in formation through the fight - only B (Solo) or Commander Mode's own fight
+	// (the autonomy owns the members in real time) take it out.
+	if (Flow->IsSquadAutonomyActive())
+	{
+		return false;
+	}
+	return SquadOrderRules::IsFollowPhase(Flow->GetPhase(), Flow->GetCombatMode(), CVarSquadPostCombatFormation.GetValueOnGameThread() != 0,
+		CVarSquadCombatFormation.GetValueOnGameThread() != 0);
+}
+
+bool USquadSubsystem::IsRealTimeFight() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime;
+}
+
+bool USquadSubsystem::IsExplorationFormation() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	return !Flow || SquadOrderRules::IsFormationPhase(Flow->GetPhase(), CVarSquadPostCombatFormation.GetValueOnGameThread() != 0);
 }
 
@@ -660,6 +697,7 @@ void USquadSubsystem::HandleTacticalPauseReleased()
 	for (AOperativeCharacter* Member : GetMembers())
 	{
 		Member->ExecutePlannedQuickFire();
+		Member->ExecutePlannedSuppress(); // the SUPPRESS order planned in the pause (2026-10-26)
 	}
 	for (AOperativeCharacter* Member : GetMembers())
 	{
@@ -819,6 +857,8 @@ bool USquadSubsystem::IsOnOwnOrder(const AOperativeCharacter* Operative) const
 	}
 	// Group cover leader priority (2026-10-23): waiting off the wall for the leader is his order too (the formation leaves him alone).
 	Facts.bObjectTask |= IsWaitingForGroupCoverLeader(Operative);
+	// User decision 2026-10-26 (the formation in the fight): a SUPPRESS order / a quick-fire burst runs to its end, then he rejoins.
+	Facts.bFireOrder = Operative->HasSuppressOrder() || Operative->HasQuickFireOrder();
 	return SquadOrderRules::IsOnOwnOrder(Facts);
 }
 
@@ -979,10 +1019,14 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 	{
 		if (Sectors.bWallOrder)
 		{
-			EndFormationWallOrder(TEXT("the formation is off (a fight)"));
+			EndFormationWallOrder(TEXT("the formation is off (turn-based / Commander Mode / Codex.Squad.CombatFormation 0)"));
 		}
 		Sectors.bSlide = false;
 		return;
+	}
+	if (Sectors.bWallOrder && !IsExplorationFormation())
+	{
+		EndFormationWallOrder(TEXT("a fight (the wall layout is the exploration formation's)")); // as before 2026-10-26
 	}
 
 	const bool bLeaderMoving = LeaderRef->IsMoving();
@@ -1052,6 +1096,14 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	{
 		return;
 	}
+	// The formation in the fight (2026-10-26): panic / rage move him themselves, a knockdown keeps him down - the formation never stops
+	// or re-paths him then (StopOperative would cut the panic flight); he rejoins on the first repath after it.
+	if (Operative->IsPanicking() || Operative->IsRaging() || Operative->IsKnockedDown())
+	{
+		Follower.bParked = false;
+		Follower.RepathTimeRemaining = 0.f;
+		return;
+	}
 	// APC P1: aboard a vehicle he rides; with the leader aboard the ones outside hold their spots. P2: walking to a door
 	// he is not pulled back to his formation slot (the leader waiting at the door for the group fade stood still).
 	if (VehicleQueries::IsMounted(Operative) || VehicleQueries::IsMounted(&LeaderRef) || VehicleQueries::IsBoarding(Operative))
@@ -1084,6 +1136,14 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		Follower.RepathTimeRemaining = 0.f;
 		return;
 	}
+	// The squad's corner peek (2026-10-26): the peeker holds his corner in cover while the others stack / slide past (not taken out of it by the
+	// leader's walk into the stack); its end hands him back to the formation (the followers-in-cover rule).
+	if (IsFormationPeeker(Operative))
+	{
+		Follower.bParked = false;
+		Follower.RepathTimeRemaining = 0.f;
+		return;
+	}
 	// Rules v2.2 wall group (Codex.Formation.Sectors): taken out of his cover slot into the back-to-wall pose, he holds it facing his look.
 	if (HoldsWallGroupPose(Follower, *Operative))
 	{
@@ -1102,7 +1162,12 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		Operative->SetStance(EOperativeStance::Standing);
 		Operative->MarkStanceFromSquad();
 	}
-	Operative->SetSprinting(LeaderRef.IsSprinting());
+	// Rules v2.5 (the covered approach to the wall): the rear cover and the flank men do not sprint after the leader running in - a sprinting
+	// operative faces his run; they hold their looks at the approach pace (the rear cover walks backwards at the backward cap).
+	const TOptional<EFormationRole> ApproachRole = Sectors.bActiveThisFrame ? SectorRoleOf(Follower) : TOptional<EFormationRole>();
+	const TOptional<EFormationApproachDuty> ApproachDuty = ApproachRole.IsSet() ? FormationApproachDuty(ApproachRole.GetValue()) : TOptional<EFormationApproachDuty>();
+	const bool bHoldsApproachLook = ApproachDuty.IsSet() && (ApproachDuty.GetValue() == EFormationApproachDuty::Rear || ApproachDuty.GetValue() == EFormationApproachDuty::Flank);
+	Operative->SetSprinting(LeaderRef.IsSprinting() && !bHoldsApproachLook);
 
 	// Bug 2026-10-11 (solo off: prone followers slid towards the leader while still rising): a stance change in progress roots
 	// the follower - he stays put until the clip ends, then the next repath sends him to his slot.
@@ -1150,7 +1215,7 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		SlotLocation += SquadFormation::ComputeWanderOffset(FormationConfig, FormationHeading, Follower.Slot, TimeSeconds);
 	}
 	SlotLocation.Z = Operative->GetActorLocation().Z;
-	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation);
+	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation, false, Operative->GetActorLocation());
 
 	const float Distance = FVector::Dist2D(Operative->GetActorLocation(), SlotLocation);
 	if (HoldsCoverOrLeavesIt(Follower, *Operative, LeaderRef, bLeaderMoving, Distance))
@@ -1173,8 +1238,12 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 			Follower.bParked = true;
 		}
 		// Parked followers face where the leader faces (Godot _align_rotation_with_leader), turned every frame by the
-		// operative's facing (FacingRules).
-		Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
+		// operative's facing (FacingRules). In the real-time fight (2026-10-26) not: his combat target / the threat he fought
+		// (ThreatFacingRules) turn him there.
+		if (!IsRealTimeFight())
+		{
+			Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
+		}
 		return;
 	}
 
@@ -1266,7 +1335,7 @@ bool USquadSubsystem::HoldsCoverOrLeavesIt(FFollowerState& Follower, AOperativeC
 	return false;
 }
 
-FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide) const
+FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide, const TOptional<FVector>& Here) const
 {
 	UNavigationSystemV1* Nav = CVarSquadSlotFallback.GetValueOnGameThread() != 0 ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()) : nullptr;
 	FNavLocation OnNav;
@@ -1303,7 +1372,8 @@ FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderR
 			Slot.X, Slot.Y, Resolved.X, Resolved.Y, FVector::Dist2D(Slot, Resolved), Chosen, Usable.Num(), Usable.Num() > 0 ? Usable[0].X : 0.0,
 			Usable.Num() > 0 ? Usable[0].Y : 0.0, *GivenText);
 	}
-	FrameGivenSlots.Add(FVector2D(Resolved));
+	// Rules v2.3 part 9 (sim resolveFrameSlots): no stand-in at all - the man's own position is what he holds this tick.
+	FrameGivenSlots.Add(FVector2D(Chosen == INDEX_NONE && Here.IsSet() ? Here.GetValue() : Resolved));
 	return Resolved;
 }
 

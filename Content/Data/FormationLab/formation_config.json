@@ -240,6 +240,27 @@
       "unit": "deg",
       "doc": "Wall layout, 4 members: the 4th man at the end looks along the wall (3-4 / 8-9 o'clock)."
     },
+    "wall_end.probe_dist": {
+      "value": 600,
+      "min": 200,
+      "max": 1500,
+      "unit": "cm",
+      "doc": "v2.4 (user bug report 2026-10-26): the wall layout's open-arc coverage probes a ring this far round the group (FormationWallRules.EndLooks, bot check 13)."
+    },
+    "wall_end.cover_pct": {
+      "value": 95,
+      "min": 80,
+      "max": 100,
+      "unit": "%",
+      "doc": "v2.4: the wall layout's looks must hold this share of the open probe ring; below it (a wall END: flanks round the end open) the looks are spread over the open arc. Also bot check 13's bar."
+    },
+    "approach.arrive_dist": {
+      "value": 100,
+      "min": 50,
+      "max": 200,
+      "unit": "cm",
+      "doc": "v2.5 (user rule 2026-10-26, the covered approach to the wall): a member is at the wall within this of his wall slot - he takes his layout look (the runner: along the wall); the approach ends when everyone is in (FormationWallRules.Approach, bot check 14)."
+    },
     "slide.max_off_wall": {
       "value": 200,
       "min": 100,
@@ -407,6 +428,20 @@
       "max": 360,
       "unit": "deg",
       "doc": "v2.3 (red team #1): a free arc narrower than look.min_free_deg still competes in ClearLook this much worse (0 = never; < 360 so a narrow arc without a sweep beats a wide one behind a sweep)."
+    },
+    "look.over_shoulder_max_deg": {
+      "value": 110,
+      "min": 90,
+      "max": 180,
+      "unit": "deg",
+      "doc": "v2.3 part 7 (user decision 2026-10-26, Q3 = c): on the move a member who is not the rear guard (nor K, nor a fixed look) looks at most this far off the heading - a coverage share in the rear is watched over the shoulder, so he walks forwards (not backwards at move.backward_mult); ClearLook keeps his wall-avoiding look inside it too. 180 = off (v2.2)."
+    },
+    "look.anticipate_s": {
+      "value": 0.5,
+      "min": 0,
+      "max": 1.5,
+      "unit": "s",
+      "doc": "v2.3 part 8 (user decision 2026-10-26, Q4 = b): ClearLook also sees the walls from where the man will be this long ahead (his position + velocity x this), so passing a wall end within ~1 m he does not stare at it while its direction swings round. 0 = off."
     },
     "classify.probe_side": {
       "value": 400,

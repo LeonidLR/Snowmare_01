@@ -200,6 +200,11 @@ void ACodexTacticsPlayerController::SquadVisionConesKey()
 
 void ACodexTacticsPlayerController::DialogueSkip()
 {
+	// The formation radial menu (hold B) first: Esc cancels it, the previous choice stays.
+	if (CancelFormationMenu())
+	{
+		return;
+	}
 	ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(GetHUD());
 	// Pause menu screens first (they are open while the world is paused).
 	if (Hud && Hud->IsPauseMenuOpen())
@@ -212,8 +217,8 @@ void ACodexTacticsPlayerController::DialogueSkip()
 	{
 		return;
 	}
-	// Sudden horde start (user decision 2026-10-11): Esc skips the camera flyover (the free tactical pause stays); before
-	// the horde's trigger it opens the free pause at once.
+	// Sudden horde start (user decision 2026-10-11): Esc skips the camera flyover; before the horde's trigger it gives the
+	// warning at once (2026-10-26: the fight stays in real time - the tactical pause only on Space).
 	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput(true))
 	{
 		return;

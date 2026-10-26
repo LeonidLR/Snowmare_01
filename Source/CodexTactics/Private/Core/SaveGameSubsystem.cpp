@@ -1167,6 +1167,10 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 			Crate->SetStringField(TEXT("crate_name"), It->CrateName.ToString());
 			Crate->SetBoolField(TEXT("hidden"), It->IsHidden());
 			Crate->SetBoolField(TEXT("corpse_loot"), It->Tags.Contains(SaveCorpseLootTag));
+			// 2026-10-26: a body's items the stash does not hold (grenades, the weapon) and whose remains these are.
+			Crate->SetNumberField(TEXT("grenades"), It->Contents.Grenades);
+			Crate->SetStringField(TEXT("bonus_weapon"), It->Contents.BonusWeaponId);
+			Crate->SetStringField(TEXT("remains_of"), It->GetRemainsOwnerName().ToString());
 		}
 		Crates->SetObjectField(It->GetName(), Crate);
 	}
@@ -1917,8 +1921,24 @@ void USaveGameSubsystem::RestoreWorld(FSaveRestoreContext& Context)
 			Spawned->SetActorHiddenInGame(SaveBool(Entry, TEXT("hidden"), false));
 			if (SaveBool(Entry, TEXT("corpse_loot"), false))
 			{
-				Spawned->OpenSeconds = 0.6f; // AOperativeCharacter::SpawnRemainsLoot: searching a body, no lid
-				Spawned->Tags.AddUnique(SaveCorpseLootTag);
+				// 2026-10-26: the remains fit the body again - the killed-in-action member lying nearest (restored with the squad above,
+				// RestoreKilledInAction), or stay where they were saved. Only his gear: no supply-crate defaults.
+				Spawned->Contents.DestroyAll();
+				Spawned->Contents.Grenades = SaveInt(Entry, TEXT("grenades"), 0);
+				Spawned->Contents.BonusWeaponId = SaveString(Entry, TEXT("bonus_weapon"));
+				const FVector At = Spawned->GetActorLocation();
+				AOperativeCharacter* Body = nullptr;
+				for (TActorIterator<AOperativeCharacter> BodyIt(World); BodyIt; ++BodyIt)
+				{
+					if (BodyIt->IsKilledInAction() && FVector::Dist2D(BodyIt->GetActorLocation(), At) <= 300.f
+						&& (!Body || FVector::Dist2D(BodyIt->GetActorLocation(), At) < FVector::Dist2D(Body->GetActorLocation(), At)))
+					{
+						Body = *BodyIt;
+					}
+				}
+				const FString OwnerName = SaveString(Entry, TEXT("remains_of"));
+				Spawned->BindRemainsBody(Body ? Body->GetMesh() : nullptr, Body ? Body->DisplayName
+					: FText::FromString(OwnerName.IsEmpty() ? Spawned->CrateName.ToString().Replace(TEXT("Remains: "), TEXT("")) : OwnerName));
 			}
 			ApplyCrate(*Spawned, Entry);
 		}

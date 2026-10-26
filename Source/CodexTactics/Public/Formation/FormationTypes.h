@@ -172,6 +172,12 @@ struct CODEXTACTICS_API FFormationConfig
 	float WallNeighbourDeg = 30.f;
 	/** [wall.end_deg] Wall layout with 4: the 4th man at the end takes the flank along the wall (3-4 / 8-9), deg. */
 	float WallEndDeg = 75.f;
+	/** [wall_end.probe_dist] v2.4 (user bug report 2026-10-26): the wall layout's open-arc coverage probes a ring this far round the group, cm. */
+	float WallEndProbeDist = 600.f;
+	/** [wall_end.cover_pct] v2.4: below this share of the open ring held (a wall END) FormationWallRules::EndLooks spreads the looks, %. */
+	float WallEndCoverPct = 95.f;
+	/** [approach.arrive_dist] v2.5 (user rule 2026-10-26, the covered approach): a member is at the wall within this of his wall slot, cm. */
+	float ApproachArriveDist = 100.f;
 	/** [pace.patrol] Patrol (walk) pace as a fraction of the walk speed. */
 	float PacePatrol = 0.8f;
 	/** [pace.walk_speed] Walk speed (OperativeMovementRules WalkSpeed), cm/s. */
@@ -233,6 +239,10 @@ struct CODEXTACTICS_API FFormationConfig
 	float LookHoldMarginDeg = 5.f;
 	/** [look.narrow_penalty] v2.3: a free but narrow direction still competes this much worse (0 = the hard cut), deg. */
 	float LookNarrowPenalty = 180.f;
+	/** [look.over_shoulder_max_deg] v2.3 part 7 (user Q3 = c): walking, only the rear guard looks further than this off his travel (180 = off), deg. */
+	float LookOverShoulderMaxDeg = 110.f;
+	/** [look.anticipate_s] v2.3 part 8 (user Q4 = b): ClearLook also sees the walls from where he will be this far ahead (0 = off), s. */
+	float LookAnticipateS = 0.5f;
 	/** [guard.clearance] v2.1: a slot is cut off when the leader -> slot / chain segment passes closer than this to a wall body, cm. */
 	float GuardClearance = 10.f;
 	/** [guard.lookahead] v2.1: the guard also checks the formation at the leader's pose this far ahead on his path (0 = only here), cm. */

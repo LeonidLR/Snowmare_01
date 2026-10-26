@@ -13,7 +13,7 @@
 // Rules v2.1 (contract 10, checks.ts): check 4 judges the REQUESTED formation (the guard's fallbacks are geometry); check 7 on every run (no
 // wall between the leader and a member's slot / position, or between chain neighbours, for >= 0.3 s); check 9 (when the leader passes a free
 // wall end beside him on patrol someone looks round it); the corner watcher's look at a wall end is no stare; the turn fold on R_E_corner (the
-// player clicks ahead along the route, round its corners); the guard with the hold-G menu's manual choices (Codex.Formation.Menu): R_B_walls
+// player clicks ahead along the route, round its corners); the guard with the hold-B menu's manual choices (Codex.Formation.Menu): R_B_walls
 // with "echelon left" (the user's bug: the mirror echelon right, HUD "Echelon left -> Echelon right (wall)"), R_D_corridors with "line" (the
 // trail column, HUD "Line -> Column (wall)"); a smoke-own pass of W_E_14's free end (R_E_corner_pass: the corner watch). "shot" also saves
 // the v2.1 stills to Saved/Screenshots/FormationV21/ (the guard switch with the HUD line, the trail column round the corner, the corner watch).
@@ -158,7 +158,7 @@ namespace FormationLabSmoke
 		FString RouteId;
 		int32 MemberCount = 4;
 		bool bWallOrderAfter = false;
-		/** Rules v2.1: the hold-G menu's choice for this run (FormationMenuRules id; empty = auto). A manual run is gated like checks.ts gates
+		/** Rules v2.1: the hold-B menu's choice for this run (FormationMenuRules id; empty = auto). A manual run is gated like checks.ts gates
 		 * manual formations (1 stare, 7 split; the zone expectations and the rear man's pace are reported, not failed). */
 		FString Menu;
 		/** The HUD line that must show while the wall guard falls back on this run (empty = none expected). */
@@ -1294,7 +1294,7 @@ namespace FormationLabSmoke
 				State.Members.Add(Back);
 			}
 			const float Yaw = FormationMath::YawOf(Route->Points[1] - Route->Points[0]);
-			// Rules v2.1: the hold-G menu's choice for this run (auto unless the run names one).
+			// Rules v2.1: the hold-B menu's choice for this run (auto unless the run names one).
 			TOptional<EFormationMenuItem> Menu;
 			FormationMenuRules::ParseChoice(Run->Menu.IsEmpty() ? FString(TEXT("auto")) : Run->Menu, Menu);
 			Squad->SetFormationMenuChoice(Menu);
@@ -1554,7 +1554,7 @@ namespace FormationLabSmoke
 				State->Plan.Add(Run);
 			}
 		}
-		// Rules v2.1: the guard with the hold-G menu's manual choices, and the corner watch.
+		// Rules v2.1: the guard with the hold-B menu's manual choices, and the corner watch.
 		struct FV21Run
 		{
 			const TCHAR* Label;
