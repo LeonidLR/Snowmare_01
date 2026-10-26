@@ -35,7 +35,8 @@
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke",
-    "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke"
+    "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke",
+    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -127,6 +128,13 @@
         "Source/**/Formation/FormationWallGroupRules*", "Source/**/Debug/FormationWallGroupSmoke*", "Source/**/Debug/FormationSlideSmoke*"],
       "tests": ["CodexTactics.Formation", "CodexTactics.Squad", "CodexTactics.Tactics.GroupCover"],
       "smokes": ["FormationWallGroupSmoke", "FormationSlideSmoke", "FormationLabSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "CoverSwitchSmoke", "CoverWrapSmoke"]
+    },
+    {
+      "name": "formation-wall-end-2026-10-26",
+      "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Characters/SquadSubsystemWallGroup*", "Source/**/Formation/FormationRuntimeRules*",
+        "Source/**/Formation/FormationWallRules*", "Source/**/Core/CodexTacticsPlayerControllerCover*", "Source/**/UI/CodexTacticsHUD*", "Source/**/Debug/FormationWallEndSmoke*"],
+      "tests": ["CodexTactics.Formation"],
+      "smokes": ["FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSlideSmoke"]
     },
     {
       "name": "orders-pause-relocate-pick-2026-10-25",

@@ -1181,6 +1181,41 @@ bool ACodexTacticsPlayerController::IsCoverWrapHoverShown() const
 	return bCoverWrapHoverShown && CoverWrapGhost && CoverWrapGhost->IsShown();
 }
 
+bool ACodexTacticsPlayerController::UpdateSquadMoveHover(const FHitResult* Hit)
+{
+	// Bug C (game designer 2026-10-26): the single operative in cover gets the wrap preview (UpdateCoverWrapHover); the squad in the
+	// formation wall layout stands in no cover slot, so it had no guide line at all - its own preview: USquadSubsystem::PreviewFormationMove.
+	USquadSubsystem* Squad = GetSquad();
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	AActor* HitActor = Hit ? Hit->GetActor() : nullptr;
+	const bool bGround = Hit && FMath::Abs(Hit->ImpactNormal.Z) > 0.7f && !(HitActor && (HitActor->IsA<APawn>() || HitActor->IsA<AInteractableActor>()
+		|| HitActor->ActorHasTag(FName(TEXT("Enemy")))));
+	if (!bGround || !Leader || Leader->bInCover || GetActiveTurnBased() || HasCoverPreview() || IsCoverWrapHoverShown() || IsCoverSwitchHoverShown()
+		|| bCornerPeekCursor || bRelocateSelectMode || IsRealTimeOrderLocked())
+	{
+		SquadMovePreviewPaths.Reset();
+		SquadMoveHoverPoint = FVector(TNumericLimits<float>::Max());
+		bSquadMoveHoverShown = false;
+		return false;
+	}
+	// The paths trace the nav mesh only when the cursor or the leader moved (cached while both rest).
+	if (FVector::DistSquared(Hit->ImpactPoint, SquadMoveHoverPoint) > FMath::Square(5.f)
+		|| FVector::DistSquared2D(Leader->GetActorLocation(), SquadMoveHoverLeaderAt) > FMath::Square(5.f))
+	{
+		SquadMoveHoverPoint = Hit->ImpactPoint;
+		SquadMoveHoverLeaderAt = Leader->GetActorLocation();
+		Squad->PreviewFormationMove(Hit->ImpactPoint, SquadMovePreviewPaths);
+	}
+	bSquadMoveHoverShown = !SquadMovePreviewPaths.IsEmpty();
+	return bSquadMoveHoverShown;
+}
+
+bool ACodexTacticsPlayerController::GetSquadMovePreviewPaths(TArray<TArray<FVector>>& OutPaths) const
+{
+	OutPaths = SquadMovePreviewPaths;
+	return bSquadMoveHoverShown && !OutPaths.IsEmpty();
+}
+
 void ACodexTacticsPlayerController::ToggleCoverFireModeKey()
 {
 	if (IsDialogueOpen() || RefuseIfLocked(PlayerCommands::CoverFireMode))

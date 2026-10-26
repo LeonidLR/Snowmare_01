@@ -216,6 +216,18 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 			Sectors.bHeadingValid = false; // formation sectors: the heading starts from the new leader's facing
 		}
 		RebuildFollowers();
+		if (bSectorLook)
+		{
+			// Bug D (game designer 2026-10-26: "at the wall, change the leader once - the slide along the wall no longer works"): a switch is no
+			// order of the new leader. His move serial was compared with the old leader's, so the switch itself counted as his new order: a phantom
+			// slide / bypass to his stale formation-follow destination (often a team-mate's spot - he pushed against him, "walking" in place).
+			Sectors.LastLeaderSerial = NewLeader->GetMoveOrderSerial();
+			Sectors.bLastLeaderSerialValid = true;
+			Sectors.bLeaderOrderPending = false;
+			EndFormationBypass(TEXT("the leader changed"));
+			// ... and the wall order (the group cover order's wall layout, a slide) goes on with him instead of ending (the hug, crouched).
+			PassWallOrderToLeader(*NewLeader);
+		}
 		if (bIsSoloMode)
 		{
 			// Reapply holding and crouch to followers in solo mode. Rev 5g: the old leader (or anyone) still executing his own

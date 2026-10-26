@@ -435,6 +435,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawHitChanceLabel();
 	DrawSelectionBox();
 	DrawCoverSwitchPreview();
+	DrawSquadMovePreview();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
 	// Minimap (2026-10-18): the top-right panel shows the feed or the map (F2 / its header), Tab the full-screen map.
 	UMinimapSubsystem* Minimap = GetWorld()->GetSubsystem<UMinimapSubsystem>();
@@ -562,11 +563,34 @@ void ACodexTacticsHUD::DrawCoverSwitchPreview()
 	{
 		return;
 	}
+	DrawDashedGroundPath(Points, FLinearColor(0.45f, 0.8f, 1.f, 0.95f));
+}
+
+void ACodexTacticsHUD::DrawSquadMovePreview()
+{
+	// Bug C (game designer 2026-10-26): the squad's guide lines along / round its wall - the same dashes as the single operative's wrap
+	// preview; the leader's line in the cover ghost's blue, the others' paler.
+	const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController());
+	TArray<TArray<FVector>> Paths;
+	if (!PC || !PC->GetSquadMovePreviewPaths(Paths))
+	{
+		return;
+	}
+	for (int32 Index = 0; Index < Paths.Num(); ++Index)
+	{
+		if (Paths[Index].Num() >= 2)
+		{
+			DrawDashedGroundPath(Paths[Index], Index == 0 ? FLinearColor(0.45f, 0.8f, 1.f, 0.95f) : FLinearColor(0.6f, 0.85f, 1.f, 0.6f));
+		}
+	}
+}
+
+void ACodexTacticsHUD::DrawDashedGroundPath(TArray<FVector> Points, const FLinearColor& DashColor)
+{
 	for (FVector& Point : Points)
 	{
 		Point.Z += 8.f; // his feet / the slot (on the navmesh): a little above the ground
 	}
-	const FLinearColor DashColor(0.45f, 0.8f, 1.f, 0.95f);
 	// Dashes of 17.5 cm with gaps of the same along the whole polyline.
 	constexpr float DashCm = 17.5f;
 	float Carry = 0.f;

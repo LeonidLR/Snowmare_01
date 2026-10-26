@@ -285,6 +285,10 @@ private:
 	void DrawSelectionBox();
 	/** Wall-edge cover switch preview (2026-10-20): the dashed run line from the operative to the other cover's slot. */
 	void DrawCoverSwitchPreview();
+	/** Bug C 2026-10-26: the squad's guide lines along / round its wall (ACodexTacticsPlayerController::GetSquadMovePreviewPaths). */
+	void DrawSquadMovePreview();
+	/** A dashed polyline a little above the ground with a cross bar at its end (the cover switch / wrap / squad guide lines). */
+	void DrawDashedGroundPath(TArray<FVector> Points, const FLinearColor& DashColor);
 	/** Sprint 10: a green shield «HOLD LINE» over every defended object / point; 2026-10-26: a red «SUPPRESS» one per SUPPRESS order (UDefenseMarkerSubsystem). */
 	void DrawDefenseMarkers();
 	UPROPERTY(Transient)

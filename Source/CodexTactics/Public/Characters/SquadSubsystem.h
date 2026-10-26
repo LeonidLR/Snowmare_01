@@ -12,6 +12,7 @@
 #include "Formation/FormationMenuRules.h"
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTypes.h"
+#include "Formation/FormationWallEndRules.h"
 #include "Formation/FormationWallGroupRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Tactics/CoverTypes.h"
@@ -391,6 +392,15 @@ public:
 	bool IsFormationSliding() const { return Sectors.bSlide; }
 	/** Wall slides started since the level began (smokes). */
 	int32 GetFormationSlideCount() const { return Sectors.SlideCount; }
+	/** Bug A 2026-10-26: the held wall layout is the corner stack at a free wall end (or the slide runs into one). */
+	bool IsFormationCornerStack() const { return Sectors.bCornerStack || (Sectors.bSlide && Sectors.bSlideStack); }
+	/**
+	 * Bug C 2026-10-26 (the squad's guide lines): the squad in group mode stands in the formation wall layout and Destination lies along its
+	 * wall or round its end (within slide.max_off_wall of the wall's body) -> the paths a move there would take, one polyline per member,
+	 * the leader first: a wall slide (to the corner stack too) - each member's line from where he stands to his slide target; else the
+	 * leader's navmesh path (round the wall's end). False (none) otherwise.
+	 */
+	bool PreviewFormationMove(const FVector& Destination, TArray<TArray<FVector>>& OutPaths) const;
 	/** The last coverage allocation on the move (FormationCoverRules::Allocate): its rear guard; false when the allocator did not run. */
 	bool GetFormationRearGuard(EFormationRole& OutRole) const;
 
@@ -556,6 +566,12 @@ private:
 		bool bSlideFromOrder = false;
 		/** The 4th / the pair's partner ends the slide on the right end (keeps it when it has room, contract 11.5). */
 		bool bSlideEndRight = true;
+		/** Bug A 2026-10-26: this slide runs to a free wall end (FormationWallEnd::FindStackEnd) and ends in the corner stack. */
+		bool bSlideStack = false;
+		FFormationStackEnd SlideStackEnd;
+		/** The held wall layout is the corner stack at a free wall end (the point man peeks round it); its end. */
+		bool bCornerStack = false;
+		FFormationStackEnd CornerStackEnd;
 		/** Rules v2.2 look probes round each follower's slot (FormationCoverRules::Allocate's walls next to the slots). */
 		TArray<FFormationWall> LookWalls;
 		/** The last coverage allocation on the move: its rear guard. */
@@ -645,6 +661,22 @@ private:
 	void EndFormationSlide(AOperativeCharacter& LeaderRef, bool bArrived, const TCHAR* Why);
 	/** The wall layout round the leader at his wall (the face behind his back: -WallNormalYaw); keeps the roles of an order. */
 	bool HoldWallLayoutAt(AOperativeCharacter& LeaderRef, float WallNormalYaw, bool bCrouch, const TOptional<bool>& KeepEndRight);
+	/**
+	 * Bug A 2026-10-26: the corner stack held at a free wall end (FormationWallEnd::StackSlots from StartSlots) as the wall order the squad
+	 * keeps until the leader's next order (crouched when bCrouch); the roles of an order are kept, else the follower slots' roles.
+	 */
+	void HoldCornerStack(AOperativeCharacter& LeaderRef, const TArray<FFormationSlot>& StartSlots, const FFormationStackEnd& End, bool bCrouch);
+	/**
+	 * Bug D 2026-10-26: the leader switched while the wall layout stands - the wall order (and a running slide) goes on with the new leader:
+	 * the layout again round him at the same wall (K in the middle), the order's crouch kept, the places by minimal travel.
+	 */
+	void PassWallOrderToLeader(AOperativeCharacter& NewLeader);
+	/** The held wall layout's roles (WallOrderRoles) for the followers by minimal travel to Slots' places (K first; a wall order's own roles kept). */
+	void AssignWallRolesByTravel(const TArray<FFormationSlot>& Slots);
+	/** Bug B 2026-10-26: Slots (FormationWallRules::Layout's, K first) fitted to the world at the wall (FormationWallEnd::FitLayout). */
+	TArray<FFormationSlot> FitWallLayoutToWorld(const TArray<FFormationSlot>& Slots, float NormalYaw, float FeetZ) const;
+	/** The world walls round Center within HalfExtentCm at the formation probe height over FeetZ (GatherFormationWalls). */
+	TArray<FFormationWall> GatherWallsAround(const FVector2D& Center, float HalfExtentCm, float FeetZ) const;
 	/** The patrol / halt looks of FrameSlots from FormationCoverRules::Allocate (rules v2.2); false when the allocator does not apply. */
 	bool AllocateFormationLooks(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos);
 	/**
