@@ -755,6 +755,8 @@ private:
 	TWeakObjectPtr<AOperativeCharacter> FramePaceLeader;
 	float FramePace = 1.f;
 	FFormationSectorState Sectors;
+	/** Formation sectors (bug 2026-10-26): each former leader's own facing and the world time he stopped leading (SetLeader). */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, TPair<float, double>> LeaderFacingMemory;
 	void UpdateSlotSwap(float DeltaTime);
 	void UpdateFollower(FFollowerState& Follower, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime, float TimeSeconds);
 	bool IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, const FVector& SlotLocation) const;

@@ -208,6 +208,34 @@ namespace FormationRuntime
 	 */
 	CODEXTACTICS_API float RearGuardCatchUpLook(float LookYaw, float HeadingYaw, float BandHalfDeg, float MoveYaw);
 
+	/** How long a leader's own facing is remembered after another member was made the leader (a brief switch away and back), s. */
+	inline constexpr float NewLeaderRememberSeconds = 10.f;
+	/** A pending order's destination closer than this gives no direction (he stands on it), cm. */
+	inline constexpr float NewLeaderOrderMinCm = 50.f;
+
+	/** What decides the look of a member who just became the leader (NewLeaderLookYaw); unset = does not apply. */
+	struct FNewLeaderLookInputs
+	{
+		/** He walks: his travel direction. */
+		TOptional<float> TravelYaw;
+		/** An order of his own is pending / running: the direction to its destination. */
+		TOptional<float> PendingOrderYaw;
+		/** His own facing when he last stopped being the leader (within NewLeaderRememberSeconds). */
+		TOptional<float> FacingAsLeaderYaw;
+		/** The squad's formation heading before the switch. */
+		TOptional<float> SquadHeadingYaw;
+		/** His facing now (the follower look he may still hold). */
+		float FacingYaw = 0.f;
+	};
+
+	/**
+	 * Bug 2026-10-26 (TutorialSmoke; the coordinator: "the leader's sector is forward (12) by the contract"): a member made the leader keeps
+	 * no follower look (the rear guard's 6 o'clock). His look on becoming the leader - the formation heading the squad then turns round:
+	 * walking, his travel; else the order he has pending; else, standing, his own facing from when he last led (a switch away and back);
+	 * else the squad's heading; only without any of them his facing now.
+	 */
+	CODEXTACTICS_API float NewLeaderLookYaw(const FNewLeaderLookInputs& In);
+
 	/** A slide's room probe along the wall: far enough for the destination (AlongCm) plus the line's ends, at least RoomMaxCm, at most 30 m. */
 	CODEXTACTICS_API float SlideRoomCm(float AlongCm, float Spacing);
 }

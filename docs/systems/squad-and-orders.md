@@ -205,9 +205,12 @@ ClearLook, HUD text), `SquadSubsystemFormationBypass.cpp` (bypass), the pure glu
   every run; R_E_corner: the turn fold; manual runs R_B_walls "echelon left" -> the mirror + HUD line, R_D_corridors "line" -> the trail column + HUD
   line; R_E_corner_pass: the corner watch at W_E_14's free end), `FormationBypassSmoke` (lane G: the four routes + the shielded side from the squad's
   own sight of a parked hound). Stills: `Saved/Screenshots/FormationV21/` (`FormationLabSmoke shot`, `FormationBypassSmoke shot`).
-- **Note (2026-10-26, TutorialSmoke):** a leader made a follower for a moment (the tutorial's medkit lesson selects another operative and back) turns
-  to his follower place's look (here the rear guard's) and keeps that facing as the halted leader - the formation's design, but a test that lays a
-  scene out along the leader's facing must not trust it (the sight scene now picks a clear bearing).
+- **A new leader looks forward (bug 2026-10-26, found by TutorialSmoke; the coordinator: "the leader's sector is 12"):** a member made the leader
+  (`SetLeader`, e.g. the tutorial's medkit lesson selects another operative and back) no longer keeps the follower look he turned to (the rear
+  guard's 6 o'clock): the formation heading - his halt look for 1 s - starts from `FormationRuntime::NewLeaderLookYaw` (walking: his travel; an
+  order of his own pending: its direction; standing: his own facing from when he last led, within 10 s; else the squad's heading). Under
+  `Codex.Formation.Sectors` only. Smoke `SquadControlSmoke` (switch away and back: forward again within 0.5 s); test
+  `CodexTactics.Formation.Runtime.NewLeaderLook`.
 - **Known limits / open:** the world walls are boxes only (a building made of one complex mesh is not seen by the guard / corner / bypass); the
   corner watch flips between the two exits of the lab's wide corridor when the leader walks exactly `classify.probe_side` (400 cm) from both walls (the
   rule's `Lateral > probe_side` edge); the HUD says "(wall)" for the turn fold too (labels.ts wording); a manual line's rear guard walks backwards
