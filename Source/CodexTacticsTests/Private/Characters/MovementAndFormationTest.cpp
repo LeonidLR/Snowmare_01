@@ -332,6 +332,39 @@ bool FFormationFallbackSlotsTest::RunTest(const FString&)
 	return true;
 }
 
+MOVEMENT_TEST(FFormationFallbackSpacingTest, "Formation.FallbackSlotsKeepSpacing")
+bool FFormationFallbackSpacingTest::RunTest(const FString&)
+{
+	// Rules v2.3 (contract 13.5, red team #5): a hedgehog of three in a 3 m corridor - P's and Z's ring slots both in the wall. Both got the
+	// SAME nearest stand-in and the two men walked into each other; the second now takes the next candidate that keeps slot.min_spacing.
+	const float Spacing = 80.f;
+	const FVector Leader(0.f, 0.f, 0.f);
+	const TArray<FVector> Usable = SquadFormation::ComputeFallbackSlots(Leader, FVector(-260.f, 0.f, 0.f), 150.f);
+	TArray<FVector2D> Given = { FVector2D(Leader) };
+	const int32 First = SquadFormation::ChooseFallbackSlot(Usable, Given, Spacing);
+	TestEqual(TEXT("The first stand-in: the nearest (nothing given near it)"), First, 0);
+	Given.Add(FVector2D(Usable[First]));
+	const int32 Second = SquadFormation::ChooseFallbackSlot(Usable, Given, Spacing);
+	TestTrue(TEXT("The second unwalkable slot gets another stand-in"), Second != INDEX_NONE && Second != First);
+	TestTrue(TEXT("... at least slot.min_spacing from the first"), Second != INDEX_NONE
+		&& FVector2D::Distance(FVector2D(Usable[Second]), FVector2D(Usable[First])) >= Spacing);
+	bool bNearestSpaced = true;
+	for (int32 Index = 0; Index < Second; ++Index)
+	{
+		bool bSpaced = true;
+		for (const FVector2D& Taken : Given)
+		{
+			bSpaced &= FVector2D::Distance(FVector2D(Usable[Index]), Taken) >= Spacing;
+		}
+		bNearestSpaced &= !bSpaced;
+	}
+	TestTrue(TEXT("... the nearest such (every candidate before it is too close)"), bNearestSpaced);
+	// None keeps the spacing: the nearest as before; nothing usable: none.
+	TestEqual(TEXT("No spaced candidate: the nearest"), SquadFormation::ChooseFallbackSlot({ FVector(10.f, 0.f, 0.f), FVector(20.f, 0.f, 0.f) }, { FVector2D(0.0, 0.0) }, Spacing), 0);
+	TestEqual(TEXT("Nothing usable: none"), SquadFormation::ChooseFallbackSlot({}, { FVector2D(0.0, 0.0) }, Spacing), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
 #undef MOVEMENT_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

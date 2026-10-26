@@ -1,6 +1,6 @@
 // CodexTactics.Formation.Parity.<Rule> - the C++ formation rules against the golden vectors the Training Ground simulator exports
 // (`npm run golden`; v1.1 adds PassageWidth, v1.2 HedgehogSlots, v2 Classify state in / out, contract 9 Menu, v2.1 / v2.1.1 Guard,
-// TrailSlots, SideWidth, Bypass, Corner, TurnAhead, ClearLook, Assign, v2.2 Cover, CoverStatic, Slide): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
+// TrailSlots, SideWidth, Bypass, Corner, TurnAhead, ClearLook, Assign, v2.2 Cover, CoverStatic, Slide, v2.3 Decided): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
 // (docs/design/FORMATION_CONTRACT.md 3, field names in 3.1). Same inputs -> same outputs within the file's tolerance (cm / deg; yaws
 // compared as angles). The rules' config is built from the file's "config_values" (the snapshot the vectors were computed with), so
 // later tuning of formation_config.json cannot break parity. A missing file: a warning, the test passes. Every case is checked (none is
@@ -971,7 +971,14 @@ bool FFormationParityTrailSlotsTest::RunTest(const FString&)
 		{
 			return TEXT("unreadable input / output");
 		}
-		return CompareSlots(FormationShapeRules::TrailSlots(Trail, static_cast<float>(Yaw), static_cast<int32>(Count), Golden.Config), *Slots, Golden, true);
+		// v2.3: the walls the stagger keeps clear of (missing / [] = none).
+		TArray<FFormationWall> Walls;
+		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
+		if (In->TryGetArrayField(TEXT("walls"), WallValues) && !ReadWalls(*WallValues, Walls))
+		{
+			return TEXT("unreadable wall");
+		}
+		return CompareSlots(FormationShapeRules::TrailSlots(Trail, static_cast<float>(Yaw), static_cast<int32>(Count), Golden.Config, Walls), *Slots, Golden, true);
 	});
 }
 
@@ -1026,7 +1033,13 @@ bool FFormationParityClearLookTest::RunTest(const FString&)
 		{
 			return TEXT("unreadable input / output");
 		}
-		const float Actual = FormationSectorRules::ClearLook(Walls, Pos, static_cast<float>(Yaw), static_cast<float>(CurrentYaw), Golden.Config);
+		// v2.3: his previous result (null / missing = none).
+		TOptional<float> Held;
+		if (!OptionalNumber(*In, TEXT("held"), nullptr, Held))
+		{
+			return TEXT("held is neither a number nor null");
+		}
+		const float Actual = FormationSectorRules::ClearLook(Walls, Pos, static_cast<float>(Yaw), static_cast<float>(CurrentYaw), Golden.Config, Held);
 		return AngleDiff(Actual, Expected) <= Golden.TolDeg ? FString() : FString::Printf(TEXT("yaw %.3f, expected %.3f"), Actual, Expected);
 	});
 }
@@ -1485,6 +1498,34 @@ bool FFormationParitySlideTest::RunTest(const FString&)
 				Actual.NormalYaw, LeaderTarget.X, LeaderTarget.Y, NormalYaw);
 		}
 		return CompareSlots(Actual.Targets, *TargetValues, Golden, true);
+	});
+}
+
+FORMATION_PARITY_TEST(FFormationParityDecidedTest, "Decided")
+bool FFormationParityDecidedTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("Decided"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("Decided"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		EFormationRole Role = EFormationRole::Commander;
+		TOptional<EFormationKind> Formation;
+		double Count = 0.0;
+		TOptional<float> Width;
+		bool bExpected = false;
+		if (!ReadRole(In->TryGetField(TEXT("role")), Role) || !OptionalFormation(*In, TEXT("formation"), Formation) || !Formation.IsSet()
+			|| !Number(*In, TEXT("memberCount"), nullptr, Count) || !OptionalNumber(*In, TEXT("passageWidth"), nullptr, Width)
+			|| !Out->TryGetBoolField(TEXT("decided"), bExpected))
+		{
+			return TEXT("unreadable input / output");
+		}
+		const bool bActual = FormationSectorRules::Decided(Role, Formation.GetValue(), static_cast<int32>(Count), Width, Golden.Config);
+		return bActual == bExpected ? FString() : FString::Printf(TEXT("decided %d, expected %d"), bActual ? 1 : 0, bExpected ? 1 : 0);
 	});
 }
 

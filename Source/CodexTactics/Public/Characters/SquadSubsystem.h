@@ -777,6 +777,12 @@ private:
 	 */
 	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide = false) const;
 
+	/**
+	 * Rules v2.3 (contract 13.5): the slots given out this formation tick (the leader's position, then each resolved slot): a stand-in for
+	 * an unwalkable slot keeps slot.min_spacing from them (SquadFormation::ChooseFallbackSlot). Reset by TickFormationFollow.
+	 */
+	mutable TArray<FVector2D> FrameGivenSlots;
+
 	TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 	TWeakObjectPtr<AOperativeCharacter> Leader;
 	TArray<TWeakObjectPtr<AOperativeCharacter>> SelectedGroup;

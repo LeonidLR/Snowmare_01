@@ -147,6 +147,14 @@ namespace SquadFormation
 	CODEXTACTICS_API TArray<FVector> ComputeFallbackSlots(const FVector& LeaderLocation, const FVector& Slot, float MinRadius);
 
 	/**
+	 * Rules v2.3 (docs/design/FORMATION_CONTRACT.md 13.5, red team #5): of the usable stand-ins for an unwalkable slot (Usable = the
+	 * ComputeFallbackSlots candidates that passed the navmesh / leader-side checks, nearest first) the first that keeps Spacing (2D) from
+	 * every slot already given out this frame (Given: the leader and the members resolved before); none such -> the nearest (index 0) as
+	 * before; INDEX_NONE when Usable is empty. Two unwalkable slots (a hedgehog of three in a 3 m corridor) then never share a stand-in.
+	 */
+	CODEXTACTICS_API int32 ChooseFallbackSlot(const TArray<FVector>& Usable, const TArray<FVector2D>& Given, float Spacing);
+
+	/**
 	 * Targets of a box-selected group ordered to Center (Godot main.gd _get_group_target_positions): index 0 (the
 	 * leader) on the click, 1 / 2 to the right / left 1.8 m and 0.8 m back, 3 2.2 m behind, further ones in rows of
 	 * two 1.5 m apart. The heading is from the group's average position to Center (FallbackForward when too close).

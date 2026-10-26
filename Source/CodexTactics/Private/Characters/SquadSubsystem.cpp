@@ -5,6 +5,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadOrderRules.h"
 #include "Formation/FormationRuntimeRules.h"
+#include "Formation/FormationTuning.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TrapSpotRules.h"
@@ -995,6 +996,9 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 		EndFormationWallOrder(TEXT("Codex.Formation.Sectors 0"));
 	}
 	const float TimeSeconds = GetWorld()->GetTimeSeconds();
+	// Rules v2.3 (contract 13.5): the slots given out this tick - two unwalkable slots never share a stand-in.
+	FrameGivenSlots.Reset();
+	FrameGivenSlots.Add(FVector2D(LeaderRef->GetActorLocation()));
 	for (FFollowerState& Follower : Followers)
 	{
 		UpdateFollower(Follower, *LeaderRef, bLeaderMoving, DeltaTime, TimeSeconds);
@@ -1258,8 +1262,10 @@ FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderR
 	FNavLocation OnNav;
 	if (!Nav || Nav->ProjectPointToNavigation(Slot, OnNav))
 	{
+		FrameGivenSlots.Add(FVector2D(Slot));
 		return Slot;
 	}
+	TArray<FVector> Usable;
 	for (const FVector& Candidate : SquadFormation::ComputeFallbackSlots(LeaderRef.GetActorLocation(), Slot, FormationConfig.StopRadius * 2.f))
 	{
 		// Rules v2.1 (contract 7): never a walkable point on the far side of a wall from the leader.
@@ -1269,10 +1275,14 @@ FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderR
 		}
 		if (Nav->ProjectPointToNavigation(Candidate, OnNav))
 		{
-			return FVector(OnNav.Location.X, OnNav.Location.Y, Slot.Z);
+			Usable.Add(FVector(OnNav.Location.X, OnNav.Location.Y, Slot.Z));
 		}
 	}
-	return Slot;
+	// Rules v2.3 (contract 13.5): the nearest stand-in that keeps slot.min_spacing from the slots given out this tick.
+	const int32 Chosen = SquadFormation::ChooseFallbackSlot(Usable, FrameGivenSlots, FormationTuning::Get().SlotMinSpacing);
+	const FVector Resolved = Chosen != INDEX_NONE ? Usable[Chosen] : Slot;
+	FrameGivenSlots.Add(FVector2D(Resolved));
+	return Resolved;
 }
 
 bool USquadSubsystem::IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, const FVector& SlotLocation) const

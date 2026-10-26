@@ -113,7 +113,7 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_Menu.json` / `Parity.Menu` (section 9; no `config_values` needed) | `op`: `itemAt` (`dx`, `dy`, `deadZonePx`) / `release` (`state: { open, choice ("auto" or item id), highlighted (item id or null) }`, `memberCount`) / `resolve` (`choice`, `memberCount`) | itemAt: `item` (id or null = Auto); release: `state` + `effect` (`none / opened / picked / auto / cancelled / disabled`); resolve: `manualFormation` (formation or null), `allForward` |
 | `formation_Guard.json` / `Parity.Guard` (10.1, 10.7) | `walls[]`, `requested`, `memberCount`, `leaderPos`, `leaderYaw`, `ahead` (`{ pos, yaw }` or null), `turnAhead`, `state: { requested, level (0/1/2), effective, candidate (level or null), candidateDistance }`, `stepDistance` | `blocked` (roles, slot order: BlockedRoles at the leader) + `state` (Resolve) |
 | `formation_TurnAhead.json` / `Parity.TurnAhead` (10.7) | `points` (the path; `path` is the scene's name), `heading` | `deg` |
-| `formation_TrailSlots.json` / `Parity.TrailSlots` (10.1) | `points` (the trail, oldest first; `trail` is the scene's name), `leaderYaw`, `memberCount` | `slots: [{ role, pos, yaw }]` |
+| `formation_TrailSlots.json` / `Parity.TrailSlots` (10.1, 13.2) | `points` (the trail, oldest first; `trail` is the scene's name), `leaderYaw`, `memberCount`, `walls` (v2.3; missing / [] = none) | `slots: [{ role, pos, yaw }]` |
 | `formation_SideWidth.json` / `Parity.SideWidth` (10.1) | `walls[]`, `pos`, `yaw` | `width` (number or null); walls across the heading are skipped (491a24d); the golden is computed from the rounded inputs it writes |
 | `formation_ClearLook.json` / `Parity.ClearLook` (10.8, 13.1) | `walls[]`, `pos`, `yaw`, `currentYaw`, `held` (v2.3, null = none) | `yaw` |
 | `formation_Bypass.json` / `Parity.Bypass` (10.2) | `wall`, `leaderPos`, `destination`, `threats: [{ pos, ageS }]` | `wallOn`, `shortest`, `reason` exactly, `detour` within 1e-3, `path` (same count, points within cm) |
@@ -121,6 +121,7 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_Assign.json` / `Parity.Assign` (10.6) | `members`, `places` (`[[x, y]]`) | `places` (index per member) exactly |
 | `formation_Cover.json` / `Parity.Cover` (11.2) | `walls[]`, `leaderPos`, `heading`, `members: [{ role, pos, back }]` (K first), `mode` (walk / halt), `t`, `fixed: [{ role, yaw }]` | `rearGuard`; `looks: [{ role, yaw }]` (same order: K, the rear guard, other fixed, the others); `shares: [{ role, from, to, primary }]` (from / to within deg, primary as an angle) |
 | `formation_CoverStatic.json` / `Parity.CoverStatic` (11.3) | `walls[]`, `members: [{ role, pos }]`, `fixed: [{ role, yaw }]`, `free` (roles) | `looks: [{ role, yaw }]` in `free`'s order |
+| `formation_Decided.json` / `Parity.Decided` (13.3) | `role`, `formation`, `memberCount`, `passageWidth` (null = none) | `decided` |
 | `formation_Slide.json` / `Parity.Slide` (12.5) | `wall`, `startSlots: [{ role, pos, yaw }]` (K first), `leaderPos`, `destination`, `t` | `active`, `lead` / `rearGuard` (role or null), `order` exactly; `leaderTarget` within cm, `normalYaw` as an angle, `targets: [{ role, pos, yaw }]` |
 
 C++ entry points (`Source/CodexTactics/Public/Formation/`): `FormationShapeRules::Slots` / `HedgehogSlots(center, memberCount, yaw,
@@ -140,7 +141,7 @@ yaw, currentYaw, config)`, `FormationBypassRules::ChooseSide(wall, leaderPos, de
 `FormationCornerRules::Watch(walls, leaderPos, leaderYaw, members, FFormationCornerState state, config) / CornerAhead`,
 `FormationAssignRules::AssignPlaces(members, places)`; geometry `FormationMath::SegmentBlocked / SegSegDist / DistToWall /
 ClosestOnSegment / NormYaw / DirOf / YawOfD` (double, = geometry.ts). Runs: v1 (ead0faf) 4563 cases, v1.1 (b4dcf9b) 5568, v1.2
-(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515, v2.2 (1f8bc25) 12079 - each 0 mismatched. v2.2
+(b5e2c7d) 7523, v2 (c54da91 + a5ed4b3) 8333, + Menu 234, v2.1.1 (308667a) 11515, v2.2 (1f8bc25) 12079, v2.3 parts 1-5 (df3b3da) 14356 - each 0 mismatched. v2.2
 adds `FormationCoverRules::Allocate(walls, leaderPos, heading, members, mode, t, config, fixed) -> TOptional<FFormationCoverResult>` /
 `AllocateStatic(walls, members, fixed, free, config)` and `FormationWallRules::Slide(wall, startSlots, leaderPos, destination, t, config)
 -> FFormationSlideResult`.
@@ -490,3 +491,21 @@ ones carry `since: 'v2.3'`).
   wall, both got the same point and the two men walked into each other - 22 cm apart.)
 - Runtime: the same requirement for `SquadFormation::ComputeFallbackSlots` - the stand-ins of one frame keep `slot.min_spacing`
   from each other and from the walkable slots.
+
+### 13.6 C++ port of v2.3 (formation/cpp-rules, 2026-10-26)
+- Ported as specified: `FormationSectorRules::ClearLook(walls, pos, yaw, currentYaw, config, TOptional held = unset)` (13.1 + 13.4: the
+  free-arc width, the held look, the narrow tier, the swept count, the longest clear ray when enclosed - the rays use
+  `FormationTerrainRules::RayHit`), `FormationSectorRules::Decided(role, formation, memberCount, TOptional passageWidth, config)` (13.3),
+  `FormationShapeRules::TrailSlots(trail, leaderYaw, memberCount, config, walls = [])` (13.2). New `FFormationConfig` fields
+  `ColumnStaggerClear`, `LookMinFreeDeg`, `LookHoldDeg`, `LookHoldMarginDeg`, `LookNarrowPenalty` (74 keys). All new parameters are
+  trailing and defaulted: the v2.1 runtime keeps compiling and behaves as before until it passes them.
+- 13.5 in the runtime: `SquadFormation::ChooseFallbackSlot(usable, given, spacing)` (pure; test
+  `CodexTactics.Formation.FallbackSlotsKeepSpacing`) picks, of the navmesh / leader-side candidates of `ComputeFallbackSlots` (nearest
+  first), the first that keeps `slot.min_spacing` (FormationTuning) from every slot already given out this formation tick; none such
+  -> the nearest as before. `USquadSubsystem::FrameGivenSlots` = the leader's position, then each slot `ResolveReachableSlot` returns
+  (walkable or stand-in) in the follower loop of `TickFormationFollow`. Interpretation: "this frame" = this formation tick in follower
+  order; a follower whose update returns before resolving his slot (cover hold, own order, repath wait) is not in the list for that
+  tick; an unresolvable slot (no usable candidate) counts as given at the slot itself (the simulator counts the man's position). Every
+  candidate is now projected (up to 23 traces / projections, only for an unwalkable slot) instead of stopping at the first usable one.
+- Not wired into the runtime yet (integration, `SquadSubsystemFormationGuard.cpp`): the walls for `TrailSlots`, the per-member held look
+  for `ClearLook` (`clearHeld`, reset whenever ClearLook does not apply), `Decided` -> the allocator's fixed looks.
