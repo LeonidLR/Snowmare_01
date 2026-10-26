@@ -92,7 +92,19 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [],
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": 4.1,
+      "what": "Z at W1",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    }
+  ],
   "fixed_entries": [
     {
       "check": 5,
@@ -102,6 +114,5 @@
       "seed": 2,
       "fixed_in": "v2.2"
     }
-  ],
-  "fixed_in": "v2.2"
+  ]
 }

@@ -140,7 +140,7 @@
       "seed": 1,
       "t": 17.1,
       "what": "P-Z 80 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

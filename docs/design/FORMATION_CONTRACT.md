@@ -115,7 +115,7 @@ tolerance.deg, 180 == -180); positions / widths by distance <= tolerance.cm; `nu
 | `formation_TurnAhead.json` / `Parity.TurnAhead` (10.7) | `points` (the path; `path` is the scene's name), `heading` | `deg` |
 | `formation_TrailSlots.json` / `Parity.TrailSlots` (10.1) | `points` (the trail, oldest first; `trail` is the scene's name), `leaderYaw`, `memberCount` | `slots: [{ role, pos, yaw }]` |
 | `formation_SideWidth.json` / `Parity.SideWidth` (10.1) | `walls[]`, `pos`, `yaw` | `width` (number or null); walls across the heading are skipped (491a24d); the golden is computed from the rounded inputs it writes |
-| `formation_ClearLook.json` / `Parity.ClearLook` (10.8) | `walls[]`, `pos`, `yaw`, `currentYaw` | `yaw` |
+| `formation_ClearLook.json` / `Parity.ClearLook` (10.8, 13.1) | `walls[]`, `pos`, `yaw`, `currentYaw`, `held` (v2.3, null = none) | `yaw` |
 | `formation_Bypass.json` / `Parity.Bypass` (10.2) | `wall`, `leaderPos`, `destination`, `threats: [{ pos, ageS }]` | `wallOn`, `shortest`, `reason` exactly, `detour` within 1e-3, `path` (same count, points within cm) |
 | `formation_Corner.json` / `Parity.Corner` (10.3) | `walls[]`, `leaderPos`, `leaderYaw`, `members: [{ role, pos }]`, `state: { left, right: { wall, end, role } or null }` | `state` exactly, `looks: [{ role, yaw }]` (same order: left first) |
 | `formation_Assign.json` / `Parity.Assign` (10.6) | `members`, `places` (`[[x, y]]`) | `places` (index per member) exactly |
@@ -434,3 +434,23 @@ map builder TargetPoints `<route id>_slide_<n>` (tag FormationLabSlide). Golden 
   cheaper than the places held (a tight formation pivoting 90 deg sent a flank man across the squad); never during a slide.
 - A light separation stands in for the engine's crowd avoidance: two members closer than slot.min_spacing + 10 cm drift apart at
   up to 60 cm/s (the leader is never pushed). The runtime's RVO / detour crowd does this in the game.
+
+## 13. v2.3 - the red-team rule fixes (coordinator task 2026-10-25; v2.2 behaviour the user approved unchanged)
+The red team (section 11) found layouts that break the rules; v2.3 fixes the rule bugs among them, one commit per fix, each
+followed by `npm run bot:movement -- --layouts redteam --refresh v2.3` (entries a fix clears drop out of `expected_fail`, new
+ones carry `since: 'v2.3'`).
+
+### 13.1 `ClearLook(walls, pos, yaw, currentYaw, config, held) -> yaw` - minimum free arc + hysteresis (red team #1)
+- A free arc (the directions between blocked spans, measured in whole degrees both ways) narrower than `look.min_free_deg`
+  (30, 0-60) does not count - neither for the wanted yaw nor for an edge. (Zigzag corridors: a 5-13 deg sliver between two
+  wall spans opened and closed as the man moved, and his look swung across a wall 1.9 m away to it - red team 2_8, 11_8, 8_2.)
+- `held` = his previous ClearLook result (null when ClearLook did not apply in the previous frame: the integration resets it
+  for the wall layout, running, the corner watcher and the leader looking where he walks). When the wanted yaw is not lookable,
+  `held` competes with the edges with score `|held - yaw| - look.hold_deg` (60, 0-120; 0 = the v2.2 memoryless rule) while no
+  wall direction is within `look.wall_angle - look.hold_margin_deg` (55 - 5) of it. A lookable wanted yaw always wins.
+  (A wall at the reach's edge or an arc at the width threshold flipped a rear man's look 145 deg every few steps.)
+- Edges: unchanged order (fewest wall directions swept from currentYaw - now counted, was yes / no - then the nearest to
+  the wanted yaw; ties: the first). Enclosed (no lookable arc): the longest clear ray, every 5 deg from the wanted yaw both
+  ways (+ before -), rays capped at 2 x `look.wall_dist`; ties: the nearest the wanted yaw (was: the wanted yaw unchanged).
+- Golden `formation_ClearLook.json`: `in.held` (null / yaw - 40 / yaw + 100) on every case; scenes `sliver_left`, `pocket`.
+- Runtime: keep the last result per member (`clearHeld`), reset it to none whenever ClearLook is not applied.

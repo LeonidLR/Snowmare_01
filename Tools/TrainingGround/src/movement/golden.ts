@@ -69,6 +69,11 @@ const SCENES: Record<string, Segment[]> = {
   echelon_cut_left: [{ a: [-2000, -400], b: [2000, -400], thickness: 40 }],
   // v2.1 guard: a passage entrance 3 m ahead (walls from x 300 on): whole here, cut at the lookahead pose.
   entrance_ahead: [{ a: [300, -250], b: [3000, -250], thickness: 40 }, { a: [300, 250], b: [3000, 250], thickness: 40 }],
+  // v2.3 ClearLook: two walls left-ahead (-45 deg, 1.9 m) and left-behind (-160 deg, 1.5 m) leave a sliver near -100 (red team 2_8).
+  sliver_left: [{ a: [-290, -558], b: [558, 290], thickness: 40 }, { a: [-278, 325], b: [-4, -427], thickness: 40 }],
+  // v2.3 ClearLook: a 2 x 2 m pocket - every direction blocked; the longest clear ray is a diagonal.
+  pocket: [{ a: [-100, -100], b: [100, -100], thickness: 20 }, { a: [100, -100], b: [100, 100], thickness: 20 },
+    { a: [100, 100], b: [-100, 100], thickness: 20 }, { a: [-100, 100], b: [-100, -100], thickness: 20 }],
 };
 
 /** v2.1 scenes for the guard (the leader's frame). */
@@ -295,15 +300,16 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     const path = pts.map(tp);
     for (const heading of [yaw, yaw + 12]) turnAhead.cases.push({ in: { path: name, points: path, heading }, out: { deg: round(FormationGuardRules.TurnAhead(path, heading, config)) } });
   }
-  const clear = base('ClearLook', 'in: walls, pos, yaw, currentYaw -> out.yaw (FormationSectorRules.ClearLook: compare as angles).');
-  for (const scene of ['none', 'wall_left', 'wall_right', 'corridor', 'ahead', 'corner_left_ahead', 'wall_end_behind_left', 'far_left']) {
+  const clear = base('ClearLook', 'in: walls, pos, yaw, currentYaw, held (null = none) -> out.yaw (FormationSectorRules.ClearLook: compare as angles).');
+  for (const scene of ['none', 'wall_left', 'wall_right', 'corridor', 'ahead', 'corner_left_ahead', 'wall_end_behind_left', 'far_left', 'sliver_left', 'pocket']) {
     for (const [yaw0, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
       const placed = place(SCENES[scene], yaw0, offset);
       for (let rel = -165; rel <= 180; rel += 30) {
         const yaw = round(yaw0 + rel + 2.5);
-        for (const turned of [0, 70, -70]) {
+        for (const turned of [0, 70, -70]) for (const heldRel of [null, -40, 100]) {
           const currentYaw = round(yaw + turned);
-          clear.cases.push({ in: { scene, walls: placed.map(seg), pos: r2(offset), yaw, currentYaw }, out: { yaw: round(FormationSectorRules.ClearLook(placed, offset, yaw, currentYaw, config)) } });
+          const held = heldRel === null ? null : round(yaw + heldRel); // v2.3: the previous result (hysteresis)
+          clear.cases.push({ in: { scene, walls: placed.map(seg), pos: r2(offset), yaw, currentYaw, held }, out: { yaw: round(FormationSectorRules.ClearLook(placed, offset, yaw, currentYaw, config, held)) } });
         }
       }
     }

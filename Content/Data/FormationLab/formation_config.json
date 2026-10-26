@@ -373,6 +373,27 @@
       "unit": "deg",
       "doc": "v2.1.1: half-width of the blocked span round the direction to the wall's closest point (the check counts 45; 10 deg margin)."
     },
+    "look.min_free_deg": {
+      "value": 30,
+      "min": 0,
+      "max": 60,
+      "unit": "deg",
+      "doc": "v2.3 (red team #1): a free arc between wall spans narrower than this is no place to look (ClearLook) - it opens and closes as the man moves and his look swings across the walls to it."
+    },
+    "look.hold_deg": {
+      "value": 60,
+      "min": 0,
+      "max": 120,
+      "unit": "deg",
+      "doc": "v2.3 (red team #1): ClearLook hysteresis - the previous result stays a candidate this much better than its distance to the wanted yaw (0 = off, the v2.2 memoryless rule)."
+    },
+    "look.hold_margin_deg": {
+      "value": 5,
+      "min": 0,
+      "max": 15,
+      "unit": "deg",
+      "doc": "v2.3: the held look is dropped once a wall direction comes within look.wall_angle minus this of it."
+    },
     "classify.probe_side": {
       "value": 400,
       "min": 200,

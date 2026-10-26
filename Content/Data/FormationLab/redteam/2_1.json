@@ -167,7 +167,7 @@
       "t": 10.6,
       "what": "P-Z 77 cm apart",
       "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -177,7 +177,7 @@
       "seed": 1,
       "t": 11.2,
       "what": "L-Z 55 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -188,7 +188,7 @@
       "t": 10.1,
       "what": "P-Z 69 cm apart",
       "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -199,7 +199,7 @@
       "t": 11.1,
       "what": "blizzard: wall cuts Z",
       "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

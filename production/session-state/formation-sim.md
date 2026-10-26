@@ -1,6 +1,6 @@
 # Formation simulator / rules / bot — handoff (cloud session → PC, 2026-10-25)
 
-Branch `claude/stoic-bell-dr29o5`, last feature commit **1f8bc25** (v2.2). Coordinator: session «Дирижер»
+Branch `claude/stoic-bell-dr29o5`, feature commits **1f8bc25** (v2.2), then v2.3 (red-team fixes, contract section 13) commits on top. Coordinator: session «Дирижер»
 (merges into main, assigns tasks; the C++ agent ports the TS rules from the golden files). Read first:
 `docs/design/FORMATION_SECTORS.md` (every user decision with its date) and `docs/design/FORMATION_CONTRACT.md`
 (the contracts, sections 1–12). The user-facing page: `docs/design/formation-sectors.html` = claude.ai artifact
@@ -20,7 +20,8 @@ reflected in the page's schemes / clips the same day** ("все, что мы и�
 | Config (the rules read it; the tuner tunes it) | `Content/Data/FormationLab/formation_config.json` (schema codex.formation_config/1, ~70 keys with ranges) |
 | Unreal map builder | `Scripts/Editor/build_formation_lab.py` (`plan` mode runs with system python) |
 | TG UI | `src/departments/MovementDepartment.tsx`, `SquadView.tsx` |
-| Tests | `src/movement/*.test.ts` (103 pass at 1f8bc25): rules, rulesV21, rulesV22, golden, bot, train, menu, levelAudit, clients |
+| Tests | `src/movement/*.test.ts` (121 pass at v2.3 part 1): rules, rulesV21, rulesV22, rulesV23, golden, bot, train, menu, levelAudit, clients, redteam |
+| Red team | `src/movement/redteam.ts`, `Content/Data/FormationLab/redteam/*.json` (56 kept layouts, `expected_fail` with `since` / `triage`); `npm run bot:movement -- --layouts redteam [--refresh vX]` (~13 min) |
 
 ## State at 1f8bc25
 - Rules v2.2: triad = K, P, Z; rear guard + coverage allocator on the move (walk / halt, 3+ members) with fixed looks;
@@ -42,6 +43,16 @@ reflected in the page's schemes / clips the same day** ("все, что мы и�
 | all_forward | 117 | 0 | 0 | (0) | (0) | 0 | - | 0 | (0) | - | 0 | 0 | PASS |
 
   sample_small: ALL GREEN. Run: `npm run bot:movement -- --layout formation_lab_01 --seeds 3 --manual all` (~5 min).
+
+## v2.3 progress (red team, coordinator task 2026-10-25)
+| step | red team failing (still + new) | #1 | #5 | #7 |
+|---|---|---|---|---|
+| v2.2 (1f8bc25) | 210 | 38 | 70 | 78 |
+| part 1 ClearLook min arc + hysteresis | 186 (169 + 17) | 20 | 65 | 77 |
+- v2.2-introduced regressions (`since: 'v2.2'`): 58 -> 26 open after part 1.
+- Next: #7 (trail column keeps its 60 cm stagger in 1.2-2 m wall gaps crossed obliquely -> the slot is unwalkable, the sim's
+  fallback re-places it round the leader -> chain cut; 12_3, 8_7, 10_6, 7_5, 9_3, 11_8, 2_2); allocator fixed looks for the
+  narrow column 1A (coordinator); then #5, the rest of #1.
 
 ## Checklist per rules change (do all of it, same commit)
 1. Rule in `rules.ts` (pure; doc comment states the user decision + date); config keys with ranges in formation_config.json.

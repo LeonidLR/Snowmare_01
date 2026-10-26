@@ -242,74 +242,20 @@
       "route": "R1",
       "seed": 1,
       "t": 10,
-      "what": "Z at R1w",
+      "what": "Z at R2w",
       "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
-      "choice": "line",
-      "members": 2,
-      "route": "R1",
-      "seed": 1,
-      "t": 9.8,
-      "what": "Z at R1w",
-      "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
-      "choice": "diamond",
-      "members": 2,
-      "route": "R1",
-      "seed": 1,
-      "t": 9.8,
-      "what": "Z at R1w",
-      "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
-      "choice": "echelon_right",
-      "members": 2,
-      "route": "R1",
-      "seed": 1,
-      "t": 9.8,
-      "what": "Z at R1w",
-      "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 1,
       "choice": "blizzard",
-      "members": 2,
+      "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 9.9,
-      "what": "Z at R1w",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "hedgehog",
-      "members": 2,
-      "route": "R1",
-      "seed": 1,
-      "t": 9.8,
-      "what": "Z at R1w",
-      "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
-    },
-    {
-      "check": 1,
-      "choice": "echelon_left",
-      "members": 2,
-      "route": "R1",
-      "seed": 1,
-      "t": 9.8,
-      "what": "Z at R1w",
-      "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+      "t": 21.5,
+      "what": "Z at L5",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
     }
   ],
   "fixed_entries": [
@@ -344,6 +290,54 @@
       "route": "R1",
       "seed": 2,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "line",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "diamond",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 2,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_left",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
     }
   ]
 }

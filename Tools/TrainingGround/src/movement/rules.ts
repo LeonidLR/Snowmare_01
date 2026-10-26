@@ -254,13 +254,16 @@ function LookYaw(role: Role, formation: Formation, mode: Mode, memberCount: numb
  * look.wall_dist of the member (surface distance) blocks the directions within look.wall_angle of the direction to its closest
  * point; a look yaw inside a blocked span turns to the nearest free direction (an edge of the span), so a scan sweeping into
  * the wall stops at the open edge of his sector. Of the free edges he takes the one he reaches from his current facing
- * (currentYaw) WITHOUT sweeping across a wall direction, then the nearest to the wanted yaw (else two edges about as near
- * flip-flop and his look swings through the wall). Enclosed on all sides -> unchanged. Ties: the earlier wall, the left edge
+ * (currentYaw) sweeping across the FEWEST wall directions (v2.3: counted; was yes / no), then the nearest to the wanted yaw
+ * (else two edges about as near flip-flop and his look swings through the wall). v2.3 (red team, coordinator 2026-10-25): a free
+ * arc narrower than look.min_free_deg does not count (neither for the wanted yaw nor an edge); `held` (his previous result, null
+ * when ClearLook did not apply last frame) stays a candidate look.hold_deg better than its distance to the wanted yaw while no
+ * wall is within look.wall_angle - look.hold_margin_deg of it (hysteresis); enclosed -> the longest clear ray (see below). Ties: the earlier wall, the left edge
  * first (the first strictly better edge wins). The integration applies it to the patrol / halt / "all forward" looks - not to
  * the wall layout, the corner watcher (he looks at the corner on purpose) or a man looking where he walks (within 45 deg).
  */
-function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw: number, config: FormationConfig): number {
-  const reach = cfg(config, 'look.wall_dist'), half = cfg(config, 'look.wall_angle');
+function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw: number, config: FormationConfig, held: number | null = null): number {
+  const reach = cfg(config, 'look.wall_dist'), half = cfg(config, 'look.wall_angle'), minFree = cfg(config, 'look.min_free_deg');
   const centers: number[] = [];
   for (const w of walls) {
     const q = closestOnSegment(pos, w.a, w.b).point;
@@ -269,19 +272,47 @@ function ClearLook(walls: readonly Segment[], pos: Vec2, yaw: number, currentYaw
     centers.push(yawOf(sub(q, pos)));
   }
   const blocked = (a: number) => centers.some((c) => Math.abs(normYaw(a - c)) < half - 1e-6);
-  if (!blocked(yaw)) return normYaw(yaw);
-  // A turn from currentYaw to `to` (the short way) sweeps across a wall direction strictly inside it.
-  const sweeps = (to: number) => {
-    const turn = normYaw(to - currentYaw);
-    return centers.some((c) => { const k = normYaw(c - currentYaw); return Math.sign(k) === Math.sign(turn) && Math.abs(k) < Math.abs(turn) - 1e-6; });
+  // v2.3: the free arc a direction lies in, measured in whole degrees both ways (a sliver between two wall spans is no place
+  // to look: as the man moves it opens and closes and his look jumps across the walls).
+  const freeWidth = (a: number, dir: 1 | -1 | 0 = 0) => {
+    if (blocked(a)) return 0;
+    let w = 0;
+    for (const sgn of dir === 0 ? [1, -1] : [dir]) for (let k = 1; k <= 360 && !blocked(a + sgn * k); k++) w++;
+    return w;
   };
+  // v2.3: how many wall directions a turn from currentYaw to `to` (the short way) sweeps across - fewest first.
+  const swept = (to: number) => {
+    const turn = normYaw(to - currentYaw);
+    return centers.filter((c) => { const k = normYaw(c - currentYaw); return Math.sign(k) === Math.sign(turn) && Math.abs(k) < Math.abs(turn) - 1e-6; }).length;
+  };
+  // The wanted yaw is taken when it lies in a free arc at least look.min_free_deg wide (v2.3: a sliver between two wall spans
+  // does not count - as the man moves it opens and closes and his look swings across the walls to it).
+  const lookable = (a: number, dir: 1 | -1 | 0 = 0) => !blocked(a) && freeWidth(a, dir) >= minFree;
+  if (lookable(yaw)) return normYaw(yaw);
+  // v2.3 hysteresis: his previous result (held) stays a candidate, look.hold_deg better than its distance to the wanted yaw,
+  // while no wall direction is within look.wall_angle - look.hold_margin_deg of it (else a wall at the reach's edge or an arc
+  // at the width threshold flips his look between two far directions every few steps - red team 2_8, 11_8, 8_2).
   let best: number | null = null, bestScore = Infinity;
-  for (const c of centers) for (const edge of [c - half, c + half]) {
-    if (blocked(edge)) continue;
-    const score = Math.abs(normYaw(edge - yaw)) + (sweeps(edge) ? 360 : 0);
+  const holdDeg = cfg(config, 'look.hold_deg'), holdHalf = half - cfg(config, 'look.hold_margin_deg');
+  if (held !== null && holdDeg > 0 && !centers.some((c) => Math.abs(normYaw(held - c)) < holdHalf - 1e-6)) {
+    best = normYaw(held); bestScore = Math.abs(normYaw(held - yaw)) - holdDeg;
+  }
+  for (const c of centers) for (const [edge, out] of [[c - half, -1], [c + half, 1]] as [number, 1 | -1][]) {
+    if (!lookable(edge, out)) continue;
+    const score = Math.abs(normYaw(edge - yaw)) + 360 * swept(edge);
     if (score < bestScore - 1e-9) { bestScore = score; best = normYaw(edge); }
   }
-  return best ?? normYaw(yaw);
+  if (best !== null) return best;
+  // v2.3: enclosed (no free arc of look.min_free_deg): look along the longest clear ray (every 5 deg from the wanted yaw, up to
+  // 2 x look.wall_dist; ties: the nearest the wanted yaw) - the least bad direction, not the wanted one into a wall.
+  let bestRay = -1;
+  best = normYaw(yaw);
+  for (let k = 0; k <= 36; k++) for (const sgn of k === 0 || k === 36 ? [1] : [1, -1]) {
+    const a = yaw + sgn * 5 * k;
+    const r = Math.min(2 * reach, raycastWalls(pos, dirOf(a), walls, 2 * reach));
+    if (r > bestRay + 1e-6) { bestRay = r; best = normYaw(a); }
+  }
+  return best;
 }
 
 export const FormationSectorRules = { LookYaw, ClearLook };

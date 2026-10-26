@@ -95,10 +95,21 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 19.5,
+      "t": 19.3,
       "what": "Z at W1",
       "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 20.1,
+      "what": "Z at W1",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
     },
     {
       "check": 5,
@@ -108,7 +119,7 @@
       "seed": 1,
       "t": 19.3,
       "what": "P-L 63 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -118,7 +129,7 @@
       "seed": 1,
       "t": 19.3,
       "what": "L-Z 61 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -128,7 +139,7 @@
       "seed": 2,
       "t": 19,
       "what": "L-Z 66 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -138,7 +149,7 @@
       "seed": 1,
       "t": 19.3,
       "what": "L-Z 60 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -148,7 +159,7 @@
       "seed": 2,
       "t": 19,
       "what": "L-Z 66 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -158,7 +169,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column (asked echelon_left): wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -168,7 +179,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column (asked echelon_left): wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -178,7 +189,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column (asked line): wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -188,7 +199,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column (asked line): wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -198,7 +209,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column (asked wedge): wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -208,7 +219,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column (asked diamond): wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -218,7 +229,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column (asked echelon_right): wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -228,7 +239,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column (asked echelon_right): wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -238,7 +249,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column (asked blizzard): wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -248,7 +259,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column (asked blizzard): wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -258,7 +269,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column: wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -268,7 +279,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column: wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -278,7 +289,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column (asked hedgehog): wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -288,7 +299,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column (asked hedgehog): wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -298,7 +309,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column (asked echelon_left): wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -308,7 +319,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column (asked echelon_left): wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -318,7 +329,7 @@
       "seed": 1,
       "t": 16.9,
       "what": "column (asked echelon_left): wall cuts P-Z slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -328,7 +339,7 @@
       "seed": 1,
       "t": 16.8,
       "what": "column (asked echelon_left): wall cuts P-L slots",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

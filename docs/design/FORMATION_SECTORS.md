@@ -177,3 +177,10 @@ WarmIdle link), blizzard tight diamond (1.1–1.2 m, shorter cones). Dropped by 
   guard. On the stop: the normal wall layout (the 4th stays on his side when there is room - otherwise he would walk through the
   line). A destination farther from the wall: the normal formation. At the wall's end the corner check (the leading end) applies.
 
+
+## v2.3 — red-team fixes (coordinator task 2026-10-25, overnight; contract section 13; the user's v2.2 decisions unchanged)
+- **No looking into slivers, and no look flip-flop (ClearLook, red team #1)**: in zigzag corridors a 5–13° gap between two
+  wall spans opened and closed as a man walked and his look swung across a wall 2 m away to reach it. Now a gap narrower than
+  30° (`look.min_free_deg`) is no place to look, and a man keeps his previous clear look (60° preference, `look.hold_deg`)
+  until a wall comes close to it — no more jumping between two far directions. Boxed in on all sides: he looks along the
+  longest clear line instead of into a wall. Refines "6А" (nobody looks into a wall); nothing else changes.

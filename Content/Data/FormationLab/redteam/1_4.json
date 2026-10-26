@@ -230,25 +230,14 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 4,
-      "route": "R1",
-      "seed": 2,
-      "t": 21,
-      "what": "L at WL3",
-      "since": "v2.2",
-      "reason": "appeared with v2.2 (rule bug?): a new failure on this layout - review"
-    },
-    {
       "check": 5,
       "choice": "hedgehog",
       "members": 3,
       "route": "R1",
       "seed": 2,
       "t": 33.7,
-      "what": "P-Z 74 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "what": "P-Z 76 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [
@@ -267,6 +256,14 @@
       "route": "R1",
       "seed": 2,
       "fixed_in": "v2.2"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
     }
   ]
 }

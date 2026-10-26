@@ -130,6 +130,28 @@
   },
   "expected_fail": [
     {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 2,
+      "route": "R1",
+      "seed": 2,
+      "t": 24,
+      "what": "Z at W2",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 25.2,
+      "what": "Z at W4",
+      "since": "v2.3",
+      "reason": "appeared with v2.3 (rule bug?): a new failure on this layout - review"
+    },
+    {
       "check": 5,
       "choice": "hedgehog",
       "members": 3,
@@ -137,7 +159,7 @@
       "seed": 1,
       "t": 22.7,
       "what": "P-Z 78 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

@@ -119,7 +119,7 @@
       "seed": 2,
       "t": 10.3,
       "what": "echelon_right: wall cuts Z",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 7,
@@ -129,7 +129,7 @@
       "seed": 2,
       "t": 14.6,
       "what": "echelon_left: wall cuts L-Z",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

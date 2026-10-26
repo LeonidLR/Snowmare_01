@@ -116,6 +116,7 @@ interface Member {
   path: Vec2[] | null;
   repathIn: number;
   prevSlot: Vec2 | null;
+  clearHeld: number | null; // v2.3: the last ClearLook result (its hysteresis input); null while ClearLook does not apply
 }
 
 /** Builds the nav grid for a layout (reuse it across runs). */
@@ -172,6 +173,7 @@ export function simulate(o: SimOptions): number {
     path: null,
     repathIn: 0,
     prevSlot: null,
+    clearHeld: null,
   }));
 
   let leg = 1;
@@ -393,8 +395,9 @@ export function simulate(o: SimOptions): number {
       // wall they hug, which made an exemption for them flip on and off).
       const watching = looks.some((l) => l.role === m.place);
       const walking = i === 0 && len(leaderVel) > 1 ? yawOf(leaderVel) : null;
-      const free = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG)
-        ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c);
+      const exempt = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG);
+      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld);
+      m.clearHeld = exempt ? null : free;
       const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
       if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);

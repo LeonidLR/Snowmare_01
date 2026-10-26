@@ -177,9 +177,9 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25.1,
-      "what": "P-L 67 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.9,
+      "what": "P-L 55 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -187,9 +187,9 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25.1,
-      "what": "P-L 67 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.9,
+      "what": "P-L 55 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -197,9 +197,9 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25,
-      "what": "P-L 60 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 26.8,
+      "what": "K-P 43 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -207,19 +207,19 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25.1,
-      "what": "P-L 67 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.9,
+      "what": "P-L 55 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "blizzard",
       "members": 4,
       "route": "R1",
-      "seed": 2,
-      "t": 24.8,
-      "what": "P-L 56 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 1,
+      "t": 24.9,
+      "what": "P-L 55 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -227,19 +227,19 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25.1,
-      "what": "P-L 67 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.9,
+      "what": "P-L 55 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
       "choice": "hedgehog",
       "members": 4,
       "route": "R1",
-      "seed": 2,
-      "t": 24.8,
-      "what": "P-L 56 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "seed": 1,
+      "t": 24.9,
+      "what": "P-L 55 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -247,9 +247,9 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 25.1,
-      "what": "P-L 67 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 24.9,
+      "what": "P-L 55 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 5,
@@ -257,9 +257,9 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 24.8,
-      "what": "P-L 63 cm apart",
-      "reason": "still failing under v2.2 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "t": 18.4,
+      "what": "P-L 44 cm apart",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [
