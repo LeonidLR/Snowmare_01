@@ -1141,6 +1141,11 @@ Every still is at the A/A noise level (falling snow / Lumen). One outlier: `afte
 run after the MPC got its new parameters (the referencing materials recompiled their shaders during the first frames); `after_2` vs
 `before_1` is 0.39 (A/A 0.20, p99.9 3 levels), so it was the shader warm-up, not the climate code.
 
+### 17.x Blizzard-only behaviours stay arctic (user decision 2026-10-26)
+The squad's tight blizzard diamond (`USquadSubsystem::IsFormationBlizzard`) and the operatives' walk-against-the-wind layer
+(`UOperativeAnimInstance` blizzard walk) run only in the ARCTIC blizzard; a temperate Storm (the same `EWeatherState::Blizzard` rung) never
+triggers them (`EnvironmentRules::IsArcticBlizzardClimate`; test `CodexTactics.Environment.Climate.BlizzardBehavioursArcticOnly`).
+
 ## 18. Rain visuals (2026-10-26)
 
 User decisions 2026-10-26 (weather chat): rain / sunny exist ONLY on the temperate narrative levels (section 17); every other level stays arctic

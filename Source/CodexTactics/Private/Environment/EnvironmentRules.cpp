@@ -655,6 +655,11 @@ namespace EnvironmentRules
 		return Climate == EClimateProfile::Temperate ? TEXT("temperate") : TEXT("arctic");
 	}
 
+	bool IsArcticBlizzardClimate(EClimateProfile Climate)
+	{
+		return Climate == EClimateProfile::Arctic;
+	}
+
 	bool ClimateFromString(const FString& Text, EClimateProfile& OutClimate)
 	{
 		const FString Trimmed = Text.TrimStartAndEnd();

@@ -550,4 +550,13 @@ bool FClimateTuningTest::RunTest(const FString&)
 	return true;
 }
 
+// User decision 2026-10-26 («только в буран»): the blizzard diamond and the wind-walk layer only in the arctic blizzard, not a temperate Storm.
+CLIMATE_TEST(FClimateBlizzardBehavioursArcticOnlyTest, "BlizzardBehavioursArcticOnly")
+bool FClimateBlizzardBehavioursArcticOnlyTest::RunTest(const FString&)
+{
+	TestTrue(TEXT("arctic: the blizzard behaviours apply"), EnvironmentRules::IsArcticBlizzardClimate(EClimateProfile::Arctic));
+	TestFalse(TEXT("temperate Storm (the Blizzard rung): no blizzard diamond / wind walk"), EnvironmentRules::IsArcticBlizzardClimate(EClimateProfile::Temperate));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

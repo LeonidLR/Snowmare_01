@@ -13,6 +13,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
+#include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
 #include "Survival/ColdSurvivalComponent.h"
 
@@ -171,7 +172,8 @@ void UOperativeAnimInstance::UpdateBlizzardWalkLayer(const AOperativeCharacter& 
 
 	// Weather (read per frame: cheap getters; the 45 s transitions fade the amount).
 	const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(this);
-	BlizzardAmount = Environment && Environment->IsInitialised()
+	// User decision 2026-10-26: the walk-against-the-wind layer only in the arctic blizzard, never in a temperate Storm (same rung).
+	BlizzardAmount = Environment && Environment->IsInitialised() && EnvironmentRules::IsArcticBlizzardClimate(Environment->GetClimate())
 		? BlizzardWalkRules::GetBlizzardAmount(Environment->GetWeather(), Environment->GetNextWeather(), Environment->GetTransitionBlend()) : 0.f;
 
 	// Indoors: a Closed / Shelter camera zone (the cold's and the campfire's indoor rule) or a heat source's warm zone.

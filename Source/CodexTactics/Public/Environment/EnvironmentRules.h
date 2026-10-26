@@ -183,6 +183,12 @@ namespace EnvironmentRules
 	CODEXTACTICS_API bool ClimateFromString(const FString& Text, EClimateProfile& OutClimate);
 
 	/**
+	 * The blizzard-only behaviours (the squad's tight blizzard diamond, the operatives' walk-against-the-wind layer) belong to the ARCTIC
+	 * blizzard only - a temperate Storm (the same ladder rung) never triggers them (user decision 2026-10-26: «только в буран»).
+	 */
+	CODEXTACTICS_API bool IsArcticBlizzardClimate(EClimateProfile Climate);
+
+	/**
 	 * The name of Weather on Climate for the UI / logs: Arctic = WeatherToString ("Clear" / "Overcast" / "Snowfall" / "Blizzard");
 	 * Temperate = "SunnyDay" / "Overcast" / "Rain" / "Storm". Saves and environment.json keep the ladder names (WeatherToString).
 	 */
