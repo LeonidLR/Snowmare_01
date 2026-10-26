@@ -14,6 +14,7 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/RelocationRules.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -438,7 +439,10 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 	}
 	if (Relocation && !Relocation->CanRelocateNow())
 	{
-		PostHeadquarters(LOCTEXT("RelocateCombat", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
+		// 2026-10-26: the real-time fight allows it (only the turn-based grid refuses; the old rule, Codex.Relocation.RealTimeCombat 0).
+		PostHeadquarters(RelocationRules::IsRealTimeCombatRelocationEnabled()
+			? LOCTEXT("RelocateGrid", "⚠️ Objects cannot be relocated in turn-based combat - use the grid's push.")
+			: LOCTEXT("RelocateCombat", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
 		return;
 	}
 	if (bRelocateSelectMode || (Relocation && Relocation->IsPlacing()))

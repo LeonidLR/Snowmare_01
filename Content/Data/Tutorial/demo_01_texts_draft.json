@@ -380,7 +380,7 @@
     },
     "TUT_PAUSE_RESUME": {
       "title": "TACTICAL PAUSE 2/2: RESUME",
-      "text": "Press {key:Time.Resume} to resume - every waiting order starts at once, all together. {key:Time.Pause} pauses again: {pause_charges} pauses per wave (the counter at the top), each ends by itself after {pause_seconds} s; when all are used, they come back {pause_cooldown} s later. The pause when a horde arrives is free and has no time limit. Hold {key:Time.Pause} for the turn-based mode."
+      "text": "Press {key:Time.Resume} to resume - every waiting order starts at once, all together. {key:Time.Pause} pauses again: {pause_charges} pauses per wave (the counter at the top), each ends by itself after {pause_seconds} s; when all are used, they come back {pause_cooldown} s later. Your first pause after a horde arrives is free and has no time limit. Hold {key:Time.Pause} for the turn-based mode."
     },
     "TUT_MEDKIT": {
       "title": "MEDKIT",

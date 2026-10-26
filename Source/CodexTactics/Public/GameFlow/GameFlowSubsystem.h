@@ -102,8 +102,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	bool IsAwaitingHordeIntro() const { return Machine.IsAwaitingHordeIntro(); }
 
-	/** The horde intro opens the free tactical pause (FGameFlowStateMachine::EnterFreeTacticalPause). */
+	/** The OLD horde intro rule: the warning opens the free tactical pause (FGameFlowStateMachine::EnterFreeTacticalPause). */
 	EGameFlowResult EnterFreeTacticalPause() { return Machine.EnterFreeTacticalPause(); }
+
+	/** 2026-10-26: the horde warning was given, real time runs on (FGameFlowStateMachine::NotifyHordeWarned). */
+	EGameFlowResult NotifyHordeWarned() { return Machine.NotifyHordeWarned(); }
+
+	/** The wave's first Space will open the free pause (FGameFlowStateMachine::IsFreePauseOffered). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	bool IsFreePauseOffered() const { return Machine.IsFreePauseOffered(); }
 
 	/** The sudden wave stays in real time without a horde intro (smokes, the bot). */
 	void CancelHordeIntro() { Machine.CancelHordeIntro(); }
@@ -118,7 +125,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	float GetCutsceneTimeRemaining() const { return Machine.GetCutsceneTimeRemaining(); }
 
-	/** Exploration -> cutscene, or with a sudden horde wave 1 straight into the wave's free tactical pause. */
+	/** Exploration -> cutscene, or with a sudden horde wave 1 straight into the real-time fight (FGameFlowStateMachine::TriggerCombatZone). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult TriggerCombatZone() { SyncSuddenStartOverride(); return Machine.TriggerCombatZone(); }
 

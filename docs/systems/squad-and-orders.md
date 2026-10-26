@@ -339,6 +339,35 @@ again; a facing order is kept).
 See [waves-horde-encounters](waves-horde-encounters.md) "Fight over: the squad stays put": after a fight the followers keep their spots until the
 leader moves - or until Regroup (B) (2026-10-23, below).
 
+### The squad stays in formation in the fight (user decision 2026-10-26)
+
+Designer: "in the tactical pause I give orders to soldiers, then resume. Combat starts, and the soldiers do NOT return to the formation: they keep acting
+SOLO; pressing B several times does nothing; it ends only when the combat ends. Until I give the order to switch to solo mode, they must stay in formation."
+**Root cause:** not the orders and not the B handler - `USquadSubsystem::IsFormationActive` was `SquadOrderRules::IsFormationPhase` (Exploration /
+PostCombat only), so from the preparation to the fight's end no follower ever walked (`TickFormationFollow` returned early), a follower in cover never
+left it, and Solo on / off (B, never refused in the real-time fight - `Codex.RealTimeOrders` 1) only changed a flag nobody read. It was a recorded
+Godot-era rule: Godot `main.gd _end_cutscene_and_start_pause` set `is_tactical_mode = true` (individual control) for every member at the preparation and
+cleared it at the fight's end; ported as "formation only in exploration (Godot is_tactical_mode)" (TANDEM, Sprint 03, 2026-09-29). **The user decided
+otherwise on 2026-10-26** - implemented:
+- `SquadOrderRules::IsFollowPhase(Phase, Mode, bPostCombat, bCombatFormation)`: the following runs in Cutscene, Preparation (and the rest between waves),
+  WaveCombat real time and tactical pause, WaveCleared, PostCombat; not on the turn-based grid, not after game over. `IsFormationActive` uses it and is off
+  while Commander Mode fights on its own (`UGameFlowSubsystem::IsSquadAutonomyActive`: the autonomy owns the members in real time; the pause hands them
+  back). Console `Codex.Squad.CombatFormation` 0 = the old rule (A/B).
+- Combat start never switches to Solo; Solo only on B (the trap Solo stays an exploration rule: `TrapSpotRules::DecideSquadResponse(IsExplorationFormation())`).
+- A member given an individual order (in the pause or in real time) carries it out - his own move / use / object task as before, and now a running
+  SUPPRESS order or quick-fire burst (`FOwnOrderFacts::bFireOrder`) - then rejoins the formation on the next repath, as out of combat. A member fighting
+  from cover holds it until the leader walks away (`ShouldLeaveCoverToFollow`), then follows.
+- `UpdateFollower` leaves a panicking / raging / knocked-down follower alone (panic and rage move him themselves; `StopOperative` would cut the flight).
+- In the real-time fight a parked follower gets no "face where the leader faces" idle facing, and the threat turn (`ThreatFacingRules`, a standing member
+  who fought turns back to the threat) wins over the formation look sector (`AOperativeCharacter::UpdateCombatFacing`).
+- The exploration-only group features keep the old rule (`USquadSubsystem::IsExplorationFormation`): the group cover order without a box selection, the
+  formation wall layout / wall group / slide preview (a wall order ends when the fight starts, as before). In the fight a cover click stays the single
+  order of the selected operative (a box selection still takes cover together) - so individual cover orders in the pause stay individual.
+- The B handler (`ACodexTacticsPlayerController::ToggleSoloMode`, `IA_SoloMode`) is unchanged.
+Tests `CodexTactics.Squad.Orders.CombatFormation.SquadStaysInFormationThroughTheFight`; smoke `CombatFormationSmoke` (the wave fight starts: Solo off,
+formation on - `CombatFormation 0` reproduces the bug; pause, B and C ordered 6 m to the sides, A selected again, resume: both carry their orders out, then
+rejoin round A; A walks 11 m - both follow; B (the key) in the fight: Solo on, A walks 8 m, they hold; B again: Regroup, both back at A).
+
 ### After the final fight: Regroup brings them back (bug 2026-10-23, lake after the horde)
 
 Designer: "after the fight one operative died, one froze, and even pressing B he does not return to the formation; Solo does not switch off".

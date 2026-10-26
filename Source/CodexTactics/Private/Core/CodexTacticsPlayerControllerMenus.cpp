@@ -212,8 +212,8 @@ void ACodexTacticsPlayerController::DialogueSkip()
 	{
 		return;
 	}
-	// Sudden horde start (user decision 2026-10-11): Esc skips the camera flyover (the free tactical pause stays); before
-	// the horde's trigger it opens the free pause at once.
+	// Sudden horde start (user decision 2026-10-11): Esc skips the camera flyover; before the horde's trigger it gives the
+	// warning at once (2026-10-26: the fight stays in real time - the tactical pause only on Space).
 	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput(true))
 	{
 		return;

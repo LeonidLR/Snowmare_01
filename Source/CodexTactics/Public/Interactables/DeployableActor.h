@@ -10,7 +10,7 @@
  * moved, trapped and defused. Confirming the menu dismantles it after a short crouched action; a trapped / armed
  * object is defused first and only picked up on success. Items go to the role specialist first
  * (barricades -> engineer, mines -> medic-sapper, turrets -> commander), then the leader, then anyone with room.
- * Not available in live combat (only in the tactical pause / preparation / exploration).
+ * Not available in turn-based combat (user decision 2026-10-26: the real-time fight allows it too; RelocationRules::CanRelocateNow).
  * Godot reference: main.gd `_trigger_menu_for_object` (deployables), `_try_dismantle_deployable`,
  * `_execute_tactical_dismantle`.
  */

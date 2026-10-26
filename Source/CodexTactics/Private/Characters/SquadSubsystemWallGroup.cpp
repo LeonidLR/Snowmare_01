@@ -56,7 +56,7 @@ void USquadSubsystem::ReallocateWallGroup(AOperativeCharacter* GroupLeader, cons
 	{
 		return; // Codex.Formation.Sectors 0: the old facing (CoverFacingRules for everyone)
 	}
-	const bool bGroupMode = GroupLeader == Leader.Get() && !bIsSoloMode && !bFollowersHolding && !HasMultiSelection() && IsFormationActive();
+	const bool bGroupMode = GroupLeader == Leader.Get() && !bIsSoloMode && !bFollowersHolding && !HasMultiSelection() && IsExplorationFormation();
 	if (!bGroupMode)
 	{
 		if (WallGroup.bActive)
@@ -167,9 +167,9 @@ void USquadSubsystem::UpdateWallGroup(float DeltaTime)
 	{
 		EndWhy = TEXT("Solo / a box selection");
 	}
-	else if (!IsFormationActive())
+	else if (!IsExplorationFormation())
 	{
-		EndWhy = TEXT("the formation is off (a fight)");
+		EndWhy = TEXT("the exploration formation is off (a fight)");
 	}
 	else if (GroupLeader->GetMoveOrderSerial() != WallGroup.LeaderSerial)
 	{

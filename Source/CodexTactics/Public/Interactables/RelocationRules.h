@@ -36,18 +36,24 @@ namespace RelocationRules
 	constexpr float UnlimitedRadius = PauseOrderRules::UnlimitedRadius;
 
 	/**
-	 * Objects can be moved outside a wave, in preparation and in the tactical pause (not in live combat) — and by a
-	 * leader exploring a camera zone alone (Godot is_in_camera_zone "zone solo").
+	 * Objects can be moved outside a wave, in preparation, in the tactical pause and - user decision 2026-10-26 ("the tactical pause
+	 * is an aid, it must not cancel everything else") - in the real-time fight too; never in turn-based combat (the grid has its own
+	 * push) unless the leader explores a camera zone alone (Godot is_in_camera_zone "zone solo").
+	 * bRealTimeCombat false = the old Godot rule (live combat refused too; console Codex.Relocation.RealTimeCombat 0, A/B).
 	 */
-	CODEXTACTICS_API bool CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo = false);
+	CODEXTACTICS_API bool CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo = false, bool bRealTimeCombat = true);
 
 	/**
-	 * Whether an active carry / push task must be dropped now («Боевая тревога! Бросаю ...»). A carry ordered in the
-	 * tactical pause runs on in the real-time fight after the release (bug 2026-10-08: it was dropped the frame after the
-	 * resume, so the order never ran); one started outside the pause is dropped when live combat begins, and every carry
-	 * is dropped in turn-based combat (the grid has its own push).
+	 * Whether an active carry / push task must be dropped now («Боевая тревога! Бросаю ...»): every carry is dropped in turn-based
+	 * combat (the grid has its own push); since 2026-10-26 (user) nothing is dropped because the fight runs in real time. With the
+	 * old rule (bRealTimeCombat false) a carry ordered in the tactical pause runs on after the release (bug 2026-10-08) and one
+	 * started outside the pause is dropped when live combat begins.
 	 */
-	CODEXTACTICS_API bool ShouldDropActiveTask(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo, bool bPlannedInPause);
+	CODEXTACTICS_API bool ShouldDropActiveTask(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo, bool bPlannedInPause,
+		bool bRealTimeCombat = true);
+
+	/** Codex.Relocation.RealTimeCombat (1 default: objects move in the real-time fight too; 0: the old pause-only rule). */
+	CODEXTACTICS_API bool IsRealTimeCombatRelocationEnabled();
 
 	/** Placement radius for the current mode, cm. */
 	CODEXTACTICS_API float GetPlacementRadius(ECodexGamePhase Phase, ECodexCombatMode Mode, float PauseRadius, float WorkerPlacementRadius);

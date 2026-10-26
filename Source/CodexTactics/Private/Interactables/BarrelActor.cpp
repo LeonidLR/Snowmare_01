@@ -62,8 +62,8 @@ void ABarrelActor::OnConstruction(const FTransform& Transform)
 
 bool ABarrelActor::CanPushNow() const
 {
-	// User decision 2026-10-08: the barrel menu also opens in the fight; "Push" only where objects may be moved
-	// (not in the live real-time fight - the tactical pause plans it).
+	// User decision 2026-10-08: the barrel menu also opens in the fight; "Push" only where objects may be moved (2026-10-26: the
+	// real-time fight too, the tactical pause plans it; not on the turn-based grid).
 	const URelocationSubsystem* Relocation = GetWorld() ? GetWorld()->GetSubsystem<URelocationSubsystem>() : nullptr;
 	return bCanBeRelocated && (!Relocation || Relocation->CanRelocateNow());
 }
