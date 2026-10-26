@@ -236,24 +236,13 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "blizzard",
-      "members": 2,
-      "route": "R1",
-      "seed": 2,
-      "t": 9.9,
-      "what": "Z at R1w",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "blizzard",
+      "check": 2,
+      "choice": "auto",
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 21.5,
-      "what": "Z at L5",
+      "t": null,
+      "what": "5-7 o'clock watched 89.2 %",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
@@ -345,6 +334,22 @@
       "members": 2,
       "route": "R1",
       "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 2,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
       "fixed_in": "v2.3"
     }
   ]

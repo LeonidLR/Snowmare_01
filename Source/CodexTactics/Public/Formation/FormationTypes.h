@@ -233,6 +233,10 @@ struct CODEXTACTICS_API FFormationConfig
 	float LookHoldMarginDeg = 5.f;
 	/** [look.narrow_penalty] v2.3: a free but narrow direction still competes this much worse (0 = the hard cut), deg. */
 	float LookNarrowPenalty = 180.f;
+	/** [look.over_shoulder_max_deg] v2.3 part 7 (user Q3 = c): walking, only the rear guard looks further than this off his travel (180 = off), deg. */
+	float LookOverShoulderMaxDeg = 110.f;
+	/** [look.anticipate_s] v2.3 part 8 (user Q4 = b): ClearLook also sees the walls from where he will be this far ahead (0 = off), s. */
+	float LookAnticipateS = 0.5f;
 	/** [guard.clearance] v2.1: a slot is cut off when the leader -> slot / chain segment passes closer than this to a wall body, cm. */
 	float GuardClearance = 10.f;
 	/** [guard.lookahead] v2.1: the guard also checks the formation at the leader's pose this far ahead on his path (0 = only here), cm. */

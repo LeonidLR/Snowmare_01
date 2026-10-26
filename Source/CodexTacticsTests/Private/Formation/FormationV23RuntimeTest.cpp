@@ -257,19 +257,25 @@ bool FFormationV23RuntimeTurnHudTest::RunTest(const FString&)
 {
 	using EK = EFormationKind;
 	using EL = EFormationGuardLevel;
+	using EC = EFormationGuardCause;
 	using FormationGuardRuntime::GuardHudText;
-	using FormationGuardRuntime::IsTurnFold;
-	// User decision 2026-10-26: the sharp-turn fold says "(turn)", a wall cut "(wall)".
-	TestEqual(TEXT("The fold"), GuardHudText(EK::EchelonRight, EK::Column, EL::Trail, 4, true), FString(TEXT("Echelon right -> Column (turn)")));
-	TestEqual(TEXT("A wall cut"), GuardHudText(EK::EchelonRight, EK::Column, EL::Trail, 4, false), FString(TEXT("Echelon right -> Column (wall)")));
-	TestEqual(TEXT("The mirror is always the wall"), GuardHudText(EK::EchelonLeft, EK::EchelonRight, EL::Mirror, 4, true),
+	// User decision 2026-10-26: the sharp-turn fold says "(turn)", a wall cut "(wall)" - rules v2.3 part 9: from the guard state's Cause.
+	TestEqual(TEXT("The fold"), GuardHudText(EK::EchelonRight, EK::Column, EL::Trail, 4, TOptional<EC>(EC::Turn)), FString(TEXT("Echelon right -> Column (turn)")));
+	TestEqual(TEXT("A wall cut"), GuardHudText(EK::EchelonRight, EK::Column, EL::Trail, 4, TOptional<EC>(EC::Wall)), FString(TEXT("Echelon right -> Column (wall)")));
+	TestEqual(TEXT("No cause: the wall"), GuardHudText(EK::EchelonRight, EK::Column, EL::Trail, 4), FString(TEXT("Echelon right -> Column (wall)")));
+	TestEqual(TEXT("The mirror is the wall"), GuardHudText(EK::EchelonLeft, EK::EchelonRight, EL::Mirror, 4, TOptional<EC>(EC::Wall)),
 		FString(TEXT("Echelon left -> Echelon right (wall)")));
-	TestEqual(TEXT("Level 0: the name"), GuardHudText(EK::Line, EK::Line, EL::Requested, 4, true), FString(TEXT("Line")));
-	TestTrue(TEXT("A turn ahead at the trail level: the fold (also with a wall: Resolve folds first)"), IsTurnFold(EL::Trail, true, true, false));
-	TestFalse(TEXT("A wall cut, no turn: the wall"), IsTurnFold(EL::Trail, false, true, true));
-	TestTrue(TEXT("Held (neither): the fold stays the fold"), IsTurnFold(EL::Trail, false, false, true));
-	TestFalse(TEXT("Held (neither): the wall stays the wall"), IsTurnFold(EL::Trail, false, false, false));
-	TestFalse(TEXT("Not the trail column: no fold"), IsTurnFold(EL::Mirror, true, false, true));
+	TestEqual(TEXT("Level 0: the name"), GuardHudText(EK::Line, EK::Line, EL::Requested, 4, TOptional<EC>(EC::Turn)), FString(TEXT("Line")));
+	// The guard's cause itself: a turn alone -> Turn; a wall cut at the same time wins (Wall).
+	const FFormationConfig C;
+	const FFormationGuardState Turn = FormationGuardRules::Resolve({}, EK::Line, 4, FVector2D::ZeroVector, 0.f, {}, C.TurnFoldDeg + 5.f, FFormationGuardState(), 0.f, C);
+	TestTrue(TEXT("A sharp turn alone: the cause is the turn"), Turn.Level == EL::Trail && Turn.Cause == TOptional<EC>(EC::Turn));
+	FFormationWall Wall;
+	Wall.A = FVector2D(-3000.0, 300.0);
+	Wall.B = FVector2D(3000.0, 300.0);
+	Wall.Thickness = 40.f;
+	const FFormationGuardState Both = FormationGuardRules::Resolve({ Wall }, EK::Line, 4, FVector2D::ZeroVector, 0.f, {}, C.TurnFoldDeg + 5.f, FFormationGuardState(), 0.f, C);
+	TestTrue(TEXT("A turn and a wall cut: the wall"), Both.Level == EL::Trail && Both.Cause == TOptional<EC>(EC::Wall));
 	return true;
 }
 

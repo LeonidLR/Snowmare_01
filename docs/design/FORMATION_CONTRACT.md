@@ -491,8 +491,72 @@ ones carry `since: 'v2.3'`).
   wall, both got the same point and the two men walked into each other - 22 cm apart.)
 - Runtime: the same requirement for `SquadFormation::ComputeFallbackSlots` - the stand-ins of one frame keep `slot.min_spacing`
   from each other and from the walkable slots.
+- v2.3 part 9 (coordinator 2026-10-26, the C++ runtime's order-free reading): the simulator's `resolveFrameSlots` gives out every
+  slot that needs no stand-in first (the leader's, every walkable slot of the frame), then resolves the unwalkable ones in member
+  order, each stand-in (or the man's position when none) given out in turn - a stand-in no longer lands on a walkable slot of a
+  member resolved after it (it used to fill `given` in member order).
 
-### 13.6 C++ port of v2.3 (formation/cpp-rules, 2026-10-26)
+### 13.6 `FormationGuardRules::Resolve(..., config, allInSight)` - a man cut off brings the trail column back (red team #7)
+- `allInSight` (default true = v2.2) = every member has a clear line (no wall body, radius 0) to the leader. False -> raw level 2
+  (the trail column) at once, whatever the slots say; released towards the request by the usual hold (classify.hold_distance
+  of the leader's path once the request is whole and everybody is in sight). The wall layout is never guarded.
+- Why: the hold distance ran out exactly as the leader turned into a 3 m side passage (red team 4_3); the blizzard's slots
+  were whole at his pose, so the guard opened while the far man was still round the corner - and stayed open as he lost the
+  leader (check 7).
+- Golden `formation_Guard.json`: `in.allInSight` (false only with the lookahead pose).
+- Decided 2026-10-26 (FORMATION_SECTORS Q3 = c): the trail column's 2nd / 3rd men doubling the rear at a wall gap no longer walk
+  backwards - 13.7.
+
+### 13.7 v2.3 part 7 - only the rear guard walks backwards (user decision 2026-10-26, Q3 = c)
+- New key `look.over_shoulder_max_deg` 110 (90-180; 180 = off = v2.2).
+- `CoverMember.travel` (optional world yaw): the direction his place travels along - the trail column's TrailSlots yaw at his slot;
+  absent = the heading.
+- `FormationCoverRules::Allocate` step 5, walk only: every member who is not K, not the rear guard and not fixed (`others`) has his
+  sweep confined to [o - lim, o + lim] relative to the heading (o = normYaw(travel - heading), lim = the key): of [mid - amp,
+  mid + amp] shifted by 0, -360, +360 (in that order) the largest overlap with it wins (ties: the first) and the sweep becomes
+  its centre +- half its width (same period and phase as the unconfined sweep); no overlap -> amplitude 0 at a shoulder o + lim
+  or o - lim: the one not within look.wall_angle of a blocked direction first, then the one nearer the share's mid, then the side
+  of his bearing from the leader (bearing < 0 -> -lim), then +lim. The shares are unchanged. Halt: unchanged, `shoulder` empty.
+- `CoverResult.shoulder` = [{role, yaw}] for those members, yaw = his travel (world).
+- `ClearLook(walls, pos, yaw, currentYaw, config, held, limit)`: `limit` = {yaw, half} | null. With a limit the wanted yaw is first
+  clamped to the nearer edge (yaw +- half); the held look, the narrow wanted yaw, the edges and the enclosed rays outside
+  +-half of limit.yaw are no candidates. Null = 13.1 / 13.4 unchanged.
+- Integration (sim, runtime): for a member in `shoulder` pass limit = {yaw: his ACTUAL step direction while he moves (the sim:
+  the step's direction when > 0.5 cm; the runtime: his velocity direction) if it is within SHOULDER_STEP_DEG (90) of the shoulder
+  entry's yaw, else (a step back to a slot behind him, a stand-in place; standing) the entry's yaw; half: the key}. (A man
+  threading a wall gap steps up to 60 deg off the squad's heading and the step decides whether he walks backwards; a step back
+  to his slot flipped the limit and swung his look round across a wall - lab R_C_gaps, line of 4.)
+  The rear guard, K, the fixed looks (the narrow column's decided L at -165 included - a user decision) keep no limit.
+- Golden: `formation_Cover.json` gains `in.members[].travel` (the last case per scene: the followers' travel = heading + 35) and
+  `out.shoulder`; `formation_ClearLook.json` gains `in.limit` (null, and {yaw: the scene heading, half 110} on the cases without
+  a turn).
+
+### 13.8 v2.3 part 8 - ClearLook anticipates the man's motion (user decision 2026-10-26, Q4 = b)
+- New key `look.anticipate_s` 0.5 (0-1.5 s; 0 = off).
+- `ClearLook(walls, pos, yaw, currentYaw, config, held, limit, ahead)`: `ahead` = [x, y] | null = his position look.anticipate_s
+  ahead (pos + velocity x look.anticipate_s). When ahead is given, differs from pos and the segment pos -> ahead crosses no wall
+  body (segmentBlocked radius 0), the wall directions are collected from pos AND from ahead (for each point: every wall whose
+  surface is within look.wall_dist of it, the direction from that point to its closest point; pos's first, then ahead's, each
+  in wall order) and all of them block (+-look.wall_angle), count for `swept` and bound the free arcs. The hold test (13.1: the
+  held look dropped when a wall direction is within look.wall_angle - look.hold_margin_deg of it) uses ONLY the directions
+  from pos. The enclosed rays stay from pos. Null = 13.7 unchanged.
+- Integration: velocity = the member's own velocity (the runtime: the character's velocity; the sim: his steps smoothed with
+  a 0.3 s time constant, VEL_SMOOTH_S - a raw sim step jitters +-50 % and flipped the anticipated spans; the leader: his walking
+  velocity); none (null) below 1 cm/s.
+- Golden `formation_ClearLook.json` gains `in.ahead` (null; and pos + 100 cm/s x anticipate_s along the scene heading on the
+  cases without a turn and without a limit) and the scene `end_right_ahead` (a wall end 0.6 m ahead, 0.9 m to the right).
+
+### 13.9 v2.3 part 9 - the turn fold's HUD says "(turn)" (user 2026-10-26); order-free stand-ins (13.5)
+- `GuardState.cause` = 'wall' | 'turn' | null (absent in an input state = null). Resolve: a wall cutting the requested formation
+  (BlockedRoles here or at the lookahead pose) -> 'wall' (the level as before: during a sharp turn 2, else the mirror's 1 / 2);
+  else the turn fold (a WIDE formation, turnAhead > turn.fold_deg) -> 'turn'; a member cut off (allInSight false) -> 'wall'.
+  The new state's cause = that raw cause when the state takes the raw level (any of the three "at(raw)" returns), the held
+  state's own cause while a looser level waits for its hold distance; null whenever the level is 0. Levels are unchanged.
+- `guardHudText(requested, effective, level, memberCount, cause = null)`: "(turn)" for 'turn', "(wall)" otherwise, e.g.
+  "Line -> Column (turn)". The C++ HUD (`FormationGuardRuntime` label) needs the same cause.
+- Golden `formation_Guard.json`: the input states carry `cause` (level 2 'wall' / the waiting one 'turn'), `out.state.cause`.
+
+### 13.10 C++ port of v2.3 (formation/cpp-rules, 2026-10-26; parts 1-5 - was numbered 13.6 before the simulator's 13.6-13.9)
 - Ported as specified: `FormationSectorRules::ClearLook(walls, pos, yaw, currentYaw, config, TOptional held = unset)` (13.1 + 13.4: the
   free-arc width, the held look, the narrow tier, the swept count, the longest clear ray when enclosed - the rays use
   `FormationTerrainRules::RayHit`), `FormationSectorRules::Decided(role, formation, memberCount, TOptional passageWidth, config)` (13.3),
@@ -514,3 +578,13 @@ ones carry `since: 'v2.3'`).
   checks.ts 6 does. 13.5 "this frame" is now order-free: every WALKABLE slot of the frame is given out before the follow loop (the port's first
   reading - only the slots resolved before him - let Z, resolved before P, take the stand-in on P's spot at the lab's floor edge, R_v2_gaps).
   For the simulator: `sim.ts` pushes `given` in member order too - seeding it with the frame's walkable slots would match the contract text.
+- Parts 6-9 (2026-10-26, formation/cpp-rules): `FormationGuardRules::Resolve(..., config, bAllInSight = true)` + `FFormationGuardState::Cause`
+  (`EFormationGuardCause` Wall / Turn), `FormationCoverRules::Allocate` step 5 (`FFormationCoverMember::Travel`, `FFormationCoverResult::Shoulder`),
+  `FormationSectorRules::ClearLook(..., held, TOptional<FFormationLookLimit> limit, TOptional<FVector2D> ahead)`; keys `look.over_shoulder_max_deg`,
+  `look.anticipate_s` (76). Runtime: `FormationGuardRuntime::AllInSight` (followers with a sector role, not on their own order, not in cover),
+  `ShoulderLimit` ("moving" = over 15 cm/s, the step-direction window 90 deg), `AnticipatedPos` (none below 1 cm/s), the trail travel per place,
+  the HUD from `Cause` (the runtime's `IsTurnFold` removed: 13.9 names a wall cut during a sharp turn "(wall)"). 13.5 / part 9 compared with
+  `resolveFrameSlots`: the C++ seeds the leader and every walkable frame slot first (`SeedFrameGivenSlots`) - the same; the one difference was
+  an unresolvable slot (no stand-in): the sim gives out the man's position, the C++ gave out the slot - now the man's position too (the returned
+  target stays the slot: the navigation walks him to its nearest reachable point, the sim keeps him in place).
+

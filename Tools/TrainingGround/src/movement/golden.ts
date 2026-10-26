@@ -74,6 +74,8 @@ const SCENES: Record<string, Segment[]> = {
   // v2.3 ClearLook: a 2 x 2 m pocket - every direction blocked; the longest clear ray is a diagonal.
   pocket: [{ a: [-100, -100], b: [100, -100], thickness: 20 }, { a: [100, -100], b: [100, 100], thickness: 20 },
     { a: [100, 100], b: [-100, 100], thickness: 20 }, { a: [-100, 100], b: [-100, -100], thickness: 20 }],
+  // v2.3 part 8 ClearLook: the end of a wall to the right, 0.6 m ahead and 0.9 m aside - he walks past it (the anticipation).
+  end_right_ahead: [{ a: [60, 90], b: [60, 1000], thickness: 20 }],
 };
 
 /** v2.1 scenes for the guard (the leader's frame). */
@@ -182,7 +184,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
   }
 
   // --- v2.1 (FORMATION_CONTRACT.md 10)
-  const guard = base('Guard', 'in: walls, requested, memberCount, leaderPos, leaderYaw, ahead ({pos, yaw} | null), turnAhead (deg, v2.1.1), state {requested, level, effective, candidate, candidateDistance}, stepDistance -> out.blocked (BlockedRoles at the leader) + out.state (Resolve).');
+  const guard = base('Guard', 'in: walls, requested, memberCount, leaderPos, leaderYaw, ahead ({pos, yaw} | null), turnAhead (deg, v2.1.1), state {requested, level, effective, candidate, candidateDistance, cause (wall | turn | null; v2.3 part 9)}, stepDistance, allInSight (v2.3) -> out.blocked (BlockedRoles at the leader) + out.state (Resolve).');
   const guardFormations: Formation[] = ['diamond', 'line', 'column', 'echelon_right', 'echelon_left', 'hedgehog', 'blizzard'];
   for (const scene of GUARD_SCENES) {
     for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
@@ -191,14 +193,15 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
       for (const requested of guardFormations) for (const memberCount of requested.startsWith('echelon') ? [3, 4] : [4]) {
         const states: GuardState[] = [
           GUARD_START,
-          { requested, level: 2, effective: 'column', candidate: null, candidateDistance: 0 },
-          { requested, level: 2, effective: 'column', candidate: 0, candidateDistance: hold - 30 },
+          { requested, level: 2, effective: 'column', candidate: null, candidateDistance: 0, cause: 'wall' },
+          { requested, level: 2, effective: 'column', candidate: 0, candidateDistance: hold - 30, cause: 'turn' },
         ];
         // v2.1.1: turnAhead 40 (> turn.fold_deg) only without the lookahead pose (keeps the file small).
-        for (const [aheadIn, turn] of [[null, 0], [ahead, 0], [null, 40]] as [typeof ahead | null, number][]) for (const state of states) {
+        // v2.3: allInSight false (a member cut off) only with the lookahead pose (keeps the file small).
+        for (const [aheadIn, turn, allInSight] of [[null, 0, true], [ahead, 0, true], [null, 40, true], [ahead, 0, false]] as [typeof ahead | null, number, boolean][]) for (const state of states) {
           const blocked = FormationGuardRules.BlockedRoles(placed, requested, memberCount, offset, yaw, config);
-          const out = FormationGuardRules.Resolve(placed, requested, memberCount, offset, yaw, aheadIn, turn, state, 60, config);
-          guard.cases.push({ in: { scene, walls: placed.map(seg), requested, memberCount, leaderPos: r2(offset), leaderYaw: yaw, ahead: aheadIn, turnAhead: turn, state, stepDistance: 60 },
+          const out = FormationGuardRules.Resolve(placed, requested, memberCount, offset, yaw, aheadIn, turn, state, 60, config, allInSight);
+          guard.cases.push({ in: { scene, walls: placed.map(seg), requested, memberCount, leaderPos: r2(offset), leaderYaw: yaw, ahead: aheadIn, turnAhead: turn, state, stepDistance: 60, allInSight },
             out: { blocked, state: { ...out, candidateDistance: round(out.candidateDistance) } } });
         }
       }
@@ -310,16 +313,24 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     const path = pts.map(tp);
     for (const heading of [yaw, yaw + 12]) turnAhead.cases.push({ in: { path: name, points: path, heading }, out: { deg: round(FormationGuardRules.TurnAhead(path, heading, config)) } });
   }
-  const clear = base('ClearLook', 'in: walls, pos, yaw, currentYaw, held (null = none) -> out.yaw (FormationSectorRules.ClearLook: compare as angles).');
-  for (const scene of ['none', 'wall_left', 'wall_right', 'corridor', 'ahead', 'corner_left_ahead', 'wall_end_behind_left', 'far_left', 'sliver_left', 'pocket']) {
+  const shoulderMax = config['look.over_shoulder_max_deg'];
+  const clear = base('ClearLook', 'in: walls, pos, yaw, currentYaw, held (null = none), limit ({yaw, half} | null; v2.3 part 7), ahead ([x, y] | null; v2.3 part 8) -> out.yaw (FormationSectorRules.ClearLook: compare as angles).');
+  for (const scene of ['none', 'wall_left', 'wall_right', 'corridor', 'ahead', 'corner_left_ahead', 'wall_end_behind_left', 'far_left', 'sliver_left', 'pocket', 'end_right_ahead']) {
     for (const [yaw0, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
       const placed = place(SCENES[scene], yaw0, offset);
+      // v2.3 part 8: his position look.anticipate_s ahead at 100 cm/s along the scene heading (rounded as written).
+      const aheadPt = r2([offset[0] + Math.cos((yaw0 * Math.PI) / 180) * 100 * config['look.anticipate_s'], offset[1] + Math.sin((yaw0 * Math.PI) / 180) * 100 * config['look.anticipate_s']]);
       for (let rel = -165; rel <= 180; rel += 30) {
         const yaw = round(yaw0 + rel + 2.5);
         for (const turned of [0, 70, -70]) for (const heldRel of [null, -40, 100]) {
           const currentYaw = round(yaw + turned);
           const held = heldRel === null ? null : round(yaw + heldRel); // v2.3: the previous result (hysteresis)
-          clear.cases.push({ in: { scene, walls: placed.map(seg), pos: r2(offset), yaw, currentYaw, held }, out: { yaw: round(FormationSectorRules.ClearLook(placed, offset, yaw, currentYaw, config, held)) } });
+          // v2.3 part 7: the over-the-shoulder limit (his travel = the scene's heading) only without a turn (keeps the file small).
+          // v2.3 part 8: the anticipation (ahead) on the cases without a turn and without a limit.
+          for (const limit of turned === 0 ? [null, { yaw: yaw0, half: shoulderMax }] : [null]) for (const ahead of turned === 0 && !limit ? [null, aheadPt] : [null]) {
+            clear.cases.push({ in: { scene, walls: placed.map(seg), pos: r2(offset), yaw, currentYaw, held, limit, ahead },
+              out: { yaw: round(FormationSectorRules.ClearLook(placed, offset, yaw, currentYaw, config, held, limit, ahead)) } });
+          }
         }
       }
     }
@@ -336,7 +347,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
   }
 
   // v2.2: the coverage allocator (walk / halt, fixed looks) and the static allocation round a standing group.
-  const cover = base('Cover', 'in: walls, leaderPos, heading, members [{role, pos, back}] (K first), mode walk|halt, t, fixed [{role, yaw}] -> out {rearGuard, looks [{role, yaw}], shares [{role, from, to, primary}]} (FormationCoverRules.Allocate; yaws compare as angles).');
+  const cover = base('Cover', 'in: walls, leaderPos, heading, members [{role, pos, back, travel?}] (K first; travel = world yaw, absent = the heading; v2.3 part 7), mode walk|halt, t, fixed [{role, yaw}] -> out {rearGuard, looks [{role, yaw}], shares [{role, from, to, primary}], shoulder [{role, yaw}]} (FormationCoverRules.Allocate; yaws compare as angles).');
   const COVER_SCENES = ['none', 'wall_left', 'wall_right', 'corridor', 'wide_street', 'gap_left', 'corner_left_ahead', 'far_left'];
   for (const scene of COVER_SCENES) for (const [yaw, offset] of [[0, [0, 0]], [-120, [800, 300]]] as [number, Vec2][]) {
     const placed = place(SCENES[scene], yaw, offset);
@@ -345,10 +356,13 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
         const p = r2(x.pos), h: Vec2 = [Math.cos((yaw * Math.PI) / 180), Math.sin((yaw * Math.PI) / 180)];
         return { role: x.role, pos: p, back: round(-((p[0] - offset[0]) * h[0] + (p[1] - offset[1]) * h[1])) };
       });
-      for (const [mode, t, fixed] of [['halt', 0, []], ['walk', 0.7, []], ['walk', 2.9, []], ['walk', 1.3, [{ role: 'K', yaw: round(yaw - 95) }]]] as ['walk' | 'halt', number, { role: Role; yaw: number }[]][]) {
-        const out = FormationCoverRules.Allocate(placed, offset, yaw, mem, mode, t, config, fixed)!;
-        cover.cases.push({ in: { scene, formation: f, walls: placed.map(seg), leaderPos: r2(offset), heading: yaw, members: mem, mode, t, fixed },
-          out: { rearGuard: out.rearGuard, looks: out.looks.map((l) => ({ role: l.role, yaw: round(l.yaw) })), shares: out.shares.map((x) => ({ ...x, primary: round(x.primary) })) } });
+      // v2.3 part 7: the last case gives the followers a travel direction 35 deg off the heading (the trail column at a bend).
+      for (const [mode, t, fixed, bend] of [['halt', 0, [], false], ['walk', 0.7, [], false], ['walk', 2.9, [], false], ['walk', 1.3, [{ role: 'K', yaw: round(yaw - 95) }], false], ['walk', 2.1, [], true]] as ['walk' | 'halt', number, { role: Role; yaw: number }[], boolean][]) {
+        const members = bend ? mem.map((m, k) => (k === 0 ? m : { ...m, travel: round(yaw + 35) })) : mem;
+        const out = FormationCoverRules.Allocate(placed, offset, yaw, members, mode, t, config, fixed)!;
+        cover.cases.push({ in: { scene, formation: f, walls: placed.map(seg), leaderPos: r2(offset), heading: yaw, members, mode, t, fixed },
+          out: { rearGuard: out.rearGuard, looks: out.looks.map((l) => ({ role: l.role, yaw: round(l.yaw) })), shares: out.shares.map((x) => ({ ...x, primary: round(x.primary) })),
+            shoulder: out.shoulder.map((x) => ({ role: x.role, yaw: round(x.yaw) })) } });
       }
     }
   }

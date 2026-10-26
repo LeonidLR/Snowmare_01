@@ -271,9 +271,9 @@ export const MovementDepartment: React.FC = () => {
                 <span>t = {frame.t.toFixed(1)} с · {MODE_RU[frame.mode]}</span>
                 {/* v2.1: the requested formation and, while a wall cuts it, the one in effect ("Эшелон влево -> колонна (стена)"). */}
                 <span>построение: <b className="text-cyan-300">{FORMATION_RU[frame.requested]}</b>
-                  {frame.formation !== frame.requested && <> → <b className="text-amber-300">{FORMATION_RU[frame.formation]}</b> (стена{frame.guardLevel === 2 ? ', по следу' : ''})</>}
+                  {frame.formation !== frame.requested && <> → <b className="text-amber-300">{FORMATION_RU[frame.formation]}</b> ({frame.guardCause === 'turn' ? 'поворот' : 'стена'}{frame.guardLevel === 2 ? ', по следу' : ''})</>}
                   {manual === 'all_forward' ? ' · все вперёд' : manual !== 'auto' ? ' (вручную)' : ''}</span>
-                <span className="text-slate-400">в игре: {guardHudText(frame.requested, frame.formation, frame.guardLevel, frame.members.length)}</span>
+                <span className="text-slate-400">в игре: {guardHudText(frame.requested, frame.formation, frame.guardLevel, frame.members.length, frame.guardCause)}</span>
                 <span>местность: {frame.terrain}</span>
                 <span>пройдено: {(frame.leaderDistance / 100).toFixed(1)} м</span>
                 {frame.bypasses.map((b, i) => (

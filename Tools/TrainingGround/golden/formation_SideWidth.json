@@ -65,6 +65,8 @@
   "look.hold_deg": 60,
   "look.hold_margin_deg": 5,
   "look.narrow_penalty": 180,
+  "look.over_shoulder_max_deg": 110,
+  "look.anticipate_s": 0.5,
   "classify.probe_side": 400,
   "classify.probe_ahead": 600,
   "classify.hold_distance": 500,
@@ -1891,6 +1893,84 @@
    },
    "out": {
     "width": 180
+   }
+  },
+  {
+   "in": {
+    "scene": "end_right_ahead",
+    "walls": [
+     {
+      "a": [
+       60,
+       90
+      ],
+      "b": [
+       60,
+       1000
+      ],
+      "thickness": 20
+     }
+    ],
+    "pos": [
+     0,
+     0
+    ],
+    "yaw": 0
+   },
+   "out": {
+    "width": null
+   }
+  },
+  {
+   "in": {
+    "scene": "end_right_ahead",
+    "walls": [
+     {
+      "a": [
+       447.049,
+       -155.68
+      ],
+      "b": [
+       -363.767,
+       257.451
+      ],
+      "thickness": 20
+     }
+    ],
+    "pos": [
+     500,
+     -250
+    ],
+    "yaw": 63
+   },
+   "out": {
+    "width": null
+   }
+  },
+  {
+   "in": {
+    "scene": "end_right_ahead",
+    "walls": [
+     {
+      "a": [
+       -1188.112,
+       692.489
+      ],
+      "b": [
+       -603.175,
+       -4.612
+      ],
+      "thickness": 20
+     }
+    ],
+    "pos": [
+     -1200,
+     800
+    ],
+    "yaw": -140
+   },
+   "out": {
+    "width": null
    }
   }
  ]

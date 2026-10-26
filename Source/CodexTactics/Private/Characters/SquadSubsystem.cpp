@@ -1150,7 +1150,7 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		SlotLocation += SquadFormation::ComputeWanderOffset(FormationConfig, FormationHeading, Follower.Slot, TimeSeconds);
 	}
 	SlotLocation.Z = Operative->GetActorLocation().Z;
-	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation);
+	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation, false, Operative->GetActorLocation());
 
 	const float Distance = FVector::Dist2D(Operative->GetActorLocation(), SlotLocation);
 	if (HoldsCoverOrLeavesIt(Follower, *Operative, LeaderRef, bLeaderMoving, Distance))
@@ -1266,7 +1266,7 @@ bool USquadSubsystem::HoldsCoverOrLeavesIt(FFollowerState& Follower, AOperativeC
 	return false;
 }
 
-FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide) const
+FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide, const TOptional<FVector>& Here) const
 {
 	UNavigationSystemV1* Nav = CVarSquadSlotFallback.GetValueOnGameThread() != 0 ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()) : nullptr;
 	FNavLocation OnNav;
@@ -1303,7 +1303,8 @@ FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderR
 			Slot.X, Slot.Y, Resolved.X, Resolved.Y, FVector::Dist2D(Slot, Resolved), Chosen, Usable.Num(), Usable.Num() > 0 ? Usable[0].X : 0.0,
 			Usable.Num() > 0 ? Usable[0].Y : 0.0, *GivenText);
 	}
-	FrameGivenSlots.Add(FVector2D(Resolved));
+	// Rules v2.3 part 9 (sim resolveFrameSlots): no stand-in at all - the man's own position is what he holds this tick.
+	FrameGivenSlots.Add(FVector2D(Chosen == INDEX_NONE && Here.IsSet() ? Here.GetValue() : Resolved));
 	return Resolved;
 }
 

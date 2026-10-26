@@ -230,28 +230,6 @@
   },
   "expected_fail": [
     {
-      "check": 1,
-      "choice": "echelon_right",
-      "members": 3,
-      "route": "R1",
-      "seed": 1,
-      "t": 4.6,
-      "what": "P at WR1",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
-      "check": 1,
-      "choice": "hedgehog",
-      "members": 2,
-      "route": "R1",
-      "seed": 2,
-      "t": 20.4,
-      "what": "Z at WL2",
-      "since": "v2.3",
-      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    },
-    {
       "check": 5,
       "choice": "hedgehog",
       "members": 3,
@@ -283,6 +261,30 @@
       "check": 1,
       "choice": "blizzard",
       "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "echelon_right",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 2,
       "route": "R1",
       "seed": 2,
       "fixed_in": "v2.3"

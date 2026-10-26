@@ -7,6 +7,7 @@
 #include "Characters/FirePostureRules.h"
 #include "Formation/FormationBypassRules.h"
 #include "Formation/FormationCornerRules.h"
+#include "Formation/FormationCoverRules.h"
 #include "Formation/FormationGuardRules.h"
 #include "Formation/FormationMenuRules.h"
 #include "Formation/FormationTerrainRules.h"
@@ -566,8 +567,10 @@ private:
 		FFormationGuardState Guard;
 		/** The slots are the trail column's this frame. */
 		bool bTrail = false;
-		/** The trail column is the sharp-turn fold, not a wall cut (the HUD's "(turn)"; FormationGuardRuntime::IsTurnFold). */
-		bool bGuardTurnFold = false;
+		/** Rules v2.3 part 7: the trail's direction at each trail slot this frame (the allocator's per-place Travel). */
+		TArray<FFormationRoleYaw> TrailTravel;
+		/** Rules v2.3 part 7: the allocator's over-the-shoulder members on the move (ClearLook's Limit; FormationGuardRuntime::ShoulderLimit). */
+		TArray<FFormationRoleYaw> ShoulderLooks;
 		/** The leader's path this tick (StepFormationTerrain), cm. */
 		float LastStepDistance = 0.f;
 		/** The leader's recorded path, oldest first (FormationGuardRuntime::PushTrail). */
@@ -792,7 +795,8 @@ private:
 	 * candidate must also be on the leader's side - nothing blocks the straight line from him to it (a walkable point behind a wall splits
 	 * the squad).
 	 */
-	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide = false) const;
+	FVector ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide = false,
+		const TOptional<FVector>& Here = TOptional<FVector>()) const;
 
 	/**
 	 * Rules v2.3 (contract 13.5): the slots given out this formation tick (the leader's position, then each resolved slot): a stand-in for

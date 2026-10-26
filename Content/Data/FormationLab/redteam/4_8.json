@@ -231,12 +231,23 @@
   "expected_fail": [
     {
       "check": 1,
-      "choice": "hedgehog",
+      "choice": "blizzard",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 27.4,
+      "what": "Z at L4",
+      "since": "v2.3",
+      "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 1,
+      "choice": "column",
       "members": 3,
       "route": "R1",
-      "seed": 1,
-      "t": 34.5,
-      "what": "P at R4w",
+      "seed": 2,
+      "t": 14.3,
+      "what": "Z at L2",
       "since": "v2.3",
       "reason": "still failing under v2.3 (rule bug?): open until the rules are fixed or the layout is judged wrong"
     }
@@ -304,6 +315,14 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
+      "fixed_in": "v2.3"
+    },
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
       "fixed_in": "v2.3"
     }
   ]

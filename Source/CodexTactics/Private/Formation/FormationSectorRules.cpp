@@ -162,24 +162,47 @@ namespace FormationSectorRules
 	}
 
 	float ClearLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, float CurrentYaw, const FFormationConfig& Config,
-		const TOptional<float>& Held)
+		const TOptional<float>& Held, const TOptional<FFormationLookLimit>& Limit, const TOptional<FVector2D>& Ahead)
 	{
 		using FormationMath::NormYaw;
 		const double Reach = Config.LookWallDist;
 		const double Half = Config.LookWallAngle;
 		const double MinFree = Config.LookMinFreeDeg;
-		const double Wanted = Yaw;
 		const double Current = CurrentYaw;
-		TArray<double> Centers;
-		for (const FFormationWall& Wall : Walls)
+		// v2.3 part 7: with a limit, no candidate outside +-Limit.Half of Limit.Yaw; a wanted yaw outside it is clamped to the nearer edge.
+		const auto InLimit = [&Limit](double Angle)
 		{
-			const FVector2D Closest = FormationMath::ClosestOnSegment(Pos, Wall.A, Wall.B);
-			const double Distance = FVector2D::Distance(Pos, Closest);
-			if (FMath::Max(0.0, Distance - 0.5 * Wall.Thickness) > Reach || Distance < 1e-6)
+			return !Limit.IsSet() || FMath::Abs(NormYaw(Angle - Limit->Yaw)) <= static_cast<double>(Limit->Half) + 1e-6;
+		};
+		double Wanted = Yaw;
+		if (Limit.IsSet() && !InLimit(Wanted))
+		{
+			Wanted = static_cast<double>(Limit->Yaw) + (NormYaw(Wanted - Limit->Yaw) < 0.0 ? -Limit->Half : Limit->Half);
+		}
+		// v2.3 part 8: the walls are also seen from Ahead (ignored when the step line from Pos to it crosses a wall body).
+		TArray<FVector2D> From = { Pos };
+		if (Ahead.IsSet() && FVector2D::Distance(Ahead.GetValue(), Pos) > 1e-6 && !FormationMath::SegmentBlocked(Pos, Ahead.GetValue(), Walls, 0.0))
+		{
+			From.Add(Ahead.GetValue());
+		}
+		TArray<double> Centers;
+		int32 NowCount = 0; // Centers[0 .. NowCount) are seen from Pos itself (the hold test uses only those)
+		for (int32 Origin = 0; Origin < From.Num(); ++Origin)
+		{
+			for (const FFormationWall& Wall : Walls)
 			{
-				continue;
+				const FVector2D Closest = FormationMath::ClosestOnSegment(From[Origin], Wall.A, Wall.B);
+				const double Distance = FVector2D::Distance(From[Origin], Closest);
+				if (FMath::Max(0.0, Distance - 0.5 * Wall.Thickness) > Reach || Distance < 1e-6)
+				{
+					continue;
+				}
+				Centers.Add(FormationMath::YawOfD(Closest - From[Origin]));
+				if (Origin == 0)
+				{
+					NowCount = Centers.Num();
+				}
 			}
-			Centers.Add(FormationMath::YawOfD(Closest - Pos));
 		}
 		const auto Blocked = [&Centers, Half](double Angle)
 		{
@@ -229,7 +252,7 @@ namespace FormationSectorRules
 			return Count;
 		};
 		const auto Lookable = [&Blocked, &FreeWidth, MinFree](double Angle, int32 Dir) { return !Blocked(Angle) && FreeWidth(Angle, Dir) >= MinFree; };
-		if (Lookable(Wanted, 0))
+		if (Lookable(Wanted, 0) && InLimit(Wanted))
 		{
 			return static_cast<float>(NormYaw(Wanted));
 		}
@@ -238,13 +261,13 @@ namespace FormationSectorRules
 		// The held look (hysteresis) while no wall direction is within LookWallAngle - LookHoldMarginDeg of it.
 		const double HoldDeg = Config.LookHoldDeg;
 		const double HoldHalf = Half - Config.LookHoldMarginDeg;
-		if (Held.IsSet() && HoldDeg > 0.0)
+		if (Held.IsSet() && HoldDeg > 0.0 && InLimit(Held.GetValue()))
 		{
 			const double HeldYaw = Held.GetValue();
 			bool bNearWall = false;
-			for (const double Center : Centers)
+			for (int32 Index = 0; Index < NowCount; ++Index)
 			{
-				bNearWall |= FMath::Abs(NormYaw(HeldYaw - Center)) < HoldHalf - 1e-6;
+				bNearWall |= FMath::Abs(NormYaw(HeldYaw - Centers[Index])) < HoldHalf - 1e-6;
 			}
 			if (!bNearWall)
 			{
@@ -254,7 +277,7 @@ namespace FormationSectorRules
 		}
 		// A free but narrow wanted yaw still competes, LookNarrowPenalty worse.
 		const double NarrowPenalty = Config.LookNarrowPenalty;
-		if (NarrowPenalty > 0.0 && !Blocked(Wanted))
+		if (NarrowPenalty > 0.0 && !Blocked(Wanted) && InLimit(Wanted))
 		{
 			const double Score = NarrowPenalty + 360.0 * Swept(Wanted);
 			if (Score < BestScore - 1e-9)
@@ -268,7 +291,7 @@ namespace FormationSectorRules
 			for (const int32 Out : { -1, 1 })
 			{
 				const double Edge = Center + Out * Half;
-				if (Blocked(Edge))
+				if (Blocked(Edge) || !InLimit(Edge))
 				{
 					continue;
 				}
@@ -301,6 +324,10 @@ namespace FormationSectorRules
 					continue;
 				}
 				const double Angle = Wanted + Sign * 5.0 * Step;
+				if (!InLimit(Angle))
+				{
+					continue;
+				}
 				const TOptional<float> Hit = FormationTerrainRules::RayHit(Walls, Pos, FormationMath::DirOf(Angle), static_cast<float>(2.0 * Reach));
 				const double Ray = FMath::Min(2.0 * Reach, Hit.IsSet() ? static_cast<double>(Hit.GetValue()) : TNumericLimits<double>::Max());
 				if (Ray > BestRay + 1e-6)
