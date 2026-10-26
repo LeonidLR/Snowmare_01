@@ -136,7 +136,7 @@
   STARTING_UNIQUE); EDITOR_PRESET tiers from the level JSON. Godot quirk kept: the specialist gets the squad total
   while the others keep theirs (items double up) — kept as in Godot (user decision 2026-09-30). The --bot-loadout CLI override is not ported.
 - Turn-based entry on flat ground only (user decision 2026-09-30; Godot allows platforms; since 2026-10-22 the stricter arena search of
-  `TurnArenaRules` / `UTurnBasedCombatSubsystem::FindTurnArena` replaces the check below - see docs/systems/combat-and-fire.md "Turn-based arena"): the controller samples the floor
+  `TurnArenaRules` / `UTurnBasedCombatSubsystem::FindTurnArena` replaces the check below; relaxed 2026-10-26: the grid round the leader, buildings / ladders subtracted, an 8 x 4 open area, the feet rule kept - see docs/systems/combat-and-fire.md "Turn-based arena"): the controller samples the floor
   under the future grid (7 x 7 over 21 m, `CombatQueries::SampleGroundHeights`) and refuses when a living operative's feet
   are more than 50 cm from the median («⚠️ Пошаговый бой можно начать только на ровной поверхности…»). A plateau wider
   than the grid counts as flat. Smokes call `RequestEnterTurnBased` directly and are not affected.

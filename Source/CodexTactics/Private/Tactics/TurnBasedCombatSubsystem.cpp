@@ -165,17 +165,16 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	LadderEnemies.Reset();
 	LadderEnemiesOff.Reset();
 
-	// The grid on flat, open ground holding the squad (TurnArenaRules, game designer 2026-10-22: never inside / across a building).
-	// The player's entry (Space hold) is refused without such ground; a direct entry (smokes, scripted) falls back to the grid
-	// round the leader as before.
+	// The grid round the leader (as before 2026-10-22), buildings and ladders subtracted (TurnArenaRules, game designer 2026-10-26:
+	// nobody enters a building during the fight). The player's entry (Space hold) is refused without an 8 x 4 open area; a direct
+	// entry (smokes, scripted) keeps the leader's grid - its buildings are subtracted all the same.
 	FindTurnArena(ActiveArena);
 	if (!ActiveArena.bFound)
 	{
 		UE_LOG(LogCodexTactics, Warning, TEXT("Turn-based combat without a valid arena (%s): the grid round the leader"),
 			TurnArenaRules::FaultName(ActiveArena.LeaderFault));
 	}
-	const FVector Center = ActiveArena.bFound ? FVector(ActiveArena.Centre.X, ActiveArena.Centre.Y, Leader->GetActorLocation().Z)
-		: Leader->GetActorLocation();
+	const FVector Center(ActiveArena.Centre.X, ActiveArena.Centre.Y, Leader->GetActorLocation().Z);
 	const float HalfExtent = TurnGridCells * TurnCellSize * 0.5f;
 	auto OnGrid = [&Center, HalfExtent](const AActor* Actor)
 	{
@@ -247,7 +246,7 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(TurnGridFloor), false);
 	Params.AddIgnoredActors(Ignore);
 	FHitResult FloorHit;
-	if (ActiveArena.bFound)
+	if (ActiveArena.Verdict.bHasGround)
 	{
 		GroundZ = ActiveArena.GroundZ;
 	}
@@ -276,9 +275,23 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	Grid->Setup(FVector(Center.X, Center.Y, GroundZ), FIntPoint(TurnGridCells, TurnGridCells), TurnCellSize, GroundZ);
 	Grid->DiagonalAPCost = Balance.DiagonalAPCost;
 	BakeObstacles(Ignore);
-	for (const FIntPoint& Cell : ActiveArena.BlockedBorder)
+	if (ActiveArena.Verdict.Cells == TurnGridCells && ActiveArena.Verdict.CellClass.Num() == TurnGridCells * TurnGridCells)
 	{
-		Grid->SetOccupant(Cell, nullptr, EGorkyOccupantType::Obstacle); // a wall / slope on the arena's outer ring
+		for (int32 X = 0; X < TurnGridCells; ++X)
+		{
+			for (int32 Y = 0; Y < TurnGridCells; ++Y)
+			{
+				const ETurnArenaCell Class = ActiveArena.Verdict.ClassOf(FIntPoint(X, Y));
+				if (TurnArenaRules::IsSubtracted(Class))
+				{
+					Grid->SetClosed(FIntPoint(X, Y)); // a building, its door, a ladder: closed for the whole fight
+				}
+				else if (Class != ETurnArenaCell::Walkable)
+				{
+					Grid->SetOccupant(FIntPoint(X, Y), nullptr, EGorkyOccupantType::Obstacle); // a wall, a slope, off the navmesh
+				}
+			}
+		}
 	}
 
 	for (AActor* Barricade : GridBarricades)
@@ -329,6 +342,14 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		// Godot: the squad faces the enemies (SOUTH on its map).
 		AddSquadUnit(Member, GridEnemies.IsEmpty() ? EGorkyFacing::South : FacingTowards(Member->GetActorLocation(), EnemyCentroid, EGorkyFacing::South), false);
 	}
+	for (int32 Index = 0; Index < GridEnemies.Num(); ++Index)
+	{
+		// 2026-10-26: an enemy deep inside a building stays out of the grid fight (stasis, as an enemy outside the grid).
+		if (!AddGridEnemy(GridEnemies[Index], FacingTowards(GridEnemies[Index]->GetActorLocation(), Center, EGorkyFacing::North)))
+		{
+			GridEnemies.RemoveAt(Index--);
+		}
+	}
 	TMap<EEnemyArchetype, int32> TypeCounts;
 	for (AEnemyCharacter* Enemy : GridEnemies)
 	{
@@ -337,7 +358,6 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		{
 			Anim->SetIdleVariation(TypeCounts.FindOrAdd(Enemy->GetArchetype())++);
 		}
-		AddGridEnemy(Enemy, FacingTowards(Enemy->GetActorLocation(), Center, EGorkyFacing::North));
 	}
 
 	// Godot start_combat: zones_manager.setup + evaluate_wave_roster (the grid's enemies).
@@ -365,6 +385,19 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	if (Overlay)
 	{
 		Overlay->SetGrid(Grid);
+		// The subtracted cells (buildings, doors, ladders, no ground) are no part of the battlefield: no grid drawn there.
+		TArray<FIntPoint> Shown;
+		for (int32 X = 0; X < TurnGridCells; ++X)
+		{
+			for (int32 Y = 0; Y < TurnGridCells; ++Y)
+			{
+				if (!TurnArenaRules::IsSubtracted(GetArenaCellClass(FIntPoint(X, Y))))
+				{
+					Shown.Add(FIntPoint(X, Y));
+				}
+			}
+		}
+		Overlay->SetCells(ETurnOverlayLayer::Grid, Shown);
 	}
 
 	// Godot _enter_turn_based_combat: the camera zooms in to 14 m on the leader; shots play as camera sequences
@@ -515,11 +548,19 @@ void UTurnBasedCombatSubsystem::AddSquadUnit(AOperativeCharacter* Member, EGorky
 	Squad.AddUnique(Member);
 	FIntPoint Cell = Grid->WorldToGrid(Member->GetActorLocation());
 	// A climber joining on an upper floor stays where the ladder left him (the grid is one level: no snap to a cell centre, which could
-	// put him over the roof's edge); the cell under him is only taken while it is free ground (a roof over a building stays an obstacle).
+	// put him over the roof's edge); the cell under him is only taken while it is free ground (a building's cell stays closed: SetClosed).
 	const bool bKeep = bKeepPlace && Grid->IsValidCell(Cell);
 	if (!bKeep)
 	{
-		Cell = Grid->FindNearestFreeCell(Cell);
+		// 2026-10-26: onto the arena - out of a building through its door, off a ladder's foot, in from just outside the grid.
+		const FIntPoint Before = Cell;
+		const FIntPoint OnArena = FindArenaCellFor(Cell, Member->GetActorLocation(), true);
+		Cell = OnArena.X >= 0 ? OnArena : Grid->FindNearestFreeCell(Cell);
+		if (TurnArenaRules::IsSubtracted(GetArenaCellClass(Before)))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[TurnArena] %s stood inside a building / on a ladder cell (%d, %d): moved out to (%d, %d)"),
+				*Member->GetName(), Before.X, Before.Y, Cell.X, Cell.Y);
+		}
 	}
 	if (!bKeep || !Grid->IsCellOccupied(Cell))
 	{
@@ -542,13 +583,18 @@ void UTurnBasedCombatSubsystem::AddSquadUnit(AOperativeCharacter* Member, EGorky
 	AlignFacing(Member, State.Facing);
 }
 
-void UTurnBasedCombatSubsystem::AddGridEnemy(AEnemyCharacter* Enemy, EGorkyFacing Facing)
+bool UTurnBasedCombatSubsystem::AddGridEnemy(AEnemyCharacter* Enemy, EGorkyFacing Facing)
 {
 	if (!Enemy || !Grid)
 	{
-		return;
+		return false;
 	}
-	const FIntPoint Cell = Grid->FindNearestFreeCell(Grid->WorldToGrid(Enemy->GetActorLocation()));
+	const FIntPoint Cell = FindArenaCellFor(Grid->WorldToGrid(Enemy->GetActorLocation()), Enemy->GetActorLocation(), false);
+	if (Cell.X < 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[TurnArena] %s is deep inside a building: not on the grid (stasis)"), *Enemy->GetName());
+		return false;
+	}
 	Grid->SetOccupant(Cell, Enemy, EGorkyOccupantType::Enemy);
 	PlaceOnCell(Enemy, Cell);
 	Enemies.AddUnique(Enemy);
@@ -561,6 +607,7 @@ void UTurnBasedCombatSubsystem::AddGridEnemy(AEnemyCharacter* Enemy, EGorkyFacin
 	State.BaseDamage = EnemyTurnRules::BaseDamage(TurnProfile, Balance.EnemyBaseDamage);
 	State.Facing = Facing;
 	AlignFacing(Enemy, State.Facing);
+	return true;
 }
 
 void UTurnBasedCombatSubsystem::HoldLadderEnemiesOff()
@@ -640,9 +687,8 @@ void UTurnBasedCombatSubsystem::JoinLadderClimbers()
 		{
 			continue;
 		}
-		if (TurnClickRules::IsInsideGrid(Enemy->GetActorLocation(), Grid->OriginWorld, TurnGridCells, TurnCellSize))
+		if (TurnClickRules::IsInsideGrid(Enemy->GetActorLocation(), Grid->OriginWorld, TurnGridCells, TurnCellSize) && AddGridEnemy(Enemy, EGorkyFacing::North))
 		{
-			AddGridEnemy(Enemy, EGorkyFacing::North);
 			UE_LOG(LogCodexTactics, Display, TEXT("[TurnBased] %s joins the grid off its ladder (round %d)"), *Enemy->GetName(), Round);
 		}
 		else
@@ -1650,6 +1696,11 @@ bool UTurnBasedCombatSubsystem::MoveActiveUnitTo(const FIntPoint& Cell)
 	{
 		return false;
 	}
+	// Game designer 2026-10-26: no way into a building (or onto a ladder) during the fight.
+	if (Grid->IsCellClosed(Cell) || TurnArenaRules::IsSubtracted(GetArenaCellClass(Cell)))
+	{
+		return false;
+	}
 	// Only highlighted cells (Godot: reachable with the AP left); crouched / prone a step costs double (user decision 2026-10-04).
 	const int32 WalkMultiplier = TurnBasedRules::MoveCostMultiplier(State->Stance, Balance);
 	const TMap<FIntPoint, int32> Reach = Grid->GetReachableCells(State->GridPos, State->AP / WalkMultiplier);
@@ -2425,6 +2476,11 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 		Post(TEXT("TACTICS"), TEXT("⚠️ Ctrl + click to attack: pick an enemy, a barrel or a barricade."));
 		break;
 	case ETurnClickAction::Walk:
+		if (Grid->IsCellClosed(Cell))
+		{
+			Post(TEXT("TACTICS"), TEXT("⚠️ No way in: buildings and ladders are closed during turn-based combat."));
+			break;
+		}
 		MoveActiveUnitTo(Cell);
 		break;
 	default:

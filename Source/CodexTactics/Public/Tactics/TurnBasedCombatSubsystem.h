@@ -25,13 +25,15 @@ class UWeaponDataAsset;
 struct CODEXTACTICS_API FTurnArenaChoice
 {
 	bool bFound = false;
-	/** Grid centre (XY) and its median ground height. */
+	/** Grid centre (XY) and its median ground height (not found: the leader's grid). */
 	FVector Centre = FVector::ZeroVector;
 	float GroundZ = 0.f;
 	/** Offset of the chosen centre from the leader, cells. */
 	FIntPoint Offset = FIntPoint::ZeroValue;
-	/** Border cells of the chosen grid that become obstacles. */
-	TArray<FIntPoint> BlockedBorder;
+	/** The cells of the chosen grid (not found: of the grid round the leader): classes, the arena, the units' cells. */
+	FTurnArenaVerdict Verdict;
+	/** Building outlines found round the squad (roofs, indoor camera zones), for logs and checks. */
+	TArray<FTurnArenaFootprint> Footprints;
 	/** Why the grid round the leader himself is refused (None when it is valid). */
 	ETurnArenaFault LeaderFault = ETurnArenaFault::None;
 	FIntPoint LeaderFaultCell = FIntPoint(-1, -1);
@@ -252,11 +254,14 @@ public:
 	UGorkyGridManager* GetGrid() const { return Grid; }
 
 	/**
-	 * Game designer rule (2026-09-30, repeated 2026-10-22 after the lake grid inside the base building): the turn-based grid only
-	 * on flat, open, navigable ground holding the whole squad (TurnArenaRules). Samples the cells round the leader and picks the
-	 * nearest valid grid centre (engaged enemies inside break ties). false: none - the fight must not switch to turn-based.
+	 * Game designer decision 2026-10-26 (TurnArenaRules): the grid round the leader as before 2026-10-22, buildings (roof / indoor
+	 * zone footprints, walled interiors, their doors) and ladders subtracted; valid when a connected open area of 8 x 8 / 8 x 4 cells
+	 * holds the squad. When the leader's grid fails, shifted centres within 4 cells are tried (nearest first). false: none - the
+	 * fight must not switch to turn-based (OutChoice still carries the leader's grid for a direct entry).
 	 */
 	bool FindTurnArena(FTurnArenaChoice& OutChoice) const;
+	/** The arena class of a cell of the running fight's grid (Walkable when no arena was sampled). */
+	ETurnArenaCell GetArenaCellClass(const FIntPoint& Cell) const;
 	/** The feed line that refuses turn-based combat for Fault. */
 	static FText DescribeArenaFault(ETurnArenaFault Fault);
 	/** The arena of the running fight (valid while IsActive; bFound false = laid round the leader without a valid arena). */
@@ -482,8 +487,16 @@ private:
 	void ApplyStasis(AEnemyCharacter* Enemy);
 	/** An operative's grid unit (cell, AP, facing); bKeepPlace = left where he stands (a climber joining on an upper floor). */
 	void AddSquadUnit(AOperativeCharacter* Member, EGorkyFacing Facing, bool bKeepPlace);
-	/** An enemy's grid unit (cell, AP by its profile, facing). */
-	void AddGridEnemy(AEnemyCharacter* Enemy, EGorkyFacing Facing);
+	/**
+	 * An enemy's grid unit (cell, AP by its profile, facing). An enemy inside a building (2026-10-26) is moved out onto the nearest
+	 * open cell within reach; false = deep inside: not on the grid (the caller leaves it in stasis).
+	 */
+	bool AddGridEnemy(AEnemyCharacter* Enemy, EGorkyFacing Facing);
+	/**
+	 * The free open cell a unit at Location (its clamped grid cell Cell) takes: its own, else out of a building through its door /
+	 * the nearest within reach (bArenaOnly: on the arena itself - the squad); (-1, -1) = deep inside a building.
+	 */
+	FIntPoint FindArenaCellFor(const FIntPoint& Cell, const FVector& Location, bool bArenaOnly) const;
 	/** LADDERS.md 7.6: an enemy that climbed off its ladder is held at once (no real-time AI during the fight); Tick. */
 	void HoldLadderEnemiesOff();
 	/** LADDERS.md 7.6: the climbers that are off their ladder join the grid (a new round); enemies outside the grid go into stasis. */

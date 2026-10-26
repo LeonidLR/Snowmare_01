@@ -1,19 +1,21 @@
-// Dev-only check of the game designer's Demo 01 report 2026-10-22 (wave 3 on the lake, blast door 51 %, generator online: the
-// turn-based grid was laid INSIDE the base building, the operatives stuck outside / on the roof, nobody could move). The rule
-// (2026-09-30, repeated 2026-10-22): a turn-based fight only on flat, open ground - nothing in the middle but barrels, barricades
-// and turrets (TurnArenaRules, UTurnBasedCombatSubsystem::FindTurnArena):
+// Dev-only check of the turn-based arena in the Demo 01 lake compound (TurnArenaRules, UTurnBasedCombatSubsystem::FindTurnArena).
+// History: game designer report 2026-10-22 (the grid laid INSIDE the base building, the squad stuck outside) -> commit 40782ae made the
+// grid need open, level ground everywhere in its middle; game designer decision 2026-10-26: too harsh - the grid round the leader as
+// before, buildings (and ladders) subtracted, an 8 x 8 / 8 x 4 open area required.
 //   Scripts/smoke_parallel.ps1 -Commands TurnArenaLakeSmoke   (map /Game/Maps/L_Demo01_A_FrozenLake + -LevelJson, Scripts/test_map.json)
-//  1. the squad in the compound's yard right outside the generator shed (a roofed building + the north wall within the 21 m grid round
-//     the leader): the grid round the leader is refused (logged why), a valid arena is found nearby;
-//  2. the fight (wave 1, its lane enemies parked away) + a hound 8 m off -> turn-based: the grid is the found arena; EVERY walkable
-//     cell is open ground (no roof overhead, nothing solid in it, on the navmesh, level with the arena); every operative stands on a
-//     walkable cell on the ground (not on a roof) and can move (reachable cells with his AP);
-//  3. the squad INSIDE the shed: no arena at all -> the Space-hold entry is refused with the "only in the open" line.
+//  1. the squad in the yard right outside the generator shed (the shed and the base building within the 21 m grid round the leader):
+//     the grid round the leader is valid (no shift);
+//  2. the fight (wave 1, its lane enemies parked away) + a hound 8 m off -> turn-based: the grid is the leader's; EVERY walkable cell is
+//     open ground (no roof overhead, nothing solid in it, on the navmesh, level with the arena); no cell inside the shed is walkable;
+//     every operative stands on a walkable cell on the ground and can move;
+//  3. the squad INSIDE the (roofless) shed: the fight starts, everyone is moved out of the shed onto the arena;
+//  4. the squad deep inside the base building: no arena -> the Space-hold entry is refused with the "only outside" line.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Camera/CameraZoneVolume.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -23,14 +25,12 @@
 #include "Containers/Ticker.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Debug/SmokeUtils.h"
+#include "Debug/TurnArenaSmokeUtils.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
-#include "Interactables/BarrelActor.h"
-#include "Interactables/BarricadeActor.h"
 #include "Interactables/InteractableActor.h"
-#include "Interactables/TurretActor.h"
 #include "NavigationSystem.h"
 #include "Tactics/GorkyGridManager.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -47,6 +47,7 @@ namespace TurnArenaLakeSmoke
 		int32 Stage = 0;
 		int32 Failures = 0;
 		TWeakObjectPtr<AInteractableActor> Generator;
+		FBox2D Shed = FBox2D(ForceInit);
 		FVector Outside = FVector::ZeroVector;
 		TWeakObjectPtr<AEnemyCharacter> Hound;
 	};
@@ -70,82 +71,30 @@ namespace TurnArenaLakeSmoke
 		State.StageTime = 0.f;
 	}
 
-	FCollisionQueryParams OpenGroundParams(UWorld* World)
-	{
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(TurnArenaLakeProbe), false);
-		for (TActorIterator<ACharacter> It(World); It; ++It)
-		{
-			Params.AddIgnoredActor(*It);
-		}
-		for (TActorIterator<ABarrelActor> It(World); It; ++It)
-		{
-			Params.AddIgnoredActor(*It);
-		}
-		for (TActorIterator<ABarricadeActor> It(World); It; ++It)
-		{
-			Params.AddIgnoredActor(*It);
-		}
-		for (TActorIterator<ATurretActor> It(World); It; ++It)
-		{
-			Params.AddIgnoredActor(*It);
-		}
-		return Params;
-	}
-
-	/** Ground under XY near RefZ (a trace from 2.5 m above), or false. */
-	bool GroundAt(UWorld* World, const FVector& XY, float RefZ, const FCollisionQueryParams& Params, float& OutZ)
-	{
-		FHitResult Hit;
-		if (!World->LineTraceSingleByChannel(Hit, FVector(XY.X, XY.Y, RefZ + 250.f), FVector(XY.X, XY.Y, RefZ - 400.f), ECC_Visibility, Params))
-		{
-			return false;
-		}
-		OutZ = Hit.ImpactPoint.Z;
-		return true;
-	}
-
-	bool IsRoofed(UWorld* World, const FVector& XY, float GroundZ, const FCollisionQueryParams& Params)
-	{
-		FHitResult Hit;
-		return World->LineTraceSingleByChannel(Hit, FVector(XY.X, XY.Y, GroundZ + 60.f), FVector(XY.X, XY.Y, GroundZ + 450.f), ECC_Visibility, Params);
-	}
-
-	/**
-	 * The nearest navmesh spot to Point (rings up to 4 m) where a standing capsule is not BLOCKED (SmokeUtils::FreeSpot refuses
-	 * touching overlaps too - inside the yard's tutorial volume every spot "overlaps"; LakeQuestSmoke's YardSpot). Centre height.
-	 */
-	FVector OpenSpot(UWorld* World, const FVector& Point, const AActor* Ignore)
-	{
-		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(TurnArenaLakeSpot), false, Ignore);
-		for (const float Radius : { 0.f, 80.f, 160.f, 250.f, 400.f })
-		{
-			for (int32 Step = 0; Step < (Radius <= 0.f ? 1 : 12); ++Step)
-			{
-				const FVector Candidate = Point + FVector(Radius, 0.f, 0.f).RotateAngleAxis(Step * 30.f, FVector::UpVector);
-				FNavLocation OnNav;
-				if (Nav && Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(40.f, 40.f, 300.f))
-					&& !World->OverlapBlockingTestByChannel(OnNav.Location + FVector(0.f, 0.f, 95.f), FQuat::Identity, ECC_Pawn,
-						FCollisionShape::MakeCapsule(42.f, 88.f), Params))
-				{
-					return OnNav.Location + FVector(0.f, 0.f, 92.f);
-				}
-			}
-		}
-		return Point + FVector(0.f, 0.f, 92.f);
-	}
-
 	/** The squad round Spot (the leader on it), stopped. */
-	void PlaceSquad(UWorld* World, USquadSubsystem& Squad, const FVector& Spot, const FVector& Back)
+	void PlaceSquad(UWorld* World, USquadSubsystem& Squad, const FVector& Spot, const FVector& Back, float MaxRadius = 400.f)
 	{
 		int32 Slot = 0;
 		for (AOperativeCharacter* Member : Squad.GetMembers())
 		{
-			Member->StopOperative();
 			const FVector Offset = Member == Squad.GetLeader() ? FVector::ZeroVector
 				: Back * 180.f + FVector::CrossProduct(FVector::UpVector, Back) * (Slot++ == 0 ? -150.f : 150.f);
-			const FVector Free = OpenSpot(World, Spot + Offset, Member);
-			Member->TeleportTo(FVector(Free.X, Free.Y, Free.Z + 4.f), (-Back).Rotation(), false, true);
+			TurnArenaSmokeUtils::PlaceAt(Member, TurnArenaSmokeUtils::OpenSpot(World, Spot + Offset, Member, MaxRadius), (-Back).Rotation().Yaw);
+		}
+	}
+
+	/** Every operative's grid unit: on a walkable cell, outside the shed. */
+	void CheckSquadOutsideShed(FState& State, UTurnBasedCombatSubsystem& TurnBased, USquadSubsystem& Squad, const TCHAR* When)
+	{
+		const UGorkyGridManager* Grid = TurnBased.GetGrid();
+		for (AOperativeCharacter* Member : Squad.GetMembers())
+		{
+			const FTurnUnitState* Unit = TurnBased.GetUnitState(Member);
+			const FVector2D At(Member->GetActorLocation());
+			const bool bInShed = State.Shed.bIsValid && State.Shed.ExpandBy(-20.f).IsInside(At);
+			Check(State, Unit && Grid && TurnBased.GetArenaCellClass(Unit->GridPos) == ETurnArenaCell::Walkable && !bInShed,
+				FString::Printf(TEXT("%s: %s on cell (%d, %d) (%s), %s the shed"), When, *Member->DisplayName.ToString(), Unit ? Unit->GridPos.X : -1,
+					Unit ? Unit->GridPos.Y : -1, Unit ? TEXT("a grid unit") : TEXT("no unit"), bInShed ? TEXT("INSIDE") : TEXT("outside")));
 		}
 	}
 
@@ -154,7 +103,7 @@ namespace TurnArenaLakeSmoke
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Time > 240.f)
+		if (!World || State.Time > 300.f)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke stopped in stage %d"), State.Stage);
 			return World ? Finish(State, false) : false;
@@ -186,29 +135,26 @@ namespace TurnArenaLakeSmoke
 			{
 				Tutorial->SkipTutorial();
 			}
-			for (TActorIterator<AInteractableActor> It(World); It; ++It)
-			{
-				if (It->ObjectType == EInteractableType::Generator)
-				{
-					State.Generator = *It;
-				}
-			}
-			AInteractableActor* Generator = State.Generator.Get();
+			AInteractableActor* Generator = TurnArenaSmokeUtils::FindGenerator(World);
+			State.Generator = Generator;
 			Check(State, Generator != nullptr, TEXT("the compound's generator (in its shed)"));
 			if (!Generator)
 			{
 				return Finish(State, false);
 			}
+			State.Shed = TurnArenaSmokeUtils::FindShedBox(World, Generator);
+			Check(State, State.Shed.bIsValid && State.Shed.GetSize().X > 200.f && State.Shed.GetSize().Y > 200.f,
+				FString::Printf(TEXT("the shed's walls: %s"), *State.Shed.ToString()));
 			// Out of the shed door (south, -Y): the first open, navigable spot, then 2.5 m further into the yard.
-			const FCollisionQueryParams Params = OpenGroundParams(World);
-			const float RefZ = Generator->GetActorLocation().Z - 50.f;
+			const FCollisionQueryParams Params = TurnArenaSmokeUtils::OpenGroundParams(World);
+			const float RefZ = static_cast<float>(Generator->GetActorLocation().Z) - 50.f;
 			FVector Spot = Generator->GetActorLocation();
 			for (float Step = 100.f; Step <= 1500.f; Step += 50.f)
 			{
 				const FVector Probe = Generator->GetActorLocation() - FVector(0.f, Step, 0.f);
 				float Z = 0.f;
-				if (GroundAt(World, Probe, RefZ, Params, Z) && !IsRoofed(World, Probe, Z, Params)
-					&& Nav->ProjectPointToNavigation(FVector(Probe.X, Probe.Y, Z), OnNav, FVector(40.f, 40.f, 120.f)))
+				if (TurnArenaSmokeUtils::GroundAt(World, Probe, RefZ, Params, Z) && !TurnArenaSmokeUtils::IsRoofed(World, Probe, Z, Params)
+					&& Nav->ProjectPointToNavigation(FVector(Probe.X, Probe.Y, Z), OnNav, FVector(40.f, 40.f, 120.f)) && !State.Shed.IsInside(FVector2D(Probe)))
 				{
 					Spot = FVector(Probe.X, Probe.Y - 250.f, Z);
 					break;
@@ -229,9 +175,9 @@ namespace TurnArenaLakeSmoke
 			}
 			FTurnArenaChoice Arena;
 			const bool bFound = TurnBased->FindTurnArena(Arena);
-			Check(State, Arena.LeaderFault != ETurnArenaFault::None, FString::Printf(TEXT("the grid round the leader (shed + north wall in it) is refused: %s at cell (%d, %d)"),
-				TurnArenaRules::FaultName(Arena.LeaderFault), Arena.LeaderFaultCell.X, Arena.LeaderFaultCell.Y));
-			Check(State, bFound, FString::Printf(TEXT("a valid arena nearby: offset (%d, %d) cells, %d candidates"), Arena.Offset.X, Arena.Offset.Y, Arena.Tried));
+			Check(State, bFound && Arena.LeaderFault == ETurnArenaFault::None && Arena.Offset == FIntPoint::ZeroValue,
+				FString::Printf(TEXT("the grid round the leader by the shed is valid as it is (as before 2026-10-22): %s, offset (%d, %d), arena %d cells, %d building outlines"),
+					TurnArenaRules::FaultName(Arena.LeaderFault), Arena.Offset.X, Arena.Offset.Y, Arena.Verdict.ArenaCells, Arena.Footprints.Num()));
 			// The fight: wave 1 on the lake lanes (parked far away), a hound 8 m out in the yard.
 			SmokeUtils::StartWaveFight(Flow);
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
@@ -239,7 +185,7 @@ namespace TurnArenaLakeSmoke
 				SmokeUtils::ParkEnemyFarAway(*It);
 				It->SetActorTickEnabled(false);
 			}
-			State.Hound = Waves->SpawnEnemy(EEnemyArchetype::FrostHound, OpenSpot(World, State.Outside - FVector(0.f, 800.f, 0.f), nullptr)
+			State.Hound = Waves->SpawnEnemy(EEnemyArchetype::FrostHound, TurnArenaSmokeUtils::OpenSpot(World, State.Outside - FVector(0.f, 800.f, 0.f), nullptr)
 				+ FVector(0.f, 0.f, 20.f), FRotator(0.f, 90.f, 0.f));
 			if (AEnemyCharacter* Hound = State.Hound.Get(); Hound && Hound->GetHealthComponent())
 			{
@@ -257,59 +203,68 @@ namespace TurnArenaLakeSmoke
 			{
 				return true;
 			}
+			const FVector LeaderAt = Squad->GetLeader()->GetActorLocation();
 			const EGameFlowResult Result = Flow->RequestEnterTurnBased(true);
 			Check(State, Result == EGameFlowResult::Ok && TurnBased->IsActive() && TurnBased->GetEnemyCount() >= 1, FString::Printf(TEXT("turn-based combat entered (%d enemies on the grid; the hound %.1f m from the leader)"),
-				TurnBased->GetEnemyCount(), State.Hound.IsValid() ? FVector::Dist2D(State.Hound->GetActorLocation(), Squad->GetLeader()->GetActorLocation()) / 100.f : -1.f));
+				TurnBased->GetEnemyCount(), State.Hound.IsValid() ? FVector::Dist2D(State.Hound->GetActorLocation(), LeaderAt) / 100.f : -1.f));
 			if (!TurnBased->IsActive() || !TurnBased->GetGrid())
 			{
 				return Finish(State, false);
 			}
 			const FTurnArenaChoice& Arena = TurnBased->GetActiveArena();
 			const UGorkyGridManager* Grid = TurnBased->GetGrid();
-			Check(State, Arena.bFound && FVector::Dist2D(Grid->GridToWorld(FIntPoint(7, 7)) - FVector(75.f, 75.f, 0.f), Arena.Centre) < 5.f,
-				FString::Printf(TEXT("the grid is the found arena (centre %s)"), *Arena.Centre.ToCompactString()));
-			const FCollisionQueryParams Params = OpenGroundParams(World);
+			Check(State, Arena.bFound && FVector::Dist2D(Grid->GridToWorld(FIntPoint(7, 7)) - FVector(75.f, 75.f, 0.f), LeaderAt) < 5.f,
+				FString::Printf(TEXT("the grid is laid round the leader (centre %s)"), *Arena.Centre.ToCompactString()));
+			const FCollisionQueryParams Params = TurnArenaSmokeUtils::OpenGroundParams(World);
 			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 			int32 Walkable = 0;
 			int32 Roofed = 0;
 			int32 Solid = 0;
 			int32 OffNav = 0;
 			int32 Uneven = 0;
+			int32 ShedCells = 0;
+			int32 ShedOpen = 0;
 			const FCollisionShape Box = FCollisionShape::MakeBox(FVector(150.f * 0.35f, 150.f * 0.35f, 60.f));
 			for (int32 X = 0; X < Grid->GridSize.X; ++X)
 			{
 				for (int32 Y = 0; Y < Grid->GridSize.Y; ++Y)
 				{
 					const FIntPoint Cell(X, Y);
+					const FVector Centre = Grid->GridToWorld(Cell);
+					if (State.Shed.bIsValid && State.Shed.ExpandBy(-30.f).IsInside(FVector2D(Centre)))
+					{
+						++ShedCells;
+						ShedOpen += Grid->IsCellWalkable(Cell) ? 1 : 0;
+					}
 					if (!Grid->IsCellWalkable(Cell))
 					{
 						continue;
 					}
 					++Walkable;
-					const FVector Centre = Grid->GridToWorld(Cell);
 					float Z = 0.f;
-					if (!GroundAt(World, Centre, Arena.GroundZ, Params, Z))
+					if (!TurnArenaSmokeUtils::GroundAt(World, Centre, Arena.GroundZ, Params, Z))
 					{
 						++Uneven;
 						continue;
 					}
-					Uneven += FMath::Abs(Z - Arena.GroundZ) > 35.f ? 1 : 0;
-					Roofed += IsRoofed(World, Centre, Z, Params) ? 1 : 0;
+					Uneven += FMath::Abs(Z - Arena.GroundZ) > 105.f ? 1 : 0;
+					Roofed += TurnArenaSmokeUtils::IsRoofed(World, Centre, Z, Params) ? 1 : 0;
 					Solid += World->OverlapBlockingTestByChannel(FVector(Centre.X, Centre.Y, Z + 90.f), FQuat::Identity, ECC_Pawn, Box, Params) ? 1 : 0;
 					FNavLocation OnNav;
 					OffNav += Nav && !Nav->ProjectPointToNavigation(FVector(Centre.X, Centre.Y, Z), OnNav, FVector(60.f, 60.f, 120.f)) ? 1 : 0;
 				}
 			}
-			Check(State, Walkable >= 100 && Roofed == 0 && Solid == 0 && OffNav == 0 && Uneven == 0,
+			Check(State, Walkable >= 32 && Roofed == 0 && Solid == 0 && OffNav == 0 && Uneven == 0,
 				FString::Printf(TEXT("every walkable cell is open, level ground: %d walkable, %d under a roof, %d inside something solid, %d off the navmesh, %d not level"),
 					Walkable, Roofed, Solid, OffNav, Uneven));
+			Check(State, ShedOpen == 0, FString::Printf(TEXT("no cell inside the shed is walkable (%d of %d)"), ShedOpen, ShedCells));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				const FTurnUnitState* Unit = TurnBased->GetUnitState(Member);
 				const FVector Feet = Member->GetActorLocation() - FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight());
 				const int32 Reach = Unit ? TurnBased->GetGrid()->GetReachableCells(Unit->GridPos, FMath::Max(1, Unit->AP)).Num() : 0;
 				Check(State, Unit && FVector::Dist2D(Grid->GridToWorld(Unit->GridPos), Member->GetActorLocation()) < 80.f
-					&& FMath::Abs(Feet.Z - Arena.GroundZ) < 60.f && !IsRoofed(World, Member->GetActorLocation(), Feet.Z, Params) && Reach > 4,
+					&& FMath::Abs(Feet.Z - Arena.GroundZ) < 60.f && !TurnArenaSmokeUtils::IsRoofed(World, Member->GetActorLocation(), Feet.Z, Params) && Reach > 4,
 					FString::Printf(TEXT("%s on cell (%d, %d) on the ground (feet %.0f cm off the arena), %d cells reachable with %d AP"),
 						*Member->DisplayName.ToString(), Unit ? Unit->GridPos.X : -1, Unit ? Unit->GridPos.Y : -1, Feet.Z - Arena.GroundZ, Reach, Unit ? Unit->AP : 0));
 			}
@@ -323,10 +278,15 @@ namespace TurnArenaLakeSmoke
 			{
 				return true;
 			}
-			// 3. Inside the shed: no arena, the Space-hold entry refused.
-			AInteractableActor* Generator = State.Generator.Get();
-			const FVector Inside = OpenSpot(World, Generator->GetActorLocation() - FVector(0.f, 150.f, 0.f), Generator) - FVector(0.f, 0.f, 92.f);
-			PlaceSquad(World, *Squad, Inside, FVector(1.f, 0.f, 0.f));
+			// 3. Inside the (roofless) shed: the fight starts, everyone is moved out onto the arena.
+			const FVector2D ShedCentre = State.Shed.bIsValid ? State.Shed.GetCenter() : FVector2D(State.Generator->GetActorLocation());
+			const FVector Inside(ShedCentre.X - 100.f, ShedCentre.Y - 60.f, State.Outside.Z);
+			int32 Slot = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				const FVector Spot = TurnArenaSmokeUtils::OpenSpot(World, Inside + FVector(Slot++ * 90.f, 0.f, 0.f), Member, 80.f);
+				TurnArenaSmokeUtils::PlaceAt(Member, Spot, 0.f);
+			}
 			Next(State);
 			return true;
 		}
@@ -336,15 +296,54 @@ namespace TurnArenaLakeSmoke
 			{
 				return true;
 			}
-			const FCollisionQueryParams Params = OpenGroundParams(World);
-			const AOperativeCharacter* Leader = Squad->GetLeader();
-			const float Feet = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight();
-			const bool bIndoors = IsRoofed(World, Leader->GetActorLocation(), Feet, Params);
+			int32 InShed = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				InShed += State.Shed.bIsValid && State.Shed.IsInside(FVector2D(Member->GetActorLocation())) ? 1 : 0;
+			}
 			FTurnArenaChoice Arena;
 			const bool bFound = TurnBased->FindTurnArena(Arena);
-			Check(State, !bFound && UTurnBasedCombatSubsystem::DescribeArenaFault(Arena.LeaderFault).ToString().Contains(TEXT("Turn-based combat")),
-				FString::Printf(TEXT("inside the shed (roof overhead %d): no arena (%s) -> \"%s\""), bIndoors ? 1 : 0, TurnArenaRules::FaultName(Arena.LeaderFault),
-					*UTurnBasedCombatSubsystem::DescribeArenaFault(Arena.LeaderFault).ToString()));
+			Check(State, InShed >= 1 && bFound, FString::Printf(TEXT("%d operatives inside the shed: the fight may start (%s, arena %d cells)"), InShed,
+				TurnArenaRules::FaultName(Arena.LeaderFault), Arena.Verdict.ArenaCells));
+			const EGameFlowResult Result = Flow->RequestEnterTurnBased(true);
+			Check(State, Result == EGameFlowResult::Ok && TurnBased->IsActive(), TEXT("turn-based combat entered from the shed"));
+			if (TurnBased->IsActive())
+			{
+				CheckSquadOutsideShed(State, *TurnBased, *Squad, TEXT("moved out of the shed"));
+			}
+			Next(State);
+			return true;
+		}
+		case 5:
+		{
+			Flow->ExitTurnBasedToRealTime();
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			// 4. Deep inside the base building: refused.
+			ACameraZoneVolume* Base = TurnArenaSmokeUtils::FindBaseZone(World, State.Generator->GetActorLocation());
+			Check(State, Base != nullptr, TEXT("the base building's indoor camera zone"));
+			if (!Base)
+			{
+				return Finish(State, false);
+			}
+			PlaceSquad(World, *Squad, Base->GetActorLocation() - FVector(0.f, 0.f, Base->GetZoneHalfExtent().Z), FVector(0.f, 1.f, 0.f), 160.f);
+			Next(State);
+			return true;
+		}
+		case 6:
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			FTurnArenaChoice Arena;
+			const bool bFound = TurnBased->FindTurnArena(Arena);
+			const FString Line = UTurnBasedCombatSubsystem::DescribeArenaFault(Arena.LeaderFault).ToString();
+			Check(State, !bFound && Arena.LeaderFault == ETurnArenaFault::InsideBuilding && Line.Contains(TEXT("outside")),
+				FString::Printf(TEXT("deep inside the base building (leader %s): no arena (%s) -> \"%s\""), *Squad->GetLeader()->GetActorLocation().ToCompactString(),
+					TurnArenaRules::FaultName(Arena.LeaderFault), *Line));
 			return Finish(State, true);
 		}
 		default:
@@ -368,7 +367,7 @@ namespace TurnArenaLakeSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.TurnArenaLakeSmoke"),
-		TEXT("Dev check (designer report 2026-10-22): the turn-based grid only on open, level ground (never in a building); logs PASS/FAIL, then exits."),
+		TEXT("Dev check (game designer 2026-10-26): the turn-based grid round the leader in the lake compound, the shed / base subtracted, the squad moved out of the shed, refused deep in the base; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

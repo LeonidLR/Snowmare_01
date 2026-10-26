@@ -20,6 +20,10 @@ struct CODEXTACTICS_API FGorkyCellData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tactics")
 	EGorkyOccupantType OccupantType = EGorkyOccupantType::None;
+
+	/** Subtracted from the fight for good (a building, its door, a ladder - TurnArenaRules): clearing an occupant keeps it closed. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tactics")
+	bool bClosed = false;
 };
 
 /**
@@ -60,6 +64,15 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Tactics|Grid")
 	void ClearOccupant(const FIntPoint& Pos);
+
+	/**
+	 * Closes the cell for the whole fight (a building's / ladder's cell, game designer 2026-10-26): an obstacle that no unit leaving
+	 * it (ClearOccupant) can open again.
+	 */
+	void SetClosed(const FIntPoint& Pos);
+
+	/** The cell was closed by SetClosed. */
+	bool IsCellClosed(const FIntPoint& Pos) const;
 
 	UFUNCTION(BlueprintPure, Category = "Tactics|Grid")
 	AActor* GetOccupant(const FIntPoint& Pos) const;
