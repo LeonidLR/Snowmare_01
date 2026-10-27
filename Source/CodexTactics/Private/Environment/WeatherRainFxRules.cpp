@@ -125,6 +125,11 @@ bool WeatherRainFxRules::IsLightningActive(float StormAmount, bool bSuppressed, 
 	return Tuning.bLightning && !bSuppressed && StormAmount >= FMath::Max(Tuning.LightningMinStorm, 0.001f);
 }
 
+bool WeatherRainFxRules::IsLightningAllowed(bool bTemperateClimate, float StormAmount, bool bSuppressed, const FWeatherRainFxTuning& Tuning)
+{
+	return bTemperateClimate && IsLightningActive(StormAmount, bSuppressed, Tuning);
+}
+
 float WeatherRainFxRules::ComputeStrikeDelay(int32 Seed, int32 Index, const FWeatherRainFxTuning& Tuning)
 {
 	const float Min = FMath::Max(Tuning.LightningIntervalMin, 0.5f);

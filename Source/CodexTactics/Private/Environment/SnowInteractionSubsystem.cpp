@@ -11,6 +11,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Environment/EnvironmentSubsystem.h"
+#include "Environment/EnvironmentTrace.h"
 #include "Environment/SnowInteractionRules.h"
 #include "Environment/SnowStampSet.h"
 #include "Environment/WeatherPresenterActor.h"
@@ -266,6 +267,7 @@ void USnowInteractionSubsystem::ClearTracks()
 	if (World && RenderTarget)
 	{
 		UKismetRenderingLibrary::ClearRenderTarget2D(World, RenderTarget, FLinearColor::Transparent);
+		CODEX_ENV_TRACE(Log, World, TEXT("snow tracks render target cleared"));
 	}
 }
 
@@ -389,6 +391,7 @@ void USnowInteractionSubsystem::UpdateWindow(const FVector& Focus, float ViewYaw
 	{
 		RunShift(FVector2D(Shift.X, Shift.Y) / static_cast<double>(Window.Resolution));
 		++Metrics.ShiftPasses;
+		CODEX_ENV_TRACE(Verbose, this, TEXT("snow tracks window scrolled %d,%d texels"), Shift.X, Shift.Y);
 	}
 	Window.Origin = Origin;
 }
@@ -497,6 +500,7 @@ void USnowInteractionSubsystem::WriteParameters()
 	if (WindowParam != LastWindowParam)
 	{
 		Instance->SetVectorParameterValue(SnowInteractionLocal::ParamWindow, WindowParam);
+		CODEX_ENV_TRACE(Verbose, World, TEXT("snow tracks MPC window %s"), *WindowParam.ToString());
 		LastWindowParam = WindowParam;
 	}
 	if (!FMath::IsNearlyEqual(SnowRefill, LastRefillWritten, 1e-4f))

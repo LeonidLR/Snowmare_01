@@ -3,12 +3,13 @@
 // with a delay ... Make it appear at once."; UE-only, no Godot reference).
 //   CodexTactics.StartLightingSmoke (nullrhi; the lake, -LevelJson=L_Demo01_A_FrozenLake.json):
 //     A. at the command (the first engine tick after the map loaded, before the world ticked): the presenter is applying and has applied
-//        the 23:00 Snowfall state - sun / moon by the frame, MPC SnowAmount = the state, the eye adaptation snapping, the falling snow
+//        the 23:00 Snowfall state - sun / moon by the frame, MPC SnowAmount = the state, snapped by camera cuts at stable eye adaptation
+//        speeds (section 19: no 1000 f-stops/s window), the falling snow
 //        intensity already at its target (no ramp); the rig mode is logged (adopted with the map's lights, own after the cleanup).
 //     B. the level's lights are destroyed and the presenter re-spawned: in the same frame it builds its OWN rig (sun, sky atmosphere, sky
 //        light, height fog, moon, post-process), applies the night, 12:00 lights the own sun; Codex.Env.Visuals 0 leaves the own rig at its
 //        daylight baseline (never black), 1 applies again.
-//     C. a state jump (SetState, as a save load) snaps again (exposure window, snow at the new target); ForceWeather does not (smoothing).
+//     C. a state jump (SetState, as a save load) snaps again (camera-cut frames, snow at the new target); ForceWeather does not (smoothing).
 //   CodexTactics.StartSnowSmoke (rendered; the lake): the falling snow is active from the first frames, pre-warmed once at the level start
 //     (GetWarmupCount 1, simulated >= the flake life) at its full target intensity, particles in the air; the start cover (black until
 //     camera + snow are ready) was shown and is lifted; a weather change afterwards (ForceWeather Blizzard) fades in (current < target)
@@ -120,9 +121,12 @@ namespace StartLightingSmoke
 			FString::Printf(TEXT("A MPC SnowAmount %.3f = the state %.3f (read %d)"), MpcSnow, Env->GetSnowAmount(), bMpcRead ? 1 : 0));
 		const UPostProcessComponent* Post = Presenter->GetOwnPostProcess();
 		const FPostProcessSettings& Settings = Presenter->GetAdoptedPostProcess() ? Presenter->GetAdoptedPostProcess()->Settings : Post->Settings;
-		Check(State, Presenter->IsExposureSnapping() && Settings.bOverride_AutoExposureSpeedUp
-			&& FMath::IsNearlyEqual(Settings.AutoExposureSpeedUp, EnvironmentStartRules::ExposureSnapSpeed),
-			FString::Printf(TEXT("A the eye adaptation snaps (speed %.0f f-stops/s)"), Settings.AutoExposureSpeedUp));
+		// Section 19 (start flicker): the snap is the camera-cut frames (the engine's eye adaptation ForceTarget), never a fast speed window.
+		Check(State, Presenter->GetSecondsSinceSnap() >= 0.f && !Presenter->IsExposureSnapping()
+			&& EnvironmentStartRules::GetExposureFrameClosure(Settings.AutoExposureSpeedUp, 1.f / 60.f) <= EnvironmentStartRules::MaxStableExposureClosure
+			&& EnvironmentStartRules::GetExposureFrameClosure(Settings.AutoExposureSpeedDown, 1.f / 60.f) <= EnvironmentStartRules::MaxStableExposureClosure,
+			FString::Printf(TEXT("A snapped (%.2f s ago) by camera cuts, the eye adaptation at stable speeds (up %.1f down %.1f f-stops/s, no 1000 window)"),
+				Presenter->GetSecondsSinceSnap(), Settings.AutoExposureSpeedUp, Settings.AutoExposureSpeedDown));
 		const UWeatherSnowFxComponent* Snow = Presenter->GetSnowFx();
 		Check(State, Snow && Snow->GetTargetIntensity() > 0.f && FMath::IsNearlyEqual(Snow->GetCurrentIntensity(), Snow->GetTargetIntensity(), 1.e-4f),
 			FString::Printf(TEXT("A the falling snow is at its target from the start (%.2f / %.2f, no ramp)"), Snow ? Snow->GetCurrentIntensity() : -1.f,
@@ -221,8 +225,9 @@ namespace StartLightingSmoke
 		Env->SetState(Jump);
 		const UWeatherSnowFxComponent* Snow = Presenter->GetSnowFx();
 		Check(State, Env->GetSnapSerial() == SerialBefore + 1, TEXT("C SetState moves the snap serial"));
-		Check(State, Presenter->IsExposureSnapping() && Presenter->GetSecondsSinceSnap() < 0.05f,
-			FString::Printf(TEXT("C a state jump snaps the exposure again (%.3f s ago)"), Presenter->GetSecondsSinceSnap()));
+		Check(State, Presenter->GetSecondsSinceSnap() < 0.05f && Presenter->GetCameraCutFramesLeft() > 0,
+			FString::Printf(TEXT("C a state jump snaps the exposure again (%.3f s ago, %d camera-cut frames)"), Presenter->GetSecondsSinceSnap(),
+				Presenter->GetCameraCutFramesLeft()));
 		Check(State, Snow && FMath::IsNearlyEqual(Snow->GetCurrentIntensity(), Snow->GetTargetIntensity(), 1.e-4f) && Snow->GetTargetIntensity() > 0.9f,
 			FString::Printf(TEXT("C the snow jumps to the blizzard (%.2f / %.2f)"), Snow ? Snow->GetCurrentIntensity() : -1.f, Snow ? Snow->GetTargetIntensity() : -1.f));
 		const float Before = Snow ? Snow->GetCurrentIntensity() : 0.f;

@@ -86,9 +86,36 @@ namespace EnvironmentStartRules
 	/** The eye adaptation runs at the snap speed while SecondsSinceSnap is in [0, WindowSeconds) (a negative time = no snap yet). */
 	CODEXTACTICS_API bool IsExposureSnapActive(float SecondsSinceSnap, float WindowSeconds);
 
-	/** Eye adaptation speed (f-stops / s) while snapping: at 60 fps one frame closes e^-(1000/60) of the gap - settled on the first frame. */
-	constexpr float ExposureSnapSpeed = 1000.f;
+	/**
+	 * Share of the gap to its target the eye adaptation closes in one frame of FrameSeconds at Speed f-stops / s (the engine's exponential
+	 * approach: 1 - 2^(-Speed x FrameSeconds)).
+	 */
+	CODEXTACTICS_API float GetExposureFrameClosure(float Speed, float FrameSeconds);
 
-	/** Game seconds the snap speed is held after a snap (the authored adaptation speeds come back after it). */
-	constexpr float ExposureSnapSeconds = 1.f;
+	/** Speed capped so one frame of FrameSeconds closes at most MaxStableExposureClosure of the gap (a long PIE hitch frame too). */
+	CODEXTACTICS_API float ClampStableExposureSpeed(float Speed, float FrameSeconds);
+
+	/**
+	 * Section 19 (start flicker, 2026-10-27): the largest per-frame closure that stays stable. The scene colour is rendered pre-exposed with
+	 * the exposure READ BACK from the GPU a few frames late, so an adaptation that closes (almost) all of the gap in one frame chases its own
+	 * stale pre-exposure and oscillates (measured on the lake at 1000 f-stops / s: the mean luma jumping 17 <-> 237 every 2-4 frames for the
+	 * whole window, "flashes like a thunderstorm"); 30 f-stops / s (0.29 per 60 fps frame) was measured flat.
+	 */
+	constexpr float MaxStableExposureClosure = 0.5f;
+
+	/**
+	 * Frames after a snap rendered as camera cuts: the engine's eye adaptation jumps to its target on a camera cut (ForceTarget), so these
+	 * frames settle the exposure at the level start / a state jump (section 16; with the start cover over the first two), and the frame's
+	 * temporal history (TAA / motion blur) of the view's first placement is dropped.
+	 */
+	constexpr int32 SnapCameraCutFrames = 3;
+
+	/** Eye adaptation speed (f-stops / s) inside the optional snap window (Codex.Env.StartExposureSeconds > 0); stable (see above). */
+	constexpr float ExposureSnapSpeed = 30.f;
+
+	/**
+	 * Game seconds the snap speed is held after a snap. Section 19: 0 - the camera-cut frames already settle the exposure and the authored
+	 * speeds follow at once (the old 1 s window at 1000 f-stops / s was the start flicker). Codex.Env.StartExposureSeconds raises it.
+	 */
+	constexpr float ExposureSnapSeconds = 0.f;
 }

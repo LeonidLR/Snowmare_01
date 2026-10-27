@@ -28,5 +28,11 @@ public class CodexTacticsDev : ModuleRules
 			"RenderCore", // ... GRenderThreadTime / GGameThreadTime
 			"CodexTactics"
 		});
+
+		if (Target.bBuildEditor)
+		{
+			// StartFlickerShots: the PIE variant (CodexTactics.PIEFlickerShots loads a map and starts PIE in the level viewport).
+			PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "LevelEditor" });
+		}
 	}
 }
