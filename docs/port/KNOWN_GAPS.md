@@ -18,6 +18,18 @@
   he never walks (`cover slot not reached (556 cm off), stays in the open`); every right-corner check after it fails in turn. The log shows the
   formation running round him (`corner watch`, `rear guard: Z (column)`) - to look at with the 2026-10-26 formation-in-the-fight / group cover
   in combat changes (bc3a4a03).
+  **Investigation so far (2026-10-28, branch `fix/coversmoke-regression`, WIP - stopped on the user's request, no fix yet):**
+  - CVar A/B on efbda183 (`smoke_parallel -Commands CoverSmoke -NoRetry -PreCmds ...`): `Codex.Debug.MoveTrace 1` alone -> FAIL (same 556 cm);
+    `+ Codex.Squad.CombatFormation 0` -> **PASS** (157 s). `Codex.GroupCover.InCombat 0` not run yet. So the trigger is the squad keeping its
+    formation in the fight (3ceb5629 / dbb4b247, merged 90d7f281), not the group cover in combat.
+  - Evidence (`Codex.Debug.MoveTrace 1`): the leader's path to the right-hand slot is fine (`result 2, 2 points, length 527, partial 0`), then
+    `move completed: Blocked[Blocked], 556 cm from the goal, velocity 0` ~2.9 s later; the next cover order (to the wall's middle) ends the same
+    (`Blocked`, 296 cm). The leader is physically blocked from the start of the walk - most likely a follower who now walks into his formation slot
+    beside the leader at the wall (the smoke parks the others 4 m behind; with the formation off in the fight they stayed there) stands on the
+    leader's way along the wall face.
+  - Next: log the followers' positions at the order (or run with `Codex.Formation.Sectors 0`), confirm the blocker; decide between the game fix
+    (a follower in the leader's way along a cover walk should step aside / the leader's own cover walk should not be blocked by followers) and the
+    smoke fix (CoverSmoke is a single-operative cover check: Solo on / park the others for good). Then git bisect only if the A/B is ambiguous.
 
 - **`SuppressionSmoke` scene A can flake under load (seen once in a batch 2026-10-26, passed alone; NOT the combat formation).** The log
   (main checkout, 18:57:39): the marksman's second shot came 0.5 s after his first and hit the Commander -> the Commander himself became
