@@ -1,0 +1,249 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_14_3",
+  "comment": "Red team 14_3 (zigzag_corridor, aimed at #4,#7,#1): A narrow 4 m corridor with alternating 40/80 deg bends should keep requesting column, but the bend lookahead, the slanted L slot and the forward P slot should either drop out of column, put a bend wall between chain neighbours, or turn scanners to face the miter walls. Broke 1 (check, choice, members): #1 wall stare. First: #1 hedgehog n4 R1 s2 t=28.1s - L at L3.",
+  "bounds": {
+    "min": [
+      -2500,
+      -1500
+    ],
+    "max": [
+      7000,
+      2000
+    ]
+  },
+  "walls": [
+    {
+      "id": "L1",
+      "a": [
+        0,
+        -200
+      ],
+      "b": [
+        1572,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "L2",
+      "a": [
+        1572,
+        -200
+      ],
+      "b": [
+        2700,
+        740
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "L3",
+      "a": [
+        2700,
+        740
+      ],
+      "b": [
+        3828,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "L4",
+      "a": [
+        3828,
+        -200
+      ],
+      "b": [
+        5400,
+        -200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "R1w",
+      "a": [
+        0,
+        200
+      ],
+      "b": [
+        1428,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "R2w",
+      "a": [
+        1428,
+        200
+      ],
+      "b": [
+        2700,
+        1260
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "R3w",
+      "a": [
+        2700,
+        1260
+      ],
+      "b": [
+        3972,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "R4w",
+      "a": [
+        3972,
+        200
+      ],
+      "b": [
+        5400,
+        200
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "corridor",
+      "poly": [
+        [
+          300,
+          -200
+        ],
+        [
+          1572,
+          -200
+        ],
+        [
+          2700,
+          740
+        ],
+        [
+          3828,
+          -200
+        ],
+        [
+          5100,
+          -200
+        ],
+        [
+          5100,
+          200
+        ],
+        [
+          3972,
+          200
+        ],
+        [
+          2700,
+          1260
+        ],
+        [
+          1428,
+          200
+        ],
+        [
+          300,
+          200
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          -1000,
+          0
+        ],
+        [
+          1500,
+          0
+        ],
+        [
+          2700,
+          1000
+        ],
+        [
+          3900,
+          0
+        ],
+        [
+          5400,
+          0
+        ],
+        [
+          6200,
+          0
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "column"
+        }
+      ],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      -1000,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "14_3",
+    "family": "zigzag_corridor",
+    "intent": "A narrow 4 m corridor with alternating 40/80 deg bends should keep requesting column, but the bend lookahead, the slanted L slot and the forward P slot should either drop out of column, put a bend wall between chain neighbours, or turn scanners to face the miter walls.",
+    "target_checks": [
+      4,
+      7,
+      1
+    ],
+    "client": "claude",
+    "config": "25d9a2d8",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-28 07:10"
+  },
+  "expected_fail": [
+    {
+      "check": 1,
+      "choice": "hedgehog",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 28.1,
+      "what": "L at L3",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

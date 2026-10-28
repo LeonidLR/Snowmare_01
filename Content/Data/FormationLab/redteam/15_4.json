@@ -1,0 +1,113 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_15_4",
+  "comment": "Red team 15_4 (wall_ends_at_turn, aimed at #13,#14): After a 90 deg right turn the squad arrives at a wall whose end is only 4 m to the left of the leader: the wall layout built for a long wall should leave the open ring round the end, along the second face, outside every cone, and the late formation switch should leave the rear or flanks unwatched on. Broke 3 (check, choice, members): #5 slots / spacing. First: #5 auto n4 R1 s2 t=18.8s - K-L 68 cm apart.",
+  "bounds": {
+    "min": [
+      -1500,
+      -4000
+    ],
+    "max": [
+      6000,
+      2000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        2600,
+        -2650
+      ],
+      "b": [
+        4500,
+        -2650
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3000,
+          0
+        ],
+        [
+          3000,
+          -2450
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "15_4",
+    "family": "wall_ends_at_turn",
+    "intent": "After a 90 deg right turn the squad arrives at a wall whose end is only 4 m to the left of the leader: the wall layout built for a long wall should leave the open ring round the end, along the second face, outside every cone, and the late formation switch should leave the rear or flanks unwatched on",
+    "target_checks": [
+      13,
+      14
+    ],
+    "client": "claude",
+    "config": "25d9a2d8",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-28 07:10"
+  },
+  "expected_fail": [
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 18.8,
+      "what": "K-L 68 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 18.8,
+      "what": "K-L 68 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 18.8,
+      "what": "K-L 71 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

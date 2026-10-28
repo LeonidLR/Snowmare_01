@@ -1,0 +1,182 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_16_4",
+  "comment": "Red team 16_4 (t_l_junction, aimed at #13,#14): After a 90 deg turn the squad walks end-on into the free tip of a T stem. The wall layout meant for a flat face should leave one flank along a stem face uncovered in the 6 m ring (check 13), and the turn right before arrival should leave the rear or flanks unheld on the way in (check 14). Broke 6 (check, choice, members): #4 expected formation per zone, #5 slots / spacing. First: #4 auto n2 R1 s1 - Z1 wants wall: 0 %.",
+  "bounds": {
+    "min": [
+      -500,
+      -1500
+    ],
+    "max": [
+      4000,
+      5000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        2000,
+        2700
+      ],
+      "b": [
+        2000,
+        4500
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "W2",
+      "a": [
+        1000,
+        4500
+      ],
+      "b": [
+        3000,
+        4500
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z1",
+      "kind": "wall_end",
+      "poly": [
+        [
+          1500,
+          2000
+        ],
+        [
+          2500,
+          2000
+        ],
+        [
+          2500,
+          2650
+        ],
+        [
+          1500,
+          2650
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          500,
+          0
+        ],
+        [
+          2000,
+          0
+        ],
+        [
+          2000,
+          2560
+        ]
+      ],
+      "expect": [
+        {
+          "zone": "Z1",
+          "formation": "wall"
+        }
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      500,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "16_4",
+    "family": "t_l_junction",
+    "intent": "After a 90 deg turn the squad walks end-on into the free tip of a T stem. The wall layout meant for a flat face should leave one flank along a stem face uncovered in the 6 m ring (check 13), and the turn right before arrival should leave the rear or flanks unheld on the way in (check 14).",
+    "target_checks": [
+      13,
+      14
+    ],
+    "client": "claude",
+    "config": "25d9a2d8",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-28 07:10"
+  },
+  "expected_fail": [
+    {
+      "check": 4,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "Z1 wants wall: 0 %",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 4,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "Z1 wants wall: 0 %",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 4,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "Z1 wants wall: 0 %",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 10.2,
+      "what": "K-P 57 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 10.2,
+      "what": "K-P 57 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "all_forward",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 10.2,
+      "what": "K-P 39 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

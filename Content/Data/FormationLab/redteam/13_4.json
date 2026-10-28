@@ -1,0 +1,131 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_13_4",
+  "comment": "Red team 13_4 (dead_end_after_turn, aimed at #13,#14,#1): Walking in echelon_right beside a left-side free wall, the squad turns left straight into that wall 3.8 m after the turn. The re-slotting into the wall layout happens mid-turn, so the rear and flank coverage of check 14 and the 6 m ring coverage at the wall end of check 13 may lapse. Broke 5 (check, choice, members): #3 flicker, #5 slots / spacing, #14 covered approach to the wall. First: #3 auto n2 R1 s1 t=16.3s - wall -> wedge, back after 0 s.",
+  "bounds": {
+    "min": [
+      -1500,
+      -2000
+    ],
+    "max": [
+      4500,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1800,
+        -500
+      ],
+      "b": [
+        3200,
+        -500
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          2500,
+          0
+        ],
+        [
+          2500,
+          -380
+        ]
+      ]
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "13_4",
+    "family": "dead_end_after_turn",
+    "intent": "Walking in echelon_right beside a left-side free wall, the squad turns left straight into that wall 3.8 m after the turn. The re-slotting into the wall layout happens mid-turn, so the rear and flank coverage of check 14 and the 6 m ring coverage at the wall end of check 13 may lapse.",
+    "target_checks": [
+      13,
+      14,
+      1
+    ],
+    "client": "claude",
+    "config": "25d9a2d8",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-28 07:10"
+  },
+  "expected_fail": [
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.3,
+      "what": "wall -> wedge, back after 0 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.3,
+      "what": "wall -> wedge, back after 0 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.3,
+      "what": "wall -> diamond, back after 0 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 5,
+      "choice": "diamond",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 16.2,
+      "what": "K-L 20 cm apart",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 14,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": null,
+      "what": "flank 100 %",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

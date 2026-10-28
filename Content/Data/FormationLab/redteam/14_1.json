@@ -1,0 +1,185 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_14_1",
+  "comment": "Red team 14_1 (stubs_pillars, aimed at #5,#7,#1): Short pillars sit exactly on the P/L diamond slots (2.6 m aside) and a stub pokes toward the path, so the open-terrain diamond should drive slots into the pillars or put a pillar between the leader and a flank man without triggering any echelon or column fold. Broke 4 (check, choice, members): #3 flicker, #6 rear man pace. First: #3 auto n2 R1 s1 t=18.2s - wedge -> echelon_left, back after 4.9 s.",
+  "bounds": {
+    "min": [
+      -1000,
+      -1500
+    ],
+    "max": [
+      5000,
+      1500
+    ]
+  },
+  "walls": [
+    {
+      "id": "P1",
+      "a": [
+        1500,
+        230
+      ],
+      "b": [
+        1500,
+        290
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "P2",
+      "a": [
+        1500,
+        -290
+      ],
+      "b": [
+        1500,
+        -230
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "P3",
+      "a": [
+        2500,
+        240
+      ],
+      "b": [
+        2560,
+        240
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "P4",
+      "a": [
+        2200,
+        -560
+      ],
+      "b": [
+        2200,
+        -500
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "S1",
+      "a": [
+        3200,
+        150
+      ],
+      "b": [
+        3200,
+        300
+      ],
+      "height": 300,
+      "thickness": 40
+    },
+    {
+      "id": "P5",
+      "a": [
+        3800,
+        -260
+      ],
+      "b": [
+        3860,
+        -260
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4500,
+          0
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      0
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "14_1",
+    "family": "stubs_pillars",
+    "intent": "Short pillars sit exactly on the P/L diamond slots (2.6 m aside) and a stub pokes toward the path, so the open-terrain diamond should drive slots into the pillars or put a pillar between the leader and a flank man without triggering any echelon or column fold.",
+    "target_checks": [
+      5,
+      7,
+      1
+    ],
+    "client": "claude",
+    "config": "25d9a2d8",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-28 07:10"
+  },
+  "expected_fail": [
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": 18.2,
+      "what": "wedge -> echelon_left, back after 4.9 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 18.2,
+      "what": "wedge -> echelon_left, back after 4.9 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 18.2,
+      "what": "diamond -> echelon_left, back after 4.9 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 2,
+      "t": 22,
+      "what": "p95 203 cm; Z 229 cm behind",
+      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}

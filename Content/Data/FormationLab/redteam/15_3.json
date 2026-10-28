@@ -1,0 +1,122 @@
+{
+  "schema": "codex.formation_layout/1",
+  "name": "redteam_15_3",
+  "comment": "Red team 15_3 (u_turn, aimed at #7,#9,#3): The route walks 4 m off a free-standing 30 m wall, makes a U-turn round its end and comes back on the other side: the echelon/column fold during the 180 deg turn should leave a member on the far side of the wall end for a moment, and nobody may slice the pie round the end. Broke 3 (check, choice, members): #3 flicker. First: #3 auto n2 R1 s1 t=32.4s - echelon_left -> wedge, back after 5.6 s.",
+  "bounds": {
+    "min": [
+      -1500,
+      -3000
+    ],
+    "max": [
+      6500,
+      3000
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "a": [
+        1000,
+        0
+      ],
+      "b": [
+        4000,
+        0
+      ],
+      "height": 300,
+      "thickness": 40
+    }
+  ],
+  "zones": [],
+  "routes": [
+    {
+      "id": "R1",
+      "pace": "walk",
+      "points": [
+        [
+          0,
+          -400
+        ],
+        [
+          4400,
+          -400
+        ],
+        [
+          4800,
+          0
+        ],
+        [
+          4400,
+          400
+        ],
+        [
+          500,
+          400
+        ]
+      ],
+      "expect": [],
+      "threats": [],
+      "expect_bypass": []
+    }
+  ],
+  "ground_z": 0,
+  "spawn": {
+    "pos": [
+      0,
+      -400
+    ],
+    "yaw": 0
+  },
+  "redteam": {
+    "id": "15_3",
+    "family": "u_turn",
+    "intent": "The route walks 4 m off a free-standing 30 m wall, makes a U-turn round its end and comes back on the other side: the echelon/column fold during the 180 deg turn should leave a member on the far side of the wall end for a moment, and nobody may slice the pie round the end.",
+    "target_checks": [
+      7,
+      9,
+      3
+    ],
+    "client": "claude",
+    "config": "25d9a2d8",
+    "members": [
+      2,
+      3,
+      4
+    ],
+    "seeds": 2,
+    "seed": 1,
+    "date": "2026-10-28 07:10"
+  },
+  "expected_fail": [
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 2,
+      "route": "R1",
+      "seed": 1,
+      "t": 32.4,
+      "what": "echelon_left -> wedge, back after 5.6 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 3,
+      "route": "R1",
+      "seed": 1,
+      "t": 32.4,
+      "what": "echelon_left -> wedge, back after 5.6 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    },
+    {
+      "check": 3,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "t": 32.4,
+      "what": "echelon_left -> diamond, back after 5.6 s",
+      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+    }
+  ]
+}
