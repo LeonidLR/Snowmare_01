@@ -428,6 +428,7 @@ otherwise on 2026-10-26** - implemented:
   SUPERSEDED the same day (user decision 2026-10-26 "group cover in combat: YES"): the group cover family runs in the fight too
   (`USquadSubsystem::IsGroupCoverFormation`, "Group cover order" above); only a spotted trap's Solo keeps `IsExplorationFormation`.
 - The B handler (`ACodexTacticsPlayerController::ToggleSoloMode`, `IA_SoloMode`) is unchanged.
+- **A follower yields to the leader's own walk (bug 2026-10-28, CoverSmoke):** with the formation on in the fight a follower walking into his slot beside the leader at a wall stood on the leader's cover walk along it - the walk ended `Blocked` at velocity 0. While the leader walks an own order (cover / move; not the wall order / slide) a follower on his straight way ahead, or whose slot lies on it, steps aside (`FormationRuntime::YieldFromLeaderWay`: 80 cm corridor, 120 cm aside on his own side first, on the nav mesh) and takes his slot again once the way is clear. `Codex.Formation.YieldToLeader 0` = the old follow (A/B). Tests `CodexTactics.Formation.Runtime.Yield.*`.
 Tests `CodexTactics.Squad.Orders.CombatFormation.SquadStaysInFormationThroughTheFight`; smoke `CombatFormationSmoke` (the wave fight starts: Solo off,
 formation on - `CombatFormation 0` reproduces the bug; pause, B and C ordered 6 m to the sides, A selected again, resume: both carry their orders out, then
 rejoin round A; A walks 11 m - both follow; B (the key) in the fight: Solo on, A walks 8 m, they hold; B again: Regroup, both back at A).

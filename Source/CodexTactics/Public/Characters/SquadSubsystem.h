@@ -579,6 +579,8 @@ private:
 		/** Rules v2.2: the rear guard's last formation move direction while he catches up (FormationRuntime::RearGuardCatchUpLook). */
 		float CatchUpMoveYaw = 0.f;
 		bool bCatchUp = false;
+		/** Bug 2026-10-28: stepping aside out of the leader's own walk (FormationRuntime::YieldFromLeaderWay); logged once per yield. */
+		bool bYielding = false;
 	};
 
 	/** Formation look sectors: the state over frames (SquadSubsystemFormation.cpp). */
