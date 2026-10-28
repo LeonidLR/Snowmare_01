@@ -92,14 +92,32 @@ bool FEnvironmentStartSnapTest::RunTest(const FString&)
 	TestFalse(TEXT("a weather change in play does not snap (same serial)"), EnvironmentStartRules::ShouldSnap(false, 3, 3));
 	TestTrue(TEXT("a state jump (save load) snaps"), EnvironmentStartRules::ShouldSnap(false, 3, 4));
 
-	TestFalse(TEXT("no snap yet"), EnvironmentStartRules::IsExposureSnapActive(-1.f, EnvironmentStartRules::ExposureSnapSeconds));
-	TestTrue(TEXT("snapping on the snap frame"), EnvironmentStartRules::IsExposureSnapActive(0.f, EnvironmentStartRules::ExposureSnapSeconds));
+	TestFalse(TEXT("no snap yet"), EnvironmentStartRules::IsExposureSnapActive(-1.f, 1.f));
+	TestTrue(TEXT("snapping on the snap frame"), EnvironmentStartRules::IsExposureSnapActive(0.f, 1.f));
 	TestTrue(TEXT("snapping inside the window"), EnvironmentStartRules::IsExposureSnapActive(0.99f, 1.f));
 	TestFalse(TEXT("authored speeds after the window"), EnvironmentStartRules::IsExposureSnapActive(1.f, 1.f));
 
-	// The eye adaptation closes 1 - 2^(-speed x dt) of the gap per frame: at the snap speed one 60 fps frame closes all of it.
-	const float Closed = 1.f - FMath::Exp2(-EnvironmentStartRules::ExposureSnapSpeed / 60.f);
-	TestTrue(FString::Printf(TEXT("one frame settles the exposure (%.6f of the gap)"), Closed), Closed > 0.9999f);
+	// Section 19 (start flicker 2026-10-27): no fast adaptation window by default - the camera-cut frames settle the exposure.
+	TestFalse(TEXT("the default window is off (the level start is never at a fast speed)"),
+		EnvironmentStartRules::IsExposureSnapActive(0.f, EnvironmentStartRules::ExposureSnapSeconds));
+	TestTrue(TEXT("the snap has camera-cut frames (the engine's eye adaptation ForceTarget)"), EnvironmentStartRules::SnapCameraCutFrames >= 2);
+	// The eye adaptation closes 1 - 2^(-speed x dt) of the gap per frame.
+	TestTrue(TEXT("the old 1000 f-stops / s closed the whole gap in one 60 fps frame (the oscillation)"),
+		EnvironmentStartRules::GetExposureFrameClosure(1000.f, 1.f / 60.f) > 0.9999f);
+	const float SnapClosure = EnvironmentStartRules::GetExposureFrameClosure(EnvironmentStartRules::ExposureSnapSpeed, 1.f / 60.f);
+	TestTrue(FString::Printf(TEXT("the optional snap speed is stable at 60 fps (%.3f of the gap per frame)"), SnapClosure),
+		SnapClosure <= EnvironmentStartRules::MaxStableExposureClosure);
+	TestEqual(TEXT("3 f-stops / s closes 0.034 per 60 fps frame"), EnvironmentStartRules::GetExposureFrameClosure(3.f, 1.f / 60.f), 1.f - FMath::Exp2(-0.05f), 1.e-5f);
+	// A long frame (a PIE hitch) caps the speed so that frame stays stable too.
+	for (const float FrameSeconds : { 1.f / 120.f, 1.f / 60.f, 0.1f, 0.5f })
+	{
+		const float Capped = EnvironmentStartRules::ClampStableExposureSpeed(1000.f, FrameSeconds);
+		TestTrue(FString::Printf(TEXT("1000 capped to %.1f at %.3f s per frame: closure %.3f"), Capped, FrameSeconds,
+					 EnvironmentStartRules::GetExposureFrameClosure(Capped, FrameSeconds)),
+			EnvironmentStartRules::GetExposureFrameClosure(Capped, FrameSeconds) <= EnvironmentStartRules::MaxStableExposureClosure + 1.e-4f);
+	}
+	TestEqual(TEXT("a stable speed is kept as it is"), EnvironmentStartRules::ClampStableExposureSpeed(3.f, 1.f / 60.f), 3.f);
+	TestEqual(TEXT("a negative speed is 0"), EnvironmentStartRules::ClampStableExposureSpeed(-1.f, 1.f / 60.f), 0.f);
 	return true;
 }
 

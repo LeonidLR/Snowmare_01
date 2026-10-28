@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "Environment/RainFxSettings.h"
+#include "Environment/WeatherRainFxComponent.h"
 #include "Environment/SnowOverlayRules.h"
 #include "Environment/WeatherRainFxRules.h"
 
@@ -170,6 +171,15 @@ bool FEnvironmentRainFxLightningTest::RunTest(const FString&)
 	TestFalse(TEXT("rain only: no lightning"), WeatherRainFxRules::IsLightningActive(Tuning.LightningMinStorm * 0.9f, false, Tuning));
 	TestTrue(TEXT("storm: lightning"), WeatherRainFxRules::IsLightningActive(1.f, false, Tuning));
 	TestFalse(TEXT("storm but suppressed"), WeatherRainFxRules::IsLightningActive(1.f, true, Tuning));
+	// Section 19 (start flicker report "as if there's a thunderstorm"): the climate gate at the source.
+	TestTrue(TEXT("temperate storm: lightning allowed"), WeatherRainFxRules::IsLightningAllowed(true, 1.f, false, Tuning));
+	TestFalse(TEXT("arctic blizzard (storm amount 1): never lightning"), WeatherRainFxRules::IsLightningAllowed(false, 1.f, false, Tuning));
+	TestFalse(TEXT("temperate rain: no lightning"), WeatherRainFxRules::IsLightningAllowed(true, 0.f, false, Tuning));
+	TestFalse(TEXT("forced on (Codex.Env.Lightning 1) still not on an arctic level"),
+		WeatherRainFxRules::IsLightningAllowed(false, 1.f, WeatherRainFxRules::IsLightningSuppressed(1, true), Tuning));
+	const FWeatherRainFxInput Default;
+	TestFalse(TEXT("a default input (before the first application) is not temperate"), Default.bTemperateClimate);
+	TestTrue(TEXT("a default input has no storm"), Default.StormAmount == 0.f);
 
 	// Deterministic schedule within the interval, varying by seed and strike.
 	bool bVaries = false;

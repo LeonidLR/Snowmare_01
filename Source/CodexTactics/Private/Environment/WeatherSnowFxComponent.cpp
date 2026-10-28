@@ -13,6 +13,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Environment/EnvironmentStartRules.h"
+#include "Environment/EnvironmentTrace.h"
 #include "Environment/SnowFxSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
@@ -226,6 +227,7 @@ void UWeatherSnowFxComponent::ActivateWarmedUp()
 #if WITH_EDITORONLY_DATA
 	Niagara->bWaitForCompilationOnActivate = false;
 #endif
+	CODEX_ENV_TRACE(Log, this, TEXT("snow Niagara activated (warm-up), active %d"), Niagara->IsActive() ? 1 : 0);
 	if (!Niagara->IsActive())
 	{
 		// Niagara deferred it (system / PSOs not ready): the warm-up runs on the first tick the system is active, still full at once.
@@ -247,6 +249,7 @@ void UWeatherSnowFxComponent::RunWarmup()
 		Niagara->AdvanceSimulation(LastWarmupTicks, LastWarmupSeconds / LastWarmupTicks);
 	}
 	++WarmupCount;
+	CODEX_ENV_TRACE(Log, this, TEXT("snow warm-up %.1f s (%d ticks)"), LastWarmupSeconds, LastWarmupTicks);
 	UE_LOG(LogCodexTactics, Log, TEXT("WeatherSnowFx: start warm-up %.1f s (%d ticks) at intensity %.2f, focus %s, engine frame %llu: %s"), LastWarmupSeconds,
 		LastWarmupTicks, CurrentIntensity, *LastFocus.ToCompactString(), static_cast<uint64>(GFrameCounter), *DescribeParticles());
 }
@@ -528,6 +531,7 @@ void UWeatherSnowFxComponent::Refresh()
 			UpdatePlacement();
 			UpdateKillBoxes();
 			Fx->Activate(true);
+			CODEX_ENV_TRACE(Log, this, TEXT("snow Niagara activated at intensity %.2f"), CurrentIntensity);
 		}
 	}
 	else if (bWantSnow)

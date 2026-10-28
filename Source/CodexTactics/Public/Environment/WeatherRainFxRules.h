@@ -322,6 +322,12 @@ namespace WeatherRainFxRules
 	/** Lightning runs: the switch, the storm amount at least LightningMinStorm, and not suppressed (automated run / console). */
 	CODEXTACTICS_API bool IsLightningActive(float StormAmount, bool bSuppressed, const FWeatherRainFxTuning& Tuning);
 
+	/**
+	 * Section 19 (user report 2026-10-27, "flashes as if there's a thunderstorm" at the start): lightning only ever on a TEMPERATE level in its
+	 * Storm (IsLightningActive); an arctic level (a Blizzard included) or an unset climate never flashes.
+	 */
+	CODEXTACTICS_API bool IsLightningAllowed(bool bTemperateClimate, float StormAmount, bool bSuppressed, const FWeatherRainFxTuning& Tuning);
+
 	/** Lightning console switch Codex.Env.Lightning: -1 auto (off on automated runs: smokes, bots, captures), 0 off, 1 on. True = suppressed. */
 	CODEXTACTICS_API bool IsLightningSuppressed(int32 ConsoleValue, bool bAutomatedRun);
 

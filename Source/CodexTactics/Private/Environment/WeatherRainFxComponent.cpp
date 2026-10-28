@@ -10,6 +10,7 @@
 #include "Engine/StreamableManager.h"
 #include "Engine/World.h"
 #include "Environment/RainFxSettings.h"
+#include "Environment/EnvironmentTrace.h"
 #include "Environment/WeatherSnowFxComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
@@ -496,6 +497,10 @@ void UWeatherRainFxComponent::RefreshScreenDrops(const FWeatherRainFxTuning& Act
 	if (ScreenDropsPost)
 	{
 		// Off = the component disabled: no post-process pass at all (zero cost when it does not rain).
+		if (ScreenDropsPost->bEnabled != bWant)
+		{
+			CODEX_ENV_TRACE(Log, this, TEXT("rain screen drops %s (strength %.2f)"), bWant ? TEXT("on") : TEXT("off"), LastScreenDropsStrength);
+		}
 		ScreenDropsPost->bEnabled = bWant;
 	}
 }
@@ -530,6 +535,8 @@ void UWeatherRainFxComponent::SetFlash(float Scale, const FWeatherRainFxTuning& 
 		FlashLight->SetIntensity(bOn ? Active.LightningFlashLux * Scale : 0.f);
 		if (FlashLight->IsVisible() != bOn)
 		{
+			CODEX_ENV_TRACE(Log, this, TEXT("lightning flash %s (scale %.2f, %.2f lux, strike %d)"), bOn ? TEXT("ON") : TEXT("off"), Scale,
+				FlashLight->Intensity, StrikeIndex);
 			FlashLight->SetVisibility(bOn);
 		}
 	}
@@ -557,7 +564,7 @@ void UWeatherRainFxComponent::UpdateLightning(const FWeatherRainFxTuning& Active
 	const double Now = World->GetTimeSeconds();
 	const bool bSuppressed = WeatherRainFxRules::IsLightningSuppressed(WeatherRainFx::CVarLightning.GetValueOnGameThread(), WeatherRainFx::IsAutomatedRun());
 	const bool bActive = bVisualsEnabled && WeatherRainFx::CanShowRain()
-		&& WeatherRainFxRules::IsLightningActive(LastInput.StormAmount, bSuppressed, Active);
+		&& WeatherRainFxRules::IsLightningAllowed(LastInput.bTemperateClimate, LastInput.StormAmount, bSuppressed, Active);
 	if (bActive && !bLightningRunning)
 	{
 		// A storm (re)starts: the schedule is derived from the environment's RNG state of this moment (deterministic, never advancing it).
@@ -569,6 +576,10 @@ void UWeatherRainFxComponent::UpdateLightning(const FWeatherRainFxTuning& Active
 	else if (!bActive)
 	{
 		bLightningRunning = false;
+	}
+	if (!LastInput.bTemperateClimate)
+	{
+		StrikeTime = -1.; // section 19: never a flash outside a temperate level, not even a strike in flight
 	}
 	if (bLightningRunning && Now >= NextStrikeTime)
 	{
@@ -624,6 +635,7 @@ void UWeatherRainFxComponent::ActivateWarmedUp()
 	RainNiagara->bWaitForCompilationOnActivate = true;
 #endif
 	RainNiagara->Activate(true);
+	CODEX_ENV_TRACE(Log, this, TEXT("rain Niagara activated (warm-up), active %d"), RainNiagara->IsActive() ? 1 : 0);
 #if WITH_EDITORONLY_DATA
 	RainNiagara->bWaitForCompilationOnActivate = false;
 #endif
@@ -682,6 +694,7 @@ void UWeatherRainFxComponent::Refresh()
 				UpdatePlacement();
 				UpdateKillBoxes();
 				Rain->Activate(true);
+				CODEX_ENV_TRACE(Log, this, TEXT("rain Niagara activated at intensity %.2f"), CurrentIntensity);
 			}
 		}
 		else if (bWantRain)

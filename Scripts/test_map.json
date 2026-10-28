@@ -36,7 +36,7 @@
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke",
-    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke"
+    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -51,6 +51,7 @@
     "ClimateSmoke": { "map": "/Game/Environment/Weather/Test/L_WeatherRainTest", "_why": "climate profiles 2026-10-26 (section 17): the temperate test map (its level JSON L_WeatherRainTest.json is read by map name)" },
     "RainSmoke": { "rendered": true, "map": "/Game/Environment/Weather/Test/L_WeatherRainTest", "timeout": 600, "_why": "rain visuals 2026-10-26 (section 18): the rain / puddle Niagara systems, the screen-drops post process and the wet overlays never load without a renderer" },
     "StartLightingSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 400, "_why": "start lighting 2026-10-25 (designer: a sunset first, then night; snow late): the start state applied before the first world tick, the own rig without the level lights, snap on a state jump" },
+    "StartFlickerSmoke": { "rendered": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "timeout": 1200, "_why": "start flicker 2026-10-27 (section 19): opens the lake, the factory, L_MovementTest and L_WeatherRainTest and reads their first 180 rendered frames back - no mean-luma jump (the old 1000 f-stops/s exposure window flickered), no lightning outside a temperate Storm" },
     "StartSnowSmoke": { "rendered": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "start lighting 2026-10-25: the falling snow pre-warmed and at full density from the first frames; the snow FX never spawns without a renderer" },
     "SnowIndoorSmoke": { "rendered": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "falling snow 2026-10-23 (user: snow fell INSIDE the hut): a pixel A/B of the snow Niagara system under the fishermen's hut roof in a blizzard, indoor kill off (control) / on / outside; the snow FX never spawns without a renderer" },
     "SnowTracksSmoke": { "rendered": true, "_why": "interactive snow 2026-10-23: USnowInteractionSubsystem draws into RT_SnowInteraction and the smoke reads it back; it is not even created without a renderer" },
@@ -840,9 +841,9 @@
     {
       "name": "start-lighting",
       "_comment": "2026-10-25 environment section 16 (game designer: the level opens in its final look, the presenter stands alone): EnvironmentStartRules, the presenter's own rig / snap / editor preview, the snow start warm-up, the map cleanup script.",
-      "globs": ["Source/**/Environment/EnvironmentStartRules*", "Source/**/Environment/WeatherPresenterActor*", "Source/**/Environment/WeatherSnowFxComponent*", "Source/**/Environment/EnvironmentSubsystem*", "Source/**/Debug/StartLighting*", "Source/CodexTacticsTests/Private/Environment/EnvironmentStartLightingTest*", "Scripts/Editor/remove_level_lighting.py"],
+      "globs": ["Source/**/Environment/EnvironmentStartRules*", "Source/**/Environment/WeatherPresenterActor*", "Source/**/Environment/WeatherSnowFxComponent*", "Source/**/Environment/EnvironmentSubsystem*", "Source/**/Debug/StartLighting*", "Source/**/Debug/StartFlicker*", "Source/**/Environment/EnvironmentTrace*", "Source/CodexTacticsTests/Private/Environment/EnvironmentStartLightingTest*", "Scripts/Editor/remove_level_lighting.py", "Scripts/Tools/flicker_strip.py", "Scripts/Tools/capture_start_flicker.ps1"],
       "tests": ["CodexTactics.Environment.StartLighting", "CodexTactics.Environment.Visuals", "CodexTactics.Environment.SnowFx"],
-      "smokes": ["StartLightingSmoke", "StartSnowSmoke", "WeatherSmoke", "WeatherLakeSmoke"]
+      "smokes": ["StartLightingSmoke", "StartSnowSmoke", "StartFlickerSmoke", "WeatherSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "falling-snow",

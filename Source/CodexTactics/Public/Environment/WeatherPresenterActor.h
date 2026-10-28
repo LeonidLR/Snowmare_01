@@ -153,8 +153,10 @@ public:
 	const FWeatherRigPlan& GetRigPlan() const { return RigPlan; }
 	/** Section 16: game seconds since the last snap (level start / state jump); negative before the first. */
 	float GetSecondsSinceSnap() const;
-	/** Section 16: the eye adaptation runs at the snap speed now. */
+	/** Section 16: the eye adaptation runs at the snap speed now (section 19: only with Codex.Env.StartExposureSeconds > 0). */
 	bool IsExposureSnapping() const;
+	/** Section 19: camera-cut frames still to come after the last snap (they settle the exposure: the engine's ForceTarget). */
+	int32 GetCameraCutFramesLeft() const { return CameraCutFramesLeft; }
 	/** Section 16: the game time of the first application (0 at a level start = in BeginPlay, before the world's first tick); -1 = none. */
 	double GetFirstApplyGameTime() const { return FirstApplyTime; }
 
@@ -436,6 +438,8 @@ private:
 	float LastRecaptureSunElevation = -1000.f;
 	EWeatherState LastRecaptureWeather = EWeatherState::Clear;
 	int32 ApplyCount = 0;
+	/** Section 19 trace: the exposure mode last logged (-1 = none yet, 0 = authored speeds, 1 = snap). */
+	int8 TracedExposureSnap = -1;
 	FVector LastWindDirection = FVector::ForwardVector;
 	float LastSnowApplyTime = -1.f;
 	/** Section 18: DA_RainFX.WetExposureBias x Wetness on a temperate level (0 elsewhere), added to the exposure bias. */

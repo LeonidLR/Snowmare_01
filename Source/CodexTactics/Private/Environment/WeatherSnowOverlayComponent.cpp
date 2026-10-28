@@ -10,6 +10,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Environment/EnvironmentTrace.h"
 #include "Environment/SnowOverlayRules.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -148,6 +149,14 @@ UWeatherSnowOverlayComponent::UWeatherSnowOverlayComponent()
 	WetGroundMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(WeatherSnowOverlay::DefaultWetGroundMaterialPath));
 	// The tactical view: ~60 m around its focus covers the screen with margin (orchestrator cap, 2026-10-22).
 	MaxDistance = 6000.f;
+}
+
+namespace WeatherSnowOverlayTrace
+{
+	/** Section 19 trace: overlays put on / taken off / Nanite fallbacks forced by the SyncOverlays in progress. */
+	int32 Added = 0;
+	int32 Removed = 0;
+	int32 NaniteOff = 0;
 }
 
 bool UWeatherSnowOverlayComponent::CanDraw() const
@@ -590,6 +599,8 @@ void UWeatherSnowOverlayComponent::RefreshTargets()
 	const int32 Summary = Targets.Num() * 7919 + VerdictCounts[static_cast<int32>(SnowOverlayRules::ESnowTargetVerdict::Covered)] * 31
 		+ VerdictCounts[static_cast<int32>(SnowOverlayRules::ESnowTargetVerdict::Interior)] + GroundTargets.Num() * 104729;
 	const double Ms = (FPlatformTime::Seconds() - StartSeconds) * 1000.0;
+	CODEX_ENV_TRACE(Verbose, this, TEXT("%s overlay scan: %d objects / %d slabs wanted, focus %s, %.2f ms"), bWetMode ? TEXT("wet") : TEXT("snow"),
+		Targets.Num(), GroundTargets.Num(), *LastRefreshFocus.ToCompactString(), Ms);
 	if (Summary != LastLoggedSummary)
 	{
 		LastLoggedSummary = Summary;
@@ -631,6 +642,7 @@ void UWeatherSnowOverlayComponent::SyncList(const TArray<TWeakObjectPtr<UMeshCom
 			}
 			RestoreNanite(Mesh);
 			InOutTouched.RemoveAtSwap(Index);
+			++WeatherSnowOverlayTrace::Removed;
 		}
 	}
 	if (!bShow)
@@ -648,21 +660,34 @@ void UWeatherSnowOverlayComponent::SyncList(const TArray<TWeakObjectPtr<UMeshCom
 				// Nanite draws no overlay: this mesh shows its fallback mesh while it holds the snow.
 				StaticMesh->SetForceDisableNanite(true);
 				NaniteForced.Add(StaticMesh);
+				++WeatherSnowOverlayTrace::NaniteOff;
 			}
 			Mesh->SetOverlayMaterial(Material);
 			InOutTouched.Add(Weak);
+			++WeatherSnowOverlayTrace::Added;
 		}
 	}
 }
 
 void UWeatherSnowOverlayComponent::SyncOverlays()
 {
+	WeatherSnowOverlayTrace::Added = WeatherSnowOverlayTrace::Removed = WeatherSnowOverlayTrace::NaniteOff = 0;
 	SyncList(Targets, Touched, ActiveOverlay(), bOverlayShown);
 	SyncList(GroundTargets, GroundTouched, ActiveGround(), bGroundShown);
+	if (WeatherSnowOverlayTrace::Added + WeatherSnowOverlayTrace::Removed > 0)
+	{
+		CODEX_ENV_TRACE(Log, this, TEXT("%s overlay toggles: +%d -%d (Nanite fallback forced on %d), now %d objects (%s) / %d slabs (%s)"),
+			bWetMode ? TEXT("wet") : TEXT("snow"), WeatherSnowOverlayTrace::Added, WeatherSnowOverlayTrace::Removed, WeatherSnowOverlayTrace::NaniteOff,
+			Touched.Num(), bOverlayShown ? TEXT("shown") : TEXT("hidden"), GroundTouched.Num(), bGroundShown ? TEXT("shown") : TEXT("hidden"));
+	}
 }
 
 void UWeatherSnowOverlayComponent::RemoveOverlays()
 {
+	if (Touched.Num() + GroundTouched.Num() > 0)
+	{
+		CODEX_ENV_TRACE(Log, this, TEXT("%s overlay removed from %d objects / %d slabs"), bWetMode ? TEXT("wet") : TEXT("snow"), Touched.Num(), GroundTouched.Num());
+	}
 	bOverlayShown = false;
 	bGroundShown = false;
 	auto Remove = [this](TArray<TWeakObjectPtr<UMeshComponent>>& List, const UMaterialInterface* Material)

@@ -28,6 +28,11 @@ struct CODEXTACTICS_API FWeatherRainFxInput
 	FVector WindDirection = FVector::ForwardVector;
 	/** The environment's RNG state (FEnvironmentState::RandomSeed): the lightning schedule is derived from it, never advancing it. */
 	int32 Seed = 0;
+	/**
+	 * Section 19: the level's climate is Temperate (set by the presenter's temperate path only). Lightning is gated on it at the source
+	 * (WeatherRainFxRules::IsLightningAllowed): a default input (an arctic level, before the first application) can never flash.
+	 */
+	bool bTemperateClimate = false;
 };
 
 /**

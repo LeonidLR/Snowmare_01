@@ -874,8 +874,9 @@ born at the top of a 28 m cylinder (~6-9 s to fill the air), and the eye adaptat
   `EnvironmentStartRules::GetSnowWarmupSeconds` (DA_SnowFX `StartWarmupSeconds`, 0 = the longest flake life, 9 s) in
   `StartWarmupTickSeconds` 0.1 s steps (90 ticks): flakes and ground drift are in the air on the first frame that shows the system (the
   lake: ~51k flakes right after the warm-up); if Niagara defers the activation (system / PSOs not ready) the warm-up runs on the first tick
-  it is active, editor builds wait for the system compile at that activation; (3) the eye adaptation runs at `ExposureSnapSpeed` 1000
-  f-stops / s for `ExposureSnapSeconds` 1 s (one 60 fps frame closes the whole gap), then the authored speeds return; (4) the next 3
+  it is active, editor builds wait for the system compile at that activation; (3) ~~the eye adaptation runs at `ExposureSnapSpeed` 1000
+  f-stops / s for `ExposureSnapSeconds` 1 s~~ - superseded by section 19 (it was the start flicker): the camera-cut frames of (4) settle the
+  exposure, the authored speeds apply at once; (4) the next 3
   frames are camera cuts (`SetGameCameraCutThisFrame`: no TAA / motion-blur smear from the camera's first placement).
 - **Start cover** (level start only): the stills showed that the level's very first rendered frame is drawn before the camera manager
   updated (the view at the world origin, editor builds also with default materials) and the pre-warmed flakes show one frame after the
@@ -1337,3 +1338,80 @@ samples 10 -> 12. No other existing material was edited (the wet / rain material
 - The landscape's wet look was only seen on the arctic terrain test map switched to temperate (its layers are snow / rock / ice): a temperate
   landscape (grass / soil layers) should be checked once a narrative level has one.
 - Characters get no wet sheen (18.7).
+
+## 19. Start flicker fix (2026-10-27)
+
+User report (main 804d64c2, PIE): "a strange flicker when the level starts"; then "the first ~1 second looks as if there's a thunderstorm -
+flashes", on any level. UE-only, no Godot reference.
+
+### 19.1 Evidence
+- `CodexTactics.StartFlickerShots` (dev, `-StartFlickerShots=<tag>` arms it at `PostLoadMapWithWorld`, so frame 1 = the level's first
+  rendered frame; no `-ExecCmds` = the player's start) reads EVERY frame back (`UGameViewportClient::OnScreenshotCaptured`, nothing written
+  by the engine) and records per frame: the mean luma (Rec. 709 on 8-bit sRGB) of the frame and of the top / middle / bottom third and the
+  HUD band (bottom 15 %), the mean abs 128x72-cell difference to the previous frame, the eye adaptation exposure read back through a world
+  view extension, the camera fade, the presenter's snap / applications / sun / moon / sky light, the lightning flash scale / strikes
+  -> `Saved/Screenshots/Environment/flicker/<tag>/<map>.csv` + 320 px thumbnails. `CodexTactics.PIEFlickerShots <map> <tag>` does the same
+  in the EDITOR: loads the map, presses Play in the level viewport, records from the PIE world's first frame (real frame times).
+- Timestamped events: log category `LogCodexEnvTrace` (`[EnvTrace] f<engine frame> t<game s> ...`; one-offs at Log, per apply at Verbose:
+  `-LogCmds="LogCodexEnvTrace Verbose"`): presenter BeginPlay / applications, the exposure mode switch, sky light recaptures, overlay
+  scans / toggles (+added -removed, Nanite fallbacks), snow / rain Niagara activations and warm-ups, screen drops, lightning flash on / off,
+  the snow-tracks render target clear / scroll / MPC window, minimap captures, character snow pushes.
+- `Scripts/Tools/capture_start_flicker.ps1 -Tag <t> [-Compare <t0>]` (one game at a time under the build lock; 1280x720 offscreen,
+  `-UseFixedTimeStep -FPS=60`, 240 frames each of the lake, the factory, L_MovementTest, L_WeatherRainTest) + `Scripts/Tools/flicker_strip.py`
+  -> `strip_<tag>.png` (per map: mean + bands + cell diff, fade / snap / lightning spans, event ticks, thumbnails round the largest jumps),
+  `compare_<a>_<b>.png`.
+- Result on main (tag `before`): during the presenter's start EXPOSURE SNAP WINDOW (section 16: 1 s at 1000 f-stops / s, logged
+  `exposure mode SNAP` at f0 and `exposure mode authored` at f60 t1.017) the picture jumps every 2-5 frames - the lake 109 -> 174 -> 18 ->
+  109 ... -> 237, largest step **169.4** (frame 17), 28 steps > 50 in 58 frames; L_WeatherRainTest 117 <-> 9 / 198, largest **167.3** (frame 46); the
+  read-back exposure swings 0.14 <-> 37 (the min / max clamps). It stops on the frame the window ends; afterwards the cell diff is ~0.2.
+  The factory's oscillation (exposure 7 <-> 62) runs under its black title fade, but leaves the exposure off target (an overshoot to luma
+  173 at frame 166 and a slow fall to 144); the rain test also drifts 117 -> 160 -> 110 after the window. L_MovementTest's dawn sat at the exposure
+  clamp (no visible jump). No other event lines up with a jump: the overlay re-scan (f3), the snow warm-up (f1), the minimap captures
+  (f61-64 / f115-118), the sky light (real-time capture: no recapture) all fall on flat frames.
+- Lightning: no flash on any start - arctic levels never create the rain FX (no flash light at all); the rain test (temperate, Rain)
+  had flash 0 / 0 strikes. The "thunderstorm" was the exposure.
+
+### 19.2 Cause
+The scene colour is rendered PRE-EXPOSED with the exposure the CPU read back from the GPU a few frames earlier
+(`FViewInfo::UpdatePreExposure` -> `GetLastEyeAdaptationExposure`); at 1000 f-stops / s one 60 fps frame closes the whole gap
+(1 - 2^(-16.7)), so the adaptation chases its own stale pre-exposure (clipping, Lumen's pre-exposed caches) and oscillates for as long as
+the window lasts. In PIE the window is 1 s of WALL time (long first frames), exactly "the first ~1 second".
+
+### 19.3 Fix
+- `EnvironmentStartRules::ExposureSnapSeconds` 1 -> **0**: no fast adaptation window. The snap's `SnapCameraCutFrames` (3) already settle
+  the exposure: on a camera cut the engine's eye adaptation jumps to its target (`ForceTarget`); the lake's read-back exposure is 1.367 on
+  frame 4 and stays there (= its final value). Then the authored speeds (3 up / 1 down).
+- The optional window (`Codex.Env.StartExposureSeconds` > 0) runs at `ExposureSnapSpeed` **30** (was 1000), and any speed is capped by
+  `EnvironmentStartRules::ClampStableExposureSpeed` so one frame closes at most `MaxStableExposureClosure` 0.5 of the gap (a long PIE hitch
+  frame too). Console: `Codex.Env.StartExposureSpeed`, `Codex.Env.StartExposureSeconds`, `Codex.Env.StartCameraCutFrames`,
+  `Codex.Env.StartExposureNoCap 1` (debug: reproduces the old flicker with seconds 1 / speed 1000).
+- Lightning gated on the climate at the source: `FWeatherRainFxInput::bTemperateClimate` (false by default, set only by the presenter's
+  temperate path) and `WeatherRainFxRules::IsLightningAllowed`; outside a temperate level a strike in flight is dropped too. The flash light
+  was and is created hidden at 0 lux.
+- Swept on the lake before choosing (`sw_*`): window 0 / speed 10 / speed 30 all flat (largest step 3.6 - the tutorial panel opening at
+  frame 62, UI).
+
+### 19.4 Before / after (fixed step 60 fps, 240 frames, largest frame-to-frame mean-luma step outside camera fades)
+| Map | before | after |
+|---|---|---|
+| L_Demo01_A_FrozenLake (23:00 Snowfall, locked) | 169.4 | 3.65 (UI panel, frame 62) |
+| L_WeatherRainTest (temperate 12:00 Rain) | 167.3 | 0.98 |
+| L_Demo01_B_FrozenFactory (title fade-in) | 4.3 (+ overshoot after the fade) | 1.85 (smooth fade-in) |
+| L_MovementTest (random start) | 1.5 | 2.2 |
+PIE (the user's case; `CodexTactics.PIEFlickerShots`, the editor with the lake, Play in the level viewport, `-UseFixedTimeStep -FPS=60`): the
+old window (reproduced with `Codex.Env.StartExposureSeconds 1`, `StartExposureSpeed 1000`, `StartExposureNoCap 1`) jumps 70 <-> 25 / 143
+every 4-5 frames, 28 steps > 20, largest **97.0**; after **1.75** (`strip_pie60_before.png`, `strip_pie60_after.png`,
+`compare_pie60_before_pie60_after.png`). On this loaded machine's wall clock the offscreen PIE ran at 2-6 fps, so the 1 s window held only
+~3 frames and showed nothing (`pie_before` / `pie_after`): the flicker needs a real frame rate, as on the user's PC.
+The lake still opens on the moonlit night with the snow falling from the first visible frame (frame 3, after the 2-frame start cover).
+Strips: `Saved/Screenshots/Environment/flicker/strip_before.png`, `strip_after.png`, `compare_before_after.png`,
+`lake_frames_before_after.png`. (The starts of the unlocked levels are random: MovementTest / the factory opened in other weathers in the
+two runs.)
+
+### 19.5 Tests, smokes
+- `CodexTactics.Environment.StartLighting.Snap` (no default window, the old speed closes a frame, the stable cap at 1/120..0.5 s frames),
+  `CodexTactics.Environment.RainFx.Lightning` (the climate gate).
+- `StartLightingSmoke` A / C: snapped by camera cuts at stable speeds (no 1000 window) / a state jump sets camera-cut frames again.
+- `StartFlickerSmoke` (rendered, `test_map.json`; opens the lake, the factory, L_MovementTest, L_WeatherRainTest, `Codex.Env.Lightning 1`):
+  the first 180 frames from each level's first frame - largest mean-luma step <= 20 outside camera fades, no lightning frame unless a
+  temperate Storm start, an arctic level has no rain FX; each arctic level forced into a Blizzard for 60 frames: no rain FX / flash.

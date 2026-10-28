@@ -22,6 +22,7 @@
 #include "Environment/EnvironmentVisualSettings.h"
 #include "Environment/WeatherPresetAsset.h"
 #include "Environment/WeatherRainFxComponent.h"
+#include "Environment/EnvironmentTrace.h"
 #include "Environment/WeatherSnowFxComponent.h"
 #include "Environment/WeatherSnowOverlayComponent.h"
 #include "HAL/IConsoleManager.h"
@@ -43,6 +44,25 @@ namespace WeatherPresenterLocal
 		TEXT("Codex.Env.Visuals"), 1,
 		TEXT("Environment visuals (docs/systems/environment-weather.md): 1 = the weather presenter drives the map's sun / sky / fog / post-process ")
 		TEXT("from the day cycle + weather, 0 = the map's authored lighting is restored."),
+		ECVF_Default);
+
+	// Section 19 (start flicker) tuning switches; the defaults are EnvironmentStartRules' values.
+	TAutoConsoleVariable<float> CVarStartExposureSpeed(
+		TEXT("Codex.Env.StartExposureSpeed"), EnvironmentStartRules::ExposureSnapSpeed,
+		TEXT("Eye adaptation speed (f-stops / s, up and down) in the snap window after the level start / a state jump (section 19)."),
+		ECVF_Default);
+	TAutoConsoleVariable<float> CVarStartExposureSeconds(
+		TEXT("Codex.Env.StartExposureSeconds"), EnvironmentStartRules::ExposureSnapSeconds,
+		TEXT("Game seconds the start exposure speed is held after a snap; 0 = the authored speeds at once (section 19)."),
+		ECVF_Default);
+	TAutoConsoleVariable<int32> CVarStartExposureNoCap(
+		TEXT("Codex.Env.StartExposureNoCap"), 0,
+		TEXT("Debug (section 19): 1 = the start exposure speed is NOT capped to a stable per-frame closure (with StartExposureSeconds 1 and ")
+		TEXT("StartExposureSpeed 1000 it reproduces the old start flicker for the capture / smoke)."),
+		ECVF_Default);
+	TAutoConsoleVariable<int32> CVarStartCameraCutFrames(
+		TEXT("Codex.Env.StartCameraCutFrames"), EnvironmentStartRules::SnapCameraCutFrames,
+		TEXT("Frames after a snap rendered as camera cuts (no temporal history; the eye adaptation jumps to its target) (section 19)."),
 		ECVF_Default);
 
 	const TCHAR* PresetPaths[4] = {
@@ -84,8 +104,6 @@ namespace WeatherPresenterLocal
 	const FName ParamScreenDrops(TEXT("ScreenDrops"));
 	/** A "delta" long enough for the snow FX intensity smoothing to reach its target at once (the first application after a snap). */
 	constexpr float SnowJumpStartSeconds = 1000.f;
-	/** Frames after a snap rendered as camera cuts: the level's first frames carry no temporal history (TAA / motion blur) of the view jump. */
-	constexpr int32 SnapCameraCutFrames = 3;
 	/** The start cover: at least / at most this many presenter ticks (the camera has ticked; a safety cap if the snow never gets ready). */
 	constexpr int32 StartCoverMinTicks = 2;
 	constexpr int32 StartCoverMaxTicks = 10;
@@ -364,7 +382,7 @@ float AWeatherPresenterActor::GetSecondsSinceSnap() const
 
 bool AWeatherPresenterActor::IsExposureSnapping() const
 {
-	return EnvironmentStartRules::IsExposureSnapActive(GetSecondsSinceSnap(), EnvironmentStartRules::ExposureSnapSeconds);
+	return EnvironmentStartRules::IsExposureSnapActive(GetSecondsSinceSnap(), WeatherPresenterLocal::CVarStartExposureSeconds.GetValueOnGameThread());
 }
 
 FString AWeatherPresenterActor::DescribeAdopted() const
@@ -417,6 +435,8 @@ void AWeatherPresenterActor::BeginPlay()
 	// map's actors (the subsystem spawns the presenter in OnWorldBeginPlay), before the first frame is rendered and before any start fade.
 	// The minimap's one-off captures run on its own tick after this, so the minimap shows the weather look too. Section 16 (2026-10-25):
 	// the first application snaps (exposure settles at once, the falling snow is pre-warmed and at full density on frame 1).
+	CODEX_ENV_TRACE(Log, this, TEXT("presenter BeginPlay in %s (world type %d): wants to apply %d"), *GetNameSafe(GetWorld()),
+		GetWorld() ? static_cast<int32>(GetWorld()->WorldType) : -1, WantsToApply() ? 1 : 0);
 	if (WantsToApply())
 	{
 		StartApplying();
@@ -437,6 +457,7 @@ void AWeatherPresenterActor::ShowStartCover()
 		return; // headless, or another fade (e.g. the factory's start fade-in) already covers the start
 	}
 	CameraManager->SetManualCameraFade(1.f, WeatherPresenterLocal::StartCoverColor, false);
+	CODEX_ENV_TRACE(Log, this, TEXT("start cover on"));
 	bStartCoverOn = true;
 	StartCoverTicks = 0;
 }
@@ -461,6 +482,7 @@ void AWeatherPresenterActor::TickStartCover()
 	{
 		CameraManager->StopCameraFade();
 		CameraManager->FadeAmount = 0.f;
+		CODEX_ENV_TRACE(Log, this, TEXT("start cover lifted after %d ticks"), StartCoverTicks);
 		UE_LOG(LogCodexTactics, Log, TEXT("[EnvVisuals] start cover lifted after %d ticks (snow %s)"), StartCoverTicks,
 			bSnowReady ? TEXT("ready") : TEXT("not ready - safety cap"));
 	}
@@ -760,7 +782,7 @@ void AWeatherPresenterActor::BeginSnap()
 	const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(this);
 	SeenSnapSerial = Environment ? Environment->GetSnapSerial() : SeenSnapSerial;
 	SnapTime = GetWorld()->GetTimeSeconds();
-	CameraCutFramesLeft = WeatherPresenterLocal::SnapCameraCutFrames;
+	CameraCutFramesLeft = FMath::Max(0, WeatherPresenterLocal::CVarStartCameraCutFrames.GetValueOnGameThread());
 	// The next ApplySnow jumps the falling snow to its target; a snowfall that starts with it is pre-warmed (the air full on frame 1).
 	LastSnowApplyTime = -1.f;
 	if (SnowFx)
@@ -804,6 +826,7 @@ void AWeatherPresenterActor::StartApplying()
 	BeginSnap();
 	Apply();
 	RecaptureSkyIfNeeded(LastFrame, true);
+	CODEX_ENV_TRACE(Log, this, TEXT("presenter starts applying (snap at %.3f)"), SnapTime);
 	UE_LOG(LogCodexTactics, Log, TEXT("[EnvVisuals] applying: %s"), *DescribeAdopted());
 }
 
@@ -848,6 +871,26 @@ void AWeatherPresenterActor::Apply()
 	++ApplyCount;
 	bDirty = false;
 	SinceApply = 0.f;
+	{
+		const UDirectionalLightComponent* SunLight = SunComp.Get();
+		const UDirectionalLightComponent* MoonLightInUse = GetActiveMoon();
+		const USkyLightComponent* SkyLightInUse = SkyLightComp.Get();
+		const FPostProcessSettings& Post = AdoptedPostProcess ? AdoptedPostProcess->Settings : PostProcess->Settings;
+		if (ApplyCount <= 2)
+		{
+			CODEX_ENV_TRACE(Log, this, TEXT("presenter apply #%d: %s %s->%s %.2f hour %.2f, sun %d %.2f lux, moon %d %.2f lux, sky light %.2f, exposure bias %.2f speed %.0f/%.0f"),
+				ApplyCount, *EnvironmentRules::ClimateToString(Climate), *EnvironmentRules::WeatherToString(Frame.Weather),
+				*EnvironmentRules::WeatherToString(Frame.NextWeather), Frame.Blend, Frame.Hour, SunLight && SunLight->IsVisible() ? 1 : 0,
+				SunLight ? SunLight->Intensity : 0.f, MoonLightInUse && MoonLightInUse->IsVisible() ? 1 : 0, MoonLightInUse ? MoonLightInUse->Intensity : 0.f,
+				SkyLightInUse ? SkyLightInUse->Intensity : 0.f, Post.AutoExposureBias, Post.AutoExposureSpeedUp, Post.AutoExposureSpeedDown);
+		}
+		else
+		{
+			CODEX_ENV_TRACE(Verbose, this, TEXT("presenter apply #%d: hour %.3f blend %.2f, sun %.2f lux, moon %.2f lux, sky light %.2f, exposure bias %.2f"),
+				ApplyCount, Frame.Hour, Frame.Blend, SunLight ? SunLight->Intensity : 0.f, MoonLightInUse ? MoonLightInUse->Intensity : 0.f,
+				SkyLightInUse ? SkyLightInUse->Intensity : 0.f, Post.AutoExposureBias);
+		}
+	}
 	UE_LOG(LogCodexTactics, VeryVerbose, TEXT("[EnvVisuals] hour %.2f %s->%s %.2f: sun %.1f deg x%.2f, moon %.1f deg x%.2f, fog %.3f"), Frame.Hour,
 		*EnvironmentRules::WeatherToString(Frame.Weather), *EnvironmentRules::WeatherToString(Frame.NextWeather), Frame.Blend, Frame.SunElevation,
 		Frame.SunIntensityScale, Frame.MoonElevation, Frame.MoonIntensityScale, Frame.Preset.FogDensity);
@@ -929,13 +972,25 @@ void AWeatherPresenterActor::ApplyPostProcess(const FWeatherVisualFrame& Frame)
 	const FPostProcessSettings& Base = Authored.PostSettings;
 	Settings.bOverride_AutoExposureBias = true;
 	Settings.AutoExposureBias = Base.AutoExposureBias + Frame.ExposureBias + WetExposureBias;
-	// Level start / state jump (section 16): the eye adaptation settles on the first frame (a night level must not open over-exposed and
-	// fade down); after EnvironmentStartRules::ExposureSnapSeconds the authored adaptation speeds are back.
+	// Level start / state jump (section 16): the camera-cut frames of the snap settle the eye adaptation (the engine jumps it to its target
+	// on a cut), then the authored speeds. Section 19: no fast adaptation window by default - the old 1 s at 1000 f-stops / s chased the
+	// read-back pre-exposure and flickered; an optional window (Codex.Env.StartExposureSeconds) runs at a speed capped to stay stable.
 	const bool bSnapExposure = IsExposureSnapping();
 	Settings.bOverride_AutoExposureSpeedUp = bSnapExposure || Base.bOverride_AutoExposureSpeedUp;
 	Settings.bOverride_AutoExposureSpeedDown = bSnapExposure || Base.bOverride_AutoExposureSpeedDown;
-	Settings.AutoExposureSpeedUp = bSnapExposure ? EnvironmentStartRules::ExposureSnapSpeed : Base.AutoExposureSpeedUp;
-	Settings.AutoExposureSpeedDown = bSnapExposure ? EnvironmentStartRules::ExposureSnapSpeed : Base.AutoExposureSpeedDown;
+	const float WantedSpeed = WeatherPresenterLocal::CVarStartExposureSpeed.GetValueOnGameThread();
+	const float SnapSpeed = WeatherPresenterLocal::CVarStartExposureNoCap.GetValueOnGameThread() != 0 ? WantedSpeed
+		: EnvironmentStartRules::ClampStableExposureSpeed(WantedSpeed, FMath::Max(GetWorld()->GetDeltaSeconds(), 1.f / 60.f));
+	Settings.AutoExposureSpeedUp = bSnapExposure ? SnapSpeed : Base.AutoExposureSpeedUp;
+	Settings.AutoExposureSpeedDown = bSnapExposure ? SnapSpeed : Base.AutoExposureSpeedDown;
+	if (TracedExposureSnap != (bSnapExposure ? 1 : 0))
+	{
+		TracedExposureSnap = bSnapExposure ? 1 : 0;
+		CODEX_ENV_TRACE(Log, this, TEXT("exposure mode %s: speed up %.2f down %.2f, bias %.2f, method %d (override %d), min %.2f max %.2f"),
+			bSnapExposure ? TEXT("SNAP") : TEXT("authored"), Settings.AutoExposureSpeedUp, Settings.AutoExposureSpeedDown, Settings.AutoExposureBias,
+			static_cast<int32>(Settings.AutoExposureMethod), Settings.bOverride_AutoExposureMethod ? 1 : 0, Settings.AutoExposureMinBrightness,
+			Settings.AutoExposureMaxBrightness);
+	}
 	const FVector4 BaseSaturation = Base.bOverride_ColorSaturation ? Base.ColorSaturation : FVector4(1.f, 1.f, 1.f, 1.f);
 	Settings.bOverride_ColorSaturation = true;
 	Settings.ColorSaturation = FVector4(BaseSaturation.X, BaseSaturation.Y, BaseSaturation.Z, BaseSaturation.W * Frame.Saturation);
@@ -1033,6 +1088,7 @@ void AWeatherPresenterActor::ApplyRain(EClimateProfile Climate, const FWeatherVi
 		Input.WindStrength = FMath::Clamp(Frame.Preset.WindStrength, 0.f, 1.f);
 		Input.WindDirection = LastWindDirection;
 		Input.Seed = State.RandomSeed;
+		Input.bTemperateClimate = true;
 		RainComponent->ApplyRainFx(Input, Delta);
 	}
 }
@@ -1291,6 +1347,7 @@ void AWeatherPresenterActor::RecaptureSkyIfNeeded(const FWeatherVisualFrame& Fra
 		return;
 	}
 	Light->RecaptureSky();
+	CODEX_ENV_TRACE(Log, this, TEXT("sky light recapture (forced %d)"), bForce ? 1 : 0);
 	LastRecaptureTime = Now;
 	LastRecaptureSunElevation = Signature;
 	LastRecaptureWeather = Frame.Weather;

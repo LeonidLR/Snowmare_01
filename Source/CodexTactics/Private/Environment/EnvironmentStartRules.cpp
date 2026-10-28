@@ -53,3 +53,15 @@ bool EnvironmentStartRules::IsExposureSnapActive(float SecondsSinceSnap, float W
 {
 	return SecondsSinceSnap >= 0.f && SecondsSinceSnap < WindowSeconds;
 }
+
+float EnvironmentStartRules::GetExposureFrameClosure(float Speed, float FrameSeconds)
+{
+	return 1.f - FMath::Exp2(-FMath::Max(Speed, 0.f) * FMath::Max(FrameSeconds, 0.f));
+}
+
+float EnvironmentStartRules::ClampStableExposureSpeed(float Speed, float FrameSeconds)
+{
+	// 1 - 2^(-S x dt) <= C  <=>  S <= -log2(1 - C) / dt.
+	const float MaxSpeed = -FMath::Log2(1.f - MaxStableExposureClosure) / FMath::Max(FrameSeconds, 1.e-3f);
+	return FMath::Clamp(Speed, 0.f, MaxSpeed);
+}

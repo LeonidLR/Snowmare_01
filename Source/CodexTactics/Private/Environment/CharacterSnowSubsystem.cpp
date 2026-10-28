@@ -11,6 +11,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Environment/EnvironmentTrace.h"
 #include "Environment/CharacterSnowRules.h"
 #include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
@@ -178,6 +179,7 @@ void UCharacterSnowSubsystem::Push(FEntry& Entry, const FDirectionalSnow& Values
 	Entry.SincePush = 0.f;
 	Entry.bEverPushed = true;
 	++Metrics.Pushes;
+	CODEX_ENV_TRACE(Verbose, this, TEXT("character snow push %s: top %.2f"), *GetNameSafe(Character), Values.Top);
 }
 
 void UCharacterSnowSubsystem::ZeroAll()

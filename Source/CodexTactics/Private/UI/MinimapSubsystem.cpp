@@ -11,6 +11,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/EnemyGhostActor.h"
+#include "Environment/EnvironmentTrace.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/SightRules.h"
@@ -899,6 +900,7 @@ void UMinimapSubsystem::RunCapturePasses()
 		Capture->CustomNearClippingPlane = bClip ? FMath::Max(1.f, static_cast<float>(Capture->GetComponentLocation().Z) - Info.ClipZ.GetValue()) : 0.f;
 		const double Start = FPlatformTime::Seconds();
 		Capture->CaptureScene();
+		CODEX_ENV_TRACE(Log, this, TEXT("minimap capture floor %d (passes left %d)"), Floor, Info.PassesLeft);
 		Info.CaptureMs += (FPlatformTime::Seconds() - Start) * 1000.0;
 		Info.bRendered = true;
 		if (Info.PassesLeft == 0)
