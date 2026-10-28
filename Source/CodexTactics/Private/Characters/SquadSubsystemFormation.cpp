@@ -25,6 +25,7 @@
 #include "Formation/FormationWallRules.h"
 #include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
+#include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
 
 namespace SquadSubsystemFormationLocal
@@ -35,6 +36,10 @@ namespace SquadSubsystemFormationLocal
 		TEXT("Rules v2.4 (user bug report 2026-10-26): 1 = at a wall END the wall layout's looks are spread over the open arc round it (FormationWallRules::EndLooks); 0 = the face looks (L 8 / K 6 / P 4) everywhere (v2.3)"));
 	TAutoConsoleVariable<int32> CVarFormationApproach(TEXT("Codex.Formation.Approach"), 1,
 		TEXT("Rules v2.5 (user rule 2026-10-26): 1 = the covered approach to the wall - the leader runs in and looks along the wall, the man farthest back covers the rear, the others a flank, until everyone is at his wall slot; 0 = everyone walks in facing his travel (v2.4)"));
+	TAutoConsoleVariable<int32> CVarFormationWallTraceBlocking(TEXT("Codex.Formation.WallTraceBlocking"), 1,
+		TEXT("Bug 2026-10-27 (the lake yard): 1 = the formation's wall traces read only what blocks pawns (never an overlap-only trigger box round the squad); 0 = any static / dynamic world object (the old trace, A/B)"));
+	TAutoConsoleVariable<int32> CVarFormationWallSnap(TEXT("Codex.Formation.WallSnap"), 1,
+		TEXT("Bug 2026-10-27: 1 = a member settled in the formation wall pose eases onto his exact wall slot (the face offset of one operative in cover); 0 = he stays where his walk stopped, a hand-span short (A/B)"));
 	/** v2.4: the world walls for EndLooks are gathered this far beyond the probe ring round the layout, cm. */
 	constexpr float WallEndGatherMarginCm = 300.f;
 	/** The last raw class logged (Codex.Formation.Debug). */
@@ -237,8 +242,7 @@ void USquadSubsystem::ProbeFormationWalls(const AOperativeCharacter& LeaderRef)
 	{
 		const FVector Direction = FRotator(0.f, Ray.Yaw, 0.f).Vector();
 		FHitResult Hit;
-		if (World->LineTraceSingleByObjectType(Hit, Origin, Origin + Direction * Ray.Length, WallObjects(), Params)
-			&& FMath::Abs(Hit.ImpactNormal.Z) < 0.7f)
+		if (TraceFormationWall(Hit, Origin, Origin + Direction * Ray.Length, Params) && FMath::Abs(Hit.ImpactNormal.Z) < 0.7f)
 		{
 			Walls.Add(FormationRuntime::WallFromHit(FVector2D(Hit.ImpactPoint), FVector2D(Hit.ImpactNormal)));
 		}
@@ -272,6 +276,66 @@ void USquadSubsystem::ProbeFormationWalls(const AOperativeCharacter& LeaderRef)
 	}
 }
 
+bool USquadSubsystem::TraceFormationWall(FHitResult& OutHit, const FVector& Start, const FVector& End, const FCollisionQueryParams& Params) const
+{
+	using namespace SquadSubsystemFormationLocal;
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	if (CVarFormationWallTraceBlocking.GetValueOnGameThread() == 0)
+	{
+		return World->LineTraceSingleByObjectType(OutHit, Start, End, WallObjects(), Params);
+	}
+	// An object-type MULTI trace reports every object along the ray (as touches): the nearest one that blocks pawns is the wall - an
+	// overlap-only box (a tutorial trigger volume, OverlapAllDynamic) or a pawn is walked through, as in GatherFormationWalls.
+	TArray<FHitResult> Hits;
+	World->LineTraceMultiByObjectType(Hits, Start, End, WallObjects(), Params);
+	TArray<FormationRuntime::FWallTraceHit> Seen;
+	for (const FHitResult& Hit : Hits)
+	{
+		const UPrimitiveComponent* Component = Hit.GetComponent();
+		const AActor* Owner = Hit.GetActor();
+		FormationRuntime::FWallTraceHit& Each = Seen.AddDefaulted_GetRef();
+		Each.Time = Hit.Time;
+		Each.bBlocksPawn = Component && Component->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Block;
+		Each.bPawn = Owner && Owner->IsA<APawn>();
+	}
+	const int32 Nearest = FormationRuntime::NearestWallHit(Seen);
+	if (Nearest == INDEX_NONE)
+	{
+		return false;
+	}
+	OutHit = Hits[Nearest];
+	OutHit.bBlockingHit = true;
+	return true;
+}
+
+void USquadSubsystem::GlideToWallSlot(AOperativeCharacter& Member, const FVector2D& Slot, float MaxCm, float DeltaTime) const
+{
+	using namespace SquadSubsystemFormationLocal;
+	// In the wall pose and his walk over (a follower parks within the formation's stop radius; farther he still walks in himself).
+	if (CVarFormationWallSnap.GetValueOnGameThread() == 0 || !Member.IsInFormationWallPose() || Member.IsMoving())
+	{
+		return;
+	}
+	const FVector Here = Member.GetActorLocation();
+	const TOptional<FVector2D> Move = FormationRuntime::WallSlotGlide(FVector2D(Here), Slot, MaxCm, DeltaTime);
+	if (!Move.IsSet())
+	{
+		return;
+	}
+	// As one operative entering cover (AOperativeCharacter::EnterCover puts him on the slot): swept, so a team-mate or the wall stops it.
+	FHitResult Blocked;
+	Member.SetActorLocation(Here + FVector(Move.GetValue(), 0.0), /*bSweep*/ true, &Blocked);
+	if (Blocked.bBlockingHit && CVarFormationDebug.GetValueOnGameThread() >= 2)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s: the glide onto his wall place (%.0f cm off it) is blocked by %s"), *Member.DisplayName.ToString(),
+			FVector2D::Distance(FVector2D(Here), Slot), *GetNameSafe(Blocked.GetActor()));
+	}
+}
+
 bool USquadSubsystem::BuildFormationWall(const FVector& Origin, const FVector2D& TowardsWall, float MaxDistance, FVector2D& OutFace, float& OutNormalYaw,
 	float& OutRoomLeft, float& OutRoomRight, float RoomMaxCm) const
 {
@@ -287,9 +351,8 @@ bool USquadSubsystem::BuildFormationWall(const FVector& Origin, const FVector2D&
 	{
 		Params.AddIgnoredActor(Member.Get());
 	}
-	const FCollisionObjectQueryParams Objects = WallObjects();
 	FHitResult Hit;
-	if (!World->LineTraceSingleByObjectType(Hit, Origin, Origin + FVector(Towards, 0.f) * MaxDistance, Objects, Params)
+	if (!TraceFormationWall(Hit, Origin, Origin + FVector(Towards, 0.f) * MaxDistance, Params)
 		|| FMath::Abs(Hit.ImpactNormal.Z) >= 0.7f)
 	{
 		return false;
@@ -312,7 +375,7 @@ bool USquadSubsystem::BuildFormationWall(const FVector& Origin, const FVector2D&
 		const FVector2D Along = SideIndex == 0 ? -RightAlong : RightAlong;
 		float Blocked = RoomMax + 1.f;
 		FHitResult AlongHit;
-		if (World->LineTraceSingleByObjectType(AlongHit, Out, Out + FVector(Along, 0.f) * RoomMax, Objects, Params))
+		if (TraceFormationWall(AlongHit, Out, Out + FVector(Along, 0.f) * RoomMax, Params))
 		{
 			Blocked = AlongHit.Distance;
 		}
@@ -327,7 +390,7 @@ bool USquadSubsystem::BuildFormationWall(const FVector& Origin, const FVector2D&
 			}
 			const FVector Start = Out + FVector(Along, 0.f) * At;
 			FHitResult Back;
-			const bool bWall = World->LineTraceSingleByObjectType(Back, Start, Start - FVector(Normal, 0.f) * (RoomProbeOutCm * 2.f), Objects, Params)
+			const bool bWall = TraceFormationWall(Back, Start, Start - FVector(Normal, 0.f) * (RoomProbeOutCm * 2.f), Params)
 				&& FVector2D::DotProduct(FVector2D(Back.ImpactNormal).GetSafeNormal(), Normal) > 0.7f;
 			Continues.Add(bWall);
 		}
@@ -812,6 +875,10 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 			Follower.RepathTimeRemaining = FMath::Max(Follower.RepathTimeRemaining, Operative.GetMoveHoldSeconds());
 		}
 	}
+	if (Sectors.bWallOrder && !Sectors.bSlide && !bMoving)
+	{
+		GlideToWallSlot(Operative, Target, WallSettleCm, DeltaTime); // bug 2026-10-27: onto his slot, not a hand-span short of it
+	}
 
 	Follower.RepathTimeRemaining -= DeltaTime;
 	if (Follower.RepathTimeRemaining > 0.f)
@@ -947,6 +1014,11 @@ void USquadSubsystem::UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, f
 		&& FormationMath::AngleBetween(static_cast<float>(OrderLeader->GetActorRotation().Yaw), Lead->Yaw) <= WallSettleYawDeg)
 	{
 		SettleFormationWallPose(*OrderLeader);
+	}
+	// Bug 2026-10-27: his own move stopped AcceptanceRadius short of his slot - onto it, as one operative in cover.
+	if (Lead && !Sectors.bSlide && !OrderLeader->IsMoving() && !IsFormationPeeker(OrderLeader) && !OrderLeader->bInCover)
+	{
+		GlideToWallSlot(*OrderLeader, Lead->Position, WallLeaderSettleCm, DeltaTime);
 	}
 }
 

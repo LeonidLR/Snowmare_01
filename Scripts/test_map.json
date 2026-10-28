@@ -36,7 +36,7 @@
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke",
-    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke"
+    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -73,6 +73,7 @@
     "PeekMinesSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "CoverSwitchLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "_why": "2026-10-21: the cover switch between two buildings in a row (the A3 gap rocks) on the lake layout" },
     "TurnArenaLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-26: the turn-based grid round the leader in the lake compound, the shed / base building subtracted, the squad moved out of the shed, refused deep in the base" },
+    "FormationWallHugSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 900, "_why": "2026-10-27 (game designer play-test, main 804d64c2): the squad hugging the lake yard's base building in the formation wall layout - the plain west face, the 3.6 m passage to the compound wall, a spawned 2 m passage; exploration and the real-time fight; tight to the face like one operative in cover" },
     "TurnArenaYardSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-26 (designer screenshot of the yard): turn-based starts in the yard, the base building's outline and door closed, nobody inside, a move into it refused" },
     "EnvironmentLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "_why": "2026-10-22: the Demo 01 lake is locked at hour 23 + Snowfall (environment block); the clock stays put at ClockScale 20" },
     "WeatherLakeSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "_why": "2026-10-22 environment phase 3: the weather presenter shows the locked 23:00 Snowfall as night (moon, no sun) + the Snowfall fog" },
@@ -143,9 +144,9 @@
     {
       "name": "formation-wall-end-2026-10-26",
       "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Characters/SquadSubsystemWallGroup*", "Source/**/Formation/FormationRuntimeRules*",
-        "Source/**/Formation/FormationWallRules*", "Source/**/Formation/FormationWallEndRules*", "Source/**/Core/CodexTacticsPlayerControllerCover*", "Source/**/Tactics/CoverGhostActor*", "Source/**/UI/CodexTacticsHUD*", "Source/**/Debug/FormationWallEndSmoke*"],
+        "Source/**/Formation/FormationWallRules*", "Source/**/Formation/FormationWallEndRules*", "Source/**/Core/CodexTacticsPlayerControllerCover*", "Source/**/Tactics/CoverGhostActor*", "Source/**/UI/CodexTacticsHUD*", "Source/**/Debug/FormationWallEndSmoke*", "Source/**/Debug/FormationWallHugSmoke*"],
       "tests": ["CodexTactics.Formation"],
-      "smokes": ["FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSlideSmoke", "FormationSquadPeekSmoke", "CornerHoldSmoke"]
+      "smokes": ["FormationWallHugSmoke", "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSlideSmoke", "FormationSquadPeekSmoke", "CornerHoldSmoke"]
     },
     {
       "name": "orders-pause-relocate-pick-2026-10-25",

@@ -12,6 +12,13 @@
   grenades, the weapon) - UE keeps the ammo of EVERY weapon he carried (Godot had one weapon); (6) the squad's corner peek (the peeker stands at
   a high wall, the others crouched) confirmed. Details: `waves-horde-encounters.md`, `squad-and-orders.md`, `interactables-traps-loot.md`,
   `combat-and-fire.md`.
+- **`CoverSmoke` "in the right-hand corner cover after 12.0 s (556 cm off the slot)" fails on main 804d64c2 (found 2026-10-27, branch
+  `formation/wall-hug-gap`; NOT caused by it - identical with `-PreCmds "Codex.Formation.WallTraceBlocking 0,Codex.Formation.WallSnap 0"`).**
+  After the left corner the Commander's cover order to the wall's other end is accepted (`to the high cover at (124, -6338) at a sprint`) but
+  he never walks (`cover slot not reached (556 cm off), stays in the open`); every right-corner check after it fails in turn. The log shows the
+  formation running round him (`corner watch`, `rear guard: Z (column)`) - to look at with the 2026-10-26 formation-in-the-fight / group cover
+  in combat changes (bc3a4a03).
+
 - **`SuppressionSmoke` scene A can flake under load (seen once in a batch 2026-10-26, passed alone; NOT the combat formation).** The log
   (main checkout, 18:57:39): the marksman's second shot came 0.5 s after his first and hit the Commander -> the Commander himself became
   SUPPRESSED (level 0.70), his SUPPRESS rounds went blind ("[suppressed: blind]", none reached the marksman), the marksman's level decayed to

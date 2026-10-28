@@ -20,6 +20,8 @@
 #include "SquadSubsystem.generated.h"
 
 class AOperativeCharacter;
+struct FCollisionQueryParams;
+struct FHitResult;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSquadLeaderChanged, AOperativeCharacter*, NewLeader);
 
@@ -888,6 +890,20 @@ private:
 	EFormationTerrainClass StepFormationTerrain(const AOperativeCharacter& LeaderRef);
 	/** Traces the probe rays round the leader into Sectors.ProbeWalls. */
 	void ProbeFormationWalls(const AOperativeCharacter& LeaderRef);
+	/**
+	 * A ray against the walls the formation reads (static / dynamic world objects that BLOCK pawns, as GatherFormationWalls): the first such
+	 * hit along Start -> End. Bug 2026-10-27 (the lake yard): a plain object-type trace also hit overlap-only boxes - the tutorial's
+	 * TutorialTriggerVolume (OverlapAllDynamic) round the whole yard - at distance 0 from inside them, so the wall layout read the wall AT the
+	 * clicked slot (every place 45 cm farther out, no room, a junk outward yaw: the squad faced the wall) and the probes a wall at 0 cm all
+	 * round. Codex.Formation.WallTraceBlocking 0 = the old trace (A/B).
+	 */
+	bool TraceFormationWall(FHitResult& OutHit, const FVector& Start, const FVector& End, const FCollisionQueryParams& Params) const;
+	/**
+	 * Bug 2026-10-27: a member settled in the wall pose eases onto his exact wall slot (the wall layout's face offset = one operative in
+	 * cover, FCoverTraceConfig::SlotOffsetCm) - the path follower stops AcceptanceRadius / the formation's stop radius short of it, a
+	 * hand-span off the wall. A swept glide, only within MaxCm of the slot (farther he is not at it). Codex.Formation.WallSnap 0 = off (A/B).
+	 */
+	void GlideToWallSlot(AOperativeCharacter& Member, const FVector2D& Slot, float MaxCm, float DeltaTime) const;
 	/**
 	 * Finds the wall face along TowardsWall from Origin within MaxDistance (its point, outward normal) and its free room each side
 	 * (left / right of a man facing it); false when there is none.
