@@ -188,6 +188,11 @@ FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonOb
 		Settings.bHasPuddles = true;
 		Settings.Puddles = FMath::Clamp(static_cast<float>(Number), 0.f, 1.f);
 	}
+	// Section 19.6: an extra exposure bias (EV) for this level's presenter.
+	if (Environment.TryGetNumberField(TEXT("exposure_bias"), Number))
+	{
+		Settings.ExposureBias = FMath::Clamp(static_cast<float>(Number), -4.f, 4.f);
+	}
 	return Settings;
 }
 

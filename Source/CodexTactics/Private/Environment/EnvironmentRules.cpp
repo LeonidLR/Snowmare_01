@@ -468,6 +468,20 @@ namespace EnvironmentRules
 		return FMath::Clamp(Level.bHasSnowCover ? Level.SnowCover : Default, 0.f, 1.f);
 	}
 
+	float GetLevelExposureBias(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level, const FString& MapName)
+	{
+		float Bias = Level.ExposureBias;
+		for (const TPair<FString, float>& Entry : Config.LevelExposureBias)
+		{
+			if (Entry.Key.Equals(MapName, ESearchCase::IgnoreCase))
+			{
+				Bias += Entry.Value;
+				break;
+			}
+		}
+		return FMath::Clamp(Bias, -4.f, 4.f);
+	}
+
 	float GetSideWindFactor(const FVector2D& WindDirection, int32 PocketIndex)
 	{
 		if (PocketIndex < 1 || PocketIndex >= FDirectionalSnow::PocketCount)

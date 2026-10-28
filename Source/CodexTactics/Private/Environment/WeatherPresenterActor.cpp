@@ -858,6 +858,9 @@ void AWeatherPresenterActor::Apply()
 	// Section 18: a soaked temperate level keeps its wet darkening under the auto exposure (0 on arctic: no rain component there).
 	WetExposureBias = Climate == EClimateProfile::Temperate && RainFx
 		? RainFx->GetActiveTuning().WetExposureBias * FMath::Clamp(Environment->GetStateRef().Wetness, 0.f, 1.f) : 0.f;
+	// Section 19.6: the level's own exposure bias (level JSON "exposure_bias" / environment.json "level_overrides"; 0 = unchanged).
+	LevelExposureBias = EnvironmentRules::GetLevelExposureBias(Environment->GetConfig(), Environment->GetLevelSettings(),
+		UWorld::RemovePIEPrefix(GetWorld()->GetMapName()));
 	ApplyPostProcess(Frame);
 	ApplySnow(Frame, Environment->GetSnowAmount());
 	WriteObjectSnow(Environment->GetStateRef().ObjectSnow);
@@ -971,7 +974,7 @@ void AWeatherPresenterActor::ApplyPostProcess(const FWeatherVisualFrame& Frame)
 	FPostProcessSettings& Settings = AdoptedPostProcess ? AdoptedPostProcess->Settings : PostProcess->Settings;
 	const FPostProcessSettings& Base = Authored.PostSettings;
 	Settings.bOverride_AutoExposureBias = true;
-	Settings.AutoExposureBias = Base.AutoExposureBias + Frame.ExposureBias + WetExposureBias;
+	Settings.AutoExposureBias = Base.AutoExposureBias + Frame.ExposureBias + WetExposureBias + LevelExposureBias;
 	// Level start / state jump (section 16): the camera-cut frames of the snap settle the eye adaptation (the engine jumps it to its target
 	// on a cut), then the authored speeds. Section 19: no fast adaptation window by default - the old 1 s at 1000 f-stops / s chased the
 	// read-back pre-exposure and flickered; an optional window (Codex.Env.StartExposureSeconds) runs at a speed capped to stay stable.

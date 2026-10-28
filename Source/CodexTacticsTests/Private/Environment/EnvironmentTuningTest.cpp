@@ -1,6 +1,8 @@
 #include "Misc/AutomationTest.h"
 #include "Dom/JsonObject.h"
 #include "Data/EnvironmentTuning.h"
+#include "Data/LevelJsonRules.h"
+#include "Environment/EnvironmentRules.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -293,6 +295,40 @@ bool FEnvTuningRosterRejectTest::RunTest(const FString&)
 	return true;
 }
 
+ENV_TUNING_TEST(FEnvTuningLevelExposureTest, "LevelExposureBias")
+bool FEnvTuningLevelExposureTest::RunTest(const FString&)
+{
+	// Default: nothing listed, nothing set = 0 for every map (no change).
+	const FEnvironmentConfig Defaults;
+	const FEnvironmentLevelSettings NoLevel;
+	TestEqual(TEXT("default config has no overrides"), Defaults.LevelExposureBias.Num(), 0);
+	TestEqual(TEXT("default level bias"), NoLevel.ExposureBias, 0.f);
+	TestEqual(TEXT("default = 0 EV"), EnvironmentRules::GetLevelExposureBias(Defaults, NoLevel, TEXT("L_MovementTest")), 0.f);
+
+	// Parse the level_overrides block (keys starting with "_" are comments, bad entries are skipped, out-of-range is clamped).
+	const FEnvironmentConfig Config = EnvironmentTuning::FromJson(*ParseObject(
+		TEXT("{\"level_overrides\": {\"_comment\": \"x\", \"L_MovementTest\": {\"exposure_bias\": -0.75}, \"L_Wild\": {\"exposure_bias\": 9},")
+		TEXT(" \"L_NoKey\": {}, \"L_NotObject\": 3}}")));
+	TestEqual(TEXT("2 maps parsed"), Config.LevelExposureBias.Num(), 2);
+	TestEqual(TEXT("MovementTest bias"), EnvironmentRules::GetLevelExposureBias(Config, NoLevel, TEXT("L_MovementTest")), -0.75f);
+	TestEqual(TEXT("case-insensitive"), EnvironmentRules::GetLevelExposureBias(Config, NoLevel, TEXT("l_movementtest")), -0.75f);
+	TestEqual(TEXT("clamped to 4 EV"), EnvironmentRules::GetLevelExposureBias(Config, NoLevel, TEXT("L_Wild")), 4.f);
+	TestEqual(TEXT("unlisted map unchanged"), EnvironmentRules::GetLevelExposureBias(Config, NoLevel, TEXT("L_Demo01_A_FrozenLake")), 0.f);
+	TestEqual(TEXT("no key skipped"), EnvironmentRules::GetLevelExposureBias(Config, NoLevel, TEXT("L_NoKey")), 0.f);
+
+	// Round trip through ToJson.
+	const FEnvironmentConfig Again = EnvironmentTuning::FromJson(*EnvironmentTuning::ToJson(Config));
+	TestEqual(TEXT("round trip"), EnvironmentRules::GetLevelExposureBias(Again, NoLevel, TEXT("L_MovementTest")), -0.75f);
+
+	// The level JSON "exposure_bias" adds to the map override.
+	const FEnvironmentLevelSettings Level = LevelJsonRules::ParseEnvironmentSettings(*ParseObject(TEXT("{\"exposure_bias\": -0.25}")));
+	TestEqual(TEXT("level JSON key"), Level.ExposureBias, -0.25f);
+	TestEqual(TEXT("level + map"), EnvironmentRules::GetLevelExposureBias(Config, Level, TEXT("L_MovementTest")), -1.f);
+	TestEqual(TEXT("level only"), EnvironmentRules::GetLevelExposureBias(Defaults, Level, TEXT("L_Other")), -0.25f);
+	TestEqual(TEXT("absent key = 0"), LevelJsonRules::ParseEnvironmentSettings(*ParseObject(TEXT("{}"))).ExposureBias, 0.f);
+	return true;
+}
+
 ENV_TUNING_TEST(FEnvTuningShippedFileTest, "ShippedFileEqualsDefaults")
 bool FEnvTuningShippedFileTest::RunTest(const FString&)
 {
@@ -322,6 +358,11 @@ bool FEnvTuningShippedFileTest::RunTest(const FString&)
 	{
 		TestEqual(Field.Key, Loaded.*Field.Member, Defaults.*Field.Member);
 	}
+	// Section 19.6: only L_MovementTest is darkened; the lake / factory (level JSON, no override) keep 0.
+	TestEqual(TEXT("shipped overrides: MovementTest only"), Loaded.LevelExposureBias.Num(), 1);
+	TestTrue(TEXT("shipped MovementTest is darkened"), EnvironmentRules::GetLevelExposureBias(Loaded, FEnvironmentLevelSettings(), TEXT("L_MovementTest")) < 0.f);
+	TestEqual(TEXT("shipped lake unchanged"), EnvironmentRules::GetLevelExposureBias(Loaded, FEnvironmentLevelSettings(), TEXT("L_Demo01_A_FrozenLake")), 0.f);
+	TestEqual(TEXT("shipped factory unchanged"), EnvironmentRules::GetLevelExposureBias(Loaded, FEnvironmentLevelSettings(), TEXT("L_Demo01_B_FrozenFactory")), 0.f);
 	TestTrue(TEXT("file has cold_on_locked_levels"), Json->HasField(TEXT("cold_on_locked_levels")));
 	TestTrue(TEXT("cold_on_locked_levels"), Loaded.bColdOnLockedLevels == Defaults.bColdOnLockedLevels);
 

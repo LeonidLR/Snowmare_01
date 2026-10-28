@@ -114,5 +114,9 @@
         "Blizzard": [0.42, 0.39, 0.41, 0.41]
       }
     }
+  },
+  "level_overrides": {
+    "_comment": "Section 19.6: per-map overrides for a map WITHOUT a level JSON (or in addition to its environment.exposure_bias): {\"<MapName>\": {\"exposure_bias\": EV}}, added to the weather presenter's post-process exposure bias in every climate (default 0). L_MovementTest settled ~130 mean luma after the start flicker fix (section 19) vs ~77 before: -0.75 EV brings it back (user: MovementTest may be darkened).",
+    "L_MovementTest": { "exposure_bias": -0.75 }
   }
 }
