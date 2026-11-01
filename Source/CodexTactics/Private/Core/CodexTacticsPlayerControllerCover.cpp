@@ -104,6 +104,9 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	const bool bAlt = IsSquadWideModifierDown();
 	// APC P1: the vehicle is a Pawn but its hull is cover (the click on the APC stays "take cover", user decision 2026-10-12).
 	const bool bVehicle = HitActor->IsA<AVehiclePawn>();
+	// Wall leadership (game designer 2026-11-01): the leader holding the corner of the squad's own peek - a click on its wall's end is the
+	// squad's corner peek again (the man nearest that corner takes it and the lead), not his single peek.
+	const bool bLeadershipPeeker = !TurnBased && Squad && Squad->IsWallLeadershipPeeker(Operative);
 	// Manual corner peek (user request 2026-10-13, rev 5c; low cover too since rev 5e): a click on the END of his own wall (its last ~75 cm,
 	// its end face or its top there) sends him to that corner, leaning out in the corner-aim pose until another order.
 	// Rev 5d (user bug 2026-10-14): decided BEFORE the "a click near an operative picks him" proximity rule - the corner he
@@ -113,7 +116,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		ECoverFacing PeekSide = ECoverFacing::Right;
 		float PeekEdge = 0.f;
 		const UTutorialSubsystem* PeekTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
-		const bool bPeekEdge = !bAlt && Operative->IsInPeekableCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
+		const bool bPeekEdge = !bAlt && !bLeadershipPeeker && Operative->IsInPeekableCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
 			&& !HitActor->IsA<APawn>() && FindCornerPeekForHit(Operative, Hit, PeekSide, PeekEdge);
 		if (CoverFacingRules::CornerPeekClickWins(bPeekEdge, HitActor->IsA<AOperativeCharacter>()))
 		{
@@ -140,7 +143,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	// The squad's corner peek (user bug report 2026-10-26): the squad in the formation wall layout stands in no cover slot, so the peek above
 	// never applied to it - a click on the END of the squad's wall (the window the single peek uses) sends the member nearest that end to peek
 	// round it, the others stack behind him (USquadSubsystem::OrderFormationCornerPeek). Before the proximity pick, as the single peek.
-	if (!TurnBased && !bAlt && !Operative->bInCover && !HitActor->IsA<APawn>())
+	if (!TurnBased && !bAlt && (!Operative->bInCover || bLeadershipPeeker) && !HitActor->IsA<APawn>())
 	{
 		const UTutorialSubsystem* SquadPeekTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
 		FSquadCornerPeekTarget Target;
@@ -317,7 +320,8 @@ bool ACodexTacticsPlayerController::FindSquadCornerPeekForHit(const FHitResult& 
 	UWorld* World = GetWorld();
 	const AActor* HitActor = Hit.GetActor();
 	float NormalYaw = 0.f;
-	if (!Leader || !World || !HitActor || Leader->bInCover || GetActiveTurnBased() || HitActor->IsA<APawn>() || HitActor->IsA<AInteractableActor>()
+	if (!Leader || !World || !HitActor || (Leader->bInCover && !Squad->IsWallLeadershipPeeker(Leader)) || GetActiveTurnBased() || HitActor->IsA<APawn>()
+		|| HitActor->IsA<AInteractableActor>()
 		|| HitActor->ActorHasTag(FName(TEXT("Enemy"))) || Squad->GetFormationKind() != EFormationKind::Wall || !Squad->GetFormationWallNormalYaw(NormalYaw))
 	{
 		return false;
@@ -395,7 +399,10 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 	const bool bPeekLocked = Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek);
 	// The squad's corner peek (2026-10-26): the ghost is the peeker's (the member nearest the hovered end), not the leader's.
 	const FSquadCornerPeekTarget* SquadTarget = nullptr;
-	if (Operative && Hit && !Operative->bInCover && !bPeekLocked && !GetActiveTurnBased())
+	const USquadSubsystem* HoverSquad = GetSquad();
+	// Wall leadership (2026-11-01): the leader holding the squad peek's corner previews the squad's peek, not his single one.
+	const bool bLeadershipPeeker = HoverSquad && HoverSquad->IsWallLeadershipPeeker(Operative);
+	if (Operative && Hit && (!Operative->bInCover || bLeadershipPeeker) && !bPeekLocked && !GetActiveTurnBased())
 	{
 		if (Hit->GetActor() != SquadPeekHoverActor.Get() || FVector::DistSquared(Hit->ImpactPoint, SquadPeekHoverPoint) > FMath::Square(5.f)
 			|| FVector::DistSquared2D(Operative->GetActorLocation(), SquadPeekHoverLeaderAt) > FMath::Square(5.f))
@@ -665,7 +672,11 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	// Locked by the tutorial: the ordinary cover order (TutorialRules::ResolveLockedCommand degrades Cover.Switch to Cover.Enter).
 	const UTutorialSubsystem* SwitchTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
 	LastCoverSwitchVerdict = Operative->EvaluateCoverSwitch(Slot);
-	const bool bSwitch = bPreviewSwitchable && CoverSwitchRules::IsSwitchConfirm(bDoubleClick, LastCoverSwitchVerdict,
+	// Wall leadership (2026-11-01): the leader holds the corner of the SQUAD's peek - his double-click on another cover is the squad's wall
+	// order there (the formation wall layout; the peek carried over, bug_04 A), not his own dash with the others' legacy group cover.
+	const USquadSubsystem* SwitchSquad = GetSquad();
+	const bool bSquadPeekLeader = SwitchSquad && SwitchSquad->IsWallLeadershipPeeker(Operative) && !SwitchSquad->HasMultiSelection();
+	const bool bSwitch = !bSquadPeekLeader && bPreviewSwitchable && CoverSwitchRules::IsSwitchConfirm(bDoubleClick, LastCoverSwitchVerdict,
 		SwitchTutorial && SwitchTutorial->IsCommandLocked(PlayerCommands::CoverSwitch));
 	bLastCoverConfirmSwitch = bSwitch;
 	if (bDoubleClick)

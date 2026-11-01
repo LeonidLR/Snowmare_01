@@ -15,6 +15,7 @@
 #include "Formation/FormationTypes.h"
 #include "Formation/FormationWallEndRules.h"
 #include "Formation/FormationWallGroupRules.h"
+#include "Formation/FormationWallLeadershipRules.h"
 #include "Formation/FormationWallRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Tactics/CoverTypes.h"
@@ -490,6 +491,24 @@ public:
 	AOperativeCharacter* GetFormationPeeker() const { return Sectors.Peek.Peeker.Get(); }
 	/** Squad corner peeks whose peek order was given (the peeker reached his corner) since the level began - smokes. */
 	int32 GetFormationPeekCount() const { return Sectors.PeekCount; }
+
+	// --- Wall leadership (game designer 2026-11-01; Codex.Formation.WallLeadership; SquadSubsystemWallLeadership.cpp) ---
+
+	/**
+	 * Wall leadership on (Codex.Formation.WallLeadership, default 1; 0 = the corner stack of the v2.4 squad peek - its point man peeks, the
+	 * leader stays): the squad's corner peek makes the member nearest that corner (FormationWallLeadership::PickCornerLeader) the FORMATION
+	 * leader - selection, portrait frame and camera follow switch to him (SetLeader) - and the others stack behind him along the near face.
+	 */
+	static bool IsWallLeadershipEnabled();
+	/**
+	 * Operative leads the squad and holds the corner of a wall-leadership peek (in its cover): the squad's corner peek hover / click stays on
+	 * for the squad's wall while he is there (the leader in cover otherwise means the single operative's peek).
+	 */
+	bool IsWallLeadershipPeeker(const AOperativeCharacter* Operative) const;
+	/** Operative can take a corner and the lead (decision 7): alive, on his feet, not on a ladder, not panicking, in the formation. */
+	bool CanTakeWallLead(const AOperativeCharacter* Operative) const;
+	/** Leader switches made by wall leadership since the level began - smokes. */
+	int32 GetWallLeadershipSwitchCount() const { return WallLeadershipSwitchCount; }
 	/** The last coverage allocation on the move (FormationCoverRules::Allocate): its rear guard; false when the allocator did not run. */
 	bool GetFormationRearGuard(EFormationRole& OutRole) const;
 
@@ -803,6 +822,13 @@ private:
 			/** The end the stack forms at (a held / sliding stack at another end is an older one: FormationWallEnd::IsSameStackEnd). */
 			FFormationStackEnd StackEnd;
 			float Seconds = 0.f;
+			/**
+			 * Wall leadership (2026-11-01): the peeker is the new leader and the others walk into the stack behind him - Line = the stack's
+			 * members in order (the leader first), LineAble = who walks (the man ahead a member keeps behind: FormationWallLeadership::AheadInLine).
+			 */
+			bool bLeadership = false;
+			TArray<TWeakObjectPtr<AOperativeCharacter>> Line;
+			TArray<bool> LineAble;
 		};
 		FSquadPeek Peek;
 		int32 PeekCount = 0;
@@ -873,6 +899,19 @@ private:
 	void EndFormationCornerPeek(const TCHAR* Why);
 	/** Operative is the squad corner peek's peeker (the formation leaves him to his corner: no follow, no wall pose, no sector look). */
 	bool IsFormationPeeker(const AOperativeCharacter* Operative) const { return Operative && Sectors.Peek.Peeker.Get() == Operative; }
+	/**
+	 * Wall leadership (SquadSubsystemWallLeadership.cpp): the plan for a corner peek at EdgeOnFace - FormationWallLeadership::Plan over the
+	 * formation's members (OutWho[i] = the plan's member i, the leader first). False when the squad cannot peek as a group.
+	 */
+	bool PlanWallLeadership(const FVector& EdgeOnFace, FWallLeadershipPlan& OutPlan, TArray<AOperativeCharacter*>& OutWho) const;
+	/**
+	 * Wall leadership: the corner peek order - Peeker (the plan's) becomes the formation leader (SetLeader: selection, portrait, camera), the
+	 * old peeker / anyone in cover leaves it, the stack behind him is held (HoldCornerStack, the order's crouch) and he takes CornerSlot in cover
+	 * and peeks (the leader-peeks path of the v2.4 squad peek). False: nothing was ordered.
+	 */
+	bool OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace);
+	/** Wall leadership: a follower walking into the stack keeps behind the man ahead of him in the line (FormationWallLeadership::HoldBehind). */
+	FVector2D HoldBehindInWallLine(const AOperativeCharacter& Operative, const FVector2D& Target) const;
 	/** The patrol / halt looks of FrameSlots from FormationCoverRules::Allocate (rules v2.2); false when the allocator does not apply. */
 	bool AllocateFormationLooks(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos);
 	/**
@@ -1097,6 +1136,12 @@ private:
 	/** Rev 5h: the Solo was entered by a spotted trap (no leash). */
 	bool bTrapSolo = false;
 	bool bAutonomousSquadCombat = false;
+	/**
+	 * Wall leadership (2026-11-01): SetLeader runs inside OrderWallLeadershipPeek - the wall order is re-keyed by the peek itself (no
+	 * PassWallOrderToLeader re-layout round the new leader).
+	 */
+	bool bWallLeadershipSwitch = false;
+	int32 WallLeadershipSwitchCount = 0;
 
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder> PlannedOrders;

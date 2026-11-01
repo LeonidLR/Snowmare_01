@@ -1044,7 +1044,15 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 				Others.Add(FVector2D(Other.Operative->GetActorLocation()));
 			}
 		}
-		if (const TOptional<FVector2D> Step = FormationWallEnd::StepRound(Here, Target, Others, Sectors.WallNormalYaw); Step.IsSet())
+		// Wall leadership (game designer 2026-11-01): walking into the stack behind the new leader he keeps behind the man ahead of him in the
+		// line - nobody passes the leader (or anybody) on the way, nobody steps round a team-mate.
+		const FVector2D Held = HoldBehindInWallLine(Operative, Target);
+		if (!Held.Equals(Target, 1.0))
+		{
+			MoveTarget = Held;
+			SlotVelocity = FVector2D::ZeroVector;
+		}
+		else if (const TOptional<FVector2D> Step = FormationWallEnd::StepRound(Here, Target, Others, Sectors.WallNormalYaw); Step.IsSet())
 		{
 			MoveTarget = Step.GetValue();
 			SlotVelocity = FVector2D::ZeroVector;

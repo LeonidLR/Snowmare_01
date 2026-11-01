@@ -31,6 +31,24 @@ bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperat
 {
 	OutPeeker = nullptr;
 	AOperativeCharacter* LeaderRef = Leader.Get();
+	if (IsWallLeadershipEnabled())
+	{
+		// Wall leadership (game designer 2026-11-01): the member nearest the corner peeks and becomes the leader, the others stack behind him.
+		FWallLeadershipPlan Leadership;
+		TArray<AOperativeCharacter*> Who;
+		if (!PlanWallLeadership(EdgeOnFace, Leadership, Who) || !Who.IsValidIndex(Leadership.Leader))
+		{
+			return false;
+		}
+		OutPeeker = Who[Leadership.Leader];
+		OutPlan = FFormationSquadPeek();
+		OutPlan.Peeker = EFormationRole::Commander;
+		OutPlan.bStack = true;
+		OutPlan.End = Leadership.End;
+		OutPlan.StackSlots = Leadership.StackSlots;
+		OutPlan.StackDestination = FVector2D(EdgeOnFace) + FormationMath::Forward(Sectors.WallNormalYaw) * FormationWallEnd::PeekDestinationOutCm;
+		return OutPeeker != nullptr;
+	}
 	if (!LeaderRef || !FormationRuntime::IsEnabled() || bIsSoloMode || bFollowersHolding || HasMultiSelection() || !IsFormationActive() || Followers.IsEmpty()
 		|| Sectors.Formation != EFormationKind::Wall || !Sectors.bWallLayoutValid || LeaderRef->bInCover)
 	{
@@ -78,6 +96,10 @@ bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperat
 
 bool USquadSubsystem::OrderFormationCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace)
 {
+	if (IsWallLeadershipEnabled())
+	{
+		return OrderWallLeadershipPeek(Peeker, CornerSlot, EdgeOnFace);
+	}
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	AOperativeCharacter* Planned = nullptr;
 	FFormationSquadPeek Plan;
