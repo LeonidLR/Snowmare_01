@@ -36,7 +36,7 @@
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke", "FormationCustomSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke", "FormationFarSideSmoke",
-    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "WallLeadershipSmoke"
+    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "WallLeadershipSmoke", "CombatLabAmbushRelocateSmoke", "SquadHaltStanceSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -93,6 +93,8 @@
     "CutterWallSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 300, "_why": "bug 06 (game designer 2026-11-01): a Cutter behind a lab wall neither bites nor pounces through it (MeleeLineRules), with a clear line it pounces and bites" },
     "CombatLabTowerSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 600, "_why": "bug 07 (game designer 2026-11-01): the tower ladders climbable; a click / double click on a ladder or a roof and a ground click take the leader up and down by the controller's click path (CombatLabTowerSmokePIE: the same in PIE)" },
     "TowerVisionSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 300, "_why": "bug 09 (game designer 2026-11-01): an operative on a lab tower sees over a 3 m wall only where the line clears it - his cone on the ground below, the roof edge's dead zone and the wall's shadow cut, drawn = CanOperativeSee; an enemy in the shadow unseen, beyond it seen; a ground-level operative's cone the flat model" },
+    "CombatLabAmbushRelocateSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 900, "_why": "the game designer's decisions 2026-11-01 night (docs/design/COMBAT_LAB.md 2.1): a plan watched all round strikes after its hold limit; a relocation run spotted by a ground / a tower watcher strikes at once; no concealed route -> no teleport, it stays, then follows the squad as a patrol; a single ambush watched all along strikes after its 60-90 s" },
+    "SquadHaltStanceSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 600, "_why": "decision 6 (2026-11-01 night, the stance jitter): in a fight a 3 s halt crouches no follower, a long halt crouches them after squad_roe.json hold_crouch_after_sec, the next move stands them up at once, Solo still crouches them" },
     "CombatLabAmbushSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 900, "_why": "combat lab ambushes v2 (game designer answers 2026-11-01, docs/design/COMBAT_LAB.md): the first group at 30 s, hiding spots at wall ends / doorways / authored points, a coordinated ambush (flanks first with the ranged ones suppressing, then rear + front, its own alive cap), a bypassed ambush relocates ahead unseen, an operative aiming at another enemy still watches" },
     "FormationLabCombatSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 900, "_why": "combat lab (game designer 2026-11-01, docs/design/COMBAT_LAB.md): seeded patrol / ambush spawns never in or near a wall / tower (record + own rays), the endless timer under max_alive, an ambusher holds while watched and springs when its side is unwatched, a patrol contact starts the skirmish while the squad moves and the squad keeps moving in formation in it, immortal + infinite ammo, the leader climbs a tower" },
     "FormationLabSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 1200, "_why": "formation stage 6 (2026-10-25, docs/design/FORMATION_SECTORS.md): the squad (4th man spawned) walks every lab route - formation per zone, no wall stare, the rear man keeps up, patrol pace, the wall layout at the dead ends, the group cover order as the wall layout, a 3-man wedge" },
@@ -130,9 +132,9 @@
     },
     {
       "name": "combat-lab-2026-11-01",
-      "globs": ["Source/**/Combat/CombatPressure*", "Source/**/Combat/CombatCheats*", "Source/**/AI/AmbushWatchRules*", "Source/**/Debug/FormationLabCombatSmoke*", "Source/**/Debug/CombatLabCommands*", "Source/**/Debug/CutterWallSmoke*", "Source/**/Debug/CombatLabTowerSmoke*", "Content/Data/FormationLab/Combat/**", "Content/Data/LevelJson/L_FormationLabCombat.json", "Content/Maps/L_FormationLabCombat.umap", "Scripts/Editor/build_formation_lab.py", "Source/**/Combat/AmbushSpotRules*", "Source/**/Combat/AmbushPlanRules*", "Source/**/Combat/AmbushRelocateRules*", "Source/**/Debug/CombatLabAmbushSmoke*"],
+      "globs": ["Source/**/Combat/CombatPressure*", "Source/**/Combat/CombatCheats*", "Source/**/AI/AmbushWatchRules*", "Source/**/Debug/FormationLabCombatSmoke*", "Source/**/Debug/CombatLabCommands*", "Source/**/Debug/CutterWallSmoke*", "Source/**/Debug/CombatLabTowerSmoke*", "Content/Data/FormationLab/Combat/**", "Content/Data/LevelJson/L_FormationLabCombat.json", "Content/Maps/L_FormationLabCombat.umap", "Scripts/Editor/build_formation_lab.py", "Source/**/Combat/AmbushSpotRules*", "Source/**/Combat/AmbushPlanRules*", "Source/**/Combat/AmbushRelocateRules*", "Source/**/Debug/CombatLabAmbushSmoke*", "Source/**/Debug/CombatLabAmbushRelocateSmoke*", "Source/**/Characters/EnemyCharacterPatrol*"],
       "tests": ["CodexTactics.Combat.Pressure", "CodexTactics.Combat.Cheats", "CodexTactics.AI.AmbushWatch", "CodexTactics.LevelJson", "CodexTactics.Combat.AmbushSpots", "CodexTactics.Combat.AmbushPlan", "CodexTactics.Combat.AmbushRelocate"],
-      "smokes": ["FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "PatrolAmbushSmoke", "TutorialAmbushLakeSmoke", "LadderClimbSmoke", "CombatLabAmbushSmoke", "SuppressionSmoke"]
+      "smokes": ["CombatLabAmbushSmoke", "CombatLabAmbushRelocateSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "PatrolAmbushSmoke", "TutorialAmbushLakeSmoke", "LadderClimbSmoke", "SuppressionSmoke"]
     },
     {
       "name": "formation-custom-2026-11-01",
@@ -653,9 +655,9 @@
     },
     {
       "name": "autonomy-postures",
-      "globs": ["Source/**/Characters/SquadAutonomy*", "Source/**/Characters/FirePosture*", "Source/**/Data/SquadROE*"],
+      "globs": ["Source/**/Characters/SquadAutonomy*", "Source/**/Characters/FirePosture*", "Source/**/Data/SquadROE*", "Content/Data/AI/squad_roe.json", "Source/**/Debug/SquadHaltStanceSmoke*"],
       "tests": ["CodexTactics.Characters.SquadAutonomy", "CodexTactics.Squad.Posture", "CodexTactics.Data.SquadROE"],
-      "smokes": ["PostureSmoke", "AmbushSmoke", "SquadFireSmoke", "SquadControlSmoke"]
+      "smokes": ["SquadHaltStanceSmoke", "PostureSmoke", "AmbushSmoke", "SquadFireSmoke", "SquadControlSmoke", "CommanderModeSmoke"]
     },
     {
       "name": "defense-marker",
@@ -817,7 +819,7 @@
       "name": "bot-telemetry",
       "globs": ["Source/**/Bot/**", "Source/**/Telemetry/**", "Scripts/bot_run.ps1", "Content/Data/CombatLab/**", "Tools/TrainingGround/golden/combatlab_*"],
       "tests": ["CodexTactics.Bot", "CodexTactics.Telemetry", "CodexTactics.LevelJson"],
-      "smokes": ["BotMarksmanSmoke", "BotRepairSmoke", "BotStealthSmoke"]
+      "smokes": ["BotMarksmanSmoke", "BotRepairSmoke", "BotStealthSmoke", "SquadHaltStanceSmoke"]
     },
     {
       "name": "player-text",

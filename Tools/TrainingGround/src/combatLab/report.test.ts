@@ -25,13 +25,14 @@ function record(run: number, over: Partial<RunRecord> = {}): RunRecord {
     contacts: { total: 2, patrol: 1, ambush: 1, coordinated: 0, unwatched_strikes: 1, never_looked: 0, reaction_mean_sec: 1, reaction_max_sec: 2, list: [contact('patrol', 0), contact('ambush', 2, 'column', true)] },
     formations: { changes: 3, entered: { diamond: 2, column: 1, wall_layout: 1 }, seconds: { diamond: 80, column: 30, wall_layout: 10 } },
     wall_hugs: 1,
+    cover: { orders: 2, taken: 1, seconds: 12.5 },
     stances: { changes: 4, per_min: 2, members: [{ name: 'Commander', changes: 4, standing: 2, crouching: 2, prone: 0, damage_taken: 0, damage_absorbed: 30, rounds: 40, climbs_up: 1, knockdowns: 0 }] },
     damage: { taken: 0, absorbed: 30 },
     ammo: { rounds: 40, infinite: true },
     ladder: { climbs_up: 1, climbs_down: 1 },
     knockdowns: 1,
     fights: { count: 2, seconds: 25 },
-    pressure: { events: 1, spawned: 3, sprung_by_watch: 1, relocations: 0 },
+    pressure: { events: 1, spawned: 3, sprung_by_watch: 1, relocations: 2, sprung_by_hold: 1, runs_spotted: 1, no_route: 1, followers: 0 },
     ...over,
   };
 }
@@ -139,4 +140,28 @@ test('run form: defaults 4 x 10 min, 2 at a time; limits; timeout; batch id; pro
   assert.equal(batchProgress(4, 1, [live(60), live(120)]), 0.625);
   assert.equal(batchProgress(0, 0, []), 0);
   assert.equal(batchProgress(2, 2, [live(500)]), 1);
+});
+
+test('cover at a wall and the ambush counters (decisions 1, 2, 5 of 2026-11-01 night); old records without them read as 0', () => {
+  const runs = [record(1), record(2)];
+  const row = runRow(runs[0]);
+  assert.equal(row.coverTaken, 1);
+  assert.equal(row.coverOrders, 2);
+  assert.equal(row.coverSeconds, 12.5);
+  const a = aggregate(runs);
+  assert.equal(a.coverTaken, 2);
+  assert.equal(a.coverOrders, 4);
+  assert.equal(a.coverSeconds, 25);
+  assert.equal(a.relocations, 4);
+  assert.equal(a.runsSpotted, 2);
+  assert.equal(a.sprungByHold, 2);
+  const md = reportMarkdown(runs);
+  assert.match(md, /Cover taken at a wall in fights: 2 of 4 orders, 25 s/);
+  assert.match(md, /relocation runs 4 \(spotted on the way 2\)/);
+  assert.match(md, /\| 1\/2 \(13\) \|/);
+  const old = record(3);
+  delete old.cover;
+  old.pressure = { events: 1, spawned: 3, sprung_by_watch: 1, relocations: 0 };
+  assert.equal(runRow(old).coverTaken, 0);
+  assert.equal(aggregate([old]).followers, 0);
 });

@@ -23,6 +23,7 @@ const DEFAULTS: SquadROE = {
   defense_leash_strictness: 'Strict',
   defense_body_block_priority: true,
   defense_ignore_distant_aid: true,
+  hold_crouch_after_sec: 4,
 };
 
 type NumberField = { kind: 'number'; key: keyof SquadROE; label: string; hint: string; step: number; min: number; max: number };
@@ -49,6 +50,7 @@ const SECTIONS: { title: string; fields: Field[] }[] = [
         { value: 'Crouch', label: 'Присед' }, { value: 'Standing', label: 'Стоя' } ] },
       { kind: 'choice', key: 'sniper_reaction', label: 'Реакция на снайпера', hint: 'когда лазер стрелка на бойце', options: [
         { value: 'DiveToCover', label: 'В укрытие (лёжа, если укрытия нет)' }, { value: 'DropProne', label: 'Сразу лечь' } ] },
+      { kind: 'number', key: 'hold_crouch_after_sec', label: 'Присед на остановке через, с', hint: 'стойка открытой местности только после стольких секунд без движения; следующий шаг поднимает сразу (0 — сразу, как раньше)', step: 0.5, min: 0, max: 60 },
     ],
   },
   {

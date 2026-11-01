@@ -42,7 +42,7 @@ export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
           <Stat label="Контакты" value={a.contacts} sub={`п ${a.byKind.patrol} · з ${a.byKind.ambush} · ск ${a.byKind.coordinated}`} />
           <Stat label="Удар с неприкрытой стороны" value={a.unwatchedStrikes} sub={`не взглянули ни разу: ${a.neverLooked}`} tone={a.unwatchedStrikes ? 'warn' : 'ok'} />
           <Stat label="До первого взгляда" value={`${fmtNum(a.reactionMean, 1)} с`} sub={`медиана ${fmtNum(a.reactionMedian, 1)} · макс ${fmtNum(a.reactionMax, 1)}`} />
-          <Stat label="Смены построения" value={a.formationChanges} sub={`прижались к стене: ${a.wallHugs}`} />
+          <Stat label="Смены построения" value={a.formationChanges} sub={`прижались к стене: ${a.wallHugs} · в бою укрылись у стены ${a.coverTaken} / ${a.coverOrders} (${fmtNum(a.coverSeconds, 0)} с)`} />
           <Stat label="Смены стойки" value={a.stanceChanges} sub={`${fmtNum(a.stancePerMin, 1)} в минуту`} />
           <Stat label={a.immortal ? 'Урон (поглощён)' : 'Урон'} value={fmtNum(a.immortal ? a.absorbed : a.damage)} sub={`${a.infiniteAmmo ? 'патронов было бы потрачено' : 'патронов'} ${a.rounds} · лестниц ${a.climbsUp} · нокдаунов ${a.knockdowns}`} />
         </div>
@@ -82,7 +82,7 @@ export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
         <div className="overflow-x-auto">
           <table className="text-xs w-full min-w-[900px]">
             <thead className="text-slate-500 text-left">
-              <tr>{['№', 'Итог', 'Мин', 'Маршрут', 'Кругов', 'Застрял', 'Контакты п/з/ск', 'Неприкр.', 'Взгляд, с', 'Построений', 'К стене', 'Стойки (/мин)', 'Урон / погл.', 'Патроны', 'Лестницы', 'Нокдауны'].map((h) => <th key={h} className="font-normal pr-3 pb-1">{h}</th>)}</tr>
+              <tr>{['№', 'Итог', 'Мин', 'Маршрут', 'Кругов', 'Застрял', 'Контакты п/з/ск', 'Неприкр.', 'Взгляд, с', 'Построений', 'К стене', 'Укрытие в бою', 'Стойки (/мин)', 'Урон / погл.', 'Патроны', 'Лестницы', 'Нокдауны'].map((h) => <th key={h} className="font-normal pr-3 pb-1">{h}</th>)}</tr>
             </thead>
             <tbody className="text-slate-200 tabular-nums">
               {rows.map((r) => (
@@ -98,6 +98,7 @@ export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
                   <td className="pr-3">{fmtNum(r.reactionMean, 1)}</td>
                   <td className="pr-3">{r.formationChanges}</td>
                   <td className="pr-3">{r.wallHugs}</td>
+                  <td className="pr-3">{r.coverTaken}/{r.coverOrders} ({fmtNum(r.coverSeconds, 0)} с)</td>
                   <td className="pr-3">{r.stanceChanges} ({fmtNum(r.stancePerMin, 1)})</td>
                   <td className="pr-3">{fmtNum(r.damage)} / {fmtNum(r.absorbed)}</td>
                   <td className="pr-3">{r.rounds}</td>

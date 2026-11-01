@@ -165,3 +165,14 @@ a usable cell. The Space-hold entry (`ACodexTacticsPlayerController::HandleSpace
 arena (smokes) keeps the leader-centred grid. `BakeObstacles` counts BLOCKING overlaps only. `Codex.TurnArena.Debug 1` logs the cell map of every search.
 Checks: `CodexTactics.Tactics.TurnArena.*`, `TurnArenaLakeSmoke` (lake compound: the grid round the leader by the generator shed refused, the arena 4.5 m
 into the yard, every walkable cell open level ground, all three operatives on the ground with 100+ reachable cells; inside the shed: refused).
+
+## Commander Mode's stance on a halt: the hold crouch (game designer decision 6, 2026-11-01 night, branch combat/ambush-v3)
+
+`USquadAutonomySubsystem` (7-C) gave an operative standing still with enemies about the ROE open-ground stance (crouch) at once, and nothing
+stood him up for his next walk: on short stops in a fight the squad crouched / stood again and again. Now the open-ground stance comes only
+after standing still `squad_roe.json` `hold_crouch_after_sec` (4 s, 0 = at once; `FSquadROE::HoldCrouchAfterSeconds`, Training Ground ROE
+panel; `SquadAutonomyRules::ShouldTakeHaltStance` / `StepStillSeconds`, tests `CodexTactics.Characters.SquadAutonomy.StanceHysteresis`); cover,
+a sniper aiming at him and a sniper rifle stay immediate. That crouch is the HOLD crouch (`AOperativeCharacter::MarkHoldCrouch` / `IsHoldCrouch`,
+a squad stance): his next own order (`OrderMoveTo`) or the formation's follow (`FollowTo`, the leader walking upright -
+`ShouldRiseFromHoldCrouch`) stands him up at once. Solo's guard crouch, the formation wall layout and the player's stance keys are unchanged.
+Smoke `SquadHaltStanceSmoke`.

@@ -78,6 +78,13 @@ struct CODEXTACTICS_API FSquadROE
 	bool bDefenseBodyBlockPriority = true;
 	/** The defender ignores wounded mates outside his defense leash. */
 	bool bDefenseIgnoreDistantAid = true;
+	/**
+	 * An operative (the followers above all) takes the open-ground stance (open_ground_stance, e.g. crouched) only after standing still this
+	 * long in a fight, s ("hold_crouch_after_sec"; game designer decision 6, 2026-11-01 night: no crouch / stand jitter on short stops); his
+	 * next move stands him up at once. 0 = at once (the behaviour before). Cover, a sniper's aim and the player's / squad's own stance orders
+	 * are not delayed.
+	 */
+	float HoldCrouchAfterSeconds = 4.f;
 };
 
 /**
@@ -159,6 +166,19 @@ namespace SquadAutonomyRules
 	 * open-ground stance.
 	 */
 	CODEXTACTICS_API EOperativeStance DesiredStance(const FSquadROE& ROE, bool bInCover, bool bSniperAiming, bool bCoverReachable);
+
+	/**
+	 * The stance hysteresis (decision 6, 2026-11-01 night): the autonomy changes a standing-still operative's stance to Desired now? Always
+	 * when it is no lower stance than Current or bDelayed is false (cover, a sniper on him); a lower one (crouch / prone) on a halt only once
+	 * he has stood still StillSeconds >= AfterSeconds.
+	 */
+	CODEXTACTICS_API bool ShouldTakeHaltStance(EOperativeStance Desired, EOperativeStance Current, float StillSeconds, float AfterSeconds, bool bDelayed);
+
+	/** A follower in the autonomy's hold crouch stands up at once for a formation move, unless he carries something or the leader walks low. */
+	CODEXTACTICS_API bool ShouldRiseFromHoldCrouch(bool bHoldCrouch, bool bCarrying, EOperativeStance LeaderStance);
+
+	/** Seconds standing still: grows while not moving, back to 0 on any move. */
+	CODEXTACTICS_API float StepStillSeconds(bool bMoving, float StillSeconds, float DeltaSeconds);
 
 	/** An enemy more than AngleDeg off the facing (planar). */
 	CODEXTACTICS_API bool IsFlankThreat(const FVector& Forward, const FVector& Position, const FVector& Enemy, float AngleDeg);

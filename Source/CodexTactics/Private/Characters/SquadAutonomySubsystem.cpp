@@ -181,6 +181,7 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 	using namespace SquadAutonomyRules;
 	const FSquadROE& ROE = SquadROE::Get();
 	State.MoveCooldown = FMath::Max(0.f, State.MoveCooldown - Elapsed);
+	State.StillSeconds = StepStillSeconds(Operative.IsMoving() || Operative.GetVelocity().Size2D() > 30.f, State.StillSeconds, Elapsed);
 	if (Operative.IsPanicking() || Operative.IsRaging() || Operative.bCarrying || Operative.IsVaulting() || Operative.IsClimbingLadder())
 	{
 		return; // broken nerves or busy hands: the autonomy does not command him
@@ -334,9 +335,16 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 		// A sniper rifle never fires standing (SniperRules, user request 2026-10-09): the autonomy keeps her down.
 		const EOperativeStance Desired = SniperRules::AutonomyStance(DesiredStance(ROE, bBehindBarricade, SniperOnMe != nullptr, bCoverReachable),
 			Operative.IsSniperWeaponEquipped());
-		if (Desired != Operative.GetStance())
+		// Decision 6 (2026-11-01 night): on a short halt he keeps standing - the open-ground crouch only after hold_crouch_after_sec standing still
+		// (cover, a sniper on him and a sniper rifle as before: at once); his next move (a formation follow, an order) stands him up at once.
+		const bool bHoldCrouch = !bBehindBarricade && !SniperOnMe && !Operative.IsSniperWeaponEquipped();
+		if (ShouldTakeHaltStance(Desired, Operative.GetStance(), State.StillSeconds, ROE.HoldCrouchAfterSeconds, bHoldCrouch))
 		{
 			Operative.SetStance(Desired);
+			if (bHoldCrouch && Desired == EOperativeStance::Crouching)
+			{
+				Operative.MarkHoldCrouch();
+			}
 			++Stats.StanceChanges;
 			Stats.ProneForSniper += SniperOnMe && Desired == EOperativeStance::Prone ? 1 : 0;
 		}

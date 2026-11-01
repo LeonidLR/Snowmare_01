@@ -18,6 +18,8 @@ enum class EPressureAmbushState : uint8
 	Hidden,
 	/** The squad in strike range, but someone looks its way: holding. */
 	Holding,
+	/** Bypassed, it runs a concealed route on foot to a new hiding spot (AmbushRelocateRules; decision 1, 2026-11-01 night). */
+	Relocating,
 	/** Struck (its side unwatched) or engaged otherwise (shot at, spotted): an ordinary enemy in the fight now. */
 	Sprung
 };
@@ -48,25 +50,40 @@ struct CODEXTACTICS_API FPressureSpawnRecord
 	EAmbushParty Party = EAmbushParty::Single;
 };
 
-/** One relocation of a bypassed ambush group (AmbushRelocateRules; smokes, logs). */
+/**
+ * One relocation of a bypassed ambush group: a RUN on foot along a concealed route (AmbushRelocateRules; the hybrid of decision 1,
+ * 2026-11-01 night - never a teleport; smokes, logs, Codex.Pressure.Status).
+ */
 struct CODEXTACTICS_API FPressureRelocationRecord
 {
 	int32 Group = 0;
 	int32 Plan = 0;
-	/** The group's first member before / after. */
+	/** The group's first member at the start / its new hiding spot. */
 	FVector From = FVector::ZeroVector;
 	FVector To = FVector::ZeroVector;
 	EAmbushSpotKind Kind = EAmbushSpotKind::None;
 	/** cos(the squad's heading, leader -> the new spot). */
 	float AheadCos = 0.f;
-	/** An operative had a line of sight to a member when it moved (never by the rule). */
+	/** An operative had a line of sight to a member when it set off (never by the rule). */
 	bool bSeenAtMove = false;
 	/** No operative had a line of sight to the new spot. */
 	bool bDestinationConcealed = false;
-	/** The pressure clock at the move, s. */
+	/** The pressure clock when it set off, s. */
 	float Clock = 0.f;
-	/** Members moved. */
+	/** Members running. */
 	int32 Members = 0;
+	/** The route: its navmesh length, its sight samples, the samples an operative saw at the start (0 by the rule), routes evaluated. */
+	float PathCm = 0.f;
+	int32 Samples = 0;
+	int32 SeenSamples = 0;
+	int32 RoutesTried = 0;
+	/** How the run went (Running until it ends) and the pressure clock then (-1 = still running). */
+	EAmbushRunStep Outcome = EAmbushRunStep::Running;
+	float EndClock = -1.f;
+	/** The largest step of any runner between two 0.1 s checks, cm (a teleport would show here). */
+	float MaxStepCm = 0.f;
+	/** The run's planned path (feet points, the start first). */
+	TArray<FVector> Path;
 };
 
 /** A coordinated ambush plan as it stands (AmbushPlanRules; smokes, Codex.Pressure.Status). */
@@ -79,8 +96,11 @@ struct CODEXTACTICS_API FPressurePlanInfo
 	/** The pressure clock when the flank block / the assault began (-1 = not yet), s. */
 	float FlankAtClock = -1.f;
 	float AssaultAtClock = -1.f;
-	/** Seconds it held (squad in range, both flanks watched). */
+	/** Seconds it held (squad in range, both flanks watched) and its hold limit (decision 2, 2026-11-01 night; 0 = none), s. */
 	float HoldSeconds = 0.f;
+	float HoldLimitSeconds = 0.f;
+	/** A runner of a party was spotted on its relocation route: the plan springs. */
+	bool bSpottedOnRoute = false;
 	/** Per party (AmbushPlanRules::PlanParty order): its group, its spot (feet), the spot's kind. */
 	TArray<int32> PartyGroups;
 	TArray<FVector> PartySpots;
@@ -133,6 +153,10 @@ public:
 	void SetWatchHalfAngleOverride(float Degrees);
 	/** Smokes: replaces the share of coordinated ambushes 0..1 (< 0 = the level's value). */
 	void SetCoordinatedShareOverride(float Share);
+	/** Smokes: replaces the hold limit range of the ambushes spawned from now on, s (Max < 0 = the level's 60-90 s). */
+	void SetHoldLimitOverride(float MinSeconds, float MaxSeconds);
+	/** Smokes: every relocation route counts as seen (no concealed route anywhere: the stay / patrol outcome). */
+	void SetRouteBlockedOverride(bool bBlocked) { bRouteBlockedOverride = bBlocked; }
 
 	/**
 	 * A spawn event now (console, smokes): Kind unset = the seeded pick; Count <= 0 = the seeded group size. bIgnoreCap spawns even past
@@ -173,6 +197,17 @@ public:
 	bool GetAmbushState(const AEnemyCharacter* Enemy, EPressureAmbushState& OutState, float& OutHoldSeconds) const;
 	/** Ambush groups that sprung because their side was unwatched (not those engaged otherwise). */
 	int32 GetSprungByWatchCount() const { return SprungByWatch; }
+	/** Ambushes (single groups / plans) that struck because they had held their whole hold limit while watched (decision 2). */
+	int32 GetSprungByHoldCount() const { return SprungByHold; }
+	/** An ambush's hold limit (its group's; a plan's for a plan member), s; 0 = none / not an ambusher. */
+	float GetHoldLimit(const AEnemyCharacter* Enemy) const;
+	/** Relocation searches that found no concealed route / groups that became a patrol following the squad for want of one. */
+	int32 GetNoRouteSearches() const { return NoRouteSearches; }
+	int32 GetFollowerConversions() const { return FollowerConversions; }
+	/** Group is a former ambush that follows the squad as a patrol (no concealed route). */
+	bool IsFollowerGroup(int32 Group) const { return FollowerGroups.Contains(Group); }
+	/** Groups running a relocation route now. */
+	int32 GetRunningCount() const { return Runs.Num(); }
 
 	/** Enemy's group, plan id (0 = none), party, and whether it suppresses (a sprung ranged ambusher). False when it is no pressure enemy. */
 	bool GetMemberInfo(const AEnemyCharacter* Enemy, int32& OutGroup, int32& OutPlan, EAmbushParty& OutParty, bool& bOutSuppressor) const;
@@ -190,10 +225,34 @@ public:
 	TArray<FVector2D> GatherSquadPositions() const;
 	/** Some living operative has a line of sight (world static only) to a body standing at Feet. */
 	bool IsVisibleToSquad(const FVector& Feet) const;
+	/**
+	 * A relocation route's sight test (decision 1): some living operative's EYES (stance height - on a tower / roof too; UTacticalSightSubsystem::
+	 * EyePoint, 60 m) have a clear sight line (HasClearSight) to Target, whichever way he looks (a route must be safe from a turn of the head).
+	 */
+	bool IsPointInSquadSight(const FVector& Target) const;
+	/** An operative SPOTS Enemy now: his real vision (UTacticalSightSubsystem::CanOperativeSee: field of view, peek, stance eye height). */
+	bool IsSpottedBySquad(const AEnemyCharacter& Enemy) const;
 	/** The level's walls / obstacles as boxes (blocking static meshes >= 50 cm tall; read once). */
 	const TArray<FPressureBox>& GetObstacleBoxes();
 
 private:
+	/** A group running its relocation route (decision 1). */
+	struct FRun
+	{
+		int32 Group = 0;
+		int32 Plan = 0;
+		/** Index into Relocations. */
+		int32 Record = INDEX_NONE;
+		TArray<TWeakObjectPtr<AEnemyCharacter>> Members;
+		/** Per member: the legs (the route's corners, then his own final spot) and the leg he walks. */
+		TArray<TArray<FVector>> Legs;
+		TArray<int32> Leg;
+		TArray<FVector> LastFeet;
+		float SpeedCmS = 300.f;
+		float Elapsed = 0.f;
+		float LimitSeconds = 30.f;
+	};
+
 	struct FManaged
 	{
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
@@ -225,12 +284,23 @@ private:
 		float AheadCos = 0.f;
 	};
 
+	/** A concealed route found by a search. */
+	struct FRouteChoice
+	{
+		FHideChoice Hide;
+		TArray<FVector> Path;
+		FAmbushRouteCandidate Candidate;
+		int32 RoutesTried = 0;
+	};
+
 	/** A running coordinated plan. */
 	struct FPlan
 	{
 		FPressurePlanInfo Info;
 		float PhaseSeconds = 0.f;
 		float BypassedSeconds = 0.f;
+		/** Relocation searches in a row with no concealed route for all four parties. */
+		int32 NoRouteSearches = 0;
 	};
 
 	void ReadConfig();
@@ -262,8 +332,30 @@ private:
 	void TickPlan(FPlan& Plan, float Step, const TArray<FVector2D>& Squad, const TArray<FAmbushWatcher>& Watchers);
 	/** A single group's bypass clock and relocation (AmbushRelocateRules). */
 	void TickRelocation(int32 Group, float Step, const TArray<FVector2D>& Squad);
-	/** Moves a hidden group's members to Feet (unseen; their guard post goes along). Returns the record. */
-	FPressureRelocationRecord MoveGroup(int32 Group, const FVector& Feet, EAmbushSpotKind Kind, float AheadCos, const FVector& FaceTowards);
+	/**
+	 * The route of Group's first member to Dest on the navmesh, its length and sight samples (IsPointInSquadSight at every route_sample_cm;
+	 * stops at the first seen one). False when the group has no living member.
+	 */
+	bool EvaluateRoute(int32 Group, const FVector& Dest, bool bDestinationConcealed, float Score, FAmbushRouteCandidate& OutRoute, TArray<FVector>& OutPath) const;
+	/**
+	 * The best concealed route of Group to a hiding spot ahead of the squad (the candidates of FindHideSpot, the best few by score;
+	 * AmbushRelocateRules::PickRoute). Unset when none is concealed (OutTried: routes evaluated).
+	 */
+	TOptional<FRouteChoice> FindRelocationRoute(int32 Group, int32& OutTried);
+	/** Group (its living, unsprung members) sets off along Route on foot. */
+	void StartRun(int32 Group, int32 Plan, const FRouteChoice& Route);
+	/** Every running group: legs, arrival, spotted (strikes at once), the time limit. */
+	void TickRuns(float Step);
+	/** No concealed route for long: Group becomes a patrol that follows the squad (its own senses back). */
+	void ConvertToFollower(int32 Group, const TCHAR* Why);
+	/** The following patrols' guard posts move after the squad's leader. */
+	void TickFollowers();
+	/** The hold limit drawn for a new ambush (its own seeded stream - the event stream stays untouched; the override in smokes). */
+	float DrawHoldLimit(int32 Key) const;
+	bool IsGroupRunning(int32 Group) const;
+	/** The candidate hiding spots ahead for a relocation (as FindHideSpot, every valid one, best first). */
+	TArray<FHideChoice> RankHideSpots(float MinDistanceCm, float MaxDistanceCm, float MinAheadCos, const TArray<FVector2D>& Avoid, float AvoidCm,
+		TArray<float>* OutScores = nullptr);
 	/** Keeps every suppressor's deliberate intent on its current target (or the nearest operative). */
 	void TickSuppressors();
 	void TickRecycle(float Step);
@@ -294,6 +386,19 @@ private:
 	int32 EventsFired = 0;
 	int32 EventsDelayed = 0;
 	int32 SprungByWatch = 0;
+	int32 SprungByHold = 0;
+	int32 NoRouteSearches = 0;
+	int32 FollowerConversions = 0;
+	float HoldMinOverride = -1.f;
+	float HoldMaxOverride = -1.f;
+	bool bRouteBlockedOverride = false;
+	float FollowTimer = 0.f;
+	TArray<FRun> Runs;
+	/** Per single ambush group: its hold limit / its failed route searches in a row. */
+	TMap<int32, float> GroupHoldLimit;
+	TMap<int32, int32> GroupNoRouteSearches;
+	/** Former ambush groups following the squad as patrols. */
+	TSet<int32> FollowerGroups;
 	bool bObstaclesRead = false;
 	TArray<FPressureBox> Obstacles;
 	FBox2D Bounds = FBox2D(ForceInit);

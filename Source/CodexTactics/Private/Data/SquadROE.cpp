@@ -116,6 +116,7 @@ FSquadROE SquadROE::FromJson(const FJsonObject& Json, const FSquadROE& Base)
 	ReadEnum(Json, TEXT("defense_leash_strictness"), LeashNames, ROE.DefenseLeashStrictness);
 	ReadBool(Json, TEXT("defense_body_block_priority"), ROE.bDefenseBodyBlockPriority);
 	ReadBool(Json, TEXT("defense_ignore_distant_aid"), ROE.bDefenseIgnoreDistantAid);
+	ReadNumber(Json, TEXT("hold_crouch_after_sec"), ROE.HoldCrouchAfterSeconds, 0.f, 60.f);
 	return ROE;
 }
 
@@ -139,6 +140,7 @@ TSharedRef<FJsonObject> SquadROE::ToJson(const FSquadROE& ROE)
 	Json->SetStringField(TEXT("defense_leash_strictness"), EnumToName(ROE.DefenseLeashStrictness, LeashNames));
 	Json->SetBoolField(TEXT("defense_body_block_priority"), ROE.bDefenseBodyBlockPriority);
 	Json->SetBoolField(TEXT("defense_ignore_distant_aid"), ROE.bDefenseIgnoreDistantAid);
+	Json->SetNumberField(TEXT("hold_crouch_after_sec"), ROE.HoldCrouchAfterSeconds);
 	return Json;
 }
 

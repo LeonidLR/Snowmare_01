@@ -113,6 +113,12 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	{
 		SetStance(EOperativeStance::Standing);
 	}
+	// Decision 6 (2026-11-01 night): crouched by the autonomy on a halt (the hold crouch), his next own order stands him up first.
+	if (IsHoldCrouch() && !bCarrying && !bPendingMoveReplay)
+	{
+		SetStance(EOperativeStance::Standing);
+		MarkStanceFromSquad();
+	}
 	// Formation wall layout (Codex.Formation.Sectors): crouched there by the squad, his next own order stands him up first (the stance clip
 	// defers the move below, as the rise from prone).
 	if (bFormationWallPose && !bPendingMoveReplay)
@@ -207,6 +213,18 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 				MarkStanceFromSquad(); // the confinement's copy, not the player's stance key
 			}
 			return EOperativeOrderResult::Refused;
+		}
+	}
+	// Decision 6 (2026-11-01 night): the hold crouch the autonomy gave him on a halt ends with the formation's next move - he stands up at once
+	// (the stance clip defers this move; the squad retries) when the leader walks upright.
+	if (IsHoldCrouch())
+	{
+		const USquadSubsystem* HoldSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+		const AOperativeCharacter* HoldLeader = HoldSquad ? HoldSquad->GetLeader() : nullptr;
+		if (HoldLeader && HoldLeader != this && SquadAutonomyRules::ShouldRiseFromHoldCrouch(true, bCarrying, HoldLeader->GetStance()))
+		{
+			SetStance(EOperativeStance::Standing);
+			MarkStanceFromSquad();
 		}
 	}
 	// A stance change is playing (the follower rises from prone / crouch, or lies down): the clip roots him, so no formation move

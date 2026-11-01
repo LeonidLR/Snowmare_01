@@ -143,6 +143,26 @@ void FCombatLabRunCollector::AddSample(const FCombatLabSample& Sample)
 	}
 	bWasAtWall = Sample.bAtWall;
 
+	// Cover at a wall in a fight (decision 5): an order (rising edge), taken once the squad is at the wall under it, the seconds there.
+	if (Sample.bCoverOrdered && !bWasCoverOrdered)
+	{
+		++CoverOrders;
+		bCoverTakenThisOrder = false;
+	}
+	if (Sample.bCoverOrdered && Sample.bAtWall)
+	{
+		if (!bCoverTakenThisOrder)
+		{
+			bCoverTakenThisOrder = true;
+			++CoverTaken;
+		}
+		else
+		{
+			CoverSeconds += Delta;
+		}
+	}
+	bWasCoverOrdered = Sample.bCoverOrdered;
+
 	SampleFormation(Sample, Delta);
 	SampleContacts(Sample);
 	SampleMembers(Sample);
@@ -486,6 +506,13 @@ TSharedRef<FJsonObject> CombatLabRules::MakeRunRecord(const FCombatLabRunMeta& M
 	Record->SetNumberField(TEXT("wall_hugs"), Collector.GetWallHugs());
 	{
 		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+		Out->SetNumberField(TEXT("orders"), Collector.GetCoverOrders());
+		Out->SetNumberField(TEXT("taken"), Collector.GetCoverTaken());
+		Out->SetNumberField(TEXT("seconds"), Round2(Collector.GetCoverSeconds()));
+		Record->SetObjectField(TEXT("cover"), Out);
+	}
+	{
+		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
 		Out->SetNumberField(TEXT("changes"), Collector.GetStanceChanges());
 		Out->SetNumberField(TEXT("per_min"), Round2(Collector.GetStanceChangesPerMinute()));
 		TArray<TSharedPtr<FJsonValue>> List;
@@ -538,6 +565,10 @@ TSharedRef<FJsonObject> CombatLabRules::MakeRunRecord(const FCombatLabRunMeta& M
 		Out->SetNumberField(TEXT("spawned"), Meta.PressureSpawned);
 		Out->SetNumberField(TEXT("sprung_by_watch"), Meta.PressureSprungByWatch);
 		Out->SetNumberField(TEXT("relocations"), Meta.PressureRelocations);
+		Out->SetNumberField(TEXT("sprung_by_hold"), Meta.PressureSprungByHold);
+		Out->SetNumberField(TEXT("runs_spotted"), Meta.PressureRunsSpotted);
+		Out->SetNumberField(TEXT("no_route"), Meta.PressureNoRoute);
+		Out->SetNumberField(TEXT("followers"), Meta.PressureFollowers);
 		Record->SetObjectField(TEXT("pressure"), Out);
 	}
 	return Record;

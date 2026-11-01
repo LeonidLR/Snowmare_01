@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Bot/BotCoverRules.h"
 
 class FJsonObject;
 
@@ -51,8 +52,13 @@ struct CODEXTACTICS_API FBotRouteConfig
 	float LegMinSpeedCm = 100.f;
 	/** Stuck events re-order the move this many times; the next one gives the waypoint up (skipped). */
 	int32 MaxRetries = 2;
-	/** A fight that starts while walking holds the route (the squad halts and fights) at most this long, s; 0 = walk on fighting. */
+	/**
+	 * A fight that starts while walking holds the route at most this long when the squad found no wall to take cover at (it halts where it
+	 * stands and fights), s; 0 = walk on fighting.
+	 */
 	float FightHoldSeconds = 20.f;
+	/** Cover at a wall first on contact ("fight_cover"; game designer decision 5, 2026-11-01 night; BotCoverRules). */
+	FBotCoverParams Cover;
 	/** A wall / climb action gives up after this long, s. */
 	float ActionTimeoutSeconds = 45.f;
 	TArray<FBotRouteWaypoint> Points;
@@ -192,7 +198,8 @@ namespace BotRouteRules
 
 	/**
 	 * The level JSON "bot_route" object: {"name", "loop", "reach_radius_cm", "stuck_after_sec", "stuck_move_cm", "leg_base_sec",
-	 * "leg_min_speed_cm", "max_retries", "fight_hold_sec", "action_timeout_sec", "points": [{"at": [x, y], "label", "action": "walk" | "wall" |
+	 * "leg_min_speed_cm", "max_retries", "fight_hold_sec", "action_timeout_sec", "fight_cover": {"enabled", "search_cm", "hold_sec", "min_wall_cm",
+	 * "min_height_cm", "min_threat_cm", "min_facing_cos"}, "points": [{"at": [x, y], "label", "action": "walk" | "wall" |
 	 * "climb", "wall": [x, y], "hold_sec"}]}. Absent keys keep the defaults (clamped to sane ranges). False + OutError on fewer than two points,
 	 * a point without "at": [x, y], an unknown action or a "wall" action without "wall": [x, y].
 	 */

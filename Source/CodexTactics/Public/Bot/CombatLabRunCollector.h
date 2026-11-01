@@ -79,6 +79,8 @@ struct CODEXTACTICS_API FCombatLabSample
 	bool bAtWall = false;
 	/** A fight runs (the skirmish). */
 	bool bInFight = false;
+	/** The bot has ordered the squad to cover at a wall for the fight (decision 5, 2026-11-01 night; BotCoverRules) and holds it. */
+	bool bCoverOrdered = false;
 	TArray<FCombatLabMemberSample> Members;
 	TArray<FCombatLabGroupSample> Groups;
 };
@@ -138,6 +140,11 @@ struct CODEXTACTICS_API FCombatLabRunMeta
 	int32 PressureSpawned = 0;
 	int32 PressureSprungByWatch = 0;
 	int32 PressureRelocations = 0;
+	/** Decisions 1-2 (2026-11-01 night): ambushes that struck after their hold limit; relocation runs spotted on the way; searches with no concealed route; ambushes turned into following patrols. */
+	int32 PressureSprungByHold = 0;
+	int32 PressureRunsSpotted = 0;
+	int32 PressureNoRoute = 0;
+	int32 PressureFollowers = 0;
 };
 
 class CODEXTACTICS_API FCombatLabRunCollector
@@ -170,6 +177,13 @@ public:
 	const TMap<FString, int32>& GetFormationsEntered() const { return FormationsEntered; }
 	const TMap<FString, float>& GetFormationSeconds() const { return FormationSeconds; }
 	int32 GetWallHugs() const { return WallHugs; }
+	/**
+	 * Cover at a wall in a fight (decision 5): orders given, covers taken (the squad at the wall while the order holds; one per order) and the
+	 * seconds spent there.
+	 */
+	int32 GetCoverOrders() const { return CoverOrders; }
+	int32 GetCoverTaken() const { return CoverTaken; }
+	float GetCoverSeconds() const { return CoverSeconds; }
 	int32 GetStanceChanges() const;
 	/** Stance changes per minute of the run. */
 	float GetStanceChangesPerMinute() const;
@@ -205,6 +219,11 @@ private:
 	bool bWasAtWall = false;
 	float OffWallSince = -1000.f;
 	int32 WallHugs = 0;
+	bool bWasCoverOrdered = false;
+	bool bCoverTakenThisOrder = false;
+	int32 CoverOrders = 0;
+	int32 CoverTaken = 0;
+	float CoverSeconds = 0.f;
 	bool bWasInFight = false;
 	int32 Fights = 0;
 	float FightSeconds = 0.f;

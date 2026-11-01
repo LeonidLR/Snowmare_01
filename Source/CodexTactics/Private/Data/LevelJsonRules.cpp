@@ -263,6 +263,9 @@ bool LevelJsonRules::ParsePressureSettings(const FJsonObject& Pressure, FCombatP
 		Config.Watch.WatchHalfAngleDeg = FMath::Clamp(Number(*Ambush, TEXT("watch_half_angle_deg"), Config.Watch.WatchHalfAngleDeg), 0.f, 180.f);
 		Config.Watch.WatchRangeCm = FMath::Max(0.f, Number(*Ambush, TEXT("watch_range_cm"), Config.Watch.WatchRangeCm));
 		Config.Watch.StrikeRangeCm = FMath::Max(100.f, Number(*Ambush, TEXT("strike_range_cm"), Config.Watch.StrikeRangeCm));
+		// Decision 2 (2026-11-01 night): an ambush watched all along strikes anyway after its hold limit (random within min..max; max 0 = never).
+		Config.Watch.HoldStrikeMinSeconds = FMath::Max(0.f, Number(*Ambush, TEXT("hold_strike_min_sec"), Config.Watch.HoldStrikeMinSeconds));
+		Config.Watch.HoldStrikeMaxSeconds = FMath::Max(Config.Watch.HoldStrikeMinSeconds, Number(*Ambush, TEXT("hold_strike_max_sec"), Config.Watch.HoldStrikeMaxSeconds));
 		// Game designer answers 2026-11-01: hiding spots (wall ends / doorways / authored points), coordinated plans, relocation.
 		if (const FJsonObject* Spots = Child(*Ambush, TEXT("spots")))
 		{
@@ -325,6 +328,13 @@ bool LevelJsonRules::ParsePressureSettings(const FJsonObject& Pressure, FCombatP
 			R.BehindAngleDeg = FMath::Clamp(Number(*Relocate, TEXT("behind_angle_deg"), R.BehindAngleDeg), 0.f, 180.f);
 			R.FarCm = FMath::Max(0.f, Number(*Relocate, TEXT("far_cm"), R.FarCm));
 			R.MinAheadCos = FMath::Clamp(Number(*Relocate, TEXT("min_ahead_cos"), R.MinAheadCos), -1.f, 1.f);
+			// Decision 1 (2026-11-01 night): the hybrid - a concealed route on foot, no teleport; no route -> stay / a following patrol.
+			R.RouteSampleCm = FMath::Max(25.f, Number(*Relocate, TEXT("route_sample_cm"), R.RouteSampleCm));
+			R.MaxRouteCm = FMath::Max(500.f, Number(*Relocate, TEXT("max_route_cm"), R.MaxRouteCm));
+			R.RunSpeedScale = FMath::Clamp(Number(*Relocate, TEXT("run_speed_scale"), R.RunSpeedScale), 0.3f, 2.f);
+			R.NoRouteTries = FMath::Max(1, FMath::RoundToInt(Number(*Relocate, TEXT("no_route_tries"), static_cast<float>(R.NoRouteTries))));
+			bool bPatrol = true;
+			R.bNoRoutePatrol = !Relocate->TryGetBoolField(TEXT("no_route_patrol"), bPatrol) || bPatrol;
 		}
 	}
 	if (const FJsonObject* Recycle = Child(Pressure, TEXT("recycle")))

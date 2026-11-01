@@ -34,6 +34,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/CombatCheats.h"
+#include "Combat/AmbushSpotRules.h"
 #include "Combat/CombatPressureRules.h"
 #include "Combat/CombatPressureSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -427,19 +428,22 @@ namespace FormationLabCombatSmoke
 			{
 				const FPressureSpawnRecord& Record = Records[Index];
 				const AEnemyCharacter* Enemy = Record.Enemy.Get();
+				// Patrols keep the level's 2.5 m from every wall; ambushers hug their wall (decision 3, 2026-11-01 night: 0.8 m spots, clearance 70 cm).
+				const float Clearance = Record.Kind == EPressureSpawnKind::Ambush ? AmbushSpotRules::HideClearanceCm(Config.WallClearanceCm, Config.Spots)
+					: Config.WallClearanceCm;
 				FString Why;
-				const bool bRays = RaysClear(World, Record.Location, Config.WallClearanceCm - 15.f, Why);
+				const bool bRays = RaysClear(World, Record.Location, Clearance - 15.f, Why);
 				FNavLocation OnNav;
 				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 				const bool bNav = Nav && Nav->ProjectPointToNavigation(Record.Location, OnNav, FVector(50.f, 50.f, 100.f));
 				const float SquadDistance = AmbushWatchRules::NearestDistance(SquadPositions, FVector2D(Record.Location));
 				const float MinDistance = (Record.Kind == EPressureSpawnKind::Patrol ? Config.MinSquadDistanceCm : Config.AmbushMinDistanceCm) - 2.f * 220.f;
 				const bool bAmbushHidden = Record.Kind != EPressureSpawnKind::Ambush || Record.bConcealed;
-				Check(State, Enemy && !Record.bPlacedByCaller && Record.ClearanceCm >= Config.WallClearanceCm - 1.f && bRays && bNav && SquadDistance >= MinDistance && bAmbushHidden
+				Check(State, Enemy && !Record.bPlacedByCaller && Record.ClearanceCm >= Clearance - 1.f && bRays && bNav && SquadDistance >= MinDistance && bAmbushHidden
 					&& CombatPressureRules::IsAllowedType(Record.Type),
 					FString::Printf(TEXT("spawn %d %s %s at %s: clearance %.0f cm (>= %.0f), rays %s, navmesh %d, squad %.0f cm, concealed %d"), Index,
 						Record.Kind == EPressureSpawnKind::Patrol ? TEXT("patrol") : TEXT("ambusher"), *UEnum::GetValueAsString(Record.Type),
-						*Record.Location.ToCompactString(), Record.ClearanceCm, Config.WallClearanceCm, bRays ? TEXT("clear") : *Why, bNav ? 1 : 0, SquadDistance,
+						*Record.Location.ToCompactString(), Record.ClearanceCm, Clearance, bRays ? TEXT("clear") : *Why, bNav ? 1 : 0, SquadDistance,
 						Record.bConcealed ? 1 : 0));
 				++State.SpawnChecked;
 			}
@@ -472,7 +476,9 @@ namespace FormationLabCombatSmoke
 			// Every timer spawn was a valid spot too.
 			for (const FPressureSpawnRecord& Record : Pressure->GetSpawnRecords())
 			{
-				if (!Record.bPlacedByCaller && Record.ClearanceCm < Config.WallClearanceCm - 1.f)
+				const float Clearance = Record.Kind == EPressureSpawnKind::Ambush ? AmbushSpotRules::HideClearanceCm(Config.WallClearanceCm, Config.Spots)
+					: Config.WallClearanceCm;
+				if (!Record.bPlacedByCaller && Record.ClearanceCm < Clearance - 1.f)
 				{
 					Check(State, false, FString::Printf(TEXT("timer spawn at %s too close to a wall (%.0f cm)"), *Record.Location.ToCompactString(), Record.ClearanceCm));
 				}

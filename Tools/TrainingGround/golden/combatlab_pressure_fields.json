@@ -106,6 +106,23 @@
       "cpp_clamp": "min"
     },
     {
+      "path": "ambush.hold_strike_min_sec",
+      "kind": "number",
+      "def": 60,
+      "min": 0,
+      "max": 1800,
+      "cpp_clamp": "min"
+    },
+    {
+      "path": "ambush.hold_strike_max_sec",
+      "kind": "number",
+      "def": 90,
+      "max": 1800,
+      "min_from": "ambush.hold_strike_min_sec",
+      "min_offset": 0,
+      "cpp_clamp": "min"
+    },
+    {
       "path": "ambush.min_squad_distance_cm",
       "kind": "number",
       "def": 1400,
@@ -133,7 +150,7 @@
     {
       "path": "ambush.spots.wall_standoff_cm",
       "kind": "number",
-      "def": 260,
+      "def": 80,
       "min": 50,
       "max": 2000,
       "cpp_clamp": "min"
@@ -354,6 +371,44 @@
       "def": 0.2,
       "min": -1,
       "max": 1,
+      "cpp_clamp": "both"
+    },
+    {
+      "path": "ambush.relocate.no_route_patrol",
+      "kind": "bool",
+      "def": true,
+      "cpp_clamp": "none"
+    },
+    {
+      "path": "ambush.relocate.no_route_tries",
+      "kind": "integer",
+      "def": 2,
+      "min": 1,
+      "max": 20,
+      "cpp_clamp": "min"
+    },
+    {
+      "path": "ambush.relocate.max_route_cm",
+      "kind": "number",
+      "def": 10000,
+      "min": 500,
+      "max": 30000,
+      "cpp_clamp": "min"
+    },
+    {
+      "path": "ambush.relocate.route_sample_cm",
+      "kind": "number",
+      "def": 100,
+      "min": 25,
+      "max": 1000,
+      "cpp_clamp": "min"
+    },
+    {
+      "path": "ambush.relocate.run_speed_scale",
+      "kind": "number",
+      "def": 1,
+      "min": 0.3,
+      "max": 2,
       "cpp_clamp": "both"
     },
     {

@@ -292,3 +292,40 @@ FString SquadAutonomyRules::PolicyName(ETargetPriorityPolicy Policy)
 		return TEXT("ThreatLevel");
 	}
 }
+
+namespace SquadAutonomyStanceLocal
+{
+	/** Standing 0, crouching 1, prone 2: how low a stance is. */
+	int32 Lowness(EOperativeStance Stance)
+	{
+		switch (Stance)
+		{
+		case EOperativeStance::Crouching: return 1;
+		case EOperativeStance::Prone: return 2;
+		default: return 0;
+		}
+	}
+}
+
+bool SquadAutonomyRules::ShouldTakeHaltStance(EOperativeStance Desired, EOperativeStance Current, float StillSeconds, float AfterSeconds, bool bDelayed)
+{
+	if (Desired == Current)
+	{
+		return false;
+	}
+	if (!bDelayed || SquadAutonomyStanceLocal::Lowness(Desired) <= SquadAutonomyStanceLocal::Lowness(Current))
+	{
+		return true;
+	}
+	return StillSeconds >= AfterSeconds;
+}
+
+bool SquadAutonomyRules::ShouldRiseFromHoldCrouch(bool bHoldCrouch, bool bCarrying, EOperativeStance LeaderStance)
+{
+	return bHoldCrouch && !bCarrying && LeaderStance == EOperativeStance::Standing;
+}
+
+float SquadAutonomyRules::StepStillSeconds(bool bMoving, float StillSeconds, float DeltaSeconds)
+{
+	return bMoving ? 0.f : StillSeconds + FMath::Max(0.f, DeltaSeconds);
+}

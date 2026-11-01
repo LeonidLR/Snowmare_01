@@ -74,6 +74,13 @@ namespace CombatLabSettingsTest
 			{ TEXT("ambush.relocate.behind_angle_deg"), [](const FCombatPressureConfig& C) { return double(C.Relocate.BehindAngleDeg); } },
 			{ TEXT("ambush.relocate.far_cm"), [](const FCombatPressureConfig& C) { return double(C.Relocate.FarCm); } },
 			{ TEXT("ambush.relocate.min_ahead_cos"), [](const FCombatPressureConfig& C) { return double(C.Relocate.MinAheadCos); } },
+			{ TEXT("ambush.relocate.route_sample_cm"), [](const FCombatPressureConfig& C) { return double(C.Relocate.RouteSampleCm); } },
+			{ TEXT("ambush.relocate.max_route_cm"), [](const FCombatPressureConfig& C) { return double(C.Relocate.MaxRouteCm); } },
+			{ TEXT("ambush.relocate.run_speed_scale"), [](const FCombatPressureConfig& C) { return double(C.Relocate.RunSpeedScale); } },
+			{ TEXT("ambush.relocate.no_route_tries"), [](const FCombatPressureConfig& C) { return double(C.Relocate.NoRouteTries); } },
+			{ TEXT("ambush.relocate.no_route_patrol"), [](const FCombatPressureConfig& C) { return C.Relocate.bNoRoutePatrol ? 1.0 : 0.0; } },
+			{ TEXT("ambush.hold_strike_min_sec"), [](const FCombatPressureConfig& C) { return double(C.Watch.HoldStrikeMinSeconds); } },
+			{ TEXT("ambush.hold_strike_max_sec"), [](const FCombatPressureConfig& C) { return double(C.Watch.HoldStrikeMaxSeconds); } },
 			{ TEXT("recycle.distance_cm"), [](const FCombatPressureConfig& C) { return double(C.RecycleDistanceCm); } },
 			{ TEXT("recycle.after_sec"), [](const FCombatPressureConfig& C) { return double(C.RecycleAfterSeconds); } },
 		};

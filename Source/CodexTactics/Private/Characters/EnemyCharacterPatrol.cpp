@@ -147,7 +147,7 @@ bool AEnemyCharacter::TryStartGuardPost()
 	return IsOnPatrol();
 }
 
-void AEnemyCharacter::MoveGuardPost(const FVector& Location, float Yaw)
+void AEnemyCharacter::MoveGuardPost(const FVector& Location, float Yaw, float SpeedCmS)
 {
 	if (!bGuardingPost)
 	{
@@ -155,8 +155,16 @@ void AEnemyCharacter::MoveGuardPost(const FVector& Location, float Yaw)
 	}
 	GuardPostLocation = Location;
 	GuardPostYaw = Yaw;
-	bGuardReturning = false;
 	bPatrolMoveIssued = false;
+	GuardMoveSpeed = FMath::Max(0.f, SpeedCmS);
+	if (GuardMoveSpeed > 0.f)
+	{
+		// A leg of a run (the hybrid relocation): walk there now, whatever the distance, until within the waypoint radius; the next TickGuardPost
+		// issues the move (a new MoveTo replaces the running one: no stop between legs).
+		bGuardReturning = true;
+		return;
+	}
+	bGuardReturning = false;
 	if (AAIController* AIC = Cast<AAIController>(GetController()))
 	{
 		AIC->StopMovement();
@@ -173,7 +181,7 @@ void AEnemyCharacter::TickGuardPost(float DeltaTime)
 		if (!bGuardReturning || !bPatrolMoveIssued || PatrolStuckTime > 1.f)
 		{
 			PatrolStuckTime = 0.f;
-			IssuePatrolMove(GuardPostLocation, PatrolWalkSpeed);
+			IssuePatrolMove(GuardPostLocation, GuardMoveSpeed > 0.f ? GuardMoveSpeed : PatrolWalkSpeed);
 		}
 		bGuardReturning = true;
 		return;
@@ -182,6 +190,7 @@ void AEnemyCharacter::TickGuardPost(float DeltaTime)
 	{
 		bGuardReturning = false;
 		bPatrolMoveIssued = false;
+		GuardMoveSpeed = 0.f;
 		if (AAIController* AIC = Cast<AAIController>(GetController()))
 		{
 			AIC->StopMovement();

@@ -96,6 +96,8 @@ private:
 		FVector TaskGoal = FVector::ZeroVector;
 		float TaskTime = 0.f;
 		float MoveCooldown = 0.f;
+		/** Seconds he has stood still (the stance hysteresis, SquadAutonomyRules::ShouldTakeHaltStance). */
+		float StillSeconds = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Patient;
 		FString PrimaryWeaponId;
 		/** The autonomy drew the sidearm (it puts it away again; a player's own pick is left alone). */

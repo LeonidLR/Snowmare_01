@@ -10,8 +10,10 @@
 //     round it HOLDS; the flanks unwatched -> the FLANK BLOCK (both flank parties strike and the ranged ones open suppressive fire while the
 //     melee front / rear still wait), then the ASSAULT (rear + front) within assault_min..assault_max; a ranged suppressor's deliberate
 //     rounds suppress an operative while the others flank;
-//  4. relocation (answer 3): a single ambush the squad leaves behind (placed 52 m away, its back turned) moves after relocate.after_sec,
-//     unseen, to a concealed spot AHEAD of the squad - the same enemy, still hidden, never despawned;
+//  4. relocation (answer 3; the HYBRID of decision 1, 2026-11-01 night): a single ambush the squad leaves behind (placed 52 m away, its back
+//     turned) sets off after relocate.after_sec along a CONCEALED ROUTE (no sight sample seen) and RUNS it on foot - no step longer than a
+//     run's, never spotted on the way - to a concealed spot AHEAD of the squad: the same enemy, still hidden, never despawned;
+//  (decision 3) every wall-end / doorway hiding spot stands 0.8 m off its wall's face, the ambushers hug their wall;
 //  5. the watch (answer 4): an operative aiming at ANOTHER enemy (a frozen decoy he fires at in a skirmish) keeps an ambusher inside his
 //     aim cone holding (>= 2.5 s, found by his look).
 // "shot" (rendered: UnrealEditor.exe <uproject> /Game/Maps/L_FormationLabCombat -game -RenderOffscreen -ResX=1280 -ResY=720
@@ -77,6 +79,7 @@ namespace CombatLabAmbushSmoke
 		RelocPlace,
 		RelocLeave,
 		RelocWait,
+		RelocRun,
 		AimPlace,
 		AimWait,
 		AimHold,
@@ -127,6 +130,11 @@ namespace CombatLabAmbushSmoke
 		int32 RelocationsBefore = 0;
 		int32 RecordsBefore = 0;
 		float LeftAtClock = 0.f;
+		/** The relocation run: its record, the most any runner moved in one frame, whether an operative ever saw it on the way. */
+		int32 RunRecord = INDEX_NONE;
+		float MaxFrameStepCm = 0.f;
+		FVector LastFeet = FVector::ZeroVector;
+		bool bSeenOnRun = false;
 		TWeakObjectPtr<AEnemyCharacter> Decoy;
 		TWeakObjectPtr<AOperativeCharacter> Aimer;
 		TWeakObjectPtr<AEnemyCharacter> AimAmbusher;
@@ -473,6 +481,22 @@ namespace CombatLabAmbushSmoke
 			Check(State, Ends >= 40 && Doorways >= 16 && Authored == Config.AuthoredPoints.Num() && Authored == 8,
 				FString::Printf(TEXT("hiding spots read from the level's walls: %d wall ends, %d doorways, %d authored (level JSON %d)"), Ends, Doorways, Authored,
 					Config.AuthoredPoints.Num()));
+			// Decision 3 (2026-11-01 night): the ambushers hug the wall - every wall-end / doorway spot 0.8 m off its wall's face.
+			const TArray<FPressureBox>& Boxes = Pressure->GetObstacleBoxes();
+			int32 OffStandoff = 0;
+			float Farthest = 0.f;
+			for (const FAmbushSpot& Spot : Pressure->GetHideSpots())
+			{
+				if (Spot.Kind != EAmbushSpotKind::Authored && Boxes.IsValidIndex(Spot.Box))
+				{
+					const float Off = CombatPressureRules::DistanceToBox(Spot.Position, Boxes[Spot.Box]);
+					Farthest = FMath::Max(Farthest, Off);
+					OffStandoff += FMath::Abs(Off - Config.Spots.WallStandoffCm) > 1.f ? 1 : 0;
+				}
+			}
+			Check(State, Config.Spots.WallStandoffCm == 80.f && OffStandoff == 0 && Farthest <= 81.f,
+				FString::Printf(TEXT("every wall-end / doorway spot hugs its wall: standoff %.0f cm (decision 3: 80), farthest %.0f cm, %d off"), Config.Spots.WallStandoffCm,
+					Farthest, OffStandoff));
 			Enter(State, EStage::SpotsPlace);
 			return true;
 		}
@@ -510,6 +534,10 @@ namespace CombatLabAmbushSmoke
 			});
 			const float Distance = static_cast<float>(FVector::Dist2D(Record->Location, FeetOf(*Leader)));
 			State.KindsSeen.Add(Record->SpotKind);
+			// Decision 3: at a wall spot the ambusher stands ~0.8 m off the face (the navmesh projection may shift it a little).
+			const bool bHugs = Record->SpotKind == EAmbushSpotKind::Authored || Record->ClearanceCm <= Config.Spots.WallStandoffCm + 40.f;
+			Check(State, bHugs, FString::Printf(TEXT("placement %d: the %s ambusher hugs its wall (%.0f cm off it, ~%.0f)"), State.Placement,
+				AmbushSpotRules::KindName(Record->SpotKind), Record->ClearanceCm, Config.Spots.WallStandoffCm));
 			Check(State, Record->Kind == EPressureSpawnKind::Ambush && Record->bConcealed && bAtCandidate && bRays && Record->ClearanceCm >= Clearance - 1.f
 				&& Distance >= Config.AmbushMinDistanceCm - 50.f && Distance <= Config.AmbushMaxDistanceCm + 50.f,
 				FString::Printf(TEXT("placement %d (%s): the ambusher hides at a %s spot %s - concealed %d, a candidate %d, clearance %.0f cm, rays %s, %.0f m from the leader"),
@@ -757,25 +785,28 @@ namespace CombatLabAmbushSmoke
 
 		case EStage::RelocPlace:
 		{
+			// The squad has walked west past an ambush hidden NORTH of the 43 m wall W_E_13 (y 2500): it is behind them now (bypassed). A concealed
+			// route exists along the wall's north side to the wall-end spot ahead of them (the decision 1 run; no line of sight over a 3 m wall).
 			if (!State.bPlaced)
 			{
 				State.bPlaced = true;
-				PlaceSquad(World, *Squad, Placements[0].Lead, Placements[0].Yaw);
+				PlaceSquad(World, *Squad, FVector2D(-2500.0, 1800.0), 180.f);
 				return true;
 			}
 			if (State.StageTime < 1.2f)
 			{
 				return true;
 			}
-			const TArray<AEnemyCharacter*> Spawned = Pressure->TriggerEvent(EPressureSpawnKind::Ambush, 1, true);
+			const TOptional<FVector> Hide = GroundNav(World, FVector(-500.f, 2900.f, 0.f));
+			const TArray<AEnemyCharacter*> Spawned = Hide.IsSet() ? Pressure->SpawnAmbushGroupAt(Hide.GetValue(), { EEnemyArchetype::Frostbitten },
+				Hide.GetValue() - FVector(0.f, 500.f, 0.f)) : TArray<AEnemyCharacter*>();
 			State.Relocator = Spawned.IsEmpty() ? nullptr : Spawned[0];
-			Check(State, State.Relocator.IsValid(), TEXT("a single ambush ahead of the squad"));
+			Check(State, State.Relocator.IsValid() && !Pressure->IsVisibleToSquad(FeetOf(*State.Relocator)),
+				TEXT("a single ambush north of W_E_13, behind the squad, out of its sight"));
 			if (!State.Relocator.IsValid())
 			{
 				return Finish(State, false);
 			}
-			// The squad turns away and leaves it behind (52 m back, heading west).
-			PlaceSquad(World, *Squad, FVector2D(-2000.0, -4500.0), 180.f);
 			State.RelocationsBefore = Pressure->GetRelocations().Num();
 			State.RecordsBefore = Pressure->GetSpawnRecords().Num();
 			State.LeftAtClock = Pressure->GetClock();
@@ -786,28 +817,64 @@ namespace CombatLabAmbushSmoke
 		case EStage::RelocWait:
 		{
 			AEnemyCharacter* Ambusher = State.Relocator.Get();
-			const bool bMoved = Pressure->GetRelocations().Num() > State.RelocationsBefore;
-			if (!bMoved && Ambusher && State.StageTime < Config.Relocate.AfterSeconds + 12.f)
+			const bool bStarted = Pressure->GetRelocations().Num() > State.RelocationsBefore;
+			if (!bStarted && Ambusher && State.StageTime < Config.Relocate.AfterSeconds + 12.f)
 			{
 				return true;
 			}
-			if (!bMoved || !Ambusher)
+			if (!bStarted || !Ambusher)
 			{
-				Check(State, false, FString::Printf(TEXT("the bypassed ambush relocates (moved %d, still there %d, %.1f s)"), bMoved ? 1 : 0, Ambusher ? 1 : 0, State.StageTime));
+				Check(State, false, FString::Printf(TEXT("the bypassed ambush sets off along a concealed route (started %d, still there %d, %.1f s)"), bStarted ? 1 : 0,
+					Ambusher ? 1 : 0, State.StageTime));
 				return Finish(State, false);
 			}
-			const FPressureRelocationRecord& Move = Pressure->GetRelocations().Last();
-			const FVector Now = FeetOf(*Ambusher);
-			const float Distance = static_cast<float>(FVector::Dist2D(Now, FeetOf(*Leader)));
+			State.RunRecord = Pressure->GetRelocations().Num() - 1;
+			const FPressureRelocationRecord& Move = Pressure->GetRelocations()[State.RunRecord];
 			const float Waited = Move.Clock - State.LeftAtClock;
 			Check(State, Waited >= Config.Relocate.AfterSeconds - 0.25f && Waited <= Config.Relocate.AfterSeconds + 3.f,
-				FString::Printf(TEXT("left behind, it relocates after %.1f s (relocate.after_sec %.0f)"), Waited, Config.Relocate.AfterSeconds));
-			Check(State, !Move.bSeenAtMove && Move.bDestinationConcealed && !Pressure->IsVisibleToSquad(Now),
-				FString::Printf(TEXT("unseen: no operative saw it go (%d), the new spot is out of sight (%d)"), Move.bSeenAtMove ? 1 : 0, Move.bDestinationConcealed ? 1 : 0));
-			Check(State, Move.AheadCos >= Config.Relocate.MinAheadCos && Distance >= Config.AmbushMinDistanceCm - 50.f && Distance <= Config.AmbushMaxDistanceCm + 50.f
-				&& Move.Kind != EAmbushSpotKind::None && FVector::Dist2D(Now, Move.To) <= 80.f,
-				FString::Printf(TEXT("AHEAD of the squad again: %s -> %s, a %s spot, ahead %.2f, %.0f m from the leader"), *Move.From.ToCompactString(),
-					*Now.ToCompactString(), AmbushSpotRules::KindName(Move.Kind), Move.AheadCos, Distance / 100.f));
+				FString::Printf(TEXT("left behind, it sets off after %.1f s (relocate.after_sec %.0f)"), Waited, Config.Relocate.AfterSeconds));
+			Check(State, !Move.bSeenAtMove && Move.bDestinationConcealed && Move.SeenSamples == 0 && Move.Samples >= 5 && Move.PathCm > 500.f
+				&& Move.Path.Num() >= 2 && FVector::Dist2D(Move.From, FeetOf(*Ambusher)) <= 60.f,
+				FString::Printf(TEXT("a CONCEALED ROUTE on foot (decision 1): %.0f m, %d sight samples, none seen (%d), unseen at the start (%d), the new spot out of sight (%d), %d routes tried"),
+					Move.PathCm / 100.f, Move.Samples, Move.SeenSamples, Move.bSeenAtMove ? 0 : 1, Move.bDestinationConcealed ? 1 : 0, Move.RoutesTried));
+			EPressureAmbushState AmbushState = EPressureAmbushState::Hidden;
+			float Held = 0.f;
+			Check(State, Pressure->GetAmbushState(Ambusher, AmbushState, Held) && AmbushState == EPressureAmbushState::Relocating,
+				FString::Printf(TEXT("the ambusher is running (state %d)"), static_cast<int32>(AmbushState)));
+			State.LastFeet = FeetOf(*Ambusher);
+			State.MaxFrameStepCm = 0.f;
+			State.bSeenOnRun = false;
+			Enter(State, EStage::RelocRun);
+			return true;
+		}
+
+		case EStage::RelocRun:
+		{
+			AEnemyCharacter* Ambusher = State.Relocator.Get();
+			if (!Ambusher || !Pressure->GetRelocations().IsValidIndex(State.RunRecord))
+			{
+				Check(State, false, TEXT("the runner is there"));
+				return Finish(State, false);
+			}
+			const FPressureRelocationRecord& Move = Pressure->GetRelocations()[State.RunRecord];
+			const FVector Feet = FeetOf(*Ambusher);
+			State.MaxFrameStepCm = FMath::Max(State.MaxFrameStepCm, static_cast<float>(FVector::Dist2D(Feet, State.LastFeet)));
+			State.LastFeet = Feet;
+			State.bSeenOnRun |= Pressure->IsSpottedBySquad(*Ambusher);
+			if (Move.Outcome == EAmbushRunStep::Running && State.StageTime < 60.f)
+			{
+				return true;
+			}
+			const float Distance = static_cast<float>(FVector::Dist2D(Feet, FeetOf(*Leader)));
+			Check(State, Move.Outcome == EAmbushRunStep::Arrived && !State.bSeenOnRun,
+				FString::Printf(TEXT("it RAN there unseen: %s after %.1f s, an operative saw it on the way %d"), AmbushRelocateRules::RunStepName(Move.Outcome),
+					Move.EndClock - Move.Clock, State.bSeenOnRun ? 1 : 0));
+			Check(State, State.MaxFrameStepCm <= 30.f && Move.MaxStepCm <= 100.f,
+				FString::Printf(TEXT("on foot, no teleport: largest step %.1f cm a frame (%.0f cm per 0.1 s check)"), State.MaxFrameStepCm, Move.MaxStepCm));
+			Check(State, Move.AheadCos >= Config.Relocate.MinAheadCos && Distance >= Config.AmbushMinDistanceCm - 250.f && Distance <= Config.AmbushMaxDistanceCm + 250.f
+				&& Move.Kind != EAmbushSpotKind::None && FVector::Dist2D(Feet, Move.To) <= 150.f && !Pressure->IsVisibleToSquad(Feet),
+				FString::Printf(TEXT("AHEAD of the squad again: %s -> %s, a %s spot, ahead %.2f, %.0f m from the leader, hidden"), *Move.From.ToCompactString(),
+					*Feet.ToCompactString(), AmbushSpotRules::KindName(Move.Kind), Move.AheadCos, Distance / 100.f));
 			Check(State, StateOf(*Pressure, Ambusher) != EPressureAmbushState::Sprung && Ambusher->IsOnPatrol() && Ambusher->IsGuardingPost()
 				&& Pressure->GetSpawnRecords().Num() == State.RecordsBefore && Flow->GetPhase() == ECodexGamePhase::Exploration,
 				TEXT("the same enemy, still hidden on its new post - not despawned, nothing new spawned, no fight"));
@@ -996,7 +1063,7 @@ namespace CombatLabAmbushSmoke
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.CombatLabAmbushSmoke"),
 		TEXT("Dev check (combat lab ambushes v2, game designer 2026-11-01, L_FormationLabCombat): the first group at 30 s, hiding spots at wall ends / doorways / ")
-		TEXT("authored points, a coordinated ambush (flanks first, ranged ones suppress, then rear + front), a bypassed ambush relocates ahead unseen, an operative ")
+		TEXT("authored points (0.8 m off the wall), a coordinated ambush (flanks first, ranged ones suppress, then rear + front), a bypassed ambush runs a concealed route ahead, an operative ")
 		TEXT("aiming at another enemy still watches; [shot]. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
