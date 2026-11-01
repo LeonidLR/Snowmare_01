@@ -46,6 +46,33 @@ float AmbushWatchRules::WatchMarginDeg(const TArray<FAmbushWatcher>& Watchers, c
 	return Margin;
 }
 
+TArray<FAmbushWatcher> AmbushWatchRules::MemberLooks(const FVector2D& Position, float BodyYawDeg, const TOptional<float>& AimYawDeg,
+	const TOptional<float>& SectorYawDeg, float DedupeDeg)
+{
+	TArray<FAmbushWatcher> Out;
+	const auto Add = [&Out, &Position, DedupeDeg](float Yaw, EAmbushLookSource Source)
+	{
+		for (const FAmbushWatcher& Each : Out)
+		{
+			if (AngleOffDeg(Each.LookYawDeg, Yaw) <= DedupeDeg)
+			{
+				return;
+			}
+		}
+		Out.Add({ Position, static_cast<float>(FMath::UnwindDegrees(Yaw)), Source });
+	};
+	Add(BodyYawDeg, EAmbushLookSource::Body);
+	if (AimYawDeg.IsSet())
+	{
+		Add(AimYawDeg.GetValue(), EAmbushLookSource::Aim);
+	}
+	if (SectorYawDeg.IsSet())
+	{
+		Add(SectorYawDeg.GetValue(), EAmbushLookSource::Sector);
+	}
+	return Out;
+}
+
 float AmbushWatchRules::NearestDistance(const TArray<FVector2D>& Positions, const FVector2D& Point)
 {
 	float Best = MAX_flt;

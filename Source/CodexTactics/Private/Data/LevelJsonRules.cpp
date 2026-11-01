@@ -262,6 +262,69 @@ bool LevelJsonRules::ParsePressureSettings(const FJsonObject& Pressure, FCombatP
 		Config.Watch.WatchHalfAngleDeg = FMath::Clamp(Number(*Ambush, TEXT("watch_half_angle_deg"), Config.Watch.WatchHalfAngleDeg), 0.f, 180.f);
 		Config.Watch.WatchRangeCm = FMath::Max(0.f, Number(*Ambush, TEXT("watch_range_cm"), Config.Watch.WatchRangeCm));
 		Config.Watch.StrikeRangeCm = FMath::Max(100.f, Number(*Ambush, TEXT("strike_range_cm"), Config.Watch.StrikeRangeCm));
+		// Game designer answers 2026-11-01: hiding spots (wall ends / doorways / authored points), coordinated plans, relocation.
+		if (const FJsonObject* Spots = Child(*Ambush, TEXT("spots")))
+		{
+			FAmbushSpotParams& S = Config.Spots;
+			S.WallStandoffCm = FMath::Max(50.f, Number(*Spots, TEXT("wall_standoff_cm"), S.WallStandoffCm));
+			S.EndInsetCm = FMath::Max(0.f, Number(*Spots, TEXT("end_inset_cm"), S.EndInsetCm));
+			S.MinWallLengthCm = FMath::Max(0.f, Number(*Spots, TEXT("min_wall_length_cm"), S.MinWallLengthCm));
+			S.JoinedGapCm = FMath::Max(1.f, Number(*Spots, TEXT("joined_gap_cm"), S.JoinedGapCm));
+			S.DoorwayMinCm = FMath::Max(0.f, Number(*Spots, TEXT("doorway_min_cm"), S.DoorwayMinCm));
+			S.DoorwayMaxCm = FMath::Max(S.DoorwayMinCm, Number(*Spots, TEXT("doorway_max_cm"), S.DoorwayMaxCm));
+			S.AuthoredBonus = Number(*Spots, TEXT("authored_bonus"), S.AuthoredBonus);
+			S.DoorwayBonus = Number(*Spots, TEXT("doorway_bonus"), S.DoorwayBonus);
+			S.MergeCm = FMath::Max(0.f, Number(*Spots, TEXT("merge_cm"), S.MergeCm));
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Points = nullptr;
+		if (Ambush->TryGetArrayField(TEXT("points"), Points) && Points)
+		{
+			for (const TSharedPtr<FJsonValue>& Point : *Points)
+			{
+				const TArray<TSharedPtr<FJsonValue>>* XY = nullptr;
+				double X = 0.0;
+				double Y = 0.0;
+				if (!Point.IsValid() || !Point->TryGetArray(XY) || !XY || XY->Num() < 2 || !(*XY)[0]->TryGetNumber(X) || !(*XY)[1]->TryGetNumber(Y))
+				{
+					if (OutError)
+					{
+						*OutError = TEXT("ambush.points: every point is [x, y] (world cm)");
+					}
+					return false;
+				}
+				Config.AuthoredPoints.Add(FVector2D(X, Y));
+			}
+		}
+		if (const FJsonObject* Plan = Child(*Ambush, TEXT("coordinated")))
+		{
+			FAmbushPlanParams& C = Config.Coordinated;
+			C.Share = FMath::Clamp(Number(*Plan, TEXT("share"), C.Share), 0.f, 1.f);
+			C.BodiesMin = FMath::Max(4, FMath::RoundToInt(Number(*Plan, TEXT("bodies_min"), static_cast<float>(C.BodiesMin))));
+			C.BodiesMax = FMath::Max(C.BodiesMin, FMath::RoundToInt(Number(*Plan, TEXT("bodies_max"), static_cast<float>(C.BodiesMax))));
+			C.MaxAlive = FMath::Max(4, FMath::RoundToInt(Number(*Plan, TEXT("max_alive"), static_cast<float>(C.MaxAlive))));
+			C.MinSquadDistanceCm = FMath::Max(0.f, Number(*Plan, TEXT("min_squad_distance_cm"), C.MinSquadDistanceCm));
+			C.MaxSquadDistanceCm = FMath::Max(C.MinSquadDistanceCm + 100.f, Number(*Plan, TEXT("max_squad_distance_cm"), C.MaxSquadDistanceCm));
+			C.AnchorAheadCm = Number(*Plan, TEXT("anchor_ahead_cm"), C.AnchorAheadCm);
+			C.FlankOffsetCm = FMath::Max(100.f, Number(*Plan, TEXT("flank_offset_cm"), C.FlankOffsetCm));
+			C.FrontOffsetCm = FMath::Max(100.f, Number(*Plan, TEXT("front_offset_cm"), C.FrontOffsetCm));
+			C.RearOffsetCm = FMath::Max(100.f, Number(*Plan, TEXT("rear_offset_cm"), C.RearOffsetCm));
+			C.MinSeparationCm = FMath::Max(0.f, Number(*Plan, TEXT("min_separation_cm"), C.MinSeparationCm));
+			C.TriggerRangeCm = FMath::Max(100.f, Number(*Plan, TEXT("trigger_range_cm"), C.TriggerRangeCm));
+			C.AssaultMinSeconds = FMath::Max(0.f, Number(*Plan, TEXT("assault_min_sec"), C.AssaultMinSeconds));
+			C.AssaultMaxSeconds = FMath::Max(C.AssaultMinSeconds, Number(*Plan, TEXT("assault_max_sec"), C.AssaultMaxSeconds));
+			C.BlockDistanceCm = FMath::Max(100.f, Number(*Plan, TEXT("block_distance_cm"), C.BlockDistanceCm));
+			C.MinRanged = FMath::Clamp(FMath::RoundToInt(Number(*Plan, TEXT("min_ranged"), static_cast<float>(C.MinRanged))), 0, 6);
+		}
+		if (const FJsonObject* Relocate = Child(*Ambush, TEXT("relocate")))
+		{
+			FAmbushRelocateParams& R = Config.Relocate;
+			bool bRelocate = true;
+			R.bEnabled = !Relocate->TryGetBoolField(TEXT("enabled"), bRelocate) || bRelocate;
+			R.AfterSeconds = FMath::Max(0.f, Number(*Relocate, TEXT("after_sec"), R.AfterSeconds));
+			R.BehindAngleDeg = FMath::Clamp(Number(*Relocate, TEXT("behind_angle_deg"), R.BehindAngleDeg), 0.f, 180.f);
+			R.FarCm = FMath::Max(0.f, Number(*Relocate, TEXT("far_cm"), R.FarCm));
+			R.MinAheadCos = FMath::Clamp(Number(*Relocate, TEXT("min_ahead_cos"), R.MinAheadCos), -1.f, 1.f);
+		}
 	}
 	if (const FJsonObject* Recycle = Child(Pressure, TEXT("recycle")))
 	{

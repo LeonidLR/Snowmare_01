@@ -147,6 +147,22 @@ bool AEnemyCharacter::TryStartGuardPost()
 	return IsOnPatrol();
 }
 
+void AEnemyCharacter::MoveGuardPost(const FVector& Location, float Yaw)
+{
+	if (!bGuardingPost)
+	{
+		return;
+	}
+	GuardPostLocation = Location;
+	GuardPostYaw = Yaw;
+	bGuardReturning = false;
+	bPatrolMoveIssued = false;
+	if (AAIController* AIC = Cast<AAIController>(GetController()))
+	{
+		AIC->StopMovement();
+	}
+}
+
 void AEnemyCharacter::TickGuardPost(float DeltaTime)
 {
 	// Back to the post after a search / a shove; a guard does not wander.

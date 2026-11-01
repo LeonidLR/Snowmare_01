@@ -45,6 +45,8 @@ struct CODEXTACTICS_API FSuppressionStats
 	int32 ExplosionImpacts = 0;
 	/** Fear zones of dense fire opened so far (melee packs scatter from them). */
 	int32 ZonesOpened = 0;
+	/** Rounds fired under a deliberate "suppress target" intent (the combat lab's suppressing ambushers, 2026-11-01). */
+	int32 DeliberateRounds = 0;
 };
 
 /** A unit's tier changed: Unit, old tier, new tier. */

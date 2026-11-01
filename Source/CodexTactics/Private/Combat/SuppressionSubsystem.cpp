@@ -271,6 +271,7 @@ void USuppressionSubsystem::ReportRound(const FSuppressionRound& Round)
 		return;
 	}
 	++Stats.Rounds;
+	Stats.DeliberateRounds += Round.bDeliberate ? 1 : 0;
 	const FSuppressionConfig& Config = SuppressionRules::GetConfig();
 	const float Scale = FMath::Max(0.f, Round.WeightScale) * (Round.bDeliberate ? FMath::Max(0.f, Config.DeliberateMultiplier) : 1.f);
 	// Broad phase: only units within the largest radius of the round's line count.
