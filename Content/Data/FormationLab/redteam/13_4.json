@@ -76,16 +76,15 @@
     "seed": 1,
     "date": "2026-10-28 07:10"
   },
-  "expected_fail": [
+  "expected_fail": [],
+  "fixed_entries": [
     {
       "check": 3,
       "choice": "auto",
       "members": 2,
       "route": "R1",
       "seed": 1,
-      "t": 16.3,
-      "what": "wall -> wedge, back after 0 s",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 3,
@@ -93,9 +92,7 @@
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 16.3,
-      "what": "wall -> wedge, back after 0 s",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 3,
@@ -103,9 +100,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 16.3,
-      "what": "wall -> diamond, back after 0 s",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 5,
@@ -113,9 +108,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 16.2,
-      "what": "K-L 20 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 14,
@@ -123,9 +116,8 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": null,
-      "what": "flank 100 %",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     }
-  ]
+  ],
+  "fixed_in": "v2.5.1"
 }

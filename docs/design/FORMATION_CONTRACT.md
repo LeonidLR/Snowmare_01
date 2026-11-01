@@ -671,3 +671,38 @@ normYaw(y), config) (no held / limit / ahead). Key `approach.arrive_dist` 100 (5
   (state exactly, duties exactly, yaws as angles, null = travel). Unit tests `CodexTactics.Formation.Approach.*`; smoke
   `FormationWallGroupSmoke` scene 5 (a patrol 9 m from a wall's long face; 1 s of game time to turn round - the game turns slower than the
   simulator).
+
+## 16. v2.5.1 - red team v2.5 triage (2026-11-01; triage table and questions: `docs/design/FORMATION_REDTEAM_V25.md`)
+The 2026-10-28 run (4 rounds, $0.37, 6 kept layouts, 12 distinct failures) was re-walked in the simulator (0 tokens). One RULE change (16.1,
+C++ port needed), two simulator integration fixes that bring the simulator in line with the runtime (16.2, no C++ change), check / report
+fixes (16.3). The user's decisions are unchanged; the open findings are questions in the triage file.
+### 16.1 Rule: a thick wall's END faces stop the rays (`geometry.ts` `wallEndFaces` / `raycastWalls(..., endFaces = true)`)
+- `wallEndFaces(w)`: for thickness > 0, two thin segments across the wall at the body's tips (thickness / 2 beyond `a` and `b` along the
+  wall, as `distToWall`'s body), the `a` end first, each from the +normal face to the -normal face (normal = (-ab.y, ab.x) / |ab|).
+- `raycastWalls` / C++ `FormationTerrainRules::RayHit` (`TerrainRaySegment`): with `endFaces` (default true) the ray also stops at those end
+  faces (the nearest hit wins; same intersection maths as the long faces). Users: `Classify` / `ClassifyRaw`'s at_wall (ahead) rays and
+  ClearLook's enclosed rays - with end faces; `sideClearance` (Classify's side probes, `PassageWidth`) - WITHOUT (`endFaces = false`: a
+  doorway's jambs are no side walls, user Q1 = a).
+- Why (16_4): the leader arriving end-on at a T stem's free tip stood 1.2 m from it and no wall layout came - the rays only saw the long
+  faces (parallel to the ray). Golden: scene `stem_tip_ahead` (`{a: [120, 0], b: [2000, 0], thickness: 40}`) in `formation_Classify.json`
+  (arrival -> at_wall in all 42 arrival cases; was open), `formation_PassageWidth.json`, `formation_SideWidth.json` (unchanged by the rule).
+  C++: `CodexTactics.Formation.Parity.Classify` fails on those cases until `TerrainRaySegment` has the end faces (and `SideClearance` passes
+  them off). In the runtime the classifier's probe walls are traces (an end face is hit as a face already); the box walls of ClearLook are not.
+- Simulator: `wallAhead` returns the END face (thickness 0) when the heading ray hits one - the wall layout lines up across the tip, as the
+  runtime's traced face (v2.4 B; EndLooks then spreads the looks round the tip).
+### 16.2 Simulator integration (the runtime already does it - no C++ change)
+- **The arrival's last step (13_4)**: in the wall layout the leader's destination for `Classify` is the nearest point of the segment from his
+  click (`wallClick`) to his wall slot, not the slot alone - a click 55 cm from the slot (> classify.arrive_dist) dropped the layout for a frame
+  (wall -> wedge -> wall: check 3, and the covered approach's roles were dealt again: check 14). Runtime: the destination stays the click
+  (`GetLastMoveDestination`; `GlideToWallSlot` is no move order) and 0.25 s standing is an arrival (`WallArrivalStillSeconds`).
+- **The yield to the leader's own walk (13_4, 15_4, 16_4)**: `sim.ts` `yieldFromLeaderWay` = C++ `FormationRuntime::YieldFromLeaderWay`
+  (86770ff7; corridor 80, aside 120, ahead 600 cm): while the leader walks the route (not the slide, not after arrival), a follower on his
+  straight way to the current route point, or whose slot is on it, is given the first walkable point aside as his slot (standing still);
+  then his place again. (A diamond turning 90 deg towards a flank man walked the leader into him: 20-70 cm, check 5.)
+- Tried and rejected (14_3): the over-the-shoulder limit from the smoothed velocity instead of the raw sim step - it fixed a 0.3 s glance of
+  a manual hedgehog in a zigzag corridor but added 5 failures (#7 / #5 on 8_7, 11_8, 12_3); 13.7 stays as written.
+### 16.3 Checks / report
+- Check 4: an expectation `wall` is judged only while the squad stands (the wall layout exists only on arrival, v1.2 / 7) - the walk through
+  the zone up to the wall used to count against it.
+- Red team: the regression table lists every recorded check (13 / 14 were counted but not shown); check 14's failure text names both flanks
+  ("flank 100 %" hid "left 40.5 %"); the report's "rule bug?" list = `RULE_BUG_CHECKS`; the model's brief describes the v2.2 triad (K P Z).

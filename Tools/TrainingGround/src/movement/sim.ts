@@ -6,7 +6,7 @@
 import type { FormationConfig } from './config.ts';
 import { cfg } from './config.ts';
 import type { Segment, Vec2 } from './geometry.ts';
-import { add, angleDiff, clamp, closestOnSegment, deltaYaw, dirOf, dist, dot, len, localToWorld, normYaw, raycastWalls, rng, scale, segmentBlocked, sub, yawOf } from './geometry.ts';
+import { add, angleDiff, clamp, closestOnSegment, deltaYaw, dirOf, dist, distToWall, dot, len, localToWorld, normYaw, raycastWalls, rng, scale, segmentBlocked, sub, wallEndFaces, yawOf } from './geometry.ts';
 import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments } from './layout.ts';
 import { AGENT_RADIUS, NavGrid } from './nav.ts';
@@ -128,6 +128,7 @@ interface Member {
   prevSlot: Vec2 | null;
   clearHeld: number | null; // v2.3: the last ClearLook result (its hysteresis input); null while ClearLook does not apply
   vel: Vec2; // v2.3 part 8: his smoothed velocity (VEL_SMOOTH_S), as the engine's character velocity - ClearLook's anticipation
+  yielding: boolean; // red team v2.5: he steps aside out of the leader's way (yieldFromLeaderWay)
 }
 
 /** Builds the nav grid for a layout (reuse it across runs). */
@@ -186,6 +187,7 @@ export function simulate(o: SimOptions): number {
     prevSlot: null,
     clearHeld: null,
     vel: [0, 0],
+    yielding: false,
   }));
 
   let leg = 1;
@@ -279,7 +281,10 @@ export function simulate(o: SimOptions): number {
     // --- terrain / formation
     // v1.2: the leader's move ends at the route's last point (at_wall only on arrival there); in the wall layout his move goes
     // on to his own wall slot, which is then his destination (the layout must not drop on that last step).
-    const destination = formation === 'wall' && leaderWallSlot ? leaderWallSlot : finalPoint;
+    // Red team v2.5 (13_4): his last step runs from where he arrived (the click) to that slot - the whole step is his destination (the
+    // nearest point of it), else a click farther than classify.arrive_dist from the slot dropped the layout for a frame (wall -> wedge ->
+    // wall at once: a flicker, and the covered approach's roles were dealt again).
+    const destination = formation === 'wall' && leaderWallSlot ? closestOnSegment(leader.pos, wallClick, leaderWallSlot).point : finalPoint;
     const stepDistance = travelled - lastTravelled;
     const slidePhase: boolean = slideNext > 0 && layoutWall !== null; // after the first slide began: the squad stays at the wall
     let requested: Formation = 'wall';
@@ -424,7 +429,19 @@ export function simulate(o: SimOptions): number {
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
       const target = frameTargets[i];
-      const { slot, fallback: slotFallback, invalid: slotInvalid } = resolved[i];
+      const { fallback: slotFallback, invalid: slotInvalid } = resolved[i];
+      let slot = resolved[i].slot;
+      // The runtime's yield (C++ UpdateSectorFollower, 86770ff7): while the leader walks his own order (the route; not the slide nor his
+      // last step into the wall layout) a follower on his straight way ahead, or whose place lies on it, steps aside (the first point
+      // on the walkable area), his slot standing still; he takes his place again once the way is clear.
+      let yielding = false;
+      if (i > 0 && !slide && !arrived) {
+        const aside = yieldFromLeaderWay(leader.pos, points[routeLeg], m.pos, slot).find((p) => nav.walkable(p));
+        if (aside) { slot = aside; yielding = true; }
+      }
+      if (yielding !== m.yielding) m.prevSlot = null; // no slot velocity from the jump to / from the point aside
+      if (yielding) m.prevSlot = slot;
+      m.yielding = yielding;
       let moveDir: Vec2 = [0, 0];
       if (i > 0 || formation === 'wall') {
         const before = m.pos;
@@ -511,6 +528,14 @@ function wallAhead(walls: readonly Segment[], pos: Vec2, heading: number): Segme
     const d = raycastWalls(pos, dirOf(heading), [w], 300);
     if (d < bestD) { bestD = d; best = w; }
   }
+  // Red team v2.5 (16_4): arriving end-on at a wall's free tip, the wall ahead is its END face (as the runtime traces it: the face the
+  // trace hits) - the layout lines up across the tip, not along the wall's axis.
+  if (best) {
+    const hit = add(pos, scale(dirOf(heading), bestD));
+    const along = closestOnSegment(hit, best.a, best.b).t;
+    const end = along <= 0 || along >= 1 ? wallEndFaces(best).find((e) => distToWall(hit, e) < 1e-3) : undefined;
+    if (end) return end;
+  }
   return best;
 }
 
@@ -552,6 +577,32 @@ export function resolveFrameSlots(nav: NavGrid, walls: readonly Segment[], leade
     given.push(slot);
     return { slot, fallback: true, invalid: !alt };
   });
+}
+
+/** The runtime's yield to the leader's own walk (C++ FormationRuntime::YieldCorridorCm / YieldClearCm / YieldAheadCm, 86770ff7), cm. */
+export const YIELD_CORRIDOR = 80;
+export const YIELD_CLEAR = 120;
+export const YIELD_AHEAD = 600;
+
+/**
+ * C++ `FormationRuntime::YieldFromLeaderWay` (bug 2026-10-28, CoverSmoke; ported to the simulator for red team v2.5 13_4): when the
+ * follower (`here`) or the place he walks to (`target`) lies on the leader's straight way ahead (leader -> destination, at most
+ * YIELD_AHEAD + YIELD_CORRIDOR along it, within YIELD_CORRIDOR of it), the points he may step aside to: beside the in-the-way point,
+ * YIELD_CLEAR off the way - his own side first, then the other. Empty: not in the way. (A manual diamond turning 90 deg towards its
+ * left man walked the leader into him: the man crossed the leader's way to his new place, 20 cm apart.)
+ */
+export function yieldFromLeaderWay(leader: Vec2, destination: Vec2, here: Vec2, target: Vec2,
+  corridor = YIELD_CORRIDOR, clear = YIELD_CLEAR, ahead = YIELD_AHEAD): Vec2[] {
+  const way = sub(destination, leader), length = len(way);
+  if (length < 1) return [];
+  const d = scale(way, 1 / length), left: Vec2 = [-d[1], d[0]];
+  const reach = Math.min(length, ahead) + corridor;
+  const inWay = (p: Vec2) => { const along = dot(sub(p, leader), d); return along > 0 && along <= reach && Math.abs(dot(sub(p, leader), left)) < corridor; };
+  const base = inWay(here) ? here : inWay(target) ? target : null;
+  if (!base) return [];
+  const along = dot(sub(base, leader), d), side = dot(sub(base, leader), left) >= 0 ? 1 : -1;
+  const onWay = add(leader, scale(d, along));
+  return [add(onWay, scale(left, side * clear)), add(onWay, scale(left, -side * clear))];
 }
 
 /**

@@ -78,16 +78,15 @@
     "seed": 1,
     "date": "2026-10-28 07:10"
   },
-  "expected_fail": [
+  "expected_fail": [],
+  "fixed_entries": [
     {
       "check": 5,
       "choice": "auto",
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 18.8,
-      "what": "K-L 68 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 5,
@@ -95,9 +94,7 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 18.8,
-      "what": "K-L 68 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 5,
@@ -105,9 +102,8 @@
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 18.8,
-      "what": "K-L 71 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     }
-  ]
+  ],
+  "fixed_in": "v2.5.1"
 }

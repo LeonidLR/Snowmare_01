@@ -1,6 +1,7 @@
 # Red team vs. rules v2.5 - interrupted run (2026-10-28)
 
-Status: STOPPED early on the coordinator's request (the user paused). No triage was done.
+Status: STOPPED early on the coordinator's request (the user paused). **Triaged 2026-11-01: `FORMATION_REDTEAM_V25.md`** (14 of the 22 entries
+fixed; 8 open - questions for the user / accepted; contract section 16).
 
 - Spend: $0.3724 (4 Claude calls, opus-5-5, rounds 13-16, 16 layouts, 864 bot runs). The run started by accident
   (`redteam.ts --help` is not a help flag and ran with the default $5 cap). The planned $12 run was NOT started.

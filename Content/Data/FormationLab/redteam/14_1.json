@@ -149,7 +149,8 @@
       "seed": 1,
       "t": 18.2,
       "what": "wedge -> echelon_left, back after 4.9 s",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong",
+      "triage": "v2.5.1 triage Q1 (design question, FORMATION_REDTEAM_V25.md): a 60 cm pillar 2.4 m beside the path reads as a wall on one side - echelon at once, back 5 m after it; open until the user answers."
     },
     {
       "check": 3,
@@ -159,7 +160,8 @@
       "seed": 1,
       "t": 18.2,
       "what": "wedge -> echelon_left, back after 4.9 s",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong",
+      "triage": "v2.5.1 triage Q1 (design question, FORMATION_REDTEAM_V25.md): a 60 cm pillar 2.4 m beside the path reads as a wall on one side - echelon at once, back 5 m after it; open until the user answers."
     },
     {
       "check": 3,
@@ -169,7 +171,8 @@
       "seed": 1,
       "t": 18.2,
       "what": "diamond -> echelon_left, back after 4.9 s",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong",
+      "triage": "v2.5.1 triage Q1 (design question, FORMATION_REDTEAM_V25.md): a 60 cm pillar 2.4 m beside the path reads as a wall on one side - echelon at once, back 5 m after it; open until the user answers."
     },
     {
       "check": 6,
@@ -179,7 +182,8 @@
       "seed": 2,
       "t": 22,
       "what": "p95 203 cm; Z 229 cm behind",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.5.1 (rule bug?): open until the rules are fixed or the layout is judged wrong",
+      "triage": "v2.5.1 triage Q2 (design question): Z stepped behind a 1.5 m stub, lost the leader (trail column) and catches up walking backwards at 0.9 x walk vs the squad's 0.8 (22 cm/s margin); open until the user answers."
     }
   ]
 }

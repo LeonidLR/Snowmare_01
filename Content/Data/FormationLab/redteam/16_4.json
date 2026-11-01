@@ -117,16 +117,15 @@
     "seed": 1,
     "date": "2026-10-28 07:10"
   },
-  "expected_fail": [
+  "expected_fail": [],
+  "fixed_entries": [
     {
       "check": 4,
       "choice": "auto",
       "members": 2,
       "route": "R1",
       "seed": 1,
-      "t": null,
-      "what": "Z1 wants wall: 0 %",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 4,
@@ -134,9 +133,7 @@
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": null,
-      "what": "Z1 wants wall: 0 %",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 4,
@@ -144,9 +141,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": null,
-      "what": "Z1 wants wall: 0 %",
-      "reason": "known red-team failure (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 5,
@@ -154,9 +149,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 10.2,
-      "what": "K-P 57 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 5,
@@ -164,9 +157,7 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 10.2,
-      "what": "K-P 57 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     },
     {
       "check": 5,
@@ -174,9 +165,8 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 10.2,
-      "what": "K-P 39 cm apart",
-      "reason": "known red-team failure (rule bug?): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.5.1"
     }
-  ]
+  ],
+  "fixed_in": "v2.5.1"
 }

@@ -86,7 +86,8 @@ export function runFailures(r: RunMetrics, choice: MenuChoice): Failure[] {
   // v2.4 (user bug report 2026-10-26): the standing wall layout holds the open arc round it (a wall end's flanks included).
   if (r.wallArc && r.wallArc.time > 0 && r.wallArc.pct < LIMITS.wallArcTimePct) add(13, r.wallArc.worst?.t ?? null, r.wallArc.worst?.what ?? 'wall end');
   // v2.5 (user rule 2026-10-26): the covered approach to the wall - the rear always held, a flank (3) / both flanks (4).
-  if (!approachOk(r)) add(14, r.approach!.worst?.t ?? null, r.approach!.worst?.what ?? `flank ${r.approach!.flankPct} %`);
+  // (Red team v2.5: the 4-man case fails on ONE flank - name both; "flank 100 %" read as a pass.)
+  if (!approachOk(r)) add(14, r.approach!.worst?.t ?? null, r.approach!.worst?.what ?? `flank ${r.approach!.flankPct} % (left ${r.approach!.leftPct} / right ${r.approach!.rightPct} %)`);
   return out;
 }
 
@@ -174,7 +175,8 @@ const SYSTEM = [
   'Units cm, deg, s. UE axes: X forward, Y RIGHT (left = -Y), yaw = atan2(dy, dx) clockwise from above; clock sectors relative to the',
   "leader's heading (12 = heading, 3 = right, 9 = left).",
   'RULES (intent): 4 men = diamond (K leader 0,0; P 2.6 m right 2.8 m back; L 2.6 m left 2.8 m back; Z 5.6 m straight back, walks',
-  'backwards looking at 6); 3 = wedge (K P L, the 5-7 o\'clock gap kept by design); 2 = pair (partner behind the right shoulder).',
+  'backwards looking at 6); 3 = wedge K P Z (Z 4.2 m straight back: the rear guard, walks backwards looking at 6); 2 = pair (partner',
+  'behind the right shoulder). With 3+ men the place farthest back is the rear guard; the others share the open arc.',
   'Patrol (walk) = 80 % speed, P scans 12->3, L 9->12; run = all face 12. Terrain picks the formation automatically: open -> diamond;',
   'a wall on one side (within 4 m) -> echelon away from it (wall on the left -> echelon_right); any passage between two walls -> column',
   '(narrow < 6 m: P forward over the shoulder, L back at a slant, Z back); arrival at a wall straight ahead -> the wall layout (all',
@@ -479,7 +481,7 @@ export function renderRedteamReport(res: RedteamResult, h: { client: string; bud
     ...(rows.length ? rows : ['| - | 0 | - | no failure found |']),
     '',
     `families (broke / tried): ${fam || '-'}`,
-    "rule bug? = a geometry promise the rules make unconditionally (1, 2, 5, 6, 7); design question = hinges on the model's expectations / thresholds (3, 4, 8, 9).",
+    `rule bug? = a geometry promise the rules make unconditionally (${RULE_BUG_CHECKS.join(', ')}); design question = hinges on the model's expectations / thresholds (3, 4, 8, 9).`,
     'regression: npm run bot:movement -- --layouts redteam (known failures are expected_fail; not gating npm test). Calls: redteam_calls.jsonl.',
   ];
   return lines.slice(0, 30).join('\n') + '\n';
@@ -556,7 +558,8 @@ export function renderRegression(rows: RegressionRow[], h: { dir: string; config
     '',
     '| check | still failing | fixed | new |',
     '|---|---|---|---|',
-    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => {
+    // Red team v2.5: every recorded check (13 and 14 were counted in the totals but missing from the table).
+    ...Object.keys(CHECK_SHORT).map(Number).map((c) => {
       const n = (xs: number[]) => xs.filter((x) => x === c).length;
       return { c, k: rows.reduce((a, r) => a + n(r.knownChecks), 0), f: rows.reduce((a, r) => a + n(r.fixedChecks), 0), w: rows.reduce((a, r) => a + n(r.fresh.map((x) => x.check)), 0) };
     }).filter((x) => x.k || x.f || x.w).map((x) => `| ${x.c} ${CHECK_SHORT[x.c]} | ${x.k} | ${x.f} | ${x.w} |`),

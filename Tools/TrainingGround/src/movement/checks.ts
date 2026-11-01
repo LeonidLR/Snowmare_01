@@ -199,7 +199,9 @@ export class RunCollector {
         // Tighter classes (echelon, column, wall) take over at once (v2); only a looser expectation waits for hold_distance.
         const looser = sameFormation(e.formation, 'diamond') || e.formation === 'blizzard';
         const settleCm = LIMITS.expectSettleCm + (looser ? cfg(this.c, 'classify.hold_distance') : 0);
-        if (walkedIn >= settleCm || halted) {
+        // Red team v2.5 (16_4): the wall layout exists only on ARRIVAL (v1.2, contract 7) - a 'wall' expectation is judged once the squad
+        // stands (the walk through the zone up to the wall is the formation of the way there, never the wall layout).
+        if (e.formation === 'wall' ? halted : walkedIn >= settleCm || halted) {
           const acc = this.expectAcc.get(key) ?? { settled: 0, match: 0 };
           acc.settled += SIM_DT;
           if (sameFormation(f.requested, e.formation)) acc.match += SIM_DT;
