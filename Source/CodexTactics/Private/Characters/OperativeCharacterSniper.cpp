@@ -234,7 +234,7 @@ float AOperativeCharacter::GetBodyYawLagDeg() const
 	if (CoverEntryYawTime >= 0.f)
 	{
 		// The blend this frame (UpdateCoverEntryBlend may not have run since the turn started).
-		const float W = FMath::Clamp(CoverEntryYawTime / FMath::Max(CoverEntryYawBlendSeconds, 0.05f), 0.f, 1.f);
+		const float W = FMath::Clamp(CoverEntryYawTime / FMath::Max(CoverEntryYawBlendActive, 0.05f), 0.f, 1.f);
 		return CoverEntryYawOffset * (1.f - FMath::SmoothStep(0.f, 1.f, W));
 	}
 	return CoverEntryAppliedYaw;

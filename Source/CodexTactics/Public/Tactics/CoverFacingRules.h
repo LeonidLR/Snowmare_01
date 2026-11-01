@@ -55,6 +55,22 @@ struct CODEXTACTICS_API FCoverFacingConfig
 	float MaxThreatDistanceCm = 5000.f;
 	/** The fire-ready corner pose is held this long after the last threat sighting / shot, then it relaxes to the look-around pose, s. */
 	float FireReadyHoldSeconds = 4.f;
+	/**
+	 * The cover enter clip (cvr_*_idle_fwd_to_cvr_*_idle) starts FACING the wall: an arrival heading more than this off facing the wall
+	 * does not fit it (DecideCoverEntryTurn), deg. 60 = the run-in's own limit (TryEnterCoverFromRun: dot >= 0.5).
+	 */
+	float EnterClipMaxOffWallDeg = 60.f;
+};
+
+/** How the body turns its back to the wall on a cover entry (CoverFacingRules::DecideCoverEntryTurn). */
+enum class ECoverEntryTurn : uint8
+{
+	/** The pack's enter clip (it starts facing the wall and turns him round). */
+	EnterClip,
+	/** No enter clip: the body's old yaw is drawn back on the mesh and eased out (CoverEntryYawBlendSeconds); the cover loops follow. */
+	EasedTurn,
+	/** The return after an open shot (a quiet entry): no clip, no turn blend (he only stepped off the wall). */
+	Quiet,
 };
 
 /**
@@ -315,4 +331,18 @@ namespace CoverFacingRules
 		bool bTurnBased, const FCoverFacingConfig& Config = FCoverFacingConfig());
 	/** Clip array index of a facing side: 0 = Right (pack *_L = his own right, back to the wall), 1 = Left (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);
+
+	/** How far an arrival heading (yaw) is off facing INTO the wall whose normal points out at WallNormalYawDeg, 0..180 deg. */
+	CODEXTACTICS_API float ArrivalOffFacingWallDeg(float ArrivalYawDeg, float WallNormalYawDeg);
+
+	/**
+	 * The squad corner peek played twice (the game designer's play-test 2026-11-01, video 1.11.26_bug_01): the peeker walks ALONG the wall
+	 * to the corner, the cover entry snapped his actor round to the wall normal and blended in the enter clip, whose first frame FACES the
+	 * wall - the body spun ~90 deg to face the wall in 0.15 s, then the clip spun it 180 deg back out, then the corner step-out followed:
+	 * two blurred spins before the one peek. An arrival for a corner peek (bCornerPeekArrival: the squad's peeker taking his corner) more
+	 * than Config.EnterClipMaxOffWallDeg off facing the wall gets no enter clip - the eased turn straight into the peek's step-out. Every
+	 * other entry keeps the clip (the run-in / head-on arrivals it was made for); a quiet entry stays quiet; no clip assigned -> eased.
+	 */
+	CODEXTACTICS_API ECoverEntryTurn DecideCoverEntryTurn(bool bQuiet, bool bHasEnterClip, bool bCornerPeekArrival, float ArrivalYawDeg, float WallNormalYawDeg,
+		const FCoverFacingConfig& Config = FCoverFacingConfig());
 }

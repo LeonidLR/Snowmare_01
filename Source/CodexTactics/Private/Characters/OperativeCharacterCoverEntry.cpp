@@ -437,13 +437,14 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 				// Clip gone before it brought the body round: the rest of the turn eases out over CoverEntryYawBlendSeconds.
 				CoverEntryYawOffset = CoverEntryAppliedYaw;
 				CoverEntryYawTime = 0.f;
+				CoverEntryYawBlendActive = CoverEntryYawBlendSeconds;
 			}
 		}
 	}
 	if (CoverEntryYawTime >= 0.f)
 	{
 		CoverEntryYawTime += DeltaTime;
-		const float W = FMath::Clamp(CoverEntryYawTime / FMath::Max(CoverEntryYawBlendSeconds, 0.05f), 0.f, 1.f);
+		const float W = FMath::Clamp(CoverEntryYawTime / FMath::Max(CoverEntryYawBlendActive, 0.05f), 0.f, 1.f);
 		const bool bKeep = bInCover || bBodyYawFree;
 		WantedYaw = bKeep ? CoverEntryYawOffset * (1.f - FMath::SmoothStep(0.f, 1.f, W)) : 0.f;
 		if (!bKeep || W >= 1.f || CoverEntryYawTime > 2.f)
@@ -539,5 +540,6 @@ void AOperativeCharacter::StartBodyYawBlend(float OldYaw)
 	}
 	CoverEntryYawOffset = FRotator::NormalizeAxis(OldYaw - GetActorRotation().Yaw + CoverEntryAppliedYaw);
 	CoverEntryYawTime = FMath::Abs(CoverEntryYawOffset) > 1.f ? 0.f : -1.f;
+	CoverEntryYawBlendActive = CoverEntryYawBlendSeconds;
 	bBodyYawFree = CoverEntryYawTime >= 0.f;
 }

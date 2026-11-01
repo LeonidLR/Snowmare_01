@@ -514,6 +514,41 @@ bool FCoverOpenShotReturnTest::RunTest(const FString&)
 	return true;
 }
 
+// The game designer's play-test 2026-11-01 (video 1.11.26_bug_01, "the corner peek animation plays twice"): the squad's peeker walks
+// ALONG the wall to his corner; the enter clip's first frame faces the wall, so the entry spun him to the wall and back before the peek.
+COVER_FACING_TEST(FCoverEntryTurnCornerPeekTest, "EntryTurnCornerPeekArrival")
+bool FCoverEntryTurnCornerPeekTest::RunTest(const FString&)
+{
+	using namespace CoverFacingRules;
+	// The wall's normal points out at yaw -90 (south): facing into it = yaw 90.
+	constexpr float Normal = -90.f;
+	TestEqual(TEXT("head-on (facing the wall): 0 deg off"), ArrivalOffFacingWallDeg(90.f, Normal), 0.f, 0.01f);
+	TestEqual(TEXT("walking along it west: 90 deg off"), ArrivalOffFacingWallDeg(180.f, Normal), 90.f, 0.01f);
+	TestEqual(TEXT("walking along it east: 90 deg off"), ArrivalOffFacingWallDeg(0.f, Normal), 90.f, 0.01f);
+	TestEqual(TEXT("backing in (facing out): 180 deg off"), ArrivalOffFacingWallDeg(-90.f, Normal), 180.f, 0.01f);
+	TestEqual(TEXT("wrapped yaws: -270 = facing it"), ArrivalOffFacingWallDeg(-270.f, Normal), 0.f, 0.01f);
+
+	const FCoverFacingConfig Config;
+	TestEqual(TEXT("the enter clip's limit = the run-in's (60 deg)"), Config.EnterClipMaxOffWallDeg, 60.f);
+	// The bug: the peeker arrives along the wall -> no enter clip, the eased turn straight into the peek.
+	TestTrue(TEXT("corner peek arrival along the wall (west): the eased turn"),
+		DecideCoverEntryTurn(false, true, true, 180.f, Normal, Config) == ECoverEntryTurn::EasedTurn);
+	TestTrue(TEXT("corner peek arrival along the wall (east): the eased turn"),
+		DecideCoverEntryTurn(false, true, true, 0.f, Normal, Config) == ECoverEntryTurn::EasedTurn);
+	TestTrue(TEXT("corner peek arrival 61 deg off: the eased turn"), DecideCoverEntryTurn(false, true, true, 90.f + 61.f, Normal, Config) == ECoverEntryTurn::EasedTurn);
+	// The clip's own case stays: a peeker walking at the wall head-on (its first frame fits).
+	TestTrue(TEXT("corner peek arrival head-on: the enter clip"), DecideCoverEntryTurn(false, true, true, 90.f, Normal, Config) == ECoverEntryTurn::EnterClip);
+	TestTrue(TEXT("corner peek arrival 59 deg off: the enter clip"), DecideCoverEntryTurn(false, true, true, 90.f + 59.f, Normal, Config) == ECoverEntryTurn::EnterClip);
+	// Every other entry is untouched: the enter clip from any heading, a quiet return stays quiet, no clip assigned = the eased turn.
+	TestTrue(TEXT("an ordinary cover order along the wall: the enter clip (unchanged)"),
+		DecideCoverEntryTurn(false, true, false, 180.f, Normal, Config) == ECoverEntryTurn::EnterClip);
+	TestTrue(TEXT("an ordinary cover order head-on: the enter clip"), DecideCoverEntryTurn(false, true, false, 90.f, Normal, Config) == ECoverEntryTurn::EnterClip);
+	TestTrue(TEXT("the return after an open shot: quiet"), DecideCoverEntryTurn(true, true, false, 180.f, Normal, Config) == ECoverEntryTurn::Quiet);
+	TestTrue(TEXT("quiet wins over a corner peek arrival"), DecideCoverEntryTurn(true, true, true, 180.f, Normal, Config) == ECoverEntryTurn::Quiet);
+	TestTrue(TEXT("no enter clip assigned: the eased turn"), DecideCoverEntryTurn(false, false, false, 90.f, Normal, Config) == ECoverEntryTurn::EasedTurn);
+	return true;
+}
+
 #undef COVER_FACING_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

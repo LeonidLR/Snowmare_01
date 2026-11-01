@@ -1406,8 +1406,10 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	{
 		return;
 	}
-	// Cover_Enter once, then the loop. Back at the wall after an open shot (he only stepped off it): straight to the loop.
-	if (bEntered && Operative.IsQuietCoverEntry())
+	// Cover_Enter once, then the loop. Back at the wall after an open shot (he only stepped off it): straight to the loop. The squad corner
+	// peek's arrival along the wall (IsCoverEntryEasedTurn, game designer 2026-11-01): no wall-facing enter clip either - the eased turn and
+	// the peek's step-out (the fire-ready transition below) are the one animation.
+	if (bEntered && (Operative.IsQuietCoverEntry() || Operative.IsCoverEntryEasedTurn()))
 	{
 		bCoverEnterPlaying = false;
 		CoverLoopMontage.Reset();

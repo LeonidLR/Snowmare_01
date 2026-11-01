@@ -108,6 +108,18 @@ namespace FormationWallEnd
 	/** The member at the leading end of the stack (the point man): the place farthest along End.Along. */
 	CODEXTACTICS_API EFormationRole PointRole(const TArray<FFormationSlot>& Slots, const FFormationStackEnd& End);
 
+	/** Two stack ends are the same corner within this (the wall walls are re-read; the end point moves a few cm), cm. */
+	inline constexpr float SameStackEndCm = 60.f;
+
+	/**
+	 * The second squad corner peek did not happen (the game designer's play-test 2026-11-01, L_FormationLab W_A_1 by Z_A_end): the squad stacked
+	 * at one end, then the peek at the OTHER end of the same wall - the corner stack of the first peek was still held, so the new peek took
+	 * that old stack for its own, the leader's slide to the new end then read as "the leader's next order" and the peek ended after 0.0 s
+	 * (the peeker went to the corner but never peeked). A held / sliding stack belongs to a peek only at its end: the same end point within
+	 * SameStackEndCm, approached the same way along the wall.
+	 */
+	CODEXTACTICS_API bool IsSameStackEnd(const FFormationStackEnd& A, const FFormationStackEnd& B, float TolCm = SameStackEndCm);
+
 	/**
 	 * Bug B: the wall layout fitted to what stands there (see the header comment). Slots = FormationWallRules::Layout's (K first), NormalYaw =
 	 * its outward normal, Usable(KPlace, Place) = the place can be stood on and reached from K's place without passing a wall body. A

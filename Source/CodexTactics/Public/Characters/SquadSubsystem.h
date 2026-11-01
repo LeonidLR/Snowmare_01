@@ -726,6 +726,8 @@ private:
 			bool bPending = false;
 			/** The leader's move into the corner stack has not become the slide / the stack yet. */
 			bool bAwaitStack = false;
+			/** The end the stack forms at (a held / sliding stack at another end is an older one: FormationWallEnd::IsSameStackEnd). */
+			FFormationStackEnd StackEnd;
 			float Seconds = 0.f;
 		};
 		FSquadPeek Peek;

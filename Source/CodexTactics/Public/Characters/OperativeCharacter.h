@@ -1335,6 +1335,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
 	float CoverEntryYawBlendSeconds = 0.3f;
 
+	/**
+	 * The squad corner peek's arrival along the wall (IsCoverEntryEasedTurn, 2026-11-01): the body's turn from his walk eases out over this
+	 * long - about the corner step-out clip (cvr_std_idle_*_to_fire, ~1 s), so the walk's yaw hands over to the step-out's own turn round
+	 * the corner in one movement (0.3 s let the body swing out to the wall normal first and back round the corner: a 50 deg wobble), s.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
+	float CornerPeekEntryYawBlendSeconds = 0.9f;
+
 	/** How long the fire-ready corner pose is held after the last threat sighting / ordered target / shot, s (FCoverFacingConfig). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverFireReadyHoldSeconds = 4.f;
@@ -1383,6 +1391,26 @@ public:
 
 	/** This cover entry is the return after an open shot (no Cover_Enter clip: he only stepped off the wall). */
 	bool IsQuietCoverEntry() const { return bQuietCoverEntry; }
+
+	/**
+	 * This cover entry turns the body round without the pack's enter clip (CoverFacingRules::DecideCoverEntryTurn -> EasedTurn while an
+	 * enter clip is assigned): the old yaw is eased out on the mesh and the AnimInstance goes straight to the cover loops / the corner
+	 * step-out (the squad corner peek bug 2026-11-01).
+	 */
+	bool IsCoverEntryEasedTurn() const { return bCoverEntryEasedTurn; }
+
+	/**
+	 * The squad's corner peek (USquadSubsystem::OrderFormationCornerPeek): the pending cover order is the peeker's walk to his corner along the
+	 * wall - its entry turns straight into the peek (no wall-facing enter clip when he arrives along the wall). Cleared by the next cover order
+	 * (OrderTakeCover / SetPendingCover), consumed by the entry. Call right after the accepted OrderTakeCover.
+	 */
+	void MarkCornerPeekArrival() { bCornerPeekArrivalPending = bHasPendingCover; }
+
+	/** The pending cover order is a corner peek arrival (MarkCornerPeekArrival; smokes). */
+	bool IsCornerPeekArrivalPending() const { return bCornerPeekArrivalPending; }
+
+	/** Cover entries that turned in without the enter clip because they were a corner peek arrival along the wall (smokes / stats). */
+	int32 GetCornerPeekArrivalEntryCount() const { return CornerPeekArrivalEntryCount; }
 
 	/** After an open shot from cover (target in front of the wall) he returns to the slot unless ordered elsewhere. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
@@ -2159,6 +2187,10 @@ private:
 	/** The current cover entry is the return after an open shot (IsQuietCoverEntry); the request is set around that EnterCover. */
 	bool bQuietCoverEntry = false;
 	bool bQuietCoverEntryRequest = false;
+	/** The current cover entry turns in without the enter clip (IsCoverEntryEasedTurn); the pending order is a corner peek arrival. */
+	bool bCoverEntryEasedTurn = false;
+	bool bCornerPeekArrivalPending = false;
+	int32 CornerPeekArrivalEntryCount = 0;
 	/** LeaveCover raises no CoverLeft event (the open-shot step off the wall comes back on its own). */
 	bool bQuietCoverLeaveRequest = false;
 	/** EnterCover ran (new wall, not a quiet return): CoverEntered waits until the body has stopped at the slot. */
@@ -2189,6 +2221,8 @@ private:
 	/** Cover entry: the actor's instant turn along the wall, drawn back on the mesh while the enter clip blends in (deg). */
 	float CoverEntryYawOffset = 0.f;
 	float CoverEntryYawTime = -1.f;
+	/** The running yaw blend's length (CoverEntryYawBlendSeconds, or CornerPeekEntryYawBlendSeconds for a corner peek arrival), s. */
+	float CoverEntryYawBlendActive = 0.3f;
 	float CoverEntryAppliedYaw = 0.f;
 	float CoverEntryTurnDeg = 0.f;
 	/** The body-yaw blend runs outside cover (StartBodyYawBlend). */
