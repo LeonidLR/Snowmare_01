@@ -405,6 +405,9 @@ Ground simulator does not model the corner stack / the fitted layout yet (follow
 - A run (double click) faces the run as in every formation; a halt keeps the fixed looks; the corner watch (slicing the pie) does not
   override the player's looks.
 
+**Status (2026-11-01, branch formation/custom): in the game** - TS reference `custom.ts` + golden, C++ `FormationCustomRules` (parity 0 diffs), the runtime
+(placement mode, ghosts, the per-tick shape, save / carry), smoke `FormationCustomSmoke`; details `docs/systems/squad-and-orders.md` "The custom formation".
+
 **Open for the designer (picked conservatively, can be flipped):** (1) no turn fold for a custom shape (as Q2 = a for the manual tight
 shapes) - a very wide custom shape swings round a sharp turn unless a wall cuts it; (2) the 10 m reach and the extra man behind the
 rearmost place; (3) the corner watch is off in the custom shape (the looks are the player's); (4) a run still faces the run.
