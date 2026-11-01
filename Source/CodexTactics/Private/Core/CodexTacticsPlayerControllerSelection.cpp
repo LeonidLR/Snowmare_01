@@ -88,6 +88,16 @@ void ACodexTacticsPlayerController::OnClick()
 	{
 		return; // the formation radial menu (hold B) is picked by releasing B, a click is no order meanwhile
 	}
+	// The custom formation's placement mode (2026-11-01): a click selects an operative / starts his spot and look (the drag); never an order.
+	if (IsFormationPlacementActive())
+	{
+		FHitResult PlacementHit;
+		if (GetHitResultUnderCursor(ECC_Visibility, false, PlacementHit) && PlacementHit.bBlockingHit)
+		{
+			HandleFormationPlacementPress(PlacementHit);
+		}
+		return;
+	}
 	// Minimap (2026-10-18): a click on the corner map / its header / the full map belongs to the map (camera there).
 	if (FVector2D MapMouse; GetMousePosition(MapMouse.X, MapMouse.Y) && HandleMapClick(MapMouse, false))
 	{
@@ -167,6 +177,20 @@ void ACodexTacticsPlayerController::OnClick()
 
 void ACodexTacticsPlayerController::OnClickReleased()
 {
+	if (IsFormationPlacementActive())
+	{
+		// The drag's end sets the look (the ground under the cursor, on the pressed spot's height when the cursor is off the ground).
+		FVector Ground;
+		if (FormationPlacementGround(Ground, FormationPressZ))
+		{
+			HandleFormationPlacementRelease(Ground);
+		}
+		else
+		{
+			FormationPlacement.CancelPress();
+		}
+		return;
+	}
 	if (!bLmbDown)
 	{
 		return;

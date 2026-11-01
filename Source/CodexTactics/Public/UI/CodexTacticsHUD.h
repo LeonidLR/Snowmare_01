@@ -287,6 +287,10 @@ private:
 	void DrawCoverSwitchPreview();
 	/** Bug C 2026-10-26: the squad's guide lines along / round its wall (ACodexTacticsPlayerController::GetSquadMovePreviewPaths). */
 	void DrawSquadMovePreview();
+	/** The custom formation's placement mode (2026-11-01): each ghost's look arrow on the ground, the drag in progress, the banner. */
+	void DrawFormationPlacement();
+	/** A ground arrow from Feet along Yaw (a shaft from 35 cm to Length, a head), projected; Thickness px. */
+	void DrawGroundArrow(const FVector& Feet, float Yaw, float Length, const FLinearColor& Color, float Thickness);
 	/** A dashed polyline a little above the ground with a cross bar at its end (the cover switch / wrap / squad guide lines). */
 	void DrawDashedGroundPath(TArray<FVector> Points, const FLinearColor& DashColor);
 	/** Sprint 10: a green shield «HOLD LINE» over every defended object / point; 2026-10-26: a red «SUPPRESS» one per SUPPRESS order (UDefenseMarkerSubsystem). */

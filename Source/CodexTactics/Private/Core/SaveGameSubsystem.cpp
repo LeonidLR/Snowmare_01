@@ -13,6 +13,8 @@
 #include "UI/MinimapSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "Characters/SquadSubsystem.h"
+#include "Formation/FormationCustomRules.h"
+#include "Formation/FormationMenuRules.h"
 #include "Characters/SquadAutonomySubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
@@ -1094,6 +1096,20 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	GameState->SetBoolField(TEXT("is_ambush_fight"), Flow && Flow->IsAmbushFight());
 	GameState->SetStringField(TEXT("squad_posture"), Squad ? SaveEnumName(Squad->GetSquadPosture()) : FString());
 	GameState->SetBoolField(TEXT("autonomous_combat"), Squad && Squad->IsAutonomousSquadCombat());
+	// The custom formation (game designer 2026-11-01, contract 16.1): the three slots (null = empty) and the hold-B menu's choice ("auto" or an
+	// item id - since this key a manual formation pick survives a load too). Optional keys: an older save restores empty slots and Auto.
+	if (Squad)
+	{
+		TArray<TSharedPtr<FJsonValue>> CustomSlots;
+		for (int32 Slot = 1; Slot <= FormationCustomRules::SlotCount; ++Slot)
+		{
+			const TSharedPtr<FJsonObject> Shape = FormationCustomRules::ToJson(Squad->GetFormationCustomShape(Slot));
+			CustomSlots.Add(Shape.IsValid() ? StaticCastSharedRef<FJsonValue>(MakeShared<FJsonValueObject>(Shape)) : StaticCastSharedRef<FJsonValue>(MakeShared<FJsonValueNull>()));
+		}
+		GameState->SetArrayField(TEXT("formation_custom"), CustomSlots);
+		const TOptional<EFormationMenuItem> Choice = Squad->GetFormationMenuChoice();
+		GameState->SetStringField(TEXT("formation_menu_choice"), Choice.IsSet() ? FormationMenuRules::ToString(Choice.GetValue()) : TEXT("auto"));
+	}
 	// Version 3 (audit 2026-10-19): the mission's rolled event waves (a reopened level re-rolled them: Susanin's rescue could land on a
 	// wave already fought), the breach done, the last wave's cold drain (in force during the rest) and the kill statistics so far.
 	if (const UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>())
@@ -1826,6 +1842,23 @@ void USaveGameSubsystem::RestoreGameState(FSaveRestoreContext& Context)
 		if ((*GameState)->HasField(TEXT("autonomous_combat")))
 		{
 			Squad->SetAutonomousSquadCombat(SaveBool(*GameState, TEXT("autonomous_combat"), false));
+		}
+		// The custom formation (contract 16.1): the three slots and the menu's choice (missing keys: the level's own - the carry's - stay).
+		const TArray<TSharedPtr<FJsonValue>>* CustomSlots = nullptr;
+		if ((*GameState)->TryGetArrayField(TEXT("formation_custom"), CustomSlots) && CustomSlots)
+		{
+			for (int32 Slot = 1; Slot <= FormationCustomRules::SlotCount; ++Slot)
+			{
+				const TSharedPtr<FJsonObject>* Shape = nullptr;
+				const bool bShape = CustomSlots->IsValidIndex(Slot - 1) && (*CustomSlots)[Slot - 1].IsValid() && (*CustomSlots)[Slot - 1]->TryGetObject(Shape) && Shape;
+				Squad->SetFormationCustomShape(Slot, bShape ? FormationCustomRules::FromJson(*Shape) : FFormationCustomShape());
+			}
+		}
+		TOptional<EFormationMenuItem> MenuChoice;
+		const FString MenuChoiceId = SaveString(*GameState, TEXT("formation_menu_choice"));
+		if (!MenuChoiceId.IsEmpty() && FormationMenuRules::ParseChoice(MenuChoiceId, MenuChoice))
+		{
+			Squad->SetFormationMenuChoice(MenuChoice);
 		}
 		Squad->RefreshFormation();
 	}

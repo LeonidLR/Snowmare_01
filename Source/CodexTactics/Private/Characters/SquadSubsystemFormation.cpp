@@ -126,6 +126,12 @@ TOptional<EFormationRole> USquadSubsystem::SectorRoleOf(const FFollowerState& Fo
 		const EFormationRole* Role = Sectors.WallOrderRoles.Find(Follower.Operative);
 		return Role ? TOptional<EFormationRole>(*Role) : TOptional<EFormationRole>();
 	}
+	if (Sectors.Formation == EFormationKind::Custom)
+	{
+		// The custom shape (contract 16.2): each operative his own stored place (the trail column's fold uses the slot order below).
+		const EFormationRole* Role = Sectors.CustomRoles.Find(Follower.Operative);
+		return Role ? TOptional<EFormationRole>(*Role) : TOptional<EFormationRole>();
+	}
 	return FormationRuntime::RoleForFollowerSlot(Follower.Slot, Sectors.MemberCount);
 }
 
@@ -700,6 +706,13 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		const FFormationMenuResolved Menu = FormationMenuRules::Resolve(Sectors.MenuChoice, Count);
 		Sectors.bAllForward = Menu.bAllForward;
 		Sectors.Requested = Menu.ManualFormation.Get(Terrain);
+		// The custom formation (contract 16.7): an empty slot (never placed) -> the terrain's formation.
+		Sectors.CustomSlot = Menu.CustomSlot;
+		if (Sectors.Requested == EFormationKind::Custom && !IsFormationCustomSlotFilled(Menu.CustomSlot))
+		{
+			Sectors.Requested = Terrain;
+			Sectors.CustomSlot = 0;
+		}
 		Sectors.Formation = Sectors.Requested;
 		Sectors.bTrail = false;
 		if (Sectors.Formation == EFormationKind::Wall)
@@ -775,9 +788,14 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	}
 	else
 	{
+		const bool bCustom = Sectors.Formation == EFormationKind::Custom;
 		if (Sectors.bTrail)
 		{
 			BuildTrailFrameSlots(LeaderPos, Count); // rules v2.1: the column along the leader's own path
+		}
+		else if (bCustom)
+		{
+			BuildCustomFrameSlots(LeaderRef, LeaderPos); // contract 16: the player's shape and his fixed looks
 		}
 		else
 		{
@@ -788,18 +806,29 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 					Sectors.PassageWidth, Config);
 			}
 		}
-		ReassignFormationPlaces();
-		// Rules v2.1: slicing the pie - the watcher's look is fixed for the allocator (the others cover what he leaves).
-		if (bV21)
+		// The custom shape keeps each man his own place and the player's looks: no place swaps, no corner watch, no allocator (contract 16).
+		if (bCustom)
 		{
-			ApplyFormationCornerWatch(LeaderPos);
+			Sectors.CornerLooks.Reset();
+			Sectors.Corner = FFormationCornerState();
+			Sectors.ShoulderLooks.Reset();
+			Sectors.RearGuard.Reset();
 		}
 		else
 		{
-			Sectors.CornerLooks.Reset();
+			ReassignFormationPlaces();
+			// Rules v2.1: slicing the pie - the watcher's look is fixed for the allocator (the others cover what he leaves).
+			if (bV21)
+			{
+				ApplyFormationCornerWatch(LeaderPos);
+			}
+			else
+			{
+				Sectors.CornerLooks.Reset();
+			}
+			// Rules v2.2: walking / halted with 3+ the coverage allocator replaces the per-formation tables (the pair and a run keep LookYaw).
+			AllocateFormationLooks(LeaderRef, LeaderPos);
 		}
-		// Rules v2.2: walking / halted with 3+ the coverage allocator replaces the per-formation tables (the pair and a run keep LookYaw).
-		AllocateFormationLooks(LeaderRef, LeaderPos);
 	}
 
 	// The leader (not with a box selection: each faces his own path): his sector, and the patrol pace while the squad walks.
@@ -1174,6 +1203,7 @@ void USquadSubsystem::ResetFormationState(const FVector& Forward)
 	Sectors.Guard = FFormationGuardState();
 	Sectors.bTrail = false;
 	Sectors.Trail.Reset();
+	Sectors.CustomRoles.Reset();
 	Sectors.bPlacesKeyValid = false;
 	Sectors.bWorldWallsValid = false;
 	Sectors.Corner = FFormationCornerState();

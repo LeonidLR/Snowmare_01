@@ -436,6 +436,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawSelectionBox();
 	DrawCoverSwitchPreview();
 	DrawSquadMovePreview();
+	DrawFormationPlacement();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
 	// Minimap (2026-10-18): the top-right panel shows the feed or the map (F2 / its header), Tab the full-screen map.
 	UMinimapSubsystem* Minimap = GetWorld()->GetSubsystem<UMinimapSubsystem>();
@@ -630,6 +631,71 @@ void ACodexTacticsHUD::DrawDashedGroundPath(TArray<FVector> Points, const FLinea
 	if (L.Z > 0.f && R.Z > 0.f)
 	{
 		DrawLine(L.X, L.Y, R.X, R.Y, DashColor, 3.f);
+	}
+}
+
+void ACodexTacticsHUD::DrawGroundArrow(const FVector& Feet, float Yaw, float Length, const FLinearColor& Color, float Thickness)
+{
+	const FVector Forward = FRotator(0.f, Yaw, 0.f).Vector();
+	const FVector Right = FRotator(0.f, Yaw + 90.f, 0.f).Vector();
+	const FVector Base = Feet + FVector(0.f, 0.f, 6.f);
+	const FVector Tip = Base + Forward * Length;
+	const auto Line = [this, &Color, Thickness](const FVector& From, const FVector& To)
+	{
+		const FVector A = Project(From, true);
+		const FVector B = Project(To, true);
+		if (A.Z > 0.f && B.Z > 0.f)
+		{
+			DrawLine(A.X, A.Y, B.X, B.Y, Color, Thickness);
+		}
+	};
+	Line(Base + Forward * 35.f, Tip);
+	Line(Tip, Tip - Forward * 32.f + Right * 22.f);
+	Line(Tip, Tip - Forward * 32.f - Right * 22.f);
+}
+
+void ACodexTacticsHUD::DrawFormationPlacement()
+{
+	// The custom formation's placement mode (game designer 2026-11-01): the ghosts are actors (AFormationGhostActor); here each one's look
+	// arrow on the ground (the hologram orange; the selected one brighter, the leader's = the squad's heading), the drag in progress (a dashed
+	// line from the spot to the cursor and the look it sets), and the banner with the controls.
+	const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController());
+	ACodexTacticsPlayerController::FFormationPlacementView View;
+	if (!PC || !PC->GetFormationPlacementView(View))
+	{
+		return;
+	}
+	const FLinearColor Holo(1.f, 0.5f, 0.12f, 0.9f);
+	const FLinearColor Selected(1.f, 0.88f, 0.4f, 1.f);
+	for (const ACodexTacticsPlayerController::FFormationPlacementGhostView& Ghost : View.Ghosts)
+	{
+		DrawGroundArrow(Ghost.Feet, Ghost.Yaw, Ghost.bAnchor ? 190.f : 150.f, Ghost.bSelected ? Selected : Holo, Ghost.bSelected ? 4.f : 3.f);
+	}
+	if (View.PressFeet.IsSet())
+	{
+		DrawGroundArrow(View.PressFeet.GetValue(), View.PressLook, 170.f, FLinearColor(1.f, 1.f, 1.f, 0.95f), 4.f);
+	}
+	UFont* Font = GEngine->GetMediumFont();
+	const FText Line1 = FText::Format(NSLOCTEXT("CodexTacticsHUD", "PlacementBanner", "PLACEMENT - Custom {0} (time stopped)"), FText::AsNumber(View.Slot));
+	const FText Line2 = View.SelectedName.IsEmpty()
+		? NSLOCTEXT("CodexTacticsHUD", "PlacementPick", "Click an operative, then press on his spot and drag to set his look.")
+		: FText::Format(NSLOCTEXT("CodexTacticsHUD", "PlacementPlace", "{0}: press on his spot, drag for his look (a click = forward).   [Space] confirm   [Esc] / RMB cancel"),
+			View.SelectedName);
+	// Above the action bar, centred (the status panel and the feed own the top of the screen).
+	float Y = Canvas->SizeY - 150.f;
+	const FText Lines[2] = { Line1, Line2 };
+	for (int32 LineIndex = 0; LineIndex < 2; ++LineIndex)
+	{
+		const FText& Text = Lines[LineIndex];
+		float W = 0.f;
+		float H = 0.f;
+		Canvas->StrLen(Font, Text.ToString(), W, H);
+		const float X = (Canvas->SizeX - W) * 0.5f;
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.55f), X - 10.f, Y - 4.f, W + 20.f, H + 8.f);
+		FCanvasTextItem Item(FVector2D(X, Y), Text, Font, LineIndex == 0 ? FLinearColor(1.f, 0.6f, 0.2f) : FLinearColor(0.92f, 0.95f, 1.f));
+		Item.EnableShadow(FLinearColor::Black);
+		Canvas->DrawItem(Item);
+		Y += H + 12.f;
 	}
 }
 

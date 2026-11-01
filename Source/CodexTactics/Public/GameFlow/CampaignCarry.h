@@ -86,6 +86,8 @@ struct CODEXTACTICS_API FCarriedOperative
 	FString CurrentWeaponId;
 };
 
+class USquadSubsystem;
+
 /** The squad handed from one campaign level to the next. */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FCampaignSquadCarry
@@ -101,6 +103,17 @@ struct CODEXTACTICS_API FCampaignSquadCarry
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign")
 	TArray<FCarriedOperative> Members;
+
+	/**
+	 * The squad's three custom formation slots (game designer 2026-11-01: they persist across levels; contract 16.1 JSON strings, "" = empty;
+	 * none = a carry without them - the next level keeps its own).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign")
+	TArray<FString> FormationCustomSlots;
+
+	/** The hold-B formation menu's choice ("auto" or an item id, FormationMenuRules) - a custom formation in force walks on into the next level. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign")
+	FString FormationMenuChoice;
 
 	bool IsSet() const { return !ToMap.IsEmpty(); }
 };
@@ -132,4 +145,9 @@ namespace CampaignCarry
 
 	/** A roster member is spawned on the new level: always without a carry; with one, unless his record says killed in action. */
 	CODEXTACTICS_API bool ShouldSpawn(const FCampaignSquadCarry& Carry, EOperativeRole Role, int32 SquadIndex);
+
+	/** The squad-level state that goes with the squad (game designer 2026-11-01): the three custom formation slots and the formation menu's choice. */
+	CODEXTACTICS_API void CaptureSquadState(const USquadSubsystem& Squad, FCampaignSquadCarry& Carry);
+	/** Puts CaptureSquadState's state onto the arriving level's squad (a carry without it - FormationCustomSlots empty - changes nothing). */
+	CODEXTACTICS_API void ApplySquadState(USquadSubsystem& Squad, const FCampaignSquadCarry& Carry);
 }

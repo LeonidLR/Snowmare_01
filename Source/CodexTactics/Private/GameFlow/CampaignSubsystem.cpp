@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Misc/FileHelper.h"
+#include "Characters/SquadSubsystem.h"
 
 UCampaignSubsystem* UCampaignSubsystem::Get(const UObject* Context)
 {
@@ -73,6 +74,11 @@ void UCampaignSubsystem::CaptureSquad(const UWorld* World, const FString& ToMap)
 		}
 	}
 	Carry.Members.Sort([](const FCarriedOperative& A, const FCarriedOperative& B) { return A.SquadIndex < B.SquadIndex; });
+	// The custom formation slots and the menu's choice go with the squad (game designer 2026-11-01, contract 16.1).
+	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+	{
+		CampaignCarry::CaptureSquadState(*Squad, Carry);
+	}
 	bArrivalFadePending = true;
 	for (const FCarriedOperative& Member : Carry.Members)
 	{

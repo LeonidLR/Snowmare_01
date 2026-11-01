@@ -34,6 +34,12 @@ public:
 	/** What to draw: the highlighted item (unset = Auto), the squad's current choice (unset = Auto), the member count (labels / greying). */
 	void SetMenuView(const TOptional<EFormationMenuItem>& Highlighted, const TOptional<EFormationMenuItem>& Current, int32 MemberCount);
 	TOptional<EFormationMenuItem> GetHighlighted() const { return Highlighted; }
+	/**
+	 * The custom formation row below the ring (game designer 2026-11-01, contract 16.7): shown (Codex.Formation.Sectors 1), which of the three
+	 * slots hold a shape, the slot the placement mode edits (0 = none: its disc says "Confirm").
+	 */
+	void SetCustomView(const TStaticArray<bool, 3>& Filled, bool bShow, int32 EditingSlot);
+	bool IsCustomRowShown() const { return bShowCustom; }
 	TOptional<EFormationMenuItem> GetCurrentChoice() const { return CurrentChoice; }
 
 	/** Menu centre, widget units. */
@@ -103,4 +109,7 @@ private:
 	TOptional<EFormationMenuItem> Highlighted;
 	TOptional<EFormationMenuItem> CurrentChoice;
 	int32 MemberCount = 0;
+	TStaticArray<bool, 3> CustomFilled = TStaticArray<bool, 3>(InPlace, false);
+	bool bShowCustom = false;
+	int32 CustomEditingSlot = 0;
 };

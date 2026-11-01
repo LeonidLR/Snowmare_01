@@ -13,6 +13,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
 #include "Formation/FormationMenuRules.h"
+#include "Formation/FormationRuntimeRules.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "UI/FormationMenuInputRules.h"
 #include "UI/FormationMenuWidget.h"
@@ -134,6 +135,18 @@ void ACodexTacticsPlayerController::UpdateFormationMenu()
 	}
 	FormationMenuRules::Move(FormationMenuState, static_cast<float>(Offset.X), static_cast<float>(Offset.Y), FormationMenuWidget->DeadZone);
 	const USquadSubsystem* Squad = GetSquad();
+	// The custom row (game designer 2026-11-01): only with Codex.Formation.Sectors 1 - with 0 it is not shown and the cursor there is the ring's.
+	const bool bCustomRow = FormationRuntime::IsEnabled();
+	if (!bCustomRow && FormationMenuState.Highlighted.IsSet() && FormationMenuRules::IsCustom(FormationMenuState.Highlighted.GetValue()))
+	{
+		FormationMenuState.Highlighted = FormationMenuRules::ItemAt(static_cast<float>(Offset.X), static_cast<float>(Offset.Y), FormationMenuWidget->DeadZone);
+	}
+	TStaticArray<bool, 3> Filled(InPlace, false);
+	for (int32 Slot = 1; Squad && Slot <= FormationMenuRules::CustomSlotCount; ++Slot)
+	{
+		Filled[Slot - 1] = Squad->IsFormationCustomSlotFilled(Slot);
+	}
+	FormationMenuWidget->SetCustomView(Filled, bCustomRow, FormationPlacement.IsActive() ? FormationPlacement.GetSlot() : 0);
 	FormationMenuWidget->SetMenuView(FormationMenuState.Highlighted, Squad ? Squad->GetFormationMenuChoice() : FormationMenuState.Choice,
 		GetFormationMenuMemberCount());
 }
@@ -143,7 +156,32 @@ void ACodexTacticsPlayerController::ReleaseFormationMenu()
 	UpdateFormationMenu(); // the cursor where the key came up
 	USquadSubsystem* Squad = GetSquad();
 	const int32 Members = GetFormationMenuMemberCount();
-	LastFormationMenuEffect = FormationMenuRules::Release(FormationMenuState, Members);
+	// The custom row (game designer 2026-11-01, contract 16.7): an empty slot opens the placement mode, a filled one is picked, Ctrl edits it;
+	// in the placement mode its own slot confirms, anything else ends it first.
+	const TOptional<EFormationMenuItem> Released = FormationMenuState.Highlighted;
+	const int32 ReleasedSlot = Released.IsSet() ? FormationMenuRules::CustomSlotOf(Released.GetValue()) : 0;
+	if (FormationPlacement.IsActive())
+	{
+		if (ReleasedSlot == FormationPlacement.GetSlot())
+		{
+			FormationMenuRules::Cancel(FormationMenuState);
+			LastFormationMenuEffect = EFormationMenuEffect::Picked;
+			if (FormationMenuWidget)
+			{
+				FormationMenuWidget->HideMenu();
+			}
+			ConfirmFormationPlacement();
+			return;
+		}
+		CancelFormationPlacement();
+	}
+	TStaticArray<bool, 3> Filled(InPlace, false);
+	for (int32 Slot = 1; Squad && Slot <= FormationMenuRules::CustomSlotCount; ++Slot)
+	{
+		Filled[Slot - 1] = Squad->IsFormationCustomSlotFilled(Slot);
+	}
+	const bool bEdit = bSimulatedFormationMenuEdit || IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
+	LastFormationMenuEffect = FormationMenuRules::Release(FormationMenuState, Members, Filled, bEdit);
 	if (FormationMenuWidget)
 	{
 		FormationMenuWidget->HideMenu();
@@ -157,6 +195,11 @@ void ACodexTacticsPlayerController::ReleaseFormationMenu()
 		Squad->SetFormationMenuChoice(FormationMenuState.Choice);
 		ControllerCommands::Report(this, PlayerCommands::FormationMenu);
 		UE_LOG(LogCodexTactics, Display, TEXT("[FormationMenu] picked %s"), *FormationMenuInput::Label(FormationMenuState.Choice, Members).ToString());
+	}
+	else if (LastFormationMenuEffect == EFormationMenuEffect::Edit)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[FormationMenu] custom %d: the placement mode (%s)"), ReleasedSlot, Filled[FMath::Max(0, ReleasedSlot - 1)] ? TEXT("edit") : TEXT("empty"));
+		BeginFormationPlacement(ReleasedSlot);
 	}
 	else if (LastFormationMenuEffect == EFormationMenuEffect::Disabled)
 	{

@@ -83,6 +83,9 @@ namespace FormationMenuInput
 		case EFormationMenuItem::Hedgehog: return LOCTEXT("Hedgehog", "Hedgehog");
 		case EFormationMenuItem::EchelonLeft: return LOCTEXT("EchelonLeft", "Echelon left");
 		case EFormationMenuItem::AllForward: return LOCTEXT("AllForward", "All forward");
+		case EFormationMenuItem::Custom1: return LOCTEXT("Custom1", "Custom 1");
+		case EFormationMenuItem::Custom2: return LOCTEXT("Custom2", "Custom 2");
+		case EFormationMenuItem::Custom3: return LOCTEXT("Custom3", "Custom 3");
 		default: return LOCTEXT("Auto", "Auto");
 		}
 	}

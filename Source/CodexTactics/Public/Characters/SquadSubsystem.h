@@ -8,6 +8,7 @@
 #include "Formation/FormationBypassRules.h"
 #include "Formation/FormationCornerRules.h"
 #include "Formation/FormationCoverRules.h"
+#include "Formation/FormationCustomRules.h"
 #include "Formation/FormationGuardRules.h"
 #include "Formation/FormationMenuRules.h"
 #include "Formation/FormationTerrainRules.h"
@@ -481,6 +482,23 @@ public:
 	void SetFormationMenuChoice(const TOptional<EFormationMenuItem>& Choice);
 	TOptional<EFormationMenuItem> GetFormationMenuChoice() const { return Sectors.MenuChoice; }
 
+	// --- The custom formation (game designer decisions 2026-11-01; contract 16; SquadSubsystemFormationCustom.cpp) ---
+
+	/** The stored shape of custom slot 1..3 (empty = an empty slot; an invalid slot = empty). */
+	const FFormationCustomShape& GetFormationCustomShape(int32 Slot) const;
+	/** Stores a shape in custom slot 1..3 (the placement mode's confirm, the save game / campaign carry restore); logs it. */
+	void SetFormationCustomShape(int32 Slot, const FFormationCustomShape& Shape);
+	/** Custom slot 1..3 holds a shape. */
+	bool IsFormationCustomSlotFilled(int32 Slot) const { return !GetFormationCustomShape(Slot).IsEmpty(); }
+	/** The custom slot (1..3) the squad's requested formation is this frame (the menu's custom choice with its slot filled); 0 = none. */
+	int32 GetFormationCustomSlot() const { return Sectors.Requested == EFormationKind::Custom ? Sectors.CustomSlot : 0; }
+	/** CustomSlots' "present": the leader's SquadIndex first, then the formation followers' by SquadIndex (contract 16.2). */
+	TArray<int32> GetFormationCustomPresent() const;
+	/** The three slots as contract 16.1 JSON strings ("" = empty) - the save game and the campaign carry. */
+	TArray<FString> ExportFormationCustomSlots() const;
+	/** Restores ExportFormationCustomSlots' strings (missing / malformed entries -> empty slots). */
+	void ImportFormationCustomSlots(const TArray<FString>& Slots);
+
 	/**
 	 * Rules v2.1 bypass "B": a spot where a threat was seen / heard just now (the smokes' threat points; the squad's own sight and
 	 * hearing feed the same list through UTacticalSightSubsystem::GetSquadKnownEnemies). Known for bypass.threat_memory_s.
@@ -696,6 +714,10 @@ private:
 		TArray<FFormationCornerLook> CornerLooks;
 		/** The hold-B menu's choice (unset = Auto) and its "All forward". */
 		TOptional<EFormationMenuItem> MenuChoice;
+		/** The custom formation (contract 16): the slot 1..3 of the menu's custom choice in force (0 = none). */
+		int32 CustomSlot = 0;
+		/** Who stands at which custom place this frame (FormationCustomRules::CustomSlots: by squad index, the leader K). */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, EFormationRole> CustomRoles;
 		bool bAllForward = false;
 		/** The bypass steering of the leader's own order through the corners of the chosen side. */
 		struct FBypassSteer
@@ -816,6 +838,12 @@ private:
 	TArray<FVector2D> LeaderPathAhead(const AOperativeCharacter& LeaderRef, bool bLeaderMoving) const;
 	/** The v2.1 guard step: Sectors.Requested -> Sectors.Formation (in effect) and Sectors.bTrail (FormationGuardRules::Resolve / Effective). */
 	void StepFormationGuard(const AOperativeCharacter& LeaderRef, bool bLeaderMoving, int32 Count);
+	/** The custom formation's guard step (FormationCustomRules::Resolve: the shape, or the trail column when a wall cuts it / a man is cut off). */
+	void StepFormationCustomGuard(const AOperativeCharacter& LeaderRef, bool bLeaderMoving);
+	/** The custom shape's slots and fixed looks this frame (FormationCustomRules::CustomSlots) and Sectors.CustomRoles. */
+	void BuildCustomFrameSlots(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos);
+	/** The three custom formation slots (contract 16.1; kept across levels by the campaign carry, in the save game). */
+	TArray<FFormationCustomShape> CustomShapes;
 	/** The trail column's slots and looks this frame (FormationShapeRules::TrailSlots, LookYaw column by each man's room). */
 	void BuildTrailFrameSlots(const FVector2D& LeaderPos, int32 Count);
 	/** Slicing the pie: FormationCornerRules::Watch on this frame's places; the watchers' looks replace their slot yaws (walk mode). */

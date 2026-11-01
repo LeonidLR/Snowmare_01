@@ -452,3 +452,38 @@ A frostbitten follower (prone, cannot get up) crawls back slowly (x0.25 cold spe
 `CodexTactics.Formation.FallbackSlotsRoundTheLeader`; smoke `RegroupAfterLossesSmoke` (Solo with the Engineer leading, he is killed -> the
 Commander leads, Solo stays on; the Medic-Sapper frostbitten; the fight's end -> PostCombat; with each old rule the bug reproduces (B: she stays),
 with the fixes she crawls back, warmed she walks into the formation, the leader walks 10 m and she follows).
+
+## The custom formation (game designer decisions 2026-11-01; branch formation/custom)
+
+Design and UX: `docs/design/FORMATION_SECTORS.md` "Custom formation"; data contract `docs/design/FORMATION_CONTRACT.md` 16; TS reference
+`Tools/TrainingGround/src/movement/custom.ts`; C++ `Formation/FormationCustomRules` (parity `CodexTactics.Formation.Parity.Custom*`, 0 diffs).
+
+- **Menu**: the hold-B radial menu draws a row of three discs below the ring - Custom 1 / 2 / 3 (`EFormationMenuItem::Custom1..3`, `FormationMenuRules::CustomItemAt /
+  HitAt`, widget `UFormationMenuWidget::SetCustomView`). Release on an empty disc = the placement mode for that slot (effect `Edit`); on a filled one = the squad
+  takes the shape (a manual choice, holds until Auto); Ctrl held on the release = edit it. With `Codex.Formation.Sectors 0` the row is not shown (the cursor
+  there is the ring's) and a held custom choice is inert (the old formation runs).
+- **Placement mode** (`CodexTacticsPlayerControllerFormationCustom.cpp`, pure state `UI/FormationPlacementRules` `FFormationPlacement`): the world stops (global
+  time dilation `FormationPlacementTimeDilation` 0.0001, re-asserted every tick; restored through `UGameFlowSubsystem::ApplyTimeDilation`; not the tactical
+  pause, no charges; the camera runs on real time). Every member in the formation (the leader + his followers, not a man on guard) gets a hologram ghost
+  (`AFormationGhostActor`: a copy of his mesh in his idle with the see-through silhouette material tinted the holo markers' orange - `M_HoloMarker` has no
+  skeletal-mesh usage; selected = brighter, refused = a red flash) at his stored place (editing) or where he stands (a new slot). Click an operative's body (or
+  within `GhostPickRadius` 60 cm of his ghost) to select him; LMB down on the ground = his spot (must project onto the nav mesh), the drag to the release =
+  his look (shorter than 50 cm = the squad's heading = the leader ghost's look); refused spots (closer than slot.min_spacing to another ghost, beyond 10 m
+  of the leader's ghost) flash red with an HQ line. The leader's ghost is the anchor: moving / turning it moves the frame. The HUD draws each ghost's look
+  arrow on the ground, the drag in progress and a banner above the action bar (`ACodexTacticsHUD::DrawFormationPlacement`). Space (or the same Custom in the
+  menu) confirms: the shape stored (`USquadSubsystem::SetFormationCustomShape`), picked, `ResetFormationState` with the anchor's heading, the leader walks to
+  his ghost when it moved, the followers fall into their places. Esc / RMB cancel (the slot and the choice unchanged). The mode ends itself on Solo, < 2
+  members, turn-based or a dialogue.
+- **Per tick** (`SquadSubsystemFormationCustom.cpp`): `Requested = Custom` (an empty slot -> the terrain's formation); the guard
+  `FormationCustomRules::Resolve` (the shape cut here / 5 m ahead or a man cut off -> the trail column, HUD "Custom 1 -> Column (wall)"; back to the shape after
+  classify.hold_distance of path); unfolded, `CustomSlots` in the leader's frame (`Sectors.CustomRoles`: each operative his own place; a new leader takes the
+  anchor, the old anchor man the new leader's place; a dead / missing member skipped; a member the shape lacks walks behind the rearmost place). Looks: the
+  player's fixed looks relative to the heading through `FormationCustomRules::Look` (ClearLook only when the look points into a wall within look.wall_dist);
+  no place reassignment, no corner watch, no coverage allocator; the facing priority (combat target > explicit facing order > cover > formation) is unchanged;
+  a run faces the run as in every formation.
+- **Kept**: the three slots in the save game (`game_state.formation_custom`, `formation_menu_choice`) and across levels (the campaign carry) - `save-load.md`.
+- **Smoke** `CodexTactics.FormationCustomSmoke` (L_FormationLab): the real paths (hold B with the virtual cursor, the placement LMB down / up handlers, Space,
+  Esc), refusals, the anchor move, the shape kept standing / walking (p90 12 cm) / after lane D's corridor (fold + unfold), the looks, Ctrl edit + Esc, a
+  three-man Custom 2 confirmed in the menu with the 4th as the extra, the carry and save -> load; `shot` (rendered) writes
+  `Saved/Screenshots/FormationCustom/01_placement_ghosts.png`, `02_custom_shape_walking.png`.
+
