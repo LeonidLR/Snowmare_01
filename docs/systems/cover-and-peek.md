@@ -25,6 +25,14 @@
 - **Numbers (cm, after the fix, all four ends - low / high wall, left / right):** head 25 past the edge, leading shoulder 23-28, pelvis 12-21; head-to-peek-eye 8-14 cm (was 33-77). Pack `_L` caveat (his right corner): the barrel runs along the wall face, muzzle 13 cm short of the end but in front of the face; `_R` muzzle 63 cm past it. Screenshots `Saved/Screenshots/lean_left.png`, `lean_right.png` (+ `_front`, `lean_high_*`) by `CodexTactics.LeanPoseSmoke Shot` (rendered run, see the command header).
 - **Tests:** `LeanPoseSmoke` (head >= 20 past the edge, shoulder past, rifle not inside the barricade, head within 30 cm of `GetPeekSight`, mesh back at its default place after leaving cover; every number logged as `LeanPose: ...`), unit test `CodexTactics.Combat.Sight.PeekLeanPoint` (eye depth).
 
+## The wall side by the cursor, the tight pick at a wall (game designer 2026-11-01)
+
+A click on a HIGH wall's top beyond its middle line, or on the ground right behind it (the band it hides from the camera, the leader on its other
+side), means its FAR face - the cover ghost stands there (first click) and the second click orders it; the top's near half means the near face, a face hit
+the face that was hit. While the squad is at a wall (the wall layout, a member in cover / the wall pose) a click picks an operative only on his body (45 cm
+of his feet on the ground), never on the wall next to him. A wall hiding the ghost / the far spot fades and the cursor looks through it. Details:
+[squad-and-orders](squad-and-orders.md) "The far side of a wall"; A/B `Codex.Cursor.WallSide`, `Codex.Cursor.TightPick`, `Codex.OccluderFade`.
+
 ## Group cover order (game designer 2026-10-20, every level)
 
 > Reverses the 2026-10-11 decision "Followers in cover: NO automatic stacking" (DEMO01_BEAT_SHEET) **for GROUP orders only**. A

@@ -411,3 +411,14 @@ Ground simulator does not model the corner stack / the fitted layout yet (follow
 **Open for the designer (picked conservatively, can be flipped):** (1) no turn fold for a custom shape (as Q2 = a for the manual tight
 shapes) - a very wide custom shape swings round a sharp turn unless a wall cuts it; (2) the 10 m reach and the extra man behind the
 rearmost place; (3) the corner watch is off in the custom shape (the looks are the player's); (4) a run still faces the run.
+
+## The far side of a wall - one route round it (game designer play-test 2026-11-01; runtime only, no TS / golden change; branch formation/wall-far-side)
+
+Approved fixes d / e (the squad must not split round a wall; the far side of the same wall as a column round the near end). Runtime rules behind
+`Codex.Formation.Sectors` + `Codex.Formation.V21` + `Codex.Formation.WallRoute` (pure `Formation/FormationWallRouteRules`, tests
+`CodexTactics.Formation.WallRoute.*`): the wall order's own walk takes the bypass planner's side of a free-standing wall (the near end, or the shielded
+one with a known threat); a follower whose straight way to his wall slot is cut by a wall walks a column on the leader's path since the order (column.base_back
++ i x column.spacing back along it, clamped to its start) until his way is clear, then his slot; the places are re-dealt by travel once all are clear. Not a
+new rule of the simulator (the sim has no group cover order); if the Training Ground models the wall order later, this is its spec. Details:
+`docs/systems/squad-and-orders.md` "The far side of a wall".
+

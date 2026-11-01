@@ -660,7 +660,11 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	// The squad's corner peek (2026-10-26): the peeker's peek order once he is at the corner; its end with the leader's next order.
 	UpdateFormationCornerPeek(LeaderRef, DeltaTime);
 	// Rules v2.1 bypass "B": a new own order of the leader (not a slide) - the side round a free-standing wall on his way; then the steering.
-	if (bV21 && bNewLeaderOrder && !Sectors.bSlide && !Sectors.bWallOrder)
+	// Fix d (game designer 2026-11-01): the wall order's own walk too - to a wall slot behind a free-standing wall the leader goes round its
+	// NEAR end (the bypass rule's shortest side, or the shielded one with a known threat; the nav mesh's polygons may pick the far one), the
+	// others follow his path as one column (ApplyFormationWallRoute).
+	const bool bWallOrderWalk = Sectors.bWallOrder && LeaderSerial == Sectors.WallOrderSerial && IsFormationWallRouteEnabled();
+	if (bV21 && bNewLeaderOrder && !Sectors.bSlide && (!Sectors.bWallOrder || bWallOrderWalk))
 	{
 		PlanFormationBypass(LeaderRef);
 	}
@@ -766,6 +770,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	}
 
 	// This frame's slots and looks by role.
+	Sectors.WallRouteRoles.Reset(); // fixes d / e: set again below while a wall order's members walk the leader's route
 	if (!bWall || Sectors.bSlide)
 	{
 		Sectors.ApproachLooks.Reset(); // rules v2.5: the covered approach is only the way INTO a standing wall layout
@@ -785,6 +790,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		Sectors.CornerLooks.Reset();
 		Sectors.Corner = FFormationCornerState();
 		ApplyFormationApproach(LeaderRef); // rules v2.5: the covered approach until everyone is at his wall slot
+		ApplyFormationWallRoute(LeaderRef, LeaderPos, Count); // fixes d / e (2026-11-01): one route round the obstacle, the trail column
 	}
 	else
 	{
@@ -873,7 +879,10 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	const FVector2D Target(SlotLocation);
 	const float Distance = static_cast<float>(FVector2D::Distance(Here, Target));
 	const bool bMoving = Operative.GetVelocity().Size2D() > StandingSpeed;
-	const bool bWall = Sectors.Formation == EFormationKind::Wall;
+	// Fixes d / e (2026-11-01): walking the leader's route round the obstacle he is a column man (his trail place and its look), not yet in
+	// the wall layout - no approach duty, no wall pose, no glide, no step round the line.
+	const bool bRouted = Sectors.WallRouteRoles.Contains(Role.GetValue());
+	const bool bWall = Sectors.Formation == EFormationKind::Wall && !bRouted;
 
 	// His look: run = his path (everybody faces 12); the wall layout: his path until 1 m from his slot (contract 7); else the sector.
 	// Rules v2.5: on the covered approach a member with an approach look (rear, flank, at the wall) holds it all the way in.
@@ -893,7 +902,7 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		// Rules v2.1.1 (user "6A"): nobody looks into a wall - in any formation (not the wall layout, a run, the corner watcher).
 		FrameLooks.Add(Follower.Operative, ClearFormationLook(Operative, Role.GetValue(), /*bLeader*/ false, Look));
 	}
-	if (Sectors.bWallOrder && Sectors.bWallOrderCrouch && !Sectors.bSlide && Distance <= WallSettleCm && !bMoving
+	if (Sectors.bWallOrder && Sectors.bWallOrderCrouch && !Sectors.bSlide && !bRouted && Distance <= WallSettleCm && !bMoving
 		&& FormationMath::AngleBetween(static_cast<float>(Operative.GetActorRotation().Yaw), Slot->Yaw) <= WallSettleYawDeg)
 	{
 		SettleFormationWallPose(Operative);
@@ -909,7 +918,7 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 			Follower.RepathTimeRemaining = FMath::Max(Follower.RepathTimeRemaining, Operative.GetMoveHoldSeconds());
 		}
 	}
-	if (Sectors.bWallOrder && !Sectors.bSlide && !bMoving)
+	if (Sectors.bWallOrder && !Sectors.bSlide && !bRouted && !bMoving)
 	{
 		GlideToWallSlot(Operative, Target, WallSettleCm, DeltaTime); // bug 2026-10-27: onto his slot, not a hand-span short of it
 	}
@@ -1095,6 +1104,7 @@ void USquadSubsystem::EndFormationWallOrder(const TCHAR* Why)
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall order over after %.1f s: %s"), Sectors.WallOrderSeconds, Why);
 	EndFormationCornerPeek(Why);
 	Sectors.bWallOrder = false;
+	ResetFormationWallRoute();
 	Sectors.bWallOrderCrouch = true;
 	Sectors.bSlide = false;
 	Sectors.bSlideStack = false;
@@ -1164,6 +1174,7 @@ bool USquadSubsystem::OrderFormationWall(AOperativeCharacter* Direct, const TArr
 		return false;
 	}
 	Sectors.bWallOrder = true;
+	ResetFormationWallRoute();
 	Sectors.bWallLayoutValid = true;
 	Sectors.WallAnchor = Clicked;
 	Sectors.WallOrderLeader = Direct;

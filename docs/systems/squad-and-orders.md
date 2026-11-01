@@ -453,6 +453,58 @@ A frostbitten follower (prone, cannot get up) crawls back slowly (x0.25 cold spe
 Commander leads, Solo stays on; the Medic-Sapper frostbitten; the fight's end -> PostCombat; with each old rule the bug reproduces (B: she stays),
 with the fixes she crawls back, warmed she walks into the formation, the leader walks 10 m and she follows).
 
+## The far side of a wall (the game designer's play-test 2026-11-01 on L_FormationLab; branch formation/wall-far-side)
+
+Report (`Saved/BugReport/1.11.2026_bug_02.avi`, `3-5.webp`): (bug_02) the squad crouched at a wall, the player wants it at the FAR side of the same
+wall - his clicks land on the wall's top, its near face or the operatives (the feed spams "Operative selected: ..."), the cover ghost snaps to the near
+face, the squad jumbles / stalls going round; (split) the squad crouched at one wall, ordered to the far side of the OPPOSITE wall - on the run the
+Commander went round one end, the Engineer + the Medic-Sapper round the other. Five approved fixes, each with an A/B console switch:
+
+- **a) The wall side by the cursor** (`Codex.Cursor.WallSide`, input UX, any formation / CVar): `ACodexTacticsPlayerController::ResolveWallSideSlot`
+  (`CodexTacticsPlayerControllerWallSide.cpp`; pure `Tactics/WallSideRules`, tests `CodexTactics.Tactics.WallSide.*`). A hit on the TOP of a HIGH wall:
+  its two faces are traced along the camera's planar view just under the hit (`LineTraceComponent`, the same object), the top is split at its middle line
+  (`SideOfTopHit`): beyond it = the FAR face, before it = the near face; the slot = `CoverTraceRules::FindCoverSlotAt` on that face (only high cover - a
+  low wall's top keeps its old meaning, a move / vault). A hit on the GROUND: traced back towards the camera at chest height (110 cm) - a high wall's face
+  pointing away from the camera, the ground within `FarGroundReachCm` of it (the band the wall hides along THIS ray: height / tan(the ray's depression) +
+  1 m, 1.5 .. 10 m) and the leader on the wall's other side (`IsGroundBehindWall`) = the far face (not the leader's own cover object while he is in cover:
+  his wrap along it decides, as before). A face hit keeps the face that was hit (`FindCoverSlotForHit`). Used by `TryHandleCoverClick` (not on the
+  turn-based grid): the first click = the ghost on that face, the second = the order (the group cover order -> the wall layout there); a far-face click on
+  the leader's own cover object = the wrap round it in cover. Log `[Cover] click at (...) on <wall>: the FAR face (slot ...)`.
+- **b) At a wall a click picks an operative only on his body** (`Codex.Cursor.TightPick`): `FindClickedMember` while `USquadSubsystem::IsSquadAtWall`
+  (the wall layout / its order stands, or a member is in cover / the wall pose) uses `ClickPickRules::PickRadius`: the ground within 45 cm of a body still
+  picks him, a wall's top / face never (it was the 120 cm `SelectRadius` - a click on the top right above a crouched man, 57 cm off his body, selected him).
+  A click on the body itself, the portraits and the number keys select as before.
+- **c) A wall that hides the cursor's target fades** (`Codex.OccluderFade`): `Camera/UOccluderFadeSubsystem` - see camera-hud-minimap.md "Occluder fade".
+  Its targets come from `UpdateWallSideHover` (PlayerTick, cached while the cursor rests): the far-side spot under the cursor, the click's cover ghost, the
+  corner peek ghost. While a wall is faded the CURSOR looks through it (`ThroughFadedOccluders`: the click / hover ray traced again past the faded pieces
+  - HandleWorldHit's first step): the ground behind it = the far face (a). Sight, cover and AI traces are unchanged (its collision stays).
+- **d) The far side of the same wall: one column round the NEAR end** and **e) no split** (`Codex.Formation.WallRoute`, behind `Codex.Formation.Sectors` +
+  `Codex.Formation.V21`). Root cause (code + `FormationFarSideSmoke` A/B): the group cover order in group mode is the formation wall layout
+  (`OrderFormationWall`): the leader runs to his slot (his own navmesh path; the polygons can make it the FAR end - at x 3400 on the lab's W_C_8 every path
+  went east though the west end is 7 m shorter), every follower walks to his OWN wall slot with his own navmesh path (`UpdateSectorFollower -> FollowTo`), so
+  men whose slots lie either side of the decision line take different ends - with `WallRoute 0` the smoke reproduces it: `Commander east, Engineer west,
+  Medic-Sapper east`, the squad 16 m apart. Now (`SquadSubsystemFormationRoute.cpp`, pure `Formation/FormationWallRouteRules`, tests
+  `CodexTactics.Formation.WallRoute.*`): (1) the wall order's own walk runs the rules v2.1 bypass planner (`PlanFormationBypass`, the shortest side or the
+  shielded one with a known threat) - the leader goes round the NEAR end; (2) every frame of the wall order a follower whose straight way to his wall slot is
+  cut by a wall body (`NeedsRoute`, 15 cm clearance) walks a column ON the leader's path since the order (`PlacesAlongTrail`: column.base_back + i x
+  column.spacing back along it, never past where he started; the column order fixed when the route begins, `AssignColumnPlaces`) - no approach duty, no
+  wall pose, he runs with a sprinting leader; once his way is clear (round the obstacle) he is released into his slot for good; once all are clear the wall
+  places are re-dealt by travel (nobody crosses another at the far face). Log `[Formation] wall route: a wall between Engineer (Z) Medic-Sapper (P) and their
+  wall slots - ...`, `... is round the obstacle`, `wall route over: the wall places by travel ...`. Getters `IsFormationWallRouted`,
+  `GetFormationWallRouteCount`. With the formation console off the group cover order is the old per-slot order (unchanged).
+- **Checks:** smoke `FormationFarSideSmoke` (L_FormationLab, the REAL click path: the player camera's ray through the aimed point -> `UpdateWallSideHover` +
+  `HandleWorldHit`; the camera yaw locked looking north): scene 1 the near-face layout at W_C_8; scene 2 (b) the top above each crouched follower and the
+  face beside him select nobody (a cover click on the near face), his body selects him; scene 3 (a, c, d) the top's near half -> the near-face ghost, the
+  far half hovered -> the wall fades (its proxy up), the cursor looks through it to the ground behind -> the far-face ghost, the first visible ground behind
+  the wall -> the far face, the confirm at the spot where the old rule splits (`FindSplitX`: each member's own navmesh path checked) -> the leader round the
+  near end, everyone round the SAME end, no stall, the layout on the far face; scene 4 (e) the same from the opposite wall W_B_3. A/B: `-PreCmds
+  "Codex.Formation.WallRoute 0"` (split + far end), `"Codex.Cursor.TightPick 0"` (selections), `"Codex.Cursor.WallSide 0,Codex.OccluderFade 0"` (no far
+  side). `Shot` (rendered) -> `Saved/Screenshots/FarSide/01_far_side_ghost.png`, `02_opposite_wall_fade.png`, `03_same_wall_column.png`,
+  `04_opposite_wall_column.png`.
+- **Limits:** the route reads the world's BOX walls (`GatherFormationWalls`) - a complex-collision building is not routed round (the nav mesh decides, as
+  before); the far side of a LOW wall is the old click (a vault / a move); the side split uses the wall's two faces along the camera's view (a wall seen
+  end-on has no far half - its faces are the ends).
+
 ## The custom formation (game designer decisions 2026-11-01; branch formation/custom)
 
 Design and UX: `docs/design/FORMATION_SECTORS.md` "Custom formation"; data contract `docs/design/FORMATION_CONTRACT.md` 16; TS reference

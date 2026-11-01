@@ -19,9 +19,17 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
+#include "Tactics/WallSideRules.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
+
+namespace ControllerSelectionLocal
+{
+	TAutoConsoleVariable<int32> CVarCursorTightPick(TEXT("Codex.Cursor.TightPick"), 1,
+		TEXT("Game designer 2026-11-01 (fix b): 1 = while the squad is at a wall a click picks an operative only on his body (the ground within 45 cm of him), never by the 120 cm select radius; 0 = the old radius everywhere"));
+}
 
 bool ACodexTacticsPlayerController::HandleSquadNumberKey(const FKey& Key)
 {
@@ -58,9 +66,19 @@ AOperativeCharacter* ACodexTacticsPlayerController::FindClickedMember(const FHit
 	// mine again does nothing"): not on a world object either - a click ON a mine / wire / crate means it, even with an operative
 	// working right next to it.
 	AOperativeCharacter* Closest = nullptr;
-	if (!Squad->HasMultiSelection() && !Cast<AInteractableActor>(HitActor))
+	// The game designer's play-test 2026-11-01 (fix b): while the squad is at a wall a click picks an operative only on his body (the ground
+	// right at his feet) - the wall's top / face next to the squad is the cover click (the far side), not "Operative selected".
+	float PickRadius = SelectRadius;
+	if (ControllerSelectionLocal::CVarCursorTightPick.GetValueOnGameThread() != 0 && Squad->IsSquadAtWall())
 	{
-		float ClosestDist = SelectRadius;
+		const AOperativeCharacter* PickLeader = Squad->GetLeader();
+		const float FeetZ = PickLeader ? static_cast<float>(PickLeader->GetActorLocation().Z) - PickLeader->GetSimpleCollisionHalfHeight() : static_cast<float>(Hit.ImpactPoint.Z);
+		const bool bGroundHit = Hit.ImpactNormal.Z >= 0.7f && Hit.ImpactPoint.Z - FeetZ <= ClickPickRules::GroundHitMaxAboveFeetCm;
+		PickRadius = ClickPickRules::PickRadius(true, bGroundHit, SelectRadius);
+	}
+	if (!Squad->HasMultiSelection() && !Cast<AInteractableActor>(HitActor) && PickRadius > 0.f)
+	{
+		float ClosestDist = PickRadius;
 		for (AOperativeCharacter* Member : Members)
 		{
 			if (VehicleQueries::IsMounted(Member))

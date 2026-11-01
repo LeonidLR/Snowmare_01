@@ -20,6 +20,7 @@ class UInputMappingContext;
 class USquadSubsystem;
 class AOperativeCharacter;
 class UFormationMenuWidget;
+enum class EWallClickSide : uint8;
 
 /**
  * The squad's corner peek under the cursor (ACodexTacticsPlayerController::FindSquadCornerPeekForHit; user bug report 2026-10-26): who peeks
@@ -221,6 +222,34 @@ public:
 	const FCoverSlot& GetCoverPreviewSlot() const { return CoverPreviewSlot; }
 	/** The click ghost (smokes: where it stands, the pose it shows). */
 	const class ACoverGhostActor* GetCoverPreviewGhost() const { return CoverGhost; }
+
+	// --- The far side of a wall (the game designer's play-test 2026-11-01; CodexTacticsPlayerControllerWallSide.cpp) ---
+
+	/**
+	 * Fix a: the wall face a click means, as the player sees the wall (WallSideRules; Codex.Cursor.WallSide): the TOP of a high wall beyond
+	 * its middle line -> the far face, its near half -> the near face; the ground right behind a high wall (the band it hides from the
+	 * camera) with the leader on its other side -> the far face (not while the leader is in cover: his wrap round the object decides).
+	 * OutSlot = the cover slot on that face at the click (CoverTraceRules::FindCoverSlotAt). False (OutSide None) for anything else - a face
+	 * hit, a low wall, no wall: the click keeps its old meaning (FindCoverSlotForHit / a move).
+	 */
+	bool ResolveWallSideSlot(const FHitResult& Hit, FCoverSlot& OutSlot, EWallClickSide& OutSide) const;
+
+	/**
+	 * Fix c: the cursor hit this frame (PlayerTick; smokes pass their own, null = none) - the far-side cover spot under it
+	 * (ResolveWallSideSlot, cached while the cursor rests) is a target of the occluder fade, as is the click's cover ghost
+	 * (UOccluderFadeSubsystem::SetTargets, every call).
+	 */
+	void UpdateWallSideHover(const FHitResult* Hit);
+	/**
+	 * Fix c: the cursor looks through a faded occluder (UOccluderFadeSubsystem) - Hit on a faded piece is traced again along its own ray
+	 * (TraceStart -> TraceEnd) past every faded piece: the ground behind the see-through wall (the far side). Any other hit: unchanged.
+	 * Only the cursor: the wall's collision (sight, cover, AI) is untouched.
+	 */
+	FHitResult ThroughFadedOccluders(const FHitResult& Hit) const;
+	/** The far-side cover spot under the cursor (UpdateWallSideHover); false when the cursor means no far face. */
+	bool GetWallSideHoverTarget(FVector& OutTarget) const;
+	/** Smokes: PlayerTick leaves the wall-side hover alone (the smoke drives UpdateWallSideHover with its own hit). */
+	bool bFreezeWallSideHoverForTesting = false;
 
 	/**
 	 * Orders the previewed cover: the walk now, planned in the pause, the grid walk in turn-based combat. A GROUP order
@@ -783,6 +812,13 @@ private:
 	FVector WrapHoverSlotLocation = FVector::ZeroVector;
 	bool bWrapHoverValid = false;
 	ECoverWrapVerdict LastCoverWrapVerdict = ECoverWrapVerdict::NotInCover;
+
+	/** The far-side cover spot under the cursor (UpdateWallSideHover; cached while the cursor rests and the leader stands). */
+	TWeakObjectPtr<AActor> WallSideHoverActor;
+	FVector WallSideHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector WallSideHoverLeaderAt = FVector::ZeroVector;
+	FVector WallSideHoverTarget = FVector::ZeroVector;
+	bool bWallSideHoverValid = false;
 
 	/** The squad's guide lines along / round its wall (UpdateSquadMoveHover; cached while the cursor rests and the squad stands). */
 	TArray<TArray<FVector>> SquadMovePreviewPaths;
