@@ -27,6 +27,7 @@
 #include "Environment/EnvironmentSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
+#include "NavigationSystem.h"
 
 namespace SquadSubsystemFormationLocal
 {
@@ -40,6 +41,10 @@ namespace SquadSubsystemFormationLocal
 		TEXT("Bug 2026-10-27 (the lake yard): 1 = the formation's wall traces read only what blocks pawns (never an overlap-only trigger box round the squad); 0 = any static / dynamic world object (the old trace, A/B)"));
 	TAutoConsoleVariable<int32> CVarFormationWallSnap(TEXT("Codex.Formation.WallSnap"), 1,
 		TEXT("Bug 2026-10-27: 1 = a member settled in the formation wall pose eases onto his exact wall slot (the face offset of one operative in cover); 0 = he stays where his walk stopped, a hand-span short (A/B)"));
+	TAutoConsoleVariable<int32> CVarFormationYieldToLeader(TEXT("Codex.Formation.YieldToLeader"), 1,
+		TEXT("Bug 2026-10-28 (CoverSmoke): 1 = a formation follower on the leader's way while the leader walks an own order (cover / move) steps aside out of it, then takes his slot again; 0 = the old follow (he may stand in the leader's way: the walk ends Blocked, A/B)"));
+	/** A yield point must project onto the nav mesh this close (it is no point inside / at a wall), cm. */
+	constexpr float FormationYieldNavSnapCm = 30.f;
 	/** v2.4: the world walls for EndLooks are gathered this far beyond the probe ring round the layout, cm. */
 	constexpr float WallEndGatherMarginCm = 300.f;
 	/** The last raw class logged (Codex.Formation.Debug). */
@@ -933,12 +938,42 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 			SlotVelocity = FVector2D::ZeroVector;
 		}
 	}
+	// Bug 2026-10-28 (CoverSmoke, the formation stays on in the fight): the leader's own walk (a cover / move order) ended Blocked at
+	// velocity 0 - a follower stood on his way along the wall (the nav mesh ignores bodies). He steps aside out of it (the first side
+	// on the nav mesh), then takes his slot again once the leader is past / his walk is over. Not the wall order / slide (their own rules).
+	bool bYield = false;
+	if (CVarFormationYieldToLeader.GetValueOnGameThread() != 0 && !Sectors.bSlide && !Sectors.bWallOrder && LeaderRef.HasOwnMoveOrder())
+	{
+		const FVector2D LeaderPos(LeaderRef.GetActorLocation());
+		const FVector LeaderGoal = LeaderRef.GetLastMoveDestination();
+		const TArray<FVector2D> Aside = FormationRuntime::YieldFromLeaderWay(LeaderPos, FVector2D(LeaderGoal), Here, MoveTarget);
+		const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		for (const FVector2D& Point : Aside)
+		{
+			FNavLocation OnNav;
+			const FVector Probe(Point.X, Point.Y, Operative.GetActorLocation().Z);
+			if (!Nav || (Nav->ProjectPointToNavigation(Probe, OnNav, FVector(FormationYieldNavSnapCm, FormationYieldNavSnapCm, 250.f))
+				&& FVector2D::Distance(FVector2D(OnNav.Location), Point) <= FormationYieldNavSnapCm))
+			{
+				MoveTarget = Point;
+				SlotVelocity = FVector2D::ZeroVector;
+				bYield = true;
+				break;
+			}
+		}
+		if (bYield && !Follower.bYielding)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s yields to the leader's walk: at (%.0f, %.0f), his slot (%.0f, %.0f) - steps aside to (%.0f, %.0f); the leader (%.0f, %.0f) -> (%.0f, %.0f)"),
+				*Operative.DisplayName.ToString(), Here.X, Here.Y, Target.X, Target.Y, MoveTarget.X, MoveTarget.Y, LeaderPos.X, LeaderPos.Y, LeaderGoal.X, LeaderGoal.Y);
+		}
+	}
+	Follower.bYielding = bYield;
 	const FormationRuntime::FFollowerMove Move = FormationRuntime::FollowerMove(Here, static_cast<float>(Operative.GetActorRotation().Yaw), MoveTarget,
 		SlotVelocity, Jitter, Top, bRearCover ? FMath::Min(Top, FormationTuning::Get().PaceWalkSpeed) : Top, bRun, FormationTuning::Get());
 	Follower.bCatchUp = !Move.bStop && Move.Speed > 1.f;
 	Follower.CatchUpMoveYaw = FormationMath::YawOf(Move.Velocity);
 	const bool bSlotStill = SlotVelocity.Size() < FormationRuntime::SlotStillSpeed;
-	const bool bStayParked = Follower.bParked && bSlotStill && Distance < FormationRuntime::StopRadiusCm + SectorParkedRestartMargin;
+	const bool bStayParked = !bYield && Follower.bParked && bSlotStill && Distance < FormationRuntime::StopRadiusCm + SectorParkedRestartMargin;
 	if (Move.bStop || bStayParked || Move.Speed <= 1.f)
 	{
 		if (!Follower.bParked)
