@@ -76,6 +76,9 @@ const SCENES: Record<string, Segment[]> = {
     { a: [100, 100], b: [-100, 100], thickness: 20 }, { a: [-100, 100], b: [-100, -100], thickness: 20 }],
   // v2.3 part 8 ClearLook: the end of a wall to the right, 0.6 m ahead and 0.9 m aside - he walks past it (the anticipation).
   end_right_ahead: [{ a: [60, 90], b: [60, 1000], thickness: 20 }],
+  // Red team v2.5 (16_4): a T stem's free tip 1 m straight ahead, end-on (the wall runs along the heading from x 120; its end face at
+  // x 100) - the forward rays hit only that END face: at_wall on arrival (they used to see nothing: open).
+  stem_tip_ahead: [{ a: [120, 0], b: [2000, 0], thickness: 40 }],
 };
 
 /** v2.1 scenes for the guard (the leader's frame). */

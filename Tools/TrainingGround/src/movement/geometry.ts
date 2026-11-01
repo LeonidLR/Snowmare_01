@@ -69,17 +69,36 @@ export function distToWall(p: Vec2, w: Segment): number {
  * Distance along a ray (origin, unit dir) to the first wall surface within maxDist, or Infinity.
  * A wall is treated as its centre line widened by half the thickness (the ray stops that much earlier, measured along the
  * wall normal), which is what the probes and the "wall stare" check need.
+ * Red team v2.5: `endFaces` (default true) - a thick wall's flat end faces (wallEndFaces) stop the ray too; the classifier's SIDE probes
+ * pass false (a doorway's jambs are no side walls: user Q1 = a, a doorway crossed at an angle is no corridor).
  */
-export function raycastWalls(origin: Vec2, dir: Vec2, walls: readonly Segment[], maxDist: number): number {
+export function raycastWalls(origin: Vec2, dir: Vec2, walls: readonly Segment[], maxDist: number, endFaces = true): number {
   let best = Infinity;
   for (const w of walls) {
-    const d = raySegment(origin, dir, w);
+    const d = raySegment(origin, dir, w, endFaces);
     if (d < best) best = d;
   }
   return best <= maxDist ? best : Infinity;
 }
 
-function raySegment(o: Vec2, d: Vec2, w: Segment): number {
+/**
+ * Red team v2.5: the flat end faces of a thick wall - across it at the body's tips (the body is the segment widened by thickness / 2 all
+ * round, as distToWall: the tip lies thickness / 2 beyond `a` / `b` along the wall), the `a` end first, each from the +normal face to the
+ * -normal face (normal = (-ab.y, ab.x) / |ab|), thickness 0. None for a thin wall (thickness 0) or a zero-length one.
+ */
+export function wallEndFaces(w: Segment): Segment[] {
+  const half = (w.thickness ?? 0) / 2;
+  const ab = sub(w.b, w.a);
+  const L = len(ab);
+  if (half <= 0 || L === 0) return [];
+  const u: Vec2 = [ab[0] / L, ab[1] / L], n: Vec2 = [-u[1], u[0]];
+  return ([[w.a, -1], [w.b, 1]] as const).map(([p, k]) => {
+    const tip = add(p, scale(u, k * half));
+    return { a: add(tip, scale(n, half)), b: add(tip, scale(n, -half)), thickness: 0 };
+  });
+}
+
+function raySegment(o: Vec2, d: Vec2, w: Segment, endFaces: boolean): number {
   const half = (w.thickness ?? 0) / 2;
   const ab = sub(w.b, w.a);
   const L = len(ab);
@@ -95,6 +114,17 @@ function raySegment(o: Vec2, d: Vec2, w: Segment): number {
     const ao = sub(a, o);
     const t = cross(ao, ab) / denom; // along the ray
     const u = cross(ao, d) / denom; // along the wall
+    if (t >= 0 && u >= 0 && u <= 1 && t < best) best = t;
+  }
+  // Red team v2.5 (16_4): the two END faces of a thick wall (flat, across the wall at a and b, as the map's box) - a ray along the
+  // wall's axis (the leader arriving end-on at a T stem's free tip) hit neither long face and the wall ahead was never seen.
+  for (const e of endFaces ? wallEndFaces(w) : []) {
+    const ef = sub(e.b, e.a);
+    const denom = cross(d, ef);
+    if (Math.abs(denom) < 1e-9) continue;
+    const ao = sub(e.a, o);
+    const t = cross(ao, ef) / denom;
+    const u = cross(ao, d) / denom;
     if (t >= 0 && u >= 0 && u <= 1 && t < best) best = t;
   }
   // Started inside the wall body: distance 0.

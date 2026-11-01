@@ -396,7 +396,8 @@ export function sideClearance(walls: readonly Segment[], pos: Vec2, yaw: number,
   let best = Infinity;
   for (const a of SIDE_RAYS) {
     const s = Math.sin((a * Math.PI) / 180);
-    const hit = raycastWalls(pos, dirOf(yaw + side * a), beside, reach / s);
+    // Red team v2.5: without the walls' end faces (a doorway's jambs are no side walls - user Q1 = a; the ahead rays see them).
+    const hit = raycastWalls(pos, dirOf(yaw + side * a), beside, reach / s, false);
     if (Number.isFinite(hit)) best = Math.min(best, hit * s);
   }
   return best;

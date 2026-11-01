@@ -17,6 +17,8 @@
 // with "echelon left" (the user's bug: the mirror echelon right, HUD "Echelon left -> Echelon right (wall)"), R_D_corridors with "line" (the
 // trail column, HUD "Line -> Column (wall)"); a smoke-own pass of W_E_14's free end (R_E_corner_pass: the corner watch). "shot" also saves
 // the v2.1 stills to Saved/Screenshots/FormationV21/ (the guard switch with the HUD line, the trail column round the corner, the corner watch).
+// Rules v2.5.1 (contract 16.1, red team 16_4): the commander arriving head-on at W_G_20's free end (the lab route R_G_end, 4 deg off the axis,
+// and the smoke-own R_G_end_axis straight along it) -> the wall layout lines up across the end face (its outward yaw = the wall's axis).
 // Known rules v1.1 limits the simulator shows too are reported, not failed (FormationLabSmoke::Known; rules v1.2 is being ported).
 // "shot" (rendered: UnrealEditor.exe <uproject> /Game/Maps/L_FormationLab -game -RenderOffscreen -ResX=1280 -ResY=720
 // "-LevelJson=L_FormationLab.json" "-ExecCmds=CodexTactics.FormationLabSmoke shot") saves stills to Saved/Screenshots/FormationLab/
@@ -92,6 +94,11 @@ namespace FormationLabSmoke
 	constexpr float WallHaltSeconds = 4.f;
 	/** A member stands on his wall slot within this distance, cm. */
 	constexpr float WallSlotTolCm = 120.f;
+	/** Rules v2.5.1: the wall layout at a free wall end faces out along the wall's axis within this, deg. */
+	constexpr float EndFaceYawTolDeg = 15.f;
+	/** ... its spread looks hold this much of the open arc round the tip (checks.ts LIMITS.wallArcPct), %; each man on his look within, deg. */
+	constexpr float EndSpreadPct = 95.f;
+	constexpr float EndLookTolDeg = 30.f;
 
 	/** Rules v1.1 limits the Training Ground simulator fails too (Saved/TrainingGround/movement/report.md, 2026-10-25): reported, not failed. */
 	struct FKnown
@@ -167,6 +174,9 @@ namespace FormationLabSmoke
 		bool bExpectFold = false;
 		/** At least one free wall end is passed on this run: check 9 must have counted it. */
 		bool bExpectCorner = false;
+		/** Rules v2.5.1 (contract 16.1): the route ends head-on at this wall's free END (layout wall id) - the wall layout lines up across the
+		 * end face (its outward yaw = the wall's axis out of that end). Empty = none. */
+		FString ExpectEndFaceOf;
 	};
 
 	enum class EStage : uint8
@@ -1156,6 +1166,25 @@ namespace FormationLabSmoke
 			float NormalYaw = 0.f;
 			const bool bLayout = Squad->GetFormationKind() == EFormationKind::Wall && Squad->GetFormationWallNormalYaw(NormalYaw);
 			Check(State, bLayout, FString::Printf(TEXT("%s: the wall layout at the dead end (formation %s)"), *Name, FormationNames::ToString(Squad->GetFormationKind())));
+			if (!Run.ExpectEndFaceOf.IsEmpty())
+			{
+				// Rules v2.5.1 (red team 16_4): the leader arriving end-on at a free wall end - the wall ahead is its END face, the layout
+				// lines up across the tip (outward = the wall's axis out of the end nearest the route's end).
+				const FLabWall* EndWall = State.Layout.Walls.FindByPredicate([&Run](const FLabWall& W) { return W.Id == Run.ExpectEndFaceOf; });
+				const FVector2D Stop = Route.Points.Last();
+				const bool bANear = EndWall && FVector2D::Distance(Stop, EndWall->A) <= FVector2D::Distance(Stop, EndWall->B);
+				const float AxisOut = EndWall ? FormationMath::YawOf(bANear ? EndWall->A - EndWall->B : EndWall->B - EndWall->A) : 0.f;
+				const float Off = bLayout ? FormationMath::AngleBetween(NormalYaw, AxisOut) : 180.f;
+				Check(State, EndWall && bLayout && Off <= EndFaceYawTolDeg, FString::Printf(TEXT("%s: the wall layout lines up across %s's free end face (outward %.0f, the wall's axis out of the end %.0f, %.0f deg off)"),
+					*Name, *Run.ExpectEndFaceOf, NormalYaw, AxisOut, Off));
+				// v2.4 wall end: the looks spread round the tip, both flanks along the wall's faces (checks.ts 13) - the flankers look back
+				// past the outward normal by design, so "nobody faces the wall" is the stare check here, each man on his look.
+				float BasePct = 0.f;
+				float SpreadPct = 0.f;
+				const bool bSpread = Squad->IsFormationWallEndSpread(BasePct, SpreadPct);
+				Check(State, bSpread && SpreadPct >= EndSpreadPct, FString::Printf(TEXT("%s: the layout knows it stands at a wall END - the face looks would hold %.0f %% of the open arc, the spread looks %.0f %%"),
+					*Name, BasePct, SpreadPct));
+			}
 			for (const AOperativeCharacter* Each : Living(State))
 			{
 				EFormationRole Role;
@@ -1166,6 +1195,12 @@ namespace FormationLabSmoke
 				const float Facing = Yaw2D(Each->GetSightFacing());
 				Check(State, bTarget && (Role == EFormationRole::Commander || Off <= WallSlotTolCm),
 					FString::Printf(TEXT("%s: %s (%s) on his wall slot (%.0f cm off)"), *Name, *Each->DisplayName.ToString(), bTarget ? FormationNames::ToString(Role) : TEXT("-"), Off));
+				if (!Run.ExpectEndFaceOf.IsEmpty())
+				{
+					Check(State, bLayout && bTarget && FormationMath::AngleBetween(Facing, Look) <= EndLookTolDeg,
+						FString::Printf(TEXT("%s: %s on his wall-end look (facing %.0f, look %.0f, outward %.0f)"), *Name, *Each->DisplayName.ToString(), Facing, Look, NormalYaw));
+					continue;
+				}
 				Check(State, bLayout && FormationMath::AngleBetween(Facing, NormalYaw) < 90.f,
 					FString::Printf(TEXT("%s: %s does not face the wall (facing %.0f, outward %.0f, look %.0f)"), *Name, *Each->DisplayName.ToString(), Facing, NormalYaw, Look));
 			}
@@ -1541,6 +1576,13 @@ namespace FormationLabSmoke
 		Pass.Id = TEXT("R_E_corner_pass");
 		Pass.Points = { FVector2D(0.0, 4300.0), FVector2D(0.0, 5800.0) };
 		State->Layout.Routes.Add(Pass);
+		// Rules v2.5.1 (red team 16_4): a smoke-own walk straight along W_G_20's axis onto its free south end (the lab route R_G_end comes in
+		// 4 deg off the axis) - the leader arrives end-on, the wall layout lines up across the end face.
+		FLabRoute EndOn;
+		EndOn.Id = TEXT("R_G_end_axis");
+		EndOn.Points = { FVector2D(4800.0, 1300.0), FVector2D(4800.0, 2635.0) };
+		EndOn.Expect.Add({ TEXT("Z_G_end"), TEXT("wall") });
+		State->Layout.Routes.Add(EndOn);
 		const TCHAR* Order[] = { TEXT("R_A_open"), TEXT("R_A_run"), TEXT("R_B_walls"), TEXT("R_C_gaps"), TEXT("R_D_corridors"), TEXT("R_E_corner"),
 			TEXT("R_F_deadend"), TEXT("R_v2_gaps") };
 		for (const TCHAR* Id : Order)
@@ -1551,6 +1593,17 @@ namespace FormationLabSmoke
 				Run.RouteId = Id;
 				Run.bWallOrderAfter = FCString::Strcmp(Id, TEXT("R_F_deadend")) == 0;
 				Run.bExpectFold = FCString::Strcmp(Id, TEXT("R_E_corner")) == 0; // the echelon right folds round the 90 deg corner
+				State->Plan.Add(Run);
+			}
+		}
+		// Rules v2.5.1: the commander arriving head-on at a free wall end (W_G_20's south end): the lab route and the smoke's on-axis walk.
+		for (const TCHAR* Id : { TEXT("R_G_end"), TEXT("R_G_end_axis") })
+		{
+			if (Only.IsEmpty() || Only.Contains(Id))
+			{
+				FRun Run;
+				Run.RouteId = Id;
+				Run.ExpectEndFaceOf = TEXT("W_G_20");
 				State->Plan.Add(Run);
 			}
 		}
