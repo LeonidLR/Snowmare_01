@@ -531,10 +531,10 @@ Commander went round one end, the Engineer + the Medic-Sapper round the other. F
   (the wall layout / its order stands, or a member is in cover / the wall pose) uses `ClickPickRules::PickRadius`: the ground within 45 cm of a body still
   picks him, a wall's top / face never (it was the 120 cm `SelectRadius` - a click on the top right above a crouched man, 57 cm off his body, selected him).
   A click on the body itself, the portraits and the number keys select as before.
-- **c) A wall that hides the cursor's target fades** (`Codex.OccluderFade`): `Camera/UOccluderFadeSubsystem` - see camera-hud-minimap.md "Occluder fade".
-  Its targets come from `UpdateWallSideHover` (PlayerTick, cached while the cursor rests): the far-side spot under the cursor, the click's cover ghost, the
-  corner peek ghost. While a wall is faded the CURSOR looks through it (`ThroughFadedOccluders`: the click / hover ray traced again past the faded pieces
-  - HandleWorldHit's first step): the ground behind it = the far face (a). Sight, cover and AI traces are unchanged (its collision stays).
+- **c) The occluder fade - REMOVED 2026-11-01** (the game designer, bug_05: "a failed solution" - walls never fade): `UOccluderFadeSubsystem`,
+  `M_OccluderFade`, `Codex.OccluderFade`, `UpdateWallSideHover` and the cursor's `ThroughFadedOccluders` step are gone (branch `fix/custom-ghosts-solo`). The
+  far side is reached by the top's far half (a); the ground right behind a high wall counts only where the camera still sees it (the wall may hide it all -
+  accepted).
 - **d) The far side of the same wall: one column round the NEAR end** and **e) no split** (`Codex.Formation.WallRoute`, behind `Codex.Formation.Sectors` +
   `Codex.Formation.V21`). Root cause (code + `FormationFarSideSmoke` A/B): the group cover order in group mode is the formation wall layout
   (`OrderFormationWall`): the leader runs to his slot (his own navmesh path; the polygons can make it the FAR end - at x 3400 on the lab's W_C_8 every path
@@ -549,14 +549,13 @@ Commander went round one end, the Engineer + the Medic-Sapper round the other. F
   places are re-dealt by travel (nobody crosses another at the far face). Log `[Formation] wall route: a wall between Engineer (Z) Medic-Sapper (P) and their
   wall slots - ...`, `... is round the obstacle`, `wall route over: the wall places by travel ...`. Getters `IsFormationWallRouted`,
   `GetFormationWallRouteCount`. With the formation console off the group cover order is the old per-slot order (unchanged).
-- **Checks:** smoke `FormationFarSideSmoke` (L_FormationLab, the REAL click path: the player camera's ray through the aimed point -> `UpdateWallSideHover` +
-  `HandleWorldHit`; the camera yaw locked looking north): scene 1 the near-face layout at W_C_8; scene 2 (b) the top above each crouched follower and the
-  face beside him select nobody (a cover click on the near face), his body selects him; scene 3 (a, c, d) the top's near half -> the near-face ghost, the
-  far half hovered -> the wall fades (its proxy up), the cursor looks through it to the ground behind -> the far-face ghost, the first visible ground behind
-  the wall -> the far face, the confirm at the spot where the old rule splits (`FindSplitX`: each member's own navmesh path checked) -> the leader round the
+- **Checks:** smoke `FormationFarSideSmoke` (L_FormationLab, the REAL click path: the player camera's ray through the aimed point -> `HandleWorldHit`; the
+  camera yaw locked looking north): scene 1 the near-face layout at W_C_8; scene 2 (b) the top above each crouched follower and the
+  face beside him select nobody (a cover click on the near face), his body selects him; scene 3 (a, d) the top's near half -> the near-face ghost, the
+  far half -> the far-face ghost with the wall solid (no fade since bug_05), the first visible ground behind the wall (when the camera sees any) -> the far face, the confirm at the spot where the old rule splits (`FindSplitX`: each member's own navmesh path checked) -> the leader round the
   near end, everyone round the SAME end, no stall, the layout on the far face; scene 4 (e) the same from the opposite wall W_B_3. A/B: `-PreCmds
-  "Codex.Formation.WallRoute 0"` (split + far end), `"Codex.Cursor.TightPick 0"` (selections), `"Codex.Cursor.WallSide 0,Codex.OccluderFade 0"` (no far
-  side). `Shot` (rendered) -> `Saved/Screenshots/FarSide/01_far_side_ghost.png`, `02_opposite_wall_fade.png`, `03_same_wall_column.png`,
+  "Codex.Formation.WallRoute 0"` (split + far end), `"Codex.Cursor.TightPick 0"` (selections), `"Codex.Cursor.WallSide 0"` (no far
+  side). `Shot` (rendered) -> `Saved/Screenshots/FarSide/01_far_side_ghost.png`, `02_opposite_wall_ghost.png`, `03_same_wall_column.png`,
   `04_opposite_wall_column.png`.
 - **Limits:** the route reads the world's BOX walls (`GatherFormationWalls`) - a complex-collision building is not routed round (the nav mesh decides, as
   before); the far side of a LOW wall is the old click (a vault / a move); the side split uses the wall's two faces along the camera's view (a wall seen
@@ -574,13 +573,21 @@ Design and UX: `docs/design/FORMATION_SECTORS.md` "Custom formation"; data contr
 - **Placement mode** (`CodexTacticsPlayerControllerFormationCustom.cpp`, pure state `UI/FormationPlacementRules` `FFormationPlacement`): the world stops (global
   time dilation `FormationPlacementTimeDilation` 0.0001, re-asserted every tick; restored through `UGameFlowSubsystem::ApplyTimeDilation`; not the tactical
   pause, no charges; the camera runs on real time). Every member in the formation (the leader + his followers, not a man on guard) gets a hologram ghost
-  (`AFormationGhostActor`: a copy of his mesh in his idle with the see-through silhouette material tinted the holo markers' orange - `M_HoloMarker` has no
-  skeletal-mesh usage; selected = brighter, refused = a red flash) at his stored place (editing) or where he stands (a new slot). Click an operative's body (or
-  within `GhostPickRadius` 60 cm of his ghost) to select him; LMB down on the ground = his spot (must project onto the nav mesh), the drag to the release =
-  his look (shorter than 50 cm = the squad's heading = the leader ghost's look); refused spots (closer than slot.min_spacing to another ghost, beyond 10 m
-  of the leader's ghost) flash red with an HQ line. The leader's ghost is the anchor: moving / turning it moves the frame. The HUD draws each ghost's look
-  arrow on the ground, the drag in progress and a banner above the action bar (`ACodexTacticsHUD::DrawFormationPlacement`). Space (or the same Custom in the
-  menu) confirms: the shape stored (`USquadSubsystem::SetFormationCustomShape`), picked, `ResetFormationState` with the anchor's heading, the leader walks to
+  (`AFormationGhostActor`: a copy of his mesh STANDING POSED - bug_05 2026-11-01, they stood in the T-pose: `ABP_Operative` leaves the baseline
+  `Animations.Idle` empty, so the ghost holds `ReadyPoseClip` (the Rifle_2 idle loop) at 35 % on a paused single node, evaluated at once
+  (`TickAnimation` + `RefreshBoneTransforms` - the placement pause leaves no tick time), checked against the reference pose
+  (`FormationPlacementRules::PoseOffRefDeg` >= 10 deg, else it follows the operative's own pose; `GetPoseSource`); the dedicated hologram
+  `/Game/UI/Materials/M_FormationGhost` (`Scripts/Editor/create_formation_ghost_material.py`: unlit translucent, skeletal-mesh usage, exposure-invariant,
+  core fill + a bright fresnel rim + rising scanlines; "Color" / "EmissiveIntensity") on every slot, the see-through silhouette as the overlay (seen behind
+  walls); orange, selected = brighter yellow, refused = a red flash) at his stored place (editing) or where he stands (a new slot). Pick an operative by
+  his body (the cursor's hit), within `GhostPickRadius` 60 cm of his ghost, his number key 1-4 or his portrait (`SelectFormationPlacementMember`; bug_05:
+  the keys / portraits changed the LEADER and the placement kept placing the old pick - now they only pick for the placement, the leader stays the anchor);
+  LMB down on the ground = his spot (must project onto the nav mesh), the drag to the release = his look (shorter than 50 cm = the squad's heading = the
+  leader ghost's look); each placed ghost stays while the others are placed; refused spots (closer than slot.min_spacing to another ghost, or past the 40 m
+  sanity reach of the leader's ghost - the 10 m reach was lifted 2026-11-01, bug_05) flash red with an HQ line. The tactical pause's order radius never
+  applies (its 12 m ring is hidden while placing: `URadiusRingSubsystem`). The leader's ghost is the anchor: moving / turning it moves the frame. The HUD draws each ghost's look
+  arrow on the ground, the drag in progress and a banner above the action bar (`ACodexTacticsHUD::DrawFormationPlacement`). Space, a B TAP (bug_05: a B tap toggled
+  SOLO and the placement then cancelled itself for the split squad - `FormationPlacementRules::ResolveBTap`) or the same Custom in the menu confirms: the shape stored (`USquadSubsystem::SetFormationCustomShape`), picked, `ResetFormationState` with the anchor's heading, the leader walks to
   his ghost when it moved, the followers fall into their places. Esc / RMB cancel (the slot and the choice unchanged). The mode ends itself on Solo, < 2
   members, turn-based or a dialogue.
 - **Per tick** (`SquadSubsystemFormationCustom.cpp`): `Requested = Custom` (an empty slot -> the terrain's formation); the guard
@@ -591,8 +598,9 @@ Design and UX: `docs/design/FORMATION_SECTORS.md` "Custom formation"; data contr
   no place reassignment, no corner watch, no coverage allocator; the facing priority (combat target > explicit facing order > cover > formation) is unchanged;
   a run faces the run as in every formation.
 - **Kept**: the three slots in the save game (`game_state.formation_custom`, `formation_menu_choice`) and across levels (the campaign carry) - `save-load.md`.
-- **Smoke** `CodexTactics.FormationCustomSmoke` (L_FormationLab): the real paths (hold B with the virtual cursor, the placement LMB down / up handlers, Space,
-  Esc), refusals, the anchor move, the shape kept standing / walking (p90 12 cm) / after lane D's corridor (fold + unfold), the looks, Ctrl edit + Esc, a
+- **Smoke** `CodexTactics.FormationCustomSmoke` (L_FormationLab): the real paths (hold B with the virtual cursor, the placement LMB down / up handlers on the
+  cursor's real ray to each body, Space, Esc), refusals, a ghost 16 m out accepted, every placed ghost kept while the next is placed, the ghosts posed in
+  `M_FormationGhost`, Space / B tap / Esc / RMB with NO solo mode, Custom 3 picked by number key / portrait / body (the leader unchanged), the anchor move, the shape kept standing / walking (p90 12 cm) / after lane D's corridor (fold + unfold), the looks, Ctrl edit + Esc, a
   three-man Custom 2 confirmed in the menu with the 4th as the extra, the carry and save -> load; `shot` (rendered) writes
-  `Saved/Screenshots/FormationCustom/01_placement_ghosts.png`, `02_custom_shape_walking.png`.
+  `Saved/Screenshots/CustomGhosts/01_placement_ghosts.png`, `02_ghosts_three_placed.png` (close-up), `02_custom_shape_walking.png`.
 

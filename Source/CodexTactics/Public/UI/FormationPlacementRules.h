@@ -10,7 +10,7 @@
  * Every member has a ghost from the start (the slot's shape when editing it, else where he stands now): what the player sees is what is stored.
  * A click on an operative (or his ghost) selects him; LMB down on the ground = his spot, the drag to the release = his look (a release within
  * CUSTOM_DRAG_MIN = a plain click: he looks along the squad's heading = the anchor ghost's look). Placing him again replaces his ghost; the anchor
- * (the leader when the mode began) moves the frame. A spot too close to another ghost or out of the 10 m reach is refused (CanPlace). Confirm =
+ * (the leader when the mode began) moves the frame. A spot too close to another ghost or out of the 40 m sanity reach is refused (CanPlace; the 10 m reach was lifted 2026-11-01, bug_05). Confirm =
  * the shape in the anchor ghost's frame (ShapeFrom).
  */
 
@@ -69,3 +69,27 @@ private:
 	TOptional<FVector2D> PressPoint;
 	TArray<FFormationCustomGhost> Ghosts;
 };
+
+/**
+ * Pure helpers of the placement mode's input and ghosts (bug_05, the game designer's PIE 2026-11-01). Tests: CodexTactics.UI.FormationPlacement.*.
+ */
+namespace FormationPlacementRules
+{
+	/** A ghost pose at least this far (its largest bone rotation) from the mesh's reference pose is a real pose, not the T-pose, deg. */
+	inline constexpr float PosedMinDeg = 10.f;
+
+	/** The largest bone rotation of Pose away from RefPose (local bone space, the bones both have), deg; 0 for an empty pose. */
+	CODEXTACTICS_API float PoseOffRefDeg(TConstArrayView<FTransform> Pose, TConstArrayView<FTransform> RefPose);
+	/** True when a pose PoseOffRefDeg away from the reference pose is a real pose (>= PosedMinDeg). */
+	CODEXTACTICS_API bool IsPosed(float OffRefDeg);
+
+	/** What a B tap (released before the hold-B menu opened) does. */
+	enum class EBTap : uint8
+	{
+		/** The solo / squad toggle (the old B). */
+		SoloToggle,
+		/** The placement mode is running: the tap confirms it (as Space) - never the solo toggle, which split the squad and cancelled it. */
+		ConfirmPlacement
+	};
+	CODEXTACTICS_API EBTap ResolveBTap(bool bPlacementActive);
+}

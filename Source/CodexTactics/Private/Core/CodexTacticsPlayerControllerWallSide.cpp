@@ -1,11 +1,11 @@
-// ACodexTacticsPlayerController: the far side of a wall (the game designer's play-test 2026-11-01 on L_FormationLab, bug_02, approved fixes
-// a / c): the wall face a click means by the cursor (ResolveWallSideSlot, WallSideRules) and the targets of the occluder fade
-// (UpdateWallSideHover -> UOccluderFadeSubsystem). Fix b (the tight pick at a wall) lives in FindClickedMember (Selection), the formation's
-// route round the wall (d / e) in USquadSubsystem::ApplyFormationWallRoute. Godot reference: none (UE-only).
+// ACodexTacticsPlayerController: the far side of a wall (the game designer's play-test 2026-11-01 on L_FormationLab, bug_02, approved fix a):
+// the wall face a click means by the cursor (ResolveWallSideSlot, WallSideRules). Fix b (the tight pick at a wall) lives in FindClickedMember
+// (Selection), the formation's route round the wall (d / e) in USquadSubsystem::ApplyFormationWallRoute. Fix c (the occluder fade: a wall
+// hiding the cursor's target went see-through) was removed on the game designer's decision 2026-11-01 (bug_05: "a failed solution" - walls never
+// fade). Godot reference: none (UE-only).
 
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
-#include "Camera/OccluderFadeSubsystem.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -34,8 +34,6 @@ namespace ControllerWallSideLocal
 	constexpr float FaceMaxNormalZ = 0.3f;
 	/** The wall's top is looked for this high over the clicked ground, cm. */
 	constexpr float TopProbeAboveCm = 800.f;
-	/** The fade aims at a cover spot's body centre this far over its feet, cm. */
-	constexpr float TargetBodyCentreCm = 90.f;
 
 	FVector PlanarView(const APlayerCameraManager* Camera)
 	{
@@ -160,82 +158,6 @@ bool ACodexTacticsPlayerController::ResolveWallSideSlot(const FHitResult& Hit, F
 		return true;
 	}
 	return false;
-}
-
-void ACodexTacticsPlayerController::UpdateWallSideHover(const FHitResult* Hit)
-{
-	USquadSubsystem* Squad = GetSquad();
-	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	const bool bTurnBased = GetActiveTurnBased() != nullptr;
-	if (!Hit || !Leader || bTurnBased || IsDialogueOpen())
-	{
-		bWallSideHoverValid = false;
-		WallSideHoverActor.Reset();
-		WallSideHoverPoint = FVector(TNumericLimits<float>::Max());
-	}
-	else if (Hit->GetActor() != WallSideHoverActor.Get() || FVector::DistSquared(Hit->ImpactPoint, WallSideHoverPoint) > FMath::Square(5.f)
-		|| FVector::DistSquared2D(Leader->GetActorLocation(), WallSideHoverLeaderAt) > FMath::Square(25.f))
-	{
-		// The probe traces only when the cursor moved (or the leader did): cached while it rests.
-		WallSideHoverActor = Hit->GetActor();
-		WallSideHoverPoint = Hit->ImpactPoint;
-		WallSideHoverLeaderAt = Leader->GetActorLocation();
-		FCoverSlot Slot;
-		EWallClickSide Side = EWallClickSide::None;
-		bWallSideHoverValid = ResolveWallSideSlot(*Hit, Slot, Side) && Side == EWallClickSide::Far;
-		WallSideHoverTarget = bWallSideHoverValid ? Slot.WorldLocation : FVector::ZeroVector;
-	}
-	// The occluder fade's targets: the far-side spot under the cursor, the click's cover ghost, the corner peek ghost (body centres).
-	if (UOccluderFadeSubsystem* Fade = GetWorld() ? GetWorld()->GetSubsystem<UOccluderFadeSubsystem>() : nullptr)
-	{
-		const FVector Up(0.f, 0.f, ControllerWallSideLocal::TargetBodyCentreCm);
-		TArray<FVector> Targets;
-		if (bTurnBased)
-		{
-			Fade->SetTargets(Targets); // the grid has its own click rules: nothing fades there
-			return;
-		}
-		if (bWallSideHoverValid)
-		{
-			Targets.Add(WallSideHoverTarget + Up);
-		}
-		if (HasCoverPreview())
-		{
-			Targets.Add((bCoverPreviewSwitchable ? CoverPreviewResolvedSlot : CoverPreviewSlot).WorldLocation + Up);
-		}
-		if (IsCornerPeekPreviewShown())
-		{
-			Targets.Add(CornerPeekGhost->GetSlot().WorldLocation + Up);
-		}
-		Fade->SetTargets(Targets);
-	}
-}
-
-FHitResult ACodexTacticsPlayerController::ThroughFadedOccluders(const FHitResult& Hit) const
-{
-	UWorld* World = GetWorld();
-	const UOccluderFadeSubsystem* Fade = World ? World->GetSubsystem<UOccluderFadeSubsystem>() : nullptr;
-	if (!Fade || !Hit.GetComponent() || !Fade->IsFaded(Hit.GetComponent()) || Hit.TraceStart.Equals(Hit.TraceEnd))
-	{
-		return Hit;
-	}
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(CursorThroughFade), false);
-	for (UPrimitiveComponent* Piece : Fade->GetFadedPieces())
-	{
-		Params.AddIgnoredComponent(Piece);
-	}
-	FHitResult Through;
-	if (World->LineTraceSingleByChannel(Through, Hit.TraceStart, Hit.TraceEnd, ECC_Visibility, Params))
-	{
-		return Through;
-	}
-	return Hit;
-}
-
-bool ACodexTacticsPlayerController::GetWallSideHoverTarget(FVector& OutTarget) const
-{
-	OutTarget = WallSideHoverTarget;
-	return bWallSideHoverValid;
 }
 
 #undef LOCTEXT_NAMESPACE

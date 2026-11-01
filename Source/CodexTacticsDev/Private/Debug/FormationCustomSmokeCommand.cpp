@@ -7,15 +7,22 @@
 // follow the set directions, the fold into the trail column in lane D's 4.6 m corridor and the unfold after, Ctrl = edit (the stored ghosts,
 // Esc keeps the slot), a three-man shape (the 4th on guard) and the 4th back as the extra behind it, the campaign carry (capture -> clear ->
 // apply) and save -> clear -> load (in place) keep the three slots. Codex.Formation.Sectors 0: the custom row is inert (skipped, PASS).
-// 'shot': rendered stills to Saved/Screenshots/FormationCustom/ (the placement mode with ghosts and look arrows; the squad walking the shape).
+// Bug_05 (the game designer's PIE 2026-11-01): every operative is picked by the cursor's real ray on his body (or his number key 1-4 / his
+// portrait - the leader stays), each placed ghost stays where it was put while the others are placed, the ghosts stand posed (not the
+// reference T-pose) in the dedicated hologram M_FormationGhost, Space / a B tap confirm with NO solo mode (the old B tap toggled solo and the
+// placement cancelled itself), Esc / RMB cancel with no solo either.
+// 'shot': rendered stills to Saved/Screenshots/CustomGhosts/ (the placement mode with ghosts and look arrows, a close-up of three placed posed
+// ghosts; the squad walking the shape).
 
 #if !UE_BUILD_SHIPPING
 
 #include "CoreMinimal.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Characters/OperativeCharacter.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Containers/Ticker.h"
@@ -67,6 +74,7 @@ namespace FormationCustomSmoke
 		WalkStop,
 		Corridor,
 		Edit,
+		Keys,
 		Three,
 		ThreeWalk,
 		Carry,
@@ -111,6 +119,11 @@ namespace FormationCustomSmoke
 		TArray<FFormationCustomGhost> EditGhosts;
 		float GroundZ = 0.f;
 		TArray<FString> SlotsBefore;
+		/** Each placed operative's spot (SquadIndex -> the ground point he was put on): every placed ghost must stay there. */
+		TMap<int32, FVector2D> PlacedSpots;
+		/** The leader when the keys / portrait placement began (selecting for the placement never changes him). */
+		TWeakObjectPtr<AOperativeCharacter> KeysLeader;
+		FString KeysShapeJson;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -177,6 +190,74 @@ namespace FormationCustomSmoke
 		Hit.ImpactPoint = Operative.GetActorLocation();
 		Hit.bBlockingHit = true;
 		return Hit;
+	}
+
+	/**
+	 * The cursor over an operative: the player camera's ray (a Visibility trace, as GetHitResultUnderCursor) through his body - his chest, head
+	 * or hips, the first one not hidden by someone else. False when none reaches him.
+	 */
+	bool CursorBodyHit(UWorld* World, const APlayerController* PC, const AOperativeCharacter& Operative, FHitResult& OutHit)
+	{
+		if (!PC || !PC->PlayerCameraManager)
+		{
+			return false;
+		}
+		const FVector Camera = PC->PlayerCameraManager->GetCameraLocation();
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(FormationCustomCursor), false);
+		for (const float Up : { 30.f, 70.f, -20.f })
+		{
+			const FVector Aim = Operative.GetActorLocation() + FVector(0.f, 0.f, Up);
+			if (World->LineTraceSingleByChannel(OutHit, Camera, Camera + (Aim - Camera) * 1.3, ECC_Visibility, Params)
+				&& (OutHit.GetActor() == &Operative || (OutHit.GetActor() && OutHit.GetActor()->GetOwner() == &Operative)))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Every operative placed so far still has his ghost (data and actor) on the spot he was put on. */
+	void CheckGhostsKept(FState& State, const ACodexTacticsPlayerController& PC, const FString& Where)
+	{
+		int32 Kept = 0;
+		FString Off;
+		for (const TPair<int32, FVector2D>& Placed : State.PlacedSpots)
+		{
+			const FFormationCustomGhost* Ghost = PC.GetFormationPlacement().FindGhost(Placed.Key);
+			const AFormationGhostActor* Actor = PC.GetFormationGhost(Placed.Key);
+			const bool bKept = Ghost && Ghost->Position.Equals(Placed.Value, 1.0) && Actor && Actor->IsShown() && !Actor->IsHidden()
+				&& FVector2D(Actor->GetFeet()).Equals(Placed.Value, 1.0);
+			Kept += bKept ? 1 : 0;
+			if (!bKept)
+			{
+				Off += FString::Printf(TEXT(" #%d"), Placed.Key);
+			}
+		}
+		Check(State, Kept == State.PlacedSpots.Num(), FString::Printf(TEXT("%s: every placed ghost stays on its spot (%d / %d)%s"), *Where, Kept, State.PlacedSpots.Num(),
+			Off.IsEmpty() ? TEXT("") : *(TEXT(", moved / hidden:") + Off)));
+	}
+
+	/** Every ghost stands in a real pose (the idle held, or the operative's own - not the mesh's reference T-pose) in the dedicated hologram. */
+	void CheckGhostsPosed(FState& State, const ACodexTacticsPlayerController& PC, const FString& Where)
+	{
+		int32 Posed = 0;
+		int32 Holo = 0;
+		float Least = TNumericLimits<float>::Max();
+		const int32 Count = PC.GetFormationPlacement().GetGhosts().Num();
+		for (const FFormationCustomGhost& Ghost : PC.GetFormationPlacement().GetGhosts())
+		{
+			const AFormationGhostActor* Actor = PC.GetFormationGhost(Ghost.Squad);
+			if (!Actor)
+			{
+				continue;
+			}
+			Least = FMath::Min(Least, Actor->GetPoseOffRefDeg());
+			Posed += Actor->GetPoseSource() != EFormationGhostPose::None && FormationPlacementRules::IsPosed(Actor->GetPoseOffRefDeg()) ? 1 : 0;
+			Holo += Actor->GetHologramMaterial() && Actor->GetHologramMaterial()->GetName() == TEXT("M_FormationGhost") ? 1 : 0;
+		}
+		Check(State, Count > 0 && Posed == Count, FString::Printf(TEXT("%s: every ghost is posed, not the T-pose (%d / %d; the least %.0f deg off the reference pose, >= %.0f)"),
+			*Where, Posed, Count, Count > 0 ? Least : 0.f, FormationPlacementRules::PosedMinDeg));
+		Check(State, Count > 0 && Holo == Count, FString::Printf(TEXT("%s: every ghost wears the hologram M_FormationGhost (%d / %d)"), *Where, Holo, Count));
 	}
 
 	void Teleport(UWorld* World, FState& State, AOperativeCharacter& Each, const FVector2D& Spot, float Yaw)
@@ -304,7 +385,7 @@ namespace FormationCustomSmoke
 		{
 			State.bShotTaken = true;
 			State.ShotFrames = 0;
-			const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots/FormationCustom") / (Name + TEXT(".png"));
+			const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots/CustomGhosts") / (Name + TEXT(".png"));
 			FScreenshotRequest::RequestScreenshot(Path, /*bInShowUI*/ true, /*bAddFilenameSuffix*/ false);
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke screenshot %s"), *Path);
 		}
@@ -439,12 +520,16 @@ namespace FormationCustomSmoke
 					Shown += Actor && Actor->IsShown() && !Actor->IsHidden() ? 1 : 0;
 				}
 				Check(State, Shown == 4, FString::Printf(TEXT("the hologram ghosts are shown (%d)"), Shown));
+				CheckGhostsPosed(State, *PC, TEXT("Custom 1 opened"));
+				State.PlacedSpots.Reset();
 				State.Origin = FVector2D(Leader->GetActorLocation());
 				State.Heading = PC->GetFormationPlacement().DefaultYaw();
-				// The plan in the leader's frame: two refusals, three placements (two drags, one plain click), the anchor moved 1 m forward.
+				// The plan in the leader's frame: one refusal (too close), a ghost 16 m out (accepted: no 10 m reach since bug_05), three placements (two drags,
+				// one plain click), the anchor moved 1 m forward.
 				State.Plan.Reset();
 				State.Plan.Add({ 0, FVector2D(0.0, 70.0), TOptional<float>(), EFormationPlacementResult::TooClose }); // past the ghost pick radius (60), inside slot.min_spacing (80)
-				State.Plan.Add({ 0, FVector2D(1200.0, 0.0), TOptional<float>(), EFormationPlacementResult::TooFar });
+				// Bug_05 (2026-11-01): no 10 m reach - a ghost 16 m from the leader is accepted (he is placed again closer below).
+				State.Plan.Add({ 1, FVector2D(1600.0, 200.0), TOptional<float>(), EFormationPlacementResult::Placed });
 				State.Plan.Add({ 0, FVector2D(-200.0, 350.0), TOptional<float>(70.f), EFormationPlacementResult::Placed });
 				State.Plan.Add({ 1, FVector2D(150.0, -300.0), TOptional<float>(-45.f), EFormationPlacementResult::Placed });
 				State.Plan.Add({ 2, FVector2D(-500.0, -100.0), TOptional<float>(), EFormationPlacementResult::Placed });
@@ -464,8 +549,11 @@ namespace FormationCustomSmoke
 					Check(State, false, TEXT("the planned operative"));
 					return Finish(State, World, false);
 				}
-				// The real click path: LMB on his body (select), LMB down on the spot, LMB up at the drag's end.
-				PC->HandleFormationPlacementPress(BodyHit(*Who));
+				// The real click path: LMB on his body (the cursor's ray hits him: select), LMB down on the spot, LMB up at the drag's end.
+				FHitResult OnBody;
+				const bool bRay = CursorBodyHit(World, PC, *Who, OnBody);
+				Check(State, bRay, FString::Printf(TEXT("the cursor's ray reaches %s's body"), *Who->DisplayName.ToString()));
+				PC->HandleFormationPlacementPress(bRay ? OnBody : BodyHit(*Who));
 				Check(State, PC->GetFormationPlacement().GetSelected() == TOptional<int32>(Who->SquadIndex), FString::Printf(TEXT("click on %s selects him"),
 					*Who->DisplayName.ToString()));
 				const FVector2D Spot = Frame(State.Origin, State.Heading, Step.Spot);
@@ -475,6 +563,11 @@ namespace FormationCustomSmoke
 				const EFormationPlacementResult Result = PC->GetLastFormationPlacementResult();
 				Check(State, Result == Step.Expect, FString::Printf(TEXT("placement %d of %s at (%.0f, %.0f): result %d, expected %d"), State.Index,
 					*Who->DisplayName.ToString(), Step.Spot.X, Step.Spot.Y, static_cast<int32>(Result), static_cast<int32>(Step.Expect)));
+				if (Result == EFormationPlacementResult::Placed)
+				{
+					State.PlacedSpots.Add(Who->SquadIndex, Spot);
+				}
+				CheckGhostsKept(State, *PC, FString::Printf(TEXT("after placement %d (%s)"), State.Index, *Who->DisplayName.ToString()));
 				++State.Index;
 				return true;
 			}
@@ -527,6 +620,7 @@ namespace FormationCustomSmoke
 				return true;
 			}
 			Check(State, !PC->IsFormationPlacementActive(), TEXT("Space confirms: the placement mode ends"));
+			Check(State, !Squad->IsSoloMode(), TEXT("Space confirms: NO solo mode (bug_05)"));
 			Check(State, UGameplayStatics::GetGlobalTimeDilation(World) > 0.9f, FString::Printf(TEXT("time resumes (dilation %.3f)"), UGameplayStatics::GetGlobalTimeDilation(World)));
 			Check(State, Squad->IsFormationCustomSlotFilled(1), TEXT("Custom 1 stored"));
 			Check(State, Squad->GetFormationMenuChoice() == TOptional<EFormationMenuItem>(EFormationMenuItem::Custom1), TEXT("Custom 1 is the formation choice"));
@@ -542,6 +636,7 @@ namespace FormationCustomSmoke
 			Check(State, Squad->GetFormationKind() == EFormationKind::Custom && Squad->GetFormationCustomSlot() == 1, FString::Printf(TEXT("the squad in Custom 1 (%s)"),
 				FormationNames::ToString(Squad->GetFormationKind())));
 			Check(State, Squad->GetFormationHudText() == TEXT("Custom 1"), FString::Printf(TEXT("HUD \"%s\""), *Squad->GetFormationHudText()));
+			Check(State, !Squad->IsSoloMode(), TEXT("settled after the confirm: still no solo mode"));
 			Check(State, FVector2D::Distance(FVector2D(Leader->GetActorLocation()), Frame(State.Origin, State.Heading, FVector2D(100.0, 0.0))) < 90.0,
 				TEXT("the leader walked to his moved spot"));
 			CheckStanding(State, *Squad, Squad->GetFormationCustomShape(1), TEXT("after the confirm"), true);
@@ -698,8 +793,203 @@ namespace FormationCustomSmoke
 			}
 			Check(State, bGhostsAtShape, TEXT("editing: the ghosts stand at the stored shape"));
 			Check(State, !PC->IsFormationPlacementActive() && UGameplayStatics::GetGlobalTimeDilation(World) > 0.9f, TEXT("Esc cancels the edit, time resumes"));
+			Check(State, !Squad->IsSoloMode(), TEXT("Esc cancels: NO solo mode (bug_05)"));
 			Check(State, FormationCustomRules::ToJsonString(Squad->GetFormationCustomShape(1)) == FormationCustomRules::ToJsonString(Stored)
 				&& Squad->GetFormationMenuChoice() == TOptional<EFormationMenuItem>(EFormationMenuItem::Custom1), TEXT("the cancelled edit keeps Custom 1 and the choice"));
+			// Bug_05: Custom 3 placed one operative after another, picked by his number key / his portrait / his body; a B tap confirms.
+			PlaceSquad(World, State, OpenStart, 0.f);
+			Enter(State, EStage::Keys);
+			return true;
+		}
+		case EStage::Keys:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			const FVector2D Custom3(FormationMenuRules::CustomRowSpacing, FormationMenuRules::CustomRowY);
+			if (State.Index == 0)
+			{
+				PC->SetFormationMenuCursorOffset(Custom3);
+				SendKey(PC, EKeys::B, IE_Pressed);
+				State.Index = 1;
+				return true;
+			}
+			if (State.Index == 1)
+			{
+				if (!PC->IsFormationMenuOpen())
+				{
+					return !TimedOut(5.f, TEXT("the menu opens for Custom 3")) || Finish(State, World, false);
+				}
+				SendKey(PC, EKeys::B, IE_Released);
+				State.Index = 2;
+				State.StageTime = 2.f;
+				return true;
+			}
+			if (State.Index == 2)
+			{
+				if (State.StageTime < 2.1f)
+				{
+					return true;
+				}
+				PC->SetFormationMenuCursorOffset(TOptional<FVector2D>());
+				Check(State, PC->IsFormationPlacementActive() && PC->GetFormationPlacement().GetSlot() == 3 && PC->GetFormationPlacement().GetGhosts().Num() == 4,
+					FString::Printf(TEXT("Custom 3: the placement with four ghosts (%d)"), PC->GetFormationPlacement().GetGhosts().Num()));
+				if (!PC->IsFormationPlacementActive())
+				{
+					return Finish(State, World, false);
+				}
+				CheckGhostsPosed(State, *PC, TEXT("Custom 3 opened"));
+				State.KeysLeader = Leader;
+				State.PlacedSpots.Reset();
+				State.Origin = FVector2D(Leader->GetActorLocation());
+				State.Heading = PC->GetFormationPlacement().DefaultYaw();
+				// Three followers one after another: the 1st by his number key, the 2nd by his portrait (the action bar's slot), the 3rd by a
+				// click on his body - each then placed with a drag; the leader never changes, every placed ghost stays.
+				const FVector2D Spots[3] = { FVector2D(-250.0, 250.0), FVector2D(-250.0, -250.0), FVector2D(-500.0, 0.0) };
+				const float Looks[3] = { 45.f, -45.f, 180.f };
+				const TCHAR* Ways[3] = { TEXT("his number key"), TEXT("his portrait"), TEXT("a click on his body") };
+				const FKey NumberKeys[4] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four };
+				const TArray<AOperativeCharacter*> Roster = Squad->GetMembers();
+				for (int32 Step = 0; Step < 3; ++Step)
+				{
+					AOperativeCharacter* Each = State.Followers.IsValidIndex(Step) ? State.Followers[Step].Get() : nullptr;
+					const int32 RosterIndex = Each ? Roster.IndexOfByKey(Each) : INDEX_NONE;
+					if (!Each || RosterIndex == INDEX_NONE || RosterIndex > 3)
+					{
+						Check(State, false, TEXT("Custom 3: the planned follower"));
+						return Finish(State, World, false);
+					}
+					if (Step == 0)
+					{
+						PC->HandleSquadNumberKey(NumberKeys[RosterIndex]);
+					}
+					else if (Step == 1)
+					{
+						PC->SelectSquadMember(RosterIndex);
+					}
+					else
+					{
+						FHitResult OnBody;
+						const bool bRay = CursorBodyHit(World, PC, *Each, OnBody);
+						Check(State, bRay, FString::Printf(TEXT("Custom 3: the cursor's ray reaches %s's body"), *Each->DisplayName.ToString()));
+						PC->HandleFormationPlacementPress(bRay ? OnBody : BodyHit(*Each));
+					}
+					Check(State, PC->GetFormationPlacement().GetSelected() == TOptional<int32>(Each->SquadIndex),
+						FString::Printf(TEXT("Custom 3: %s picked by %s"), *Each->DisplayName.ToString(), Ways[Step]));
+					Check(State, Squad->GetLeader() == State.KeysLeader.Get(), FString::Printf(TEXT("Custom 3: picking %s by %s keeps the leader %s"), *Each->DisplayName.ToString(),
+						Ways[Step], State.KeysLeader.IsValid() ? *State.KeysLeader->DisplayName.ToString() : TEXT("-")));
+					const FVector2D Spot = Frame(State.Origin, State.Heading, Spots[Step]);
+					PC->HandleFormationPlacementPress(GroundHit(World, Spot, State.GroundZ));
+					PC->HandleFormationPlacementRelease(FVector(Spot + FormationMath::Forward(State.Heading + Looks[Step]) * 160.0, State.GroundZ));
+					Check(State, PC->GetLastFormationPlacementResult() == EFormationPlacementResult::Placed, FString::Printf(TEXT("Custom 3: %s placed"), *Each->DisplayName.ToString()));
+					State.PlacedSpots.Add(Each->SquadIndex, Spot);
+					CheckGhostsKept(State, *PC, FString::Printf(TEXT("Custom 3 after %s"), *Each->DisplayName.ToString()));
+				}
+				// The leader's own number in the placement mode picks him (not his profile).
+				PC->HandleSquadNumberKey(NumberKeys[FMath::Clamp(Roster.IndexOfByKey(Leader), 0, 3)]);
+				Check(State, PC->GetFormationPlacement().GetSelected() == TOptional<int32>(Leader->SquadIndex) && Squad->GetLeader() == Leader,
+					TEXT("Custom 3: the leader's own number key picks him for the placement"));
+				CheckGhostsKept(State, *PC, TEXT("Custom 3 before the confirm"));
+				State.KeysShapeJson = FormationCustomRules::ToJsonString(PC->GetFormationPlacement().Shape());
+				State.Index = 20;
+				return true;
+			}
+			if (State.Index == 20)
+			{
+				// The close-up of the placed, posed hologram ghosts (rendered runs).
+				const FVector Middle(Frame(State.Origin, State.Heading, FVector2D(-250.0, 0.0)), State.GroundZ + 80.f);
+				if (!Still(World, State, TEXT("02_ghosts_three_placed"), Middle, State.Heading + 160.f, -32.f, 900.f))
+				{
+					return true;
+				}
+				EndStill(World, State);
+				// A B TAP (released before the hold-B menu opens): the designer's key - it confirms, it never toggles solo.
+				SendKey(PC, EKeys::B, IE_Pressed);
+				State.Index = 3;
+				return true;
+			}
+			if (State.Index == 3)
+			{
+				Check(State, !PC->IsFormationMenuOpen(), TEXT("Custom 3: a B tap does not open the menu"));
+				SendKey(PC, EKeys::B, IE_Released);
+				State.Index = 4;
+				State.StageTime = 2.f;
+				return true;
+			}
+			if (State.Index == 4)
+			{
+				if (State.StageTime < 2.1f)
+				{
+					return true;
+				}
+				Check(State, !PC->IsFormationPlacementActive(), TEXT("Custom 3: a B tap confirms - the placement mode ends"));
+				Check(State, !Squad->IsSoloMode(), TEXT("Custom 3: a B tap in the placement mode: NO solo mode (bug_05)"));
+				Check(State, FormationCustomRules::ToJsonString(Squad->GetFormationCustomShape(3)) == State.KeysShapeJson && Squad->GetFormationCustomShape(3).Members.Num() == 4,
+					FString::Printf(TEXT("Custom 3 stored as placed (%d members)"), Squad->GetFormationCustomShape(3).Members.Num()));
+				Check(State, Squad->GetFormationMenuChoice() == TOptional<EFormationMenuItem>(EFormationMenuItem::Custom3), TEXT("Custom 3 is the formation choice"));
+				Check(State, UGameplayStatics::GetGlobalTimeDilation(World) > 0.9f, TEXT("Custom 3: time resumes"));
+				State.Index = 5;
+				State.StageTime = 2.f;
+				return true;
+			}
+			if (State.Index == 5)
+			{
+				if (State.StageTime < 3.f || (!StandingStill(*Squad) && State.StageTime < 14.f))
+				{
+					return true;
+				}
+				Check(State, Squad->GetFormationKind() == EFormationKind::Custom && Squad->GetFormationCustomSlot() == 3, FString::Printf(TEXT("the squad in Custom 3 (%s)"),
+					FormationNames::ToString(Squad->GetFormationKind())));
+				Check(State, !Squad->IsSoloMode(), TEXT("Custom 3 settled: no solo mode"));
+				CheckStanding(State, *Squad, Squad->GetFormationCustomShape(3), TEXT("Custom 3 (keys / portrait / body)"), true);
+				// RMB cancels an edit with no solo either.
+				PC->SetSimulatedFormationMenuEdit(true);
+				PC->SetFormationMenuCursorOffset(Custom3);
+				SendKey(PC, EKeys::B, IE_Pressed);
+				State.Index = 6;
+				State.StageTime = 2.f;
+				return true;
+			}
+			if (State.Index == 6)
+			{
+				if (!PC->IsFormationMenuOpen())
+				{
+					return !TimedOut(7.f, TEXT("the menu opens for the Custom 3 edit")) || Finish(State, World, false);
+				}
+				SendKey(PC, EKeys::B, IE_Released);
+				State.Index = 7;
+				State.StageTime = 2.f;
+				return true;
+			}
+			if (State.Index == 7)
+			{
+				if (State.StageTime < 2.1f)
+				{
+					return true;
+				}
+				PC->SetSimulatedFormationMenuEdit(false);
+				PC->SetFormationMenuCursorOffset(TOptional<FVector2D>());
+				Check(State, PC->IsFormationPlacementActive() && PC->GetFormationPlacement().GetSlot() == 3, TEXT("Ctrl + release on the filled Custom 3: edit"));
+				SendKey(PC, EKeys::RightMouseButton, IE_Pressed);
+				State.Index = 8;
+				return true;
+			}
+			if (State.Index == 8)
+			{
+				SendKey(PC, EKeys::RightMouseButton, IE_Released);
+				State.Index = 9;
+				State.StageTime = 2.f;
+				return true;
+			}
+			if (State.StageTime < 2.1f)
+			{
+				return true;
+			}
+			Check(State, !PC->IsFormationPlacementActive() && UGameplayStatics::GetGlobalTimeDilation(World) > 0.9f, TEXT("RMB cancels the edit, time resumes"));
+			Check(State, !Squad->IsSoloMode(), TEXT("RMB cancels: NO solo mode (bug_05)"));
+			Check(State, FormationCustomRules::ToJsonString(Squad->GetFormationCustomShape(3)) == State.KeysShapeJson
+				&& Squad->GetFormationMenuChoice() == TOptional<EFormationMenuItem>(EFormationMenuItem::Custom3), TEXT("the cancelled edit keeps Custom 3 and the choice"));
 			// Three: the 4th on guard (out of the formation); Custom 2 for the three.
 			if (AOperativeCharacter* Fourth = State.Fourth.Get(); Fourth && !Fourth->bGuarding)
 			{
@@ -756,7 +1046,8 @@ namespace FormationCustomSmoke
 					{
 						continue;
 					}
-					PC->HandleFormationPlacementPress(BodyHit(*Each));
+					FHitResult OnBody;
+					PC->HandleFormationPlacementPress(CursorBodyHit(World, PC, *Each, OnBody) ? OnBody : BodyHit(*Each));
 					const FVector2D Spot = Frame(State.Origin, State.Heading, Spots[Placed]);
 					PC->HandleFormationPlacementPress(GroundHit(World, Spot, State.GroundZ));
 					PC->HandleFormationPlacementRelease(FVector(Spot + FormationMath::Forward(State.Heading + Looks[Placed]) * 150.0, State.GroundZ));
@@ -910,7 +1201,8 @@ namespace FormationCustomSmoke
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.FormationCustomSmoke"),
 		TEXT("Dev check (2026-11-01): the custom formation - hold-B Custom 1 -> the placement mode (time stops, ghosts), placement by clicks + drags, ")
-		TEXT("refusals, Space confirms, the shape kept walking in the open, the fold in lane D's corridor and the unfold, Ctrl = edit / Esc, a three-man ")
+		TEXT("refusals, posed ghosts kept while the others are placed, Space confirms (no solo), the shape kept walking in the open, the fold in lane D's corridor ")
+		TEXT("and the unfold, Ctrl = edit / Esc, Custom 3 picked by keys 1-4 / portrait / body and confirmed by a B tap (no solo), RMB cancel, a three-man ")
 		TEXT("Custom 2 confirmed in the menu, the 4th as the extra, the campaign carry and save -> load keep the slots; [shot]. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }

@@ -300,6 +300,17 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 		// lead and an open profile follows him.
 		const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
 		AOperativeCharacter* Target = Members.IsValidIndex(RosterIndex) ? Members[RosterIndex] : nullptr;
+		// The custom formation's placement mode (game designer 2026-11-01, bug_05: "#2 placed" twice - the number key changed the leader while
+		// the placement kept the old pick): a number key / portrait picks the operative whose ghost the next ground click places - never a new
+		// leader (the leader is the shape's anchor) nor the profile.
+		if (IsFormationPlacementActive())
+		{
+			if (Target)
+			{
+				SelectFormationPlacementMember(Target->SquadIndex);
+			}
+			return;
+		}
 		ACodexTacticsHUD* Hud = GetHUD<ACodexTacticsHUD>();
 		if (Target && Target == Squad->GetLeader())
 		{

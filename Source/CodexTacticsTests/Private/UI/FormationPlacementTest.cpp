@@ -63,4 +63,71 @@ bool FFormationPlacementFlowTest::RunTest(const FString&)
 	return true;
 }
 
+// Bug_05 (the game designer's PIE 2026-11-01): select operative 1, place him; select operative 2, place him; ... - every placed ghost stays
+// where it was put while the next one is placed (the log showed "#2 placed" twice: the pick had not moved on).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFormationPlacementOneByOneTest, "CodexTactics.UI.FormationPlacement.OneAfterAnother",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FFormationPlacementOneByOneTest::RunTest(const FString&)
+{
+	FFormationPlacement Placement;
+	Placement.Begin(1, 0, FormationPlacementTestLocal::Squad());
+	const FVector2D Spots[3] = { FVector2D(150.0, 0.0), FVector2D(-100.0, 300.0), FVector2D(-100.0, -300.0) };
+	const float Looks[3] = { 0.f, 90.f, -90.f };
+	for (int32 Squad = 0; Squad < 3; ++Squad)
+	{
+		TestTrue(FString::Printf(TEXT("#%d selected"), Squad), Placement.Select(Squad) == EFormationPlacementResult::Selected && Placement.GetSelected() == TOptional<int32>(Squad));
+		Placement.Press(Spots[Squad]);
+		TestTrue(FString::Printf(TEXT("#%d placed"), Squad), Placement.Release(Spots[Squad] + FVector2D(FMath::Cos(FMath::DegreesToRadians(Looks[Squad])),
+			FMath::Sin(FMath::DegreesToRadians(Looks[Squad]))) * 200.0) == EFormationPlacementResult::Placed);
+		for (int32 Earlier = 0; Earlier <= Squad; ++Earlier)
+		{
+			const FFormationCustomGhost* Ghost = Placement.FindGhost(Earlier);
+			TestTrue(FString::Printf(TEXT("after #%d: #%d's ghost stays at its spot, looking its way"), Squad, Earlier), Ghost && Ghost->Position.Equals(Spots[Earlier], 0.01)
+				&& FMath::IsNearlyEqual(FMath::FindDeltaAngleDegrees(Ghost->Yaw, Looks[Earlier]), 0.f, 0.01f));
+		}
+	}
+	TestTrue(TEXT("the selection stays on the last one placed"), Placement.GetSelected() == TOptional<int32>(2));
+	// Re-picking an earlier operative and placing him again moves only him.
+	Placement.Select(1);
+	Placement.Press(FVector2D(-200.0, 300.0));
+	Placement.Release(FVector2D(-200.0, 300.0));
+	TestTrue(TEXT("#1 moved again, #0 and #2 kept"), Placement.FindGhost(1)->Position.Equals(FVector2D(-200.0, 300.0)) && Placement.FindGhost(0)->Position.Equals(Spots[0])
+		&& Placement.FindGhost(2)->Position.Equals(Spots[2]));
+	return true;
+}
+
+// Bug_05: the ghosts stood in the T-pose (the mesh's reference pose) - the pose check the ghost actor runs after setting its idle.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFormationPlacementPoseTest, "CodexTactics.UI.FormationPlacement.GhostPose",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FFormationPlacementPoseTest::RunTest(const FString&)
+{
+	TArray<FTransform> Ref;
+	Ref.Add(FTransform::Identity);
+	Ref.Add(FTransform(FRotator(0.0, 0.0, 90.0), FVector(0.0, 20.0, 140.0))); // an arm straight out (the T)
+	Ref.Add(FTransform(FRotator(0.0, 90.0, 0.0), FVector(0.0, 30.0, 0.0)));
+	TestEqual(TEXT("the reference pose itself is 0 deg off"), FormationPlacementRules::PoseOffRefDeg(Ref, Ref), 0.f, 0.01f);
+	TestFalse(TEXT("the reference pose is not posed (the T-pose)"), FormationPlacementRules::IsPosed(FormationPlacementRules::PoseOffRefDeg(Ref, Ref)));
+	TArray<FTransform> Idle = Ref;
+	Idle[1].SetRotation(FQuat(FRotator(0.0, 0.0, 15.0))); // the arm down 75 deg
+	TestEqual(TEXT("the arm down: 75 deg off"), FormationPlacementRules::PoseOffRefDeg(Idle, Ref), 75.f, 0.05f);
+	TestTrue(TEXT("an idle pose is posed"), FormationPlacementRules::IsPosed(FormationPlacementRules::PoseOffRefDeg(Idle, Ref)));
+	TArray<FTransform> Tiny = Ref;
+	Tiny[2].SetRotation(FQuat(FRotator(0.0, 94.0, 0.0)));
+	TestFalse(TEXT("a 4 deg wobble is still the reference pose"), FormationPlacementRules::IsPosed(FormationPlacementRules::PoseOffRefDeg(Tiny, Ref)));
+	TestEqual(TEXT("an empty pose: 0"), FormationPlacementRules::PoseOffRefDeg(TArray<FTransform>(), Ref), 0.f);
+	TestEqual(TEXT("q and -q are the same rotation"), FormationPlacementRules::PoseOffRefDeg(TArray<FTransform>{ FTransform(-FQuat(FRotator(0.0, 0.0, 90.0))) },
+		TArray<FTransform>{ FTransform(FQuat(FRotator(0.0, 0.0, 90.0))) }), 0.f, 0.01f);
+	return true;
+}
+
+// Bug_05: a B tap in the placement mode toggled SOLO and the placement cancelled itself - the tap now confirms the placement.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFormationPlacementBTapTest, "CodexTactics.UI.FormationPlacement.BTap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FFormationPlacementBTapTest::RunTest(const FString&)
+{
+	TestTrue(TEXT("outside the placement mode a B tap is the solo toggle"), FormationPlacementRules::ResolveBTap(false) == FormationPlacementRules::EBTap::SoloToggle);
+	TestTrue(TEXT("in the placement mode a B tap confirms it (never solo)"), FormationPlacementRules::ResolveBTap(true) == FormationPlacementRules::EBTap::ConfirmPlacement);
+	return true;
+}
+
 #endif

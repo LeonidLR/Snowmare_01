@@ -27,7 +27,7 @@ const walls = {
 };
 
 test('constants and the sample shape (17 / 17.8)', () => {
-  assert.deepEqual([CUSTOM_MAX_RADIUS, CUSTOM_DRAG_MIN, CUSTOM_SLOT_COUNT, CUSTOM_MAX_MEMBERS], [1000, 50, 3, 4]);
+  assert.deepEqual([CUSTOM_MAX_RADIUS, CUSTOM_DRAG_MIN, CUSTOM_SLOT_COUNT, CUSTOM_MAX_MEMBERS], [4000, 50, 3, 4]);
   assert.deepEqual(SAMPLE.members.map((m) => [m.squad, m.fwd, m.right, m.look]), [[0, 0, 0, 0], [1, -250, 300, 60], [2, -250, -300, -60], [3, -450, 0, 180]]);
 });
 
@@ -182,20 +182,23 @@ test('CanPlace: too_close within slot.min_spacing of another ghost, too_far past
   assert.equal(R.CanPlace(ghosts, 0, 3, [-250, 300 + 79], C), 'too_close');
   assert.equal(R.CanPlace(ghosts, 0, 3, [-250, 300 + 81], C), 'ok');
   assert.equal(R.CanPlace(ghosts, 0, 1, [-250, 330], C), 'ok', 'his own old place is not "another ghost"');
-  assert.equal(R.CanPlace(ghosts, 0, 1, [1000, 0], C), 'ok', 'exactly the radius');
-  assert.equal(R.CanPlace(ghosts, 0, 1, [1000.1, 0], C), 'too_far');
+  assert.equal(R.CanPlace(ghosts, 0, 1, [1500, 0], C), 'ok', '15 m from the anchor (bug_05: the old 10 m reach is gone)');
+  assert.equal(R.CanPlace(ghosts, 0, 1, [4000, 0], C), 'ok', 'exactly the radius');
+  assert.equal(R.CanPlace(ghosts, 0, 1, [4000.1, 0], C), 'too_far');
   assert.equal(R.CanPlace(ghosts, 0, 1, [10, 10], C), 'too_close', 'next to the anchor');
   assert.equal(R.CanPlace(ghosts, 0, 1, [0, 20], C), 'too_close', 'too_close wins over a far ghost elsewhere');
   // the anchor moves: the others must stay within reach of his new place
   assert.equal(R.CanPlace(ghosts, 0, 0, [600, 0], C), 'ok');
-  assert.equal(R.CanPlace(ghosts, 0, 0, [0, 1500], C), 'too_far');
+  assert.equal(R.CanPlace(ghosts, 0, 0, [0, 1500], C), 'ok');
+  assert.equal(R.CanPlace(ghosts, 0, 0, [0, 4500], C), 'too_far');
   assert.equal(R.CanPlace(ghosts, 0, 0, [-250, 250], C), 'too_close');
   // no anchor ghost -> no reach test
   assert.equal(R.CanPlace([{ squad: 1, pos: [0, 0] }], 0, 2, [5000, 5000], C), 'ok');
   assert.equal(R.CanPlace([], 0, 1, [5000, 5000], C), 'ok');
   assert.equal(R.CanPlace([], 0, 0, [5000, 5000], C), 'ok', 'the first ghost, alone');
   // the anchor placed later sees the others that are too far
-  assert.equal(R.CanPlace([{ squad: 1, pos: [2000, 0] }], 0, 0, [0, 0], C), 'too_far');
+  assert.equal(R.CanPlace([{ squad: 1, pos: [2000, 0] }], 0, 0, [0, 0], C), 'ok');
+  assert.equal(R.CanPlace([{ squad: 1, pos: [5000, 0] }], 0, 0, [0, 0], C), 'too_far');
 });
 
 test('ShapeFrom: the anchor ghost is the frame; the anchor first (0, 0, 0), the others by squad, at most 4; rounded to 0.1', () => {

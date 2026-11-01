@@ -69,8 +69,12 @@ enum class EFormationCustomPlace : uint8
 
 namespace FormationCustomRules
 {
-	/** A member may stand at most this far from the anchor, cm. */
-	inline constexpr double MaxRadius = 1000.0;
+	/**
+	 * A member may stand at most this far from the anchor, cm. 2026-11-01 (the game designer, bug_05: the old 10 m reach "ruins everything"): only
+	 * a generous sanity reach against a mis-click on the far horizon (the wall fold traces leader -> slot lines, the camera frames the squad);
+	 * 15-30 m shapes are accepted. The tactical pause's order radius never applies to the placement.
+	 */
+	inline constexpr double MaxRadius = 4000.0;
 	/** A press-and-drag shorter than this is a plain click (the default look), cm. */
 	inline constexpr double DragMin = 50.0;
 	/** Custom slots per squad. */

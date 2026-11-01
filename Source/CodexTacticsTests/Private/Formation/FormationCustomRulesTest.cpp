@@ -117,8 +117,10 @@ bool FFormationCustomPlacementTest::RunTest(const FString&)
 	Other.Position = FVector2D(-300.0, 0.0);
 	Ghosts.Add(Other);
 	TestTrue(TEXT("too close"), FormationCustomRules::CanPlace(Ghosts, 0, 2, FVector2D(-300.0, 50.0), Config) == EFormationCustomPlace::TooClose);
-	TestTrue(TEXT("too far"), FormationCustomRules::CanPlace(Ghosts, 0, 2, FVector2D(1200.0, 0.0), Config) == EFormationCustomPlace::TooFar);
-	TestTrue(TEXT("the anchor may not leave a man out of reach"), FormationCustomRules::CanPlace(Ghosts, 0, 0, FVector2D(900.0, 0.0), Config) == EFormationCustomPlace::TooFar);
+	TestTrue(TEXT("15 m from the anchor is fine (bug_05: no 10 m reach)"), FormationCustomRules::CanPlace(Ghosts, 0, 2, FVector2D(1500.0, 0.0), Config) == EFormationCustomPlace::Ok);
+	TestTrue(TEXT("30 m from the anchor is fine"), FormationCustomRules::CanPlace(Ghosts, 0, 2, FVector2D(0.0, -3000.0), Config) == EFormationCustomPlace::Ok);
+	TestTrue(TEXT("too far (past the 40 m sanity reach)"), FormationCustomRules::CanPlace(Ghosts, 0, 2, FVector2D(4200.0, 0.0), Config) == EFormationCustomPlace::TooFar);
+	TestTrue(TEXT("the anchor may not leave a man out of reach"), FormationCustomRules::CanPlace(Ghosts, 0, 0, FVector2D(3900.0, 0.0), Config) == EFormationCustomPlace::TooFar);
 	TestTrue(TEXT("ok"), FormationCustomRules::CanPlace(Ghosts, 0, 2, FVector2D(-300.0, 300.0), Config) == EFormationCustomPlace::Ok);
 	// The shape in the anchor's frame (anchor at (100, 0) facing +Y): a man at (100, 300) is 300 forward.
 	Ghosts[0].Position = FVector2D(100.0, 0.0);

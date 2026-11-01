@@ -713,7 +713,8 @@ fixes (16.3). The user's decisions are unchanged; the open findings are question
 The player places the squad's shape himself (hold-B menu -> Custom 1 / 2 / 3 -> the placement mode) and the squad keeps it like any
 other formation: slots in the leader's frame, rotating with the heading; the looks are the player's, fixed relative to the heading.
 TS `Tools/TrainingGround/src/movement/custom.ts` (`FormationCustomRules`), C++ `Source/CodexTactics/*/Formation/FormationCustomRules.*`,
-golden `formation_Custom*.json`. Constants (same in TS and C++, not tuned): `CUSTOM_MAX_RADIUS` 1000 cm, `CUSTOM_DRAG_MIN` 50 cm,
+golden `formation_Custom*.json`. Constants (same in TS and C++, not tuned): `CUSTOM_MAX_RADIUS` 4000 cm (was 1000 until 2026-11-01: the game designer, bug_05 - the 10 m
+reach "ruins everything"; 4000 is only a sanity reach against a mis-click on the far horizon), `CUSTOM_DRAG_MIN` 50 cm,
 `CUSTOM_SLOT_COUNT` 3, `CUSTOM_MAX_MEMBERS` 4.
 
 ### 17.1 The slot storage (`FFormationCustomShape`; save game / campaign carry / golden)
@@ -767,7 +768,9 @@ currentYaw, config, held)` (13.1 / 13.4; no limit, no ahead).
 - `CanPlace(ghosts [{squad, pos}], anchorSquad, squad, pos, config) -> 'ok' | 'too_far' | 'too_close'`: the ghosts after the placement
   (squad's ghost moved to pos, added when missing). `too_close` when some other ghost is within `slot.min_spacing` of pos; `too_far` when
   any ghost (pos's included) is farther than CUSTOM_MAX_RADIUS from the anchor's ghost (squad == anchorSquad: the anchor moves, the
-  others must stay within reach; no anchor ghost -> no reach test). Checked in that order.
+  others must stay within reach; no anchor ghost -> no reach test). Checked in that order. CUSTOM_MAX_RADIUS is a generous sanity reach
+  (40 m, 2026-11-01): the placement has no other range limit - never the tactical pause's order radius (the placement is no pause order;
+  the runtime also hides the pause's 12 m ring while placing); the runtime adds only "a walkable spot" (on the nav mesh, not inside a wall).
 - `ShapeFrom(ghosts [{squad, pos, yaw}], anchorSquad) -> shape`: the anchor ghost's pos / yaw is the frame; each ghost -> `fwd` / `right`
   = his pos in that frame, `look = normYaw(yaw - anchorYaw)`; the anchor first (forced 0, 0, 0), the others by squad ascending, at most
   CUSTOM_MAX_MEMBERS; `RoundShape` applied. No anchor ghost -> empty.
@@ -799,7 +802,7 @@ currentYaw, config, held)` (13.1 / 13.4; no limit, no ahead).
   trail column as before.
 
 ### 17.9 Readings fixed by the TS reference (2026-11-01; the C++ port follows them)
-- Boundaries: CanPlace `too_close` = distance < slot.min_spacing, `too_far` = distance > CUSTOM_MAX_RADIUS (1000.0 is ok); DragLook
+- Boundaries: CanPlace `too_close` = distance < slot.min_spacing, `too_far` = distance > CUSTOM_MAX_RADIUS (4000.0 is ok); DragLook
   < CUSTOM_DRAG_MIN is a click (50.0 is a drag). RoundShape = `sign(v) x round(|v| x 10) / 10` (-0 -> 0), the look then `normYaw`
   (-179.96 -> 180). Resolve's held branch keeps `state.cause ?? 'wall'`; walked == hold_distance releases; a negative step counts 0.
 - CustomSlots: members[0] is the anchor whatever its stored numbers; the leader stored but the anchor dead -> the leader takes place 0

@@ -3,8 +3,10 @@
 // The custom formation's placement mode (game designer decisions 2026-11-01; docs/design/FORMATION_SECTORS.md "Custom formation", contract
 // docs/design/FORMATION_CONTRACT.md 17). Opened from the hold-B menu's Custom 1 / 2 / 3 row (an empty slot, or Ctrl on a filled one): the world
 // stops (a dedicated placement pause - the global time dilation at its minimum, not the tactical pause), each member has a holographic ghost
-// (AFormationGhostActor). Click an operative (or his ghost), then press on his spot and drag to set his look (a plain click = the squad's
-// heading); Space or the same Custom in the menu confirms (the shape stored, picked, time resumes, the squad walks into it), Esc / RMB cancel.
+// (AFormationGhostActor). Click an operative (his body, his ghost, his number key 1-4 or his portrait - the leader never changes meanwhile), then
+// press on his spot and drag to set his look (a plain click = the squad's heading); his ghost stays there while the others are placed. Space, a
+// B tap or the same Custom in the menu confirms (the shape stored, picked, time resumes, the squad walks into it; never the solo toggle -
+// bug_05 2026-11-01), Esc / RMB cancel.
 // Godot reference: none (UE-only). Pure state: FFormationPlacement (UI/FormationPlacementRules).
 
 #include "Characters/OperativeCharacter.h"
@@ -143,6 +145,7 @@ bool ACodexTacticsPlayerController::ConfirmFormationPlacement()
 	EndFormationPlacement();
 	if (!Squad || Shape.IsEmpty())
 	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[FormationCustom] placement for Custom %d ended without a shape (no anchor ghost): the slot unchanged"), Slot);
 		return false;
 	}
 	Squad->SetFormationCustomShape(Slot, Shape);
@@ -305,18 +308,15 @@ bool ACodexTacticsPlayerController::HandleFormationPlacementPress(const FHitResu
 	{
 		Clicked = Cast<AOperativeCharacter>(HitActor->GetOwner());
 	}
-	if (Clicked && FormationPlacementMembers.Contains(Clicked->SquadIndex))
+	if (Clicked && SelectFormationPlacementMember(Clicked->SquadIndex))
 	{
-		LastFormationPlacementResult = FormationPlacement.Select(Clicked->SquadIndex);
-		SyncFormationGhosts();
 		return true;
 	}
 	const FVector2D Ground(Hit.ImpactPoint);
 	const TOptional<int32> Near = FormationPlacement.GhostAt(Ground, GhostPickRadius);
 	if (Near.IsSet() && (!FormationPlacement.GetSelected().IsSet() || FormationPlacement.GetSelected().GetValue() != Near.GetValue()))
 	{
-		LastFormationPlacementResult = FormationPlacement.Select(Near.GetValue());
-		SyncFormationGhosts();
+		SelectFormationPlacementMember(Near.GetValue());
 		return true;
 	}
 	LastFormationPlacementResult = FormationPlacement.Press(Ground);
@@ -336,6 +336,24 @@ bool ACodexTacticsPlayerController::HandleFormationPlacementPress(const FHitResu
 		return true;
 	}
 	FormationPressZ = static_cast<float>(Hit.ImpactPoint.Z);
+	return true;
+}
+
+bool ACodexTacticsPlayerController::SelectFormationPlacementMember(int32 Squad)
+{
+	const TWeakObjectPtr<AOperativeCharacter>* Member = FormationPlacementMembers.Find(Squad);
+	if (!FormationPlacement.IsActive() || !Member || !FormationPlacement.FindGhost(Squad))
+	{
+		return false;
+	}
+	const bool bChanged = FormationPlacement.GetSelected() != TOptional<int32>(Squad);
+	LastFormationPlacementResult = FormationPlacement.Select(Squad);
+	SyncFormationGhosts();
+	if (bChanged)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[FormationCustom] #%d selected (%s) - his next ground click places him"), Squad,
+			Member->IsValid() ? *Member->Get()->DisplayName.ToString() : TEXT("-"));
+	}
 	return true;
 }
 
@@ -364,7 +382,7 @@ bool ACodexTacticsPlayerController::HandleFormationPlacementRelease(const FVecto
 			Ghost->FlashRefused();
 		}
 		PostHeadquarters(LastFormationPlacementResult == EFormationPlacementResult::TooFar
-			? LOCTEXT("FormationPlacementTooFar", "Too far: everyone stays within 10 m of the leader.")
+			? LOCTEXT("FormationPlacementTooFar", "Too far: everyone stays within 40 m of the leader.")
 			: LOCTEXT("FormationPlacementTooClose", "Too close to another operative."));
 	}
 	else if (LastFormationPlacementResult == EFormationPlacementResult::Placed)

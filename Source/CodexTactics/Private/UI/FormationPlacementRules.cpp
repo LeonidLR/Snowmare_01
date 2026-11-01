@@ -106,3 +106,24 @@ EFormationPlacementResult FFormationPlacement::Release(const FVector2D& Cursor, 
 	Own->Yaw = Look;
 	return EFormationPlacementResult::Placed;
 }
+
+float FormationPlacementRules::PoseOffRefDeg(TConstArrayView<FTransform> Pose, TConstArrayView<FTransform> RefPose)
+{
+	double Worst = 0.0;
+	const int32 Count = FMath::Min(Pose.Num(), RefPose.Num());
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		Worst = FMath::Max(Worst, Pose[Index].GetRotation().GetNormalized().AngularDistance(RefPose[Index].GetRotation().GetNormalized()));
+	}
+	return static_cast<float>(FMath::RadiansToDegrees(Worst));
+}
+
+bool FormationPlacementRules::IsPosed(float OffRefDeg)
+{
+	return OffRefDeg >= PosedMinDeg;
+}
+
+FormationPlacementRules::EBTap FormationPlacementRules::ResolveBTap(bool bPlacementActive)
+{
+	return bPlacementActive ? EBTap::ConfirmPlacement : EBTap::SoloToggle;
+}

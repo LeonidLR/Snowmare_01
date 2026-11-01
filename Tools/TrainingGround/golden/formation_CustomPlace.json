@@ -1393,6 +1393,102 @@
   {
    "in": {
     "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     -200,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
     "set": "anchor",
     "ghosts": [
      {
@@ -1507,7 +1603,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -1675,7 +1771,151 @@
     ]
    },
    "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
     "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     -200,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
    }
   },
   {
@@ -1865,7 +2105,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -2093,7 +2333,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -2131,7 +2371,235 @@
     ]
    },
    "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
     "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     -200,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
    }
   },
   {
@@ -2283,7 +2751,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -2321,7 +2789,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -2549,7 +3017,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -2587,7 +3055,235 @@
     ]
    },
    "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
     "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     -200,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
    }
   },
   {
@@ -2812,7 +3508,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -3037,7 +3733,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -3082,7 +3778,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -3127,7 +3823,277 @@
     ]
    },
    "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
     "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     -200,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
    }
   },
   {
@@ -3307,7 +4273,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -3352,7 +4318,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -3622,7 +4588,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -3667,7 +4633,277 @@
     ]
    },
    "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
     "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     -200,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
    }
   },
   {
@@ -3822,7 +5058,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -4035,6 +5271,750 @@
     "squad": 4,
     "pos": [
      1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     -200,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_two",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       3900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     -200,
      0
     ]
    },
@@ -4380,7 +6360,7 @@
     ]
    },
    "out": {
-    "result": "too_far"
+    "result": "ok"
    }
   },
   {
@@ -4407,6 +6387,192 @@
     "squad": 4,
     "pos": [
      1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     4500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     4000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     -200,
      0
     ]
    },

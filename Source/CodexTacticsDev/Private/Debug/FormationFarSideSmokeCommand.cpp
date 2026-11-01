@@ -4,23 +4,24 @@
 //           the operatives ("Operative selected: ..."), the cover ghost snaps to the near face, the squad jumbles / stalls going round;
 //   split:  the squad crouched at one wall, ordered to the far side of the OPPOSITE wall - on the run it splits round both ends.
 // Fixes: a) the wall side by the cursor (the top's far half / the ground behind = the FAR face, the near half = the near face);
-//        b) at a wall a click picks an operative only on his body; c) a wall hiding the cursor's target fades (and the cursor looks through
-//        it); d) the far side of the same wall: one column round the near end, then the wall layout; e) no split: one route round an obstacle.
+//        b) at a wall a click picks an operative only on his body; d) the far side of the same wall: one column round the near end, then the
+//        wall layout; e) no split: one route round an obstacle. (Fix c, the occluder fade, was removed on the game designer's decision
+//        2026-11-01 (bug_05): walls never fade - the smoke asserts the clicked wall stays solid and every click is the plain cursor ray.)
 //   CodexTactics.FormationFarSideSmoke [Shot]
 //   powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands FormationFarSideSmoke [-PreCmds "Codex.Formation.WallRoute 0"]
 //   (map /Game/Maps/L_FormationLab + -LevelJson=L_FormationLab.json, Scripts/test_map.json)
-//   rendered stills ("Shot"; -RenderOffscreen): Saved/Screenshots/FarSide/01_far_side_ghost.png (the ghost on the far face, the wall faded),
-//   02_opposite_wall_fade.png (the opposite wall faded over the far-side spot), 03_same_wall_column.png / 04_opposite_wall_column.png (the
+//   rendered stills ("Shot"; -RenderOffscreen): Saved/Screenshots/FarSide/01_far_side_ghost.png (the ghost on the far face, the wall solid),
+//   02_opposite_wall_ghost.png (the ghost on the opposite wall's far face), 03_same_wall_column.png / 04_opposite_wall_column.png (the
 //   squad mid-route round the wall's end, from above).
 // The REAL click path: every click is the cursor's ray (a Visibility trace from the player camera through the aimed point, the camera's
-// yaw locked looking north) handed to ACodexTacticsPlayerController::HandleWorldHit; the hover is UpdateWallSideHover with the same hit.
+// yaw locked looking north) handed to ACodexTacticsPlayerController::HandleWorldHit.
 // The lab's W_C_8 (y -1500, x 3000..4500, 40 cm thick, 3 m high) and W_B_3 (y -2700, x 1500..4000); the camera looks north, so their south
 // faces are the near faces. Scenes:
 //   1. the squad walks up, two clicks on W_C_8's south face -> the wall layout there;
 //   2. (b) a click on the wall's top right above each crouched follower (within the old 120 cm select radius) is a cover click, not a
 //      selection; a click on a follower's body still selects him (the portrait path selects the leader back);
-//   3. (a, c) the top's near half -> the ghost on the near face; the far half -> hovered: the wall fades, the click lands behind it -> the
-//      ghost on the FAR face; the ground right behind the wall -> the far face; (d) the confirm -> the squad goes round one end as one
+//   3. (a) the top's near half -> the ghost on the near face; the far half -> the ghost on the FAR face (the wall stays solid: the click
+//      is the top hit itself); the ground right behind the wall, where visible -> the far face; (d) the confirm -> the squad goes round one end as one
 //      column and settles in the wall layout on the far face - nobody round the other end, no stall;
 //   4. (e) the squad crouched at W_B_3's north face, the far-side click on the OPPOSITE wall W_C_8 -> everyone round the SAME end.
 // Godot reference: none (UE-only).
@@ -31,7 +32,6 @@
 
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
-#include "Camera/OccluderFadeSubsystem.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
@@ -231,16 +231,16 @@ namespace FormationFarSideSmoke
 		return World->LineTraceSingleByChannel(OutHit, Camera, Camera + (Aim - Camera) * 1.6, ECC_Visibility, Params);
 	}
 
-	/** The hover then the click, as PlayerTick then OnClick do. */
+	/** The click, as OnClick hands the cursor's hit on. */
 	void Click(FState& State, UWorld* World, ACodexTacticsPlayerController* PC, const FHitResult& Hit)
 	{
-		PC->UpdateWallSideHover(&Hit);
-		if (UOccluderFadeSubsystem* Fade = World->GetSubsystem<UOccluderFadeSubsystem>())
-		{
-			Fade->UpdateNow();
-		}
 		PC->HandleWorldHit(Hit);
-		PC->UpdateWallSideHover(nullptr);
+	}
+
+	/** A wall piece drawn as before (game designer 2026-11-01, bug_05: walls never fade): visible and blocking the cursor. */
+	bool IsSolid(const UPrimitiveComponent* Piece)
+	{
+		return Piece && Piece->IsVisible() && Piece->GetCollisionResponseToChannel(ECC_Visibility) == ECR_Block;
 	}
 
 	FString Where(const FVector& Point)
@@ -615,7 +615,6 @@ namespace FormationFarSideSmoke
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(World, 0));
-		UOccluderFadeSubsystem* Fade = World->GetSubsystem<UOccluderFadeSubsystem>();
 		AOperativeCharacter* Lead = State.Leader.Get();
 		StepPhoto(World, State);
 		if (State.PhotoPhase != 0 && State.Stage != EStage::RouteSame && State.Stage != EStage::RouteOpposite)
@@ -626,7 +625,7 @@ namespace FormationFarSideSmoke
 		{
 		case EStage::Setup:
 		{
-			if (State.StageTime < 3.f || !Squad || !PC || !Fade || Squad->GetMembers().Num() < 3)
+			if (State.StageTime < 3.f || !Squad || !PC || Squad->GetMembers().Num() < 3)
 			{
 				return State.Time < 60.f || Finish(State, false);
 			}
@@ -648,7 +647,6 @@ namespace FormationFarSideSmoke
 				Camera->SetCinematicLock(true);
 				Camera->SetCinematicYaw(90.f);
 			}
-			PC->bFreezeWallSideHoverForTesting = true;
 			PC->bFreezeCoverHoverForTesting = true;
 			PC->bFreezeCornerPeekHoverForTesting = true;
 			PlaceSquad(World, Squad, State, FVector2D(State.WallC.Mid(), -2150.0), 90.f);
@@ -795,28 +793,16 @@ namespace FormationFarSideSmoke
 				FString::Printf(TEXT("scene 3: the top's near half (hit %s) -> the ghost on the near face (%s)"), *Where(NearTop.ImpactPoint),
 					PC->HasCoverPreview() ? *Where(PC->GetCoverPreviewSlot().WorldLocation) : TEXT("none")));
 			PC->HideCoverPreview();
-			if (Fade)
-			{
-				PC->UpdateWallSideHover(nullptr);
-				Fade->UpdateNow();
-			}
-			Check(State, !Fade || !Fade->IsFaded(WallPiece), TEXT("scene 3: nothing hides the near face - the wall stays solid"));
-			// The top's far half: hovered -> the far spot is the fade's target, the wall fades; the click looks through it -> the far face. Where:
-			// the spot along the far face from which the old rule (each man his own path to his slot) would split the squad round both ends.
+			Check(State, IsSolid(WallPiece), TEXT("scene 3: the wall stays solid (no fade)"));
+			// The top's far half -> the far face (the click is the top hit itself: the wall stays solid, nothing fades). Where: the spot along
+			// the far face from which the old rule (each man his own path to his slot) would split the squad round both ends.
 			State.ClickX = FindSplitX(World, State, KX);
 			FHitResult FarTop;
 			CursorHit(World, PC, At(State, State.ClickX, State.WallC.Y + 10.0, WallHeightCm), FarTop);
 			const bool bFar = PC->ResolveWallSideSlot(FarTop, Slot, Side) && Side == EWallClickSide::Far && Slot.WorldLocation.Y > State.WallC.NorthFace();
 			Check(State, bFar, FString::Printf(TEXT("scene 3: the top's far half (hit %s) means the FAR face (slot %s)"), *Where(FarTop.ImpactPoint), *Where(Slot.WorldLocation)));
-			PC->UpdateWallSideHover(&FarTop);
-			FVector Target;
-			const bool bHover = PC->GetWallSideHoverTarget(Target);
-			Fade->UpdateNow();
-			Check(State, bHover && Fade->IsFaded(WallPiece) && Fade->GetProxy(WallPiece) != nullptr, FString::Printf(TEXT("scene 3: hovered, the far spot %s is hidden by %s - it fades (see-through proxy %s)"),
-				*Where(Target), *GetNameSafe(WallPiece ? WallPiece->GetOwner() : nullptr), Fade->GetProxy(WallPiece) ? TEXT("up") : TEXT("missing")));
-			const FHitResult Seen = PC->ThroughFadedOccluders(FarTop);
-			Check(State, Seen.GetComponent() != WallPiece && Seen.ImpactPoint.Y > State.WallC.NorthFace() && Seen.ImpactPoint.Z < State.GroundZ + 30.f,
-				FString::Printf(TEXT("scene 3: the cursor looks through the faded wall - its ray lands on the ground behind it %s"), *Where(Seen.ImpactPoint)));
+			Check(State, FarTop.GetComponent() == WallPiece && IsSolid(WallPiece), FString::Printf(TEXT("scene 3: the far half's ray stops on the same wall's top (%s) - solid, no fade"),
+				*GetNameSafe(WallPiece ? WallPiece->GetOwner() : nullptr)));
 			Click(State, World, PC, FarTop);
 			Check(State, PC->HasCoverPreview() && PC->GetCoverPreviewSlot().WorldLocation.Y > State.WallC.NorthFace() && PC->GetCoverPreviewSlot().WallNormal.Y > 0.9,
 				FString::Printf(TEXT("scene 3: the click -> the ghost on the FAR face (%s)"), PC->HasCoverPreview() ? *Where(PC->GetCoverPreviewSlot().WorldLocation) : TEXT("none")));
@@ -826,8 +812,6 @@ namespace FormationFarSideSmoke
 			{
 				FHitResult Ground;
 				const FVector Aim = At(State, KX + 120.0, State.WallC.NorthFace() + Back, 0.f);
-				PC->UpdateWallSideHover(nullptr);
-				Fade->RestoreAll();
 				if (!CursorHit(World, PC, Aim, Ground) || Ground.ImpactNormal.Z < 0.7f || FVector::Dist2D(Ground.ImpactPoint, Aim) > 30.0 || Ground.ImpactPoint.Z > State.GroundZ + 20.f)
 				{
 					continue; // hidden by the wall: the next one
@@ -841,17 +825,19 @@ namespace FormationFarSideSmoke
 					*Where(GroundSlot.WorldLocation)));
 				break;
 			}
-			Check(State, bGroundTried, TEXT("scene 3: some ground right behind the wall is visible from the camera (within the band)"));
-			// Back to the ghost of the far-half click, hovered: the still of the ghost on the far face with the wall faded.
-			PC->UpdateWallSideHover(&FarTop);
-			Fade->UpdateNow();
+			if (!bGroundTried)
+			{
+				// Accepted (game designer 2026-11-01, bug_05): with no fade the wall may hide all the ground right behind it - the top's far half
+				// is then the way to the far face.
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: scene 3: no ground right behind the wall is visible from this camera (the wall hides it) - the far top half is the far-side click"));
+			}
+			// The ghost of the far-half click: the still of the ghost on the far face, the wall solid.
 			RequestPhoto(State, TEXT("01_far_side_ghost.png"), false, FVector2D::ZeroVector);
 			Enter(State, EStage::FarConfirm);
 			return true;
 		}
 		case EStage::FarConfirm:
 		{
-			PC->UpdateWallSideHover(nullptr); // the ghost keeps the wall faded; the cursor looks through it
 			if (State.StageTime < 0.3f)
 			{
 				return true;
@@ -867,7 +853,6 @@ namespace FormationFarSideSmoke
 		case EStage::RouteSame:
 		case EStage::RouteOpposite:
 		{
-			PC->UpdateWallSideHover(nullptr);
 			const bool bSame = State.Stage == EStage::RouteSame;
 			TrackRoute(State, Squad, bSame ? TEXT("03_same_wall_column.png") : TEXT("04_opposite_wall_column.png"));
 			bool bOk = false;
@@ -918,27 +903,22 @@ namespace FormationFarSideSmoke
 			{
 				return true; // the camera follows the leader to the new wall
 			}
-			// The far half of the OPPOSITE wall's top, 11 m away: hovered (it fades), clicked (through it) -> the ghost on its far face.
+			// The far half of the OPPOSITE wall's top, 11 m away: clicked -> the ghost on its far face (the wall stays solid).
 			FHitResult FarTop;
 			State.ClickX = FindSplitX(World, State, State.WallC.Mid());
 			const bool bTop = CursorHit(World, PC, At(State, State.ClickX, State.WallC.Y + 10.0, WallHeightCm), FarTop) && FarTop.ImpactNormal.Z > 0.7f;
 			UPrimitiveComponent* WallPiece = FarTop.GetComponent();
-			PC->UpdateWallSideHover(&FarTop);
-			Fade->UpdateNow();
-			Check(State, bTop && Fade->IsFaded(WallPiece), FString::Printf(TEXT("scene 4: the far half of %s's top hovered (hit %s) - the wall fades"), *State.WallC.Id,
+			Check(State, bTop && IsSolid(WallPiece), FString::Printf(TEXT("scene 4: the far half of %s's top under the cursor (hit %s) - the wall stays solid"), *State.WallC.Id,
 				*Where(FarTop.ImpactPoint)));
 			Click(State, World, PC, FarTop);
 			Check(State, PC->HasCoverPreview() && PC->GetCoverPreviewSlot().WorldLocation.Y > State.WallC.NorthFace(),
 				FString::Printf(TEXT("scene 4: the ghost on %s's FAR face (%s)"), *State.WallC.Id, PC->HasCoverPreview() ? *Where(PC->GetCoverPreviewSlot().WorldLocation) : TEXT("none")));
-			PC->UpdateWallSideHover(&FarTop);
-			Fade->UpdateNow();
-			RequestPhoto(State, TEXT("02_opposite_wall_fade.png"), false, FVector2D::ZeroVector);
+			RequestPhoto(State, TEXT("02_opposite_wall_ghost.png"), false, FVector2D::ZeroVector);
 			Enter(State, EStage::OppositeConfirm);
 			return true;
 		}
 		case EStage::OppositeConfirm:
 		{
-			PC->UpdateWallSideHover(nullptr);
 			if (State.StageTime < 0.3f)
 			{
 				return true;

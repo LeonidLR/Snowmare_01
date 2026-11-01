@@ -678,8 +678,8 @@ void ACodexTacticsHUD::DrawFormationPlacement()
 	UFont* Font = GEngine->GetMediumFont();
 	const FText Line1 = FText::Format(NSLOCTEXT("CodexTacticsHUD", "PlacementBanner", "PLACEMENT - Custom {0} (time stopped)"), FText::AsNumber(View.Slot));
 	const FText Line2 = View.SelectedName.IsEmpty()
-		? NSLOCTEXT("CodexTacticsHUD", "PlacementPick", "Click an operative, then press on his spot and drag to set his look.")
-		: FText::Format(NSLOCTEXT("CodexTacticsHUD", "PlacementPlace", "{0}: press on his spot, drag for his look (a click = forward).   [Space] confirm   [Esc] / RMB cancel"),
+		? NSLOCTEXT("CodexTacticsHUD", "PlacementPick", "Click an operative (or press 1-4), then press on his spot and drag to set his look.")
+		: FText::Format(NSLOCTEXT("CodexTacticsHUD", "PlacementPlace", "{0}: press on his spot, drag for his look (a click = forward). Next: click another operative or 1-4.   [Space] / [B] confirm   [Esc] / RMB cancel"),
 			View.SelectedName);
 	// Above the action bar, centred (the status panel and the feed own the top of the screen).
 	float Y = Canvas->SizeY - 150.f;
