@@ -24,6 +24,9 @@
 //   -ExecCmds="CodexTactics.EnvironmentShots visuals climate"  -> Saved/Screenshots/Environment/climate/<map>_<SunnyDay|Overcast|Rain|Storm>_<hhmm>.png
 // for SunnyDay 12:00, Overcast 12:00, Rain 12:00, Storm 12:00, SunnyDay 07:00, Rain 23:00 (the same fixed view; names by the level's climate).
 //
+// Mode "visuals exposure <tag>" (section 19.6, the per-level exposure bias): the same fixed view for Clear 12:00, Overcast 12:00,
+// Snowfall 15:00, Clear 23:00 -> Saved/Screenshots/Environment/exposure/<tag>/<map>_<weather>_<hhmm>.png (run it once per bias value).
+//
 // Mode "snowperf" (falling snow cost): -ExecCmds="CodexTactics.EnvironmentShots snowperf [<subdir>]" -> log lines "[SnowFxPerf]" (GPU / render / game ms, draws)
 // and stills Saved/Screenshots/Environment/snowperf/<map>_<state>[_far].png for snow FX off / Snowfall / Blizzard at the default and the max zoom
 // (MovementTest: wave 2 is started first).
@@ -709,6 +712,11 @@ namespace EnvironmentShots
 			{ EWeatherState::Clear, 7.f }, { EWeatherState::Snowfall, 23.f },
 		};
 
+		/** Section 19.6: the exposure bias A/B stills (Clear / Overcast noon, Snowfall afternoon, a clear night). */
+		const FShot ExposureShots[] = {
+			{ EWeatherState::Clear, 12.f }, { EWeatherState::Overcast, 12.f }, { EWeatherState::Snowfall, 15.f }, { EWeatherState::Clear, 23.f },
+		};
+
 		enum class EStep : uint8 { Warmup, Setup, Settle, Write, DaySetup, Day, Done };
 
 		struct FVisualsRunner
@@ -721,6 +729,8 @@ namespace EnvironmentShots
 			bool bTimelapse = false;
 			/** Section 17: "visuals climate" (ClimateShots into Environment/climate). */
 			bool bClimate = false;
+			/** Section 19.6: "visuals exposure <tag>" (ExposureShots into Environment/exposure/<tag>). */
+			bool bExposure = false;
 			FString MapName;
 			FString Dir;
 			FDelegateHandle EndFrameHandle;
@@ -730,11 +740,19 @@ namespace EnvironmentShots
 
 		int32 ShotCount()
 		{
+			if (VRunner && VRunner->bExposure)
+			{
+				return static_cast<int32>(UE_ARRAY_COUNT(ExposureShots));
+			}
 			return VRunner && VRunner->bClimate ? static_cast<int32>(UE_ARRAY_COUNT(ClimateShots)) : static_cast<int32>(UE_ARRAY_COUNT(Shots));
 		}
 
 		const FShot& GetShot(int32 Index)
 		{
+			if (VRunner && VRunner->bExposure)
+			{
+				return ExposureShots[Index];
+			}
 			return VRunner && VRunner->bClimate ? ClimateShots[Index] : Shots[Index];
 		}
 
@@ -930,13 +948,18 @@ namespace EnvironmentShots
 			}
 		}
 
-		void Run(bool bTimelapse, bool bClimate)
+		void Run(bool bTimelapse, bool bClimate, const FString& ExposureTag = FString())
 		{
 			Runner = MakeShared<FRunner>();
 			VRunner = MakeShared<FVisualsRunner>();
 			VRunner->bTimelapse = bTimelapse;
 			VRunner->bClimate = bClimate;
+			VRunner->bExposure = !ExposureTag.IsEmpty();
 			VRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / (bClimate ? TEXT("climate") : TEXT("visuals")));
+			if (VRunner->bExposure)
+			{
+				VRunner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("Environment") / TEXT("exposure") / ExposureTag);
+			}
 			FPaths::CollapseRelativeDirectories(VRunner->Dir);
 			IFileManager::Get().MakeDirectory(*VRunner->Dir, true);
 			Runner->Dir = VRunner->Dir;
@@ -2386,8 +2409,10 @@ namespace EnvironmentShots
 		}
 		if (Args.Num() > 0 && Args[0].Equals(TEXT("visuals"), ESearchCase::IgnoreCase))
 		{
+			const int32 ExposureIndex = Args.IndexOfByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("exposure"), ESearchCase::IgnoreCase); });
 			Visuals::Run(Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("timelapse"), ESearchCase::IgnoreCase); }),
-				Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("climate"), ESearchCase::IgnoreCase); }));
+				Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("climate"), ESearchCase::IgnoreCase); }),
+				ExposureIndex != INDEX_NONE ? (Args.IsValidIndex(ExposureIndex + 1) ? Args[ExposureIndex + 1] : FString(TEXT("run"))) : FString());
 			return;
 		}
 		Runner = MakeShared<FRunner>();

@@ -326,6 +326,14 @@ bool FEnvTuningLevelExposureTest::RunTest(const FString&)
 	TestEqual(TEXT("level + map"), EnvironmentRules::GetLevelExposureBias(Config, Level, TEXT("L_MovementTest")), -1.f);
 	TestEqual(TEXT("level only"), EnvironmentRules::GetLevelExposureBias(Defaults, Level, TEXT("L_Other")), -0.25f);
 	TestEqual(TEXT("absent key = 0"), LevelJsonRules::ParseEnvironmentSettings(*ParseObject(TEXT("{}"))).ExposureBias, 0.f);
+	// The sum of the level key and the map override is clamped to -4..4 EV; a level JSON value out of range is clamped on parse.
+	const FEnvironmentLevelSettings Dark = LevelJsonRules::ParseEnvironmentSettings(*ParseObject(TEXT("{\"exposure_bias\": -3.5}")));
+	const FEnvironmentConfig DarkMap = EnvironmentTuning::FromJson(*ParseObject(TEXT("{\"level_overrides\": {\"L_Dark\": {\"exposure_bias\": -3}}}")));
+	TestEqual(TEXT("sum clamped to -4"), EnvironmentRules::GetLevelExposureBias(DarkMap, Dark, TEXT("L_Dark")), -4.f);
+	TestEqual(TEXT("level JSON clamped on parse"), LevelJsonRules::ParseEnvironmentSettings(*ParseObject(TEXT("{\"exposure_bias\": -9}"))).ExposureBias, -4.f);
+	// A map name is matched whole: a prefix / suffix of a listed map is another map (no bias).
+	TestEqual(TEXT("whole name only"), EnvironmentRules::GetLevelExposureBias(Config, NoLevel, TEXT("L_MovementTest2")), 0.f);
+	TestEqual(TEXT("empty name"), EnvironmentRules::GetLevelExposureBias(Config, NoLevel, FString()), 0.f);
 	return true;
 }
 
@@ -360,7 +368,9 @@ bool FEnvTuningShippedFileTest::RunTest(const FString&)
 	}
 	// Section 19.6: only L_MovementTest is darkened; the lake / factory (level JSON, no override) keep 0.
 	TestEqual(TEXT("shipped overrides: MovementTest only"), Loaded.LevelExposureBias.Num(), 1);
-	TestTrue(TEXT("shipped MovementTest is darkened"), EnvironmentRules::GetLevelExposureBias(Loaded, FEnvironmentLevelSettings(), TEXT("L_MovementTest")) < 0.f);
+	// Tuned 2026-11-01 (-0.5 EV: no clipped snow, mean luma ~139 vs 159 at 0 EV): a darkening of at most one stop.
+	const float ShippedBias = EnvironmentRules::GetLevelExposureBias(Loaded, FEnvironmentLevelSettings(), TEXT("L_MovementTest"));
+	TestTrue(TEXT("shipped MovementTest is darkened (-1..0 EV)"), ShippedBias < 0.f && ShippedBias >= -1.f);
 	TestEqual(TEXT("shipped lake unchanged"), EnvironmentRules::GetLevelExposureBias(Loaded, FEnvironmentLevelSettings(), TEXT("L_Demo01_A_FrozenLake")), 0.f);
 	TestEqual(TEXT("shipped factory unchanged"), EnvironmentRules::GetLevelExposureBias(Loaded, FEnvironmentLevelSettings(), TEXT("L_Demo01_B_FrozenFactory")), 0.f);
 	TestTrue(TEXT("file has cold_on_locked_levels"), Json->HasField(TEXT("cold_on_locked_levels")));

@@ -1415,3 +1415,27 @@ two runs.)
 - `StartFlickerSmoke` (rendered, `test_map.json`; opens the lake, the factory, L_MovementTest, L_WeatherRainTest, `Codex.Env.Lightning 1`):
   the first 180 frames from each level's first frame - largest mean-luma step <= 20 outside camera fades, no lightning frame unless a
   temperate Storm start, an arctic level has no rain FX; each arctic level forced into a Blizzard for 60 frames: no rain FX / flash.
+
+### 19.6 Per-level exposure bias (2026-11-01)
+Game designer: L_MovementTest renders too bright under the presenter; the map file is the user's baseline and is never re-saved, so the bias
+lives in data: `environment.json` `level_overrides` `{"<MapName>": {"exposure_bias": EV}}` (maps without a level JSON) and the level JSON
+`environment.exposure_bias` (both add up, clamped -4..4); `EnvironmentRules::GetLevelExposureBias` (pure) -> `AWeatherPresenterActor::LevelExposureBias`,
+added to `AutoExposureBias` in every climate. A map with neither gets 0 (unchanged).
+- Stills: `CodexTactics.EnvironmentShots visuals exposure <tag>` (fixed tactical view, Clear 12:00, Overcast 12:00, Snowfall 15:00, Clear 23:00;
+  1280x720 offscreen, -benchmark -fps=30) -> `Saved/Screenshots/Environment/exposure/<tag>/`; the bias is edited in `environment.json` between runs
+  (no rebuild). Mean luma (Rec.709, bottom 10 % label strip dropped):
+
+  | Map / bias | Clear 12 | Overcast 12 | Snowfall 15 | Clear 23 | mean |
+  |---|---|---|---|---|---|
+  | MovementTest 0 EV | 179.6 | 168.8 | 174.1 | 114.9 | 159.4 |
+  | MovementTest -0.5 EV (shipped) | 160.3 | 147.7 | 153.0 | 94.5 | 138.9 |
+  | MovementTest -0.75 EV | 150.0 | 136.8 | 141.8 | 84.9 | 128.4 |
+  | MovementTest -1.0 EV | 139.4 | 126.0 | 130.6 | 75.6 | 117.9 |
+  | Lake (before = after) | 184.2 | 168.3 | 172.6 | 111.7 | 159.2 |
+  | Factory (before = after) | 177.6 | 167.6 | 172.0 | 111.5 | 157.2 |
+
+- Finding: at 0 EV the mean equals the lake / factory, but the white snow patches clip (4.7 % of the pixels >= 235 at Clear 12:00; factory 5.6 %,
+  lake 0 %). -0.5 EV removes the clipping (0.2 %) and keeps the night readable (94); -1.0 EV starts to crush the night. The value is one number:
+  set `"L_MovementTest": {"exposure_bias": ...}` to taste. The lake and factory are bit-identical before / after (no override, level JSON key absent).
+- Tests: `CodexTactics.Environment.Tuning.LevelExposureBias` (parse, case-insensitive, whole-name match, clamps, level + map sum, round trip),
+  `ShippedFileEqualsDefaults` (only L_MovementTest listed, -1..0 EV; lake / factory 0).
