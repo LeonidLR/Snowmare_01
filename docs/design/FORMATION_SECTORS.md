@@ -432,3 +432,14 @@ Questions: `FORMATION_REDTEAM_V25.md` Q1-Q3 (cases 14_1 #3, 14_1 #6, 15_3 #3).
 - **Q3 = keep** - the 5 m hold after a U-turn round a wall's end stays (15_3 #3 stays a known entry).
 - Runtime: `Codex.Formation.ShortSideObstacles` (Q1) and `Codex.Formation.RearTurn` (Q2), both default 1 (0 = v2.5.1, A/B). The side probe's
   trace hit alone does not know the obstacle's size: the level's box walls round the leader do (`FormationTerrainRules::IsShortSideObstacleAt`).
+
+## The far side of a wall - one route round it (game designer play-test 2026-11-01; runtime only, no TS / golden change; branch formation/wall-far-side)
+
+Approved fixes d / e (the squad must not split round a wall; the far side of the same wall as a column round the near end). Runtime rules behind
+`Codex.Formation.Sectors` + `Codex.Formation.V21` + `Codex.Formation.WallRoute` (pure `Formation/FormationWallRouteRules`, tests
+`CodexTactics.Formation.WallRoute.*`): the wall order's own walk takes the bypass planner's side of a free-standing wall (the near end, or the shielded
+one with a known threat); a follower whose straight way to his wall slot is cut by a wall walks a column on the leader's path since the order (column.base_back
++ i x column.spacing back along it, clamped to its start) until his way is clear, then his slot; the places are re-dealt by travel once all are clear. Not a
+new rule of the simulator (the sim has no group cover order); if the Training Ground models the wall order later, this is its spec. Details:
+`docs/systems/squad-and-orders.md` "The far side of a wall".
+

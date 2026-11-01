@@ -35,7 +35,7 @@
     "DisarmCoverSmoke", "LowCoverMoveSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "BarricadeVaultBackSmoke", "HeatFearWallSmoke", "TurnArenaLakeSmoke", "TurnArenaYardSmoke", "RetreatFacingSmoke", "EnvironmentSmoke", "EnvironmentLakeSmoke",
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke", "FormationCustomSmoke",
-    "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke",
+    "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke", "FormationFarSideSmoke",
     "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke"
   ],
   "smokeDefaults": {
@@ -82,6 +82,7 @@
     "GateExitLakeKiaSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "bug 2026-10-23: the lake exit with the Engineer killed in action - the two living cross, the points screen, the factory (the fallen stays behind)" },
     "GateExitLakeKiaNoPointsSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 700, "_why": "bug 2026-10-23: the same with no unspent points - the factory opens at once" },
     "FrozenFactoryStartSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 300, "_why": "2026-10-22 b: campaign level 0.1 starts with a fade-in, the squad just outside the lake compound's blast door (set dressing; CLOSED and blocking since 2026-10-22 e), facing away, the door in the start camera" },
+    "FormationFarSideSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 900, "_why": "game designer play-test 2026-11-01 (bug_02 + the split, 3-5.webp): at a wall a top / face click selects nobody (only a body), the top's near / far half and the ground behind decide the wall side, the wall hiding the cursor's target fades (the cursor looks through it), the far side of the same wall and of the opposite wall as one column round ONE end, no stall" },
     "FormationBypassSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 600, "_why": "rules v2.1 bypass B (2026-10-26, docs/design/FORMATION_CONTRACT.md 10.2 / 10.5): lane G - one click behind a free-standing wall; no threat -> the shortest side, a reported / seen threat -> the shielded side when the detour <= bypass.max_detour, else the shortest; the leader's real side (checks.ts 8), the squad never splits (check 7)" },
     "FormationCustomSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 900, "_why": "custom formation (game designer 2026-11-01, FORMATION_SECTORS.md Custom formation): hold-B Custom 1 -> placement (time stops, ghosts), clicks + drags, Space confirms, the shape kept in the open, the fold in lane D and the unfold, edit / Esc, a 3-man Custom 2, the carry and save -> load keep the slots" },
     "SquadCornerPeekSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 600, "_why": "the game designer's play-test 2026-11-01 (the squad corner peek animation played twice): the squad hugs lab wall W_B_3, the hover + click on its end -> one cover entry, one peek step-out montage, no facing flip, the fire idle of the peek side; both ends" },
@@ -110,6 +111,14 @@
   },
   "nonSmokeDebugCommands": ["StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
   "rules": [
+    {
+      "name": "formation-far-side-2026-11-01",
+      "globs": ["Source/**/Tactics/WallSideRules*", "Source/**/Core/CodexTacticsPlayerControllerWallSide*", "Source/**/Core/CodexTacticsPlayerControllerSelection*",
+        "Source/**/Camera/OccluderFade*", "Source/**/Formation/FormationWallRouteRules*", "Source/**/Characters/SquadSubsystemFormationRoute*",
+        "Source/**/Debug/FormationFarSideSmoke*", "Scripts/Editor/create_occluder_fade_material.py", "Content/UI/Materials/M_OccluderFade*"],
+      "tests": ["CodexTactics.Tactics.WallSide", "CodexTactics.Formation.WallRoute", "CodexTactics.Camera.OccluderFade", "CodexTactics.Formation", "CodexTactics.Squad"],
+      "smokes": ["FormationFarSideSmoke", "FormationLabSmoke", "FormationWallGroupSmoke", "FormationSlideSmoke", "GroupCoverSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "SquadControlSmoke", "GroupSelectSmoke", "RoofCutawaySmoke", "MovementSmoke"]
+    },
     {
       "name": "formation-custom-2026-11-01",
       "globs": ["Source/**/Formation/FormationCustomRules*", "Source/**/Characters/SquadSubsystemFormationCustom*", "Source/**/Core/CodexTacticsPlayerControllerFormationCustom*",

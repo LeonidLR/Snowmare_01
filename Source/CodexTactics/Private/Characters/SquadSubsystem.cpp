@@ -649,6 +649,24 @@ bool USquadSubsystem::IsExplorationFormation() const
 	return !Flow || SquadOrderRules::IsFormationPhase(Flow->GetPhase(), CVarSquadPostCombatFormation.GetValueOnGameThread() != 0);
 }
 
+bool USquadSubsystem::IsSquadAtWall() const
+{
+	// The game designer's play-test 2026-11-01 (fix b): the wall layout / its order stands, or anyone hugs a wall (cover slot, wall pose).
+	if (Sectors.bWallOrder || (Sectors.bActiveThisFrame && Sectors.Formation == EFormationKind::Wall && Sectors.bWallLayoutValid))
+	{
+		return true;
+	}
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
+	{
+		const AOperativeCharacter* Operative = Member.Get();
+		if (Operative && (Operative->bInCover || Operative->IsInFormationWallPose()))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 bool USquadSubsystem::IsGroupCoverFormation() const
 {
 	if (IsExplorationFormation())
@@ -1190,7 +1208,9 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	// operative faces his run; they hold their looks at the approach pace (the rear cover walks backwards at the backward cap).
 	const TOptional<EFormationRole> ApproachRole = Sectors.bActiveThisFrame ? SectorRoleOf(Follower) : TOptional<EFormationRole>();
 	const TOptional<EFormationApproachDuty> ApproachDuty = ApproachRole.IsSet() ? FormationApproachDuty(ApproachRole.GetValue()) : TOptional<EFormationApproachDuty>();
-	const bool bHoldsApproachLook = ApproachDuty.IsSet() && (ApproachDuty.GetValue() == EFormationApproachDuty::Rear || ApproachDuty.GetValue() == EFormationApproachDuty::Flank);
+	// Fixes d / e (2026-11-01): a man walking the leader's route round the obstacle runs with him (no approach duty yet).
+	const bool bHoldsApproachLook = ApproachDuty.IsSet() && (ApproachDuty.GetValue() == EFormationApproachDuty::Rear || ApproachDuty.GetValue() == EFormationApproachDuty::Flank)
+		&& !(ApproachRole.IsSet() && Sectors.WallRouteRoles.Contains(ApproachRole.GetValue()));
 	Operative->SetSprinting(LeaderRef.IsSprinting() && !bHoldsApproachLook);
 
 	// Bug 2026-10-11 (solo off: prone followers slid towards the leader while still rising): a stance change in progress roots

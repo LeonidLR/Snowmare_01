@@ -375,6 +375,21 @@ public:
 	/** A group cover order in group mode runs as the formation wall layout (OrderFormationWall) and has not ended. */
 	bool HasFormationWallOrder() const { return Sectors.bWallOrder; }
 
+	/**
+	 * The game designer's play-test 2026-11-01 (fix b): the squad stands at a wall - the formation wall layout / its order stands, or a
+	 * member is in cover or in the formation wall pose. A click then picks an operative only on his body (ClickPickRules::PickRadius).
+	 */
+	bool IsSquadAtWall() const;
+
+	/**
+	 * Fixes d / e (2026-11-01; Codex.Formation.Sectors + Codex.Formation.WallRoute): Operative walks the leader's route into the wall
+	 * layout this frame - his straight way to his wall slot is cut by a wall (FormationWallRoute::NeedsRoute), so he holds his place in
+	 * the trail column along the leader's path until he is round the obstacle.
+	 */
+	bool IsFormationWallRouted(const AOperativeCharacter* Operative) const;
+	/** Wall orders since the level began in which members walked the leader's route (smokes). */
+	int32 GetFormationWallRouteCount() const { return Sectors.WallRouteCount; }
+
 	/** The outward normal's yaw of the wall layout in force (the automatic one or the order); false when none. */
 	bool GetFormationWallNormalYaw(float& OutYaw) const;
 
@@ -661,6 +676,19 @@ private:
 		float WallNormalYaw = 0.f;
 		/** The group cover order in group mode as the wall layout (OrderFormationWall). */
 		bool bWallOrder = false;
+		/**
+		 * Fixes d / e (2026-11-01, ApplyFormationWallRoute): the roles walking the leader's route into the wall layout this frame; who of
+		 * this order was routed / is released (his way to his slot clear, for good); the places re-dealt by travel once all were clear.
+		 */
+		TArray<EFormationRole> WallRouteRoles;
+		/** The leader's path since the wall order began (PushTrail) and the column order of the routed members (first = right behind him). */
+		TArray<FVector2D> WallRouteTrail;
+		TArray<TWeakObjectPtr<AOperativeCharacter>> WallRouteColumn;
+		TSet<TWeakObjectPtr<AOperativeCharacter>> WallRouteRouted;
+		TSet<TWeakObjectPtr<AOperativeCharacter>> WallRouteReleased;
+		bool bWallRouteDealt = false;
+		bool bWallRouteStarted = false;
+		int32 WallRouteCount = 0;
 		TWeakObjectPtr<AOperativeCharacter> WallOrderLeader;
 		uint32 WallOrderSerial = 0;
 		float WallOrderSeconds = 0.f;
@@ -984,6 +1012,17 @@ private:
 	 * Formation sectors part of UpdateFollower: his slot / look this frame, the facing, the speed with the slot's velocity lead.
 	 * Returns false when the old slot math should run instead (no role).
 	 */
+	/**
+	 * Fixes d / e (2026-11-01): during a wall order the followers whose straight way to their wall slot is cut by a wall walk the leader's
+	 * route - their frame slot is their place in the trail column (FormationWallRoute) - until they are round it; then the wall slots,
+	 * re-dealt by travel once everyone is clear. SquadSubsystemFormationRoute.cpp.
+	 */
+	void ApplyFormationWallRoute(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos, int32 Count);
+	/** The wall order's routing starts afresh (a new order / its end). */
+	void ResetFormationWallRoute();
+	/** Codex.Formation.WallRoute is on (fixes d / e: the column on the leader's path, his walk round the near end by the bypass rule). */
+	static bool IsFormationWallRouteEnabled();
+
 	bool UpdateSectorFollower(FFollowerState& Follower, AOperativeCharacter& Operative, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime,
 		float TimeSeconds);
 	/** His role this frame (the wall order's, else by his follower slot); unset = none. */

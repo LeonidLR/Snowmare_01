@@ -199,14 +199,16 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 
 void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 {
+	// Game designer 2026-11-01 (fix c): the cursor looks through a faded wall (the occluder fade) - the click lands behind it.
+	const FHitResult SeenHit = ThroughFadedOccluders(InHit);
 	// Rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed"): the wire is an 8 cm bar at shin height - a click on the ground
 	// next to a spotted wire (TripwireRules::ClickSnapCm) means the wire (its Disarm menu), as hovering shows (the hand cursor).
-	FHitResult Hit = InHit;
-	if (!Cast<AInteractableActor>(InHit.GetActor()) && !Cast<APawn>(InHit.GetActor()))
+	FHitResult Hit = SeenHit;
+	if (!Cast<AInteractableActor>(SeenHit.GetActor()) && !Cast<APawn>(SeenHit.GetActor()))
 	{
-		if (ATripwireActor* Wire = ATripwireActor::FindClickableWireNear(GetWorld(), InHit.ImpactPoint))
+		if (ATripwireActor* Wire = ATripwireActor::FindClickableWireNear(GetWorld(), SeenHit.ImpactPoint))
 		{
-			Hit = FHitResult(Wire, Wire->Box.Get(), InHit.ImpactPoint, InHit.ImpactNormal);
+			Hit = FHitResult(Wire, Wire->Box.Get(), SeenHit.ImpactPoint, SeenHit.ImpactNormal);
 			UE_LOG(LogCodexTactics, Display, TEXT("Click next to the spotted wire %s: taken as a click on it"), *Wire->GetName());
 		}
 	}

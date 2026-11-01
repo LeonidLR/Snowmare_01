@@ -19,6 +19,7 @@
 #include "Tactics/GroupCoverRules.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Tactics/CoverWrapRules.h"
+#include "Tactics/WallSideRules.h"
 #include "NavigationPath.h"
 #include "Characters/SquadOrderRules.h"
 #include "Interactables/InteractionSubsystem.h"
@@ -175,9 +176,20 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	{
 		return false;
 	}
+	// Game designer 2026-11-01 (fix a): the side of a high wall is decided by the cursor - its top beyond the middle / the ground right
+	// behind it = the FAR face, the top's near half = the near face (ResolveWallSideSlot). Not on the turn-based grid (its own click rules).
+	FCoverSlot SideSlot;
+	EWallClickSide WallSide = EWallClickSide::None;
+	const bool bSideSlot = !TurnBased && !bAlt && !bVehicle && ResolveWallSideSlot(Hit, SideSlot, WallSide);
+	if (bSideSlot)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] click at (%.0f, %.0f, %.0f) on %s: the %s face (slot at (%.0f, %.0f), outward yaw %.0f)"), Hit.ImpactPoint.X,
+			Hit.ImpactPoint.Y, Hit.ImpactPoint.Z, *GetNameSafe(HitActor), WallSide == EWallClickSide::Far ? TEXT("FAR") : TEXT("near"), SideSlot.WorldLocation.X,
+			SideSlot.WorldLocation.Y, SideSlot.WallNormal.Rotation().Yaw);
+	}
 	// A floor / ramp is a move target, not a wall (Alt + click probes anyway: a wall edge may have been clicked); the
 	// vehicle's roof is always its hull.
-	if (FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bAlt && !bVehicle)
+	if (!bSideSlot && FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bAlt && !bVehicle)
 	{
 		return false;
 	}
@@ -187,14 +199,16 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	{
 		const FCoverSlot& Own = Operative->GetCoverSlot();
 		const bool bOwnObject = Own.WallComponent.IsValid() ? Hit.GetComponent() == Own.WallComponent.Get() : HitActor == Own.WallActor.Get();
-		const FVector2D HitNormal = FVector2D(Hit.ImpactNormal.X, Hit.ImpactNormal.Y).GetSafeNormal();
-		if (bOwnObject && FVector2D::DotProduct(HitNormal, FVector2D(Own.WallNormal).GetSafeNormal()) < 0.9f && TryOrderCoverWrap(Operative, Hit.ImpactPoint))
+		// The wall side by the cursor (2026-11-01): its face and its slot stand for the top click (the far face = round the object in cover).
+		const FVector2D HitNormal = bSideSlot ? FVector2D(SideSlot.WallNormal).GetSafeNormal() : FVector2D(Hit.ImpactNormal.X, Hit.ImpactNormal.Y).GetSafeNormal();
+		if (bOwnObject && FVector2D::DotProduct(HitNormal, FVector2D(Own.WallNormal).GetSafeNormal()) < 0.9f
+			&& TryOrderCoverWrap(Operative, bSideSlot ? SideSlot.WorldLocation : FVector(Hit.ImpactPoint)))
 		{
 			return true;
 		}
 	}
-	FCoverSlot Slot;
-	if (!FindCoverSlotForHit(Hit, Slot))
+	FCoverSlot Slot = SideSlot;
+	if (!bSideSlot && !FindCoverSlotForHit(Hit, Slot))
 	{
 		if (bAlt)
 		{
@@ -240,7 +254,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	{
 		HideCoverPreview();
 		FCoverSlot Shimmy;
-		if (CoverTraceRules::FindShimmySlot(GetWorld(), Operative->GetCoverSlot(), Hit.ImpactPoint, Shimmy))
+		if (CoverTraceRules::FindShimmySlot(GetWorld(), Operative->GetCoverSlot(), bSideSlot ? Slot.WallPoint : FVector(Hit.ImpactPoint), Shimmy))
 		{
 			Operative->OrderShimmyTo(Shimmy);
 		}
