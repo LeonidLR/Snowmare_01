@@ -188,7 +188,7 @@ stays the fallback. Status: see section 9.
 | 2 generator core + evaluation + tests | done (`npm test`: the levelgen suite; every seed 1..8 completable with its variants) |
 | 3 department page | done (`/api/levelgen/*`, `LevelGenDepartment.tsx`) |
 | 4 Jev + Claude critic | done (real calls verified 2026-11-01; ledger) |
-| 5 UE builder + one generated map + smoke | see the CHANGELOG row of the branch's last commit |
+| 5 UE builder + one generated map + smoke | builder done (`Scripts/levelgen_build_map.ps1` = the commandlet + the navmesh bake); `/Game/Maps/Generated/L_Gen_Depot_1` built from the accepted seed 1 (555 actors, 6 climbable ladders, navmesh 453 tiles) + `Content/Data/LevelJson/L_Gen_Depot_1.json`; `LevelGenRouteSmoke` registered (`knownFail` until the stair connects) and run 2026-11-01: the squad walks the whole ground loop (legs 1-11 of 24: the west street, the compound, the T-junction, the north lane, the NE crossing, the east yard, the south street; 245 s) and is STUCK at leg 12, the external stair onto the ruin's roof - the pathfinder sends the leader up the interior stair to floor 1 under the landing instead, i.e. the ramp / landing is not connected to the roof in the baked navmesh. **Open for the follow-up:** check the ramp (a 35 deg rotated cube, 1.5 m wide) and the landing in the editor's navmesh view; candidates: the landing coplanar with the wall top, the nav agent's slope / step on the rotated cube, the landing's overlap with the roof slab. The hole drops (legs 14 / 16) are teleported by design until a drop nav link exists. |
 
 ## 10. Open questions for the game designer
 
