@@ -246,6 +246,7 @@ bool AOperativeCharacter::CanBeginWeaponShot()
 
 void AOperativeCharacter::ConsumeAmmoAfterShot()
 {
+	RoundsSpent += UsesAmmo() ? 1 : 0; // the bot report's rounds, the free ones included
 	if (!UsesAmmo() || CombatCheats::IsInfiniteAmmo(GetWorld())) // combat lab cheat (CombatCheats): the clip stays full
 	{
 		return;

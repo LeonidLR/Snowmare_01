@@ -163,6 +163,11 @@ void UPlaytestBotSubsystem::StartBot(EBotProfile InProfile, bool bQuitAtEnd, boo
 void UPlaytestBotSubsystem::SetupRun()
 {
 	bRunSetUp = true;
+	// Combat lab (Training Ground, 2026-11-01): an endless pressure level with a planned route -> the route mode (PlaytestBotRouteMode.cpp).
+	if (TrySetupRouteMode())
+	{
+		return;
+	}
 	if (FParse::Param(FCommandLine::Get(), TEXT("BotSpawnPatrols")))
 	{
 		SpawnRuntimePatrols();
@@ -312,6 +317,9 @@ void UPlaytestBotSubsystem::Tick(float DeltaTime)
 		return;
 	case EBotStage::Stealth:
 		TickStealth(DeltaTime, false);
+		return;
+	case EBotStage::Route:
+		TickRoute(DeltaTime);
 		return;
 	case EBotStage::EnterCombat:
 		// bot_driver: main._on_start_combat_pressed = "Start combat": the squad behind the gate, healed, warm, then the
@@ -1814,6 +1822,10 @@ int32 UPlaytestBotSubsystem::SpawnRuntimePatrols()
 
 void UPlaytestBotSubsystem::Finish(const TCHAR* Result, int32 ExitCode)
 {
+	if (bRouteMode && Stage != EBotStage::Done)
+	{
+		WriteCombatLabReport(Result);
+	}
 	if (bStealthLevel && StealthOutcome.IsEmpty())
 	{
 		StealthOutcome = TEXT("none");

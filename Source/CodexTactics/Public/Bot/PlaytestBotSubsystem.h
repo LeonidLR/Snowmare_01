@@ -1,7 +1,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Bot/BotRouteRules.h"
 #include "Bot/BotStealthRules.h"
+#include "Bot/CombatLabRunCollector.h"
 #include "Bot/PlaytestBotRules.h"
 #include "Bot/SpatialTelemetryRecorder.h"
 #include "Data/CombatTypes.h"
@@ -40,6 +42,12 @@ class AOperativeCharacter;
  *   map without any, see SpawnRuntimePatrols)]
  * (Scripts/bot_run.ps1 runs it fixed-step without rendering and quits at the end) or the console command
  * CodexTactics.Bot <profile> [nocollect] [seed=<n>] (no exit).
+ * ROUTE mode (Training Ground "Combat lab", game designer 2026-11-01, docs/design/COMBAT_LAB.md section 7; PlaytestBotRouteMode.cpp): on an
+ * ENDLESS level (the level JSON has an active "pressure" block and a "bot_route"; -BotRoute=1 / 0 forces it on / off) the bot leads the squad
+ * in formation along the level's planned route (clicks through the player controller: moves, a wall click = the formation wall layout, a
+ * tower climbed by the leader alone), fights what it meets with the Aggressive posture (a fight holds the route for "fight_hold_sec",
+ * crouched), and stops by TIME: -BotDuration=<game s, 600> -> RESULT COMPLETE. The run report (FCombatLabRunCollector + FBotRouteTracker,
+ * schema codex.combatlab_run/1) goes to -CombatLabReport=<file.json> (a live snapshot to <file>.live.json every 5 s).
  */
 UCLASS()
 class CODEXTACTICS_API UPlaytestBotSubsystem : public UTickableWorldSubsystem
@@ -67,7 +75,7 @@ public:
 	EBotProfile GetProfile() const { return Profile; }
 
 	/** The phase the bot is in (logs / smokes). Stealth: an ambush level after the exploration, sneaking up on a patrol. */
-	enum class EBotStage : uint8 { Explore, Stealth, EnterCombat, Fight, Done };
+	enum class EBotStage : uint8 { Explore, Stealth, EnterCombat, Fight, Route, Done };
 	EBotStage GetStage() const { return Stage; }
 	int32 GetGrenadesThrown() const { return GrenadesThrown; }
 	int32 GetDeploysOrdered() const { return DeploysOrdered; }
@@ -98,6 +106,12 @@ public:
 	const FString& GetStealthOutcome() const { return StealthOutcome; }
 	const FBotStealthConfig& GetStealthConfig() const { return StealthConfig; }
 	int32 GetSeed() const { return Seed; }
+
+	// --- Route mode (combat lab) ---
+	/** The bot walks the level's planned route (an endless pressure level). */
+	bool IsRouteMode() const { return bRouteMode; }
+	const FBotRouteTracker& GetRouteTracker() const { return RouteTracker; }
+	const FCombatLabRunCollector& GetCombatLabCollector() const { return LabCollector; }
 
 	/**
 	 * The best Sprint 12 wall-cover slot within RadiusCm of Operative with the wall between it and Threat (16 knee-high
@@ -155,6 +169,24 @@ private:
 	AOperativeCharacter* Member(int32 Index) const;
 	void HandleEnemySpawned(class AEnemyCharacter* Enemy, EEnemyArchetype Archetype);
 	void HandleEnemyDied(AActor* Victim, const FString& Source);
+
+	// Route mode (PlaytestBotRouteMode.cpp)
+	/** The level has a route and an endless pressure (or -BotRoute=1): route mode is set up. */
+	bool TrySetupRouteMode();
+	void TickRoute(float DeltaTime);
+	/** A click on the ground at the current waypoint (the player's path, ACodexTacticsPlayerController::HandleWorldHit). */
+	void IssueRouteMove(const TCHAR* Why);
+	/** Feeds a tracker command back (moves, actions, the end). */
+	void HandleRouteCommand(EBotRouteCommand Command);
+	void BeginRouteAction();
+	void TickRouteAction(float DeltaTime);
+	void EndRouteAction(bool bOk, const FString& Why);
+	/** A click (a Visibility trace) handed to the controller; false when nothing was hit or no controller. */
+	bool RouteClick(const FVector& Start, const FVector& End, const TCHAR* What);
+	FBotRouteInput RouteInput() const;
+	FCombatLabSample SampleCombatLab() const;
+	void WriteCombatLabLive() const;
+	void WriteCombatLabReport(const TCHAR* Result) const;
 
 	/** Godot spatial_telemetry_recorder: frames / events of the fight for the editor's replay player. */
 	FSpatialTelemetryRecorder Spatial;
@@ -243,4 +275,26 @@ private:
 	double TrapStateTime = 0.0;
 	FVector TrapRetreatPoint = FVector::ZeroVector;
 	int32 TrapMinesBefore = 0;
+
+	// Route mode
+	enum class ERouteActionPhase : uint8 { None, WallWait, WallHold, ClimbUp, ClimbHold, ClimbDown };
+	bool bRouteMode = false;
+	FBotRouteTracker RouteTracker;
+	FCombatLabRunCollector LabCollector;
+	float RouteDurationSeconds = 600.f;
+	double RouteStartTime = 0.0;
+	float LabSampleTimer = 0.f;
+	float LabLiveTimer = 0.f;
+	float RouteClickCooldown = 0.f;
+	bool bRouteReorder = false;
+	bool bRouteFightHold = false;
+	bool bRouteWasInFight = false;
+	double RouteFightHoldStart = 0.0;
+	ERouteActionPhase RoutePhase = ERouteActionPhase::None;
+	float RoutePhaseTime = 0.f;
+	TWeakObjectPtr<class ALadderActor> RouteLadder;
+	FString CombatLabReportFile;
+	int32 RoutePressureSeed = 0;
+	int32 RouteLoggedStucks = 0;
+	int32 RouteLoggedIndex = 0;
 };

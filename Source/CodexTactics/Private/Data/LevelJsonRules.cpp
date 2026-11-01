@@ -1,4 +1,5 @@
 #include "Data/LevelJsonRules.h"
+#include "Bot/BotRouteRules.h"
 #include "CodexTactics.h"
 #include "Environment/EnvironmentRules.h"
 #include "GameFlow/LevelEncounterRules.h"
@@ -481,6 +482,15 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		if (!ParsePressureSettings(*Pressure, Config.Pressure, &PressureError))
 		{
 			OutError = FString::Printf(TEXT("pressure: %s"), *PressureError);
+			return false;
+		}
+	}
+	if (const TSharedPtr<FJsonObject> Route = LevelJsonObject(Root, TEXT("bot_route")))
+	{
+		FString RouteError;
+		if (!BotRouteRules::Parse(*Route, Config.BotRoute, &RouteError))
+		{
+			OutError = RouteError;
 			return false;
 		}
 	}

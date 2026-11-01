@@ -805,8 +805,8 @@
     },
     {
       "name": "bot-telemetry",
-      "globs": ["Source/**/Bot/**", "Source/**/Telemetry/**"],
-      "tests": ["CodexTactics.Bot", "CodexTactics.Telemetry"],
+      "globs": ["Source/**/Bot/**", "Source/**/Telemetry/**", "Scripts/bot_run.ps1", "Content/Data/CombatLab/**", "Tools/TrainingGround/golden/combatlab_*"],
+      "tests": ["CodexTactics.Bot", "CodexTactics.Telemetry", "CodexTactics.LevelJson"],
       "smokes": ["BotMarksmanSmoke", "BotRepairSmoke", "BotStealthSmoke"]
     },
     {

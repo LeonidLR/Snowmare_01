@@ -1972,6 +1972,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat")
 	int32 ReserveAmmo = 120;
 
+	/**
+	 * Rounds fired since the level began - counted also when no round leaves the clip (the combat lab's infinite-ammo cheat, the rage's
+	 * free rounds): the bot run report's "would-be spent" ammo (docs/design/COMBAT_LAB.md section 7).
+	 */
+	int32 GetRoundsSpent() const { return RoundsSpent; }
+
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
 	bool bIsReloading = false;
 
@@ -2078,6 +2084,8 @@ private:
 
 	/** Godot _consume_ammo_after_shot: one round; reload when the clip runs dry. */
 	void ConsumeAmmoAfterShot();
+	/** GetRoundsSpent. */
+	int32 RoundsSpent = 0;
 	/** Stops, drops the sprint and turns to face Location. */
 	void StopAndFace(const FVector& Location);
 	/**

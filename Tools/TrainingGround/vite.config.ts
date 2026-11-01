@@ -5,6 +5,7 @@ import path from 'path'
 import { spawn } from 'child_process'
 import { parseJsonText, patchJsonText } from './src/utils/jsonTextPatch.ts'
 import { setupMovementApi } from './server/movementApi.ts'
+import { setupCombatLabApi } from './server/combatLabApi.ts'
 import {
   applyLevelEncounterPatch, effectiveHorde, isJsonObject, mergeAiTuningCvars, pickLevelEncounter,
   validateCVarEdits, validateHorde, validateLevelPatch, validatePerception,
@@ -35,6 +36,8 @@ const setupApiMiddlewares = (middlewares: any) => {
 
   // Training Ground departments «Перемещение» / «Левел-дизайн» (server/movementApi.ts)
   setupMovementApi((route, handler) => middlewares.use(route, handler))
+  // Training Ground department «Боевая лаборатория» (server/combatLabApi.ts)
+  setupCombatLabApi((route, handler) => middlewares.use(route, handler))
 
   // 0. Health check для индикатора подключения
   middlewares.use('/api/health', (req: any, res: any) => {

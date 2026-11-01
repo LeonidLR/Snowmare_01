@@ -26,6 +26,8 @@
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
@@ -133,6 +135,14 @@ void UCombatPressureSubsystem::ReadConfig()
 	{
 		Config.Coordinated.Share = CoordinatedShareOverride;
 	}
+#if !UE_BUILD_SHIPPING
+	// Training Ground bot batches (Scripts/bot_run.ps1 -ReportDir): every run of a batch gets its own pressure seed.
+	int32 SeedOverride = 0;
+	if (FParse::Value(FCommandLine::Get(), TEXT("PressureSeed="), SeedOverride))
+	{
+		Config.Seed = SeedOverride;
+	}
+#endif
 	Stream.Initialize(Config.Seed);
 	Clock = 0.f;
 	DueAt = Config.FirstEventSeconds;
