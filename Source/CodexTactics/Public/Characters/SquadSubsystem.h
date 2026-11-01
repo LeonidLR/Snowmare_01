@@ -374,6 +374,18 @@ public:
 
 	/** A group cover order in group mode runs as the formation wall layout (OrderFormationWall) and has not ended. */
 	bool HasFormationWallOrder() const { return Sectors.bWallOrder; }
+	/**
+	 * Rules v2.5 (the covered approach): everyone has reached his wall slot since the wall layout began (false while it runs, and when the
+	 * approach is off - Codex.Formation.Approach 0 - or there is no wall layout). Bug_04 A (2026-11-01): the carried corner peek waits for it.
+	 */
+	bool IsFormationWallApproachDone() const { return Sectors.bWallOrder && Sectors.Approach.IsSet() && Sectors.Approach->bDone; }
+	/**
+	 * Bug_04 A: every follower of the wall order stands at his wall slot - crouched in the wall pose, or still within 60 cm of it (the covered
+	 * approach counts a man as there earlier; a man still walking round the corner would cross the peeker's corner). SquadSubsystemFormationPeek.cpp.
+	 */
+	bool AreFormationWallMembersSettled() const;
+	/** Members a wall order took out of their cover / corner / prone spot (bug_04 A, 2026-11-01) since the level began - smokes. */
+	int32 GetFormationWallReleaseCount() const { return Sectors.WallReleaseCount; }
 
 	/**
 	 * The game designer's play-test 2026-11-01 (fix b): the squad stands at a wall - the formation wall layout / its order stands, or a
@@ -794,6 +806,8 @@ private:
 		};
 		FSquadPeek Peek;
 		int32 PeekCount = 0;
+		/** Members OrderFormationWall took out of their cover / corner / prone spot (bug_04 A) - smokes. */
+		int32 WallReleaseCount = 0;
 		/** Rules v2.6: rear guard turn-rounds (Q2) and side probe hits dropped on short obstacles (Q1) since the level began (smokes). */
 		int32 RearTurnCount = 0;
 		int32 ShortSideHits = 0;
@@ -1048,6 +1062,12 @@ private:
 	bool TryWarmPull(FFollowerState& Follower, AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef);
 	bool HoldsCoverOrLeavesIt(FFollowerState& Follower, AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef, bool bLeaderMoving,
 		float Distance);
+	/**
+	 * Takes a follower out of his cover (the cover exit to walk) or off his group-cover prone spot (up to the leader's stance), and up from a
+	 * squad-given crouch for a standing leader; his next repath waits for the stand-up / exit clip. Why goes to the log. The leave half of
+	 * HoldsCoverOrLeavesIt, and the wall order's own release (bug_04 A, 2026-11-01).
+	 */
+	void LeaveCoverForSquad(FFollowerState& Follower, AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef, const TCHAR* Why);
 	/**
 	 * Bug 2026-10-23: a formation slot off the navmesh (inside a wall, the generator, a fallen mate's remains crate) was unreachable
 	 * for good - while the leader stood still the follower never came back. Returns Slot when it lies on the navmesh, else the

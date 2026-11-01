@@ -124,6 +124,16 @@ public:
 	/** Smokes (no viewport headless): fixes the layout to this viewport. */
 	void SetViewportSizeForTesting(const FVector2D& ViewportSize);
 	FVector2D GetViewportSize() const { return Viewport; }
+	/** The level's area the map covers (planar, cm); false before the map's setup. The free camera pan keeps its view inside it (bug_04 B). */
+	bool GetLevelArea(FBox2D& OutArea) const
+	{
+		if (!Area.IsValid)
+		{
+			return false;
+		}
+		OutArea = FBox2D(FVector2D(Area.Min.X, Area.Min.Y), FVector2D(Area.Max.X, Area.Max.Y));
+		return true;
+	}
 	/** The panel's header strip (MAP | MESSAGES), screen pixels. */
 	FBox2D GetHeaderRect() const { return HeaderRect; }
 	/** The corner map's view (valid in map mode). */

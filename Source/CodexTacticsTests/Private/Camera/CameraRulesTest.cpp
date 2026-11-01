@@ -60,6 +60,38 @@ bool FCameraPanDirectionTest::RunTest(const FString&)
 	return true;
 }
 
+CAMERA_TEST(FCameraFreePanNoLeashTest, "Camera.FreePanNoLeash")
+bool FCameraFreePanNoLeashTest::RunTest(const FString&)
+{
+	using namespace TacticalCameraRules;
+	// Bug_04 B (game designer 2026-11-01): the free pan stopped MaxPanCombat (85 m) from the focus frozen at the selected character. The
+	// only limit now: the level's area (120 x 120 m, the formation lab's) grown by 30 m.
+	const FBox2D Lab(FVector2D(-6000.0, -6000.0), FVector2D(6000.0, 6000.0));
+	const FVector Focus(-5500.f, -4500.f, 100.f);
+	const FVector Far(10000.f, 0.f, 0.f); // 100 m along X: past the old 85 m leash, still inside the lab
+	TestEqual(TEXT("100 m along X inside the level: no leash"), ClampFreePan(Focus, Far, Lab, 3000.f), Far);
+	TestEqual(TEXT("... the same pan along Y"), ClampFreePan(Focus, FVector(0.f, 9000.f, 0.f), Lab, 3000.f), FVector(0.f, 9000.f, 0.f));
+	TestTrue(TEXT("the old radius leash would have stopped it at 85 m"), ClampPan(Far, 8500.f).X < 8501.f);
+	// Past the level: the view stops at the area's edge + the margin, by axis (the other axis keeps moving).
+	const FVector Out = ClampFreePan(Focus, FVector(20000.f, 3000.f, 0.f), Lab, 3000.f);
+	TestEqual(TEXT("past the east edge: held at 6000 + 3000"), Focus.X + Out.X, 9000.0, 0.01);
+	TestEqual(TEXT("... while Y still moves"), Focus.Y + Out.Y, -1500.0, 0.01);
+	TestEqual(TEXT("... Z kept"), Out.Z, 0.0, 0.01);
+	// Not relative to the character: the same view point is allowed whoever is followed and wherever he stands.
+	const FVector OtherFocus(4000.f, 4000.f, 0.f);
+	const FVector ViewPoint(8500.f, -8500.f, 0.f);
+	const FVector ViaA = Focus + ClampFreePan(Focus, ViewPoint - Focus, Lab, 3000.f);
+	const FVector ViaB = OtherFocus + ClampFreePan(OtherFocus, ViewPoint - OtherFocus, Lab, 3000.f);
+	TestTrue(TEXT("the limit is the level's, not the focus's (focus A)"), FVector2D(ViaA).Equals(FVector2D(8500.0, -8500.0), 0.01));
+	TestTrue(TEXT("... (focus B)"), FVector2D(ViaB).Equals(FVector2D(8500.0, -8500.0), 0.01));
+	// A character outside the area keeps his own view (the grown area holds the focus).
+	const FVector Outside(15000.f, 0.f, 0.f);
+	TestEqual(TEXT("a focus outside the level: his own view stays"), ClampFreePan(Outside, FVector::ZeroVector, Lab, 3000.f), FVector::ZeroVector);
+	// No area known yet (before the map's setup): no limit at all.
+	TestEqual(TEXT("no level area: unchanged"), ClampFreePan(Focus, FVector(50000.f, -50000.f, 0.f), FBox2D(ForceInit), 3000.f), FVector(50000.f, -50000.f, 0.f));
+	return true;
+}
+
 CAMERA_TEST(FCameraEaseAndDeadzoneTest, "Camera.PanReturnEaseAndTurnBasedDeadzone")
 bool FCameraEaseAndDeadzoneTest::RunTest(const FString&)
 {

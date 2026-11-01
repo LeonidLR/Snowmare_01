@@ -154,6 +154,12 @@ private:
 	bool IsCombatView() const;
 	/** The pan stays where the player leaves it, in the combat range: combat, or exploration with the free camera (2026-10-25). */
 	bool IsFreePanView() const;
+	/**
+	 * The pan target's limit (bug_04 B, 2026-11-01): the free pan view keeps the view's centre inside the level's area
+	 * (TacticalCameraRules::ClampFreePan; Codex.Camera.FreePanBounds 1) - no leash to the followed character; else the old radius LeashCm
+	 * round the focus.
+	 */
+	FVector LimitPan(const FVector& Pan, float LeashCm) const;
 	bool IsTurnBased() const;
 	void UpdateZoomMode();
 	void UpdatePan(float RealDelta);

@@ -215,6 +215,35 @@ corner stack at its end (x, y) is on (sliding there / held) - ...` and, when a p
 orders 1a / 1b (west, then east straight from the west stack) and 2a / 2b (the reverse); each order: one step-out montage start, by the man at
 the ORDERED end, round THAT corner. With the old rule orders 1b / 2b fail (`Saved/Logs/SquadCornerPeek_bug2_repro_old_stack_rule.log`).
 
+### The squad's corner peek moves on to the next wall (2026-11-01, branch fix/peek-next-wall-camera; the game designer's play-test, bug_04 A)
+
+Report (L_FormationLabCombat, `Saved/BugReport/2026-11-01_bug_04_peek_next_wall_camera/6-8.webp` + `PIE_designer_2026-11-01_bug04.log`): the squad
+peeking round the end of one of two parallel walls (W_D_9), the double-click on the OTHER wall's end (W_D_10, the cyan cover ghost "corner to fire
+from") - the squad only walked to that wall, the member who had peeked stayed in his corner, the other two crouched in a broken shape, no peek.
+- **Root cause 1 (the old peeker stayed):** the double-click is a group cover order = the formation wall layout (`USquadSubsystem::OrderFormationWall`;
+  log 15:03:37 `wall order: Engineer -> Z / Medic-Sapper -> P`, `squad corner peek over ... the leader's next order`). The peek's end handed its
+  peeker back to the followers-in-cover rule (`SquadOrderRules::ShouldLeaveCoverToFollow`: out only while the leader walks AND his slot is > leave
+  distance); on the wall route (`wall route: a wall between Engineer (Z) Medic-Sapper (P)`) his trail place lay beside his corner and the leader
+  then stood at his slot - Medic-Sapper never logged "stands up" / "at the wall" (15:03:37-15:03:51, only the leader's next move freed him; the
+  15:04:55 order the same for the Engineer). **Fix:** `OrderFormationWall` ends a peek in force itself and takes every member it names out of his
+  cover / peek corner / group-cover prone spot / walk to a cover slot first (`LeaveCoverForSquad`, the leave half of `HoldsCoverOrLeavesIt`; log
+  `[Formation] wall order: X leaves his peek corner for his wall slot (the squad's order)`, counter `GetFormationWallReleaseCount`).
+- **Root cause 2 (no peek):** a wall order is only the wall layout; the peek at the new wall needed a second click on its end (15:05:03 - and
+  with the leader's slot at that end, `PlanSquadPeek` gave "the leader takes the corner, the others hold": one of them in the wall END layout's
+  place round the corner, in front of the peeker). **Fix:** the corner peek is carried over (`Codex.Formation.PeekCarry`, pure
+  `FormationPeekCarry`, tests `CodexTactics.Formation.PeekCarry.*`): a group wall order given while the squad peeks, at a slot with a free corner
+  (`FCoverSlot::HasExposedEdge`), remembers that corner (`StartSquadPeekCarry`: the nearer exposed edge, an aim point 25 cm in from it); once
+  the squad stands at the new wall (the covered approach over AND every member settled at his wall slot - `AreFormationWallMembersSettled`; the
+  leader still 0.4 s; a straggler: the leader still 8 s; dropped by the leader's next order / a leader switch / the order's end / 40 s) the
+  controller orders the squad's corner peek there exactly as the player's click on that end (`TickSquadPeekCarry` -> `FindSquadCornerPeekForHit`
+  -> `OrderFormationCornerPeek`). And `FormationWallEnd::PlanSquadPeek`: the leader already within `SlideMin` of the end = the stack where he
+  stands - K the point man, the others in a line behind him along the face in the order they stood, the first 30 cm farther back (`AtEndGapCm`: the leader at his corner cover stands ~20 cm behind his stack place; at 84 cm a man walking in past him stuck on his body) (was: the others hold) - so the shape is
+  the first peek's either way: the peeker at the corner, the stack behind.
+- **Checks:** `SquadPeekNextWallSmoke` (L_FormationLab, W_D_9 / W_D_10; every click in the world tick): variant 1 the west ends (the click 80 cm
+  from the end: P peeks, K second, Z back), variant 2 the east ends (40 cm: the leader at the end peeks, Z and P behind) - the old peeker out of
+  his corner within ~0.5-0.7 s, one carried peek, the peek pose held, the others at W_D_10 behind him, nobody left at W_D_9. A/B
+  `-PreCmds "Codex.Formation.PeekCarry 0"`. Stills `Saved/Screenshots/Bug04/` (`... SquadPeekNextWallSmoke Shot`, rendered).
+
 ### Rules v2.5 in the runtime - the covered approach to the wall (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.Approach`)
 
 New user rule 2026-10-26: on the order to hug a wall (the group cover order in group mode, or the arrival layout) everyone used to drop his sector

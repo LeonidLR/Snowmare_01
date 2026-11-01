@@ -22,6 +22,9 @@ namespace SquadSubsystemPeekLocal
 	constexpr float PeekAwaitStackSeconds = 4.f;
 	/** The peeker reaches his corner within this (a long wall walked crouched included), s. */
 	constexpr float PeekReachMaxSeconds = 45.f;
+	/** AreFormationWallMembersSettled: within this of his wall slot and slower than this, cm / cm/s. */
+	constexpr float SettledCm = 60.f;
+	constexpr float SettledSpeed = 10.f;
 }
 
 bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperativeCharacter*& OutPeeker, FFormationSquadPeek& OutPlan) const
@@ -112,7 +115,8 @@ bool USquadSubsystem::OrderFormationCornerPeek(AOperativeCharacter* Peeker, cons
 		{
 			Sectors.bSlide = false;
 			Sectors.bSlideStack = false;
-			HoldCornerStack(*LeaderRef, Start, Plan.End, bCrouch);
+			// The plan's own places (StackSlots of them again is the same line): with K at the end the others line up behind him (bug_04 A).
+			HoldCornerStack(*LeaderRef, Plan.StackSlots.IsEmpty() ? Start : Plan.StackSlots, Plan.End, bCrouch);
 		}
 		Sectors.WallOrderSerial = LeaderRef->GetMoveOrderSerial();
 		Sectors.LastLeaderSerial = Sectors.WallOrderSerial;
@@ -239,6 +243,32 @@ void USquadSubsystem::UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, 
 		return;
 	}
 	++Sectors.PeekCount;
+}
+
+bool USquadSubsystem::AreFormationWallMembersSettled() const
+{
+	if (!Sectors.bWallOrder || !Sectors.bWallLayoutValid)
+	{
+		return false;
+	}
+	for (const FFollowerState& Follower : Followers)
+	{
+		const AOperativeCharacter* Operative = Follower.Operative.Get();
+		const TOptional<EFormationRole> Role = SectorRoleOf(Follower);
+		if (!Operative || !Role.IsSet())
+		{
+			continue;
+		}
+		const EFormationRole Want = Role.GetValue();
+		const FFormationSlot* Slot = Sectors.WallSlots.FindByPredicate([Want](const FFormationSlot& Each) { return Each.Role == Want; });
+		const bool bStill = Operative->GetVelocity().Size2D() < SquadSubsystemPeekLocal::SettledSpeed;
+		const bool bAtSlot = Slot && FVector2D::Distance(FVector2D(Operative->GetActorLocation()), Slot->Position) <= SquadSubsystemPeekLocal::SettledCm;
+		if (!(Operative->IsInFormationWallPose() || (bAtSlot && bStill)))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 void USquadSubsystem::EndFormationCornerPeek(const TCHAR* Why)

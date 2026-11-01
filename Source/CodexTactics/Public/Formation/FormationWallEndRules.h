@@ -53,14 +53,21 @@ struct FFormationSquadPeek
 
 namespace FormationWallEnd
 {
+	/**
+	 * K at the end (bug_04 A): the line behind him starts this much farther back than a wall spacing - the leader peeking stands at his corner
+	 * cover slot ~20 cm behind his stack place, and two bodies need 80 cm (the man walking in past him got stuck at 84), cm.
+	 */
+	inline constexpr double AtEndGapCm = 30.0;
 	/** The squad peek's stack destination lies this far out from the wall face at the hovered end (inside slide.max_off_wall), cm. */
 	inline constexpr float PeekDestinationOutCm = 60.f;
 
 	/**
 	 * The squad's corner peek round the end at EdgeOnFace (the exposed end of the squad's wall on its face line - the cover rules' peek edge):
 	 * with the corner stack there (FindStackEnd for the move PeekDestinationOutCm out from the face at that end) the peeker is the stack's
-	 * point man - the place nearest that end, so with three K is second; without a stack (a joint, K already within FormationWallRules::SlideMin
-	 * of the end, no squad wall) the member nearest EdgeOnFace peeks and the others hold. StartSlots = the layout in force (K first), Members =
+	 * point man - the place nearest that end, so with three K is second; K already within FormationWallRules::SlideMin of the end (bug_04 A,
+	 * 2026-11-01): the stack where he stands - K the point man, the others in a line behind him along the wall in the order they stood (no
+	 * slide: the leader takes the corner himself); without a stack (a joint, no squad wall) the member nearest EdgeOnFace peeks and the others
+	 * hold. StartSlots = the layout in force (K first), Members =
 	 * each member's role and where he stands (Yaw unused), NormalYaw = the layout's outward normal.
 	 */
 	CODEXTACTICS_API FFormationSquadPeek PlanSquadPeek(const TArray<FFormationWall>& Walls, const TArray<FFormationSlot>& StartSlots, float NormalYaw,

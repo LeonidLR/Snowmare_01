@@ -26,6 +26,9 @@ namespace TacticalCameraPawnLocal
 	TAutoConsoleVariable<int32> CVarFreeExploration(TEXT("Codex.Camera.FreeExploration"), 1,
 		TEXT("1: in exploration the camera pans like in combat - no drift back to the leader, the combat range (game designer 2026-10-25); "
 			"0: the old exploration leash"));
+	TAutoConsoleVariable<int32> CVarFreePanBounds(TEXT("Codex.Camera.FreePanBounds"), 1,
+		TEXT("Bug_04 B (game designer 2026-11-01): 1 = the free pan has no leash to the followed character - only the level's area (the minimap's + FreePanLevelMarginCm) "
+			"keeps the view in; 0 = the old leash (MaxPanCombat round the focus, A/B)"));
 }
 
 ATacticalCameraPawn::ATacticalCameraPawn()
@@ -326,7 +329,7 @@ void ATacticalCameraPawn::NudgePan(const FVector& WorldDelta)
 	bLookAtPoint = false;
 	bPanReturning = false;
 	DetachFromFollow();
-	TargetPanOffset = TacticalCameraRules::ClampPan(TargetPanOffset + FVector(WorldDelta.X, WorldDelta.Y, 0.f), Config.MaxPanCombat);
+	TargetPanOffset = LimitPan(TargetPanOffset + FVector(WorldDelta.X, WorldDelta.Y, 0.f), Config.MaxPanCombat);
 }
 
 void ATacticalCameraPawn::ReattachToFollowTarget()
@@ -359,6 +362,22 @@ bool ATacticalCameraPawn::IsCombatView() const
 bool ATacticalCameraPawn::IsFreePanView() const
 {
 	return IsCombatView() || (Config.bFreeExplorationPan && TacticalCameraPawnLocal::CVarFreeExploration.GetValueOnGameThread() != 0);
+}
+
+FVector ATacticalCameraPawn::LimitPan(const FVector& Pan, float LeashCm) const
+{
+	if (!IsFreePanView() || TacticalCameraPawnLocal::CVarFreePanBounds.GetValueOnGameThread() == 0)
+	{
+		return TacticalCameraRules::ClampPan(Pan, LeashCm); // the exploration leash (bFreeExplorationPan off) / the A/B
+	}
+	// Bug_04 B (game designer 2026-11-01): panned far enough the view stopped, held MaxPanCombat round the focus frozen at the selected
+	// character - only a click on him moved it on. The free pan's one limit is the level itself.
+	FBox2D Area(ForceInit);
+	if (const UMinimapSubsystem* Minimap = UMinimapSubsystem::Get(this))
+	{
+		Minimap->GetLevelArea(Area);
+	}
+	return TacticalCameraRules::ClampFreePan(Focus, Pan, Area, Config.FreePanLevelMarginCm);
 }
 
 bool ATacticalCameraPawn::IsTurnBased() const
@@ -401,7 +420,7 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 			DetachFromFollow();
 		}
 		TargetPanOffset += (-Right * Delta.X + Forward * Delta.Y) * Scale;
-		TargetPanOffset = TacticalCameraRules::ClampPan(TargetPanOffset, Config.MaxPanCombat);
+		TargetPanOffset = LimitPan(TargetPanOffset, Config.MaxPanCombat);
 		PanOffset = FMath::Lerp(PanOffset, TargetPanOffset, PanAlpha);
 		return;
 	}
@@ -491,7 +510,7 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 	if (!Input.IsNearlyZero())
 	{
 		TargetPanOffset += TacticalCameraRules::ComputePanDirection(Input, CurrentYaw) * Config.PanSpeed * RealDelta;
-		TargetPanOffset = TacticalCameraRules::ClampPan(TargetPanOffset, bCombat ? Config.MaxPanCombat : Config.MaxPanExploration);
+		TargetPanOffset = LimitPan(TargetPanOffset, bCombat ? Config.MaxPanCombat : Config.MaxPanExploration);
 	}
 	else if (!bCombat)
 	{
