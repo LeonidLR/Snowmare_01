@@ -106,6 +106,11 @@ namespace FormationWallEnd
 		return static_cast<float>(FormationMath::NormYaw(FormationMath::YawOfD(Graze - PointPos)));
 	}
 
+	bool IsSameStackEnd(const FFormationStackEnd& A, const FFormationStackEnd& B, float TolCm)
+	{
+		return FVector2D::Distance(A.End, B.End) <= TolCm && FVector2D::DotProduct(A.Along.GetSafeNormal(), B.Along.GetSafeNormal()) > 0.5;
+	}
+
 	EFormationRole PointRole(const TArray<FFormationSlot>& Slots, const FFormationStackEnd& End)
 	{
 		const FFormationSlot* Point = nullptr;

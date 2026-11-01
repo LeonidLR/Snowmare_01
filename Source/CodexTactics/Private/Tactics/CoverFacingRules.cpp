@@ -354,4 +354,29 @@ namespace CoverFacingRules
 		// Pack _L = his own right as he stands back to the wall (the pack names its sides facing the wall).
 		return Facing == ECoverFacing::Right ? 0 : 1;
 	}
+
+	float ArrivalOffFacingWallDeg(float ArrivalYawDeg, float WallNormalYawDeg)
+	{
+		// Facing into the wall = the normal's yaw + 180.
+		return FMath::Abs(FRotator::NormalizeAxis(ArrivalYawDeg - (WallNormalYawDeg + 180.f)));
+	}
+
+	ECoverEntryTurn DecideCoverEntryTurn(bool bQuiet, bool bHasEnterClip, bool bCornerPeekArrival, float ArrivalYawDeg, float WallNormalYawDeg,
+		const FCoverFacingConfig& Config)
+	{
+		if (bQuiet)
+		{
+			return ECoverEntryTurn::Quiet;
+		}
+		if (!bHasEnterClip)
+		{
+			return ECoverEntryTurn::EasedTurn;
+		}
+		// The squad corner peek (2026-11-01): walked in along the wall, the clip's wall-facing first frame would spin him twice.
+		if (bCornerPeekArrival && ArrivalOffFacingWallDeg(ArrivalYawDeg, WallNormalYawDeg) > Config.EnterClipMaxOffWallDeg)
+		{
+			return ECoverEntryTurn::EasedTurn;
+		}
+		return ECoverEntryTurn::EnterClip;
+	}
 }

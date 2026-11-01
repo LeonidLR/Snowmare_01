@@ -101,6 +101,9 @@ bool USquadSubsystem::OrderFormationCornerPeek(AOperativeCharacter* Peeker, cons
 			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] squad corner peek: %s cannot take the corner (%d)"), *Peeker->DisplayName.ToString(), static_cast<int32>(Result));
 			return false;
 		}
+		// His walk to the corner runs along the wall: its cover entry turns straight into the peek (no wall-facing enter clip - the double
+		// spin of the game designer's play-test 2026-11-01).
+		Peeker->MarkCornerPeekArrival();
 	}
 	if (bLeaderPeeks)
 	{
@@ -131,6 +134,7 @@ bool USquadSubsystem::OrderFormationCornerPeek(AOperativeCharacter* Peeker, cons
 	Peek.LeaderSerial = LeaderRef->GetMoveOrderSerial();
 	Peek.bPending = true;
 	Peek.bAwaitStack = Plan.bStack && !bLeaderPeeks;
+	Peek.StackEnd = Plan.End;
 	FString Line;
 	for (const FFormationSlot& Slot : Plan.StackSlots)
 	{
@@ -158,13 +162,21 @@ void USquadSubsystem::UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, 
 	Peek.Seconds += DeltaTime;
 	const uint32 Serial = LeaderRef.GetMoveOrderSerial();
 	// The leader's move into the stack became the squad's slide / the stack (TryStartFormationSlide gave him that move): the peek goes on with it.
-	if (Peek.bAwaitStack && (Sectors.bCornerStack || (Sectors.bSlide && Sectors.bSlideStack)))
+	// Only a stack at THIS peek's end (game designer 2026-11-01): the stack of an earlier peek at the wall's other end is still held when the
+	// new order comes - taken for this one, the slide to the new end that follows ended the peek as "the leader's next order" after 0.0 s.
+	const bool bStackHere = (Sectors.bCornerStack && FormationWallEnd::IsSameStackEnd(Sectors.CornerStackEnd, Peek.StackEnd))
+		|| (Sectors.bSlide && Sectors.bSlideStack && FormationWallEnd::IsSameStackEnd(Sectors.SlideStackEnd, Peek.StackEnd));
+	if (Peek.bAwaitStack && bStackHere)
 	{
 		Peek.bAwaitStack = false;
-		if (Serial == (Sectors.bSlide ? Sectors.SlideSerial : Sectors.WallOrderSerial))
+		const bool bAdopt = Serial == (Sectors.bSlide ? Sectors.SlideSerial : Sectors.WallOrderSerial);
+		if (bAdopt)
 		{
 			Peek.LeaderSerial = Serial;
 		}
+		const FFormationStackEnd& At = Sectors.bSlide ? Sectors.SlideStackEnd : Sectors.CornerStackEnd;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] squad corner peek: the corner stack at its end (%.0f, %.0f) is on (%s) - the peek goes on with it (the leader's move %u%s)"),
+			At.End.X, At.End.Y, Sectors.bSlide ? TEXT("sliding there") : TEXT("held"), Serial, bAdopt ? TEXT(", adopted") : TEXT(""));
 	}
 	const TCHAR* Over = nullptr;
 	if (Peek.Leader.Get() != &LeaderRef)
@@ -197,6 +209,8 @@ void USquadSubsystem::UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, 
 	}
 	if (Over)
 	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] squad corner peek: the leader's move %u (the peek's %u), the stack still awaited %d, slide %d, held stack %d"), Serial,
+			Peek.LeaderSerial, Peek.bAwaitStack ? 1 : 0, Sectors.bSlide ? 1 : 0, Sectors.bCornerStack ? 1 : 0);
 		EndFormationCornerPeek(Over);
 		return;
 	}

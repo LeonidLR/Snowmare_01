@@ -228,6 +228,35 @@ bool FFormationWallEndSquadPeekTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_WALL_END_TEST(FFormationWallEndSameStackEndTest, "SameStackEnd")
+bool FFormationWallEndSameStackEndTest::RunTest(const FString&)
+{
+	using namespace FormationWallEndTestUtil;
+	// The game designer's play-test 2026-11-01: a squad peek at the right end, then one at the LEFT end of the same wall - the right end's stack,
+	// still held, must not count as the left peek's stack.
+	const TArray<FFormationWall> Walls = { WallEndSeg(-600.0, 0.0, 600.0, 0.0) };
+	const TArray<FFormationSlot> Start = WallEndLayoutOfThree();
+	const FFormationSquadPeek Right = FormationWallEnd::PlanSquadPeek(Walls, Start, WallEndNormalYaw, FVector2D(600.0, -20.0), Start);
+	// The squad stacked at the right end (its places), then the order for the left end from there.
+	const FFormationSquadPeek Left = FormationWallEnd::PlanSquadPeek(Walls, Right.StackSlots, WallEndNormalYaw, FVector2D(-600.0, -20.0), Right.StackSlots);
+	TestTrue(TEXT("both ends stack"), Right.bStack && Left.bStack);
+	TestFalse(TEXT("the right end's stack is not the left peek's"), FormationWallEnd::IsSameStackEnd(Right.End, Left.End));
+	TestFalse(TEXT("... nor the other way round"), FormationWallEnd::IsSameStackEnd(Left.End, Right.End));
+	TestTrue(TEXT("the same end planned again: the same stack"), FormationWallEnd::IsSameStackEnd(Right.End,
+		FormationWallEnd::PlanSquadPeek(Walls, Start, WallEndNormalYaw, FVector2D(600.0, -20.0), Start).End));
+	// Tolerance: the end point re-read a few cm off is the same corner; 61 cm off or approached the other way is not.
+	FFormationStackEnd Near = Right.End;
+	Near.End += FVector2D(0.0, 30.0);
+	TestTrue(TEXT("30 cm off: the same end"), FormationWallEnd::IsSameStackEnd(Right.End, Near));
+	FFormationStackEnd Far = Right.End;
+	Far.End += FVector2D(FormationWallEnd::SameStackEndCm + 1.0, 0.0);
+	TestFalse(TEXT("61 cm off: another end"), FormationWallEnd::IsSameStackEnd(Right.End, Far));
+	FFormationStackEnd Reversed = Right.End;
+	Reversed.Along = -Reversed.Along;
+	TestFalse(TEXT("the same point approached the other way: another stack"), FormationWallEnd::IsSameStackEnd(Right.End, Reversed));
+	return true;
+}
+
 #undef FORMATION_WALL_END_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

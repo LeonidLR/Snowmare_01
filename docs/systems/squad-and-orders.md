@@ -174,6 +174,47 @@ off once his body has turned) and walks backwards again within `move.rear_turn_b
 (the rear guard set 3 m back mid-walk: he turns within 1.5 s, faces his run, walks backwards again); the old known R_B_walls pace entry passes
 (p95 103 cm, was 160-175). Tests `CodexTactics.Formation.V26.*`, `Parity.RearCatchUp`, `Parity.Classify` / `.PassageWidth` (the new scenes).
 
+### The squad corner peek played twice (2026-11-01, branch fix/squad-corner-peek-anim; the game designer's play-test video `Saved/BugReport/1.11.26_bug_01.avi`)
+
+Report: "when peeking round a corner the animation plays TWICE" - the peeker (the Medic-Sapper on L_FormationLab's W_B_2) made two blurred spins
+at the corner, then raised the rifle. **Not two peek orders:** the designer's PIE log (`Saved/Logs/PIE_designer_2026-11-01_corner_peek.log`,
+10:03:14-16) and `SquadCornerPeekSmoke` show ONE `OrderFormationCornerPeek`, ONE cover entry, ONE `OrderCornerPeek`, ONE step-out
+(`cvr_std_idle_*_to_fire`), no facing flip. **Root cause:** the peeker walks ALONG the wall to his corner and his cover entry played the pack's
+enter clip `std_idle_fwd_to_cvr_std_idle_*`, whose first frame FACES the wall (it is made for a head-on arrival): the actor snapped round to the
+wall normal, the clip blended in over 0.15 s (spin 1: the body turned ~90 deg to face the wall), then the clip turned it 180 deg back out (spin
+2), and only then (~1 s) the corner step-out - the peek. Measured on the body's shoulder line (the smoke, old entry): +310 deg one way, then
+-119 back (west end); +145 / -139 / +183 (east end).
+- **Fix:** `CoverFacingRules::DecideCoverEntryTurn` (pure, test `CodexTactics.Tactics.Cover.EntryTurnCornerPeekArrival`): a corner peek arrival
+  (`AOperativeCharacter::MarkCornerPeekArrival`, set by `OrderFormationCornerPeek` right after the peeker's `OrderTakeCover`; cleared by the next
+  cover order, consumed by `EnterCover` at that slot) more than `FCoverFacingConfig::EnterClipMaxOffWallDeg` (60, the run-in's own limit) off
+  facing the wall gets no enter clip (`IsCoverEntryEasedTurn` -> `UOperativeAnimInstance::UpdateCoverLayer` skips it as for a quiet entry): the
+  walk's yaw is held on the mesh and eased out over `CornerPeekEntryYawBlendSeconds` 0.9 s (~ the step-out clip; 0.3 s let the body swing out
+  to the wall normal and back, a 50 deg wobble) while the step-out plays at once - one turn from his walk into the peek, the rifle on the peek
+  side's fire idle. Every other cover entry keeps the enter clip (head-on peek arrivals too). `Codex.Cover.CornerPeekEntryTurn 0` = the old
+  entry (A/B). Log `[Cover] X: arrives at the corner peek's slot 90 deg off facing the wall - no wall-facing enter clip, ...`.
+- **Checks:** `SquadCornerPeekSmoke` (L_FormationLab, `-LevelJson=L_FormationLab.json`; the lab wall W_B_3, both ends; the group cover clicks, the
+  hover + click on the end through the player's path): one cover entry, one peek order / reached, no enter clip, ONE step-out montage start, no
+  exit / stance / second entry one-shot, no facing flip, the fire idle of the peek side, ONE body turn (`turns 1`). With the switch 0 the
+  enter-clip and turn checks fail (the A/B). `Shot` (rendered) = the frame strip `Saved/Screenshots/CornerPeekFix/peek_<fixed|old>_end<n>_<i>.png`.
+- **Open:** any OTHER cover entry walked in along the wall (not a peek) still plays the wall-facing enter clip (the same double turn); widening the
+  rule to every entry is one switch in `DecideCoverEntryTurn` - for the designer to decide.
+
+**The second peek at the other end never happened (same day, L_FormationLab W_A_1 by `Z_A_end`).** The squad peeked at the right end (it
+stacked there), then the player ordered the peek at the LEFT end of the same wall: the squad slid over, the end man reached the corner and stood
+there ("Hugging the wall, holding the corner!", barely leaning out) - no peek. Designer's PIE log 11:21:09 frames 665-666: `squad corner peek at
+(4480, -5401)`, the slide to it one frame later, `squad corner peek over after 0.0 s (Medic-Sapper, the peek still due): the leader's next order`
+(also 11:19:19 and 11:19:47 on the east face). **Root cause:** `UpdateFormationCornerPeek` waited for "a" corner stack (`bCornerStack` or a
+stack slide) to adopt the leader's move into it - the FIRST peek's stack at the other end was still held, so the frame after the order (the
+leader's move still waiting for his stand-up) took that old stack for the new one and stopped waiting; the slide to the new end then gave the
+leader a new move order and the peek read it as "the leader's next order". Only when the click lands inside the world tick (the player's click
+in PlayerTick: the squad updates in the same frame, before the slide is decided) - the smoke reproduces it that way (its end clicks run on
+`OnWorldPreActorTick`; from the core ticker the squad saw the slide first and the bug hid). **Fix:** the peek stores its stack end
+(`FSquadPeek::StackEnd` = the plan's) and adopts only a held / sliding stack AT that end (`FormationWallEnd::IsSameStackEnd`: within
+`SameStackEndCm` 60, approached the same way; test `CodexTactics.Formation.WallEnd.SameStackEnd`). Logs `[Formation] squad corner peek: the
+corner stack at its end (x, y) is on (sliding there / held) - ...` and, when a peek ends, the serials and stack flags. Smoke: `SquadCornerPeekSmoke`
+orders 1a / 1b (west, then east straight from the west stack) and 2a / 2b (the reverse); each order: one step-out montage start, by the man at
+the ORDERED end, round THAT corner. With the old rule orders 1b / 2b fail (`Saved/Logs/SquadCornerPeek_bug2_repro_old_stack_rule.log`).
+
 ### Rules v2.5 in the runtime - the covered approach to the wall (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.Approach`)
 
 New user rule 2026-10-26: on the order to hug a wall (the group cover order in group mode, or the arrival layout) everyone used to drop his sector

@@ -34,6 +34,9 @@ namespace
 {
 	TAutoConsoleVariable<int32> CVarDebugCornerAim(TEXT("Codex.Debug.CornerAim"), 0,
 		TEXT("1: the sustained corner aim's decision, its reason and inputs over the operatives in cover."));
+	TAutoConsoleVariable<int32> CVarCornerPeekEntryTurn(TEXT("Codex.Cover.CornerPeekEntryTurn"), 1,
+		TEXT("1 (default): the squad corner peek's arrival along the wall turns straight into the peek (no wall-facing enter clip, eased over ")
+		TEXT("CornerPeekEntryYawBlendSeconds); 0: the old entry - the enter clip spins him to the wall and back first (the 2026-11-01 bug; A/B)."));
 }
 
 EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot, bool bSprint)
@@ -45,6 +48,7 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 	bHoldGroupCoverSlot = false; // a group cover order sets it again after this call
 	bCoverSwitchPending = false; // OrderCoverSwitch sets it again after this call
 	bCoverSwitchFacingPending = false;
+	bCornerPeekArrivalPending = false; // the squad's corner peek marks it again after this call (MarkCornerPeekArrival)
 	CancelCoverWrap(TEXT("cover order"));
 	if (IsKnockedDown())
 	{
@@ -94,6 +98,7 @@ void AOperativeCharacter::SetPendingCover(const FCoverSlot& Slot)
 	bCoverSwitchPending = false; // a planned switch sets it again after this call (SetPendingCoverSwitch)
 	bCoverSwitchFacingPending = false;
 	bCoverWrapPlanned = false; // a planned wrap sets it again after this call (SetPendingCoverWrap)
+	bCornerPeekArrivalPending = false;
 	PendingCoverSlot = Slot;
 	bHasPendingCover = Slot.IsValid();
 }
@@ -119,6 +124,10 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	}
 	const bool bSwitchFacing = bCoverSwitchFacingPending;
 	bCoverSwitchFacingPending = false;
+	// The squad corner peek's walk to its corner (MarkCornerPeekArrival): this entry, at the slot it was ordered to, turns straight into the peek.
+	const bool bCornerPeekArrival = bCornerPeekArrivalPending && FVector::Dist2D(PendingCoverSlot.WorldLocation, Slot.WorldLocation) <= 5.f
+		&& CVarCornerPeekEntryTurn.GetValueOnGameThread() != 0;
+	bCornerPeekArrivalPending = false;
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
@@ -133,6 +142,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	bOpenShotReturnPending = false; // a cover entry ends any open shot
 	bCornerAimActive = false;
 	bQuietCoverEntry = bQuietCoverEntryRequest; // the return after an open shot: no Cover_Enter clip
+	bCoverEntryEasedTurn = false; // decided below for a new wall (CoverFacingRules::DecideCoverEntryTurn)
 	bCoverEntryFromRun = bCoverEntryFromRunRequest;
 	bCoverSwitchEntry = bCoverSwitchEntryRequest; // the wall-edge switch's run-in clip (TryEnterCoverSwitchFromRun)
 	bCoverLeftToMove = false;
@@ -172,9 +182,24 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		CoverEntryTurnDeg = FMath::Abs(FRotator::NormalizeAxis(OldYaw - GetActorRotation().Yaw));
 		const UOperativeAnimInstance* EntryAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 		const auto HasClip = [](const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) { return Clips.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; }); };
-		const bool bEnterClip = EntryAnim && EntryAnim->bUseNativeCoverClips && (HasClip(EntryAnim->CoverStandEnter) || HasClip(EntryAnim->CoverCrouchEnter));
+		const bool bHasEnterClip = EntryAnim && EntryAnim->bUseNativeCoverClips && (HasClip(EntryAnim->CoverStandEnter) || HasClip(EntryAnim->CoverCrouchEnter));
+		// The squad corner peek bug (game designer 2026-11-01): walked in along the wall for a corner peek, the enter clip (its first frame
+		// faces the wall) spun him to the wall and back before the peek - that entry eases the turn and goes straight into the step-out.
+		const float NormalYaw = static_cast<float>(Slot.WallNormal.Rotation().Yaw);
+		const ECoverEntryTurn EntryTurn = CoverFacingRules::DecideCoverEntryTurn(bQuietCoverEntry, bHasEnterClip, bCornerPeekArrival, OldYaw, NormalYaw,
+			GetCoverFacingConfig());
+		const bool bEnterClip = EntryTurn == ECoverEntryTurn::EnterClip;
+		bCoverEntryEasedTurn = bHasEnterClip && EntryTurn == ECoverEntryTurn::EasedTurn;
+		if (bCornerPeekArrival)
+		{
+			CornerPeekArrivalEntryCount += bCoverEntryEasedTurn ? 1 : 0;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: arrives at the corner peek's slot %.0f deg off facing the wall - %s"), *DisplayName.ToString(),
+				CoverFacingRules::ArrivalOffFacingWallDeg(OldYaw, NormalYaw),
+				bCoverEntryEasedTurn ? TEXT("no wall-facing enter clip, the body turns straight into the peek") : TEXT("the enter clip fits (head-on)"));
+		}
 		CoverEntryYawOffset = FRotator::NormalizeAxis(OldYaw - GetActorRotation().Yaw);
 		CoverEntryYawTime = bQuietCoverEntry || bEnterClip ? -1.f : 0.f;
+		CoverEntryYawBlendActive = bCoverEntryEasedTurn ? CornerPeekEntryYawBlendSeconds : CoverEntryYawBlendSeconds;
 		bBodyYawFree = false;
 		// With an enter clip and a big turn the clip comes in at once (CoverEnterTurnedBlendSeconds), one anim update later:
 		// until it plays, the old pose keeps its old yaw on the mesh (no frame of the run pose turned round).
@@ -182,6 +207,12 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		bCoverEntryAwaitClip = bEnterClip && !bQuietCoverEntry && (CoverEntryTurnDeg > 90.f || bCoverSwitchEntry);
 		bCoverEntryClipSeen = false;
 		CoverEntryAwaitSeconds = 0.f;
+		if (bCoverEntryEasedTurn)
+		{
+			// The old yaw on the mesh in this very frame (an arrival entered from the move's end runs after this tick's blend): no frame of
+			// the walk pose snapped round to the wall normal.
+			UpdateCoverEntryBlend(0.f);
+		}
 	}
 	ClearIdleFacing();
 	if (!bSameWall)
