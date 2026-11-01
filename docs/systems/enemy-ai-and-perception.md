@@ -101,6 +101,13 @@ idempotent, never overwrites a saved asset; `CODEX_MZ_REAPPLY=1` re-applies the 
   `CodexTactics.Characters.EnemyAnim.*`); asset test `CodexTactics.Characters.EnemyAssets.MilitaryZombie`; smoke `MilitaryZombieSmoke`
   (`Saved/Screenshots/military_zombie_*.png`). Animation route and clip roles: [animation-setup](animation-setup.md) "Military Zombie".
 
+## Blows and pounces never pass a wall (game designer bug 06, 2026-11-01, branch fix/cutter-walls-ladder)
+
+UE-only rule (Godot `can_melee_attack` / `start_jump_attack` check the distance only). `MeleeLineRules` (Characters/MeleeLineRules.h):
+- **Blow** (`AEnemyCharacter::TickBehavior` -> `AttackTarget`, every melee enemy: Hound, Frostbitten, Brute, Cutter, zombies, PMC fighter): in reach (`CanMelee`) AND a clear line (`HasClearMeleeLine`: a Pawn-channel line between the points 150 cm over both feet - over low cover <= 130 cm and barricades, under walls >= 180 cm; characters and non-solid components passed, the target ends it clear). In reach behind a wall it holds the blow (`[Melee] X: Y within reach but <wall> is between - no blow, it goes round`, once per target) and paths to his feet (MoveToActor's reach test would count it as there).
+- **Cutter pounce**: `CheckLeap` = `EvaluateLeap` (3.5-9 m, <= 2.5 m height, then the line, then the flight arc `LeapArc` swept with its capsule on the Pawn channel, characters passed); refused -> looked at again in 0.5 s; re-checked at the end of the windup (aborted: `[Leap] ... aborts`). The landing hurts only members within 2.2 m it has a clear line to (`PounceReaches`).
+- The Spitter / Marksman / Cryo Drone already trace their own line of fire. Read-outs: `GetMeleeWallHolds`, `GetLeapWallRefusals`, `GetLeapsLaunched`. Tests `CodexTactics.Characters.EnemyAI.MeleeLine.*`, smoke `CutterWallSmoke`.
+
 ## Operatives first (game designer 2026-10-25, branch agents/enemy-priority)
 
 **Report** (packaged build, Demo 01 tutorial, the A4 lake zombie): "when it switched to combat it once attacked the barricade instead of me.

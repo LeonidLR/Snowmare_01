@@ -458,8 +458,8 @@ namespace HordeIntroSmoke
 				{
 					Banners->Refresh();
 					const FString Combat = Banners->GetCombatText().ToString();
-					Check(State, Banners->GetPauseText().IsEmpty() && Combat.Contains(TEXT("[SPACE] tactical pause 3/3")) && !Combat.Contains(TEXT("free")),
-						FString::Printf(TEXT("banners: no pause banner, the combat banner shows the ordinary pause's charges, no free pause (\"%s\")"), *Combat));
+					Check(State, Banners->GetPauseText().IsEmpty() && Combat.IsEmpty(),
+						FString::Printf(TEXT("banners: no pause banner, no combat banner in the fight (bug 08, 2026-11-01) (\"%s\")"), *Combat));
 				}
 				for (const EEnemyArchetype Type : LiveTypes(World))
 				{

@@ -303,7 +303,7 @@ void URecruitSubsystem::RecruitIntoSquad(bool bSilent)
 	UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
 	if (Mission && Waves && Waves->IsWaveActive())
 	{
-		Mission->SetObjective(MissionRules::GetWaveObjective(Waves->GetCurrentWaveIndex(), Waves->GetTotalWaveEnemies()));
+		Mission->SetObjective(MissionRules::GetWaveObjective(Waves->GetCurrentWaveIndex()));
 	}
 }
 

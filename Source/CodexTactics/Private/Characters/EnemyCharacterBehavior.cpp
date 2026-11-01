@@ -250,15 +250,21 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 
 	// Godot enemy_cutter.gd _process_enemy_behavior: a pounce at 3.5-9 m (at most 2.5 m of height difference).
 	AVehiclePawn* TargetVehicle = Cast<AVehiclePawn>(Target);
+	// Bug 06 (2026-11-01): never through a wall - a clear line to the target and a free flight arc (MeleeLineRules::EvaluateLeap).
 	if (Archetype == EEnemyArchetype::Cutter && bJumpAttackEnabled && JumpCooldownTimer <= 0.f && !TargetVehicle)
 	{
-		const FVector JumpFeet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
-		const FVector JumpTargetPosition = GodotPosition(Target);
-		const float JumpDistance = FVector::Dist(JumpFeet, JumpTargetPosition);
-		if (JumpDistance >= JumpMinDistance && JumpDistance <= JumpMaxDistance && FMath::Abs(JumpTargetPosition.Z - JumpFeet.Z) <= 250.f
-			&& StartJumpAttack(Target))
+		FString Blocker;
+		const ECutterLeapCheck Leap = CheckLeap(Target, &Blocker);
+		if (Leap == ECutterLeapCheck::Leap && StartJumpAttack(Target))
 		{
 			return;
+		}
+		if (Leap == ECutterLeapCheck::WallInLine || Leap == ECutterLeapCheck::PathBlocked)
+		{
+			++LeapWallRefusals;
+			JumpCooldownTimer = 0.5f; // looked again in half a second, not every frame
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[Leap] %s holds its pounce at %s: %s (%s)"), *GetName(), *Target->GetName(), MeleeLineRules::LeapCheckName(Leap),
+				*Blocker);
 		}
 	}
 
@@ -296,7 +302,25 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	// APC P4: a vehicle is reached at its nearest hull side (a 7.8 m hull: its pivot is metres away), at the feet's height.
 	const FVector TargetPosition = TargetVehicle ? FVector(FVector2D(TargetVehicle->GetClosestHullPoint(Feet)), Feet.Z) : GodotPosition(Target);
-	if (EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange))
+	// Bug 06 (2026-11-01): a blow needs a clear line too - within reach behind a wall it walks round (the close-in below), every melee enemy.
+	const bool bInReach = EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange);
+	FString MeleeBlocker;
+	const bool bMeleeLine = !bInReach || TargetVehicle || HasClearMeleeLine(Target, Feet, &MeleeBlocker);
+	if (bInReach && !bMeleeLine)
+	{
+		++MeleeWallHolds;
+		if (LoggedMeleeWallTarget.Get() != Target)
+		{
+			LoggedMeleeWallTarget = Target;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Melee] %s: %s within reach but %s is between - no blow, it goes round"), *GetName(), *Target->GetName(),
+				*MeleeBlocker);
+		}
+	}
+	else if (bInReach)
+	{
+		LoggedMeleeWallTarget = nullptr;
+	}
+	if (MeleeLineRules::MayStrike(bInReach, bMeleeLine))
 	{
 		if (AIC)
 		{
@@ -338,6 +362,12 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		{
 			// APC P4: up to the hull side nearest it (the parked hull is carved out of the navmesh).
 			RequestAIMoveToLocation(AIC, TargetVehicle->GetHullAttackPoint(Feet, GetSimpleCollisionRadius() + 30.f), 40.f);
+		}
+		else if (bInReach && !bMeleeLine)
+		{
+			// Bug 06: within reach through a wall - MoveToActor would count it as there (its reach test adds both radii): a path to his
+			// feet instead, round the wall's end.
+			RequestAIMoveToLocation(AIC, Target->IsA<ACharacter>() ? TargetPosition - FVector(0.f, 0.f, 100.f) : TargetPosition, 30.f);
 		}
 		else if (bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && FindNearestFireZone(800.f, Zone, ZoneRadius)
 			&& EnemyAIRules::FireDetourWaypoint(Feet, Zone, ZoneRadius + 50.f, TargetPosition, Waypoint))

@@ -60,6 +60,8 @@ TutorialSmoke stages 152-153 (the camera turned away: one arrow along the target
 
 ## Phase banners and action bar (old §5)
 
+2026-11-01 (bug 08): no combat banner during a fight and no enemy count anywhere on screen - see waves-horde-encounters.md "No enemy count on screen".
+
 **Phase banners** — `UI/PhaseBannersWidget`: pause banner «РЕЖИМ ПРИКАЗОВ | Зарядов… | Время планирования…» (the free
 pause of a sudden wave: «CONTACT - free pause, charges N/M kept» + the flyover caption «HOSTILE: <type> | [Esc / click] skip»),
 combat banner «ПОДГОТОВКА К БОЮ: NN сек» + «Начать бой» (`FinishPreparation`) / «ВОЛНА N | ВРАГОВ ОСТАЛОСЬ: M»,

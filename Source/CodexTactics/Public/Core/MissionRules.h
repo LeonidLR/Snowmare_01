@@ -64,8 +64,8 @@ namespace MissionRules
 	/** Objective after the victory dialogue. */
 	CODEXTACTICS_API FText GetAfterVictoryObjective();
 
-	/** "DEFENSE: Repel wave N! Enemies: M". */
-	CODEXTACTICS_API FText GetWaveObjective(int32 WaveIndex, int32 EnemyCount);
+	/** "DEFENSE: Repel wave N!" - never the enemy count (game designer bug 08, 2026-11-01: the player never sees how many are left). */
+	CODEXTACTICS_API FText GetWaveObjective(int32 WaveIndex);
 
 	/** Mission failed reason for the fallen operative (hypothermia or wounds). */
 	CODEXTACTICS_API FText GetFailureReason(const FText& OperativeName, float ColdLevel);

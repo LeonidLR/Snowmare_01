@@ -113,6 +113,10 @@ validation flags it with a warning (amber editor text "Decoration: < 7 rungs, no
 `ErrorGlow` (1 = red emissive) on the rung material instance; the map check also lists them. Nothing of this runs in a
 packaged game.
 
+### 3.4 Derived state survives the PIE copy (bug 07, 2026-11-01)
+
+The rung count is `GetRungCount() = RungCountForHeight(Height, Pitch)` - never a value cached by `OnConstruction`. A PIE world is a property copy of the editor world: the old non-UPROPERTY `RungCount` came over as 0, the copied rung instances kept BeginPlay's `== 0` rebuild from running, and every ladder was a decoration in PIE (the -game smokes load from disk and passed). BeginPlay rebuilds when the drawn rungs differ from the count, else re-detects the wall and the link state, and logs `[Ladder] <name> ready in <world>: N rungs (M drawn at BeginPlay: kept / rebuilt) ...`. Test `CodexTactics.Ladder.Actor.DerivedState`; PIE check `CodexTactics.CombatLabTowerSmokePIE`.
+
 ## 4. Clip contract (measured 2026-10-22)
 
 Source: the course's `CorrectAnimations/*Fixed.FBX` (the `NotFixed` set is not used: 25 fps, other lengths). Skeleton: **UE5

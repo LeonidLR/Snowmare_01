@@ -1,7 +1,7 @@
 // Dev-only console command for a headless phase-banner check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.BannersSmoke
 // 1. the gate opens -> cutscene card with a countdown; Space skips it; 2. the squad starts the preparation warm and
-// healed; 3. preparation banner "BATTLE PREPARATION"; "Start Battle" -> wave banner "WAVE 1 | ENEMIES LEFT";
+// healed; 3. preparation banner "BATTLE PREPARATION"; "Start Battle" -> no combat banner in the wave (bug 08, 2026-11-01);
 // 4. tactical pause -> "ORDER MODE" banner.
 
 #include "CoreMinimal.h"
@@ -113,7 +113,8 @@ namespace BannersSmoke
 			{
 				return true;
 			}
-			Check(State, Banners->GetCombatText().ToString().StartsWith(TEXT("⚔️ WAVE 1 | ENEMIES LEFT: ")), Banners->GetCombatText().ToString());
+			Check(State, Banners->GetCombatText().IsEmpty(), FString::Printf(TEXT("no combat banner in the wave (bug 08: no wave number, no enemy count) \"%s\""),
+				*Banners->GetCombatText().ToString()));
 			PC->SpacePressed();
 			PC->SpaceReleased();
 			Check(State, Banners->GetPauseText().ToString().StartsWith(TEXT("⏱️ ORDER MODE | Charges per wave: 2/3")), Banners->GetPauseText().ToString());

@@ -194,21 +194,8 @@ FText UPhaseBannersWidget::GetCombatText() const
 		return FText::FromString(FString::Printf(TEXT("⏱ BATTLE PREPARATION: %02d sec | [SPACE] for the bottom menu"),
 			FMath::CeilToInt(Flow->GetPreparationTimeRemaining())));
 	}
-	if (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
-	{
-		const UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>();
-		if (Flow->IsSkirmish())
-		{
-			return FText::FromString(FString::Printf(TEXT("⚔️ CONTACT | HOSTILES: %d"), Waves ? Waves->GetAliveEnemyCount() : 0)); // 2026-10-21: no waves
-		}
-		// User decision 2026-10-26 ("the first pause of a wave being free: NO"): Space opens an ordinary pause - in real time the banner
-		// shows the charges (it said "[SPACE] free tactical pause" before the wave's first pause).
-		const FString Hint = Flow->GetCombatMode() == ECodexCombatMode::RealTime
-			? TEXT(" | ") + GetPauseHint(Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges, Flow->GetPauseCooldownRemaining())
-			: FString();
-		return FText::FromString(FString::Printf(TEXT("⚔️ WAVE %d | ENEMIES LEFT: %d%s"), Flow->GetWaveIndex(),
-			Waves ? Waves->GetAliveEnemyCount() : 0, *Hint));
-	}
+	// Game designer bug 08 (2026-11-01): NO banner during a fight - neither "CONTACT | HOSTILES: N" (skirmish) nor "WAVE N | ENEMIES LEFT: M"
+	// (waves), on every map: the player learns he is attacked from the game itself and never sees how many enemies are left.
 	return FText::GetEmpty();
 }
 
