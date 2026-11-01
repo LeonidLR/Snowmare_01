@@ -2,8 +2,9 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.GroupSelectSmoke
 // Godot main.gd _perform_box_selection / _set_selected_squad / _get_group_target_positions, player.gd set_group_selected:
 // rings under the selected and always under the leader (Sprint 06-A), the group walks to its formation around the click,
-// picking a leader by number drops the group. In the fight's tactical pause a screen box selects all three and a ground
-// click plans a move for each; all of them walk once the pause ends.
+// then (user decision 2026-10-26, the squad keeps its formation in the preparation / the fight) the followers rejoin the
+// leader's formation; picking a leader by number drops the group. In the fight's tactical pause a screen box selects all three
+// and a ground click plans a move for each; all of them walk once the pause ends.
 
 #include "CoreMinimal.h"
 
@@ -129,8 +130,9 @@ namespace GroupSelectSmoke
 		}
 		case 12:
 		{
-			// Preparation: operatives act on their own (no formation following).
-			// Preparation-phase behaviour: the old prepared start (a "sudden_start": false wave; default since 2026-10-11 is the sudden horde).
+			// Preparation: the old prepared start (a "sudden_start": false wave; default since 2026-10-11 is the sudden horde). Since the user
+			// decision 2026-10-26 (docs/systems/squad-and-orders.md "The squad stays in formation in the fight") the formation follows here too
+			// (SquadOrderRules::IsFollowPhase; it used to be the Godot-era "operatives act on their own" until the fight's end).
 			SmokeUtils::UsePreparedWaveStart();
 			Flow->TriggerCombatZone();
 			Flow->FinishCutscene();
@@ -161,19 +163,23 @@ namespace GroupSelectSmoke
 				Average += Members[Index]->GetActorLocation() / 3.f;
 			}
 			State.Targets = SquadFormation::ComputeGroupTargets(Destination, Average, FVector::ForwardVector, 3);
+			State.MinDistances = { 1.0e9f, 1.0e9f, 1.0e9f };
 			State.Stage = 1;
 			State.StageTime = 0.f;
 			return true;
 		}
 		case 1:
 		{
-			// Leader (Members[1]) first, then Members[0], Members[2] in selection order. Waits until all three stand in their
-			// slots (cap 15 s) instead of a fixed 7 s: under load the walk (and its path requests) can take longer.
+			// Leader (Members[1]) first, then Members[0], Members[2] in selection order. Each must REACH his group slot (the closest he
+			// came until his walk ended, cap 15 s): a follower's group move is his own order, and once it ends the formation takes him back (rev 5g; in the
+			// preparation since 2026-10-26), so his final spot is the formation's, not the group slot (stage 13 checks that rejoin).
 			const AOperativeCharacter* Order[] = { Members[1], Members[0], Members[2] };
 			bool bAllThere = true;
 			for (int32 Index = 0; Index < 3; ++Index)
 			{
-				bAllThere &= FVector::Dist2D(Order[Index]->GetActorLocation(), State.Targets[Index]) < 150.f && Order[Index]->GetVelocity().Size2D() < 10.f;
+				State.MinDistances[Index] = FMath::Min(State.MinDistances[Index],
+					static_cast<float>(FVector::Dist2D(Order[Index]->GetActorLocation(), State.Targets[Index])));
+				bAllThere &= State.MinDistances[Index] < 150.f && !Order[Index]->HasOwnMoveOrder(); // his walk ended (arrival)
 			}
 			if (State.StageTime < 2.f || (!bAllThere && State.StageTime < 15.f))
 			{
@@ -181,10 +187,43 @@ namespace GroupSelectSmoke
 			}
 			for (int32 Index = 0; Index < 3; ++Index)
 			{
-				const float Distance = FVector::Dist2D(Order[Index]->GetActorLocation(), State.Targets[Index]);
-				Check(State, Distance < 150.f, FString::Printf(TEXT("%s reached its group slot (%.0f cm off)"),
-					*Order[Index]->DisplayName.ToString(), Distance));
+				Check(State, State.MinDistances[Index] < 150.f, FString::Printf(TEXT("%s reached its group slot (%.0f cm off)"),
+					*Order[Index]->DisplayName.ToString(), State.MinDistances[Index]));
 			}
+			State.Stage = 13;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 13:
+		{
+			// User decision 2026-10-26 ("until I give the order to switch to solo mode, they must stay in formation"): with Solo off the two
+			// followers, their group move done, rejoin the leader's formation and stand there; the leader (no formation to rejoin) stays on
+			// his group slot. The box selection itself is kept until the next pick.
+			const AOperativeCharacter* GroupLeader = Members[1];
+			bool bRejoined = true;
+			float Farthest = 0.f;
+			float LeastLeft = 1.0e9f;
+			// Targets[1] / [2] = Members[0] / Members[2]'s group slots. The wedge places lie behind the leader, the group slots beside him
+			// (80 cm back): leaving the group slot by > 1.5 m tells "the formation took him" from "he stayed where the group move ended".
+			for (int32 Index : { 1, 2 })
+			{
+				const AOperativeCharacter* Follower = Index == 1 ? Members[0] : Members[2];
+				const float Distance = FVector::Dist2D(Follower->GetActorLocation(), GroupLeader->GetActorLocation());
+				const float LeftSlot = FVector::Dist2D(Follower->GetActorLocation(), State.Targets[Index]);
+				Farthest = FMath::Max(Farthest, Distance);
+				LeastLeft = FMath::Min(LeastLeft, LeftSlot);
+				bRejoined &= !Follower->HasOwnMoveOrder() && Distance <= 500.f && LeftSlot > 150.f && Follower->GetVelocity().Size2D() < 10.f;
+			}
+			if (!bRejoined && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			Check(State, Squad->GetLeader() == GroupLeader && !Squad->IsSoloMode() && Squad->HasMultiSelection(),
+				TEXT("preparation: the group order kept the leader, Solo off and the box selection"));
+			Check(State, bRejoined, FString::Printf(TEXT("preparation: after the group move both followers rejoined the leader's formation and stand (farthest %.0f cm from him, each >= %.0f cm off his group slot)"),
+				Farthest, LeastLeft));
+			const float LeaderOff = FVector::Dist2D(GroupLeader->GetActorLocation(), State.Targets[0]);
+			Check(State, LeaderOff < 150.f, FString::Printf(TEXT("preparation: the leader stays on his group slot (%.0f cm off)"), LeaderOff));
 			// Choosing a leader by number drops the group.
 			Squad->SetLeader(Members[2]);
 			// Sprint 06-A: the active leader always keeps his gold ring.
