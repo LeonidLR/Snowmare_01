@@ -121,6 +121,27 @@ namespace FormationSectorRules
 	CODEXTACTICS_API bool Decided(EFormationRole Role, EFormationKind Formation, int32 MemberCount, const TOptional<float>& PassageWidth,
 		const FFormationConfig& Config = FFormationConfig());
 
+	/**
+	 * v2.6 (game designer 2026-11-01, Q2 = b; contract 18.2; rules.ts RearCatchUp): the rear guard who lags behind turns round and catches up
+	 * FACING FORWARDS (his run) at the normal catch-up speed instead of walking backwards at MoveBackwardMult; back within his slot band he
+	 * turns round again. LagCm = how far his slot lies AHEAD of him along the squad's heading (dot(Slot - Pos, heading); a sideways shift is
+	 * no lag). Hysteresis: forward when LagCm > MoveRearTurnLag, back only when LagCm <= MoveRearTurnBack. bTurned = the last tick's answer
+	 * (false at the start / for anyone not the walking rear guard). bWayBlocked (RearWayBlocked) only delays the turn: he does not START it
+	 * while a team-mate stands on his straight way to his slot (no head-on overtaking at the catch-up speed - red team 4_3 / 8_2); once
+	 * turned he keeps facing forwards until he is back. Returns: faces forward.
+	 */
+	CODEXTACTICS_API bool RearCatchUp(float LagCm, bool bTurned, bool bWayBlocked, const FFormationConfig& Config = FFormationConfig());
+
+	/** v2.6 (rules.ts REAR_WAY_MARGIN): RearWayBlocked's margin beyond SlotMinSpacing, cm. */
+	inline constexpr float RearWayMarginCm = 20.f;
+
+	/**
+	 * v2.6 (contract 18.2; rules.ts RearWayBlocked): a team-mate (Others, positions) stands on the rear guard's straight way to his slot - within
+	 * SlotMinSpacing + RearWayMarginCm of the segment Pos -> Slot and ahead of him (dot(Other - Pos, Slot - Pos) > 0).
+	 */
+	CODEXTACTICS_API bool RearWayBlocked(const FVector2D& Pos, const FVector2D& Slot, const TArray<FVector2D>& Others,
+		const FFormationConfig& Config = FFormationConfig());
+
 	/** The squad's pace for a mode, cm/s: walk = PaceWalkSpeed * PacePatrol, run = PaceRunSpeed, halt / wall = 0. */
 	CODEXTACTICS_API float SquadPace(EFormationMode Mode, const FFormationConfig& Config = FFormationConfig());
 

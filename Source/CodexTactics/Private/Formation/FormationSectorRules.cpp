@@ -346,6 +346,24 @@ namespace FormationSectorRules
 			&& PassageWidth.GetValue() < Config.ColumnNarrowWidth;
 	}
 
+	bool RearCatchUp(float LagCm, bool bTurned, bool bWayBlocked, const FFormationConfig& Config)
+	{
+		return bTurned ? LagCm > Config.MoveRearTurnBack : !bWayBlocked && LagCm > Config.MoveRearTurnLag;
+	}
+
+	bool RearWayBlocked(const FVector2D& Pos, const FVector2D& Slot, const TArray<FVector2D>& Others, const FFormationConfig& Config)
+	{
+		const double Reach = static_cast<double>(Config.SlotMinSpacing) + RearWayMarginCm;
+		for (const FVector2D& Other : Others)
+		{
+			if (FVector2D::Distance(FormationMath::ClosestOnSegment(Other, Pos, Slot), Other) < Reach && FVector2D::DotProduct(Other - Pos, Slot - Pos) > 0.0)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	float SquadPace(EFormationMode Mode, const FFormationConfig& Config)
 	{
 		switch (Mode)

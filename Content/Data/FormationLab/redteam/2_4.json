@@ -137,18 +137,7 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
-    {
-      "check": 6,
-      "choice": "auto",
-      "members": 4,
-      "route": "R1",
-      "seed": 1,
-      "t": 11.4,
-      "what": "p95 228 cm; Z 253 cm behind",
-      "reason": "still failing under v2.5.1 (rule bug?): open until the rules are fixed or the layout is judged wrong"
-    }
-  ],
+  "expected_fail": [],
   "fixed_entries": [
     {
       "check": 1,
@@ -253,6 +242,15 @@
       "route": "R1",
       "seed": 1,
       "fixed_in": "v2.3"
+    },
+    {
+      "check": 6,
+      "choice": "auto",
+      "members": 4,
+      "route": "R1",
+      "seed": 1,
+      "fixed_in": "v2.6"
     }
-  ]
+  ],
+  "fixed_in": "v2.6"
 }

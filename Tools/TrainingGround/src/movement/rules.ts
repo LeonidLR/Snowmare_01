@@ -6,7 +6,7 @@
 import type { FormationConfig } from './config.ts';
 import { cfg } from './config.ts';
 import type { Segment, Vec2 } from './geometry.ts';
-import { add, closestOnSegment, dirOf, dist, distToWall, dot, localToWorld, normYaw, raycastWalls, scale, segmentBlocked, sub, yawOf } from './geometry.ts';
+import { add, closestOnSegment, dirOf, dist, distToWall, dot, localToWorld, normYaw, raycastWalls, scale, segSegDist, segmentBlocked, sub, yawOf } from './geometry.ts';
 import type { Formation } from './layout.ts';
 
 /**
@@ -373,7 +373,33 @@ function Decided(role: Role, formation: Formation, memberCount: number, passageW
   return formation === 'column' && memberCount >= 3 && role !== 'Z' && passageWidth !== null && passageWidth < cfg(config, 'column.narrow_width');
 }
 
-export const FormationSectorRules = { LookYaw, ClearLook, Decided };
+/**
+ * v2.6 (game designer 2026-11-01, Q2 = b; FORMATION_CONTRACT.md 18.2): the rear guard who lags behind turns round and catches up FACING
+ * FORWARDS (his run) at the normal catch-up speed instead of walking backwards at move.backward_mult; back within his slot band he turns
+ * round again and resumes the backward walk. `lag` = how far his slot lies AHEAD of him along the squad's heading, cm (check 6's
+ * measure: dot(slot - pos, heading); a sideways shift is no lag). Hysteresis: he turns forward when it is more than move.rear_turn_lag,
+ * and back only when it is at most move.rear_turn_back (no flicker between the two). `turned` = the answer of the last tick (false at
+ * the start / when he is no walking rear guard). `wayBlocked` (RearWayBlocked) only delays the turn: he does not START it while a
+ * team-mate stands on his straight way to his slot (he would overtake him head-on at the catch-up speed - red team 4_3 / 8_2, a manual
+ * hedgehog re-forming after a corridor); once turned he keeps facing forwards until he is back. Returns whether he faces forward now.
+ */
+function RearCatchUp(lag: number, turned: boolean, wayBlocked: boolean, config: FormationConfig): boolean {
+  return turned ? lag > cfg(config, 'move.rear_turn_back') : !wayBlocked && lag > cfg(config, 'move.rear_turn_lag');
+}
+
+/** v2.6: RearWayBlocked's margin beyond slot.min_spacing, cm. */
+export const REAR_WAY_MARGIN = 20;
+
+/**
+ * v2.6 (contract 18.2): a team-mate (`others`, positions) stands on the rear guard's straight way to his slot - within slot.min_spacing +
+ * REAR_WAY_MARGIN of the segment pos -> slot, and ahead of him (dot(other - pos, slot - pos) > 0).
+ */
+function RearWayBlocked(pos: Vec2, slot: Vec2, others: readonly Vec2[], config: FormationConfig): boolean {
+  const reach = cfg(config, 'slot.min_spacing') + REAR_WAY_MARGIN;
+  return others.some((o) => dist(closestOnSegment(o, pos, slot).point, o) < reach && dot(sub(o, pos), sub(slot, pos)) > 0);
+}
+
+export const FormationSectorRules = { LookYaw, ClearLook, Decided, RearCatchUp, RearWayBlocked };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // FormationTerrainRules::Classify
@@ -406,6 +432,54 @@ export function sideClearance(walls: readonly Segment[], pos: Vec2, yaw: number,
   return best;
 }
 
+/** v2.6: the obstacle (connected group) of every wall for a join gap - cached per walls array (the simulator's walls never change). */
+const groupCache = new WeakMap<readonly Segment[], Map<number, number[]>>();
+
+/**
+ * v2.6 (FORMATION_CONTRACT.md 18.1): walls whose BODIES come within `gap` of each other (centre-line distance minus both half
+ * thicknesses) are one obstacle - a wall built of touching pieces (a modular wall, a box read as its four sides) is one long
+ * obstacle. Returns the obstacle index of every wall: the lowest wall index of its group (connected components).
+ */
+export function obstacleGroups(walls: readonly Segment[], gap: number): number[] {
+  let byGap = groupCache.get(walls);
+  const hit = byGap?.get(gap);
+  if (hit) return hit;
+  const parent = walls.map((_, i) => i);
+  const find = (i: number): number => { while (parent[i] !== i) i = parent[i] = parent[parent[i]]; return i; };
+  for (let i = 0; i < walls.length; i++) for (let j = i + 1; j < walls.length; j++) {
+    const wi = walls[i], wj = walls[j];
+    const body = segSegDist(wi.a, wi.b, wj.a, wj.b) - ((wi.thickness ?? 0) + (wj.thickness ?? 0)) / 2;
+    if (body > gap) continue;
+    const ri = find(i), rj = find(j);
+    if (ri !== rj) parent[Math.max(ri, rj)] = Math.min(ri, rj);
+  }
+  const out = walls.map((_, i) => find(i));
+  if (!byGap) { byGap = new Map(); groupCache.set(walls, byGap); }
+  byGap.set(gap, out);
+  return out;
+}
+
+/**
+ * v2.6 (game designer 2026-11-01, Q1 = b; FORMATION_CONTRACT.md 18.1): the walls the classifier's SIDE probes read. An obstacle
+ * (obstacleGroups with classify.side_join_gap) shorter than classify.side_min_length ALONG THE HEADING - its walls' bodies (each the
+ * centre line +- thickness / 2) projected onto the heading - is left out: a post or a short stub 2-4 m beside the path is no side
+ * wall (no echelon for it; a man's look into it stays ClearLook's job). classify.side_min_length 0 = off (every wall).
+ */
+export function sideWalls(walls: readonly Segment[], yaw: number, c: FormationConfig): readonly Segment[] {
+  const minLength = cfg(c, 'classify.side_min_length');
+  if (minLength <= 0 || walls.length === 0) return walls;
+  const group = obstacleGroups(walls, cfg(c, 'classify.side_join_gap'));
+  const h = dirOf(yaw);
+  const lo = new Map<number, number>(), hi = new Map<number, number>();
+  walls.forEach((w, i) => {
+    const half = (w.thickness ?? 0) / 2, pa = dot(w.a, h), pb = dot(w.b, h);
+    const g = group[i];
+    lo.set(g, Math.min(lo.get(g) ?? Infinity, Math.min(pa, pb) - half));
+    hi.set(g, Math.max(hi.get(g) ?? -Infinity, Math.max(pa, pb) + half));
+  });
+  return walls.filter((_, i) => hi.get(group[i])! - lo.get(group[i])! >= minLength);
+}
+
 /** The raw class of the spot (no hysteresis). v1.1: the ahead / at_wall rays first, then the side rays (walls across ignored). */
 export function rawClass(walls: readonly Segment[], pos: Vec2, yaw: number, destination: Vec2 | null, c: FormationConfig): TerrainClass {
   // v1.2: at_wall only on ARRIVAL - the leader's move ends (he is within classify.arrive_dist of his destination) with a wall
@@ -416,8 +490,9 @@ export function rawClass(walls: readonly Segment[], pos: Vec2, yaw: number, dest
   }
   const reach = cfg(c, 'classify.probe_side');
   const ignore = cfg(c, 'classify.side_ignore_perp_deg');
-  const right = sideClearance(walls, pos, yaw, 1, reach, ignore);
-  const left = sideClearance(walls, pos, yaw, -1, reach, ignore);
+  const side = sideWalls(walls, yaw, c); // v2.6: short obstacles beside the path are no side walls
+  const right = sideClearance(side, pos, yaw, 1, reach, ignore);
+  const left = sideClearance(side, pos, yaw, -1, reach, ignore);
   const rightBlocked = right <= reach, leftBlocked = left <= reach;
   // v1.2 (user Q3 = A): ANY passage between two walls (both sides blocked within probe_side) is a corridor -> column; the
   // narrow / wide column sectors follow PassageWidth (column.narrow_width). The old width limit (classify.corridor_width) is gone.
@@ -433,8 +508,9 @@ export function rawClass(walls: readonly Segment[], pos: Vec2, yaw: number, dest
  */
 function PassageWidth(walls: readonly Segment[], pos: Vec2, yaw: number, c: FormationConfig): number | null {
   const reach = cfg(c, 'classify.probe_side'), ignore = cfg(c, 'classify.side_ignore_perp_deg');
-  const right = sideClearance(walls, pos, yaw, 1, reach, ignore);
-  const left = sideClearance(walls, pos, yaw, -1, reach, ignore);
+  const side = sideWalls(walls, yaw, c); // v2.6: as rawClass
+  const right = sideClearance(side, pos, yaw, 1, reach, ignore);
+  const left = sideClearance(side, pos, yaw, -1, reach, ignore);
   return right <= reach && left <= reach ? left + right : null;
 }
 

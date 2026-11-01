@@ -112,6 +112,138 @@ namespace FormationTerrainRules
 		return Best <= static_cast<double>(MaxDistance) ? TOptional<float>(static_cast<float>(Best)) : TOptional<float>();
 	}
 
+	/** v2.6: two walls' bodies come within GapCm of each other (one obstacle). */
+	static bool TerrainWallsJoined(const FFormationWall& First, const FFormationWall& Second, double GapCm)
+	{
+		return FormationMath::SegSegDist(First.A, First.B, Second.A, Second.B) - 0.5 * (static_cast<double>(First.Thickness) + Second.Thickness) <= GapCm;
+	}
+
+	/** v2.6: a wall body's span along the unit heading H (the centre line's projections +- Thickness / 2). */
+	static void TerrainExtendAlong(const FFormationWall& Wall, const FVector2D& H, double& InOutLo, double& InOutHi)
+	{
+		const double Half = 0.5 * Wall.Thickness;
+		const double ProjA = FVector2D::DotProduct(Wall.A, H);
+		const double ProjB = FVector2D::DotProduct(Wall.B, H);
+		InOutLo = FMath::Min(InOutLo, FMath::Min(ProjA, ProjB) - Half);
+		InOutHi = FMath::Max(InOutHi, FMath::Max(ProjA, ProjB) + Half);
+	}
+
+	TArray<int32> ObstacleGroups(const TArray<FFormationWall>& Walls, float GapCm)
+	{
+		TArray<int32> Parent;
+		Parent.SetNumUninitialized(Walls.Num());
+		for (int32 Index = 0; Index < Walls.Num(); ++Index)
+		{
+			Parent[Index] = Index;
+		}
+		const auto Find = [&Parent](int32 Index)
+		{
+			while (Parent[Index] != Index)
+			{
+				Parent[Index] = Parent[Parent[Index]];
+				Index = Parent[Index];
+			}
+			return Index;
+		};
+		for (int32 First = 0; First < Walls.Num(); ++First)
+		{
+			for (int32 Second = First + 1; Second < Walls.Num(); ++Second)
+			{
+				if (!TerrainWallsJoined(Walls[First], Walls[Second], GapCm))
+				{
+					continue;
+				}
+				const int32 RootFirst = Find(First);
+				const int32 RootSecond = Find(Second);
+				if (RootFirst != RootSecond)
+				{
+					Parent[FMath::Max(RootFirst, RootSecond)] = FMath::Min(RootFirst, RootSecond);
+				}
+			}
+		}
+		TArray<int32> Groups;
+		Groups.SetNumUninitialized(Walls.Num());
+		for (int32 Index = 0; Index < Walls.Num(); ++Index)
+		{
+			Groups[Index] = Find(Index);
+		}
+		return Groups;
+	}
+
+	TArray<FFormationWall> SideWalls(const TArray<FFormationWall>& Walls, float Yaw, const FFormationConfig& Config)
+	{
+		const double MinLength = Config.ClassifySideMinLength;
+		if (MinLength <= 0.0 || Walls.Num() == 0)
+		{
+			return Walls;
+		}
+		const TArray<int32> Groups = ObstacleGroups(Walls, Config.ClassifySideJoinGap);
+		const FVector2D H = FormationMath::DirOf(Yaw);
+		TArray<double> Lo;
+		TArray<double> Hi;
+		Lo.Init(TNumericLimits<double>::Max(), Walls.Num());
+		Hi.Init(TNumericLimits<double>::Lowest(), Walls.Num());
+		for (int32 Index = 0; Index < Walls.Num(); ++Index)
+		{
+			TerrainExtendAlong(Walls[Index], H, Lo[Groups[Index]], Hi[Groups[Index]]);
+		}
+		TArray<FFormationWall> Out;
+		Out.Reserve(Walls.Num());
+		for (int32 Index = 0; Index < Walls.Num(); ++Index)
+		{
+			if (Walls[Index].bProbeHit || Hi[Groups[Index]] - Lo[Groups[Index]] >= MinLength)
+			{
+				Out.Add(Walls[Index]);
+			}
+		}
+		return Out;
+	}
+
+	bool IsShortSideObstacleAt(const TArray<FFormationWall>& WorldWalls, const FVector2D& Point, float Yaw, const FFormationConfig& Config, float OnWallTolCm)
+	{
+		const double MinLength = Config.ClassifySideMinLength;
+		if (MinLength <= 0.0)
+		{
+			return false;
+		}
+		const FVector2D H = FormationMath::DirOf(Yaw);
+		TArray<bool> Seen;
+		Seen.Init(false, WorldWalls.Num());
+		bool bAny = false;
+		for (int32 Start = 0; Start < WorldWalls.Num(); ++Start)
+		{
+			if (Seen[Start] || FormationMath::DistToWall(Point, WorldWalls[Start]) > OnWallTolCm)
+			{
+				continue;
+			}
+			bAny = true;
+			// The obstacle of this wall: a breadth-first walk over the joined walls (ObstacleGroups' rule, only this group).
+			double Lo = TNumericLimits<double>::Max();
+			double Hi = TNumericLimits<double>::Lowest();
+			TArray<int32, TInlineAllocator<16>> Open;
+			Open.Add(Start);
+			Seen[Start] = true;
+			while (Open.Num() > 0)
+			{
+				const int32 Index = Open.Pop(EAllowShrinking::No);
+				TerrainExtendAlong(WorldWalls[Index], H, Lo, Hi);
+				for (int32 Other = 0; Other < WorldWalls.Num(); ++Other)
+				{
+					if (!Seen[Other] && TerrainWallsJoined(WorldWalls[Index], WorldWalls[Other], Config.ClassifySideJoinGap))
+					{
+						Seen[Other] = true;
+						Open.Add(Other);
+					}
+				}
+			}
+			if (Hi - Lo >= MinLength)
+			{
+				return false; // the hit is on a long obstacle (also when a short one touches the same spot)
+			}
+		}
+		return bAny;
+	}
+
 	bool IsAcrossHeading(const FFormationWall& Wall, float Yaw, float IgnorePerpDeg)
 	{
 		const float Along = FMath::Abs(FRotator::NormalizeAxis(FormationMath::YawOf(Wall.B - Wall.A) - Yaw));
@@ -205,8 +337,9 @@ namespace FormationTerrainRules
 			}
 		}
 		const float Reach = Config.ClassifyProbeSide;
-		const TOptional<float> Right = SideClearance(Walls, LeaderPos, LeaderYaw, 1, Reach, Config.ClassifySideIgnorePerpDeg);
-		const TOptional<float> Left = SideClearance(Walls, LeaderPos, LeaderYaw, -1, Reach, Config.ClassifySideIgnorePerpDeg);
+		const TArray<FFormationWall> Side = SideWalls(Walls, LeaderYaw, Config); // v2.6: short obstacles beside the path are no side walls
+		const TOptional<float> Right = SideClearance(Side, LeaderPos, LeaderYaw, 1, Reach, Config.ClassifySideIgnorePerpDeg);
+		const TOptional<float> Left = SideClearance(Side, LeaderPos, LeaderYaw, -1, Reach, Config.ClassifySideIgnorePerpDeg);
 		const bool bRightBlocked = Right.IsSet() && Right.GetValue() <= Reach;
 		const bool bLeftBlocked = Left.IsSet() && Left.GetValue() <= Reach;
 		if (bRightBlocked && bLeftBlocked)
@@ -228,8 +361,9 @@ namespace FormationTerrainRules
 	TOptional<float> PassageWidth(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, const FFormationConfig& Config)
 	{
 		const float Reach = Config.ClassifyProbeSide;
-		const TOptional<float> Right = SideClearance(Walls, LeaderPos, LeaderYaw, 1, Reach, Config.ClassifySideIgnorePerpDeg);
-		const TOptional<float> Left = SideClearance(Walls, LeaderPos, LeaderYaw, -1, Reach, Config.ClassifySideIgnorePerpDeg);
+		const TArray<FFormationWall> Side = SideWalls(Walls, LeaderYaw, Config); // v2.6: as ClassifyRaw
+		const TOptional<float> Right = SideClearance(Side, LeaderPos, LeaderYaw, 1, Reach, Config.ClassifySideIgnorePerpDeg);
+		const TOptional<float> Left = SideClearance(Side, LeaderPos, LeaderYaw, -1, Reach, Config.ClassifySideIgnorePerpDeg);
 		if (Right.IsSet() && Left.IsSet() && Right.GetValue() <= Reach && Left.GetValue() <= Reach)
 		{
 			return Left.GetValue() + Right.GetValue();

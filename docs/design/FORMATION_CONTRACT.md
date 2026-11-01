@@ -811,3 +811,37 @@ currentYaw, config, held)` (13.1 / 13.4; no limit, no ahead).
   (`dx`, `dy`, `deadZonePx` -> `item`); its old `resolve` cases omit `customSlot` (absent = null).
 - Golden counts: CustomSlots 235, CustomGuard 306, CustomLook 252, CustomPlace 197, Menu 160 -> 466. Bot `--manual custom`: checks 1 / 5 / 7
   green on sample_small (24 runs) and formation_lab_01 (168 runs).
+
+## 18. v2.6 - the game designer's answers to the red team v2.5 questions (2026-11-01; FORMATION_SECTORS.md "v2.6", FORMATION_REDTEAM_V25.md Q1-Q3)
+### 18.1 Rule: short obstacles beside the path are no side walls (Q1 = b; `rules.ts` `obstacleGroups` / `sideWalls`)
+- New keys `classify.side_min_length` 150 (0-400 cm; 0 = off = v2.5.1) and `classify.side_join_gap` 50 (0-150 cm).
+- `obstacleGroups(walls, gap)` / C++ `FormationTerrainRules::ObstacleGroups`: walls whose BODIES come within `gap` of each other
+  (`segSegDist(a, b, a', b') - (t + t') / 2 <= gap`) are one obstacle (connected components); each wall's group = the lowest wall index in it.
+- `sideWalls(walls, yaw, config)` / C++ `SideWalls`: every wall of an obstacle whose extent ALONG the heading - over its walls, the centre
+  line's projections on `dirOf(yaw)` +- thickness / 2 - is `>= classify.side_min_length`; C++ also keeps a runtime probe hit
+  (`FFormationWall::bProbeHit`). `rawClass` / `ClassifyRaw` and `PassageWidth` give the side probes (`sideClearance` / `SideClearance`)
+  only these walls; the at_wall (ahead) rays, `SideWidth`, the guard and ClearLook are unchanged.
+- Runtime: the classifier's walls are trace hits (`FormationRuntime::WallFromHit`, 20 cm, `bProbeHit = true`); a SIDE probe's hit (> 45 deg
+  off the heading) is dropped when `FormationTerrainRules::IsShortSideObstacleAt(boxWalls, hit, heading, config)` - some box wall's body within
+  20 cm of the hit and every such wall in an obstacle (the same join rule, a breadth-first walk from it) shorter than the key; no box wall
+  there (complex collision) -> kept. Box walls = the guard's world walls (`GatherFormationWalls`), else gathered round the probe.
+  `Codex.Formation.ShortSideObstacles` 0 = every hit (A/B); counter `GetFormationShortSideHits`.
+- Golden: `formation_Classify.json` / `formation_PassageWidth.json` / `formation_SideWidth.json` gain the scenes `pillar_left`,
+  `stub_right_120`, `short_wall_left_200`, `pieces_left`, `posts_right`, `pillar_in_corridor`, `stub_on_wall_right`.
+### 18.2 Rule: the lagging rear guard turns round (Q2 = b; `FormationSectorRules.RearCatchUp` / `RearWayBlocked`)
+- New keys `move.rear_turn_lag` 150 (50-400 cm) and `move.rear_turn_back` 50 (0-200 cm).
+- `RearCatchUp(lag, turned, wayBlocked, config) -> turned'`: `turned ? lag > rear_turn_back : !wayBlocked && lag > rear_turn_lag`. `lag` =
+  `dot(slot - pos, dirOf(heading))` (how far his slot lies ahead of him along the squad's heading; check 6's measure).
+- `RearWayBlocked(pos, slot, others, config)`: some other member within `slot.min_spacing + REAR_WAY_MARGIN` (20 cm) of the segment pos ->
+  slot and ahead of him (`dot(other - pos, slot - pos) > 0`).
+- Integration (sim `m.rearTurned`, runtime `FFollowerState::bRearTurned`): only the walking (`mode walk`, not the wall layout) rear guard
+  (the allocator's `rearGuard`); `wayBlocked` is evaluated only while he is not turned (it delays the start, never ends a turn). Turned: he
+  faces his travel (sim: the step's direction, ClearLook exempt; runtime: no formation look -> he faces his movement) - the backward cap
+  (`move.backward_mult`) no longer applies once his body has turned, he catches up at walk x `move.catchup_mult`. `Codex.Formation.RearTurn`
+  0 = v2.5.1 (A/B); log `[Formation] <name> (rear guard) turns round to catch up facing forwards` / `is back - walks backwards again`;
+  `IsFormationRearTurned`, `GetFormationRearTurnCount`.
+- Golden `formation_RearCatchUp.json`: op `turn` {lag, turned, wayBlocked} -> {turned}; op `way` {pos, slot, others} -> {blocked}.
+### 18.3 Checks / report
+- Checks 2 (rear cover) and 10 (coverage) count the patrol frames in which a rear guard is turned, and `LIMITS.rearTurnGrace` 0.5 s after (his body coming round again), as held (the open rear is the designer's
+  accepted cost); `RunMetrics.rearTurn` {walkTime, time, turns, pct}; report info line 15 (runs with a turn, the worst share of the patrol).
+- Q3 = keep: no change (the 5 m hold).

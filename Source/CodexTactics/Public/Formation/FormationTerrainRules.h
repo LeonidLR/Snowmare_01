@@ -41,6 +41,10 @@
  * PassageWidth (v1.1): Left + Right clearance (the same side rays) when both sides are blocked, else unset - feeds LookYaw's narrow /
  * wide column.
  *
+ * v2.6 (game designer 2026-11-01, Q1 = b; contract 18.1): the side probes of ClassifyRaw / PassageWidth read only SideWalls - an obstacle
+ * (walls joined within ClassifySideJoinGap, ObstacleGroups) shorter than ClassifySideMinLength along the heading is no side wall (a post
+ * or a short stub beside the path: no echelon for it). The forward (at_wall) rays still see every wall.
+ *
  * Mapping (FormationFor): open -> diamond (4 or more) / wedge (3 or fewer) - in a blizzard (v1.2, user decision) the blizzard tight
  * diamond; wall_left -> echelon RIGHT (away from the wall), wall_right ->
  * echelon LEFT, corridor -> column, at_wall -> wall.
@@ -87,6 +91,28 @@ namespace FormationTerrainRules
 	 */
 	CODEXTACTICS_API TOptional<float> SideClearance(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, int32 Side, float Reach,
 		float IgnorePerpDeg = 0.f);
+
+	/**
+	 * v2.6 (rules.ts obstacleGroups): walls whose BODIES come within GapCm of each other (SegSegDist minus both half thicknesses) are one
+	 * obstacle; Result[i] = the lowest wall index of wall i's group (connected components).
+	 */
+	CODEXTACTICS_API TArray<int32> ObstacleGroups(const TArray<FFormationWall>& Walls, float GapCm);
+
+	/**
+	 * v2.6 (rules.ts sideWalls; game designer Q1 = b): the walls the side probes read - every wall of an obstacle (ObstacleGroups with
+	 * ClassifySideJoinGap) at least ClassifySideMinLength long ALONG Yaw (its walls' bodies, the centre line +- Thickness / 2, projected on
+	 * the heading); a probe hit (bProbeHit) is always kept. ClassifySideMinLength <= 0: every wall.
+	 */
+	CODEXTACTICS_API TArray<FFormationWall> SideWalls(const TArray<FFormationWall>& Walls, float Yaw, const FFormationConfig& Config = FFormationConfig());
+
+	/**
+	 * v2.6 runtime: is a side probe's hit at Point on a SHORT obstacle of the world walls (the level's box collision)? True when some wall's
+	 * body lies within OnWallTolCm of Point and every such wall belongs to an obstacle shorter than ClassifySideMinLength along Yaw (its group
+	 * found from that wall by ObstacleGroups' joining rule). No wall there (a complex-collision mesh the box walls do not hold): false - the
+	 * hit stays.
+	 */
+	CODEXTACTICS_API bool IsShortSideObstacleAt(const TArray<FFormationWall>& WorldWalls, const FVector2D& Point, float Yaw,
+		const FFormationConfig& Config = FFormationConfig(), float OnWallTolCm = 20.f);
 
 	/** v1.1: the free width between the walls on both sides (left + right clearance), unset when a side is open. */
 	CODEXTACTICS_API TOptional<float> PassageWidth(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw,

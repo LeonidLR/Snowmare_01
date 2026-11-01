@@ -108,6 +108,11 @@ struct FFormationWall
 	FVector2D A = FVector2D::ZeroVector;
 	FVector2D B = FVector2D::ZeroVector;
 	float Thickness = 0.f;
+	/**
+	 * v2.6: a runtime probe's trace hit (FormationRuntime::WallFromHit: a 20 cm piece of an obstacle of unknown size) - FormationTerrainRules::
+	 * SideWalls keeps it (the runtime drops the side hits on a short obstacle itself, FormationTerrainRules::IsShortSideObstacleAt).
+	 */
+	bool bProbeHit = false;
 };
 
 /**
@@ -193,6 +198,13 @@ struct CODEXTACTICS_API FFormationConfig
 	float MoveBackwardMult = 0.9f;
 	/** [move.catchup_mult] A member far behind his slot may move this much faster than the squad pace. */
 	float MoveCatchupMult = 1.25f;
+	/**
+	 * [move.rear_turn_lag] v2.6 (game designer 2026-11-01, Q2 = b): the rear guard more than this far from his slot turns round and catches
+	 * up facing forwards at the catch-up speed (FormationSectorRules::RearCatchUp), cm.
+	 */
+	float MoveRearTurnLag = 150.f;
+	/** [move.rear_turn_back] v2.6: ... and turns round again (the backward walk) within this distance of his slot (hysteresis), cm. */
+	float MoveRearTurnBack = 50.f;
 	/** [facing.turn_speed] Body turn rate (FacingRules::StepYaw turn speed), 1/s. */
 	float FacingTurnSpeed = 10.f;
 	/** [scan.period] Patrol scan period, s. */
@@ -230,6 +242,13 @@ struct CODEXTACTICS_API FFormationConfig
 	float ClassifyArriveDist = 50.f;
 	/** [classify.side_ignore_perp_deg] v1.1: the side probes ignore wall segments within this angle of perpendicular to the heading, deg. */
 	float ClassifySideIgnorePerpDeg = 30.f;
+	/**
+	 * [classify.side_min_length] v2.6 (game designer 2026-11-01, Q1 = b): the side probes ignore an obstacle shorter than this ALONG THE
+	 * HEADING (FormationTerrainRules::SideWalls: a post / a short stub beside the path is no side wall); 0 = off, cm.
+	 */
+	float ClassifySideMinLength = 150.f;
+	/** [classify.side_join_gap] v2.6: walls whose bodies come within this of each other are one obstacle (ObstacleGroups), cm. */
+	float ClassifySideJoinGap = 50.f;
 	/** [sight.fov] Vision cone width standing / crouched (simulator checks only; the game owns the real value), deg. */
 	float SightFov = 140.f;
 	/** [look.wall_dist] v2.1.1 (user): a wall surface closer than this blocks looks towards it (FormationSectorRules::ClearLook), cm. */

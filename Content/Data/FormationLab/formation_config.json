@@ -310,6 +310,20 @@
       "unit": "ratio",
       "doc": "A member far behind his slot may move this much faster than the squad pace."
     },
+    "move.rear_turn_lag": {
+      "value": 150,
+      "min": 50,
+      "max": 400,
+      "unit": "cm",
+      "doc": "v2.6 (game designer 2026-11-01, Q2 = b): the rear guard more than this far from his slot turns round and catches up facing forwards at the catch-up speed (not walking backwards at move.backward_mult)."
+    },
+    "move.rear_turn_back": {
+      "value": 50,
+      "min": 0,
+      "max": 200,
+      "unit": "cm",
+      "doc": "v2.6: ... and turns round again (the rear-guard backward walk) once he is within this distance of his slot (hysteresis below move.rear_turn_lag: no flicker)."
+    },
     "facing.turn_speed": {
       "value": 10,
       "min": 3,
@@ -484,6 +498,20 @@
       "max": 45,
       "unit": "deg",
       "doc": "v1.1: the side probes ignore wall segments within this angle of perpendicular to the heading (walls ahead / behind, not beside)."
+    },
+    "classify.side_min_length": {
+      "value": 150,
+      "min": 0,
+      "max": 400,
+      "unit": "cm",
+      "doc": "v2.6 (game designer 2026-11-01, Q1 = b): the side probes ignore an obstacle shorter than this along the heading (a post, a short stub beside the path is no side wall: no echelon for it); 0 = off."
+    },
+    "classify.side_join_gap": {
+      "value": 50,
+      "min": 0,
+      "max": 150,
+      "unit": "cm",
+      "doc": "v2.6: walls whose bodies come within this of each other are one obstacle for classify.side_min_length (a wall of touching pieces is one long wall)."
     },
     "guard.clearance": {
       "value": 10,

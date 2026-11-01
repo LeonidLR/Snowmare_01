@@ -41,6 +41,12 @@ namespace SquadSubsystemFormationLocal
 		TEXT("Bug 2026-10-27 (the lake yard): 1 = the formation's wall traces read only what blocks pawns (never an overlap-only trigger box round the squad); 0 = any static / dynamic world object (the old trace, A/B)"));
 	TAutoConsoleVariable<int32> CVarFormationWallSnap(TEXT("Codex.Formation.WallSnap"), 1,
 		TEXT("Bug 2026-10-27: 1 = a member settled in the formation wall pose eases onto his exact wall slot (the face offset of one operative in cover); 0 = he stays where his walk stopped, a hand-span short (A/B)"));
+	TAutoConsoleVariable<int32> CVarFormationShortSide(TEXT("Codex.Formation.ShortSideObstacles"), 1,
+		TEXT("Rules v2.6 (game designer 2026-11-01, Q1 = b): 1 = a side probe hit on an obstacle shorter than classify.side_min_length along the heading (a post, a short stub) is no side wall - no echelon for it; 0 = every hit counts (v2.5.1, A/B)"));
+	TAutoConsoleVariable<int32> CVarFormationRearTurn(TEXT("Codex.Formation.RearTurn"), 1,
+		TEXT("Rules v2.6 (game designer 2026-11-01, Q2 = b): 1 = the rear guard more than move.rear_turn_lag behind his slot turns round and catches up facing forwards, back within move.rear_turn_back he walks backwards again; 0 = he catches up walking backwards (v2.5.1, A/B)"));
+	/** v2.6: a probe ray this far off the heading is a SIDE probe (the classifier's 60 / 90 / 120 deg rays; the forward fan is 0 / +-20), deg. */
+	constexpr float SideProbeMinDeg = 45.f;
 	TAutoConsoleVariable<int32> CVarFormationYieldToLeader(TEXT("Codex.Formation.YieldToLeader"), 1,
 		TEXT("Bug 2026-10-28 (CoverSmoke): 1 = a formation follower on the leader's way while the leader walks an own order (cover / move) steps aside out of it, then takes his slot again; 0 = the old follow (he may stand in the leader's way: the walk ends Blocked, A/B)"));
 	/** A yield point must project onto the nav mesh this close (it is no point inside / at a wall), cm. */
@@ -133,6 +139,16 @@ TOptional<EFormationRole> USquadSubsystem::SectorRoleOf(const FFollowerState& Fo
 		return Role ? TOptional<EFormationRole>(*Role) : TOptional<EFormationRole>();
 	}
 	return FormationRuntime::RoleForFollowerSlot(Follower.Slot, Sectors.MemberCount);
+}
+
+bool USquadSubsystem::IsFormationRearTurned(const AOperativeCharacter* Operative) const
+{
+	if (!Operative || !Sectors.bActiveThisFrame)
+	{
+		return false;
+	}
+	const FFollowerState* Follower = Followers.FindByPredicate([Operative](const FFollowerState& State) { return State.Operative.Get() == Operative; });
+	return Follower && Follower->bRearTurned;
 }
 
 bool USquadSubsystem::GetFormationRole(const AOperativeCharacter* Operative, EFormationRole& OutRole) const
@@ -249,12 +265,38 @@ void USquadSubsystem::ProbeFormationWalls(const AOperativeCharacter& LeaderRef)
 	FVector Origin = LeaderRef.GetActorLocation();
 	Origin.Z = FormationFeetZ(LeaderRef) + FormationRuntime::ProbeHeightCm;
 	TArray<FFormationWall> Walls;
-	for (const FormationRuntime::FProbeRay& Ray : FormationRuntime::ProbeRays(Sectors.HeadingYaw, FormationTuning::Get()))
+	// Rules v2.6 (game designer 2026-11-01, Q1 = b): a SIDE probe's hit on a short obstacle (a post, a short stub: shorter than
+	// classify.side_min_length along the heading, read from the level's box walls) is no side wall. The trace hit alone does not know the
+	// obstacle's size: the box walls round the leader do (the guard's world walls, else gathered here).
+	const FFormationConfig& ProbeConfig = FormationTuning::Get();
+	const bool bShortSide = CVarFormationShortSide.GetValueOnGameThread() != 0 && ProbeConfig.ClassifySideMinLength > 0.f;
+	TArray<FFormationWall> LocalBoxWalls;
+	const TArray<FFormationWall>* BoxWalls = nullptr;
+	if (bShortSide)
+	{
+		if (Sectors.bWorldWallsValid)
+		{
+			BoxWalls = &Sectors.WorldWalls;
+		}
+		else
+		{
+			const float Reach = ProbeConfig.ClassifyProbeSide * 2.f + ProbeConfig.ClassifySideMinLength;
+			LocalBoxWalls = GatherFormationWalls(FVector2D(Origin), FVector2D(Reach, Reach), 0.f, static_cast<float>(Origin.Z));
+			BoxWalls = &LocalBoxWalls;
+		}
+	}
+	for (const FormationRuntime::FProbeRay& Ray : FormationRuntime::ProbeRays(Sectors.HeadingYaw, ProbeConfig))
 	{
 		const FVector Direction = FRotator(0.f, Ray.Yaw, 0.f).Vector();
 		FHitResult Hit;
 		if (TraceFormationWall(Hit, Origin, Origin + Direction * Ray.Length, Params) && FMath::Abs(Hit.ImpactNormal.Z) < 0.7f)
 		{
+			if (BoxWalls && FMath::Abs(FMath::FindDeltaAngleDegrees(Sectors.HeadingYaw, Ray.Yaw)) > SideProbeMinDeg
+				&& FormationTerrainRules::IsShortSideObstacleAt(*BoxWalls, FVector2D(Hit.ImpactPoint), Sectors.HeadingYaw, ProbeConfig))
+			{
+				++Sectors.ShortSideHits;
+				continue;
+			}
 			Walls.Add(FormationRuntime::WallFromHit(FVector2D(Hit.ImpactPoint), FVector2D(Hit.ImpactNormal)));
 		}
 	}
@@ -879,7 +921,39 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	// Rules v2.5: on the covered approach a member with an approach look (rear, flank, at the wall) holds it all the way in.
 	const TOptional<EFormationApproachDuty> Duty = bWall && !Sectors.bSlide ? FormationApproachDuty(Role.GetValue()) : TOptional<EFormationApproachDuty>();
 	const bool bApproachLook = Duty.IsSet() && Duty.GetValue() != EFormationApproachDuty::Run;
-	if (Sectors.Mode != EFormationMode::Run && (!bWall || Sectors.bSlide || bApproachLook || FormationRuntime::UseWallLayoutYaw(Distance, bMoving)))
+	// Rules v2.6 (game designer 2026-11-01, Q2 = b): the walking rear guard more than move.rear_turn_lag behind his slot turns round and
+	// catches up facing his run (no formation look: he faces his movement, and FollowerMove's backward cap is off once his body has turned);
+	// back within move.rear_turn_back he takes the rear look again and walks backwards (sim: m.rearTurned).
+	const bool bWalkingRearGuard = !bWall && Sectors.Mode == EFormationMode::Walk && Sectors.RearGuard.IsSet() && Role.GetValue() == Sectors.RearGuard.GetValue()
+		&& CVarFormationRearTurn.GetValueOnGameThread() != 0;
+	const bool bWasRearTurned = Follower.bRearTurned;
+	const float RearLag = static_cast<float>(FVector2D::DotProduct(Target - Here, FormationMath::Forward(Sectors.HeadingYaw))); // behind his slot along the heading
+	bool bRearWayBlocked = false;
+	if (bWalkingRearGuard && !Follower.bRearTurned)
+	{
+		// He starts the turn only with his straight way to the slot clear of the others (no head-on overtaking at the catch-up speed).
+		TArray<FVector2D> Others;
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
+		{
+			if (Member.IsValid() && Member.Get() != &Operative)
+			{
+				Others.Add(FVector2D(Member->GetActorLocation()));
+			}
+		}
+		bRearWayBlocked = FormationSectorRules::RearWayBlocked(Here, Target, Others, FormationTuning::Get());
+	}
+	Follower.bRearTurned = bWalkingRearGuard && FormationSectorRules::RearCatchUp(RearLag, Follower.bRearTurned, bRearWayBlocked, FormationTuning::Get());
+	if (Follower.bRearTurned != bWasRearTurned)
+	{
+		if (Follower.bRearTurned)
+		{
+			++Sectors.RearTurnCount;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s (rear guard) %s: %.0f cm behind his slot"), *Operative.DisplayName.ToString(),
+			Follower.bRearTurned ? TEXT("turns round to catch up facing forwards") : TEXT("is back - walks backwards again"), RearLag);
+	}
+	if (Sectors.Mode != EFormationMode::Run && !Follower.bRearTurned
+		&& (!bWall || Sectors.bSlide || bApproachLook || FormationRuntime::UseWallLayoutYaw(Distance, bMoving)))
 	{
 		float Look = Slot->Yaw;
 		// Rules v2.2: the rear guard catching up sideways eases his look within his rear band (5-7 o'clock stays in his cone).
@@ -1231,5 +1305,6 @@ void USquadSubsystem::ResetFormationState(const FVector& Forward)
 		Follower.PrevSectorSlotTime = -1.0;
 		Follower.RepathTimeRemaining = 0.f;
 		Follower.bParked = false;
+		Follower.bRearTurned = false;
 	}
 }

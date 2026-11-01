@@ -55,6 +55,8 @@ export interface MemberFrame {
   rearGuard: boolean;
   /** v2.5: his duty on the covered approach to the wall (FormationWallRules.Approach); null outside it. */
   approachDuty: ApproachDuty | null;
+  /** v2.6 (Q2 = b): the rear guard lags behind his slot and catches up facing forwards (FormationSectorRules.RearCatchUp). */
+  rearTurned: boolean;
 }
 
 /** v2.1: a bypass decision (FormationBypassRules.ChooseSide) taken when a route leg starts and a wall blocks it. */
@@ -133,6 +135,7 @@ interface Member {
   clearHeld: number | null; // v2.3: the last ClearLook result (its hysteresis input); null while ClearLook does not apply
   vel: Vec2; // v2.3 part 8: his smoothed velocity (VEL_SMOOTH_S), as the engine's character velocity - ClearLook's anticipation
   yielding: boolean; // red team v2.5: he steps aside out of the leader's way (yieldFromLeaderWay)
+  rearTurned: boolean; // v2.6 (Q2 = b): the lagging rear guard faces forwards while he catches up (FormationSectorRules.RearCatchUp)
 }
 
 /** Builds the nav grid for a layout (reuse it across runs). */
@@ -192,6 +195,7 @@ export function simulate(o: SimOptions): number {
     clearHeld: null,
     vel: [0, 0],
     yielding: false,
+    rearTurned: false,
   }));
 
   let leg = 1;
@@ -456,6 +460,13 @@ export function simulate(o: SimOptions): number {
       if (yielding !== m.yielding) m.prevSlot = null; // no slot velocity from the jump to / from the point aside
       if (yielding) m.prevSlot = slot;
       m.yielding = yielding;
+      // v2.6 (game designer 2026-11-01, Q2 = b): the rear guard lagging behind his slot turns round and catches up facing his run
+      // (not walking backwards at move.backward_mult); back within move.rear_turn_back he turns round again (RearCatchUp's hysteresis).
+      // His lag = how far his slot is AHEAD of him along the squad's heading (check 6's measure; a sideways shift is no lag). He turns
+      // only with his straight way to the slot clear of the others (RearWayBlocked: no head-on overtaking at the catch-up speed).
+      m.rearTurned = i > 0 && mode === 'walk' && formation !== 'wall' && m.place === rearGuard
+        && FormationSectorRules.RearCatchUp(dot(sub(slot, m.pos), dirOf(heading)), m.rearTurned,
+          !m.rearTurned && FormationSectorRules.RearWayBlocked(m.pos, slot, members.filter((o) => o !== m).map((o) => o.pos), c), c);
       let moveDir: Vec2 = [0, 0];
       if (i > 0 || formation === 'wall') {
         const before = m.pos;
@@ -473,7 +484,7 @@ export function simulate(o: SimOptions): number {
       // wall they hug, which made an exemption for them flip on and off).
       const watching = looks.some((l) => l.role === m.place);
       const walking = i === 0 && len(leaderVel) > 1 ? yawOf(leaderVel) : null;
-      const exempt = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG);
+      const exempt = formation === 'wall' || mode === 'run' || mode === 'wall' || watching || m.rearTurned || (walking !== null && angleDiff(target.yaw, walking) <= WALK_LOOK_DEG);
       // v2.3 part 7 (Q3 = c): an over-the-shoulder member's wall-avoiding look stays within +- the limit of where he steps:
       // his ACTUAL step decides whether he walks backwards (a man threading a wall gap steps up to 60 deg off the squad's
       // heading) - unless it is more than SHOULDER_STEP_DEG off his place's travel (a step back to a slot behind him, a
@@ -491,13 +502,13 @@ export function simulate(o: SimOptions): number {
         ? FormationCustomRules.Look(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld)
         : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld, limit, ahead);
       m.clearHeld = exempt ? null : free;
-      const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
+      const desired = (run && !arrived) || toWallSlot || m.rearTurned ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
       if (i === 0 && formation !== 'wall') moveDir = scale(leaderVel, SIM_DT);
       const moving = len(moveDir) > 0.5;
       const backwards = moving && angleDiff(yawOf(moveDir), m.yaw) > 120;
       frames.push({ role: m.role, place: m.place, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.place), rearGuard: m.place === rearGuard,
-        approachDuty: approachLook?.duty ?? null });
+        approachDuty: approachLook?.duty ?? null, rearTurned: m.rearTurned });
     }
     // Light separation standing in for the engine's crowd avoidance (the game's RVO / detour crowd): two members closer than
     // slot.min_spacing drift apart at up to SEPARATION_SPEED; the leader is never pushed (he walks his path).

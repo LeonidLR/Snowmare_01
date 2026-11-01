@@ -159,6 +159,21 @@ others the formation drive) - nobody is in a cover slot, and the corner peek, ho
 - **Checks:** `FormationSquadPeekSmoke` (both ends of the long wall; the hover through `UpdateCornerPeekHover`, the clicks through
   `HandleWorldHit`; `Shot` = `Saved/Screenshots/Formation/squad_peek_ghost.png` / `squad_peek_held.png`).
 
+### Rules v2.6 in the runtime - short obstacles and the rear guard's turn round (2026-11-01, branch formation/rules-v26; behind `Codex.Formation.Sectors` + `Codex.Formation.ShortSideObstacles` / `Codex.Formation.RearTurn`)
+
+The game designer's answers to the red team v2.5 questions (FORMATION_SECTORS.md "v2.6", contract 18). (1) A post or a short stub beside the path
+is no side wall: `ProbeFormationWalls` drops a SIDE probe's hit (> 45 deg off the heading) on an obstacle shorter than `classify.side_min_length`
+(150 cm) along the heading - `FormationTerrainRules::IsShortSideObstacleAt` over the level's box walls (the guard's world walls; touching boxes
+within `classify.side_join_gap` 50 cm are one obstacle; a hit on complex collision stays) - so no echelon for it; the probe hits are marked
+`FFormationWall::bProbeHit` (the pure `SideWalls` filter keeps them). (2) The walking rear guard more than `move.rear_turn_lag` (150 cm) behind his
+slot along the heading turns round and catches up facing forwards (no formation look: he faces his movement; `FollowerMove`'s backward cap is
+off once his body has turned) and walks backwards again within `move.rear_turn_back` (50 cm) - `FormationSectorRules::RearCatchUp` in
+`UpdateSectorFollower` (`FFollowerState::bRearTurned`); a team-mate on his straight way to the slot delays the start (`RearWayBlocked`). Logs
+`[Formation] <name> (rear guard) turns round to catch up facing forwards: N cm behind his slot` / `is back - walks backwards again`. Smoke
+`FormationLabSmoke` runs `R_A_posts` (two 60 x 40 cm boxes spawned 3.2 m beside lane A: the diamond holds, the probes drop the hits) and `R_A_rear`
+(the rear guard set 3 m back mid-walk: he turns within 1.5 s, faces his run, walks backwards again); the old known R_B_walls pace entry passes
+(p95 103 cm, was 160-175). Tests `CodexTactics.Formation.V26.*`, `Parity.RearCatchUp`, `Parity.Classify` / `.PassageWidth` (the new scenes).
+
 ### Rules v2.5 in the runtime - the covered approach to the wall (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.Approach`)
 
 New user rule 2026-10-26: on the order to hug a wall (the group cover order in group mode, or the arrival layout) everyone used to drop his sector
