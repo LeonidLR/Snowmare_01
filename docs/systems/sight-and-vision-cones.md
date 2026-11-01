@@ -81,6 +81,38 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
 - **Cost (VisionConeSmoke, 3 operative cones with walls in view, async mode):** per rebuild 121 -> 131 rays, 376 -> 433 traces (the low trace now runs at 90 cm, so obstacles between 90 and 150 cm get their top / back probes), 0.58 -> 0.68 ms ray work on the task threads, game thread 0.265 -> 0.286 ms (the light section's upload). Throttle unchanged (12 Hz while moving, 2 s still): 3 operatives walking ~36 rebuilds/s = ~+0.06 ms/frame of task-thread work at 60 fps.
 - **Verified:** unit `CodexTactics.Combat.VisionCone.Occlusion.OperativeLevels` (crouched behind 0.8 / 1.2 / 3 m walls, standing 5 m back: spot levels, the drawn level = the exact 3D line test on a grid, nested levels, no light ring on open ground); `VisionConeSmoke` stages 40-47 (Shift+O on; the leader crouched behind a 0.8 m wall, a mate crouched behind a 1.2 m wall, the third standing 5 m back, a 3 m wall beyond: regions behind each wall and a 75 cm grid of every cone - drawn level = `CanOperativeSee` at 90 / 150 cm, 0 mismatches; the cost of 1 vs 2 levels logged `[VisionCone] squad perf`; `Shot` -> `Saved/Screenshots/squad_cones_occluded.png`, the designer's scene: one crouched behind the barricade, two standing back).
 
+## Elevated observers: the 2.5D cone (bug 09, 2026-11-01)
+
+- **Problem (game designer, L_FormationLabCombat, `Saved/BugReport/2026-11-01_bug_09_tower_vision`):** an operative on a combat-lab tower
+  (3 x 3 x 4 m) had his green cone drawn straight over a 3 m lab wall - "he sees everything behind it"; the designer drew the wall's shadow
+  as a black triangle. **Root cause:** the cone model was flat - every height (eye, target profiles, obstacle tops) was measured from the
+  observer's feet and the targets were assumed to stand at his feet's level. On a 4 m roof the targets "stood" 4 m up in the air: the
+  sight-line traces ran at roof + 0.9 / 1.6 m, above every wall, so nothing was cut, and the fan was drawn floating at roof height. The
+  game's real sight checks (`UTacticalSightSubsystem::CanOperativeSee`, `AEnemyCharacter::FindVisibleOperative`, the cone colour check)
+  were already right: 3D `ECC_Visibility` traces from the eye to the target's profile point (no 2D shortcut found; `AmbushWatchRules`
+  deliberately ignores walls and was left alone).
+- **Now (pure rule, `VisionConeVisibility`):** a ray carries `GroundCm`, the ground its targets stand on relative to the observer's feet
+  (0 = his level, the old model; negative = he looks down from a perch). A target's profile is `GroundCm + profile`; the high / low traces
+  follow it (`GetHighTraceHeight(GroundCm)` / `GetLowTraceHeight(GroundCm)`: from 4 m the low trace runs 90 cm over the ground below).
+  The perch is an obstacle from the eye to its edge with `bHidesInside` (the ground under the roof is out of sight) whose rim (a parapet,
+  else the roof) hides the ground near its foot. Closed forms for docs / tests / smokes: `WallShadowLengthCm` (behind a wall h_w at d,
+  eye h_e > h_w: h_w x d / (h_e - h_w) of ground, everything when h_e <= h_w), `PerchDeadZoneCm`, `ElevatedGroundCm` (elevated only when
+  the ground lies >= `ElevatedMinDropCm` 100 cm below the feet: a crate / step stays flat). The mesh lies on each ray's ground.
+- **Tracing (`UVisionConeComponent`):** per rebuild `ProbePerch` (2 traces): what he stands on, and ground >= 1 m below it right under him
+  with that block ignored -> a perch. Per ray from a perch `SamplePerch` (4 traces): the edge (the perch traced back towards the feet just
+  under its roof), the ground past it (the lower of two columns 40 / 120 cm out - a ladder at the face never reads as ground), the rim's
+  top; the low trace then starts past the edge with the perch ignored. A ground-level observer (a floor, a landscape: nothing under it)
+  costs 2 traces per rebuild more and is otherwise unchanged. The rebuild cadence / budget / async batches are as before; `GroundCm` is
+  derived, not part of `SameSpec`, so it never forces rebuilds. Known limit: one ground level per ray (the ground just past the perch's
+  edge) - a target on another roof further out is judged as if on that ground.
+- **Example (TowerVisionSmoke):** eye 562 cm over the ground on T_SW, W_C_4 (300 cm) 15.6 - 16.6 m out: ground shadow 18.9 m; a
+  standing / crouched enemy hidden for 9.5 / 13.3 m behind the wall; the roof edge's dead zone to 4.2 / 4.9 m from the roof's middle.
+- **Verified:** unit `CodexTactics.Combat.VisionCone.Elevated.*` (ShadowRules, TowerOverWall, ConeMatchesSight: a whole cone from a tower
+  and from the ground = the exact 3D line test on a grid, the mesh on the ground); `TowerVisionSmoke` on L_FormationLabCombat (the
+  leader on T_SW facing W_C_4: every ray looks down 402 cm, the cone drawn on the ground, dead zone / before the wall / shadow / beyond
+  = drawn and CanOperativeSee, 0 mismatches on a 1 m grid; a ground operative's cone flat; an enemy in the shadow unseen, one beyond
+  seen); arg `Shot` -> `Saved/Screenshots/TowerVision/tower_vision_fixed.png`, `tower_vision_close.png`.
+
 ## Vision cones - how to switch them on (old §6)
 
 - **Vision cones - how to switch them on (user request 2026-10-11).** Off by default (as in Godot's shipped config).

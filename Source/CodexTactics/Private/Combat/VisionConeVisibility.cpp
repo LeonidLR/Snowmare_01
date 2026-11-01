@@ -21,18 +21,21 @@ namespace
 		Triangles.Append({ A, B, C, A, C, B });
 	}
 
-	/** Quad (or a triangle when both starts sit on the apex) between two angles: [Start, End] on each side. */
-	void AddSpanQuad(FVisionConeMesh& Mesh, float AngleA, float StartA, float EndA, float AngleB, float StartB, float EndB, float HeightCm)
+	/**
+	 * Quad (or a triangle when both starts sit on the apex) between two angles: [Start, End] on each side, side A at HeightA, side B
+	 * at HeightB (each ray's ground: an elevated observer's spans lie on the ground below him).
+	 */
+	void AddSpanQuad(FVisionConeMesh& Mesh, float AngleA, float StartA, float EndA, float AngleB, float StartB, float EndB, float HeightA, float HeightB)
 	{
 		const int32 Base = Mesh.Vertices.Num();
 		if (StartA < 0.01f && StartB < 0.01f)
 		{
-			Mesh.Vertices.Append({ FVector(0.f, 0.f, HeightCm), PointAt(AngleA, EndA, HeightCm), PointAt(AngleB, EndB, HeightCm) });
+			Mesh.Vertices.Append({ FVector(0.f, 0.f, 0.5f * (HeightA + HeightB)), PointAt(AngleA, EndA, HeightA), PointAt(AngleB, EndB, HeightB) });
 			AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
 			return;
 		}
-		Mesh.Vertices.Append({ PointAt(AngleA, StartA, HeightCm), PointAt(AngleA, EndA, HeightCm), PointAt(AngleB, EndB, HeightCm),
-			PointAt(AngleB, StartB, HeightCm) });
+		Mesh.Vertices.Append({ PointAt(AngleA, StartA, HeightA), PointAt(AngleA, EndA, HeightA), PointAt(AngleB, EndB, HeightB),
+			PointAt(AngleB, StartB, HeightB) });
 		AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
 		AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 2, Base + 3);
 	}
@@ -47,9 +50,15 @@ namespace
 		return A.X * B.Y - A.Y * B.X;
 	}
 
-	/** Closed polyline as a band WidthCm wide on its inner side (mitred corners, clamped). */
-	void BuildClosedBand(const TArray<FVector2D>& Points, float WidthCm, float HeightCm, FVisionConeMesh& Mesh)
+	/** Closed polyline (planar X / Y, each point at its own Z) as a band WidthCm wide on its inner side (mitred corners, clamped). */
+	void BuildClosedBand(const TArray<FVector>& Points3, float WidthCm, FVisionConeMesh& Mesh)
 	{
+		TArray<FVector2D> Points;
+		Points.Reserve(Points3.Num());
+		for (const FVector& Point : Points3)
+		{
+			Points.Add(FVector2D(Point.X, Point.Y));
+		}
 		const int32 Count = Points.Num();
 		if (Count < 3 || WidthCm <= 0.f)
 		{
@@ -86,8 +95,8 @@ namespace
 		{
 			const int32 Next = (Index + 1) % Count;
 			const int32 Base = Mesh.Vertices.Num();
-			Mesh.Vertices.Append({ FVector(Points[Index], HeightCm), FVector(Points[Next], HeightCm), FVector(Inner[Next], HeightCm),
-				FVector(Inner[Index], HeightCm) });
+			Mesh.Vertices.Append({ FVector(Points[Index], Points3[Index].Z), FVector(Points[Next], Points3[Next].Z), FVector(Inner[Next], Points3[Next].Z),
+				FVector(Inner[Index], Points3[Index].Z) });
 			AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
 			AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 2, Base + 3);
 		}
@@ -135,24 +144,57 @@ float FVisionConeSightSpec::GetMaxRange() const
 	return Range;
 }
 
-float FVisionConeSightSpec::GetHighTraceHeight() const
+float FVisionConeSightSpec::GetHighTraceHeight(float GroundCm) const
 {
 	float Height = EyeHeightCm;
 	for (const FVisionConeLevel& Level : Levels)
 	{
-		Height = FMath::Max(Height, Level.ProfileHeightCm);
+		Height = FMath::Max(Height, GroundCm + Level.ProfileHeightCm);
 	}
 	return Height;
 }
 
-float FVisionConeSightSpec::GetLowTraceHeight() const
+float FVisionConeSightSpec::GetLowTraceHeight(float GroundCm) const
 {
 	float Height = EyeHeightCm;
 	for (const FVisionConeLevel& Level : Levels)
 	{
-		Height = FMath::Min(Height, Level.ProfileHeightCm);
+		Height = FMath::Min(Height, GroundCm + Level.ProfileHeightCm);
 	}
 	return Height;
+}
+
+float VisionConeVisibility::ElevatedGroundCm(float FeetZ, float GroundZ, float MinDropCm)
+{
+	return FeetZ - GroundZ >= MinDropCm ? GroundZ - FeetZ : 0.f;
+}
+
+float VisionConeVisibility::WallShadowLengthCm(float EyeAboveGroundCm, float WallTopCm, float WallDistanceCm, float ProfileCm)
+{
+	if (ProfileCm >= WallTopCm)
+	{
+		return 0.f;
+	}
+	if (EyeAboveGroundCm <= WallTopCm)
+	{
+		return TNumericLimits<float>::Max();
+	}
+	// The line eye -> profile grazes the wall's top at the face: Face x (Eye - Profile) / (Eye - Top) from the eye.
+	return WallDistanceCm * (WallTopCm - ProfileCm) / (EyeAboveGroundCm - WallTopCm);
+}
+
+float VisionConeVisibility::PerchDeadZoneCm(float EyeAboveRoofCm, float RoofAboveGroundCm, float EdgeCm, float ProfileCm)
+{
+	const float ProfileBelowRoof = RoofAboveGroundCm - ProfileCm;
+	if (ProfileBelowRoof <= 0.f)
+	{
+		return EdgeCm;
+	}
+	if (EyeAboveRoofCm <= KINDA_SMALL_NUMBER)
+	{
+		return TNumericLimits<float>::Max();
+	}
+	return EdgeCm * (EyeAboveRoofCm + ProfileBelowRoof) / EyeAboveRoofCm;
 }
 
 FVisionConeSightSpec VisionConeVisibility::MakeOperativeSightSpec(float EyeHeightCm, float RangeCm, int32 LevelCount)
@@ -182,9 +224,14 @@ bool VisionConeVisibility::IsSeenAt(const FVisionConeSightSpec& Spec, const FVis
 	{
 		return false;
 	}
-	const float Profile = Spec.Levels[Level].ProfileHeightCm;
+	// 2.5D (bug 09): the target stands on the ray's ground (heights from the observer's feet).
+	const float Profile = Ray.GroundCm + Spec.Levels[Level].ProfileHeightCm;
 	for (const FVisionConeObstacle& Obstacle : Ray.Obstacles)
 	{
+		if (Obstacle.bHidesInside && TargetCm > Obstacle.NearCm && TargetCm < Obstacle.FarCm)
+		{
+			return false; // on the ground under the observer's own roof
+		}
 		if (IsBlockedByFace(Spec.EyeHeightCm, Profile, Obstacle.NearCm, Obstacle.TopCm, TargetCm)
 			|| IsBlockedByFace(Spec.EyeHeightCm, Profile, Obstacle.FarCm, Obstacle.TopCm, TargetCm))
 		{
@@ -223,10 +270,11 @@ void VisionConeVisibility::ClassifyRay(const FVisionConeSightSpec& Spec, FVision
 	for (const FVisionConeLevel& Level : Spec.Levels)
 	{
 		Breaks.Add(Level.RangeCm);
+		const float Profile = Ray.GroundCm + Level.ProfileHeightCm;
 		for (const FVisionConeObstacle& Obstacle : Ray.Obstacles)
 		{
-			AddFaceBreaks(Spec.EyeHeightCm, Level.ProfileHeightCm, Obstacle.NearCm, Obstacle.TopCm, Breaks);
-			AddFaceBreaks(Spec.EyeHeightCm, Level.ProfileHeightCm, Obstacle.FarCm, Obstacle.TopCm, Breaks);
+			AddFaceBreaks(Spec.EyeHeightCm, Profile, Obstacle.NearCm, Obstacle.TopCm, Breaks);
+			AddFaceBreaks(Spec.EyeHeightCm, Profile, Obstacle.FarCm, Obstacle.TopCm, Breaks);
 		}
 	}
 	for (float& Break : Breaks)
@@ -326,7 +374,8 @@ bool VisionConeVisibility::SameStructure(const FVisionConeRay& A, const FVisionC
 
 bool VisionConeVisibility::NeedsRefine(const FVisionConeSightSpec& Spec, const FVisionConeRay& A, const FVisionConeRay& B)
 {
-	if (!SameStructure(A, B) || A.BlockerKey != B.BlockerKey || A.Obstacles.Num() != B.Obstacles.Num())
+	if (!SameStructure(A, B) || A.BlockerKey != B.BlockerKey || A.Obstacles.Num() != B.Obstacles.Num()
+		|| FMath::Abs(A.GroundCm - B.GroundCm) > GroundToleranceCm)
 	{
 		return true;
 	}
@@ -348,7 +397,7 @@ bool VisionConeVisibility::NeedsRefine(const FVisionConeSightSpec& Spec, const F
 	{
 		const FVisionConeObstacle& OA = A.Obstacles[Index];
 		const FVisionConeObstacle& OB = B.Obstacles[Index];
-		if (Turns(OA.NearNormal, OB.NearNormal) || Turns(OA.FarNormal, OB.FarNormal)
+		if (OA.bHidesInside != OB.bHidesInside || Turns(OA.NearNormal, OB.NearNormal) || Turns(OA.FarNormal, OB.FarNormal)
 			|| FMath::Abs(FMath::Min(OA.TopCm, 1.e4f) - FMath::Min(OB.TopCm, 1.e4f)) > 5.f || Jumps(OA.NearCm, OB.NearCm) || Jumps(OA.FarCm, OB.FarCm))
 		{
 			return true;
@@ -413,15 +462,17 @@ FVisionConeShape VisionConeVisibility::BuildShape(const TArray<FVisionConeRay>& 
 		return Level >= LevelCount ? Shape.Full : Shape.Light;
 	};
 	const bool bAllRound = VisionConeRules::ClampHalfAngle(HalfAngleDeg) >= 180.f;
-	TArray<FVector2D> Envelope;
+	const float OutlineLift = OutlineHeightCm - HeightCm;
+	TArray<FVector> Envelope;
 	if (!bAllRound)
 	{
-		Envelope.Add(FVector2D::ZeroVector);
+		Envelope.Add(FVector(0.f, 0.f, HeightCm + Rays[0].GroundCm + OutlineLift));
 	}
-	auto AddEnvelope = [&Envelope](float AngleDeg, float DistanceCm)
+	auto AddEnvelope = [&Envelope, HeightCm, OutlineLift](float AngleDeg, float DistanceCm, float GroundCm)
 	{
-		const FVector2D Point = Direction(AngleDeg) * DistanceCm;
-		if (Envelope.Num() == 0 || FVector2D::Distance(Envelope.Last(), Point) > 0.5f)
+		const FVector2D Point2 = Direction(AngleDeg) * DistanceCm;
+		const FVector Point(Point2, HeightCm + GroundCm + OutlineLift);
+		if (Envelope.Num() == 0 || FVector2D::Distance(FVector2D(Envelope.Last().X, Envelope.Last().Y), Point2) > 0.5f)
 		{
 			Envelope.Add(Point);
 		}
@@ -429,7 +480,7 @@ FVisionConeShape VisionConeVisibility::BuildShape(const TArray<FVisionConeRay>& 
 	for (int32 Index = 0; Index < Rays.Num(); ++Index)
 	{
 		const FVisionConeRay& A = Rays[Index];
-		AddEnvelope(A.AngleDeg, FarEnd(A));
+		AddEnvelope(A.AngleDeg, FarEnd(A), A.GroundCm);
 		if (Index + 1 >= Rays.Num())
 		{
 			break;
@@ -444,7 +495,7 @@ FVisionConeShape VisionConeVisibility::BuildShape(const TArray<FVisionConeRay>& 
 			for (int32 Span = 0; Span < A.Spans.Num(); ++Span)
 			{
 				AddSpanQuad(MeshFor(A.Spans[Span].Level), A.AngleDeg, A.Spans[Span].StartCm, A.Spans[Span].EndCm,
-					B.AngleDeg, B.Spans[Span].StartCm, B.Spans[Span].EndCm, HeightCm);
+					B.AngleDeg, B.Spans[Span].StartCm, B.Spans[Span].EndCm, HeightCm + A.GroundCm, HeightCm + B.GroundCm);
 			}
 			continue;
 		}
@@ -452,20 +503,20 @@ FVisionConeShape VisionConeVisibility::BuildShape(const TArray<FVisionConeRay>& 
 		const float Mid = (A.AngleDeg + B.AngleDeg) * 0.5f;
 		for (const FVisionConeSpan& Span : A.Spans)
 		{
-			AddSpanQuad(MeshFor(Span.Level), A.AngleDeg, Span.StartCm, Span.EndCm, Mid, Span.StartCm, Span.EndCm, HeightCm);
+			AddSpanQuad(MeshFor(Span.Level), A.AngleDeg, Span.StartCm, Span.EndCm, Mid, Span.StartCm, Span.EndCm, HeightCm + A.GroundCm, HeightCm + A.GroundCm);
 		}
 		for (const FVisionConeSpan& Span : B.Spans)
 		{
-			AddSpanQuad(MeshFor(Span.Level), Mid, Span.StartCm, Span.EndCm, B.AngleDeg, Span.StartCm, Span.EndCm, HeightCm);
+			AddSpanQuad(MeshFor(Span.Level), Mid, Span.StartCm, Span.EndCm, B.AngleDeg, Span.StartCm, Span.EndCm, HeightCm + B.GroundCm, HeightCm + B.GroundCm);
 		}
-		AddEnvelope(Mid, FarEnd(A));
-		AddEnvelope(Mid, FarEnd(B));
+		AddEnvelope(Mid, FarEnd(A), A.GroundCm);
+		AddEnvelope(Mid, FarEnd(B), B.GroundCm);
 	}
-	if (Envelope.Num() > 2 && FVector2D::Distance(Envelope[0], Envelope.Last()) <= 0.5f)
+	if (Envelope.Num() > 2 && FVector2D::Distance(FVector2D(Envelope[0].X, Envelope[0].Y), FVector2D(Envelope.Last().X, Envelope.Last().Y)) <= 0.5f)
 	{
 		Envelope.Pop(); // all round: the last ray is the first one
 	}
-	BuildClosedBand(Envelope, OutlineWidthCm, OutlineHeightCm, Shape.Outline);
+	BuildClosedBand(Envelope, OutlineWidthCm, Shape.Outline);
 	return Shape;
 }
 
