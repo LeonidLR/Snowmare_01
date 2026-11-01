@@ -19,6 +19,7 @@ export const LIMITS = {
   stareMinSeconds: 0.3, // a glance while turning is not a stare (looking where one walks never counts: approaching a wall)
   rearCoverPct: 90, // % of patrol time, 3 and 4 members (contract; v2.2: the triad has a rear man too)
   rearMargin: 30, // the 5-7 o'clock sector (60 deg) must sit inside a cone: centre within fov / 2 - 30
+  rearTurnGrace: 0.5, // s, v2.6: after the rear guard's turn round ends his body comes back to the rear (checks 2 / 10 count it as held)
   flickerPer100m: 1, // unexpected formation changes per 100 m (contract)
   flickerRevert: 2, // a change undone within 2 x classify.hold_distance of the leader's path is a flicker
   expectLookAhead: 500, // cm: a change into the formation expected just ahead counts as expected
@@ -82,6 +83,11 @@ export interface RunMetrics {
    * was held; flankPct / leftPct / rightPct of the approach time.
    */
   approach: { time: number; rearMiss: number; flankPct: number; leftPct: number; rightPct: number; worst: Worst | null } | null;
+  /**
+   * v2.6 (game designer 2026-11-01, Q2 = b): patrol time the rear guard spent turned round catching up facing forwards (the rear open by
+   * the decision - checks 2 and 10 count that time + LIMITS.rearTurnGrace as held), the turns, and its share of the patrol (3+ members; info line 15).
+   */
+  rearTurn: { walkTime: number; time: number; turns: number; pct: number } | null;
 }
 
 /** Collects one run's frames into RunMetrics. */
@@ -103,6 +109,8 @@ export class RunCollector {
   private stuckTimer = new Map<string, number>();
   private behind: number[] = [];
   private rearWatched = 0;
+  private rearTurnedLast = false;
+  private rearTurnEnd = -Infinity;
   private readonly segs: Segment[];
   private splitTimer = 0;
   private splitCounted = false;
@@ -130,6 +138,7 @@ export class RunCollector {
       bypass: [],
       corner: { ends: 0, missed: 0, worst: null },
       cover: memberCount >= 3 ? { walkTime: 0, okTime: 0, pct: 100, worst: null } : null,
+      rearTurn: memberCount >= 3 ? { walkTime: 0, time: 0, turns: 0, pct: 0 } : null,
       slide: { time: 0, orderBreaks: 0, okTime: 0, pct: 100, worst: null },
       wallArc: memberCount >= 3 ? { time: 0, okTime: 0, pct: 100, worst: null } : null,
       approach: memberCount >= 2 ? { time: 0, rearMiss: 0, flankPct: 100, leftPct: 100, rightPct: 100, worst: null } : null,
@@ -163,11 +172,23 @@ export class RunCollector {
       } else { this.stareTimer.set(key, 0); this.stareCounted.delete(key); }
     }
 
+    // v2.6 (Q2 = b): the rear guard turned round to catch up - the rear is open by the designer's decision; checks 2 and 10 count that
+    // time (and LIMITS.rearTurnGrace after it, his body coming round to the rear again) as held.
+    const rearTurned = f.mode === 'walk' && f.members.some((mem) => mem.rearTurned);
+    if (this.m.rearTurn && f.mode === 'walk') {
+      this.m.rearTurn.walkTime += SIM_DT;
+      if (rearTurned) this.m.rearTurn.time += SIM_DT;
+      if (rearTurned && !this.rearTurnedLast) this.m.rearTurn.turns++;
+    }
+    if (this.rearTurnedLast && !rearTurned) this.rearTurnEnd = f.t;
+    this.rearTurnedLast = rearTurned;
+    const rearAccepted = rearTurned || f.t - this.rearTurnEnd < LIMITS.rearTurnGrace;
+
     // 2. rear cover (patrol only)
     if (this.m.rearCover && f.mode === 'walk') {
       this.m.rearCover.walkTime += SIM_DT;
       const rear = f.heading + 180, lim = cfg(this.c, 'sight.fov') / 2 - LIMITS.rearMargin;
-      if (f.members.some((mem) => angleDiff(mem.yaw, rear) <= lim)) this.rearWatched += SIM_DT;
+      if (rearAccepted || f.members.some((mem) => angleDiff(mem.yaw, rear) <= lim)) this.rearWatched += SIM_DT;
     }
 
     // 3. flicker + 4. expected formation per zone
@@ -321,7 +342,7 @@ export class RunCollector {
         for (let k = 1; k <= n; k++) { if (open[(i0 + k) % n]) { run++; gap = Math.max(gap, run * step); } else run = 0; }
       }
       this.m.cover.walkTime += SIM_DT;
-      if (gap <= cfg(this.c, 'coverage.max_gap_deg')) this.m.cover.okTime += SIM_DT;
+      if (rearAccepted || gap <= cfg(this.c, 'coverage.max_gap_deg')) this.m.cover.okTime += SIM_DT;
       else if (!this.m.cover.worst || gap > this.m.cover.worst.value) this.m.cover.worst = { t: round(f.t, 1), what: `${gap} deg open (${f.formation})`, value: gap };
     }
 
@@ -399,6 +420,10 @@ export class RunCollector {
   finish(): RunMetrics {
     const m = this.m;
     if (m.rearCover) m.rearCover.pct = m.rearCover.walkTime > 0 ? round((100 * this.rearWatched) / m.rearCover.walkTime, 1) : 100;
+    if (m.rearTurn) {
+      m.rearTurn.pct = m.rearTurn.walkTime > 0 ? round((100 * m.rearTurn.time) / m.rearTurn.walkTime, 1) : 0;
+      m.rearTurn.time = round(m.rearTurn.time, 2); m.rearTurn.walkTime = round(m.rearTurn.walkTime, 2);
+    }
     m.flicker.per100m = m.distance > 0 ? round(m.flicker.unexpected / (m.distance / 10000), 2) : 0;
     m.expect = (this.route.expect ?? []).map((e) => {
       const acc = this.expectAcc.get(e.zone) ?? { settled: 0, match: 0 };
@@ -526,6 +551,9 @@ export function summarize(runs: RunMetrics[]): SeriesSummary {
         const a = bad.approach!;
         return `${runTag(bad)} rear missed ${a.rearMiss} s of ${a.time} s, flank ${a.flankPct} % (left ${a.leftPct} / right ${a.rightPct})${a.worst ? `, t=${a.worst.t}s ${a.worst.what}` : ''}`;
       })() : '-'),
+    line(15, 'info: the rear guard turned round to catch up (v2.6 Q2 = b; checks 2 / 10 count that time as held) - runs with a turn; worst share of the patrol',
+      runs.filter((r) => r.rearTurn), (r) => !r.rearTurn!.turns,
+      (() => { const t = runs.filter((r) => r.rearTurn && r.rearTurn.turns).sort((a, b) => b.rearTurn!.pct - a.rearTurn!.pct)[0]; return t ? `${runTag(t)} ${t.rearTurn!.pct} % (${t.rearTurn!.turns} turns, ${t.rearTurn!.time} s)` : '-'; })(), true),
     line(12, `info: stuck followers (>${LIMITS.stuckDist} cm for ${LIMITS.stuckSeconds} s), slot fallbacks`, runs, (r) => r.stuck.events === 0,
       `${worstOf(runs, (r) => r.stuck.worst)}; fallback ticks ${runs.reduce((a, r) => a + r.slots.fallbackTicks, 0)}`, true),
   ];

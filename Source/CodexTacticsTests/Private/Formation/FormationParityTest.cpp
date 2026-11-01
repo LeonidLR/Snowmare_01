@@ -1,7 +1,8 @@
 // CodexTactics.Formation.Parity.<Rule> - the C++ formation rules against the golden vectors the Training Ground simulator exports
 // (`npm run golden`; v1.1 adds PassageWidth, v1.2 HedgehogSlots, v2 Classify state in / out, contract 9 Menu, v2.1 / v2.1.1 Guard,
 // TrailSlots, SideWidth, Bypass, Corner, TurnAhead, ClearLook, Assign, v2.2 Cover, CoverStatic, Slide, v2.3 Decided; v2.3 parts 6-9
-// add Guard allInSight / cause, Cover travel / shoulder, ClearLook limit / ahead): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
+// add Guard allInSight / cause, Cover travel / shoulder, ClearLook limit / ahead; v2.6 RearCatchUp and the short-obstacle Classify /
+// PassageWidth scenes): FPaths::ProjectDir()/Tools/TrainingGround/golden/formation_<Rule>.json, schema codex.formation_golden/1
 // (docs/design/FORMATION_CONTRACT.md 3, field names in 3.1). Same inputs -> same outputs within the file's tolerance (cm / deg; yaws
 // compared as angles). The rules' config is built from the file's "config_values" (the snapshot the vectors were computed with), so
 // later tuning of formation_config.json cannot break parity. A missing file: a warning, the test passes. Every case is checked (none is
@@ -1795,6 +1796,63 @@ bool FFormationParityApproachTest::RunTest(const FString&)
 			}
 		}
 		return FString();
+	});
+}
+
+// v2.6 (game designer 2026-11-01, Q2 = b): the lagging rear guard turns round to catch up (contract 17.2).
+FORMATION_PARITY_TEST(FFormationParityRearCatchUpTest, "RearCatchUp")
+bool FFormationParityRearCatchUpTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("RearCatchUp"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("RearCatchUp"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		FString Op;
+		if (!In->TryGetStringField(TEXT("op"), Op))
+		{
+			return TEXT("unreadable op");
+		}
+		if (Op == TEXT("way"))
+		{
+			// The rear guard's straight way to his slot: a team-mate on it?
+			FVector2D Pos;
+			FVector2D Slot;
+			const TArray<TSharedPtr<FJsonValue>>* OtherValues = nullptr;
+			bool bExpected = false;
+			if (!Vec2(In->TryGetField(TEXT("pos")), Pos) || !Vec2(In->TryGetField(TEXT("slot")), Slot) || !In->TryGetArrayField(TEXT("others"), OtherValues)
+				|| !Out->TryGetBoolField(TEXT("blocked"), bExpected))
+			{
+				return TEXT("unreadable way input / output");
+			}
+			TArray<FVector2D> Others;
+			for (const TSharedPtr<FJsonValue>& Value : *OtherValues)
+			{
+				FVector2D Other;
+				if (!Vec2(Value, Other))
+				{
+					return TEXT("unreadable other");
+				}
+				Others.Add(Other);
+			}
+			const bool bActual = FormationSectorRules::RearWayBlocked(Pos, Slot, Others, Golden.Config);
+			return bActual == bExpected ? FString() : FString::Printf(TEXT("blocked %d, expected %d"), bActual ? 1 : 0, bExpected ? 1 : 0);
+		}
+		double Lag = 0.0;
+		bool bTurned = false;
+		bool bWayBlocked = false;
+		bool bExpected = false;
+		if (!Number(*In, TEXT("lag"), nullptr, Lag) || !In->TryGetBoolField(TEXT("turned"), bTurned) || !In->TryGetBoolField(TEXT("wayBlocked"), bWayBlocked)
+			|| !Out->TryGetBoolField(TEXT("turned"), bExpected))
+		{
+			return TEXT("unreadable input / output");
+		}
+		const bool bActual = FormationSectorRules::RearCatchUp(static_cast<float>(Lag), bTurned, bWayBlocked, Golden.Config);
+		return bActual == bExpected ? FString() : FString::Printf(TEXT("turned %d, expected %d"), bActual ? 1 : 0, bExpected ? 1 : 0);
 	});
 }
 

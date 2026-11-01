@@ -110,6 +110,7 @@ namespace FormationRuntime
 		Wall.A = Point - Along * HalfLength;
 		Wall.B = Point + Along * HalfLength;
 		Wall.Thickness = 0.f;
+		Wall.bProbeHit = true; // v2.6: a piece of an obstacle of unknown size - SideWalls keeps it (the runtime filters short ones itself)
 		return Wall;
 	}
 

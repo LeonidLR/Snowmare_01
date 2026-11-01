@@ -17,7 +17,8 @@ import type { MenuChoice } from './menu.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
 export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu',
-  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided', 'WallEnd', 'Approach'] as const;
+  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided', 'WallEnd', 'Approach',
+  'RearCatchUp'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -79,6 +80,23 @@ const SCENES: Record<string, Segment[]> = {
   // Red team v2.5 (16_4): a T stem's free tip 1 m straight ahead, end-on (the wall runs along the heading from x 120; its end face at
   // x 100) - the forward rays hit only that END face: at_wall on arrival (they used to see nothing: open).
   stem_tip_ahead: [{ a: [120, 0], b: [2000, 0], thickness: 40 }],
+  // v2.6 (game designer 2026-11-01, Q1 = b): short obstacles beside the path are no side walls (classify.side_min_length 150 along the
+  // heading, pieces within classify.side_join_gap 50 are one obstacle). A 60 cm pillar 2.4 m to the left (red team 14_1): open.
+  pillar_left: [{ a: [-30, -240], b: [30, -240], thickness: 40 }],
+  // v2.6: a 1.2 m stub along the path 2.5 m to the right: open.
+  stub_right_120: [{ a: [-40, 250], b: [40, 250], thickness: 40 }],
+  // v2.6: a 2 m wall 2.5 m to the left - long enough: wall_left.
+  short_wall_left_200: [{ a: [-80, -250], b: [80, -250], thickness: 40 }],
+  // v2.6: a wall of touching 1 m pieces on the left (each alone 1.2 m) is one 5.2 m obstacle: wall_left.
+  pieces_left: [{ a: [-250, -260], b: [-150, -260], thickness: 20 }, { a: [-150, -260], b: [-50, -260], thickness: 20 },
+    { a: [-50, -260], b: [50, -260], thickness: 20 }, { a: [50, -260], b: [150, -260], thickness: 20 }, { a: [150, -260], b: [250, -260], thickness: 20 }],
+  // v2.6: posts 1.4 m apart on the right (gaps 1.1 m > the join gap): each a short obstacle - open.
+  posts_right: [{ a: [-200, 260], b: [-200, 261], thickness: 30 }, { a: [-60, 260], b: [-60, 261], thickness: 30 },
+    { a: [80, 260], b: [80, 261], thickness: 30 }, { a: [220, 260], b: [220, 261], thickness: 30 }],
+  // v2.6: a long wall on the left and a pillar on the right: wall_left (no corridor for the pillar).
+  pillar_in_corridor: [{ a: [-2000, -250], b: [2000, -250], thickness: 40 }, { a: [-30, 240], b: [30, 240], thickness: 40 }],
+  // v2.6: a short stub touching a long wall (a T joint) belongs to the long obstacle: the side probes still see the long wall.
+  stub_on_wall_right: [{ a: [-2000, 380], b: [2000, 380], thickness: 40 }, { a: [0, 360], b: [0, 260], thickness: 40 }],
 };
 
 /** v2.1 scenes for the guard (the leader's frame). */
@@ -349,6 +367,25 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
+  // v2.6 (game designer 2026-11-01, Q2 = b): the lagging rear guard turns round to catch up (hysteresis move.rear_turn_lag / rear_turn_back).
+  const rearG = base('RearCatchUp', 'in: op turn {lag (cm behind his slot along the heading), turned (the last answer), wayBlocked} -> out.turned (FormationSectorRules.RearCatchUp); op way {pos, slot, others [[x, y]]} -> out.blocked (FormationSectorRules.RearWayBlocked).');
+  const lagKey = config['move.rear_turn_lag'], backKey = config['move.rear_turn_back'];
+  for (const lag of [0, 20, backKey - 1, backKey, backKey + 1, 100, lagKey - 1, lagKey, lagKey + 1, 250, 600]) for (const turned of [false, true]) {
+    for (const wayBlocked of [false, true]) {
+      rearG.cases.push({ in: { op: 'turn', lag, turned, wayBlocked }, out: { turned: FormationSectorRules.RearCatchUp(lag, turned, wayBlocked, config) } });
+    }
+  }
+  // The way: his slot 4 m ahead (+X, then rotated / moved); a mate on it, beside it within / beyond the reach, behind him, past the slot.
+  const WAY_OTHERS: Vec2[][] = [[], [[200, 0]], [[200, 90]], [[200, 115]], [[200, -60]], [[-60, 0]], [[430, 0]], [[520, 0]], [[200, 130], [300, -10]]];
+  for (const [yaw, offset] of [[0, [0, 0]], [-115, [640, -300]]] as [number, Vec2][]) {
+    const tp = (p: Vec2): Vec2 => r2(place([{ a: p, b: p }], yaw, offset)[0].a);
+    const pos = tp([0, 0]), slot = tp([400, 0]);
+    for (const others of WAY_OTHERS) {
+      const placed = others.map(tp);
+      rearG.cases.push({ in: { op: 'way', pos, slot, others: placed }, out: { blocked: FormationSectorRules.RearWayBlocked(pos, slot, placed, config) } });
+    }
+  }
+
   // v2.2: the coverage allocator (walk / halt, fixed looks) and the static allocation round a standing group.
   const cover = base('Cover', 'in: walls, leaderPos, heading, members [{role, pos, back, travel?}] (K first; travel = world yaw, absent = the heading; v2.3 part 7), mode walk|halt, t, fixed [{role, yaw}] -> out {rearGuard, looks [{role, yaw}], shares [{role, from, to, primary}], shoulder [{role, yaw}]} (FormationCoverRules.Allocate; yaws compare as angles).');
   const COVER_SCENES = ['none', 'wall_left', 'wall_right', 'corridor', 'wide_street', 'gap_left', 'corner_left_ahead', 'far_left'];
@@ -480,7 +517,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  return { Approach: approachG, WallEnd: wallEnd, Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
+  return { RearCatchUp: rearG, Approach: approachG, WallEnd: wallEnd, Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
     Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign, TurnAhead: turnAhead, ClearLook: clear, Cover: cover, CoverStatic: coverStatic, Slide: slide, Decided: decided };
 }
 

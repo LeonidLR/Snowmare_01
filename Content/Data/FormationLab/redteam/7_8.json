@@ -118,7 +118,7 @@
       "seed": 1,
       "t": 26,
       "what": "echelon_left -> wedge, back after 3.4 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.6 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 3,
@@ -128,7 +128,7 @@
       "seed": 1,
       "t": 26,
       "what": "echelon_left -> wedge, back after 3.4 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.6 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 3,
@@ -138,7 +138,7 @@
       "seed": 1,
       "t": 26,
       "what": "echelon_left -> diamond, back after 3.4 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong"
+      "reason": "still failing under v2.6 (design question): open until the rules are fixed or the layout is judged wrong"
     }
   ],
   "fixed_entries": [

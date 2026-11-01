@@ -96,8 +96,8 @@
       "seed": 1,
       "t": 32.4,
       "what": "echelon_left -> wedge, back after 5.6 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong",
-      "triage": "v2.5.1 triage b (rules as decided, optional Q3): a U-turn round a wall's end crosses ~15 m of open ground - the wedge after the 5 m hold, the echelon again on the far face; 1 change back on a 94 m route = 1.06 / 100 m."
+      "triage": "v2.5.1 triage b (rules as decided; Q3 = keep, game designer 2026-11-01): a U-turn round a wall's end crosses ~15 m of open ground - the wedge after the 5 m hold, the echelon again on the far face; 1 change back on a 94 m route = 1.06 / 100 m.",
+      "reason": "still failing under v2.6 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 3,
@@ -107,8 +107,8 @@
       "seed": 1,
       "t": 32.4,
       "what": "echelon_left -> wedge, back after 5.6 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong",
-      "triage": "v2.5.1 triage b (rules as decided, optional Q3): a U-turn round a wall's end crosses ~15 m of open ground - the wedge after the 5 m hold, the echelon again on the far face; 1 change back on a 94 m route = 1.06 / 100 m."
+      "triage": "v2.5.1 triage b (rules as decided; Q3 = keep, game designer 2026-11-01): a U-turn round a wall's end crosses ~15 m of open ground - the wedge after the 5 m hold, the echelon again on the far face; 1 change back on a 94 m route = 1.06 / 100 m.",
+      "reason": "still failing under v2.6 (design question): open until the rules are fixed or the layout is judged wrong"
     },
     {
       "check": 3,
@@ -118,8 +118,8 @@
       "seed": 1,
       "t": 32.4,
       "what": "echelon_left -> diamond, back after 5.6 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong",
-      "triage": "v2.5.1 triage b (rules as decided, optional Q3): a U-turn round a wall's end crosses ~15 m of open ground - the wedge after the 5 m hold, the echelon again on the far face; 1 change back on a 94 m route = 1.06 / 100 m."
+      "triage": "v2.5.1 triage b (rules as decided; Q3 = keep, game designer 2026-11-01): a U-turn round a wall's end crosses ~15 m of open ground - the wedge after the 5 m hold, the echelon again on the far face; 1 change back on a 94 m route = 1.06 / 100 m.",
+      "reason": "still failing under v2.6 (design question): open until the rules are fixed or the layout is judged wrong"
     }
   ]
 }

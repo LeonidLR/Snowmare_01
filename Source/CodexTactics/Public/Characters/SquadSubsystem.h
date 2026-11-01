@@ -350,6 +350,16 @@ public:
 	/** Operative's formation role this frame (the leader K; a follower by his slot / the wall order); false when he has none. */
 	bool GetFormationRole(const AOperativeCharacter* Operative, EFormationRole& OutRole) const;
 
+	/**
+	 * Rules v2.6 (game designer 2026-11-01, Q2 = b): this follower is the rear guard lagging behind his slot and catches up facing forwards
+	 * (FormationSectorRules::RearCatchUp; Codex.Formation.RearTurn) - smokes.
+	 */
+	bool IsFormationRearTurned(const AOperativeCharacter* Operative) const;
+	/** Rules v2.6: how often a rear guard turned round to catch up since the level began - smokes. */
+	int32 GetFormationRearTurnCount() const { return Sectors.RearTurnCount; }
+	/** Rules v2.6 (Q1 = b): side probe hits dropped as short obstacles (FormationTerrainRules::IsShortSideObstacleAt) since the level began - smokes. */
+	int32 GetFormationShortSideHits() const { return Sectors.ShortSideHits; }
+
 	/** Operative's formation slot (Z = his feet height) and look yaw this frame; false when he has none (no role, console off, ...). */
 	bool GetFormationTarget(const AOperativeCharacter* Operative, FVector& OutSlot, float& OutLookYaw) const;
 
@@ -581,6 +591,8 @@ private:
 		bool bCatchUp = false;
 		/** Bug 2026-10-28: stepping aside out of the leader's own walk (FormationRuntime::YieldFromLeaderWay); logged once per yield. */
 		bool bYielding = false;
+		/** Rules v2.6 (Q2 = b): the lagging rear guard faces forwards while he catches up (FormationSectorRules::RearCatchUp's hysteresis). */
+		bool bRearTurned = false;
 	};
 
 	/** Formation look sectors: the state over frames (SquadSubsystemFormation.cpp). */
@@ -730,6 +742,9 @@ private:
 		};
 		FSquadPeek Peek;
 		int32 PeekCount = 0;
+		/** Rules v2.6: rear guard turn-rounds (Q2) and side probe hits dropped on short obstacles (Q1) since the level began (smokes). */
+		int32 RearTurnCount = 0;
+		int32 ShortSideHits = 0;
 	};
 
 	/** Rules v2.2 wall group (ReallocateWallGroup; SquadSubsystemWallGroup.cpp). */

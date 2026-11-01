@@ -274,6 +274,7 @@ bool FFormationTerrainPassageWidthTest::RunTest(const FString&)
 	TestEqual(TEXT("Dead end ahead: still open (no column flip before arriving)"), Raw({ Across }), EFormationTerrainClass::Open);
 	FFormationConfig Unfiltered = Config;
 	Unfiltered.ClassifySideIgnorePerpDeg = 0.f;
+	Unfiltered.ClassifySideMinLength = 0.f; // v2.6: a wall across the heading is also short ALONG it (its thickness) - off, to show the v1.1 filter alone
 	TestEqual(TEXT("Without the v1.1 filter the dead end read as a corridor"), FormationTerrainRules::ClassifyRaw({ Across }, FVector2D::ZeroVector, 0.f, Unfiltered),
 		EFormationTerrainClass::Corridor);
 	TestFalse(TEXT("No passage at a dead end"), FormationTerrainRules::PassageWidth({ Across }, FVector2D::ZeroVector, 0.f, Config).IsSet());

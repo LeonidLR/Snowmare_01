@@ -369,3 +369,24 @@ Ground simulator does not model the corner stack / the fitted layout yet (follow
   - *The squad never splits comes first* (found by FormationWallSwitchSmoke after the merge with the corner stack): a man whose straight way
     to his slot passes a wall (a switch round a corner to a cross wall) goes round it facing his run at the squad's pace - holding his look he
     fell 4 s behind the leader round the corner - and takes his approach look again once the way is clear.
+
+## v2.6 — the game designer's answers to the red team v2.5 questions (2026-11-01, via the coordinator; contract section 17)
+Questions: `FORMATION_REDTEAM_V25.md` Q1-Q3 (cases 14_1 #3, 14_1 #6, 15_3 #3).
+- **Q1 = b - a post or a short stub beside the path is no side wall.** An obstacle shorter than **1.5 m along the path**
+  (`classify.side_min_length` 150 cm; touching pieces within `classify.side_join_gap` 50 cm are one obstacle, so a wall built of 1 m
+  modules stays a wall) is ignored by the side classification: no echelon for a 60 cm pillar 2-4 m from the path. The forward (arrival)
+  rays still see it, and a man's look into it stays ClearLook's job. Threshold picked with the simulator: 100 cm leaves 14_1 open (its
+  pillars are 100 cm long with their thickness), 150 and 200 cm give the same result on the lab and the 62 red-team layouts (8 entries
+  fixed, 0 new) - 150 keeps the 1.5-2 m walls readable as walls.
+- **Q2 = b - the lagging rear guard turns round.** More than **1.5 m behind his slot along the squad's heading** (`move.rear_turn_lag`
+  150 cm, check 6's measure - a sideways shift is no lag) the walking rear guard turns round and catches up FACING FORWARDS at the normal
+  catch-up speed (walk x `move.catchup_mult`) instead of walking backwards at `move.backward_mult`; back within **0.5 m**
+  (`move.rear_turn_back` 50 cm) he turns round again and resumes the backward walk. The 1 m band between the two keys is the hysteresis:
+  one turn out and one back per lag, no flicker. He does not START the turn while a team-mate stands on his straight way to his slot
+  (slot.min_spacing + 20 cm of it): he would overtake him head-on at the catch-up speed (found on red team 4_3 / 8_2, a manual hedgehog
+  re-forming after a corridor); once turned he keeps facing forwards until he is back. The rear is open while he is turned - the price the
+  designer accepted ("the squad never splits comes first"); the bot's rear cover (check 2) and coverage (check 10) count that time (+0.5 s while he turns back) as held
+  and report it as info line 15.
+- **Q3 = keep** - the 5 m hold after a U-turn round a wall's end stays (15_3 #3 stays a known entry).
+- Runtime: `Codex.Formation.ShortSideObstacles` (Q1) and `Codex.Formation.RearTurn` (Q2), both default 1 (0 = v2.5.1, A/B). The side probe's
+  trace hit alone does not know the obstacle's size: the level's box walls round the leader do (`FormationTerrainRules::IsShortSideObstacleAt`).

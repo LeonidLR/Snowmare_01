@@ -234,17 +234,16 @@
     "seed": 1,
     "date": "2026-10-28 07:10"
   },
-  "expected_fail": [
+  "expected_fail": [],
+  "fixed_entries": [
     {
       "check": 1,
       "choice": "hedgehog",
       "members": 4,
       "route": "R1",
       "seed": 2,
-      "t": 28.1,
-      "what": "L at L3",
-      "reason": "still failing under v2.5.1 (rule bug?): open until the rules are fixed or the layout is judged wrong",
-      "triage": "v2.5.1 triage b (accepted): a MANUAL hedgehog in a 4 m zigzag corridor (Q2 = a family: the player's choice), a 0.30 s glance of a jostled man; the smoothed-velocity limit fixed it but added 5 failures - rejected."
+      "fixed_in": "v2.6"
     }
-  ]
+  ],
+  "fixed_in": "v2.6"
 }

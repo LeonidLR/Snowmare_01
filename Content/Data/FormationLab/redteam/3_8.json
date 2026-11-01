@@ -111,16 +111,15 @@
     "seed": 1,
     "date": "2026-10-25 19:43"
   },
-  "expected_fail": [
+  "expected_fail": [],
+  "fixed_entries": [
     {
       "check": 3,
       "choice": "auto",
       "members": 2,
       "route": "R1",
       "seed": 1,
-      "t": 29,
-      "what": "wedge -> echelon_right, back after 4.1 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.6"
     },
     {
       "check": 3,
@@ -128,9 +127,7 @@
       "members": 3,
       "route": "R1",
       "seed": 1,
-      "t": 29,
-      "what": "wedge -> echelon_right, back after 4.1 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.6"
     },
     {
       "check": 3,
@@ -138,9 +135,8 @@
       "members": 4,
       "route": "R1",
       "seed": 1,
-      "t": 29,
-      "what": "diamond -> echelon_right, back after 4.1 s",
-      "reason": "still failing under v2.5.1 (design question): open until the rules are fixed or the layout is judged wrong"
+      "fixed_in": "v2.6"
     }
-  ]
+  ],
+  "fixed_in": "v2.6"
 }

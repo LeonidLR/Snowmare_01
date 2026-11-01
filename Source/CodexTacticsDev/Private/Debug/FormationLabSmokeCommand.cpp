@@ -19,6 +19,9 @@
 // the v2.1 stills to Saved/Screenshots/FormationV21/ (the guard switch with the HUD line, the trail column round the corner, the corner watch).
 // Rules v2.5.1 (contract 16.1, red team 16_4): the commander arriving head-on at W_G_20's free end (the lab route R_G_end, 4 deg off the axis,
 // and the smoke-own R_G_end_axis straight along it) -> the wall layout lines up across the end face (its outward yaw = the wall's axis).
+// Rules v2.6 (the game designer's answers 2026-11-01, contract 17): R_A_posts - two 60 x 40 cm posts spawned 3.2 m beside lane A's open
+// ground (one each side): the squad walks past them in the diamond (no echelon: the side probes drop the posts' hits, Q1 = b); R_A_rear - on
+// lane A the rear guard is set 3 m back mid-walk: he turns round, catches up facing his run and walks backwards again at his place (Q2 = b).
 // Known rules v1.1 limits the simulator shows too are reported, not failed (FormationLabSmoke::Known; rules v1.2 is being ported).
 // "shot" (rendered: UnrealEditor.exe <uproject> /Game/Maps/L_FormationLab -game -RenderOffscreen -ResX=1280 -ResY=720
 // "-LevelJson=L_FormationLab.json" "-ExecCmds=CodexTactics.FormationLabSmoke shot") saves stills to Saved/Screenshots/FormationLab/
@@ -30,6 +33,8 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Camera/CameraActor.h"
+#include "Components/BoxComponent.h"
+#include "Engine/CollisionProfile.h"
 #include "Camera/CameraComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -99,6 +104,17 @@ namespace FormationLabSmoke
 	/** ... its spread looks hold this much of the open arc round the tip (checks.ts LIMITS.wallArcPct), %; each man on his look within, deg. */
 	constexpr float EndSpreadPct = 95.f;
 	constexpr float EndLookTolDeg = 30.f;
+	/** Rules v2.6 R_A_posts: the posts' half extents (60 x 40 cm, 3 m high) and their centres 3.4 m beside lane A's path, cm. */
+	const FVector PostHalfExtent(30.0, 20.0, 150.0);
+	constexpr double PostOffsetCm = 340.0;
+	/** Rules v2.6 R_A_rear: the rear guard is set this far back after this much of the leader's path, cm; he must turn within, s. */
+	constexpr double RearPushCm = 300.0;
+	constexpr float RearPushAfterCm = 900.f;
+	constexpr float RearTurnWithinSeconds = 1.5f;
+	/** ... turned this long (his body came round), moving faster than this, his facing within this of his velocity, s / cm/s / deg. */
+	constexpr float RearFacingAfterSeconds = 0.6f;
+	constexpr float RearFacingMinSpeed = 60.f;
+	constexpr float RearFacingTolDeg = 60.f;
 
 	/** Rules v1.1 limits the Training Ground simulator fails too (Saved/TrainingGround/movement/report.md, 2026-10-25): reported, not failed. */
 	struct FKnown
@@ -108,7 +124,7 @@ namespace FormationLabSmoke
 		const TCHAR* Why;
 	};
 	const FKnown Known[] = {
-		{ TEXT("R_B_walls"), TEXT("pace"), TEXT("rules v2 / contract 7: at the echelon <-> diamond switches the 4th man crosses ~5.4 m to his new slot walking BACKWARDS (he looks 150 / 180 deg), capped at walk x move.backward_mult (0.9) = only ~22 cm/s over the squad's patrol pace; the game shows p95 160-175 cm, the simulator 95-105 cm (its members turn and accelerate instantly) - a tuning / design point for the Training Ground (2026-10-25)") },
+		{ TEXT("R_B_walls"), TEXT("pace"), TEXT("rules v2 / contract 7: at the echelon <-> diamond switches the 4th man crosses ~5.4 m to his new slot walking BACKWARDS (he looks 150 / 180 deg), capped at walk x move.backward_mult (0.9) = only ~22 cm/s over the squad's patrol pace; the game showed p95 160-175 cm, the simulator 95-105 cm (its members turn and accelerate instantly) - a tuning / design point for the Training Ground (2026-10-25). Fixed by rules v2.6 (Q2 = b: the rear guard turns round to catch up; p95 103 cm in the game, 2026-11-01): kept only for the A/B Codex.Formation.RearTurn 0") },
 	};
 
 	const TCHAR* KnownWhy(const FString& Route, const TCHAR* Check)
@@ -177,6 +193,10 @@ namespace FormationLabSmoke
 		/** Rules v2.5.1 (contract 16.1): the route ends head-on at this wall's free END (layout wall id) - the wall layout lines up across the
 		 * end face (its outward yaw = the wall's axis out of that end). Empty = none. */
 		FString ExpectEndFaceOf;
+		/** Rules v2.6 (Q1 = b): posts are spawned beside this route; the squad must keep the open-ground formation past them. */
+		bool bPosts = false;
+		/** Rules v2.6 (Q2 = b): the rear guard is set RearPushCm back mid-walk; he must turn round, catch up facing his run, turn back. */
+		bool bRearLag = false;
 	};
 
 	enum class EStage : uint8
@@ -276,6 +296,20 @@ namespace FormationLabSmoke
 		// The wall order stage.
 		FCoverSlot OrderSlot;
 		FVector OrderBackPoint = FVector::ZeroVector;
+		// Rules v2.6 (R_A_posts / R_A_rear).
+		TArray<TWeakObjectPtr<AActor>> Posts;
+		int32 ShortHitsAtStart = 0;
+		float PostOffSeconds = 0.f;
+		FString PostOffWorst;
+		bool bRearPushed = false;
+		TWeakObjectPtr<AOperativeCharacter> RearMan;
+		float RearPushTime = -1.f;
+		float RearTurnedAt = -1.f;
+		float RearBackAt = -1.f;
+		int32 RearFacingOk = 0;
+		int32 RearFacingBad = 0;
+		FString RearFacingWorst;
+		float RearBackwardsSeconds = 0.f;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -518,6 +552,117 @@ namespace FormationLabSmoke
 		State.TrailNearCorner = 0.f;
 		State.HudSeen.Reset();
 		State.CornerWatchSeconds = 0.f;
+		State.PostOffSeconds = 0.f;
+		State.PostOffWorst.Reset();
+		State.bRearPushed = false;
+		State.RearMan.Reset();
+		State.RearPushTime = -1.f;
+		State.RearTurnedAt = -1.f;
+		State.RearBackAt = -1.f;
+		State.RearFacingOk = 0;
+		State.RearFacingBad = 0;
+		State.RearFacingWorst.Reset();
+		State.RearBackwardsSeconds = 0.f;
+	}
+
+	/** Rules v2.6 R_A_posts: a 60 x 40 cm post (a blocking box, as the level's box collision the formation reads) standing on the ground. */
+	AActor* SpawnPost(UWorld* World, const FState& State, const FVector2D& Center)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		const FVector Location(Center.X, Center.Y, State.Layout.GroundZ + PostHalfExtent.Z);
+		AActor* Post = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform(Location), Params);
+		if (!Post)
+		{
+			return nullptr;
+		}
+		UBoxComponent* Box = NewObject<UBoxComponent>(Post, TEXT("SmokePost"));
+		Box->SetMobility(EComponentMobility::Movable);
+		Box->SetBoxExtent(PostHalfExtent);
+		Box->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		Post->SetRootComponent(Box);
+		Box->RegisterComponent();
+		Box->SetWorldLocation(Location);
+		return Post;
+	}
+
+	void DestroyPosts(FState& State)
+	{
+		for (const TWeakObjectPtr<AActor>& Post : State.Posts)
+		{
+			if (AActor* Actor = Post.Get())
+			{
+				Actor->Destroy();
+			}
+		}
+		State.Posts.Reset();
+	}
+
+	/** Rules v2.6 R_A_rear: the rear guard set back mid-walk, then his turn round (facing his run), his return to the backward walk. */
+	void SampleRearLag(UWorld* World, FState& State, float Dt)
+	{
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+		if (!Leader)
+		{
+			return;
+		}
+		const float Heading = Squad->GetFormationHeadingYaw();
+		if (!State.bRearPushed)
+		{
+			EFormationRole RearRole;
+			if (State.LeaderPath < RearPushAfterCm || Squad->GetFormationMode() != EFormationMode::Walk || !Squad->GetFormationRearGuard(RearRole))
+			{
+				return;
+			}
+			for (AOperativeCharacter* Each : Living(State))
+			{
+				EFormationRole Role;
+				if (Each != Leader && Squad->GetFormationRole(Each, Role) && Role == RearRole)
+				{
+					const FVector Back = Each->GetActorLocation() - FVector(FormationMath::Forward(Heading), 0.0) * RearPushCm;
+					Each->TeleportTo(Back, Each->GetActorRotation(), false, true);
+					State.RearMan = Each;
+					State.bRearPushed = true;
+					State.RearPushTime = State.StageTime;
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace: R_A_rear t=%.1f the rear guard %s (%s) set %.0f cm back"), State.StageTime,
+						*Each->DisplayName.ToString(), FormationNames::ToString(Role), RearPushCm);
+					break;
+				}
+			}
+			return;
+		}
+		const AOperativeCharacter* Rear = State.RearMan.Get();
+		if (!Rear)
+		{
+			return;
+		}
+		const bool bTurned = Squad->IsFormationRearTurned(Rear);
+		if (bTurned && State.RearTurnedAt < 0.f)
+		{
+			State.RearTurnedAt = State.StageTime;
+		}
+		if (!bTurned && State.RearTurnedAt >= 0.f && State.RearBackAt < 0.f)
+		{
+			State.RearBackAt = State.StageTime;
+		}
+		const FVector2D Velocity(Rear->GetVelocity());
+		const float Facing = Yaw2D(Rear->GetActorForwardVector());
+		if (bTurned && State.StageTime - State.RearTurnedAt >= RearFacingAfterSeconds && Velocity.Size() > RearFacingMinSpeed)
+		{
+			const float Off = FormationMath::AngleBetween(Facing, FormationMath::YawOf(Velocity));
+			++(Off <= RearFacingTolDeg ? State.RearFacingOk : State.RearFacingBad);
+			if (Off > RearFacingTolDeg && State.RearFacingWorst.IsEmpty())
+			{
+				State.RearFacingWorst = FString::Printf(TEXT("t=%.1f facing %.0f, moving %.0f"), State.StageTime, Facing, FormationMath::YawOf(Velocity));
+			}
+		}
+		// Back at his place: the rear guard's backward walk (facing back, moving with the squad).
+		if (State.RearBackAt >= 0.f && !bTurned && Velocity.Size() > RearFacingMinSpeed
+			&& FormationMath::AngleBetween(Facing, FormationMath::YawOf(Velocity)) > 120.f)
+		{
+			State.RearBackwardsSeconds += Dt;
+		}
 	}
 
 	/** The layout's walls as the rules see them (checks 7 / 9 use the layout, like checks.ts). */
@@ -1123,7 +1268,8 @@ namespace FormationLabSmoke
 		}
 		CheckKnown(State, Route.Id, TEXT("stare"), State.StareEvents == 0, FString::Printf(TEXT("%s: nobody faces a wall within 200 cm for >= 0.3 s (%d events%s)"),
 			*Name, State.StareEvents, State.StareWorst.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", worst %.1f s %s"), State.StareWorstSeconds, *State.StareWorst)));
-		if (MemberCount >= 4 && !Route.bRun && State.Behind.Num() > 10)
+		// R_A_rear sets the rear guard 3 m back on purpose: his pace there is the turn round's own check (below).
+		if (MemberCount >= 4 && !Route.bRun && !Run.bRearLag && State.Behind.Num() > 10)
 		{
 			TArray<float> Sorted = State.Behind;
 			Sorted.Sort();
@@ -1161,6 +1307,25 @@ namespace FormationLabSmoke
 					State.NarrowWorst.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", %s"), *State.NarrowWorst)));
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s: %d formation changes"), *Name, State.FormationChanges);
+		if (Run.bPosts)
+		{
+			const int32 Dropped = Squad->GetFormationShortSideHits() - State.ShortHitsAtStart;
+			Check(State, State.PostOffSeconds <= 0.f, FString::Printf(TEXT("%s: past the two posts the squad keeps the diamond - no echelon for a post beside the path (%.1f s off%s)"),
+				*Name, State.PostOffSeconds, State.PostOffWorst.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", first %s"), *State.PostOffWorst)));
+			Check(State, Dropped > 0, FString::Printf(TEXT("%s: the side probes saw the posts and dropped them as short obstacles (%d hits)"), *Name, Dropped));
+		}
+		if (Run.bRearLag)
+		{
+			const AOperativeCharacter* Rear = State.RearMan.Get();
+			Check(State, State.bRearPushed && Rear, FString::Printf(TEXT("%s: the rear guard was set %.0f cm back mid-walk"), *Name, RearPushCm));
+			Check(State, State.RearTurnedAt >= 0.f && State.RearTurnedAt - State.RearPushTime <= RearTurnWithinSeconds,
+				FString::Printf(TEXT("%s: the lagging rear guard turns round to catch up (after %.2f s, <= %.1f)"), *Name,
+					State.RearTurnedAt >= 0.f ? State.RearTurnedAt - State.RearPushTime : -1.f, RearTurnWithinSeconds));
+			Check(State, State.RearFacingOk >= 10 && State.RearFacingBad == 0, FString::Printf(TEXT("%s: turned, he catches up FACING his run (%d ok, %d off%s)"), *Name,
+				State.RearFacingOk, State.RearFacingBad, State.RearFacingWorst.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", first %s"), *State.RearFacingWorst)));
+			Check(State, State.RearBackAt >= 0.f && State.RearBackwardsSeconds >= 1.f, FString::Printf(TEXT("%s: back at his place he walks backwards again (turned for %.1f s, then %.1f s backwards)"),
+				*Name, State.RearBackAt >= 0.f ? State.RearBackAt - State.RearTurnedAt : -1.f, State.RearBackwardsSeconds));
+		}
 		if (bWallEnd)
 		{
 			float NormalYaw = 0.f;
@@ -1334,6 +1499,22 @@ namespace FormationLabSmoke
 			FormationMenuRules::ParseChoice(Run->Menu.IsEmpty() ? FString(TEXT("auto")) : Run->Menu, Menu);
 			Squad->SetFormationMenuChoice(Menu);
 			PlaceSquad(World, State, Route->Points[0], Yaw);
+			DestroyPosts(State);
+			if (Run->bPosts)
+			{
+				// Rules v2.6 (Q1 = b): a post each side of the path, 3.2 m from it (inside classify.probe_side, clear of the flank slots).
+				const FVector2D Leg = (Route->Points[1] - Route->Points[0]).GetSafeNormal();
+				const FVector2D Right(-Leg.Y, Leg.X);
+				const double Length = FVector2D::Distance(Route->Points[0], Route->Points[1]);
+				for (const TPair<double, double>& Spot : { TPair<double, double>(0.4, 1.0), TPair<double, double>(0.7, -1.0) })
+				{
+					if (AActor* Post = SpawnPost(World, State, Route->Points[0] + Leg * (Length * Spot.Key) + Right * (PostOffsetCm * Spot.Value)))
+					{
+						State.Posts.Add(Post);
+					}
+				}
+				Check(State, State.Posts.Num() == 2, FString::Printf(TEXT("%s: 2 posts spawned beside the path (%d)"), *Route->Id, State.Posts.Num()));
+			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: route %s (%s, %d points) with %d members, menu %s"), *Route->Id, Route->bRun ? TEXT("run") : TEXT("walk"),
 				Route->Points.Num(), Run->MemberCount, Run->Menu.IsEmpty() ? TEXT("auto") : *Run->Menu);
 			Enter(State, EStage::RouteSettle);
@@ -1344,6 +1525,7 @@ namespace FormationLabSmoke
 			if (State.StageTime >= SettleSeconds)
 			{
 				ResetMetrics(State);
+				State.ShortHitsAtStart = Squad->GetFormationShortSideHits();
 				State.Point = 1;
 				State.LegTime = 0.f;
 				State.StillTime = 0.f;
@@ -1355,6 +1537,24 @@ namespace FormationLabSmoke
 		case EStage::RouteWalk:
 		{
 			Sample(World, State, *Route, Dt);
+			if (Run->bRearLag)
+			{
+				SampleRearLag(World, State, Dt);
+			}
+			if (Run->bPosts && Squad->GetFormationMode() == EFormationMode::Walk)
+			{
+				// Rules v2.6 (Q1 = b): past the posts the squad keeps the open-ground formation (the requested one: no echelon / column).
+				const EFormationKind Requested = Squad->GetFormationRequested();
+				if (Requested != EFormationKind::Diamond)
+				{
+					State.PostOffSeconds += Dt;
+					if (State.PostOffWorst.IsEmpty())
+					{
+						State.PostOffWorst = FString::Printf(TEXT("%s at (%.0f, %.0f), t=%.1f"), FormationNames::ToString(Requested), Leader->GetActorLocation().X,
+							Leader->GetActorLocation().Y, State.StageTime);
+					}
+				}
+			}
 			State.LegTime += Dt;
 			State.CarrotTime += Dt;
 			const FVector2D Here(Leader->GetActorLocation());
@@ -1430,6 +1630,7 @@ namespace FormationLabSmoke
 				}
 			}
 			CheckRoute(World, State, *Route, *Run, bWallEnd);
+			DestroyPosts(State);
 			if (Run->bWallOrderAfter)
 			{
 				// Back off the dead end, then the group cover order at its wall.
@@ -1583,6 +1784,14 @@ namespace FormationLabSmoke
 		EndOn.Points = { FVector2D(4800.0, 1300.0), FVector2D(4800.0, 2635.0) };
 		EndOn.Expect.Add({ TEXT("Z_G_end"), TEXT("wall") });
 		State->Layout.Routes.Add(EndOn);
+		// Rules v2.6 (contract 17): lane A's open ground west of its slide stretch - the posts beside the path (Q1), the rear guard set back (Q2).
+		for (const TCHAR* Id : { TEXT("R_A_posts"), TEXT("R_A_rear") })
+		{
+			FLabRoute Lane;
+			Lane.Id = Id;
+			Lane.Points = { FVector2D(-5500.0, -4500.0), FVector2D(-500.0, -4500.0) };
+			State->Layout.Routes.Add(Lane);
+		}
 		const TCHAR* Order[] = { TEXT("R_A_open"), TEXT("R_A_run"), TEXT("R_B_walls"), TEXT("R_C_gaps"), TEXT("R_D_corridors"), TEXT("R_E_corner"),
 			TEXT("R_F_deadend"), TEXT("R_v2_gaps") };
 		for (const TCHAR* Id : Order)
@@ -1634,6 +1843,20 @@ namespace FormationLabSmoke
 				Run.bExpectCorner = Each.bCorner;
 				State->Plan.Add(Run);
 			}
+		}
+		if (Only.IsEmpty() || Only.Contains(TEXT("R_A_posts")))
+		{
+			FRun Posts;
+			Posts.RouteId = TEXT("R_A_posts");
+			Posts.bPosts = true;
+			State->Plan.Add(Posts);
+		}
+		if (Only.IsEmpty() || Only.Contains(TEXT("R_A_rear")))
+		{
+			FRun Rear;
+			Rear.RouteId = TEXT("R_A_rear");
+			Rear.bRearLag = true;
+			State->Plan.Add(Rear);
 		}
 		if (Only.IsEmpty() || Only.Contains(TEXT("n3")))
 		{

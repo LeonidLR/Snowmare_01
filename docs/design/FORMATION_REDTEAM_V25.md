@@ -41,4 +41,11 @@ only with 4 men (`runFailures`) while the bot gates it from 3 (v2.2) - aligning 
    already uses.
 3. **Q3 (optional) - a U-turn round a wall's end (15_3).** The squad leaves the echelon at the apex (open ground) and takes it again on the far
    face. Options: (a) leave it (recommended - it is the 5 m hold as decided); (b) hold the echelon through a turn the fold already covers.
-EOF
+
+## Answers (game designer, 2026-11-01) - rules v2.6 (`FORMATION_SECTORS.md` "v2.6", contract 17)
+- **Q1 = b**: obstacles shorter than 1.5 m along the path are no side walls (`classify.side_min_length` 150, `classify.side_join_gap` 50).
+  14_1 #3 (auto n2 / n3 / n4) fixed; 14_1 #6 fixed too (no echelon -> Z never steps behind the stub); also 3_8 #3 x 3 and 2_4 #6.
+- **Q2 = b**: the rear guard more than 1.5 m behind his slot turns round and catches up facing forwards; back within 0.5 m he walks backwards
+  again (`move.rear_turn_lag` 150 / `move.rear_turn_back` 50; no turn start while a team-mate is on his way). Alone (Q1 off) it takes 14_1 n4 s2
+  from p95 203 to 88 cm; with Q1 the 14_1 case no longer lags at all.
+- **Q3 = keep**: 15_3 #3 stays a known entry (the 5 m hold, as decided).
