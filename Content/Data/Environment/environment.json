@@ -114,5 +114,9 @@
         "Blizzard": [0.42, 0.39, 0.41, 0.41]
       }
     }
+  },
+  "level_overrides": {
+    "_comment": "Section 19.6: per-map overrides for a map WITHOUT a level JSON (or in addition to its environment.exposure_bias): {\"<MapName>\": {\"exposure_bias\": EV}}, added to the weather presenter's post-process exposure bias in every climate (default 0). L_MovementTest at 0 EV has the same mean luma as the lake / factory under the fixed shots view (159 vs 159 / 157) but its white snow patches clip (4.7 % of the pixels >= 235 at Clear 12:00; the lake 0 %); -0.5 EV removes the clipping and darkens the mean to ~139 (night ~94 vs 112) - game designer: the test map is too bright, a per-level darkening is approved. Tuned 2026-11-01, stills in Saved/Screenshots/MovementTestExposure.",
+    "L_MovementTest": { "exposure_bias": -0.5 }
   }
 }

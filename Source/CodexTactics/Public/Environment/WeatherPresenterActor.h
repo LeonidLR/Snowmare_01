@@ -444,6 +444,8 @@ private:
 	float LastSnowApplyTime = -1.f;
 	/** Section 18: DA_RainFX.WetExposureBias x Wetness on a temperate level (0 elsewhere), added to the exposure bias. */
 	float WetExposureBias = 0.f;
+	/** Section 19.6: the level's extra exposure bias (EnvironmentRules::GetLevelExposureBias), added to the exposure bias. */
+	float LevelExposureBias = 0.f;
 	/** Section 18: the previous rain FX application (-1 = jump to the target at once). */
 	float LastRainApplyTime = -1.f;
 	float SinceTargetRefresh = 0.f;

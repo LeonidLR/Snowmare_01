@@ -397,6 +397,20 @@ FEnvironmentConfig EnvironmentTuning::FromJson(const FJsonObject& Json, const FE
 	{
 		ParseTemperate(**TemperateJson, Config.Temperate);
 	}
+	// Section 19.6: per-map overrides {"<MapName>": {"exposure_bias": EV}}; a map listed again replaces the earlier value.
+	const TSharedPtr<FJsonObject>* OverridesJson = nullptr;
+	if (Json.TryGetObjectField(TEXT("level_overrides"), OverridesJson))
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*OverridesJson)->Values)
+		{
+			const TSharedPtr<FJsonObject>* MapJson = nullptr;
+			double Bias = 0.0;
+			if (!Entry.Key.StartsWith(TEXT("_")) && Entry.Value.IsValid() && Entry.Value->TryGetObject(MapJson) && (*MapJson)->TryGetNumberField(TEXT("exposure_bias"), Bias))
+			{
+				Config.LevelExposureBias.Add(Entry.Key, FMath::Clamp(static_cast<float>(Bias), -4.f, 4.f));
+			}
+		}
+	}
 	return Config;
 }
 
@@ -410,6 +424,14 @@ TSharedRef<FJsonObject> EnvironmentTuning::ToJson(const FEnvironmentConfig& Conf
 	Json->SetBoolField(ColdOnLockedKey, Config.bColdOnLockedLevels);
 	Json->SetObjectField(TEXT("roster"), RosterToJson(Config.Roster));
 	Json->SetObjectField(TEXT("temperate"), TemperateToJson(Config.Temperate));
+	TSharedRef<FJsonObject> Overrides = MakeShared<FJsonObject>();
+	for (const TPair<FString, float>& Entry : Config.LevelExposureBias)
+	{
+		TSharedRef<FJsonObject> MapJson = MakeShared<FJsonObject>();
+		MapJson->SetNumberField(TEXT("exposure_bias"), Entry.Value);
+		Overrides->SetObjectField(Entry.Key, MapJson);
+	}
+	Json->SetObjectField(TEXT("level_overrides"), Overrides);
 	return Json;
 }
 

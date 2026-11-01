@@ -484,6 +484,13 @@ struct CODEXTACTICS_API FEnvironmentConfig
 	/** Section 17: the Temperate climate profile (block "temperate"); every value above stays the Arctic one. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Climate")
 	FTemperateClimateConfig Temperate;
+
+	/**
+	 * Section 19.6: per-map exposure bias in EV (block "level_overrides": {"<MapName>": {"exposure_bias": -0.75}}), for a map without a
+	 * level JSON (L_MovementTest). Added to the presenter's post-process exposure bias in every climate; a map not listed gets 0.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	TMap<FString, float> LevelExposureBias;
 };
 
 /**
@@ -628,4 +635,8 @@ struct CODEXTACTICS_API FEnvironmentLevelSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "1"))
 	float Puddles = 0.f;
+
+	/** Section 19.6: "exposure_bias" (EV, default 0, clamped -4..4): added to the presenter's exposure bias on this level. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "-4", ClampMax = "4"))
+	float ExposureBias = 0.f;
 };

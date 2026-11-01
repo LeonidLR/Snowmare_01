@@ -133,6 +133,12 @@ namespace EnvironmentRules
 	 */
 	CODEXTACTICS_API float GetInitialSnowCover(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level);
 
+	/**
+	 * Section 19.6: the extra exposure bias (EV) of a level: its "environment.exposure_bias" plus Config.LevelExposureBias[MapName]
+	 * (MapName without the PIE prefix; case-insensitive). 0 for a level / map with neither. Clamped -4..4.
+	 */
+	CODEXTACTICS_API float GetLevelExposureBias(const FEnvironmentConfig& Config, const FEnvironmentLevelSettings& Level, const FString& MapName);
+
 	// --- Directional snow on objects / characters (FEnvironmentState::ObjectSnow, UCharacterSnowSubsystem; design §15) ---
 
 	/** max(0, -dot(Wind, side)) for side pocket Index (1..4; the top 0): 1 when the side faces straight into the wind. Wind need not be unit. */
