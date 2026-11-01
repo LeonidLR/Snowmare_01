@@ -235,23 +235,6 @@ public:
 	bool ResolveWallSideSlot(const FHitResult& Hit, FCoverSlot& OutSlot, EWallClickSide& OutSide) const;
 
 	/**
-	 * Fix c: the cursor hit this frame (PlayerTick; smokes pass their own, null = none) - the far-side cover spot under it
-	 * (ResolveWallSideSlot, cached while the cursor rests) is a target of the occluder fade, as is the click's cover ghost
-	 * (UOccluderFadeSubsystem::SetTargets, every call).
-	 */
-	void UpdateWallSideHover(const FHitResult* Hit);
-	/**
-	 * Fix c: the cursor looks through a faded occluder (UOccluderFadeSubsystem) - Hit on a faded piece is traced again along its own ray
-	 * (TraceStart -> TraceEnd) past every faded piece: the ground behind the see-through wall (the far side). Any other hit: unchanged.
-	 * Only the cursor: the wall's collision (sight, cover, AI) is untouched.
-	 */
-	FHitResult ThroughFadedOccluders(const FHitResult& Hit) const;
-	/** The far-side cover spot under the cursor (UpdateWallSideHover); false when the cursor means no far face. */
-	bool GetWallSideHoverTarget(FVector& OutTarget) const;
-	/** Smokes: PlayerTick leaves the wall-side hover alone (the smoke drives UpdateWallSideHover with its own hit). */
-	bool bFreezeWallSideHoverForTesting = false;
-
-	/**
 	 * Orders the previewed cover: the walk now, planned in the pause, the grid walk in turn-based combat. A GROUP order
 	 * (OrderGroupCover) when others go along (a box selection, or group mode). bDoubleClick (the confirm came within the double-click
 	 * time of the click that showed the ghost): the wall-edge COVER SWITCH when CoverSwitchRules allows it (in cover at a wall edge,
@@ -465,7 +448,10 @@ public:
 	 * the look arrows. False (with an HQ line) when unavailable: Codex.Formation.Sectors 0, solo / < 2 members, turn-based, a dialogue.
 	 */
 	bool BeginFormationPlacement(int32 Slot);
-	/** Space / the same Custom in the menu: stores the shape in its slot, picks it (FormationMenuRules choice), time resumes, the squad walks into it. */
+	/**
+	 * Space / a B tap / the same Custom in the menu: stores the shape in its slot, picks it (FormationMenuRules choice), time resumes, the squad
+	 * walks into it (never the solo toggle - bug_05 2026-11-01).
+	 */
 	bool ConfirmFormationPlacement();
 	/** Esc / RMB: ends the mode, the slot and the previous choice unchanged, time resumes; true when it was active. */
 	bool CancelFormationPlacement();
@@ -478,6 +464,12 @@ public:
 	bool HandleFormationPlacementPress(const FHitResult& Hit);
 	/** The placement mode's LMB up with the cursor over Ground: the drag's look, the ghost placed (or refused). True when the mode took it. */
 	bool HandleFormationPlacementRelease(const FVector& Ground);
+	/**
+	 * The placement mode: the member with this SquadIndex becomes the operative the next ground click places (his body, his ghost, his number
+	 * key 1-4 or his portrait - the leader never changes meanwhile; bug_05 2026-11-01). The ghosts already placed stay. False when the mode is off
+	 * or he has no ghost.
+	 */
+	bool SelectFormationPlacementMember(int32 Squad);
 	/** The HUD's view of the placement mode; false when it is not active. */
 	bool GetFormationPlacementView(FFormationPlacementView& Out) const;
 	/** The last placement input's result (smokes). */
@@ -812,13 +804,6 @@ private:
 	FVector WrapHoverSlotLocation = FVector::ZeroVector;
 	bool bWrapHoverValid = false;
 	ECoverWrapVerdict LastCoverWrapVerdict = ECoverWrapVerdict::NotInCover;
-
-	/** The far-side cover spot under the cursor (UpdateWallSideHover; cached while the cursor rests and the leader stands). */
-	TWeakObjectPtr<AActor> WallSideHoverActor;
-	FVector WallSideHoverPoint = FVector(TNumericLimits<float>::Max());
-	FVector WallSideHoverLeaderAt = FVector::ZeroVector;
-	FVector WallSideHoverTarget = FVector::ZeroVector;
-	bool bWallSideHoverValid = false;
 
 	/** The squad's guide lines along / round its wall (UpdateSquadMoveHover; cached while the cursor rests and the squad stands). */
 	TArray<TArray<FVector>> SquadMovePreviewPaths;

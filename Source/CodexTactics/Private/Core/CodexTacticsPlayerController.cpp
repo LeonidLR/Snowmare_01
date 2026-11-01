@@ -379,12 +379,6 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		{
 			UpdateSquadMoveHover(bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
 		}
-		// Game designer 2026-11-01 (fixes a / c): the far-side cover spot under the cursor and the click's ghost - the walls hiding them fade.
-		if (!bFreezeWallSideHoverForTesting)
-		{
-			const FHitResult SideHit = bCursorHit ? ThroughFadedOccluders(TrapHit) : TrapHit;
-			UpdateWallSideHover(bCursorHit && !PeekTurnBased ? &SideHit : nullptr);
-		}
 		// Rev 5g: an EXIT arrow under the cursor lights up and shows the hand too.
 		AInteriorExitArrowActor* HoveredExit = bCursorHit ? Cast<AInteriorExitArrowActor>(TrapHit.GetActor()) : nullptr;
 		if (UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>())

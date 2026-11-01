@@ -643,10 +643,11 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
   const g = (squad: number, x: number, y: number): Ghost => ({ squad, pos: [x, y] });
   const GHOST_SETS: [string, Ghost[], number[]][] = [ // [name, ghosts, anchor squads to try]
     ['none', [], [0]], ['anchor', [g(0, 0, 0)], [0]], ['three', [g(0, 0, 0), g(1, -250, 300), g(2, -250, -300)], [0, 2]],
-    ['four', [g(0, 0, 0), g(1, -250, 300), g(2, -250, -300), g(3, -450, 0)], [0, 2]], ['far_one', [g(0, 0, 0), g(1, 900, 0)], [0]], ['no_anchor', [g(1, -250, 300), g(2, -250, -300)], [0]],
+    ['four', [g(0, 0, 0), g(1, -250, 300), g(2, -250, -300), g(3, -450, 0)], [0, 2]], ['far_one', [g(0, 0, 0), g(1, 900, 0)], [0]], ['far_two', [g(0, 0, 0), g(1, 3900, 0)], [0]], ['no_anchor', [g(1, -250, 300), g(2, -250, -300)], [0]],
   ];
   const PLACEMENTS: [number, number, number][] = [ // [squad, x, y]
     [1, -250, 300], [1, -250, 340], [1, 10, 10], [1, 1000, 0], [1, 1000.1, 0], [2, 79.9, 0], [2, 80.1, 0], [3, -450, 20], [0, 0, 0], [0, 600, 0], [0, 1500, 0], [4, 1000.1, 0],
+    [1, 1500, 0], [1, 4000, 0], [1, 4000.1, 0], [0, 4500, 0], [4, 4000.1, 0], [0, -200, 0],
   ];
   for (const [setName, ghosts, anchors] of GHOST_SETS) for (const anchorSquad of anchors) for (const [squad, x, y] of PLACEMENTS) {
     const pos: Vec2 = [x, y];

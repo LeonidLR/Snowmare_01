@@ -1,7 +1,8 @@
 #include "Core/CodexTacticsPlayerController.h"
 
 // The formation radial menu on B (stage 7 of the formation system, user decision 2026-10-26: G is the grenade, so the menu moved to
-// B). Tap B = the solo / squad toggle as before (on the release); hold B (FormationMenuHoldSeconds, real time) = the radial menu at
+// B). Tap B = the solo / squad toggle as before (on the release; in the custom formation's placement mode it confirms the placement, as
+// Space - bug_05 2026-11-01); hold B (FormationMenuHoldSeconds, real time) = the radial menu at
 // the cursor (pulled in to stay on screen), the cursor moves its highlight, the release picks (FormationMenuRules::Release ->
 // USquadSubsystem::SetFormationMenuChoice, the same path as the dev console Codex.Formation.Menu); Esc / RMB cancel it. Only in
 // exploration / the tactical pause, squad mode, >= 2 members; otherwise a hold is a plain tap. Godot reference: none (UE-only;
@@ -16,6 +17,7 @@
 #include "Formation/FormationRuntimeRules.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "UI/FormationMenuInputRules.h"
+#include "UI/FormationPlacementRules.h"
 #include "UI/FormationMenuWidget.h"
 
 #define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
@@ -30,6 +32,15 @@ void ACodexTacticsPlayerController::SoloModeReleased()
 	switch (FormationMenuKey.Release())
 	{
 	case EFormationMenuKeyAction::Toggle:
+		// The game designer's PIE 2026-11-01 (bug_05): a B tap in the custom formation's placement mode toggled SOLO on, and the placement's tick
+		// then cancelled itself for the split squad ("SOLO MODE: ON" + "placement ... cancelled" in one frame) - the shape was lost and the squad
+		// left crouched in solo. In the placement mode the tap is the placement's own key: it confirms (as Space), never the solo toggle.
+		if (FormationPlacementRules::ResolveBTap(IsFormationPlacementActive()) == FormationPlacementRules::EBTap::ConfirmPlacement)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[FormationCustom] B tap in the placement mode: confirms the placement (no solo toggle)"));
+			ConfirmFormationPlacement();
+			break;
+		}
 		ToggleSoloMode();
 		break;
 	case EFormationMenuKeyAction::Pick:

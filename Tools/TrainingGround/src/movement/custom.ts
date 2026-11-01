@@ -10,7 +10,9 @@ import type { GuardLevel, GuardState, Role } from './rules.ts';
 import { FormationSectorRules, rolesFor } from './rules.ts';
 
 /** Constants (17; the same in TS and C++, not tuned). */
-export const CUSTOM_MAX_RADIUS = 1000; // cm: the farthest a member may stand from the anchor
+// cm: the farthest a member may stand from the anchor. 2026-11-01 (game designer, bug_05: the 10 m reach "ruins everything"): only a generous
+// sanity reach - a mis-click on the far horizon, the wall fold's leader -> slot lines and the shared camera frame; 15-30 m shapes are fine.
+export const CUSTOM_MAX_RADIUS = 4000;
 export const CUSTOM_DRAG_MIN = 50; // cm: a drag shorter than this is a plain click (the default look)
 export const CUSTOM_SLOT_COUNT = 3; // custom_1 .. custom_3
 export const CUSTOM_MAX_MEMBERS = 4;

@@ -2,6 +2,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -101,7 +102,11 @@ void URadiusRingSubsystem::Tick(float DeltaTime)
 	}
 	// User decision 2026-10-11: the free pause of a sudden horde start is an unrestricted preparation - no radius ring there
 	// (the 12 m ring and limit stay in the paid pause).
-	const bool bPause = Flow->GetCombatMode() == ECodexCombatMode::TacticalPause && Flow->IsPauseRadiusLimited();
+	// The game designer 2026-11-01 (bug_05: "a radius limit ruins everything"): the custom formation's placement mode is no order of the
+	// tactical pause - its 12 m order ring is not shown over the ghosts (the placement has no pause radius).
+	const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+	const bool bPlacingFormation = PC && PC->IsFormationPlacementActive();
+	const bool bPause = Flow->GetCombatMode() == ECodexCombatMode::TacticalPause && Flow->IsPauseRadiusLimited() && !bPlacingFormation;
 	FVector Center = FVector::ZeroVector;
 	float Radius = 0.f;
 	FLinearColor Color = Green;

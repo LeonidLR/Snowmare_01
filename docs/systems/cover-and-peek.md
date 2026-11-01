@@ -38,8 +38,8 @@
 A click on a HIGH wall's top beyond its middle line, or on the ground right behind it (the band it hides from the camera, the leader on its other
 side), means its FAR face - the cover ghost stands there (first click) and the second click orders it; the top's near half means the near face, a face hit
 the face that was hit. While the squad is at a wall (the wall layout, a member in cover / the wall pose) a click picks an operative only on his body (45 cm
-of his feet on the ground), never on the wall next to him. A wall hiding the ghost / the far spot fades and the cursor looks through it. Details:
-[squad-and-orders](squad-and-orders.md) "The far side of a wall"; A/B `Codex.Cursor.WallSide`, `Codex.Cursor.TightPick`, `Codex.OccluderFade`.
+of his feet on the ground), never on the wall next to him. (The occluder fade - a wall hiding the ghost went see-through - was removed 2026-11-01, bug_05:
+walls never fade.) Details: [squad-and-orders](squad-and-orders.md) "The far side of a wall"; A/B `Codex.Cursor.WallSide`, `Codex.Cursor.TightPick`.
 
 ## Group cover order (game designer 2026-10-20, every level)
 
