@@ -986,7 +986,9 @@ namespace FormationWallEndSmoke
 		const float PeekerToEnd = FMath::Abs(AlongR(State, Peeker->GetActorLocation()) - EndR);
 		const bool bPose = Peeker->bInCover && Peeker->bAtCoverCorner && Peeker->IsCornerAimActive() && Peeker->IsManualCornerPeek() && Peeker->bIsCornerLeaning;
 		const bool bFirst = Order[0] == Peeker && PeekerToEnd <= 130.f;
-		const bool bLeaderSecond = Order[1] == Squad->GetLeader();
+		// Wall leadership (game designer 2026-11-01, Codex.Formation.WallLeadership): the peeker IS the leader now, the others behind him; the
+		// v2.4 rule (Codex.Formation.WallLeadership 0): the leader second.
+		const bool bLeaderSecond = USquadSubsystem::IsWallLeadershipEnabled() ? Squad->GetLeader() == Peeker : Order[1] == Squad->GetLeader();
 		OutWhy = FString::Printf(TEXT("peeker %s %.0f cm from the end (first %d), in cover %d, at the corner %d, corner aim %d, manual peek %d, leaning %d (peeking %d); second %s (leader %d); all on the near side %d"),
 			*Peeker->DisplayName.ToString(), PeekerToEnd, bFirst ? 1 : 0, Peeker->bInCover ? 1 : 0, Peeker->bAtCoverCorner ? 1 : 0, Peeker->IsCornerAimActive() ? 1 : 0,
 			Peeker->IsManualCornerPeek() ? 1 : 0, Peeker->bIsCornerLeaning ? 1 : 0, Peeker->IsPeekingRoundCorner() ? 1 : 0, *Order[1]->DisplayName.ToString(),
@@ -1049,7 +1051,10 @@ namespace FormationWallEndSmoke
 			const bool bGhost = PC->UpdateCornerPeekHover(Leader, &EndHit);
 			const ACoverGhostActor* Ghost = PC->GetCornerPeekGhost();
 			const AOperativeCharacter* GhostOf = Ghost ? Ghost->GetOperative() : nullptr;
-			Check(State, !Leader->bInCover, TEXT("the squad hugs the wall in the formation layout: the leader is in no cover slot (the single peek cannot apply)"));
+			// (Wall leadership: at the second end the leader is the first end's peeker in its corner cover - the squad's peek stays on there.)
+			const bool bLeaderPeeks = Squad->IsWallLeadershipPeeker(Leader);
+			Check(State, !Leader->bInCover || bLeaderPeeks, FString::Printf(TEXT("the squad hugs the wall in the formation layout: the leader is in no cover slot (the single peek cannot apply)%s"),
+				bLeaderPeeks ? TEXT(" - or holds the squad peek's corner (wall leadership)") : TEXT("")));
 			Check(State, bGhost && PC->IsCornerPeekPreviewShown() && Ghost && Ghost->IsCornerPeekPose() && GhostOf == Nearest && PC->CurrentMouseCursor == EMouseCursor::Crosshairs,
 				FString::Printf(TEXT("end %d: hovering the wall's end shows the peek ghost (shown %d, corner-peek pose %d) of the member nearest it (%s; ghost of %s), the crosshair %d"),
 					State.Variant, bGhost ? 1 : 0, Ghost && Ghost->IsCornerPeekPose() ? 1 : 0, Nearest ? *Nearest->DisplayName.ToString() : TEXT("-"),
@@ -1064,8 +1069,10 @@ namespace FormationWallEndSmoke
 			const FHitResult Along = GroundClick(State, WallNearF - 100.f, EndR + Inward * 250.f);
 			const bool bAlongGhost = PC->UpdateCornerPeekHover(Leader, &Along);
 			const bool bLines = PC->UpdateSquadMoveHover(&Along);
-			Check(State, !bAlongGhost && !PC->IsCornerPeekPreviewShown() && bLines,
-				FString::Printf(TEXT("end %d: the ground along the wall: no peek ghost (%d), the squad's guide lines (%d)"), State.Variant, bAlongGhost ? 1 : 0, bLines ? 1 : 0));
+			// The guide lines need the leader out of cover (PreviewFormationMove); the wall-leadership leader at the first end's corner shows none.
+			Check(State, !bAlongGhost && !PC->IsCornerPeekPreviewShown() && (bLines || bLeaderPeeks),
+				FString::Printf(TEXT("end %d: the ground along the wall: no peek ghost (%d), the squad's guide lines (%d%s)"), State.Variant, bAlongGhost ? 1 : 0, bLines ? 1 : 0,
+					bLeaderPeeks ? TEXT(", the leader in the peek corner: not required") : TEXT("")));
 			PC->UpdateSquadMoveHover(nullptr);
 			// Hover 3: the wall's middle - no ghost (a click there is the cover order).
 			const FHitResult Middle = WallClick(State, State.Variant == 0 ? 300.f : -300.f);

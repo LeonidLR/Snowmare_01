@@ -437,6 +437,53 @@ Questions: `FORMATION_REDTEAM_V25.md` Q1-Q3 (cases 14_1 #3, 14_1 #6, 15_3 #3).
 - Runtime: `Codex.Formation.ShortSideObstacles` (Q1) and `Codex.Formation.RearTurn` (Q2), both default 1 (0 = v2.5.1, A/B). The side probe's
   trace hit alone does not know the obstacle's size: the level's box walls round the leader do (`FormationTerrainRules::IsShortSideObstacleAt`).
 
+## Wall leadership (game designer decisions 2026-11-01; runtime only, no TS / golden change; branch formation/wall-leadership)
+
+The report: the squad's wall layout depended on the leader's position, and on the order to peek round a wall's end the leader did not peek -
+the member nearest that end did (v2.4 squad peek: the corner stack's point man, "K second"), and a man could step out past the corner.
+**His decisions (unchanged):**
+1. Free movement: unchanged.
+2. The squad pressed to a wall, the player orders a peek round a corner (either end): the member NEAREST that corner peeks AND BECOMES THE
+   FORMATION LEADER. All later orders go to him; the others lay out relative to him.
+3. The side comes from the order: a LEFT-corner peek -> the left-end man leads; a RIGHT-corner peek -> the right-end man. At the same wall,
+   left then right moves the leadership from the left-end man to the right-end man.
+4. NOBODY passes the new leader or steps out round the corner, on either side: ALL the others line up along the wall's near face BEHIND him
+   (a stack from the corner along the wall) - in every case, not only when the leader already stood at the end.
+5. The leader change is a normal leader change: the selection, the leader's portrait frame and the camera follow switch to him. The
+   Commander keeps his own perks / role - only the FORMATION leadership moves.
+6. Leaving the wall keeps the state fixed at that moment: the new leader AND the others' order (no reverting to the old leader).
+7. If the end man at the ordered corner cannot take it (knocked down, dead, in solo mode, on a ladder...), the next nearest member to that
+   corner takes it.
+
+**The rules (pure `FormationWallLeadership`, tests `CodexTactics.Formation.WallLeadership.*`; supersedes "K second" of v2.4 A for the
+ordered peek - the v2.4 corner stack of a plain move to a wall's end is unchanged):**
+- *Who* (`PickCornerLeader`): the able member farthest along the wall towards the ordered corner (the wall line's direction from K's place
+  to the corner); within 10 cm along the wall the one nearer the corner point. Able (`USquadSubsystem::CanTakeWallLead`): alive, not knocked
+  down, not on a ladder, not panicking, not on Guard (the per-man hold - such a man is not in the formation anyway). Solo is squad-wide in
+  the game: in Solo there is no squad peek at all (the single operative's peek applies), so "in solo mode" is covered by that.
+- *The stack* (`StackOrder`, `StackLine`, `Plan`): the others in the order they stood from the corner (nobody crosses another), those who
+  cannot walk last; the leader's place = his own position projected onto the wall layout's line, the first man one wall spacing + 30 cm
+  behind him (`FormationWallEnd::AtEndGapCm`: the leader in his corner cover stands ~20 cm behind his stack place), the rest a spacing
+  apart; the whole line shifted so the leader stands 40 cm short of the end (`FormationWallEnd::StackSlots`: his look round the corner, the
+  trailing end back along the wall turned out, a middle man the wall layout's neighbour look). The corner = the free end of the squad's
+  wall in the world walls (`FindStackEnd`), else one at the peek edge itself (no world wall read: the stack still forms).
+- *The roles* (`SwapRoles`): the new leader K, the old leader the new leader's old role, the rest keep theirs.
+- *On the way* (`HoldBehind` / `AheadInLine`): each man's target is held back so he stays as far behind the man ahead of him in the line
+  (the nearest able one; the leader for the first) as his place lies behind that man's place, less 30 cm - nobody passes the leader or
+  anybody else while the leader walks to the corner; no stepping round a team-mate.
+- *Leaving the wall* (decision 6): the leader stays (it was a real leader switch); the places of the next formation are dealt by travel
+  from the stack (contract 10.6), so the man right behind the leader stays next to him and the stack's last man becomes the rear guard.
+
+**Interpretations (agent's, for the designer to confirm or flip):** (a) "nearest the corner" = along the wall, not the straight distance;
+(b) a knocked-down member keeps a place at the tail of the line and walks there once up (his team-mates do not wait for him); (c) the
+peek order on the leader himself when he already is the man nearest that corner = no switch (he peeks, the stack forms behind him);
+(d) the carried peek at the next wall (bug_04 A, `Codex.Formation.PeekCarry`) is the player's peek order too, so it hands the lead the same
+way; (e) while the leader peeks at one corner, the squad's guide lines along the wall are not shown (they need the leader out of cover);
+(f) the leader peeking for the squad and double-clicking another cover = the squad's wall order there (the peek carried over), not his
+own wall-edge cover switch (a dash alone).
+Runtime: `Codex.Formation.WallLeadership` (default 1; 0 = the v2.4 squad peek, A/B). Details: `docs/systems/squad-and-orders.md` "Wall
+leadership"; smoke `WallLeadershipSmoke`.
+
 ## The far side of a wall - one route round it (game designer play-test 2026-11-01; runtime only, no TS / golden change; branch formation/wall-far-side)
 
 Approved fixes d / e (the squad must not split round a wall; the far side of the same wall as a column round the near end). Runtime rules behind

@@ -230,7 +230,11 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 			Sectors.bLeaderOrderPending = false;
 			EndFormationBypass(TEXT("the leader changed"));
 			// ... and the wall order (the group cover order's wall layout, a slide) goes on with him instead of ending (the hug, crouched).
-			PassWallOrderToLeader(*NewLeader);
+			// Wall leadership (2026-11-01): the corner peek that made him the leader re-keys the order itself (the stack behind him).
+			if (!bWallLeadershipSwitch)
+			{
+				PassWallOrderToLeader(*NewLeader);
+			}
 		}
 		if (bIsSoloMode)
 		{

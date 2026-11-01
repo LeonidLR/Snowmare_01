@@ -1,0 +1,191 @@
+// CodexTactics.Formation.WallLeadership.* - wall leadership (Formation/FormationWallLeadershipRules; the game designer's decisions
+// 2026-11-01, docs/design/FORMATION_SECTORS.md "Wall leadership"): the corner peek's man nearest that corner becomes the formation leader,
+// the others stack behind him along the near face in the order they stood, nobody passes him or stands past the corner, an unable end man
+// is skipped. UE-only (no golden: the Training Ground simulator models neither the corner peek nor the formation leader).
+
+#include "Misc/AutomationTest.h"
+#include "Formation/FormationWallLeadershipRules.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+#define FORMATION_WALL_LEADERSHIP_TEST(TestClass, TestPath) \
+	IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, "CodexTactics.Formation.WallLeadership." TestPath, \
+		EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+namespace FormationWallLeadershipTestUtil
+{
+	/** The long wall along X (-600..600, 40 thick), the squad in front of it at y -65 (the outward normal yaw -90). */
+	constexpr float LeadNormalYaw = -90.f;
+	const FVector2D LeadWestEdge(-600.0, -20.0);
+	const FVector2D LeadEastEdge(600.0, -20.0);
+	const FVector2D LeadLineOrigin(0.0, -65.0);
+
+	TArray<FFormationWall> LeadWalls()
+	{
+		FFormationWall Wall;
+		Wall.A = FVector2D(-600.0, 0.0);
+		Wall.B = FVector2D(600.0, 0.0);
+		Wall.Thickness = 40.f;
+		return { Wall };
+	}
+
+	FWallLeadershipMember LeadMember(EFormationRole Role, double X, bool bAble = true)
+	{
+		FWallLeadershipMember Member;
+		Member.Role = Role;
+		Member.Position = FVector2D(X, -65.0);
+		Member.bAble = bAble;
+		return Member;
+	}
+
+	/** The group cover order's layout of three: the Commander mid-wall, P on the west (x -100), Z on the east (x 100). */
+	TArray<FWallLeadershipMember> LeadThree()
+	{
+		return { LeadMember(EFormationRole::Commander, 0.0), LeadMember(EFormationRole::Right, -100.0), LeadMember(EFormationRole::Rear, 100.0) };
+	}
+
+	const FFormationSlot* LeadSlotOf(const TArray<FFormationSlot>& Slots, EFormationRole Role)
+	{
+		return Slots.FindByPredicate([Role](const FFormationSlot& Slot) { return Slot.Role == Role; });
+	}
+}
+
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipPickTest, "PickCornerLeader")
+bool FFormationWallLeadershipPickTest::RunTest(const FString&)
+{
+	using namespace FormationWallLeadershipTestUtil;
+	const TArray<FWallLeadershipMember> Three = LeadThree();
+	const FVector2D West = FormationWallLeadership::TowardCorner(LeadNormalYaw, LeadWestEdge, LeadLineOrigin);
+	const FVector2D East = FormationWallLeadership::TowardCorner(LeadNormalYaw, LeadEastEdge, LeadLineOrigin);
+	TestTrue(TEXT("Toward the west corner = -X"), West.Equals(FVector2D(-1.0, 0.0), 1e-6));
+	TestTrue(TEXT("Toward the east corner = +X"), East.Equals(FVector2D(1.0, 0.0), 1e-6));
+	TestEqual(TEXT("West peek: the west-end man (P) takes it, not the Commander mid-wall"), FormationWallLeadership::PickCornerLeader(Three, LeadWestEdge, West), 1);
+	TestEqual(TEXT("East peek: the east-end man (Z) takes it"), FormationWallLeadership::PickCornerLeader(Three, LeadEastEdge, East), 2);
+	// Decision 7: the end man cannot -> the next nearest.
+	TArray<FWallLeadershipMember> Down = Three;
+	Down[1].bAble = false;
+	TestEqual(TEXT("West end man knocked down: the next nearest (the Commander) takes it"), FormationWallLeadership::PickCornerLeader(Down, LeadWestEdge, West), 0);
+	Down[0].bAble = false;
+	TestEqual(TEXT("... and him too: the far man"), FormationWallLeadership::PickCornerLeader(Down, LeadWestEdge, West), 2);
+	Down[2].bAble = false;
+	TestEqual(TEXT("Nobody able: nobody"), FormationWallLeadership::PickCornerLeader(Down, LeadWestEdge, West), static_cast<int32>(INDEX_NONE));
+	// A tie along the wall (one a step out from it): the nearer to the corner point.
+	TArray<FWallLeadershipMember> Tie = { LeadMember(EFormationRole::Commander, -300.0), LeadMember(EFormationRole::Right, -305.0) };
+	Tie[1].Position.Y = -300.0;
+	TestEqual(TEXT("Within the tie band the man nearer the edge point wins"), FormationWallLeadership::PickCornerLeader(Tie, LeadWestEdge, West), 0);
+	return true;
+}
+
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipOrderTest, "StackOrderAndRoles")
+bool FFormationWallLeadershipOrderTest::RunTest(const FString&)
+{
+	using namespace FormationWallLeadershipTestUtil;
+	TArray<FWallLeadershipMember> Four = LeadThree();
+	Four.Add(LeadMember(EFormationRole::Left, 200.0));
+	const FVector2D West(-1.0, 0.0);
+	const TArray<int32> Order = FormationWallLeadership::StackOrder(Four, 1, West);
+	TestEqual(TEXT("Three behind the leader"), Order.Num(), 3);
+	if (Order.Num() == 3)
+	{
+		TestTrue(TEXT("In the order they stood from the corner: K, Z, L"), Order[0] == 0 && Order[1] == 2 && Order[2] == 3);
+	}
+	Four[2].bAble = false;
+	const TArray<int32> WithDown = FormationWallLeadership::StackOrder(Four, 1, West);
+	TestTrue(TEXT("A knocked-down man stands last in the line"), WithDown.Num() == 3 && WithDown[0] == 0 && WithDown[1] == 3 && WithDown[2] == 2);
+	// Decision 5: only the formation leadership moves - the old leader takes the new one's role.
+	const TArray<EFormationRole> Roles = FormationWallLeadership::SwapRoles(LeadThree(), 1);
+	TestTrue(TEXT("The new leader is K, the old leader takes P, Z keeps his"),
+		Roles.Num() == 3 && Roles[1] == EFormationRole::Commander && Roles[0] == EFormationRole::Right && Roles[2] == EFormationRole::Rear);
+	const TArray<EFormationRole> Same = FormationWallLeadership::SwapRoles(LeadThree(), 0);
+	TestTrue(TEXT("The leader peeking himself: no change"), Same[0] == EFormationRole::Commander && Same[1] == EFormationRole::Right && Same[2] == EFormationRole::Rear);
+	return true;
+}
+
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipPlanTest, "PlanStackBehindTheNewLeader")
+bool FFormationWallLeadershipPlanTest::RunTest(const FString&)
+{
+	using namespace FormationWallLeadershipTestUtil;
+	// The Commander mid-wall, the peek round the WEST corner: P (the west-end man) leads, everyone stacks behind him along the near face.
+	const FWallLeadershipPlan Plan = FormationWallLeadership::Plan(LeadWalls(), LeadLineOrigin, LeadNormalYaw, LeadWestEdge, LeadThree());
+	TestEqual(TEXT("The west-end man takes the lead"), Plan.Leader, 1);
+	TestTrue(TEXT("The corner from the world walls: the wall's west end"), Plan.bWorldEnd && Plan.End.End.Equals(FVector2D(-600.0, 0.0), 0.01));
+	TestEqual(TEXT("A stack of three"), Plan.StackSlots.Num(), 3);
+	const FFormationSlot* K = LeadSlotOf(Plan.StackSlots, EFormationRole::Commander);
+	const FFormationSlot* OldK = LeadSlotOf(Plan.StackSlots, EFormationRole::Right); // the old Commander took P
+	const FFormationSlot* Z = LeadSlotOf(Plan.StackSlots, EFormationRole::Rear);
+	if (TestTrue(TEXT("Every role placed"), K && OldK && Z))
+	{
+		TestTrue(TEXT("The new leader at the corner, EdgeInsetCm short of it"), K->Position.Equals(FVector2D(-560.0, -65.0), 0.5));
+		TestTrue(TEXT("The old leader second (1 m + the at-end gap behind him)"), OldK->Position.Equals(FVector2D(-430.0, -65.0), 0.5));
+		TestTrue(TEXT("Z third, a spacing further back"), Z->Position.Equals(FVector2D(-330.0, -65.0), 0.5));
+		for (const FFormationSlot& Slot : Plan.StackSlots)
+		{
+			TestTrue(TEXT("Nobody past the corner"), Slot.Position.X > -600.0);
+			TestTrue(TEXT("Everyone on the near face (the layout's line)"), FMath::IsNearlyEqual(Slot.Position.Y, -65.0, 0.5));
+			TestTrue(TEXT("Nobody passes the leader (he is the farthest along)"), Slot.Role == EFormationRole::Commander || Slot.Position.X > K->Position.X + 50.0);
+		}
+		TestTrue(TEXT("The leader's look goes round the corner (west, at the corner past the face)"), FMath::Abs(FMath::FindDeltaAngleDegrees(K->Yaw, 180.f)) < 40.f);
+		TestTrue(TEXT("The trailing end looks back along the wall (east, turned out)"), FMath::Abs(FMath::FindDeltaAngleDegrees(Z->Yaw, 0.f)) < 45.f);
+	}
+	// Decision 3: then the EAST corner from that stack - the lead moves to the east-end man (Z), the order kept, the old leader last.
+	TArray<FWallLeadershipMember> Stacked = { LeadMember(EFormationRole::Right, -430.0), LeadMember(EFormationRole::Commander, -560.0), LeadMember(EFormationRole::Rear, -330.0) };
+	const FWallLeadershipPlan East = FormationWallLeadership::Plan(LeadWalls(), FVector2D(-560.0, -65.0), LeadNormalYaw, LeadEastEdge, Stacked);
+	TestEqual(TEXT("East peek from the west stack: the east-end man (Z) leads"), East.Leader, 2);
+	TestTrue(TEXT("... the old leader (the west corner man) gives up K and takes Z's role"),
+		East.Roles.Num() == 3 && East.Roles[2] == EFormationRole::Commander && East.Roles[1] == EFormationRole::Rear && East.Roles[0] == EFormationRole::Right);
+	TestTrue(TEXT("... the line behind him in the order they stood: P, then the old leader"), East.Order.Num() == 2 && East.Order[0] == 0 && East.Order[1] == 1);
+	const FFormationSlot* EK = LeadSlotOf(East.StackSlots, EFormationRole::Commander);
+	const FFormationSlot* EP = LeadSlotOf(East.StackSlots, EFormationRole::Right);
+	const FFormationSlot* EZ = LeadSlotOf(East.StackSlots, EFormationRole::Rear);
+	if (TestTrue(TEXT("East: every role placed"), EK && EP && EZ))
+	{
+		TestTrue(TEXT("East: the leader 40 cm short of the east end"), EK->Position.Equals(FVector2D(560.0, -65.0), 0.5));
+		TestTrue(TEXT("East: P second, the old leader third"), EP->Position.Equals(FVector2D(430.0, -65.0), 0.5) && EZ->Position.Equals(FVector2D(330.0, -65.0), 0.5));
+	}
+	return true;
+}
+
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipFallbackTest, "PlanFallbacks")
+bool FFormationWallLeadershipFallbackTest::RunTest(const FString&)
+{
+	using namespace FormationWallLeadershipTestUtil;
+	// Decision 7: the west end man knocked down - the Commander (next nearest) leads, the down man last in the line.
+	TArray<FWallLeadershipMember> Down = LeadThree();
+	Down[1].bAble = false;
+	const FWallLeadershipPlan Plan = FormationWallLeadership::Plan(LeadWalls(), LeadLineOrigin, LeadNormalYaw, LeadWestEdge, Down);
+	TestEqual(TEXT("The next nearest takes it"), Plan.Leader, 0);
+	TestTrue(TEXT("Z behind him, the knocked-down man last"), Plan.Order.Num() == 2 && Plan.Order[0] == 2 && Plan.Order[1] == 1);
+	TestTrue(TEXT("The leader peeking himself keeps his roles"), Plan.Roles[0] == EFormationRole::Commander && Plan.Roles[1] == EFormationRole::Right);
+	// No world walls (a wall the box gatherer does not read): the corner at the peek edge itself.
+	const FWallLeadershipPlan Bare = FormationWallLeadership::Plan(TArray<FFormationWall>(), LeadLineOrigin, LeadNormalYaw, LeadWestEdge, LeadThree());
+	const FFormationSlot* K = LeadSlotOf(Bare.StackSlots, EFormationRole::Commander);
+	TestTrue(TEXT("No world walls: the corner at the edge, still the stack"), !Bare.bWorldEnd && K && FMath::IsNearlyEqual(K->Position.X, -560.0, 0.5));
+	// The leader already at the corner (within SlideMin of it): the move is pushed on, the world end still found.
+	const TArray<FWallLeadershipMember> AtEnd = { LeadMember(EFormationRole::Commander, -560.0), LeadMember(EFormationRole::Right, -460.0) };
+	const FWallLeadershipPlan Near = FormationWallLeadership::Plan(LeadWalls(), FVector2D(-560.0, -65.0), LeadNormalYaw, LeadWestEdge, AtEnd);
+	TestTrue(TEXT("Already at the end: he keeps it, the world end found"), Near.Leader == 0 && Near.bWorldEnd);
+	return true;
+}
+
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipHoldBehindTest, "HoldBehind")
+bool FFormationWallLeadershipHoldBehindTest::RunTest(const FString&)
+{
+	const FVector2D West(-1.0, 0.0);
+	// His place 130 cm behind the leader's place; the leader still 300 cm short of his: the place is held 100 cm behind the leader now.
+	const FVector2D Held = FormationWallLeadership::HoldBehind(FVector2D(-430.0, -65.0), FVector2D(-430.0, -65.0), FVector2D(-560.0, -65.0), FVector2D(-260.0, -65.0), West);
+	TestTrue(TEXT("Held 130 - 30 cm behind where the leader stands"), Held.Equals(FVector2D(-160.0, -65.0), 0.01));
+	// The leader at his place (his corner cover ~20 cm behind it): the place itself.
+	const FVector2D Free = FormationWallLeadership::HoldBehind(FVector2D(-430.0, -65.0), FVector2D(-430.0, -65.0), FVector2D(-560.0, -65.0), FVector2D(-540.0, -65.0), West);
+	TestTrue(TEXT("The leader at his corner: the place unchanged"), Free.Equals(FVector2D(-430.0, -65.0), 0.01));
+	// Already behind the man ahead: unchanged.
+	const FVector2D Behind = FormationWallLeadership::HoldBehind(FVector2D(-100.0, -65.0), FVector2D(-430.0, -65.0), FVector2D(-560.0, -65.0), FVector2D(-260.0, -65.0), West);
+	TestTrue(TEXT("A target behind him stays"), Behind.Equals(FVector2D(-100.0, -65.0), 0.01));
+	// The man to keep behind: the nearest able one before him (a knocked-down man is no stop).
+	TestEqual(TEXT("The first behind the leader keeps behind the leader"), FormationWallLeadership::AheadInLine({ true, true, true }, 1), 0);
+	TestEqual(TEXT("The third behind the second"), FormationWallLeadership::AheadInLine({ true, true, true }, 2), 1);
+	TestEqual(TEXT("... or behind the leader when the second is down"), FormationWallLeadership::AheadInLine({ true, false, true }, 2), 0);
+	TestEqual(TEXT("The leader keeps behind nobody"), FormationWallLeadership::AheadInLine({ true, true }, 0), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+#endif // WITH_DEV_AUTOMATION_TESTS

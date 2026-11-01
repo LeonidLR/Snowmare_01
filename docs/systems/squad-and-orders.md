@@ -244,6 +244,31 @@ from") - the squad only walked to that wall, the member who had peeked stayed in
   his corner within ~0.5-0.7 s, one carried peek, the peek pose held, the others at W_D_10 behind him, nobody left at W_D_9. A/B
   `-PreCmds "Codex.Formation.PeekCarry 0"`. Stills `Saved/Screenshots/Bug04/` (`... SquadPeekNextWallSmoke Shot`, rendered).
 
+### Wall leadership (2026-11-01, branch formation/wall-leadership; the game designer's decisions; behind `Codex.Formation.Sectors` + `Codex.Formation.WallLeadership`)
+
+Design and the seven decisions: `docs/design/FORMATION_SECTORS.md` "Wall leadership". The squad's corner peek (the click on an end of the squad's wall,
+the carried peek of the next wall) no longer leaves the leader where he is: the member nearest that corner along the wall peeks AND becomes the
+formation leader; all the others stack behind him along the near face.
+- **Code:** pure `Formation/FormationWallLeadershipRules` (`PickCornerLeader`, `StackOrder`, `SwapRoles`, `StackLine`, `Plan`, `HoldBehind`,
+  `AheadInLine`; tests `CodexTactics.Formation.WallLeadership.*`); runtime `Private/Characters/SquadSubsystemWallLeadership.cpp`:
+  `PlanWallLeadership` (the formation's members, able = `CanTakeWallLead`), `OrderWallLeadershipPeek` (ends the old peek, `SetLeader` under
+  `bWallLeadershipSwitch` - selection, ring, portrait, camera follow as any leader change, but no `PassWallOrderToLeader` re-layout round him; the
+  wall order's roles re-keyed (`SwapRoles`); every follower in cover / a peek corner / a prone spot / a cover walk released (`LeaveCoverForSquad` -
+  the old leader at the other corner held it by the followers-in-cover rule while the new leader takes cover); the new leader's `OrderTakeCover` on
+  the corner slot + `MarkCornerPeekArrival`; `HoldCornerStack` with the plan's stack; the peek state `FSquadPeek::bLeadership` / `Line` /
+  `LineAble`), `HoldBehindInWallLine` (called from `UpdateSectorFollower`'s wall branch instead of the bug-D step round). `PlanFormationCornerPeek` /
+  `OrderFormationCornerPeek` route to it while the CVar is on. The controller (`CodexTacticsPlayerControllerCover.cpp`, `PlayerTick`): the leader
+  holding the squad peek's corner (`IsWallLeadershipPeeker`) keeps the squad's peek hover / click for its wall (the other corner), not his single peek; and his double-click on ANOTHER cover is the
+  squad's wall order there (the formation wall layout + the carried peek of bug_04 A), not his own wall-edge cover switch with the others' legacy
+  group cover (found by `SquadPeekNextWallSmoke`: with the peeker now the leader in his corner cover, the double-click dashed him alone).
+- **Log:** `[Formation] wall leadership: the corner peek at (x, y) - B takes the corner and the lead from A (the corner of the world walls at ...);
+  behind him: ...`, `[Formation] wall leadership: X leaves his peek corner for his place behind B`.
+- **Leaving the wall (decision 6):** nothing extra - the switch is a real `SetLeader`, and the next formation's places are dealt by travel from the
+  stack (contract 10.6): the man right behind the leader becomes P, the stack's last man the rear guard Z (the smoke checks it).
+- **Checks:** `WallLeadershipSmoke` (L_FormationLab W_B_3; see build-test-smokes.md); `FormationSquadPeekSmoke` now expects the peeker to BE the
+  leader (with the CVar 0 the old "leader second"); A/B `-PreCmds "Codex.Formation.WallLeadership 0"`.
+- **Open:** interpretations (a)-(e) in FORMATION_SECTORS.md "Wall leadership".
+
 ### Rules v2.5 in the runtime - the covered approach to the wall (2026-10-26, branch formation/v24-wall-end; behind `Codex.Formation.Sectors` + `Codex.Formation.Approach`)
 
 New user rule 2026-10-26: on the order to hug a wall (the group cover order in group mode, or the arrival layout) everyone used to drop his sector
