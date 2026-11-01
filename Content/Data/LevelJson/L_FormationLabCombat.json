@@ -35,6 +35,40 @@
     },
     "recycle": { "distance_cm": 6000, "after_sec": 60 }
   },
+  "bot_route": {
+    "name": "combat_lab_loop_01",
+    "comment": "The playtest bot's planned route (Training Ground 'Combat lab', game designer 2026-11-01: every map has a route; docs/design/COMBAT_LAB.md section 7). A loop from the spawn through the lab: tower T_SW, the W_C_4 corner, tower T_NW, the inner corner of lane E, the V2 6 m doorway, the W_E_14 end, tower T_NE, a wall hug at W_G_20, tower T_SE, both lane D corridors, the lane C 2 m doorway, a wall hug at W_B_2 and its west end. 'wall' = a click on the wall face at 'wall' (the formation wall layout), 'climb' = the leader alone climbs the nearest tower ladder and back. ~453 m a lap.",
+    "loop": true,
+    "reach_radius_cm": 250,
+    "stuck_after_sec": 12,
+    "stuck_move_cm": 150,
+    "max_retries": 2,
+    "fight_hold_sec": 20,
+    "action_timeout_sec": 45,
+    "points": [
+      { "at": [-5000, -4500], "label": "start (spawn)" },
+      { "at": [-4600, -2200], "label": "tower T_SW", "action": "climb", "hold_sec": 3 },
+      { "at": [-4800, -1000], "label": "W_C_4 west end (corner)" },
+      { "at": [-4600, 3800], "label": "tower T_NW", "action": "climb", "hold_sec": 3 },
+      { "at": [-300, 3000], "label": "lane E inner corner" },
+      { "at": [-300, 4850], "label": "lane E north leg" },
+      { "at": [-2100, 4850], "label": "V2 6 m doorway (south)" },
+      { "at": [-2100, 5700], "label": "V2 6 m doorway (north)" },
+      { "at": [700, 5650], "label": "W_E_14 north end (corner)" },
+      { "at": [2200, 4840], "label": "tower T_NE", "action": "climb", "hold_sec": 3 },
+      { "at": [4380, 3350], "label": "W_G_20 west face", "action": "wall", "wall": [4780, 3350], "hold_sec": 3 },
+      { "at": [4000, 1900], "label": "east of corridor D" },
+      { "at": [4650, -200], "label": "tower T_SE", "action": "climb", "hold_sec": 3 },
+      { "at": [3900, 800], "label": "corridor D wide (east mouth)" },
+      { "at": [700, 800], "label": "corridor D wide (west mouth)" },
+      { "at": [-800, 800], "label": "corridor D narrow (east mouth)" },
+      { "at": [-3800, 800], "label": "corridor D narrow (west mouth)" },
+      { "at": [-1800, -950], "label": "lane C 2 m doorway (north)" },
+      { "at": [-1800, -2050], "label": "lane C 2 m doorway (south)" },
+      { "at": [-2750, -2900], "label": "W_B_2 north face", "action": "wall", "wall": [-2750, -3280], "hold_sec": 3 },
+      { "at": [-4350, -3000], "label": "W_B_2 west end (corner)" }
+    ]
+  },
   "waves": [
     {
       "wave_index": 1,

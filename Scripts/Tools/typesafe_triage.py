@@ -306,6 +306,9 @@ def cmd_evaluate_telemetry(file_path, last=20):
     if not runs:
         print(f"[Jev:Telemetry] No run records in {file_path}.")
         return
+    if all(r.get("kind") == "combat_lab" for r in runs):
+        cmd_combat_lab_digest(runs)
+        return
     n = len(runs)
     wins = sum(1 for r in runs if r.get("result") == "VICTORY")
     causes, failed_waves = {}, {}
@@ -358,6 +361,85 @@ def cmd_evaluate_telemetry(file_path, last=20):
     if error:
         print(f" • Jev unavailable   : {error}")
     print("=" * 60)
+
+def combat_lab_aggregate(runs):
+    """The numbers of a combat lab batch (records codex.combatlab_run/1; the same sums as Tools/TrainingGround src/combatLab/report.ts)."""
+    n = len(runs)
+    minutes = sum(r.get("duration_sec", 0) for r in runs) / 60.0
+    contacts = [c for r in runs for c in (r.get("contacts") or {}).get("list", [])]
+    reactions = [c.get("reaction_sec", -1) for c in contacts if c.get("reaction_sec", -1) >= 0]
+    stuck_at = {}
+    for r in runs:
+        for s in (r.get("route") or {}).get("stuck", []):
+            key = f"#{s.get('waypoint')} {s.get('label', '')}"
+            stuck_at[key] = stuck_at.get(key, 0) + 1
+    return {
+        "runs": n,
+        "minutes": minutes,
+        "completed": sum(1 for r in runs if (r.get("route") or {}).get("completed")),
+        "progress": sum((r.get("route") or {}).get("progress", 0) for r in runs) / n,
+        "stuck": sum(len((r.get("route") or {}).get("stuck", [])) for r in runs),
+        "stuck_at": max(stuck_at, key=stuck_at.get) if stuck_at else "",
+        "contacts": len(contacts),
+        "patrol": sum(1 for c in contacts if c.get("kind") == "patrol"),
+        "ambush": sum(1 for c in contacts if c.get("kind") == "ambush"),
+        "coordinated": sum(1 for c in contacts if c.get("kind") == "coordinated"),
+        "unwatched": sum(1 for c in contacts if c.get("unwatched_strike")),
+        "never_looked": sum(1 for c in contacts if c.get("reaction_sec", -1) < 0),
+        "reaction": sum(reactions) / len(reactions) if reactions else 0.0,
+        "formation_changes": sum((r.get("formations") or {}).get("changes", 0) for r in runs),
+        "wall_hugs": sum(r.get("wall_hugs", 0) for r in runs),
+        "stance_per_min": sum((r.get("stances") or {}).get("changes", 0) for r in runs) / minutes if minutes > 0 else 0.0,
+        "absorbed": sum((r.get("damage") or {}).get("absorbed", 0) for r in runs),
+        "taken": sum((r.get("damage") or {}).get("taken", 0) for r in runs),
+        "rounds": sum((r.get("ammo") or {}).get("rounds", 0) for r in runs),
+        "climbs": sum((r.get("ladder") or {}).get("climbs_up", 0) for r in runs),
+        "knockdowns": sum(r.get("knockdowns", 0) for r in runs),
+    }
+
+
+def cmd_combat_lab_digest(runs):
+    """A combat lab batch (Training Ground «Боевая лаборатория»): the numbers in code, a worded summary for Jev, a 3-line brief out."""
+    a = combat_lab_aggregate(runs)
+    share = lambda part, whole: part / whole if whole else 0.0  # noqa: E731
+    words = [
+        f"The bot finished its planned route in {bucket(share(a['completed'], a['runs']), [0.05, 0.5, 0.95], ['no run', 'some runs', 'most runs', 'every run'])}"
+        f" and got stuck {bucket(a['stuck'] / a['runs'], [0.5, 2, 5], ['almost never', 'sometimes', 'often', 'all the time'])}.",
+        f"The squad met {bucket(a['contacts'] / max(a['minutes'], 1), [0.1, 0.4, 1], ['almost no', 'few', 'regular', 'many'])} enemy groups; "
+        f"{bucket(share(a['unwatched'], a['contacts']), [0.05, 0.3, 0.6], ['almost none', 'some', 'many', 'most'])} of them struck from a side nobody watched.",
+        f"Operatives turned to a new enemy {bucket(a['reaction'], [0.5, 2, 5], ['at once', 'quickly', 'slowly', 'very late'])}"
+        f" and {bucket(share(a['never_looked'], a['contacts']), [0.05, 0.3], ['nearly always', 'mostly', 'often not'])} looked at it at all.",
+    ]
+    answers, error = jev_client.ask({"batch": words}, {
+        "route_health": {"type": "choice", "instructions": "How well does the bot walk its route in `batch`?",
+                         "criteria": {"Reliable": "It finishes the route and rarely gets stuck",
+                                      "SometimesStuck": "It gets stuck now and then but mostly gets round",
+                                      "Broken": "It rarely finishes; the route or the navigation needs fixing"}},
+        "squad_awareness": {"type": "choice", "instructions": "How aware of its surroundings is the squad in `batch`?",
+                            "criteria": {"Alert": "Ambushes rarely catch it unwatched and it turns to enemies quickly",
+                                         "BlindSides": "Ambushes often strike from unwatched sides",
+                                         "SlowToReact": "It looks at new enemies late or not at all"}},
+        "recommended_focus": {"type": "choice", "instructions": "Which single area should the designer look at first after `batch`?",
+                              "criteria": {"FixRouteOrNavigation": "The bot's route / the map's navigation",
+                                           "SquadWatchSectors": "The formation's look sectors and the rear guard",
+                                           "AmbushPressure": "The ambush / patrol settings (too easy or too hard)",
+                                           "NoChange": "Nothing stands out"}}})
+    route_health, _ = jev_client.choice(answers, "route_health", "n/a")
+    awareness, _ = jev_client.choice(answers, "squad_awareness", "n/a")
+    focus, _ = jev_client.choice(answers, "recommended_focus", "n/a")
+    print("=" * 60)
+    print(" TYPESAFE (JEV) COMBAT LAB DIGEST")
+    print("=" * 60)
+    print(f" • Route    : completed {a['completed']}/{a['runs']} runs, progress {a['progress'] * 100:.0f} %, stuck {a['stuck']}"
+          f"{' (most at ' + a['stuck_at'] + ')' if a['stuck_at'] else ''} - Jev: {route_health}")
+    print(f" • Contacts : {a['contacts']} in {a['minutes']:.0f} min (patrol {a['patrol']} / ambush {a['ambush']} / coordinated {a['coordinated']}),"
+          f" unwatched strikes {a['unwatched']}, first look {a['reaction']:.1f} s, never looked {a['never_looked']} - Jev: {awareness}")
+    print(f" • Squad    : formation changes {a['formation_changes']}, wall hugs {a['wall_hugs']}, stances {a['stance_per_min']:.1f}/min,"
+          f" damage {a['taken']:.0f} (absorbed {a['absorbed']:.0f}), rounds {a['rounds']}, climbs {a['climbs']}, knockdowns {a['knockdowns']} - Jev focus: {focus}")
+    if error:
+        print(f"   (Jev unavailable: {error})")
+    print("=" * 60)
+
 
 # ------------------------------------------------------------------------------
 # Action 4: Smart Test Selection
@@ -451,6 +533,8 @@ def cmd_early_stop(file_path, since=None):
                     runs.append(json.loads(line))
                 except ValueError:
                     pass
+    # Combat lab runs end by time (result COMPLETE), never by a defeat cause: no early stop for them.
+    runs = [r for r in runs if r.get("kind") != "combat_lab"]
     if since:
         runs = [r for r in runs if r.get("timestamp_utc", "") >= since[:19]]
     recent = runs[-5:]

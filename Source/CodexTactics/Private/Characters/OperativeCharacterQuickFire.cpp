@@ -305,6 +305,7 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 		return;
 	}
 	const FQuickFireConfig& Config = QuickFireRules::GetConfig();
+	RoundsSpent += UsesAmmo() ? 1 : 0; // the bot report's rounds, the free ones included
 	if (UsesAmmo() && !CombatCheats::IsInfiniteAmmo(World)) // combat lab cheat (CombatCheats)
 	{
 		CurrentClip = FMath::Max(0, CurrentClip - 1);

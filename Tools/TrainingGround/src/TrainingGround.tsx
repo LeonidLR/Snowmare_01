@@ -1,17 +1,20 @@
 // Training Ground (the former Wave Editor, user decision 2026-10-25): departments for the bots. «Волны» is the wave / level
-// editor as before; «Перемещение» the squad movement simulator, bot and tuner; «Левел-дизайн» the layout audit.
+// editor as before; «Перемещение» the squad movement simulator, bot and tuner; «Левел-дизайн» the layout audit; «Боевая лаборатория»
+// (2026-11-01) the combat lab map's pressure settings, presets and bot runs in Unreal with their report.
 import React, { useState } from 'react';
-import { Footprints, Map, Swords } from 'lucide-react';
+import { Crosshair, Footprints, Map, Swords } from 'lucide-react';
 import { App as WavesDepartment } from './App';
 import { MovementDepartment } from './departments/MovementDepartment';
 import { LevelDesignDepartment } from './departments/LevelDesignDepartment';
+import { CombatLabDepartment } from './departments/CombatLabDepartment';
 
-type DepartmentId = 'waves' | 'movement' | 'level';
+type DepartmentId = 'waves' | 'movement' | 'level' | 'combat';
 
 const DEPARTMENTS: { id: DepartmentId; name: string; icon: React.ReactNode; hint: string }[] = [
   { id: 'waves', name: 'Волны', icon: <Swords size={15} />, hint: 'Волны, оружие, скрытность, бот боя (Unreal)' },
   { id: 'movement', name: 'Перемещение', icon: <Footprints size={15} />, hint: 'Построения, сектора взгляда, бот и обучение' },
   { id: 'level', name: 'Левел-дизайн', icon: <Map size={15} />, hint: 'Проверка раскладок тестовых уровней' },
+  { id: 'combat', name: 'Боевая лаборатория', icon: <Crosshair size={15} />, hint: 'L_FormationLabCombat: давление врагов, засады, пресеты, боты по маршруту и отчёт' },
 ];
 
 const STORAGE_KEY = 'training_ground_department';
@@ -19,7 +22,7 @@ const STORAGE_KEY = 'training_ground_department';
 function initialDepartment(): DepartmentId {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === 'waves' || v === 'movement' || v === 'level') return v;
+    if (v === 'waves' || v === 'movement' || v === 'level' || v === 'combat') return v;
   } catch { /* storage blocked: default */ }
   return 'waves';
 }
@@ -45,6 +48,7 @@ export const TrainingGround: React.FC = () => {
       {department === 'waves' && <WavesDepartment />}
       {department === 'movement' && <MovementDepartment />}
       {department === 'level' && <LevelDesignDepartment />}
+      {department === 'combat' && <CombatLabDepartment />}
     </div>
   );
 };

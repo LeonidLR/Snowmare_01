@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Data/CombatTypes.h"
+#include "Bot/BotRouteRules.h"
 #include "Combat/CombatPressureRules.h"
 #include "Environment/EnvironmentTypes.h"
 #include "Quests/GateExitRules.h"
@@ -351,6 +352,11 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 * bEnabled false without the block. Runtime data from the JSON only (not a UPROPERTY: the level assets never carry it).
 	 */
 	FCombatPressureConfig Pressure;
+	/**
+	 * "bot_route": the playtest bot's planned route (game designer 2026-11-01: every map has one; BotRouteRules::Parse,
+	 * docs/design/COMBAT_LAB.md section 7). Invalid (no points) without the block. Runtime data from the JSON only.
+	 */
+	FBotRouteConfig BotRoute;
 };
 
 UCLASS(BlueprintType)

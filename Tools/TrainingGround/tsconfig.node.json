@@ -11,6 +11,7 @@
   },
   "include": [
     "src/movement/**/*.ts",
+    "src/combatLab/**/*.ts",
     "server/**/*.ts"
   ],
   "exclude": [

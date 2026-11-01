@@ -168,3 +168,60 @@ Round 2 (v2, open):
    `L_FormationLabCombat.json` "ambush"."points" as you like.
 
 Known limit: save / load keeps no pressure state (a reloaded lab starts its pressure afresh; the lab is a test map, not in the campaign).
+
+## 7. Training Ground department "Combat lab" (game designer 2026-11-01, branch `tools/tg-combat-lab`)
+
+`Tools/TrainingGround` department **«Боевая лаборатория»** (next to Waves / Movement / Level design), only for `L_FormationLabCombat`. Four tabs:
+A level settings and C bot runs are built; B (a map editor: walls, ambush points, the route) and D (a browser simulator) are reserved
+tabs ("скоро"). Endpoints `server/combatLabApi.ts`; pure modules `src/combatLab/pressureSettings.ts` (A) and `src/combatLab/report.ts` (C),
+tests `src/combatLab/*.test.ts`.
+
+### 7.1 A - level settings
+
+- Edits the level JSON's `"pressure"` block (every key of section 2 / 2.1: the schedule, groups and caps, the patrol / ambush / coordinated
+  shares - shown as the three effective event shares -, the type weights of the five types, the watch cone, the hiding spots, the coordinated
+  plans, the relocation, the patrols, the recycling, the seed) and `"cheats"` (immortality, infinite ammo). Each field shows the game's
+  default and its range; «Подробнее» shows the rest. Saved through `POST /api/combat-lab/settings`: validated, the old file copied to
+  `Saved/TrainingGround/combat_lab/backups/`, only the changed values rewritten (`patchJsonText`), the diff shown.
+- **One rule set.** The page's field table (`PRESSURE_FIELDS`) mirrors `LevelJsonRules::ParsePressureSettings`: the page REJECTS what the
+  C++ would clamp (min = the C++ floor, max = the C++ ceiling, integers, "max >= min (+100)"), forbids BRUTE / CRYO_DRONE / unknown types and
+  malformed `ambush.points`. `npm run golden` exports the table to `Tools/TrainingGround/golden/combatlab_pressure_fields.json`;
+  `CodexTactics.LevelJson.PressureFieldsGolden` checks every default, min and max against the parser (and that it clamps where the page says).
+- **Presets** `Content/Data/CombatLab/presets.json` (`codex.combatlab_presets/1`): Default (as shipped), Patrols only, Ambush heavy, Coordinated
+  only; one click applies one, «Сохранить как пресет» adds / replaces one. `CodexTactics.LevelJson.CombatLabPresets`: every preset parses as
+  written and the level with it applied parses (the AllFilesParse rule).
+
+### 7.2 C - bot runs in Unreal
+
+- **The route.** Every map gets a planned route; the combat lab's is the level JSON `"bot_route"` (`BotRouteRules::Parse`,
+  `FLevelCombatConfig::BotRoute`): `combat_lab_loop_01`, 21 waypoints, ~453 m a loop - from the spawn up tower T_SW, round the W_C_4 end,
+  up T_NW, the inner corner of lane E, the V2 6 m doorway, round the W_E_14 end, up T_NE, a wall hug at W_G_20, up T_SE, both lane D
+  corridors, the lane C 2 m doorway, a wall hug at W_B_2 and round its west end. A waypoint is `walk`, `wall` (a click on the wall face =
+  the formation wall layout, held `hold_sec`) or `climb` (the leader alone - Solo - walks up the nearest tower's ladder, holds, comes down).
+- **The bot's route mode** (`UPlaytestBotSubsystem`, `PlaytestBotRouteMode.cpp`): on an endless pressure level with a route (or
+  `-BotRoute=1`) the bot leads the squad through the player's own click path (`HandleWorldHit`: moves in formation, the wall click + its
+  confirm, the roof click), Aggressive posture; a fight holds the route up to `fight_hold_sec` (20 s, the squad halts crouched), then it walks
+  on fighting; it stops by TIME (`-BotDuration=<game s>` -> `RESULT COMPLETE`). `FBotRouteTracker` (pure, `CodexTactics.Bot.Route.*`):
+  reached / skipped waypoints, laps; STUCK = the leader moved < 1.5 m in 12 s (`no_move`) or a leg takes longer than 25 s + its length at 1 m/s
+  (`leg_timeout`) or an order / action failed - the move is ordered again, after 2 retries the waypoint is skipped. Completed = a lap with no
+  waypoint skipped.
+- **The metrics** (`FCombatLabRunCollector`, pure, `CodexTactics.Bot.CombatLab.*`; sampled every 0.1 s): contacts per pressure group (a
+  coordinated plan is one) - opened when a member is seen (line of sight within 30 m), engages or an ambush springs; the time from the
+  contact to the first operative's look covering it (`AmbushWatchRules` looks: body, aim, formation sector, +- the watch half angle); an
+  ambush that sprang while unwatched; the formation at the contact. Formation changes by type (a label holds 0.5 s; Solo / off is none; the
+  diamond of 3 = wedge; the wall order = `wall_layout`), wall hugs (`IsSquadAtWall` rising after >= 1 s off), stance changes per operative /
+  minute, damage taken and absorbed by immortality (`UHealthComponent::GetCheatBlockedDamage`), rounds incl. the infinite-ammo ones
+  (`AOperativeCharacter::GetRoundsSpent`), ladder climbs, knockdowns, fights. One record per run, schema `codex.combatlab_run/1`.
+- **The batch**: «Прогоны ботов» -> `POST /api/combat-lab/run` (defaults 4 runs x 10 min, 2 at a time) writes `Saved/Telemetry/combat_lab/<id>/`
+  `level.json` (the page's settings, also unsaved ones) + `batch.json` and starts `Scripts/bot_run.ps1 -ReportDir <dir> -DurationSec <s>
+  -SeedBase <seed> -LevelJson <dir>/level.json -Map /Game/Maps/L_FormationLabCombat` (run n: `-BotSeed=n -PressureSeed=seed+n-1`). Live:
+  `bot_status.json` + each game's `run_<n>.live.json` (every 5 s). At the end: `runs.jsonl`, `jev.txt` (`typesafe_triage.py --telemetry` -
+  a 3-line combat lab digest), `report.md` + `aggregate.json` (`node src/combatLab/cli/report.ts --batch <dir>`); the page shows the
+  aggregate, a row per run, the map with the stuck points / contacts / end positions and the digest.
+
+### 7.3 Open questions (round 3)
+
+1. **Fight policy of the bot.** It halts crouched up to 20 s when a fight starts, then walks on fighting. Halt longer (until the fight
+   is over), never halt, or let it take wall cover first?
+2. **The route.** ~453 m a lap (about 5-7 game minutes with the climbs and fights): one lap per 10-minute run. Shorter (towers only) or as is?
+3. **"Looked at"** = an operative's body / aim / sector look within +-45 deg (the ambush watch rule) - or a stricter "aims at it"?

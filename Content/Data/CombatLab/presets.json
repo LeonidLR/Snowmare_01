@@ -1,0 +1,334 @@
+{
+  "schema": "codex.combatlab_presets/1",
+  "comment": "Named presets of the Training Ground department 'Combat lab' (docs/design/COMBAT_LAB.md section 7): each sets the level JSON blocks 'pressure' and 'cheats' of L_FormationLabCombat.json with one click. Validated by Tools/TrainingGround/src/combatLab/pressureSettings.ts and CodexTactics.LevelJson.CombatLabPresets (every preset parses with the level).",
+  "presets": [
+    {
+      "id": "default",
+      "name": "Default",
+      "description": "The shipped combat lab values (2026-11-01): the first group at 30 s, then every 120 s; 60 % patrols, 35 % of the ambushes coordinated.",
+      "pressure": {
+        "enabled": true,
+        "interval_sec": 120,
+        "first_event_sec": 30,
+        "group_min": 1,
+        "group_max": 3,
+        "max_alive": 4,
+        "patrol_share": 0.6,
+        "seed": 1101,
+        "types": {
+          "HOUND": 1,
+          "FROSTBITTEN": 1,
+          "SPITTER": 1,
+          "CUTTER": 1,
+          "MARKSMAN": 1
+        },
+        "wall_clearance_cm": 250,
+        "min_squad_distance_cm": 2500,
+        "max_squad_distance_cm": 5000,
+        "patrol": {
+          "points": 4,
+          "radius_cm": 1200,
+          "wait_sec": 2
+        },
+        "ambush": {
+          "min_squad_distance_cm": 1400,
+          "max_squad_distance_cm": 3000,
+          "watch_half_angle_deg": 45,
+          "watch_range_cm": 5000,
+          "strike_range_cm": 1800,
+          "spots": {
+            "wall_standoff_cm": 260,
+            "end_inset_cm": 100,
+            "min_wall_length_cm": 150,
+            "joined_gap_cm": 30,
+            "doorway_min_cm": 80,
+            "doorway_max_cm": 600,
+            "authored_bonus": 0.5,
+            "doorway_bonus": 0.25,
+            "merge_cm": 100
+          },
+          "points": [[4800, -4000], [2750, -2420], [-3750, -1780], [2250, 120], [-2000, 2220], [-2700, 5020], [5100, 3400], [4800, 5000]],
+          "coordinated": {
+            "share": 0.35,
+            "bodies_min": 4,
+            "bodies_max": 6,
+            "max_alive": 6,
+            "min_squad_distance_cm": 1000,
+            "max_squad_distance_cm": 3000,
+            "anchor_ahead_cm": 500,
+            "flank_offset_cm": 1500,
+            "front_offset_cm": 1600,
+            "rear_offset_cm": 1500,
+            "min_separation_cm": 600,
+            "trigger_range_cm": 1800,
+            "assault_min_sec": 1.5,
+            "assault_max_sec": 4,
+            "block_distance_cm": 900,
+            "min_ranged": 1
+          },
+          "relocate": {
+            "enabled": true,
+            "after_sec": 15,
+            "behind_angle_deg": 100,
+            "far_cm": 3500,
+            "min_ahead_cos": 0.2
+          }
+        },
+        "recycle": {
+          "distance_cm": 6000,
+          "after_sec": 60
+        }
+      },
+      "cheats": {
+        "immortal": true,
+        "infinite_ammo": true
+      }
+    },
+    {
+      "id": "patrols_only",
+      "name": "Patrols only",
+      "description": "Every event is a patrol walking a loop (meeting engagements only).",
+      "pressure": {
+        "enabled": true,
+        "interval_sec": 120,
+        "first_event_sec": 30,
+        "group_min": 1,
+        "group_max": 3,
+        "max_alive": 4,
+        "patrol_share": 1,
+        "seed": 1101,
+        "types": {
+          "HOUND": 1,
+          "FROSTBITTEN": 1,
+          "SPITTER": 1,
+          "CUTTER": 1,
+          "MARKSMAN": 1
+        },
+        "wall_clearance_cm": 250,
+        "min_squad_distance_cm": 2500,
+        "max_squad_distance_cm": 5000,
+        "patrol": {
+          "points": 4,
+          "radius_cm": 1200,
+          "wait_sec": 2
+        },
+        "ambush": {
+          "min_squad_distance_cm": 1400,
+          "max_squad_distance_cm": 3000,
+          "watch_half_angle_deg": 45,
+          "watch_range_cm": 5000,
+          "strike_range_cm": 1800,
+          "spots": {
+            "wall_standoff_cm": 260,
+            "end_inset_cm": 100,
+            "min_wall_length_cm": 150,
+            "joined_gap_cm": 30,
+            "doorway_min_cm": 80,
+            "doorway_max_cm": 600,
+            "authored_bonus": 0.5,
+            "doorway_bonus": 0.25,
+            "merge_cm": 100
+          },
+          "points": [[4800, -4000], [2750, -2420], [-3750, -1780], [2250, 120], [-2000, 2220], [-2700, 5020], [5100, 3400], [4800, 5000]],
+          "coordinated": {
+            "share": 0.35,
+            "bodies_min": 4,
+            "bodies_max": 6,
+            "max_alive": 6,
+            "min_squad_distance_cm": 1000,
+            "max_squad_distance_cm": 3000,
+            "anchor_ahead_cm": 500,
+            "flank_offset_cm": 1500,
+            "front_offset_cm": 1600,
+            "rear_offset_cm": 1500,
+            "min_separation_cm": 600,
+            "trigger_range_cm": 1800,
+            "assault_min_sec": 1.5,
+            "assault_max_sec": 4,
+            "block_distance_cm": 900,
+            "min_ranged": 1
+          },
+          "relocate": {
+            "enabled": true,
+            "after_sec": 15,
+            "behind_angle_deg": 100,
+            "far_cm": 3500,
+            "min_ahead_cos": 0.2
+          }
+        },
+        "recycle": {
+          "distance_cm": 6000,
+          "after_sec": 60
+        }
+      },
+      "cheats": {
+        "immortal": true,
+        "infinite_ammo": true
+      }
+    },
+    {
+      "id": "ambush_heavy",
+      "name": "Ambush heavy",
+      "description": "80 % ambushes (35 % of them coordinated), an event every 90 s.",
+      "pressure": {
+        "enabled": true,
+        "interval_sec": 90,
+        "first_event_sec": 30,
+        "group_min": 1,
+        "group_max": 3,
+        "max_alive": 4,
+        "patrol_share": 0.2,
+        "seed": 1101,
+        "types": {
+          "HOUND": 1,
+          "FROSTBITTEN": 1,
+          "SPITTER": 1,
+          "CUTTER": 1,
+          "MARKSMAN": 1
+        },
+        "wall_clearance_cm": 250,
+        "min_squad_distance_cm": 2500,
+        "max_squad_distance_cm": 5000,
+        "patrol": {
+          "points": 4,
+          "radius_cm": 1200,
+          "wait_sec": 2
+        },
+        "ambush": {
+          "min_squad_distance_cm": 1400,
+          "max_squad_distance_cm": 3000,
+          "watch_half_angle_deg": 45,
+          "watch_range_cm": 5000,
+          "strike_range_cm": 1800,
+          "spots": {
+            "wall_standoff_cm": 260,
+            "end_inset_cm": 100,
+            "min_wall_length_cm": 150,
+            "joined_gap_cm": 30,
+            "doorway_min_cm": 80,
+            "doorway_max_cm": 600,
+            "authored_bonus": 0.5,
+            "doorway_bonus": 0.25,
+            "merge_cm": 100
+          },
+          "points": [[4800, -4000], [2750, -2420], [-3750, -1780], [2250, 120], [-2000, 2220], [-2700, 5020], [5100, 3400], [4800, 5000]],
+          "coordinated": {
+            "share": 0.35,
+            "bodies_min": 4,
+            "bodies_max": 6,
+            "max_alive": 6,
+            "min_squad_distance_cm": 1000,
+            "max_squad_distance_cm": 3000,
+            "anchor_ahead_cm": 500,
+            "flank_offset_cm": 1500,
+            "front_offset_cm": 1600,
+            "rear_offset_cm": 1500,
+            "min_separation_cm": 600,
+            "trigger_range_cm": 1800,
+            "assault_min_sec": 1.5,
+            "assault_max_sec": 4,
+            "block_distance_cm": 900,
+            "min_ranged": 1
+          },
+          "relocate": {
+            "enabled": true,
+            "after_sec": 15,
+            "behind_angle_deg": 100,
+            "far_cm": 3500,
+            "min_ahead_cos": 0.2
+          }
+        },
+        "recycle": {
+          "distance_cm": 6000,
+          "after_sec": 60
+        }
+      },
+      "cheats": {
+        "immortal": true,
+        "infinite_ammo": true
+      }
+    },
+    {
+      "id": "coordinated_only",
+      "name": "Coordinated only",
+      "description": "Every event is a coordinated plan (flanks first, then rear + front; ranged ones suppress), every 150 s.",
+      "pressure": {
+        "enabled": true,
+        "interval_sec": 150,
+        "first_event_sec": 30,
+        "group_min": 1,
+        "group_max": 3,
+        "max_alive": 4,
+        "patrol_share": 0,
+        "seed": 1101,
+        "types": {
+          "HOUND": 1,
+          "FROSTBITTEN": 1,
+          "SPITTER": 1,
+          "CUTTER": 1,
+          "MARKSMAN": 1
+        },
+        "wall_clearance_cm": 250,
+        "min_squad_distance_cm": 2500,
+        "max_squad_distance_cm": 5000,
+        "patrol": {
+          "points": 4,
+          "radius_cm": 1200,
+          "wait_sec": 2
+        },
+        "ambush": {
+          "min_squad_distance_cm": 1400,
+          "max_squad_distance_cm": 3000,
+          "watch_half_angle_deg": 45,
+          "watch_range_cm": 5000,
+          "strike_range_cm": 1800,
+          "spots": {
+            "wall_standoff_cm": 260,
+            "end_inset_cm": 100,
+            "min_wall_length_cm": 150,
+            "joined_gap_cm": 30,
+            "doorway_min_cm": 80,
+            "doorway_max_cm": 600,
+            "authored_bonus": 0.5,
+            "doorway_bonus": 0.25,
+            "merge_cm": 100
+          },
+          "points": [[4800, -4000], [2750, -2420], [-3750, -1780], [2250, 120], [-2000, 2220], [-2700, 5020], [5100, 3400], [4800, 5000]],
+          "coordinated": {
+            "share": 1,
+            "bodies_min": 4,
+            "bodies_max": 6,
+            "max_alive": 6,
+            "min_squad_distance_cm": 1000,
+            "max_squad_distance_cm": 3000,
+            "anchor_ahead_cm": 500,
+            "flank_offset_cm": 1500,
+            "front_offset_cm": 1600,
+            "rear_offset_cm": 1500,
+            "min_separation_cm": 600,
+            "trigger_range_cm": 1800,
+            "assault_min_sec": 1.5,
+            "assault_max_sec": 4,
+            "block_distance_cm": 900,
+            "min_ranged": 1
+          },
+          "relocate": {
+            "enabled": true,
+            "after_sec": 15,
+            "behind_angle_deg": 100,
+            "far_cm": 3500,
+            "min_ahead_cos": 0.2
+          }
+        },
+        "recycle": {
+          "distance_cm": 6000,
+          "after_sec": 60
+        }
+      },
+      "cheats": {
+        "immortal": true,
+        "infinite_ammo": true
+      }
+    }
+  ]
+}
