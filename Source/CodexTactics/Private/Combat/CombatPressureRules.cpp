@@ -58,6 +58,15 @@ EPressureSpawnKind CombatPressureRules::PickKind(float Rand01, float PatrolShare
 	return Rand01 < FMath::Clamp(PatrolShare, 0.f, 1.f) ? EPressureSpawnKind::Patrol : EPressureSpawnKind::Ambush;
 }
 
+EPressureSpawnKind CombatPressureRules::PickEventKind(float Rand01, float RandCoordinated01, float PatrolShare, float CoordinatedShare)
+{
+	if (PickKind(Rand01, PatrolShare) == EPressureSpawnKind::Patrol)
+	{
+		return EPressureSpawnKind::Patrol;
+	}
+	return RandCoordinated01 < FMath::Clamp(CoordinatedShare, 0.f, 1.f) ? EPressureSpawnKind::Coordinated : EPressureSpawnKind::Ambush;
+}
+
 EEnemyArchetype CombatPressureRules::PickType(const TArray<FPressureTypeWeight>& Weights, float Rand01)
 {
 	const TArray<FPressureTypeWeight> Effective = EffectiveWeights(Weights);
@@ -128,7 +137,7 @@ float CombatPressureRules::ScoreSpot(const FPressureSpotInput& Input)
 		{
 			return -1000.f;
 		}
-		return 2.f * Input.AheadCos - FromMid - 3.f * OffBand;
+		return 2.f * Input.AheadCos - FromMid - 3.f * OffBand + Input.KindBonus;
 	}
 	return Input.AheadCos * 0.75f + (Input.bConcealed ? 1.f : 0.f) - (Input.bWatched ? 0.5f : 0.f) - 0.5f * FromMid - 3.f * OffBand;
 }

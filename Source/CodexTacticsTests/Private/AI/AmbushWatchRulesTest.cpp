@@ -61,6 +61,35 @@ bool FAmbushWatchDecideTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAmbushWatchAimTest, "CodexTactics.AI.AmbushWatch.AimCounts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAmbushWatchAimTest::RunTest(const FString&)
+{
+	// Answer 4 (2026-11-01): an operative aiming at / fighting ANOTHER enemy still watches - his aim cone covers an ambush in it.
+	FAmbushWatchParams Params;
+	Params.WatchHalfAngleDeg = 45.f;
+	Params.StrikeRangeCm = 1800.f;
+	const FVector2D Here(0.0, 0.0);
+	// His body still faces north (+Y, yaw 90) after the turn order; he aims east (yaw 0) at the enemy he fights.
+	const TArray<FAmbushWatcher> Looks = AmbushWatchRules::MemberLooks(Here, 90.f, TOptional<float>(0.f), TOptional<float>());
+	TestEqual(TEXT("Body + aim = two looks"), Looks.Num(), 2);
+	TestTrue(TEXT("... the second is his aim"), Looks.Num() == 2 && Looks[1].Source == EAmbushLookSource::Aim);
+	const FVector2D InHisAimCone(1200.0, 400.0); // 18 deg off his aim, 72 deg off his body
+	TestTrue(TEXT("An ambush inside his aim cone is watched"), AmbushWatchRules::IsWatched(Looks, InHisAimCone, Params));
+	TestTrue(TEXT("... so it holds"), AmbushWatchRules::Decide(Looks, { Here }, InHisAimCone, Params) == EAmbushDecision::Hold);
+	TestEqual(TEXT("... by his aim look"), AmbushWatchRules::FindWatcher(Looks, InHisAimCone, Params), 1);
+	const TArray<FAmbushWatcher> BodyOnly = AmbushWatchRules::MemberLooks(Here, 90.f, TOptional<float>(), TOptional<float>());
+	TestTrue(TEXT("Without the aim look the same spot would spring"), AmbushWatchRules::Decide(BodyOnly, { Here }, InHisAimCone, Params) == EAmbushDecision::Spring);
+	TestTrue(TEXT("Behind his aim and his body: unwatched"), !AmbushWatchRules::IsWatched(Looks, FVector2D(-1000.0, -1000.0), Params));
+	// Three looks (body, aim, sector); a look within 5 deg of one listed is dropped.
+	TestEqual(TEXT("Body, aim, sector"), AmbushWatchRules::MemberLooks(Here, 90.f, TOptional<float>(0.f), TOptional<float>(180.f)).Num(), 3);
+	TestEqual(TEXT("An aim along his body adds nothing"), AmbushWatchRules::MemberLooks(Here, 90.f, TOptional<float>(93.f), TOptional<float>()).Num(), 1);
+	TestEqual(TEXT("A sector look along his aim adds nothing"), AmbushWatchRules::MemberLooks(Here, 90.f, TOptional<float>(0.f), TOptional<float>(-4.f)).Num(), 2);
+	TestTrue(TEXT("Looks wrap (aim 359 = -1)"), FMath::IsNearlyEqual(AmbushWatchRules::MemberLooks(Here, 90.f, TOptional<float>(359.f), TOptional<float>())[1].LookYawDeg, -1.f, 0.01f));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAmbushWatchGapTest, "CodexTactics.AI.AmbushWatch.WidestGap",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

@@ -9,12 +9,30 @@
  * living member's body yaw and his formation sector look, docs/design/FORMATION_SECTORS.md).
  */
 
-/** One look of a squad member: where he stands and where he looks. A member may give two (his body and his formation sector look). */
+/** Where a look comes from (AmbushWatchRules::MemberLooks; logs, smokes). */
+enum class EAmbushLookSource : uint8
+{
+	/** His body's facing (actor yaw). */
+	Body,
+	/** His formation sector look (FORMATION_SECTORS.md). */
+	Sector,
+	/**
+	 * Where he aims: the enemy he fights / fired at (game designer 2026-11-01, answer 4: an operative aiming at / fighting ANOTHER enemy
+	 * still counts as watching - his look covers an ambush inside his aim cone).
+	 */
+	Aim
+};
+
+/**
+ * One look of a squad member: where he stands and where he looks. A member may give up to three (his body, his aim and his formation
+ * sector look; AmbushWatchRules::MemberLooks).
+ */
 struct CODEXTACTICS_API FAmbushWatcher
 {
 	FVector2D Position = FVector2D::ZeroVector;
 	/** Where he looks, degrees (UE yaw: atan2(dy, dx)). */
 	float LookYawDeg = 0.f;
+	EAmbushLookSource Source = EAmbushLookSource::Body;
 };
 
 /** Tuning (level JSON "pressure"."ambush", LevelJsonRules::ParsePressureSettings). */
@@ -71,6 +89,14 @@ namespace AmbushWatchRules
 	 */
 	CODEXTACTICS_API EAmbushDecision Decide(const TArray<FAmbushWatcher>& Watchers, const TArray<FVector2D>& Squad, const FVector2D& Ambusher,
 		const FAmbushWatchParams& Params);
+
+	/**
+	 * Every look of one living member (answer 4, 2026-11-01): his body yaw, his aim (the bearing to the enemy he aims at / fights, when he
+	 * aims at one) and his formation sector look; a look within DedupeDeg of one already listed is dropped. Fighting another enemy never
+	 * drops him from the watch - his aim is one more look.
+	 */
+	CODEXTACTICS_API TArray<FAmbushWatcher> MemberLooks(const FVector2D& Position, float BodyYawDeg, const TOptional<float>& AimYawDeg,
+		const TOptional<float>& SectorYawDeg, float DedupeDeg = 5.f);
 
 	/**
 	 * The middle of the widest arc of directions no look covers (each look +- WatchHalfAngleDeg; positions ignored - the looks as seen from

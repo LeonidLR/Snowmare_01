@@ -2,23 +2,29 @@
 
 #include "CoreMinimal.h"
 #include "AI/AmbushWatchRules.h"
+#include "Combat/AmbushPlanRules.h"
+#include "Combat/AmbushRelocateRules.h"
+#include "Combat/AmbushSpotRules.h"
 #include "Data/CombatTypes.h"
 
 /**
  * The combat lab's endless enemy pressure (game designer decisions 2026-11-01, docs/design/COMBAT_LAB.md; UE-only, no Godot reference):
  * every IntervalSeconds a spawn event brings a group of GroupMin..GroupMax enemies (at most MaxAlive alive; an event waits while the cap is
- * full) - a PATROL walking a loop or AMBUSHERS hidden near the squad's way. Pure rules (schedule, group, kind, type, spawn spot validity /
+ * full) - a PATROL walking a loop or AMBUSHERS hidden near the squad's way (a single-spot group, or a COORDINATED plan of four parties -
+ * AmbushPlanRules; hiding spots AmbushSpotRules; a bypassed ambush relocates - AmbushRelocateRules; designer answers 2026-11-01). Pure rules (schedule, group, kind, type, spawn spot validity /
  * score, recycling) tested in CodexTactics.Combat.Pressure.*; the level JSON block "pressure" (LevelJsonRules::ParsePressureSettings) fills
  * FCombatPressureConfig; UCombatPressureSubsystem applies them in the world.
  */
 
-/** The two kinds of spawn. */
+/** The kinds of spawn event (a coordinated plan's members are recorded as Ambush). */
 enum class EPressureSpawnKind : uint8
 {
 	/** Walks a patrol loop (APatrolRouteActor) until it perceives the squad. */
 	Patrol,
-	/** Waits concealed near the squad's way and strikes when its side is unwatched (AmbushWatchRules). */
-	Ambush
+	/** Waits concealed at a hiding spot near the squad's way and strikes when its side is unwatched (AmbushWatchRules). */
+	Ambush,
+	/** A coordinated multi-direction ambush: four parties round the squad, flanks first, then rear + front (AmbushPlanRules). */
+	Coordinated
 };
 
 /** One entry of the type weights ("pressure"."types"). */
@@ -35,8 +41,8 @@ struct CODEXTACTICS_API FCombatPressureConfig
 	bool bEnabled = false;
 	/** Seconds between spawn events ("interval_sec"). */
 	float IntervalSeconds = 120.f;
-	/** Seconds from the level start to the first event ("first_event_sec"). */
-	float FirstEventSeconds = 15.f;
+	/** Seconds from the level start to the first event ("first_event_sec"; designer answer 6, 2026-11-01: 30 s). */
+	float FirstEventSeconds = 30.f;
 	/** Group size ("group_min" / "group_max"). */
 	int32 GroupMin = 1;
 	int32 GroupMax = 3;
@@ -62,19 +68,17 @@ struct CODEXTACTICS_API FCombatPressureConfig
 	float AmbushMaxDistanceCm = 3000.f;
 	/** "ambush": {"watch_half_angle_deg", "watch_range_cm", "strike_range_cm"}. */
 	FAmbushWatchParams Watch;
+	/** "ambush"."spots": the wall-end / doorway hiding spots (AmbushSpotRules). */
+	FAmbushSpotParams Spots;
+	/** "ambush"."points": hand-placed ambush points [[x, y], ...] (world cm; AmbushSpotRules authored candidates). */
+	TArray<FVector2D> AuthoredPoints;
+	/** "ambush"."coordinated": the multi-direction ambush plans (AmbushPlanRules). */
+	FAmbushPlanParams Coordinated;
+	/** "ambush"."relocate": a bypassed ambush moves ahead (AmbushRelocateRules). */
+	FAmbushRelocateParams Relocate;
 	/** "recycle": {"distance_cm", "after_sec"}: an unengaged pressure enemy this far from the squad, unseen, for this long is removed. */
 	float RecycleDistanceCm = 6000.f;
 	float RecycleAfterSeconds = 60.f;
-};
-
-/** A wall / obstacle as a 2D oriented box (the level's blocking static meshes). */
-struct CODEXTACTICS_API FPressureBox
-{
-	FVector2D Center = FVector2D::ZeroVector;
-	/** Unit axis of the box's local X (its local Y is perpendicular, rotated +90 deg). */
-	FVector2D AxisX = FVector2D(1.0, 0.0);
-	/** Half sizes along the local X / Y, cm. */
-	FVector2D HalfSize = FVector2D::ZeroVector;
 };
 
 /** Why a spawn point is refused. */
@@ -115,6 +119,8 @@ struct CODEXTACTICS_API FPressureSpotInput
 	bool bConcealed = false;
 	/** An operative looks its way (AmbushWatchRules::IsWatched). */
 	bool bWatched = false;
+	/** Ambush hiding spots: the spot kind's bonus (AmbushSpotRules::KindBonus). */
+	float KindBonus = 0.f;
 };
 
 namespace CombatPressureRules
@@ -133,6 +139,9 @@ namespace CombatPressureRules
 
 	/** Rand01 < PatrolShare -> Patrol, else Ambush. */
 	CODEXTACTICS_API EPressureSpawnKind PickKind(float Rand01, float PatrolShare);
+
+	/** PickKind, then an ambush is a Coordinated plan when RandCoordinated01 < CoordinatedShare (designer answer 2, 2026-11-01). */
+	CODEXTACTICS_API EPressureSpawnKind PickEventKind(float Rand01, float RandCoordinated01, float PatrolShare, float CoordinatedShare);
 
 	/** The weighted pick of Rand01 in [0, 1) over EffectiveWeights(Weights). */
 	CODEXTACTICS_API EEnemyArchetype PickType(const TArray<FPressureTypeWeight>& Weights, float Rand01);
@@ -153,7 +162,8 @@ namespace CombatPressureRules
 	/**
 	 * Score of a valid spot (higher = better). Patrols: within the distance band, ahead of the squad, out of its sight and looks preferred.
 	 * Ambushers: MUST be concealed (an unconcealed spot scores -1000), ahead of the squad's way preferred strongly (it walks past them and
-	 * turns its back), the middle of the band preferred; a watched spot is fine (they hold until the squad looks away).
+	 * turns its back), the middle of the band preferred, + the hiding spot kind's bonus; a watched spot is fine (they hold until the squad
+	 * looks away).
 	 */
 	CODEXTACTICS_API float ScoreSpot(const FPressureSpotInput& Input);
 

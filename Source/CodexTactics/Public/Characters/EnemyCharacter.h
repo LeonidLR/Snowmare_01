@@ -678,6 +678,12 @@ public:
 	 */
 	bool TryStartGuardPost();
 
+	/**
+	 * Moves the post it guards to Location facing Yaw (the combat lab's ambush relocation, game designer answer 3, 2026-11-01): it stands
+	 * there instead of walking back to the old post. No-op unless it guards a post.
+	 */
+	void MoveGuardPost(const FVector& Location, float Yaw);
+
 	// --- Vision cone (user request 2026-10-11; Godot had cones on the operatives only) ---
 
 	/** Ground cone of its sight (range / field of view from GetPerception; colour idle / suspicious / alert). */

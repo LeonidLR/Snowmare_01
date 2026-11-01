@@ -28,6 +28,16 @@ bool FCombatPressureScheduleTest::RunTest(const FString&)
 	TestTrue(TEXT("Rand at the share: ambush"), CombatPressureRules::PickKind(0.6f, 0.6f) == EPressureSpawnKind::Ambush);
 	TestTrue(TEXT("Share 0: always ambush"), CombatPressureRules::PickKind(0.f, 0.f) == EPressureSpawnKind::Ambush);
 	TestTrue(TEXT("Share 1: always patrol"), CombatPressureRules::PickKind(0.999f, 1.f) == EPressureSpawnKind::Patrol);
+	// Coordinated plans: a share of the ambush events (designer answer 2, 2026-11-01).
+	TestTrue(TEXT("A patrol stays a patrol"), CombatPressureRules::PickEventKind(0.1f, 0.f, 0.6f, 0.35f) == EPressureSpawnKind::Patrol);
+	TestTrue(TEXT("An ambush below the coordinated share: a plan"), CombatPressureRules::PickEventKind(0.7f, 0.34f, 0.6f, 0.35f) == EPressureSpawnKind::Coordinated);
+	TestTrue(TEXT("An ambush at the share: single"), CombatPressureRules::PickEventKind(0.7f, 0.35f, 0.6f, 0.35f) == EPressureSpawnKind::Ambush);
+	TestTrue(TEXT("Share 0: never a plan"), CombatPressureRules::PickEventKind(0.9f, 0.f, 0.6f, 0.f) == EPressureSpawnKind::Ambush);
+	TestTrue(TEXT("Share 1: every ambush a plan"), CombatPressureRules::PickEventKind(0.9f, 0.999f, 0.6f, 1.f) == EPressureSpawnKind::Coordinated);
+	// The first group at 30 s (answer 6): the default.
+	TestEqual(TEXT("First event default 30 s"), FCombatPressureConfig().FirstEventSeconds, 30.f);
+	TestTrue(TEXT("Not due at 29.9 s"), CombatPressureRules::DecideEvent(29.9f, FCombatPressureConfig().FirstEventSeconds, 0, 4) == EPressureEventDecision::NotDue);
+	TestTrue(TEXT("Due at 30 s"), CombatPressureRules::DecideEvent(30.f, FCombatPressureConfig().FirstEventSeconds, 0, 4) == EPressureEventDecision::Spawn);
 	return true;
 }
 

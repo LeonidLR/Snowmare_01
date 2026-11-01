@@ -160,7 +160,11 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 			"types": {"HOUND": 2, "frostbitten": 1, "SPITTER": 0, "CUTTER": 1, "MARKSMAN": 0.5},
 			"wall_clearance_cm": 300, "min_squad_distance_cm": 2000, "max_squad_distance_cm": 4500,
 			"patrol": {"points": 5, "radius_cm": 900, "wait_sec": 1.5},
-			"ambush": {"min_squad_distance_cm": 1200, "max_squad_distance_cm": 2800, "watch_half_angle_deg": 50, "watch_range_cm": 4000, "strike_range_cm": 1500},
+			"ambush": {"min_squad_distance_cm": 1200, "max_squad_distance_cm": 2800, "watch_half_angle_deg": 50, "watch_range_cm": 4000, "strike_range_cm": 1500,
+				"spots": {"wall_standoff_cm": 200, "end_inset_cm": 80, "doorway_max_cm": 500, "authored_bonus": 0.7},
+				"points": [[100, 200], [-300.5, 400]],
+				"coordinated": {"share": 0.5, "bodies_min": 3, "bodies_max": 5, "max_alive": 7, "assault_min_sec": 2, "assault_max_sec": 1, "min_ranged": 2},
+				"relocate": {"enabled": false, "after_sec": 20, "behind_angle_deg": 120, "far_cm": 4000, "min_ahead_cos": 0.3}},
 			"recycle": {"distance_cm": 7000, "after_sec": 45}}})");
 	TestTrue(TEXT("Parses"), LevelJsonRules::ParseLevel(Json, TEXT("p"), Config, Error));
 	const FCombatPressureConfig& P = Config.Pressure;
@@ -181,6 +185,26 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 	TestEqual(TEXT("watch half angle"), P.Watch.WatchHalfAngleDeg, 50.f);
 	TestEqual(TEXT("strike range"), P.Watch.StrikeRangeCm, 1500.f);
 	TestEqual(TEXT("recycle"), P.RecycleAfterSeconds, 45.f);
+	// Answers 2026-11-01: hiding spots, authored points, coordinated plans, relocation.
+	TestEqual(TEXT("spots: standoff"), P.Spots.WallStandoffCm, 200.f);
+	TestEqual(TEXT("spots: inset"), P.Spots.EndInsetCm, 80.f);
+	TestEqual(TEXT("spots: doorway max"), P.Spots.DoorwayMaxCm, 500.f);
+	TestEqual(TEXT("spots: authored bonus"), P.Spots.AuthoredBonus, 0.7f);
+	TestEqual(TEXT("spots: untouched keys keep the default"), P.Spots.DoorwayMinCm, FAmbushSpotParams().DoorwayMinCm);
+	TestEqual(TEXT("2 authored points"), P.AuthoredPoints.Num(), 2);
+	TestTrue(TEXT("... [x, y]"), P.AuthoredPoints.Num() == 2 && P.AuthoredPoints[1].Equals(FVector2D(-300.5, 400.0)));
+	TestEqual(TEXT("coordinated share"), P.Coordinated.Share, 0.5f);
+	TestEqual(TEXT("coordinated: never fewer than 4 bodies"), P.Coordinated.BodiesMin, 4);
+	TestEqual(TEXT("coordinated: bodies max >= min"), P.Coordinated.BodiesMax, 5);
+	TestEqual(TEXT("coordinated: own cap"), P.Coordinated.MaxAlive, 7);
+	TestEqual(TEXT("coordinated: assault max >= min"), P.Coordinated.AssaultMaxSeconds, 2.f);
+	TestEqual(TEXT("coordinated: min ranged"), P.Coordinated.MinRanged, 2);
+	TestFalse(TEXT("relocate: off"), P.Relocate.bEnabled);
+	TestEqual(TEXT("relocate: after"), P.Relocate.AfterSeconds, 20.f);
+	TestEqual(TEXT("relocate: behind"), P.Relocate.BehindAngleDeg, 120.f);
+	TestEqual(TEXT("relocate: ahead cos"), P.Relocate.MinAheadCos, 0.3f);
+	TestFalse(TEXT("A malformed ambush point is refused"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"p","pressure":{"ambush":{"points":[[1]]}}})"), TEXT("p"), Config, Error));
+	TestTrue(TEXT("... the error names it"), Error.Contains(TEXT("ambush.points")));
 
 	FCombatPressureConfig Clamped;
 	FJsonObject Wild;
@@ -208,6 +232,12 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 		TestEqual(TEXT("Lab: every 2 minutes"), Lab.Pressure.IntervalSeconds, 120.f);
 		TestEqual(TEXT("Lab: groups 1-3"), Lab.Pressure.GroupMin * 10 + Lab.Pressure.GroupMax, 13);
 		TestEqual(TEXT("Lab: at most 4 alive"), Lab.Pressure.MaxAlive, 4);
+		TestEqual(TEXT("Lab: the first group at 30 s (answer 6)"), Lab.Pressure.FirstEventSeconds, 30.f);
+		TestTrue(TEXT("Lab: authored ambush points (answer 1)"), Lab.Pressure.AuthoredPoints.Num() >= 4);
+		TestTrue(TEXT("Lab: coordinated plans with their own cap above max_alive (answer 2)"), Lab.Pressure.Coordinated.Share > 0.f
+			&& Lab.Pressure.Coordinated.MaxAlive >= Lab.Pressure.Coordinated.BodiesMax && Lab.Pressure.Coordinated.MaxAlive > Lab.Pressure.MaxAlive);
+		TestTrue(TEXT("Lab: relocation on (answer 3)"), Lab.Pressure.Relocate.bEnabled);
+		TestEqual(TEXT("Lab: the watch stays +-45 deg (answer 4)"), Lab.Pressure.Watch.WatchHalfAngleDeg, 45.f);
 		TestTrue(TEXT("Lab: immortal + infinite ammo by default"), Lab.bCheatImmortal && Lab.bCheatInfiniteAmmo);
 		TestTrue(TEXT("Lab: fights start on contact as skirmishes"), Lab.CombatStart == ECombatStartMode::Ambush && Lab.bAmbushSkirmish);
 		TestEqual(TEXT("Lab: no cold"), Lab.ColdRateMult, 0.f);

@@ -5,9 +5,10 @@
 //   (map /Game/Maps/L_FormationLabCombat, "-LevelJson=L_FormationLabCombat.json" - Scripts/test_map.json smokeOptions)
 //  1. setup: the pressure is on (its timer stopped for the checks), both cheats on from the level JSON, the fight starts by contact, the 4
 //     towers' ladders are climbable (>= 7 rungs, nav link, both ends on the navmesh), immortality holds against direct damage;
-//  2. spawn points: 8 seeded events (patrols / ambushes alternately, groups of 3) round the squad - every spawned enemy clear of every wall /
-//     tower by the level's clearance (its record, and the smoke's own 36 horizontal rays at two heights + a ground trace: not on a roof), on the
-//     navmesh, away from the squad; every ambusher concealed (no operative's line of sight);
+//  2. spawn points: 8 seeded events (patrols / single ambushes alternately, groups of 3) round the squad - every spawned enemy clear of every
+//     wall / tower by the level's clearance (its record, and the smoke's own 36 horizontal rays at two heights + a ground trace: not on a
+//     roof), on the navmesh, away from the squad; every ambusher concealed (no operative's line of sight; since 2026-11-01 v2 at a wall end /
+//     doorway / authored hiding spot, or a patrol when none is in reach - CombatLabAmbushSmoke checks the v2 ambushes);
 //  3. endless timer: the interval cut to 3 s - events keep coming, never more than max_alive alive, an event waits while the cap is full;
 //  4. ambush, watched: an ambusher placed 12 m out where the leader looks HOLDS (no fight, its senses muted) for >= 3 s; then moved to the
 //     squad's widest unwatched side it SPRINGS within 1 s - the real-time skirmish starts with it as the contact (Patrol -> Engage);
@@ -450,6 +451,8 @@ namespace FormationLabCombatSmoke
 			Check(State, State.SpawnChecked >= SpawnEvents, FString::Printf(TEXT("%d spawned enemies checked"), State.SpawnChecked));
 			// The endless timer: events every 3 s from now on.
 			IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.IntervalSec"))->Set(3.f);
+			// The plain events only (max_alive 4): a coordinated plan has its own cap (6) - CombatLabAmbushSmoke checks those.
+			Pressure->SetCoordinatedShareOverride(0.f);
 			Pressure->SetAutoSpawn(true);
 			State.MaxAliveSeen = 0;
 			Enter(State, EStage::Auto);
@@ -475,6 +478,7 @@ namespace FormationLabCombatSmoke
 				}
 			}
 			Pressure->SetAutoSpawn(false);
+			Pressure->SetCoordinatedShareOverride(-1.f);
 			IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.IntervalSec"))->Set(0.f);
 			Pressure->DespawnAll();
 			Enter(State, EStage::AutoSettle);
