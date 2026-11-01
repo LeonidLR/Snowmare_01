@@ -289,4 +289,20 @@ namespace FormationRuntime
 	 */
 	CODEXTACTICS_API TArray<FFormationSlot> SlideTargetsClearOfLeader(const TArray<FFormationSlot>& StartSlots, const TArray<FFormationSlot>& BaseTargets,
 		const TArray<FFormationSlot>& AheadTargets, const FVector2D& LeaderTarget);
+
+	/** Yield to the leader's own walk: a body within this of his straight way ahead is in it (two capsules + a margin), cm. */
+	inline constexpr float YieldCorridorCm = 80.f;
+	/** ... the follower steps this far off the way, cm. */
+	inline constexpr float YieldClearCm = 120.f;
+	/** ... the way ahead is looked at this far (his walk's next stretch), cm. */
+	inline constexpr float YieldAheadCm = 600.f;
+
+	/**
+	 * Bug 2026-10-28 (CoverSmoke since the formation stays on in the fight): the leader's own walk (a cover / move order) along a wall ended
+	 * Blocked at velocity 0 - a formation follower stood on his straight way (the nav mesh ignores bodies). When the follower (Here) or the
+	 * place he walks to (Target) lies on the leader's way ahead (Leader -> Destination, at most AheadCm, within CorridorCm of it), the points
+	 * he may step aside to: beside the in-the-way point, ClearCm off the way - his own side first, then the other. Empty: not in the way.
+	 */
+	CODEXTACTICS_API TArray<FVector2D> YieldFromLeaderWay(const FVector2D& Leader, const FVector2D& Destination, const FVector2D& Here,
+		const FVector2D& Target, float CorridorCm = YieldCorridorCm, float ClearCm = YieldClearCm, float AheadCm = YieldAheadCm);
 }
