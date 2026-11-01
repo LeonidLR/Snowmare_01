@@ -196,6 +196,82 @@ FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonOb
 	return Settings;
 }
 
+bool LevelJsonRules::ParsePressureSettings(const FJsonObject& Pressure, FCombatPressureConfig& OutConfig, FString* OutError)
+{
+	FCombatPressureConfig Config;
+	const auto Number = [](const FJsonObject& Object, const TCHAR* Key, float Default)
+	{
+		double Value = Default;
+		return Object.TryGetNumberField(Key, Value) ? static_cast<float>(Value) : Default;
+	};
+	const auto Child = [](const FJsonObject& Object, const TCHAR* Key) -> const FJsonObject*
+	{
+		const TSharedPtr<FJsonObject>* Found = nullptr;
+		return Object.TryGetObjectField(Key, Found) && Found && Found->IsValid() ? Found->Get() : nullptr;
+	};
+	bool bEnabled = true;
+	Config.bEnabled = !Pressure.TryGetBoolField(TEXT("enabled"), bEnabled) || bEnabled;
+	Config.IntervalSeconds = FMath::Max(5.f, Number(Pressure, TEXT("interval_sec"), Config.IntervalSeconds));
+	Config.FirstEventSeconds = FMath::Max(0.f, Number(Pressure, TEXT("first_event_sec"), Config.FirstEventSeconds));
+	Config.GroupMin = FMath::Max(1, FMath::RoundToInt(Number(Pressure, TEXT("group_min"), static_cast<float>(Config.GroupMin))));
+	Config.GroupMax = FMath::Max(Config.GroupMin, FMath::RoundToInt(Number(Pressure, TEXT("group_max"), static_cast<float>(Config.GroupMax))));
+	Config.MaxAlive = FMath::Max(1, FMath::RoundToInt(Number(Pressure, TEXT("max_alive"), static_cast<float>(Config.MaxAlive))));
+	Config.PatrolShare = FMath::Clamp(Number(Pressure, TEXT("patrol_share"), Config.PatrolShare), 0.f, 1.f);
+	Config.Seed = FMath::RoundToInt(Number(Pressure, TEXT("seed"), static_cast<float>(Config.Seed)));
+	Config.WallClearanceCm = FMath::Max(0.f, Number(Pressure, TEXT("wall_clearance_cm"), Config.WallClearanceCm));
+	Config.MinSquadDistanceCm = FMath::Max(0.f, Number(Pressure, TEXT("min_squad_distance_cm"), Config.MinSquadDistanceCm));
+	Config.MaxSquadDistanceCm = FMath::Max(Config.MinSquadDistanceCm + 100.f, Number(Pressure, TEXT("max_squad_distance_cm"), Config.MaxSquadDistanceCm));
+	if (const FJsonObject* Types = Child(Pressure, TEXT("types")))
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : Types->Values)
+		{
+			EEnemyArchetype Type = EEnemyArchetype::Base;
+			if (!ParseEnemyType(Entry.Key, Type))
+			{
+				if (OutError)
+				{
+					*OutError = FString::Printf(TEXT("unknown enemy type '%s' in types"), *Entry.Key);
+				}
+				return false;
+			}
+			if (!CombatPressureRules::IsAllowedType(Type))
+			{
+				if (OutError)
+				{
+					*OutError = FString::Printf(TEXT("'%s' is never spawned by the pressure (HOUND, FROSTBITTEN, SPITTER, CUTTER, MARKSMAN)"), *Entry.Key);
+				}
+				return false;
+			}
+			double Weight = 0.0;
+			if (Entry.Value.IsValid() && Entry.Value->TryGetNumber(Weight) && Weight > 0.0)
+			{
+				Config.TypeWeights.Add({ Type, static_cast<float>(Weight) });
+			}
+		}
+	}
+	if (const FJsonObject* Patrol = Child(Pressure, TEXT("patrol")))
+	{
+		Config.PatrolPoints = FMath::Clamp(FMath::RoundToInt(Number(*Patrol, TEXT("points"), static_cast<float>(Config.PatrolPoints))), 2, 12);
+		Config.PatrolRadiusCm = FMath::Max(200.f, Number(*Patrol, TEXT("radius_cm"), Config.PatrolRadiusCm));
+		Config.PatrolWaitSeconds = FMath::Max(0.f, Number(*Patrol, TEXT("wait_sec"), Config.PatrolWaitSeconds));
+	}
+	if (const FJsonObject* Ambush = Child(Pressure, TEXT("ambush")))
+	{
+		Config.AmbushMinDistanceCm = FMath::Max(0.f, Number(*Ambush, TEXT("min_squad_distance_cm"), Config.AmbushMinDistanceCm));
+		Config.AmbushMaxDistanceCm = FMath::Max(Config.AmbushMinDistanceCm + 100.f, Number(*Ambush, TEXT("max_squad_distance_cm"), Config.AmbushMaxDistanceCm));
+		Config.Watch.WatchHalfAngleDeg = FMath::Clamp(Number(*Ambush, TEXT("watch_half_angle_deg"), Config.Watch.WatchHalfAngleDeg), 0.f, 180.f);
+		Config.Watch.WatchRangeCm = FMath::Max(0.f, Number(*Ambush, TEXT("watch_range_cm"), Config.Watch.WatchRangeCm));
+		Config.Watch.StrikeRangeCm = FMath::Max(100.f, Number(*Ambush, TEXT("strike_range_cm"), Config.Watch.StrikeRangeCm));
+	}
+	if (const FJsonObject* Recycle = Child(Pressure, TEXT("recycle")))
+	{
+		Config.RecycleDistanceCm = FMath::Max(0.f, Number(*Recycle, TEXT("distance_cm"), Config.RecycleDistanceCm));
+		Config.RecycleAfterSeconds = FMath::Max(0.f, Number(*Recycle, TEXT("after_sec"), Config.RecycleAfterSeconds));
+	}
+	OutConfig = MoveTemp(Config);
+	return true;
+}
+
 bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, FLevelCombatConfig& OutConfig, FString& OutError)
 {
 	TSharedPtr<FJsonObject> Root;
@@ -325,6 +401,24 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		if (!EnvironmentWarning.IsEmpty())
 		{
 			UE_LOG(LogCodexTactics, Warning, TEXT("Level JSON %s: %s"), *Config.LevelId, *EnvironmentWarning);
+		}
+	}
+
+	// Combat lab (game designer 2026-11-01, docs/design/COMBAT_LAB.md): the squad's cheats on by default and the endless enemy pressure.
+	if (const TSharedPtr<FJsonObject> Cheats = LevelJsonObject(Root, TEXT("cheats")))
+	{
+		bool bFlag = false;
+		Config.bCheatImmortal = Cheats->TryGetBoolField(TEXT("immortal"), bFlag) && bFlag;
+		bFlag = false;
+		Config.bCheatInfiniteAmmo = Cheats->TryGetBoolField(TEXT("infinite_ammo"), bFlag) && bFlag;
+	}
+	if (const TSharedPtr<FJsonObject> Pressure = LevelJsonObject(Root, TEXT("pressure")))
+	{
+		FString PressureError;
+		if (!ParsePressureSettings(*Pressure, Config.Pressure, &PressureError))
+		{
+			OutError = FString::Printf(TEXT("pressure: %s"), *PressureError);
+			return false;
 		}
 	}
 

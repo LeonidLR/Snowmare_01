@@ -5,6 +5,8 @@
 
 #include "Characters/OperativeCharacter.h"
 
+#include "Combat/CombatCheats.h"
+
 #include "CodexTactics.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -303,7 +305,7 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 		return;
 	}
 	const FQuickFireConfig& Config = QuickFireRules::GetConfig();
-	if (UsesAmmo())
+	if (UsesAmmo() && !CombatCheats::IsInfiniteAmmo(World)) // combat lab cheat (CombatCheats)
 	{
 		CurrentClip = FMath::Max(0, CurrentClip - 1);
 	}

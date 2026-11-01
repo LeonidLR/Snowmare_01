@@ -1,6 +1,7 @@
 #include "Misc/AutomationTest.h"
 #include "Core/MissionRules.h"
 #include "Data/LevelJsonRules.h"
+#include "Dom/JsonObject.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 
@@ -138,3 +139,85 @@ bool FLevelJsonPerMapTest::RunTest(const FString&)
 }
 
 #endif
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+// Combat lab (game designer 2026-11-01, docs/design/COMBAT_LAB.md): the "pressure" and "cheats" blocks.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelJsonPressureTest, "CodexTactics.LevelJson.Pressure",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FLevelJsonPressureTest::RunTest(const FString&)
+{
+	FLevelCombatConfig Config;
+	FString Error;
+	TestTrue(TEXT("A level without the block parses"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"p"})"), TEXT("p"), Config, Error));
+	TestFalse(TEXT("No block: pressure off"), Config.Pressure.bEnabled);
+	TestFalse(TEXT("No block: no cheats"), Config.bCheatImmortal || Config.bCheatInfiniteAmmo);
+
+	const FString Json = TEXT(R"({"level_id":"p", "cheats": {"immortal": true, "infinite_ammo": true},
+		"pressure": {"interval_sec": 90, "first_event_sec": 5, "group_min": 1, "group_max": 3, "max_alive": 4, "patrol_share": 0.25, "seed": 77,
+			"types": {"HOUND": 2, "frostbitten": 1, "SPITTER": 0, "CUTTER": 1, "MARKSMAN": 0.5},
+			"wall_clearance_cm": 300, "min_squad_distance_cm": 2000, "max_squad_distance_cm": 4500,
+			"patrol": {"points": 5, "radius_cm": 900, "wait_sec": 1.5},
+			"ambush": {"min_squad_distance_cm": 1200, "max_squad_distance_cm": 2800, "watch_half_angle_deg": 50, "watch_range_cm": 4000, "strike_range_cm": 1500},
+			"recycle": {"distance_cm": 7000, "after_sec": 45}}})");
+	TestTrue(TEXT("Parses"), LevelJsonRules::ParseLevel(Json, TEXT("p"), Config, Error));
+	const FCombatPressureConfig& P = Config.Pressure;
+	TestTrue(TEXT("Enabled by default when present"), P.bEnabled);
+	TestTrue(TEXT("Cheats on"), Config.bCheatImmortal && Config.bCheatInfiniteAmmo);
+	TestEqual(TEXT("interval"), P.IntervalSeconds, 90.f);
+	TestEqual(TEXT("first event"), P.FirstEventSeconds, 5.f);
+	TestEqual(TEXT("group"), P.GroupMax, 3);
+	TestEqual(TEXT("max alive"), P.MaxAlive, 4);
+	TestEqual(TEXT("patrol share"), P.PatrolShare, 0.25f);
+	TestEqual(TEXT("seed"), P.Seed, 77);
+	TestEqual(TEXT("4 positive weights (SPITTER 0 dropped)"), P.TypeWeights.Num(), 4);
+	TestEqual(TEXT("clearance"), P.WallClearanceCm, 300.f);
+	TestEqual(TEXT("squad band"), P.MaxSquadDistanceCm, 4500.f);
+	TestEqual(TEXT("patrol points"), P.PatrolPoints, 5);
+	TestEqual(TEXT("patrol wait"), P.PatrolWaitSeconds, 1.5f);
+	TestEqual(TEXT("ambush band"), P.AmbushMinDistanceCm, 1200.f);
+	TestEqual(TEXT("watch half angle"), P.Watch.WatchHalfAngleDeg, 50.f);
+	TestEqual(TEXT("strike range"), P.Watch.StrikeRangeCm, 1500.f);
+	TestEqual(TEXT("recycle"), P.RecycleAfterSeconds, 45.f);
+
+	FCombatPressureConfig Clamped;
+	FJsonObject Wild;
+	Wild.SetNumberField(TEXT("interval_sec"), 1.0);
+	Wild.SetNumberField(TEXT("group_min"), 0.0);
+	Wild.SetNumberField(TEXT("group_max"), -3.0);
+	Wild.SetNumberField(TEXT("patrol_share"), 7.0);
+	Wild.SetBoolField(TEXT("enabled"), false);
+	TestTrue(TEXT("Wild values parse"), LevelJsonRules::ParsePressureSettings(Wild, Clamped));
+	TestFalse(TEXT("enabled: false"), Clamped.bEnabled);
+	TestEqual(TEXT("interval >= 5 s"), Clamped.IntervalSeconds, 5.f);
+	TestEqual(TEXT("group_min >= 1"), Clamped.GroupMin, 1);
+	TestEqual(TEXT("group_max >= group_min"), Clamped.GroupMax, 1);
+	TestEqual(TEXT("share <= 1"), Clamped.PatrolShare, 1.f);
+
+	TestFalse(TEXT("A Brute in the types is refused"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"p","pressure":{"types":{"BRUTE":1}}})"), TEXT("p"), Config, Error));
+	TestTrue(TEXT("... the error names it"), Error.Contains(TEXT("BRUTE")));
+	TestFalse(TEXT("An unknown type is refused"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"p","pressure":{"types":{"DRAGON":1}}})"), TEXT("p"), Config, Error));
+
+	// The combat lab's own file: both cheats on, the designer's numbers.
+	FLevelCombatConfig Lab;
+	if (TestTrue(TEXT("L_FormationLabCombat.json parses"), LevelJsonRules::LoadLevel(TEXT("L_FormationLabCombat.json"), Lab, Error)))
+	{
+		TestTrue(TEXT("Lab: pressure on"), Lab.Pressure.bEnabled);
+		TestEqual(TEXT("Lab: every 2 minutes"), Lab.Pressure.IntervalSeconds, 120.f);
+		TestEqual(TEXT("Lab: groups 1-3"), Lab.Pressure.GroupMin * 10 + Lab.Pressure.GroupMax, 13);
+		TestEqual(TEXT("Lab: at most 4 alive"), Lab.Pressure.MaxAlive, 4);
+		TestTrue(TEXT("Lab: immortal + infinite ammo by default"), Lab.bCheatImmortal && Lab.bCheatInfiniteAmmo);
+		TestTrue(TEXT("Lab: fights start on contact as skirmishes"), Lab.CombatStart == ECombatStartMode::Ambush && Lab.bAmbushSkirmish);
+		TestEqual(TEXT("Lab: no cold"), Lab.ColdRateMult, 0.f);
+		TestFalse(TEXT("Lab: no intro briefing"), Lab.bIntroDialogue);
+		for (const FPressureTypeWeight& Weight : Lab.Pressure.TypeWeights)
+		{
+			TestTrue(TEXT("Lab: only the allowed types"), CombatPressureRules::IsAllowedType(Weight.Type));
+		}
+	}
+	return true;
+}
+
+#endif // WITH_DEV_AUTOMATION_TESTS

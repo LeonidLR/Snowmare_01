@@ -17,13 +17,21 @@ Places (every actor tagged FormationLab and filed under the outliner folder Form
     (the in-game bot reports it to the squad as a known threat at since_s; FORMATION_CONTRACT.md 10.2).
 Lighting (sun, sky light, sky atmosphere, height fog) is tagged FormationLab_Env and placed only when missing, so hand tweaks stay.
 
+Overlay layouts (schema codex.formation_layout_overlay/1, the combat lab 2026-11-01, docs/design/COMBAT_LAB.md): {"extends": "<base layout,
+relative to the overlay>", "towers": [...], "nav_z": [z0, z1]} = the base layout (its walls, zones, routes, spawn: one source of truth) plus
+  - a tower per entry: a solid block (label = the tower id, tags FormationLab + CombatLabTower, folder Towers/) size[0] x size[1] x rungs * 36.4 cm
+    (a walkable roof) and an ALadderActor 10 cm off its ladder_face (+x / -x / +y / -y; label "<id>_Ladder", 3 wall brackets, >= 7 rungs = a nav link);
+  - the NavMeshBoundsVolume spanning nav_z (the roofs inside it).
+The combat lab: CODEX_LAB_LAYOUT=<project>/Content/Data/FormationLab/Combat/formation_lab_combat_01.json CODEX_LAB_TARGET=/Game/Maps/L_FormationLabCombat
+(then Scripts/bake_navmesh.ps1 -Map L_FormationLabCombat).
+
 Idempotent: every run deletes the actors tagged FormationLab and places them again from the JSON; nothing else in the map is
 touched and no other map is opened for writing. The map is created (EditorLoadingAndSavingUtils.new_blank_map) when it does not
 exist; CODEX_LAB_FRESH=1 deletes it first. The saved RecastNavMesh actors are destroyed before the save (docs/port/TRAPS.md: a
 commandlet-saved navmesh stays empty at runtime) - bake it with Scripts/bake_navmesh.ps1 (or open + save the map in the editor).
 
 Env: CODEX_LAB_LAYOUT (layout JSON path, default formation_lab_01), CODEX_LAB_TARGET (map, default /Game/Maps/L_FormationLab),
-CODEX_LAB_FRESH=1. Report: Saved/Logs/FormationLabLayout.txt.
+CODEX_LAB_FRESH=1. Report: Saved/Logs/FormationLabLayout.txt (Saved/Logs/<target map>Layout.txt for another target).
 Run (this project's editor closed):
   UnrealEditor-Cmd.exe <project>/CodexTactics.uproject -run=pythonscript -script="<abs path to this file>" -unattended -nullrhi
 Without Unreal (system python): `python build_formation_lab.py plan [layout.json]` prints the actor plan as JSON (no map change).
@@ -49,8 +57,14 @@ ENV_TAG = "FormationLab_Env"
 ROUTE_TAG = "FormationLabRoute"
 THREAT_TAG = "FormationLabThreat"
 SLIDE_TAG = "FormationLabSlide"
+TOWER_TAG = "CombatLabTower"
 FOLDER = "FormationLab"
 SCHEMA = "codex.formation_layout/1"
+OVERLAY_SCHEMA = "codex.formation_layout_overlay/1"
+PITCH = 36.4          # ladder rung pitch, cm (docs/design/LADDERS.md clip contract)
+LADDER_GAP = 10.0     # rung plane off the tower face, cm (as Scripts/Editor/place_factory_test_ladders.py)
+MIN_RUNGS = 7         # fewer rungs: decoration, no nav link (LADDERS.md)
+FACES = {"+x": (1.0, 0.0, 0.0), "-x": (-1.0, 0.0, 180.0), "+y": (0.0, 1.0, 90.0), "-y": (0.0, -1.0, -90.0)}
 
 CUBE = "/Engine/BasicShapes/Cube.Cube"
 GRID = "/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"
@@ -70,6 +84,8 @@ def report(line):
 def load_layout(path):
     with open(path, encoding="utf-8") as f:
         layout = json.load(f)
+    if layout.get("schema") == OVERLAY_SCHEMA:
+        return load_overlay(path, layout)
     problems = []
     if layout.get("schema") != SCHEMA:
         problems.append("schema must be %s" % SCHEMA)
@@ -78,6 +94,26 @@ def load_layout(path):
             problems.append("missing %s" % key)
     if problems:
         raise ValueError("%s: %s (validate it in Training Ground first: npm test / the level-design department)" % (path, "; ".join(problems)))
+    return layout
+
+
+def load_overlay(path, overlay):
+    """The base layout ("extends", relative to the overlay) + the overlay's towers / nav_z (the base's walls stay the one source of truth)."""
+    problems = []
+    if "extends" not in overlay:
+        problems.append("missing extends")
+    for t in overlay.get("towers", []):
+        if t.get("ladder_face") not in FACES:
+            problems.append("tower %s: ladder_face must be one of %s" % (t.get("id"), ", ".join(sorted(FACES))))
+        if int(t.get("rungs", 0)) < MIN_RUNGS:
+            problems.append("tower %s: >= %d rungs (a shorter ladder gets no nav link)" % (t.get("id"), MIN_RUNGS))
+    if problems:
+        raise ValueError("%s: %s" % (path, "; ".join(problems)))
+    layout = dict(load_layout(os.path.normpath(os.path.join(os.path.dirname(path), overlay["extends"]))))
+    layout["name"] = overlay.get("name", layout["name"])
+    layout["towers"] = overlay.get("towers", [])
+    if "nav_z" in overlay:
+        layout["nav_z"] = overlay["nav_z"]
     return layout
 
 
@@ -102,9 +138,20 @@ def plan(layout):
     sx, sy = layout["spawn"]["pos"]
     specs.append({"kind": "player_start", "label": "Lab_PlayerStart", "folder": "Base",
                   "location": [sx, sy, gz + START_Z], "yaw": float(layout["spawn"]["yaw"])})
+    nz0, nz1 = layout.get("nav_z", [gz - 300.0, gz + 700.0])  # a unit brush is 200 cm: scale 5 = the 10 m of the 01 lab
     specs.append({"kind": "nav_bounds", "label": "Lab_NavMeshBounds", "folder": "Navigation",
-                  "location": [(x0 + x1) / 2.0, (y0 + y1) / 2.0, gz + 200.0], "yaw": 0.0,
-                  "scale": [(x1 - x0) / 200.0, (y1 - y0) / 200.0, 5.0]})
+                  "location": [(x0 + x1) / 2.0, (y0 + y1) / 2.0, (nz0 + nz1) / 2.0], "yaw": 0.0,
+                  "scale": [(x1 - x0) / 200.0, (y1 - y0) / 200.0, (nz1 - nz0) / 200.0]})
+    for t in layout.get("towers", []):
+        (cx, cy), (sx, sy) = t["center"], t["size"]
+        rungs = int(t["rungs"])
+        top = rungs * PITCH
+        specs.append({"kind": "cube", "label": t["id"], "folder": "Towers", "tags": [TOWER_TAG],
+                      "location": [cx, cy, gz + top / 2.0], "yaw": 0.0, "scale": [sx / 100.0, sy / 100.0, top / 100.0]})
+        fx, fy, yaw = FACES[t["ladder_face"]]
+        half = (sx if fx else sy) / 2.0
+        specs.append({"kind": "ladder", "label": t["id"] + "_Ladder", "folder": "Towers", "tags": [TOWER_TAG],
+                      "location": [cx + fx * (half + LADDER_GAP), cy + fy * (half + LADDER_GAP), gz], "yaw": yaw, "rungs": rungs})
     for r in layout["routes"]:
         for n, (px, py) in enumerate(r["points"]):
             specs.append({"kind": "target_point", "label": "%s_%d" % (r["id"], n), "folder": "Routes/" + r["id"],
@@ -154,7 +201,7 @@ class Placer:
     def place(self, spec):
         kind = spec["kind"]
         if kind == "cube":
-            actor = self.spawn(unreal.StaticMeshActor, spec)
+            actor = self.spawn(unreal.StaticMeshActor, spec, tags=[TAG] + spec.get("tags", []))
             comp = actor.static_mesh_component
             comp.set_static_mesh(self.cube)
             comp.set_material(0, self.grid)
@@ -176,6 +223,13 @@ class Placer:
                 comp.set_editor_property("horizontal_alignment", unreal.HorizTextAligment.EHTA_CENTER)
             except Exception as exc:  # cosmetic only
                 report("REVIEW: zone label %s: %r" % (spec["label"], exc))
+        elif kind == "ladder":
+            actor = self.spawn(unreal.LadderActor, spec, tags=[TAG] + spec.get("tags", []))
+            actor.set_editor_property("height", spec["rungs"] * PITCH)
+            actor.set_editor_property("wall_bracket_count", 3)
+            actor.set_editor_property("wall_search_cm", LADDER_GAP + 2.0)
+            # set_editor_property re-runs the construction: the ladder lays itself out against the tower face.
+            report("  %s: %d rungs, climbable %s, wall %s" % (spec["label"], actor.get_rung_count(), actor.is_climbable(), actor.has_wall()))
         elif kind == "campfire":
             cls = getattr(unreal, "CampfireActor", None)
             if cls is None:
@@ -238,8 +292,8 @@ def build():
     p = Placer()
     for spec in specs:
         p.place(spec)
-    report("placed %d actors from %s (%d walls, %d zones, %d routes)" % (p.placed, os.path.basename(LAYOUT_FILE),
-           len(layout["walls"]), len(layout["zones"]), len(layout["routes"])))
+    report("placed %d actors from %s (%d walls, %d zones, %d routes, %d towers)" % (p.placed, os.path.basename(LAYOUT_FILE),
+           len(layout["walls"]), len(layout["zones"]), len(layout["routes"]), len(layout.get("towers", []))))
 
     starts = [a for a in actors.get_all_level_actors() if isinstance(a, unreal.PlayerStart)]
     if len(starts) != 1:
@@ -259,7 +313,9 @@ def build():
 def flush_report():
     saved = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir())
     os.makedirs(saved + "Logs", exist_ok=True)
-    with open(saved + "Logs/FormationLabLayout.txt", "w", encoding="utf-8") as f:
+    leaf = TARGET_MAP.rsplit("/", 1)[-1]
+    name = "FormationLabLayout.txt" if leaf == "L_FormationLab" else (leaf[2:] if leaf.startswith("L_") else leaf) + "Layout.txt"
+    with open(saved + "Logs/" + name, "w", encoding="utf-8") as f:
         f.write("\n".join(REPORT) + "\n")
 
 

@@ -50,6 +50,16 @@ namespace LevelJsonRules
 	CODEXTACTICS_API FEnvironmentLevelSettings ParseEnvironmentSettings(const FJsonObject& Environment, FString* OutError = nullptr);
 
 	/**
+	 * The level JSON "pressure" object (combat lab, game designer 2026-11-01, docs/design/COMBAT_LAB.md): {"enabled": true, "interval_sec": 120,
+	 * "first_event_sec": 15, "group_min": 1, "group_max": 3, "max_alive": 4, "patrol_share": 0.6, "seed": 1101, "types": {"HOUND": 1, ...},
+	 * "wall_clearance_cm": 250, "min_squad_distance_cm": 2500, "max_squad_distance_cm": 5000, "patrol": {"points", "radius_cm", "wait_sec"},
+	 * "ambush": {"min_squad_distance_cm", "max_squad_distance_cm", "watch_half_angle_deg", "watch_range_cm", "strike_range_cm"},
+	 * "recycle": {"distance_cm", "after_sec"}}. Absent keys keep the FCombatPressureConfig defaults, values are clamped to sane ranges;
+	 * "enabled" defaults to true. False + OutError on an unknown type name or a type the pressure never spawns (BRUTE, CRYO_DRONE).
+	 */
+	CODEXTACTICS_API bool ParsePressureSettings(const FJsonObject& Pressure, FCombatPressureConfig& OutConfig, FString* OutError = nullptr);
+
+	/**
 	 * Parses a level JSON text; false + OutError on invalid JSON or an unknown enemy type. A spawn entry's "environment_lock": true
 	 * sets FEnemySpawnEntry::bEnvironmentLocked (the weather / time-of-day roster leaves it as written).
 	 */

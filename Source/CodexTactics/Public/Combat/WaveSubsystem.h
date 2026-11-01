@@ -47,6 +47,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Wave")
 	AEnemyCharacter* SpawnEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator);
 
+	/**
+	 * Spawns an enemy that is NOT part of the current fight (combat lab, docs/design/COMBAT_LAB.md: the pressure's patrols / ambushers are
+	 * level enemies spawned at runtime): it is not counted as a living enemy of the wave / skirmish until it engages the squad
+	 * (ULevelEncounterSubsystem::NotifyHostileContact -> JoinSkirmish). SpawnEnemy adds every spawn to the fight at once.
+	 */
+	AEnemyCharacter* SpawnLevelEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator);
+
 	/** Destroys all currently alive enemies immediately. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Wave")
 	void ClearAllEnemies();
@@ -206,6 +213,9 @@ private:
 
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
+
+	/** SpawnEnemy / SpawnLevelEnemy: bJoinFight adds it to the current fight's living enemies. */
+	AEnemyCharacter* SpawnEnemyInternal(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, bool bJoinFight);
 
 	void HandleEnemyDied(AEnemyCharacter* Enemy);
 	void ProcessPendingSpawns(float DeltaTime);

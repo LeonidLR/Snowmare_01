@@ -1,0 +1,47 @@
+{
+  "$schema": "../Schemas/level_config.schema.json",
+  "level_id": "L_FormationLabCombat",
+  "level_name": "Formation Lab - Combat",
+  "description": "Combat copy of the formation lab (game designer decisions 2026-11-01, docs/design/COMBAT_LAB.md; built by Scripts/Editor/build_formation_lab.py from Content/Data/FormationLab/Combat/formation_lab_combat_01.json = the lab layout + 4 towers with ladders). The squad meets endless enemy pressure: every 2 minutes a group of 1-3 (Hound, Frostbitten, Spitter, Cutter, Marksman) - a patrol walking a loop or ambushers hidden near the squad's way that strike when their side is unwatched. Fights start on contact (combat_start ambush) as skirmishes and end straight in exploration. No cold, no intro briefing, no horde; the squad is immortal with infinite ammo by default (Codex.Cheat.Immortal / Codex.Cheat.InfiniteAmmo 0 turn them off). ONE small wave only because the level file must hold a valid wave (CodexTactics.LevelJson.AllFilesParse); it is never played (the fights are skirmishes).",
+  "combat_start": "ambush",
+  "ambush_fight": "skirmish",
+  "susanin_wave": 0,
+  "horde_enabled": false,
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "cold_rate_mult": 0,
+  "intro_dialogue": false,
+  "cheats": { "immortal": true, "infinite_ammo": true },
+  "pressure": {
+    "enabled": true,
+    "interval_sec": 120,
+    "first_event_sec": 15,
+    "group_min": 1,
+    "group_max": 3,
+    "max_alive": 4,
+    "patrol_share": 0.6,
+    "seed": 1101,
+    "types": { "HOUND": 1, "FROSTBITTEN": 1, "SPITTER": 1, "CUTTER": 1, "MARKSMAN": 1 },
+    "wall_clearance_cm": 250,
+    "min_squad_distance_cm": 2500,
+    "max_squad_distance_cm": 5000,
+    "patrol": { "points": 4, "radius_cm": 1200, "wait_sec": 2 },
+    "ambush": { "min_squad_distance_cm": 1400, "max_squad_distance_cm": 3000, "watch_half_angle_deg": 45, "watch_range_cm": 5000, "strike_range_cm": 1800 },
+    "recycle": { "distance_cm": 6000, "after_sec": 60 }
+  },
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        { "enemy_type": "FROSTBITTEN", "count": 2, "spawn_lane": "ANY", "spawn_delay_sec": 1, "initial_delay_sec": 0 }
+      ],
+      "wave_modifiers": { "enemy_hp_mult": 1, "enemy_damage_mult": 1, "enemy_speed_mult": 1, "cold_drain_mult": 1 }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  }
+}

@@ -396,6 +396,16 @@ TArray<AEnemyCharacter*> UWaveSubsystem::GetAliveEnemies() const
 
 AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation)
 {
+	return SpawnEnemyInternal(Archetype, Location, Rotation, true);
+}
+
+AEnemyCharacter* UWaveSubsystem::SpawnLevelEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation)
+{
+	return SpawnEnemyInternal(Archetype, Location, Rotation, false);
+}
+
+AEnemyCharacter* UWaveSubsystem::SpawnEnemyInternal(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, bool bJoinFight)
+{
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -427,8 +437,11 @@ AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVe
 		Enemy->InitializeArchetype(Archetype);
 		// Game designer 2026-10-20: an ABP with an entrance clip plays it (Military Zombie transformation); others: no-op.
 		Enemy->PlaySpawnEntrance();
-		Enemy->OnEnemyDiedNative.AddUObject(this, &UWaveSubsystem::HandleEnemyDied);
-		AliveEnemies.Add(Enemy);
+		if (bJoinFight)
+		{
+			Enemy->OnEnemyDiedNative.AddUObject(this, &UWaveSubsystem::HandleEnemyDied);
+			AliveEnemies.Add(Enemy);
+		}
 
 		OnEnemySpawned.Broadcast(Enemy, Archetype);
 		OnEnemySpawnedNative.Broadcast(Enemy, Archetype);
