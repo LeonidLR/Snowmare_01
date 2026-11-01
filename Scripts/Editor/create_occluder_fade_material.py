@@ -3,7 +3,7 @@
 #
 # Look: Masked (no translucency sorting, cheap: the depth / velocity passes as any masked mesh), Default Lit - a cool grey wall with a soft
 # fresnel rim so its outline still reads, its opacity mask = DitherTemporalAA(Opacity): TSR / TAA blends the dither into a smooth fade.
-# Parameters: Opacity (1 = solid; the subsystem eases it 1 -> 0.3 -> 1), Tint, RimColor, RimStrength. The proxy mesh carrying it casts no
+# Parameters: Opacity (1 = solid; the subsystem eases it 1 -> 0.45 -> 1), Tint, RimColor, RimStrength. The proxy mesh carrying it casts no
 # shadow (the hidden original keeps casting its own).
 #
 # Run (editor CLOSED for this checkout, under the build lock):

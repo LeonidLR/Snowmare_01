@@ -314,7 +314,16 @@ void UOccluderFadeSubsystem::Fade(UPrimitiveComponent& Piece, double Now)
 		}
 		Faded.Proxy = Proxy;
 	}
-	// Not drawn (main + depth pass), still casting its shadow; its collision stays (the cursor still lands on the wall: the side rules decide).
+	// The weather's snow / wet overlay (UWeatherSnowOverlayComponent) is drawn even with the main pass off: off while faded.
+	if (UMeshComponent* AsMesh = Cast<UMeshComponent>(&Piece))
+	{
+		Faded.Overlay = AsMesh->GetOverlayMaterial();
+		if (Faded.Overlay.IsValid())
+		{
+			AsMesh->SetOverlayMaterial(nullptr);
+		}
+	}
+	// Not drawn (main + depth pass), still casting its shadow; its collision stays (sight, cover, AI; the cursor looks through it).
 	Piece.SetRenderInMainPass(false);
 	Piece.SetRenderInDepthPass(false);
 	ApplyOpacity(Faded, 1.f);
@@ -345,6 +354,13 @@ void UOccluderFadeSubsystem::Restore(FFaded& Faded)
 	{
 		Piece->SetRenderInMainPass(Faded.bRenderInMainPass);
 		Piece->SetRenderInDepthPass(Faded.bRenderInDepthPass);
+		// The overlay back, unless the weather set another one meanwhile.
+		UMeshComponent* AsMesh = Cast<UMeshComponent>(Piece);
+		if (AsMesh && Faded.Overlay.IsValid() && AsMesh->GetOverlayMaterial() == nullptr)
+		{
+			AsMesh->SetOverlayMaterial(Faded.Overlay.Get());
+		}
+		Faded.Overlay.Reset();
 		UE_LOG(LogCodexTactics, Display, TEXT("[OccluderFade] restore %s.%s"), Piece->GetOwner() ? *Piece->GetOwner()->GetName() : TEXT("-"), *Piece->GetName());
 	}
 }

@@ -66,7 +66,13 @@ bool ACodexTacticsPlayerController::ResolveWallSideSlot(const FHitResult& Hit, F
 	{
 		return false; // a face hit keeps the face that was hit (FindCoverSlotForHit); bodies / objects keep their meaning
 	}
-	const FVector View = PlanarView(PlayerCameraManager);
+	// The cursor ray's own planar direction (off the screen centre it slants sideways from the camera's forward); the camera's forward when
+	// the hit carries no ray (a constructed hit).
+	FVector View = Planar(FVector(Hit.ImpactPoint) - Hit.TraceStart);
+	if (View.IsNearlyZero() || Hit.TraceStart.Equals(Hit.TraceEnd))
+	{
+		View = PlanarView(PlayerCameraManager);
+	}
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WallSideTrace), false);
 	if (Squad)
 	{
@@ -77,7 +83,7 @@ bool ACodexTacticsPlayerController::ResolveWallSideSlot(const FHitResult& Hit, F
 	}
 	const auto FaceAlong = [&View](const FHitResult& Face) { return static_cast<float>(FVector::DotProduct(Planar(Face.ImpactNormal), View)); };
 
-	// 1. The top of a wall: its two faces along the view just under the hit, on the same object (LineTraceComponent: nothing in between counts).
+	// 1. The top of a wall: its two faces along the ray just under the hit, on the same object (LineTraceComponent: nothing in between counts).
 	{
 		const FVector Under = Hit.ImpactPoint - FVector(0.f, 0.f, FaceProbeBelowTopCm);
 		const float Reach = WallSideRules::MaxWallThicknessCm + 50.f;

@@ -21,7 +21,7 @@ struct FOccluderFadeConfig
 	/** A piece whose footprint is wider than this on BOTH axes is a floor slab / terrain block, never faded, cm. */
 	float MaxShortSideCm = 3000.f;
 	/** The faded look: the fade material's Opacity at full fade. */
-	float FadedOpacity = 0.3f;
+	float FadedOpacity = 0.45f;
 	/** Fade in / out time (real time), s. */
 	float FadeSeconds = 0.2f;
 	/** A faded piece no target is behind any more comes back this long after it last hid one (hysteresis), s. */
@@ -77,7 +77,7 @@ namespace OccluderFadeRules
  * mesh in front of a target that rises a metre above its feet fades: it is no longer drawn in the main / depth pass (as the roof cutaway:
  * its shadow and its collision stay - sight, cover and AI traces are unchanged; only the player's cursor looks through it to the ground
  * behind, ACodexTacticsPlayerController::ThroughFadedOccluders) and a see-through proxy with the dithered
- * fade material (M_OccluderFade, Masked: no translucency sorting) stands in its place, its opacity eased 1 -> 0.3 in 0.2 s. A piece no target
+ * fade material (M_OccluderFade, Masked: no translucency sorting) stands in its place, its opacity eased 1 -> 0.45 in 0.2 s. A piece no target
  * hides behind any more comes back 0.3 s later. At most 6 pieces at once; pawns, terrain, foliage, instanced meshes, interactables and
  * actors tagged NoOccluderFade never fade. Missing material: the piece is cut like a roof (no proxy).
  */
@@ -122,6 +122,8 @@ private:
 		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
 		bool bRenderInMainPass = true;
 		bool bRenderInDepthPass = true;
+		/** Its overlay material (the weather's snow / wet overlay draws even with the main pass off): taken off while faded. */
+		TWeakObjectPtr<UMaterialInterface> Overlay;
 		double LastHidSeconds = 0.0;
 		double StateSeconds = 0.0;
 		bool bFadingOut = false;

@@ -9,7 +9,7 @@
  * CodexTactics.Tactics.WallSide.*. The runtime (traces, the cover slot) is ACodexTacticsPlayerController::ResolveWallSideSlot
  * (CodexTacticsPlayerControllerWallSide.cpp).
  *
- * a) The side is decided by the cursor, as the player sees the wall (the camera's planar view direction): a hit on the TOP of a high wall
+ * a) The side is decided by the cursor, as the player sees the wall (along the cursor ray, planar): a hit on the TOP of a high wall
  *    beyond its middle line, or on the ground right behind it (within the band the wall hides from the camera, see FarGroundReachCm) with
  *    the leader on the other side -> the FAR face; the top's near half -> the near face; a face hit stays the face that was hit.
  * b) While the squad is at a wall a click picks an operative only on his body (the trace hit him, or the ground within TightPickRadiusCm

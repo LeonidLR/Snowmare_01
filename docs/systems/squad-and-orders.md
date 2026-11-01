@@ -462,9 +462,9 @@ Commander went round one end, the Engineer + the Medic-Sapper round the other. F
 
 - **a) The wall side by the cursor** (`Codex.Cursor.WallSide`, input UX, any formation / CVar): `ACodexTacticsPlayerController::ResolveWallSideSlot`
   (`CodexTacticsPlayerControllerWallSide.cpp`; pure `Tactics/WallSideRules`, tests `CodexTactics.Tactics.WallSide.*`). A hit on the TOP of a HIGH wall:
-  its two faces are traced along the camera's planar view just under the hit (`LineTraceComponent`, the same object), the top is split at its middle line
+  its two faces are traced along the cursor ray (planar) just under the hit (`LineTraceComponent`, the same object), the top is split at its middle line
   (`SideOfTopHit`): beyond it = the FAR face, before it = the near face; the slot = `CoverTraceRules::FindCoverSlotAt` on that face (only high cover - a
-  low wall's top keeps its old meaning, a move / vault). A hit on the GROUND: traced back towards the camera at chest height (110 cm) - a high wall's face
+  low wall's top keeps its old meaning, a move / vault). A hit on the GROUND: traced back along the cursor ray (planar) at chest height (110 cm) - a high wall's face
   pointing away from the camera, the ground within `FarGroundReachCm` of it (the band the wall hides along THIS ray: height / tan(the ray's depression) +
   1 m, 1.5 .. 10 m) and the leader on the wall's other side (`IsGroundBehindWall`) = the far face (not the leader's own cover object while he is in cover:
   his wrap along it decides, as before). A face hit keeps the face that was hit (`FindCoverSlotForHit`). Used by `TryHandleCoverClick` (not on the
