@@ -60,8 +60,20 @@ struct FFormationClassifyState
 
 namespace FormationTerrainRules
 {
-	/** Distance along the ray Origin + Dir * t (Dir unit) to the first wall surface within MaxDistance; unset = none. */
-	CODEXTACTICS_API TOptional<float> RayHit(const TArray<FFormationWall>& Walls, const FVector2D& Origin, const FVector2D& Dir, float MaxDistance);
+	/**
+	 * Distance along the ray Origin + Dir * t (Dir unit) to the first wall surface within MaxDistance; unset = none (geometry.ts raycastWalls).
+	 * v2.5.1 (red team 16_4): bEndFaces (default true) - a thick wall's flat end faces (WallEndFaces) stop the ray too; the classifier's
+	 * SIDE probes (SideClearance) pass false (a doorway's jambs are no side walls: user Q1 = a).
+	 */
+	CODEXTACTICS_API TOptional<float> RayHit(const TArray<FFormationWall>& Walls, const FVector2D& Origin, const FVector2D& Dir, float MaxDistance,
+		bool bEndFaces = true);
+
+	/**
+	 * v2.5.1 (geometry.ts wallEndFaces): the flat end faces of a thick wall - across it at the body's tips (Thickness / 2 beyond A / B
+	 * along the wall, as the body distance), the A end first, each from the +normal face to the -normal face (normal = (-AB.Y, AB.X) / |AB|),
+	 * thickness 0. None for a thin wall (thickness 0) or a zero-length one.
+	 */
+	CODEXTACTICS_API TArray<FFormationWall, TInlineAllocator<2>> WallEndFaces(const FFormationWall& Wall);
 
 	/**
 	 * v1.1: true when the wall's direction A -> B is within IgnorePerpDeg of perpendicular to Yaw (offParallel = min(|d|, 180 - |d|) of

@@ -11,8 +11,8 @@ namespace FormationTerrainRules
 		return A.X * B.Y - A.Y * B.X;
 	}
 
-	/** Distance along the ray to one wall (its faces / centre line), infinity when none (geometry.ts raySegment). */
-	static double TerrainRaySegment(const FVector2D& Origin, const FVector2D& Dir, const FFormationWall& Wall)
+	/** Distance along the ray to one wall (its faces / centre line, v2.5.1 its end faces too), infinity when none (geometry.ts raySegment). */
+	static double TerrainRaySegment(const FVector2D& Origin, const FVector2D& Dir, const FFormationWall& Wall, bool bEndFaces)
 	{
 		const double Half = 0.5 * Wall.Thickness;
 		const FVector2D Edge = Wall.B - Wall.A;
@@ -41,6 +41,27 @@ namespace FormationTerrainRules
 				Best = T;
 			}
 		}
+		if (bEndFaces)
+		{
+			// v2.5.1 (red team 16_4): the two END faces of a thick wall (flat, across the wall at its body tips) - a ray along the wall's
+			// axis (the leader arriving end-on at a T stem's free tip) hits neither long face and the wall ahead was never seen.
+			for (const FFormationWall& Face : WallEndFaces(Wall))
+			{
+				const FVector2D FaceEdge = Face.B - Face.A;
+				const double Denominator = TerrainCross2D(Dir, FaceEdge);
+				if (FMath::Abs(Denominator) < 1e-9)
+				{
+					continue;
+				}
+				const FVector2D ToA = Face.A - Origin;
+				const double T = TerrainCross2D(ToA, FaceEdge) / Denominator;
+				const double U = TerrainCross2D(ToA, Dir) / Denominator;
+				if (T >= 0.0 && U >= 0.0 && U <= 1.0 && T < Best)
+				{
+					Best = T;
+				}
+			}
+		}
 		if (Half > 0.0)
 		{
 			// Started inside the wall body: distance 0.
@@ -56,12 +77,37 @@ namespace FormationTerrainRules
 		return Best;
 	}
 
-	TOptional<float> RayHit(const TArray<FFormationWall>& Walls, const FVector2D& Origin, const FVector2D& Dir, float MaxDistance)
+	TArray<FFormationWall, TInlineAllocator<2>> WallEndFaces(const FFormationWall& Wall)
+	{
+		TArray<FFormationWall, TInlineAllocator<2>> Faces;
+		const double Half = 0.5 * Wall.Thickness;
+		const FVector2D Edge = Wall.B - Wall.A;
+		const double Length = Edge.Size();
+		if (Half <= 0.0 || Length == 0.0)
+		{
+			return Faces;
+		}
+		const FVector2D Unit(Edge.X / Length, Edge.Y / Length);
+		const FVector2D Normal(-Unit.Y, Unit.X);
+		const FVector2D Ends[2] = { Wall.A, Wall.B };
+		const double Signs[2] = { -1.0, 1.0 };
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			const FVector2D Tip = Ends[Index] + Unit * (Signs[Index] * Half);
+			FFormationWall& Face = Faces.AddDefaulted_GetRef();
+			Face.A = Tip + Normal * Half;
+			Face.B = Tip + Normal * (-Half);
+			Face.Thickness = 0.f;
+		}
+		return Faces;
+	}
+
+	TOptional<float> RayHit(const TArray<FFormationWall>& Walls, const FVector2D& Origin, const FVector2D& Dir, float MaxDistance, bool bEndFaces)
 	{
 		double Best = TNumericLimits<double>::Max();
 		for (const FFormationWall& Wall : Walls)
 		{
-			Best = FMath::Min(Best, TerrainRaySegment(Origin, Dir, Wall));
+			Best = FMath::Min(Best, TerrainRaySegment(Origin, Dir, Wall, bEndFaces));
 		}
 		return Best <= static_cast<double>(MaxDistance) ? TOptional<float>(static_cast<float>(Best)) : TOptional<float>();
 	}
@@ -92,7 +138,9 @@ namespace FormationTerrainRules
 		for (const float RayDeg : TerrainSideRaysDeg)
 		{
 			const double Sine = FMath::Sin(FMath::DegreesToRadians(static_cast<double>(RayDeg)));
-			const TOptional<float> Hit = RayHit(Walls, Pos, FormationMath::Forward(Yaw + static_cast<float>(Side) * RayDeg), static_cast<float>(Reach / Sine));
+			// v2.5.1: without the walls' end faces (a doorway's jambs are no side walls - user Q1 = a; the ahead rays see them).
+			const TOptional<float> Hit = RayHit(Walls, Pos, FormationMath::Forward(Yaw + static_cast<float>(Side) * RayDeg), static_cast<float>(Reach / Sine),
+				false);
 			if (Hit.IsSet())
 			{
 				const double Lateral = static_cast<double>(Hit.GetValue()) * Sine;

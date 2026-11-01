@@ -686,8 +686,10 @@ fixes (16.3). The user's decisions are unchanged; the open findings are question
 - Why (16_4): the leader arriving end-on at a T stem's free tip stood 1.2 m from it and no wall layout came - the rays only saw the long
   faces (parallel to the ray). Golden: scene `stem_tip_ahead` (`{a: [120, 0], b: [2000, 0], thickness: 40}`) in `formation_Classify.json`
   (arrival -> at_wall in all 42 arrival cases; was open), `formation_PassageWidth.json`, `formation_SideWidth.json` (unchanged by the rule).
-  C++: `CodexTactics.Formation.Parity.Classify` fails on those cases until `TerrainRaySegment` has the end faces (and `SideClearance` passes
-  them off). In the runtime the classifier's probe walls are traces (an end face is hit as a face already); the box walls of ClearLook are not.
+  C++ (ported, `formation/port-v251`): `FormationTerrainRules::WallEndFaces`, `RayHit(..., bEndFaces = true)` (`TerrainRaySegment`), `SideClearance`
+  passes false; `Parity.Classify` 0 diffs. In the runtime the classifier's probe walls are traces (an end face is hit as a face already: no
+  wiring); the box walls of ClearLook get the end faces from `RayHit`. `FormationLabSmoke` checks it on `R_G_end` / `R_G_end_axis` (W_G_20's free
+  end head-on: the wall layout across the end face, the v2.4 end spread).
 - Simulator: `wallAhead` returns the END face (thickness 0) when the heading ray hits one - the wall layout lines up across the tip, as the
   runtime's traced face (v2.4 B; EndLooks then spreads the looks round the tip).
 ### 16.2 Simulator integration (the runtime already does it - no C++ change)

@@ -91,6 +91,40 @@ bool FFormationTerrainRayTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_TERRAIN_TEST(FFormationTerrainEndFacesTest, "EndFacesStopTheAheadRaysNotTheSideRays")
+bool FFormationTerrainEndFacesTest::RunTest(const FString&)
+{
+	using namespace FormationTerrainTestUtil;
+	// v2.5.1 (red team 16_4, contract 16.1; mirrors redteamV25.test.ts): a T stem's free tip end-on.
+	const FFormationWall Stem = MakeWall(120.0, 0.0, 2000.0, 0.0, 40.f);
+	const TArray<FFormationWall, TInlineAllocator<2>> Faces = FormationTerrainRules::WallEndFaces(Stem);
+	TestEqual(TEXT("Two end faces"), Faces.Num(), 2);
+	if (Faces.Num() == 2)
+	{
+		TestTrue(TEXT("The A end: 20 cm before A, across the wall, from the +normal face to the -normal face"),
+			Faces[0].A.Equals(FVector2D(100.0, 20.0), 1e-6) && Faces[0].B.Equals(FVector2D(100.0, -20.0), 1e-6) && Faces[0].Thickness == 0.f);
+		TestTrue(TEXT("The B end"), Faces[1].A.Equals(FVector2D(2020.0, 20.0), 1e-6) && Faces[1].B.Equals(FVector2D(2020.0, -20.0), 1e-6));
+	}
+	TestEqual(TEXT("A thin wall has no end faces"), FormationTerrainRules::WallEndFaces(MakeWall(0.0, 0.0, 100.0, 0.0, 0.f)).Num(), 0);
+	TestEqual(TEXT("A zero-length wall has none"), FormationTerrainRules::WallEndFaces(MakeWall(50.0, 0.0, 50.0, 0.0, 40.f)).Num(), 0);
+	const TOptional<float> EndOn = FormationTerrainRules::RayHit({ Stem }, FVector2D::ZeroVector, FVector2D(1.0, 0.0), 300.f);
+	TestTrue(TEXT("End-on: the end face 1 m ahead (the long faces are parallel to the ray)"), EndOn.IsSet() && EndOn.GetValue() == 100.f);
+	TestFalse(TEXT("... not with the end faces off"), FormationTerrainRules::RayHit({ Stem }, FVector2D::ZeroVector, FVector2D(1.0, 0.0), 300.f, false).IsSet());
+	TestFalse(TEXT("Away from the tip: no hit"), FormationTerrainRules::RayHit({ Stem }, FVector2D::ZeroVector, FVector2D(-1.0, 0.0), 300.f).IsSet());
+	const TOptional<float> Across = FormationTerrainRules::RayHit({ Stem }, FVector2D(500.0, -300.0), FVector2D(0.0, 1.0), 400.f);
+	TestTrue(TEXT("The long faces still win where they are nearer (a ray across the wall)"), Across.IsSet() && Across.GetValue() == 280.f);
+	// Arriving end-on at the tip is an arrival at a wall; walking at it is not.
+	TestEqual(TEXT("Arriving end-on at the stem's tip: at_wall"), Raw({ Stem }, FVector2D::ZeroVector, 0.f, FVector2D::ZeroVector),
+		EFormationTerrainClass::AtWall);
+	TestEqual(TEXT("Walking on at it: open"), Raw({ Stem }, FVector2D::ZeroVector, 0.f, FVector2D(1000.0, 0.0)), EFormationTerrainClass::Open);
+	// The side probes leave the end faces out (a doorway's jambs are no side walls - user Q1 = a): a stem running off to the right, end-on.
+	const FFormationWall RightStem = MakeWall(0.0, 150.0, 0.0, 2000.0, 40.f);
+	const TOptional<float> RightRay = FormationTerrainRules::RayHit({ RightStem }, FVector2D::ZeroVector, FVector2D(0.0, 1.0), 400.f);
+	TestTrue(TEXT("The 90 deg ray meets its end face at 130 cm"), RightRay.IsSet() && FMath::IsNearlyEqual(RightRay.GetValue(), 130.f, 1e-3f));
+	TestFalse(TEXT("... the side clearance does not"), FormationTerrainRules::SideClearance({ RightStem }, FVector2D::ZeroVector, 0.f, 1, 400.f).IsSet());
+	return true;
+}
+
 FORMATION_TERRAIN_TEST(FFormationTerrainHysteresisTest, "PathHoldTighterAtOnceLooserAfterTheHoldDistance")
 bool FFormationTerrainHysteresisTest::RunTest(const FString&)
 {
