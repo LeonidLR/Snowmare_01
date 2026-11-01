@@ -238,4 +238,71 @@ namespace FormationRuntime
 
 	/** A slide's room probe along the wall: far enough for the destination (AlongCm) plus the line's ends, at least RoomMaxCm, at most 30 m. */
 	CODEXTACTICS_API float SlideRoomCm(float AlongCm, float Spacing);
+
+	// --- The squad hugging a wall (game designer's play-test bug 2026-10-27, the lake yard) -------------------------------------------
+
+	/** The wall pose's glide onto the exact wall slot (WallSlotGlide): this fast, cm/s; done within this, cm. */
+	inline constexpr float WallSlotGlideSpeedCm = 150.f;
+	inline constexpr float WallSlotGlideDoneCm = 1.f;
+
+	/** One object along a formation wall trace (USquadSubsystem::TraceFormationWall): where on the ray (0..1) and what it is. */
+	struct FWallTraceHit
+	{
+		float Time = 1.f;
+		/** Its collision blocks pawns (a wall, a crate); an overlap-only box (a tutorial trigger volume) does not. */
+		bool bBlocksPawn = false;
+		/** It is a character / vehicle (never a wall for the formation). */
+		bool bPawn = false;
+	};
+
+	/**
+	 * Bug 2026-10-27: the wall the formation reads along a ray - the nearest object that blocks pawns and is no pawn (as
+	 * GatherFormationWalls). An overlap-only box is walked through: from inside the lake yard's TutorialTriggerVolume a plain object trace
+	 * hit it at distance 0, and the wall layout read the wall at the clicked slot. INDEX_NONE when none.
+	 */
+	CODEXTACTICS_API int32 NearestWallHit(const TArray<FWallTraceHit>& Hits);
+
+	/**
+	 * Bug 2026-10-27: one frame of a member settled in the wall pose easing onto his wall slot (the slot is the face offset of one operative in
+	 * cover; the path follower stopped AcceptanceRadius / StopRadiusCm short of it, a hand-span off the wall): the planar move towards Slot,
+	 * at most SpeedCmPerSec * DeltaTime and never past it. Unset when he is within WallSlotGlideDoneCm (on it) or farther than MaxCm (not at
+	 * his slot: the walk brings him).
+	 */
+	CODEXTACTICS_API TOptional<FVector2D> WallSlotGlide(const FVector2D& Here, const FVector2D& Slot, float MaxCm, float DeltaTime,
+		float SpeedCmPerSec = WallSlotGlideSpeedCm);
+
+	/** A wall slide's members AHEAD of the leader keep this much farther ahead of him than the layout's spacing while he walks, cm. */
+	inline constexpr float SlideAheadClearCm = 40.f;
+
+	/**
+	 * Bug 2026-10-27 (found by FormationCornerPeekSmoke once the squad hugs the wall exactly): on a wall slide the places move with the
+	 * leader's progress, so a lead man parked within the stop radius short of his place stood in the leader's way on the wall line, the
+	 * crowd avoidance slowed the leader to a stop - and the places stopped with him. The point the slide rule is asked with for the members
+	 * ahead of the leader: his position advanced ByCm along K0 -> LeaderTarget (the slide's travel), its progress capped at LeaderTarget.
+	 */
+	CODEXTACTICS_API FVector2D SlideLeaderAhead(const FVector2D& LeaderPos, const FVector2D& K0, const FVector2D& LeaderTarget, float ByCm = SlideAheadClearCm);
+
+	/**
+	 * The wall slide's places with the members ahead of the leader kept clear of him: BaseTargets (FormationWallRules::Slide with the leader's
+	 * position) with each member whose START place lies ahead of K0 along the travel (K0 -> LeaderTarget) taking his place from AheadTargets
+	 * (the same rule asked with SlideLeaderAhead); the leader and the trailing members unchanged. All arrays in StartSlots' order.
+	 */
+	CODEXTACTICS_API TArray<FFormationSlot> SlideTargetsClearOfLeader(const TArray<FFormationSlot>& StartSlots, const TArray<FFormationSlot>& BaseTargets,
+		const TArray<FFormationSlot>& AheadTargets, const FVector2D& LeaderTarget);
+
+	/** Yield to the leader's own walk: a body within this of his straight way ahead is in it (two capsules + a margin), cm. */
+	inline constexpr float YieldCorridorCm = 80.f;
+	/** ... the follower steps this far off the way, cm. */
+	inline constexpr float YieldClearCm = 120.f;
+	/** ... the way ahead is looked at this far (his walk's next stretch), cm. */
+	inline constexpr float YieldAheadCm = 600.f;
+
+	/**
+	 * Bug 2026-10-28 (CoverSmoke since the formation stays on in the fight): the leader's own walk (a cover / move order) along a wall ended
+	 * Blocked at velocity 0 - a formation follower stood on his straight way (the nav mesh ignores bodies). When the follower (Here) or the
+	 * place he walks to (Target) lies on the leader's way ahead (Leader -> Destination, at most AheadCm, within CorridorCm of it), the points
+	 * he may step aside to: beside the in-the-way point, ClearCm off the way - his own side first, then the other. Empty: not in the way.
+	 */
+	CODEXTACTICS_API TArray<FVector2D> YieldFromLeaderWay(const FVector2D& Leader, const FVector2D& Destination, const FVector2D& Here,
+		const FVector2D& Target, float CorridorCm = YieldCorridorCm, float ClearCm = YieldClearCm, float AheadCm = YieldAheadCm);
 }

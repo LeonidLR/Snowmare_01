@@ -229,9 +229,6 @@ TArray<FFormationWall> USquadSubsystem::TraceLookWalls(const TArray<FVector>& Po
 	{
 		Params.AddIgnoredActor(Member.Get());
 	}
-	FCollisionObjectQueryParams Objects;
-	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
 	for (const FVector& Feet : Positions)
 	{
 		const FVector Origin = Feet + FVector(0.f, 0.f, HeightAboveFeet);
@@ -239,7 +236,7 @@ TArray<FFormationWall> USquadSubsystem::TraceLookWalls(const TArray<FVector>& Po
 		{
 			const FVector Direction = FRotator(0.f, 360.f * static_cast<float>(Ray) / static_cast<float>(Rays), 0.f).Vector();
 			FHitResult Hit;
-			if (World->LineTraceSingleByObjectType(Hit, Origin, Origin + Direction * Length, Objects, Params) && FMath::Abs(Hit.ImpactNormal.Z) < 0.7f)
+			if (TraceFormationWall(Hit, Origin, Origin + Direction * Length, Params) && FMath::Abs(Hit.ImpactNormal.Z) < 0.7f)
 			{
 				Walls.Add(FormationRuntime::WallFromHit(FVector2D(Hit.ImpactPoint), FVector2D(Hit.ImpactNormal), 30.f));
 			}

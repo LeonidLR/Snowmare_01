@@ -365,7 +365,13 @@ void USquadSubsystem::UpdateFormationSlide(AOperativeCharacter& LeaderRef, float
 		return;
 	}
 	Sectors.Formation = EFormationKind::Wall;
-	Sectors.FrameSlots = Slide.Targets;
+	// Bug 2026-10-27: the members ahead of the leader keep clear of his way along the wall (else the crowd avoidance stops him at a lead man
+	// parked short of his place, and the places stop with him).
+	const FVector2D K0 = Sectors.SlideStartSlots.IsEmpty() ? LeaderPos : Sectors.SlideStartSlots[0].Position;
+	const FFormationSlideResult Ahead = FormationWallRules::Slide(Sectors.SlideWall, Sectors.SlideStartSlots,
+		FormationRuntime::SlideLeaderAhead(LeaderPos, K0, Slide.LeaderTarget), Sectors.SlideDestination, Sectors.PatrolTime, FormationTuning::Get());
+	Sectors.FrameSlots = Ahead.bActive ? FormationRuntime::SlideTargetsClearOfLeader(Sectors.SlideStartSlots, Slide.Targets, Ahead.Targets, Slide.LeaderTarget)
+		: Slide.Targets;
 	Sectors.RearGuard = Slide.RearGuard;
 	const bool bArrived = !LeaderRef.IsMoving() && Sectors.LeaderStillSeconds >= SlideArriveStillSeconds;
 	if (bArrived || Sectors.SlideSeconds > SlideMaxSeconds)

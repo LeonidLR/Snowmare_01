@@ -330,4 +330,99 @@ namespace FormationRuntime
 			: In.FacingAsLeaderYaw.IsSet() ? In.FacingAsLeaderYaw : In.SquadHeadingYaw;
 		return FRotator::NormalizeAxis(Pick.Get(In.FacingYaw));
 	}
+
+	int32 NearestWallHit(const TArray<FWallTraceHit>& Hits)
+	{
+		int32 Nearest = INDEX_NONE;
+		for (int32 Index = 0; Index < Hits.Num(); ++Index)
+		{
+			const FWallTraceHit& Hit = Hits[Index];
+			if (Hit.bBlocksPawn && !Hit.bPawn && (Nearest == INDEX_NONE || Hit.Time < Hits[Nearest].Time))
+			{
+				Nearest = Index;
+			}
+		}
+		return Nearest;
+	}
+
+	TOptional<FVector2D> WallSlotGlide(const FVector2D& Here, const FVector2D& Slot, float MaxCm, float DeltaTime, float SpeedCmPerSec)
+	{
+		const FVector2D Way = Slot - Here;
+		const double Distance = Way.Size();
+		if (Distance <= static_cast<double>(WallSlotGlideDoneCm) || Distance > static_cast<double>(MaxCm) || DeltaTime <= 0.f || SpeedCmPerSec <= 0.f)
+		{
+			return TOptional<FVector2D>();
+		}
+		return Way / Distance * FMath::Min(Distance, static_cast<double>(SpeedCmPerSec * DeltaTime));
+	}
+
+	FVector2D SlideLeaderAhead(const FVector2D& LeaderPos, const FVector2D& K0, const FVector2D& LeaderTarget, float ByCm)
+	{
+		const FVector2D Travel = LeaderTarget - K0;
+		const double Length = Travel.Size();
+		if (Length < 1e-3)
+		{
+			return LeaderPos;
+		}
+		const FVector2D D = Travel / Length;
+		const double Progress = FVector2D::DotProduct(LeaderPos - K0, D);
+		const double Ahead = FMath::Clamp(Progress + static_cast<double>(ByCm), 0.0, Length);
+		return LeaderPos + D * (Ahead - Progress);
+	}
+
+	TArray<FFormationSlot> SlideTargetsClearOfLeader(const TArray<FFormationSlot>& StartSlots, const TArray<FFormationSlot>& BaseTargets,
+		const TArray<FFormationSlot>& AheadTargets, const FVector2D& LeaderTarget)
+	{
+		TArray<FFormationSlot> Out = BaseTargets;
+		const int32 LeaderIndex = StartSlots.IndexOfByPredicate([](const FFormationSlot& Slot) { return Slot.Role == EFormationRole::Commander; });
+		if (LeaderIndex == INDEX_NONE || BaseTargets.Num() != StartSlots.Num() || AheadTargets.Num() != StartSlots.Num())
+		{
+			return Out;
+		}
+		const FVector2D K0 = StartSlots[LeaderIndex].Position;
+		const FVector2D D = (LeaderTarget - K0).GetSafeNormal();
+		if (D.IsNearlyZero())
+		{
+			return Out;
+		}
+		for (int32 Index = 0; Index < StartSlots.Num(); ++Index)
+		{
+			if (Index != LeaderIndex && FVector2D::DotProduct(StartSlots[Index].Position - K0, D) > 1.0)
+			{
+				Out[Index].Position = AheadTargets[Index].Position;
+			}
+		}
+		return Out;
+	}
+
+	TArray<FVector2D> YieldFromLeaderWay(const FVector2D& Leader, const FVector2D& Destination, const FVector2D& Here, const FVector2D& Target,
+		float CorridorCm, float ClearCm, float AheadCm)
+	{
+		TArray<FVector2D> Out;
+		const FVector2D Way = Destination - Leader;
+		const double Length = Way.Size();
+		if (Length < 1.0)
+		{
+			return Out;
+		}
+		const FVector2D D = Way / Length;
+		const FVector2D Left(-D.Y, D.X);
+		const double Reach = FMath::Min(Length, static_cast<double>(AheadCm)) + static_cast<double>(CorridorCm);
+		const auto InWay = [&](const FVector2D& Point)
+		{
+			const double Along = FVector2D::DotProduct(Point - Leader, D);
+			return Along > 0.0 && Along <= Reach && FMath::Abs(FVector2D::DotProduct(Point - Leader, Left)) < static_cast<double>(CorridorCm);
+		};
+		const FVector2D* Base = InWay(Here) ? &Here : (InWay(Target) ? &Target : nullptr);
+		if (!Base)
+		{
+			return Out;
+		}
+		const double Along = FVector2D::DotProduct(*Base - Leader, D);
+		const double Side = FVector2D::DotProduct(*Base - Leader, Left) >= 0.0 ? 1.0 : -1.0;
+		const FVector2D OnWay = Leader + D * Along;
+		Out.Add(OnWay + Left * (Side * ClearCm));
+		Out.Add(OnWay - Left * (Side * ClearCm));
+		return Out;
+	}
 }
