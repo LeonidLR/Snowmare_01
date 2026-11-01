@@ -87,7 +87,7 @@
   "corner.peek_dist": 300,
   "sight.fov": 140
  },
- "notes": "in: op (itemAt | release | resolve; 16.7: customAt | hitAt) + its inputs -> out (FormationMenuRules; screen px, y down, 12 = up). release also takes filled [bool x 3] + edit (absent = [false, false, false] / false; effect may be edit); resolve out.customSlot is absent in the old cases (= null) and written in the custom ones; hitAt = customAt ?? itemAt.",
+ "notes": "in: op (itemAt | release | resolve; 17.7: customAt | hitAt) + its inputs -> out (FormationMenuRules; screen px, y down, 12 = up). release also takes filled [bool x 3] + edit (absent = [false, false, false] / false; effect may be edit); resolve out.customSlot is absent in the old cases (= null) and written in the custom ones; hitAt = customAt ?? itemAt.",
  "cases": [
   {
    "in": {
