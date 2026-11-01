@@ -20,13 +20,6 @@
       "spawns": [
         {
           "enemy_type": "HOUND",
-          "count": 45,
-          "spawn_lane": "ANY",
-          "spawn_delay_sec": 1,
-          "initial_delay_sec": 0
-        },
-        {
-          "enemy_type": "FROSTBITTEN",
           "count": 10,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
@@ -47,15 +40,8 @@
       "spawns": [
         {
           "enemy_type": "HOUND",
-          "count": 40,
+          "count": 20,
           "spawn_lane": "WEST_FLANK",
-          "spawn_delay_sec": 1,
-          "initial_delay_sec": 0
-        },
-        {
-          "enemy_type": "CUTTER",
-          "count": 5,
-          "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
         },
@@ -88,7 +74,7 @@
       "spawns": [
         {
           "enemy_type": "HOUND",
-          "count": 20,
+          "count": 72,
           "spawn_lane": "WEST_FLANK",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0,
@@ -109,6 +95,13 @@
         {
           "enemy_type": "MARKSMAN",
           "count": 6,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        },
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 9,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
