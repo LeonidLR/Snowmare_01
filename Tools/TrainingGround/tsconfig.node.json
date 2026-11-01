@@ -11,6 +11,7 @@
   },
   "include": [
     "src/movement/**/*.ts",
+    "src/levelgen/**/*.ts",
     "server/**/*.ts"
   ],
   "exclude": [

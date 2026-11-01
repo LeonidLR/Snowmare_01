@@ -14,6 +14,8 @@
     "train": "node src/movement/cli/train.ts",
     "redteam": "node src/movement/cli/redteam.ts",
     "lab:gen": "node src/movement/cli/genLab.ts",
+    "levelgen": "node src/levelgen/cli/levelgen.ts",
+    "levelgen:critic": "node src/levelgen/cli/critic.ts",
     "menu:icons": "node src/movement/cli/genMenuIcons.ts"
   },
   "dependencies": {

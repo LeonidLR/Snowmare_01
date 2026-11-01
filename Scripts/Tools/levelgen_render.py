@@ -10,6 +10,7 @@ Usage:
   python Scripts/Tools/levelgen_render.py profile <ref.json> <out.png> [--background <unskewed map png> --ppm 10]
   python Scripts/Tools/levelgen_render.py layout  <layout.json> <out.png> [--ppm 8] [--floor 0|1|2]
   python Scripts/Tools/levelgen_render.py unskew  <clean.webp> <annotated.jpg> <out_dir>   (the reference's top-down images)
+  python Scripts/Tools/levelgen_render.py shrink  <in.png> <out.png> <width>               (the critic's 1200 px reference image)
 """
 import json
 import math
@@ -136,7 +137,11 @@ def draw_layout(layout, ppm=8, floor=None):
     for b in layout.get("buildings", []):
         if floor is not None and floor > 0 and b.get("floors", 1) <= floor:
             continue
-        fp = [P(p) for p in b["footprint"]]
+        corners = b["footprint"]
+        if len(corners) == 2:  # [min, max] of an axis-aligned rectangle (codex.levelgen_layout/1)
+            (ax, ay), (bx, by) = corners
+            corners = [[ax, ay], [bx, ay], [bx, by], [ax, by]]
+        fp = [P(p) for p in corners]
         fill = (150, 120, 100) if b.get("height", 0) >= 600 else (170, 150, 120)
         d.polygon(fp, fill=fill, outline=(255, 255, 255))
         if b.get("roof_walkable"):
@@ -150,7 +155,8 @@ def draw_layout(layout, ppm=8, floor=None):
         for s in b.get("stairs", []):
             q = P(s["pos"])
             d.rectangle([q[0] - 4, q[1] - 4, q[0] + 4, q[1] + 4], fill=(80, 220, 120))
-        d.text((min(p[0] for p in fp) + 2, min(p[1] for p in fp) + 2), b["id"], fill=(255, 255, 255), font=FONT)
+        label = b["id"] + (" +%d" % b["floors"] if b.get("roof_walkable") else "")  # the roof's height level (3 m steps)
+        d.text((min(p[0] for p in fp) + 2, min(p[1] for p in fp) + 2), label, fill=(255, 255, 255), font=FONT)
     for wall in layout.get("walls", []):
         if floor is not None and wall.get("floor", 0) != floor:
             continue
@@ -220,6 +226,11 @@ def main():
         draw_layout(layout, ppm, int(fl) if fl is not None else None).save(args[2])
     elif mode == "unskew":
         print(unskew(args[1], args[2], args[3]))
+    elif mode == "shrink":  # shrink <in> <out> <width>: the critic's reference image (a .jpg out path = JPEG quality 85)
+        im = Image.open(args[1]).convert("RGB")
+        w = int(args[3])
+        small = im.resize((w, int(im.size[1] * w / im.size[0])), Image.LANCZOS)
+        small.save(args[2], quality=85) if args[2].lower().endswith((".jpg", ".jpeg")) else small.save(args[2])
     else:
         print(__doc__)
     print("wrote", args[-1] if mode != "unskew" else args[3])

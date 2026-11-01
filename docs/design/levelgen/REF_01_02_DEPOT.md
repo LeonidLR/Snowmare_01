@@ -27,6 +27,26 @@
   twice the area and three times the width: **a generated map gets its own ground plane, 200 x 150 m (layout + 10 m margin)**,
   never a resize of the Frozen Factory map (which is not touched).
 
+## 1a. Height levels (game designer decision 2026-11-01, night)
+
+Every map is split into discrete height levels 3 m apart, and the layout layers, the generator's grammar, the simulator's
+per-level evaluation and the UE builder use them (`Tools/TrainingGround/src/levelgen/schema.ts` `LEVEL_HEIGHT`, the profile's
+`height_levels`):
+
+| Level | Height | In the reference |
+|---|---|---|
+| -1 | -3 m | the cut floor (rail cut / canal); pits, craters, trenches, basements in general |
+| 0 | 0 m | streets, yards, compounds, the junkyard field, the park, the east yard |
+| +1 | +3 m | the pipe gallery platform (B2), the ruined factory's upper floor (B13), the low buildings' roofs (not walkable), the cut's rims |
+| +2 | +6 m | the ruined factory's roof with its holes, the hall / warehouse / Steel Works roofs (walkable in the greybox; the originals are 8-12 m and the generator snaps them to +2), tower tops (the chimneys) |
+
+Links between levels: the three cut ladders (-1 -> 0), L1 (0 -> +1), the ruin's external stair (0 -> +2), its roof holes
+(+2 -> +1) and floor holes (+1 -> 0), the stairwells of the halls (0 -> +2), the two cut crossings (ramps / bridges at 0 over
+-1). A ladder over one level = 8 rungs x 36.4 cm + an 8.8 cm plinth under its foot (two levels: 16 rungs + 17.6 cm), so the top
+lands exactly on the level (LADDERS.md 3.1). The profile's `zones[].level`, `buildings[].level_top` / `levels_walkable`,
+`ladders[].levels` carry the classification; the generator targets `height_levels` 3-4 on the map and `route_levels` 2-4 on
+the mandatory route.
+
 ## 2. The map in one paragraph
 
 A long sunken rail cut / canal with concrete retaining walls (trench ~6 m wide, walls 1.5 m thick, ~3.5 m deep, wire fence on

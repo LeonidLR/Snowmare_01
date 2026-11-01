@@ -137,7 +137,8 @@
         "width_m": 6,
         "note": "walkable round the end only at the very edge; off the route"
       }
-    ]
+    ],
+    "level": -1
   },
   "ladders": [
     {
@@ -152,7 +153,11 @@
         "Z_W_PIPEWORKS ground",
         "B2 pipe gallery platform"
       ],
-      "note": "the stair building / pipe gallery on the far west: an overwatch over the west street and the start (route variant V1)"
+      "note": "the stair building / pipe gallery on the far west: an overwatch over the west street and the start (route variant V1)",
+      "levels": [
+        0,
+        1
+      ]
     },
     {
       "id": "L2",
@@ -166,7 +171,11 @@
         "cut floor",
         "south bank (Z_SW_GREEN)"
       ],
-      "note": "the cut's south wall at the west end"
+      "note": "the cut's south wall at the west end",
+      "levels": [
+        -1,
+        0
+      ]
     },
     {
       "id": "L3",
@@ -180,7 +189,11 @@
         "cut floor",
         "south bank (Z_TANKS north fence)"
       ],
-      "note": "the cut's south wall by the silos; route variant V3 (through the cut)"
+      "note": "the cut's south wall by the silos; route variant V3 (through the cut)",
+      "levels": [
+        -1,
+        0
+      ]
     },
     {
       "id": "L4",
@@ -194,7 +207,11 @@
         "cut floor",
         "Z_S_INNER_STREET at the NW chimney"
       ],
-      "note": "the cut's south wall at the Steel Works; route variant V3's exit"
+      "note": "the cut's south wall at the Steel Works; route variant V3's exit",
+      "levels": [
+        -1,
+        0
+      ]
     }
   ],
   "zones": [
@@ -227,7 +244,8 @@
       "mechanics": [
         "wall layout along the facade",
         "corner peek at the block ends"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_W_PIPEWORKS",
@@ -258,7 +276,8 @@
       "mechanics": [
         "ladder L1 + elevated vision from the gallery",
         "custom formation among the racks"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_W_STREET",
@@ -290,7 +309,8 @@
         "column / diamond on the road",
         "wall layout at the curbs",
         "patrol contact head-on"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_W_COMPOUND",
@@ -327,7 +347,8 @@
       "mechanics": [
         "one-entry compound: doorway classification, corner peek at the gate",
         "ambush at the shed corners"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_N_CROSS",
@@ -357,7 +378,8 @@
       ],
       "mechanics": [
         "T-junction: the squad turns from the west street into the north street; far side of a wall at the corner"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_N_SAWTOOTH",
@@ -388,7 +410,8 @@
       "mechanics": [
         "enterable hall + roof (elevated vision)",
         "the boiler yard = a one-entry compound (route variant V2)"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_N_OFFICE",
@@ -419,7 +442,8 @@
       "mechanics": [
         "facade + doorway",
         "alley between the office and the warehouse (route variant V2)"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_WAREHOUSE",
@@ -450,7 +474,8 @@
       "mechanics": [
         "roof overwatch over the north street and the junkyard",
         "stairwell"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_JUNKYARD",
@@ -492,7 +517,8 @@
         "coordinated ambush ground (every wreck a hiding spot)",
         "custom formation",
         "no long lanes: suppression useless, grenades / close fight"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_N_STREET",
@@ -523,7 +549,8 @@
       "mechanics": [
         "THE marksman lane: column along the cut wall, suppression, wall layout at the curb blocks",
         "patrol contact at long range"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_CUT",
@@ -555,7 +582,8 @@
         "killing zone: anyone inside is seen from both walls; crossings = chokepoints",
         "ladders L2-L4 in and out",
         "elevated vision from the walls' tops"
-      ]
+      ],
+      "level": -1
     },
     {
       "id": "Z_S_INNER_STREET",
@@ -587,7 +615,8 @@
         "column along the cut's south wall",
         "corner peek at the chimney base",
         "wall layout against the silo lot's fence"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_TANKS",
@@ -619,7 +648,8 @@
         "fenced lots with gates (doorways)",
         "round covers (silos) = wrap round a cover object",
         "pump house enterable"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_SW_GREEN",
@@ -649,7 +679,8 @@
       ],
       "mechanics": [
         "open square: diamond / wedge, all-round watch vs ambush"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_RUINED_FACTORY",
@@ -681,7 +712,8 @@
         "entered from below (wall holes, doors) AND above (roof holes, external stair)",
         "floors + holes in the floor",
         "doorways, corners, dead ends inside"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_STEEL_WORKS",
@@ -713,7 +745,8 @@
         "the biggest facade: wall layout + wall slide along it",
         "roof overwatch via the pipe stair",
         "the chimneys = towers"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_E_YARD",
@@ -743,7 +776,8 @@
       ],
       "mechanics": [
         "narrow yard between the hall and the fence: column, echelon along the wall"
-      ]
+      ],
+      "level": 0
     },
     {
       "id": "Z_S_STREET",
@@ -775,7 +809,8 @@
         "the second marksman lane: jersey barriers and sandbags = low covers",
         "ambush from the fence line",
         "the way back SW"
-      ]
+      ],
+      "level": 0
     }
   ],
   "buildings": [
@@ -796,7 +831,9 @@
       "floors": 3,
       "enterable": false,
       "roof_access": false,
-      "note": "office blocks along the NW edge: facades only"
+      "note": "office blocks along the NW edge: facades only",
+      "level_top": 3,
+      "levels_walkable": []
     },
     {
       "id": "B1b_LongBlock_N",
@@ -814,7 +851,9 @@
       "height_class": "tall",
       "floors": 2,
       "enterable": false,
-      "roof_access": false
+      "roof_access": false,
+      "level_top": 3,
+      "levels_walkable": []
     },
     {
       "id": "B2_PipeGallery_W",
@@ -837,7 +876,12 @@
       "ladders": [
         "L1"
       ],
-      "note": "an open pipe-rack structure; its 4 m platform is the overwatch of route variant V1"
+      "note": "an open pipe-rack structure; its 4 m platform is the overwatch of route variant V1",
+      "level_top": 1,
+      "levels_walkable": [
+        0,
+        1
+      ]
     },
     {
       "id": "B3_RedRoofShed",
@@ -861,7 +905,11 @@
           56
         ]
       ],
-      "roof_access": false
+      "roof_access": false,
+      "level_top": 1,
+      "levels_walkable": [
+        0
+      ]
     },
     {
       "id": "B4_SawtoothHall",
@@ -891,7 +939,12 @@
       ],
       "roof_access": true,
       "stairwell": true,
-      "note": "sawtooth roof walkable (figures on it); one big floor + a mezzanine"
+      "note": "sawtooth roof walkable (figures on it); one big floor + a mezzanine",
+      "level_top": 3,
+      "levels_walkable": [
+        0,
+        3
+      ]
     },
     {
       "id": "B5_BoilerYard",
@@ -916,7 +969,11 @@
         ]
       ],
       "roof_access": false,
-      "note": "a fenced yard with boilers = covers; one gate"
+      "note": "a fenced yard with boilers = covers; one gate",
+      "level_top": 0,
+      "levels_walkable": [
+        0
+      ]
     },
     {
       "id": "B6_OfficeSmall",
@@ -940,7 +997,11 @@
           48
         ]
       ],
-      "roof_access": false
+      "roof_access": false,
+      "level_top": 2,
+      "levels_walkable": [
+        0
+      ]
     },
     {
       "id": "B7_Warehouse",
@@ -970,7 +1031,12 @@
       ],
       "roof_access": true,
       "stairwell": true,
-      "note": "flat roof walkable (figures on it): an inner stairwell in the UE version"
+      "note": "flat roof walkable (figures on it): an inner stairwell in the UE version",
+      "level_top": 3,
+      "levels_walkable": [
+        0,
+        3
+      ]
     },
     {
       "id": "B8_WarehouseLot",
@@ -994,7 +1060,11 @@
           52
         ]
       ],
-      "roof_access": false
+      "roof_access": false,
+      "level_top": 0,
+      "levels_walkable": [
+        0
+      ]
     },
     {
       "id": "B9_JunkyardFence",
@@ -1023,7 +1093,11 @@
         ]
       ],
       "roof_access": false,
-      "note": "the field inside: 40-60 wrecks / cars / buses, each a cover object"
+      "note": "the field inside: 40-60 wrecks / cars / buses, each a cover object",
+      "level_top": 0,
+      "levels_walkable": [
+        0
+      ]
     },
     {
       "id": "B11_Silos",
@@ -1042,7 +1116,9 @@
       "floors": 0,
       "enterable": false,
       "roof_access": false,
-      "note": "two cylinders dia 8 m: round cover objects"
+      "note": "two cylinders dia 8 m: round cover objects",
+      "level_top": 3,
+      "levels_walkable": []
     },
     {
       "id": "B12_PumpHouse",
@@ -1067,7 +1143,11 @@
         ]
       ],
       "roof_access": false,
-      "note": "concrete, pipes on the roof"
+      "note": "concrete, pipes on the roof",
+      "level_top": 2,
+      "levels_walkable": [
+        0
+      ]
     },
     {
       "id": "B13_RuinedFactory_Main",
@@ -1103,7 +1183,13 @@
       ],
       "roof_holes": 2,
       "floor_holes": 2,
-      "note": "sloped roof with two holes onto floor 1; floor 1 has two holes down to the ground floor; entered from below AND above"
+      "note": "sloped roof with two holes onto floor 1; floor 1 has two holes down to the ground floor; entered from below AND above",
+      "level_top": 2,
+      "levels_walkable": [
+        0,
+        1,
+        2
+      ]
     },
     {
       "id": "B14_RuinedFactory_Annex",
@@ -1137,7 +1223,11 @@
           105
         ]
       ],
-      "roof_access": false
+      "roof_access": false,
+      "level_top": 1,
+      "levels_walkable": [
+        0
+      ]
     },
     {
       "id": "B15_SteelWorks_Hall",
@@ -1167,7 +1257,12 @@
       ],
       "roof_access": true,
       "stairwell": true,
-      "note": "'STEEL WORKS' on the roof, figures on it: the pipe stair on the north face / an inner stairwell; one open hall + a gallery"
+      "note": "'STEEL WORKS' on the roof, figures on it: the pipe stair on the north face / an inner stairwell; one open hall + a gallery",
+      "level_top": 3,
+      "levels_walkable": [
+        0,
+        3
+      ]
     },
     {
       "id": "B16_SteelWorks_Annex",
@@ -1186,7 +1281,9 @@
       "floors": 1,
       "enterable": false,
       "roof_access": false,
-      "note": "pipe racks and a low block between the ruined factory and the hall"
+      "note": "pipe racks and a low block between the ruined factory and the hall",
+      "level_top": 2,
+      "levels_walkable": []
     },
     {
       "id": "B17a_Chimney_NW",
@@ -1205,7 +1302,9 @@
       "floors": 0,
       "enterable": false,
       "roof_access": false,
-      "note": "not climbable in the original; a tower candidate for us"
+      "note": "not climbable in the original; a tower candidate for us",
+      "level_top": 2,
+      "levels_walkable": []
     },
     {
       "id": "B17b_Chimney_S",
@@ -1223,7 +1322,9 @@
       "height_class": "tower",
       "floors": 0,
       "enterable": false,
-      "roof_access": false
+      "roof_access": false,
+      "level_top": 2,
+      "levels_walkable": []
     },
     {
       "id": "B18_EastYardFence",
@@ -1251,7 +1352,11 @@
           118
         ]
       ],
-      "roof_access": false
+      "roof_access": false,
+      "level_top": 0,
+      "levels_walkable": [
+        0
+      ]
     },
     {
       "id": "B19_SouthFence",
@@ -1269,7 +1374,9 @@
       "height_class": "fence",
       "floors": 0,
       "enterable": false,
-      "roof_access": false
+      "roof_access": false,
+      "level_top": 0,
+      "levels_walkable": []
     }
   ],
   "route": {
@@ -1378,7 +1485,8 @@
           "zone": "Z_TANKS",
           "note": "back out to the south street's SW end, 28 m"
         }
-      ]
+      ],
+      "note": "The bare skeleton is 365 m; the designer's full loop with the compound and the ruined factory folded in (his description) runs ~520 m. Target 320-600."
     },
     "variants": [
       {
@@ -1663,8 +1771,8 @@
       "p50": 25,
       "p90": 75,
       "max": 177,
-      "short_zone_share": 0.45,
-      "note": "p50 / p90 of the free line-of-sight length sampled along the main route (streets long, compounds / junkyard short)"
+      "short_zone_share": 0.18,
+      "note": "p50 / p90 of the longest free line of sight sampled along the main route (streets long, compounds / yards short); short_zone_share = the share of the main route's length in zones whose longest sightline is under 40 m (the T-junction and the tank farm: ~65 of 365 m)"
     }
   },
   "densities": {
@@ -1699,8 +1807,8 @@
   },
   "targets": {
     "route_length_m": [
-      300,
-      420
+      320,
+      600
     ],
     "variants": [
       3,
@@ -1731,12 +1839,20 @@
       3
     ],
     "short_zone_share": [
-      0.35,
-      0.55
+      0.1,
+      0.3
     ],
     "cover_per_100m2_mean": [
       2.0,
       3.5
+    ],
+    "height_levels": [
+      3,
+      4
+    ],
+    "route_levels": [
+      2,
+      4
     ]
   },
   "open_questions": [
@@ -1745,5 +1861,25 @@
     "3. The junkyard: the route never enters it; keep it as an optional ambush field beside the north street, or route a variant through it?",
     "4. The chimneys: towers with ladders in our version (the original has none) - yes / no?",
     "5. V3 through the cut: a deliberate 'killing zone' option for the player, or forbidden (fence the crossings so the cut is enemy ground only)?"
-  ]
+  ],
+  "height_levels": {
+    "step_m": 3,
+    "decision": "game designer 2026-11-01: every map is split into discrete height levels 3 m apart; the layout layers, the generator, the simulator's per-level evaluation and the UE builder use them",
+    "levels": {
+      "-1": "-3 m: the cut floor (rail cut / canal), pits, craters, trenches, basements",
+      "0": "0 m: streets, yards, compounds, the junkyard field",
+      "1": "+3 m: first floors, low roofs (shed, offices, pump house), the pipe gallery platform, the cut's rims",
+      "2": "+6 m: second floors, the hall / warehouse / Steel Works roofs, the ruined factory's roof, tower tops"
+    },
+    "reference_parts": {
+      "cut floor": -1,
+      "streets / yards / compounds": 0,
+      "B2 pipe gallery platform": 1,
+      "B3 / B6 / B12 / B14 low buildings' roofs (not walkable)": 1,
+      "B13 ruined factory upper floor": 1,
+      "B13 roof with its holes": 2,
+      "B4 / B7 / B15 hall roofs (walkable in the greybox; the originals are 8-12 m)": 2,
+      "B17 chimneys (towers in our version)": 2
+    }
+  }
 }
