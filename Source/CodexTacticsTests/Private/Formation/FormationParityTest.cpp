@@ -14,6 +14,7 @@
 #include "Formation/FormationBypassRules.h"
 #include "Formation/FormationCornerRules.h"
 #include "Formation/FormationCoverRules.h"
+#include "Formation/FormationCustomRules.h"
 #include "Formation/FormationGuardRules.h"
 #include "Formation/FormationMenuRules.h"
 #include "Formation/FormationSectorRules.h"
@@ -613,6 +614,7 @@ namespace FormationParityUtil
 		case EFormationMenuEffect::Auto: return TEXT("auto");
 		case EFormationMenuEffect::Cancelled: return TEXT("cancelled");
 		case EFormationMenuEffect::Disabled: return TEXT("disabled");
+		case EFormationMenuEffect::Edit: return TEXT("edit");
 		default: return TEXT("none");
 		}
 	}
@@ -649,6 +651,23 @@ bool FFormationParityMenuTest::RunTest(const FString&)
 			const TOptional<EFormationMenuItem> Actual = FormationMenuRules::ItemAt(static_cast<float>(Dx), static_cast<float>(Dy), static_cast<float>(DeadZone));
 			return Actual == Expected ? FString() : FString::Printf(TEXT("item %s, expected %s"), *ShowMenuItem(Actual, TEXT("null")), *ShowMenuItem(Expected, TEXT("null")));
 		}
+		// Contract 16.7: the custom discs below the ring (customAt) and the combined hit test (hitAt).
+		if (Op == TEXT("customAt") || Op == TEXT("hitAt"))
+		{
+			double Dx = 0.0;
+			double Dy = 0.0;
+			double DeadZone = 0.0;
+			TOptional<EFormationMenuItem> Expected;
+			const bool bHit = Op == TEXT("hitAt");
+			if (!Number(*In, TEXT("dx"), nullptr, Dx) || !Number(*In, TEXT("dy"), nullptr, Dy) || (bHit && !Number(*In, TEXT("deadZonePx"), nullptr, DeadZone))
+				|| !Out->HasField(TEXT("item")) || !OptionalMenuItem(*Out, TEXT("item"), Expected))
+			{
+				return TEXT("unreadable customAt / hitAt case");
+			}
+			const TOptional<EFormationMenuItem> Actual = bHit ? FormationMenuRules::HitAt(static_cast<float>(Dx), static_cast<float>(Dy), static_cast<float>(DeadZone))
+				: FormationMenuRules::CustomItemAt(static_cast<float>(Dx), static_cast<float>(Dy));
+			return Actual == Expected ? FString() : FString::Printf(TEXT("%s %s, expected %s"), *Op, *ShowMenuItem(Actual, TEXT("null")), *ShowMenuItem(Expected, TEXT("null")));
+		}
 		if (Op == TEXT("release"))
 		{
 			const TSharedPtr<FJsonObject>* InState = nullptr;
@@ -662,7 +681,19 @@ bool FFormationParityMenuTest::RunTest(const FString&)
 			{
 				return TEXT("unreadable release case");
 			}
-			const EFormationMenuEffect Effect = FormationMenuRules::Release(State, static_cast<int32>(Count));
+			// Contract 16.7: the custom slots' filled flags and the edit modifier (missing = none filled / no edit).
+			TStaticArray<bool, 3> Filled(InPlace, false);
+			const TArray<TSharedPtr<FJsonValue>>* FilledValues = nullptr;
+			if (In->TryGetArrayField(TEXT("filled"), FilledValues))
+			{
+				for (int32 Slot = 0; Slot < 3 && Slot < FilledValues->Num(); ++Slot)
+				{
+					(*FilledValues)[Slot]->TryGetBool(Filled[Slot]);
+				}
+			}
+			bool bEdit = false;
+			In->TryGetBoolField(TEXT("edit"), bEdit);
+			const EFormationMenuEffect Effect = FormationMenuRules::Release(State, static_cast<int32>(Count), Filled, bEdit);
 			if (State.bOpen != Expected.bOpen || State.Choice != Expected.Choice || State.Highlighted != Expected.Highlighted || ExpectedEffect != MenuEffectName(Effect))
 			{
 				return FString::Printf(TEXT("state {%s, %s, %s} %s, expected {%s, %s, %s} %s"), State.bOpen ? TEXT("open") : TEXT("closed"),
@@ -697,6 +728,17 @@ bool FFormationParityMenuTest::RunTest(const FString&)
 				ExpectedFormation = Parsed;
 			}
 			const FFormationMenuResolved Actual = FormationMenuRules::Resolve(Choice, static_cast<int32>(Count));
+			// Contract 16.7: customSlot (1..3; null / missing = none = 0).
+			double ExpectedSlot = 0.0;
+			const TSharedPtr<FJsonValue> SlotValue = Out->TryGetField(TEXT("customSlot"));
+			if (SlotValue.IsValid() && !SlotValue->IsNull() && !SlotValue->TryGetNumber(ExpectedSlot))
+			{
+				return TEXT("unreadable customSlot");
+			}
+			if (Actual.CustomSlot != static_cast<int32>(ExpectedSlot))
+			{
+				return FString::Printf(TEXT("customSlot %d, expected %d"), Actual.CustomSlot, static_cast<int32>(ExpectedSlot));
+			}
 			if (Actual.ManualFormation != ExpectedFormation || Actual.bAllForward != bExpectedForward)
 			{
 				return FString::Printf(TEXT("{%s, all forward %d}, expected {%s, %d}"),
@@ -1795,6 +1837,337 @@ bool FFormationParityApproachTest::RunTest(const FString&)
 			}
 		}
 		return FString();
+	});
+}
+
+// --- Contract 16: the custom formation (game designer 2026-11-01; TS custom.ts) ---
+
+namespace FormationParityUtil
+{
+	/** A custom shape { members: [{ squad, fwd, right, look }] } read as written (no filtering - the rules see what the TS saw). */
+	bool ReadCustomShape(const TSharedPtr<FJsonValue>& Value, FFormationCustomShape& Out)
+	{
+		Out = FFormationCustomShape();
+		const TSharedPtr<FJsonObject>* Object = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* Members = nullptr;
+		if (!Value.IsValid() || !Value->TryGetObject(Object) || !(*Object)->TryGetArrayField(TEXT("members"), Members))
+		{
+			return false;
+		}
+		for (const TSharedPtr<FJsonValue>& Each : *Members)
+		{
+			const TSharedPtr<FJsonObject>* Member = nullptr;
+			double Squad = 0.0;
+			double Fwd = 0.0;
+			double Right = 0.0;
+			double Look = 0.0;
+			if (!Each->TryGetObject(Member) || !(*Member)->TryGetNumberField(TEXT("squad"), Squad) || !(*Member)->TryGetNumberField(TEXT("fwd"), Fwd)
+				|| !(*Member)->TryGetNumberField(TEXT("right"), Right) || !(*Member)->TryGetNumberField(TEXT("look"), Look))
+			{
+				return false;
+			}
+			FFormationCustomMember& Read = Out.Members.AddDefaulted_GetRef();
+			Read.Squad = static_cast<int32>(Squad);
+			Read.Fwd = static_cast<float>(Fwd);
+			Read.Right = static_cast<float>(Right);
+			Read.Look = static_cast<float>(Look);
+		}
+		return true;
+	}
+
+	bool ReadSquads(const FJsonObject& Object, const TCHAR* Name, TArray<int32>& Out)
+	{
+		Out.Reset();
+		const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+		if (!Object.TryGetArrayField(Name, Values))
+		{
+			return false;
+		}
+		for (const TSharedPtr<FJsonValue>& Value : *Values)
+		{
+			double Squad = 0.0;
+			if (!Value->TryGetNumber(Squad))
+			{
+				return false;
+			}
+			Out.Add(static_cast<int32>(Squad));
+		}
+		return true;
+	}
+
+	bool ReadGhosts(const FJsonObject& Object, TArray<FFormationCustomGhost>& Out, bool bYaw)
+	{
+		Out.Reset();
+		const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+		if (!Object.TryGetArrayField(TEXT("ghosts"), Values))
+		{
+			return false;
+		}
+		for (const TSharedPtr<FJsonValue>& Value : *Values)
+		{
+			const TSharedPtr<FJsonObject>* Ghost = nullptr;
+			double Squad = 0.0;
+			double Yaw = 0.0;
+			FFormationCustomGhost& Read = Out.AddDefaulted_GetRef();
+			if (!Value->TryGetObject(Ghost) || !(*Ghost)->TryGetNumberField(TEXT("squad"), Squad) || !Vec2((*Ghost)->TryGetField(TEXT("pos")), Read.Position)
+				|| (bYaw && !(*Ghost)->TryGetNumberField(TEXT("yaw"), Yaw)))
+			{
+				return false;
+			}
+			Read.Squad = static_cast<int32>(Squad);
+			Read.Yaw = static_cast<float>(Yaw);
+		}
+		return true;
+	}
+
+	FString ShowShape(const FFormationCustomShape& Shape)
+	{
+		FString Text;
+		for (const FFormationCustomMember& Member : Shape.Members)
+		{
+			Text += FString::Printf(TEXT("[%d %.2f %.2f %.2f]"), Member.Squad, Member.Fwd, Member.Right, Member.Look);
+		}
+		return Text;
+	}
+
+	FString ShowRoles(const TArray<EFormationRole>& Roles)
+	{
+		FString Text;
+		for (const EFormationRole Role : Roles)
+		{
+			Text += FormationNames::ToString(Role);
+		}
+		return Text;
+	}
+}
+
+FORMATION_PARITY_TEST(FFormationParityCustomSlotsTest, "CustomSlots")
+bool FFormationParityCustomSlotsTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("CustomSlots"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("CustomSlots"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		FFormationCustomShape Shape;
+		TArray<int32> Present;
+		FVector2D Pos = FVector2D::ZeroVector;
+		double Yaw = 0.0;
+		const TArray<TSharedPtr<FJsonValue>>* Expected = nullptr;
+		if (!ReadCustomShape(Field(*In, TEXT("shape")), Shape) || !ReadSquads(*In, TEXT("present"), Present) || !Vec2(Field(*In, TEXT("leaderPos")), Pos)
+			|| !Number(*In, TEXT("leaderYaw"), nullptr, Yaw) || !Out->TryGetArrayField(TEXT("slots"), Expected))
+		{
+			return TEXT("unreadable input / output");
+		}
+		const TArray<FFormationCustomSlot> Actual = FormationCustomRules::CustomSlots(Shape, Present, Pos, static_cast<float>(Yaw), Golden.Config);
+		if (Actual.Num() != Expected->Num())
+		{
+			return FString::Printf(TEXT("%d slots, expected %d"), Actual.Num(), Expected->Num());
+		}
+		for (int32 Index = 0; Index < Actual.Num(); ++Index)
+		{
+			const TSharedPtr<FJsonObject>* Slot = nullptr;
+			double Squad = 0.0;
+			FString Role;
+			FVector2D SlotPos = FVector2D::ZeroVector;
+			double SlotYaw = 0.0;
+			bool bFixed = false;
+			if (!(*Expected)[Index]->TryGetObject(Slot) || !(*Slot)->TryGetNumberField(TEXT("squad"), Squad) || !(*Slot)->TryGetStringField(TEXT("role"), Role)
+				|| !Vec2((*Slot)->TryGetField(TEXT("pos")), SlotPos) || !(*Slot)->TryGetNumberField(TEXT("yaw"), SlotYaw) || !(*Slot)->TryGetBoolField(TEXT("fixed"), bFixed))
+			{
+				return FString::Printf(TEXT("expected slot %d unreadable"), Index);
+			}
+			const FFormationCustomSlot& Got = Actual[Index];
+			if (Got.Squad != static_cast<int32>(Squad) || Role != FormationNames::ToString(Got.Role) || Got.bFixed != bFixed
+				|| FVector2D::Distance(Got.Position, SlotPos) > Golden.TolCm || AngleDiff(Got.Yaw, SlotYaw) > Golden.TolDeg)
+			{
+				return FString::Printf(TEXT("slot %d {%d %s (%.2f, %.2f) %.2f %d}, expected {%d %s (%.2f, %.2f) %.2f %d}"), Index, Got.Squad,
+					FormationNames::ToString(Got.Role), Got.Position.X, Got.Position.Y, Got.Yaw, Got.bFixed ? 1 : 0, static_cast<int32>(Squad), *Role, SlotPos.X,
+					SlotPos.Y, SlotYaw, bFixed ? 1 : 0);
+			}
+		}
+		return FString();
+	});
+}
+
+FORMATION_PARITY_TEST(FFormationParityCustomGuardTest, "CustomGuard")
+bool FFormationParityCustomGuardTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("CustomGuard"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("CustomGuard"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* BlockedValues = nullptr;
+		const TSharedPtr<FJsonObject>* InState = nullptr;
+		const TSharedPtr<FJsonObject>* OutState = nullptr;
+		TArray<FFormationWall> Walls;
+		FFormationCustomShape Shape;
+		TArray<int32> Present;
+		FVector2D Pos = FVector2D::ZeroVector;
+		double Yaw = 0.0;
+		double Step = 0.0;
+		FFormationGuardState State;
+		FFormationGuardState Expected;
+		if (!In->TryGetArrayField(TEXT("walls"), WallValues) || !ReadWalls(*WallValues, Walls) || !ReadCustomShape(Field(*In, TEXT("shape")), Shape)
+			|| !ReadSquads(*In, TEXT("present"), Present) || !Vec2(Field(*In, TEXT("leaderPos")), Pos) || !Number(*In, TEXT("leaderYaw"), nullptr, Yaw)
+			|| !Number(*In, TEXT("stepDistance"), nullptr, Step) || !In->TryGetObjectField(TEXT("state"), InState) || !ReadGuardState(**InState, State)
+			|| !Out->TryGetArrayField(TEXT("blocked"), BlockedValues) || !Out->TryGetObjectField(TEXT("state"), OutState) || !ReadGuardState(**OutState, Expected))
+		{
+			return TEXT("unreadable input / output");
+		}
+		TOptional<FFormationPose> Ahead;
+		const TSharedPtr<FJsonValue> AheadValue = Field(*In, TEXT("ahead"));
+		if (AheadValue.IsValid() && !AheadValue->IsNull())
+		{
+			const TSharedPtr<FJsonObject>* AheadObject = nullptr;
+			FFormationPose Pose;
+			double AheadYaw = 0.0;
+			if (!AheadValue->TryGetObject(AheadObject) || !Vec2((*AheadObject)->TryGetField(TEXT("pos")), Pose.Pos) || !(*AheadObject)->TryGetNumberField(TEXT("yaw"), AheadYaw))
+			{
+				return TEXT("unreadable ahead");
+			}
+			Pose.Yaw = static_cast<float>(AheadYaw);
+			Ahead = Pose;
+		}
+		bool bAllInSight = true;
+		const TSharedPtr<FJsonValue> SightValue = Field(*In, TEXT("allInSight"));
+		if (SightValue.IsValid() && !SightValue->IsNull() && !SightValue->TryGetBool(bAllInSight))
+		{
+			return TEXT("allInSight is not a bool");
+		}
+		TArray<EFormationRole> ExpectedBlocked;
+		for (const TSharedPtr<FJsonValue>& Value : *BlockedValues)
+		{
+			EFormationRole Role = EFormationRole::Commander;
+			if (!ReadRole(Value, Role))
+			{
+				return TEXT("unreadable blocked role");
+			}
+			ExpectedBlocked.Add(Role);
+		}
+		const TArray<EFormationRole> Blocked = FormationCustomRules::BlockedRoles(Walls,
+			FormationCustomRules::CustomSlots(Shape, Present, Pos, static_cast<float>(Yaw), Golden.Config), Pos, Golden.Config);
+		if (Blocked != ExpectedBlocked)
+		{
+			return FString::Printf(TEXT("blocked [%s], expected [%s]"), *ShowRoles(Blocked), *ShowRoles(ExpectedBlocked));
+		}
+		const FFormationGuardState Actual = FormationCustomRules::Resolve(Walls, Shape, Present, Pos, static_cast<float>(Yaw), Ahead, State,
+			static_cast<float>(Step), Golden.Config, bAllInSight);
+		const bool bSame = Actual.Requested == Expected.Requested && Actual.Level == Expected.Level && Actual.Effective == Expected.Effective
+			&& Actual.Candidate == Expected.Candidate && FMath::Abs(Actual.CandidateDistance - Expected.CandidateDistance) <= Golden.TolCm
+			&& Actual.Cause == Expected.Cause;
+		return bSame ? FString() : FString::Printf(TEXT("state %s, expected %s"), *ShowGuardState(Actual), *ShowGuardState(Expected));
+	});
+}
+
+FORMATION_PARITY_TEST(FFormationParityCustomLookTest, "CustomLook")
+bool FFormationParityCustomLookTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("CustomLook"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("CustomLook"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		const TArray<TSharedPtr<FJsonValue>>* WallValues = nullptr;
+		TArray<FFormationWall> Walls;
+		FVector2D Pos = FVector2D::ZeroVector;
+		double Yaw = 0.0;
+		double Current = 0.0;
+		double Expected = 0.0;
+		TOptional<float> Held;
+		if (!In->TryGetArrayField(TEXT("walls"), WallValues) || !ReadWalls(*WallValues, Walls) || !Vec2(Field(*In, TEXT("pos")), Pos)
+			|| !Number(*In, TEXT("yaw"), nullptr, Yaw) || !Number(*In, TEXT("currentYaw"), nullptr, Current) || !OptionalNumber(*In, TEXT("held"), nullptr, Held)
+			|| !Out->TryGetNumberField(TEXT("yaw"), Expected))
+		{
+			return TEXT("unreadable input / output");
+		}
+		const float Actual = FormationCustomRules::Look(Walls, Pos, static_cast<float>(Yaw), static_cast<float>(Current), Golden.Config, Held);
+		return AngleDiff(Actual, Expected) <= Golden.TolDeg ? FString() : FString::Printf(TEXT("yaw %.3f, expected %.3f"), Actual, Expected);
+	});
+}
+
+FORMATION_PARITY_TEST(FFormationParityCustomPlaceTest, "CustomPlace")
+bool FFormationParityCustomPlaceTest::RunTest(const FString&)
+{
+	using namespace FormationParityUtil;
+	FGolden Golden;
+	bool bMissing = false;
+	if (!LoadGolden(*this, TEXT("CustomPlace"), Golden, bMissing))
+	{
+		return bMissing;
+	}
+	return RunCases(*this, TEXT("CustomPlace"), Golden, [&Golden](const TSharedPtr<FJsonObject>& In, const TSharedPtr<FJsonObject>& Out) -> FString
+	{
+		FString Op;
+		if (!In->TryGetStringField(TEXT("op"), Op))
+		{
+			return TEXT("no op");
+		}
+		if (Op == TEXT("dragLook"))
+		{
+			FVector2D Ghost = FVector2D::ZeroVector;
+			FVector2D Cursor = FVector2D::ZeroVector;
+			double Default = 0.0;
+			double Expected = 0.0;
+			if (!Vec2(Field(*In, TEXT("ghostPos")), Ghost) || !Vec2(Field(*In, TEXT("cursorPos")), Cursor) || !Number(*In, TEXT("defaultYaw"), nullptr, Default)
+				|| !Out->TryGetNumberField(TEXT("yaw"), Expected))
+			{
+				return TEXT("unreadable dragLook case");
+			}
+			const float Actual = FormationCustomRules::DragLook(Ghost, Cursor, static_cast<float>(Default));
+			return AngleDiff(Actual, Expected) <= Golden.TolDeg ? FString() : FString::Printf(TEXT("yaw %.3f, expected %.3f"), Actual, Expected);
+		}
+		if (Op == TEXT("canPlace"))
+		{
+			TArray<FFormationCustomGhost> Ghosts;
+			double Anchor = 0.0;
+			double Squad = 0.0;
+			FVector2D Pos = FVector2D::ZeroVector;
+			FString Expected;
+			if (!ReadGhosts(*In, Ghosts, false) || !Number(*In, TEXT("anchorSquad"), nullptr, Anchor) || !Number(*In, TEXT("squad"), nullptr, Squad)
+				|| !Vec2(Field(*In, TEXT("pos")), Pos) || !Out->TryGetStringField(TEXT("result"), Expected))
+			{
+				return TEXT("unreadable canPlace case");
+			}
+			const EFormationCustomPlace Result = FormationCustomRules::CanPlace(Ghosts, static_cast<int32>(Anchor), static_cast<int32>(Squad), Pos, Golden.Config);
+			const TCHAR* Actual = Result == EFormationCustomPlace::Ok ? TEXT("ok") : Result == EFormationCustomPlace::TooFar ? TEXT("too_far") : TEXT("too_close");
+			return Expected == Actual ? FString() : FString::Printf(TEXT("%s, expected %s"), Actual, *Expected);
+		}
+		if (Op == TEXT("shapeFrom"))
+		{
+			TArray<FFormationCustomGhost> Ghosts;
+			double Anchor = 0.0;
+			FFormationCustomShape Expected;
+			if (!ReadGhosts(*In, Ghosts, true) || !Number(*In, TEXT("anchorSquad"), nullptr, Anchor) || !ReadCustomShape(Field(*Out, TEXT("shape")), Expected))
+			{
+				return TEXT("unreadable shapeFrom case");
+			}
+			const FFormationCustomShape Actual = FormationCustomRules::ShapeFrom(Ghosts, static_cast<int32>(Anchor));
+			bool bSame = Actual.Members.Num() == Expected.Members.Num();
+			for (int32 Index = 0; bSame && Index < Actual.Members.Num(); ++Index)
+			{
+				const FFormationCustomMember& A = Actual.Members[Index];
+				const FFormationCustomMember& B = Expected.Members[Index];
+				bSame = A.Squad == B.Squad && FMath::Abs(A.Fwd - B.Fwd) <= Golden.TolCm && FMath::Abs(A.Right - B.Right) <= Golden.TolCm
+					&& AngleDiff(A.Look, B.Look) <= Golden.TolDeg;
+			}
+			return bSame ? FString() : FString::Printf(TEXT("shape %s, expected %s"), *ShowShape(Actual), *ShowShape(Expected));
+		}
+		return FString::Printf(TEXT("unknown op %s"), *Op);
 	});
 }
 

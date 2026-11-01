@@ -141,7 +141,7 @@ namespace FormationShapeRules
 	TArray<FFormationSlot> Slots(EFormationKind Formation, int32 MemberCount, const FVector2D& LeaderPos, float LeaderYaw, const FFormationConfig& Config)
 	{
 		TArray<FFormationSlot> Result;
-		if (Formation == EFormationKind::Wall)
+		if (Formation == EFormationKind::Wall || Formation == EFormationKind::Custom)
 		{
 			return Result;
 		}
