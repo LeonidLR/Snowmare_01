@@ -20,6 +20,7 @@ class UInputMappingContext;
 class USquadSubsystem;
 class AOperativeCharacter;
 class UFormationMenuWidget;
+class UPrimitiveComponent;
 enum class EWallClickSide : uint8;
 
 /**
@@ -34,6 +35,26 @@ struct FSquadCornerPeekTarget
 	ECoverFacing Side = ECoverFacing::Right;
 	FVector EdgeOnFace = FVector::ZeroVector;
 	bool bCrouched = false;
+};
+
+/**
+ * The squad's corner peek carried over to the next wall (bug_04 A, the game designer's play-test 2026-11-01; FormationPeekCarry): a group
+ * wall order given while the squad peeks, at a slot with a free corner -> once the squad is at the new wall, the squad's corner peek there.
+ * Set by OrderGroupCover, run by TickSquadPeekCarry.
+ */
+struct FSquadPeekCarry
+{
+	bool bActive = false;
+	TWeakObjectPtr<AActor> WallActor;
+	TWeakObjectPtr<UPrimitiveComponent> WallComponent;
+	/** The point on the wall's face the carried peek "clicks" (FormationPeekCarry::AimInsetCm in from the corner), and the face's normal. */
+	FVector AimPoint = FVector::ZeroVector;
+	FVector WallNormal = FVector::ForwardVector;
+	TWeakObjectPtr<AOperativeCharacter> Leader;
+	uint32 LeaderSerial = 0;
+	float Seconds = 0.f;
+	float LeaderStillSeconds = 0.f;
+	bool bLeaderMoved = false;
 };
 
 /**
@@ -381,6 +402,17 @@ public:
 
 	/** Smokes (rendered stills): the corner peek hover set by the smoke stays up (PlayerTick does not follow the real cursor for it). */
 	bool bFreezeCornerPeekHoverForTesting = false;
+
+	/** Bug_04 A: a corner peek carried over to the next wall waits for the squad to reach it (smokes). */
+	bool IsSquadPeekCarryPending() const { return PeekCarry.bActive; }
+	/** Carried corner peeks ordered since the level began (smokes). */
+	int32 GetSquadPeekCarryCount() const { return PeekCarryFired; }
+	/**
+	 * Bug_04 A: one frame of the carried corner peek (FormationPeekCarry::Decide) - at the new wall, the squad's corner peek at its corner
+	 * (the same order as the player's click on that end: FindSquadCornerPeekForHit + USquadSubsystem::OrderFormationCornerPeek). PlayerTick
+	 * runs it; DeltaSeconds = the world's (the tactical pause slows it with the squad).
+	 */
+	void TickSquadPeekCarry(float DeltaSeconds);
 
 	/** Godot Alt + Z / C / V: the whole squad changes stance (prone refused while anyone moves). */
 	void SetEntireSquadStance(EOperativeStance Stance);
@@ -850,6 +882,11 @@ private:
 	mutable FVector SquadPeekBaseLeaderAt = FVector(TNumericLimits<float>::Max());
 	mutable bool bSquadPeekBaseValid = false;
 	mutable float SquadPeekBaseYaw = 0.f;
+	/** Bug_04 A: the corner peek carried over to the next wall (OrderGroupCover sets it, TickSquadPeekCarry runs it). */
+	FSquadPeekCarry PeekCarry;
+	int32 PeekCarryFired = 0;
+	/** Bug_04 A: after a group wall order (OrderFormationWall) - carries the squad's corner peek in force to Slot's corner (FormationPeekCarry). */
+	void StartSquadPeekCarry(USquadSubsystem& Squad, AOperativeCharacter& Leader, const FCoverSlot& Slot, bool bPeekInForce);
 	/** FindCornerPeekForHit's rule from a given wall slot (the operative's own, or the squad's wall behind the leader). */
 	bool FindCornerPeekForSlot(const FCoverSlot& Slot, const FHitResult& Hit, ECoverFacing& OutSide, float& OutEdgeAlongCm) const;
 

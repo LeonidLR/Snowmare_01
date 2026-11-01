@@ -339,6 +339,9 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	// The custom formation's placement mode: its pause holds, the ghosts' refusal flashes run on real time.
 	TickFormationPlacement(static_cast<float>(FApp::GetDeltaTime()));
 
+	// Bug_04 A (2026-11-01): a squad corner peek carried over to the next wall - ordered once the squad stands at it.
+	TickSquadPeekCarry(DeltaTime);
+
 	// Sprint 12: RMB / Esc drop the cover preview.
 	if (HasCoverPreview() && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape)))
 	{

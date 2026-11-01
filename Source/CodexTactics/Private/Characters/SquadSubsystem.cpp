@@ -1354,29 +1354,39 @@ bool USquadSubsystem::HoldsCoverOrLeavesIt(FFollowerState& Follower, AOperativeC
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: the leader walks away (slot %.0f cm off) - leaves the cover and follows"),
 			*Operative->DisplayName.ToString(), Distance);
-		Operative->LeaveCoverToMove(TEXT("follows the leader"));
-		if (bGroupCoverProne)
+		LeaveCoverForSquad(Follower, *Operative, LeaderRef, TEXT("follows the leader"));
+		if (OperativeMovementRules::ShouldDeferMove(Operative->GetMoveHoldSeconds()))
 		{
-			DropGroupCoverProne(Operative, TEXT("follows the leader"));
-			// He lay down for the cover, not by the player's stance key: up to the leader's stance to walk with him.
-			if (Operative->GetStance() == EOperativeStance::Prone && LeaderRef.GetStance() != EOperativeStance::Prone)
-			{
-				Operative->SetStance(LeaderRef.GetStance());
-			}
-		}
-		// Crouched at a low wall: he stands up to walk with a standing leader (the clip roots him, the next repath walks him).
-		if (Operative->GetStance() == EOperativeStance::Crouching && LeaderRef.GetStance() == EOperativeStance::Standing)
-		{
-			Operative->SetStance(EOperativeStance::Standing);
-		}
-		if (const float LeaveHold = Operative->GetMoveHoldSeconds(); OperativeMovementRules::ShouldDeferMove(LeaveHold))
-		{
-			Follower.bParked = false;
-			Follower.RepathTimeRemaining = LeaveHold;
 			return true;
 		}
 	}
 	return false;
+}
+
+void USquadSubsystem::LeaveCoverForSquad(FFollowerState& Follower, AOperativeCharacter& OperativeRef, const AOperativeCharacter& LeaderRef, const TCHAR* Why)
+{
+	AOperativeCharacter* Operative = &OperativeRef;
+	const bool bGroupCoverProne = HasGroupCoverProne(Operative);
+	Operative->LeaveCoverToMove(Why);
+	if (bGroupCoverProne)
+	{
+		DropGroupCoverProne(Operative, Why);
+		// He lay down for the cover, not by the player's stance key: up to the leader's stance to walk with him.
+		if (Operative->GetStance() == EOperativeStance::Prone && LeaderRef.GetStance() != EOperativeStance::Prone)
+		{
+			Operative->SetStance(LeaderRef.GetStance());
+		}
+	}
+	// Crouched at a low wall: he stands up to walk with a standing leader (the clip roots him, the next repath walks him).
+	if (Operative->GetStance() == EOperativeStance::Crouching && LeaderRef.GetStance() == EOperativeStance::Standing)
+	{
+		Operative->SetStance(EOperativeStance::Standing);
+	}
+	if (const float LeaveHold = Operative->GetMoveHoldSeconds(); OperativeMovementRules::ShouldDeferMove(LeaveHold))
+	{
+		Follower.bParked = false;
+		Follower.RepathTimeRemaining = LeaveHold;
+	}
 }
 
 FVector USquadSubsystem::ResolveReachableSlot(const AOperativeCharacter& LeaderRef, const FVector& Slot, bool bLeaderSide, const TOptional<FVector>& Here) const

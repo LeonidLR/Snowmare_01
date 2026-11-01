@@ -96,6 +96,14 @@ struct CODEXTACTICS_API FTacticalCameraConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan")
 	bool bFreeExplorationPan = true;
 
+	/**
+	 * The free pan (exploration with bFreeExplorationPan, every fight view) has no leash to the followed character (game designer
+	 * play-test 2026-11-01, bug_04 B: "after panning far enough it stops, tied to the selected character"): the view's centre is only kept
+	 * inside the level's area (the minimap's) grown by this margin, cm. Console: Codex.Camera.FreePanBounds (0 = the old MaxPanCombat leash).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan", meta = (ClampMin = "0"))
+	float FreePanLevelMarginCm = 3000.f;
+
 	/** In exploration (bFreeExplorationPan off), released pan drifts back to the focus at this rate, 1/s. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan", meta = (ClampMin = "0"))
 	float PanReturnSpeed = 2.5f;
@@ -137,6 +145,13 @@ namespace TacticalCameraRules
 
 	/** Clamps a pan offset to a maximum length. */
 	CODEXTACTICS_API FVector ClampPan(const FVector& Pan, float MaxDistance);
+
+	/**
+	 * The free pan's only limit (bug_04 B, 2026-11-01): the view's centre (Focus + Pan, planar) kept inside LevelArea grown by MarginCm - never
+	 * a distance from the focus (the followed character). The grown area always holds the focus itself (a character outside the level's
+	 * area never has his own view pushed away). No valid area: Pan unchanged. Returns the pan to use (its Z kept).
+	 */
+	CODEXTACTICS_API FVector ClampFreePan(const FVector& Focus, const FVector& Pan, const FBox2D& LevelArea, float MarginCm);
 
 	/** Smoothstep t²(3 - 2t), 0..1 (Godot _update_smooth_focus). */
 	CODEXTACTICS_API float Smoothstep(float T);

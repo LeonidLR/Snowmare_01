@@ -59,6 +59,19 @@ namespace TacticalCameraRules
 		return Pan.Size() > MaxDistance ? Pan.GetSafeNormal() * MaxDistance : Pan;
 	}
 
+	FVector ClampFreePan(const FVector& Focus, const FVector& Pan, const FBox2D& LevelArea, float MarginCm)
+	{
+		if (!LevelArea.bIsValid)
+		{
+			return Pan;
+		}
+		FBox2D Allowed = LevelArea.ExpandBy(FMath::Max(0.f, MarginCm));
+		Allowed += FVector2D(Focus.X, Focus.Y);
+		const FVector2D View(Focus.X + Pan.X, Focus.Y + Pan.Y);
+		const FVector2D Kept(FMath::Clamp(View.X, Allowed.Min.X, Allowed.Max.X), FMath::Clamp(View.Y, Allowed.Min.Y, Allowed.Max.Y));
+		return FVector(Kept.X - Focus.X, Kept.Y - Focus.Y, Pan.Z);
+	}
+
 	float Smoothstep(float T)
 	{
 		const float Clamped = FMath::Clamp(T, 0.f, 1.f);

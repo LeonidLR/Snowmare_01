@@ -781,8 +781,11 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		}
 		return true;
 	}
+	// Bug_04 A (2026-11-01): the peek in force before the order ends it (OrderFormationWall) - it decides whether the peek moves on.
+	const bool bPeekInForce = Squad->GetFormationPeeker() != nullptr;
 	if (bWallLayout && !bPlan && Squad->OrderFormationWall(Direct, Others, Slot))
 	{
+		StartSquadPeekCarry(*Squad, *Direct, Slot, bPeekInForce);
 		LastGroupCoverSlots = 1 + Others.Num();
 		LastGroupCoverProne = 0;
 		UInteractionSubsystem* WallUseOrders = World->GetSubsystem<UInteractionSubsystem>();

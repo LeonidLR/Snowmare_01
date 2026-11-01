@@ -216,11 +216,30 @@ bool FFormationWallEndSquadPeekTest::RunTest(const FString&)
 	const FFormationSquadPeek Joint = FormationWallEnd::PlanSquadPeek(Corner, Start, WallEndNormalYaw, FVector2D(-600.0, -20.0), Members);
 	TestFalse(TEXT("A joint: no stack"), Joint.bStack);
 	TestEqual(TEXT("A joint: the member nearest the end peeks"), Joint.Peeker, EFormationRole::Right);
-	// The pair with K at the end (K within SlideMin of it): no stack, K himself is nearest.
+	// The pair with K at the end (K within SlideMin of it; bug_04 A 2026-11-01): no slide, the stack where he stands - K peeks, the partner
+	// lines up behind him.
 	const TArray<FFormationSlot> Pair = { WallEndSlot(EFormationRole::Commander, -560.0, -65.0, -45.f), WallEndSlot(EFormationRole::Rear, -460.0, -65.0, -135.f) };
 	const FFormationSquadPeek AtEnd = FormationWallEnd::PlanSquadPeek(Walls, Pair, WallEndNormalYaw, FVector2D(-600.0, -20.0), Pair);
-	TestFalse(TEXT("K already at the end: no stack to slide into"), AtEnd.bStack);
+	TestTrue(TEXT("K already at the end: the stack where he stands"), AtEnd.bStack);
 	TestEqual(TEXT("... the leader peeks"), AtEnd.Peeker, EFormationRole::Commander);
+	{
+		const FFormationSlot* K = WallEndSlotOf(AtEnd.StackSlots, EFormationRole::Commander);
+		const FFormationSlot* Z = WallEndSlotOf(AtEnd.StackSlots, EFormationRole::Rear);
+		TestTrue(TEXT("... K 40 cm short of the end, Z a wall spacing + the gap behind him"), K && Z && FMath::IsNearlyEqual(K->Position.X, -560.0, 1.0)
+			&& FMath::IsNearlyEqual(Z->Position.X, -560.0 + 100.0 + FormationWallEnd::AtEndGapCm, 1.0) && FMath::IsNearlyEqual(Z->Position.Y, -65.0, 1.0));
+	}
+	// The wall END layout of a click next to the corner (bug_04 A): K at the end, one man ROUND the end (past it), one behind - the stack puts
+	// both behind K along the face, in the order they stood (the one past the end first).
+	const TArray<FFormationSlot> EndLayout = { WallEndSlot(EFormationRole::Commander, -570.0, -65.0, -90.f), WallEndSlot(EFormationRole::Rear, -640.0, -65.0, 47.f),
+		WallEndSlot(EFormationRole::Right, -470.0, -65.0, -150.f) };
+	const FFormationSquadPeek Round = FormationWallEnd::PlanSquadPeek(Walls, EndLayout, WallEndNormalYaw, FVector2D(-600.0, -20.0), EndLayout);
+	TestTrue(TEXT("END layout, K at the end: the stack"), Round.bStack && Round.Peeker == EFormationRole::Commander);
+	{
+		TArray<FFormationSlot> Line = Round.StackSlots;
+		Line.Sort([](const FFormationSlot& A, const FFormationSlot& B) { return A.Position.X < B.Position.X; });
+		TestTrue(TEXT("... K at the edge, Z next (he stood nearer the end), P last - nobody past the end"), Line.Num() == 3 && Line[0].Role == EFormationRole::Commander
+			&& Line[1].Role == EFormationRole::Rear && Line[2].Role == EFormationRole::Right && Line[0].Position.X >= -600.0 + 39.0);
+	}
 	// Members off their places: without a stack the nearest by position wins.
 	const TArray<FFormationSlot> Moved = { WallEndSlot(EFormationRole::Commander, -560.0, -65.0, 0.f), WallEndSlot(EFormationRole::Rear, -580.0, -150.0, 0.f) };
 	TestEqual(TEXT("No stack: the nearest member by position"), FormationWallEnd::PlanSquadPeek(Corner, Pair, WallEndNormalYaw, FVector2D(-600.0, -20.0), Moved).Peeker,

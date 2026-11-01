@@ -1247,6 +1247,9 @@ bool USquadSubsystem::OrderFormationWall(AOperativeCharacter* Direct, const TArr
 		Sectors.bWallLayoutValid = false;
 		return false;
 	}
+	// Bug_04 A: a peek in force ends with the order itself (its peeker is released below, not held in his corner by the peek).
+	const AOperativeCharacter* OldPeeker = Sectors.Peek.Peeker.Get();
+	EndFormationCornerPeek(TEXT("the squad's wall order"));
 	Sectors.bWallOrder = true;
 	ResetFormationWallRoute();
 	Sectors.bWallLayoutValid = true;
@@ -1262,12 +1265,30 @@ bool USquadSubsystem::OrderFormationWall(AOperativeCharacter* Direct, const TArr
 		AOperativeCharacter* Other = Placed[Index];
 		Sectors.WallOrderRoles.Add(Other, PlaceRoles[Assignment[Index]]);
 		Other->SetFormationWallPose(false);
+		// Bug_04 A (the game designer's play-test 2026-11-01): the order names him - out of his cover / his peek corner / his prone spot and
+		// off his own walk to a cover slot first. The followers-in-cover rule alone kept the old peeker in his corner (his trail place on the
+		// wall route lay beside him, the leader stopped at his slot), the squad's new wall layout never complete.
+		const bool bInCover = Other->bInCover;
+		const bool bPendingCover = Other->HasPendingCover();
+		const bool bProne = HasGroupCoverProne(Other);
 		for (FFollowerState& Follower : Followers)
 		{
 			if (Follower.Operative.Get() == Other)
 			{
 				Follower.RepathTimeRemaining = 0.f;
 				Follower.bParked = false;
+				if (bInCover || bPendingCover || bProne)
+				{
+					if (bPendingCover && !bInCover)
+					{
+						Other->ClearPendingCover();
+						Other->StopOperative(); // his own cover walk ends: the formation drive takes him to his wall slot
+					}
+					LeaveCoverForSquad(Follower, *Other, *Direct, TEXT("the squad's wall order"));
+					++Sectors.WallReleaseCount;
+					UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall order: %s leaves his %s for his wall slot (the squad's order)"), *Other->DisplayName.ToString(),
+						bInCover ? (Other == OldPeeker ? TEXT("peek corner") : TEXT("cover")) : bProne ? TEXT("prone spot") : TEXT("walk to a cover slot"));
+				}
 			}
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall order: %s -> %s"), *Other->DisplayName.ToString(),

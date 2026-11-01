@@ -283,6 +283,48 @@ namespace FormationWallEnd
 			Plan = FFormationSquadPeek();
 			Plan.StackDestination = EdgeOnFace + FormationMath::Forward(NormalYaw) * PeekDestinationOutCm;
 		}
+		else if (!StartSlots.IsEmpty() && StartSlots[0].Role == EFormationRole::Commander)
+		{
+			// Bug_04 A (the game designer's play-test 2026-11-01): K already at the end (within SlideMin of it - the wall END layout of a click
+			// next to the corner) - no slide, but still the stack: K is the point man where he stands, the others line up behind him along the
+			// wall in the order they stand (they held the END layout's places, one of them round the corner in front of the peeker).
+			const FVector2D RightAlong = FormationMath::Forward(NormalYaw + 270.f);
+			const FVector2D KPlace = StartSlots[0].Position;
+			const double Toward = FVector2D::DotProduct(Plan.StackDestination - KPlace, RightAlong);
+			if (FMath::Abs(Toward) >= 1.0 && FMath::Abs(Toward) < FormationWallRules::SlideMin) // only K AT the end (a longer move is the slide's)
+			{
+				const FVector2D Along = RightAlong * (Toward > 0.0 ? 1.0 : -1.0);
+				const FVector2D Pushed = Plan.StackDestination + Along * FormationWallRules::SlideMin;
+				const TOptional<FFormationStackEnd> AtEnd = FindStackEnd(Walls, KPlace, NormalYaw, Pushed, Config);
+				if (AtEnd.IsSet())
+				{
+					TArray<FFormationSlot> Others(StartSlots.GetData() + 1, StartSlots.Num() - 1);
+					// The nearest the end first: they keep their order along the wall (nobody crosses another to his place).
+					Others.Sort([&Along](const FFormationSlot& A, const FFormationSlot& B)
+					{
+						return FVector2D::DotProduct(A.Position, Along) > FVector2D::DotProduct(B.Position, Along);
+					});
+					TArray<FFormationSlot> Line;
+					Line.Add(StartSlots[0]);
+					for (int32 Index = 0; Index < Others.Num(); ++Index)
+					{
+						FFormationSlot Place = Others[Index];
+						Place.Position = KPlace - AtEnd->Along * (static_cast<double>(Index + 1) * Config.WallSpacing + AtEndGapCm);
+						Line.Add(Place);
+					}
+					FFormationSquadPeek AtEndPlan;
+					AtEndPlan.StackDestination = Plan.StackDestination;
+					AtEndPlan.bStack = true;
+					AtEndPlan.End = AtEnd.GetValue();
+					AtEndPlan.StackSlots = StackSlots(Line, AtEndPlan.End, NormalYaw, Config);
+					AtEndPlan.Peeker = PointRole(AtEndPlan.StackSlots, AtEndPlan.End);
+					if (AtEndPlan.Peeker == EFormationRole::Commander && Members.ContainsByPredicate([](const FFormationSlot& Each) { return Each.Role == EFormationRole::Commander; }))
+					{
+						return AtEndPlan;
+					}
+				}
+			}
+		}
 		double Nearest = TNumericLimits<double>::Max();
 		for (const FFormationSlot& Each : Members)
 		{
