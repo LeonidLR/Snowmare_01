@@ -14,7 +14,7 @@ import type { ZoneKind } from '../movement/layout.ts';
 import type { Profile } from './profile.ts';
 import { toUE } from './profile.ts';
 import type { CoverKind, Door, GenBuilding, GenCover, GenCut, GenLadder, GenLayout, GenParams, GenRoute, GenWall, PatrolRoute, SetPiece, SpawnPoint, Stair } from './schema.ts';
-import { CUT_LEVEL, DEFAULT_PARAMS, LEVELGEN_SCHEMA, LEVEL_HEIGHT, ladderForLevels, levelZ, rect } from './schema.ts';
+import { CUT_LEVEL, DEFAULT_PARAMS, LEVELGEN_SCHEMA, LEVEL_HEIGHT, STAIR_RUN_PER_RISE, ladderForLevels, levelZ, rect } from './schema.ts';
 
 type Rect = [Vec2, Vec2];
 
@@ -197,14 +197,16 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     const r = fit(region.ruin);
     const b = addBuilding(d, 'B_ruin', r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: V >= 1, stairwell: false, set_piece: 'ruined_two_level', doorSides: ['west', 'south'] }, random);
     if (V >= 1) {
-      const sx0 = r[0][0] + (r[1][0] - r[0][0]) * 0.6;
-      b.stairs.push({ id: id('STAIR_ext'), pos: [sx0, r[1][1] + 1.2], from: 0, to: 2, kind: 'external', top: [sx0, r[1][1] - 1.5] });
+      // the external stair climbs along the south face (a 35 deg ramp: 6 m rise = 8.6 m run) and lands on the roof over the edge
+      const run = 2 * STAIR_RUN_PER_RISE * (LEVEL_HEIGHT / 100);
+      const sx1 = r[0][0] + (r[1][0] - r[0][0]) * 0.7;
+      b.stairs.push({ id: id('STAIR_ext'), pos: [sx1 - run, r[1][1] + 1.2], mid: [sx1, r[1][1] + 1.2], from: 0, to: 2, kind: 'external', top: [sx1, r[1][1] - 1.6] });
     }
     if (V >= 3) {
       b.roof_holes.push([r[0][0] + (r[1][0] - r[0][0]) * 0.3, r[0][1] + (r[1][1] - r[0][1]) * 0.4], [r[0][0] + (r[1][0] - r[0][0]) * 0.75, r[0][1] + (r[1][1] - r[0][1]) * 0.6]);
       b.floor_holes.push({ pos: [r[0][0] + (r[1][0] - r[0][0]) * 0.35, r[0][1] + (r[1][1] - r[0][1]) * 0.7], floor: 1 });
     }
-    if (V >= 2) b.stairs.push({ id: id('STAIR_in'), pos: [r[0][0] + 2, r[0][1] + 2], from: 0, to: 1, kind: 'stairwell', top: [r[0][0] + 2, r[0][1] + 5] });
+    if (V >= 2) b.stairs.push({ id: id('STAIR_in'), pos: [r[0][0] + 2, r[0][1] + 2], from: 0, to: 1, kind: 'stairwell', top: [r[0][0] + 2, r[0][1] + 2 + STAIR_RUN_PER_RISE * (LEVEL_HEIGHT / 100)] });
     // interior: one partition per floor with a doorway
     for (let f = 0; f < b.floors; f++) {
       // the partition at 0.5-0.6 of the width: clear of the roof holes (0.3 / 0.75) and the floor hole (0.35) the route drops through
@@ -416,7 +418,7 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     bounds: { min: [-(h / 2) * 100, -(w / 2) * 100], max: [(h / 2) * 100, (w / 2) * 100] }, ground_z: 0,
     spawn: { pos: U(start), yaw: 90 }, end: U(end),
     walls: d.walls.map((wl) => ({ id: wl.id, a: U(wl.a), b: U(wl.b), height: wl.height, thickness: wl.thickness, ...(wl.floor ? { floor: wl.floor } : {}), ...(wl.kind ? { kind: wl.kind } : {}), ...(wl.building ? { building: wl.building } : {}) })),
-    buildings: d.buildings.map((b) => ({ ...b, footprint: UR(b.footprint), doors: b.doors.map((x) => ({ ...x, pos: U(x.pos) })), stairs: b.stairs.map((s) => ({ ...s, pos: U(s.pos), top: U(s.top) })),
+    buildings: d.buildings.map((b) => ({ ...b, footprint: UR(b.footprint), doors: b.doors.map((x) => ({ ...x, pos: U(x.pos) })), stairs: b.stairs.map((s) => ({ ...s, pos: U(s.pos), top: U(s.top), ...(s.mid ? { mid: U(s.mid) } : {}) })),
       roof_holes: b.roof_holes.map(U), floor_holes: b.floor_holes.map((x) => ({ pos: U(x.pos), floor: x.floor })) })),
     cut: d.cut ? { poly: d.cut.poly.map(U), level: d.cut.level, floor_z: d.cut.floor_z, crossings: d.cut.crossings.map((c) => ({ ...c, poly: c.poly.map(U) })) } : undefined,
     ladders: d.ladders.map((l) => ({ ...l, pos: U(l.pos), foot: U(l.foot), top: U(l.top), yaw: yawToUE(l.yaw) })),
@@ -531,9 +533,18 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   if (s.stairwell && s.enterable) {
     // one stairwell in a corner, climbing every floor up to the roof when walkable
     const top = s.roof_walkable ? s.floors : s.floors - 1;
-    // a hollow building (a hall, a tower) has no intermediate slabs: one flight ground -> roof
-    if (s.hollow) { if (top > 0) stairs.push({ id: `${bid}_stair_0`, pos: [x0 + 1.5, y0 + 1.5], from: 0, to: top, kind: 'stairwell', top: [x0 + 1.5, y0 + 4.5] }); }
-    else for (let f = 0; f < top; f++) stairs.push({ id: `${bid}_stair_${f}`, pos: [x0 + 1.5, y0 + 1.5 + f * 0.01], from: f, to: f + 1, kind: 'stairwell', top: [x0 + 1.5, y0 + 4.5] });
+    // a 35 deg ramp along the longer inner side (run = 1.43 x rise); a hollow building (a hall, a tower) has no intermediate slabs:
+    // one flight ground -> roof
+    const flight = (f: number, t: number, n: number): Stair => {
+      const run = (t - f) * STAIR_RUN_PER_RISE * (LEVEL_HEIGHT / 100);
+      const alongY = y1 - y0 >= x1 - x0;
+      // flights side by side (2 m apart) so the upper ramp never passes over the opening the lower one comes up through
+      const pos: Vec2 = alongY ? [x0 + 1.5 + n * 2, y0 + 1.2] : [x0 + 1.2, y0 + 1.5 + n * 2];
+      const topPt: Vec2 = alongY ? [x0 + 1.5 + n * 2, Math.min(y1 - 1.2, y0 + 1.2 + run)] : [Math.min(x1 - 1.2, x0 + 1.2 + run), y0 + 1.5 + n * 2];
+      return { id: `${bid}_stair_${n}`, pos, from: f, to: t, kind: 'stairwell', top: topPt };
+    };
+    if (s.hollow) { if (top > 0) stairs.push(flight(0, top, 0)); }
+    else for (let f = 0; f < top; f++) stairs.push(flight(f, f + 1, f));
   }
   const b = { id: bid, footprint: r, height: s.height, floors: s.floors, ...(s.hollow ? { hollow: true } : {}), enterable: s.enterable, roof_walkable: s.roof_walkable, doors, stairs, roof_holes: [] as Vec2[], floor_holes: [] as { pos: Vec2; floor: number }[], set_piece: s.set_piece };
   d.buildings.push(b);

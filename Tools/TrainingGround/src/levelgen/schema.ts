@@ -60,7 +60,14 @@ export interface GenWall extends LayoutWall {
 }
 
 export interface Door { pos: Vec2; floor: number; /** The wall id the door is cut into. */ wall?: string }
-export interface Stair { id: string; pos: Vec2; from: number; to: number; kind: 'stairwell' | 'external'; /** The top landing point (on `to`). */ top: Vec2 }
+/**
+ * A stair = a walkable ramp at ~35 deg (run = 1.43 x rise) from `pos` (on `from`) to `top` (on `to`); an external one climbs along the
+ * face outside the building to `mid` (the ramp's top end) and crosses onto the roof by a flat landing mid -> top. The builder cuts
+ * the slab on `to` open above the ramp's last 3 m (the stairwell opening).
+ */
+export interface Stair { id: string; pos: Vec2; from: number; to: number; kind: 'stairwell' | 'external'; /** The top landing point (on `to`). */ top: Vec2; mid?: Vec2 }
+/** The stair's horizontal run per metre of rise (35 deg; the characters walk up to 44 deg). */
+export const STAIR_RUN_PER_RISE = 1.43;
 
 export interface GenBuilding {
   id: string;
