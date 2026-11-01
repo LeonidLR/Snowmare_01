@@ -9,10 +9,13 @@
 //        the right of the picture, the OPTIMIZED one on the left.
 // Its own empty arena (SmokeUtils::FindClearArena).
 //  Operatives: the leader wears the original body, the second operative the optimized one (both with the case Blueprint's anim
-//   class and mesh transform); idle, walk, crouch, prone, aim (a frozen hound, one forced shot), vault (each body airborne), cover.
+//   class and mesh transform); idle, walk, crouch, prone, aim (a frozen hound, one forced shot), vault (each body airborne over a wall
+//   of three barricades; each path must cross the wall's vault area), cover.
 //  Enemies: two enemies of the case Blueprint placed as deaf guards (they idle), the right one keeps the original body (for a look
 //   variant: the variant's source materials from the pipeline's material_sets.json), the left one gets the optimized body + the variant's MI; idle, move (a search walk),
-//   attack (AttackTarget on an operative put in front), hit (a damage spec), death. Further look variants: an idle still each.
+//   attack (AttackTarget on an operative put in front), hit (a damage spec), death (both bodies still there, dying, the optimized one
+//   in its death clip; the scripted hit starts the level's ambush fight, so a frozen keeper holds that fight open - its end would sweep
+//   the corpses away). Further look variants: an idle still each.
 // Asserts per case: one material slot (an MI of M_CharacterMaster with its four textures, one MI per look variant), LOD0 within
 // the triangle budget, >= 3 LODs, same skeleton and physics asset as the original, bounds within 10 %, no load warnings about
 // the new assets, and in every state the optimized body is animated (a bone >= 5 cm off the reference pose: no T-pose). Logs
@@ -22,8 +25,10 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "AIController.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "Characters/EnemyAnimInstance.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -49,6 +54,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/FileManager.h"
 #include "Interactables/BarricadeActor.h"
+#include "Interactables/VaultNavigation.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInterface.h"
@@ -56,6 +62,9 @@
 #include "Misc/CoreDelegates.h"
 #include "Misc/OutputDeviceRedirector.h"
 #include "Misc/Paths.h"
+#include "NavMesh/NavMeshPath.h"
+#include "NavMesh/RecastNavMesh.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PixelFormat.h"
 #include "Rendering/SkeletalMeshRenderData.h"
@@ -187,6 +196,11 @@ namespace OptimizedCharacterSmoke
 		TWeakObjectPtr<ACharacter> Optimized;
 		TWeakObjectPtr<ACameraActor> Camera;
 		TArray<TWeakObjectPtr<AActor>> Props;
+		/**
+		 * Holds the level fight open over the death check: the scripted hit makes the guards (level enemies) the ambush fight,
+		 * and the kill of the last fight enemy ends it - the post-combat sweep (UWaveVictorySubsystem) destroys every enemy body.
+		 */
+		TWeakObjectPtr<AEnemyCharacter> Keeper;
 		SmokeUtils::FClearArena Arena;
 		FCoverSlot Slots[2];
 		int32 MarkFrame = 0;
@@ -811,6 +825,44 @@ namespace OptimizedCharacterSmoke
 		return 90;
 	}
 
+	/**
+	 * The walk crosses the vault nav area (UNavArea_Vault) of the wall: the body is going over it, not round it. The operatives' crowd path
+	 * keeps the polygon corridor (its points are only start and end), the decision is in the polygons.
+	 */
+	bool PathCrossesVaultArea(const AOperativeCharacter* Op)
+	{
+		const AAIController* Controller = Op ? Cast<AAIController>(Op->GetController()) : nullptr;
+		const UPathFollowingComponent* PathFollowing = Controller ? Controller->GetPathFollowingComponent() : nullptr;
+		const FNavMeshPath* Path = PathFollowing && PathFollowing->GetPath().IsValid() ? PathFollowing->GetPath()->CastPath<FNavMeshPath>() : nullptr;
+		const ARecastNavMesh* NavMesh = Path ? Cast<ARecastNavMesh>(Path->GetNavigationDataUsed()) : nullptr;
+		if (!NavMesh)
+		{
+			return false;
+		}
+		const int32 VaultArea = NavMesh->GetAreaID(UNavArea_Vault::StaticClass());
+		for (const NavNodeRef Poly : Path->PathCorridor)
+		{
+			if (static_cast<int32>(NavMesh->GetPolyAreaID(Poly)) == VaultArea)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Vault: a wall of three barricades across both lanes (9 m, the arena's cleared width). With one 3 m barricade the lanes (1.1 m
+	 * off its centre) ran 40 cm inside its ends: the vault area's cost (3) made the way round the end as cheap as the vault, and
+	 * the navmesh's polygons decided per lane - lane 0 went round (no vault), lane 1 into it (a follower vaults when blocked).
+	 */
+	void SpawnVaultWall(UWorld* World)
+	{
+		for (const float Side : { -300.f, 0.f, 300.f })
+		{
+			SpawnBarricade(World, Runner->Arena.Origin + Runner->Arena.Forward * 250.f + Runner->Arena.Right * Side);
+		}
+	}
+
 	void AddVaultShots(TArray<FStep>& S, bool bOriginal)
 	{
 		S.Add([bOriginal](UWorld*)
@@ -884,7 +936,7 @@ namespace OptimizedCharacterSmoke
 			ResetPair(World);
 			return 120;
 		});
-		S.Add([](UWorld* World) { SpawnBarricade(World, Runner->Arena.Origin + Runner->Arena.Forward * 250.f); return 120; });
+		S.Add([](UWorld* World) { SpawnVaultWall(World); return 120; });
 		S.Add([](UWorld* World)
 		{
 			int32 Lane = 0;
@@ -892,6 +944,8 @@ namespace OptimizedCharacterSmoke
 			{
 				const EOperativeOrderResult Order = Op->OrderMoveTo(LaneStart(Lane++) + Runner->Arena.Forward * 550.f, false);
 				Check(Order == EOperativeOrderResult::Accepted, FString::Printf(TEXT("vault: move order over the barricade (%d)"), static_cast<int32>(Order)));
+				Check(PathCrossesVaultArea(Op), FString::Printf(TEXT("vault: the %s body's path goes over the barricades, not round them"),
+					Op == OpA() ? TEXT("original") : TEXT("optimized")));
 			}
 			Runner->MarkFrame = Runner->Frame;
 			return 0;
@@ -1048,6 +1102,56 @@ namespace OptimizedCharacterSmoke
 		return 90;
 	}
 
+	/**
+	 * Before the kill: when the guards are a running fight's last enemies (the scripted hit started the level's ambush fight), a
+	 * frozen keeper far away joins it, so their deaths do not end it - the post-combat sweep would destroy both bodies mid-clip.
+	 */
+	void HoldFightOpen(UWorld* World)
+	{
+		UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+		if (!Waves || !Waves->IsWaveActive() || Runner->Keeper.IsValid())
+		{
+			return;
+		}
+		const FVector At = Runner->Arena.Origin - Runner->Arena.Forward * 3000.f + FVector(0.f, 0.f, 60.f);
+		AEnemyCharacter* Keeper = Waves->SpawnEnemy(EEnemyArchetype::FrostHound, At, Runner->Arena.Forward.Rotation());
+		if (Keeper)
+		{
+			Keeper->SetActorTickEnabled(false);
+			Keeper->GetHealthComponent()->SetMaxHealth(100000.f, true);
+			SmokeUtils::ParkEnemyFarAway(Keeper);
+			Runner->Keeper = Keeper;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("OptimizedCharacterSmoke: [%s] a fight is on (%d enemies): keeper %s holds it over the death check"),
+			Runner->Case ? Runner->Case->Asset : TEXT("-"), Waves->GetAliveEnemyCount(), *GetNameSafe(Keeper));
+	}
+
+	/** After the death stills: the keeper goes, the fight ends (the sweep takes the corpses) before the next guards spawn. */
+	int32 ReleaseFight()
+	{
+		AEnemyCharacter* Keeper = Runner->Keeper.Get();
+		Runner->Keeper.Reset();
+		if (!Keeper)
+		{
+			return 0;
+		}
+		Keeper->Destroy();
+		return 60;
+	}
+
+	/** Both guards still stand in the world, dead, and the optimized one plays its death clip (the pose check follows). */
+	void CheckDeath()
+	{
+		const AEnemyCharacter* A = EnA();
+		const AEnemyCharacter* B = EnB();
+		const UEnemyAnimInstance* Anim = B ? Cast<UEnemyAnimInstance>(B->GetMesh()->GetAnimInstance()) : nullptr;
+		const bool bClip = Anim && (!Anim->HasDeathAnimation() || Anim->IsAnyMontagePlaying());
+		Check(A && B && A->IsDying() && B->IsDying() && Anim && Anim->bIsDead && bClip,
+			FString::Printf(TEXT("death: both bodies still there (original %d, optimized %d), dying, optimized anim dead %d, death clip %s"),
+				A ? 1 : 0, B ? 1 : 0, Anim && Anim->bIsDead ? 1 : 0,
+				!Anim ? TEXT("-") : !Anim->HasDeathAnimation() ? TEXT("none set") : Anim->IsAnyMontagePlaying() ? TEXT("playing") : TEXT("NOT playing")));
+	}
+
 	void AddEnemySteps(TArray<FStep>& S, int32 /*Unused*/)
 	{
 		S.Add([](UWorld* World) { Runner->Variant = 0; Runner->bSkip = false; return SetUpEnemies(World); });
@@ -1103,13 +1207,16 @@ namespace OptimizedCharacterSmoke
 				const FVector Spot = Runner->Arena.Origin + Runner->Arena.Forward * 1600.f + Runner->Arena.Right * (200.f * Slot++);
 				Each->TeleportTo(SmokeUtils::FreeSpot(World, Spot, Each), (-Runner->Arena.Forward).Rotation(), false, true);
 			}
+			HoldFightOpen(World);
 			for (AEnemyCharacter* Enemy : { EnA(), EnB() })
 			{
 				Enemy->GetHealthComponent()->ApplyDirectHealthLoss(1000000.f, TEXT("OptimizedCharacterSmoke"));
 			}
 			return 90;
 		});
+		S.Add([](UWorld*) { CheckDeath(); return 0; });
 		AddShots(S, TEXT("death"));
+		S.Add([](UWorld*) { return ReleaseFight(); });
 		// the other look variants: an idle still each (steps for up to MaxVariants; missing ones are skipped)
 		for (int32 Variant = 1; Variant < MaxVariants; ++Variant)
 		{
