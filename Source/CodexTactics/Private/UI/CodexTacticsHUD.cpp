@@ -1122,7 +1122,7 @@ void ACodexTacticsHUD::DrawHordeWarning()
 	const FLinearColor Red(1.f, 0.18f, 0.12f, Pulse);
 	const float Distance = FVector::Dist2D(Location, Horde->GetLastSquadCentre()) / 100.f;
 	UFont* Font = GEngine->GetLargeFont();
-	const FString Banner = FString::Printf(TEXT("HORDE!  %d enemies  -  %.0f m"), Count, Distance);
+	const FString Banner = FString::Printf(TEXT("HORDE!  %.0f m"), Distance); // never how many (game designer bug 08, 2026-11-01)
 	float W = 0.f;
 	float H = 0.f;
 	Canvas->StrLen(Font, Banner, W, H);

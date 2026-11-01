@@ -28,6 +28,26 @@
 #include "NavigationSystem.h"
 #include "CollisionQueryParams.h"
 #include "TimerManager.h"
+
+namespace WaveSubsystemInternal
+{
+	/** " (Cutters, Hounds, Spitters, Brutes)" - the kinds in the wave, never their numbers (game designer bug 08, 2026-11-01); "" for none. */
+	FString DescribeWaveKinds(const TMap<EEnemyArchetype, int32>& Spawned)
+	{
+		static const TPair<EEnemyArchetype, const TCHAR*> Kinds[] = {
+			{ EEnemyArchetype::Cutter, TEXT("🐺 Cutters") }, { EEnemyArchetype::FrostHound, TEXT("🐺 Hounds") },
+			{ EEnemyArchetype::Spitter, TEXT("🏹 Spitters") }, { EEnemyArchetype::Brute, TEXT("❄️ Brutes") } };
+		TArray<FString> Parts;
+		for (const TPair<EEnemyArchetype, const TCHAR*>& Kind : Kinds)
+		{
+			if (Spawned.FindRef(Kind.Key) > 0)
+			{
+				Parts.Add(Kind.Value);
+			}
+		}
+		return Parts.IsEmpty() ? FString() : TEXT(" (") + FString::Join(Parts, TEXT(", ")) + TEXT(")");
+	}
+}
 #include "UI/GameMessageSubsystem.h"
 
 void UWaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -190,12 +210,9 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 
 	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		const int32 Cutters = Spawned.FindRef(EEnemyArchetype::Cutter);
-		const FString CutterPart = Cutters > 0 ? FString::Printf(TEXT("🐺 Cutter: %d, "), Cutters) : FString();
-		Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(FString::Printf(
-			TEXT("Wave %d: enemies advancing (Total: %d | %s🐺 Hounds: %d, 🏹 Spitters: %d, ❄️ Brutes: %d)!"),
-			CurrentWaveIndex, GetCurrentWaveSpawnTotal(), *CutterPart, Spawned.FindRef(EEnemyArchetype::FrostHound),
-			Spawned.FindRef(EEnemyArchetype::Spitter), Spawned.FindRef(EEnemyArchetype::Brute))));
+		// Game designer bug 08 (2026-11-01): the player never learns how many enemies come - the kinds only, no numbers.
+		Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(FString::Printf(TEXT("Wave %d: enemies advancing%s!"),
+			CurrentWaveIndex, *WaveSubsystemInternal::DescribeWaveKinds(Spawned))));
 	}
 
 	OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
@@ -279,7 +296,7 @@ void UWaveSubsystem::AdoptLevelEnemies()
 	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Msg->PostMessage(FText::FromString(TEXT("Commander")),
-			FText::FromString(FString::Printf(TEXT("Ambush! Hostiles on the level (total: %d) - eliminate them!"), TotalWaveEnemies)));
+			FText::FromString(TEXT("Ambush! Hostiles on the level - eliminate them!"))); // no total (game designer bug 08, 2026-11-01)
 	}
 }
 
@@ -350,12 +367,9 @@ void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
 
 	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		const int32 Cutters = Counts.FindRef(EEnemyArchetype::Cutter);
-		const FString CutterPart = Cutters > 0 ? FString::Printf(TEXT("🐺 Cutter: %d, "), Cutters) : FString();
-		Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(FString::Printf(
-			TEXT("Wave %d: enemies advancing (Total: %d | %s🐺 Hounds: %d, 🏹 Spitters: %d, ❄️ Brutes: %d)!"),
-			CurrentWaveIndex, Spawned, *CutterPart, Counts.FindRef(EEnemyArchetype::FrostHound),
-			Counts.FindRef(EEnemyArchetype::Spitter), Counts.FindRef(EEnemyArchetype::Brute))));
+		// Game designer bug 08 (2026-11-01): the kinds only, never how many.
+		Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(FString::Printf(TEXT("Wave %d: enemies advancing%s!"),
+			CurrentWaveIndex, *WaveSubsystemInternal::DescribeWaveKinds(Counts))));
 	}
 }
 

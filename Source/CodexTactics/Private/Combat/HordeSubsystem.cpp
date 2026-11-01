@@ -309,7 +309,7 @@ int32 UHordeSubsystem::SpawnHorde(int32 HordeIndex)
 	if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(FString::Printf(
-			TEXT("⚠️ HORDE! %d creatures heading straight for the squad - %.0f m! Take up defensive positions!"), LastHorde.Num(), Distance)));
+			TEXT("⚠️ HORDE! Creatures heading straight for the squad - %.0f m! Take up defensive positions!"), Distance))); // no count (bug 08)
 	}
 	if (AEnemyCharacter* First = LastHorde[0].Get())
 	{

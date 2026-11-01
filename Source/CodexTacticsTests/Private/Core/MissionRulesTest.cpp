@@ -25,7 +25,7 @@ bool FMissionObjectivesTest::RunTest(const FString&)
 	TestEqual(TEXT("Explore text"), Objective.ToString(), FString(TEXT("LINE SECURED: Explore the checkpoint grounds")));
 	TestFalse(TEXT("Exploration before combat keeps the quest objective"), GetPhaseObjective(ECodexGamePhase::Exploration, 0, 0.f, false, Objective));
 	TestFalse(TEXT("Wave objective comes from the wave start"), GetPhaseObjective(ECodexGamePhase::WaveCombat, 1, 0.f, false, Objective));
-	TestEqual(TEXT("Wave text"), GetWaveObjective(1, 12).ToString(), FString(TEXT("DEFENSE: Repel wave 1! Enemies: 12")));
+	TestEqual(TEXT("Wave text: no enemy count (bug 08)"), GetWaveObjective(1).ToString(), FString(TEXT("DEFENSE: Repel wave 1!")));
 	TestEqual(TEXT("Start"), GetStartObjective().ToString(), FString(TEXT("Explore the checkpoint and find a way to open the blast gates")));
 	return true;
 }

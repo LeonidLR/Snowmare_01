@@ -5,6 +5,7 @@
 #include "AI/PerceptionRules.h"
 #include "AI/ScentRules.h"
 #include "Characters/EnemyAIRules.h"
+#include "Characters/MeleeLineRules.h"
 #include "GameFramework/Character.h"
 #include "Data/CombatTypes.h"
 #include "Combat/KnockdownTypes.h"
@@ -364,6 +365,22 @@ public:
 	bool IsJumpAttacking() const { return JumpPhase != ECutterJumpPhase::None; }
 	/** Seconds until the next pounce. */
 	float GetJumpCooldown() const { return JumpCooldownTimer; }
+
+	/**
+	 * Game designer bug 06 (2026-11-01): nothing solid between this enemy (its feet at FromFeet) and Target - a Visibility trace between
+	 * the MeleeLineRules line points (MeleeLineRules::LineHeightCm over each one's feet), other characters and non-solid components (those
+	 * that do not block the Pawn channel: click proxies, triggers) passed through, Target itself ending it clear. OutBlocker names the wall.
+	 */
+	bool HasClearMeleeLine(const AActor* Target, const FVector& FromFeet, FString* OutBlocker = nullptr) const;
+
+	/** Bug 06: the pounce flight arc (MeleeLineRules::LeapArc points) swept with its capsule on the Pawn channel, characters passed through. */
+	bool IsLeapArcClear(const TArray<FVector>& Arc, const AActor* Target, FString* OutBlocker = nullptr) const;
+
+	/** Bug 06 read-outs (smokes): blows held back by a wall in reach, pounces not started / aborted because of a wall. */
+	int32 GetMeleeWallHolds() const { return MeleeWallHolds; }
+	int32 GetLeapWallRefusals() const { return LeapWallRefusals; }
+	/** Pounces launched (the flight began). */
+	int32 GetLeapsLaunched() const { return LeapsLaunched; }
 
 	/**
 	 * It attacks Target (blow, pounce, spit, marksman shot). An operative attacked by an enemy placed in the map while
@@ -937,6 +954,13 @@ protected:
 	bool bJumpDamageDealt = false;
 	bool bAirborneDeath = false;
 	TWeakObjectPtr<AActor> JumpTarget;
+	/** Bug 06 (2026-11-01): the counters behind GetMeleeWallHolds / GetLeapWallRefusals / GetLeapsLaunched, and the last target logged. */
+	int32 MeleeWallHolds = 0;
+	int32 LeapWallRefusals = 0;
+	int32 LeapsLaunched = 0;
+	TWeakObjectPtr<AActor> LoggedMeleeWallTarget;
+	/** The pounce from here at Target's current spot: MeleeLineRules::EvaluateLeap with the line / arc traces (only once range and height pass). */
+	ECutterLeapCheck CheckLeap(const AActor* Target, FString* OutBlocker = nullptr) const;
 	void TickJumpAttack(float DeltaTime);
 	void ApplyJumpImpactDamage();
 	virtual void Landed(const FHitResult& Hit) override;

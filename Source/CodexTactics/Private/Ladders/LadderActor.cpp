@@ -112,10 +112,23 @@ void ALadderActor::OnConstruction(const FTransform& Transform)
 void ALadderActor::BeginPlay()
 {
 	Super::BeginPlay();
-	if (Rungs->GetInstanceCount() == 0)
+	const int32 DrawnRungs = Rungs->GetInstanceCount();
+	if (DrawnRungs != GetRungCount())
 	{
 		Generate(); // a deferred / runtime spawn whose construction ran before its parameters were set
 	}
+	else
+	{
+		// A loaded / PIE-copied ladder (bug 07, 2026-11-01): the construction pass did not run in this world - its derived state again.
+		bHasWall = WallBracketCount > 0 || DetectWall();
+		if (NavLink && NavLink->IsEnabled() != IsClimbable())
+		{
+			UpdateNavLink();
+		}
+	}
+	UE_LOG(LogCodexTactics, Log, TEXT("[Ladder] %s ready in %s: %d rungs (%d drawn at BeginPlay: %s), top %.0f cm, %s, %s, link %s"), *GetName(),
+		*GetNameSafe(GetWorld()), GetRungCount(), DrawnRungs, DrawnRungs != GetRungCount() ? TEXT("rebuilt") : TEXT("kept"), LadderRules::TopZ(GetRungCount(), Pitch),
+		IsClimbable() ? TEXT("climbable") : TEXT("decoration"), bHasWall ? TEXT("wall") : TEXT("free-standing"), NavLink && NavLink->IsEnabled() ? TEXT("on") : TEXT("off"));
 	NavLink->SetMoveReachedLink(this, &ALadderActor::HandleLinkReached);
 	if (ULadderSubsystem* Ladders = GetWorld() ? GetWorld()->GetSubsystem<ULadderSubsystem>() : nullptr)
 	{
@@ -132,9 +145,14 @@ void ALadderActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+int32 ALadderActor::GetRungCount() const
+{
+	return LadderRules::RungCountForHeight(Height, Pitch);
+}
+
 bool ALadderActor::IsClimbable() const
 {
-	return LadderRules::IsClimbable(RungCount, bTopExit, GetContract().MinClimbableRungs);
+	return LadderRules::IsClimbable(GetRungCount(), bTopExit, GetContract().MinClimbableRungs);
 }
 
 LadderRules::FClipContract ALadderActor::GetContract() const
@@ -150,7 +168,7 @@ LadderRules::FClipContract ALadderActor::GetContract() const
 
 float ALadderActor::GetTopWorldZ() const
 {
-	return GetActorLocation().Z + LadderRules::TopZ(RungCount, Pitch);
+	return GetActorLocation().Z + LadderRules::TopZ(GetRungCount(), Pitch);
 }
 
 FVector ALadderActor::GetRungWorldLocation(int32 K) const
@@ -170,12 +188,12 @@ FVector ALadderActor::GetBottomLinkWorld() const
 
 FVector ALadderActor::GetTopLinkWorld() const
 {
-	return FTransform(GetActorRotation(), GetActorLocation()).TransformPosition(LadderRules::TopLinkLocal(GetContract(), RungCount));
+	return FTransform(GetActorRotation(), GetActorLocation()).TransformPosition(LadderRules::TopLinkLocal(GetContract(), GetRungCount()));
 }
 
 FVector ALadderActor::GetTopExitWorld() const
 {
-	return FTransform(GetActorRotation(), GetActorLocation()).TransformPosition(LadderRules::TopExitLocal(GetContract(), RungCount));
+	return FTransform(GetActorRotation(), GetActorLocation()).TransformPosition(LadderRules::TopExitLocal(GetContract(), GetRungCount()));
 }
 
 float ALadderActor::GetClimberYaw() const
@@ -309,6 +327,7 @@ void ALadderActor::ApplyLook(UInstancedStaticMeshComponent* Component, UStaticMe
 bool ALadderActor::DetectWall() const
 {
 	const UWorld* World = GetWorld();
+	const int32 RungCount = GetRungCount();
 	if (!World || RungCount <= 0)
 	{
 		return false;
@@ -330,7 +349,7 @@ bool ALadderActor::DetectWall() const
 void ALadderActor::Generate()
 {
 	using namespace LadderActorInternal;
-	RungCount = LadderRules::RungCountForHeight(Height, Pitch);
+	const int32 RungCount = GetRungCount();
 	const float Top = LadderRules::TopZ(RungCount, Pitch);
 	const FLadderMeshData& Look = ResolveMeshData();
 	UStaticMesh* RailMesh = LoadMesh(Look.RailMesh, CylinderPath);
@@ -430,7 +449,7 @@ void ALadderActor::UpdateNavLink()
 		return;
 	}
 	const LadderRules::FClipContract Contract = GetContract();
-	NavLink->SetLinkData(LadderRules::BottomLinkLocal(Contract), LadderRules::TopLinkLocal(Contract, RungCount), ENavLinkDirection::BothWays);
+	NavLink->SetLinkData(LadderRules::BottomLinkLocal(Contract), LadderRules::TopLinkLocal(Contract, GetRungCount()), ENavLinkDirection::BothWays);
 	// The climbing enemies' filter opens UNavArea_Ladder only: a ladder closed to the enemies gets the squad-only area (7.5).
 	NavLink->SetEnabledArea(bAllowEnemies ? UNavArea_Ladder::StaticClass() : UNavArea_LadderSquadOnly::StaticClass());
 	// A decoration ladder (< 7 rungs / no top exit): the link is off (its disabled area is Null - nothing paths over it).
@@ -441,7 +460,7 @@ void ALadderActor::Validate()
 {
 	TArray<FString> Errors;
 	TArray<FString> Warnings;
-	if (RungCount < GetContract().MinClimbableRungs)
+	if (GetRungCount() < GetContract().MinClimbableRungs)
 	{
 		Warnings.Add(FString::Printf(TEXT("Decoration: < %d rungs, not climbable"), GetContract().MinClimbableRungs));
 	}
@@ -462,7 +481,7 @@ void ALadderActor::Validate()
 		const FVector TopPoint = GetTopLinkWorld();
 		if (!World->LineTraceSingleByChannel(Hit, TopPoint + FVector(0.f, 0.f, 8.f), TopPoint - FVector(0.f, 0.f, 8.f), ECC_Visibility, Params))
 		{
-			Errors.Add(FString::Printf(TEXT("no top floor at %.0f cm (+-8) under the top link point"), LadderRules::TopZ(RungCount, Pitch)));
+			Errors.Add(FString::Printf(TEXT("no top floor at %.0f cm (+-8) under the top link point"), LadderRules::TopZ(GetRungCount(), Pitch)));
 		}
 	}
 	ValidationText = FString::Join(Errors, TEXT("; "));
@@ -478,7 +497,7 @@ void ALadderActor::Validate()
 		const FString Shown = bError ? TEXT("Error: ") + ValidationText : WarningText;
 		ValidationLabel->SetText(FText::FromString(Shown));
 		ValidationLabel->SetTextRenderColor(bError ? FColor(255, 40, 40) : FColor(255, 180, 40));
-		ValidationLabel->SetRelativeLocation(FVector(30.f, 0.f, LadderRules::TopZ(RungCount, Pitch) + 60.f));
+		ValidationLabel->SetRelativeLocation(FVector(30.f, 0.f, LadderRules::TopZ(GetRungCount(), Pitch) + 60.f));
 		ValidationLabel->SetVisibility(!Shown.IsEmpty());
 	}
 #endif

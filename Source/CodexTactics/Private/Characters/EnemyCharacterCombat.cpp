@@ -25,6 +25,130 @@
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/SuppressionSubsystem.h"
+#include "Combat/CombatCheats.h"
+#include "Components/CapsuleComponent.h"
+
+namespace EnemyCombatInternal
+{
+	/** A character's feet (its capsule bottom), anything else its location. */
+	FVector FeetOf(const AActor& Actor)
+	{
+		if (const ACharacter* Character = Cast<ACharacter>(&Actor))
+		{
+			return Character->GetActorLocation() - FVector(0.f, 0.f, Character->GetSimpleCollisionHalfHeight());
+		}
+		return Actor.GetActorLocation();
+	}
+}
+
+bool AEnemyCharacter::HasClearMeleeLine(const AActor* Target, const FVector& FromFeet, FString* OutBlocker) const
+{
+	const UWorld* World = GetWorld();
+	if (!World || !Target)
+	{
+		return true; // a world-less unit test enemy (CodexTactics.Combat.Enemy.*): no walls
+	}
+	const FVector Start = MeleeLineRules::LinePoint(FromFeet);
+	const FVector End = MeleeLineRules::LinePoint(EnemyCombatInternal::FeetOf(*Target));
+	// The Pawn channel: what blocks a body (walls, buildings, towers, hulls); click proxies and triggers ignore it.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(EnemyMeleeLine), false, this);
+	TArray<EMeleeLineHit, TInlineAllocator<8>> Hits;
+	for (int32 Attempt = 0; Attempt < 8; ++Attempt)
+	{
+		FHitResult Hit;
+		if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Params))
+		{
+			break;
+		}
+		const AActor* HitActor = Hit.GetActor();
+		const UPrimitiveComponent* HitComponent = Hit.GetComponent();
+		const EMeleeLineHit Kind = MeleeLineRules::ClassifyHit(HitActor == Target, HitActor && HitActor->IsA<APawn>(),
+			HitComponent && HitComponent->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Block);
+		Hits.Add(Kind);
+		if (Kind == EMeleeLineHit::Target || Kind == EMeleeLineHit::Solid)
+		{
+			if (Kind == EMeleeLineHit::Solid && OutBlocker)
+			{
+				*OutBlocker = GetNameSafe(HitActor);
+			}
+			break;
+		}
+		if (Kind == EMeleeLineHit::Pawn)
+		{
+			Params.AddIgnoredActor(HitActor);
+		}
+		else
+		{
+			Params.AddIgnoredComponent(HitComponent);
+		}
+	}
+	return MeleeLineRules::IsLineClear(Hits);
+}
+
+bool AEnemyCharacter::IsLeapArcClear(const TArray<FVector>& Arc, const AActor* Target, FString* OutBlocker) const
+{
+	const UWorld* World = GetWorld();
+	if (!World || Arc.Num() < 2)
+	{
+		return true;
+	}
+	// Its own capsule (a hair thinner), its bottom lifted off the floor it starts from and lands on.
+	const float Radius = FMath::Max(10.f, GetSimpleCollisionRadius() - 4.f);
+	const float HalfHeight = FMath::Max(Radius, GetSimpleCollisionHalfHeight() - MeleeLineRules::LeapSweepFloorClearanceCm * 0.5f);
+	const FVector Lift(0.f, 0.f, MeleeLineRules::LeapSweepFloorClearanceCm * 0.5f);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(CutterLeapArc), false, this);
+	Params.AddIgnoredActor(Target);
+	for (int32 Index = 1; Index < Arc.Num(); ++Index)
+	{
+		for (int32 Attempt = 0; Attempt < 6; ++Attempt)
+		{
+			FHitResult Hit;
+			if (!World->SweepSingleByChannel(Hit, Arc[Index - 1] + Lift, Arc[Index] + Lift, FQuat::Identity, ECC_Pawn,
+				FCollisionShape::MakeCapsule(Radius, HalfHeight), Params))
+			{
+				break;
+			}
+			const AActor* HitActor = Hit.GetActor();
+			if (HitActor && HitActor->IsA<APawn>())
+			{
+				Params.AddIgnoredActor(HitActor); // bodies do not stop the leap (it lands beside / on them)
+				continue;
+			}
+			if (OutBlocker)
+			{
+				*OutBlocker = GetNameSafe(HitActor);
+			}
+			return false;
+		}
+	}
+	return true;
+}
+
+ECutterLeapCheck AEnemyCharacter::CheckLeap(const AActor* Target, FString* OutBlocker) const
+{
+	if (!Target)
+	{
+		return ECutterLeapCheck::OutOfRange;
+	}
+	const FVector Feet = EnemyCombatInternal::FeetOf(*this);
+	const FVector TargetPosition = GodotPosition(Target);
+	const float Distance = FVector::Dist(Feet, TargetPosition);
+	const float Height = TargetPosition.Z - Feet.Z;
+	const ECutterLeapCheck Cheap = MeleeLineRules::EvaluateLeap(Distance, Height, JumpMinDistance, JumpMaxDistance, true, true);
+	if (Cheap != ECutterLeapCheck::Leap)
+	{
+		return Cheap;
+	}
+	const bool bLine = HasClearMeleeLine(Target, Feet, OutBlocker);
+	bool bArc = true;
+	if (bLine)
+	{
+		const FVector Landing = TargetPosition + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		const float Gravity = GetCharacterMovement() ? -GetCharacterMovement()->GetGravityZ() : 980.f;
+		bArc = IsLeapArcClear(MeleeLineRules::LeapArc(GetActorLocation(), Landing, 1.3f / JumpAttackSpeed, Gravity, JumpMaxDistance), Target, OutBlocker);
+	}
+	return MeleeLineRules::EvaluateLeap(Distance, Height, JumpMinDistance, JumpMaxDistance, bLine, bArc);
+}
 
 void AEnemyCharacter::TryKnockDownOperative(AOperativeCharacter* Operative, float DamageDealt)
 {
@@ -330,8 +454,10 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 		const FVector ToAttacker = (GetActorLocation() - Operative->GetActorLocation()).GetSafeNormal2D();
 		const float FromAngle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct(
 			Operative->GetActorForwardVector().GetSafeNormal2D(), ToAttacker)), -1.f, 1.f)));
-		UE_LOG(LogCodexTactics, Display, TEXT("[Melee] %s hits %s for %.1f%s from the %s (%.0f deg)"), *GetName(), *Operative->DisplayName.ToString(), Dealt,
-			bIsCrit ? TEXT(" (crit)") : TEXT(""), FromAngle < 60.f ? TEXT("front") : (FromAngle <= 120.f ? TEXT("side") : TEXT("back")), FromAngle);
+		// Bug 06 (2026-11-01): the immortality cheat absorbs the health loss after TakeHit computed it - say so (0.0 = a dodge).
+		UE_LOG(LogCodexTactics, Display, TEXT("[Melee] %s hits %s for %.1f%s from the %s (%.0f deg)%s"), *GetName(), *Operative->DisplayName.ToString(), Dealt,
+			bIsCrit ? TEXT(" (crit)") : TEXT(""), FromAngle < 60.f ? TEXT("front") : (FromAngle <= 120.f ? TEXT("side") : TEXT("back")), FromAngle,
+			Dealt > 0.f && CombatCheats::IsImmortalActor(Operative) ? TEXT(" - absorbed by the immortality cheat") : TEXT(""));
 		TryKnockDownOperative(Operative, Dealt); // Sprint 14: Brute heavy melee / hound pounce
 		// Godot enemy_frostbitten.gd _attack_target: the blow shoves the operative 2.5 m/s away (velocity added).
 		FVector Push = Operative->GetActorLocation() - GetActorLocation();
@@ -416,22 +542,30 @@ void AEnemyCharacter::TickJumpAttack(float DeltaTime)
 		{
 			return;
 		}
+		// Bug 06 (2026-11-01): the target moved during the windup - behind a wall now, or the flight would run into one: no leap.
+		if (Target)
+		{
+			FString Blocker;
+			const ECutterLeapCheck Check = CheckLeap(Target, &Blocker);
+			if (Check == ECutterLeapCheck::WallInLine || Check == ECutterLeapCheck::PathBlocked)
+			{
+				++LeapWallRefusals;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Leap] %s aborts its pounce at %s: %s (%s)"), *GetName(), *Target->GetName(),
+					MeleeLineRules::LeapCheckName(Check), *Blocker);
+				JumpPhase = ECutterJumpPhase::None;
+				JumpPhaseTimer = 0.f;
+				JumpCooldownTimer = FMath::Min(JumpCooldown, 1.f); // it may try again once it has the line
+				return;
+			}
+		}
 		// Godot _launch_jump_flight: a ballistic arc landing on the target within 1.3 s / speed, at most JumpMaxDistance.
 		JumpPhase = ECutterJumpPhase::Airborne;
 		JumpPhaseTimer = 0.f;
 		JumpFlightDuration = 1.3f / JumpAttackSpeed;
 		const FVector Start = GetActorLocation();
-		FVector Landing = Target ? GodotPosition(Target) + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight()) : Start + GetActorForwardVector() * 500.f;
-		FVector Horizontal(Landing.X - Start.X, Landing.Y - Start.Y, 0.f);
-		if (Horizontal.Size() > JumpMaxDistance)
-		{
-			Horizontal = Horizontal.GetSafeNormal() * JumpMaxDistance;
-		}
-		const float Gravity = -GetCharacterMovement()->GetGravityZ();
-		const float DeltaZ = Landing.Z - Start.Z;
-		const FVector Velocity = Horizontal / FMath::Max(0.05f, JumpFlightDuration)
-			+ FVector(0.f, 0.f, (DeltaZ + 0.5f * Gravity * JumpFlightDuration * JumpFlightDuration) / FMath::Max(0.05f, JumpFlightDuration));
-		LaunchCharacter(Velocity, true, true);
+		const FVector Landing = Target ? GodotPosition(Target) + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight()) : Start + GetActorForwardVector() * 500.f;
+		++LeapsLaunched;
+		LaunchCharacter(MeleeLineRules::LeapVelocity(Start, Landing, JumpFlightDuration, -GetCharacterMovement()->GetGravityZ(), JumpMaxDistance), true, true);
 		return;
 	}
 	case ECutterJumpPhase::Airborne:
@@ -475,7 +609,9 @@ void AEnemyCharacter::ApplyJumpImpactDamage()
 		for (AOperativeCharacter* Member : Squad->GetMembers())
 		{
 			const FVector Position = GodotPosition(Member);
-			if (!VehicleQueries::IsMounted(Member) && FVector::Dist(Feet, Position) <= JumpDamageRadius && FMath::Abs(Feet.Z - Position.Z) <= 150.f)
+			// Bug 06 (2026-11-01): the landing hurts only those it has a clear line to (never through the wall it ran into).
+			if (!VehicleQueries::IsMounted(Member)
+				&& MeleeLineRules::PounceReaches(FVector::Dist(Feet, Position), Feet.Z - Position.Z, JumpDamageRadius, HasClearMeleeLine(Member, Feet)))
 			{
 				// Sprint 14: the pounce landing knocks him down (dodged: no hit, no fall).
 				if (Member->TakeHit(Damage, EnemyDisplayName, bIsCrit, false, this) > 0.f && Member->KnockdownComponent)

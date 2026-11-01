@@ -99,8 +99,13 @@ public:
 
 	// --- Queries ---
 
+	/**
+	 * Rungs, from the saved parameters (round(Height / Pitch)) - never a value cached by the construction pass: a PIE world is a property
+	 * copy of the editor world (StaticDuplicateObject), which dropped a non-UPROPERTY cache, and the copied rung instances kept BeginPlay
+	 * from rebuilding it - every ladder read 0 rungs (a decoration) in PIE (game designer bug 07, 2026-11-01).
+	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Ladder")
-	int32 GetRungCount() const { return RungCount; }
+	int32 GetRungCount() const;
 
 	/** Climbable (>= 7 rungs, a top exit) - else decoration. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Ladder")
@@ -208,7 +213,7 @@ private:
 	/** The smart link's "reached" callback: hands the climber over to his ULadderClimbComponent. */
 	void HandleLinkReached(UNavLinkCustomComponent* ThisComp, UObject* PathComp, const FVector& DestPoint);
 
-	int32 RungCount = 0;
+	/** Derived by Generate / BeginPlay (DetectWall); not saved. */
 	bool bHasWall = false;
 	FString ValidationText;
 	TWeakObjectPtr<AActor> LeaseHolder;

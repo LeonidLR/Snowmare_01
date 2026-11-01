@@ -13,7 +13,7 @@ class UTextBlock;
  * - pause banner (top centre): "ORDER MODE | Charges per wave: N/3 | Planning time: T s [SPACE to execute]";
  * - combat banner (below it): "BATTLE PREPARATION: NN sec | [SPACE] for the bottom menu" + "Start Battle" during the
  *   preparation before the first wave, "NEXT WAVE IN: NN sec" (no button: the wave comes by itself, game designer 2026-10-25)
- *   during the rest between waves, "WAVE N | ENEMIES LEFT: M" during a wave;
+ *   during the rest between waves, nothing during a fight (no "CONTACT" / "WAVE N | ENEMIES LEFT" banner: game designer bug 08, 2026-11-01);
  * - pre-combat cutscene: letterbox bars, card "[CUTSCENE: BREAKTHROUGH INTO THE QUARANTINE COURTYARD]", countdown; a click skips it.
  * Godot reference: movements_demo.tscn UI/PauseBanner, UI/CombatBanner, UI/CutscenePanel; main.gd _process banner
  * texts, _update_pause_banner_ui, _end_cutscene_and_start_pause.
@@ -35,7 +35,8 @@ public:
 	bool IsStartBattleShown() const;
 	/**
 	 * The combat banner's pause hint in a real-time wave (user decision 2026-10-26: no free first pause - Space is an ordinary pause):
-	 * "[SPACE] tactical pause N/M" with charges left, "pauses recharge: S s" while they come back, else "no pauses left".
+	 * "[SPACE] tactical pause N/M" with charges left, "pauses recharge: S s" while they come back, else "no pauses left". Not shown since
+	 * the fight banner went (game designer bug 08, 2026-11-01); kept for a later HUD element.
 	 */
 	static FString GetPauseHint(int32 Charges, int32 MaxCharges, float CooldownSeconds);
 

@@ -258,7 +258,7 @@ void UMissionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 
 void UMissionSubsystem::HandleWaveStarted(int32 WaveIndex, int32 TotalEnemies)
 {
-	SetObjective(MissionRules::GetWaveObjective(WaveIndex, TotalEnemies));
+	SetObjective(MissionRules::GetWaveObjective(WaveIndex));
 }
 
 void UMissionSubsystem::TriggerMissionFailed(AOperativeCharacter* FallenOperative)

@@ -11,6 +11,10 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## No enemy count on screen (game designer bug 08, 2026-11-01)
+
+The player never sees how many enemies there are or are left, in any fight, on any map: no combat banner during a fight at all (`UPhaseBannersWidget::GetCombatText` is empty in `WaveCombat` - the old "CONTACT | HOSTILES: N" / "WAVE N | ENEMIES LEFT: M" are gone; the preparation / rest countdowns and the order-mode banner stay); the wave notification names the kinds only ("Wave N: enemies advancing (Hounds, Spitters)!"), the ambush notification and the HQ horde line have no number, the HUD's HORDE banner shows the distance only, the wave objective is "DEFENSE: Repel wave N!". Log lines keep the counts. `UPhaseBannersWidget::GetPauseHint` stays (tested) but is no longer shown.
+
 ## Red horde-direction arrows (game designer 2026-10-25)
 
 "We need a visual indicator of the direction from which the horde is moving - the same arrows as the tutorial's, in RED; several hordes = several

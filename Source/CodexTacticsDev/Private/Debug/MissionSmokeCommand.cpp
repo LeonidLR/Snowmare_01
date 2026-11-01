@@ -81,12 +81,12 @@ namespace MissionSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke objective: %s"), *Mission->GetObjective().ToString());
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro(),
 				TEXT("sudden horde start: wave 1 at once, horde intro armed (no cutscene / preparation)"));
-			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("DEFENSE: Repel wave 1! Enemies: ")), TEXT("wave objective at once"));
+			Check(State, Mission->GetObjective().ToString().Equals(TEXT("DEFENSE: Repel wave 1!")), TEXT("wave objective at once"));
 			SmokeUtils::ReleaseHordeIntroPause(Flow);
 			return true;
 		case 1:
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke objective: %s"), *Mission->GetObjective().ToString());
-			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("DEFENSE: Repel wave 1! Enemies: ")), TEXT("wave objective"));
+			Check(State, Mission->GetObjective().ToString().Equals(TEXT("DEFENSE: Repel wave 1!")), TEXT("wave objective"));
 			return true;
 		case 2:
 		{

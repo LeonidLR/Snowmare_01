@@ -74,6 +74,18 @@ the skirmish while the squad walks, a move order in the fight is carried out in 
 the leader climbs the nearest tower. `shot` (rendered) saves `Saved/Screenshots/CombatLab/01_overview_towers.png`, `02_patrol.png`,
 `03_ambush_springs.png`.
 
+`CodexTactics.CutterWallSmoke` (bug 06): the squad (Passive) against the south face of W_E_13, a Cutter in bite reach behind it - no blow (it holds and goes round), 5.7 m behind it - no pounce (refused); 6 m out on the squad's side - it pounces, next to them its blows land.
+`CodexTactics.CombatLabTowerSmoke` (bug 07): the leader (solo) up a tower by a click on its ladder, down by a ground click, up by a double click on the ladder (a sprint), down, up by a double click on the roof - all through `HandleWorldHit`; never a refusal. `CodexTactics.CombatLabTowerSmokePIE` runs it in real PIE (the editor, `-RenderOffscreen`).
+
+## 5a. Play-test fixes 2026-11-01 (branch `fix/cutter-walls-ladder`)
+
+| Bug | Cause | Fix |
+|---|---|---|
+| 06 Cutter hits / pounces through walls | `EnemyAIRules::CanMelee` and the pounce checked the distance only (Godot too); the lab's 40 cm walls left 135 cm between two capsules - inside the 150 cm bite reach | `MeleeLineRules` (enemy-ai-and-perception.md): every enemy blow, the pounce and its landing need a clear line; the pounce's flight arc is swept with its capsule |
+| 06 "for 12.6" while immortal | the log printed the damage `TakeHit` computed; the cheat absorbed it in `UHealthComponent` (no health lost) | the log says "- absorbed by the immortality cheat" |
+| 07 tower ladders refused in PIE (`climb refused (6)` = NotClimbable) | the rung count was a construction-pass cache lost in the PIE copy (the -game smoke loads from disk and rebuilds: it passed) | derived from Height / Pitch (LADDERS.md 3.4); the "ladder text" was the refusal's floating "THIS LADDER CAN'T BE CLIMBED" |
+| 08 the enemy count on screen | the fight banners and notifications printed it | no fight banner at all, no numbers (waves-horde-encounters.md) |
+
 ## 6. Open questions for the designer
 
 1. **The ambusher's hiding spot.** Now: the best concealed spot 14-30 m AHEAD of the squad's current heading (the squad walks past, turns its

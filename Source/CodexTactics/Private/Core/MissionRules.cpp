@@ -95,9 +95,9 @@ FText MissionRules::GetAfterVictoryObjective()
 	return LOCTEXT("Explore", "LINE SECURED: Explore the checkpoint grounds");
 }
 
-FText MissionRules::GetWaveObjective(int32 WaveIndex, int32 EnemyCount)
+FText MissionRules::GetWaveObjective(int32 WaveIndex)
 {
-	return FText::Format(LOCTEXT("Wave", "DEFENSE: Repel wave {0}! Enemies: {1}"), WaveIndex, EnemyCount);
+	return FText::Format(LOCTEXT("Wave", "DEFENSE: Repel wave {0}!"), WaveIndex);
 }
 
 FText MissionRules::GetFailureReason(const FText& OperativeName, float ColdLevel)
