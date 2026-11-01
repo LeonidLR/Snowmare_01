@@ -43,6 +43,7 @@
 #include "Interactables/VaultNavigation.h"
 #include "UI/CodexTacticsHUD.h"
 
+#include "Characters/SquadSubsystem.h"
 #define LOCTEXT_NAMESPACE "CodexTacticsGameMode"
 
 ACodexTacticsGameMode::ACodexTacticsGameMode()
@@ -205,6 +206,11 @@ void ACodexTacticsGameMode::SpawnSquad()
 	// 2026-10-22 b: the squad that left the previous campaign level (UCampaignSubsystem): its progression and kit, the fallen stay behind.
 	const UCampaignSubsystem* Campaign = UCampaignSubsystem::Get(this);
 	const FCampaignSquadCarry* Carry = Campaign ? Campaign->GetCarryFor(World) : nullptr;
+	// The custom formation slots and the menu's choice of the previous level (game designer 2026-11-01, contract 17.1).
+	if (USquadSubsystem* CarrySquad = Carry ? World->GetSubsystem<USquadSubsystem>() : nullptr)
+	{
+		CampaignCarry::ApplySquadState(*CarrySquad, *Carry);
+	}
 	if (TActorIterator<AOperativeCharacter>(World))
 	{
 		// The level places its own squad: the carry goes onto the placed operatives.

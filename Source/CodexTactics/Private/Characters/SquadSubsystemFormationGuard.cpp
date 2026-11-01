@@ -203,6 +203,11 @@ TArray<FVector2D> USquadSubsystem::LeaderPathAhead(const AOperativeCharacter& Le
 
 void USquadSubsystem::StepFormationGuard(const AOperativeCharacter& LeaderRef, bool bLeaderMoving, int32 Count)
 {
+	if (Sectors.Requested == EFormationKind::Custom)
+	{
+		StepFormationCustomGuard(LeaderRef, bLeaderMoving); // contract 17.4: the shape or the trail column, no mirror, no turn fold
+		return;
+	}
 	const FFormationConfig& Config = FormationTuning::Get();
 	const FVector2D LeaderPos(LeaderRef.GetActorLocation());
 	const TArray<FVector2D> Path = LeaderPathAhead(LeaderRef, bLeaderMoving);
@@ -340,6 +345,13 @@ float USquadSubsystem::ClearFormationLook(const AOperativeCharacter& Member, EFo
 	const FFormationConfig& Config = FormationTuning::Get();
 	const FVector2D Velocity(Member.GetVelocity());
 	const FVector2D Here(Member.GetActorLocation());
+	if (Sectors.Formation == EFormationKind::Custom && !bLeader)
+	{
+		// Contract 17.5: the player's fixed look stays his unless it points into a wall within look.wall_dist (then ClearLook, held).
+		const float Custom = FormationCustomRules::Look(Sectors.WorldWalls, Here, Look, static_cast<float>(Member.GetActorRotation().Yaw), Config, Held);
+		FormationGuardRuntime::RememberClearLook(ClearHeld, Who, TOptional<float>(Custom));
+		return Custom;
+	}
 	const TOptional<FFormationLookLimit> Limit = bLeader ? TOptional<FFormationLookLimit>() : FormationGuardRuntime::ShoulderLimit(Sectors.ShoulderLooks, Role, Velocity, Config);
 	const float Cleared = FormationSectorRules::ClearLook(Sectors.WorldWalls, Here, Look, static_cast<float>(Member.GetActorRotation().Yaw), Config, Held,
 		Limit, FormationGuardRuntime::AnticipatedPos(Here, Velocity, Config));
@@ -366,6 +378,15 @@ FString USquadSubsystem::GetFormationHudText() const
 		return FormationGuardRuntime::FormationLabel(Sectors.Formation, Count);
 	}
 	FString Text = FormationGuardRuntime::GuardHudText(Sectors.Requested, Sectors.Formation, Sectors.Guard.Level, Count, Sectors.Guard.Cause);
+	if (Sectors.Requested == EFormationKind::Custom)
+	{
+		// Contract 17.7: "Custom 2", folded "Custom 2 -> Column (wall)".
+		Text = FString::Printf(TEXT("Custom %d"), Sectors.CustomSlot);
+		if (Sectors.Formation != EFormationKind::Custom)
+		{
+			Text += FString::Printf(TEXT(" -> %s (wall)"), *FormationGuardRuntime::FormationLabel(Sectors.Formation, Count));
+		}
+	}
 	if (Sectors.bAllForward)
 	{
 		Text += TEXT(", all forward");

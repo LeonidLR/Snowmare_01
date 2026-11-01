@@ -4,6 +4,13 @@
 
 ## 7. Open user decisions / questions
 
+- **Custom formation (2026-11-01, formation/custom) - picked conservatively, can be flipped** (`docs/design/FORMATION_SECTORS.md` "Custom formation"):
+  (1) no turn fold for a custom shape (as Q2 = a for the manual tight shapes): a very wide custom shape swings round a sharp turn unless a wall cuts it;
+  (2) the 10 m reach round the leader's ghost and a member the shape lacks walking behind its rearmost place; (3) the corner watch (slicing the pie) is off in
+  the custom shape (the looks are the player's); (4) a run (double click) still faces the run; (5) the hold-B menu's choice is now saved (a manual line /
+  echelon also survives a load); (6) the ghosts use the operatives' see-through silhouette material tinted orange (`M_HoloMarker` has no skeletal-mesh usage) -
+  switch to the holo marker look if wanted (one material usage flag).
+
 - **Frozen PMC Fighter (2026-10-20, agents/pmcfighter) - to check:** (1) it plays the Frostbitten's MONSTER clips (hunched idle, clawing attacks) on a human
   soldier, as asked - keep, or give it a human set (one ABP class-default change)? (2) the pack mesh `Cyberpunk_Explorer_A_UE5` has a stray FBX root bone
   `SKM_Cyberpunk_Explorer_A` that its skeleton SK_Mannequin lacks (the editor asks to "save the Skeleton" at every load, no ABP on SK_Mannequin runs on it); the

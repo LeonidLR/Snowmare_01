@@ -336,6 +336,8 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 
 	// Formation radial menu: B held past FormationMenuHoldSeconds opens it, the cursor moves its highlight (real time).
 	TickFormationMenu(static_cast<float>(FApp::GetDeltaTime()));
+	// The custom formation's placement mode: its pause holds, the ghosts' refusal flashes run on real time.
+	TickFormationPlacement(static_cast<float>(FApp::GetDeltaTime()));
 
 	// Sprint 12: RMB / Esc drop the cover preview.
 	if (HasCoverPreview() && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape)))

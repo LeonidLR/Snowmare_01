@@ -15,6 +15,7 @@ namespace FormationNames
 		case EFormationKind::Wall: return TEXT("wall");
 		case EFormationKind::Hedgehog: return TEXT("hedgehog");
 		case EFormationKind::Blizzard: return TEXT("blizzard");
+		case EFormationKind::Custom: return TEXT("custom");
 		default: return TEXT("diamond");
 		}
 	}
@@ -75,7 +76,7 @@ namespace FormationNames
 
 	bool Parse(const FString& Name, EFormationKind& Out)
 	{
-		return ParseFormationEnumName(Name, static_cast<int32>(EFormationKind::Blizzard) + 1, Out);
+		return ParseFormationEnumName(Name, static_cast<int32>(EFormationKind::Custom) + 1, Out);
 	}
 
 	bool Parse(const FString& Name, EFormationRole& Out)

@@ -1,0 +1,6523 @@
+{
+ "schema": "codex.formation_golden/1",
+ "rule": "CustomPlace",
+ "tolerance": {
+  "cm": 0.5,
+  "deg": 0.5
+ },
+ "config": "Content/Data/FormationLab/formation_config.json",
+ "config_values": {
+  "slot.side_offset": 260,
+  "slot.back_offset": 280,
+  "slot.min_spacing": 80,
+  "diamond.rear_back": 560,
+  "pair.side_offset": 180,
+  "pair.back_offset": 220,
+  "pair.scan_period": 5,
+  "pair.scan_from": 90,
+  "pair.scan_to": 270,
+  "triad.rear_back": 420,
+  "column.base_back": 180,
+  "column.spacing": 150,
+  "column.stagger": 60,
+  "column.stagger_clear": 45,
+  "column.side_deg": 70,
+  "column.narrow_width": 600,
+  "column.narrow_fwd_deg": 15,
+  "column.narrow_back_deg": 165,
+  "line.spacing": 260,
+  "line.fan_inner": 5,
+  "line.fan_outer": 25,
+  "echelon.step": 180,
+  "echelon.sector_lead": 10,
+  "echelon.sector_2": 45,
+  "echelon.sector_3": 80,
+  "echelon.sector_4": 150,
+  "blizzard.side_offset": 110,
+  "blizzard.back_offset": 120,
+  "hedgehog.radius": 130,
+  "wall.spacing": 100,
+  "wall.face_offset": 45,
+  "wall.flank_deg": 60,
+  "wall.neighbour_deg": 30,
+  "wall.end_deg": 75,
+  "wall_end.probe_dist": 600,
+  "wall_end.cover_pct": 95,
+  "approach.arrive_dist": 100,
+  "slide.max_off_wall": 200,
+  "slide.lead_out_deg": 20,
+  "pace.patrol": 0.8,
+  "pace.walk_speed": 220,
+  "pace.run_speed": 480,
+  "move.backward_mult": 0.9,
+  "move.catchup_mult": 1.25,
+  "facing.turn_speed": 10,
+  "scan.period": 3,
+  "scan.center_side": 45,
+  "scan.amp_side": 45,
+  "scan.amp_lead": 30,
+  "scan.dwell_exp": 0.45,
+  "halt.side_deg": 60,
+  "rear.share_half": 30,
+  "rear.wall_shift_deg": 30,
+  "coverage.max_sweep": 90,
+  "coverage.max_gap_deg": 60,
+  "look.wall_dist": 260,
+  "look.wall_angle": 55,
+  "look.min_free_deg": 30,
+  "look.hold_deg": 60,
+  "look.hold_margin_deg": 5,
+  "look.narrow_penalty": 180,
+  "look.over_shoulder_max_deg": 110,
+  "look.anticipate_s": 0.5,
+  "classify.probe_side": 400,
+  "classify.probe_ahead": 600,
+  "classify.hold_distance": 500,
+  "classify.at_wall_dist": 150,
+  "classify.arrive_dist": 50,
+  "classify.side_ignore_perp_deg": 30,
+  "guard.clearance": 10,
+  "guard.lookahead": 500,
+  "turn.fold_deg": 25,
+  "turn.lookahead": 800,
+  "bypass.max_detour": 0.3,
+  "bypass.threat_memory_s": 20,
+  "corner.lead_dist": 300,
+  "corner.hold_dist": 200,
+  "corner.peek_dist": 300,
+  "sight.fov": 140
+ },
+ "notes": "in: op (dragLook | canPlace | shapeFrom) + its inputs. dragLook: ghostPos, cursorPos, defaultYaw -> out.yaw (compare as angles). canPlace: ghosts [{squad, pos}], anchorSquad, squad, pos -> out.result (ok | too_far | too_close). shapeFrom: ghosts [{squad, pos, yaw}], anchorSquad -> out.shape {members [{squad, fwd, right, look}]} (RoundShape applied: 0.1 cm / 0.1 deg; look compares as an angle; empty members = no anchor ghost).",
+ "cases": [
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     100
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     108.66,
+     105
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     124.95,
+     56.785
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     150,
+     100
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     150
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     50,
+     100
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     50
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     150.1,
+     100
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     150.1
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     49.9,
+     100
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     49.9
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     400,
+     100
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     312.132,
+     312.132
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 45
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     400
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -112.132,
+     312.132
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -200,
+     100
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -112.132,
+     -112.132
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": -135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     -200
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     312.132,
+     -112.132
+    ],
+    "defaultYaw": 0
+   },
+   "out": {
+    "yaw": -45
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     100
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": -135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     108.66,
+     105
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": -135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     124.95,
+     56.785
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": -135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     150,
+     100
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     150
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     50,
+     100
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     50
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     150.1,
+     100
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     150.1
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     49.9,
+     100
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     49.9
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     400,
+     100
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     312.132,
+     312.132
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 45
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     400
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -112.132,
+     312.132
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -200,
+     100
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -112.132,
+     -112.132
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": -135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     -200
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     312.132,
+     -112.132
+    ],
+    "defaultYaw": -135
+   },
+   "out": {
+    "yaw": -45
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     100
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     108.66,
+     105
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     124.95,
+     56.785
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     150,
+     100
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     150
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     50,
+     100
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     50
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     150.1,
+     100
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     150.1
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     49.9,
+     100
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     49.9
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     400,
+     100
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     312.132,
+     312.132
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 45
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     400
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -112.132,
+     312.132
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -200,
+     100
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     -112.132,
+     -112.132
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": -135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     100,
+     -200
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     100,
+     100
+    ],
+    "cursorPos": [
+     312.132,
+     -112.132
+    ],
+    "defaultYaw": 180
+   },
+   "out": {
+    "yaw": -45
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     -420.5,
+     77.25
+    ],
+    "cursorPos": [
+     -120.5,
+     77.25
+    ],
+    "defaultYaw": 37.5
+   },
+   "out": {
+    "yaw": 0
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     -420.5,
+     77.25
+    ],
+    "cursorPos": [
+     -208.368,
+     289.382
+    ],
+    "defaultYaw": 37.5
+   },
+   "out": {
+    "yaw": 45
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     -420.5,
+     77.25
+    ],
+    "cursorPos": [
+     -420.5,
+     377.25
+    ],
+    "defaultYaw": 37.5
+   },
+   "out": {
+    "yaw": 90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     -420.5,
+     77.25
+    ],
+    "cursorPos": [
+     -632.632,
+     289.382
+    ],
+    "defaultYaw": 37.5
+   },
+   "out": {
+    "yaw": 135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     -420.5,
+     77.25
+    ],
+    "cursorPos": [
+     -720.5,
+     77.25
+    ],
+    "defaultYaw": 37.5
+   },
+   "out": {
+    "yaw": 180
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     -420.5,
+     77.25
+    ],
+    "cursorPos": [
+     -632.632,
+     -134.882
+    ],
+    "defaultYaw": 37.5
+   },
+   "out": {
+    "yaw": -135
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     -420.5,
+     77.25
+    ],
+    "cursorPos": [
+     -420.5,
+     -222.75
+    ],
+    "defaultYaw": 37.5
+   },
+   "out": {
+    "yaw": -90
+   }
+  },
+  {
+   "in": {
+    "op": "dragLook",
+    "ghostPos": [
+     -420.5,
+     77.25
+    ],
+    "cursorPos": [
+     -208.368,
+     -134.882
+    ],
+    "defaultYaw": 37.5
+   },
+   "out": {
+    "yaw": -45
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "none",
+    "ghosts": [],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "anchor",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "three",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "four",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 2,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_close"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "far_one",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ]
+     },
+     {
+      "squad": 1,
+      "pos": [
+       900,
+       0
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     300
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     -250,
+     340
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     10,
+     10
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 1,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     79.9,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 2,
+    "pos": [
+     80.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 3,
+    "pos": [
+     -450,
+     20
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     0,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     600,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 0,
+    "pos": [
+     1500,
+     0
+    ]
+   },
+   "out": {
+    "result": "too_far"
+   }
+  },
+  {
+   "in": {
+    "op": "canPlace",
+    "set": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ]
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ]
+     }
+    ],
+    "anchorSquad": 0,
+    "squad": 4,
+    "pos": [
+     1000.1,
+     0
+    ]
+   },
+   "out": {
+    "result": "ok"
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "anchor_only",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       100,
+       100
+      ],
+      "yaw": 30
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "sample_world",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -250,
+       300
+      ],
+      "yaw": 60
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -250,
+       -300
+      ],
+      "yaw": -60
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -450,
+       0
+      ],
+      "yaw": 180
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -250,
+       "right": 300,
+       "look": 60
+      },
+      {
+       "squad": 2,
+       "fwd": -250,
+       "right": -300,
+       "look": -60
+      },
+      {
+       "squad": 3,
+       "fwd": -450,
+       "right": 0,
+       "look": 180
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "sample_rotated",
+    "ghosts": [
+     {
+      "squad": 3,
+      "pos": [
+       1000,
+       2000
+      ],
+      "yaw": 90
+     },
+     {
+      "squad": 0,
+      "pos": [
+       2000,
+       500
+      ],
+      "yaw": 90
+     },
+     {
+      "squad": 1,
+      "pos": [
+       1800,
+       500
+      ],
+      "yaw": 90
+     },
+     {
+      "squad": 2,
+      "pos": [
+       2000,
+       700
+      ],
+      "yaw": 0
+     }
+    ],
+    "anchorSquad": 3
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 3,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -1500,
+       "right": -1000,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -1500,
+       "right": -800,
+       "look": 0
+      },
+      {
+       "squad": 2,
+       "fwd": -1300,
+       "right": -1000,
+       "look": -90
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "scrambled_order",
+    "ghosts": [
+     {
+      "squad": 2,
+      "pos": [
+       -100,
+       50
+      ],
+      "yaw": 10
+     },
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -200,
+       -30
+      ],
+      "yaw": -170
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -50,
+       120
+      ],
+      "yaw": 95
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -50,
+       "right": 120,
+       "look": 95
+      },
+      {
+       "squad": 2,
+       "fwd": -100,
+       "right": 50,
+       "look": 10
+      },
+      {
+       "squad": 3,
+       "fwd": -200,
+       "right": -30,
+       "look": -170
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "anchor_squad_2",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       130.25,
+       -88.5
+      ],
+      "yaw": 12
+     },
+     {
+      "squad": 2,
+      "pos": [
+       500,
+       500
+      ],
+      "yaw": 45
+     },
+     {
+      "squad": 3,
+      "pos": [
+       420,
+       600.75
+      ],
+      "yaw": 45
+     }
+    ],
+    "anchorSquad": 2
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 2,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -677.6,
+       "right": -154.7,
+       "look": -33
+      },
+      {
+       "squad": 3,
+       "fwd": 14.7,
+       "right": 127.8,
+       "look": 0
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "five_ghosts_cut",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -100,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -200,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -300,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 4,
+      "pos": [
+       -400,
+       0
+      ],
+      "yaw": 0
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -100,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 2,
+       "fwd": -200,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 3,
+       "fwd": -300,
+       "right": 0,
+       "look": 0
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "five_ghosts_anchor_4",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       -400,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -100,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -200,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -300,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 4,
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     }
+    ],
+    "anchorSquad": 4
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 4,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -400,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -100,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 2,
+       "fwd": -200,
+       "right": 0,
+       "look": 0
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "look_wrap",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 170
+     },
+     {
+      "squad": 1,
+      "pos": [
+       0,
+       100
+      ],
+      "yaw": -170
+     },
+     {
+      "squad": 2,
+      "pos": [
+       0,
+       -100
+      ],
+      "yaw": 170
+     },
+     {
+      "squad": 3,
+      "pos": [
+       50,
+       50
+      ],
+      "yaw": 10
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": 17.4,
+       "right": -98.5,
+       "look": 20
+      },
+      {
+       "squad": 2,
+       "fwd": -17.4,
+       "right": 98.5,
+       "look": 0
+      },
+      {
+       "squad": 3,
+       "fwd": -40.6,
+       "right": -57.9,
+       "look": -160
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "look_180",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": -10
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -100,
+       0
+      ],
+      "yaw": 170
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -100,
+       50
+      ],
+      "yaw": 170.04
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -100,
+       -50
+      ],
+      "yaw": 169.96
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -98.5,
+       "right": -17.4,
+       "look": 180
+      },
+      {
+       "squad": 2,
+       "fwd": -107.2,
+       "right": 31.9,
+       "look": 180
+      },
+      {
+       "squad": 3,
+       "fwd": -89.8,
+       "right": -66.6,
+       "look": 180
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "rounding_half_away",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 1,
+      "pos": [
+       0.05,
+       -0.05
+      ],
+      "yaw": 0.05
+     },
+     {
+      "squad": 2,
+      "pos": [
+       0.15,
+       -0.15
+      ],
+      "yaw": -0.15
+     },
+     {
+      "squad": 3,
+      "pos": [
+       123.456,
+       -123.456
+      ],
+      "yaw": 10.04
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": 0.1,
+       "right": -0.1,
+       "look": 0
+      },
+      {
+       "squad": 2,
+       "fwd": 0.2,
+       "right": -0.2,
+       "look": -0.10000000000002274
+      },
+      {
+       "squad": 3,
+       "fwd": 123.5,
+       "right": -123.5,
+       "look": 10
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "no_anchor",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0
+     },
+     {
+      "squad": 2,
+      "pos": [
+       100,
+       0
+      ],
+      "yaw": 0
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": []
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "empty",
+    "ghosts": [],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": []
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_0",
+    "ghosts": [
+     {
+      "squad": 2,
+      "pos": [
+       -122.2,
+       -814.7
+      ],
+      "yaw": 92.2
+     },
+     {
+      "squad": 0,
+      "pos": [
+       -26.3,
+       -1004.6
+      ],
+      "yaw": 175
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -132.1,
+       515.6
+      ],
+      "yaw": -218.5
+     },
+     {
+      "squad": 3,
+      "pos": [
+       156.2,
+       -1498.4
+      ],
+      "yaw": 299.5
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -1029.1,
+       "right": 1123.9,
+       "look": 33.5
+      },
+      {
+       "squad": 2,
+       "fwd": -835.9,
+       "right": 1034.9,
+       "look": -49.30000000000001
+      },
+      {
+       "squad": 3,
+       "fwd": -1479.4,
+       "right": 1396.7,
+       "look": 158
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_1",
+    "ghosts": [
+     {
+      "squad": 3,
+      "pos": [
+       1308.9,
+       224.3
+      ],
+      "yaw": 236.4
+     },
+     {
+      "squad": 0,
+      "pos": [
+       1233.2,
+       134.3
+      ],
+      "yaw": -55.3
+     },
+     {
+      "squad": 1,
+      "pos": [
+       -412.9,
+       1133.5
+      ],
+      "yaw": -304.1
+     },
+     {
+      "squad": 2,
+      "pos": [
+       755.6,
+       737.6
+      ],
+      "yaw": 16.6
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -1758.6,
+       "right": -784.5,
+       "look": 111.20000000000005
+      },
+      {
+       "squad": 2,
+       "fwd": -767.9,
+       "right": -49.2,
+       "look": 71.89999999999998
+      },
+      {
+       "squad": 3,
+       "fwd": -30.9,
+       "right": 113.5,
+       "look": -68.30000000000001
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_2",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       -320.8,
+       982.1
+      ],
+      "yaw": -252.8
+     },
+     {
+      "squad": 1,
+      "pos": [
+       81.3,
+       27.5
+      ],
+      "yaw": -283.5
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": 834.4,
+       "right": 613.8,
+       "look": 30.700000000000045
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_3",
+    "ghosts": [
+     {
+      "squad": 2,
+      "pos": [
+       -220.1,
+       1179.1
+      ],
+      "yaw": 73.5
+     },
+     {
+      "squad": 0,
+      "pos": [
+       -228.2,
+       -1261
+      ],
+      "yaw": 99.1
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 2,
+       "fwd": 2408.1,
+       "right": -393.9,
+       "look": -25.600000000000023
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_4",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       684.9,
+       -303.4
+      ],
+      "yaw": 351.3
+     },
+     {
+      "squad": 0,
+      "pos": [
+       -179.2,
+       -1325.9
+      ],
+      "yaw": -107.2
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -809.2,
+       940.1
+      ],
+      "yaw": 255.7
+     },
+     {
+      "squad": 3,
+      "pos": [
+       923.5,
+       1340.4
+      ],
+      "yaw": 358
+     }
+    ],
+    "anchorSquad": 2
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 2,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": 2040.2,
+       "right": 1170.2,
+       "look": -2.8999999999999773
+      },
+      {
+       "squad": 1,
+       "fwd": 835.9,
+       "right": 1754.9,
+       "look": 95.60000000000002
+      },
+      {
+       "squad": 3,
+       "fwd": -815.9,
+       "right": 1580.1,
+       "look": 102.29999999999995
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_5",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -813.9,
+       -155.2
+      ],
+      "yaw": 123.2
+     },
+     {
+      "squad": 2,
+      "pos": [
+       484.3,
+       1087.6
+      ],
+      "yaw": -231.6
+     },
+     {
+      "squad": 3,
+      "pos": [
+       1187.4,
+       -559.9
+      ],
+      "yaw": 68.2
+     },
+     {
+      "squad": 0,
+      "pos": [
+       -619.7,
+       431.5
+      ],
+      "yaw": 9.2
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": 384.6,
+       "right": -483.8,
+       "look": -114
+      },
+      {
+       "squad": 2,
+       "fwd": 329.1,
+       "right": -1766.8,
+       "look": 5.2000000000000455
+      },
+      {
+       "squad": 3,
+       "fwd": -1434.5,
+       "right": -1453,
+       "look": -55
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_6",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -485.5,
+       424.4
+      ],
+      "yaw": 308.4
+     },
+     {
+      "squad": 2,
+      "pos": [
+       1209.7,
+       -1271.3
+      ],
+      "yaw": 306.1
+     },
+     {
+      "squad": 0,
+      "pos": [
+       -1220.8,
+       1425.8
+      ],
+      "yaw": 107.6
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -1241.5,
+       "right": 45.8,
+       "look": 159.20000000000005
+      },
+      {
+       "squad": 2,
+       "fwd": 2381.9,
+       "right": 275.2,
+       "look": -2.2999999999999545
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_7",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       1357.9,
+       322.1
+      ],
+      "yaw": -182.6
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -614.9,
+       878.6
+      ],
+      "yaw": 5.5
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 2,
+       "fwd": 1996,
+       "right": -466.4,
+       "look": -171.89999999999998
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_8",
+    "ghosts": [
+     {
+      "squad": 3,
+      "pos": [
+       -726.9,
+       1130.1
+      ],
+      "yaw": -192.3
+     },
+     {
+      "squad": 1,
+      "pos": [
+       760.7,
+       1065.5
+      ],
+      "yaw": 87.6
+     },
+     {
+      "squad": 0,
+      "pos": [
+       -1005.2,
+       -193.1
+      ],
+      "yaw": -205.2
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -1061.9,
+       "right": -1890.7,
+       "look": -67.19999999999999
+      },
+      {
+       "squad": 3,
+       "fwd": 311.6,
+       "right": -1315.8,
+       "look": 12.899999999999977
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_9",
+    "ghosts": [
+     {
+      "squad": 2,
+      "pos": [
+       -584.1,
+       685.5
+      ],
+      "yaw": -132.4
+     },
+     {
+      "squad": 0,
+      "pos": [
+       848,
+       1371.9
+      ],
+      "yaw": 159.8
+     },
+     {
+      "squad": 1,
+      "pos": [
+       37.2,
+       -1332
+      ],
+      "yaw": 186.4
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -1159.2,
+       -1248.4
+      ],
+      "yaw": -278.8
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -172.7,
+       "right": 2817.6,
+       "look": 26.600000000000023
+      },
+      {
+       "squad": 2,
+       "fwd": 1107,
+       "right": 1138.7,
+       "look": 67.79999999999995
+      },
+      {
+       "squad": 3,
+       "fwd": 979,
+       "right": 3152.2,
+       "look": -78.60000000000002
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_10",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       -867.6,
+       1443.7
+      ],
+      "yaw": -255.9
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -572,
+       307.1
+      ],
+      "yaw": 292
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -628,
+       282.6
+      ],
+      "yaw": 136.7
+     }
+    ],
+    "anchorSquad": 2
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 2,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -1164.6,
+       "right": 151.7,
+       "look": 172.10000000000002
+      },
+      {
+       "squad": 3,
+       "fwd": 1.7,
+       "right": -61.1,
+       "look": -155.3
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_11",
+    "ghosts": [
+     {
+      "squad": 2,
+      "pos": [
+       1453.2,
+       1287
+      ],
+      "yaw": 160
+     },
+     {
+      "squad": 1,
+      "pos": [
+       457,
+       1120.4
+      ],
+      "yaw": -161.8
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -633.8,
+       -191.4
+      ],
+      "yaw": -175.5
+     },
+     {
+      "squad": 0,
+      "pos": [
+       549.6,
+       -1055.2
+      ],
+      "yaw": 206.2
+     }
+    ],
+    "anchorSquad": 3
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 3,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -1112,
+       "right": 954,
+       "look": 21.700000000000045
+      },
+      {
+       "squad": 1,
+       "fwd": -1190.4,
+       "right": -1222.2,
+       "look": 13.700000000000045
+      },
+      {
+       "squad": 2,
+       "fwd": -2196.6,
+       "right": -1310.1,
+       "look": -24.5
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_12",
+    "ghosts": [
+     {
+      "squad": 3,
+      "pos": [
+       -657.7,
+       301.5
+      ],
+      "yaw": 136.2
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -92.7,
+       -174.7
+      ],
+      "yaw": -165.8
+     }
+    ],
+    "anchorSquad": 2
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 2,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 3,
+       "fwd": 430.9,
+       "right": -600.2,
+       "look": -58
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_13",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       1098.8,
+       -1144.2
+      ],
+      "yaw": -216.8
+     },
+     {
+      "squad": 3,
+      "pos": [
+       1429.9,
+       -672.7
+      ],
+      "yaw": -333.6
+     },
+     {
+      "squad": 0,
+      "pos": [
+       -738.2,
+       660.1
+      ],
+      "yaw": 258.6
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": 2551.8,
+       "right": -344.4,
+       "look": 115.39999999999998
+      },
+      {
+       "squad": 3,
+       "fwd": 17.3,
+       "right": -575.9,
+       "look": -116.80000000000001
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_14",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       35.1,
+       857.1
+      ],
+      "yaw": -148.8
+     },
+     {
+      "squad": 0,
+      "pos": [
+       -1407.7,
+       -1126.5
+      ],
+      "yaw": -76.5
+     },
+     {
+      "squad": 3,
+      "pos": [
+       693.7,
+       -963.9
+      ],
+      "yaw": 146.2
+     },
+     {
+      "squad": 2,
+      "pos": [
+       812.5,
+       -1303.2
+      ],
+      "yaw": -1.8
+     }
+    ],
+    "anchorSquad": 0
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 0,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -1592,
+       "right": 1866,
+       "look": -72.30000000000001
+      },
+      {
+       "squad": 2,
+       "fwd": 690.1,
+       "right": 2117.6,
+       "look": 74.70000000000005
+      },
+      {
+       "squad": 3,
+       "fwd": 332.5,
+       "right": 2081.3,
+       "look": -137.3
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_15",
+    "ghosts": [
+     {
+      "squad": 3,
+      "pos": [
+       857.4,
+       -290.2
+      ],
+      "yaw": 260.1
+     },
+     {
+      "squad": 0,
+      "pos": [
+       334.5,
+       -275
+      ],
+      "yaw": 264
+     },
+     {
+      "squad": 2,
+      "pos": [
+       1176.3,
+       779.4
+      ],
+      "yaw": 192
+     },
+     {
+      "squad": 1,
+      "pos": [
+       1330.8,
+       787.8
+      ],
+      "yaw": 134.1
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -69.9,
+       "right": 1455.1,
+       "look": 129.89999999999998
+      },
+      {
+       "squad": 2,
+       "fwd": 101.5,
+       "right": 116.8,
+       "look": 57.89999999999998
+      },
+      {
+       "squad": 3,
+       "fwd": -444.7,
+       "right": 1090.2,
+       "look": 126
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_16",
+    "ghosts": [
+     {
+      "squad": 2,
+      "pos": [
+       1493.6,
+       -381
+      ],
+      "yaw": 216.5
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -978.7,
+       -1284.2
+      ],
+      "yaw": 76.1
+     },
+     {
+      "squad": 1,
+      "pos": [
+       1043.7,
+       492.1
+      ],
+      "yaw": -221.1
+     }
+    ],
+    "anchorSquad": 2
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 2,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -157.7,
+       "right": -969.5,
+       "look": -77.60000000000002
+      },
+      {
+       "squad": 3,
+       "fwd": 2524.6,
+       "right": -744.5,
+       "look": -140.39999999999998
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_17",
+    "ghosts": [
+     {
+      "squad": 2,
+      "pos": [
+       -191.6,
+       297.7
+      ],
+      "yaw": -258.2
+     },
+     {
+      "squad": 1,
+      "pos": [
+       818.3,
+       131.6
+      ],
+      "yaw": -211.8
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -1137.3,
+       472.1
+      ],
+      "yaw": -34.4
+     }
+    ],
+    "anchorSquad": 3
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 3,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": 1806,
+       "right": 823.9,
+       "look": -177.39999999999998
+      },
+      {
+       "squad": 2,
+       "fwd": 878.8,
+       "right": 390.4,
+       "look": 136.20000000000005
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_18",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       926.2,
+       -551.8
+      ],
+      "yaw": -209.7
+     },
+     {
+      "squad": 3,
+      "pos": [
+       1362,
+       849.4
+      ],
+      "yaw": 167.2
+     }
+    ],
+    "anchorSquad": 3
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 3,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": 114.5,
+       "right": 1462.9,
+       "look": -16.899999999999977
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_19",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       763.3,
+       1361.5
+      ],
+      "yaw": -155.3
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -232.1,
+       480.6
+      ],
+      "yaw": -237.8
+     },
+     {
+      "squad": 0,
+      "pos": [
+       163.4,
+       1262
+      ],
+      "yaw": 25.4
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": 586.6,
+       "right": -160.3,
+       "look": -179.3
+      },
+      {
+       "squad": 3,
+       "fwd": 1272.4,
+       "right": 384.4,
+       "look": -82.5
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_20",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -889.8,
+       -479.6
+      ],
+      "yaw": -231.7
+     },
+     {
+      "squad": 2,
+      "pos": [
+       71.4,
+       -818.1
+      ],
+      "yaw": 299.1
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -1269.5,
+       1064.6
+      ],
+      "yaw": -139
+     }
+    ],
+    "anchorSquad": 2
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 2,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 1,
+       "fwd": -763.2,
+       "right": -675.2,
+       "look": -170.8
+      },
+      {
+       "squad": 3,
+       "fwd": -2297.2,
+       "right": -256,
+       "look": -78.10000000000002
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_21",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -444.9,
+       1058.9
+      ],
+      "yaw": -25.3
+     },
+     {
+      "squad": 2,
+      "pos": [
+       -356.2,
+       -313.5
+      ],
+      "yaw": -318.7
+     },
+     {
+      "squad": 0,
+      "pos": [
+       602.8,
+       -1018.1
+      ],
+      "yaw": 212.6
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": 1834.8,
+       "right": -1430,
+       "look": -122.10000000000002
+      },
+      {
+       "squad": 2,
+       "fwd": 666.7,
+       "right": -1202.9,
+       "look": 66.60000000000002
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_22",
+    "ghosts": [
+     {
+      "squad": 1,
+      "pos": [
+       -386.3,
+       804.8
+      ],
+      "yaw": 49.5
+     },
+     {
+      "squad": 0,
+      "pos": [
+       515.8,
+       -739.1
+      ],
+      "yaw": -159.8
+     }
+    ],
+    "anchorSquad": 1
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 1,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -588.1,
+       "right": -1688.6,
+       "look": 150.70000000000005
+      }
+     ]
+    }
+   }
+  },
+  {
+   "in": {
+    "op": "shapeFrom",
+    "name": "random_23",
+    "ghosts": [
+     {
+      "squad": 0,
+      "pos": [
+       149.5,
+       947
+      ],
+      "yaw": 73.2
+     },
+     {
+      "squad": 2,
+      "pos": [
+       1052.7,
+       604.7
+      ],
+      "yaw": -184.2
+     },
+     {
+      "squad": 3,
+      "pos": [
+       -1334.2,
+       -731.8
+      ],
+      "yaw": -68.2
+     }
+    ],
+    "anchorSquad": 3
+   },
+   "out": {
+    "shape": {
+     "members": [
+      {
+       "squad": 3,
+       "fwd": 0,
+       "right": 0,
+       "look": 0
+      },
+      {
+       "squad": 0,
+       "fwd": -1007.7,
+       "right": 2001,
+       "look": 141.39999999999998
+      },
+      {
+       "squad": 2,
+       "fwd": -354.5,
+       "right": 2712.5,
+       "look": -116
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

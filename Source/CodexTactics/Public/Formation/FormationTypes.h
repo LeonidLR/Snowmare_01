@@ -47,7 +47,12 @@ enum class EFormationKind : uint8
 	/** Ring round a point (heat source), backs to the centre, facing out [hedgehog]. */
 	Hedgehog,
 	/** Tight diamond in a blizzard [blizzard]. */
-	Blizzard
+	Blizzard,
+	/**
+	 * The player's own shape (game designer 2026-11-01, contract 17) [custom]: slots and fixed looks from a stored FFormationCustomShape
+	 * (FormationCustomRules::CustomSlots); FormationShapeRules::Slots / FormationGuardRules::BlockedRoles give none for it.
+	 */
+	Custom
 };
 
 /** What the squad is doing (contract: walk | run | halt | wall). */

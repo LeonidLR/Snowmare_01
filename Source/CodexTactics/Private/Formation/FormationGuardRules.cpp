@@ -69,7 +69,7 @@ namespace FormationGuardRules
 		float LeaderYaw, const FFormationConfig& Config)
 	{
 		TArray<EFormationRole> Result;
-		if (Formation == EFormationKind::Wall)
+		if (Formation == EFormationKind::Wall || Formation == EFormationKind::Custom)
 		{
 			return Result;
 		}

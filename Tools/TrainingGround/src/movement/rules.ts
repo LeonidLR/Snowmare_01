@@ -91,7 +91,8 @@ function localSlot(formation: Formation, role: Role, n: number, c: FormationConf
       return [-2 * r, 0];
     }
     case 'wall':
-      return [0, 0]; // not used: Slots('wall') returns [] (FormationWallRules.Layout owns the wall)
+    case 'custom':
+      return [0, 0]; // not used: Slots('wall') / Slots('custom') return [] (FormationWallRules.Layout owns the wall, FormationCustomRules the custom shape)
   }
 }
 
@@ -110,7 +111,7 @@ function echelonIndex(formation: Formation, role: Role, n: number): number {
  * With 3 members 'diamond' is the wedge; with 2 the partner Z stands behind the right shoulder.
  */
 function Slots(formation: Formation, memberCount: number, leaderPos: Vec2, leaderYaw: number, config: FormationConfig): Slot[] {
-  if (formation === 'wall') return [];
+  if (formation === 'wall' || formation === 'custom') return [];
   return rolesFor(memberCount).map((role) => ({
     role,
     pos: localToWorld(leaderPos, leaderYaw, localSlot(formation, role, memberCount, config)),
@@ -241,6 +242,8 @@ function relativeLook(role: Role, formation: Formation, mode: Mode, n: number, t
       if (n === 2) return 180;
       if (n === 3) return role === 'P' ? 120 : -120;
       return role === 'P' ? 90 : role === 'L' ? -90 : 180;
+    case 'custom':
+      return 0; // not used: the custom shape's looks are the player's (FormationCustomRules.Look)
   }
 }
 
@@ -811,7 +814,8 @@ function ChainPairs(formation: Formation, memberCount: number): [Role, Role][] {
     case 'diamond':
     case 'wedge':
     case 'blizzard': return memberCount >= 4 ? [['P', 'Z'], ['L', 'Z']] : [['P', 'Z']];
-    case 'wall': return [];
+    case 'wall':
+    case 'custom': return [];
   }
 }
 
@@ -821,7 +825,7 @@ function ChainPairs(formation: Formation, memberCount: number): [Role, Role][] {
  */
 function BlockedRoles(walls: readonly Segment[], formation: Formation, memberCount: number, leaderPos: Vec2, leaderYaw: number,
   config: FormationConfig): Role[] {
-  if (formation === 'wall') return [];
+  if (formation === 'wall' || formation === 'custom') return [];
   const r = cfg(config, 'guard.clearance');
   const slots = Slots(formation, memberCount, leaderPos, leaderYaw, config);
   const at = (role: Role) => slots.find((s) => s.role === role)!.pos;

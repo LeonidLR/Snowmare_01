@@ -321,7 +321,7 @@ namespace FormationRuntime
 	bool UsesCoverAllocator(EFormationKind Formation, EFormationMode Mode, int32 MemberCount)
 	{
 		return MemberCount >= 3 && (Mode == EFormationMode::Walk || Mode == EFormationMode::Halt) && Formation != EFormationKind::Wall
-			&& Formation != EFormationKind::Hedgehog;
+			&& Formation != EFormationKind::Hedgehog && Formation != EFormationKind::Custom; // the custom shape's looks are the player's
 	}
 
 	float NewLeaderLookYaw(const FNewLeaderLookInputs& In)

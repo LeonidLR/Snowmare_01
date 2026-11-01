@@ -234,6 +234,7 @@ namespace FormationGuardRuntime
 		case EFormationKind::Wall: return TEXT("Wall");
 		case EFormationKind::Hedgehog: return TEXT("Hedgehog");
 		case EFormationKind::Blizzard: return TEXT("Blizzard diamond");
+		case EFormationKind::Custom: return TEXT("Custom");
 		default: return TEXT("Diamond");
 		}
 	}

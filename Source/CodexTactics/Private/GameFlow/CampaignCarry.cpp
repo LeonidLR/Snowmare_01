@@ -1,4 +1,6 @@
 #include "GameFlow/CampaignCarry.h"
+#include "Characters/SquadSubsystem.h"
+#include "Formation/FormationMenuRules.h"
 
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
@@ -132,4 +134,25 @@ bool CampaignCarry::ShouldSpawn(const FCampaignSquadCarry& Carry, EOperativeRole
 {
 	const FCarriedOperative* Carried = Carry.IsSet() ? FindFor(Carry, Role, SquadIndex) : nullptr;
 	return !Carried || !Carried->bKilledInAction;
+}
+
+void CampaignCarry::CaptureSquadState(const USquadSubsystem& Squad, FCampaignSquadCarry& Carry)
+{
+	Carry.FormationCustomSlots = Squad.ExportFormationCustomSlots();
+	const TOptional<EFormationMenuItem> Choice = Squad.GetFormationMenuChoice();
+	Carry.FormationMenuChoice = Choice.IsSet() ? FormationMenuRules::ToString(Choice.GetValue()) : TEXT("auto");
+}
+
+void CampaignCarry::ApplySquadState(USquadSubsystem& Squad, const FCampaignSquadCarry& Carry)
+{
+	if (Carry.FormationCustomSlots.IsEmpty())
+	{
+		return;
+	}
+	Squad.ImportFormationCustomSlots(Carry.FormationCustomSlots);
+	TOptional<EFormationMenuItem> Choice;
+	if (FormationMenuRules::ParseChoice(Carry.FormationMenuChoice, Choice))
+	{
+		Squad.SetFormationMenuChoice(Choice);
+	}
 }

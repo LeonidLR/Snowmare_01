@@ -5,8 +5,9 @@
 import type { FormationConfig } from './config.ts';
 import type { Vec2 } from './geometry.ts';
 import { dirOf, round } from './geometry.ts';
+import { CUSTOM_SAMPLE_SHAPE } from './custom.ts';
 import type { MenuChoice } from './menu.ts';
-import { FormationSectorRules, FormationShapeRules } from './rules.ts';
+import { FormationSectorRules, FormationShapeRules, rolesFor } from './rules.ts';
 import type { Role } from './rules.ts';
 
 interface IconMember { role: Role; pos: Vec2; rel: number }
@@ -22,6 +23,10 @@ function iconMembers(id: MenuChoice, c: FormationConfig): IconMember[] {
       return FormationShapeRules.Slots('diamond', 4, [0, 0], 0, c).map((s) => ({ role: s.role, pos: s.pos, rel: look(s.role, 'diamond', 'forward') }));
     case 'auto':
       return [];
+    case 'custom_1':
+    case 'custom_2':
+    case 'custom_3': // 16.7: the discs have no fixed shape; the icon shows the bot's sample shape
+      return CUSTOM_SAMPLE_SHAPE.members.map((m, i) => ({ role: rolesFor(CUSTOM_SAMPLE_SHAPE.members.length)[i], pos: [m.fwd, m.right] as Vec2, rel: m.look }));
     default: {
       const f = id === 'diamond' ? 'diamond' : id;
       // Diamond / blizzard: the patrol scan centres (P 45 / L -45), not the halt ones - the icon shows the walking sectors.

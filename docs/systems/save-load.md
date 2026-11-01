@@ -75,6 +75,7 @@ cannot exist in a save because saves are refused in combat), **GAP** (open; list
 | leader, Solo / trap Solo (followers holding), squad posture, Commander Mode | SAVED | `is_leader`, `game_state.is_solo_mode / is_trap_solo / squad_posture / autonomous_combat` |
 | hand-over counts (tutorial share lesson) | SAVED | `squad_transfer.handed_over` |
 | Susanin: recruited, rescue happened, his own record while waiting | SAVED | `susanin.*` (+ `killed_in_action` inside his record) |
+| the three custom formation slots + the hold-B menu's formation choice (2026-11-01; a manual pick now survives a load too) | SAVED | `game_state.formation_custom` (`[shape \| null] x 3`, contract 17.1), `game_state.formation_menu_choice` (`auto` / item id); missing = the level's own (the carry's) |
 | provoked flags, formation slots, selection group, pause plans, deferred shots | DERIVED | per fight / rebuilt |
 | defense markers (`UDefenseMarkerSubsystem`) | DERIVED | drawn every tick from the restored defense directives |
 
@@ -134,6 +135,8 @@ cannot exist in a save because saves are refused in combat), **GAP** (open; list
 `UCampaignSubsystem` (GameInstance) carries the squad from a level left through the gate exit to the next campaign level (`CampaignCarry::Capture / Apply`,
 the same per-operative fields as `SaveOperative`: level, EXP, unspent points, max health / luck / accuracy / fortitude, item counts by their save keys, bonus
 items, ammo per weapon, extra ammo, the weapon in hands; full health on arrival, no cold / frostbite / orders / cover; the killed in action stay behind).
+The squad-level state goes with it (2026-11-01): the three custom formation slots and the formation menu's choice (`FCampaignSquadCarry::FormationCustomSlots` /
+`FormationMenuChoice`, `CampaignCarry::CaptureSquadState / ApplySquadState`; an older carry without them changes nothing).
 It is applied in `ACodexTacticsGameMode::SpawnSquad` on the arrival map only, kept until NEW GAME or the next transition (a restart of the arrival level
 brings the squad back as it arrived) and is NOT written into save files: a save made on the arrival level holds the operatives' values itself, and a load
 applies them over the spawned squad as before. Details: [demo01-lake](demo01-lake.md) block 2026-10-22 d.

@@ -102,6 +102,13 @@ void UFormationMenuWidget::HideMenu()
 	SetVisibility(ESlateVisibility::Collapsed);
 }
 
+void UFormationMenuWidget::SetCustomView(const TStaticArray<bool, 3>& Filled, bool bShow, int32 EditingSlot)
+{
+	CustomFilled = Filled;
+	bShowCustom = bShow;
+	CustomEditingSlot = EditingSlot;
+}
+
 void UFormationMenuWidget::SetMenuView(const TOptional<EFormationMenuItem>& InHighlighted, const TOptional<EFormationMenuItem>& Current, int32 InMemberCount)
 {
 	Highlighted = InHighlighted;
@@ -158,7 +165,9 @@ FVector2D UFormationMenuWidget::GetHalfExtent() const
 {
 	using namespace FormationMenuWidgetLocal;
 	const float Disc = RingRadius + ItemRadius * HighlightGrow + LabelGap;
-	return FVector2D(Disc + LabelRoom, Disc + RowRoom);
+	// The custom row below the ring (contract 17.7) and the hint under it.
+	const float Below = bShowCustom ? FormationMenuRules::CustomRowY + FormationMenuRules::CustomRowRadius * HighlightGrow + 3.f * LabelGap + 40.f : Disc + RowRoom;
+	return FVector2D(Disc + LabelRoom, FMath::Max(Disc + RowRoom, Below));
 }
 
 int32 UFormationMenuWidget::GetLoadedIconCount() const
@@ -228,7 +237,7 @@ int32 UFormationMenuWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 		const TArray<FVector2D> Border = { Centre + Dir * (CentreRadius + 8.f), Centre + Dir * (Backdrop - 6.f) };
 		FSlateDrawElement::MakeLines(OutDrawElements, Layer, Geo.ToPaintGeometry(), Border, ESlateDrawEffect::None, FLinearColor(0.75f, 0.88f, 1.f, 0.1f), true, 1.f);
 	}
-	if (Highlighted.IsSet())
+	if (Highlighted.IsSet() && !FormationMenuRules::IsCustom(Highlighted.GetValue()))
 	{
 		const float Mid = FormationMenuRules::SectorDeg * static_cast<float>(static_cast<int32>(Highlighted.GetValue()));
 		const bool bEnabled = FormationMenuRules::IsEnabled(Highlighted.GetValue(), MemberCount);
@@ -277,17 +286,51 @@ int32 UFormationMenuWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 	}
 	Layer += 3;
 
+	// The custom row below the ring (game designer 2026-11-01, contract 17.7): Custom 1 / 2 / 3, an empty one "(empty)" (its release opens the
+	// placement mode), a filled one picks it (Ctrl: edit); the slot being placed says "Confirm".
+	if (bShowCustom)
+	{
+		const FSlateFontInfo DigitFont = FCoreStyle::GetDefaultFontStyle("Bold", LabelFontSize + 9);
+		const FSlateFontInfo SubFont = FCoreStyle::GetDefaultFontStyle("Regular", LabelFontSize - 2);
+		for (int32 CustomIndex = 1; CustomIndex <= FormationMenuRules::CustomSlotCount; ++CustomIndex)
+		{
+			const EFormationMenuItem Item = FormationMenuRules::CustomItem(CustomIndex);
+			const FVector2D At = Centre + FVector2D((CustomIndex - 2) * FormationMenuRules::CustomRowSpacing, FormationMenuRules::CustomRowY);
+			const bool bHigh = Highlighted.IsSet() && Highlighted.GetValue() == Item;
+			const bool bEnabled = FormationMenuRules::IsEnabled(Item, MemberCount);
+			const bool bCurrent = CurrentChoice.IsSet() && CurrentChoice.GetValue() == Item;
+			const bool bFilled = CustomFilled[CustomIndex - 1];
+			const float Radius = FormationMenuRules::CustomRowRadius * (bHigh ? HighlightGrow : 1.f);
+			const FLinearColor Fill = !bEnabled ? FLinearColor(0.1f, 0.1f, 0.11f, 0.8f) : (bHigh ? HighlightColor : (bFilled ? DiscColor : FLinearColor(0.06f, 0.08f, 0.1f, 0.8f)));
+			const FLinearColor Outline = bCurrent ? CurrentColor : (bHigh ? FLinearColor(1.f, 1.f, 1.f, 0.9f) : FLinearColor(1.f, 0.6f, 0.2f, bFilled ? 0.6f : 0.3f));
+			DrawDisc(OutDrawElements, Layer, Geo, At, Radius, Fill, Outline, bCurrent ? 3.f : 2.f);
+			const FText Digit = FText::AsNumber(CustomIndex);
+			const FVector2D DigitSize = Measure(Digit, DigitFont);
+			FSlateDrawElement::MakeText(OutDrawElements, Layer + 1, Geo.ToPaintGeometry(DigitSize, FSlateLayoutTransform(At - DigitSize * 0.5)), Digit, DigitFont,
+				ESlateDrawEffect::None, !bEnabled ? DisabledColor : (bHigh ? DarkIcon : (bFilled ? IconColor : DisabledColor)));
+			const FText Text = CustomEditingSlot == CustomIndex ? FText::Format(LOCTEXT("CustomConfirm", "{0}: confirm"), FormationMenuInput::Label(Item, MemberCount))
+				: bFilled ? FormationMenuInput::Label(Item, MemberCount) : FText::Format(LOCTEXT("CustomEmpty", "{0} (empty)"), FormationMenuInput::Label(Item, MemberCount));
+			const FVector2D Size = Measure(Text, SubFont);
+			DrawLabel(OutDrawElements, Layer + 2, Geo, At + FVector2D(-0.5 * Size.X, Radius + LabelGap * 0.5), Size, Text, SubFont,
+				!bEnabled ? DisabledColor : (bHigh ? HighlightColor : (bCurrent ? CurrentColor : LabelColor)), PillColor);
+		}
+		Layer += 3;
+	}
+
 	// Title above, the hint below (the refusal while a greyed item is under the cursor).
 	{
 		const float Row = RingRadius + ItemRadius * HighlightGrow + LabelGap + 30.f;
+		const float HintRow = bShowCustom ? FormationMenuRules::CustomRowY + FormationMenuRules::CustomRowRadius * HighlightGrow + 3.f * LabelGap + 14.f : Row + 4.f;
 		const FText Title = LOCTEXT("Title", "FORMATION");
 		const FVector2D TitleSize = Measure(Title, TitleFont);
 		DrawLabel(OutDrawElements, Layer, Geo, Centre - FVector2D(0.5 * TitleSize.X, Row + TitleSize.Y), TitleSize, Title, TitleFont, LabelColor, PillColor);
 		const bool bRefused = Highlighted.IsSet() && !FormationMenuRules::IsEnabled(Highlighted.GetValue(), MemberCount);
+		const bool bCustomHigh = Highlighted.IsSet() && FormationMenuRules::IsCustom(Highlighted.GetValue());
 		const FText Hint = bRefused ? LOCTEXT("HintRefused", "Needs at least 2 operatives")
+			: bCustomHigh ? LOCTEXT("HintCustom", "Release B: use it (empty: place it)   |   hold Ctrl: edit it   |   Esc / RMB: cancel")
 			: LOCTEXT("Hint", "Release B to choose   |   Esc / RMB: cancel   |   centre = Auto");
 		const FVector2D HintSize = Measure(Hint, HintFont);
-		DrawLabel(OutDrawElements, Layer, Geo, Centre + FVector2D(-0.5 * HintSize.X, Row + 4.f), HintSize, Hint, HintFont,
+		DrawLabel(OutDrawElements, Layer, Geo, Centre + FVector2D(-0.5 * HintSize.X, HintRow), HintSize, Hint, HintFont,
 			bRefused ? FLinearColor(1.f, 0.45f, 0.35f, 1.f) : FLinearColor(0.8f, 0.86f, 0.92f, 1.f), PillColor);
 	}
 	return Layer + 3;

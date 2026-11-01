@@ -21,6 +21,12 @@
 
 void ACodexTacticsPlayerController::SpacePressed()
 {
+	// The custom formation's placement mode (2026-11-01): Space confirms it (never the tactical pause meanwhile).
+	if (IsFormationPlacementActive())
+	{
+		ConfirmFormationPlacement();
+		return;
+	}
 	// Godot: any key skips the pre-combat cutscene.
 	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->GetPhase() == ECodexGamePhase::Cutscene)
 	{

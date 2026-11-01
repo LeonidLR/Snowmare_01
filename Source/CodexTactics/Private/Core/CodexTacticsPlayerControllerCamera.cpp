@@ -133,6 +133,11 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 	{
 		return;
 	}
+	// The custom formation's placement mode: RMB cancels it (the slot unchanged, time resumes).
+	if (CancelFormationPlacement())
+	{
+		return;
+	}
 	// Minimap (2026-10-18): RMB on the map = a move order there (the normal ground-click path), never a camera drag.
 	if (FVector2D MapMouse; GetMousePosition(MapMouse.X, MapMouse.Y) && HandleMapClick(MapMouse, true))
 	{

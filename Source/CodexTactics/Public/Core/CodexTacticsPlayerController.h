@@ -12,6 +12,7 @@
 #include "Tactics/CoverTypes.h"
 #include "Tactics/CoverWrapRules.h"
 #include "UI/FormationMenuInputRules.h"
+#include "UI/FormationPlacementRules.h"
 #include "CodexTacticsPlayerController.generated.h"
 
 class UInputAction;
@@ -403,8 +404,64 @@ public:
 	void SetFormationMenuCursorOffset(const TOptional<FVector2D>& Offset) { FormationMenuCursorOffset = Offset; }
 	/** What the last release / cancel did (smokes). */
 	EFormationMenuEffect GetLastFormationMenuEffect() const { return LastFormationMenuEffect; }
+	/** Smokes: the menu release acts as if Ctrl were held (edit a filled custom slot). */
+	void SetSimulatedFormationMenuEdit(bool bEdit) { bSimulatedFormationMenuEdit = bEdit; }
 	/** The menu widget (null until the menu first opened). */
 	UFormationMenuWidget* GetFormationMenuWidget() const { return FormationMenuWidget; }
+
+	// --- The custom formation's placement mode (game designer decisions 2026-11-01; CodexTacticsPlayerControllerFormationCustom.cpp) ---
+
+	/** One ghost of the placement mode for the HUD (its look arrow). */
+	struct FFormationPlacementGhostView
+	{
+		FVector Feet = FVector::ZeroVector;
+		float Yaw = 0.f;
+		bool bSelected = false;
+		bool bAnchor = false;
+	};
+	/** What the HUD draws while the placement mode runs: the ghosts' look arrows, the drag in progress, the banner. */
+	struct FFormationPlacementView
+	{
+		int32 Slot = 0;
+		TArray<FFormationPlacementGhostView> Ghosts;
+		/** LMB is down on a spot: the spot and the look the release would set. */
+		TOptional<FVector> PressFeet;
+		float PressLook = 0.f;
+		FText SelectedName;
+	};
+
+	/**
+	 * Starts the placement mode for custom slot Slot (1..3): the world stops (a dedicated placement pause - not the tactical pause, no
+	 * charges), every member gets a holographic ghost (the slot's shape when it is filled, else where he stands), the HUD shows the banner and
+	 * the look arrows. False (with an HQ line) when unavailable: Codex.Formation.Sectors 0, solo / < 2 members, turn-based, a dialogue.
+	 */
+	bool BeginFormationPlacement(int32 Slot);
+	/** Space / the same Custom in the menu: stores the shape in its slot, picks it (FormationMenuRules choice), time resumes, the squad walks into it. */
+	bool ConfirmFormationPlacement();
+	/** Esc / RMB: ends the mode, the slot and the previous choice unchanged, time resumes; true when it was active. */
+	bool CancelFormationPlacement();
+	bool IsFormationPlacementActive() const { return FormationPlacement.IsActive(); }
+	const FFormationPlacement& GetFormationPlacement() const { return FormationPlacement; }
+	/**
+	 * The placement mode's LMB down on Hit (the cursor's hit; the smokes build it): an operative (or within GhostPickRadius of a ghost's feet)
+	 * is selected; else the ground point is the selected operative's spot (the drag starts). True when the mode took the click.
+	 */
+	bool HandleFormationPlacementPress(const FHitResult& Hit);
+	/** The placement mode's LMB up with the cursor over Ground: the drag's look, the ghost placed (or refused). True when the mode took it. */
+	bool HandleFormationPlacementRelease(const FVector& Ground);
+	/** The HUD's view of the placement mode; false when it is not active. */
+	bool GetFormationPlacementView(FFormationPlacementView& Out) const;
+	/** The last placement input's result (smokes). */
+	EFormationPlacementResult GetLastFormationPlacementResult() const { return LastFormationPlacementResult; }
+	/** The ghost of the member with this SquadIndex (null when none / the mode is off). */
+	class AFormationGhostActor* GetFormationGhost(int32 Squad) const;
+
+	/** A click within this of a ghost's feet selects his operative (cm). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "20"))
+	float GhostPickRadius = 60.f;
+	/** The placement pause's world time dilation (the engine's minimum stops the world in practice). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "0.0001"))
+	float FormationPlacementTimeDilation = 0.0001f;
 
 protected:
 	virtual void BeginPlay() override;
@@ -649,8 +706,28 @@ private:
 	FFormationMenuState FormationMenuState;
 	TOptional<FVector2D> FormationMenuCursorOffset;
 	EFormationMenuEffect LastFormationMenuEffect = EFormationMenuEffect::None;
+	bool bSimulatedFormationMenuEdit = false;
 	UPROPERTY(Transient)
 	TObjectPtr<UFormationMenuWidget> FormationMenuWidget;
+
+	/** The custom formation's placement mode (CodexTacticsPlayerControllerFormationCustom.cpp). */
+	void TickFormationPlacement(float RealDeltaSeconds);
+	/** Shows / moves / highlights one ghost per member from FormationPlacement. */
+	void SyncFormationGhosts();
+	/** The ground under the cursor (the visibility hit, else the cursor ray on the plane at PlaneZ). */
+	bool FormationPlacementGround(FVector& OutGround, float PlaneZ) const;
+	/** Ends the mode (ghosts hidden, the world clock back to the game flow's). */
+	void EndFormationPlacement();
+	FFormationPlacement FormationPlacement;
+	EFormationPlacementResult LastFormationPlacementResult = EFormationPlacementResult::None;
+	/** The ground Z of each ghost (the rules work in 2D), by SquadIndex. */
+	TMap<int32, float> FormationGhostZ;
+	/** The ground Z of the spot LMB went down on (the drag in progress). */
+	float FormationPressZ = 0.f;
+	/** The operative of each SquadIndex in the mode. */
+	TMap<int32, TWeakObjectPtr<class AOperativeCharacter>> FormationPlacementMembers;
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<class AFormationGhostActor>> FormationGhosts;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class AHoldSphereActor> HoldSphere;

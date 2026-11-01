@@ -205,6 +205,11 @@ void ACodexTacticsPlayerController::DialogueSkip()
 	{
 		return;
 	}
+	// The custom formation's placement mode: Esc cancels it (the slot unchanged, time resumes).
+	if (CancelFormationPlacement())
+	{
+		return;
+	}
 	ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(GetHUD());
 	// Pause menu screens first (they are open while the world is paused).
 	if (Hud && Hud->IsPauseMenuOpen())
