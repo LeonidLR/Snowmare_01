@@ -1,7 +1,11 @@
 // Dev-only headless check of the sudden horde start (user decisions / feedback 2026-10-11, UHordeIntroSubsystem) on
-// L_MovementTest with its level waves (wave 1: hounds + frostbitten; wave 2 adds cutters + marksmen; wave 3: hounds,
+// L_MovementTest with its own pinned waves (wave 1: hounds + frostbitten; wave 2 adds cutters + marksmen; wave 3: hounds,
 // cutters, marksmen); the squad waits 30 m from the spawn points so the horde has a run-up:
-//   Scripts/smoke.ps1 -Command CodexTactics.HordeIntroSmoke
+//   Scripts/smoke_parallel.ps1 -Commands HordeIntroSmoke
+//   Scripts/smoke.ps1 -Command CodexTactics.HordeIntroSmoke -Extra "-LevelJson=SmokeFixtures/horde_intro_smoke.json"
+// The waves come from the fixture Content/Data/LevelJson/SmokeFixtures/horde_intro_smoke.json (Scripts/test_map.json smokeOptions),
+// not from level_01_outpost.json: that file is the user's level, tuned in the Wave Editor (2026-11-01: the user's working copy had
+// wave 1 = hounds only and wave 3 with frostbitten, so the shot lists below no longer applied). Stage 0 checks the data fits.
 // User decisions 2026-10-26: (a) the warning never opens the tactical pause - only the player's Space does; (b) only the fight's FIRST
 // wave is warned - later waves come silently (only the HUD's incoming arrows); (c) "the first pause of a wave being free: NO" - the
 // wave's first Space is an ordinary pause (a charge, the timer, the order radius), the combat banner shows the charges.
@@ -152,6 +156,35 @@ namespace HordeIntroSmoke
 		return Types;
 	}
 
+	/** Unique archetypes a level wave writes, in spawn-entry order. */
+	TArray<EEnemyArchetype> WaveTypes(const FWaveDefinition& Wave)
+	{
+		TArray<EEnemyArchetype> Types;
+		for (const FEnemySpawnEntry& Entry : Wave.Spawns)
+		{
+			Types.AddUnique(Entry.EnemyType);
+		}
+		return Types;
+	}
+
+	/**
+	 * The level waves this smoke's shot lists assume (the fixture SmokeFixtures/horde_intro_smoke.json): wave 1 hounds + frostbitten
+	 * (a wide shot + one shot per type), wave 3 cutters + marksmen (the types new to the level) and no frostbitten.
+	 */
+	bool LevelFitsSmoke(const FLevelCombatConfig& Level, FString& OutWhy)
+	{
+		if (Level.Waves.Num() < 3)
+		{
+			OutWhy = FString::Printf(TEXT("%d waves, 3 needed"), Level.Waves.Num());
+			return false;
+		}
+		const TArray<EEnemyArchetype> One = WaveTypes(Level.Waves[0]);
+		const TArray<EEnemyArchetype> Three = WaveTypes(Level.Waves[2]);
+		OutWhy = FString::Printf(TEXT("wave 1 %d types, wave 3 %d types"), One.Num(), Three.Num());
+		return One.Contains(EEnemyArchetype::FrostHound) && One.Contains(EEnemyArchetype::Frostbitten)
+			&& Three.Contains(EEnemyArchetype::Cutter) && Three.Contains(EEnemyArchetype::Marksman) && !Three.Contains(EEnemyArchetype::Frostbitten);
+	}
+
 	FVector EnemyFeet(const AEnemyCharacter* Enemy)
 	{
 		return Enemy->GetActorLocation() - FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight());
@@ -240,7 +273,18 @@ namespace HordeIntroSmoke
 				&& FVector::Dist2D(Camera.GetFocus(), Enemy->GetActorLocation()) < 150.f,
 				FString::Printf(TEXT("%s: camera tracks %s close at %.1f m"), *Label, Enemy ? *Enemy->GetName() : TEXT("-"),
 					Camera.GetCurrentDistance() / 100.f));
-			Check(State, Speed > 50.f, FString::Printf(TEXT("%s: the tracked one moves (%.0f cm/s)"), *Label, Speed));
+			// The representative is a runner when its type has any (HordeIntroRules::PickRunningRepresentative); marksmen that already
+			// fire from their spots (in range at the spawn) have none - then the nearest one stands, which is the rule's own fallback.
+			int32 TypeMoving = 0;
+			if (UWorld* ShotWorld = Enemy ? Enemy->GetWorld() : nullptr)
+			{
+				for (TActorIterator<AEnemyCharacter> It(ShotWorld); It; ++It)
+				{
+					TypeMoving += It->GetArchetype() == Shot.Archetype && !It->IsDying() && It->GetVelocity().Size2D() > 50.f ? 1 : 0;
+				}
+			}
+			Check(State, Speed > 50.f || TypeMoving == 0, FString::Printf(TEXT("%s: the tracked one moves (%.0f cm/s; %d of the type move)"),
+				*Label, Speed, TypeMoving));
 			if (Enemy)
 			{
 				const FHordeFrameView View = CameraView(Camera);
@@ -391,6 +435,10 @@ namespace HordeIntroSmoke
 			Check(State, Intro->GetStage() == EHordeIntroStage::Waiting && !Camera->IsCinematicLocked(), TEXT("intro waits, camera free"));
 			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+			FString FitWhy = TEXT("no level config");
+			const bool bLevelFits = Level && LevelFitsSmoke(Level->Config, FitWhy); // before the message reads FitWhy
+			Check(State, bLevelFits, FString::Printf(TEXT("the level waves fit this smoke (%s): wave 1 hounds + "
+				"frostbitten, wave 3 cutters + marksmen without frostbitten - run with -LevelJson=SmokeFixtures/horde_intro_smoke.json"), *FitWhy));
 			// Environment phase 2b: the written wave under the weather / time-of-day roster (resolved at the wave start).
 			const int32 Written = Level && Level->Config.Waves.Num() > 0 ? Level->Config.Waves[0].GetTotalEnemyCount() : -1;
 			const int32 Expected = Waves->GetCurrentWaveSpawns().Num() > 0 ? Waves->GetCurrentWaveSpawnTotal() : Written;

@@ -250,4 +250,44 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelJsonHordeIntroFixtureTest, "CodexTactics.LevelJson.HordeIntroSmokeFixture",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FLevelJsonHordeIntroFixtureTest::RunTest(const FString&)
+{
+	// HordeIntroSmoke runs on its own pinned waves (Scripts/test_map.json -LevelJson=SmokeFixtures/horde_intro_smoke.json), not on
+	// level_01_outpost.json, which the user tunes in the Wave Editor (2026-11-01: wave 1 = hounds only in his working copy broke the
+	// smoke's shot lists). The fixture keeps what the smoke's checks assume.
+	FLevelCombatConfig Fixture;
+	FString Error;
+	if (!TestTrue(FString::Printf(TEXT("The fixture parses (%s)"), *Error),
+		LevelJsonRules::LoadLevel(TEXT("SmokeFixtures/horde_intro_smoke.json"), Fixture, Error)))
+	{
+		return false;
+	}
+	if (!TestTrue(TEXT("Three waves"), Fixture.Waves.Num() >= 3))
+	{
+		return false;
+	}
+	auto Types = [](const FWaveDefinition& Wave)
+	{
+		TArray<EEnemyArchetype> Out;
+		for (const FEnemySpawnEntry& Entry : Wave.Spawns)
+		{
+			Out.AddUnique(Entry.EnemyType);
+		}
+		return Out;
+	};
+	const TArray<EEnemyArchetype> One = Types(Fixture.Waves[0]);
+	const TArray<EEnemyArchetype> Two = Types(Fixture.Waves[1]);
+	const TArray<EEnemyArchetype> Three = Types(Fixture.Waves[2]);
+	TestTrue(TEXT("Wave 1: hounds first, then frostbitten (the wide shot + one shot per type in spawn order)"), One.Num() == 2
+		&& One[0] == EEnemyArchetype::FrostHound && One[1] == EEnemyArchetype::Frostbitten);
+	TestTrue(TEXT("Wave 2 adds cutters + marksmen (it comes silently)"), Two.Contains(EEnemyArchetype::Cutter) && Two.Contains(EEnemyArchetype::Marksman));
+	TestTrue(TEXT("Wave 3: hounds, cutters, marksmen - no frostbitten"), Three.Contains(EEnemyArchetype::FrostHound)
+		&& Three.Contains(EEnemyArchetype::Cutter) && Three.Contains(EEnemyArchetype::Marksman) && !Three.Contains(EEnemyArchetype::Frostbitten));
+	TestTrue(TEXT("Wave 1 is a horde (>= 10 enemies) for the running-mass trigger"), Fixture.Waves[0].GetTotalEnemyCount() >= 10);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
