@@ -26,10 +26,17 @@ struct FVisionConeTraceContext
 	FVector Feet = FVector::ZeroVector;
 	float Yaw = 0.f;
 	float RangeCm = 0.f;
-	float HighCm = 0.f;
-	float LowCm = 0.f;
 	int32 MaxLowObstacles = 0;
 	float DepthProbeCm = 0.f;
+	/**
+	 * Elevated observer (bug 09, 2026-11-01): the block he stands on (a tower, a roof) when ground lies well below it (ProbePerch),
+	 * else null - the flat model, nothing changes for him.
+	 */
+	UPrimitiveComponent* Perch = nullptr;
+	/** Z of the perch's walking surface under his feet. */
+	float PerchSurfaceZ = 0.f;
+	/** Params with the perch ignored: the low trace runs below its roof, from its edge on (the perch is its own obstacle). */
+	FCollisionQueryParams PerchParams;
 	mutable int32 Traces = 0;
 
 	/** A world direction in the cone frame (planar). */
@@ -107,14 +114,115 @@ namespace VisionConeConsole
 		return true;
 	}
 
-	/** Traces one ray of a cone (any thread): the sight lines' top, then the lower obstacles' front face, top and back face. */
-	void SampleRay(const FVisionConeTraceContext& Context, float AngleDeg, FVisionConeRay& Ray)
+	/** How far below a perch's roof its ground is searched, cm. */
+	constexpr float PerchMaxDropCm = 5000.f;
+
+	/**
+	 * Elevated observer (bug 09; any thread): what he stands on, and whether ground lies at least ElevatedMinDropCm below it right under
+	 * him (that block ignored) - then Context.Perch is set and every ray finds the perch's edge and the ground past it (SamplePerch).
+	 * Two traces per cone; a ground-level observer (a floor, a landscape: nothing under it) keeps the flat model.
+	 */
+	void ProbePerch(FVisionConeTraceContext& Context)
+	{
+		const FVector Feet = Context.Feet;
+		FHitResult Hit;
+		++Context.Traces;
+		if (!Context.World->LineTraceSingleByChannel(Hit, Feet + FVector(0.f, 0.f, 40.f), Feet - FVector(0.f, 0.f, 60.f), ECC_Visibility, Context.Params)
+			|| Hit.bStartPenetrating || !Hit.GetComponent())
+		{
+			return;
+		}
+		UPrimitiveComponent* Under = Hit.GetComponent();
+		const float SurfaceZ = static_cast<float>(Hit.ImpactPoint.Z);
+		FCollisionQueryParams Below(Context.Params);
+		Below.AddIgnoredComponent(Under);
+		FHitResult Ground;
+		++Context.Traces;
+		if (!Context.World->LineTraceSingleByChannel(Ground, FVector(Feet.X, Feet.Y, SurfaceZ - 1.f), FVector(Feet.X, Feet.Y, SurfaceZ - PerchMaxDropCm),
+				ECC_Visibility, Below)
+			|| SurfaceZ - Ground.ImpactPoint.Z < VisionConeVisibility::ElevatedMinDropCm)
+		{
+			return;
+		}
+		Context.Perch = Under;
+		Context.PerchSurfaceZ = SurfaceZ;
+		Context.PerchParams = MoveTemp(Below);
+	}
+
+	/**
+	 * One ray from a perch (any thread): its edge along the ray (traced back towards the feet just below the roof), the ground past the
+	 * edge (the lower of two columns 40 / 120 cm out - a ladder or a wall's foot right at the edge never reads as the ground), and the
+	 * rim's top (a parapet, else the roof). Elevated (the ground at least ElevatedMinDropCm below): Ray.GroundCm and the perch obstacle
+	 * (0 .. edge, hides what stands under it) are set and the edge distance returned; else 0 - the ray keeps the flat model.
+	 */
+	float SamplePerch(const FVisionConeSightSpec& Spec, const FVisionConeTraceContext& Context, const FVector& Dir, FVisionConeRay& Ray)
+	{
+		const FVector Under(Context.Feet.X, Context.Feet.Y, Context.PerchSurfaceZ - 5.f);
+		FHitResult Probe;
+		++Context.Traces;
+		if (!Context.Perch->LineTraceComponent(Probe, Under + Dir * Context.RangeCm, Under, Context.ComponentParams) || Probe.bStartPenetrating)
+		{
+			return 0.f;
+		}
+		const float EdgeCm = Context.RangeCm - static_cast<float>(Probe.Distance);
+		if (EdgeCm <= 1.f || EdgeCm >= Context.RangeCm - 1.f)
+		{
+			return 0.f;
+		}
+		float GroundZ = TNumericLimits<float>::Max();
+		for (const float PastCm : { 40.f, 120.f })
+		{
+			const FVector Column = Context.Feet + Dir * (EdgeCm + PastCm);
+			FHitResult Hit;
+			++Context.Traces;
+			if (Context.World->LineTraceSingleByChannel(Hit, FVector(Column.X, Column.Y, Context.PerchSurfaceZ + 10.f),
+				FVector(Column.X, Column.Y, Context.PerchSurfaceZ - PerchMaxDropCm), ECC_Visibility, Context.Params))
+			{
+				GroundZ = FMath::Min(GroundZ, static_cast<float>(Hit.ImpactPoint.Z));
+			}
+		}
+		const float GroundCm = GroundZ < TNumericLimits<float>::Max()
+			? VisionConeVisibility::ElevatedGroundCm(static_cast<float>(Context.Feet.Z), GroundZ) : 0.f;
+		if (GroundCm >= 0.f)
+		{
+			return 0.f;
+		}
+		// The rim: a parapet below the eye (one above it is a full wall for the high trace), else the roof itself.
+		float TopCm = Context.PerchSurfaceZ - static_cast<float>(Context.Feet.Z);
+		const FVector Rim = Context.Feet + Dir * FMath::Max(EdgeCm - 3.f, 0.f);
+		FHitResult Hit;
+		++Context.Traces;
+		if (Context.World->LineTraceSingleByChannel(Hit, FVector(Rim.X, Rim.Y, Context.Feet.Z + Spec.GetHighTraceHeight(GroundCm)),
+			FVector(Rim.X, Rim.Y, Context.PerchSurfaceZ - 10.f), ECC_Visibility, Context.Params) && !Hit.bStartPenetrating)
+		{
+			TopCm = static_cast<float>(Hit.ImpactPoint.Z - Context.Feet.Z);
+		}
+		Ray.GroundCm = GroundCm;
+		FVisionConeObstacle Roof;
+		Roof.NearCm = 0.f;
+		Roof.FarCm = EdgeCm;
+		Roof.TopCm = TopCm;
+		Roof.FarNormal = Context.ToLocal(Probe.ImpactNormal);
+		Roof.bHidesInside = true;
+		Ray.Obstacles.Add(Roof);
+		return EdgeCm;
+	}
+
+	/**
+	 * Traces one ray of a cone (any thread): from a perch its edge and the ground below first (SamplePerch), then the sight lines' top,
+	 * then the lower obstacles' front face, top and back face (heights from the observer's feet, the profiles on the ray's ground).
+	 */
+	void SampleRay(const FVisionConeSightSpec& Spec, const FVisionConeTraceContext& Context, float AngleDeg, FVisionConeRay& Ray)
 	{
 		const FVector Dir = FRotator(0.f, Context.Yaw + AngleDeg, 0.f).Vector();
 		FHitResult Hit;
+		// 0. Elevated (bug 09): the perch's edge, the ground below; the low trace then starts past the edge, the perch ignored.
+		const float PerchEdgeCm = Context.Perch ? SamplePerch(Spec, Context, Dir, Ray) : 0.f;
+		const float HighCm = Spec.GetHighTraceHeight(Ray.GroundCm);
+		const float LowCm = Spec.GetLowTraceHeight(Ray.GroundCm);
 		// 1. The sight lines' top: anything this tall hides every level behind it.
 		float WallCm = Context.RangeCm;
-		const FVector HighStart = Context.Feet + FVector(0.f, 0.f, Context.HighCm);
+		const FVector HighStart = Context.Feet + FVector(0.f, 0.f, HighCm);
 		++Context.Traces;
 		if (Context.World->LineTraceSingleByChannel(Hit, HighStart, HighStart + Dir * Context.RangeCm, ECC_Visibility, Context.Params))
 		{
@@ -125,14 +233,15 @@ namespace VisionConeConsole
 			Ray.Obstacles.Add({ WallCm, WallCm, VisionConeVisibility::FullHeightCm, Ray.BlockerNormal, Ray.BlockerNormal });
 		}
 		// 2. Lower obstacles (under the sight lines): front face, top and back face of each, nearest first.
-		const FVector LowOrigin = Context.Feet + FVector(0.f, 0.f, Context.LowCm);
+		const FVector LowOrigin = Context.Feet + FVector(0.f, 0.f, LowCm);
+		const FCollisionQueryParams& LowParams = PerchEdgeCm > 0.f ? Context.PerchParams : Context.Params;
 		TOptional<FCollisionQueryParams> SkipParams;
-		float FromCm = 0.f;
+		float FromCm = PerchEdgeCm > 0.f ? PerchEdgeCm + 1.f : 0.f;
 		int32 LowObstacles = 0;
 		for (int32 Attempt = 0; Attempt < Context.MaxLowObstacles + 2 && LowObstacles < Context.MaxLowObstacles && FromCm < WallCm - 1.f; ++Attempt)
 		{
 			++Context.Traces;
-			const FCollisionQueryParams& Params = SkipParams.IsSet() ? SkipParams.GetValue() : Context.Params;
+			const FCollisionQueryParams& Params = SkipParams.IsSet() ? SkipParams.GetValue() : LowParams;
 			if (!Context.World->LineTraceSingleByChannel(Hit, LowOrigin + Dir * FromCm, LowOrigin + Dir * WallCm, ECC_Visibility, Params))
 			{
 				break;
@@ -148,7 +257,7 @@ namespace VisionConeConsole
 				// Started inside a deep obstacle (past its probed depth): skip that component.
 				if (!SkipParams.IsSet())
 				{
-					SkipParams.Emplace(Context.Params);
+					SkipParams.Emplace(LowParams);
 				}
 				SkipParams->AddIgnoredComponent(Component);
 				continue;
@@ -157,12 +266,12 @@ namespace VisionConeConsole
 			FVector2D FarNormal = FVector2D::ZeroVector;
 			FHitResult Probe;
 			// Its top just behind the front face (the high trace passed above it there).
-			float TopCm = Context.LowCm;
+			float TopCm = LowCm;
 			const FVector Column = Context.Feet + Dir * (NearCm + 2.f);
 			++Context.Traces;
-			if (Component->LineTraceComponent(Probe, Column + FVector(0.f, 0.f, Context.HighCm), Column + FVector(0.f, 0.f, Context.LowCm - 1.f), Context.ComponentParams))
+			if (Component->LineTraceComponent(Probe, Column + FVector(0.f, 0.f, HighCm), Column + FVector(0.f, 0.f, LowCm - 1.f), Context.ComponentParams))
 			{
-				TopCm = FMath::Max(static_cast<float>(Probe.ImpactPoint.Z - Context.Feet.Z), Context.LowCm);
+				TopCm = FMath::Max(static_cast<float>(Probe.ImpactPoint.Z - Context.Feet.Z), LowCm);
 			}
 			// Its back face (traced back towards the eye).
 			float FarCm = NearCm + Context.DepthProbeCm;
@@ -183,9 +292,10 @@ namespace VisionConeConsole
 	void RunJob(FJob& Job)
 	{
 		const double Start = FPlatformTime::Seconds();
+		ProbePerch(Job.Context);
 		Job.Rays = VisionConeVisibility::CastRays(Job.Spec, [&Job](float Angle, FVisionConeRay& Ray)
 		{
-			SampleRay(Job.Context, Angle, Ray);
+			SampleRay(Job.Spec, Job.Context, Angle, Ray);
 		}, &Job.Samples);
 		Job.Shape = VisionConeVisibility::BuildShape(Job.Rays, Job.Spec.Levels.Num(), Job.Spec.HalfAngleDeg, Job.OutlineWidthCm, 0.f, 0.5f);
 		Job.Seconds = FPlatformTime::Seconds() - Start;
@@ -593,8 +703,6 @@ void UVisionConeComponent::RebuildBatch(UWorld* World, TArrayView<UVisionConeCom
 		Context.Feet = Cone->GetOwnerFeet();
 		Context.Yaw = Cone->GetOwnerYaw();
 		Context.RangeCm = Job.Spec.GetMaxRange();
-		Context.HighCm = Job.Spec.GetHighTraceHeight();
-		Context.LowCm = Job.Spec.GetLowTraceHeight();
 		Context.MaxLowObstacles = Cone->MaxLowObstaclesPerRay;
 		Context.DepthProbeCm = Cone->ObstacleDepthProbeCm;
 	}
