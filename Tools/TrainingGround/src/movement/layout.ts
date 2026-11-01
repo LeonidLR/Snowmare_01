@@ -11,7 +11,8 @@ export const ZONE_KINDS = ['open', 'corridor', 'wall_run', 'gap_run', 'corner', 
 export type ZoneKind = (typeof ZONE_KINDS)[number];
 
 export const FORMATIONS = ['diamond', 'wedge', 'column', 'line', 'echelon_left', 'echelon_right', 'wall', 'hedgehog', 'blizzard'] as const;
-export type Formation = (typeof FORMATIONS)[number];
+/** The built-in shapes (FORMATIONS, the golden loops) plus 'custom' (FORMATION_CONTRACT.md 16: the player's own shape; no table entry). */
+export type Formation = (typeof FORMATIONS)[number] | 'custom';
 
 export interface LayoutWall {
   id: string;
@@ -148,7 +149,7 @@ export function validateLayout(data: unknown): string[] {
       if (!Array.isArray(r.expect)) e.push(`${where}: expect must be an array`);
       else r.expect.forEach((x, j) => {
         if (!zoneIds.has(x?.zone)) e.push(`${where}.expect[${j}]: unknown zone "${x?.zone}"`);
-        if (!FORMATIONS.includes(x?.formation as Formation)) e.push(`${where}.expect[${j}]: formation must be one of ${FORMATIONS.join(' | ')}`);
+        if (!FORMATIONS.includes(x?.formation as (typeof FORMATIONS)[number])) e.push(`${where}.expect[${j}]: formation must be one of ${FORMATIONS.join(' | ')}`);
       });
     }
     if (r?.threats !== undefined) {

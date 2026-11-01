@@ -1,6 +1,7 @@
 // `npm run bot:movement -- [--layout sample_small] [--members 2,3,4] [--seeds 4] [--seed 1] [--client none|mock|claude|jev]
-//  [--config <file>] [--manual auto|<menu item>|all] [--strict] [--layouts redteam|<dir>]` - runs the movement series, writes
+//  [--config <file>] [--manual auto|<menu item>|custom|all] [--strict] [--layouts redteam|<dir>]` - runs the movement series, writes
 // Saved/TrainingGround/movement/runs.jsonl (raw, not for agents) and report.md (<= 30 lines, FORMATION_CONTRACT.md 4).
+// --manual custom: the custom formation (FORMATION_CONTRACT.md 16.8) with CUSTOM_SAMPLE_SHAPE, gated as a manual formation (checks 1 / 5 / 7).
 // --manual <item>: every run with that hold-G menu choice; --manual all: auto + every menu item, report = the matrix
 // (manual_matrix.md too). --strict exits 1 when a check fails (with all: auto any check, a manual item checks 1 / 2 / 5 / 7 / 10 / 11).
 // --layouts redteam: the red team's regression layouts (Content/Data/FormationLab/redteam, FORMATION_CONTRACT.md 11), each walked
@@ -14,6 +15,7 @@ import { advicePrompt, resolveClient } from '../ai.ts';
 import { configHash, runSeries } from '../bot.ts';
 import { renderManualMatrix, renderReport } from '../checks.ts';
 import { configValues } from '../config.ts';
+import { CUSTOM_SAMPLE_SHAPE } from '../custom.ts';
 import type { MenuChoice } from '../menu.ts';
 import { MENU_ITEMS } from '../menu.ts';
 import { refreshKept, regressLayout, renderRegression } from '../redteam.ts';
@@ -69,8 +71,10 @@ if (manualArg === 'all') {
   const gate = (r: (typeof rows)[number]) => r.choice === 'auto' ? r.summary.allGreen : r.summary.checks.filter((ch) => [1, 2, 5, 7, 10, 11].includes(ch.id)).every((ch) => ch.fail === 0);
   process.exit(args.strict && !rows.every(gate) ? 1 : 0);
 }
-if (manualArg !== 'auto' && !MENU_ITEMS.some((i) => i.id === manualArg)) { console.error(`--manual: unknown item "${manualArg}"`); process.exit(2); }
-const { runs, summary } = runSeries({ layout, config, members, seeds, seedBase: seed, manual: manualArg as MenuChoice });
+if (manualArg !== 'auto' && manualArg !== 'custom' && !MENU_ITEMS.some((i) => i.id === manualArg)) { console.error(`--manual: unknown item "${manualArg}"`); process.exit(2); }
+// 'custom' = the first custom disc with the sample shape (the bot has no saved shapes)
+const manualChoice: MenuChoice = manualArg === 'custom' ? 'custom_1' : (manualArg as MenuChoice);
+const { runs, summary } = runSeries({ layout, config, members, seeds, seedBase: seed, manual: manualChoice, customShape: CUSTOM_SAMPLE_SHAPE });
 fs.mkdirSync(OUT_DIR, { recursive: true });
 fs.writeFileSync(path.join(OUT_DIR, 'runs.jsonl'), runs.map((r) => JSON.stringify({ layout: layout.name, config: configHash(config), ...r })).join('\n') + '\n');
 
@@ -86,4 +90,6 @@ const report = renderReport({ ...header(), manual: manualArg === 'auto' ? undefi
 fs.writeFileSync(path.join(OUT_DIR, 'report.md'), report);
 process.stdout.write(report);
 console.error(`[bot] ${runs.length} runs in ${((Date.now() - started) / 1000).toFixed(1)} s -> ${path.relative(process.cwd(), OUT_DIR)}`);
-if (args.strict && !summary.allGreen) process.exit(1);
+// a manual formation ignores the terrain on purpose: --manual custom gates checks 1 / 5 / 7 (16.8)
+const green = manualArg === 'custom' ? summary.checks.filter((ch) => [1, 5, 7].includes(ch.id)).every((ch) => ch.fail === 0) : summary.allGreen;
+if (args.strict && !green) process.exit(1);

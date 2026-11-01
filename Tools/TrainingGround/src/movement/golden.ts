@@ -4,20 +4,23 @@
 
 import type { FormationConfig } from './config.ts';
 import type { Segment, Vec2 } from './geometry.ts';
-import { normYaw, round } from './geometry.ts';
+import { normYaw, rng, round } from './geometry.ts';
 import type { Formation } from './layout.ts';
 import { FORMATIONS } from './layout.ts';
-import type { ClassifyState, CornerState, GuardState, Mode, Role, TerrainClass, Threat } from './rules.ts';
+import type { ClassifyState, CornerState, GuardLevel, GuardState, Mode, Role, TerrainClass, Threat } from './rules.ts';
 import {
   CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules, FormationShapeRules,
   FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
 } from './rules.ts';
 import { FormationMenuRules, MENU_ITEMS } from './menu.ts';
-import type { MenuChoice } from './menu.ts';
+import type { MenuChoice, MenuItemId } from './menu.ts';
+import type { CustomShape } from './custom.ts';
+import { CUSTOM_SAMPLE_SHAPE, FormationCustomRules } from './custom.ts';
 
 export const GOLDEN_SCHEMA = 'codex.formation_golden/1';
 export const GOLDEN_RULES = ['Slots', 'HedgehogSlots', 'LookYaw', 'Classify', 'PassageWidth', 'FormationFor', 'WallLayout', 'Menu',
-  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided', 'WallEnd', 'Approach'] as const;
+  'Guard', 'TrailSlots', 'SideWidth', 'Bypass', 'Corner', 'Assign', 'TurnAhead', 'ClearLook', 'Cover', 'CoverStatic', 'Slide', 'Decided', 'WallEnd', 'Approach',
+  'CustomSlots', 'CustomGuard', 'CustomLook', 'CustomPlace'] as const;
 export type GoldenRule = (typeof GOLDEN_RULES)[number];
 
 export interface GoldenFile {
@@ -170,7 +173,7 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  const menu = base('Menu', 'in: op (itemAt | release | resolve) + its inputs -> out (FormationMenuRules; screen px, y down, 12 = up).');
+  const menu = base('Menu', 'in: op (itemAt | release | resolve; 16.7: customAt | hitAt) + its inputs -> out (FormationMenuRules; screen px, y down, 12 = up). release also takes filled [bool x 3] + edit (absent = [false, false, false] / false; effect may be edit); resolve out.customSlot is absent in the old cases (= null) and written in the custom ones; hitAt = customAt ?? itemAt.');
   for (let deg = 1.3; deg < 360; deg += 7.5) for (const r of [20, 41, 120]) { // off the sector borders (22.5 + 45k): parity-safe
     const dx = round(Math.sin((deg * Math.PI) / 180) * r, 4), dy = round(-Math.cos((deg * Math.PI) / 180) * r, 4);
     menu.cases.push({ in: { op: 'itemAt', dx, dy, deadZonePx: 40 }, out: { item: FormationMenuRules.ItemAt(dx, dy, 40) } });
@@ -180,6 +183,31 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     menu.cases.push({ in: { op: 'release', state: { open: true, choice, highlighted }, memberCount }, out: r });
   }
   for (const choice of ['auto', ...MENU_ITEMS.map((i) => i.id)] as MenuChoice[]) for (const memberCount of [1, 2, 3, 4]) {
+    const { customSlot: _none, ...old } = FormationMenuRules.Resolve(choice, memberCount); // the first cases predate customSlot (always null here)
+    menu.cases.push({ in: { op: 'resolve', choice, memberCount }, out: old });
+  }
+  // --- 16.7 (the custom discs; appended after the old cases, which stay unchanged: the old resolve cases keep the old `out` without customSlot)
+  const CUSTOM_PROBES: [number, number][] = [ // [dx, dy]: the disc centres, rings round them (inside / on / outside the radius), the gaps, the ring side
+    [-100, 280], [0, 280], [100, 280], [-100, 319], [-100, 321], [-100, 241], [-60, 280], [-59, 280], [-140, 280], [-141, 280], [-39.9, 280], [-40.1, 280], [0, 240], [0, 320], [0, 320.5],
+    [40, 280], [40.1, 280], [-40, 280], [60, 280], [59.9, 280], [140, 280], [140.5, 280], [80, 280], [-80, 280], [100, 250], [130, 300], [-130, 300], [0, 200], [0, 100], [250, 280], [0, 0],
+  ];
+  for (const [dx, dy] of CUSTOM_PROBES) menu.cases.push({ in: { op: 'customAt', dx, dy }, out: { item: FormationMenuRules.CustomItemAt(dx, dy) } });
+  for (const [dx, dy] of CUSTOM_PROBES) menu.cases.push({ in: { op: 'hitAt', dx, dy, deadZonePx: 40 }, out: { item: FormationMenuRules.HitAt(dx, dy, 40) } });
+  const FILLED: boolean[][] = [[false, false, false], [true, false, true], [false, true, false], [true, true, true]];
+  for (const highlighted of ['custom_1', 'custom_2', 'custom_3'] as MenuItemId[]) for (const choice of ['auto', 'custom_2'] as MenuChoice[]) for (const memberCount of [1, 2, 4]) {
+    for (const filled of FILLED) for (const edit of [false, true]) {
+      const r = FormationMenuRules.Release({ open: true, choice, highlighted }, memberCount, filled, edit);
+      menu.cases.push({ in: { op: 'release', state: { open: true, choice, highlighted }, memberCount, filled, edit }, out: r });
+    }
+  }
+  for (const highlighted of [null, 'column', 'all_forward'] as (MenuItemId | null)[]) for (const edit of [false, true]) { // `edit` and `filled` change nothing off the custom discs
+    const r = FormationMenuRules.Release({ open: true, choice: 'custom_1', highlighted }, 4, [true, true, true], edit);
+    menu.cases.push({ in: { op: 'release', state: { open: true, choice: 'custom_1', highlighted }, memberCount: 4, filled: [true, true, true], edit }, out: r });
+  }
+  for (const choice of ['custom_1', 'custom_2', 'custom_3'] as MenuChoice[]) for (const memberCount of [1, 2, 3, 4]) {
+    menu.cases.push({ in: { op: 'resolve', choice, memberCount }, out: FormationMenuRules.Resolve(choice, memberCount) });
+  }
+  for (const choice of ['auto', 'column', 'diamond', 'all_forward'] as MenuChoice[]) for (const memberCount of [2, 4]) {
     menu.cases.push({ in: { op: 'resolve', choice, memberCount }, out: FormationMenuRules.Resolve(choice, memberCount) });
   }
 
@@ -477,7 +505,142 @@ export function buildGolden(config: FormationConfig, configPath: string): Record
     }
   }
 
-  return { Approach: approachG, WallEnd: wallEnd, Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
+  // --- FORMATION_CONTRACT.md 16 (the custom formation)
+  const S = (...m: [number, number, number, number][]): CustomShape => ({ members: m.map(([squad, fwd, right, look]) => ({ squad, fwd, right, look })) });
+  const CUSTOM_SHAPES: Record<string, CustomShape> = {
+    anchor_only: S([0, 0, 0, 0]),
+    pair: S([0, 0, 0, 0], [2, -312.4, 187.6, 33.3]),
+    triad: S([0, 0, 0, 0], [1, -250, 300, 60], [3, -100, -410.5, -135]),
+    sample: CUSTOM_SAMPLE_SHAPE,
+    anchor_squad_2: S([2, 0, 0, 0], [0, -180, -220, -90], [3, -400, 100.2, 175.5]),
+  };
+  const HEADS: [Vec2, number][] = [[[0, 0], 0], [[1234.5, -678.25], 37.5], [[-300, 50.5], -120], [[0, 0], 180]];
+  const customSlots = base('CustomSlots', 'in: name (informational), shape {members [{squad, fwd, right, look}]} (members[0] = the anchor), present [squad] (the living members, the leader FIRST then the followers in squad order), leaderPos, leaderYaw -> out.slots [{squad, role, pos, yaw, fixed}] (FormationCustomRules.CustomSlots; output order = the leader, then present order; present beyond 4 is cut; yaws compare as angles; empty shape or empty present -> []).');
+  const pushSlots = (name: string, shape: CustomShape, present: number[], leaderPos: Vec2, leaderYaw: number) => {
+    const slotsOut = FormationCustomRules.CustomSlots(shape, present, leaderPos, leaderYaw, config).map((s) => ({ squad: s.squad, role: s.role, pos: r2(s.pos), yaw: round(s.yaw), fixed: s.fixed }));
+    customSlots.cases.push({ in: { name, shape, present, leaderPos, leaderYaw }, out: { slots: slotsOut } });
+  };
+  // the leader (any of squads 0..3) x who else is alive (every subset of the other three, squad order); a shape with the leader as the
+  // anchor / another stored member / not stored, a stored member dead, extras
+  const presents: number[][] = [];
+  for (const leader of [0, 1, 2, 3]) {
+    const rest = [0, 1, 2, 3].filter((q) => q !== leader);
+    for (let mask = 0; mask < 8; mask++) presents.push([leader, ...rest.filter((_, k) => mask & (1 << k))]);
+  }
+  let headIdx = 0;
+  for (const [name, shape] of Object.entries(CUSTOM_SHAPES)) for (const present of presents) {
+    if (name === 'sample') for (const [pos, yaw] of HEADS.slice(0, 3)) pushSlots(name, shape, present, pos, yaw);
+    else { const [pos, yaw] = HEADS[headIdx++ % HEADS.length]; pushSlots(name, shape, present, pos, yaw); }
+  }
+  for (const [name, shape, present] of [
+    ['sample_five_present', CUSTOM_SAMPLE_SHAPE, [0, 1, 2, 3, 4]], ['sample_five_leader_3', CUSTOM_SAMPLE_SHAPE, [3, 0, 1, 2, 4]],
+    ['sample_extra_4', CUSTOM_SAMPLE_SHAPE, [0, 4, 1]], ['sample_leader_not_stored', CUSTOM_SAMPLE_SHAPE, [4, 0, 1]],
+    ['sample_leader_not_stored_anchor_dead', CUSTOM_SAMPLE_SHAPE, [4, 1, 2, 3]], ['sample_all_extras', CUSTOM_SAMPLE_SHAPE, [5, 6, 7]],
+    ['pair_two_extras', CUSTOM_SHAPES.pair, [1, 3, 4]], ['anchor2_leader_not_stored', CUSTOM_SHAPES.anchor_squad_2, [1, 0, 2, 3]],
+    ['empty_shape', { members: [] }, [0, 1, 2]], ['empty_shape_alone', { members: [] }, [0]], ['empty_present', CUSTOM_SAMPLE_SHAPE, []],
+  ] as [string, CustomShape, number[]][]) pushSlots(name, shape, present, ...HEADS[1]);
+
+  const customGuard = base('CustomGuard', 'in: name (informational), walls, shape, present (leader first), leaderPos, leaderYaw, ahead ({pos, yaw} | null), state {requested, level, effective, candidate, candidateDistance, cause (wall | null)}, stepDistance, allInSight -> out.blocked (BlockedRoles at the leader pose for CustomSlots) + out.state (FormationCustomRules.Resolve: requested custom, effective custom at level 0 / column at level 2, cause wall | null).');
+  const CUSTOM_SCENES: Record<string, Segment[]> = {
+    none: SCENES.none, wall_left: SCENES.wall_left, wall_right: SCENES.wall_right, corridor: SCENES.corridor, entrance_ahead: SCENES.entrance_ahead, far_left: SCENES.far_left,
+    narrow: [{ a: [-2000, -130], b: [2000, -130], thickness: 40 }, { a: [-2000, 130], b: [2000, 130], thickness: 40 }],
+    behind: [{ a: [-200, -600], b: [-200, 600], thickness: 20 }],
+  };
+  const heldWall = (candidate: GuardLevel | null, candidateDistance: number, requested: Formation = 'custom', level: GuardLevel = 2): GuardState =>
+    ({ requested, level, effective: level === 0 ? requested : 'column', candidate, candidateDistance, cause: level === 0 ? null : 'wall' });
+  const guardStates: GuardState[] = [GUARD_START, heldWall(null, 0), heldWall(0, hold - 30)];
+  const pushGuard = (scene: string, walls: Segment[], present: number[], offset: Vec2, yaw: number, aheadIn: { pos: Vec2; yaw: number } | null, state: GuardState, stepDistance: number, allInSight: boolean) => {
+    const slotsAt = FormationCustomRules.CustomSlots(CUSTOM_SAMPLE_SHAPE, present, offset, yaw, config);
+    const blocked = FormationCustomRules.BlockedRoles(walls, slotsAt, offset, config);
+    const out = FormationCustomRules.Resolve(walls, CUSTOM_SAMPLE_SHAPE, present, offset, yaw, aheadIn, state, stepDistance, config, allInSight);
+    customGuard.cases.push({ in: { name: scene, walls: walls.map(seg), shape: CUSTOM_SAMPLE_SHAPE, present, leaderPos: r2(offset), leaderYaw: yaw, ahead: aheadIn, state, stepDistance, allInSight },
+      out: { blocked, state: { ...out, candidateDistance: round(out.candidateDistance) } } });
+  };
+  for (const [scene, scn] of Object.entries(CUSTOM_SCENES)) for (const [yaw, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
+    const placed = place(scn, yaw, offset);
+    const ahead = { pos: r2([offset[0] + Math.cos((yaw * Math.PI) / 180) * 500, offset[1] + Math.sin((yaw * Math.PI) / 180) * 500]), yaw };
+    for (const present of [[0, 1, 2, 3], [1, 0, 2]]) {
+      for (const [aheadIn, allInSight] of [[null, true], [ahead, true], [ahead, false]] as [typeof ahead | null, boolean][]) {
+        for (const state of guardStates) pushGuard(scene, placed, present, offset, yaw, aheadIn, state, 60, allInSight);
+      }
+    }
+  }
+  // the hold: waiting for level 0 (the distance walked so far + the step), a step of 0 / negative, the exact release, a new request
+  for (const scene of ['none', 'wall_left']) {
+    const placed = place(CUSTOM_SCENES[scene], 0, [0, 0]);
+    for (const [state, step] of [
+      [heldWall(0, 100), 60], [heldWall(0, 100), 0], [heldWall(0, 100), -20], [heldWall(null, 100), 60], [heldWall(0, hold - 30), 30], [heldWall(0, hold - 30), 29.5],
+      [heldWall(0, 0, 'column'), 60], [heldWall(0, 0, 'custom', 0), 60], [heldWall(0, 0, 'custom', 0), 6],
+    ] as [GuardState, number][]) pushGuard(scene, placed, [0, 1, 2, 3], [0, 0], 0, null, state, step, true);
+  }
+
+  const customLook = base('CustomLook', "in: name (informational), walls, pos, yaw, currentYaw, held (null = none) -> out.yaw (FormationCustomRules.Look: the player's yaw kept unless it points into a wall within look.wall_dist / look.wall_angle, then ClearLook(walls, pos, yaw, currentYaw, held) without limit / ahead; compare as angles).");
+  for (const scene of ['none', 'wall_left', 'corridor', 'ahead', 'pocket', 'sliver_left', 'corner_left_ahead']) {
+    for (const [yaw0, offset] of [[0, [0, 0]], [63, [500, -250]]] as [number, Vec2][]) {
+      const placed = place(SCENES[scene], yaw0, offset);
+      for (const rel of [-150, -90, -30, 30, 90, 150]) {
+        const yaw = round(yaw0 + rel + 2.5);
+        for (const [turned, heldRel] of [[0, null], [70, null], [0, -40]] as [number, number | null][]) {
+          const currentYaw = round(yaw + turned);
+          const held = heldRel === null ? null : round(yaw + heldRel);
+          customLook.cases.push({ in: { name: scene, walls: placed.map(seg), pos: r2(offset), yaw, currentYaw, held },
+            out: { yaw: round(FormationCustomRules.Look(placed, offset, yaw, currentYaw, config, held)) } });
+        }
+      }
+    }
+  }
+
+  const customPlace = base('CustomPlace', 'in: op (dragLook | canPlace | shapeFrom) + its inputs. dragLook: ghostPos, cursorPos, defaultYaw -> out.yaw (compare as angles). canPlace: ghosts [{squad, pos}], anchorSquad, squad, pos -> out.result (ok | too_far | too_close). shapeFrom: ghosts [{squad, pos, yaw}], anchorSquad -> out.shape {members [{squad, fwd, right, look}]} (RoundShape applied: 0.1 cm / 0.1 deg; look compares as an angle; empty members = no anchor ghost).');
+  // dragLook: a click (< 50 cm), the exact threshold, a drag in several directions
+  const DRAG_DIRS: [number, number[]][] = [[0, [0]], [10, [30]], [49.9, [-60]], [50, [0, 90, 180, -90]], [50.1, [0, 90, 180, -90]], [300, [0, 45, 90, 135, 180, -135, -90, -45]]];
+  const dragCase = (ghostPos: Vec2, d: number, dirDeg: number, defaultYaw: number) => {
+    const cursorPos = r2([ghostPos[0] + Math.cos((dirDeg * Math.PI) / 180) * d, ghostPos[1] + Math.sin((dirDeg * Math.PI) / 180) * d]);
+    customPlace.cases.push({ in: { op: 'dragLook', ghostPos, cursorPos, defaultYaw }, out: { yaw: round(FormationCustomRules.DragLook(ghostPos, cursorPos, defaultYaw)) } });
+  };
+  for (const defaultYaw of [0, -135, 180]) for (const [d, dirs] of DRAG_DIRS) for (const dirDeg of dirs) dragCase([100, 100], d, dirDeg, defaultYaw);
+  for (const dirDeg of DRAG_DIRS[5][1]) dragCase([-420.5, 77.25], 300, dirDeg, 37.5);
+  // canPlace: ghosts (squad 0 = the anchor unless said otherwise) x a placement: new / moved / the anchor moved / too close / too far
+  type Ghost = { squad: number; pos: Vec2 };
+  const g = (squad: number, x: number, y: number): Ghost => ({ squad, pos: [x, y] });
+  const GHOST_SETS: [string, Ghost[], number[]][] = [ // [name, ghosts, anchor squads to try]
+    ['none', [], [0]], ['anchor', [g(0, 0, 0)], [0]], ['three', [g(0, 0, 0), g(1, -250, 300), g(2, -250, -300)], [0, 2]],
+    ['four', [g(0, 0, 0), g(1, -250, 300), g(2, -250, -300), g(3, -450, 0)], [0, 2]], ['far_one', [g(0, 0, 0), g(1, 900, 0)], [0]], ['no_anchor', [g(1, -250, 300), g(2, -250, -300)], [0]],
+  ];
+  const PLACEMENTS: [number, number, number][] = [ // [squad, x, y]
+    [1, -250, 300], [1, -250, 340], [1, 10, 10], [1, 1000, 0], [1, 1000.1, 0], [2, 79.9, 0], [2, 80.1, 0], [3, -450, 20], [0, 0, 0], [0, 600, 0], [0, 1500, 0], [4, 1000.1, 0],
+  ];
+  for (const [setName, ghosts, anchors] of GHOST_SETS) for (const anchorSquad of anchors) for (const [squad, x, y] of PLACEMENTS) {
+    const pos: Vec2 = [x, y];
+    customPlace.cases.push({ in: { op: 'canPlace', set: setName, ghosts, anchorSquad, squad, pos }, out: { result: FormationCustomRules.CanPlace(ghosts, anchorSquad, squad, pos, config) } });
+  }
+  // shapeFrom: hand-made (ordering, the cut at 4, the anchor squad, the look wrap, the rounding) + seeded random scenes
+  const gy = (squad: number, x: number, y: number, yaw: number) => ({ squad, pos: [x, y] as Vec2, yaw });
+  const SHAPE_CASES: [string, { squad: number; pos: Vec2; yaw: number }[], number][] = [
+    ['anchor_only', [gy(0, 100, 100, 30)], 0],
+    ['sample_world', [gy(0, 0, 0, 0), gy(1, -250, 300, 60), gy(2, -250, -300, -60), gy(3, -450, 0, 180)], 0],
+    ['sample_rotated', [gy(3, 1000, 2000, 90), gy(0, 2000, 500, 90), gy(1, 1800, 500, 90), gy(2, 2000, 700, 0)], 3],
+    ['scrambled_order', [gy(2, -100, 50, 10), gy(0, 0, 0, 0), gy(3, -200, -30, -170), gy(1, -50, 120, 95)], 0],
+    ['anchor_squad_2', [gy(0, 130.25, -88.5, 12), gy(2, 500, 500, 45), gy(3, 420, 600.75, 45)], 2],
+    ['five_ghosts_cut', [gy(0, 0, 0, 0), gy(1, -100, 0, 0), gy(2, -200, 0, 0), gy(3, -300, 0, 0), gy(4, -400, 0, 0)], 0],
+    ['five_ghosts_anchor_4', [gy(0, -400, 0, 0), gy(1, -100, 0, 0), gy(2, -200, 0, 0), gy(3, -300, 0, 0), gy(4, 0, 0, 0)], 4],
+    ['look_wrap', [gy(0, 0, 0, 170), gy(1, 0, 100, -170), gy(2, 0, -100, 170), gy(3, 50, 50, 10)], 0],
+    ['look_180', [gy(0, 0, 0, -10), gy(1, -100, 0, 170), gy(2, -100, 50, 170.04), gy(3, -100, -50, 169.96)], 0],
+    ['rounding_half_away', [gy(0, 0, 0, 0), gy(1, 0.05, -0.05, 0.05), gy(2, 0.15, -0.15, -0.15), gy(3, 123.456, -123.456, 10.04)], 0],
+    ['no_anchor', [gy(1, 0, 0, 0), gy(2, 100, 0, 0)], 0],
+    ['empty', [], 0],
+  ];
+  for (const [name, ghosts, anchorSquad] of SHAPE_CASES) customPlace.cases.push({ in: { op: 'shapeFrom', name, ghosts, anchorSquad }, out: { shape: FormationCustomRules.ShapeFrom(ghosts, anchorSquad) } });
+  const rand = rng(1601);
+  for (let i = 0; i < 24; i++) {
+    const squads = [0, 1, 2, 3].filter(() => rand() < 0.8);
+    if (!squads.length) squads.push(0);
+    const ghosts = squads.map((squad) => gy(squad, round((rand() - 0.5) * 3000, 1), round((rand() - 0.5) * 3000, 1), round((rand() - 0.5) * 720, 1)));
+    for (let k = ghosts.length - 1; k > 0; k--) { const j = Math.floor(rand() * (k + 1)); [ghosts[k], ghosts[j]] = [ghosts[j], ghosts[k]]; } // the input order is scrambled
+    const anchorSquad = squads[Math.floor(rand() * squads.length)];
+    customPlace.cases.push({ in: { op: 'shapeFrom', name: `random_${i}`, ghosts, anchorSquad }, out: { shape: FormationCustomRules.ShapeFrom(ghosts, anchorSquad) } });
+  }
+
+  return { CustomSlots: customSlots, CustomGuard: customGuard, CustomLook: customLook, CustomPlace: customPlace, Approach: approachG, WallEnd: wallEnd, Slots: slots, HedgehogSlots: hedgehog, LookYaw: look, Menu: menu, Classify: classify, PassageWidth: passage, FormationFor: formationFor, WallLayout: wall,
     Guard: guard, TrailSlots: trail, SideWidth: side, Bypass: bypass, Corner: corner, Assign: assign, TurnAhead: turnAhead, ClearLook: clear, Cover: cover, CoverStatic: coverStatic, Slide: slide, Decided: decided };
 }
 

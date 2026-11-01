@@ -63,12 +63,12 @@ test('disabled: one operative has no formation - a pick is refused and the previ
 });
 
 test('Resolve: auto -> terrain rules; all forward -> terrain + look forward; diamond = wedge / pair by count; too few -> Auto', () => {
-  assert.deepEqual(M.Resolve('auto', 4), { manualFormation: null, allForward: false });
-  assert.deepEqual(M.Resolve('all_forward', 3), { manualFormation: null, allForward: true });
-  assert.deepEqual(M.Resolve('diamond', 4), { manualFormation: 'diamond', allForward: false });
-  assert.deepEqual(M.Resolve('diamond', 3), { manualFormation: 'wedge', allForward: false });
-  assert.deepEqual(M.Resolve('column', 2), { manualFormation: 'column', allForward: false });
-  assert.deepEqual(M.Resolve('column', 1), { manualFormation: null, allForward: false }, 'members died: back to Auto');
+  assert.deepEqual(M.Resolve('auto', 4), { manualFormation: null, allForward: false, customSlot: null });
+  assert.deepEqual(M.Resolve('all_forward', 3), { manualFormation: null, allForward: true, customSlot: null });
+  assert.deepEqual(M.Resolve('diamond', 4), { manualFormation: 'diamond', allForward: false, customSlot: null });
+  assert.deepEqual(M.Resolve('diamond', 3), { manualFormation: 'wedge', allForward: false, customSlot: null });
+  assert.deepEqual(M.Resolve('column', 2), { manualFormation: 'column', allForward: false, customSlot: null });
+  assert.deepEqual(M.Resolve('column', 1), { manualFormation: null, allForward: false, customSlot: null }, 'members died: back to Auto');
   assert.equal(menuLabel('diamond', 4), 'Ромб'); assert.equal(menuLabel('diamond', 3), 'Клин'); assert.equal(menuLabel('diamond', 2), 'Пара');
 });
 

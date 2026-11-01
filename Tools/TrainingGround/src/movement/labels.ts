@@ -9,11 +9,11 @@ import type { GuardCause, GuardLevel } from './rules.ts';
 /** Formation names as the game shows them. */
 export const FORMATION_LABEL_EN: Record<Formation, string> = {
   diamond: 'Diamond', wedge: 'Wedge', column: 'Column', line: 'Line', echelon_left: 'Echelon left', echelon_right: 'Echelon right',
-  wall: 'Wall', hedgehog: 'Hedgehog', blizzard: 'Blizzard diamond',
+  wall: 'Wall', hedgehog: 'Hedgehog', blizzard: 'Blizzard diamond', custom: 'Custom',
 };
 
 /** Hold-G menu labels (the diamond item names the shape the member count gives). */
-export function menuLabelEn(id: MenuChoice, memberCount: number): string {
+export function menuLabelEn(id: MenuChoice, memberCount: number, empty = false): string {
   switch (id) {
     case 'auto': return 'Auto';
     case 'line': return 'Line';
@@ -24,6 +24,9 @@ export function menuLabelEn(id: MenuChoice, memberCount: number): string {
     case 'hedgehog': return 'Hedgehog';
     case 'echelon_left': return 'Echelon left';
     case 'all_forward': return 'All forward';
+    case 'custom_1': return empty ? 'Custom 1 (empty)' : 'Custom 1';
+    case 'custom_2': return empty ? 'Custom 2 (empty)' : 'Custom 2';
+    case 'custom_3': return empty ? 'Custom 3 (empty)' : 'Custom 3';
   }
 }
 
@@ -33,7 +36,9 @@ export function menuLabelEn(id: MenuChoice, memberCount: number): string {
  * v2.3 part 9 (user 2026-10-26): the turn fold ("5Б", GuardState.cause 'turn') says "(turn)": "Line -> Column (turn)"; a wall
  * (or no cause given) keeps "(wall)".
  */
-export function guardHudText(requested: Formation, effective: Formation, level: GuardLevel, memberCount: number, cause: GuardCause | null = null): string {
-  const name = (f: Formation) => ((f === 'diamond' || f === 'wedge') && memberCount === 2 ? 'Pair' : FORMATION_LABEL_EN[f]);
+export function guardHudText(requested: Formation, effective: Formation, level: GuardLevel, memberCount: number, cause: GuardCause | null = null, customSlot: number | null = null): string {
+  // 16.7: the custom shape is named by its slot ("Custom 2 -> Column (wall)")
+  const name = (f: Formation) => ((f === 'diamond' || f === 'wedge') && memberCount === 2 ? 'Pair'
+    : f === 'custom' && customSlot !== null ? `Custom ${customSlot}` : FORMATION_LABEL_EN[f]);
   return level === 0 || requested === effective ? name(effective) : `${name(requested)} -> ${name(effective)} (${cause === 'turn' ? 'turn' : 'wall'})`;
 }

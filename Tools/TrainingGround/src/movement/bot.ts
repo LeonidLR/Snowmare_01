@@ -4,6 +4,8 @@
 import type { FormationConfig } from './config.ts';
 import type { RunMetrics, SeriesSummary } from './checks.ts';
 import { RunCollector, summarize } from './checks.ts';
+import { CUSTOM_SAMPLE_SHAPE } from './custom.ts';
+import type { CustomShape } from './custom.ts';
 import type { Layout } from './layout.ts';
 import type { MenuChoice } from './menu.ts';
 import { FormationMenuRules } from './menu.ts';
@@ -21,6 +23,8 @@ export interface SeriesOptions {
   nav?: NavGrid;
   /** v2.1: the hold-G menu choice for every run (default 'auto'); resolved per member count (FormationMenuRules.Resolve). */
   manual?: MenuChoice;
+  /** The stored shape a custom_k choice walks (default CUSTOM_SAMPLE_SHAPE, FORMATION_CONTRACT.md 16.8). */
+  customShape?: CustomShape;
 }
 
 export function runSeries(o: SeriesOptions): { runs: RunMetrics[]; summary: SeriesSummary } {
@@ -34,6 +38,7 @@ export function runSeries(o: SeriesOptions): { runs: RunMetrics[]; summary: Seri
     simulate({
       layout: o.layout, route, memberCount: n, config: o.config, seed, nav, onFrame: (f) => collector.onFrame(f),
       manualFormation: pick.manualFormation ?? undefined, allForward: pick.allForward,
+      customShape: pick.manualFormation === 'custom' ? o.customShape ?? CUSTOM_SAMPLE_SHAPE : undefined,
     });
     runs.push(collector.finish());
   }

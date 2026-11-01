@@ -6,6 +6,8 @@
 import type { FormationConfig } from './config.ts';
 import { cfg } from './config.ts';
 import type { Segment, Vec2 } from './geometry.ts';
+import type { CustomShape } from './custom.ts';
+import { FormationCustomRules } from './custom.ts';
 import { add, angleDiff, clamp, closestOnSegment, deltaYaw, dirOf, dist, dot, len, localToWorld, normYaw, raycastWalls, rng, scale, segmentBlocked, sub, yawOf } from './geometry.ts';
 import type { Formation, Layout, LayoutRoute } from './layout.ts';
 import { wallSegments } from './layout.ts';
@@ -106,6 +108,8 @@ export interface SimOptions {
   seed: number;
   /** Fixed formation (the hold-G manual choice); undefined = automatic by terrain. */
   manualFormation?: Formation;
+  /** FORMATION_CONTRACT.md 16: the stored shape of manualFormation 'custom' (the members have squad indices 0..n-1, the leader 0). */
+  customShape?: CustomShape;
   /** v1.2 (user Q4 = A): the weather is a blizzard - open ground picks the blizzard tight diamond. */
   blizzard?: boolean;
   /** v1.2: the menu's "All forward" - walking, everyone looks at 12 (LookYaw mode 'forward'). */
@@ -291,9 +295,13 @@ export function simulate(o: SimOptions): number {
       requested = o.manualFormation ?? FormationTerrainRules.FormationFor(terrain, n, !!o.blizzard);
       // v2.1: the wall guard - no formation may cut the squad in two (mirror echelon, else the column; the request stays).
       const pathAhead: Vec2[] = arrived ? [leader.pos] : [leader.pos, ...legs.slice(leg), ...points.slice(routeLeg + 1)];
-      guard = FormationGuardRules.Resolve(walls, requested, n, leader.pos, heading, arrived ? null : aheadPose(cfg(c, 'guard.lookahead')),
-        FormationGuardRules.TurnAhead(pathAhead, heading, c), guard, stepDistance, c,
-        members.every((m) => !segmentBlocked(leader.pos, m.pos, walls, 0))); // v2.3: the squad all on his side of the walls
+      const allInSight = members.every((m) => !segmentBlocked(leader.pos, m.pos, walls, 0)); // v2.3: the squad all on his side of the walls
+      const lookahead = arrived ? null : aheadPose(cfg(c, 'guard.lookahead'));
+      guard = requested === 'custom' && o.customShape
+        // 16.4: the custom shape's own guard (no mirror, no turn fold); level 2 = the trail column as below
+        ? FormationCustomRules.Resolve(walls, o.customShape, members.map((_, i) => i), leader.pos, heading, lookahead, guard, stepDistance, c, allInSight)
+        : FormationGuardRules.Resolve(walls, requested, n, leader.pos, heading, lookahead,
+          FormationGuardRules.TurnAhead(pathAhead, heading, c), guard, stepDistance, c, allInSight);
       formation = guard.effective!;
     } else { formation = 'wall'; terrain = 'at_wall'; }
     lastTravelled = travelled;
@@ -348,6 +356,9 @@ export function simulate(o: SimOptions): number {
           // crossed obliquely is not a corridor (P's "forward over the shoulder" aimed at the door's wall end 0.5 m away).
           decided: FormationSectorRules.Decided(s.role, 'column', n, passage, c) };
       });
+    } else if (formation === 'custom' && o.customShape) {
+      // 16.2: the player's places (the members are squad 0..n-1, the leader first); the looks are his (Look below, per member).
+      targets = FormationCustomRules.CustomSlots(o.customShape, members.map((_, i) => i), leader.pos, heading, c).map((s) => ({ role: s.role, pos: s.pos, yaw: s.yaw }));
     } else {
       targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
         ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),
@@ -362,7 +373,10 @@ export function simulate(o: SimOptions): number {
     {
       const followers = members.slice(1);
       const places = followers.map((m) => targets.find((x) => x.role === m.place)).filter((x) => !!x);
-      if (places.length === followers.length && !slide) {
+      if (formation === 'custom') {
+        // 16.2: who stands where is the player's (squad order), not the minimal travel.
+        followers.forEach((m) => { if (m.place !== m.role) { m.place = m.role; m.path = null; } });
+      } else if (places.length === followers.length && !slide) {
         const pick = FormationAssignRules.AssignPlaces(followers.map((m) => m.pos), places.map((x) => x!.pos));
         const held = followers.reduce((acc, m, i) => acc + dist(m.pos, places[i]!.pos), 0);
         const best = followers.reduce((acc, m, i) => acc + (pick[i] >= 0 ? dist(m.pos, places[pick[i]]!.pos) : 0), 0);
@@ -390,14 +404,14 @@ export function simulate(o: SimOptions): number {
     const watch = FormationCornerRules.Watch(walls, leader.pos, heading, members.map((m) => ({ role: m.place, pos: m.pos })), corner, c);
     corner = watch.state;
     // The corner watch on patrol, and on a wall slide (the leading end at the wall's end) - not in the standing wall layout.
-    const looks = mode === 'walk' && (formation !== 'wall' || slide) ? watch.looks : [];
+    const looks = mode === 'walk' && (formation !== 'wall' || slide) && formation !== 'custom' ? watch.looks : []; // custom: his looks are the player's
     if (looks.length) targets = targets.map((x) => ({ ...x, yaw: looks.find((l) => l.role === x.role)?.yaw ?? x.yaw }));
     // v2.2 (user 2026-10-25): with 3+ members walking / halted the looks come from the coverage allocator - K the front, the
     // place farthest back = the rear guard (6 o'clock), the others split the open arc. The pair, run, "all forward", the wall
     // layout and the STANDING hedgehog ring keep their rules (walking, the hedgehog is just a shape).
     let rearGuard: Role | null = slideRear;
     let shoulder: { role: Role; yaw: number }[] = []; // v2.3 part 7 (Q3 = c): the allocator's over-the-shoulder members (ClearLook's limit)
-    if (n >= 3 && (mode === 'walk' || (mode === 'halt' && formation !== 'hedgehog')) && formation !== 'wall') {
+    if (n >= 3 && (mode === 'walk' || (mode === 'halt' && formation !== 'hedgehog')) && formation !== 'wall' && formation !== 'custom') {
       const trailOn = FormationGuardRules.Effective(guard).trail;
       const hv = dirOf(heading);
       // v2.3 (1A clarified): the looks the user decided for the formation (the narrow column's K / P / L) are fixed looks too.
@@ -455,7 +469,10 @@ export function simulate(o: SimOptions): number {
       const stepVel = i === 0 && formation !== 'wall' ? leaderVel : scale(moveDir, 1 / SIM_DT);
       m.vel = add(m.vel, scale(sub(stepVel, m.vel), clamp(SIM_DT / VEL_SMOOTH_S, 0, 1)));
       const ahead = len(m.vel) > 1 ? add(m.pos, scale(m.vel, cfg(c, 'look.anticipate_s'))) : null;
-      const free = exempt ? target.yaw : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld, limit, ahead);
+      // 16.5: the custom shape keeps the player's look unless it points into a wall (then ClearLook, no limit / anticipation).
+      const free = exempt ? target.yaw : formation === 'custom'
+        ? FormationCustomRules.Look(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld)
+        : FormationSectorRules.ClearLook(walls, m.pos, target.yaw, m.yaw, c, m.clearHeld, limit, ahead);
       m.clearHeld = exempt ? null : free;
       const desired = (run && !arrived) || toWallSlot ? (len(moveDir) > 0.5 ? yawOf(moveDir) : heading) : free;
       m.yaw = normYaw(m.yaw + deltaYaw(m.yaw, desired) * clamp(turnSpeed * SIM_DT, 0, 1));
