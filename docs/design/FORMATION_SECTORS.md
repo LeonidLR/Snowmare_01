@@ -369,3 +369,42 @@ Ground simulator does not model the corner stack / the fitted layout yet (follow
   - *The squad never splits comes first* (found by FormationWallSwitchSmoke after the merge with the corner stack): a man whose straight way
     to his slot passes a wall (a switch round a corner to a cross wall) goes round it facing his run at the squad's pace - holding his look he
     fell 4 s behind the leader round the corner - and takes his approach look again once the way is clear.
+
+## Custom formation (game designer decisions 2026-11-01; contract section 16; branch formation/custom)
+**His decisions (unchanged):**
+1. A new "Custom" entry in the hold-B radial menu. Choosing it enters a PLACEMENT mode: time stops (also outside combat) - a dedicated
+   placement pause, not the combat tactical pause (no charges, no limits).
+2. Placement order: click an OPERATIVE, then his spot on the ground. A holographic ghost of him appears there. Press on the spot and DRAG
+   to set his look (an arrow from the ghost); a plain click without a drag = he looks forward along the squad's heading. Placing him again
+   replaces his ghost. The leader is the anchor: his position and heading define the frame; placing the leader moves the anchor.
+3. Space (or picking the same Custom again in the menu) confirms: time resumes, everyone walks to his spot, and from then on the squad moves
+   in that shape - relative to the leader, rotating with the heading like every other formation. The looks are the player's fixed looks
+   relative to the heading; the coverage allocator does NOT override them; combat targets still win (combat target > explicit facing order >
+   cover > formation > movement). ClearLook applies only when a fixed look points INTO a wall within look.wall_dist (contract 16.5): a look
+   that does not face a wall is never touched (no sliver / hold logic).
+4. When the shape does not fit (walls, a narrow passage, a member cut off) it folds into the trail column (the existing guard / TrailSlots
+   path, as the manual formations) and unfolds back into the custom shape after classify.hold_distance of path (the existing hold).
+5. THREE custom slots, kept across levels (campaign carry) and in save games. An empty slot opens the placement mode; a filled slot is
+   applied at once; re-edit = hold Ctrl while releasing B on it.
+6. Behind `Codex.Formation.Sectors`: with the CVar 0 the custom row is not shown (and a held custom choice is inert: the old formation).
+
+**UX (agent's choice, 2026-11-01):**
+- The hold-B menu gets a row of three discs BELOW the ring: "Custom 1 / 2 / 3" (an empty one greyed with "(empty)"). Release on an empty
+  disc = the placement mode for that slot; on a filled one = the squad takes that shape at once (it holds until Auto, like any manual
+  pick); Ctrl held on the release = edit it (placement mode with its ghosts). Why a row and not a 9th sector: the ring's 8 x 45 deg sectors
+  are full, and a separate row keeps every existing item where the player's hand already knows it.
+- Placement mode: a banner "PLACEMENT - Custom N: click an operative, then his spot (drag = look). [Space] confirm, [Esc] / right click
+  cancel". On entry every member already has a ghost - at his saved spot (editing) or where he stands now (a new slot) - so what the
+  player sees is exactly what is stored; the selected operative's ghost is highlighted. Ghosts are holographic copies of the operative's
+  mesh (orange; the selected one brighter; a refused spot flashes red with a HUD line "Too far from the leader" / "Too close to ..."). An
+  arrow on the ground from each ghost shows his look. Confirm stores every ghost (the anchor = the leader's ghost).
+- Limits: a spot must be within 10 m of the leader's ghost and >= slot.min_spacing (80 cm) from the other ghosts (contract 16.6), on
+  the nav mesh; moving the leader's ghost is refused when it would leave someone out of the 10 m reach.
+- A leader switch later: the new leader takes the anchor's place (K), the old anchor man takes the new leader's stored place (contract 16.2,
+  "places, not fixed slots"). A dead or missing member is skipped; a member the shape lacks (a recruit) walks behind the rearmost place.
+- A run (double click) faces the run as in every formation; a halt keeps the fixed looks; the corner watch (slicing the pie) does not
+  override the player's looks.
+
+**Open for the designer (picked conservatively, can be flipped):** (1) no turn fold for a custom shape (as Q2 = a for the manual tight
+shapes) - a very wide custom shape swings round a sharp turn unless a wall cuts it; (2) the 10 m reach and the extra man behind the
+rearmost place; (3) the corner watch is off in the custom shape (the looks are the player's); (4) a run still faces the run.

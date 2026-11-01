@@ -671,3 +671,106 @@ normYaw(y), config) (no held / limit / ahead). Key `approach.arrive_dist` 100 (5
   (state exactly, duties exactly, yaws as angles, null = travel). Unit tests `CodexTactics.Formation.Approach.*`; smoke
   `FormationWallGroupSmoke` scene 5 (a patrol 9 m from a wall's long face; 1 s of game time to turn round - the game turns slower than the
   simulator).
+
+## 16. The custom formation (game designer decisions 2026-11-01; FORMATION_SECTORS.md "Custom formation")
+The player places the squad's shape himself (hold-B menu -> Custom 1 / 2 / 3 -> the placement mode) and the squad keeps it like any
+other formation: slots in the leader's frame, rotating with the heading; the looks are the player's, fixed relative to the heading.
+TS `Tools/TrainingGround/src/movement/custom.ts` (`FormationCustomRules`), C++ `Source/CodexTactics/*/Formation/FormationCustomRules.*`,
+golden `formation_Custom*.json`. Constants (same in TS and C++, not tuned): `CUSTOM_MAX_RADIUS` 1000 cm, `CUSTOM_DRAG_MIN` 50 cm,
+`CUSTOM_SLOT_COUNT` 3, `CUSTOM_MAX_MEMBERS` 4.
+
+### 16.1 The slot storage (`FFormationCustomShape`; save game / campaign carry / golden)
+```json
+{ "members": [ { "squad": 0, "fwd": 0, "right": 0, "look": 0 },
+               { "squad": 2, "fwd": -250, "right": 300, "look": 60 } ] }
+```
+- `members[0]` = the ANCHOR: the operative who led when the shape was confirmed; `fwd` / `right` = 0, `look` = 0 (his look is the
+  shape's heading). The others follow sorted by `squad` ascending. Up to 4 entries, `squad` (the operative's `SquadIndex`) unique.
+- `fwd` / `right`: the member's place in the anchor's frame, cm (forward along the heading, right = heading + 90); `look`: his look
+  relative to the heading, deg in (-180, 180]. Stored rounded to 0.1 cm / 0.1 deg (`RoundShape`, round half away from zero).
+- An empty slot = no members (`null` in JSON). Three slots per squad (`custom_1..3`). Save game: `game_state.formation_custom` =
+  `[shape | null, shape | null, shape | null]` + `game_state.formation_menu_choice` (`auto` or a menu item id); the campaign carry
+  (`FCampaignSquadCarry`) the same two.
+
+### 16.2 `CustomSlots(shape, present, leaderPos, leaderYaw, config) -> [{ squad, role, pos, yaw, fixed }]`
+`present` = the squad indices of the living members in the formation, the LEADER first, then the followers in squad order.
+- Places: place j = `shape.members[j]` (place 0 = the anchor at 0, 0, look 0). Who stands where: the leader -> place 0. The operative
+  stored at place 0 (when present and not the leader) -> the place the leader had in the shape (when the leader is in the shape; else
+  he is an extra). Everybody else present -> his own stored place. A present member the shape lacks -> an extra. A stored member not
+  present (dead, missing) is skipped; the others keep their places.
+- Output order: the leader first, then the others in `present` order. Roles = `rolesFor(count)` by that order (K, then P / Z, P / L / Z);
+  `present` beyond CUSTOM_MAX_MEMBERS is cut (the runtime's 5th man keeps the old slot math).
+- Placed: `pos = localToWorld(leaderPos, leaderYaw, [fwd, right])`, `yaw = normYaw(leaderYaw + look)`, `fixed = true`.
+- Extras (in output order, k = 1, 2, ...): `pos = localToWorld(leaderPos, leaderYaw, [minFwd - k x column.spacing, 0])`, minFwd = the
+  smallest `fwd` of the places given out (0 with the leader alone); `yaw = normYaw(leaderYaw + 180)`, `fixed = false`.
+- An empty shape -> `[]` (the caller falls back to the terrain's formation).
+
+### 16.3 `BlockedRoles(walls, slots, leaderPos, config) -> roles`
+The roles (slot order, the leader never) whose straight line `leaderPos -> slot` passes within `guard.clearance` of a wall body
+(`segmentBlocked`). No chain pairs: the custom shape has no neighbour order; every slot must see the leader.
+
+### 16.4 `Resolve(walls, shape, present, leaderPos, leaderYaw, ahead | null, state, stepDistance, config, allInSight = true) -> GuardState`
+The guard of 10.1 / 13.6 for the custom shape: `requested = 'custom'`, `effective = 'custom'` at level 0, `'column'` at level 2 (the TRAIL
+column, `FormationShapeRules.TrailSlots` - the existing fold); there is no level 1 (no mirror) and no turn fold (a sharp turn alone does
+not fold it: the player's shape, as Q2 = a for the manual hedgehog / blizzard / column). Raw level 2 (`cause 'wall'`) when BlockedRoles
+is not empty for `CustomSlots` at the leader, or at `ahead` (`{pos, yaw}`, the guard.lookahead pose), or `allInSight` is false; else 0.
+Hysteresis exactly as 10.1: `state.requested !== 'custom'` or raw >= state.level -> the raw level now; else (level 2 waiting for 0)
+`walked = (state.candidate === 0 ? state.candidateDistance : 0) + max(0, stepDistance)`; walked >= `classify.hold_distance` -> level
+0, else level 2 held (`candidate 0`, `candidateDistance walked`, the held cause). The caller does not call it for an empty shape.
+
+### 16.5 `Look(walls, pos, yaw, currentYaw, config, held = null) -> yaw`
+The player's fixed look is kept unless it points INTO a wall: blocked = some wall whose surface is within `look.wall_dist` of pos (and
+whose closest point is >= 1e-6 from pos) has the direction to its closest point within `look.wall_angle` (strictly, - 1e-6) of yaw.
+Not blocked -> `normYaw(yaw)` (no sliver / hold logic: his look stays his). Blocked -> `FormationSectorRules.ClearLook(walls, pos, yaw,
+currentYaw, config, held)` (13.1 / 13.4; no limit, no ahead).
+
+### 16.6 Placement (pure; the runtime's placement mode)
+- `DragLook(ghostPos, cursorPos, defaultYaw) -> yaw`: `dist(ghostPos, cursorPos) < CUSTOM_DRAG_MIN` -> `normYaw(defaultYaw)` (a plain
+  click: he looks along the squad's heading), else `yawOf(cursorPos - ghostPos)`.
+- `CanPlace(ghosts [{squad, pos}], anchorSquad, squad, pos, config) -> 'ok' | 'too_far' | 'too_close'`: the ghosts after the placement
+  (squad's ghost moved to pos, added when missing). `too_close` when some other ghost is within `slot.min_spacing` of pos; `too_far` when
+  any ghost (pos's included) is farther than CUSTOM_MAX_RADIUS from the anchor's ghost (squad == anchorSquad: the anchor moves, the
+  others must stay within reach; no anchor ghost -> no reach test). Checked in that order.
+- `ShapeFrom(ghosts [{squad, pos, yaw}], anchorSquad) -> shape`: the anchor ghost's pos / yaw is the frame; each ghost -> `fwd` / `right`
+  = his pos in that frame, `look = normYaw(yaw - anchorYaw)`; the anchor first (forced 0, 0, 0), the others by squad ascending, at most
+  CUSTOM_MAX_MEMBERS; `RoundShape` applied. No anchor ghost -> empty.
+
+### 16.7 The menu (section 9 extended)
+- Items `custom_1`, `custom_2`, `custom_3` (C++ `EFormationMenuItem::Custom1..3`, values 8-10; `ItemCount` stays 8 = the ring). They
+  are three discs in a row BELOW the ring: centres `(dx, dy) = ((k - 1) x CUSTOM_ROW_SPACING, CUSTOM_ROW_Y)`, k = 0..2, radius
+  `CUSTOM_ROW_RADIUS` (widget px: 100, 280, 40). `CustomItemAt(dx, dy) -> custom_(k+1) | null`: the first disc with hypot <= radius.
+  `HitAt(dx, dy, deadZonePx) = CustomItemAt(dx, dy) ?? ItemAt(dx, dy, deadZonePx)`; `Move` uses HitAt (ItemAt is unchanged).
+- `Release(state, memberCount, filled = [false, false, false], edit = false)`: on `custom_k` (enabled with >= 2 members, else
+  `disabled`): `filled[k-1]` and not `edit` -> `picked` (choice = custom_k, holds until Auto); else -> effect `edit` (the choice
+  unchanged; the runtime opens the placement mode for slot k). Every other case as section 9.
+- `Resolve(choice, memberCount)` gains `customSlot`: `custom_k` -> `{ manualFormation: 'custom', allForward: false, customSlot: k }`
+  (null for every other choice); the runtime falls back to Auto when that slot is empty. Below 2 members -> Auto as before.
+- Labels (English, the widget): "Custom 1" .. "Custom 3"; an empty slot "Custom 1 (empty)"; the HUD while folded "Custom 2 -> Column (wall)".
+- Golden `formation_Menu.json` gains the op `customAt` (`dx`, `dy` -> `item`), `release` cases with `filled` / `edit` and `resolve`
+  cases with `customSlot` (the old cases unchanged).
+
+### 16.8 Golden, bot
+- `formation_CustomSlots.json` (`in: shape, present, leaderPos, leaderYaw` -> `out.slots [{squad, role, pos, yaw, fixed}]`), cases: 1-4
+  stored members x the leader = the anchor / another stored member / not stored x a member dead / an extra x three headings.
+- `formation_CustomGuard.json` (`in: walls, shape, present, leaderPos, leaderYaw, ahead, state, stepDistance, allInSight` -> `out.blocked`
+  roles + `out.state`), scenes open / a narrow passage / a wall through a slot / a member cut off, with the hold.
+- `formation_CustomLook.json` (`in: walls, pos, yaw, currentYaw, held` -> `out.yaw`); `formation_CustomPlace.json` (ops `dragLook`,
+  `canPlace`, `shapeFrom`).
+- Bot: `npm run bot:movement -- --manual custom` walks the lab with `CUSTOM_SAMPLE_SHAPE` (4: P 250 back / 300 right look 60, L 250
+  back / 300 left look -60, Z 450 back look 180; fewer members take the first entries); gated as a manual formation (checks 1, 5, 7).
+  The sim: requested 'custom' -> Resolve 16.4 every frame; level 0 -> CustomSlots + Look per member (his held look); level 2 -> the
+  trail column as before.
+
+### 16.9 Readings fixed by the TS reference (2026-11-01; the C++ port follows them)
+- Boundaries: CanPlace `too_close` = distance < slot.min_spacing, `too_far` = distance > CUSTOM_MAX_RADIUS (1000.0 is ok); DragLook
+  < CUSTOM_DRAG_MIN is a click (50.0 is a drag). RoundShape = `sign(v) x round(|v| x 10) / 10` (-0 -> 0), the look then `normYaw`
+  (-179.96 -> 180). Resolve's held branch keeps `state.cause ?? 'wall'`; walked == hold_distance releases; a negative step counts 0.
+- CustomSlots: members[0] is the anchor whatever its stored numbers; the leader stored but the anchor dead -> the leader takes place 0
+  and his own stored place stays empty; minFwd counts the leader's place 0 (so <= 0). In the existing rules `Slots('custom')` and
+  `BlockedRoles('custom')` are `[]` (the custom rules own them); `localSlot` / `relativeLook` give 0.
+- Look: the wall test = surface distance <= look.wall_dist, the closest point >= 1e-6 away, |direction - yaw| < look.wall_angle - 1e-6.
+- Sim: level 0 skips the corner watch and the coverage allocator (the looks are the player's) and keeps the places in squad order (no
+  minimal-travel reassignment); level 2 is the trail column with its reassignment. Golden `formation_Menu.json` also has the op `hitAt`
+  (`dx`, `dy`, `deadZonePx` -> `item`); its old `resolve` cases omit `customSlot` (absent = null).
+- Golden counts: CustomSlots 235, CustomGuard 306, CustomLook 252, CustomPlace 197, Menu 160 -> 466. Bot `--manual custom`: checks 1 / 5 / 7
+  green on sample_small (24 runs) and formation_lab_01 (168 runs).
