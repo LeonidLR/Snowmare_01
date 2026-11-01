@@ -124,9 +124,18 @@ public:
 	 */
 	FLethalDamageGuard LethalDamageGuard;
 
+	/** Combat lab immortality (CombatCheats::IsImmortalActor): hits / damage this component ignored (smokes, the HUD log). */
+	int32 GetCheatBlockedHits() const { return CheatBlockedHits; }
+	float GetCheatBlockedDamage() const { return CheatBlockedDamage; }
+
 protected:
 	void ProcessStatusEffects(float DeltaSeconds);
 	void Die(const FString& AttackerSource);
+	/** True (and counted) when the owner is an immortal operative (combat lab cheat): Amount is not taken. */
+	bool AbsorbByImmortalCheat(float Amount);
+
+	int32 CheatBlockedHits = 0;
+	float CheatBlockedDamage = 0.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Health")
 	float CurrentHealth = 100.0f;

@@ -38,6 +38,8 @@
         "snow_cover": { "type": "number", "minimum": 0, "maximum": 1, "description": "Environment phase 4: the start snow cover (0 bare .. 1 fully white) when the level is locked or starts fresh (no previous level to continue); absent = environment.json snow_cover_start. It grows while it snows and never recedes" }
       }
     },
+    "cheats": { "type": "object", "description": "UE (combat lab, docs/design/COMBAT_LAB.md): {\"immortal\": bool, \"infinite_ammo\": bool} - the squad's test cheats on by default on this level (Codex.Cheat.Immortal / Codex.Cheat.InfiniteAmmo override; never in Shipping)" },
+    "pressure": { "type": "object", "description": "UE (combat lab, docs/design/COMBAT_LAB.md): endless patrols / ambushers - enabled, interval_sec, first_event_sec, group_min, group_max, max_alive, patrol_share, seed, types {TYPE: weight} (HOUND, FROSTBITTEN, SPITTER, CUTTER, MARKSMAN only), wall_clearance_cm, min_squad_distance_cm, max_squad_distance_cm, patrol {points, radius_cm, wait_sec}, ambush {min_squad_distance_cm, max_squad_distance_cm, watch_half_angle_deg, watch_range_cm, strike_range_cm}, recycle {distance_cm, after_sec}; the Wave Editor ignores it for now" },
     "waves": {
       "type": "array",
       "description": "Список последовательных боевых волн",

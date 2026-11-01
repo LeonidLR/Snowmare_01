@@ -5,6 +5,8 @@
 
 #include "Characters/OperativeCharacter.h"
 
+#include "Combat/CombatCheats.h"
+
 #include "CodexTactics.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -766,7 +768,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	}
 
 	const bool bRagingShot = IsRaging();
-	if (UsesAmmo() && !(bRagingShot && RageComponent->Config.bInfiniteAmmo))
+	if (UsesAmmo() && !(bRagingShot && RageComponent->Config.bInfiniteAmmo) && !CombatCheats::IsInfiniteAmmo(GetWorld())) // combat lab cheat
 	{
 		CurrentClip--;
 	}

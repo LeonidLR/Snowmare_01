@@ -1,4 +1,5 @@
 #include "Combat/HealthComponent.h"
+#include "Combat/CombatCheats.h"
 #include "Combat/EncounterQueries.h"
 #include "Combat/KnockdownComponent.h"
 #include "CodexTactics.h"
@@ -37,9 +38,20 @@ void UHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	}
 }
 
+bool UHealthComponent::AbsorbByImmortalCheat(float Amount)
+{
+	if (Amount <= 0.0f || !CombatCheats::IsImmortalActor(GetOwner()))
+	{
+		return false;
+	}
+	++CheatBlockedHits;
+	CheatBlockedDamage += Amount;
+	return true;
+}
+
 void UHealthComponent::ApplyDirectHealthLoss(float Amount, const FString& Source)
 {
-	if (bIsDead || Amount <= 0.0f)
+	if (bIsDead || Amount <= 0.0f || AbsorbByImmortalCheat(Amount))
 	{
 		return;
 	}
@@ -83,6 +95,10 @@ float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 	const UKnockdownComponent* Knockdown = GetOwner() ? GetOwner()->FindComponentByClass<UKnockdownComponent>() : nullptr;
 	const float KnockdownScale = Knockdown ? Knockdown->GetDamageMultiplier() : 1.f;
 	const float FinalDamage = FMath::Max(1.0f, DmgAfterArmor * ElementMult * DefenseMultiplier * KnockdownScale);
+	if (AbsorbByImmortalCheat(FinalDamage))
+	{
+		return 0.0f; // combat lab cheat (CombatCheats): an immortal operative loses nothing
+	}
 
 	const float OldHealth = CurrentHealth;
 	CurrentHealth = FMath::Max(0.0f, CurrentHealth - FinalDamage);
@@ -222,7 +238,8 @@ void UHealthComponent::ProcessStatusEffects(float DeltaSeconds)
 		if (BurningTickAccum >= BurningTickInterval)
 		{
 			BurningTickAccum = 0.0f;
-			CurrentHealth = FMath::Max(0.0f, CurrentHealth - BurningTickDamage);
+			// Combat lab cheat (CombatCheats): no tick damage on an immortal operative.
+			CurrentHealth = AbsorbByImmortalCheat(BurningTickDamage) ? CurrentHealth : FMath::Max(0.0f, CurrentHealth - BurningTickDamage);
 			if (FloatsEnemyNumbers(GetOwner()))
 			{
 				UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), FString::Printf(TEXT("🔥 -%d"), FMath::FloorToInt(BurningTickDamage)), FLinearColor(1.f, 0.45f, 0.1f));
@@ -243,7 +260,8 @@ void UHealthComponent::ProcessStatusEffects(float DeltaSeconds)
 		if (BleedingTickAccum >= BleedingTickInterval)
 		{
 			BleedingTickAccum = 0.0f;
-			CurrentHealth = FMath::Max(0.0f, CurrentHealth - BleedingTickDamage);
+			// Combat lab cheat (CombatCheats): no tick damage on an immortal operative.
+			CurrentHealth = AbsorbByImmortalCheat(BleedingTickDamage) ? CurrentHealth : FMath::Max(0.0f, CurrentHealth - BleedingTickDamage);
 			if (FloatsEnemyNumbers(GetOwner()))
 			{
 				UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), FString::Printf(TEXT("🩸 -%d"), FMath::FloorToInt(BleedingTickDamage)), FLinearColor(0.9f, 0.1f, 0.1f));

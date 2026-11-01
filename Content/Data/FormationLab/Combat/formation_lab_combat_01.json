@@ -1,0 +1,12 @@
+{
+  "schema": "codex.formation_layout_overlay/1",
+  "name": "formation_lab_combat_01",
+  "comment": "The combat lab (game designer decisions 2026-11-01, docs/design/COMBAT_LAB.md): the formation lab layout ../formation_lab_01.json (its walls, zones, routes, spawn - the ONE source of truth for the shared walls) + 4 towers with climbable ladders spread over the lab, away from the lanes. Built into /Game/Maps/L_FormationLabCombat by Scripts/Editor/build_formation_lab.py (CODEX_LAB_LAYOUT = this file). A tower: a solid block size[0] x size[1] cm, rungs x 36.4 cm tall (11 = 4.0 m, a walkable roof), an ALadderActor on the ladder_face side (+x / -x / +y / -y, 10 cm off the face, 3 wall brackets). In a subfolder so the Training Ground simulator (Content/Data/FormationLab/*.json) does not list it as a layout.",
+  "extends": "../formation_lab_01.json",
+  "towers": [
+    { "id": "T_SW", "center": [-5200, -2200], "size": [300, 300], "rungs": 11, "ladder_face": "+x" },
+    { "id": "T_NW", "center": [-5200, 3800], "size": [300, 300], "rungs": 11, "ladder_face": "+x" },
+    { "id": "T_NE", "center": [2200, 5450], "size": [300, 300], "rungs": 11, "ladder_face": "-y" },
+    { "id": "T_SE", "center": [5300, -200], "size": [300, 300], "rungs": 11, "ladder_face": "-x" }
+  ]
+}

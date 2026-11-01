@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Data/CombatTypes.h"
+#include "Combat/CombatPressureRules.h"
 #include "Environment/EnvironmentTypes.h"
 #include "Quests/GateExitRules.h"
 #include "Quests/GateProgressRules.h"
@@ -336,6 +337,20 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FEnvironmentLevelSettings Environment;
+	/**
+	 * "cheats": {"immortal": true, "infinite_ammo": true} (combat lab, game designer 2026-11-01, docs/design/COMBAT_LAB.md): the level turns
+	 * the squad's immortality / infinite ammo on by default (CombatCheats; Codex.Cheat.Immortal / Codex.Cheat.InfiniteAmmo override, never in
+	 * Shipping).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	bool bCheatImmortal = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	bool bCheatInfiniteAmmo = false;
+	/**
+	 * "pressure": the endless patrols / ambushers of the combat lab (LevelJsonRules::ParsePressureSettings, UCombatPressureSubsystem);
+	 * bEnabled false without the block. Runtime data from the JSON only (not a UPROPERTY: the level assets never carry it).
+	 */
+	FCombatPressureConfig Pressure;
 };
 
 UCLASS(BlueprintType)

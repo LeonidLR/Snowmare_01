@@ -5,6 +5,8 @@
 
 #include "Characters/OperativeCharacter.h"
 
+#include "Combat/CombatCheats.h"
+
 #include "Characters/OperativeCharacterInternal.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
@@ -244,7 +246,7 @@ bool AOperativeCharacter::CanBeginWeaponShot()
 
 void AOperativeCharacter::ConsumeAmmoAfterShot()
 {
-	if (!UsesAmmo())
+	if (!UsesAmmo() || CombatCheats::IsInfiniteAmmo(GetWorld())) // combat lab cheat (CombatCheats): the clip stays full
 	{
 		return;
 	}
