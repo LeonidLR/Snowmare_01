@@ -97,12 +97,31 @@ namespace PauseBarrelOrderSmoke
 		return Operative.GetActorLocation() - FVector(0.f, 0.f, Operative.GetSimpleCollisionHalfHeight());
 	}
 
-	/** An actor of class T on a reachable ground spot Distance cm from Operative along Direction, HalfHeight above it. */
+	/** The objects keep this far apart (an object standing on another's walk-up spot blocked that order; 2026-11-02). */
+	constexpr float ObjectGapCm = 300.f;
+
+	/**
+	 * An actor of class T on a reachable ground spot Distance cm from Operative along Direction (or the first turn of it, +-30 / 60 ...,
+	 * at least ObjectGapCm from every spot in Taken), HalfHeight above it; its spot is added to Taken. 2026-11-02: since the formation
+	 * look sectors (9cd47737; the old set-up passes with Codex.Formation.Sectors 0) the squad settles differently at the start and barrel
+	 * 4 (C's real-time "Ignite") landed on barrel 2's push walk-up spot: "Engineer: move to ... -> unreachable", the push never ran.
+	 */
 	template <typename T>
-	T* SpawnNear(UWorld* World, const AOperativeCharacter& Operative, const FVector& Direction, float Distance, float HalfHeight)
+	T* SpawnNear(UWorld* World, const AOperativeCharacter& Operative, const FVector& Direction, float Distance, float HalfHeight, TArray<FVector>& Taken)
 	{
 		const FVector From = Feet(Operative);
-		const FVector Spot = SmokeUtils::ClearPoint(World, From, From + Direction.GetSafeNormal2D() * Distance);
+		const FVector Dir = Direction.GetSafeNormal2D();
+		FVector Spot = SmokeUtils::ClearPoint(World, From, From + Dir * Distance);
+		for (const float Turn : { 0.f, 30.f, -30.f, 60.f, -60.f, 90.f, -90.f, 120.f, -120.f, 150.f, -150.f, 180.f })
+		{
+			const FVector Candidate = SmokeUtils::ClearPoint(World, From, From + Dir.RotateAngleAxis(Turn, FVector::UpVector) * Distance);
+			if (!Taken.ContainsByPredicate([&Candidate](const FVector& Other) { return FVector::Dist2D(Other, Candidate) < ObjectGapCm; }))
+			{
+				Spot = Candidate;
+				break;
+			}
+		}
+		Taken.Add(Spot);
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		return World->SpawnActor<T>(FVector(Spot.X, Spot.Y, From.Z + HalfHeight), FRotator::ZeroRotator, Params);
@@ -170,12 +189,13 @@ namespace PauseBarrelOrderSmoke
 			State.SquadStart = Shooter->GetActorLocation();
 			const FVector Forward = Shooter->GetActorForwardVector();
 			const FVector Right = Shooter->GetActorRightVector();
-			State.ShotBarrel = SpawnNear<ABarrelActor>(World, *Shooter, Forward, ShotDistance, BarrelHalfHeight);
-			State.LiveShotBarrel = SpawnNear<ABarrelActor>(World, *Shooter, Right, ShotDistance, BarrelHalfHeight);
-			State.CarryBarrel = SpawnNear<ABarrelActor>(World, *State.Carrier, -Forward - Right * 0.5f, 350.f, BarrelHalfHeight);
-			State.Barricade = SpawnNear<ABarricadeActor>(World, *State.Carrier, -Forward + Right * 0.5f, 350.f, 50.f);
-			State.MatchBarrel = SpawnNear<ABarrelActor>(World, *State.Lighter, -Right, 500.f, BarrelHalfHeight);
-			State.LiveMatchBarrel = SpawnNear<ABarrelActor>(World, *State.Lighter, -Forward - Right, 500.f, BarrelHalfHeight);
+			TArray<FVector> Taken;
+			State.ShotBarrel = SpawnNear<ABarrelActor>(World, *Shooter, Forward, ShotDistance, BarrelHalfHeight, Taken);
+			State.LiveShotBarrel = SpawnNear<ABarrelActor>(World, *Shooter, Right, ShotDistance, BarrelHalfHeight, Taken);
+			State.CarryBarrel = SpawnNear<ABarrelActor>(World, *State.Carrier, -Forward - Right * 0.5f, 350.f, BarrelHalfHeight, Taken);
+			State.Barricade = SpawnNear<ABarricadeActor>(World, *State.Carrier, -Forward + Right * 0.5f, 350.f, 50.f, Taken);
+			State.MatchBarrel = SpawnNear<ABarrelActor>(World, *State.Lighter, -Right, 500.f, BarrelHalfHeight, Taken);
+			State.LiveMatchBarrel = SpawnNear<ABarrelActor>(World, *State.Lighter, -Forward - Right, 500.f, BarrelHalfHeight, Taken);
 			Check(State, State.ShotBarrel.IsValid() && State.LiveShotBarrel.IsValid() && State.CarryBarrel.IsValid() && State.Barricade.IsValid()
 				&& State.MatchBarrel.IsValid() && State.LiveMatchBarrel.IsValid(), TEXT("five barrels and a barricade spawned"));
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime,
@@ -202,6 +222,13 @@ namespace PauseBarrelOrderSmoke
 			Check(State, Relocation->IsPlacing(), TEXT("B: \"Push\" starts the placement"));
 			State.CarryStart = State.CarryBarrel->GetActorLocation();
 			State.CarryTarget = SpotBeside(World, *Carrier, *State.CarryBarrel, 60.f, 600.f);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: B (%s) at %s facing %s, barrel 2 at %s, its spot %s; the barricade at %s; A at %s facing %s"),
+				*Carrier->DisplayName.ToString(), *Carrier->GetActorLocation().ToCompactString(), *Carrier->GetActorForwardVector().ToCompactString(),
+				*State.CarryBarrel->GetActorLocation().ToCompactString(), *State.CarryTarget.ToCompactString(), *State.Barricade->GetActorLocation().ToCompactString(),
+				*Shooter->GetActorLocation().ToCompactString(), *Shooter->GetActorForwardVector().ToCompactString());
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: barrels 1 %s, 3 %s, 4 %s, 5 %s; C (%s) at %s"), *State.ShotBarrel->GetActorLocation().ToCompactString(),
+				*State.MatchBarrel->GetActorLocation().ToCompactString(), *State.LiveMatchBarrel->GetActorLocation().ToCompactString(),
+				*State.LiveShotBarrel->GetActorLocation().ToCompactString(), *Lighter->DisplayName.ToString(), *Lighter->GetActorLocation().ToCompactString());
 			Relocation->ConfirmPlacement(State.CarryTarget);
 			Check(State, Relocation->HasPlannedTask(Carrier) && Relocation->GetActiveTaskCount() == 0, TEXT("B: push planned, not started"));
 			// C: click on barrel 3 -> its menu -> «Разжечь (1 спичка)».

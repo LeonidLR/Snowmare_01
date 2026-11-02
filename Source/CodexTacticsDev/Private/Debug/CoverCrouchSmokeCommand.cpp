@@ -268,6 +268,10 @@ namespace CoverCrouchSmoke
 					Member->TeleportTo(State.P - State.F * 400.f + State.R * (Index++ % 2 == 0 ? 250.f : -250.f), State.F.Rotation(), false, true);
 				}
 			}
+			// Solo: the two others hold where they are put. Since the user's decision 2026-10-26 ("the squad stays in formation in the fight")
+			// they followed him round the walls and stood on his shimmy line by chance (2026-11-02: the forward crouch-shimmy shrank from
+			// 151 to 57 cm and was over before the clip check) - this smoke is about one operative's cover moves.
+			Squad->EnterSoloMode();
 			// The high wall (6 m x 3 m) 4 m ahead as in CoverSmoke; a 60 cm low cover (3 m) 7.5 m to the side (-R).
 			const FVector WallCentre = State.P + State.F * 400.f;
 			SpawnBlock(World, FVector(WallCentre.X, WallCentre.Y, State.GroundZ + 150.f), State.F.Rotation(), FVector(0.4f, 6.f, 3.f));
@@ -361,8 +365,13 @@ namespace CoverCrouchSmoke
 			}
 			Check(State, !Op->IsCornerAimActive() && Op->GetLastCornerAimBreak() == ECornerAimDecision::ReturnNoTargets,
 				FString::Printf(TEXT("low cover: no target -> back down after the grace (%.1f s)"), StageTime));
-			// An enemy on his side of the barricade: the open shot.
-			PlaceHound(State, Op->GetActorLocation() - State.F * 600.f - State.R * 150.f);
+			// An enemy on his side of the barricade: the open shot. Since the field-of-view rule (e4e78b61, 2026-10-20: operatives see only
+			// inside +-70 deg of their look; the old spot passes with Codex.Sight.Fov 0) the hound must be where the squad sees it - a player
+			// cannot click a hound that is not shown. The old spot (6 m straight behind him) was outside the low-cover look-around pose
+			// (along the wall), so the click found no visible enemy and nothing fired. Now 6 m along the wall the way he looks, 1.5 m back
+			// on his side.
+			const float LookSide = FVector::DotProduct(Op->GetSightFacing(), State.R) >= 0.f ? 1.f : -1.f;
+			PlaceHound(State, Op->GetActorLocation() - State.F * 150.f + State.R * (LookSide * 600.f));
 			State.OpenBefore = Op->GetCoverOpenShots();
 			State.bSawLeftCover = false;
 			return Next(6);
