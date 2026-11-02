@@ -44,6 +44,8 @@ namespace RealtimeSelectSmoke
 		FVector TargetB = FVector::ZeroVector;
 		float MinA = 1.0e9f;
 		float MinB = 1.0e9f;
+		/** Order keep: steps spent waiting for a knocked-down A / B to be up before the orders (2026-11-02). */
+		int32 KnockdownWaits = 0;
 	};
 
 	void PressKey(APlayerController* PC, const FKey& Key, EInputEvent Event)
@@ -92,6 +94,22 @@ namespace RealtimeSelectSmoke
 			// A clean stretch (the test start corridor, away from the fight's corpses) and no fire / grenades of their own.
 			Squad->SetSquadPosture(ESquadFirePosture::Passive);
 			SmokeUtils::PlaceSquadAtTestStart(World);
+			return true;
+		case 3:
+			// 2026-11-02: a hound of the live wave (parked at step 0) may have pounced on A / B just before. An order while he is down is
+			// buffered (UKnockdownComponent::BufferOrder) and becomes his own move order only once he is up - the check at step 6 read that
+			// as "the selection dropped his order" (seen on main after the medic-regroup merge, Commander knocked down at the wave start).
+			if ((A->IsKnockedDown() || B->IsKnockedDown()) && State.KnockdownWaits < 40)
+			{
+				++State.KnockdownWaits;
+				--State.Step; // this step again in 0.25 s
+				return true;
+			}
+			if (State.KnockdownWaits > 0)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[RealtimeSelect] waited %.2f s for A / B to get up from a knockdown before the orders"),
+					State.KnockdownWaits * 0.25f);
+			}
 			return true;
 		case 4:
 			Squad->SetLeaderByIndex(0);
