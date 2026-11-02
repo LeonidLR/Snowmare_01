@@ -16,6 +16,8 @@
     "lab:gen": "node src/movement/cli/genLab.ts",
     "levelgen": "node src/levelgen/cli/levelgen.ts",
     "levelgen:critic": "node src/levelgen/cli/critic.ts",
+    "combatsim": "node src/combatSim/cli/combatsim.ts",
+    "combatsim:calibrate": "node src/combatSim/cli/calibrate.ts",
     "menu:icons": "node src/movement/cli/genMenuIcons.ts"
   },
   "dependencies": {

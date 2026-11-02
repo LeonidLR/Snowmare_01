@@ -436,8 +436,11 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     spawn_points: d.spawn_points.map((s) => ({ ...s, pos: U(s.pos) })),
     ambush_points: d.ambush_points.map((a) => ({ ...a, pos: U(a.pos) })),
     patrol_routes: d.patrol_routes.map((p) => ({ ...p, points: p.points.map(U) })),
-    pressure: { first_event_sec: 30, interval_sec: 120, group_min: 1, group_max: 3, max_alive: 4, patrol_share: 0.6, seed: o.seed,
-      ambush: { points: d.ambush_points.map((a) => U(a.pos)) } },
+    // The pressure template of a generated map (COMBAT_SIM.md section 5, 2026-11-02): ambush-heavy - 30 % patrols, half of the ambushes
+    // coordinated plans, a group every 90 s, caps of 8 so a plan of 4-6 finds room beside a living patrol (the combat lab's own level
+    // keeps the designer's 60 % / 35 % / 120 s / 4). The level JSON's block is the master once the map is built (the builder keeps it).
+    pressure: { first_event_sec: 30, interval_sec: 90, group_min: 2, group_max: 4, max_alive: 8, patrol_share: 0.3, seed: o.seed,
+      ambush: { points: d.ambush_points.map((a) => U(a.pos)), coordinated: { share: 0.5, max_alive: 8 } } },
   };
   return layout;
 }

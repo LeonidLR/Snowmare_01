@@ -7173,11 +7173,11 @@
  ],
  "pressure": {
   "first_event_sec": 30,
-  "interval_sec": 120,
-  "group_min": 1,
-  "group_max": 3,
-  "max_alive": 4,
-  "patrol_share": 0.6,
+  "interval_sec": 90,
+  "group_min": 2,
+  "group_max": 4,
+  "max_alive": 8,
+  "patrol_share": 0.3,
   "seed": 1,
   "ambush": {
    "points": [
@@ -7269,7 +7269,11 @@
      -6039,
      1480
     ]
-   ]
+   ],
+   "coordinated": {
+    "share": 0.5,
+    "max_alive": 8
+   }
   }
  }
 }
