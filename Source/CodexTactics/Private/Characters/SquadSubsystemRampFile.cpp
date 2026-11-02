@@ -49,7 +49,7 @@ namespace SquadSubsystemRampFileLocal
 			|| (Owner && Owner->GetClass()->GetName().Contains(TEXT("Landscape")));
 	}
 
-	float FeetZ(const AOperativeCharacter& Operative)
+	float RampFeetZ(const AOperativeCharacter& Operative)
 	{
 		return static_cast<float>(Operative.GetActorLocation().Z) - Operative.GetSimpleCollisionHalfHeight();
 	}
@@ -127,7 +127,7 @@ FVector USquadSubsystem::KeepSlotOffRamp(const AOperativeCharacter& LeaderRef, c
 	{
 		return Slot;
 	}
-	const float LeaderFeet = FeetZ(LeaderRef);
+	const float LeaderFeet = RampFeetZ(LeaderRef);
 	if (!RampFileRules::ShouldDropRampSlot(IsOperativeOnRamp(LeaderRef), IsRampUnder(FVector2D(Slot), LeaderFeet)))
 	{
 		return Slot;
@@ -259,7 +259,7 @@ void USquadSubsystem::UpdateHolderYield(AOperativeCharacter& Operative, const AO
 		return;
 	}
 	// Only a team-mate on the leader's level near him (a man on the roof above the ramp's foot is in nobody's way).
-	if (FMath::Abs(FeetZ(Operative) - FeetZ(LeaderRef)) > 120.f || FVector::Dist2D(Operative.GetActorLocation(), LeaderRef.GetActorLocation()) > 800.f)
+	if (FMath::Abs(RampFeetZ(Operative) - RampFeetZ(LeaderRef)) > 120.f || FVector::Dist2D(Operative.GetActorLocation(), LeaderRef.GetActorLocation()) > 800.f)
 	{
 		return;
 	}
@@ -290,7 +290,7 @@ void USquadSubsystem::UpdateHolderYield(AOperativeCharacter& Operative, const AO
 		}
 	}
 	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	const float Feet = FeetZ(Operative);
+	const float Feet = RampFeetZ(Operative);
 	FCollisionQueryParams WalkParams(SCENE_QUERY_STAT(SquadRampYieldWalk), false);
 	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
 	{
@@ -392,7 +392,7 @@ void USquadSubsystem::UpdateRampFile(float DeltaTime)
 		const bool bHasWalk = Hold.bHeld || MoveStatus(*Operative) != EPathFollowingStatus::Idle;
 		const float UphillSpeed = static_cast<float>(FVector2D::DotProduct(FVector2D(Operative->GetVelocity()), Candidate.Uphill));
 		Candidate.Direction = Hold.bHeld ? Hold.Direction
-			: RampFileRules::TravelDirection(FeetZ(*Operative), static_cast<float>(Operative->GetLastMoveDestination().Z), bHasWalk, Tune.LevelChangeCm,
+			: RampFileRules::TravelDirection(RampFeetZ(*Operative), static_cast<float>(Operative->GetLastMoveDestination().Z), bHasWalk, Tune.LevelChangeCm,
 				bOnRamp, UphillSpeed, Tune.ProgressSpeed);
 		Candidate.Priority = Operative == LeaderRef ? 0 : Index + 1;
 	}
