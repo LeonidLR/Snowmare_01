@@ -1075,6 +1075,7 @@ void USquadSubsystem::Tick(float DeltaTime)
 	UpdateGroupCoverWait(DeltaTime); // group cover leader priority (2026-10-23)
 	UpdateWallGroup(DeltaTime); // rules v2.2 wall group (Codex.Formation.Sectors): the followers' looks round the leader's fixed corner aim
 	UpdateSoloGuardCrouch(DeltaTime); // Solo's guard crouch after hold_crouch_after_sec standing still (2026-11-02)
+	UpdateRampFile(DeltaTime); // a narrow ramp / stair single file, holders out of the selected man's path (bug report 2026-11-02 item 7)
 
 	// Formation look sectors (Codex.Formation.Sectors): the follow below fills this frame's looks / the leader's pace; every member not
 	// given one this frame (console off, Solo, a fight, an order of his own, ...) gets none - his old facing and speed.

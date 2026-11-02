@@ -305,4 +305,12 @@ namespace FormationRuntime
 	 */
 	CODEXTACTICS_API TArray<FVector2D> YieldFromLeaderWay(const FVector2D& Leader, const FVector2D& Destination, const FVector2D& Here,
 		const FVector2D& Target, float CorridorCm = YieldCorridorCm, float ClearCm = YieldClearCm, float AheadCm = YieldAheadCm);
+
+	/**
+	 * Bug report 2026-11-02 item 7 (Solo at a ramp's foot): YieldFromLeaderWay along the leader's PATH (Path[0] = where he is, then its
+	 * corners) instead of the straight line to his goal - a path turns into a ramp's mouth. Each leg of the path is looked at in turn until
+	 * AheadCm of it are covered; the first leg Here stands on gives the points to step aside to. Empty: not in the way (or no path).
+	 */
+	CODEXTACTICS_API TArray<FVector2D> YieldFromLeaderPath(TArrayView<const FVector2D> Path, const FVector2D& Here, float CorridorCm = YieldCorridorCm,
+		float ClearCm = YieldClearCm, float AheadCm = YieldAheadCm);
 }

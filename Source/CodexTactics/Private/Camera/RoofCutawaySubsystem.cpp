@@ -18,6 +18,8 @@ namespace
 {
 	TAutoConsoleVariable<int32> CVarRoofCutaway(TEXT("Codex.RoofCutaway"), 1,
 		TEXT("1: roofs / ceilings over squad operatives are cut away from the main render pass (rev 5h, URoofCutawaySubsystem); 0: off"));
+	TAutoConsoleVariable<int32> CVarRoofCutawayFollowSelected(TEXT("Codex.RoofCutaway.FollowSelected"), 1,
+		TEXT("Bug report 2026-11-02 item 8: 1 = only the SELECTED operative's roof is cut (the squad leader: the selected man, a group's leader, the turn-based active unit) - a selected man on a roof keeps it drawn while a team-mate stands under it; 0 = every operative's roof (the old rule, A/B)"));
 
 	/** A head never counts lower than a standing operative's (a prone one must not cut a table he lies under), cm above the feet. */
 	constexpr float RoofMinHeadHeightCm = 180.f;
@@ -83,6 +85,11 @@ namespace RoofCutawayRules
 	bool ShouldCutForOperative(bool bInsideShownZoneCamera)
 	{
 		return !bInsideShownZoneCamera;
+	}
+
+	bool ShouldEvaluateOperative(bool bIsSelected, bool bFollowSelected)
+	{
+		return bIsSelected || !bFollowSelected;
 	}
 
 	bool ShouldRestore(double LastCoveredSeconds, double NowSeconds, float RestoreDelaySeconds)
@@ -160,9 +167,11 @@ void URoofCutawaySubsystem::UpdateNow()
 	TSet<UPrimitiveComponent*> Covered;
 	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
 	{
+		const bool bFollowSelected = CVarRoofCutawayFollowSelected.GetValueOnGameThread() != 0;
 		for (AOperativeCharacter* Member : Squad->GetMembers())
 		{
-			if (Member && !Member->IsHidden() && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member))
+			if (Member && RoofCutawayRules::ShouldEvaluateOperative(Member == Squad->GetLeader(), bFollowSelected)
+				&& !Member->IsHidden() && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member))
 			{
 				CollectRoofPieces(*Member, ShownZones, Covered);
 			}

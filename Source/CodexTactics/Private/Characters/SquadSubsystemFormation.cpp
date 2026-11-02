@@ -923,6 +923,9 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	const float LeaderFloorZ = static_cast<float>(bLeaderLevel ? LeaderRef.GetFloorReferenceLocation().Z : Operative.GetActorLocation().Z);
 	FVector SlotLocation(Raw.X, Raw.Y, LeaderFloorZ);
 	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation, /*bLeaderSide*/ FormationGuardRuntime::IsEnabled(), Operative.GetActorLocation());
+	// Bug report 2026-11-02 item 7: never a slot ON a narrow ramp while the leader stands on a floor (the trail column behind a leader who
+	// stopped just past the ramp's top parked a man on it - the next man up pushed into him for good).
+	SlotLocation = KeepSlotOffRamp(LeaderRef, SlotLocation);
 	FrameGivenByMember.Add(Follower.Operative, FVector2D(SlotLocation));
 	const FVector2D Here(Operative.GetActorLocation());
 	const FVector2D Target(SlotLocation);

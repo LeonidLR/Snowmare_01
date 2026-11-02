@@ -426,4 +426,26 @@ namespace FormationRuntime
 		Out.Add(OnWay - Left * (Side * ClearCm));
 		return Out;
 	}
+
+	TArray<FVector2D> YieldFromLeaderPath(TArrayView<const FVector2D> Path, const FVector2D& Here, float CorridorCm, float ClearCm, float AheadCm)
+	{
+		float Left = AheadCm;
+		for (int32 Index = 0; Index + 1 < Path.Num() && Left > 0.f; ++Index)
+		{
+			const float Leg = static_cast<float>(FVector2D::Distance(Path[Index], Path[Index + 1]));
+			if (Leg < 1.f)
+			{
+				continue;
+			}
+			// The leg's first Left cm (the last leg looked at is cut where the look-ahead ends).
+			const FVector2D End = Leg <= Left ? Path[Index + 1] : Path[Index] + (Path[Index + 1] - Path[Index]) * (Left / Leg);
+			TArray<FVector2D> Aside = YieldFromLeaderWay(Path[Index], End, Here, Here, CorridorCm, ClearCm, FMath::Min(Leg, Left));
+			if (!Aside.IsEmpty())
+			{
+				return Aside;
+			}
+			Left -= Leg;
+		}
+		return TArray<FVector2D>();
+	}
 }

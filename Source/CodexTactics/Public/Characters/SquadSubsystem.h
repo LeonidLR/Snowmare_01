@@ -22,6 +22,7 @@
 #include "SquadSubsystem.generated.h"
 
 class AOperativeCharacter;
+class UPrimitiveComponent;
 struct FCollisionQueryParams;
 struct FHitResult;
 
@@ -165,6 +166,13 @@ public:
 
 	/** Solo holds him standing and his guard crouch still waits out hold_crouch_after_sec (ArmSoloGuardCrouch; smokes / debug). */
 	bool IsSoloGuardCrouchWaiting(const AOperativeCharacter* Operative) const;
+
+	/** He waits in a ramp's file now (bug report 2026-11-02 item 7; smokes / debug). */
+	bool IsRampHeld(const AOperativeCharacter* Operative) const;
+	/** He stands on a ramp / stair now (his movement's floor is a sloped static mesh); OutUphill = its uphill direction (2D). */
+	bool IsOperativeOnRamp(const AOperativeCharacter& Operative, FVector2D* OutUphill = nullptr, const UPrimitiveComponent** OutRamp = nullptr) const;
+	/** Ramp file waits started so far (smokes). */
+	int32 GetRampHoldCount() const { return RampHoldCount; }
 
 	/**
 	 * Demo 01 rev 5h (game designer 2026-10-15, every level): a hidden trap was spotted (AInteractableActor::NotifyTrapSpotted).
@@ -643,6 +651,51 @@ private:
 	void ApplySoloGuardCrouch(AOperativeCharacter& Operative);
 	/** Solo's waiting followers -> seconds each has stood still since Solo held him (ArmSoloGuardCrouch). */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, float> SoloGuardCrouchWait;
+
+	// --- The squad on a narrow ramp / stair (bug report 2026-11-02 item 7; RampFileRules; SquadSubsystemRampFile.cpp) ---
+	/**
+	 * Each frame (Codex.Squad.RampFile): the members on a ramp / stair or in its mouth walk it single file - the man behind waits until the
+	 * man ahead is RampFileRules::FRampFileConfig::FileGapCm along (a formation follower by a traffic hold, an own walk paused, never longer
+	 * than MaxHoldSeconds); holding team-mates (Solo, a perimeter hold) on the selected man's path step aside (UpdateHolderYield).
+	 */
+	void UpdateRampFile(float DeltaTime);
+	/** A holding team-mate standing on the leader's path ahead of him (his own walk) steps aside (FormationRuntime::YieldFromLeaderPath). */
+	void UpdateHolderYield(AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef);
+	/** Holds / releases him in the ramp file: an own walk is paused / resumed, a formation follower held by a traffic hold. */
+	void SetRampHold(AOperativeCharacter& Operative, bool bHold, int32 Direction, const TCHAR* Why);
+	/** The floor under Point (a trace down from FromZ + 100 cm) is a ramp / stair (a sloped static mesh). */
+	bool IsRampUnder(const FVector2D& Point, float FromZ) const;
+	/**
+	 * Bug report 2026-11-02 item 7: a follower's slot ON a ramp while the leader stands on a floor (the trail column behind a leader who
+	 * stopped just past a ramp's top) - a stand-in round the leader on his floor (SquadFormation::ComputeFallbackSlots), else Slot.
+	 */
+	FVector KeepSlotOffRamp(const AOperativeCharacter& LeaderRef, const FVector& Slot) const;
+
+	struct FRampHoldState
+	{
+		bool bHeld = false;
+		/** His own walk was paused (resumed on release) - else a traffic hold on a formation follower. */
+		bool bPausedOwnWalk = false;
+		uint32 PausedRequestId = 0;
+		/** The way he was going when held (+1 up, -1 down): a held man stays in the file. */
+		int32 Direction = 0;
+		float HeldSeconds = 0.f;
+		float CooldownSeconds = 0.f;
+		/** World time he last walked at RampFileRules::FRampFileConfig::ProgressSpeed+, s. */
+		double LastProgressSeconds = -1.0e9;
+	};
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FRampHoldState> RampHolds;
+	/** Holders who stepped out of the leader's path for his current order (one step per order serial). */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, uint32> HolderYieldSerial;
+	/** The leader's path from where he is now (the cached corners of his current order's navmesh path); empty without one. */
+	void BuildLeaderWay(const AOperativeCharacter& LeaderRef, TArray<FVector2D>& OutWay);
+	/** Holders stepping out of the leader's way -> the spot each walks to (the leader waits while one is still on his way). */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector2D> HolderYieldTargets;
+	/** The leader's path corners for his current order (UpdateHolderYield; one navmesh query per order). */
+	TArray<FVector2D> HolderYieldWay;
+	TWeakObjectPtr<const AOperativeCharacter> HolderYieldWayLeader;
+	uint32 HolderYieldWaySerial = 0;
+	int32 RampHoldCount = 0;
 
 	UFUNCTION()
 	void HandleTacticalPauseReleased();
