@@ -1,0 +1,139 @@
+{
+  "$schema": "../../Schemas/level_config.schema.json",
+  "level_id": "stage_01",
+  "level_name": "Battle 1: Checkpoint Skirmish",
+  "stage_number": 1,
+  "act": 1,
+  "biome_id": "bunker_industrial",
+  "description": "Smoke fixture of CommanderModeSmoke (CodexTactics.CommanderModeSmoke, Scripts/test_map.json -LevelJson=SmokeFixtures/commander_mode_smoke.json): level_01_outpost's waves as of d4bca4a7 (the waves the smoke last passed on, 2026-10-21), pinned so the user's Wave Editor edits of level_01_outpost.json cannot change what the smoke checks. The smoke's real-time pause comes 16 s into wave 1 and must find the wave still running: wave 1 = 45 hounds + 10 frostbitten (the user's 10-hound wave 1 of 2026-10-28 was cleared by the immortal squad in ~11 s - 'pause freeze 0'). Do not tune.",
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "gate_open_mode": "generator_waves",
+  "gate_progress_per_second": 0.004,
+  "gate_max_progress_before_final": 0.9,
+  "gate_full_open_after_wave": 0,
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 8,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 45,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        },
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 10,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1,
+        "enemy_damage_mult": 1,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    },
+    {
+      "wave_index": 2,
+      "name": "Wave 2",
+      "max_simultaneous_enemies": 10,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 40,
+          "spawn_lane": "WEST_FLANK",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        },
+        {
+          "enemy_type": "CUTTER",
+          "count": 5,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        },
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 10,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        },
+        {
+          "enemy_type": "MARKSMAN",
+          "count": 2,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1.05,
+        "enemy_damage_mult": 1.05,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    },
+    {
+      "wave_index": 3,
+      "name": "Wave 3",
+      "max_simultaneous_enemies": 12,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 20,
+          "spawn_lane": "WEST_FLANK",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0,
+          "custom_stats": {
+            "health": 100
+          }
+        },
+        {
+          "enemy_type": "CUTTER",
+          "count": 6,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0,
+          "custom_stats": {
+            "health": 200
+          }
+        },
+        {
+          "enemy_type": "MARKSMAN",
+          "count": 6,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1.1,
+        "enemy_damage_mult": 1.1,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    }
+  ],
+  "standard_loot_found": true,
+  "puzzle_secret_found": false,
+  "squad_loadout": {
+    "simulation_mode": "STARTING_UNIQUE",
+    "preset_tier": "CUSTOM",
+    "turrets_count": 1,
+    "barricades_count": 2,
+    "mines_count": 2,
+    "medkits_count": 2,
+    "m16_ammo": 30,
+    "pistol_ammo": 24,
+    "canned_food": 4,
+    "matches": 3
+  }
+}

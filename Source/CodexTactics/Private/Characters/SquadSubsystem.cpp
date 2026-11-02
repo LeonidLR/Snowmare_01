@@ -3,6 +3,7 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Characters/SquadAutonomyRules.h"
 #include "Characters/SquadOrderRules.h"
 #include "Formation/FormationGuardRuntimeRules.h"
 #include "Formation/FormationRuntimeRules.h"
@@ -15,6 +16,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TargetedShotRules.h"
+#include "Data/SquadROE.h"
 #include "Data/TacticalHeatTuning.h"
 #include "CodexTactics.h"
 #include "CollisionQueryParams.h"
@@ -240,6 +242,7 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 		{
 			// Reapply holding and crouch to followers in solo mode. Rev 5g: the old leader (or anyone) still executing his own
 			// order finishes it first, then holds where it ended (bug: selecting another operative in Solo stopped him).
+			SoloGuardCrouchWait.Remove(NewLeader); // the new leader is nobody's guard
 			for (FFollowerState& Follower : Followers)
 			{
 				// (2026-10-20: one lying behind a cover on a group cover order keeps lying there.)
@@ -247,8 +250,12 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 					Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !HasGroupCoverProne(Operative))
 				{
 					Operative->StopOperative();
-					Operative->SetStance(EOperativeStance::Crouching);
-					Operative->MarkStanceFromSquad(); // Solo's guard crouch (bug 2026-10-20)
+					// Solo's guard crouch (bug 2026-10-20); a standing one waits hold_crouch_after_sec first (2026-11-02). One already
+					// waiting keeps his clock.
+					if (!SoloGuardCrouchWait.Contains(Operative))
+					{
+						ArmSoloGuardCrouch(*Operative);
+					}
 				}
 				Follower.bParked = true;
 				Follower.RepathTimeRemaining = 0.f;
@@ -461,15 +468,17 @@ void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
 
 	// Followers crouch when holding in solo mode (Godot solo_wait_stance = 1 / CROUCHING); one still on his own order walks on in
 	// his stance (rev 5g). Rev 5h: the trap hold leaves an operative in cover as he is (a crouch would drop a corner peek's pose).
+	// 2026-11-02 (the game designer's review of ambush v3: the two waiting while the leader climbs a tower crouched at once): a standing
+	// follower crouches only after squad_roe.json hold_crouch_after_sec standing still - the autonomy's hold crouch delay
+	// (ArmSoloGuardCrouch / UpdateSoloGuardCrouch).
+	SoloGuardCrouchWait.Reset();
 	for (FFollowerState& Follower : Followers)
 	{
 		if (AOperativeCharacter* Operative = Follower.Operative.Get();
 			Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !(bForTrap && Operative->bInCover)
 			&& !HasGroupCoverProne(Operative)) // 2026-10-20: lying behind a cover on a group cover order: stays prone
 		{
-			Operative->SetStance(EOperativeStance::Crouching);
-			Operative->MarkStanceFromSquad(); // the guard crouch is the squad's, not the player's (ShouldStandToSprintWithLeader)
-			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🛡️ GUARD: CROUCHED"), FLinearColor(0.3f, 0.9f, 0.4f));
+			ArmSoloGuardCrouch(*Operative);
 		}
 	}
 	UFloatingTextSubsystem::SpawnAboveOperative(LeaderRef, TEXT("👤 SOLO MODE [B]"), FLinearColor(0.2f, 0.9f, 1.f));
@@ -479,6 +488,71 @@ void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
 		Messages->PostMessage(LeaderRef->DisplayName,
 			FText::Format(LOCTEXT("SoloModeOn", "👤 [SOLO MODE: ON] {0} scouts alone (max 25 m). Teammates hold their positions, crouched!"),
 				LeaderRef->DisplayName));
+	}
+}
+
+bool USquadSubsystem::IsSoloGuardCrouchWaiting(const AOperativeCharacter* Operative) const
+{
+	return Operative && SoloGuardCrouchWait.Contains(TWeakObjectPtr<AOperativeCharacter>(const_cast<AOperativeCharacter*>(Operative)));
+}
+
+void USquadSubsystem::ApplySoloGuardCrouch(AOperativeCharacter& Operative)
+{
+	const bool bChanged = Operative.GetStance() != EOperativeStance::Crouching;
+	Operative.SetStance(EOperativeStance::Crouching);
+	Operative.MarkStanceFromSquad(); // the guard crouch is the squad's, not the player's (ShouldStandToSprintWithLeader)
+	if (bChanged)
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(&Operative, TEXT("🛡️ GUARD: CROUCHED"), FLinearColor(0.3f, 0.9f, 0.4f));
+	}
+}
+
+void USquadSubsystem::ArmSoloGuardCrouch(AOperativeCharacter& Operative)
+{
+	using namespace SquadAutonomyRules;
+	if (StartSoloGuardCrouch(Operative.GetStance(), SquadROE::Get().HoldCrouchAfterSeconds) == ESoloGuardCrouch::Crouch)
+	{
+		SoloGuardCrouchWait.Remove(&Operative);
+		ApplySoloGuardCrouch(Operative);
+		return;
+	}
+	SoloGuardCrouchWait.Add(&Operative, 0.f); // the clock starts when Solo holds him
+}
+
+void USquadSubsystem::UpdateSoloGuardCrouch(float DeltaTime)
+{
+	using namespace SquadAutonomyRules;
+	if (SoloGuardCrouchWait.IsEmpty())
+	{
+		return;
+	}
+	const float AfterSeconds = SquadROE::Get().HoldCrouchAfterSeconds;
+	const AOperativeCharacter* LeaderRef = Leader.Get();
+	for (auto It = SoloGuardCrouchWait.CreateIterator(); It; ++It)
+	{
+		AOperativeCharacter* Operative = It.Key().Get();
+		if (!Operative || !Operative->HealthComponent || !Operative->HealthComponent->IsAlive())
+		{
+			It.RemoveCurrent();
+			continue;
+		}
+		const bool bFollower = Followers.ContainsByPredicate([Operative](const FFollowerState& Follower) { return Follower.Operative.Get() == Operative; });
+		const bool bHolding = bIsSoloMode && bFollower && Operative != LeaderRef;
+		const bool bKeepsOwnStance = (bTrapSolo && Operative->bInCover) || HasGroupCoverProne(Operative);
+		It.Value() = StepStillSeconds(Operative->IsMoving() || Operative->GetVelocity().Size2D() > 30.f, It.Value(), DeltaTime);
+		switch (StepSoloGuardCrouch(bHolding, IsOnOwnOrder(Operative), bKeepsOwnStance, Operative->GetStance(), It.Value(), AfterSeconds))
+		{
+		case ESoloGuardCrouch::Crouch:
+			UE_LOG(LogCodexTactics, Log, TEXT("Squad: Solo guard crouch - %s after %.1f s standing still"), *Operative->DisplayName.ToString(), It.Value());
+			ApplySoloGuardCrouch(*Operative);
+			It.RemoveCurrent();
+			break;
+		case ESoloGuardCrouch::Drop:
+			It.RemoveCurrent();
+			break;
+		default:
+			break;
+		}
 	}
 }
 
@@ -492,6 +566,7 @@ void USquadSubsystem::RestoreSoloForLoad(bool bSolo, bool bInTrapSolo)
 	{
 		SetSelectedGroup({ LeaderRef }, false); // the next order goes to the selected operative alone
 	}
+	SoloGuardCrouchWait.Reset();
 	if (bSolo)
 	{
 		for (FFollowerState& Follower : Followers)
@@ -499,6 +574,9 @@ void USquadSubsystem::RestoreSoloForLoad(bool bSolo, bool bInTrapSolo)
 			if (AOperativeCharacter* Operative = Follower.Operative.Get())
 			{
 				Operative->StopOperative(); // they hold where the save put them
+				// ... in the saved stance; one saved standing takes the guard crouch after hold_crouch_after_sec (UpdateSoloGuardCrouch only
+				// crouches a standing follower - the save's stance may still be applied after this).
+				SoloGuardCrouchWait.Add(Operative, 0.f);
 			}
 		}
 	}
@@ -552,6 +630,7 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 
 	bIsSoloMode = false;
 	bTrapSolo = false;
+	SoloGuardCrouchWait.Reset();
 	SetFollowersHolding(false);
 	// Bug 2026-10-23 (lake, after the horde): Regroup is an order to come back - the post-fight hold ends with it, not only when the
 	// leader moves.
@@ -966,6 +1045,7 @@ void USquadSubsystem::Tick(float DeltaTime)
 	UpdateGroupCoverProne(DeltaTime); // fights too (the formation is off there, a prone order still lies down on arrival)
 	UpdateGroupCoverWait(DeltaTime); // group cover leader priority (2026-10-23)
 	UpdateWallGroup(DeltaTime); // rules v2.2 wall group (Codex.Formation.Sectors): the followers' looks round the leader's fixed corner aim
+	UpdateSoloGuardCrouch(DeltaTime); // Solo's guard crouch after hold_crouch_after_sec standing still (2026-11-02)
 
 	// Formation look sectors (Codex.Formation.Sectors): the follow below fills this frame's looks / the leader's pace; every member not
 	// given one this frame (console off, Solo, a fight, an order of his own, ...) gets none - his old facing and speed.

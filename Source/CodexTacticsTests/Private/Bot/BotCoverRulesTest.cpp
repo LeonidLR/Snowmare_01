@@ -202,4 +202,51 @@ bool FSquadStanceHysteresisTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSquadSoloGuardCrouchDelayTest, "CodexTactics.Characters.SquadAutonomy.SoloGuardCrouchDelay",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSquadSoloGuardCrouchDelayTest::RunTest(const FString&)
+{
+	// The game designer's review of ambush v3 (2026-11-02): while the leader is on a tower (Solo), the two waiting operatives crouched at
+	// once - Solo's guard crouch now waits the same ROE hold_crouch_after_sec standing still (no tunable of its own).
+	using namespace SquadAutonomyRules;
+	const float After = FSquadROE().HoldCrouchAfterSeconds;
+	TestEqual(TEXT("Solo begins, a standing follower: he waits"), StartSoloGuardCrouch(EOperativeStance::Standing, After), ESoloGuardCrouch::Wait);
+	TestEqual(TEXT("... hold_crouch_after_sec 0: at once (the old behaviour)"), StartSoloGuardCrouch(EOperativeStance::Standing, 0.f), ESoloGuardCrouch::Crouch);
+	TestEqual(TEXT("A prone follower kneels at once as before (a rise is never delayed)"), StartSoloGuardCrouch(EOperativeStance::Prone, After),
+		ESoloGuardCrouch::Crouch);
+	TestEqual(TEXT("A crouched one keeps his crouch as the squad's at once"), StartSoloGuardCrouch(EOperativeStance::Crouching, After), ESoloGuardCrouch::Crouch);
+
+	// The wait: the leader climbs (3 s), the two stand; 4 s standing still -> the guard crouch.
+	float Still = 0.f;
+	for (int32 Step = 0; Step < 10; ++Step)
+	{
+		Still = StepStillSeconds(false, Still, 0.3f);
+	}
+	TestEqual(TEXT("3 s still: still standing"), StepSoloGuardCrouch(true, false, false, EOperativeStance::Standing, Still, After), ESoloGuardCrouch::Wait);
+	TestFalse(TEXT("... the same delay as the autonomy's hold crouch"),
+		ShouldTakeHaltStance(EOperativeStance::Crouching, EOperativeStance::Standing, Still, After, true));
+	for (int32 Step = 0; Step < 4; ++Step)
+	{
+		Still = StepStillSeconds(false, Still, 0.3f);
+	}
+	TestEqual(TEXT("4.2 s still: he crouches"), StepSoloGuardCrouch(true, false, false, EOperativeStance::Standing, Still, After), ESoloGuardCrouch::Crouch);
+	TestEqual(TEXT("A step (a shove, a slide) restarts the clock"),
+		StepSoloGuardCrouch(true, false, false, EOperativeStance::Standing, StepStillSeconds(true, Still, 0.3f), After), ESoloGuardCrouch::Wait);
+	TestEqual(TEXT("A tunable 6 s: 4.2 s is not enough"), StepSoloGuardCrouch(true, false, false, EOperativeStance::Standing, Still, 6.f), ESoloGuardCrouch::Wait);
+
+	// The wait ends without a crouch.
+	TestEqual(TEXT("Regroup / Solo off, or he became the leader: dropped"), StepSoloGuardCrouch(false, false, false, EOperativeStance::Standing, 10.f, After),
+		ESoloGuardCrouch::Drop);
+	TestEqual(TEXT("An order of his own: he holds where it ends, standing (rev 5g)"),
+		StepSoloGuardCrouch(true, true, false, EOperativeStance::Standing, 10.f, After), ESoloGuardCrouch::Drop);
+	TestEqual(TEXT("The trap hold's cover / a group cover prone: his own stance"),
+		StepSoloGuardCrouch(true, false, true, EOperativeStance::Standing, 10.f, After), ESoloGuardCrouch::Drop);
+	TestEqual(TEXT("Someone else crouched / laid him down meanwhile: left as he is"),
+		StepSoloGuardCrouch(true, false, false, EOperativeStance::Prone, 10.f, After), ESoloGuardCrouch::Drop);
+	TestEqual(TEXT("... already crouched: nothing to do"), StepSoloGuardCrouch(true, false, false, EOperativeStance::Crouching, 10.f, After),
+		ESoloGuardCrouch::Drop);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

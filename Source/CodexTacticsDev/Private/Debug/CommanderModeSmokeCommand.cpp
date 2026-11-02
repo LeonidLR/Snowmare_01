@@ -4,6 +4,10 @@
 // medkits; Commander Mode on. 3. 15 s of autonomous fighting: nobody leaves his leash (7 m, 10 m for aid), the
 // wounded one gets first aid, targets are picked. 4. A tactical pause freezes the autonomy at once (no autonomy target
 // left). PASS when all hold. The squad is unkillable and kept warm: the check is about decisions, not survival.
+// Runs on its own pinned waves (Scripts/test_map.json: -LevelJson=SmokeFixtures/commander_mode_smoke.json, wave 1 = 45 hounds + 10
+// frostbitten). 2026-11-02: it failed "pause freeze 0" since the user's level_01_outpost wave 1 became 10 hounds (2026-10-28): the
+// immortal squad cleared them in ~11 s, the game was in the preparation for wave 2 at the pause (no tactical pause outside a fight -
+// the game was right) - the wave must still run when the pause comes (checked, with its own message).
 
 #include "CoreMinimal.h"
 
@@ -35,6 +39,8 @@ namespace CommanderModeSmoke
 		FString WorstLeashName;
 		int32 FreezesBefore = 0;
 		bool bFrozeClean = false;
+		/** The wave fight still ran when the smoke paused (else there is nothing to freeze: the level's wave 1 was too short). */
+		bool bWaveAtPause = false;
 	};
 
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
@@ -138,6 +144,12 @@ namespace CommanderModeSmoke
 				return true;
 			}
 			State.FreezesBefore = Autonomy->GetStats().Freezes;
+			State.bWaveAtPause = Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime;
+			if (!State.bWaveAtPause)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the wave fight is over before the pause (phase %d, wave %d) - nothing to freeze; the level's wave 1 is too short for the smoke (pinned fixture: -LevelJson=SmokeFixtures/commander_mode_smoke.json)"),
+					static_cast<int32>(Flow->GetPhase()), Flow->GetWaveIndex());
+			}
 			Flow->ToggleTacticalPause();
 			State.Stage = 3;
 			State.Time = 0.f;
@@ -160,10 +172,10 @@ namespace CommanderModeSmoke
 			TEXT("Smoke: cover %d, stance %d, prone for sniper %d, reload %d, sidearm %d, flank %d, leash returns %d, aid %d (moves %d, unsafe %d), targets %d"),
 			Stats.CoverMoves, Stats.StanceChanges, Stats.ProneForSniper, Stats.Reloads, Stats.SidearmSwitches, Stats.FlankShifts, Stats.LeashReturns,
 			Stats.AidGiven, Stats.AidMoves, Stats.AidRefusedUnsafe, Stats.TargetPicks);
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: default off %d | worst leash %.1f m (%s, limit %.1f m) %d | aid %d (HP %.0f -> %.0f) | pause freeze %d | targets picked %d"),
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: default off %d | worst leash %.1f m (%s, limit %.1f m) %d | aid %d (HP %.0f -> %.0f) | wave still on at the pause %d | pause freeze %d | targets picked %d"),
 			State.bDefaultOff ? 1 : 0, State.WorstLeashCm / 100.f, *State.WorstLeashName, (AidLeash + 150.f) / 100.f, bLeash ? 1 : 0, bAid ? 1 : 0,
-			State.PatientHealthBefore, PatientHealth, State.bFrozeClean ? 1 : 0, Stats.TargetPicks);
-		const bool bPass = State.bDefaultOff && bLeash && bAid && State.bFrozeClean && Stats.TargetPicks > 0;
+			State.PatientHealthBefore, PatientHealth, State.bWaveAtPause ? 1 : 0, State.bFrozeClean ? 1 : 0, Stats.TargetPicks);
+		const bool bPass = State.bDefaultOff && bLeash && bAid && State.bWaveAtPause && State.bFrozeClean && Stats.TargetPicks > 0;
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bPass ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("CommanderModeSmoke"));
 		return false;

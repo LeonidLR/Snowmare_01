@@ -325,6 +325,25 @@ bool SquadAutonomyRules::ShouldRiseFromHoldCrouch(bool bHoldCrouch, bool bCarryi
 	return bHoldCrouch && !bCarrying && LeaderStance == EOperativeStance::Standing;
 }
 
+SquadAutonomyRules::ESoloGuardCrouch SquadAutonomyRules::StartSoloGuardCrouch(EOperativeStance Current, float AfterSeconds)
+{
+	if (Current != EOperativeStance::Standing || AfterSeconds <= 0.f)
+	{
+		return ESoloGuardCrouch::Crouch;
+	}
+	return ESoloGuardCrouch::Wait;
+}
+
+SquadAutonomyRules::ESoloGuardCrouch SquadAutonomyRules::StepSoloGuardCrouch(bool bHoldingInSolo, bool bOnOwnOrder, bool bKeepsOwnStance,
+	EOperativeStance Current, float StillSeconds, float AfterSeconds)
+{
+	if (!bHoldingInSolo || bOnOwnOrder || bKeepsOwnStance || Current != EOperativeStance::Standing)
+	{
+		return ESoloGuardCrouch::Drop;
+	}
+	return ShouldTakeHaltStance(EOperativeStance::Crouching, Current, StillSeconds, AfterSeconds, true) ? ESoloGuardCrouch::Crouch : ESoloGuardCrouch::Wait;
+}
+
 float SquadAutonomyRules::StepStillSeconds(bool bMoving, float StillSeconds, float DeltaSeconds)
 {
 	return bMoving ? 0.f : StillSeconds + FMath::Max(0.f, DeltaSeconds);

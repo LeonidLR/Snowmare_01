@@ -8,7 +8,8 @@
 //  2. a 10 s halt: everyone crouches as before - only after >= 4 s standing still;
 //  3. a move stands them up at once: the leader's own order (<= 0.5 s) and - Commander Mode off, the formation walks on - the followers'
 //     formation follow (<= 1.5 s); they follow upright;
-//  4. the deliberate case stays: Solo ("teammates hold crouched") crouches the followers at once.
+//  4. Solo ("teammates hold crouched", e.g. the leader climbs a tower): the waiting followers stand on, the guard crouch comes after the same
+//     hold_crouch_after_sec standing still (2026-11-02, the game designer's review of ambush v3; was: at once).
 // Godot reference: none (UE-only; the autonomy's stance is Sprint 07-C).
 
 #include "CoreMinimal.h"
@@ -378,16 +379,35 @@ namespace SquadHaltStanceSmoke
 
 		case EStage::Solo:
 		{
-			if (State.StageTime < 0.5f)
+			TrackMembers(State);
+			if (State.StageTime >= 1.f && !State.bChecked)
+			{
+				// 2026-11-02 (the game designer's review of ambush v3): the guard crouch no longer comes at once - the waiting followers stand.
+				State.bChecked = true;
+				bool bAllWaiting = true;
+				for (const FMember& Each : State.Members)
+				{
+					const AOperativeCharacter* Operative = Each.Operative.Get();
+					bAllWaiting &= Operative == Leader || (Operative && Operative->GetStance() == EOperativeStance::Standing && Squad->IsSoloGuardCrouchWaiting(Operative));
+				}
+				Check(State, bAllWaiting, TEXT("Solo on: the waiting followers still stand 1 s later (the guard crouch waits hold_crouch_after_sec)"));
+			}
+			if (State.StageTime < CrouchAfter + 3.f)
 			{
 				return true;
 			}
-			bool bAllCrouched = true;
 			for (const FMember& Each : State.Members)
 			{
-				bAllCrouched &= Each.Operative.Get() == Leader || (Each.Operative.IsValid() && Each.Operative->GetStance() == EOperativeStance::Crouching);
+				const AOperativeCharacter* Operative = Each.Operative.Get();
+				if (Operative == Leader)
+				{
+					Check(State, Operative->GetStance() == EOperativeStance::Standing, TEXT("Solo: the leader keeps his own stance"));
+					continue;
+				}
+				Check(State, Operative && Operative->GetStance() == EOperativeStance::Crouching && Each.CrouchedAt >= CrouchAfter - 0.2f
+					&& Each.CrouchedAt <= CrouchAfter + 1.5f, FString::Printf(TEXT("Solo: %s takes the guard crouch %.1f s after Solo began (hold_crouch_after_sec %.1f)"),
+						*NameOf(Each), Each.CrouchedAt, CrouchAfter));
 			}
-			Check(State, bAllCrouched, TEXT("the deliberate case stays: Solo crouches the followers at once (\"teammates hold crouched\")"));
 			Squad->ExitSoloMode(false, 0.f);
 			return Finish(World, State, true);
 		}
@@ -428,7 +448,7 @@ namespace SquadHaltStanceSmoke
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.SquadHaltStanceSmoke"),
 		TEXT("Dev check (decision 6, 2026-11-01 night, L_FormationLabCombat): in a fight (Commander Mode) a 3 s halt crouches nobody, a long halt crouches ")
-		TEXT("them after hold_crouch_after_sec, the next move stands them up at once, Solo still crouches the followers at once. PASS/FAIL, then exits."),
+		TEXT("them after hold_crouch_after_sec, the next move stands them up at once, Solo's guard crouch waits hold_crouch_after_sec too. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

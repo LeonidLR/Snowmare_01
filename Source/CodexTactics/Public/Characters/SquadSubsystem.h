@@ -163,6 +163,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsSoloMode() const { return bIsSoloMode; }
 
+	/** Solo holds him standing and his guard crouch still waits out hold_crouch_after_sec (ArmSoloGuardCrouch; smokes / debug). */
+	bool IsSoloGuardCrouchWaiting(const AOperativeCharacter* Operative) const;
+
 	/**
 	 * Demo 01 rev 5h (game designer 2026-10-15, every level): a hidden trap was spotted (AInteractableActor::NotifyTrapSpotted).
 	 * Everyone stops (the Godot rule); exploring with the formation outside the AUTO mode the squad also switches to Solo
@@ -627,6 +630,19 @@ private:
 
 	/** EnterSoloMode body; bForTrap: the trap hold (no leash, operatives in cover keep their stance, the trap line instead). */
 	void EnterSoloModeInternal(bool bForTrap);
+
+	/**
+	 * Solo's guard crouch (2026-11-02, the game designer's review of ambush v3): a holding follower who stands waits squad_roe.json
+	 * hold_crouch_after_sec standing still before he crouches (SquadAutonomyRules::StartSoloGuardCrouch / StepSoloGuardCrouch) - the
+	 * same delay as the autonomy's hold crouch; any other stance becomes the guard crouch at once as before.
+	 */
+	void ArmSoloGuardCrouch(AOperativeCharacter& Operative);
+	/** The waiting followers each frame: crouched once they have stood still long enough, dropped when Solo / the hold ends for them. */
+	void UpdateSoloGuardCrouch(float DeltaTime);
+	/** The guard crouch itself: crouched, the squad's stance mark (ShouldStandToSprintWithLeader), the floating text. */
+	void ApplySoloGuardCrouch(AOperativeCharacter& Operative);
+	/** Solo's waiting followers -> seconds each has stood still since Solo held him (ArmSoloGuardCrouch). */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, float> SoloGuardCrouchWait;
 
 	UFUNCTION()
 	void HandleTacticalPauseReleased();
