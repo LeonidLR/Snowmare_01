@@ -6,9 +6,11 @@ with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBo
 
   - HEIGHT LEVELS (game designer 2026-11-01): level n sits at n x 300 cm; the cut floor at level -1, floors / roofs at +1 / +2,
     the tall halls' roofs at +3 = 9 m (2026-11-02);
-  - the ground slab over the bounds + a margin, split round the cut's trench; the trench floor slab at -300; the retaining walls
-    from the trench floor up to their parapet (the layout's cut_wall walls stand on the ground: height above ground, plus a
-    below-ground part); crossing slabs (bridges) / ramps across the trench;
+  - the ground slab over the bounds + a margin, split round the cut's trench; the trench floor slab at -300; the retaining faces
+    below ground stand OUTSIDE the trench (the layout's cut_wall walls stand on the ground above them); crossing slabs (bridges) across
+    the trench at ground level; a "ramp" crossing also gets a ramp from the bridge slab's edge down ALONG the trench onto its floor
+    (levelgen_ladders.cut_ramps, 2026-11-02 - the old ramp joined nothing: its top end hung over the trench, its middle ran under the
+    bridge with 0.7 m of head room);
   - walls per level (a floor-n wall stands on its slab), fences (thin), building perimeters with their door gaps (already split by
     the generator);
   - buildings: floor slabs at every intermediate level (hollow buildings have none), the floor holes cut as four slabs round the
@@ -16,8 +18,11 @@ with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBo
     levels - the stairwell opening ENDS exactly at the ramp's top (no gap the navmesh cannot cross), an external stair's ramp ends
     exactly where its flat landing starts (no step: the landing never overlaps the ramp's top) and the landing crosses the wall's
     top onto the roof; factory chimneys (set-piece "chimney") are closed cylinders, never climbable;
-  - ladders: ALadderActor at pos / yaw (Height = rungs x pitch), a plinth cube of plinth_cm under its foot so the top lands on
-    the level (LADDERS.md 3.1 top tolerance 8 cm);
+  - ladders: ALadderActor (Height = rungs x pitch), a plinth cube of plinth_cm under its foot so the top lands on the level
+    (LADDERS.md 3.1 top tolerance 8 cm); since 2026-11-02 (levelgen_ladders.py, the game designer's bug report) the actor's yaw comes
+    from the geometry (+X from `pos` towards the layout's `foot`: the older layouts carry a mirrored yaw), its rung plane stands 10 cm
+    off the OUTER face of the wall behind it (the builder's walls are centred on the generator's lines), and a wall on the upper level
+    that the top exit crosses (the cut's retaining wall) gets a 2 m opening; tag "ladder=<id>";
   - covers: cubes (silos: cylinders) at pos / yaw / size; PlayerStart at the spawn; the end as a TargetPoint "LevelGenEnd";
   - route TargetPoints per route point (label "<route>_<n>", tags LevelGen + LevelGenRoute + the route id + "layer=<layer>"),
     spawn / patrol / ambush TargetPoints (ambush points tagged CodexAmbushPoint for UCombatPressureSubsystem), zone labels;
@@ -52,6 +57,7 @@ except ImportError:  # system python: the `plan` mode only
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import levelgen_bot_route  # noqa: E402  (pure: the bot route block + the drop links)
+import levelgen_ladders  # noqa: E402  (pure: the ladder frames, the top exit openings, the cut's faces / ramps)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -167,14 +173,14 @@ def slabs_with_holes(label, folder, x0, y0, x1, y1, top_z, holes):
     return out
 
 
-def ramp(label, folder, a, b, z0, z1, width=STAIR_W):
+def ramp(label, folder, a, b, z0, z1, width=STAIR_W, tags=None):
     """A sloped cube from a (at z0) to b (at z1): a walkable stair stand-in (<= 44 deg)."""
     run = math.hypot(b[0] - a[0], b[1] - a[1])
     rise = z1 - z0
     length = math.hypot(run, rise)
     pitch = math.degrees(math.atan2(rise, run))  # UE pitch: positive = nose UP (the local +X end rises towards b)
     return cube(label, folder, [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, (z0 + z1) / 2.0 - SLAB / 2.0], [length, width, SLAB],
-                math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])), None, pitch)
+                math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])), tags, pitch)
 
 
 def plan(layout):
@@ -202,23 +208,27 @@ def plan(layout):
             specs.append(rect_slab("Ground_E", "Ground", tx1, ty0, gx1, ty1, gz))
         cz = gz + z_of(int(cut.get("level", -1)))
         specs.append(rect_slab("Cut_Floor", "Cut", tx0, ty0, tx1, ty1, cz))
-        # the retaining faces below ground (the layout's cut_wall walls carry the parapet above): the trench's two long edges
-        for n, (a, b) in enumerate([((tx0, ty0), (tx1, ty0)), ((tx0, ty1), (tx1, ty1))] if not band_x else [((tx0, ty0), (tx0, ty1)), ((tx1, ty0), (tx1, ty1))]):
-            specs.append(wall_cube("Cut_Face_%d" % n, "Cut", a, b, cz, gz - cz, 20.0))
+        # the retaining faces below ground (the layout's cut_wall walls carry the parapet above): the trench's two long edges, standing
+        # OUTSIDE the trench (their inner face on its edge: the cut ladders' rung plane 10 cm off it, the full trench width walkable)
+        for f in levelgen_ladders.cut_face_walls(cut):
+            specs.append(wall_cube(f["id"], "Cut", f["a"], f["b"], cz, gz - cz, f["thickness"], ["cut_face"]))
         for x in cut.get("crossings", []):
             cx_ = [p[0] for p in x["poly"]]
             cy_ = [p[1] for p in x["poly"]]
             specs.append(rect_slab("Cut_%s" % x["id"], "Cut", min(cx_), min(cy_), max(cx_), max(cy_), gz, [x.get("kind", "bridge")]))
-            if x.get("kind") == "ramp":
-                # a ramp down into the trench beside the bridge slab (the V3 variant walks in here)
-                mid = ((min(cx_) + max(cx_)) / 2.0, (min(cy_) + max(cy_)) / 2.0)
-                along = (1.0, 0.0) if not band_x else (0.0, 1.0)
-                specs.append(ramp("Cut_%s_ramp" % x["id"], "Cut", (mid[0] - along[0] * 500.0, mid[1] - along[1] * 500.0), (mid[0] + along[0] * 300.0, mid[1] + along[1] * 300.0), gz, cz, 300.0))
+        # a "ramp" crossing: the ramp from the bridge slab's far edge down along the trench onto its floor (the V3 variant walks in here)
+        for r in levelgen_ladders.cut_ramps(cut, gz):
+            specs.append(ramp(r["id"], "Cut", r["a"], r["b"], r["z0"], r["z1"], r["width"], ["cut_ramp", r["crossing"]]))
+            report("cut ramp %s: (%.0f, %.0f) at %.0f -> (%.0f, %.0f) at %.0f, %.0f cm wide" % (r["id"], r["a"][0], r["a"][1], r["z0"], r["b"][0], r["b"][1], r["z1"], r["width"]))
     else:
         specs.append(rect_slab("Ground", "Ground", gx0, gy0, gx1, gy1, gz))
     # ---- walls (per level; cut_wall parapets stand on the ground)
     chimneys = {b["id"] for b in layout["buildings"] if b.get("set_piece") == "chimney"}
-    for w in layout["walls"]:
+    frames = {f["id"]: f for f in levelgen_ladders.ladder_frames(layout)}
+    gaps = levelgen_ladders.exit_gaps(layout, list(frames.values()))
+    for wid, cuts in sorted(gaps.items()):
+        report("ladder exit opening in %s: %s" % (wid, ", ".join("%s %.0f..%.0f cm" % (lid, t0, t1) for t0, t1, lid in cuts)))
+    for w in levelgen_ladders.split_walls(layout["walls"], gaps):
         if w.get("building") in chimneys:
             continue  # the chimney's cylinder stands for its four 2D walls
         lvl = int(w.get("floor", 0))
@@ -262,15 +272,20 @@ def plan(layout):
                 specs.append(rect_slab("%s_%s_landing" % (b["id"], s["id"]), "Buildings/%s" % b["id"], x0_, y0_, x1_, y1_, z1))
             else:
                 specs.append(ramp("%s_%s" % (b["id"], s["id"]), "Buildings/%s" % b["id"], s["pos"], s["top"], z0, z1))
-    # ---- ladders with their plinths
+    # ---- ladders with their plinths, in their real frame (levelgen_ladders.ladder_frame: the yaw from pos -> foot, 10 cm off the outer face)
     for ld in layout["ladders"]:
+        f = frames[ld["id"]]
         lower = gz + z_of(int(ld.get("level_from", 0)))
         plinth = float(ld.get("plinth_cm", 0.0))
+        if f["yaw_fixed"] or abs(f["shift_cm"]) > 0.5:
+            report("ladder %s: yaw %.0f (layout %.0f%s), moved %.1f cm out to stand 10 cm off %s" % (
+                ld["id"], f["yaw"], f["layout_yaw"], " - MIRRORED in the layout, fixed" if f["yaw_fixed"] else "", f["shift_cm"], f["backing"] or "(no wall)"))
         if plinth > 0.5:
-            d = (math.cos(math.radians(ld["yaw"])), math.sin(math.radians(ld["yaw"])))
-            specs.append(cube("%s_plinth" % ld["id"], "Ladders", [ld["pos"][0] + d[0] * 50.0, ld["pos"][1] + d[1] * 50.0, lower + plinth / 2.0], [140.0, 100.0, plinth]))
-        specs.append({"kind": "ladder", "label": ld["id"], "folder": "Ladders", "location": [ld["pos"][0], ld["pos"][1], lower + plinth], "yaw": float(ld["yaw"]),
-                      "rungs": int(ld["rungs"]), "tags": ["from=%s" % ld["from"], "to=%s" % ld["to"]]})
+            d = f["out"]
+            # under the foot: from 5 cm in front of the rung plane out past the bottom link point (88 cm), 140 cm wide
+            specs.append(cube("%s_plinth" % ld["id"], "Ladders", [f["pos"][0] + d[0] * 60.0, f["pos"][1] + d[1] * 60.0, lower + plinth / 2.0], [110.0, 140.0, plinth], f["yaw"]))
+        specs.append({"kind": "ladder", "label": ld["id"], "folder": "Ladders", "location": [f["pos"][0], f["pos"][1], lower + plinth], "yaw": f["yaw"],
+                      "rungs": int(ld["rungs"]), "tags": ["ladder=%s" % ld["id"], "from=%s" % ld["from"], "to=%s" % ld["to"]]})
     # ---- covers
     for c in layout["covers"]:
         size = c["size"]

@@ -116,6 +116,13 @@ void USquadSubsystem::PlanFormationBypass(AOperativeCharacter& LeaderRef)
 	{
 		return;
 	}
+	// Another level (a cut's floor below, a roof above): the walk goes through a ramp / stair / ladder the 2D leg cannot see - the nav mesh's way.
+	if (!FormationGuardRuntime::IsSameLevelLeg(BypassFeetZ(LeaderRef), static_cast<float>(LeaderRef.GetLastMoveDestination().Z)))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] bypass: none - the destination (%.0f, %.0f, %.0f) is on another level (feet at %.0f)"), To.X, To.Y,
+			LeaderRef.GetLastMoveDestination().Z, BypassFeetZ(LeaderRef));
+		return;
+	}
 	// The walls round the straight way (a box along it), then the first free-standing one that blocks it.
 	const FVector2D Mid = (From + To) * 0.5;
 	const FVector2D Half(0.5 * Length + BypassCorridorCm, BypassCorridorCm);

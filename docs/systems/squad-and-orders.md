@@ -178,6 +178,24 @@ off once his body has turned) and walks backwards again within `move.rear_turn_b
 (the rear guard set 3 m back mid-walk: he turns within 1.5 s, faces his run, walks backwards again); the old known R_B_walls pace entry passes
 (p95 103 cm, was 160-175). Tests `CodexTactics.Formation.V26.*`, `Parity.RearCatchUp`, `Parity.Classify` / `.PassageWidth` (the new scenes).
 
+### The formation across height levels (2026-11-02, branch fix/levelgen-ladders-cut; the game designer's play-test of `L_Gen_Depot_1`'s cut)
+
+Three cross-level faults found by `LevelGenLaddersSmoke` once the generated map's ramp / ladders were connected (`docs/design/levelgen/LEVEL_GENERATOR.md` 8.5):
+- **The bypass plans on the leader's own level only** (`FormationGuardRuntime::IsSameLevelLeg`, `BypassLevelChangeCm` 150): an order whose destination
+  lies more than half a level above / below his feet is the nav mesh's way (ramp / stair / ladder). Before, the cut's below-ground retaining face read
+  as a free-standing wall between the leader in the trench and his goal on the rim, and the bypass steered the squad round the trench's far end
+  (the ramp exit took 85 s instead of 10). Log `[Formation] bypass: none - the destination ... is on another level`. Test
+  `CodexTactics.Formation.GuardRuntime.BypassSameLevel`.
+- **A climb during a steered order resumes the ORDER's destination** (`ULadderClimbComponent::NotifyLinkReached`): the path's goal was the bypass
+  waypoint, so after the ladder the leader walked to a stale corner 63 m away and stopped there.
+- **A follower's slot lies on the LEADER's level** (`UpdateSectorFollower`: the slot is projected from the leader's floor - `GetFloorReferenceLocation`,
+  on a ladder the floor he left - not from the follower's own height, whose +-250 cm query reached a level up but never one down), and a follower
+  on another level than the leader walks to that slot by the nav mesh's way before any formation pacing (the 2D slot distance means nothing
+  across levels). Before, the squad followed its leader UP a cut ladder but stayed on the rim when he went down it. A/B `Codex.Formation.LeaderLevelSlots`
+  (default 1; 0 = the old slot at the follower's own height). Behaviour change to know: in squad mode the others now follow the leader up a 4 m
+  tower ladder too (before, their +-250 cm query never reached 4 m, so they waited below) - Solo keeps them where they are (`CombatLabTowerSmoke`
+  now puts its followers beside the tower: its 27 m teleport of the leader broke the solo leash).
+
 ### The squad corner peek played twice (2026-11-01, branch fix/squad-corner-peek-anim; the game designer's play-test video `Saved/BugReport/1.11.26_bug_01.avi`)
 
 Report: "when peeking round a corner the animation plays TWICE" - the peeker (the Medic-Sapper on L_FormationLab's W_B_2) made two blurred spins

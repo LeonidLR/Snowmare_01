@@ -31,6 +31,8 @@
 
 namespace SquadSubsystemFormationLocal
 {
+	TAutoConsoleVariable<int32> CVarFormationLeaderLevel(TEXT("Codex.Formation.LeaderLevelSlots"), 1,
+		TEXT("Bug 2026-11-02 (L_Gen_Depot_1's cut ladder): 1 = a follower's slot lies on the LEADER's level (projected from his floor) and a follower on another level walks there by the nav mesh's way (ramp / stair / ladder); 0 = the slot at the follower's own height (followed a leader up 3 m, never down - A/B)"));
 	TAutoConsoleVariable<int32> CVarFormationDebug(TEXT("Codex.Formation.Debug"), 0,
 		TEXT("1: log the formation probe (each raw terrain class change with its probe hits); 2: also every follower repath; 3: also each member's formation look whenever it changes, and every look ClearLook turns"));
 	TAutoConsoleVariable<int32> CVarFormationWallEnd(TEXT("Codex.Formation.WallEnd"), 1,
@@ -914,7 +916,12 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		return false; // a 5th member and beyond: the old slot math
 	}
 	const FVector2D Raw = Slot->Position;
-	FVector SlotLocation(Raw.X, Raw.Y, Operative.GetActorLocation().Z);
+	// The slot lies on the LEADER's level (2026-11-02, a generated map's cut): projected from his floor, not from the follower's - a slot
+	// taken at the follower's own height reached a level up (+250 cm from his centre) but never one down, so the squad followed its leader
+	// up a cut ladder and stayed on the rim when he went down it. On a ladder the leader counts on the floor he left (LADDERS.md 7.3).
+	const bool bLeaderLevel = CVarFormationLeaderLevel.GetValueOnGameThread() != 0;
+	const float LeaderFloorZ = static_cast<float>(bLeaderLevel ? LeaderRef.GetFloorReferenceLocation().Z : Operative.GetActorLocation().Z);
+	FVector SlotLocation(Raw.X, Raw.Y, LeaderFloorZ);
 	SlotLocation = ResolveReachableSlot(LeaderRef, SlotLocation, /*bLeaderSide*/ FormationGuardRuntime::IsEnabled(), Operative.GetActorLocation());
 	FrameGivenByMember.Add(Follower.Operative, FVector2D(SlotLocation));
 	const FVector2D Here(Operative.GetActorLocation());
@@ -1088,6 +1095,15 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		}
 	}
 	Follower.bYielding = bYield;
+	// On another level than the leader (2026-11-02): he walks to his slot on the leader's level by the nav mesh's way (a ramp / stair / ladder;
+	// the ladder's queue holds him) - the 2D distance to the slot means nothing across levels (right above it he would park on the rim).
+	if (bLeaderLevel && !FormationGuardRuntime::IsSameLevelLeg(static_cast<float>(Operative.GetActorLocation().Z), LeaderFloorZ))
+	{
+		Follower.bParked = false;
+		Follower.bCatchUp = true;
+		Operative.FollowTo(SlotLocation, FormationTuning::Get().PaceWalkSpeed);
+		return true;
+	}
 	const FormationRuntime::FFollowerMove Move = FormationRuntime::FollowerMove(Here, static_cast<float>(Operative.GetActorRotation().Yaw), MoveTarget,
 		SlotVelocity, Jitter, Top, bRearCover ? FMath::Min(Top, FormationTuning::Get().PaceWalkSpeed) : Top, bRun, FormationTuning::Get());
 	Follower.bCatchUp = !Move.bStop && Move.Speed > 1.f;

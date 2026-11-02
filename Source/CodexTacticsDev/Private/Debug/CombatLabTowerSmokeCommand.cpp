@@ -31,6 +31,7 @@
 #include "Ladders/LadderActor.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "NavLinkCustomComponent.h"
+#include "NavigationSystem.h"
 #include "TimerManager.h"
 #include "UI/FloatingTextSubsystem.h"
 #if WITH_EDITOR
@@ -224,6 +225,33 @@ namespace CombatLabTowerSmoke
 			Squad->EnterSoloMode();
 			Leader->StopOperative();
 			const FVector Start = GroundSpot(*Tower);
+			// The others wait beside the tower, holding (2026-11-02): the leader is put far from where they stood - past the 25 m solo leash,
+			// which ended Solo, and the squad (whose slots now lie on the leader's level, squad-and-orders.md "The formation across height
+			// levels") walked up his ladder into the cursor's way. 4 m to each side and 2.5 m further out: off the click ray and the climb.
+			Squad->SetFollowersHolding(true);
+			{
+				const FVector Side = FVector::CrossProduct(FVector::UpVector, Tower->GetOutward()).GetSafeNormal();
+				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				int32 Slot = 0;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (!Member || Member == Leader)
+					{
+						continue;
+					}
+					const float Sign = Slot % 2 == 0 ? 1.f : -1.f;
+					FVector Spot = Start + Tower->GetOutward() * 250.f + Side * Sign * (400.f + 150.f * static_cast<float>(Slot / 2));
+					++Slot;
+					FNavLocation OnNav;
+					if (Nav && Nav->ProjectPointToNavigation(FVector(Spot.X, Spot.Y, Tower->GetFloorZ()), OnNav, FVector(150.f, 150.f, 150.f)))
+					{
+						Spot = OnNav.Location;
+					}
+					Member->StopOperative();
+					Member->SetActorLocation(FVector(Spot.X, Spot.Y, Tower->GetFloorZ() + Member->GetSimpleCollisionHalfHeight() + 2.f), false, nullptr,
+						ETeleportType::TeleportPhysics);
+				}
+			}
 			Leader->SetActorLocation(FVector(Start.X, Start.Y, Tower->GetFloorZ() + Leader->GetSimpleCollisionHalfHeight() + 2.f), false, nullptr,
 				ETeleportType::TeleportPhysics);
 			AActor* Clicked = nullptr;

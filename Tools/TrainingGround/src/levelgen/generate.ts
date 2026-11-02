@@ -451,8 +451,13 @@ const COVER_SIZE: Record<CoverKind, [number, number, number]> = {
   jersey: [300, 60, 90], sandbag: [250, 80, 100], crate: [120, 120, 110], wreck: [420, 180, 150], barrel: [60, 60, 90], silo: [800, 800, 1200], boiler: [200, 120, 160],
 };
 
-/** Profile yaw (degrees from +x east towards +y south) to UE yaw (from +X north towards +Y east): UE = 90 - profile. */
-const yawToUE = (deg: number) => ((90 - deg) % 360 + 360) % 360;
+/**
+ * Profile yaw (degrees from +x east towards +y south) to UE yaw (from +X north towards +Y east): UE = profile + 90 (both turn clockwise
+ * on the map: profile east 0 -> UE 90, profile south 90 -> UE 180). Until 2026-11-02 this was 90 - profile, a MIRROR: every ladder faced
+ * its wall in UE (the game designer's "ladders sunk into the walls"; build_levelgen_map.py / levelgen_ladders.py now take the ladder's
+ * yaw from pos -> foot, so the layouts accepted before the fix build right too).
+ */
+const yawToUE = (deg: number) => ((deg + 90) % 360 + 360) % 360;
 
 function unit(a: Vec2, b: Vec2): Vec2 { const L = dist(a, b) || 1; return [(a[0] - b[0]) / L, (a[1] - b[1]) / L]; }
 /** Where a leg towards an open hole stops: on the solid slab 0.8 m past the hole's edge (HOLE_HALF_CM), on the side it comes from. */

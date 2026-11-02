@@ -444,7 +444,14 @@ bool ULadderClimbComponent::NotifyLinkReached(ALadderActor* InLadder, bool bInGo
 	const ACharacter* Character = GetCharacter();
 	const AAIController* Controller = Character ? Cast<AAIController>(Character->GetController()) : nullptr;
 	const UPathFollowingComponent* Following = Controller ? Controller->GetPathFollowingComponent() : nullptr;
-	if (Following && Following->GetPath().IsValid() && Following->GetPath()->IsValid())
+	const AOperativeCharacter* SteeredOperative = Cast<AOperativeCharacter>(Character);
+	if (SteeredOperative && SteeredOperative->IsOwnMoveSteered())
+	{
+		// His own order steered through a formation bypass waypoint (2026-11-02): the path's goal is only that waypoint - the climb ends the
+		// bypass (it plans on one level), so after the climb he walks on to the ORDER's destination, never to the stale waypoint.
+		SetPendingDestination(SteeredOperative->GetLastMoveDestination());
+	}
+	else if (Following && Following->GetPath().IsValid() && Following->GetPath()->IsValid())
 	{
 		SetPendingDestination(Following->GetPath()->GetDestinationLocation());
 	}
