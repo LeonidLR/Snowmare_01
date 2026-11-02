@@ -35,6 +35,15 @@ namespace SquadOrderRules
 		return Facts.DistanceToSlotCm > LeaveDistanceCm;
 	}
 
+	bool DropsPendingCover(bool bHasPendingCover, bool bRegroup, bool bInCover, bool bPendingOnSameWall)
+	{
+		if (!bHasPendingCover)
+		{
+			return false;
+		}
+		return bRegroup || (bInCover && bPendingOnSameWall);
+	}
+
 	bool ShouldJoinGroupCover(const FGroupCoverJoinFacts& Facts)
 	{
 		if (Facts.bDirectOrder || !Facts.bAlive || Facts.bUnavailable)
