@@ -54,30 +54,33 @@ bool FAmbushSpotWallEndsTest::RunTest(const FString&)
 	const TArray<FAmbushSpot> Spots = AmbushSpotRules::WallSpots(One, Params);
 	TestEqual(TEXT("A free wall: 4 spots (2 ends x 2 faces)"), Spots.Num(), 4);
 	TestEqual(TEXT("... all wall ends"), CountKind(Spots, EAmbushSpotKind::WallEnd), 4);
-	// 100 cm inside the end, 260 cm off the 20 cm half thickness.
-	TestNotNull(TEXT("East end, +Y face"), NearSpot(Spots, FVector2D(900.0, 280.0)));
-	TestNotNull(TEXT("East end, -Y face"), NearSpot(Spots, FVector2D(900.0, -280.0)));
-	TestNotNull(TEXT("West end, +Y face"), NearSpot(Spots, FVector2D(100.0, 280.0)));
-	if (const FAmbushSpot* Spot = NearSpot(Spots, FVector2D(900.0, 280.0)))
+	// 100 cm inside the end, 80 cm off the 20 cm half thickness (decision 3, 2026-11-01 night: the ambusher hugs the wall; was 260).
+	TestEqual(TEXT("The default standoff hugs the wall: 80 cm"), Params.WallStandoffCm, 80.f);
+	TestNotNull(TEXT("East end, +Y face"), NearSpot(Spots, FVector2D(900.0, 100.0)));
+	TestNotNull(TEXT("East end, -Y face"), NearSpot(Spots, FVector2D(900.0, -100.0)));
+	TestNotNull(TEXT("West end, +Y face"), NearSpot(Spots, FVector2D(100.0, 100.0)));
+	if (const FAmbushSpot* Spot = NearSpot(Spots, FVector2D(900.0, 100.0)))
 	{
 		TestEqual(TEXT("Its normal points off the face"), Spot->Normal.Y, 1.0, 0.001);
 		TestEqual(TEXT("It hides behind box 0"), Spot->Box, 0);
-		TestEqual(TEXT("Exactly the standoff from the wall"), CombatPressureRules::DistanceToBox(Spot->Position, One[0]), 260.f, 0.5f);
+		TestEqual(TEXT("Exactly the standoff from the wall"), CombatPressureRules::DistanceToBox(Spot->Position, One[0]), 80.f, 0.5f);
 	}
 	// A wall written along Y (the long side is the box's local Y) works the same.
 	FPressureBox AlongY;
 	AlongY.Center = FVector2D(0.0, 0.0);
 	AlongY.HalfSize = FVector2D(20.0, 500.0);
-	TestNotNull(TEXT("A Y-long box: spot beside its +Y end"), NearSpot(AmbushSpotRules::WallSpots({ AlongY }, Params), FVector2D(280.0, 400.0)));
+	TestNotNull(TEXT("A Y-long box: spot beside its +Y end"), NearSpot(AmbushSpotRules::WallSpots({ AlongY }, Params), FVector2D(100.0, 400.0)));
 	// Two walls meeting at a corner (W_E_13 / W_E_14): the joined ends give no spots.
 	const TArray<FPressureBox> Corner = { SpotWall(FVector2D(0.0, 0.0), FVector2D(1000.0, 0.0)), SpotWall(FVector2D(1000.0, 0.0), FVector2D(1000.0, 1000.0)) };
 	const TArray<FAmbushWallEnd> Ends = AmbushSpotRules::FreeEnds(Corner, Params);
 	TestEqual(TEXT("A corner: only the two outer ends are free"), Ends.Num(), 2);
-	TestNull(TEXT("... no spot at the corner"), NearSpot(AmbushSpotRules::WallSpots(Corner, Params), FVector2D(900.0, 280.0)));
+	TestNull(TEXT("... no spot at the corner"), NearSpot(AmbushSpotRules::WallSpots(Corner, Params), FVector2D(900.0, 100.0)));
 	// A post / ladder rail shorter than the minimum is no wall to hide behind.
 	TestEqual(TEXT("A 1 m post: no spots"), AmbushSpotRules::WallSpots({ SpotWall(FVector2D(0.0, 0.0), FVector2D(100.0, 0.0)) }, Params).Num(), 0);
 	// The hiding clearance never exceeds the level's clearance and keeps 10 cm under the standoff.
-	TestEqual(TEXT("Clearance: min(level 250, standoff 260 - 10)"), AmbushSpotRules::HideClearanceCm(250.f, Params), 250.f);
+	TestEqual(TEXT("Clearance at the wall: min(level 250, standoff 80 - 10) = 70 (the 2.5 m rule is the patrols')"), AmbushSpotRules::HideClearanceCm(250.f, Params), 70.f);
+	Params.WallStandoffCm = 260.f;
+	TestEqual(TEXT("The old 2.6 m standoff kept the level's 250"), AmbushSpotRules::HideClearanceCm(250.f, Params), 250.f);
 	Params.WallStandoffCm = 150.f;
 	TestEqual(TEXT("A closer standoff lowers the hiding clearance"), AmbushSpotRules::HideClearanceCm(250.f, Params), 140.f);
 	return true;
@@ -97,9 +100,9 @@ bool FAmbushSpotDoorwaysTest::RunTest(const FString&)
 	const TArray<FAmbushSpot> Spots = AmbushSpotRules::WallSpots(Gap, Params);
 	TestEqual(TEXT("The two jambs: 4 doorway spots"), CountKind(Spots, EAmbushSpotKind::Doorway), 4);
 	TestEqual(TEXT("The outer ends: 4 wall-end spots"), CountKind(Spots, EAmbushSpotKind::WallEnd), 4);
-	const FAmbushSpot* Jamb = NearSpot(Spots, FVector2D(900.0, -280.0));
+	const FAmbushSpot* Jamb = NearSpot(Spots, FVector2D(900.0, -100.0));
 	TestTrue(TEXT("Beside the doorway behind the west jamb"), Jamb && Jamb->Kind == EAmbushSpotKind::Doorway);
-	const FAmbushSpot* Outer = NearSpot(Spots, FVector2D(100.0, 280.0));
+	const FAmbushSpot* Outer = NearSpot(Spots, FVector2D(100.0, 100.0));
 	TestTrue(TEXT("The far end is a plain wall end"), Outer && Outer->Kind == EAmbushSpotKind::WallEnd);
 	float GapCm = 0.f;
 	const FAmbushWallEnd* East = Ends.FindByPredicate([](const FAmbushWallEnd& End) { return End.Box == 0 && End.Sign == 1; });
@@ -125,11 +128,11 @@ bool FAmbushSpotCandidatesTest::RunTest(const FString&)
 	FAmbushSpotParams Params;
 	const TArray<FPressureBox> One = { SpotWall(FVector2D(0.0, 0.0), FVector2D(1000.0, 0.0)) };
 	// An authored point on top of a wall-end spot wins it (one spot, authored); another authored point stands alone.
-	const TArray<FAmbushSpot> Spots = AmbushSpotRules::Candidates(One, { FVector2D(930.0, 300.0), FVector2D(500.0, -2000.0) }, Params);
+	const TArray<FAmbushSpot> Spots = AmbushSpotRules::Candidates(One, { FVector2D(930.0, 120.0), FVector2D(500.0, -2000.0) }, Params);
 	TestEqual(TEXT("4 wall spots + 2 authored - 1 merged = 5"), Spots.Num(), 5);
 	TestEqual(TEXT("Two authored"), CountKind(Spots, EAmbushSpotKind::Authored), 2);
 	TestEqual(TEXT("Three wall ends left"), CountKind(Spots, EAmbushSpotKind::WallEnd), 3);
-	TestNull(TEXT("The merged wall-end spot is gone"), NearSpot(Spots, FVector2D(900.0, 280.0)));
+	TestNull(TEXT("The merged wall-end spot is gone"), NearSpot(Spots, FVector2D(900.0, 100.0), 10.0));
 	// Bonuses rank the kinds (the selector's score: CombatPressureRules::ScoreSpot + KindBonus).
 	TestTrue(TEXT("Authored > doorway > wall end"), AmbushSpotRules::KindBonus(EAmbushSpotKind::Authored, Params)
 		> AmbushSpotRules::KindBonus(EAmbushSpotKind::Doorway, Params) && AmbushSpotRules::KindBonus(EAmbushSpotKind::Doorway, Params)
@@ -201,7 +204,7 @@ bool FAmbushSpotLabTest::RunTest(const FString&)
 	AddInfo(FString::Printf(TEXT("lab hiding spots: %d wall ends, %d doorways, %d authored"), Ends, Doorways, CountKind(Spots, EAmbushSpotKind::Authored)));
 	TestTrue(TEXT("The lab's gap runs give doorways (C 1-2-3 m, V2 4.5 / 6 m gaps: >= 16 spots)"), Doorways >= 16);
 	TestTrue(TEXT("... and plenty of wall ends"), Ends >= 40);
-	const FAmbushSpot* LaneC = NearSpot(Spots, FVector2D(-1600.0, -1220.0));
+	const FAmbushSpot* LaneC = NearSpot(Spots, FVector2D(-1600.0, -1400.0)); // 0.8 m off the north face (decision 3, 2026-11-01 night)
 	TestTrue(TEXT("Beside lane C's 2 m doorway (W_C_6 west jamb, north face)"), LaneC && LaneC->Kind == EAmbushSpotKind::Doorway);
 	TestNull(TEXT("No spot at the W_E_13 / W_E_14 corner"), NearSpot(Spots, FVector2D(200.0, 2780.0), 30.f));
 	// Every authored point is a legal spawn: clear of every wall / tower by the level's clearance, inside the lab.

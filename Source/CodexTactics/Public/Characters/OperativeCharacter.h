@@ -214,6 +214,12 @@ public:
 	 */
 	void MarkStanceFromSquad() { SquadStanceSerial = StanceSerial; }
 	bool IsStanceFromSquad() const { return SquadStanceSerial == StanceSerial; }
+	/**
+	 * The autonomy crouched him on a halt in a fight (the hold crouch, decision 6 of 2026-11-01 night): a squad stance that his next move
+	 * (a formation follow or his own order) stands him up from at once (SquadAutonomyRules::ShouldRiseFromHoldCrouch).
+	 */
+	void MarkHoldCrouch() { SquadStanceSerial = StanceSerial; HoldCrouchSerial = StanceSerial; }
+	bool IsHoldCrouch() const { return HoldCrouchSerial == StanceSerial && Stance == EOperativeStance::Crouching; }
 	/** The player's stance key / squad stance order (even one that changes nothing): his stance is his own. */
 	void ClearStanceFromSquad() { SquadStanceSerial = MAX_uint32; }
 
@@ -2454,6 +2460,8 @@ private:
 	/** Counts his stance changes; SquadStanceSerial = the count when the squad automation set it (IsStanceFromSquad). */
 	uint32 StanceSerial = 0;
 	uint32 SquadStanceSerial = MAX_uint32;
+	/** StanceSerial when the autonomy's hold crouch set the stance (IsHoldCrouch). */
+	uint32 HoldCrouchSerial = MAX_uint32;
 	/** The last RequestMove destination (the walk resumes there after jumping off an obstacle top). */
 	FVector LastMoveDestination = FVector::ZeroVector;
 	uint32 MoveOrderSerial = 0;

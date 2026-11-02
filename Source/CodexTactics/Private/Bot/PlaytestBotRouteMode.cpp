@@ -3,10 +3,12 @@
 // ("bot_route", FBotRouteTracker), fights what it meets, stops by time and writes the run report (FCombatLabRunCollector).
 // Every order goes through the player's own click path (ACodexTacticsPlayerController::HandleWorldHit), so the squad moves exactly as
 // it does for the player: a ground click = the formation move, a click on a wall face = the group cover / formation wall layout, a click
-// on a tower roof = a walk up its ladder (Solo, the leader alone).
+// on a tower roof = a walk up its ladder (Solo, the leader alone). In a fight the squad first takes COVER AT A WALL facing the threat (the same
+// wall click; BotCoverRules - game designer decision 5, 2026-11-01 night).
 #include "Bot/PlaytestBotSubsystem.h"
 
 #include "AI/AmbushWatchRules.h"
+#include "Bot/BotCoverRules.h"
 #include "Bot/BotRouteRules.h"
 #include "Bot/CombatLabRunCollector.h"
 #include "Characters/EnemyCharacter.h"
@@ -188,28 +190,44 @@ void UPlaytestBotSubsystem::TickRoute(float DeltaTime)
 		return;
 	}
 
-	// A fight (the skirmish) holds the route a while: the squad halts crouched and fights; then it walks on, fighting.
+	// A fight (the skirmish) holds the route a while (decision 5, 2026-11-01 night): the squad takes cover at the nearest wall facing the threat
+	// and fights from there (no wall: it halts where it stands - the autonomy's ROE crouches it only when the halt lasts); then it walks on:
+	// the fight is over, or the hold time is up (it walks on fighting, the Aggressive posture fires on the move).
 	const bool bInFight = Flow->GetPhase() == ECodexGamePhase::WaveCombat;
 	const FBotRouteConfig& Route = RouteTracker.GetConfig();
 	if (bInFight && !bRouteWasInFight)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: fight at %.1f s on the way to #%d (%s), formation %s"), Now, RouteTracker.GetIndex(),
 			RouteTracker.GetWaypoint() ? *RouteTracker.GetWaypoint()->Label : TEXT("?"), *LabCollector.GetFormation());
-		if (Route.FightHoldSeconds > 0.f && RoutePhase == ERouteActionPhase::None)
+		if (RoutePhase == ERouteActionPhase::None)
 		{
-			bRouteFightHold = true;
-			RouteFightHoldStart = Now;
-			Leader->OrderMoveTo(Leader->GetActorLocation(), false); // halt where he stands
-			Squad->SetSquadStance(EOperativeStance::Crouching);
-			RouteTracker.NotifyOrder(TEXT("halt: fight (crouched)"));
+			if (Route.Cover.bEnabled && TryTakeFightCover())
+			{
+				bRouteFightHold = true;
+				bRouteFightCover = true;
+				RouteFightHoldStart = Now;
+			}
+			else if (Route.FightHoldSeconds > 0.f)
+			{
+				bRouteFightHold = true;
+				bRouteFightCover = false;
+				RouteFightHoldStart = Now;
+				Leader->OrderMoveTo(Leader->GetActorLocation(), false); // halt where he stands
+				RouteTracker.NotifyOrder(TEXT("halt: fight (no wall to take cover at)"));
+			}
 		}
 	}
-	if (bRouteFightHold && (!bInFight || Now - RouteFightHoldStart >= Route.FightHoldSeconds))
+	const float HoldLimit = bRouteFightCover ? Route.Cover.HoldSeconds : Route.FightHoldSeconds;
+	if (bRouteFightHold && (!bInFight || Now - RouteFightHoldStart >= HoldLimit))
 	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: walking on at %.1f s (%s; %s %.1f s)"), Now,
+			bInFight ? TEXT("still fighting, firing on the move") : TEXT("the fight is over"), bRouteFightCover ? TEXT("at the wall") : TEXT("halted"),
+			Now - RouteFightHoldStart);
 		bRouteFightHold = false;
+		bRouteFightCover = false;
+		// Up from any crouch the fight left (the wall layout's / the ROE's) to walk on with the formation.
 		Squad->SetSquadStance(EOperativeStance::Standing);
 		bRouteReorder = true;
-		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: walking on at %.1f s (%s)"), Now, bInFight ? TEXT("still fighting") : TEXT("the fight is over"));
 	}
 	bRouteWasInFight = bInFight;
 
@@ -265,6 +283,69 @@ void UPlaytestBotSubsystem::HandleRouteCommand(EBotRouteCommand Command)
 	default:
 		return;
 	}
+}
+
+bool UPlaytestBotSubsystem::TryTakeFightCover()
+{
+	using namespace BotRouteModeLocal;
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	UCombatPressureSubsystem* Pressure = World->GetSubsystem<UCombatPressureSubsystem>();
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader || !Pressure || Squad->IsSoloMode())
+	{
+		return false;
+	}
+	// The threat: the nearest living enemy that fights (it left its patrol / post), else the nearest living one.
+	const AEnemyCharacter* Threat = nullptr;
+	float Best = MAX_flt;
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		if (It->IsDying() || !IsLiving(*It))
+		{
+			continue;
+		}
+		const float Score = static_cast<float>(FVector::Dist2D(It->GetActorLocation(), Leader->GetActorLocation())) + (It->IsOnPatrol() ? 100000.f : 0.f);
+		if (Score < Best)
+		{
+			Best = Score;
+			Threat = *It;
+		}
+	}
+	if (!Threat)
+	{
+		return false;
+	}
+	const FBotRouteConfig& Route = RouteTracker.GetConfig();
+	const TOptional<FBotCoverChoice> Choice = BotCoverRules::PickWall(Pressure->GetObstacleBoxes(), To2D(Leader->GetActorLocation()),
+		To2D(Threat->GetActorLocation()), Route.Cover);
+	if (!Choice.IsSet())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: no wall within %.0f m between the squad and %s - it halts where it stands"), Route.Cover.SearchCm / 100.f,
+			*Threat->GetName());
+		return false;
+	}
+	// The player's click on the near face of the wall (from the squad's side, at knee height) = the group cover order / the formation wall layout.
+	const float Z = RouteFeetZ(*Leader) + 100.f;
+	const FVector2D From = Choice->FacePoint + Choice->Normal * 120.0;
+	const FVector2D Into = Choice->FacePoint - Choice->Normal * 60.0;
+	RouteClickCooldown = ClickInterval;
+	if (!RouteClick(FVector(From.X, From.Y, Z), FVector(Into.X, Into.Y, Z), TEXT("fight cover")))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: the cover click on the wall at (%.0f, %.0f) missed - it halts where it stands"), Choice->FacePoint.X,
+			Choice->FacePoint.Y);
+		return false;
+	}
+	ACodexTacticsPlayerController* Controller = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+	if (Controller && Controller->HasCoverPreview())
+	{
+		Controller->ConfirmCoverPreview(false);
+	}
+	RouteTracker.NotifyOrder(FString::Printf(TEXT("fight: cover at the wall (%.0f, %.0f) against %s"), Choice->FacePoint.X, Choice->FacePoint.Y, *Threat->GetName()));
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: COVER - the squad to the wall at (%.0f, %.0f), %.1f m away, facing %s (%.0f m off, facing cos %.2f)"),
+		Choice->FacePoint.X, Choice->FacePoint.Y, Choice->DistanceCm / 100.f, *Threat->GetName(),
+		FVector2D::Distance(To2D(Threat->GetActorLocation()), Choice->FacePoint) / 100.0, Choice->FacingCos);
+	return true;
 }
 
 bool UPlaytestBotSubsystem::RouteClick(const FVector& Start, const FVector& End, const TCHAR* What)
@@ -491,6 +572,7 @@ FCombatLabSample UPlaytestBotSubsystem::SampleCombatLab() const
 	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 	const UCombatPressureSubsystem* Pressure = World->GetSubsystem<UCombatPressureSubsystem>();
 	Sample.bInFight = Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat;
+	Sample.bCoverOrdered = bRouteFightHold && bRouteFightCover;
 	if (Squad)
 	{
 		Sample.bAtWall = Squad->IsSquadAtWall();
@@ -610,16 +692,23 @@ void UPlaytestBotSubsystem::WriteCombatLabReport(const TCHAR* Result) const
 		Meta.PressureSpawned = Pressure->GetSpawnRecords().Num();
 		Meta.PressureSprungByWatch = Pressure->GetSprungByWatchCount();
 		Meta.PressureRelocations = Pressure->GetRelocations().Num();
+		Meta.PressureSprungByHold = Pressure->GetSprungByHoldCount();
+		Meta.PressureNoRoute = Pressure->GetNoRouteSearches();
+		Meta.PressureFollowers = Pressure->GetFollowerConversions();
+		for (const FPressureRelocationRecord& Run : Pressure->GetRelocations())
+		{
+			Meta.PressureRunsSpotted += Run.Outcome == EAmbushRunStep::Spotted ? 1 : 0;
+		}
 	}
 	const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	const FVector2D LeaderNow = Leader ? BotRouteModeLocal::To2D(Leader->GetActorLocation()) : FVector2D::ZeroVector;
 	const FString Line = CombatLabRules::ToJsonLine(CombatLabRules::MakeRunRecord(Meta, RouteTracker, Final, LeaderNow));
-	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route report: %s, laps %d, route completed %d (progress %.0f %%, skipped %d, stuck %d), contacts %d (patrol %d, ambush %d, coordinated %d, unwatched strikes %d), formation changes %d, wall hugs %d, stance changes %d, climbs %d, knockdowns %d, rounds %d, damage %.0f / absorbed %.0f"),
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route report: %s, laps %d, route completed %d (progress %.0f %%, skipped %d, stuck %d), contacts %d (patrol %d, ambush %d, coordinated %d, unwatched strikes %d), formation changes %d, wall hugs %d, cover taken %d of %d (%.0f s), stance changes %d, climbs %d, knockdowns %d, rounds %d, damage %.0f / absorbed %.0f"),
 		Result, RouteTracker.GetLaps().Num(), RouteTracker.IsRouteCompleted() ? 1 : 0, RouteTracker.GetProgress() * 100.f, RouteTracker.GetTotalSkipped(),
 		RouteTracker.GetStucks().Num(), Final.GetContacts().Num(), Final.CountContacts(ECombatLabContactKind::Patrol), Final.CountContacts(ECombatLabContactKind::Ambush),
 		Final.CountContacts(ECombatLabContactKind::Coordinated), Final.CountUnwatchedStrikes(), Final.GetFormationChanges(), Final.GetWallHugs(),
-		Final.GetStanceChanges(), Final.GetClimbsUp(), Final.GetKnockdowns(), Final.GetRounds(), Final.GetDamageTaken(), Final.GetDamageAbsorbed());
+		Final.GetCoverTaken(), Final.GetCoverOrders(), Final.GetCoverSeconds(), Final.GetStanceChanges(), Final.GetClimbsUp(), Final.GetKnockdowns(), Final.GetRounds(), Final.GetDamageTaken(), Final.GetDamageAbsorbed());
 	if (!CombatLabReportFile.IsEmpty())
 	{
 		if (!FFileHelper::SaveStringToFile(Line + TEXT("\n"), *CombatLabReportFile, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))

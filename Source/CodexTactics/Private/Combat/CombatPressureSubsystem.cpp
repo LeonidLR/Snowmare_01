@@ -1,4 +1,6 @@
 // The combat lab's endless enemy pressure: patrols and ambushers (game designer decisions 2026-11-01, docs/design/COMBAT_LAB.md).
+// Since the designer's decisions of 2026-11-01 night: a bypassed ambush RUNS a concealed route on foot (no teleport), an ambush watched all along
+// strikes after its 60-90 s hold limit, hiding spots hug the wall (0.8 m).
 // UE-only, no Godot reference. Pure rules: CombatPressureRules / AmbushWatchRules / AmbushSpotRules / AmbushPlanRules / AmbushRelocateRules
 // (CodexTactics.Combat.Pressure.*, CodexTactics.AI.AmbushWatch.*, CodexTactics.Combat.AmbushSpots.*, .AmbushPlan.*, .AmbushRelocate.*).
 
@@ -13,6 +15,7 @@
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/SuppressionSubsystem.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SplineComponent.h"
@@ -53,6 +56,15 @@ namespace CombatPressureLocal
 	constexpr float TargetLiftCm = 110.f;
 	/** A relocating group's new spot keeps this far from where it hid, cm. */
 	constexpr float RelocateAvoidCm = 600.f;
+	/** Routes evaluated per relocation search (the best hiding spots ahead by score). */
+	constexpr int32 RelocateRoutes = 8;
+	/** A runner within this of his leg's end turns onto the next leg, cm (the guard post's own stop radius is 80). */
+	constexpr float RunLegAcceptCm = 150.f;
+	/** ... within this of his final spot he has arrived, cm. */
+	constexpr float RunArriveCm = 120.f;
+	/** A following patrol re-aims at the squad this often, s; its post moves when the squad moved this far, cm. */
+	constexpr float FollowStepSeconds = 2.f;
+	constexpr float FollowRepostCm = 300.f;
 	/** Name of the actor tag of a hand-placed ambush point (any actor in the map). */
 	static const FName AmbushPointTag(TEXT("CodexAmbushPoint"));
 
@@ -175,6 +187,44 @@ void UCombatPressureSubsystem::SetCoordinatedShareOverride(float Share)
 	Config.Coordinated.Share = Share >= 0.f ? FMath::Clamp(Share, 0.f, 1.f) : LevelConfig.Coordinated.Share;
 }
 
+void UCombatPressureSubsystem::SetHoldLimitOverride(float MinSeconds, float MaxSeconds)
+{
+	HoldMinOverride = MinSeconds;
+	HoldMaxOverride = MaxSeconds;
+}
+
+float UCombatPressureSubsystem::DrawHoldLimit(int32 Key) const
+{
+	FAmbushWatchParams Params = Config.Watch;
+	if (HoldMaxOverride >= 0.f)
+	{
+		Params.HoldStrikeMinSeconds = FMath::Max(0.f, HoldMinOverride);
+		Params.HoldStrikeMaxSeconds = HoldMaxOverride;
+	}
+	// Its own stream per ambush: the seeded event stream (kinds, types, spots) stays exactly as before.
+	FRandomStream Draw(Config.Seed * 7919 + Key);
+	return AmbushWatchRules::HoldLimitSeconds(Draw.FRand(), Params);
+}
+
+float UCombatPressureSubsystem::GetHoldLimit(const AEnemyCharacter* Enemy) const
+{
+	for (const FManaged& Each : Managed)
+	{
+		if (Each.Enemy.Get() != Enemy || Each.Kind != EPressureSpawnKind::Ambush)
+		{
+			continue;
+		}
+		if (Each.Plan > 0)
+		{
+			FPressurePlanInfo Info;
+			return GetPlanInfo(Each.Plan, Info) ? Info.HoldLimitSeconds : 0.f;
+		}
+		const float* Limit = GroupHoldLimit.Find(Each.Group);
+		return Limit ? *Limit : 0.f;
+	}
+	return 0.f;
+}
+
 void UCombatPressureSubsystem::Tick(float DeltaTime)
 {
 	UWorld* World = GetWorld();
@@ -277,14 +327,29 @@ void UCombatPressureSubsystem::CleanUp()
 			It.RemoveCurrent();
 		}
 	}
+	const auto HasGroup = [this](int32 Group) { return Managed.ContainsByPredicate([Group](const FManaged& Each) { return Each.Group == Group; }); };
 	for (auto It = GroupBypassSeconds.CreateIterator(); It; ++It)
 	{
-		const int32 Group = It.Key();
-		if (!Managed.ContainsByPredicate([Group](const FManaged& Each) { return Each.Group == Group; }))
+		if (!HasGroup(It.Key()))
 		{
 			It.RemoveCurrent();
 		}
 	}
+	for (auto It = GroupNoRouteSearches.CreateIterator(); It; ++It)
+	{
+		if (!HasGroup(It.Key()))
+		{
+			It.RemoveCurrent();
+		}
+	}
+	for (auto It = FollowerGroups.CreateIterator(); It; ++It)
+	{
+		if (!HasGroup(*It))
+		{
+			It.RemoveCurrent();
+		}
+	}
+	Runs.RemoveAll([&HasGroup](const FRun& Run) { return !HasGroup(Run.Group); });
 }
 
 void UCombatPressureSubsystem::DespawnAll()
@@ -306,6 +371,9 @@ void UCombatPressureSubsystem::DespawnAll()
 	}
 	Routes.Reset();
 	GroupBypassSeconds.Reset();
+	GroupNoRouteSearches.Reset();
+	FollowerGroups.Reset();
+	Runs.Reset();
 	UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] every pressure enemy removed"));
 }
 
@@ -386,6 +454,56 @@ bool UCombatPressureSubsystem::IsGroupSeen(int32 Group) const
 	return false;
 }
 
+bool UCombatPressureSubsystem::IsPointInSquadSight(const FVector& Target) const
+{
+	const UWorld* World = GetWorld();
+	const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+	const UTacticalSightSubsystem* Sight = World ? World->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+	if (!Squad)
+	{
+		return false;
+	}
+	for (const AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		if (!CombatPressureLocal::IsLiving(Member))
+		{
+			continue;
+		}
+		// His real eyes (the stance height over his capsule: a man on a tower / roof looks from up there), any direction.
+		const FVector Eye = UTacticalSightSubsystem::EyePoint(*Member);
+		if (FVector::Dist(Eye, Target) > UTacticalSightSubsystem::MaxSightCm)
+		{
+			continue;
+		}
+		if (Sight ? Sight->HasClearSight(Eye, Target)
+			: !World->LineTraceTestByObjectType(Eye, Target, FCollisionObjectQueryParams(ECC_WorldStatic), FCollisionQueryParams(SCENE_QUERY_STAT(CombatPressureRoute), false)))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UCombatPressureSubsystem::IsSpottedBySquad(const AEnemyCharacter& Enemy) const
+{
+	const UWorld* World = GetWorld();
+	const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+	const UTacticalSightSubsystem* Sight = World ? World->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+	if (!Squad || !Sight)
+	{
+		return Squad && IsVisibleToSquad(CombatPressureLocal::FeetOf(Enemy));
+	}
+	const FVector Profile = UTacticalSightSubsystem::ProfilePoint(Enemy);
+	for (const AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		if (CombatPressureLocal::IsLiving(Member) && Sight->CanOperativeSee(*Member, Profile))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 const TArray<FPressureBox>& UCombatPressureSubsystem::GetObstacleBoxes()
 {
 	if (!bObstaclesRead)
@@ -437,6 +555,7 @@ void UCombatPressureSubsystem::GatherObstacles()
 				Box.AxisX = FVector2D(1.0, 0.0);
 			}
 			Box.HalfSize = FVector2D(Local.GetExtent().X * Scale.X, Local.GetExtent().Y * Scale.Y);
+			Box.HeightCm = static_cast<float>(Local.GetSize().Z * Scale.Z);
 			Obstacles.Add(Box);
 		}
 	}
@@ -685,6 +804,75 @@ TOptional<UCombatPressureSubsystem::FHideChoice> UCombatPressureSubsystem::FindH
 	return {};
 }
 
+TArray<UCombatPressureSubsystem::FHideChoice> UCombatPressureSubsystem::RankHideSpots(float MinDistanceCm, float MaxDistanceCm, float MinAheadCos,
+	const TArray<FVector2D>& Avoid, float AvoidCm, TArray<float>* OutScores)
+{
+	TArray<FHideChoice> Out;
+	const TArray<FVector2D> Squad = GatherSquadPositions();
+	if (!GetWorld() || Squad.IsEmpty())
+	{
+		return Out;
+	}
+	const TArray<FPressureBox>& Boxes = GetObstacleBoxes();
+	const TArray<FAmbushSpot>& Spots = GetHideSpots();
+	const TArray<FAmbushWatcher> Watchers = GatherWatchers();
+	const FVector Feet = LeaderFeet();
+	const FVector2D Leader2D = CombatPressureLocal::To2D(Feet);
+	const FVector2D Heading2D = CombatPressureLocal::To2D(SquadHeading()).GetSafeNormal();
+	const float Clearance = HideClearance();
+	struct FCandidate
+	{
+		FHideChoice Choice;
+		float Score;
+	};
+	TArray<FCandidate> Candidates;
+	for (const FAmbushSpot& Spot : Spots)
+	{
+		const float Distance = static_cast<float>(FVector2D::Distance(Leader2D, Spot.Position));
+		if (Distance < MinDistanceCm || Distance > MaxDistanceCm
+			|| CombatPressureRules::CheckSpawnPoint(Spot.Position, Boxes, Clearance, Squad, MinDistanceCm, Bounds) != ESpawnPointVerdict::Ok
+			|| Avoid.ContainsByPredicate([&Spot, AvoidCm](const FVector2D& Each) { return FVector2D::Distance(Each, Spot.Position) < AvoidCm; }))
+		{
+			continue;
+		}
+		const float AheadCos = Distance > 1.f ? static_cast<float>(FVector2D::DotProduct(Heading2D, (Spot.Position - Leader2D) / Distance)) : 1.f;
+		if (AheadCos < MinAheadCos)
+		{
+			continue;
+		}
+		const TOptional<FVector> OnNav = ProjectFeet(Spot.Position, static_cast<float>(Feet.Z));
+		if (!OnNav.IsSet() || CombatPressureRules::Clearance(CombatPressureLocal::To2D(OnNav.GetValue()), Boxes) < Clearance - 1.f
+			|| IsVisibleToSquad(OnNav.GetValue()))
+		{
+			continue;
+		}
+		FPressureSpotInput Input;
+		Input.Kind = EPressureSpawnKind::Ambush;
+		Input.DistanceCm = Distance;
+		Input.MinDistanceCm = MinDistanceCm;
+		Input.MaxDistanceCm = MaxDistanceCm;
+		Input.AheadCos = AheadCos;
+		Input.bConcealed = true;
+		Input.bWatched = AmbushWatchRules::IsWatched(Watchers, Spot.Position, Config.Watch);
+		Input.KindBonus = AmbushSpotRules::KindBonus(Spot.Kind, Config.Spots);
+		FCandidate& Candidate = Candidates.AddDefaulted_GetRef();
+		Candidate.Choice.Feet = OnNav.GetValue();
+		Candidate.Choice.Kind = Spot.Kind;
+		Candidate.Choice.AheadCos = AheadCos;
+		Candidate.Score = CombatPressureRules::ScoreSpot(Input);
+	}
+	Candidates.Sort([](const FCandidate& A, const FCandidate& B) { return A.Score > B.Score; });
+	for (const FCandidate& Each : Candidates)
+	{
+		Out.Add(Each.Choice);
+		if (OutScores)
+		{
+			OutScores->Add(Each.Score);
+		}
+	}
+	return Out;
+}
+
 bool UCombatPressureSubsystem::PlanLayout(FPressurePlanInfo& OutInfo)
 {
 	UWorld* World = GetWorld();
@@ -778,9 +966,12 @@ TArray<FVector> UCombatPressureSubsystem::GroupSpots(const FVector& Feet, int32 
 		{
 			continue;
 		}
+		// Hugging a wall (decision 3, the 0.8 m spots) a mate's spot could lie on the wall's far side: only spots with a clear walk from the group's point.
 		if (const TOptional<FVector> OnNav = ProjectFeet(Point, static_cast<float>(Feet.Z));
 			OnNav.IsSet() && CombatPressureRules::Clearance(CombatPressureLocal::To2D(OnNav.GetValue()), Obstacles) >= Clearance
-			&& (!bConcealed || !IsVisibleToSquad(OnNav.GetValue())))
+			&& (!bConcealed || !IsVisibleToSquad(OnNav.GetValue()))
+			&& !GetWorld()->LineTraceTestByObjectType(Feet + FVector(0.f, 0.f, 60.f), OnNav.GetValue() + FVector(0.f, 0.f, 60.f),
+				FCollisionObjectQueryParams(ECC_WorldStatic), FCollisionQueryParams(SCENE_QUERY_STAT(CombatPressureGroupSpot), false)))
 		{
 			Out.Add(OnNav.GetValue());
 		}
@@ -945,6 +1136,11 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnAmbushGroup(const FVecto
 	}
 	GetObstacleBoxes();
 	const int32 Group = NextGroup++;
+	// Decision 2 (2026-11-01 night): watched all along, it strikes anyway after its own 60-90 s (a plan keeps one limit for all its parties).
+	if (Tags.Plan == 0)
+	{
+		GroupHoldLimit.Add(Group, DrawHoldLimit(Group));
+	}
 	const TArray<FVector> Spots = GroupSpots(Feet, Types.Num(), !bPlacedByCaller);
 	for (int32 Index = 0; Index < Spots.Num(); ++Index)
 	{
@@ -1076,6 +1272,7 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerCoordinated(const TArr
 	}
 	Info.Id = NextPlan++;
 	LastPlanId = Info.Id;
+	Info.HoldLimitSeconds = DrawHoldLimit(100000 + Info.Id);
 	Info.PartyGroups.Init(0, 4);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] event at %.0f s: coordinated ambush plan %d of %d round the squad (anchor %s)"), Clock, Info.Id, Bodies.Num(),
 		*Info.Anchor.ToString());
@@ -1204,7 +1401,8 @@ void UCombatPressureSubsystem::TickAmbushers(float Step)
 	TSet<int32> Groups;
 	for (const FManaged& Each : Managed)
 	{
-		if (Each.Kind == EPressureSpawnKind::Ambush && Each.Plan == 0 && Each.AmbushState != EPressureAmbushState::Sprung)
+		if (Each.Kind == EPressureSpawnKind::Ambush && Each.Plan == 0 && Each.AmbushState != EPressureAmbushState::Sprung
+			&& Each.AmbushState != EPressureAmbushState::Relocating)
 		{
 			Groups.Add(Each.Group);
 		}
@@ -1238,6 +1436,7 @@ void UCombatPressureSubsystem::TickAmbushers(float Step)
 			Spring(Group, TEXT("its side is unwatched"));
 			continue;
 		}
+		float Held = 0.f;
 		for (FManaged& Each : Managed)
 		{
 			if (Each.Group != Group)
@@ -1247,12 +1446,22 @@ void UCombatPressureSubsystem::TickAmbushers(float Step)
 			const EPressureAmbushState Was = Each.AmbushState;
 			Each.AmbushState = Decision == EAmbushDecision::Hold ? EPressureAmbushState::Holding : EPressureAmbushState::Hidden;
 			Each.HoldSeconds += Decision == EAmbushDecision::Hold ? Step : 0.f;
+			Held = FMath::Max(Held, Each.HoldSeconds);
 			if (Was != Each.AmbushState && Each.AmbushState == EPressureAmbushState::Holding && Each.Enemy.Get() == First)
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] ambush group %d holds: the squad is in range but looks its way"), Group);
 			}
 		}
-		// Answer 3 (2026-11-01): bypassed, it moves ahead of the squad unseen.
+		// Decision 2 (2026-11-01 night): a squad that watches every side still gets attacked - after the group's own hold limit.
+		const float* Limit = GroupHoldLimit.Find(Group);
+		if (Decision == EAmbushDecision::Hold && Limit && AmbushWatchRules::HeldTooLong(Held, *Limit))
+		{
+			++SprungByHold;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] ambush group %d held %.1f s while watched (its limit %.1f s): it strikes anyway"), Group, Held, *Limit);
+			Spring(Group, TEXT("held too long, watched all along"));
+			continue;
+		}
+		// Answer 3 / decision 1 (2026-11-01): bypassed, it runs a concealed route to a spot ahead of the squad (no route: it stays / follows).
 		if (Decision == EAmbushDecision::Wait)
 		{
 			TickRelocation(Group, Step, Squad);
@@ -1268,6 +1477,13 @@ void UCombatPressureSubsystem::TickAmbushers(float Step)
 		{
 			TickPlan(Plan, Step, Squad, Watchers);
 		}
+	}
+	TickRuns(Step);
+	FollowTimer += Step;
+	if (FollowTimer >= CombatPressureLocal::FollowStepSeconds)
+	{
+		FollowTimer = 0.f;
+		TickFollowers();
 	}
 	TickSuppressors();
 }
@@ -1311,8 +1527,22 @@ void UCombatPressureSubsystem::TickPlan(FPlan& Plan, float Step, const TArray<FV
 		return; // every member fights (or none is left)
 	}
 	Tick.FlanksUnwatched = UnwatchedFlankGroups.Num();
+	Tick.HoldSeconds = Info.HoldSeconds;
+	Tick.HoldLimitSeconds = Info.HoldLimitSeconds;
+	// A runner of a party spotted on its relocation route: the whole plan springs (the flank block, then the assault).
+	Tick.bAnyEngaged |= Info.bSpottedOnRoute;
+	bool bRunning = false;
+	for (const int32 Group : Info.PartyGroups)
+	{
+		bRunning |= IsGroupRunning(Group);
+	}
+	if (bRunning && !Tick.bAnyEngaged)
+	{
+		return; // its parties are on their way to the new layout (decision 1): no phase change until they hide again
+	}
 
-	// Bypassed while waiting (answer 3): the plan is laid out afresh round the squad, its parties move there unseen.
+	// Bypassed while waiting (answer 3; the hybrid of decision 1): the plan is laid out afresh round the squad, its parties RUN there by concealed
+	// routes - all four or none; no concealed routes for long: it dissolves into single groups (each one searches / follows on its own).
 	if (Info.Phase == EAmbushPlanPhase::Waiting && !Tick.bAnyEngaged)
 	{
 		const FVector2D Leader2D = CombatPressureLocal::To2D(LeaderFeet());
@@ -1328,17 +1558,44 @@ void UCombatPressureSubsystem::TickPlan(FPlan& Plan, float Step, const TArray<FV
 		{
 			Plan.BypassedSeconds = 0.f;
 			FPressurePlanInfo Fresh;
-			if (PlanLayout(Fresh))
+			const bool bLayout = PlanLayout(Fresh);
+			TArray<FRouteChoice> PartyRoutes;
+			if (bLayout)
 			{
-				UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] coordinated plan %d bypassed: re-laid round the squad (anchor %s -> %s)"), Info.Id,
-					*Info.Anchor.ToString(), *Fresh.Anchor.ToString());
 				const FVector2D Heading2D = CombatPressureLocal::To2D(SquadHeading()).GetSafeNormal();
 				for (int32 Slot = 0; Slot < 4 && Slot < Info.PartyGroups.Num(); ++Slot)
 				{
+					FRouteChoice& Route = PartyRoutes.AddDefaulted_GetRef();
 					const FVector2D To = CombatPressureLocal::To2D(Fresh.PartySpots[Slot]);
 					const float Distance = static_cast<float>(FVector2D::Distance(Leader2D, To));
-					const float AheadCos = Distance > 1.f ? static_cast<float>(FVector2D::DotProduct(Heading2D, (To - Leader2D) / Distance)) : 1.f;
-					MoveGroup(Info.PartyGroups[Slot], Fresh.PartySpots[Slot], Fresh.PartyKinds[Slot], AheadCos, LeaderFeet());
+					Route.Hide.Feet = Fresh.PartySpots[Slot];
+					Route.Hide.Kind = Fresh.PartyKinds[Slot];
+					Route.Hide.AheadCos = Distance > 1.f ? static_cast<float>(FVector2D::DotProduct(Heading2D, (To - Leader2D) / Distance)) : 1.f;
+					Route.RoutesTried = 1;
+					// A party already gone (killed) needs no route.
+					if (!Managed.ContainsByPredicate([Group = Info.PartyGroups[Slot]](const FManaged& Each) { return Each.Group == Group; }))
+					{
+						Route.Candidate.bReachable = true;
+						continue;
+					}
+					EvaluateRoute(Info.PartyGroups[Slot], Fresh.PartySpots[Slot], !IsVisibleToSquad(Fresh.PartySpots[Slot]), 0.f, Route.Candidate, Route.Path);
+				}
+			}
+			const bool bAllConcealed = bLayout && !PartyRoutes.ContainsByPredicate([this](const FRouteChoice& Route)
+			{
+				return !AmbushRelocateRules::IsConcealedRoute(Route.Candidate, Config.Relocate);
+			});
+			if (bAllConcealed)
+			{
+				Plan.NoRouteSearches = 0;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] coordinated plan %d bypassed: re-laid round the squad (anchor %s -> %s), its parties run there by concealed routes"),
+					Info.Id, *Info.Anchor.ToString(), *Fresh.Anchor.ToString());
+				for (int32 Slot = 0; Slot < PartyRoutes.Num(); ++Slot)
+				{
+					if (!PartyRoutes[Slot].Path.IsEmpty())
+					{
+						StartRun(Info.PartyGroups[Slot], Info.Id, PartyRoutes[Slot]);
+					}
 				}
 				Info.Anchor = Fresh.Anchor;
 				Info.HeadingYawDeg = Fresh.HeadingYawDeg;
@@ -1346,10 +1603,18 @@ void UCombatPressureSubsystem::TickPlan(FPlan& Plan, float Step, const TArray<FV
 				Info.PartyKinds = Fresh.PartyKinds;
 				++Info.Relocations;
 			}
+			else if (bLayout && AmbushRelocateRules::NoRouteOutcome(++Plan.NoRouteSearches, Config.Relocate) == EAmbushNoRouteOutcome::Stay)
+			{
+				++NoRouteSearches;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] coordinated plan %d bypassed: no concealed route for every party (search %d) - it stays put, no teleport"),
+					Info.Id, Plan.NoRouteSearches);
+			}
 			else
 			{
-				// No layout round the squad here: the parties go on as single groups (each relocates on its own).
-				UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] coordinated plan %d bypassed, no layout round the squad: its parties go on as single groups"), Info.Id);
+				// No layout round the squad here (or no concealed routes for long): the parties go on as single groups (each searches on its own).
+				NoRouteSearches += bLayout ? 1 : 0;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] coordinated plan %d bypassed, %s: its parties go on as single groups"), Info.Id,
+					bLayout ? TEXT("no concealed routes") : TEXT("no layout round the squad"));
 				Info.bDissolved = true;
 				for (FManaged& Each : Managed)
 				{
@@ -1357,6 +1622,10 @@ void UCombatPressureSubsystem::TickPlan(FPlan& Plan, float Step, const TArray<FV
 					{
 						Each.Plan = 0;
 						Each.Party = EAmbushParty::Single;
+						if (!GroupHoldLimit.Contains(Each.Group))
+						{
+							GroupHoldLimit.Add(Each.Group, DrawHoldLimit(Each.Group)); // a single group now: its own hold limit
+						}
 					}
 				}
 			}
@@ -1377,7 +1646,15 @@ void UCombatPressureSubsystem::TickPlan(FPlan& Plan, float Step, const TArray<FV
 		if (Next == EAmbushPlanPhase::FlankBlock && Info.FlankAtClock < 0.f)
 		{
 			Info.FlankAtClock = Clock;
-			SprungByWatch += Tick.bAnyEngaged ? 0 : 1;
+			// A flank side unwatched (the watch rule) or - decision 2 - watched all round for its whole hold limit (it strikes anyway).
+			const bool bByHold = !Tick.bAnyEngaged && Tick.FlanksUnwatched == 0;
+			SprungByWatch += !Tick.bAnyEngaged && !bByHold ? 1 : 0;
+			SprungByHold += bByHold ? 1 : 0;
+			if (bByHold)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] coordinated plan %d held %.1f s watched all round (its limit %.1f s): it strikes anyway"), Info.Id,
+					Info.HoldSeconds, Info.HoldLimitSeconds);
+			}
 		}
 		if (Next == EAmbushPlanPhase::Assault && Info.AssaultAtClock < 0.f)
 		{
@@ -1405,6 +1682,10 @@ void UCombatPressureSubsystem::TickPlan(FPlan& Plan, float Step, const TArray<FV
 		else if (AmbushPlanRules::Springs(Info.Phase, Each.Party, AmbushPlanRules::IsRanged(Each.Type)))
 		{
 			SpringMember(Each, Info.Phase == EAmbushPlanPhase::FlankBlock ? TEXT("the plan blocks the flanks") : TEXT("the plan's assault"));
+		}
+		else if (Each.AmbushState == EPressureAmbushState::Relocating)
+		{
+			continue; // still on its way to its new spot (it strikes from wherever it is at the assault)
 		}
 		else
 		{
@@ -1441,63 +1722,377 @@ void UCombatPressureSubsystem::TickRelocation(int32 Group, float Step, const TAr
 		return;
 	}
 	Seconds = 0.f; // a failed search retries after another AfterSeconds
-	const TOptional<FHideChoice> Hide = FindHideSpot(Config.AmbushMinDistanceCm, Config.AmbushMaxDistanceCm, Config.Relocate.MinAheadCos, { Here },
-		CombatPressureLocal::RelocateAvoidCm);
-	if (!Hide.IsSet() || !AmbushRelocateRules::IsGoodDestination(Hide->AheadCos, !IsVisibleToSquad(Hide->Feet), Config.Relocate))
+	// Decision 1 (2026-11-01 night): a CONCEALED ROUTE on foot to a spot ahead - never a teleport.
+	int32 Tried = 0;
+	const TOptional<FRouteChoice> Route = FindRelocationRoute(Group, Tried);
+	if (!Route.IsSet())
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] ambush group %d bypassed (%.0f cm away, %.0f deg off the squad's way): no concealed spot ahead yet"), Group,
-			Nearest, Angle);
+		++NoRouteSearches;
+		int32& Fails = GroupNoRouteSearches.FindOrAdd(Group);
+		++Fails;
+		const EAmbushNoRouteOutcome Outcome = AmbushRelocateRules::NoRouteOutcome(Fails, Config.Relocate);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] ambush group %d bypassed (%.0f cm away, %.0f deg off the squad's way): no concealed route ahead (%d routes tried, search %d) - %s"),
+			Group, Nearest, Angle, Tried, Fails, Outcome == EAmbushNoRouteOutcome::Patrol ? TEXT("it follows the squad as a patrol") : TEXT("it stays put"));
+		if (Outcome == EAmbushNoRouteOutcome::Patrol)
+		{
+			ConvertToFollower(Group, TEXT("no concealed route"));
+		}
 		return;
 	}
-	MoveGroup(Group, Hide->Feet, Hide->Kind, Hide->AheadCos, LeaderFeet());
+	GroupNoRouteSearches.Remove(Group);
+	StartRun(Group, 0, Route.GetValue());
 }
 
-FPressureRelocationRecord UCombatPressureSubsystem::MoveGroup(int32 Group, const FVector& Feet, EAmbushSpotKind Kind, float AheadCos, const FVector& FaceTowards)
+bool UCombatPressureSubsystem::IsGroupRunning(int32 Group) const
 {
-	FPressureRelocationRecord Record;
-	Record.Group = Group;
-	Record.To = Feet;
-	Record.Kind = Kind;
-	Record.AheadCos = AheadCos;
-	Record.Clock = Clock;
-	Record.bSeenAtMove = IsGroupSeen(Group);
-	Record.bDestinationConcealed = !IsVisibleToSquad(Feet);
-	TArray<AEnemyCharacter*> Members;
+	return Runs.ContainsByPredicate([Group](const FRun& Run) { return Run.Group == Group; });
+}
+
+bool UCombatPressureSubsystem::EvaluateRoute(int32 Group, const FVector& Dest, bool bDestinationConcealed, float Score, FAmbushRouteCandidate& OutRoute,
+	TArray<FVector>& OutPath) const
+{
+	OutRoute = FAmbushRouteCandidate();
+	OutRoute.Score = Score;
+	OutRoute.bDestinationConcealed = bDestinationConcealed;
+	OutPath.Reset();
+	const AEnemyCharacter* First = nullptr;
 	for (const FManaged& Each : Managed)
+	{
+		if (Each.Group == Group && Each.AmbushState != EPressureAmbushState::Sprung && CombatPressureLocal::IsLivingEnemy(Each.Enemy.Get()))
+		{
+			First = Each.Enemy.Get();
+			break;
+		}
+	}
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	if (!First || !Nav)
+	{
+		return false;
+	}
+	// Its own navmesh path (its nav agent and filter: a mutant never paths through a ladder).
+	const FVector Start = CombatPressureLocal::FeetOf(*First);
+	UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, Start + FVector(0.f, 0.f, 50.f), Dest + FVector(0.f, 0.f, 50.f), const_cast<AEnemyCharacter*>(First));
+	if (!Path || !Path->IsValid() || Path->IsPartial() || Path->PathPoints.Num() < 2)
+	{
+		return true;
+	}
+	OutRoute.bReachable = true;
+	TArray<FVector2D> Points;
+	for (const FVector& Point : Path->PathPoints)
+	{
+		OutPath.Add(Point);
+		Points.Add(CombatPressureLocal::To2D(Point));
+	}
+	OutRoute.PathCm = AmbushRelocateRules::PathLength(Points);
+	if (OutRoute.PathCm > Config.Relocate.MaxRouteCm)
+	{
+		return true;
+	}
+	// The runner's body along the route: his profile point's height over his feet at every sample (the path's Z between its corners).
+	const float Lift = static_cast<float>(UTacticalSightSubsystem::ProfilePoint(*First).Z - Start.Z);
+	const TArray<FVector2D> Samples = AmbushRelocateRules::SamplePath(Points, Config.Relocate.RouteSampleCm);
+	for (const FVector2D& Sample : Samples)
+	{
+		// The sample's ground height: on the path segment nearest to it.
+		double Z = OutPath[0].Z;
+		double Best = MAX_dbl;
+		for (int32 Corner = 1; Corner < OutPath.Num(); ++Corner)
+		{
+			const FVector2D A = Points[Corner - 1];
+			const FVector2D AB = Points[Corner] - A;
+			const double Length2 = AB.SizeSquared();
+			const double T = Length2 > 1.0 ? FMath::Clamp(FVector2D::DotProduct(Sample - A, AB) / Length2, 0.0, 1.0) : 0.0;
+			const double Distance = FVector2D::Distance(A + AB * T, Sample);
+			if (Distance < Best)
+			{
+				Best = Distance;
+				Z = FMath::Lerp(OutPath[Corner - 1].Z, OutPath[Corner].Z, T);
+			}
+		}
+		if (bRouteBlockedOverride || IsPointInSquadSight(FVector(Sample.X, Sample.Y, Z + Lift)))
+		{
+			OutRoute.SeenSamples = 1; // one seen sample is enough to refuse the route
+			break;
+		}
+	}
+	return true;
+}
+
+TOptional<UCombatPressureSubsystem::FRouteChoice> UCombatPressureSubsystem::FindRelocationRoute(int32 Group, int32& OutTried)
+{
+	OutTried = 0;
+	const FManaged* First = Managed.FindByPredicate([Group](const FManaged& Each)
+	{
+		return Each.Group == Group && Each.AmbushState != EPressureAmbushState::Sprung && CombatPressureLocal::IsLivingEnemy(Each.Enemy.Get());
+	});
+	if (!First)
+	{
+		return {};
+	}
+	const FVector2D Here = CombatPressureLocal::To2D(First->Enemy->GetActorLocation());
+	TArray<float> Scores;
+	const TArray<FHideChoice> Spots = RankHideSpots(Config.AmbushMinDistanceCm, Config.AmbushMaxDistanceCm, Config.Relocate.MinAheadCos, { Here },
+		CombatPressureLocal::RelocateAvoidCm, &Scores);
+	TArray<FAmbushRouteCandidate> Candidates;
+	TArray<TArray<FVector>> Paths;
+	for (int32 Index = 0; Index < Spots.Num() && Index < CombatPressureLocal::RelocateRoutes; ++Index)
+	{
+		FAmbushRouteCandidate& Candidate = Candidates.AddDefaulted_GetRef();
+		TArray<FVector>& Path = Paths.AddDefaulted_GetRef();
+		EvaluateRoute(Group, Spots[Index].Feet, AmbushRelocateRules::IsGoodDestination(Spots[Index].AheadCos, true, Config.Relocate), Scores[Index], Candidate, Path);
+	}
+	OutTried = Candidates.Num();
+	const int32 Best = AmbushRelocateRules::PickRoute(Candidates, Config.Relocate);
+	if (Best == INDEX_NONE)
+	{
+		int32 Unreachable = 0;
+		int32 TooLong = 0;
+		int32 Seen = 0;
+		for (const FAmbushRouteCandidate& Each : Candidates)
+		{
+			Unreachable += Each.bReachable ? 0 : 1;
+			TooLong += Each.bReachable && Each.PathCm > Config.Relocate.MaxRouteCm ? 1 : 0;
+			Seen += Each.bReachable && Each.PathCm <= Config.Relocate.MaxRouteCm && (Each.SeenSamples > 0 || !Each.bDestinationConcealed) ? 1 : 0;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] group %d: %d hiding spots ahead, %d routes tried - %d unreachable, %d longer than %.0f m, %d in an operative's sight"),
+			Group, Spots.Num(), Candidates.Num(), Unreachable, TooLong, Config.Relocate.MaxRouteCm / 100.f, Seen);
+		return {};
+	}
+	FRouteChoice Choice;
+	Choice.Hide = Spots[Best];
+	Choice.Path = Paths[Best];
+	Choice.Candidate = Candidates[Best];
+	Choice.RoutesTried = Candidates.Num();
+	return Choice;
+}
+
+void UCombatPressureSubsystem::StartRun(int32 Group, int32 Plan, const FRouteChoice& Route)
+{
+	FRun Run;
+	Run.Group = Group;
+	Run.Plan = Plan;
+	for (FManaged& Each : Managed)
 	{
 		AEnemyCharacter* Enemy = Each.Enemy.Get();
 		if (Each.Group == Group && Each.AmbushState != EPressureAmbushState::Sprung && CombatPressureLocal::IsLivingEnemy(Enemy))
 		{
-			Record.Plan = Each.Plan;
-			Members.Add(Enemy);
+			Run.Members.Add(Enemy);
+			Each.AmbushState = EPressureAmbushState::Relocating;
 		}
 	}
-	if (Members.IsEmpty())
+	if (Run.Members.IsEmpty() || Route.Path.Num() < 2)
 	{
-		return Record;
+		return;
 	}
-	Record.From = CombatPressureLocal::FeetOf(*Members[0]);
-	TArray<FVector> Spots = GroupSpots(Feet, Members.Num(), true);
-	if (Spots.Num() < Members.Num())
+	// Each runner: the route's corners, then his own spot round the new hiding spot (the group's spacing there).
+	TArray<FVector> Finals = GroupSpots(Route.Hide.Feet, Run.Members.Num(), true);
+	if (Finals.Num() < Run.Members.Num())
 	{
-		Spots = GroupSpots(Feet, Members.Num(), false);
+		Finals = GroupSpots(Route.Hide.Feet, Run.Members.Num(), false);
 	}
-	for (int32 Index = 0; Index < Members.Num(); ++Index)
+	float Speed = MAX_flt;
+	for (int32 Index = 0; Index < Run.Members.Num(); ++Index)
 	{
-		AEnemyCharacter* Enemy = Members[Index];
-		const FVector Spot = Spots[FMath::Min(Index, Spots.Num() - 1)] + (Index >= Spots.Num() ? FVector(60.f * Index, 0.f, 0.f) : FVector::ZeroVector);
-		const FVector Facing = (FaceTowards - Spot).GetSafeNormal2D();
-		const FRotator Rotation = Facing.IsNearlyZero() ? Enemy->GetActorRotation() : Facing.Rotation();
-		const FVector Centre = Spot + FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight() + 2.f);
-		Enemy->SetActorLocationAndRotation(Centre, Rotation, false, nullptr, ETeleportType::TeleportPhysics);
-		Enemy->MoveGuardPost(Centre, static_cast<float>(Rotation.Yaw));
+		AEnemyCharacter* Enemy = Run.Members[Index].Get();
+		TArray<FVector>& Legs = Run.Legs.AddDefaulted_GetRef();
+		for (int32 Corner = 1; Corner + 1 < Route.Path.Num(); ++Corner)
+		{
+			Legs.Add(Route.Path[Corner]);
+		}
+		Legs.Add(Finals[FMath::Min(Index, Finals.Num() - 1)]);
+		Run.Leg.Add(0);
+		Run.LastFeet.Add(CombatPressureLocal::FeetOf(*Enemy));
+		// The group runs together at its slowest member's pace.
+		Speed = FMath::Min(Speed, Enemy->GetBaseWalkSpeed() * Config.Relocate.RunSpeedScale);
 	}
-	Record.Members = Members.Num();
-	Relocations.Add(Record);
-	UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] ambush group %d relocates unseen (seen %d): %s -> %s (%s spot, ahead %.2f, concealed %d, %d members)"), Group,
-		Record.bSeenAtMove ? 1 : 0, *Record.From.ToCompactString(), *Record.To.ToCompactString(), AmbushSpotRules::KindName(Kind), AheadCos,
-		Record.bDestinationConcealed ? 1 : 0, Record.Members);
-	return Record;
+	Run.SpeedCmS = FMath::Max(150.f, Speed);
+	Run.LimitSeconds = AmbushRelocateRules::RunLimitSeconds(Route.Candidate.PathCm, Run.SpeedCmS);
+	for (int32 Index = 0; Index < Run.Members.Num(); ++Index)
+	{
+		AEnemyCharacter* Enemy = Run.Members[Index].Get();
+		const FVector Leg = Run.Legs[Index][0];
+		Enemy->MoveGuardPost(Leg + FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight()), CombatPressureLocal::YawOf(Leg - CombatPressureLocal::FeetOf(*Enemy)), Run.SpeedCmS);
+	}
+	FPressureRelocationRecord Record;
+	Record.Group = Group;
+	Record.Plan = Plan;
+	Record.From = Route.Path[0];
+	Record.To = Route.Hide.Feet;
+	Record.Kind = Route.Hide.Kind;
+	Record.AheadCos = Route.Hide.AheadCos;
+	Record.bSeenAtMove = IsGroupSeen(Group);
+	Record.bDestinationConcealed = !IsVisibleToSquad(Route.Hide.Feet);
+	Record.Clock = Clock;
+	Record.Members = Run.Members.Num();
+	Record.PathCm = Route.Candidate.PathCm;
+	Record.Samples = AmbushRelocateRules::SamplePath([&Route]()
+	{
+		TArray<FVector2D> Points;
+		for (const FVector& Point : Route.Path)
+		{
+			Points.Add(CombatPressureLocal::To2D(Point));
+		}
+		return Points;
+	}(), Config.Relocate.RouteSampleCm).Num();
+	Record.SeenSamples = Route.Candidate.SeenSamples;
+	Record.RoutesTried = Route.RoutesTried;
+	Record.Path = Route.Path;
+	Run.Record = Relocations.Add(Record);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] ambush group %d%s runs a concealed route on foot: %s -> %s (%s spot, %.0f m, %d sight samples clear, %d routes tried, ahead %.2f, %d members at %.0f cm/s)"),
+		Group, Plan > 0 ? *FString::Printf(TEXT(" (plan %d)"), Plan) : TEXT(""), *Record.From.ToCompactString(), *Record.To.ToCompactString(),
+		AmbushSpotRules::KindName(Record.Kind), Record.PathCm / 100.f, Record.Samples, Record.RoutesTried, Record.AheadCos, Record.Members, Run.SpeedCmS);
+	Runs.Add(MoveTemp(Run));
+}
+
+void UCombatPressureSubsystem::TickRuns(float Step)
+{
+	for (int32 RunIndex = Runs.Num() - 1; RunIndex >= 0; --RunIndex)
+	{
+		FRun& Run = Runs[RunIndex];
+		Run.Elapsed += Step;
+		FPressureRelocationRecord* Record = Relocations.IsValidIndex(Run.Record) ? &Relocations[Run.Record] : nullptr;
+		bool bSpotted = false;
+		bool bAllArrived = true;
+		int32 Running = 0;
+		for (int32 Index = 0; Index < Run.Members.Num(); ++Index)
+		{
+			AEnemyCharacter* Enemy = Run.Members[Index].Get();
+			FManaged* Entry = Enemy ? Managed.FindByPredicate([Enemy](const FManaged& Each) { return Each.Enemy.Get() == Enemy; }) : nullptr;
+			if (!Entry || !CombatPressureLocal::IsLivingEnemy(Enemy) || Entry->AmbushState != EPressureAmbushState::Relocating)
+			{
+				continue; // gone, or struck already (a plan's flank block)
+			}
+			++Running;
+			const FVector Feet = CombatPressureLocal::FeetOf(*Enemy);
+			if (Record)
+			{
+				Record->MaxStepCm = FMath::Max(Record->MaxStepCm, static_cast<float>(FVector::Dist2D(Feet, Run.LastFeet[Index])));
+			}
+			Run.LastFeet[Index] = Feet;
+			// Shot at / perceived otherwise (it left its post) or seen by an operative: spotted on its way.
+			bSpotted |= !Enemy->IsOnPatrol() || IsSpottedBySquad(*Enemy);
+			TArray<FVector>& Legs = Run.Legs[Index];
+			int32& Leg = Run.Leg[Index];
+			while (Leg + 1 < Legs.Num() && FVector::Dist2D(Feet, Legs[Leg]) <= CombatPressureLocal::RunLegAcceptCm)
+			{
+				++Leg;
+				Enemy->MoveGuardPost(Legs[Leg] + FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight()), CombatPressureLocal::YawOf(Legs[Leg] - Feet), Run.SpeedCmS);
+			}
+			bAllArrived &= Leg + 1 == Legs.Num() && FVector::Dist2D(Feet, Legs.Last()) <= CombatPressureLocal::RunArriveCm;
+		}
+		if (Running == 0)
+		{
+			// Every runner struck already (a plan's flank block / assault) or is gone: the run is over.
+			if (Record && Record->Outcome == EAmbushRunStep::Running)
+			{
+				Record->Outcome = EAmbushRunStep::Spotted;
+				Record->EndClock = Clock;
+			}
+			Runs.RemoveAt(RunIndex);
+			continue;
+		}
+		const EAmbushRunStep Outcome = AmbushRelocateRules::StepRun(bSpotted, bAllArrived, Run.Elapsed, Run.LimitSeconds);
+		if (Outcome == EAmbushRunStep::Running)
+		{
+			continue;
+		}
+		if (Record)
+		{
+			Record->Outcome = Outcome;
+			Record->EndClock = Clock;
+		}
+		const FVector Face = LeaderFeet();
+		for (FManaged& Each : Managed)
+		{
+			AEnemyCharacter* Enemy = Each.Enemy.Get();
+			if (Each.Group != Run.Group || Each.AmbushState != EPressureAmbushState::Relocating || !CombatPressureLocal::IsLivingEnemy(Enemy))
+			{
+				continue;
+			}
+			Each.AmbushState = EPressureAmbushState::Hidden;
+			if (Outcome != EAmbushRunStep::Spotted)
+			{
+				// It hides where it is now (its final spot, or where the time ran out): the post stays there, facing the squad.
+				const FVector Feet = CombatPressureLocal::FeetOf(*Enemy);
+				Enemy->MoveGuardPost(Enemy->GetActorLocation(), CombatPressureLocal::YawOf(Face - Feet));
+			}
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] ambush group %d's run %s after %.1f s%s"), Run.Group, AmbushRelocateRules::RunStepName(Outcome), Run.Elapsed,
+			Record ? *FString::Printf(TEXT(" (largest step %.0f cm)"), Record->MaxStepCm) : TEXT(""));
+		if (Outcome == EAmbushRunStep::Spotted)
+		{
+			// Decision 1: spotted on the way, it attacks at once (a plan springs: the flank block, then the assault).
+			if (Run.Plan > 0)
+			{
+				if (FPlan* Owner = Plans.FindByPredicate([&Run](const FPlan& Each) { return Each.Info.Id == Run.Plan; }))
+				{
+					Owner->Info.bSpottedOnRoute = true;
+				}
+			}
+			Spring(Run.Group, TEXT("spotted on its relocation route"));
+		}
+		Runs.RemoveAt(RunIndex);
+	}
+}
+
+void UCombatPressureSubsystem::ConvertToFollower(int32 Group, const TCHAR* Why)
+{
+	int32 Members = 0;
+	for (FManaged& Each : Managed)
+	{
+		AEnemyCharacter* Enemy = Each.Enemy.Get();
+		if (Each.Group != Group || Each.AmbushState == EPressureAmbushState::Sprung || !CombatPressureLocal::IsLivingEnemy(Enemy))
+		{
+			continue;
+		}
+		// No longer an ambush: a patrol on the squad's trail with its own senses (it engages when it perceives the squad).
+		Each.Kind = EPressureSpawnKind::Patrol;
+		Each.AmbushState = EPressureAmbushState::Hidden;
+		Enemy->bOverridePerception = false;
+		Enemy->GuardLookAroundDeg = PatrolRouteRules::GuardLookAroundDeg;
+		++Members;
+	}
+	if (Members == 0)
+	{
+		return;
+	}
+	FollowerGroups.Add(Group);
+	GroupBypassSeconds.Remove(Group);
+	GroupNoRouteSearches.Remove(Group);
+	++FollowerConversions;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] ambush group %d (%d members) becomes a patrol following the squad (%s)"), Group, Members, Why);
+	TickFollowers();
+}
+
+void UCombatPressureSubsystem::TickFollowers()
+{
+	if (FollowerGroups.IsEmpty())
+	{
+		return;
+	}
+	const FVector Leader = LeaderFeet();
+	for (const int32 Group : FollowerGroups)
+	{
+		int32 Index = 0;
+		for (const FManaged& Each : Managed)
+		{
+			AEnemyCharacter* Enemy = Each.Enemy.Get();
+			if (Each.Group != Group || !CombatPressureLocal::IsLivingEnemy(Enemy) || !Enemy->IsGuardingPost())
+			{
+				continue;
+			}
+			// On the squad's trail: its leader's feet, the group spread round them; walking (a patrol's pace, a little brisk), on foot.
+			const FVector2D Want = CombatPressureLocal::To2D(Leader) + CombatPressureRules::GroupOffset(Index++, CombatPressureLocal::GroupSpacingCm);
+			const TOptional<FVector> OnNav = ProjectFeet(Want, static_cast<float>(Leader.Z));
+			const FVector Goal = OnNav.Get(Leader);
+			if (FVector::Dist2D(Goal, Enemy->GetGuardPostLocation()) >= CombatPressureLocal::FollowRepostCm)
+			{
+				const FVector Feet = CombatPressureLocal::FeetOf(*Enemy);
+				Enemy->MoveGuardPost(Goal + FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight()), CombatPressureLocal::YawOf(Goal - Feet), Enemy->PatrolWalkSpeed * 1.25f);
+			}
+		}
+	}
 }
 
 void UCombatPressureSubsystem::TickSuppressors()

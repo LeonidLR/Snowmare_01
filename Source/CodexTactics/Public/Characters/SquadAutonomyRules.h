@@ -78,6 +78,14 @@ struct CODEXTACTICS_API FSquadROE
 	bool bDefenseBodyBlockPriority = true;
 	/** The defender ignores wounded mates outside his defense leash. */
 	bool bDefenseIgnoreDistantAid = true;
+	/**
+	 * An operative (the followers above all) takes the open-ground stance (open_ground_stance, e.g. crouched) only after standing still this
+	 * long in a fight, s ("hold_crouch_after_sec"; game designer decision 6, 2026-11-01 night: no crouch / stand jitter on short stops); his
+	 * next move stands him up at once. 0 = at once (the behaviour before). Cover, a sniper's aim and the player's / squad's own stance orders
+	 * are not delayed. Solo's guard crouch of the waiting followers (e.g. the leader on a tower) waits the same time (2026-11-02,
+	 * StartSoloGuardCrouch / StepSoloGuardCrouch).
+	 */
+	float HoldCrouchAfterSeconds = 4.f;
 };
 
 /**
@@ -159,6 +167,46 @@ namespace SquadAutonomyRules
 	 * open-ground stance.
 	 */
 	CODEXTACTICS_API EOperativeStance DesiredStance(const FSquadROE& ROE, bool bInCover, bool bSniperAiming, bool bCoverReachable);
+
+	/**
+	 * The stance hysteresis (decision 6, 2026-11-01 night): the autonomy changes a standing-still operative's stance to Desired now? Always
+	 * when it is no lower stance than Current or bDelayed is false (cover, a sniper on him); a lower one (crouch / prone) on a halt only once
+	 * he has stood still StillSeconds >= AfterSeconds.
+	 */
+	CODEXTACTICS_API bool ShouldTakeHaltStance(EOperativeStance Desired, EOperativeStance Current, float StillSeconds, float AfterSeconds, bool bDelayed);
+
+	/** A follower in the autonomy's hold crouch stands up at once for a formation move, unless he carries something or the leader walks low. */
+	CODEXTACTICS_API bool ShouldRiseFromHoldCrouch(bool bHoldCrouch, bool bCarrying, EOperativeStance LeaderStance);
+
+	/** What the Solo guard crouch ("teammates hold crouched") does with a waiting follower. */
+	enum class ESoloGuardCrouch : uint8
+	{
+		/** Not yet: he stands, waiting out hold_crouch_after_sec standing still. */
+		Wait,
+		/** Crouch now (SetStance + the squad's stance mark). */
+		Crouch,
+		/** Nothing more to do for him: Solo ended, he leads now, an order of his own, a stance someone else gave him, ... */
+		Drop
+	};
+
+	/**
+	 * Solo begins (or a leader switch while it is on) for a follower who holds now (game designer review of ambush v3, 2026-11-02: the
+	 * waiting operatives crouched at once while the leader climbed a tower). A standing follower WAITS - the guard crouch takes the same
+	 * hold_crouch_after_sec standing still as the autonomy's hold crouch (decision 6), 0 = at once (the old behaviour); any other stance
+	 * becomes the guard crouch at once as before (a prone follower kneels, a crouched one keeps his crouch as the squad's).
+	 */
+	CODEXTACTICS_API ESoloGuardCrouch StartSoloGuardCrouch(EOperativeStance Current, float AfterSeconds);
+
+	/**
+	 * A waiting follower each frame: bHoldingInSolo = Solo is still on and he is a follower (not the leader); bOnOwnOrder = he walks an
+	 * order of his own (he holds where it ends, standing - Solo never crouched those); bKeepsOwnStance = the trap hold's cover / a group
+	 * cover's prone. Only a standing follower is crouched, once StillSeconds >= AfterSeconds (ShouldTakeHaltStance, delayed).
+	 */
+	CODEXTACTICS_API ESoloGuardCrouch StepSoloGuardCrouch(bool bHoldingInSolo, bool bOnOwnOrder, bool bKeepsOwnStance, EOperativeStance Current,
+		float StillSeconds, float AfterSeconds);
+
+	/** Seconds standing still: grows while not moving, back to 0 on any move. */
+	CODEXTACTICS_API float StepStillSeconds(bool bMoving, float StillSeconds, float DeltaSeconds);
 
 	/** An enemy more than AngleDeg off the facing (planar). */
 	CODEXTACTICS_API bool IsFlankThreat(const FVector& Forward, const FVector& Position, const FVector& Enemy, float AngleDeg);

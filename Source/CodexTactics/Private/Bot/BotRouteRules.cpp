@@ -92,6 +92,20 @@ bool BotRouteRules::Parse(const FJsonObject& Route, FBotRouteConfig& OutConfig, 
 	Config.MaxRetries = FMath::Clamp(FMath::RoundToInt(Number(Route, TEXT("max_retries"), static_cast<float>(Config.MaxRetries))), 0, 10);
 	Config.FightHoldSeconds = FMath::Max(0.f, Number(Route, TEXT("fight_hold_sec"), Config.FightHoldSeconds));
 	Config.ActionTimeoutSeconds = FMath::Max(5.f, Number(Route, TEXT("action_timeout_sec"), Config.ActionTimeoutSeconds));
+	const TSharedPtr<FJsonObject>* CoverObject = nullptr;
+	if (Route.TryGetObjectField(TEXT("fight_cover"), CoverObject) && CoverObject && CoverObject->IsValid())
+	{
+		const FJsonObject& Cover = **CoverObject;
+		FBotCoverParams& C = Config.Cover;
+		bool bCover = true;
+		C.bEnabled = !Cover.TryGetBoolField(TEXT("enabled"), bCover) || bCover;
+		C.SearchCm = FMath::Max(100.f, Number(Cover, TEXT("search_cm"), C.SearchCm));
+		C.HoldSeconds = FMath::Max(1.f, Number(Cover, TEXT("hold_sec"), C.HoldSeconds));
+		C.MinWallLengthCm = FMath::Max(50.f, Number(Cover, TEXT("min_wall_cm"), C.MinWallLengthCm));
+		C.MinHeightCm = FMath::Max(0.f, Number(Cover, TEXT("min_height_cm"), C.MinHeightCm));
+		C.MinThreatCm = FMath::Max(0.f, Number(Cover, TEXT("min_threat_cm"), C.MinThreatCm));
+		C.MinFacingCos = FMath::Clamp(Number(Cover, TEXT("min_facing_cos"), C.MinFacingCos), -1.f, 1.f);
+	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Points = nullptr;
 	if (!Route.TryGetArrayField(TEXT("points"), Points) || !Points || Points->Num() < 2)

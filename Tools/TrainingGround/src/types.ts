@@ -368,4 +368,6 @@ export interface SquadROE {
   defense_leash_strictness: LeashStrictness;
   defense_body_block_priority: boolean;
   defense_ignore_distant_aid: boolean;
+  // Decision 6 (2026-11-01 night): the open-ground crouch only after standing still this long (no jitter on short stops).
+  hold_crouch_after_sec: number;
 }

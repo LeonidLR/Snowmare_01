@@ -18,6 +18,8 @@ struct CODEXTACTICS_API FPressureBox
 	FVector2D AxisX = FVector2D(1.0, 0.0);
 	/** Half sizes along the local X / Y, cm. */
 	FVector2D HalfSize = FVector2D::ZeroVector;
+	/** Its height, cm (0 = unknown; the bot's fight cover wants a wall at least crouch-high, BotCoverRules). */
+	float HeightCm = 0.f;
 };
 
 /** What a hiding spot is. */
@@ -35,8 +37,11 @@ enum class EAmbushSpotKind : uint8
 /** Tuning (level JSON "pressure"."ambush"."spots"). */
 struct CODEXTACTICS_API FAmbushSpotParams
 {
-	/** A spot stands this far from the wall's face, cm (>= the wall clearance + 10 keeps the 2.5 m rule of every spawn). */
-	float WallStandoffCm = 260.f;
+	/**
+	 * A spot stands this far from the wall's face, cm: 80 = the ambusher hugs the wall (game designer decision 3, 2026-11-01 night; was 260).
+	 * The hiding spots keep min(wall clearance, standoff - 10) from every wall (HideClearanceCm); the 2.5 m rule stays for PATROL spawns.
+	 */
+	float WallStandoffCm = 80.f;
 	/** ... this far inside the wall's end along it, cm (the wall still covers him from the far side). */
 	float EndInsetCm = 100.f;
 	/** Shorter boxes (posts, ladder rails) are no walls to hide behind, cm. */

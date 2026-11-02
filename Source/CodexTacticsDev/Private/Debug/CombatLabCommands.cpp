@@ -76,10 +76,10 @@ namespace CombatLabCommands
 		{
 			return;
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] active %d, auto %d, alive %d / %d (plans %d), next event in %.0f s, events %d (waited %d), sprung by watch %d, immortal %d, infinite ammo %d"),
+		UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] active %d, auto %d, alive %d / %d (plans %d), next event in %.0f s, events %d (waited %d), sprung by watch %d / by the hold limit %d, no-route searches %d, following patrols %d, immortal %d, infinite ammo %d"),
 			Pressure->IsActive() ? 1 : 0, Pressure->IsAutoSpawn() ? 1 : 0, Pressure->GetAliveCount(), Pressure->GetConfig().MaxAlive, Pressure->GetConfig().Coordinated.MaxAlive,
-			Pressure->GetSecondsToNextEvent(), Pressure->GetEventsFired(), Pressure->GetEventsDelayed(), Pressure->GetSprungByWatchCount(),
-			CombatCheats::IsImmortal(World) ? 1 : 0, CombatCheats::IsInfiniteAmmo(World) ? 1 : 0);
+			Pressure->GetSecondsToNextEvent(), Pressure->GetEventsFired(), Pressure->GetEventsDelayed(), Pressure->GetSprungByWatchCount(), Pressure->GetSprungByHoldCount(),
+			Pressure->GetNoRouteSearches(), Pressure->GetFollowerConversions(), CombatCheats::IsImmortal(World) ? 1 : 0, CombatCheats::IsInfiniteAmmo(World) ? 1 : 0);
 		for (const FPressureSpawnRecord& Record : Pressure->GetSpawnRecords())
 		{
 			const AEnemyCharacter* Enemy = Record.Enemy.Get();
@@ -91,8 +91,10 @@ namespace CombatLabCommands
 				Record.Plan > 0 ? *FString::Printf(TEXT(" (plan %d %s)"), Record.Plan, AmbushPlanRules::PartyName(Record.Party))
 					: Record.SpotKind != EAmbushSpotKind::None ? *FString::Printf(TEXT(" (%s spot)"), AmbushSpotRules::KindName(Record.SpotKind)) : TEXT(""),
 				Enemy ? (Enemy->IsOnPatrol() ? TEXT("unengaged") : TEXT("engaged")) : TEXT("gone"),
-				bAmbusher ? *FString::Printf(TEXT(", %s (held %.1f s)"), State == EPressureAmbushState::Hidden ? TEXT("hidden")
-					: State == EPressureAmbushState::Holding ? TEXT("holding") : TEXT("sprung"), Hold) : TEXT(""));
+				bAmbusher ? *FString::Printf(TEXT(", %s (held %.1f s of %.0f)"), State == EPressureAmbushState::Hidden ? TEXT("hidden")
+					: State == EPressureAmbushState::Holding ? TEXT("holding") : State == EPressureAmbushState::Relocating ? TEXT("running a concealed route")
+					: TEXT("sprung"), Hold, Pressure->GetHoldLimit(Enemy))
+					: Pressure->IsFollowerGroup(Record.Group) ? TEXT(", following the squad (no concealed route)") : TEXT(""));
 		}
 		for (int32 Plan = 1; Plan <= Pressure->GetLastPlanId(); ++Plan)
 		{
@@ -106,8 +108,9 @@ namespace CombatLabCommands
 		}
 		for (const FPressureRelocationRecord& Move : Pressure->GetRelocations())
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("[Pressure]   relocation at %.0f s: group %d %s -> %s (%s spot, ahead %.2f, seen %d)"), Move.Clock, Move.Group,
-				*Move.From.ToCompactString(), *Move.To.ToCompactString(), AmbushSpotRules::KindName(Move.Kind), Move.AheadCos, Move.bSeenAtMove ? 1 : 0);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Pressure]   relocation run at %.0f s: group %d %s -> %s (%s spot, ahead %.2f, %.0f m on foot, %d samples, %s at %.0f s, largest step %.0f cm)"),
+				Move.Clock, Move.Group, *Move.From.ToCompactString(), *Move.To.ToCompactString(), AmbushSpotRules::KindName(Move.Kind), Move.AheadCos, Move.PathCm / 100.f,
+				Move.Samples, AmbushRelocateRules::RunStepName(Move.Outcome), Move.EndClock, Move.MaxStepCm);
 		}
 	}
 

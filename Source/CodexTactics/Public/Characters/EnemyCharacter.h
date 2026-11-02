@@ -697,9 +697,13 @@ public:
 
 	/**
 	 * Moves the post it guards to Location facing Yaw (the combat lab's ambush relocation, game designer answer 3, 2026-11-01): it stands
-	 * there instead of walking back to the old post. No-op unless it guards a post.
+	 * there instead of walking back to the old post. No-op unless it guards a post. SpeedCmS > 0 (the hybrid relocation, decision 1 of
+	 * 2026-11-01 night): it goes there on foot at once at that pace (a leg of its concealed route; no stop between legs) - never a teleport.
 	 */
-	void MoveGuardPost(const FVector& Location, float Yaw);
+	void MoveGuardPost(const FVector& Location, float Yaw, float SpeedCmS = 0.f);
+
+	/** Its walk speed before frost / fear factors (archetype, balance, wave modifiers), cm/s (the relocation run's pace). */
+	float GetBaseWalkSpeed() const { return BaseWalkSpeed; }
 
 	// --- Vision cone (user request 2026-10-11; Godot had cones on the operatives only) ---
 
@@ -734,6 +738,8 @@ protected:
 
 	bool bGuardingPost = false;
 	bool bGuardReturning = false;
+	/** The pace of a MoveGuardPost run, cm/s (0 = the patrol walk). */
+	float GuardMoveSpeed = 0.f;
 	FVector GuardPostLocation = FVector::ZeroVector;
 	float GuardPostYaw = 0.f;
 	float GuardClock = 0.f;

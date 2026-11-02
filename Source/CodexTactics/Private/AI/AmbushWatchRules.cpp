@@ -153,3 +153,18 @@ TOptional<float> AmbushWatchRules::WidestUnwatchedBearing(const TArray<FAmbushWa
 	}
 	return static_cast<float>(FMath::UnwindDegrees(BestMid));
 }
+
+float AmbushWatchRules::HoldLimitSeconds(float Rand01, const FAmbushWatchParams& Params)
+{
+	if (Params.HoldStrikeMaxSeconds <= 0.f)
+	{
+		return 0.f;
+	}
+	const float Min = FMath::Clamp(Params.HoldStrikeMinSeconds, 0.f, Params.HoldStrikeMaxSeconds);
+	return FMath::Lerp(Min, Params.HoldStrikeMaxSeconds, FMath::Clamp(Rand01, 0.f, 1.f));
+}
+
+bool AmbushWatchRules::HeldTooLong(float HoldSeconds, float LimitSeconds)
+{
+	return LimitSeconds > 0.f && HoldSeconds >= LimitSeconds;
+}

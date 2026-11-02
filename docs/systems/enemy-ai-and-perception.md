@@ -156,3 +156,11 @@ clears the box (76 cm); a lone Frostbitten with a turret 3.6 m off and a barrica
 1 s; a saturated extra one in front of the barricade smashes it; a closed ring of barricades round the commander -> unreachable (a mate
 outside reachable), a lone enemy smashes its way in. `EnemyAISmoke` now checks the opposite of its old turret / barricade stages (a lone hound
 ignores a close turret, a lone brute leaves a free-standing barricade alone).
+
+## The combat lab's runners: a guard post walked on foot (game designer decision 1, 2026-11-01 night, branch combat/ambush-v3)
+
+`AEnemyCharacter::MoveGuardPost(Location, Yaw, SpeedCmS)`: with a speed > 0 the guard walks to the new post at once at that pace (a leg of a
+combat-lab ambush's concealed relocation route; the next leg's MoveTo replaces the running one - no stop between legs; `GuardMoveSpeed`, reset
+on arrival), never a teleport; without it the post moves as before (it stands there). `GetBaseWalkSpeed()` gives the run's pace. The routes,
+the spotting and the "following patrol" (a former ambush whose guard post is walked after the squad's leader) are `UCombatPressureSubsystem`'s
+- `docs/design/COMBAT_LAB.md` 2.1.

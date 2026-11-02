@@ -444,12 +444,25 @@ namespace SoloRejoinSmoke
 			return true;
 		case 118:
 		{
-			if (State.StageTime < SettleSeconds)
+			if (!Squad->IsSoloMode())
+			{
+				if (State.StageTime < SettleSeconds)
+				{
+					return true;
+				}
+				// Solo (B, C crouch as guards - after squad_roe.json hold_crouch_after_sec standing still, 2026-11-02).
+				Squad->EnterSoloMode();
+				State.StageTime = 0.f;
+				return true;
+			}
+			const bool bGuardsDown = B->GetStance() == EOperativeStance::Crouching && C->GetStance() == EOperativeStance::Crouching;
+			if (!bGuardsDown && State.StageTime < 10.f)
 			{
 				return true;
 			}
-			// Solo (B, C crouch as guards); C stacks at the wall (door), B is selected and walks 4 m "inside", still crouched.
-			Squad->EnterSoloMode();
+			Check(State, bGuardsDown && State.StageTime >= 3.f, FString::Printf(TEXT("[regroup sprint %d] Solo: B and C took the guard crouch after %.1f s standing still"),
+				State.SprintPass, State.StageTime));
+			// C stacks at the wall (door), B is selected and walks 4 m "inside", still crouched.
 			Squad->SetLeader(C);
 			C->OrderTakeCover(State.Slot, false);
 			Squad->SetLeader(B);
@@ -464,9 +477,14 @@ namespace SoloRejoinSmoke
 			{
 				return true;
 			}
-			Check(State, C->bInCover && B->GetStance() == EOperativeStance::Crouching && A->GetStance() == EOperativeStance::Crouching,
-				FString::Printf(TEXT("[regroup sprint %d] Solo: C stacked in cover %d, B (selected) crouched %d, A guards crouched %d"), State.SprintPass,
-					C->bInCover ? 1 : 0, B->GetStance() == EOperativeStance::Crouching ? 1 : 0, A->GetStance() == EOperativeStance::Crouching ? 1 : 0));
+			// A, the old leader, holds as a guard now: crouched, or still standing out hold_crouch_after_sec (2026-11-02). Not waited for:
+			// the regroup below copies B's crouch to him anyway, and a longer wait lets C shimmy to the wall's corner, whose cover move
+			// survives the regroup (C re-enters the cover standing) - pass 0 would no longer reproduce the old rule's bug.
+			const bool bAGuards = A->GetStance() == EOperativeStance::Crouching || Squad->IsSoloGuardCrouchWaiting(A);
+			Check(State, C->bInCover && B->GetStance() == EOperativeStance::Crouching && bAGuards,
+				FString::Printf(TEXT("[regroup sprint %d] Solo: C stacked in cover %d, B (selected) crouched %d, A guards (crouched %d, waiting %d)"), State.SprintPass,
+					C->bInCover ? 1 : 0, B->GetStance() == EOperativeStance::Crouching ? 1 : 0, A->GetStance() == EOperativeStance::Crouching ? 1 : 0,
+					Squad->IsSoloGuardCrouchWaiting(A) ? 1 : 0));
 			// Regroup (B) with B leading: A and C copy his crouch; then the Commander (A) is selected and runs (double-click = sprint).
 			Squad->ToggleSoloMode();
 			Check(State, !Squad->IsSoloMode() && A->GetStance() == EOperativeStance::Crouching && C->GetStance() == EOperativeStance::Crouching && !C->bInCover,

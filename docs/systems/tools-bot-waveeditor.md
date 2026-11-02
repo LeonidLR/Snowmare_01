@@ -31,3 +31,12 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 Old HANDOFF §8 item 0 «Bot training» (approve / reject `Saved/Coach/stealth_proposal.md`) is in [NEXT_STEPS](../port/NEXT_STEPS.md).
 
+## The route bot's fight: cover at a wall first (game designer decision 5, 2026-11-01 night, branch combat/ambush-v3)
+
+In the combat lab's route mode (`PlaytestBotRouteMode.cpp`) a fight no longer halts the squad crouched: `UPlaytestBotSubsystem::TryTakeFightCover`
+picks the nearest suitable wall between the squad and the threat (`BotCoverRules::PickWall` on `UCombatPressureSubsystem::GetObstacleBoxes`,
+now with each box's height) and clicks its near face through the player's click path (the group cover order = the formation wall layout),
+confirms the ghost and holds until the fight ends or `"bot_route"."fight_cover"."hold_sec"` (45 s); no wall -> a halt in place for
+`fight_hold_sec`. The run record's `"cover"` block (orders / taken / seconds, `FCombatLabRunCollector`) and the new `"pressure"` counters
+(`sprung_by_hold`, `runs_spotted`, `no_route`, `followers`) reach the Training Ground report (`src/combatLab/report.ts`, column "Cover (s)").
+`docs/design/COMBAT_LAB.md` 7.2.

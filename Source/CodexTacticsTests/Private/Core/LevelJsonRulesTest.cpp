@@ -161,10 +161,12 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 			"wall_clearance_cm": 300, "min_squad_distance_cm": 2000, "max_squad_distance_cm": 4500,
 			"patrol": {"points": 5, "radius_cm": 900, "wait_sec": 1.5},
 			"ambush": {"min_squad_distance_cm": 1200, "max_squad_distance_cm": 2800, "watch_half_angle_deg": 50, "watch_range_cm": 4000, "strike_range_cm": 1500,
+				"hold_strike_min_sec": 45, "hold_strike_max_sec": 30,
 				"spots": {"wall_standoff_cm": 200, "end_inset_cm": 80, "doorway_max_cm": 500, "authored_bonus": 0.7},
 				"points": [[100, 200], [-300.5, 400]],
 				"coordinated": {"share": 0.5, "bodies_min": 3, "bodies_max": 5, "max_alive": 7, "assault_min_sec": 2, "assault_max_sec": 1, "min_ranged": 2},
-				"relocate": {"enabled": false, "after_sec": 20, "behind_angle_deg": 120, "far_cm": 4000, "min_ahead_cos": 0.3}},
+				"relocate": {"enabled": false, "after_sec": 20, "behind_angle_deg": 120, "far_cm": 4000, "min_ahead_cos": 0.3, "route_sample_cm": 150,
+					"max_route_cm": 5000, "run_speed_scale": 0.8, "no_route_tries": 3, "no_route_patrol": false}},
 			"recycle": {"distance_cm": 7000, "after_sec": 45}}})");
 	TestTrue(TEXT("Parses"), LevelJsonRules::ParseLevel(Json, TEXT("p"), Config, Error));
 	const FCombatPressureConfig& P = Config.Pressure;
@@ -203,6 +205,14 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 	TestEqual(TEXT("relocate: after"), P.Relocate.AfterSeconds, 20.f);
 	TestEqual(TEXT("relocate: behind"), P.Relocate.BehindAngleDeg, 120.f);
 	TestEqual(TEXT("relocate: ahead cos"), P.Relocate.MinAheadCos, 0.3f);
+	// Decisions 2026-11-01 night: the hold limit (max >= min), the concealed route on foot, no route -> stay / a following patrol.
+	TestEqual(TEXT("hold limit: min"), P.Watch.HoldStrikeMinSeconds, 45.f);
+	TestEqual(TEXT("hold limit: max >= min"), P.Watch.HoldStrikeMaxSeconds, 45.f);
+	TestEqual(TEXT("relocate: route sample"), P.Relocate.RouteSampleCm, 150.f);
+	TestEqual(TEXT("relocate: max route"), P.Relocate.MaxRouteCm, 5000.f);
+	TestEqual(TEXT("relocate: run speed"), P.Relocate.RunSpeedScale, 0.8f);
+	TestEqual(TEXT("relocate: no-route tries"), P.Relocate.NoRouteTries, 3);
+	TestFalse(TEXT("relocate: no route -> stays only"), P.Relocate.bNoRoutePatrol);
 	TestFalse(TEXT("A malformed ambush point is refused"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"p","pressure":{"ambush":{"points":[[1]]}}})"), TEXT("p"), Config, Error));
 	TestTrue(TEXT("... the error names it"), Error.Contains(TEXT("ambush.points")));
 
@@ -238,6 +248,12 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 			&& Lab.Pressure.Coordinated.MaxAlive >= Lab.Pressure.Coordinated.BodiesMax && Lab.Pressure.Coordinated.MaxAlive > Lab.Pressure.MaxAlive);
 		TestTrue(TEXT("Lab: relocation on (answer 3)"), Lab.Pressure.Relocate.bEnabled);
 		TestEqual(TEXT("Lab: the watch stays +-45 deg (answer 4)"), Lab.Pressure.Watch.WatchHalfAngleDeg, 45.f);
+		TestEqual(TEXT("Lab: hiding spots hug the wall, 0.8 m (decision 3)"), Lab.Pressure.Spots.WallStandoffCm, 80.f);
+		TestTrue(TEXT("Lab: an ambush watched all along strikes after 60-90 s (decision 2)"), Lab.Pressure.Watch.HoldStrikeMinSeconds == 60.f
+			&& Lab.Pressure.Watch.HoldStrikeMaxSeconds == 90.f);
+		TestTrue(TEXT("Lab: no concealed route -> a following patrol after 2 searches (decision 1)"), Lab.Pressure.Relocate.bNoRoutePatrol
+			&& Lab.Pressure.Relocate.NoRouteTries == 2);
+		TestTrue(TEXT("Lab: the bot takes cover at a wall in a fight (decision 5)"), Lab.BotRoute.Cover.bEnabled && Lab.BotRoute.Cover.HoldSeconds > 0.f);
 		TestTrue(TEXT("Lab: immortal + infinite ammo by default"), Lab.bCheatImmortal && Lab.bCheatInfiniteAmmo);
 		TestTrue(TEXT("Lab: fights start on contact as skirmishes"), Lab.CombatStart == ECombatStartMode::Ambush && Lab.bAmbushSkirmish);
 		TestEqual(TEXT("Lab: no cold"), Lab.ColdRateMult, 0.f);

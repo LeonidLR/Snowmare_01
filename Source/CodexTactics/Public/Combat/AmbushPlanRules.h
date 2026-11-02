@@ -87,6 +87,12 @@ struct CODEXTACTICS_API FAmbushPlanTick
 	/** Living flank members / those within BlockDistanceCm of an operative. */
 	int32 FlankMembersAlive = 0;
 	int32 FlankMembersInPlace = 0;
+	/**
+	 * Seconds it has held in all (in range, both flanks watched) and its hold limit (AmbushWatchRules::HoldLimitSeconds; 0 = none): a plan
+	 * watched all round strikes anyway once it is reached (game designer decision 2, 2026-11-01 night).
+	 */
+	float HoldSeconds = 0.f;
+	float HoldLimitSeconds = 0.f;
 };
 
 namespace AmbushPlanRules
@@ -139,7 +145,8 @@ namespace AmbushPlanRules
 
 	/**
 	 * The phase machine. Waiting / Holding: a party engaged otherwise -> FlankBlock; the nearest operative beyond TriggerRangeCm -> Waiting;
-	 * in range with a flank side unwatched -> FlankBlock, else Holding. FlankBlock -> Assault once AssaultMinSeconds passed and every living
+	 * in range with a flank side unwatched -> FlankBlock, else Holding - until it has held HoldLimitSeconds in all (watched all round):
+	 * then FlankBlock anyway. FlankBlock -> Assault once AssaultMinSeconds passed and every living
 	 * flank member is in place (or none is left), or at AssaultMaxSeconds. Assault stays.
 	 */
 	CODEXTACTICS_API EAmbushPlanPhase NextPhase(const FAmbushPlanTick& Tick, const FAmbushPlanParams& Params);

@@ -3,6 +3,8 @@
 
 #include "Combat/AmbushPlanRules.h"
 
+#include "AI/AmbushWatchRules.h"
+
 EAmbushParty AmbushPlanRules::PlanParty(int32 SlotIndex)
 {
 	switch (SlotIndex)
@@ -187,7 +189,12 @@ EAmbushPlanPhase AmbushPlanRules::NextPhase(const FAmbushPlanTick& Tick, const F
 		{
 			return EAmbushPlanPhase::Waiting;
 		}
-		return Tick.FlanksUnwatched > 0 ? EAmbushPlanPhase::FlankBlock : EAmbushPlanPhase::Holding;
+		if (Tick.FlanksUnwatched > 0)
+		{
+			return EAmbushPlanPhase::FlankBlock;
+		}
+		// Decision 2 (2026-11-01 night): watched all round for its whole hold limit, it strikes anyway.
+		return AmbushWatchRules::HeldTooLong(Tick.HoldSeconds, Tick.HoldLimitSeconds) ? EAmbushPlanPhase::FlankBlock : EAmbushPlanPhase::Holding;
 	case EAmbushPlanPhase::FlankBlock:
 	{
 		if (Tick.SecondsInPhase >= Params.AssaultMaxSeconds)

@@ -6,6 +6,8 @@
 //   the clock runs in real time, stops in the tactical pause; at the trigger 8 enemies (5 frost hounds, 3 frostbitten)
 //   appear 25-45 m from the squad's centre, clustered, as wave members that know where the squad is; the HUD warning is
 //   up; they close in on the squad; no second horde in the same fight (once per fight by default).
+// 2026-11-02: the world's proximity mines are removed first - the smoke measures the horde's arrival and rush, and mines placed on the
+// user's L_MovementTest killed horde members on the way (a flaky "they joined the wave" / "rushes the squad").
 
 #include "CoreMinimal.h"
 
@@ -24,6 +26,7 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/ProximityMineActor.h"
 #include "TimerManager.h"
 
 namespace HordeSmoke
@@ -138,6 +141,13 @@ namespace HordeSmoke
 			{
 				It->Destroy();
 			}
+			int32 MinesRemoved = 0;
+			for (TActorIterator<AProximityMineActor> It(World); It; ++It)
+			{
+				It->Destroy();
+				++MinesRemoved;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %d proximity mine(s) removed (they must not thin out the horde)"), MinesRemoved);
 			// A keeper far behind, frozen and tough: the wave stays on (the horde is part of the same fight).
 			AOperativeCharacter* Leader = Squad->GetLeader();
 			State.Keeper = Waves->SpawnEnemy(EEnemyArchetype::Brute, Leader->GetActorLocation() - Leader->GetActorForwardVector() * 6000.f + FVector(0.f, 0.f, 50.f));

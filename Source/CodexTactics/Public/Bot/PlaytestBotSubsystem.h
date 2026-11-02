@@ -45,8 +45,10 @@ class AOperativeCharacter;
  * ROUTE mode (Training Ground "Combat lab", game designer 2026-11-01, docs/design/COMBAT_LAB.md section 7; PlaytestBotRouteMode.cpp): on an
  * ENDLESS level (the level JSON has an active "pressure" block and a "bot_route"; -BotRoute=1 / 0 forces it on / off) the bot leads the squad
  * in formation along the level's planned route (clicks through the player controller: moves, a wall click = the formation wall layout, a
- * tower climbed by the leader alone), fights what it meets with the Aggressive posture (a fight holds the route for "fight_hold_sec",
- * crouched), and stops by TIME: -BotDuration=<game s, 600> -> RESULT COMPLETE. The run report (FCombatLabRunCollector + FBotRouteTracker,
+ * tower climbed by the leader alone), fights what it meets with the Aggressive posture - on contact it takes COVER AT A WALL facing the
+ * threat first (the group cover click on the nearest suitable wall's near face, BotCoverRules; game designer decision 5, 2026-11-01 night),
+ * fights from there and walks on when the fight is over or after "fight_cover"."hold_sec" (no wall: it halts for "fight_hold_sec") -, and
+ * stops by TIME: -BotDuration=<game s, 600> -> RESULT COMPLETE. The run report (FCombatLabRunCollector + FBotRouteTracker,
  * schema codex.combatlab_run/1) goes to -CombatLabReport=<file.json> (a live snapshot to <file>.live.json every 5 s).
  */
 UCLASS()
@@ -181,6 +183,11 @@ private:
 	void BeginRouteAction();
 	void TickRouteAction(float DeltaTime);
 	void EndRouteAction(bool bOk, const FString& Why);
+	/**
+	 * Decision 5 (2026-11-01 night): the squad takes cover at the nearest suitable wall between it and the threat (BotCoverRules on the level's
+	 * obstacle boxes) - a click on that wall's near face, the cover ghost confirmed. False when there is no threat / no wall / the click missed.
+	 */
+	bool TryTakeFightCover();
 	/** A click (a Visibility trace) handed to the controller; false when nothing was hit or no controller. */
 	bool RouteClick(const FVector& Start, const FVector& End, const TCHAR* What);
 	FBotRouteInput RouteInput() const;
@@ -290,6 +297,8 @@ private:
 	bool bRouteFightHold = false;
 	bool bRouteWasInFight = false;
 	double RouteFightHoldStart = 0.0;
+	/** The fight hold is a cover at a wall (TryTakeFightCover), not a halt in place. */
+	bool bRouteFightCover = false;
 	ERouteActionPhase RoutePhase = ERouteActionPhase::None;
 	float RoutePhaseTime = 0.f;
 	TWeakObjectPtr<class ALadderActor> RouteLadder;

@@ -36,8 +36,10 @@
           "watch_half_angle_deg": 45,
           "watch_range_cm": 5000,
           "strike_range_cm": 1800,
+          "hold_strike_min_sec": 60,
+          "hold_strike_max_sec": 90,
           "spots": {
-            "wall_standoff_cm": 260,
+            "wall_standoff_cm": 80,
             "end_inset_cm": 100,
             "min_wall_length_cm": 150,
             "joined_gap_cm": 30,
@@ -71,7 +73,12 @@
             "after_sec": 15,
             "behind_angle_deg": 100,
             "far_cm": 3500,
-            "min_ahead_cos": 0.2
+            "min_ahead_cos": 0.2,
+            "route_sample_cm": 100,
+            "max_route_cm": 10000,
+            "run_speed_scale": 1,
+            "no_route_tries": 2,
+            "no_route_patrol": true
           }
         },
         "recycle": {
@@ -118,8 +125,10 @@
           "watch_half_angle_deg": 45,
           "watch_range_cm": 5000,
           "strike_range_cm": 1800,
+          "hold_strike_min_sec": 60,
+          "hold_strike_max_sec": 90,
           "spots": {
-            "wall_standoff_cm": 260,
+            "wall_standoff_cm": 80,
             "end_inset_cm": 100,
             "min_wall_length_cm": 150,
             "joined_gap_cm": 30,
@@ -153,7 +162,12 @@
             "after_sec": 15,
             "behind_angle_deg": 100,
             "far_cm": 3500,
-            "min_ahead_cos": 0.2
+            "min_ahead_cos": 0.2,
+            "route_sample_cm": 100,
+            "max_route_cm": 10000,
+            "run_speed_scale": 1,
+            "no_route_tries": 2,
+            "no_route_patrol": true
           }
         },
         "recycle": {
@@ -200,8 +214,10 @@
           "watch_half_angle_deg": 45,
           "watch_range_cm": 5000,
           "strike_range_cm": 1800,
+          "hold_strike_min_sec": 60,
+          "hold_strike_max_sec": 90,
           "spots": {
-            "wall_standoff_cm": 260,
+            "wall_standoff_cm": 80,
             "end_inset_cm": 100,
             "min_wall_length_cm": 150,
             "joined_gap_cm": 30,
@@ -235,7 +251,12 @@
             "after_sec": 15,
             "behind_angle_deg": 100,
             "far_cm": 3500,
-            "min_ahead_cos": 0.2
+            "min_ahead_cos": 0.2,
+            "route_sample_cm": 100,
+            "max_route_cm": 10000,
+            "run_speed_scale": 1,
+            "no_route_tries": 2,
+            "no_route_patrol": true
           }
         },
         "recycle": {
@@ -282,8 +303,10 @@
           "watch_half_angle_deg": 45,
           "watch_range_cm": 5000,
           "strike_range_cm": 1800,
+          "hold_strike_min_sec": 60,
+          "hold_strike_max_sec": 90,
           "spots": {
-            "wall_standoff_cm": 260,
+            "wall_standoff_cm": 80,
             "end_inset_cm": 100,
             "min_wall_length_cm": 150,
             "joined_gap_cm": 30,
@@ -317,7 +340,12 @@
             "after_sec": 15,
             "behind_angle_deg": 100,
             "far_cm": 3500,
-            "min_ahead_cos": 0.2
+            "min_ahead_cos": 0.2,
+            "route_sample_cm": 100,
+            "max_route_cm": 10000,
+            "run_speed_scale": 1,
+            "no_route_tries": 2,
+            "no_route_patrol": true
           }
         },
         "recycle": {

@@ -44,6 +44,13 @@ struct CODEXTACTICS_API FAmbushWatchParams
 	float WatchRangeCm = 5000.f;
 	/** The ambusher strikes only when the nearest operative is this close, cm (planar). */
 	float StrikeRangeCm = 1800.f;
+	/**
+	 * A squad that watches every side still gets attacked (game designer decision 2, 2026-11-01 night): an ambush (single or coordinated) that
+	 * has HELD this long in all - in strike range, always watched - strikes anyway; each ambush draws its own limit uniformly in
+	 * HoldStrikeMinSeconds..HoldStrikeMaxSeconds ("hold_strike_min_sec" / "hold_strike_max_sec"); a max <= 0 turns it off.
+	 */
+	float HoldStrikeMinSeconds = 60.f;
+	float HoldStrikeMaxSeconds = 90.f;
 };
 
 /** What a hidden ambusher does this tick. */
@@ -103,4 +110,13 @@ namespace AmbushWatchRules
 	 * the squad's middle), degrees; unset when the looks cover the whole ring. No watchers: 0 (everything is unwatched).
 	 */
 	CODEXTACTICS_API TOptional<float> WidestUnwatchedBearing(const TArray<FAmbushWatcher>& Watchers, const FAmbushWatchParams& Params);
+
+	/**
+	 * One ambush's hold limit from Rand01 in [0, 1): HoldStrikeMinSeconds..HoldStrikeMaxSeconds (decision 2, 2026-11-01 night); 0 = never
+	 * (HoldStrikeMaxSeconds <= 0).
+	 */
+	CODEXTACTICS_API float HoldLimitSeconds(float Rand01, const FAmbushWatchParams& Params);
+
+	/** It has held (in range, watched) HoldSeconds in all: strike anyway once that reaches LimitSeconds (a limit <= 0 never strikes). */
+	CODEXTACTICS_API bool HeldTooLong(float HoldSeconds, float LimitSeconds);
 }

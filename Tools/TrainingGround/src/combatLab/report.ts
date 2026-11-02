@@ -31,13 +31,19 @@ export interface RunRecord {
   contacts: { total: number; patrol: number; ambush: number; coordinated: number; unwatched_strikes: number; never_looked: number; reaction_mean_sec: number; reaction_max_sec: number; list: ContactRow[] };
   formations: { changes: number; entered: Record<string, number>; seconds: Record<string, number> };
   wall_hugs: number;
+  /** Cover at a wall in a fight (decision 5, 2026-11-01 night): orders, covers taken, seconds there. Absent in records before it. */
+  cover?: { orders: number; taken: number; seconds: number };
   stances: { changes: number; per_min: number; members: MemberRow[] };
   damage: { taken: number; absorbed: number };
   ammo: { rounds: number; infinite: boolean };
   ladder: { climbs_up: number; climbs_down: number };
   knockdowns: number;
   fights: { count: number; seconds: number };
-  pressure: { events: number; spawned: number; sprung_by_watch: number; relocations: number };
+  pressure: {
+    events: number; spawned: number; sprung_by_watch: number; relocations: number;
+    /** Decisions 1-2 (2026-11-01 night); absent in records before them. */
+    sprung_by_hold?: number; runs_spotted?: number; no_route?: number; followers?: number;
+  };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -105,6 +111,9 @@ export interface RunRow {
   reactionMean: number;
   formationChanges: number;
   wallHugs: number;
+  coverTaken: number;
+  coverOrders: number;
+  coverSeconds: number;
   stanceChanges: number;
   stancePerMin: number;
   damage: number;
@@ -135,6 +144,9 @@ export function runRow(run: RunRecord): RunRow {
     reactionMean: run.contacts.reaction_mean_sec,
     formationChanges: run.formations.changes,
     wallHugs: run.wall_hugs,
+    coverTaken: run.cover?.taken ?? 0,
+    coverOrders: run.cover?.orders ?? 0,
+    coverSeconds: run.cover?.seconds ?? 0,
     stanceChanges: run.stances.changes,
     stancePerMin: run.stances.per_min,
     damage: run.damage.taken,
@@ -170,6 +182,16 @@ export interface Aggregate {
   formationsEntered: Record<string, number>;
   formationSeconds: Record<string, number>;
   wallHugs: number;
+  /** Cover at a wall in fights (decision 5): orders, taken, seconds at the wall. */
+  coverOrders: number;
+  coverTaken: number;
+  coverSeconds: number;
+  /** The ambushes (decisions 1-2): relocation runs, runs spotted on the way, searches with no concealed route, groups turned into following patrols, strikes after the hold limit. */
+  relocations: number;
+  runsSpotted: number;
+  noRoute: number;
+  followers: number;
+  sprungByHold: number;
   stanceChanges: number;
   stancePerMin: number;
   /** Stance changes per operative name over all runs. */
@@ -252,6 +274,14 @@ export function aggregate(runs: RunRecord[]): Aggregate {
     formationsEntered: entered,
     formationSeconds: Object.fromEntries(Object.entries(seconds).map(([k, v]) => [k, round2(v)])),
     wallHugs: sum(runs.map((r) => r.wall_hugs)),
+    coverOrders: sum(runs.map((r) => r.cover?.orders ?? 0)),
+    coverTaken: sum(runs.map((r) => r.cover?.taken ?? 0)),
+    coverSeconds: round2(sum(runs.map((r) => r.cover?.seconds ?? 0))),
+    relocations: sum(runs.map((r) => r.pressure?.relocations ?? 0)),
+    runsSpotted: sum(runs.map((r) => r.pressure?.runs_spotted ?? 0)),
+    noRoute: sum(runs.map((r) => r.pressure?.no_route ?? 0)),
+    followers: sum(runs.map((r) => r.pressure?.followers ?? 0)),
+    sprungByHold: sum(runs.map((r) => r.pressure?.sprung_by_hold ?? 0)),
     stanceChanges,
     stancePerMin: minutes > 0 ? round2(stanceChanges / minutes) : 0,
     stanceByMember,
@@ -287,10 +317,10 @@ export function reportMarkdown(runs: RunRecord[], batch: { id?: string; preset?:
   lines.push('');
   lines.push(`Runs ${a.runs} (${pairs(a.results)}), ${a.minutes.toFixed(1)} game min${batch.preset ? `, preset ${batch.preset}` : ''}; immortal ${a.immortal ? 'on' : 'off'}, infinite ammo ${a.infiniteAmmo ? 'on' : 'off'}.`);
   lines.push('');
-  lines.push('| Run | Result | Min | Route | Progress | Laps | Stuck | Contacts p/a/c | Unwatched | React s | Form. ch. | Wall hugs | Stances (/min) | Dmg / absorbed | Rounds | Climbs | KD |');
-  lines.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+  lines.push('| Run | Result | Min | Route | Progress | Laps | Stuck | Contacts p/a/c | Unwatched | React s | Form. ch. | Wall hugs | Cover (s) | Stances (/min) | Dmg / absorbed | Rounds | Climbs | KD |');
+  lines.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const r of runs.map(runRow)) {
-    lines.push(`| ${r.run} | ${r.result} | ${r.minutes.toFixed(1)} | ${r.completed ? 'completed' : 'not completed'} | ${r.progressPct} % | ${r.laps} | ${r.stuck} | ${r.patrol}/${r.ambush}/${r.coordinated} | ${r.unwatched} | ${r.reactionMean.toFixed(1)} | ${r.formationChanges} | ${r.wallHugs} | ${r.stanceChanges} (${r.stancePerMin.toFixed(1)}) | ${Math.round(r.damage)} / ${Math.round(r.absorbed)} | ${r.rounds} | ${r.climbs} | ${r.knockdowns} |`);
+    lines.push(`| ${r.run} | ${r.result} | ${r.minutes.toFixed(1)} | ${r.completed ? 'completed' : 'not completed'} | ${r.progressPct} % | ${r.laps} | ${r.stuck} | ${r.patrol}/${r.ambush}/${r.coordinated} | ${r.unwatched} | ${r.reactionMean.toFixed(1)} | ${r.formationChanges} | ${r.wallHugs} | ${r.coverTaken}/${r.coverOrders} (${r.coverSeconds.toFixed(0)}) | ${r.stanceChanges} (${r.stancePerMin.toFixed(1)}) | ${Math.round(r.damage)} / ${Math.round(r.absorbed)} | ${r.rounds} | ${r.climbs} | ${r.knockdowns} |`);
   }
   lines.push('');
   lines.push(`- Route: completed in ${a.routeCompleted} of ${a.runs} runs, mean progress ${a.progressMeanPct} %, ${a.lapsTotal} laps, ${a.distanceM.toFixed(0)} m walked, ${a.skipped} waypoints skipped, ${a.stuck} stuck events.`);
@@ -302,6 +332,8 @@ export function reportMarkdown(runs: RunRecord[], batch: { id?: string; preset?:
   lines.push(`- Contacts: ${a.contacts} (patrol ${a.byKind.patrol}, ambush ${a.byKind.ambush}, coordinated ${a.byKind.coordinated}); ambushes from an unwatched side ${a.unwatchedStrikes}; never looked at ${a.neverLooked}.`);
   lines.push(`- Time to the first look: mean ${a.reactionMean.toFixed(1)} s, median ${a.reactionMedian.toFixed(1)} s, max ${a.reactionMax.toFixed(1)} s. Formation at the contacts: ${pairs(a.contactFormations)}.`);
   lines.push(`- Formation changes: ${a.formationChanges}; entered: ${pairs(a.formationsEntered)}.`);
+  lines.push(`- Cover taken at a wall in fights: ${a.coverTaken} of ${a.coverOrders} orders, ${a.coverSeconds.toFixed(0)} s at the wall.`);
+  lines.push(`- Ambushes: relocation runs ${a.relocations} (spotted on the way ${a.runsSpotted}), no concealed route ${a.noRoute}x, became following patrols ${a.followers}, struck after the hold limit ${a.sprungByHold}.`);
   lines.push(`- Wall hugs: ${a.wallHugs}. Stance changes: ${a.stanceChanges} (${a.stancePerMin.toFixed(1)}/min); per operative: ${Object.entries(a.stanceByMember).map(([n, s]) => `${n} ${s.changes} (stand ${s.standing}, crouch ${s.crouching}, prone ${s.prone})`).join(', ') || '-'}.`);
   lines.push(`- Damage taken ${a.damage.toFixed(0)}${a.immortal ? `, absorbed by immortality ${a.absorbed.toFixed(0)}` : ''}; rounds ${a.infiniteAmmo ? 'that would have been spent' : 'spent'} ${a.rounds}; ladder climbs ${a.climbsUp} up / ${a.climbsDown} down; knockdowns ${a.knockdowns}; fights ${a.fights} (${a.fightSeconds.toFixed(0)} s).`);
   if (batch.jev) {

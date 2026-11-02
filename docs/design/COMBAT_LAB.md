@@ -69,8 +69,10 @@ Pure rules `AmbushSpotRules` (`CodexTactics.Combat.AmbushSpots.*`), `AmbushPlanR
   Spots within `spots.merge_cm` (100) are one (authored > doorway > wall end). The SELECTOR is unchanged: among the candidates 14-30 m from the
   squad that are concealed, on the navmesh at ground level, >= the clearance from every wall and reachable on foot, the best by
   `CombatPressureRules::ScoreSpot` (ahead of the squad's heading strongly, the middle of the band) + the kind's bonus (`spots.authored_bonus`
-  0.5, `spots.doorway_bonus` 0.25). The hiding clearance is min(`wall_clearance_cm`, standoff - 10) = 250 cm, so the 2.5 m rule of every
-  spawn still holds. No candidate in reach: a patrol instead (as before).
+  0.5, `spots.doorway_bonus` 0.25). No candidate in reach: a patrol instead (as before).
+  **Since decision 3 (2026-11-01 night) the ambushers HUG the wall:** `spots.wall_standoff_cm` **80** (was 260) - a wall-end / doorway spot
+  stands 0.8 m off its wall's face; the hiding clearance is min(`wall_clearance_cm`, standoff - 10) = **70 cm** (the 2.5 m rule stays for PATROL
+  spawns). A group's other members stand only where they can walk to from its spot in a straight line (never on the wall's far side).
 - **Coordinated ambushes (answer 2).** `ambush.coordinated.share` (0.35) of the ambush events are a PLAN of `bodies_min`..`bodies_max` (4-6):
   four PARTIES - flank left, flank right, front, rear (bodies 0-3, the extras to the front, then the rear) - each at its own concealed
   hiding spot in its SECTOR round the plan's anchor (`anchor_ahead_cm` 5 m ahead of the leader; front +-45 deg of the heading, the flanks
@@ -89,14 +91,33 @@ Pure rules `AmbushSpotRules` (`CodexTactics.Combat.AmbushSpots.*`), `AmbushPlanR
   A single-spot ambush's ranged members suppress the same way when they strike. **Alive cap (chosen):** the plain events keep `max_alive` 4;
   a plan has its OWN cap `coordinated.max_alive` (**6**): it spawns only while the pressure enemies alive + its bodies stay within 6 (else a
   single ambush), and while more than 4 are alive the plain timer events wait as before.
-- **Relocation (answer 3).** A hidden single group is BYPASSED while the squad is beyond its strike range and it lies behind the squad's way
-  (> `relocate.behind_angle_deg` 100 deg off the heading) or farther than `relocate.far_cm` (35 m). Bypassed for `relocate.after_sec` (15 s)
-  and no operative has a line of sight to any member, it MOVES to the best concealed hiding spot ahead of the squad (cos >= `min_ahead_cos`
-  0.2, >= 6 m from where it hid): the group is put on the new spot at once (an unseen hop - nobody can see it go: the squad's sight hides
-  every enemy no operative sees) and its guard post moves along (`AEnemyCharacter::MoveGuardPost`). Seen, it waits until unseen; no spot ahead,
-  it retries after another 15 s (the 60 m / 60 s recycling stays the last resort). A waiting coordinated plan that is bypassed is laid out
-  afresh round the squad and each party moves there; with no layout its parties go on as single groups. `relocate.enabled` false = the first
-  version (wait until recycled).
+- **Relocation (answer 3; the HYBRID of decision 1, 2026-11-01 night - no teleport).** A hidden single group is BYPASSED while the squad is
+  beyond its strike range and it lies behind the squad's way (> `relocate.behind_angle_deg` 100 deg off the heading) or farther than
+  `relocate.far_cm` (35 m). Bypassed for `relocate.after_sec` (15 s) and unseen, it searches a **CONCEALED ROUTE**: the best hiding spots ahead
+  of the squad (cos >= `min_ahead_cos` 0.2, >= 6 m from where it hid; up to 8 by score) and the navmesh path of its first member to each
+  (its own nav filter); a path is sampled every `relocate.route_sample_cm` (100 cm) and refused at the first sample some living operative's
+  EYES have a clear sight line to (`UCombatPressureSubsystem::IsPointInSquadSight`: `UTacticalSightSubsystem::EyePoint` - his stance eye
+  height, on a tower / roof up there - and `HasClearSight`, 60 m, whichever way he looks: the route must survive a turn of the head), or
+  longer than `relocate.max_route_cm` (100 m), or to a spot in sight (`AmbushRelocateRules::IsConcealedRoute` / `PickRoute`: the best spot
+  score among the concealed routes, a tie -> the shorter path). It then **RUNS** the route on foot: each runner walks the path's corners, then
+  his own spot round the new hiding spot, at the group's slowest `BaseWalkSpeed` x `relocate.run_speed_scale` (1.0), by its guard post
+  (`AEnemyCharacter::MoveGuardPost(Location, Yaw, Speed)` - a leg of a run, no stop between legs); its state is `Relocating`, its own senses
+  stay muted. Every 0.1 s (`AmbushRelocateRules::StepRun`): **spotted** - an operative SEES a runner with his real vision
+  (`UTacticalSightSubsystem::CanOperativeSee`: field of view, stance eye, peek; a man on a tower sees over the walls) or a runner was shot at ->
+  the group **strikes at once** (a plan's party spotted on the way: the whole plan springs - the flank block, then the assault); **arrived** ->
+  it hides there facing the squad; far over its time (`RunLimitSeconds`: twice the path at its pace + 10 s) -> it stops and hides where it
+  stands. **No concealed route: NO teleport** - it stays put; after `relocate.no_route_tries` (2) searches in a row without one (each
+  `after_sec` apart) it becomes a **patrol following the squad** (`relocate.no_route_patrol` true; its own senses back, its guard post walked
+  after the squad's leader every 2 s at 1.25 x the patrol pace - it engages when it perceives the squad; false = it only stays until
+  recycled). A waiting coordinated plan that is bypassed is laid out afresh round the squad; its parties run there only when ALL of them have
+  a concealed route, else it stays (and after `no_route_tries` searches, or with no layout at all, its parties go on as single groups).
+  `relocate.enabled` false = the first version (wait until recycled). The record (`FPressureRelocationRecord`): path, length, samples,
+  outcome, the largest step of a runner (a teleport would show), `Codex.Pressure.Status` lists it.
+- **A squad that watches every side still gets attacked (decision 2, 2026-11-01 night).** An ambush that has HELD (in strike range, watched)
+  for its own hold limit in all strikes anyway: single groups and coordinated plans (a plan watched all round -> the flank block, then the
+  assault as usual) draw a limit uniformly in `ambush.hold_strike_min_sec`..`hold_strike_max_sec` (**60-90 s**; its own seeded stream, the
+  event stream is untouched; max 0 = never). `AmbushWatchRules::HoldLimitSeconds` / `HeldTooLong`, `AmbushPlanRules::NextPhase`
+  (`FAmbushPlanTick::HoldSeconds` / `HoldLimitSeconds`); counted apart from the watch springs (`GetSprungByHoldCount`).
 - **The watch (answer 4)** stays +-45 deg; aiming counts (above). **Immortality (answer 5)** keeps the knockdown of a heavy hit. **Save / load
   (answer 7)** restarting the pressure is fine.
 
@@ -131,13 +152,20 @@ the leader climbs the nearest tower. `shot` (rendered) saves `Saved/Screenshots/
 `CodexTactics.CombatLabTowerSmoke` (bug 07): the leader (solo) up a tower by a click on its ladder, down by a ground click, up by a double click on the ladder (a sprint), down, up by a double click on the roof - all through `HandleWorldHit`; never a refusal. `CodexTactics.CombatLabTowerSmokePIE` runs it in real PIE (the editor, `-RenderOffscreen`).
 
 `CodexTactics.CombatLabAmbushSmoke` (same map / level JSON): the level's own timer - the first group at 30 s; the hiding-spot inventory (wall
-ends, doorways, the 8 authored points) and three squad placements whose seeded single ambush picks an authored point / a doorway / a wall
-end (concealed, clear of walls by its record + its own rays); a coordinated plan of 6 (hound / frostbitten flanks, cutter + marksman front,
-hound + spitter rear) - each party in its own sector, 6 alive above `max_alive` 4 within the plans' cap 6, all concealed; watched all round it
-holds; the flanks unwatched: both flanks + the two ranged strike (suppress intent on an operative) while the melee front / rear wait; the
-assault 1.5-4 s later; deliberate rounds raise an operative's suppression level; a single ambush left 52 m behind relocates after 15 s,
-unseen, to a concealed spot ahead (the same enemy, still hidden); the leader firing at a frozen decoy keeps an ambusher in his aim cone
-holding. `shot` saves `Saved/Screenshots/CombatLabV2/01_coordinated_plan.png`, `02_flank_block.png`, `03_suppressor.png` (every enemy revealed).
+ends, doorways, the 8 authored points; every wall-end / doorway spot exactly 0.8 m off its wall) and three squad placements whose seeded
+single ambush picks an authored point / a doorway / a wall end (concealed, clear of walls by its record + its own rays, hugging its wall); a
+coordinated plan of 6 (hound / frostbitten flanks, cutter + marksman front, hound + spitter rear) - each party in its own sector, 6 alive above
+`max_alive` 4 within the plans' cap 6, all concealed; watched all round it holds; the flanks unwatched: both flanks + the two ranged strike
+(suppress intent on an operative) while the melee front / rear wait; the assault 1.5-4 s later; deliberate rounds raise an operative's
+suppression level; a single ambush hidden north of the 43 m wall W_E_13 that the squad (south of it, heading west) has passed sets off after
+15 s along a CONCEALED route (34 m, 36 sight samples clear) and RUNS it on foot to the wall-end spot ahead - never seen, largest step 4.7 cm a
+frame, arrived after 12 s, the same enemy still hidden; the leader firing at a frozen decoy keeps an ambusher in his aim cone holding.
+`CodexTactics.CombatLabAmbushRelocateSmoke` (same map / level JSON; decisions 1-2 of 2026-11-01 night): a plan watched ALL ROUND strikes after
+its hold limit (5-6 s for the smoke: the flank block after 5.5 s held); the W_E_13 runner is SPOTTED by an operative posted on the ground
+10 m from it -> strikes at once (0.08 s), the fight starts; the same with the watcher on a TOWER ROOF (T_NW, 40 m) -> strikes at once; with
+every route counted as seen (`SetRouteBlockedOverride`): no teleport, it stays put after the first search, after the second it is a patrol
+following the squad on foot (largest step 4 cm a frame); a single ambush 12 m ahead of a squad watching every side holds 30 s, then strikes
+at its own 60-90 s limit (88.5 s). `shot` saves `Saved/Screenshots/CombatLabV2/01_coordinated_plan.png`, `02_flank_block.png`, `03_suppressor.png` (every enemy revealed).
 
 ## 5a. Play-test fixes 2026-11-01 (branch `fix/cutter-walls-ladder`)
 
@@ -154,7 +182,9 @@ Round 1 (answered 2026-11-01, implemented in section 2.1): 1 hiding spots = wall
 2 coordinated multi-direction ambushes, ranged ones suppress; 3 a bypassed ambush relocates ahead unseen; 4 the watch stays +-45 deg, aiming at
 another enemy still counts; 5 immortality keeps the knockdown; 6 the first group at 30 s; 7 save / load restarting the pressure is fine.
 
-Round 2 (v2, open):
+Round 2 (v2) - answered 2026-11-01 night (decisions 1-7; implemented on branch `combat/ambush-v3`): 1 relocation = the HYBRID (a concealed
+route on foot, spotted -> strike, no route -> stay / follow as a patrol); 2 the coordinated numbers stay; 3 an always-watched ambush strikes
+after 60-90 s; 4 the spots hug the wall at 0.8 m. The original questions for reference:
 
 1. **Relocation is an unseen hop.** The group is put on its new spot at once, only while no operative sees any member and the new spot is out
    of sight (the player cannot see it go either). A real walk round the squad would need a hidden route (walking the shortest path it would
@@ -200,8 +230,14 @@ tests `src/combatLab/*.test.ts`.
   the formation wall layout, held `hold_sec`) or `climb` (the leader alone - Solo - walks up the nearest tower's ladder, holds, comes down).
 - **The bot's route mode** (`UPlaytestBotSubsystem`, `PlaytestBotRouteMode.cpp`): on an endless pressure level with a route (or
   `-BotRoute=1`) the bot leads the squad through the player's own click path (`HandleWorldHit`: moves in formation, the wall click + its
-  confirm, the roof click), Aggressive posture; a fight holds the route up to `fight_hold_sec` (20 s, the squad halts crouched), then it walks
-  on fighting; it stops by TIME (`-BotDuration=<game s>` -> `RESULT COMPLETE`). `FBotRouteTracker` (pure, `CodexTactics.Bot.Route.*`):
+  confirm, the roof click), Aggressive posture. **A fight: COVER AT A WALL first** (decision 5, 2026-11-01 night): the threat = the nearest
+  living enemy that fights (else the nearest one); `BotCoverRules::PickWall` on the level's obstacle boxes picks the face of a wall >= 2 m long
+  and >= 1.2 m tall that stands between the squad and the threat (cos(into the wall, face -> threat) >= 0.5, the threat >= 4 m off), within
+  15 m walk of the leader (round the wall's end when the squad stands on its far side), best by facing minus 0.8 x distance / 15 m; the bot
+  clicks that face from the squad's side at knee height (the group cover order = the formation wall layout) and confirms the ghost; the
+  squad fights from there until the fight ends or `fight_cover.hold_sec` (45 s), then walks on (firing on the move). No wall: it halts where it
+  stands up to `fight_hold_sec` (20 s) - no crouch order any more (the old "halt crouched" made the stance jitter, decision 6). Level JSON
+  `"bot_route"."fight_cover"` {enabled, search_cm, hold_sec, min_wall_cm, min_height_cm, min_threat_cm, min_facing_cos}. It stops by TIME (`-BotDuration=<game s>` -> `RESULT COMPLETE`). `FBotRouteTracker` (pure, `CodexTactics.Bot.Route.*`):
   reached / skipped waypoints, laps; STUCK = the leader moved < 1.5 m in 12 s (`no_move`) or a leg takes longer than 25 s + its length at 1 m/s
   (`leg_timeout`) or an order / action failed - the move is ordered again, after 2 retries the waypoint is skipped. Completed = a lap with no
   waypoint skipped.
@@ -211,7 +247,9 @@ tests `src/combatLab/*.test.ts`.
   ambush that sprang while unwatched; the formation at the contact. Formation changes by type (a label holds 0.5 s; Solo / off is none; the
   diamond of 3 = wedge; the wall order = `wall_layout`), wall hugs (`IsSquadAtWall` rising after >= 1 s off), stance changes per operative /
   minute, damage taken and absorbed by immortality (`UHealthComponent::GetCheatBlockedDamage`), rounds incl. the infinite-ammo ones
-  (`AOperativeCharacter::GetRoundsSpent`), ladder climbs, knockdowns, fights. One record per run, schema `codex.combatlab_run/1`.
+  (`AOperativeCharacter::GetRoundsSpent`), ladder climbs, knockdowns, fights; **cover at a wall in fights** (`"cover"`: orders, taken = the
+  squad at the wall under the order, seconds there; report column "Cover (s)") and the ambush counters (`"pressure"`: `sprung_by_hold`,
+  `runs_spotted`, `no_route`, `followers`). One record per run, schema `codex.combatlab_run/1` (the new blocks are optional for older records).
 - **The batch**: «Прогоны ботов» -> `POST /api/combat-lab/run` (defaults 4 runs x 10 min, 2 at a time) writes `Saved/Telemetry/combat_lab/<id>/`
   `level.json` (the page's settings, also unsaved ones) + `batch.json` and starts `Scripts/bot_run.ps1 -ReportDir <dir> -DurationSec <s>
   -SeedBase <seed> -LevelJson <dir>/level.json -Map /Game/Maps/L_FormationLabCombat` (run n: `-BotSeed=n -PressureSeed=seed+n-1`). Live:
@@ -219,9 +257,35 @@ tests `src/combatLab/*.test.ts`.
   a 3-line combat lab digest), `report.md` + `aggregate.json` (`node src/combatLab/cli/report.ts --batch <dir>`); the page shows the
   aggregate, a row per run, the map with the stuck points / contacts / end positions and the digest.
 
-### 7.3 Open questions (round 3)
+### 7.3 Open questions (round 3) - answered 2026-11-01 night
 
-1. **Fight policy of the bot.** It halts crouched up to 20 s when a fight starts, then walks on fighting. Halt longer (until the fight
-   is over), never halt, or let it take wall cover first?
-2. **The route.** ~453 m a lap (about 5-7 game minutes with the climbs and fights): one lap per 10-minute run. Shorter (towers only) or as is?
-3. **"Looked at"** = an operative's body / aim / sector look within +-45 deg (the ambush watch rule) - or a stricter "aims at it"?
+1. **Fight policy of the bot** -> cover at a wall first (decision 5, section 7.2). 2. **The route** stays (453 m). 3. **"Looked at"** stays
+(body / aim / sector within +-45 deg).
+
+### 7.4 The stance jitter (decision 6, 2026-11-01 night)
+
+The report of 2026-11-01 19:34 counted ~6 crouch / stand changes per 2 minutes for the Engineer and the Medic. Where followers crouch on a
+halt: (a) the bot's own fight halt ("halt crouched", gone - section 7.2); (b) Solo's guard crouch while the leader climbs a tower (deliberate,
+"teammates hold crouched" - kept); (c) the formation wall layout at a wall (taking cover - kept); (d) in the GAME, the squad autonomy's ROE
+(Commander Mode, `USquadAutonomySubsystem` 7-C: `open_ground_stance` crouch for an operative standing still with enemies about) - it crouched
+at once on every stop and nothing stood him up for the next walk. Fixed there with a hysteresis: the open-ground stance only after standing
+still `Content/Data/AI/squad_roe.json` **`hold_crouch_after_sec` (4 s**; 0 = at once as before; Training Ground ROE panel) -
+`SquadAutonomyRules::ShouldTakeHaltStance` / `StepStillSeconds`; cover, a sniper's aim on him and a sniper rifle stay immediate. That crouch
+is the "hold crouch" (`AOperativeCharacter::MarkHoldCrouch`): his next move stands him up at once - his own order (`OrderMoveTo`) or the
+formation's follow (`FollowTo`, when the leader walks upright; `ShouldRiseFromHoldCrouch`). Solo, explicit stance orders and the wall
+layout are unchanged. Smoke `CodexTactics.SquadHaltStanceSmoke`: in a fight with Commander Mode, a 3 s halt crouches nobody, a 10 s halt
+crouches everyone 3.7 s into it, the leader's next order and the formation's follow stand them up at once (0.02 s), Solo still crouches at
+once. Bot batch `Saved/Telemetry/combat_lab/20261101_205220` (2 runs x 3 min, seeds 1101-1102): stance changes **2.7 / min** (was 7.0 / min;
+Engineer / Medic 4 per run of 3 min, all from the two tower climbs' Solo), cover taken 2 of 2 orders (12 s at the wall).
+
+### 7.5 Open questions (round 4)
+
+1. **Solo during the bot's tower climbs** still crouches the two who wait (~25 s each climb: 2 of the 4 changes per run left). Keep it
+   (it is the deliberate "teammates hold crouched"), or give Solo the same 4 s hysteresis?
+2. **No concealed route** -> after 2 searches (30 s) the ambush follows the squad as a patrol (its senses back). Or should it only stay put
+   (`no_route_patrol` false - the recycling removes it after 60 s far away)?
+3. **Concealment of a route** is tested against every operative's eyes in ALL directions (a turn of the head must not reveal it), while
+   "spotted on the way" uses their real field of view. In the open lab few routes qualify (the squad sees most of it) - mostly runs behind
+   long walls (W_E_13, W_E_14, the lane D corridors). Loosen it to the operatives' field of view at the time of the search?
+4. **The bot's cover**: 15 m search, a wall >= 2 m long / 1.2 m tall facing the threat; 45 s at most at the wall. OK? (One fight in the batch
+   found no wall within 15 m and halted.)
