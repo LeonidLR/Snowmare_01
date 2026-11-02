@@ -4,6 +4,7 @@
 // The wall face runs along Y at x 0 (40 cm), the squad comes from +X: outward normal yaw 0.
 
 #include "Misc/AutomationTest.h"
+#include "Formation/FormationSectorRules.h"
 #include "Formation/FormationWallRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -131,6 +132,58 @@ bool FFormationApproachNeverSplitTest::RunTest(const FString&)
 	const FFormationApproachResult Back = FormationWallRules::Approach(Walls, Slots, 0.f, At(Slots, { { AR::Right, FVector2D(520.0, 200.0) },
 		{ AR::Left, FVector2D(500.0, -150.0) }, { AR::Rear, FVector2D(800.0, 0.0) } }), Res.State, Config);
 	TestTrue(TEXT("round the wall: his flank look again"), ApproachLookOf(Back, AR::Left).Duty == EFormationApproachDuty::Flank);
+	return true;
+}
+
+FORMATION_APPROACH_TEST(FFormationApproachHoldLooksTest, "HoldLooks")
+bool FFormationApproachHoldLooksTest::RunTest(const FString&)
+{
+	using namespace FormationApproachTestUtil;
+	// FormationWallGroupSmoke 2026-11-02: the rear man (Z) walking in with a wall right behind him (a wall across +X, 1 m back): the rear
+	// look (normal yaw 0) is blocked; both edges of the blocked span are as near the wanted look - from scratch the rule may take either
+	// side frame to frame. With last frame's side, that side is kept while it is still clear.
+	FFormationWall Behind;
+	Behind.A = FVector2D(400.0, -300.0);
+	Behind.B = FVector2D(400.0, 300.0);
+	Behind.Thickness = 20.f;
+	const TArray<FFormationWall> Walls = { Behind };
+	const FFormationConfig Config;
+	TArray<FFormationSlot> Members;
+	FFormationSlot RearMan;
+	RearMan.Role = AR::Rear;
+	RearMan.Position = FVector2D(300.0, 0.0);
+	Members.Add(RearMan);
+	FFormationApproachState State;
+	State.Runner = AR::Commander;
+	State.Rear = AR::Rear;
+	const float Cleared = FormationSectorRules::ClearLook(Walls, RearMan.Position, 0.f, 0.f, Config);
+	TestTrue(TEXT("From scratch the rear look leaves the wall's blocked span"), FMath::Abs(FormationMath::NormYaw(static_cast<double>(Cleared))) >= Config.LookWallAngle - 1.0);
+	const float OtherSide = static_cast<float>(FormationMath::NormYaw(-static_cast<double>(Cleared)));
+
+	FFormationApproachLook Rear;
+	Rear.Role = AR::Rear;
+	Rear.Duty = EFormationApproachDuty::Rear;
+	Rear.Yaw = Cleared;
+	FFormationApproachLook Last = Rear;
+	Last.Yaw = OtherSide;
+	TArray<FFormationApproachLook> Looks = { Rear };
+	FormationWallRules::HoldApproachLooks(Walls, 0.f, Members, State, { Last }, Looks, Config);
+	TestEqual(TEXT("Last frame's (clear) other side is kept"), Looks[0].Yaw.Get(0.f), OtherSide, 0.5f);
+
+	Looks = { Rear };
+	FormationWallRules::HoldApproachLooks(Walls, 0.f, Members, State, {}, Looks, Config);
+	TestEqual(TEXT("No history: Approach's own cleared look"), Looks[0].Yaw.Get(0.f), Cleared, 0.01f);
+
+	FFormationApproachLook Flank = Last;
+	Flank.Duty = EFormationApproachDuty::Flank;
+	Looks = { Rear };
+	FormationWallRules::HoldApproachLooks(Walls, 0.f, Members, State, { Flank }, Looks, Config);
+	TestEqual(TEXT("Another duty last frame is no history"), Looks[0].Yaw.Get(0.f), Cleared, 0.01f);
+
+	Members[0].Position = FVector2D(-300.0, 0.0); // the wall is out of reach now
+	Looks = { Rear };
+	FormationWallRules::HoldApproachLooks(Walls, 0.f, Members, State, { Last }, Looks, Config);
+	TestEqual(TEXT("Once the rear is clear he looks straight back again"), Looks[0].Yaw.Get(1.f), 0.f, 0.01f);
 	return true;
 }
 

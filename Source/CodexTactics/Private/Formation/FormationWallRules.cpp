@@ -556,6 +556,52 @@ namespace FormationWallRules
 		return Result;
 	}
 
+	void HoldApproachLooks(const TArray<FFormationWall>& Walls, float NormalYaw, const TArray<FFormationSlot>& Members,
+		const FFormationApproachState& State, const TArray<FFormationApproachLook>& Previous, TArray<FFormationApproachLook>& InOutLooks,
+		const FFormationConfig& Config)
+	{
+		using FormationMath::NormYaw;
+		const double Normal = static_cast<double>(NormalYaw);
+		for (FFormationApproachLook& Look : InOutLooks)
+		{
+			if (!Look.Yaw.IsSet())
+			{
+				continue;
+			}
+			TOptional<double> Wanted;
+			if (Look.Duty == EFormationApproachDuty::Rear)
+			{
+				Wanted = Normal;
+			}
+			else if (Look.Duty == EFormationApproachDuty::Along)
+			{
+				Wanted = Normal + State.AlongSide * 90.0;
+			}
+			else if (Look.Duty == EFormationApproachDuty::Flank)
+			{
+				const EFormationRole Role = Look.Role;
+				if (const TPair<EFormationRole, int32>* Flank = State.Flanks.FindByPredicate([Role](const TPair<EFormationRole, int32>& Each) { return Each.Key == Role; }))
+				{
+					Wanted = Normal + Flank->Value * 90.0;
+				}
+			}
+			const EFormationRole Role = Look.Role;
+			const EFormationApproachDuty Duty = Look.Duty;
+			const FFormationApproachLook* Before = Previous.FindByPredicate([Role, Duty](const FFormationApproachLook& Each)
+			{
+				return Each.Role == Role && Each.Duty == Duty && Each.Yaw.IsSet();
+			});
+			const FFormationSlot* Member = Members.FindByPredicate([Role](const FFormationSlot& Each) { return Each.Role == Role; });
+			if (!Wanted.IsSet() || !Before || !Member)
+			{
+				continue;
+			}
+			const float Held = Before->Yaw.GetValue();
+			Look.Yaw = static_cast<float>(NormYaw(FormationSectorRules::ClearLook(Walls, Member->Position, static_cast<float>(NormYaw(Wanted.GetValue())), Held,
+				Config, TOptional<float>(Held))));
+		}
+	}
+
 	void BreakRoomTie(float& RoomLeft, float& RoomRight, float TravelLeft, float TravelRight)
 	{
 		if (RoomLeft == RoomRight && TravelLeft < TravelRight)

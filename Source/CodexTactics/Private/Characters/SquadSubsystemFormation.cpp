@@ -39,6 +39,8 @@ namespace SquadSubsystemFormationLocal
 		TEXT("Rules v2.4 (user bug report 2026-10-26): 1 = at a wall END the wall layout's looks are spread over the open arc round it (FormationWallRules::EndLooks); 0 = the face looks (L 8 / K 6 / P 4) everywhere (v2.3)"));
 	TAutoConsoleVariable<int32> CVarFormationApproach(TEXT("Codex.Formation.Approach"), 1,
 		TEXT("Rules v2.5 (user rule 2026-10-26): 1 = the covered approach to the wall - the leader runs in and looks along the wall, the man farthest back covers the rear, the others a flank, until everyone is at his wall slot; 0 = everyone walks in facing his travel (v2.4)"));
+	TAutoConsoleVariable<int32> CVarFormationApproachHold(TEXT("Codex.Formation.ApproachHold"), 1,
+		TEXT("FormationWallGroupSmoke 2026-11-02: 1 = the covered approach's cleared looks (rear / flank / along) keep their last side while it is still clear (FormationWallRules::HoldApproachLooks: no frame-to-frame flicker round a wall behind a man); 0 = cleared from scratch every frame (A/B)"));
 	TAutoConsoleVariable<int32> CVarFormationWallTraceBlocking(TEXT("Codex.Formation.WallTraceBlocking"), 1,
 		TEXT("Bug 2026-10-27 (the lake yard): 1 = the formation's wall traces read only what blocks pawns (never an overlap-only trigger box round the squad); 0 = any static / dynamic world object (the old trace, A/B)"));
 	TAutoConsoleVariable<int32> CVarFormationWallSnap(TEXT("Codex.Formation.WallSnap"), 1,
@@ -546,6 +548,7 @@ void USquadSubsystem::ApplyFormationWallEnd(const FVector& Origin, const FVector
 void USquadSubsystem::ApplyFormationApproach(const AOperativeCharacter& LeaderRef)
 {
 	using namespace SquadSubsystemFormationLocal;
+	const TArray<FFormationApproachLook> PreviousLooks = MoveTemp(Sectors.ApproachLooks); // the hysteresis below (HoldApproachLooks)
 	Sectors.ApproachLooks.Reset();
 	if (CVarFormationApproach.GetValueOnGameThread() == 0 || Sectors.FrameSlots.Num() < 2)
 	{
@@ -602,7 +605,13 @@ void USquadSubsystem::ApplyFormationApproach(const AOperativeCharacter& LeaderRe
 		return;
 	}
 	Sectors.ApproachLooks = Result.Looks;
-	for (const FFormationApproachLook& Look : Result.Looks)
+	// The cleared looks keep their last frame's side while it is still clear (no frame-to-frame flicker round a wall behind a man).
+	if (CVarFormationApproachHold.GetValueOnGameThread() != 0)
+	{
+		FormationWallRules::HoldApproachLooks(bWalls ? Sectors.WorldWalls : NoWalls, Sectors.WallNormalYaw, Places, Result.State, PreviousLooks,
+			Sectors.ApproachLooks, FormationTuning::Get());
+	}
+	for (const FFormationApproachLook& Look : Sectors.ApproachLooks)
 	{
 		FFormationSlot* Slot = Sectors.FrameSlots.FindByPredicate([&Look](const FFormationSlot& Each) { return Each.Role == Look.Role; });
 		if (Slot && Look.Yaw.IsSet())
