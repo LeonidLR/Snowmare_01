@@ -14,7 +14,7 @@ import type { ZoneKind } from '../movement/layout.ts';
 import type { Profile } from './profile.ts';
 import { toUE } from './profile.ts';
 import type { CoverKind, Door, GenBuilding, GenCover, GenCut, GenLadder, GenLayout, GenParams, GenRoute, GenWall, PatrolRoute, SetPiece, SpawnPoint, Stair } from './schema.ts';
-import { CUT_LEVEL, DEFAULT_PARAMS, LEVELGEN_SCHEMA, LEVEL_HEIGHT, STAIR_RUN_PER_RISE, ladderForLevels, levelZ, rect } from './schema.ts';
+import { CHIMNEY_HEIGHT_CM, CUT_LEVEL, DEFAULT_PARAMS, HALL_ROOF_LEVEL, HOLE_HALF_CM, LEVELGEN_SCHEMA, LEVEL_HEIGHT, STAIR_RUN_PER_RISE, ladderForLevels, levelZ, rect } from './schema.ts';
 
 type Rect = [Vec2, Vec2];
 
@@ -25,7 +25,7 @@ interface Draft {
   cut?: GenCut;
   ladders: GenLadder[];
   covers: GenCover[];
-  zones: { id: string; kind: ZoneKind; set_piece: SetPiece; poly: Vec2[]; density: number; coverKinds: CoverKind[] }[];
+  zones: { id: string; kind: ZoneKind; set_piece: SetPiece; poly: Vec2[]; density: number; coverKinds: CoverKind[]; intent?: 'kill_zone' }[];
   routes: GenRoute[];
   spawn_points: SpawnPoint[];
   ambush_points: { id: string; pos: Vec2 }[];
@@ -94,7 +94,8 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     const gaps = crossings.map((c) => [c.poly[0][0], c.poly[1][0]] as [number, number]);
     splitWall(d, 'CUTWALL_N', [0, cutN - CUT_WALL_T / 2], [w, cutN - CUT_WALL_T / 2], gaps, CUT_WALL_H, CUT_WALL_T * 100, 'cut_wall');
     splitWall(d, 'CUTWALL_S', [0, cutS + CUT_WALL_T / 2], [w, cutS + CUT_WALL_T / 2], gaps, CUT_WALL_H, CUT_WALL_T * 100, 'cut_wall');
-    d.zones.push({ id: 'Z_cut', kind: 'corridor', set_piece: 'cut_crossing', poly: rect.poly([[0, cutN], [w, cutS]]), density: 0.5, coverKinds: ['crate'] });
+    // the cut floor is a deliberate killing ground (game designer 2026-11-02): seen from both rims, few ways out
+    d.zones.push({ id: 'Z_cut', kind: 'corridor', set_piece: 'cut_crossing', poly: rect.poly([[0, cutN], [w, cutS]]), density: 0.5, coverKinds: ['crate'], intent: 'kill_zone' });
     // ladders on the south wall (the reference: 3; verticality >= 1): level -1 -> 0 = 3 m = 8 rungs + an 8.8 cm plinth
     if (V >= 1) {
       const lad = ladderForLevels(1);
@@ -143,10 +144,11 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     d.zones.push(zone('Z_compound', 'open', 'one_entry_compound', r, 3.5, ['crate', 'barrel', 'wreck']));
     d.ambush_points.push({ id: id('AMB_shed'), pos: [shed[1][0] + 1, shed[1][1] - 1] });
   }
-  // the sawtooth hall (enterable, roof, stairwell when V >= 2) + its boiler yard (a small one-entry compound)
+  // the sawtooth hall (enterable, a walkable roof on level +3 = 9 m, one stairwell flight ground -> roof when V >= 2) + its boiler
+  // yard (a small one-entry compound). The tall halls' roofs sit on HALL_ROOF_LEVEL (game designer 2026-11-02: the view from the roofs).
   {
     const r = fit(region.sawtooth);
-    addBuilding(d, 'B_hall_n', r, { height: 2 * LEVEL_HEIGHT, floors: 2, hollow: V < 2, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'industrial_hall', doorSides: ['south', 'south'] }, random);
+    addBuilding(d, 'B_hall_n', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'industrial_hall', doorSides: ['south', 'south'] }, random);
     const y = fit(region.boilerYard);
     fenceRect(d, 'F_boilers', y, [{ side: 'south', at: (y[0][0] + y[1][0]) / 2, width: GATE_W }]);
     d.zones.push(zone('Z_boilers', 'open', 'one_entry_compound', y, 3.0, ['boiler', 'barrel']));
@@ -156,7 +158,7 @@ export function generateLayout(o: GenerateOptions): GenLayout {
   // the warehouse (enterable, roof, stairwell) + its fenced lot (one gate on the street)
   {
     const r = fit(region.warehouse);
-    addBuilding(d, 'B_warehouse', r, { height: 2 * LEVEL_HEIGHT, floors: 2, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'warehouse', doorSides: ['west', 'south'] }, random);
+    addBuilding(d, 'B_warehouse', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'warehouse', doorSides: ['west', 'south'] }, random);
     const lot = fit(region.warehouseLot);
     lotGateX = (lot[0][0] + lot[1][0]) / 2 + jit(4);
     fenceRect(d, 'F_lot', lot, [{ side: 'south', at: lotGateX, width: GATE_W }, { side: 'north', at: (lot[0][0] + lot[1][0]) / 2, width: GATE_W }]);
@@ -197,10 +199,11 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     const r = fit(region.ruin);
     const b = addBuilding(d, 'B_ruin', r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: V >= 1, stairwell: false, set_piece: 'ruined_two_level', doorSides: ['west', 'south'] }, random);
     if (V >= 1) {
-      // the external stair climbs along the south face (a 35 deg ramp: 6 m rise = 8.6 m run) and lands on the roof over the edge
-      const run = 2 * STAIR_RUN_PER_RISE * (LEVEL_HEIGHT / 100);
-      const sx1 = r[0][0] + (r[1][0] - r[0][0]) * 0.7;
-      b.stairs.push({ id: id('STAIR_ext'), pos: [sx1 - run, r[1][1] + 1.2], mid: [sx1, r[1][1] + 1.2], from: 0, to: 2, kind: 'external', top: [sx1, r[1][1] - 1.6] });
+      // the external stair climbs along the south face (a 35 deg ramp sized to the level difference: the roof on level `floors` =
+      // 2 -> 6 m rise = 8.6 m run) to `mid`, then a flat landing (mid -> top) crosses the wall's top onto the roof
+      const run = b.floors * STAIR_RUN_PER_RISE * (LEVEL_HEIGHT / 100);
+      const sx1 = Math.min(r[1][0] - 1.5, Math.max(r[0][0] + (r[1][0] - r[0][0]) * 0.7, r[0][0] + run + 0.5));
+      b.stairs.push({ id: id('STAIR_ext'), pos: [sx1 - run, r[1][1] + 1.2], mid: [sx1, r[1][1] + 1.2], from: 0, to: b.floors, kind: 'external', top: [sx1, r[1][1] - 1.6] });
     }
     if (V >= 3) {
       b.roof_holes.push([r[0][0] + (r[1][0] - r[0][0]) * 0.3, r[0][1] + (r[1][1] - r[0][1]) * 0.4], [r[0][0] + (r[1][0] - r[0][0]) * 0.75, r[0][1] + (r[1][1] - r[0][1]) * 0.6]);
@@ -219,15 +222,17 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     addBuilding(d, 'B_ruin_annex', a, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'ruined_two_level', doorSides: ['west', 'south', 'north'] }, random);
     d.zones.push(zone('Z_ruin', 'open', 'ruined_two_level', [[a[0][0] - 2, r[0][1] - 2], [r[1][0] + 2, a[1][1] + 2]], 2.5, ['crate', 'barrel']));
   }
-  // the Steel Works hall (enterable, roof, stairwell), two towers (the chimneys), the annex racks
+  // the Steel Works hall (enterable, roof on +3, stairwell), two factory chimneys (tall obstacles, never climbable), the annex racks
   {
     const r = fit(region.steel);
-    addBuilding(d, 'B_steelworks', r, { height: 2 * LEVEL_HEIGHT, floors: 2, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'industrial_hall', doorSides: ['south', 'west'] }, random);
-    // the two chimneys as towers: one at the hall's NE corner (over the north street's end), one at its SW (over the south street)
+    addBuilding(d, 'B_steelworks', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'industrial_hall', doorSides: ['south', 'west'] }, random);
+    // the two factory chimneys: one at the hall's NE corner (over the north street's end), one at its SW (over the south street).
+    // Game designer 2026-11-02: chimneys are NOT ladder towers - a tall closed obstacle that blocks sight, no ladder, no walkable
+    // top, no height level of its own (validateGenLayout refuses a climbable chimney).
     for (const [k, c] of ([[0, [r[1][0] + 2.5 + jit(0.5), r[0][1] - 2.5 + jit(0.5)]], [1, [r[0][0] - 6 + jit(1), r[1][1] - 2 + jit(1)]]] as [number, Vec2][])) {
       const t: Rect = [[c[0] - 1.5, c[1] - 1.5], [c[0] + 1.5, c[1] + 1.5]];
-      const tower = addBuilding(d, `B_tower_${k}`, t, { height: 2 * LEVEL_HEIGHT, floors: 2, hollow: true, enterable: false, roof_walkable: V >= 1, set_piece: 'tower' }, random);
-      if (V >= 1) addLadderAt(d, tower, k === 0 ? 'west' : 'south', random);
+      addBuilding(d, `B_chimney_${k}`, t, { height: CHIMNEY_HEIGHT_CM, floors: 1, hollow: true, enterable: false, roof_walkable: false, set_piece: 'chimney' }, random);
+      if (V >= 1) random(); // the draw the former tower ladder took: keeps the rest of every seed's layout unchanged
     }
     const an = fit(region.steelAnnex);
     d.zones.push(zone('Z_steel_annex', 'corridor', 'alley', an, 2.5, ['crate', 'barrel']));
@@ -268,8 +273,10 @@ export function generateLayout(o: GenerateOptions): GenLayout {
   const pieces: SetPiece[] = ['street', 'one_entry_compound', 'street', 't_junction', 'marksman_lane', 'cut_crossing', 'street', 'marksman_lane'];
   if (extStair && V >= 3 && ruinB.roof_holes.length && ruinB.floor_holes.length) {
     const rh = ruinB.roof_holes[0], fh = ruinB.floor_holes[0];
-    main.push(extStair.pos, extStair.top, rh); mainLayers.push('ground', 'roof:B_ruin', 'roof:B_ruin'); mainLinks.push({ at: main.length - 2, via: extStair.id });
-    main.push([rh[0], rh[1] + 1], fh.pos); mainLayers.push('floor:B_ruin:1', 'floor:B_ruin:1'); mainLinks.push({ at: main.length - 2, via: 'hole_roof_0' });
+    // a leg that ends at a hole stops on its RIM (the hole is open: nobody stands over it); the drop leg lands 1 m past its centre
+    const below: Vec2 = [rh[0], rh[1] + 1];
+    main.push(extStair.pos, extStair.top, holeRim(rh, extStair.top)); mainLayers.push('ground', 'roof:B_ruin', 'roof:B_ruin'); mainLinks.push({ at: main.length - 2, via: extStair.id });
+    main.push(below, holeRim(fh.pos, below)); mainLayers.push('floor:B_ruin:1', 'floor:B_ruin:1'); mainLinks.push({ at: main.length - 2, via: 'hole_roof_0' });
     main.push([fh.pos[0], fh.pos[1] + 1], [ruinW - 1.25, (ruinN + ruinS) / 2]); mainLayers.push('ground', 'ground'); mainLinks.push({ at: main.length - 2, via: 'hole_floor_0' });
     pieces.push('ruined_two_level');
   } else {
@@ -316,7 +323,8 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     // down the centre ramp (the link leg runs from the ramp's north end to the trench floor beside it), along the trench, up the last ladder
     variants.push({ id: 'V3_cut', pace: 'walk',
       points: [[xCentreX, yNorthSt + STREET_W / 2 - HUG], [xCentreX, cutN - 0.6], [xCentreX + 3.5, yCut], [out.foot[0] - 2, yCut], out.foot, out.top, [out.top[0], yInnerSt]],
-      layers: ['ground', 'ground', 'cut', 'cut', 'cut', 'ground', 'ground'], links: [{ at: 2, via: 'X_centre' }, { at: 5, via: out.id }], set_pieces: ['cut_crossing'] });
+      layers: ['ground', 'ground', 'cut', 'cut', 'cut', 'ground', 'ground'], links: [{ at: 2, via: 'X_centre' }, { at: 5, via: out.id }], set_pieces: ['cut_crossing'],
+      intent: 'kill_zone', intent_note: 'game designer 2026-11-02: the canal-floor variant is a deliberate kill zone - the trench floor is seen from both rims, the only ways out are the ramp and the ladders; a fast, risky shortcut, not a defect' });
   }
   // V4 - the inner street along the cut's south wall from the central crossing to the Steel Works' NW tower, then the ruin from BELOW
   // (its south door in, its west door out - the other way into the ruin than the mandatory route's)
@@ -423,7 +431,7 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     cut: d.cut ? { poly: d.cut.poly.map(U), level: d.cut.level, floor_z: d.cut.floor_z, crossings: d.cut.crossings.map((c) => ({ ...c, poly: c.poly.map(U) })) } : undefined,
     ladders: d.ladders.map((l) => ({ ...l, pos: U(l.pos), foot: U(l.foot), top: U(l.top), yaw: yawToUE(l.yaw) })),
     covers: d.covers.map((c) => ({ ...c, pos: U(c.pos), yaw: yawToUE(c.yaw) })),
-    zones: d.zones.map((z) => ({ id: z.id, kind: z.kind, set_piece: z.set_piece, poly: z.poly.map(U) })),
+    zones: d.zones.map((z) => ({ id: z.id, kind: z.kind, set_piece: z.set_piece, poly: z.poly.map(U), ...(z.intent ? { intent: z.intent } : {}) })),
     routes: d.routes.map((r) => ({ ...r, points: r.points.map(U) })),
     spawn_points: d.spawn_points.map((s) => ({ ...s, pos: U(s.pos) })),
     ambush_points: d.ambush_points.map((a) => ({ ...a, pos: U(a.pos) })),
@@ -444,6 +452,9 @@ const COVER_SIZE: Record<CoverKind, [number, number, number]> = {
 const yawToUE = (deg: number) => ((90 - deg) % 360 + 360) % 360;
 
 function unit(a: Vec2, b: Vec2): Vec2 { const L = dist(a, b) || 1; return [(a[0] - b[0]) / L, (a[1] - b[1]) / L]; }
+/** Where a leg towards an open hole stops: on the solid slab 0.8 m past the hole's edge (HOLE_HALF_CM), on the side it comes from. */
+export const HOLE_RIM_M = HOLE_HALF_CM / 100 + 0.8;
+function holeRim(hole: Vec2, from: Vec2): Vec2 { const u = unit(from, hole); return [hole[0] + u[0] * HOLE_RIM_M, hole[1] + u[1] * HOLE_RIM_M]; }
 function segDist(p: Vec2, a: Vec2, b: Vec2): number {
   const ab: Vec2 = [b[0] - a[0], b[1] - a[1]]; const l2 = ab[0] * ab[0] + ab[1] * ab[1];
   const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / l2));

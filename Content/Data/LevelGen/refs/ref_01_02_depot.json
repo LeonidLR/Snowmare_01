@@ -579,11 +579,12 @@
         177
       ],
       "mechanics": [
-        "killing zone: anyone inside is seen from both walls; crossings = chokepoints",
+        "killing zone BY DESIGN (game designer 2026-11-02): anyone inside is seen from both walls; crossings = chokepoints; the variant through it is intended, not a defect",
         "ladders L2-L4 in and out",
         "elevated vision from the walls' tops"
       ],
-      "level": -1
+      "level": -1,
+      "intent": "kill_zone"
     },
     {
       "id": "Z_S_INNER_STREET",
@@ -744,7 +745,7 @@
       "mechanics": [
         "the biggest facade: wall layout + wall slide along it",
         "roof overwatch via the pipe stair",
-        "the chimneys = towers"
+        "the chimneys = tall obstacles (never climbable)"
       ],
       "level": 0
     },
@@ -1302,8 +1303,8 @@
       "floors": 0,
       "enterable": false,
       "roof_access": false,
-      "note": "not climbable in the original; a tower candidate for us",
-      "level_top": 2,
+      "note": "not climbable in the original; game designer 2026-11-02: NOT a ladder tower in ours either - a tall obstacle (sight blocker) with no level of its own",
+      "level_top": null,
       "levels_walkable": []
     },
     {
@@ -1323,8 +1324,9 @@
       "floors": 0,
       "enterable": false,
       "roof_access": false,
-      "level_top": 2,
-      "levels_walkable": []
+      "level_top": null,
+      "levels_walkable": [],
+      "note": "not climbable in the original; game designer 2026-11-02: NOT a ladder tower in ours either - a tall obstacle (sight blocker) with no level of its own"
     },
     {
       "id": "B18_EastYardFence",
@@ -1587,7 +1589,8 @@
         "note": "down into the cut at the central crossing, along the trench floor (the killing zone - the walls' tops see all of it) and out by ladder L4 at the chimney onto the inner south street",
         "requires": [
           "L4"
-        ]
+        ],
+        "intent": "kill_zone"
       },
       {
         "id": "V4_inner_street",
@@ -1799,7 +1802,7 @@
     "open_square": 2,
     "cut_crossing": 2,
     "ladder_overwatch": 4,
-    "tower": 2,
+    "chimney": 2,
     "ruined_two_level": 1,
     "dead_end": 2,
     "junkyard_field": 1,
@@ -1847,8 +1850,8 @@
       3.5
     ],
     "height_levels": [
-      3,
-      4
+      4,
+      5
     ],
     "route_levels": [
       2,
@@ -1856,11 +1859,7 @@
     ]
   },
   "open_questions": [
-    "1. The mission's END point: the blue loop closes nowhere; this profile ends it at the south street's SW end by the tanks (62, 116).",
-    "2. Scale: B (177 x 124 m, architecture) is recommended; the FOT hex scale A gives 110 x 77 m. The generator's size parameter covers both.",
-    "3. The junkyard: the route never enters it; keep it as an optional ambush field beside the north street, or route a variant through it?",
-    "4. The chimneys: towers with ladders in our version (the original has none) - yes / no?",
-    "5. V3 through the cut: a deliberate 'killing zone' option for the player, or forbidden (fence the crossings so the cut is enemy ground only)?"
+    "answered 2026-11-02 - see designer_answers"
   ],
   "height_levels": {
     "step_m": 3,
@@ -1869,7 +1868,8 @@
       "-1": "-3 m: the cut floor (rail cut / canal), pits, craters, trenches, basements",
       "0": "0 m: streets, yards, compounds, the junkyard field",
       "1": "+3 m: first floors, low roofs (shed, offices, pump house), the pipe gallery platform, the cut's rims",
-      "2": "+6 m: second floors, the hall / warehouse / Steel Works roofs, the ruined factory's roof, tower tops"
+      "2": "+6 m: second floors, the ruined factory's roof (B13)",
+      "3": "+9 m: the tall halls' walkable roofs - the sawtooth hall, the warehouse, the Steel Works (game designer 2026-11-02: raised from +2 for the view from the roofs)"
     },
     "reference_parts": {
       "cut floor": -1,
@@ -1878,8 +1878,17 @@
       "B3 / B6 / B12 / B14 low buildings' roofs (not walkable)": 1,
       "B13 ruined factory upper floor": 1,
       "B13 roof with its holes": 2,
-      "B4 / B7 / B15 hall roofs (walkable in the greybox; the originals are 8-12 m)": 2,
-      "B17 chimneys (towers in our version)": 2
+      "B4 / B7 / B15 hall roofs (walkable; the originals are 8-12 m; game designer 2026-11-02: +3)": 3,
+      "B17 chimneys (obstacles, never climbable, no level of their own - game designer 2026-11-02)": null
     }
+  },
+  "designer_answers": {
+    "date": "2026-11-02",
+    "1_end": "the route ends at the SW dead end - keep it",
+    "2_scale": "scale B 177 x 124 m is OK",
+    "3_junkyard": "stays an ambush field beside the north street, not a route variant",
+    "4_chimneys": "factory chimneys are NOT ladder towers (no extra height); the generator never makes them climbable",
+    "5_cut_variant": "the canal-floor route variant IS a deliberate kill zone: marked intent kill_zone in the layout and the evaluation, the critics treat it as intended",
+    "6_hall_roofs": "the workshop / hall roofs go to level +3 = 9 m for the view from the roofs; ladders and stairs sized to the level difference"
   }
 }

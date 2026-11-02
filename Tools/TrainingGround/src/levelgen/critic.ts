@@ -61,11 +61,15 @@ export interface ClaudeCriticOptions {
 
 const SYSTEM = [
   'You are the level-design critic of a tactical squad game (Operation: Cold Silence, Unreal Engine; a Gorky 17 tribute: real time + tactical pause,',
-  'a 3-4 operative squad moving in formations - column / wedge / diamond, wall layouts along facades, corner peeks, covers, ladders onto roofs, towers).',
+  'a 3-4 operative squad moving in formations - column / wedge / diamond, wall layouts along facades, corner peeks, covers, ladders onto roofs).',
+  'Height levels are 3 m steps (-1 the cut floor, 0 the ground, +1 / +2 floors and low roofs, +3 = 9 m the roofs of the tall halls, for the view over the blocks).',
   'A generator produced an ORIGINAL greybox layout from a reference profile read off the game designer\'s annotated reference map. Judge whether the',
   'candidate FITS the reference\'s tactical profile: its scale and proportions, the placement of obstacles, barricades, enterable buildings, ladders,',
   'the dividing cut with few crossings, the long marksman lanes against the short-sightline compounds, the density of covers per zone, a mandatory',
-  'route through both halves with variants. It must NOT be a copy of the reference layout. Answer strict JSON only:',
+  'route through both halves with variants. It must NOT be a copy of the reference layout.',
+  'Game designer decisions you must respect (not defects): factory chimneys are tall obstacles, never climbable towers; a route marked intent "kill_zone"',
+  '(the variant along the cut floor) is a DELIBERATE killing zone - its exposure and few exits are intended; the junkyard is an ambush field the route',
+  'passes, not a route; the mandatory route ends in the SW dead end. Answer strict JSON only:',
   '{"fits": true|false, "confidence": 0..1, "reasons": ["<short, concrete, cite a metric or a place>", ...], "fixes": ["<one change each>", ...]}',
   '- at most 6 reasons and 4 fixes, no preamble.',
 ].join(' ');
@@ -75,8 +79,8 @@ export function criticPrompt(o: Pick<ClaudeCriticOptions, 'layoutName' | 'evalua
   const ev = o.evaluation;
   const brief = {
     layout: o.layoutName, score: ev.score, route: { completable: ev.route.completable, fail: ev.route.fail, length_m: ev.route.length_m, layers: ev.route.layers },
-    variants: ev.variants.map((v) => ({ id: v.id, ok: v.completable, length_m: v.length_m, fail: v.fail })),
-    mechanics: ev.mechanics, sightlines: ev.sightlines, ambush: ev.ambush, counts: ev.counts, similarity: ev.similarity,
+    variants: ev.variants.map((v) => ({ id: v.id, ok: v.completable, length_m: v.length_m, fail: v.fail, ...(v.intent ? { intent: v.intent, intended: true } : {}) })),
+    mechanics: ev.mechanics, sightlines: ev.sightlines, roof_views: ev.roofViews, kill_zones_intended: ev.killZones, ambush: ev.ambush, counts: ev.counts, similarity: ev.similarity,
   };
   const ref = { id: o.profile.id, size_m: o.profile.bounds.max, targets: o.profile.targets, set_pieces: o.profile.set_pieces, densities: o.profile.densities.covers_per_100m2,
     sightlines: o.profile.sightlines.stats_m, route_m: o.profile.route.main.length_m, variants: o.profile.route.variants.length, ladders: o.profile.ladders.length };
@@ -155,7 +159,7 @@ export const JEV_ASPECTS = ['route', 'scale', 'verticality', 'covers', 'sightlin
 /** The typed questions (one request, independent judgments over the same state; the typesafe-ai skill's guidance). */
 export function jevQuestions(): Record<string, unknown> {
   return {
-    fits: { type: 'noul', instructions: 'The candidate greybox layout fits the reference profile\'s tactical pattern: a completable mandatory route through both halves, long marksman lanes with short-sightline compounds between them, ladders and roofs, cover densities near the targets, the counts inside their target ranges.' },
+    fits: { type: 'noul', instructions: 'The candidate greybox layout fits the reference profile\'s tactical pattern: a completable mandatory route through both halves, long marksman lanes with short-sightline compounds between them, ladders and roofs (the tall halls\' roofs on +3 = 9 m for the view), cover densities near the targets, the counts inside their target ranges. A variant marked as an intended kill zone (the cut floor) is a deliberate design choice, not a defect; chimneys are obstacles, never towers.' },
     // a Score's criteria = the ordered levels (a list; the API rejects an object), each a concrete situation
     quality: { type: 'score', instructions: 'How good is this candidate as a level-design greybox for a tactical squad game (level 1 = worst, 5 = best)?', criteria: [
       'unusable: the mandatory route fails or the layout is empty', 'poor: the route works but most targets are missed and the mechanics are barely exercised',
@@ -170,7 +174,8 @@ export function jevQuestions(): Record<string, unknown> {
 export function jevState(ev: Evaluation, profile: Profile): Record<string, unknown> {
   return {
     candidate: { score: ev.score, route_completable: ev.route.completable, route_fail: ev.route.fail ?? null, route_length_m: ev.route.length_m, variants_ok: ev.variants.filter((v) => v.completable).length, variants: ev.variants.length,
-      mechanics: ev.mechanics, sightlines: ev.sightlines, ambush: ev.ambush, counts: ev.counts, similarity: ev.similarity.score, misses: ev.similarity.metrics.filter((m) => m.score < 1).map((m) => `${m.key} ${m.value} (target ${m.target?.join('..')})`) },
+      mechanics: ev.mechanics, sightlines: ev.sightlines, roof_views: ev.roofViews, intended_kill_zones: ev.killZones.map((k) => `${k.route}: ${k.in_zone_m} m, ${k.ways_out} ways out (intended)`),
+      ambush: ev.ambush, counts: ev.counts, similarity: ev.similarity.score, misses: ev.similarity.metrics.filter((m) => m.score < 1).map((m) => `${m.key} ${m.value} (target ${m.target?.join('..')})`) },
     reference: { id: profile.id, size_m: profile.bounds.max, targets: profile.targets, set_pieces: profile.set_pieces },
   };
 }
@@ -207,6 +212,7 @@ export function mockCritic(ev: Evaluation): CriticVerdict {
   const reasons = [
     ev.route.completable ? `the mandatory route completes (${ev.route.length_m} m)` : `the mandatory route FAILS: ${ev.route.fail}`,
     ...ev.variants.filter((v) => !v.completable).map((v) => `variant ${v.id} fails: ${v.fail}`),
+    ...ev.killZones.map((k) => `${k.route} is an intended kill zone (${k.in_zone_m} m, ${k.ways_out} ways out) - by design`),
     `similarity ${ev.similarity.score}${misses.length ? `; off target: ${misses.map((m) => `${m.key} ${m.value}`).join(', ')}` : ''}`,
     `ambush ${ev.ambush.per100m} concealed spots / 100 m`, `sightlines p50 ${ev.sightlines.p50_m} m, lanes ${ev.sightlines.lanes_over_80m}`,
   ].slice(0, 6);

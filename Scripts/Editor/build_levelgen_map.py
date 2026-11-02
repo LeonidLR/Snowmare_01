@@ -4,21 +4,25 @@
 Content/Data/LevelJson/<map>.json. Generalises Scripts/Editor/build_formation_lab.py (the same actor vocabulary: engine cubes
 with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBoundsVolume) for the extended format:
 
-  - HEIGHT LEVELS (game designer 2026-11-01): level n sits at n x 300 cm; the cut floor at level -1, floors / roofs at +1 / +2;
+  - HEIGHT LEVELS (game designer 2026-11-01): level n sits at n x 300 cm; the cut floor at level -1, floors / roofs at +1 / +2,
+    the tall halls' roofs at +3 = 9 m (2026-11-02);
   - the ground slab over the bounds + a margin, split round the cut's trench; the trench floor slab at -300; the retaining walls
     from the trench floor up to their parapet (the layout's cut_wall walls stand on the ground: height above ground, plus a
     below-ground part); crossing slabs (bridges) / ramps across the trench;
   - walls per level (a floor-n wall stands on its slab), fences (thin), building perimeters with their door gaps (already split by
     the generator);
   - buildings: floor slabs at every intermediate level (hollow buildings have none), the floor holes cut as four slabs round the
-    hole, the roof slab at level `floors` with its roof holes, a 1 m parapet round a walkable roof, stairwells / external stairs
-    as sloped cubes (ramps) between their levels;
+    hole, the roof slab at level `floors` with its roof holes, stairwells / external stairs as sloped cubes (ramps) between their
+    levels - the stairwell opening ENDS exactly at the ramp's top (no gap the navmesh cannot cross), an external stair's ramp ends
+    exactly where its flat landing starts (no step: the landing never overlaps the ramp's top) and the landing crosses the wall's
+    top onto the roof; factory chimneys (set-piece "chimney") are closed cylinders, never climbable;
   - ladders: ALadderActor at pos / yaw (Height = rungs x pitch), a plinth cube of plinth_cm under its foot so the top lands on
     the level (LADDERS.md 3.1 top tolerance 8 cm);
   - covers: cubes (silos: cylinders) at pos / yaw / size; PlayerStart at the spawn; the end as a TargetPoint "LevelGenEnd";
   - route TargetPoints per route point (label "<route>_<n>", tags LevelGen + LevelGenRoute + the route id + "layer=<layer>"),
     spawn / patrol / ambush TargetPoints (ambush points tagged CodexAmbushPoint for UCombatPressureSubsystem), zone labels;
-  - NavMeshBoundsVolume over the bounds from -4 m to +9 m; the saved RecastNavMesh actors are destroyed before the save
+  - NavMeshBoundsVolume over the bounds from a level below the cut to 3 m above the highest walkable level (+3 -> 12 m; a chimney's
+    top stays outside, so it never gets a navmesh island); the saved RecastNavMesh actors are destroyed before the save
     (docs/port/TRAPS.md) - bake with Scripts/bake_navmesh.ps1 -Map <map> afterwards.
 Idempotent per map (every actor tagged LevelGen is deleted and placed again); never touches another map (L_Demo01_B_FrozenFactory
 is not read or written). Lighting (sun, sky, fog) placed once (tag LevelGen_Env).
@@ -57,6 +61,8 @@ SLAB = 20.0            # cm, every floor / roof / ground slab
 MARGIN = 1000.0        # cm of ground plane round the layout bounds
 PARAPET_H = 100.0
 STAIR_W = 150.0
+STAIRWELL_HOLE = 350.0   # cm: the slab opening above a stairwell ramp's last 3.5 m (head room 0.7 x 350 - 20 = 2.25 m at its far edge)
+LANDING_TUCK = 5.0       # cm: the external landing starts this far before the ramp's top end (a 3.5 cm step, under the agent's 35 cm)
 CUBE = "/Engine/BasicShapes/Cube.Cube"
 CYLINDER = "/Engine/BasicShapes/Cylinder.Cylinder"
 GRID = "/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"
@@ -202,7 +208,10 @@ def plan(layout):
     else:
         specs.append(rect_slab("Ground", "Ground", gx0, gy0, gx1, gy1, gz))
     # ---- walls (per level; cut_wall parapets stand on the ground)
+    chimneys = {b["id"] for b in layout["buildings"] if b.get("set_piece") == "chimney"}
     for w in layout["walls"]:
+        if w.get("building") in chimneys:
+            continue  # the chimney's cylinder stands for its four 2D walls
         lvl = int(w.get("floor", 0))
         specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")]))
     # ---- buildings: slabs, holes, parapets, stairs
@@ -213,19 +222,26 @@ def plan(layout):
         holes_by_floor = {}
         for h in b.get("floor_holes", []):
             holes_by_floor.setdefault(int(h["floor"]), []).append(h["pos"])
-        # a stairwell opening in the slab a stair arrives on: above the ramp's last 3 m (an external stair lands over the roof's edge)
+        # a stairwell opening in the slab a stair arrives on: above the ramp's last 3.5 m, ENDING exactly at the ramp's top end so the
+        # ramp meets the slab edge (an opening past the top end leaves a gap the navmesh does not cross); an external stair lands on
+        # the roof over the wall instead
         for s in b.get("stairs", []):
             if s.get("kind") == "stairwell":
                 end = s["top"]
                 d = (end[0] - s["pos"][0], end[1] - s["pos"][1])
                 L = math.hypot(*d) or 1.0
-                holes_by_floor.setdefault(int(s["to"]), []).append((end[0] - d[0] / L * 150.0, end[1] - d[1] / L * 150.0, 175.0))
+                half = STAIRWELL_HOLE / 2.0
+                holes_by_floor.setdefault(int(s["to"]), []).append((end[0] - d[0] / L * half, end[1] - d[1] / L * half, half))
         if not hollow:
             for n in range(1, floors):
                 specs.extend(slabs_with_holes("%s_floor%d" % (b["id"], n), "Buildings/%s" % b["id"], bx0, by0, bx1, by1, gz + z_of(n), holes_by_floor.get(n, [])))
         if b.get("roof_walkable") or b.get("enterable"):
             roof_holes = list(b.get("roof_holes", [])) + holes_by_floor.get(floors, [])
             specs.extend(slabs_with_holes("%s_roof" % b["id"], "Buildings/%s" % b["id"], bx0, by0, bx1, by1, gz + z_of(floors), roof_holes))
+        elif b.get("set_piece") == "chimney":
+            # a factory chimney (game designer 2026-11-02): a closed cylinder, a sight blocker, never climbable (no ladder, no roof)
+            specs.append({"kind": "cylinder", "label": "%s_chimney" % b["id"], "folder": "Buildings/%s" % b["id"], "location": [(bx0 + bx1) / 2.0, (by0 + by1) / 2.0, gz + float(b["height"]) / 2.0],
+                          "yaw": 0.0, "pitch": 0.0, "scale": [(bx1 - bx0) / 100.0, (by1 - by0) / 100.0, float(b["height"]) / 100.0], "tags": ["chimney"]})
         else:
             specs.append(cube("%s_block" % b["id"], "Buildings/%s" % b["id"], [(bx0 + bx1) / 2.0, (by0 + by1) / 2.0, gz + float(b["height"]) / 2.0], [bx1 - bx0, by1 - by0, float(b["height"])]))
         # no parapet: the roof simply ends (the 2D layer's parapet is only the simulator's boundary); an external stair lands over the edge
@@ -233,10 +249,8 @@ def plan(layout):
             z0, z1 = gz + z_of(int(s["from"])), gz + z_of(int(s["to"]))
             if s.get("kind") == "external" and s.get("mid"):
                 specs.append(ramp("%s_%s" % (b["id"], s["id"]), "Buildings/%s" % b["id"], s["pos"], s["mid"], z0, z1))
-                mx, my = s["mid"]
-                tx, ty = s["top"]
-                specs.append(cube("%s_%s_landing" % (b["id"], s["id"]), "Buildings/%s" % b["id"], [(mx + tx) / 2.0, (my + ty) / 2.0, z1 - SLAB / 2.0],
-                                  [max(STAIR_W, abs(tx - mx) + STAIR_W), max(STAIR_W, abs(ty - my) + STAIR_W), SLAB]))
+                x0_, y0_, x1_, y1_ = landing_rect(s["pos"], s["mid"], s["top"])
+                specs.append(rect_slab("%s_%s_landing" % (b["id"], s["id"]), "Buildings/%s" % b["id"], x0_, y0_, x1_, y1_, z1))
             else:
                 specs.append(ramp("%s_%s" % (b["id"], s["id"]), "Buildings/%s" % b["id"], s["pos"], s["top"], z0, z1))
     # ---- ladders with their plinths
@@ -275,11 +289,43 @@ def plan(layout):
         cx = sum(p[0] for p in z["poly"]) / len(z["poly"])
         cy = sum(p[1] for p in z["poly"]) / len(z["poly"])
         specs.append({"kind": "text", "label": "Zone_" + z["id"], "folder": "Zones", "text": "%s (%s)" % (z["id"], z.get("set_piece", z["kind"])), "location": [cx, cy, gz + 3.0], "yaw": 0.0})
-    # ---- navmesh bounds: from a level below the cut to above the highest roof
-    nz0, nz1 = gz + z_of(-1) - 100.0, gz + z_of(3)
+    # ---- navmesh bounds: from a level below the cut to 3 m above the highest walkable level (a roof on it needs the agent's
+    # height above it inside the volume; a chimney's top stays outside)
+    nz0, nz1 = gz + z_of(-1) - 100.0, gz + z_of(max_walkable_level(layout)) + LEVEL_HEIGHT
     specs.append({"kind": "nav_bounds", "label": "LevelGen_NavMeshBounds", "folder": "Navigation", "location": [(gx0 + gx1) / 2.0, (gy0 + gy1) / 2.0, (nz0 + nz1) / 2.0], "yaw": 0.0,
                   "scale": [(gx1 - gx0) / 200.0, (gy1 - gy0) / 200.0, (nz1 - nz0) / 200.0]})
     return specs
+
+
+def landing_rect(pos, mid, top):
+    """The flat landing of an external stair (x0, y0, x1, y1): it STARTS at the ramp's top end `mid` (LANDING_TUCK before it, so
+    the ramp's last centimetres slide under it - never the 50 cm step a landing centred on `mid` leaves over the 35 deg ramp,
+    above the navmesh agent's 35 cm step), runs STAIR_W on in the ramp's direction and spans from the ramp's outer edge across the
+    wall's top to `top` on the roof + half a stair width."""
+    ux, uy = mid[0] - pos[0], mid[1] - pos[1]
+    L = math.hypot(ux, uy) or 1.0
+    ux, uy = ux / L, uy / L
+    vx, vy = -uy, ux
+    # the side of the ramp line the roof lies on (towards `top`)
+    side = 1.0 if (top[0] - mid[0]) * vx + (top[1] - mid[1]) * vy >= 0.0 else -1.0
+    reach = abs((top[0] - mid[0]) * vx + (top[1] - mid[1]) * vy) + STAIR_W / 2.0
+    pts = []
+    for a in (-LANDING_TUCK, STAIR_W):
+        for b in (-STAIR_W / 2.0 * side, reach * side):
+            pts.append((mid[0] + ux * a + vx * b, mid[1] + uy * a + vy * b))
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def max_walkable_level(layout):
+    """The highest level anyone walks on: a walkable roof's level, an enterable building's top floor, the ground."""
+    best = 0
+    for b in layout["buildings"]:
+        if b.get("roof_walkable"):
+            best = max(best, int(b["floors"]))
+        elif b.get("enterable"):
+            best = max(best, int(b["floors"]) - 1)
+    return best
 
 
 def layer_level(layout, layer):
@@ -313,7 +359,7 @@ def level_json(layout, map_path):
         "intro_dialogue": False,
         "cheats": {"immortal": True, "infinite_ammo": True},
         "levelgen_layout": "Content/Data/LevelGen/accepted/%s.json" % layout["name"],
-        "minimap": {"floors_cm": [300, 600]},
+        "minimap": {"floors_cm": [z_of(n) for n in range(1, max_walkable_level(layout) + 1)]},
         "waves": [{"wave_index": 1, "name": "Wave 1", "max_simultaneous_enemies": 2,
                    "spawns": [{"enemy_type": "FROSTBITTEN", "count": 2, "spawn_lane": "ANY", "spawn_delay_sec": 1, "initial_delay_sec": 0}],
                    "wave_modifiers": {"enemy_hp_mult": 1, "enemy_damage_mult": 1, "enemy_speed_mult": 1, "cold_drain_mult": 1}}],

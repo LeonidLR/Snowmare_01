@@ -9,11 +9,13 @@ import { fileURLToPath } from 'node:url';
 import { configValues } from '../movement/config.ts';
 import { validateLayout } from '../movement/layout.ts';
 import { auditLayout } from '../movement/levelAudit.ts';
+import { criticPrompt, mockCritic } from './critic.ts';
 import { evaluateLayout } from './evaluate.ts';
-import { generateLayout } from './generate.ts';
+import { generateLayout, HOLE_RIM_M } from './generate.ts';
 import type { Profile } from './profile.ts';
 import { fromUE, targetScore, toUE, validateProfile } from './profile.ts';
-import { ladderForLevels, layerLevel, layersOf, LEVEL_HEIGHT, levelsOf, mandatoryRoute, toFormationLayout, validateGenLayout } from './schema.ts';
+import type { GenLayout } from './schema.ts';
+import { HALL_ROOF_LEVEL, HOLE_HALF_CM, ladderForLevels, layerLevel, layersOf, LEVEL_HEIGHT, levelsOf, mandatoryRoute, STAIR_RUN_PER_RISE, toFormationLayout, validateGenLayout } from './schema.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const profile = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/refs/ref_01_02_depot.json'), 'utf8')) as Profile;
@@ -118,23 +120,139 @@ test('verticality: the layers, the links of the variants, and a route changing l
   assert.deepEqual(validateGenLayout(flat), []);
 });
 
-test('height levels: 3 m steps, ladders sized to the level difference, every layer on a level, the route visits -1 / 0 / +1 / +2 in the ruin and the cut variant', () => {
+test('height levels: 3 m steps, ladders sized to the level difference, every layer on a level (the hall roofs on +3), the route visits 0 / +1 / +2 in the ruin', () => {
   assert.equal(LEVEL_HEIGHT, 300);
   assert.deepEqual(ladderForLevels(1), { rungs: 8, plinth_cm: 8.8 });
   assert.deepEqual(ladderForLevels(2), { rungs: 16, plinth_cm: 17.6 });
   const l = generateLayout({ profile, seed: 4 });
-  assert.deepEqual(levelsOf(l), [-1, 0, 1, 2]);
+  assert.deepEqual(levelsOf(l), [-1, 0, 1, 2, 3]);
   assert.equal(layerLevel(l, 'cut'), -1);
   assert.equal(layerLevel(l, 'floor:B_ruin:1'), 1);
   assert.equal(layerLevel(l, 'roof:B_ruin'), 2);
   assert.equal(layerLevel(l, 'roof:B_gallery'), 1);
   for (const ld of l.ladders) assert.ok(Math.abs(ld.rungs * 36.4 + ld.plinth_cm - (ld.level_to - ld.level_from) * LEVEL_HEIGHT) < 1, ld.id);
   assert.ok(l.buildings.filter((b) => b.roof_walkable).every((b) => b.height === b.floors * LEVEL_HEIGHT), 'walkable roofs sit on their level');
-  assert.ok(l.buildings.some((b) => b.hollow && b.stairs.some((s) => s.from === 0 && s.to === 2)), 'a hollow hall climbs ground -> roof in one flight');
+  assert.ok(l.buildings.some((b) => b.hollow && b.stairs.some((s) => s.from === 0 && s.to === HALL_ROOF_LEVEL)), 'a hollow hall climbs ground -> roof in one flight');
   assert.equal(l.cut?.floor_z, -300);
   const ev = evaluateLayout({ layout: l, profile, config, noSim: true });
   assert.deepEqual(ev.mechanics.levels, [0, 1, 2]);
-  assert.equal(ev.counts.height_levels, 4);
+  assert.equal(ev.counts.height_levels, 5);
+});
+
+const HALLS = ['B_hall_n', 'B_warehouse', 'B_steelworks'];
+const flatDist = (a: [number, number], b: [number, number]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const hallWalls = (l: GenLayout, building: string) => l.walls.filter((w) => w.building === building && (w.floor ?? 0) === 0 && w.kind === 'building');
+
+test('game designer 2026-11-02 (6): the hall roofs sit on +3 = 9 m, their stairwells and the ruin external stair are sized to the level difference', () => {
+  assert.equal(HALL_ROOF_LEVEL, 3);
+  for (let seed = 1; seed <= 8; seed++) {
+    const l = generateLayout({ profile, seed });
+    for (const id of HALLS) {
+      const b = l.buildings.find((x) => x.id === id)!;
+      assert.equal(b.height, 900, `${seed} ${id} height`);
+      assert.equal(layerLevel(l, `roof:${id}`), 3, `${seed} ${id} roof level`);
+      const flight = b.stairs.find((s) => s.kind === 'stairwell')!;
+      assert.equal(flight.to - flight.from, 3, `${seed} ${id}: one flight ground -> +3`);
+      // 35 deg: run = 1.43 x 9 m
+      assert.ok(Math.abs(flatDist(flight.pos, flight.top) - 3 * STAIR_RUN_PER_RISE * LEVEL_HEIGHT) < 2, `${seed} ${id} run ${flatDist(flight.pos, flight.top)}`);
+      assert.ok(hallWalls(l, id).every((w) => w.height === 900), `${seed} ${id}: the walls reach the roof`);
+    }
+    const ruin = l.buildings.find((x) => x.id === 'B_ruin')!;
+    assert.equal(ruin.floors, 2, 'the ruin keeps its two storeys (+2)');
+    const ext = ruin.stairs.find((s) => s.kind === 'external')!;
+    assert.equal(ext.to, ruin.floors);
+    assert.ok(Math.abs(flatDist(ext.pos, ext.mid!) - ruin.floors * STAIR_RUN_PER_RISE * LEVEL_HEIGHT) < 2, 'the external ramp is sized to its rise');
+    for (const ld of l.ladders) assert.ok(Math.abs(ld.rungs * 36.4 + ld.plinth_cm - (ld.level_to - ld.level_from) * LEVEL_HEIGHT) < 1, `${seed} ${ld.id}`);
+  }
+  assert.deepEqual(ladderForLevels(3), { rungs: 24, plinth_cm: 26.4 }, 'a 9 m ladder, should one ever be placed');
+});
+
+test('game designer 2026-11-02 (4): factory chimneys are never climbable towers - no ladder, no walkable top, no level - for every seed and verticality', () => {
+  for (let seed = 1; seed <= 6; seed++) {
+    for (const verticality of [0, 1, 2, 3] as const) {
+      const l = generateLayout({ profile, seed, params: { verticality } });
+      const chimneys = l.buildings.filter((b) => b.set_piece === 'chimney');
+      assert.equal(chimneys.length, 2, `seed ${seed} V${verticality}: two chimneys`);
+      for (const c of chimneys) {
+        assert.ok(!c.roof_walkable && !c.enterable && c.stairs.length === 0, `${c.id} closed`);
+        assert.ok(!l.ladders.some((ld) => ld.to.includes(c.id) || ld.from.includes(c.id)), `${c.id}: no ladder`);
+        assert.ok(!layersOf(l).some((x) => x.includes(c.id)), `${c.id}: no layer`);
+        assert.ok(c.height >= 1500, `${c.id}: a tall sight blocker`);
+      }
+      assert.ok(!l.buildings.some((b) => b.set_piece === 'tower'), 'no tower set-piece is generated');
+      assert.deepEqual(validateGenLayout(l), [], `seed ${seed} V${verticality}`);
+    }
+  }
+  // the validator refuses a climbable chimney
+  const bad = structuredClone(generateLayout({ profile, seed: 1 }));
+  const c = bad.buildings.find((b) => b.set_piece === 'chimney')!;
+  c.roof_walkable = true;
+  bad.ladders.push({ ...bad.ladders[0], id: 'LAD_bad', to: `roof:${c.id}`, level_to: 1 });
+  const errors = validateGenLayout(bad);
+  assert.ok(errors.some((e) => e.includes(`${c.id}: a chimney is an obstacle`)), errors.join('; '));
+  assert.ok(errors.some((e) => e.includes(`${c.id}: a chimney never gets a ladder`)), errors.join('; '));
+});
+
+test('game designer 2026-11-02 (5): the canal-floor variant is a deliberate kill zone - marked in the layout, reported as intended, never a defect', () => {
+  const l = generateLayout({ profile, seed: 1 });
+  const v3 = l.routes.find((r) => r.id === 'V3_cut')!;
+  assert.equal(v3.intent, 'kill_zone');
+  assert.match(v3.intent_note ?? '', /deliberate kill zone/);
+  assert.equal(l.zones.find((z) => z.id === 'Z_cut')?.intent, 'kill_zone');
+  assert.ok(!mandatoryRoute(l).intent, 'the mandatory route is not a kill zone');
+  const ev = evaluateLayout({ layout: l, profile, config, noSim: true });
+  const k = ev.killZones.find((x) => x.route === 'V3_cut')!;
+  assert.ok(k && k.intended && k.completable);
+  assert.ok(k.share > 0.5 && k.in_zone_m > 30, `in the zone ${k.in_zone_m} m (${k.share})`);
+  assert.ok(k.ways_out >= 2, 'the ramp + the ladders');
+  assert.equal(ev.variants.find((v) => v.id === 'V3_cut')?.intent, 'kill_zone');
+  assert.ok(ev.summary.some((line) => line.startsWith('kill zone (INTENDED, not a defect): V3_cut')));
+  assert.ok(ev.summary.some((line) => line.includes('V3_cut ok') && line.includes('[kill zone by design]')));
+  // the critics are told
+  assert.match(criticPrompt({ layoutName: l.name, evaluation: ev, profile }), /"intent":"kill_zone"/);
+  assert.ok(mockCritic(ev).reasons.some((r) => r.includes('intended kill zone')));
+  // the mandatory route can never be one
+  const bad = structuredClone(l);
+  mandatoryRoute(bad).intent = 'kill_zone';
+  assert.ok(validateGenLayout(bad).some((e) => e.includes('never a kill zone')));
+});
+
+test('elevated vision: a hall roof on +3 sees over the 6-9 m blocks - further than the same roof on +2 and than the street', () => {
+  const l = generateLayout({ profile, seed: 1 });
+  const ev = evaluateLayout({ layout: l, profile, config, noSim: true });
+  const at3 = ev.roofViews.find((r) => r.id === 'B_hall_n')!;
+  assert.equal(at3.level, 3);
+  // the same hall with its roof on +2 (the greybox before 2026-11-02)
+  const low = structuredClone(l);
+  const b = low.buildings.find((x) => x.id === 'B_hall_n')!;
+  b.floors = 2; b.height = 600; b.stairs = b.stairs.map((s) => ({ ...s, to: 2 }));
+  for (const w of hallWalls(low, 'B_hall_n')) w.height = 600;
+  const at2 = evaluateLayout({ layout: low, profile, config, noSim: true }).roofViews.find((r) => r.id === 'B_hall_n')!;
+  assert.equal(at2.level, 2);
+  assert.ok(at3.mean_m > at2.mean_m, `+3 mean ${at3.mean_m} m vs +2 ${at2.mean_m} m`);
+  assert.ok(at3.open_share > at2.open_share, `+3 open ${at3.open_share} vs +2 ${at2.open_share}`);
+  assert.ok(at3.mean_m > ev.sightlines.open_p50_m, 'the roof is more open than the street');
+  for (const id of HALLS) assert.ok(ev.roofViews.some((r) => r.id === id && r.level === 3));
+  assert.ok(!ev.roofViews.some((r) => r.id.startsWith('B_chimney')));
+  assert.ok(ev.summary.some((line) => line.startsWith('roof views')));
+});
+
+test('a route leg towards an open roof / floor hole stops on its rim (the hole is open in the built map), the drop lands under the hole', () => {
+  for (let seed = 1; seed <= 8; seed++) {
+    const l = generateLayout({ profile, seed });
+    const r = mandatoryRoute(l);
+    const ruin = l.buildings.find((b) => b.id === 'B_ruin')!;
+    const holeLinks = (r.links ?? []).filter((x) => x.via.startsWith('hole_'));
+    assert.equal(holeLinks.length, 2, `seed ${seed}: the roof and the floor drop`);
+    for (const k of holeLinks) {
+      const m = /^hole_(roof|floor)_(\d+)$/.exec(k.via)!;
+      const hole = m[1] === 'roof' ? ruin.roof_holes[Number(m[2])] : ruin.floor_holes[Number(m[2])].pos;
+      const rim = r.points[k.at - 1];
+      const d = flatDist(rim, hole);
+      assert.ok(d >= HOLE_HALF_CM + 35 && Math.abs(d - HOLE_RIM_M * 100) < 2, `seed ${seed} ${k.via}: the rim ${d} cm from the hole centre`);
+      assert.ok(flatDist(r.points[k.at], hole) < HOLE_HALF_CM, `seed ${seed} ${k.via}: the drop lands under the hole`);
+    }
+  }
 });
 
 test('a route point moved into a closed building is reported as the failing leg (an enterable one is reachable through its doors)', () => {

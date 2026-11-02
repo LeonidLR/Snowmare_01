@@ -38,14 +38,17 @@ per-level evaluation and the UE builder use them (`Tools/TrainingGround/src/leve
 | -1 | -3 m | the cut floor (rail cut / canal); pits, craters, trenches, basements in general |
 | 0 | 0 m | streets, yards, compounds, the junkyard field, the park, the east yard |
 | +1 | +3 m | the pipe gallery platform (B2), the ruined factory's upper floor (B13), the low buildings' roofs (not walkable), the cut's rims |
-| +2 | +6 m | the ruined factory's roof with its holes, the hall / warehouse / Steel Works roofs (walkable in the greybox; the originals are 8-12 m and the generator snaps them to +2), tower tops (the chimneys) |
+| +2 | +6 m | the ruined factory's roof with its holes |
+| +3 | +9 m | the hall / warehouse / Steel Works roofs (walkable; the originals are 8-12 m - game designer 2026-11-02: raised from +2 to +3 "for the view from the roofs") |
+
+The chimneys (B17) are NOT on any level: tall obstacles, never climbable (game designer 2026-11-02).
 
 Links between levels: the three cut ladders (-1 -> 0), L1 (0 -> +1), the ruin's external stair (0 -> +2), its roof holes
-(+2 -> +1) and floor holes (+1 -> 0), the stairwells of the halls (0 -> +2), the two cut crossings (ramps / bridges at 0 over
--1). A ladder over one level = 8 rungs x 36.4 cm + an 8.8 cm plinth under its foot (two levels: 16 rungs + 17.6 cm), so the top
+(+2 -> +1) and floor holes (+1 -> 0), the stairwells of the halls (0 -> +3, one 9 m flight, 12.9 m run), the two cut crossings
+(ramps / bridges at 0 over -1). A ladder over one level = 8 rungs x 36.4 cm + an 8.8 cm plinth under its foot (two levels: 16 rungs + 17.6 cm), so the top
 lands exactly on the level (LADDERS.md 3.1). The profile's `zones[].level`, `buildings[].level_top` / `levels_walkable`,
-`ladders[].levels` carry the classification; the generator targets `height_levels` 3-4 on the map and `route_levels` 2-4 on
-the mandatory route.
+`ladders[].levels` carry the classification; the generator targets `height_levels` 4-5 on the map (-1 / 0 / +1 / +2 / +3 since
+2026-11-02) and `route_levels` 2-4 on the mandatory route.
 
 ## 2. The map in one paragraph
 
@@ -193,10 +196,15 @@ of the route runs through short-sightline zones (compounds, yards, the ruin, the
 Route 300-420 m with 3-5 variants; 4-7 ladders; 3-5 walkable roofs; 2-4 stairwells; 6-10 enterable buildings; 2-3 cut
 crossings; 2-3 lanes over 80 m; 35-55 % of the route in short-sightline zones; mean cover density 2.0-3.5 per 100 m² (the
 junkyard 9, streets 2, compounds 3.5, open 1). Set-pieces: 3 alleys, 3 T-junctions, 5 facades, 4 one-entry compounds, 2 open
-squares, 2 cut crossings, 4 ladder overwatches, 2 towers, 1 ruined two-level factory, 2 dead ends, 1 junkyard field, 2
-marksman lanes.
+squares, 2 cut crossings, 4 ladder overwatches, 2 chimneys (obstacles, not towers - 2026-11-02), 1 ruined two-level factory,
+2 dead ends, 1 junkyard field, 2 marksman lanes.
 
-## 10. Open questions for the game designer
+## 10. Open questions for the game designer - ANSWERED 2026-11-02
+
+The answers (the profile's `designer_answers`; LEVEL_GENERATOR.md section 10): 1 the SW dead end stays the end; 2 scale B; 3 the
+junkyard stays an ambush field, not a route; 4 the chimneys are NOT ladder towers (no extra height); 5 the canal-floor variant IS
+a deliberate kill zone (marked `intent: kill_zone`, treated as intended); 6 the hall roofs go to +3 = 9 m for the view. The
+questions as asked:
 
 1. **The END.** The blue loop has no explicit end; the profile ends the mandatory route at the south street's SW end by the
    tanks (62, 116). Right place? (Alternatives: back at the start, the park, the ruined factory.)

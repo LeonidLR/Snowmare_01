@@ -29,6 +29,18 @@ export const MIN_RUNGS = 7;
 /** The cut's floor = level -1. */
 export const CUT_LEVEL = -1;
 export const CUT_DEPTH = LEVEL_HEIGHT;
+/**
+ * The level of the tall halls' walkable roofs (the sawtooth hall, the warehouse, the Steel Works): +3 = 9 m (game designer
+ * 2026-11-02, "for the view from the roofs"; the reference draws them 8-12 m tall). The ruin keeps its two storeys (+2).
+ */
+export const HALL_ROOF_LEVEL = 3;
+/** Half the side of a square roof / floor hole, cm (the builder cuts the slab 2 x this wide). */
+export const HOLE_HALF_CM = 120;
+/** A factory chimney's height, cm: a tall obstacle that blocks sight, never a height level (designer 2026-11-02: not a ladder tower). */
+export const CHIMNEY_HEIGHT_CM = 2000;
+/** Route intents a designer can mark: 'kill_zone' = a deliberately exposed passage (the cut floor), intended, never a defect. */
+export const ROUTE_INTENTS = ['kill_zone'] as const;
+export type RouteIntent = (typeof ROUTE_INTENTS)[number];
 
 /**
  * A ladder over `levels` height levels: rungs = the whole rungs that fit (8 for 3 m, 16 for 6 m), the rest (8.8 / 17.6 cm) is a
@@ -45,7 +57,12 @@ export type WallKind = (typeof WALL_KINDS)[number];
 
 /** The set-piece vocabulary of the grammar (docs/design/levelgen/LEVEL_GENERATOR.md section 3). */
 export const SET_PIECES = ['alley', 't_junction', 'facade', 'one_entry_compound', 'open_square', 'cut_crossing', 'ladder_overwatch',
-  'tower', 'ruined_two_level', 'dead_end', 'junkyard_field', 'marksman_lane', 'industrial_hall', 'warehouse', 'tank_farm', 'street'] as const;
+  'tower', 'chimney', 'ruined_two_level', 'dead_end', 'junkyard_field', 'marksman_lane', 'industrial_hall', 'warehouse', 'tank_farm', 'street'] as const;
+/**
+ * Set-pieces that are obstacles only: never enterable, never a walkable roof, no ladder / stair onto them (a factory chimney -
+ * game designer 2026-11-02: "chimneys are NOT ladder towers"). validateGenLayout enforces it.
+ */
+export const NEVER_CLIMBABLE: readonly SetPiece[] = ['chimney'];
 export type SetPiece = (typeof SET_PIECES)[number];
 
 export const COVER_KINDS = ['jersey', 'sandbag', 'crate', 'wreck', 'barrel', 'silo', 'boiler'] as const;
@@ -132,6 +149,13 @@ export interface GenRoute extends LayoutRoute {
   links?: { at: number; via: string }[];
   /** Which set-pieces the route passes, in order (for the report). */
   set_pieces?: SetPiece[];
+  /**
+   * The designer's intent for the route: 'kill_zone' = a deliberately exposed passage (V3 along the cut floor: seen from both
+   * rims, few exits). The evaluation reports its exposure as INTENDED and the critics are told not to count it as a defect.
+   */
+  intent?: RouteIntent;
+  /** Why (shown with the intent in the report and the critic prompt). */
+  intent_note?: string;
 }
 
 export interface SpawnPoint { id: string; pos: Vec2; kind: 'edge' | 'patrol' | 'ambush' }
@@ -154,7 +178,7 @@ export interface GenLayout {
   cut?: GenCut;
   ladders: GenLadder[];
   covers: GenCover[];
-  zones: (LayoutZone & { set_piece?: SetPiece })[];
+  zones: (LayoutZone & { set_piece?: SetPiece; /** 'kill_zone': the zone is a deliberate killing ground (the cut). */ intent?: RouteIntent })[];
   routes: GenRoute[];
   spawn_points: SpawnPoint[];
   ambush_points: { id: string; pos: Vec2 }[];
@@ -198,6 +222,10 @@ export function validateGenLayout(data: unknown): string[] {
     if (!isNum(b.floors) || b.floors < 1) e.push(`building ${b.id}: floors >= 1`);
     if (b.roof_walkable && isNum(b.floors) && b.height !== b.floors * LEVEL_HEIGHT) e.push(`building ${b.id}: a walkable roof sits on level ${b.floors} = ${b.floors * LEVEL_HEIGHT} cm, height is ${b.height}`);
     for (const s of b.stairs ?? []) if (s.to > b.floors) e.push(`building ${b.id}: stair ${s.id} leads to floor ${s.to} of ${b.floors}`);
+    if (NEVER_CLIMBABLE.includes(b.set_piece)) {
+      if (b.roof_walkable || b.enterable || (b.stairs ?? []).length) e.push(`building ${b.id}: a ${b.set_piece} is an obstacle - no walkable roof, no entry, no stairs`);
+      if ((l.ladders ?? []).some((ld) => ld.to === `roof:${b.id}` || ld.from === `roof:${b.id}` || ld.to.startsWith(`floor:${b.id}:`))) e.push(`building ${b.id}: a ${b.set_piece} never gets a ladder`);
+    }
   }
   for (const ld of l.ladders ?? []) {
     if (!isNum(ld.rungs) || ld.rungs < MIN_RUNGS) e.push(`ladder ${ld.id}: >= ${MIN_RUNGS} rungs (a shorter ladder is decoration, LADDERS.md)`);
@@ -211,6 +239,8 @@ export function validateGenLayout(data: unknown): string[] {
   for (const r of l.routes ?? []) {
     if (r.layers && r.layers.length !== r.points.length) e.push(`route ${r.id}: layers must match points (${r.layers.length} vs ${r.points.length})`);
     for (const k of r.links ?? []) if (k.at < 1 || k.at >= r.points.length) e.push(`route ${r.id}: link at ${k.at} out of range`);
+    if (r.intent !== undefined && !(ROUTE_INTENTS as readonly string[]).includes(r.intent)) e.push(`route ${r.id}: unknown intent "${r.intent}"`);
+    if (r.intent === 'kill_zone' && r.mandatory) e.push(`route ${r.id}: the mandatory route is never a kill zone (a variant the player chooses)`);
   }
   return e;
 }

@@ -142,7 +142,7 @@ def draw_layout(layout, ppm=8, floor=None):
             (ax, ay), (bx, by) = corners
             corners = [[ax, ay], [bx, ay], [bx, by], [ax, by]]
         fp = [P(p) for p in corners]
-        fill = (150, 120, 100) if b.get("height", 0) >= 600 else (170, 150, 120)
+        fill = (70, 70, 78) if b.get("set_piece") == "chimney" else (150, 120, 100) if b.get("height", 0) >= 600 else (170, 150, 120)
         d.polygon(fp, fill=fill, outline=(255, 255, 255))
         if b.get("roof_walkable"):
             d.polygon(fp, outline=(80, 220, 120))
@@ -171,7 +171,11 @@ def draw_layout(layout, ppm=8, floor=None):
         d.rectangle([q[0] - 4, q[1] - 7, q[0] + 4, q[1] + 7], fill=(255, 230, 0), outline=(0, 0, 0))
     for r in layout.get("routes", []):
         main = r.get("mandatory", r["id"] == layout.get("mandatory_route"))
-        d.line([P(p) for p in r["points"]], fill=(0, 140, 255) if main else (90, 200, 255), width=5 if main else 2)
+        kill = r.get("intent") == "kill_zone"  # the designer's deliberate kill zone (V3 along the cut floor)
+        d.line([P(p) for p in r["points"]], fill=(0, 140, 255) if main else (255, 110, 110) if kill else (90, 200, 255), width=5 if main else 2)
+        if kill:
+            q = P(r["points"][len(r["points"]) // 2])
+            d.text((q[0] + 4, q[1] + 4), r["id"] + " kill zone (intended)", fill=(255, 140, 140), font=FONT)
     for sp in layout.get("spawn_points", []):
         q = P(sp["pos"])
         d.polygon([(q[0], q[1] - 6), (q[0] + 6, q[1] + 5), (q[0] - 6, q[1] + 5)], fill=(255, 80, 80))
@@ -187,9 +191,9 @@ def draw_layout(layout, ppm=8, floor=None):
         d.rectangle([q[0] - 9, q[1] - 9, q[0] + 9, q[1] + 9], outline=(255, 80, 80), width=3)
     d.text((6, H + 6), f"{layout['name']}  {int((y1 - y0) / 100)} x {int((x1 - x0) / 100)} m  seed {layout.get('seed', '-')}  floor {floor if floor is not None else 'all'}",
            fill=(255, 255, 0), font=FONT)
-    d.text((6, H + 22), "blue = mandatory route, light = variants, yellow = ladders, red triangles = spawns, orange rings = ambush points, red loops = patrols",
+    d.text((6, H + 22), "blue = mandatory route, light = variants (red = intended kill zone), yellow = ladders, red triangles = spawns, orange rings = ambush points, red loops = patrols",
            fill=(200, 200, 200), font=FONT)
-    d.text((6, H + 38), "white = buildings (green = walkable roof, orange squares = roof holes, green squares = stairs), dark blue = the cut", fill=(200, 200, 200), font=FONT)
+    d.text((6, H + 38), "white = buildings (+n = roof level, 3 m steps; green = walkable roof, orange squares = roof holes, green squares = stairs), dark grey = chimneys, dark blue = the cut", fill=(200, 200, 200), font=FONT)
     return img
 
 

@@ -6,16 +6,20 @@
 //       terrain class (open / corridor / wall_run / gap_run / corner / wall_end) and per formation is counted, plus corner
 //       watches, wall layouts, doorways crossed, ladder / stair / hole uses, roofs / floors visited;
 //   (3) sightlines: along the route the longest free line of sight per sample (36 rays against the layer's walls + the tall
-//       covers) -> p50 / p90 / max, the share of short-sightline samples (< 25 m), the number of lanes >= 80 m;
+//       covers) -> p50 / p90 / max, the share of short-sightline samples (< 40 m), the number of lanes >= 80 m; on a ROOF the eye
+//       stands at the roof's level + 1.6 m and only obstacles reaching that height block it (ELEVATED vision); the view from every
+//       walkable roof is reported on its own (roofViews: the halls on +3 = 9 m see over the 6-9 m blocks);
 //   (4) ambush-spot quality (the AmbushSpotRules ideas): the layout's ambush points that are 14-30 m from the route AND concealed
 //       from the nearest route sample, per 100 m of route, and how many route samples a coordinated plan (3+ concealed spots in
 //       3+ sectors) could be laid round;
 //   (5) profile similarity: every generator target of the reference profile scored 1 inside its range, decaying outside.
+//   (6) kill zones: a route the designer marked intent 'kill_zone' (V3 along the cut floor) is reported as INTENDED - how far it
+//       runs through the killing ground and how many ways out the ground has - never as a defect (game designer 2026-11-02).
 // The report is <= 30 lines (the only thing an agent reads); the full Evaluation JSON feeds the department page and the critics.
 
 import type { FormationConfig } from '../movement/config.ts';
 import type { Segment, Vec2 } from '../movement/geometry.ts';
-import { closestOnSegment, dirOf, dist, raycastWalls, segmentBlocked, sub, yawOf } from '../movement/geometry.ts';
+import { closestOnSegment, dirOf, dist, pointInPoly, raycastWalls, segmentBlocked, sub, yawOf } from '../movement/geometry.ts';
 import type { Formation, Layout, LayoutRoute } from '../movement/layout.ts';
 import { wallSegments } from '../movement/layout.ts';
 import { AGENT_RADIUS, NavGrid } from '../movement/nav.ts';
@@ -23,11 +27,15 @@ import type { TerrainClass } from '../movement/rules.ts';
 import { simulate } from '../movement/sim.ts';
 import type { Profile } from './profile.ts';
 import { targetScore } from './profile.ts';
-import type { GenLayout, GenRoute } from './schema.ts';
-import { layerLevel, layersOf, levelsOf, mandatoryRoute, rect, toFormationLayout } from './schema.ts';
+import type { GenLayout, GenRoute, RouteIntent } from './schema.ts';
+import { layerLevel, layersOf, levelsOf, levelZ, mandatoryRoute, NEVER_CLIMBABLE, rect, toFormationLayout } from './schema.ts';
 
 export interface LegReport { index: number; layer: string; ok: boolean; reason?: string; detour_cm?: number; link?: string }
-export interface RouteReport { id: string; mandatory: boolean; completable: boolean; legs: LegReport[]; length_m: number; fail?: string; layers: string[] }
+export interface RouteReport { id: string; mandatory: boolean; completable: boolean; legs: LegReport[]; length_m: number; fail?: string; layers: string[]; intent?: RouteIntent; intent_note?: string }
+/** The view from one walkable roof (elevated eye: the roof's level + 1.6 m; only obstacles reaching that height block). */
+export interface RoofView { id: string; level: number; longest_m: number; mean_m: number; open_share: number }
+/** A route the designer marked as a deliberate kill zone, reported as intended. */
+export interface KillZoneReport { route: string; intended: true; note: string; in_zone_m: number; share: number; ways_out: number; completable: boolean }
 
 export interface Evaluation {
   layout: string;
@@ -52,6 +60,10 @@ export interface Evaluation {
     simSeconds: number;
   };
   sightlines: { p50_m: number; p90_m: number; max_m: number; short_share: number; lanes_over_80m: number; samples: number; open_p50_m: number };
+  /** The view from every walkable roof, best first (the elevated-vision check of the raised hall roofs). */
+  roofViews: RoofView[];
+  /** Routes marked intent 'kill_zone': intended exposure, not a defect. */
+  killZones: KillZoneReport[];
   ambush: { points: number; concealed: number; per100m: number; coordinatedSamples: number; coordinatedShare: number };
   counts: Record<string, number>;
   similarity: { score: number; metrics: { key: string; value: number; target?: [number, number]; score: number }[] };
@@ -77,6 +89,10 @@ const RAYS = 36;
 const MAX_LOS_CM = 20000;
 /** A link's two ends must lie within this of the leg's ends (a cut crossing is a 5 m ramp; a ladder's foot / top points). */
 const LINK_REACH_CM = 500;
+/** A standing man's eye above the surface he stands on, cm (the elevated-vision rule). */
+const EYE_CM = 160;
+/** A roof ray counts as OPEN when it runs at least this far (m). */
+const ROOF_OPEN_M = 60;
 
 export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const l = o.layout;
@@ -94,13 +110,24 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
     return g;
   };
   // tall covers block sight (wrecks, silos, boilers); low ones (jersey, sandbags, barrels, crates) do not block a standing man's view
-  const tallCoverSegs: Segment[] = l.covers.filter((c) => c.size[2] >= 140).flatMap((c) => {
-    const hx = c.size[0] / 2, hy = c.size[1] / 2, d = dirOf(c.yaw), r: Vec2 = [-d[1], d[0]];
-    const corner = (sx: number, sy: number): Vec2 => [c.pos[0] + d[0] * hx * sx + r[0] * hy * sy, c.pos[1] + d[1] * hx * sx + r[1] * hy * sy];
-    const p = [corner(1, 1), corner(-1, 1), corner(-1, -1), corner(1, -1)];
-    return p.map((a, i) => ({ a, b: p[(i + 1) % 4], thickness: 0 }));
-  });
-  const sightWalls = (layer: string): Segment[] => [...wallSegments(layerLayout(layer)), ...(layer === 'ground' ? tallCoverSegs : [])];
+  const tallCoverSegs: Segment[] = l.covers.filter((c) => c.size[2] >= 140).flatMap(coverSegs);
+  // ELEVATED vision: every obstacle with the height of its top (walls on their level, buildings, covers); an eye on a roof is blocked
+  // only by what reaches its height (a wall below the eye does not stop the line - the in-game vision cone draws the dead zone
+  // behind a roof's edge, the metric keeps the longest line). Chimneys (20 m) and silos (12 m) block even the +3 roofs.
+  const tops: { seg: Segment; top: number }[] = [
+    ...l.walls.map((w) => ({ seg: { a: w.a, b: w.b, thickness: w.thickness }, top: levelZ(w.floor ?? 0) + w.height })),
+    ...l.covers.flatMap((c) => coverSegs(c).map((seg) => ({ seg, top: c.size[2] }))),
+  ];
+  const elevatedWalls = new Map<number, Segment[]>();
+  const blockersAbove = (eyeZ: number): Segment[] => {
+    let s = elevatedWalls.get(eyeZ);
+    if (!s) { s = tops.filter((o) => o.top >= eyeZ).map((o) => o.seg); elevatedWalls.set(eyeZ, s); }
+    return s;
+  };
+  const sightWalls = (layer: string): Segment[] => {
+    if (layer.startsWith('roof:')) return blockersAbove(levelZ(layerLevel(l, layer)) + EYE_CM);
+    return [...wallSegments(layerLayout(layer)), ...(layer === 'ground' ? tallCoverSegs : [])];
+  };
 
   const routes = l.routes.map((r) => checkRoute(l, r, layers, layerNav));
   const main = routes.find((r) => r.mandatory) ?? routes[0];
@@ -161,17 +188,19 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
     if (dv[1] > 1e-9) t = Math.min(t, (bmax[1] - p[1]) / dv[1]); else if (dv[1] < -1e-9) t = Math.min(t, (bmin[1] - p[1]) / dv[1]);
     return Math.max(0, t);
   };
-  for (const s of samples) {
-    const walls = sightWalls(s.layer);
-    let best = 0, sum = 0;
+  const rays = (pos: Vec2, walls: Segment[]): number[] => {
+    const out: number[] = [];
     for (let k = 0; k < RAYS; k++) {
       const dirv = dirOf((k * 360) / RAYS);
-      const edge = toEdge(s.pos, dirv);
-      const d = raycastWalls(s.pos, dirv, walls, edge);
-      const v = Number.isFinite(d) ? d : edge;
-      best = Math.max(best, v); sum += v;
+      const edge = toEdge(pos, dirv);
+      const d = raycastWalls(pos, dirv, walls, edge);
+      out.push(Number.isFinite(d) ? d : edge);
     }
-    losMean.push(sum / RAYS / 100); losMax.push(best / 100);
+    return out;
+  };
+  for (const s of samples) {
+    const r = rays(s.pos, sightWalls(s.layer));
+    losMean.push(r.reduce((a, b) => a + b, 0) / RAYS / 100); losMax.push(Math.max(...r) / 100);
   }
   // p50 / p90 / short share from the longest ray (how far the squad can see / be seen); the mean ray = openness
   const sorted = [...losMax].sort((a, b) => a - b);
@@ -185,6 +214,30 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const meanSorted = [...losMean].sort((a, b) => a - b);
   const sight = { p50_m: round(q(0.5), 1), p90_m: round(q(0.9), 1), max_m: round(Math.max(0, ...losMax), 1), short_share: round(losMax.filter((v) => v < SHORT_LOS_M).length / Math.max(1, losMax.length), 3), lanes_over_80m: lanes, samples: losMax.length,
     open_p50_m: round(meanSorted[Math.floor(meanSorted.length / 2)] ?? 0, 1) };
+
+  // ---- the view from every walkable roof: the centre + four points 1.5 m inside the corners, 36 rays each --------------------
+  const roofViews: RoofView[] = l.buildings.filter((b) => b.roof_walkable && !NEVER_CLIMBABLE.includes(b.set_piece)).map((b) => {
+    const level = layerLevel(l, `roof:${b.id}`);
+    const walls = blockersAbove(levelZ(level) + EYE_CM);
+    const [[x0, y0], [x1, y1]] = b.footprint;
+    const inset = Math.min(150, (x1 - x0) / 4, (y1 - y0) / 4);
+    const pts: Vec2[] = [rect.centre(b.footprint), [x0 + inset, y0 + inset], [x1 - inset, y0 + inset], [x0 + inset, y1 - inset], [x1 - inset, y1 - inset]];
+    const all = pts.flatMap((p) => rays(p, walls));
+    return { id: b.id, level, longest_m: round(Math.max(...all) / 100, 1), mean_m: round(all.reduce((a, v) => a + v, 0) / all.length / 100, 1),
+      open_share: round(all.filter((v) => v >= ROOF_OPEN_M * 100).length / all.length, 3) };
+  }).sort((a, b) => b.mean_m - a.mean_m);
+
+  // ---- kill zones the designer marked: intended exposure (how far through the killing ground, how many ways out) ------------
+  const killPolys = l.zones.filter((z) => z.intent === 'kill_zone').map((z) => z.poly);
+  const waysOut = (l.cut?.crossings.filter((c) => c.kind === 'ramp').length ?? 0) + l.ladders.filter((x) => x.from === 'cut').length;
+  const killZones: KillZoneReport[] = l.routes.filter((r) => r.intent === 'kill_zone').map((r) => {
+    const lay = r.layers ?? r.points.map(() => 'ground');
+    const smp = sampleRoute(r, lay, SAMPLE_CM);
+    const inZone = smp.filter((s) => s.layer === 'cut' || killPolys.some((poly) => pointInPoly(s.pos, poly))).length;
+    const rep = routes.find((x) => x.id === r.id);
+    return { route: r.id, intended: true, note: r.intent_note ?? 'marked kill_zone by the designer', in_zone_m: round((inZone * SAMPLE_CM) / 100), share: round(inZone / Math.max(1, smp.length), 3),
+      ways_out: waysOut, completable: rep?.completable ?? false };
+  });
 
   // ---- ambush spots: concealed from the nearest route sample, 14-30 m off it ---------------------------------------------
   const groundWalls = sightWalls('ground');
@@ -216,8 +269,9 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   // ---- counts + similarity ------------------------------------------------------------------------------------------------
   const area_m2 = ((l.bounds.max[0] - l.bounds.min[0]) / 100) * ((l.bounds.max[1] - l.bounds.min[1]) / 100);
   const counts: Record<string, number> = {
-    buildings: l.buildings.filter((b) => b.set_piece !== 'tower').length,
+    buildings: l.buildings.filter((b) => b.set_piece !== 'tower' && b.set_piece !== 'chimney').length,
     towers: l.buildings.filter((b) => b.set_piece === 'tower').length,
+    chimneys: l.buildings.filter((b) => b.set_piece === 'chimney').length,
     enterable_buildings: l.buildings.filter((b) => b.enterable).length,
     roofs_walkable: l.buildings.filter((b) => b.roof_walkable && b.set_piece !== 'tower').length,
     stairwells: l.buildings.filter((b) => b.stairs.some((s) => s.kind === 'stairwell')).length,
@@ -246,7 +300,7 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const terrainClasses = Object.values(mech.terrain).filter((v) => (v ?? 0) >= 0.05).length;
   const score = round(0.4 * (main.completable ? 1 : 0) + 0.2 * similarity.score + 0.2 * Math.min(1, terrainClasses / 5) + 0.2 * Math.min(1, ambush.per100m / 3), 3);
 
-  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, ambush, counts, similarity, score, summary: [] };
+  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, score, summary: [] };
   ev.summary = renderSummary(ev);
   return ev;
 }
@@ -279,7 +333,8 @@ function checkRoute(l: GenLayout, r: GenRoute, layers: string[], layerNav: (laye
     const L = path.slice(1).reduce((acc, p, k) => acc + dist(path[k], p), 0);
     legs.push({ index: i, layer: la, ok: true, detour_cm: Math.round(L - dist(a, b)) });
   }
-  return { id: r.id, mandatory: !!r.mandatory, completable: !fail, legs, length_m: round(polyLength(r.points) / 100), fail, layers: [...new Set(lay)] };
+  return { id: r.id, mandatory: !!r.mandatory, completable: !fail, legs, length_m: round(polyLength(r.points) / 100), fail, layers: [...new Set(lay)],
+    ...(r.intent ? { intent: r.intent, intent_note: r.intent_note } : {}) };
 }
 
 /** The two ends of a link: a ladder (pos / top), a stair (pos / top), a cut crossing (its polygon centre twice), a hole (its position twice). */
@@ -313,6 +368,14 @@ function sampleRoute(r: GenRoute, layers: string[], step: number): { pos: Vec2; 
   return out;
 }
 
+/** The four sides of a cover's footprint (yawed rectangle). */
+function coverSegs(c: GenLayout['covers'][number]): Segment[] {
+  const hx = c.size[0] / 2, hy = c.size[1] / 2, d = dirOf(c.yaw), r: Vec2 = [-d[1], d[0]];
+  const corner = (sx: number, sy: number): Vec2 => [c.pos[0] + d[0] * hx * sx + r[0] * hy * sy, c.pos[1] + d[1] * hx * sx + r[1] * hy * sy];
+  const p = [corner(1, 1), corner(-1, 1), corner(-1, -1), corner(1, -1)];
+  return p.map((a, i) => ({ a, b: p[(i + 1) % 4], thickness: 0 }));
+}
+
 const polyLength = (pts: Vec2[]) => pts.slice(1).reduce((n, p, i) => n + dist(pts[i], p), 0);
 const nearestDist = (p: Vec2, pts: Vec2[]) => pts.slice(1).reduce((m, b, i) => Math.min(m, dist(p, closestOnSegment(p, pts[i], b).point)), Infinity);
 const centroid = (poly: Vec2[]): Vec2 => [poly.reduce((s, p) => s + p[0], 0) / poly.length, poly.reduce((s, p) => s + p[1], 0) / poly.length];
@@ -324,11 +387,13 @@ export function renderSummary(ev: Evaluation): string[] {
   const lines = [
     `# Level generator - ${ev.layout} (profile ${ev.profile}, seed ${ev.seed})`,
     `score ${ev.score} | route ${ev.route.completable ? 'COMPLETABLE' : `FAILS at ${ev.route.fail}`} | ${ev.route.length_m} m, ${ev.route.legs.length} legs, layers ${ev.route.layers.join(' / ')}`,
-    `variants: ${ev.variants.map((v) => `${v.id} ${v.completable ? 'ok' : `FAILS (${v.fail})`} ${v.length_m} m`).join('; ') || 'none'}`,
+    `variants: ${ev.variants.map((v) => `${v.id} ${v.completable ? 'ok' : `FAILS (${v.fail})`} ${v.length_m} m${v.intent === 'kill_zone' ? ' [kill zone by design]' : ''}`).join('; ') || 'none'}`,
     `terrain: ${Object.entries(ev.mechanics.terrain).map(([k, v]) => `${k} ${pct(v)}`).join(', ') || '(no sim)'}`,
     `formation: ${Object.entries(ev.mechanics.formation).map(([k, v]) => `${k} ${pct(v)}`).join(', ') || '(no sim)'}`,
     `mechanics: corner watches ${ev.mechanics.cornerWatches}, wall layouts ${ev.mechanics.wallLayouts}, doorways ${ev.mechanics.doorways}, ladders ${ev.mechanics.ladderUses}, stairs ${ev.mechanics.stairUses}, holes ${ev.mechanics.holeUses}, roofs ${ev.mechanics.roofs}, floors ${ev.mechanics.floors}; height levels on the route ${ev.mechanics.levels.map((v) => (v > 0 ? `+${v}` : String(v))).join(' / ') || '0'} (${Object.entries(ev.mechanics.levelShare).map(([k, v]) => `${k}: ${pct(v)}`).join(', ')})`,
     `sightlines (longest ray per route sample): p50 ${ev.sightlines.p50_m} m, p90 ${ev.sightlines.p90_m} m, max ${ev.sightlines.max_m} m, short (< ${SHORT_LOS_M} m) ${pct(ev.sightlines.short_share)}, lanes >= ${LANE_M} m: ${ev.sightlines.lanes_over_80m}, openness (mean ray) p50 ${ev.sightlines.open_p50_m} m`,
+    `roof views (eye on the roof + 1.6 m, lower obstacles do not block): ${ev.roofViews.map((r) => `${r.id} +${r.level} mean ${r.mean_m} m / longest ${r.longest_m} m / open ${pct(r.open_share)}`).join('; ') || 'no walkable roof'}`,
+    ...ev.killZones.map((k) => `kill zone (INTENDED, not a defect): ${k.route} ${k.in_zone_m} m on the killing ground (${pct(k.share)} of it), ${k.ways_out} ways out - ${k.note}`),
     `ambush: ${ev.ambush.concealed} / ${ev.ambush.points} spots concealed 14-30 m off the route (${ev.ambush.per100m} per 100 m), coordinated plan possible at ${pct(ev.ambush.coordinatedShare)} of the route`,
     `counts: ${Object.entries(ev.counts).map(([k, v]) => `${k} ${v}`).join(', ')}`,
     `similarity to the profile ${ev.similarity.score}: ${ev.similarity.metrics.map((m) => `${m.key} ${m.value}${m.target ? ` [${m.target[0]}..${m.target[1]}]` : ''}${m.score < 1 ? ` x${m.score}` : ''}`).join(', ')}`,

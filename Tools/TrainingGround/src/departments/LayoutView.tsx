@@ -10,7 +10,7 @@ import type { GenLayout } from '../levelgen/schema';
 const SET_TINT: Record<string, string> = {
   street: '#787882', marksman_lane: '#8a7070', t_junction: '#8c8c5a', alley: '#969664', facade: '#5a463c', one_entry_compound: '#966e3c',
   industrial_hall: '#6e5032', warehouse: '#786450', junkyard_field: '#aa5a28', cut_crossing: '#283c6e', tank_farm: '#825a46', open_square: '#3c8246',
-  ruined_two_level: '#963c32', dead_end: '#aa5050', ladder_overwatch: '#82643c', tower: '#646e82',
+  ruined_two_level: '#963c32', dead_end: '#aa5050', ladder_overwatch: '#82643c', tower: '#646e82', chimney: '#46464e',
 };
 
 export interface LayoutViewHandle { toPngBase64: () => string | null }
@@ -68,14 +68,14 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     for (const b of layout.buildings) {
       if (!showBuilding(b.id, b.floors)) continue;
       const pts = rectPts(b.footprint);
-      g.fillStyle = b.set_piece === 'tower' ? '#646e82' : b.height >= 600 ? '#967864' : '#aa9678'; g.strokeStyle = '#ffffff'; g.lineWidth = 1.2;
+      g.fillStyle = b.set_piece === 'chimney' ? '#46464e' : b.set_piece === 'tower' ? '#646e82' : b.height >= 600 ? '#967864' : '#aa9678'; g.strokeStyle = '#ffffff'; g.lineWidth = 1.2;
       poly(pts); g.fill(); g.stroke();
       if (b.roof_walkable) { g.strokeStyle = '#50dc78'; g.lineWidth = 1.5; const q = P(b.footprint[0]), r = P(b.footprint[1]); g.strokeRect(Math.min(q[0], r[0]) + 3, Math.min(q[1], r[1]) + 3, Math.abs(r[0] - q[0]) - 6, Math.abs(r[1] - q[1]) - 6); }
       for (const d of b.doors) { const q = P(d.pos); g.fillStyle = '#fff'; g.beginPath(); g.arc(q[0], q[1], 2.5, 0, Math.PI * 2); g.fill(); }
       for (const hpos of b.roof_holes) { const q = P(hpos); g.strokeStyle = '#ff783c'; g.lineWidth = 2; g.strokeRect(q[0] - 4, q[1] - 4, 8, 8); }
       for (const st of b.stairs) { const q = P(st.pos); g.fillStyle = '#50dc78'; g.fillRect(q[0] - 3.5, q[1] - 3.5, 7, 7); const t = P(st.top); g.strokeStyle = '#50dc78'; g.lineWidth = 1; g.beginPath(); g.moveTo(q[0], q[1]); g.lineTo(t[0], t[1]); g.stroke(); }
       const q = P(b.footprint[1]);
-      g.fillStyle = '#fff'; g.font = '9px ui-monospace, monospace'; g.textAlign = 'left'; g.fillText(b.id, Math.min(P(b.footprint[0])[0], q[0]) + 3, Math.min(P(b.footprint[0])[1], q[1]) + 10);
+      g.fillStyle = '#fff'; g.font = '9px ui-monospace, monospace'; g.textAlign = 'left'; g.fillText(b.roof_walkable ? `${b.id} +${b.floors}` : b.id, Math.min(P(b.footprint[0])[0], q[0]) + 3, Math.min(P(b.footprint[0])[1], q[1]) + 10);
     }
     // walls
     for (const wl of layout.walls) {
@@ -101,7 +101,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
       g.strokeStyle = main ? '#008cff' : '#5ac8ff'; g.lineWidth = main ? 4 : 1.5; g.setLineDash(main ? [] : [5, 4]);
       g.beginPath(); r.points.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.stroke(); g.setLineDash([]);
       if (main) r.points.forEach((p, i) => { const q = P(p); g.fillStyle = '#008cff'; g.beginPath(); g.arc(q[0], q[1], 3.5, 0, Math.PI * 2); g.fill(); g.fillStyle = '#c8e6ff'; g.font = '9px ui-monospace, monospace'; g.fillText(String(i), q[0] + 5, q[1] - 4); });
-      if (!main) { const p = r.points[Math.floor(r.points.length / 2)]; const q = P(p); g.fillStyle = '#5ac8ff'; g.font = '9px ui-monospace, monospace'; g.fillText(r.id, q[0] + 4, q[1] + 10); }
+      if (!main) { const p = r.points[Math.floor(r.points.length / 2)]; const q = P(p); g.fillStyle = r.intent === 'kill_zone' ? '#ff6464' : '#5ac8ff'; g.font = '9px ui-monospace, monospace'; g.fillText(r.intent === 'kill_zone' ? `${r.id} (kill zone, intended)` : r.id, q[0] + 4, q[1] + 10); }
     }
     for (const sp of layout.spawn_points) { const q = P(sp.pos); g.fillStyle = '#ff5050'; g.beginPath(); g.moveTo(q[0], q[1] - 5); g.lineTo(q[0] + 5, q[1] + 4); g.lineTo(q[0] - 5, q[1] + 4); g.closePath(); g.fill(); }
     for (const ap of layout.ambush_points) { const q = P(ap.pos); g.strokeStyle = '#ffa03c'; g.lineWidth = 1.5; g.beginPath(); g.arc(q[0], q[1], 3.5, 0, Math.PI * 2); g.stroke(); }

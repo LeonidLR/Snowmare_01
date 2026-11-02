@@ -395,7 +395,7 @@
     5700,
     550
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_hall_n"
@@ -410,7 +410,7 @@
     3200,
     -2150
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_hall_n"
@@ -425,7 +425,7 @@
     3200,
     -1918
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_hall_n"
@@ -440,7 +440,7 @@
     3200,
     550
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_hall_n"
@@ -455,7 +455,7 @@
     3200,
     -3250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_hall_n"
@@ -470,7 +470,7 @@
     3200,
     550
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_hall_n"
@@ -630,7 +630,7 @@
     5000,
     3250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_warehouse"
@@ -645,7 +645,7 @@
     1800,
     1882
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_warehouse"
@@ -660,7 +660,7 @@
     1800,
     3250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_warehouse"
@@ -675,7 +675,7 @@
     2898,
     850
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_warehouse"
@@ -690,7 +690,7 @@
     1800,
     850
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_warehouse"
@@ -705,7 +705,7 @@
     1800,
     3250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_warehouse"
@@ -1360,7 +1360,7 @@
     -1400,
     7250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_steelworks"
@@ -1375,7 +1375,7 @@
     -4500,
     5307
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_steelworks"
@@ -1390,7 +1390,7 @@
     -4500,
     7250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_steelworks"
@@ -1405,7 +1405,7 @@
     -2232,
     4250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_steelworks"
@@ -1420,7 +1420,7 @@
     -4500,
     4250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_steelworks"
@@ -1435,13 +1435,13 @@
     -4500,
     7250
    ],
-   "height": 600,
+   "height": 900,
    "thickness": 30,
    "kind": "building",
    "building": "B_steelworks"
   },
   {
-   "id": "B_tower_0_N_0",
+   "id": "B_chimney_0_N_0",
    "a": [
     -966,
     7334
@@ -1450,13 +1450,13 @@
     -966,
     7634
    ],
-   "height": 600,
+   "height": 2000,
    "thickness": 30,
    "kind": "building",
-   "building": "B_tower_0"
+   "building": "B_chimney_0"
   },
   {
-   "id": "B_tower_0_S_0",
+   "id": "B_chimney_0_S_0",
    "a": [
     -1266,
     7334
@@ -1465,13 +1465,13 @@
     -1266,
     7634
    ],
-   "height": 600,
+   "height": 2000,
    "thickness": 30,
    "kind": "building",
-   "building": "B_tower_0"
+   "building": "B_chimney_0"
   },
   {
-   "id": "B_tower_0_W_0",
+   "id": "B_chimney_0_W_0",
    "a": [
     -966,
     7334
@@ -1480,13 +1480,13 @@
     -1266,
     7334
    ],
-   "height": 600,
+   "height": 2000,
    "thickness": 30,
    "kind": "building",
-   "building": "B_tower_0"
+   "building": "B_chimney_0"
   },
   {
-   "id": "B_tower_0_E_0",
+   "id": "B_chimney_0_E_0",
    "a": [
     -966,
     7634
@@ -1495,13 +1495,13 @@
     -1266,
     7634
    ],
-   "height": 600,
+   "height": 2000,
    "thickness": 30,
    "kind": "building",
-   "building": "B_tower_0"
+   "building": "B_chimney_0"
   },
   {
-   "id": "B_tower_1_N_0",
+   "id": "B_chimney_1_N_0",
    "a": [
     -4075,
     3500
@@ -1510,13 +1510,13 @@
     -4075,
     3800
    ],
-   "height": 600,
+   "height": 2000,
    "thickness": 30,
    "kind": "building",
-   "building": "B_tower_1"
+   "building": "B_chimney_1"
   },
   {
-   "id": "B_tower_1_S_0",
+   "id": "B_chimney_1_S_0",
    "a": [
     -4375,
     3500
@@ -1525,40 +1525,40 @@
     -4375,
     3800
    ],
-   "height": 600,
+   "height": 2000,
    "thickness": 30,
    "kind": "building",
-   "building": "B_tower_1"
+   "building": "B_chimney_1"
   },
   {
-   "id": "B_tower_1_W_0",
-   "a": [
-    -4075,
-    3500
-   ],
-   "b": [
-    -4375,
-    3500
-   ],
-   "height": 600,
-   "thickness": 30,
-   "kind": "building",
-   "building": "B_tower_1"
-  },
-  {
-   "id": "B_tower_1_E_0",
+   "id": "B_chimney_1_W_0",
    "a": [
     -4075,
+    3500
+   ],
+   "b": [
+    -4375,
+    3500
+   ],
+   "height": 2000,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_chimney_1"
+  },
+  {
+   "id": "B_chimney_1_E_0",
+   "a": [
+    -4075,
     3800
    ],
    "b": [
     -4375,
     3800
    ],
-   "height": 600,
+   "height": 2000,
    "thickness": 30,
    "kind": "building",
-   "building": "B_tower_1"
+   "building": "B_chimney_1"
   },
   {
    "id": "F_east_N_0",
@@ -1719,8 +1719,9 @@
      550
     ]
    ],
-   "height": 600,
-   "floors": 2,
+   "height": 900,
+   "floors": 3,
+   "hollow": true,
    "enterable": true,
    "roof_walkable": true,
    "doors": [
@@ -1747,25 +1748,11 @@
       -3130
      ],
      "from": 0,
-     "to": 1,
+     "to": 3,
      "kind": "stairwell",
      "top": [
       5550,
-      -2701
-     ]
-    },
-    {
-     "id": "B_hall_n_stair_1",
-     "pos": [
-      5350,
-      -3130
-     ],
-     "from": 1,
-     "to": 2,
-     "kind": "stairwell",
-     "top": [
-      5350,
-      -2701
+      -1843
      ]
     }
    ],
@@ -1815,8 +1802,8 @@
      3250
     ]
    ],
-   "height": 600,
-   "floors": 2,
+   "height": 900,
+   "floors": 3,
    "hollow": true,
    "enterable": true,
    "roof_walkable": true,
@@ -1844,10 +1831,10 @@
       1000
      ],
      "from": 0,
-     "to": 2,
+     "to": 3,
      "kind": "stairwell",
      "top": [
-      4022,
+      3593,
       1000
      ]
     }
@@ -2029,8 +2016,8 @@
      7250
     ]
    ],
-   "height": 600,
-   "floors": 2,
+   "height": 900,
+   "floors": 3,
    "hollow": true,
    "enterable": true,
    "roof_walkable": true,
@@ -2058,10 +2045,10 @@
       4400
      ],
      "from": 0,
-     "to": 2,
+     "to": 3,
      "kind": "stairwell",
      "top": [
-      -2378,
+      -2807,
       4400
      ]
     }
@@ -2071,7 +2058,7 @@
    "set_piece": "industrial_hall"
   },
   {
-   "id": "B_tower_0",
+   "id": "B_chimney_0",
    "footprint": [
     [
      -1266,
@@ -2082,19 +2069,19 @@
      7634
     ]
    ],
-   "height": 600,
-   "floors": 2,
+   "height": 2000,
+   "floors": 1,
    "hollow": true,
    "enterable": false,
-   "roof_walkable": true,
+   "roof_walkable": false,
    "doors": [],
    "stairs": [],
    "roof_holes": [],
    "floor_holes": [],
-   "set_piece": "tower"
+   "set_piece": "chimney"
   },
   {
-   "id": "B_tower_1",
+   "id": "B_chimney_1",
    "footprint": [
     [
      -4375,
@@ -2105,16 +2092,16 @@
      3800
     ]
    ],
-   "height": 600,
-   "floors": 2,
+   "height": 2000,
+   "floors": 1,
    "hollow": true,
    "enterable": false,
-   "roof_walkable": true,
+   "roof_walkable": false,
    "doors": [],
    "stairs": [],
    "roof_holes": [],
    "floor_holes": [],
-   "set_piece": "tower"
+   "set_piece": "chimney"
   }
  ],
  "cut": {
@@ -2272,50 +2259,6 @@
    "top": [
     4100,
     -7810
-   ]
-  },
-  {
-   "id": "LAD_B_tower_0",
-   "pos": [
-    -1147,
-    7324
-   ],
-   "yaw": 270,
-   "rungs": 16,
-   "plinth_cm": 17.6,
-   "from": "ground",
-   "to": "roof:B_tower_0",
-   "level_from": 0,
-   "level_to": 2,
-   "foot": [
-    -1147,
-    7224
-   ],
-   "top": [
-    -1147,
-    7434
-   ]
-  },
-  {
-   "id": "LAD_B_tower_1",
-   "pos": [
-    -4385,
-    3602
-   ],
-   "yaw": 0,
-   "rungs": 16,
-   "plinth_cm": 17.6,
-   "from": "ground",
-   "to": "roof:B_tower_1",
-   "level_from": 0,
-   "level_to": 2,
-   "foot": [
-    -4485,
-    3602
-   ],
-   "top": [
-    -4275,
-    3602
    ]
   }
  ],
@@ -5109,16 +5052,16 @@
   {
    "id": "COV_206",
    "pos": [
-    -4306,
-    3905
+    -4543,
+    3563
    ],
    "yaw": 270,
    "size": [
-    120,
-    120,
-    110
+    60,
+    60,
+    90
    ],
-   "kind": "crate"
+   "kind": "barrel"
   },
   {
    "id": "COV_207",
@@ -6207,7 +6150,8 @@
      -317,
      -8850
     ]
-   ]
+   ],
+   "intent": "kill_zone"
   },
   {
    "id": "Z_pipeyard",
@@ -6682,16 +6626,16 @@
      2480
     ],
     [
-     -2720,
-     1720
+     -2874,
+     1847
     ],
     [
      -2820,
      1720
     ],
     [
-     -3260,
-     1815
+     -3065,
+     1773
     ],
     [
      -3360,
@@ -6883,7 +6827,7 @@
      1000
     ],
     [
-     4022,
+     3593,
      1000
     ],
     [
@@ -6972,7 +6916,9 @@
    ],
    "set_pieces": [
     "cut_crossing"
-   ]
+   ],
+   "intent": "kill_zone",
+   "intent_note": "game designer 2026-11-02: the canal-floor variant is a deliberate kill zone - the trench floor is seen from both rims, the only ways out are the ramp and the ladders; a fast, risky shortcut, not a defect"
   }
  ],
  "spawn_points": [
