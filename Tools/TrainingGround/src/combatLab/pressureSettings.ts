@@ -360,10 +360,18 @@ export function upsertPreset(file: CombatLabPresetFile, preset: CombatLabPreset)
   return { ...file, presets };
 }
 
-/** The id of the preset these settings equal (undefined = custom). */
-export function matchingPreset(file: CombatLabPresetFile | null, settings: CombatLabSettings): string | undefined {
-  return file?.presets.find((p) => JSON.stringify(sortKeys(p.pressure)) === JSON.stringify(sortKeys(settings.pressure))
-    && p.cheats.immortal === settings.cheats.immortal && p.cheats.infinite_ammo === settings.cheats.infinite_ammo)?.id;
+/** The lab map: the default of the combat lab and the map whose own ambush points the shared presets carry. */
+export const LAB_MAP_ID = 'L_FormationLabCombat';
+
+/** The id of the preset these settings equal (undefined = custom; `mapId` = the map the settings belong to). */
+export function matchingPreset(file: CombatLabPresetFile | null, settings: CombatLabSettings, mapId: string = LAB_MAP_ID): string | undefined {
+  // ambush.points are map data: on a map other than the lab (or for a preset saved without points) they are not compared.
+  const strip = (pressure: JsonObject, ignore: boolean) => (ignore && getAt(pressure, 'ambush.points') !== undefined ? setAt(pressure, 'ambush.points', undefined) : pressure);
+  return file?.presets.find((p) => {
+    const ignore = mapId !== LAB_MAP_ID || getAt(p.pressure, 'ambush.points') === undefined;
+    return JSON.stringify(sortKeys(strip(p.pressure, ignore))) === JSON.stringify(sortKeys(strip(settings.pressure, ignore)))
+      && p.cheats.immortal === settings.cheats.immortal && p.cheats.infinite_ammo === settings.cheats.infinite_ammo;
+  })?.id;
 }
 
 function sortKeys(value: unknown): unknown {

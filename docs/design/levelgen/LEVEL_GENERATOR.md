@@ -20,7 +20,10 @@
 | Department page | `src/departments/LevelGenDepartment.tsx` + `LayoutView.tsx` (the canvas); server `server/levelgenApi.ts` (`/api/levelgen/*`) |
 | Renders | `Scripts/Tools/levelgen_render.py` (profile schematic over the un-skewed reference, candidate top-down, the critic's reference JPEG) |
 | UE builder | `Scripts/Editor/build_levelgen_map.py` (section 7; generalises `build_formation_lab.py`) -> `/Game/Maps/Generated/L_Gen_<profile>_<seed>` + `Content/Data/LevelJson/L_Gen_<...>.json` |
-| In-game check | `CodexTactics.LevelGenRouteSmoke` (section 8) |
+| In-game check | `CodexTactics.LevelGenRouteSmoke` (section 8; any generated map: `Scripts/levelgen_route_smoke.ps1 -Map <map>`) |
+| Bot route + drop links | `Scripts/Editor/levelgen_bot_route.py` (pure: the level JSON's `bot_route` from the mandatory route, the hole drop links; `--test`; alone it patches a level JSON without a rebuild) |
+| Combat bot runs / video | `Scripts/bot_run.ps1 -ReportDir` (section 8.1), `Scripts/levelgen_record_run.ps1` + `Scripts/Tools/clip_assemble.py` (section 8.2); the Training Ground «Боевая лаборатория» lists every generated map with a `bot_route` |
+| Pipeline job status | `Scripts/job_status.ps1` (`codex.job_status/1`, section 8.3) |
 | Tests | `src/levelgen/levelgen.test.ts` (`npm test`) |
 
 ## 2. The layout format `codex.levelgen_layout/1`
@@ -198,15 +201,92 @@ to the highest walkable one (300 / 600 / 900). It writes the level JSON
 `Content/Data/LevelJson/<map>.json` from a template (combat_start ambush, skirmish, no cold, cheats on, the layout's `pressure`
 block). Status: see section 9.
 
+**2026-11-02 (branch `tools/levelgen-bot-runs`).** The builder also places the **DROP nav links** through the roof / floor holes
+(`levelgen_bot_route.drop_links`): per hole a `NavLinkProxy` (`Drop_<building>_<hole>`, tag `LevelGenDrop`) with four one-way point
+links from 70 cm outside each edge on the upper slab down to the hole's centre one level below - the squad (and the enemies) walk off
+the rim and fall 3 m (no teleport); only one-level drops onto a real slab (a hollow hall's roof hole gets none). The level JSON gets a
+**`bot_route`** (`levelgen_bot_route.bot_route`, the format of `L_FormationLabCombat.json`): one waypoint per mandatory-route point
+with `"z"` = its floor height (the bot clicks just above that level and checks it on arrival), a point over an open hole of its own
+level pushed out to the rim + 70 cm, `"drop": "<hole>"` on the leg that drops, the `wall` action at the last point when the route
+expects the wall layout there (Z_deadend), `loop: true` (the timed runs walk it again and again). A rebuild KEEPS the existing level
+JSON's `pressure` / `cheats` (tuned on the combat lab page) when it was written for the same layout. Without a rebuild:
+`python Scripts/Editor/levelgen_bot_route.py <accepted layout.json> [<level json>]` adds / replaces only the `bot_route`.
+`L_Gen_Depot_1` was rebuilt with the links (3 drop link actors, 12 links; navmesh Default 440 tiles).
+`Scripts/levelgen_build_map.ps1` writes a job status (section 8.3) and refuses with a clear status when the editor is open.
+
 ## 8. The in-game check
 
 `CodexTactics.LevelGenRouteSmoke` (CodexTacticsDev) loads the generated map's layout JSON (by the map name from
 `Content/Data/LevelGen/accepted/`), walks the squad along the mandatory route with the leader's move orders (the FormationLabSmoke
 carrot pattern: a point every 6 m ahead, renewed every second; ladders and stairs through the nav links; a leg has 3 x its
 walking time to finish) and reports completion or the leg where it got stuck (position, the leg's layer, the last order).
-**TODO (hook):** once the combat-lab bot ROUTE mode lands (`PlaytestBotRouteMode`, `BotRouteRules*`, branch
-`tools/tg-combat-lab`), the smoke hands the walk to it (`Codex.Bot.Route <route id>`) and only reads its result; the carrot walk
-stays the fallback. Status: see section 9.
+**The hook (done 2026-11-02):** when the level JSON has a `bot_route` the smoke hands the walk to the playtest bot's ROUTE mode
+(`Codex.Bot.Route`, `PlaytestBotRouteMode.cpp`: the player's own clicks, the formation, the drop nav links) with the pressure off
+(`Codex.Pressure.Enabled 0`) and only reads its tracker: PASS = every waypoint reached once, none skipped; each hole drop is reported
+(fell through the link / scripted). No `bot_route` or `walk=carrot`: the carrot walk above (its drops teleported). Arguments
+`map=<L_Gen_...>` (must be the loaded map), `layout=`, `route=`, `walk=carrot`; any generated map:
+`powershell -ExecutionPolicy Bypass -File Scripts/levelgen_route_smoke.ps1 -Map /Game/Maps/Generated/<map>` (status section 8.3).
+Result on `L_Gen_Depot_1`: **PASS, 25 / 25 waypoints, 538 m in 319 s game time, both drops a real fall** (2.7-3.0 s each), one
+stuck retry at #19 (fixed after: the click on a walk waypoint 2.7 m off the pump house's corner became a wall-cover preview that
+waited for a second click - the route mode now drops such a preview and orders the leader there).
+
+### 8.1 Combat bot runs on generated maps
+
+The bot's route mode (COMBAT_LAB.md section 7.2) runs on every generated map with a `bot_route` and a `pressure` block: the squad
+walks the route in formation, the pressure subsystem spawns patrols / ambushers at the builder's `CodexAmbushPoint` points, wall ends and
+doorways (never the Brute or the Cryo Drone; the first group at 30 s, then every 120 s), immortality + infinite ammo on. Per waypoint
+`"z"`, the drop legs and the drop record (`route.drops` in `codex.combatlab_run/1`: `waypoint`, `label`, `via`, `fell`, `scripted`,
+`reached`, `seconds`) are in COMBAT_LAB.md 7.2. A drop leg that gets stuck is SCRIPTED (the bot puts the squad down at the waypoint
+itself, `scripted: true`). The Training Ground «Боевая лаборатория» has a map selector (the lab + every `/Game/Maps/Generated/*` with a
+level JSON that has a `bot_route`): settings, presets (a preset never overwrites a generated map's own `ambush.points`), bot runs and
+reports per map.
+Batch: `Scripts/bot_run.ps1 -Map /Game/Maps/Generated/L_Gen_Depot_1 -LevelJson L_Gen_Depot_1.json -ReportDir <dir> -DurationSec 600 -Runs 2
+-Parallel 2 -TimeoutSeconds 2400` (a 10 min run takes ~1 min real, nullrhi fixed step), then `node src/combatLab/cli/report.ts --batch <dir>`.
+`L_Gen_Depot_1`'s pressure tuned in its level JSON (2026-11-02): groups of **2-4** (was 1-3), `max_alive` **6** (was 4) - with 1-enemy
+groups the 2 x 10 min batch had 6 short fights; the 22 authored points were enough.
+**Batch 2026-11-02 `Saved/Telemetry/combat_lab/20261102_102340`** (2 x 10 min, seeds 1-2, the final build): route completed 2 / 2 (1 lap
+each, 0 skipped, 4 / 4 drops fell through the links), stuck 1 (#18, run 2, retried), contacts 9 (patrol 6, ambush 3, coordinated 0), first
+look 0.1 s, unwatched strikes 0, formation changes 131 (6.6 / min), wall hugs 9, cover taken 7 of 7 orders (212 s at the wall), stance
+changes 1.9 / min, fights 7 (310 s), rounds 221, damage 0 (589 absorbed), knockdowns 7. Jev: route SometimesStuck, contacts Alert, focus
+FixRouteOrNavigation. Earlier: `20261102_090514` (the original pressure, groups 1-3): contacts 9 (patrol 3 / ambush 6), fights 6, rounds 85;
+`20261102_090718` (groups 2-4, before the cover-preview fix): contacts 8, fights 7, stuck 2 (both #19).
+
+### 8.2 The video of a run
+
+`powershell -ExecutionPolicy Bypass -File Scripts/levelgen_record_run.ps1 -Map /Game/Maps/Generated/L_Gen_Depot_1 -LevelJson L_Gen_Depot_1.json
+-Name lgdepot [-Seconds 600] [-SpeedUp 4] [-Highlights 3] [-Seed 1] [-OutDir Saved/Screenshots/LevelGenRun] [-Keep]`: the game RENDERED
+offscreen (`-RenderOffscreen -ResX=1280 -ResY=720 -benchmark -fps=30`, never a desktop capture) with the bot's route mode
+(`-CodexBot -BotRoute=1 -BotDuration=<s>`) and `CodexTactics.ClipRecorder <name>` (the director camera on the action - since
+2026-11-02 at most 7 m off the operative towards the foe, so a far foe no longer pushes the squad off the frame).
+`Scripts/Tools/clip_assemble.py watch` encodes the PNG frames in 900-frame blocks while the game records and deletes them at once (a 10 min
+run is 18 000 frames, ~25 GB as PNG); `assemble` concatenates the blocks and cuts `<name>_full_x<K>.mp4` (the whole run sped up, an "xK"
+overlay, H.264 crf 28, <= 1280x720, <= 40 MB) and `<name>_fight_<n>.mp4` (real speed, <= 20 s: 3 s before to 16 s after each
+`[Bot] Route: fight at` line, placed on the video by the recorder's `ClipRecorder <name> f=N` lines), checks each (duration, size, the
+middle frame's mean brightness YAVG > 8 = not black) and writes **`clips.json`** (`codex.levelgen_clips/1`):
+`{name, created_utc, fps, speedup, frames, video_sec, game_log, run_report, ok, files: [{kind: "full" | "fight", file, name, duration_sec,
+size_bytes, yavg, ok, start_sec?, end_sec?, event?}], events: [{kind: "fight" | "cover" | "drop" | "scripted_drop" | "stuck", frame,
+video_sec, game_sec, text}]}`. Also in the folder: `<name>_run.json` (the bot's run record), `<name>.log` (the game log). One folder per
+recording (clips.json is per folder). Rendering runs at ~6-9 frames per real second: 10 min of game ~45 min (+ ~1 min to assemble).
+**First run 2026-11-02** (`Saved/Screenshots/LevelGenRun/`, seed 1, 600 s): `lgdepot_full_x4.mp4` (150 s, 35 MB), `lgdepot_fight_1.mp4`
+(the 30 s patrol contact at the first compound, the squad's cover at the wall) and `lgdepot_fight_2.mp4` (the patrol at 401 s on the way
+back to the spawn), 19 s each; the route lap completed, both drops a real fall (events in clips.json). Only two fights in that seed - more
+with `-Seed` 2 (the batch's run 2 had 5 contacts).
+
+### 8.3 Job status for the Training Ground pipeline
+
+Every pipeline script writes a status JSON the server can poll (`Scripts/job_status.ps1`, schema `codex.job_status/1`):
+`{schema, job: "build_map" | "bot_batch" | "record_run" | "route_smoke", state: "running" | "waiting_lock" | "done" | "failed" | "refused",
+reason: "" | "editor_open" | "lock_held" | "timeout" | "no_layout" | "not_saved" | "navmesh" | "run_failed" | "no_video" | "clip_check" |
+"smoke_failed" | ..., message, exit_code: null | n, pid, started_utc, updated_utc, finished_utc, log, lock_holder: null | {agent, purpose, pid,
+started}, result: {...}}`. A running / waiting_lock status whose `pid` is gone = the script died. The shared build lock is waited for with
+`state: "waiting_lock"` (+ who holds it) and refused after `-LockWaitMinutes` (`reason: "lock_held"`, exit 3) - never a silent hang.
+
+| Script | Status file (default) | Exit codes | `result` |
+|---|---|---|---|
+| `levelgen_build_map.ps1 -Layout <name> -Target <map> [-StatusFile] [-LockWaitMinutes 60]` | `Saved/LevelGen/build_map_status.json` | 0 done, 2 editor open / no layout, 3 lock / timeout, 4 not saved, 5 navmesh | `layout, target, map, level_json, report, navbake_log, drop_links, actors` |
+| `bot_run.ps1 ... -ReportDir <dir> [-JobStatusFile] [-LockWaitMinutes 240]` | `<dir>/status.json` | 0 ok, 1 a run errored / timed out, 3 lock | `report_dir, map, level_json, runs, duration_sec, parallel, finished, results, runs_jsonl, report_md, aggregate, jev, logs` |
+| `levelgen_record_run.ps1 -Map -LevelJson -Name [-StatusFile]` | `<OutDir>/<Name>.status.json` | 0 done, 1 no video, 2 a clip failed its check, 3 lock, 4 the game did not start | `map, level_json, name, seconds, speedup, frames_dir, out_dir, game_pid, frames_encoded, segments, game_exit_code, manifest, files, video_sec, run_report, game_log` |
+| `levelgen_route_smoke.ps1 -Map [-Carrot] [-StatusFile]` | `Saved/LevelGen/route_smoke_<map>.json` | 0 PASS, 1 FAIL, 2 no level JSON, 3 lock / timeout | `map, level_json, result, summary, checks` |
 
 ## 9. Status
 
@@ -216,7 +296,7 @@ stays the fallback. Status: see section 9.
 | 2 generator core + evaluation + tests | done (`npm test`: the levelgen suite; every seed 1..8 completable with its variants) |
 | 3 department page | done (`/api/levelgen/*`, `LevelGenDepartment.tsx`) |
 | 4 Jev + Claude critic | done (real calls verified 2026-11-01; ledger) |
-| 5 UE builder + one generated map + smoke | done. `Scripts/levelgen_build_map.ps1` = the commandlet + the navmesh bake; `/Game/Maps/Generated/L_Gen_Depot_1` rebuilt 2026-11-02 from the accepted seed 1 with the designer's answers (539 actors, 4 climbable ladders, the halls' roofs on +3, the chimneys as cylinders, navmesh 440 tiles, bounds up to 12 m) + `Content/Data/LevelJson/L_Gen_Depot_1.json` (minimap floors 300 / 600 / 900). **`LevelGenRouteSmoke` PASSES the whole mandatory route** (24 / 24 legs, 307 s game time, ~74 s wall: the ground loop, the external stair onto the ruin's roof, the roof to the hole's rim, the two hole drops teleported as designed, the tank farm, the dead end); its knownFail is gone. **The stair fix** (2026-11-01 knownFail): the landing was centred on the ramp's top end, so its west half sat over the 35 deg ramp and left a ~52 cm step (above the navmesh agent's 35 cm step) - the landing now starts at the ramp's top (5 cm tucked under it); the stairwell openings end exactly at their ramps' tops (they ran 25 cm past - a gap); the roof / floor legs end on the holes' rims (a point over an open hole is off the navmesh). Still open: a real drop nav link for the holes (the smoke teleports). |
+| 5 UE builder + one generated map + smoke | done. `Scripts/levelgen_build_map.ps1` = the commandlet + the navmesh bake; `/Game/Maps/Generated/L_Gen_Depot_1` rebuilt 2026-11-02 from the accepted seed 1 with the designer's answers (539 actors, 4 climbable ladders, the halls' roofs on +3, the chimneys as cylinders, navmesh 440 tiles, bounds up to 12 m) + `Content/Data/LevelJson/L_Gen_Depot_1.json` (minimap floors 300 / 600 / 900). **`LevelGenRouteSmoke` PASSES the whole mandatory route** (24 / 24 legs, 307 s game time, ~74 s wall: the ground loop, the external stair onto the ruin's roof, the roof to the hole's rim, the two hole drops teleported as designed, the tank farm, the dead end); its knownFail is gone. **The stair fix** (2026-11-01 knownFail): the landing was centred on the ramp's top end, so its west half sat over the 35 deg ramp and left a ~52 cm step (above the navmesh agent's 35 cm step) - the landing now starts at the ramp's top (5 cm tucked under it); the stairwell openings end exactly at their ramps' tops (they ran 25 cm past - a gap); the roof / floor legs end on the holes' rims (a point over an open hole is off the navmesh). 2026-11-02 (`tools/levelgen-bot-runs`): the drop nav links (no teleport), the `bot_route`, `LevelGenRouteSmoke` through the bot's route mode (PASS 25 / 25), combat bot runs + the run video (sections 8.1-8.3). |
 
 ## 10. The game designer's answers (2026-11-02)
 

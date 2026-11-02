@@ -15,6 +15,11 @@
 # gets the pressure seed SeedBase + n - 1; this script appends the records to <folder>\runs.jsonl, then writes the Jev digest
 # (<folder>\jev.txt, Scripts\Tools\typesafe_triage.py --telemetry) and the report (<folder>\report.md, Tools\TrainingGround
 # src\combatLab\cli\report.ts). No early stop there (a run ends by time, not by a defeat).
+# Machine-readable result of a combat lab batch (level generator pipeline, 2026-11-02; Scripts\job_status.ps1, codex.job_status/1):
+# <ReportDir>\status.json (or -JobStatusFile) - state running / waiting_lock (the shared build lock is held: who and since when) / done /
+# failed / refused (the lock still held after -LockWaitMinutes), result { report_dir, map, level_json, runs, duration_sec, parallel, finished,
+# results {COMPLETE, ERROR, ...}, runs_jsonl, report_md, aggregate, jev, logs [...] }; exit 0 = no run errored / timed out, 1 = one did,
+# 3 = the lock was held. (Without -ReportDir nothing changes: no status file, exit 0.)
 param(
     [int]$Runs = 1,
     [string]$Profile = "NORMAL",
@@ -32,7 +37,10 @@ param(
     # A level JSON to play instead of the map's own (an absolute path, spaces allowed; the game's -LevelJson=).
     [string]$LevelJson = "",
     # A transcript of this script's output (the Training Ground starts it in its own minimized window: the page shows this log).
-    [string]$LogFile = ""
+    [string]$LogFile = "",
+    # Combat lab batches: the job status file (default <ReportDir>\status.json) and how long to wait for the build lock.
+    [string]$JobStatusFile = "",
+    [int]$LockWaitMinutes = 240
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,6 +99,7 @@ function Complete-Run($Job) {
         if ($Line) { [IO.File]::AppendAllText((Join-Path $ReportDir "runs.jsonl"), $Line + "`n", $Utf8) }
     }
     $script:Finished++
+    if ($script:BatchJob) { Set-JobStatus $script:BatchJob @{ finished = $script:Finished; results = $Results.Clone() } "running" ("{0} / {1} runs finished" -f $script:Finished, $Runs) }
     Write-Host ("    [{0} {1}/{2}] {3}, waves cleared {4}, {5:N0} s real (log {6})" -f $Profile, $Job.Run, $Runs, $Result, $Cleared,
         $Job.Watch.Elapsed.TotalSeconds, $Job.Log)
 }
@@ -102,7 +111,14 @@ Write-Host ("{0}: {1} runs, {2} at a time" -f $Profile, $Runs, $Parallel)
 # The games load the module DLLs from Binaries\: a build while they run fails, so a batch holds the shared agent lock
 # (Scripts\agent_lock.ps1; a long coach run takes it per batch, so other agents can build between batches).
 . (Join-Path $PSScriptRoot "agent_lock.ps1")
-$LockOwned = Enter-AgentLock "bot_run $Profile x$Runs" 240
+. (Join-Path $PSScriptRoot "job_status.ps1")
+$BatchJob = $null # not $Job: Complete-Run and the runner loop use $Job for a single game
+if ($CombatLab) {
+    if (-not $JobStatusFile) { $JobStatusFile = Join-Path $ReportDir "status.json" }
+    $BatchJob = New-JobStatus $JobStatusFile "bot_batch" $LogFile
+    Set-JobStatus $BatchJob @{ report_dir = $ReportDir; map = $Map; level_json = $LevelJson; runs = $Runs; duration_sec = $DurationSec; parallel = $Parallel; finished = 0 }
+}
+$LockOwned = if ($BatchJob) { Wait-JobLock $BatchJob "bot_run $Profile x$Runs" $LockWaitMinutes } else { Enter-AgentLock "bot_run $Profile x$Runs" $LockWaitMinutes }
 try {
 Write-Status $true
 
@@ -178,6 +194,15 @@ if ($CombatLab) {
         $ErrorActionPreference = $PrevPreference
     }
     Write-Host ("Combat lab report: {0}" -f (Join-Path $ReportDir "report.md"))
+    $Logs = @(1..$Runs | ForEach-Object { Join-Path $ReportDir "Bot-$_.log" })
+    $Bad = $Results.ERROR + $Results.ABORTED
+    Set-JobStatus $BatchJob @{ finished = $script:Finished; results = $Results.Clone(); runs_jsonl = (Join-Path $ReportDir "runs.jsonl")
+        report_md = (Join-Path $ReportDir "report.md"); aggregate = (Join-Path $ReportDir "aggregate.json"); jev = (Join-Path $ReportDir "jev.txt"); logs = $Logs }
+    if ($Bad -gt 0) {
+        Complete-JobStatus $BatchJob "failed" 1 ("{0} of {1} runs errored / timed out" -f $Bad, $Runs) "run_failed"
+    } else {
+        Complete-JobStatus $BatchJob "done" 0 ("{0} runs finished, report {1}" -f $Runs, (Join-Path $ReportDir "report.md"))
+    }
 }
 Write-Status $false
 Write-Host ""
@@ -185,3 +210,4 @@ Write-Host ("{0}: {1} runs - victories {2}, completed by time {8}, defeats {3}, 
     $Results.VICTORY, $Results.DEFEAT, $Results.ABORTED, $Results.ERROR, ((Get-Date) - $Started).TotalSeconds, $Parallel, $Results.COMPLETE)
 Write-Host ("Telemetry: {0}" -f $RunsFile)
 if ($LogFile) { Stop-Transcript | Out-Null }
+if ($BatchJob -and $BatchJob.status.exit_code) { exit $BatchJob.status.exit_code }

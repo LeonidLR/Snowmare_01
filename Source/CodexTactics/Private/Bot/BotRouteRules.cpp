@@ -89,6 +89,7 @@ bool BotRouteRules::Parse(const FJsonObject& Route, FBotRouteConfig& OutConfig, 
 	Config.StuckMoveCm = FMath::Max(10.f, Number(Route, TEXT("stuck_move_cm"), Config.StuckMoveCm));
 	Config.LegBaseSeconds = FMath::Max(1.f, Number(Route, TEXT("leg_base_sec"), Config.LegBaseSeconds));
 	Config.LegMinSpeedCm = FMath::Max(10.f, Number(Route, TEXT("leg_min_speed_cm"), Config.LegMinSpeedCm));
+	Config.ReachHeightCm = FMath::Max(30.f, Number(Route, TEXT("reach_height_cm"), Config.ReachHeightCm));
 	Config.MaxRetries = FMath::Clamp(FMath::RoundToInt(Number(Route, TEXT("max_retries"), static_cast<float>(Config.MaxRetries))), 0, 10);
 	Config.FightHoldSeconds = FMath::Max(0.f, Number(Route, TEXT("fight_hold_sec"), Config.FightHoldSeconds));
 	Config.ActionTimeoutSeconds = FMath::Max(5.f, Number(Route, TEXT("action_timeout_sec"), Config.ActionTimeoutSeconds));
@@ -135,6 +136,10 @@ bool BotRouteRules::Parse(const FJsonObject& Route, FBotRouteConfig& OutConfig, 
 			return false;
 		}
 		Waypoint.HoldSeconds = FMath::Clamp(Number(*Point, TEXT("hold_sec"), Waypoint.HoldSeconds), 0.f, 120.f);
+		double Z = 0.0;
+		Waypoint.bHasZ = Point->TryGetNumberField(TEXT("z"), Z);
+		Waypoint.Z = static_cast<float>(Z);
+		Point->TryGetStringField(TEXT("drop"), Waypoint.Drop);
 		if (Waypoint.Label.IsEmpty())
 		{
 			Waypoint.Label = FString::Printf(TEXT("#%d"), Each);
@@ -192,7 +197,7 @@ EBotRouteCommand FBotRouteTracker::Tick(const FBotRouteInput& In)
 		return EBotRouteCommand::None;
 	}
 	LegSeconds += Delta;
-	if (FVector2D::Distance(In.Leader, GetTarget()) <= Config.ReachRadiusCm)
+	if (IsAt(*GetWaypoint(), In))
 	{
 		if (GetWaypoint()->Action != EBotRouteAction::Walk)
 		{
@@ -322,6 +327,12 @@ EBotRouteCommand FBotRouteTracker::Advance(const FBotRouteInput& In, bool bReach
 	bOrdered = true;
 	StartLeg(In);
 	return EBotRouteCommand::Move;
+}
+
+bool FBotRouteTracker::IsAt(const FBotRouteWaypoint& Waypoint, const FBotRouteInput& In) const
+{
+	return FVector2D::Distance(In.Leader, Waypoint.At) <= Config.ReachRadiusCm
+		&& (!Waypoint.bHasZ || FMath::Abs(In.LeaderFeetZ - Waypoint.Z) <= Config.ReachHeightCm);
 }
 
 bool FBotRouteTracker::IsRouteCompleted() const

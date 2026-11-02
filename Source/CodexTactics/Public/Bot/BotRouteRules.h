@@ -34,6 +34,15 @@ struct CODEXTACTICS_API FBotRouteWaypoint
 	FVector2D WallPoint = FVector2D::ZeroVector;
 	/** Wall / Climb: seconds the squad stays at the wall / the leader on the roof. */
 	float HoldSeconds = 3.f;
+	/**
+	 * "z" (generated maps, 2026-11-02): the floor height of the waypoint's level, cm. Set: the bot clicks just above that level (a
+	 * waypoint under a roof is never a click on the roof) and the waypoint counts as reached only with the leader's feet within
+	 * FBotRouteConfig::ReachHeightCm of it (a roof point straight above a floor point). Unset: the leader's own level, any height.
+	 */
+	bool bHasZ = false;
+	float Z = 0.f;
+	/** "drop": the leg to this waypoint drops through that roof / floor hole (a drop nav link; the bot reports how it went). */
+	FString Drop;
 };
 
 /** The level JSON "bot_route" block (defaults = the 2026-11-01 combat lab values). */
@@ -44,6 +53,8 @@ struct CODEXTACTICS_API FBotRouteConfig
 	bool bLoop = true;
 	/** The leader within this of a waypoint has reached it, cm. */
 	float ReachRadiusCm = 250.f;
+	/** A waypoint with a "z" is reached only with the leader's feet within this of it, cm. */
+	float ReachHeightCm = 150.f;
 	/** The leader moved less than StuckMoveCm for this long (route not paused) = stuck, s. */
 	float StuckAfterSeconds = 12.f;
 	float StuckMoveCm = 150.f;
@@ -84,6 +95,22 @@ struct CODEXTACTICS_API FBotRouteStuck
 	bool bSkipped = false;
 };
 
+/**
+ * One drop through a roof / floor hole (a waypoint with "drop"; generated maps 2026-11-02): how the squad got down. bFell = the leader
+ * fell (walked off the rim through the builder's drop nav link); bScripted = the leg got stuck and the bot put the squad down there itself.
+ */
+struct CODEXTACTICS_API FBotRouteDrop
+{
+	int32 Waypoint = 0;
+	FString Label;
+	FString Via;
+	bool bFell = false;
+	bool bScripted = false;
+	bool bReached = false;
+	/** From the leg's order to the waypoint reached (or given up), s. */
+	float Seconds = 0.f;
+};
+
 /** One finished lap. */
 struct CODEXTACTICS_API FBotRouteLap
 {
@@ -112,6 +139,8 @@ struct CODEXTACTICS_API FBotRouteInput
 {
 	float Time = 0.f;
 	FVector2D Leader = FVector2D::ZeroVector;
+	/** The leader's feet height, cm (checked against a waypoint's "z"). */
+	float LeaderFeetZ = 0.f;
 	/** No stuck clock this tick (a fight hold, a knockdown, the leader on a ladder). */
 	bool bPaused = false;
 };
@@ -157,6 +186,8 @@ public:
 	/** The furthest waypoint reached in the first lap (INDEX_NONE before any). */
 	int32 GetFurthestFirstLap() const { return FurthestFirstLap; }
 	const FBotRouteConfig& GetConfig() const { return Config; }
+	/** The leader stands at Waypoint: within the reach radius and, when it has a "z", the reach height. */
+	bool IsAt(const FBotRouteWaypoint& Waypoint, const FBotRouteInput& In) const;
 
 private:
 	EBotRouteCommand Advance(const FBotRouteInput& In, bool bReached);
@@ -198,9 +229,9 @@ namespace BotRouteRules
 
 	/**
 	 * The level JSON "bot_route" object: {"name", "loop", "reach_radius_cm", "stuck_after_sec", "stuck_move_cm", "leg_base_sec",
-	 * "leg_min_speed_cm", "max_retries", "fight_hold_sec", "action_timeout_sec", "fight_cover": {"enabled", "search_cm", "hold_sec", "min_wall_cm",
-	 * "min_height_cm", "min_threat_cm", "min_facing_cos"}, "points": [{"at": [x, y], "label", "action": "walk" | "wall" |
-	 * "climb", "wall": [x, y], "hold_sec"}]}. Absent keys keep the defaults (clamped to sane ranges). False + OutError on fewer than two points,
+	 * "leg_min_speed_cm", "reach_height_cm", "max_retries", "fight_hold_sec", "action_timeout_sec", "fight_cover": {"enabled", "search_cm", "hold_sec", "min_wall_cm",
+	 * "min_height_cm", "min_threat_cm", "min_facing_cos"}, "points": [{"at": [x, y], "z", "label", "action": "walk" | "wall" |
+	 * "climb", "wall": [x, y], "hold_sec", "drop": "<hole id>"}]}. Absent keys keep the defaults (clamped to sane ranges). False + OutError on fewer than two points,
 	 * a point without "at": [x, y], an unknown action or a "wall" action without "wall": [x, y].
 	 */
 	CODEXTACTICS_API bool Parse(const FJsonObject& Route, FBotRouteConfig& OutConfig, FString* OutError = nullptr);

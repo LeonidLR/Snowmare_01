@@ -9,8 +9,11 @@
 // Args: <name> [intro] [seconds=N] (stop + exit after N game seconds; default: until the game exits) [nodirector].
 // "intro": reads the start dialogue at a comfortable pace (a line every 3.5 s), then walks the squad (the leader's move orders, the
 // others follow) to the tutorial's current navigation target, re-ordering as the target moves on.
-// Director: the camera looks at the operative closest to an awake enemy within 35 m, two fifths of the way to that enemy (else the
-// leader), smoothed. UE-only, no Godot reference.
+// Director: the camera looks at the operative closest to an awake enemy within 35 m, two fifths of the way to that enemy but at most 7 m
+// off him (2026-11-02: a far foe pushed the squad off the frame; else the leader), smoothed.
+// The level generator's bot runs (2026-11-02): Scripts/levelgen_record_run.ps1 runs it with the bot's route mode (-CodexBot -BotRoute=1)
+// and Scripts/Tools/clip_assemble.py encodes the frames while the game records (the full run sped up + fight clips cut at the bot's
+// "[Bot] Route: fight at" lines placed by the f=N lines; clips.json). UE-only, no Godot reference.
 
 #include "CoreMinimal.h"
 
@@ -52,6 +55,9 @@ namespace ClipRecorder
 		TWeakObjectPtr<UWorld> World;
 	};
 
+	/** The director's look leads from the operative towards the foe at most this far, cm. */
+	constexpr float MaxLeadCm = 700.f;
+
 	bool IsAwakeEnemy(const AEnemyCharacter* Enemy)
 	{
 		const UHealthComponent* Health = Enemy ? Enemy->GetHealthComponent() : nullptr;
@@ -90,7 +96,13 @@ namespace ClipRecorder
 				}
 			}
 		}
-		const FVector Target = Foe ? FMath::Lerp(Hero->GetActorLocation(), Foe->GetActorLocation(), 0.4f) : Hero->GetActorLocation();
+		// Two fifths of the way to the foe, but never more than MaxLeadCm off the operative: a foe 25-35 m away pushed the squad off the frame.
+		FVector Target = Hero->GetActorLocation();
+		if (Foe)
+		{
+			const FVector Lead = (Foe->GetActorLocation() - Hero->GetActorLocation()) * 0.4f;
+			Target += Lead.GetClampedToMaxSize(MaxLeadCm);
+		}
 		State.Look = State.bHasLook ? FMath::Lerp(State.Look, Target, FMath::Min(1.f, Delta * 2.f)) : Target;
 		State.bHasLook = true;
 		Camera->LookAtPoint(State.Look);

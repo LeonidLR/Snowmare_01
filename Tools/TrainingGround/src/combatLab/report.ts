@@ -5,6 +5,8 @@
 export const RUN_SCHEMA = 'codex.combatlab_run/1';
 
 export interface StuckEvent { time: number; position: [number, number]; waypoint: number; label: string; last_order: string; reason: string; skipped: boolean }
+/** A drop through a roof / floor hole on the route (generated maps): `fell` = the leader physically fell through a drop nav link, `scripted` = the bot teleported the squad because the drop failed. */
+export interface DropEvent { waypoint: number; label: string; via: string; fell: boolean; scripted: boolean; seconds: number }
 export interface ContactRow { id: number; kind: ContactKind; trigger: string; time: number; position: [number, number]; formation: string; watched_at_start: boolean; unwatched_strike: boolean; reaction_sec: number }
 export type ContactKind = 'patrol' | 'ambush' | 'coordinated';
 export interface MemberRow { name: string; changes: number; standing: number; crouching: number; prone: number; damage_taken: number; damage_absorbed: number; rounds: number; climbs_up: number; knockdowns: number }
@@ -27,6 +29,8 @@ export interface RunRecord {
     name: string; loop: boolean; waypoints: number; lap_length_m: number; completed: boolean; progress: number; laps: number; reached: number; skipped: number;
     distance_m: number; furthest_index: number; furthest_label: string; current_index: number; current_label: string; last_order: string; end_position: [number, number];
     lap_list: { seconds: number; reached: number; skipped: number }[]; stuck: StuckEvent[];
+    /** Drops through roof / floor holes; OPTIONAL: records of the lab map and older records have none. */
+    drops?: DropEvent[];
   };
   contacts: { total: number; patrol: number; ambush: number; coordinated: number; unwatched_strikes: number; never_looked: number; reaction_mean_sec: number; reaction_max_sec: number; list: ContactRow[] };
   formations: { changes: number; entered: Record<string, number>; seconds: Record<string, number> };
@@ -75,6 +79,12 @@ export function parseRunsJsonl(text: string): { runs: RunRecord[]; skipped: numb
   return { runs, skipped };
 }
 
+/** The drops of a run ([] when the record has none or the field is malformed). */
+export function runDrops(run: RunRecord): DropEvent[] {
+  const list: unknown = run.route.drops;
+  return Array.isArray(list) ? list.filter((d): d is DropEvent => isObj(d) && typeof d.waypoint === 'number') : [];
+}
+
 /** Where / why the route stopped for the report: the first stuck event that skipped a waypoint, else the last stuck event. */
 export function worstStuck(run: RunRecord): StuckEvent | undefined {
   return run.route.stuck.find((s) => s.skipped) ?? run.route.stuck[run.route.stuck.length - 1];
@@ -103,6 +113,9 @@ export interface RunRow {
   skipped: number;
   stuck: number;
   stuckWhere: string;
+  drops: number;
+  dropsFell: number;
+  dropsScripted: number;
   contacts: number;
   patrol: number;
   ambush: number;
@@ -136,6 +149,9 @@ export function runRow(run: RunRecord): RunRow {
     skipped: run.route.skipped,
     stuck: run.route.stuck.length,
     stuckWhere: stuck ? `#${stuck.waypoint} ${stuck.label} (${Math.round(stuck.position[0])}, ${Math.round(stuck.position[1])}) — ${reasonText(stuck.reason)}; приказ: ${stuck.last_order || '—'}` : '',
+    drops: runDrops(run).length,
+    dropsFell: runDrops(run).filter((d) => d.fell).length,
+    dropsScripted: runDrops(run).filter((d) => d.scripted).length,
     contacts: run.contacts.total,
     patrol: run.contacts.patrol,
     ambush: run.contacts.ambush,
@@ -168,6 +184,10 @@ export interface Aggregate {
   stuck: number;
   /** Stuck events grouped by waypoint label: where the bot gets stuck most. */
   stuckByWaypoint: { label: string; count: number; reasons: string[] }[];
+  /** Drops through roof / floor holes: all, physically fallen, scripted (the bot teleported the squad after a failed drop). */
+  drops: number;
+  dropsFell: number;
+  dropsScripted: number;
   contacts: number;
   byKind: Record<ContactKind, number>;
   unwatchedStrikes: number;
@@ -225,6 +245,7 @@ function addInto(target: Record<string, number>, source: Record<string, number>)
 
 export function aggregate(runs: RunRecord[]): Aggregate {
   const contacts = runs.flatMap((r) => r.contacts.list);
+  const drops = runs.flatMap(runDrops);
   const reactions = contacts.filter((c) => c.reaction_sec >= 0).map((c) => c.reaction_sec);
   const minutes = sum(runs.map((r) => r.duration_sec)) / 60;
   const stuckBy = new Map<string, { count: number; reasons: Set<string> }>();
@@ -262,6 +283,9 @@ export function aggregate(runs: RunRecord[]): Aggregate {
     skipped: sum(runs.map((r) => r.route.skipped)),
     stuck: sum(runs.map((r) => r.route.stuck.length)),
     stuckByWaypoint: [...stuckBy.entries()].map(([label, e]) => ({ label, count: e.count, reasons: [...e.reasons] })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
+    drops: drops.length,
+    dropsFell: drops.filter((d) => d.fell).length,
+    dropsScripted: drops.filter((d) => d.scripted).length,
     contacts: contacts.length,
     byKind: { patrol: contacts.filter((c) => c.kind === 'patrol').length, ambush: contacts.filter((c) => c.kind === 'ambush').length, coordinated: contacts.filter((c) => c.kind === 'coordinated').length },
     unwatchedStrikes: contacts.filter((c) => c.unwatched_strike).length,
@@ -310,10 +334,10 @@ const pairs = (o: Record<string, number>, name: (k: string) => string = (k) => k
   Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${name(k)} ${v}`).join(', ') || '—';
 
 /** The batch report as Markdown (Saved/Telemetry/combat_lab/<batch>/report.md; the coordinator reads it, ~40 lines). */
-export function reportMarkdown(runs: RunRecord[], batch: { id?: string; preset?: string; jev?: string } = {}): string {
+export function reportMarkdown(runs: RunRecord[], batch: { id?: string; preset?: string; jev?: string; level?: string } = {}): string {
   const a = aggregate(runs);
   const lines: string[] = [];
-  lines.push(`# Combat lab bot report${batch.id ? ` — ${batch.id}` : ''}`);
+  lines.push(`# Combat lab bot report${batch.id ? ` — ${batch.id}` : ''}${batch.level ? ` (${batch.level})` : ''}`);
   lines.push('');
   lines.push(`Runs ${a.runs} (${pairs(a.results)}), ${a.minutes.toFixed(1)} game min${batch.preset ? `, preset ${batch.preset}` : ''}; immortal ${a.immortal ? 'on' : 'off'}, infinite ammo ${a.infiniteAmmo ? 'on' : 'off'}.`);
   lines.push('');
@@ -328,6 +352,10 @@ export function reportMarkdown(runs: RunRecord[], batch: { id?: string; preset?:
   for (const r of runs) {
     const w = worstStuck(r);
     if (w) lines.push(`  - run ${r.run}: ${w.skipped ? 'gave up' : 'stuck'} at #${w.waypoint} ${w.label} (${Math.round(w.position[0])}, ${Math.round(w.position[1])}) at ${w.time.toFixed(0)} s - ${w.reason}; last order: ${w.last_order || '-'}`);
+  }
+  if (a.drops > 0) {
+    lines.push(`- Drops through roof / floor holes: ${a.drops} (fell physically ${a.dropsFell}, scripted after a failed drop ${a.dropsScripted}).`);
+    for (const r of runs) for (const d of runDrops(r)) lines.push(`  - run ${r.run}: #${d.waypoint} ${d.label} via ${d.via || '-'} - ${d.scripted ? 'SCRIPTED (the drop failed)' : d.fell ? 'fell' : 'did not fall'} in ${d.seconds.toFixed(1)} s`);
   }
   lines.push(`- Contacts: ${a.contacts} (patrol ${a.byKind.patrol}, ambush ${a.byKind.ambush}, coordinated ${a.byKind.coordinated}); ambushes from an unwatched side ${a.unwatchedStrikes}; never looked at ${a.neverLooked}.`);
   lines.push(`- Time to the first look: mean ${a.reactionMean.toFixed(1)} s, median ${a.reactionMedian.toFixed(1)} s, max ${a.reactionMax.toFixed(1)} s. Formation at the contacts: ${pairs(a.contactFormations)}.`);

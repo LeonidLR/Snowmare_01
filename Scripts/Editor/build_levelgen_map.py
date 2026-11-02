@@ -23,7 +23,13 @@ with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBo
     spawn / patrol / ambush TargetPoints (ambush points tagged CodexAmbushPoint for UCombatPressureSubsystem), zone labels;
   - NavMeshBoundsVolume over the bounds from a level below the cut to 3 m above the highest walkable level (+3 -> 12 m; a chimney's
     top stays outside, so it never gets a navmesh island); the saved RecastNavMesh actors are destroyed before the save
-    (docs/port/TRAPS.md) - bake with Scripts/bake_navmesh.ps1 -Map <map> afterwards.
+    (docs/port/TRAPS.md) - bake with Scripts/bake_navmesh.ps1 -Map <map> afterwards;
+  - DROP nav links through the roof / floor holes (2026-11-02, levelgen_bot_route.drop_links): per hole a NavLinkProxy with four
+    one-way point links from 70 cm outside each edge on the upper slab down to the hole's centre one level below - the squad
+    (and the enemies) walk off the rim and fall 3 m instead of being teleported; only one-level drops onto a real slab;
+  - the level JSON's "bot_route" (levelgen_bot_route.bot_route: the mandatory route as the playtest bot's planned route, with each
+    waypoint's floor height and the drop legs marked); a rebuild KEEPS the existing level JSON's "pressure" / "cheats" blocks
+    (tuned on the Training Ground combat lab page) when it was written for the same layout.
 Idempotent per map (every actor tagged LevelGen is deleted and placed again); never touches another map (L_Demo01_B_FrozenFactory
 is not read or written). Lighting (sun, sky, fog) placed once (tag LevelGen_Env).
 
@@ -43,6 +49,9 @@ try:
     import unreal
 except ImportError:  # system python: the `plan` mode only
     unreal = None
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import levelgen_bot_route  # noqa: E402  (pure: the bot route block + the drop links)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -289,6 +298,12 @@ def plan(layout):
         cx = sum(p[0] for p in z["poly"]) / len(z["poly"])
         cy = sum(p[1] for p in z["poly"]) / len(z["poly"])
         specs.append({"kind": "text", "label": "Zone_" + z["id"], "folder": "Zones", "text": "%s (%s)" % (z["id"], z.get("set_piece", z["kind"])), "location": [cx, cy, gz + 3.0], "yaw": 0.0})
+    # ---- drop nav links through the roof / floor holes (one level down; levelgen_bot_route.drop_links)
+    for dl in levelgen_bot_route.drop_links(layout, gz):
+        hx, hy = dl["hole"]
+        specs.append({"kind": "nav_link", "label": "Drop_%s" % dl["id"], "folder": "Navigation/Drops", "location": [hx, hy, dl["upper_z"]], "yaw": 0.0,
+                      "links": [[[sx - hx, sy - hy, 0.0], [0.0, 0.0, dl["lower_z"] - dl["upper_z"]]] for sx, sy in dl["starts"]],
+                      "tags": ["LevelGenDrop", dl["via"]]})
     # ---- navmesh bounds: from a level below the cut to 3 m above the highest walkable level (a roof on it needs the agent's
     # height above it inside the volume; a chimney's top stays outside)
     nz0, nz1 = gz + z_of(-1) - 100.0, gz + z_of(max_walkable_level(layout)) + LEVEL_HEIGHT
@@ -367,6 +382,9 @@ def level_json(layout, map_path):
     }
     if layout.get("pressure"):
         data["pressure"] = layout["pressure"]
+    route = levelgen_bot_route.bot_route(layout)
+    if route:
+        data["bot_route"] = route
     return data
 
 
@@ -374,8 +392,21 @@ def write_level_json(layout, map_path):
     os.makedirs(LEVELJSON_DIR, exist_ok=True)
     leaf = map_path.rsplit("/", 1)[-1]
     path = os.path.join(LEVELJSON_DIR, leaf + ".json")
+    data = level_json(layout, map_path)
+    # The combat lab page tunes "pressure" / "cheats" per map: a rebuild from the SAME layout keeps them.
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                old = json.load(f)
+            if old.get("levelgen_layout") == data["levelgen_layout"]:
+                for key in ("pressure", "cheats"):
+                    if key in old:
+                        data[key] = old[key]
+                report("level JSON: kept its pressure / cheats (same layout)")
+        except (OSError, ValueError) as exc:
+            report("REVIEW: the old level JSON %s unreadable (%r): written afresh" % (path, exc))
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(level_json(layout, map_path), f, indent=2)
+        json.dump(data, f, indent=2)
         f.write("\n")
     report("level JSON -> %s" % path)
     return path
@@ -425,6 +456,17 @@ class Placer:
                 comp.set_editor_property("horizontal_alignment", unreal.HorizTextAligment.EHTA_CENTER)
             except Exception as exc:
                 report("REVIEW: zone label %s: %r" % (spec["label"], exc))
+        elif kind == "nav_link":
+            actor = self.spawn(unreal.NavLinkProxy, spec, tags=tags)
+            links = []
+            for left, right in spec["links"]:
+                link = unreal.NavigationLink()
+                link.set_editor_property("left", unreal.Vector(*left))
+                link.set_editor_property("right", unreal.Vector(*right))
+                link.set_editor_property("direction", unreal.NavLinkDirection.LEFT_TO_RIGHT)
+                links.append(link)
+            actor.set_editor_property("point_links", links)
+            report("  %s: %d one-way drop links, %.0f cm down" % (spec["label"], len(links), -spec["links"][0][1][2]))
         elif kind == "ladder":
             actor = self.spawn(unreal.LadderActor, spec, tags=tags)
             actor.set_editor_property("height", spec["rungs"] * PITCH)

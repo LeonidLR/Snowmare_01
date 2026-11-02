@@ -462,6 +462,23 @@ TSharedRef<FJsonObject> CombatLabRules::MakeRunRecord(const FCombatLabRunMeta& M
 			Stucks.Add(MakeShared<FJsonValueObject>(Each));
 		}
 		Out->SetArrayField(TEXT("stuck"), Stucks);
+		if (!Meta.Drops.IsEmpty())
+		{
+			TArray<TSharedPtr<FJsonValue>> Drops;
+			for (const FBotRouteDrop& Drop : Meta.Drops)
+			{
+				TSharedRef<FJsonObject> Each = MakeShared<FJsonObject>();
+				Each->SetNumberField(TEXT("waypoint"), Drop.Waypoint);
+				Each->SetStringField(TEXT("label"), Drop.Label);
+				Each->SetStringField(TEXT("via"), Drop.Via);
+				Each->SetBoolField(TEXT("fell"), Drop.bFell);
+				Each->SetBoolField(TEXT("scripted"), Drop.bScripted);
+				Each->SetBoolField(TEXT("reached"), Drop.bReached);
+				Each->SetNumberField(TEXT("seconds"), Round2(Drop.Seconds));
+				Drops.Add(MakeShared<FJsonValueObject>(Each));
+			}
+			Out->SetArrayField(TEXT("drops"), Drops);
+		}
 		Record->SetObjectField(TEXT("route"), Out);
 	}
 

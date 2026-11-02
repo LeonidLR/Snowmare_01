@@ -250,6 +250,13 @@ bool FCombatLabRecordTest::RunTest(const FString&)
 	Meta.PlannedSeconds = 120.f;
 	Meta.bImmortal = true;
 	Meta.bInfiniteAmmo = true;
+	FBotRouteDrop Drop;
+	Drop.Waypoint = 14;
+	Drop.Via = TEXT("hole_roof_0");
+	Drop.bFell = true;
+	Drop.bReached = true;
+	Drop.Seconds = 4.25f;
+	Meta.Drops.Add(Drop);
 	const FString Line = CombatLabRules::ToJsonLine(CombatLabRules::MakeRunRecord(Meta, Tracker, Collector, FVector2D(12.4, -3.6)));
 	TestFalse(TEXT("one line"), Line.Contains(TEXT("\n")));
 	TSharedPtr<FJsonObject> Record;
@@ -274,6 +281,13 @@ bool FCombatLabRecordTest::RunTest(const FString&)
 		TestEqual(TEXT("... why"), Event->GetStringField(TEXT("reason")), FString(TEXT("no_move")));
 		TestEqual(TEXT("... the last order"), Event->GetStringField(TEXT("last_order")), FString(TEXT("move to #1")));
 		TestEqual(TEXT("... where (x, y)"), Event->GetArrayField(TEXT("position")).Num(), 2);
+	}
+	const TArray<TSharedPtr<FJsonValue>>* Drops = nullptr;
+	if (TestTrue(TEXT("route: the drops (generated maps)"), RouteJson->TryGetArrayField(TEXT("drops"), Drops) && Drops && Drops->Num() == 1))
+	{
+		const TSharedPtr<FJsonObject> Each = (*Drops)[0]->AsObject();
+		TestTrue(TEXT("... fell through hole_roof_0 at #14, not scripted"), Each->GetStringField(TEXT("via")) == TEXT("hole_roof_0") && Each->GetBoolField(TEXT("fell"))
+			&& !Each->GetBoolField(TEXT("scripted")) && static_cast<int32>(Each->GetNumberField(TEXT("waypoint"))) == 14);
 	}
 	const TArray<TSharedPtr<FJsonValue>>& End = RouteJson->GetArrayField(TEXT("end_position"));
 	TestTrue(TEXT("route: the end position in whole cm"), End.Num() == 2 && End[0]->AsNumber() == 12.0 && End[1]->AsNumber() == -4.0);

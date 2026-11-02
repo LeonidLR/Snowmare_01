@@ -2,7 +2,7 @@
 // where the bot got stuck and where it met the enemy, and the 3-line Jev digest.
 import React, { useMemo } from 'react';
 import type { RunRecord } from '../../combatLab/report';
-import { KIND_NAMES, aggregate, formationName, reasonText, runRow, worstStuck } from '../../combatLab/report';
+import { KIND_NAMES, aggregate, formationName, reasonText, runDrops, runRow, worstStuck } from '../../combatLab/report';
 import type { LabLayout, LabMark, LabRoutePoint } from './CombatLabMap';
 import { CombatLabMap, MapLegend } from './CombatLabMap';
 import { Bars, Card, Stat, fmtNum } from './ui';
@@ -11,11 +11,12 @@ export interface BatchReport { id: string; dir: string; batch: Record<string, un
 
 interface Props {
   report: BatchReport;
+  mapId: string;
   layout: LabLayout | null;
   route: LabRoutePoint[];
 }
 
-export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
+export const ReportView: React.FC<Props> = ({ report, mapId, layout, route }) => {
   const a = useMemo(() => aggregate(report.runs), [report.runs]);
   const rows = useMemo(() => report.runs.map(runRow), [report.runs]);
   const marks = useMemo<LabMark[]>(() => report.runs.flatMap((r) => [
@@ -26,7 +27,7 @@ export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
 
   if (report.runs.length === 0) {
     return (
-      <Card title={`Отчёт ${report.id}`} hint="Записей забегов пока нет (серия идёт или не удалась).">
+      <Card title={`Отчёт ${report.id} · ${mapId}`} hint="Записей забегов пока нет (серия идёт или не удалась).">
         {report.log && <pre className="text-[11px] bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-x-auto text-slate-400 max-h-64">{report.log}</pre>}
       </Card>
     );
@@ -35,7 +36,7 @@ export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
   const totalSeconds = Object.values(a.formationSeconds).reduce((x, y) => x + y, 0);
   return (
     <div className="flex flex-col gap-4">
-      <Card title={`Итог серии ${report.id}`} hint={`${a.runs} забег(ов), ${fmtNum(a.minutes, 1)} мин игры${report.batch?.preset ? `, пресет ${report.batch.preset}` : ''}; бессмертие ${a.immortal ? 'вкл' : 'выкл'}, бесконечные патроны ${a.infiniteAmmo ? 'вкл' : 'выкл'}. Папка: ${report.dir}`}>
+      <Card title={`Итог серии ${report.id} · ${mapId}`} hint={`${a.runs} забег(ов), ${fmtNum(a.minutes, 1)} мин игры${report.batch?.preset ? `, пресет ${report.batch.preset}` : ''}; бессмертие ${a.immortal ? 'вкл' : 'выкл'}, бесконечные патроны ${a.infiniteAmmo ? 'вкл' : 'выкл'}. Папка: ${report.dir}`}>
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
           <Stat label="Маршрут пройден" value={`${a.routeCompleted} / ${a.runs}`} sub={`в среднем ${a.progressMeanPct} % · кругов ${a.lapsTotal}`} tone={a.routeCompleted === a.runs ? 'ok' : a.progressMeanPct >= 50 ? 'warn' : 'bad'} />
           <Stat label="Застревания" value={a.stuck} sub={`пропущено точек ${a.skipped}`} tone={a.skipped ? 'bad' : a.stuck ? 'warn' : 'ok'} />
@@ -61,6 +62,16 @@ export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
               </ul>
             )}
           </Card>
+          {a.drops > 0 && (
+            <Card title="Спуски через проломы крыши / пола" hint="fell — лидер упал через ссылку спуска; скрипт — спуск не удался, бот перенёс отряд.">
+              <p className="text-sm">Всего <span className="font-semibold text-slate-100">{a.drops}</span> · упали сами <span className="text-emerald-400 font-semibold">{a.dropsFell}</span> · перенесены скриптом <span className={a.dropsScripted ? 'text-rose-300 font-semibold' : 'text-slate-400'}>{a.dropsScripted}</span></p>
+              <ul className="text-xs flex flex-col gap-0.5 text-slate-300">
+                {report.runs.flatMap((r) => runDrops(r).map((d, i) => (
+                  <li key={`${r.run}-${i}`}>забег {r.run}: #{d.waypoint} {d.label} через {d.via || '—'} — {d.scripted ? <span className="text-rose-300">скрипт (спуск не удался)</span> : d.fell ? <span className="text-emerald-400">упал</span> : 'не упал'}, {fmtNum(d.seconds, 1)} с</li>
+                )))}
+              </ul>
+            </Card>
+          )}
           <Card title="Построение в момент контакта">
             <Bars rows={Object.entries(a.contactFormations).sort((x, y) => y[1] - x[1]).map(([k, v]) => ({ label: formationName(k), value: v, share: a.contacts ? v / a.contacts : 0, color: 'bg-orange-500' }))} />
           </Card>
@@ -82,7 +93,7 @@ export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
         <div className="overflow-x-auto">
           <table className="text-xs w-full min-w-[900px]">
             <thead className="text-slate-500 text-left">
-              <tr>{['№', 'Итог', 'Мин', 'Маршрут', 'Кругов', 'Застрял', 'Контакты п/з/ск', 'Неприкр.', 'Взгляд, с', 'Построений', 'К стене', 'Укрытие в бою', 'Стойки (/мин)', 'Урон / погл.', 'Патроны', 'Лестницы', 'Нокдауны'].map((h) => <th key={h} className="font-normal pr-3 pb-1">{h}</th>)}</tr>
+              <tr>{['№', 'Итог', 'Мин', 'Маршрут', 'Кругов', 'Застрял', 'Контакты п/з/ск', 'Неприкр.', 'Взгляд, с', 'Построений', 'К стене', 'Укрытие в бою', 'Стойки (/мин)', 'Урон / погл.', 'Патроны', 'Лестницы', 'Спуски (сам/скрипт)', 'Нокдауны'].map((h) => <th key={h} className="font-normal pr-3 pb-1">{h}</th>)}</tr>
             </thead>
             <tbody className="text-slate-200 tabular-nums">
               {rows.map((r) => (
@@ -103,6 +114,7 @@ export const ReportView: React.FC<Props> = ({ report, layout, route }) => {
                   <td className="pr-3">{fmtNum(r.damage)} / {fmtNum(r.absorbed)}</td>
                   <td className="pr-3">{r.rounds}</td>
                   <td className="pr-3">{r.climbs}</td>
+                  <td className="pr-3">{r.drops ? `${r.dropsFell}/${r.dropsScripted} из ${r.drops}` : '—'}</td>
                   <td className="pr-3">{r.knockdowns}</td>
                 </tr>
               ))}

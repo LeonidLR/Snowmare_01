@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Bot/BotRouteRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Formation/FormationTypes.h"
 
@@ -145,6 +146,8 @@ struct CODEXTACTICS_API FCombatLabRunMeta
 	int32 PressureRunsSpotted = 0;
 	int32 PressureNoRoute = 0;
 	int32 PressureFollowers = 0;
+	/** The route's drops through roof / floor holes (generated maps; empty elsewhere -> no "drops" in the record). */
+	TArray<FBotRouteDrop> Drops;
 };
 
 class CODEXTACTICS_API FCombatLabRunCollector

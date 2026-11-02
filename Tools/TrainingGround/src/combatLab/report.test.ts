@@ -46,6 +46,34 @@ test('parseRunsJsonl: records sorted by run, other / broken lines counted', () =
   assert.equal(recordProblem(record(1)), '');
 });
 
+test('route.drops: optional, aggregated (total / fell / scripted), shown in the Markdown; older records parse and show nothing', () => {
+  const old = record(1);
+  assert.equal(recordProblem(old), '');
+  assert.equal(runRow(old).drops, 0);
+  assert.equal(aggregate([old]).drops, 0);
+  assert.ok(!reportMarkdown([old]).includes('Drops'));
+  const withDrops = record(2, {
+    route: { ...old.route, drops: [
+      { waypoint: 7, label: 'hole roof 0', via: 'hole_roof_0', fell: true, scripted: false, seconds: 4.2 },
+      { waypoint: 9, label: 'hole floor 2', via: 'hole_floor_2', fell: false, scripted: true, seconds: 12 },
+      { waypoint: 11, label: 'hole roof 1', via: 'hole_roof_1', fell: true, scripted: false, seconds: 3 },
+    ] },
+  });
+  const { runs } = parseRunsJsonl([JSON.stringify(old), JSON.stringify(withDrops)].join('\n'));
+  assert.equal(runs.length, 2);
+  const a = aggregate(runs);
+  assert.deepEqual([a.drops, a.dropsFell, a.dropsScripted], [3, 2, 1]);
+  const row = runRow(withDrops);
+  assert.deepEqual([row.drops, row.dropsFell, row.dropsScripted], [3, 2, 1]);
+  const md = reportMarkdown(runs, { id: 'b1', level: 'L_Gen_Depot_1' });
+  assert.match(md, /^# Combat lab bot report — b1 \(L_Gen_Depot_1\)/);
+  assert.match(md, /Drops through roof \/ floor holes: 3 \(fell physically 2, scripted after a failed drop 1\)/);
+  assert.match(md, /run 2: #9 hole floor 2 via hole_floor_2 - SCRIPTED/);
+  // A malformed field is ignored, not thrown.
+  const broken = record(3, { route: { ...old.route, drops: 'nope' as unknown as undefined } });
+  assert.equal(aggregate([broken]).drops, 0);
+});
+
 test('runRow: the route, where / why it got stuck', () => {
   const stuck = { time: 50, position: [123.4, -56.7] as [number, number], waypoint: 3, label: 'tower T_NW', last_order: 'climb: up Ladder_2', reason: 'action_failed:climb_up_timeout', skipped: true };
   const r = record(1, { route: { ...record(1).route, stuck: [{ ...stuck, skipped: false, reason: 'no_move', waypoint: 2, label: 'W_C_4' }, stuck] } });
