@@ -271,4 +271,84 @@ bool FBotRouteCombatLabFileTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBotRouteLevelsTest, "CodexTactics.Bot.Route.LevelsAndDrops",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FBotRouteLevelsTest::RunTest(const FString&)
+{
+	using namespace BotRouteTest;
+	// Generated maps (2026-11-02): a waypoint's "z" (its floor height) and the "drop" through a roof / floor hole.
+	FBotRouteConfig Config;
+	FString Error;
+	const TSharedPtr<FJsonObject> Json = ParseRouteObject(TEXT(R"({"loop": false, "reach_height_cm": 120, "points": [{"at": [0, 0], "z": 0},
+		{"at": [100, 0], "z": 600, "label": "roof rim"}, {"at": [200, 0], "z": 300, "drop": "hole_roof_0"}, {"at": [900, 0]}]})"));
+	if (!TestTrue(TEXT("parses"), Json.IsValid() && BotRouteRules::Parse(*Json, Config, &Error)))
+	{
+		return false;
+	}
+	TestTrue(TEXT("z read"), Config.Points[1].bHasZ && Config.Points[1].Z == 600.f && Config.Points[2].Z == 300.f);
+	TestFalse(TEXT("no z -> none"), Config.Points[3].bHasZ);
+	TestEqual(TEXT("drop read"), Config.Points[2].Drop, FString(TEXT("hole_roof_0")));
+	TestTrue(TEXT("no drop elsewhere"), Config.Points[1].Drop.IsEmpty());
+	TestEqual(TEXT("reach height read"), Config.ReachHeightCm, 120.f);
+
+	FBotRouteTracker Tracker;
+	Tracker.Reset(Config, 0.f, FVector2D::ZeroVector);
+	auto At = [](float Time, double X, float FeetZ)
+	{
+		FBotRouteInput In = RouteAt(Time, FVector2D(X, 0.0));
+		In.LeaderFeetZ = FeetZ;
+		return In;
+	};
+	Tracker.Tick(At(0.1f, 0.0, 0.f));
+	TestTrue(TEXT("the start reached on the ground"), Tracker.Tick(At(0.2f, 0.0, 0.f)) == EBotRouteCommand::Move);
+	TestEqual(TEXT("-> the roof rim"), Tracker.GetIndex(), 1);
+	TestTrue(TEXT("under the roof rim (ground) is NOT the rim"), Tracker.Tick(At(1.f, 100.0, 0.f)) == EBotRouteCommand::None);
+	TestTrue(TEXT("on the roof it is"), Tracker.Tick(At(5.f, 100.0, 600.f)) == EBotRouteCommand::Move);
+	TestEqual(TEXT("-> the drop's landing"), Tracker.GetIndex(), 2);
+	TestTrue(TEXT("still on the roof 1 m off the landing: not there"), Tracker.Tick(At(6.f, 150.0, 600.f)) == EBotRouteCommand::None);
+	TestTrue(TEXT("landed one level down: reached"), Tracker.Tick(At(7.f, 210.0, 302.f)) == EBotRouteCommand::Move);
+	TestTrue(TEXT("a waypoint without z: any height"), Tracker.Tick(At(9.f, 900.0, 300.f)) == EBotRouteCommand::Finished);
+	TestTrue(TEXT("completed"), Tracker.IsRouteCompleted());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBotRouteGeneratedDepotTest, "CodexTactics.Bot.Route.GeneratedDepotRoute",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FBotRouteGeneratedDepotTest::RunTest(const FString&)
+{
+	// The generated map's route (Scripts/Editor/levelgen_bot_route.py from the accepted layout's R_main): a loop through the depot with
+	// the external stair onto the ruin's roof (z 600), the two hole drops (roof -> floor 1 -> ground) and the wall layout at the dead end.
+	FLevelCombatConfig Level;
+	FString Error;
+	if (!TestTrue(FString::Printf(TEXT("L_Gen_Depot_1.json loads (%s)"), *Error), LevelJsonRules::LoadLevel(TEXT("L_Gen_Depot_1.json"), Level, Error)))
+	{
+		return false;
+	}
+	const FBotRouteConfig& Route = Level.BotRoute;
+	TestTrue(TEXT("it has a route"), Route.IsValid());
+	TestTrue(TEXT("a loop"), Route.bLoop);
+	TestTrue(TEXT("an endless pressure level"), Level.Pressure.bEnabled);
+	TestTrue(TEXT("immortal + infinite ammo"), Level.bCheatImmortal && Level.bCheatInfiniteAmmo);
+	TArray<FString> Drops;
+	int32 Roof = 0;
+	int32 Walls = 0;
+	for (const FBotRouteWaypoint& Each : Route.Points)
+	{
+		TestTrue(FString::Printf(TEXT("%s has a z"), *Each.Label), Each.bHasZ);
+		Roof += Each.bHasZ && Each.Z >= 600.f ? 1 : 0;
+		Walls += Each.Action == EBotRouteAction::Wall ? 1 : 0;
+		if (!Each.Drop.IsEmpty())
+		{
+			Drops.Add(Each.Drop);
+		}
+	}
+	TestEqual(TEXT("two drops: roof -> floor 1, floor 1 -> ground"), Drops, TArray<FString>({ TEXT("hole_roof_0"), TEXT("hole_floor_0") }));
+	TestTrue(FString::Printf(TEXT("roof waypoints (%d)"), Roof), Roof >= 2);
+	TestEqual(TEXT("the wall layout at the dead end"), Walls, 1);
+	TestTrue(FString::Printf(TEXT("a lap of 500-800 m (%.0f m)"), Route.LapLengthCm() / 100.f), Route.LapLengthCm() >= 50000.f && Route.LapLengthCm() <= 80000.f);
+	return true;
+}
+
 #endif

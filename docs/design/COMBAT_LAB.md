@@ -201,7 +201,8 @@ Known limit: save / load keeps no pressure state (a reloaded lab starts its pres
 
 ## 7. Training Ground department "Combat lab" (game designer 2026-11-01, branch `tools/tg-combat-lab`)
 
-`Tools/TrainingGround` department **«Боевая лаборатория»** (next to Waves / Movement / Level design), only for `L_FormationLabCombat`. Four tabs:
+`Tools/TrainingGround` department **«Боевая лаборатория»** (next to Waves / Movement / Level design), for `L_FormationLabCombat` and (since
+2026-11-02, section 7.6) every generated map with a `bot_route` - a map selector in the header. Four tabs:
 A level settings and C bot runs are built; B (a map editor: walls, ambush points, the route) and D (a browser simulator) are reserved
 tabs ("скоро"). Endpoints `server/combatLabApi.ts`; pure modules `src/combatLab/pressureSettings.ts` (A) and `src/combatLab/report.ts` (C),
 tests `src/combatLab/*.test.ts`.
@@ -289,3 +290,26 @@ Engineer / Medic 4 per run of 3 min, all from the two tower climbs' Solo), cover
    long walls (W_E_13, W_E_14, the lane D corridors). Loosen it to the operatives' field of view at the time of the search?
 4. **The bot's cover**: 15 m search, a wall >= 2 m long / 1.2 m tall facing the threat; 45 s at most at the wall. OK? (One fight in the batch
    found no wall within 15 m and halted.)
+
+### 7.6 Generated maps (2026-11-02, branch `tools/levelgen-bot-runs`)
+
+The level generator's maps (`docs/design/levelgen/LEVEL_GENERATOR.md` sections 7-8) get the same bot runs:
+- **Map selector.** `GET /api/combat-lab/maps` -> `{default: "L_FormationLabCombat", maps: [{id, map, levelFile, kind: "lab" | "generated",
+  hasRoute, routeName, routePoints}]}` (the lab + every `Content/Maps/Generated/<leaf>.umap` whose `Content/Data/LevelJson/<leaf>.json` has a
+  `bot_route`); every endpoint takes `?map=<id>` (GET) / `map` (POST), missing = the lab (strictly validated ids). Settings, layout preview
+  (a generated map: its accepted layout's walls, buildings, ladders), runs (`-Map` = that map, `batch.json` `level` = the id), batches
+  (per map) and reports per map. Presets stay one shared file; applied to a generated map they keep ITS `ambush.points`, saved from one they
+  carry none (pure `src/combatLab/maps.ts`, tests `maps.test.ts`).
+- **The route.** The builder writes the `bot_route` from the layout's mandatory route (`Scripts/Editor/levelgen_bot_route.py`): waypoints with
+  **`"z"`** (the floor height: the bot's click runs from 1.5 m above that level to 2 m below it - never the roof over a floor point - and the
+  waypoint counts as reached only with the leader's feet within `reach_height_cm` (150) of it; `FBotRouteTracker::IsAt`) and **`"drop"`**
+  on a leg through a roof / floor hole. The squad goes down by the builder's drop nav link (it walks off the rim and falls); the run record's
+  `route.drops` lists each (`fell` / `scripted`); a drop leg that gets stuck is scripted (`ScriptedRouteDrop`: the living squad put down at
+  the waypoint, marked). Tests `CodexTactics.Bot.Route.LevelsAndDrops`, `.GeneratedDepotRoute`, `CodexTactics.Bot.CombatLab.*` (drops).
+- **Clicks.** A slab cut away round the squad inside a building ignores the Visibility channel: the bot's click falls back to WorldStatic.
+  A move click near a wall that the controller turns into a wall-cover PREVIEW (waiting for a second click) is dropped and the leader ordered
+  to the waypoint (it stalled 12 s at the depot's #19 before).
+- **`Codex.Bot.Route [seconds=<game s>] [seed=<n>] [quit]`** starts the route mode in a running game (also without an endless pressure):
+  `LevelGenRouteSmoke` uses it, `UPlaytestBotSubsystem::StartRouteRun`.
+- **Batch** `Scripts/bot_run.ps1 ... -ReportDir <dir>` writes `<dir>/status.json` (`codex.job_status/1`, LEVEL_GENERATOR.md 8.3) and
+  exits 1 when a run errored, 3 when the build lock stayed held. The first batch on `L_Gen_Depot_1`: LEVEL_GENERATOR.md 8.1.

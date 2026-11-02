@@ -114,6 +114,14 @@ public:
 	bool IsRouteMode() const { return bRouteMode; }
 	const FBotRouteTracker& GetRouteTracker() const { return RouteTracker; }
 	const FCombatLabRunCollector& GetCombatLabCollector() const { return LabCollector; }
+	/** The route's drops through roof / floor holes so far (generated maps; the one under way included). */
+	TArray<FBotRouteDrop> GetRouteDrops() const;
+	/**
+	 * Starts the ROUTE mode from the console / a smoke (Codex.Bot.Route; generated maps 2026-11-02): the level's "bot_route" whether the
+	 * level has an endless pressure or not, for DurationSeconds of game time (<= 0: the -BotDuration / 600 s default), bQuitAtEnd exits the
+	 * game at the end (false: the caller reads GetRouteTracker() and ends the game itself).
+	 */
+	void StartRouteRun(float DurationSeconds, bool bQuitAtEnd, int32 InSeed = 1);
 
 	/**
 	 * The best Sprint 12 wall-cover slot within RadiusCm of Operative with the wall between it and Threat (16 knee-high
@@ -194,6 +202,10 @@ private:
 	FCombatLabSample SampleCombatLab() const;
 	void WriteCombatLabLive() const;
 	void WriteCombatLabReport(const TCHAR* Result) const;
+	/** The drop bookkeeping (a waypoint with "drop"): opens / closes a record as the route reaches / leaves it, notes the leader falling. */
+	void TrackRouteDrop();
+	/** A drop leg that got stuck: the bot puts the living squad down at the drop's waypoint itself (marked bScripted in the record). */
+	bool ScriptedRouteDrop();
 
 	/** Godot spatial_telemetry_recorder: frames / events of the fight for the editor's replay player. */
 	FSpatialTelemetryRecorder Spatial;
@@ -306,4 +318,13 @@ private:
 	int32 RoutePressureSeed = 0;
 	int32 RouteLoggedStucks = 0;
 	int32 RouteLoggedIndex = 0;
+	/** -1 = the command line decides (-BotRoute=), 0 off, 1 on (StartRouteRun). */
+	int32 RouteForce = -1;
+	/** StartRouteRun's duration (> 0 overrides -BotDuration). */
+	float RouteDurationOverride = 0.f;
+	TArray<FBotRouteDrop> RouteDrops;
+	/** The drop under way (an index into RouteDrops), INDEX_NONE when the current leg is no drop. */
+	int32 RouteDropActive = INDEX_NONE;
+	int32 RouteDropReachedBase = 0;
+	float RouteDropStart = 0.f;
 };

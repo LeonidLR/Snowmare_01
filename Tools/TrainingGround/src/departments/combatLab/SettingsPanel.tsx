@@ -1,4 +1,4 @@
-// Training Ground «Боевая лаборатория», part A: the level JSON blocks "pressure" / "cheats" of L_FormationLabCombat.json - every field with
+// Training Ground «Боевая лаборатория», part A: the level JSON blocks "pressure" / "cheats" of the chosen map's level JSON - every field with
 // its default and range, validated by the same rules as the C++ parser (src/combatLab/pressureSettings.ts), named presets applied with one
 // click, saved through /api/combat-lab/settings (a backup + the diff of what changed).
 import React, { useMemo, useState } from 'react';
@@ -6,8 +6,9 @@ import { AlertTriangle, CheckCircle2, RotateCcw, Save, Star } from 'lucide-react
 import type { CombatLabPresetFile, CombatLabSettings, PressureField, SettingChange } from '../../combatLab/pressureSettings';
 import {
   CHEAT_FIELDS, FIELD_GROUPS, PRESSURE_FIELDS, PRESSURE_TYPES, diffSettings, eventShares, fieldError, fieldMin, fieldValue, getAt, matchingPreset,
-  presetSettings, setAt, typeShares, typeWeights, validateSettings,
+  setAt, typeShares, typeWeights, validateSettings,
 } from '../../combatLab/pressureSettings';
+import { LAB_MAP_ID, presetSettingsForMap } from '../../combatLab/maps';
 import { Bars, Card, btnGhost, btnPrimary, inputCls, pct } from './ui';
 
 const show = (v: unknown) => (v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
@@ -50,15 +51,17 @@ interface Props {
   onSaved: (saved: CombatLabSettings) => void;
   onPresetsChanged: (file: CombatLabPresetFile) => void;
   file: string;
+  /** The chosen map (src/combatLab/maps.ts): presets are shared, ambush.points stay the map's own. */
+  mapId: string;
 }
 
-export const SettingsPanel: React.FC<Props> = ({ base, settings, presets, onChange, onSaved, onPresetsChanged, file }) => {
+export const SettingsPanel: React.FC<Props> = ({ base, settings, presets, onChange, onSaved, onPresetsChanged, file, mapId }) => {
   const [advanced, setAdvanced] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'bad'; text: string; diff?: SettingChange[]; backup?: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const errors = useMemo(() => (settings ? validateSettings(settings) : []), [settings]);
   const pending = useMemo(() => (base && settings ? diffSettings(base, settings) : []), [base, settings]);
-  const active = settings ? matchingPreset(presets, settings) : undefined;
+  const active = settings ? matchingPreset(presets, settings, mapId) : undefined;
 
   if (!settings) return <Card title="Настройки уровня"><p className="text-sm text-slate-400">Загрузка…</p></Card>;
   const pressure = settings.pressure;
@@ -72,7 +75,7 @@ export const SettingsPanel: React.FC<Props> = ({ base, settings, presets, onChan
     setBusy(true);
     setMessage(null);
     try {
-      const r = await fetch('/api/combat-lab/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings, base }) });
+      const r = await fetch('/api/combat-lab/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ map: mapId, settings, base }) });
       const d = await r.json();
       if (!r.ok) setMessage({ tone: 'bad', text: d.error ?? `ошибка ${r.status}`, diff: d.diff });
       else {
@@ -90,7 +93,7 @@ export const SettingsPanel: React.FC<Props> = ({ base, settings, presets, onChan
     if (!name) return;
     const id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `preset_${Date.now()}`;
     const r = await fetch('/api/combat-lab/presets', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ preset: { id, name: name.trim(), description: 'Saved from the Training Ground', pressure, cheats: settings.cheats } }) });
+      body: JSON.stringify({ map: mapId, preset: { id, name: name.trim(), description: 'Saved from the Training Ground', pressure, cheats: settings.cheats } }) });
     const d = await r.json();
     if (!r.ok) setMessage({ tone: 'bad', text: d.error ?? 'пресет не сохранён' });
     else { onPresetsChanged(d); setMessage({ tone: 'ok', text: `Пресет «${name.trim()}» сохранён (Content/Data/CombatLab/presets.json)` }); }
@@ -98,11 +101,11 @@ export const SettingsPanel: React.FC<Props> = ({ base, settings, presets, onChan
 
   return (
     <div className="flex flex-col gap-4">
-      <Card title="Пресеты" hint="Один клик ставит все настройки давления и читов; «Сохранить в уровень» пишет их в файл уровня."
+      <Card title="Пресеты" hint={`Один клик ставит все настройки давления и читов; «Сохранить в уровень» пишет их в файл уровня.${mapId === LAB_MAP_ID ? '' : ' Пресеты общие для всех карт, но точки засад (ambush.points) остаются свои: пресет их не меняет, а сохранённый отсюда пресет их не содержит.'}`}
         right={<button className={btnGhost} onClick={savePreset} disabled={errors.length > 0}><Star size={14} />Сохранить как пресет</button>}>
         <div className="flex flex-wrap gap-2">
           {(presets?.presets ?? []).map((p) => (
-            <button key={p.id} title={p.description} onClick={() => onChange(presetSettings(p))}
+            <button key={p.id} title={p.description} onClick={() => onChange(presetSettingsForMap(p, settings, mapId))}
               className={`px-3 py-1.5 rounded-lg text-sm border ${active === p.id ? 'bg-cyan-600 border-cyan-500 text-slate-950 font-semibold' : 'bg-slate-950 border-slate-700 text-slate-200 hover:bg-slate-800'}`}>
               {p.name}
             </button>

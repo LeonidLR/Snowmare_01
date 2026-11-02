@@ -1,11 +1,17 @@
-// Training Ground «Боевая лаборатория»: the top-down map of L_FormationLabCombat (walls of formation_lab_01, the towers of the combat
-// overlay), the bot's planned route (numbered, wall / climb waypoints marked), the authored ambush points and - in a report - where the
+// Training Ground «Боевая лаборатория»: the top-down map of the chosen map - L_FormationLabCombat (walls of formation_lab_01, the towers of the
+// combat overlay) or a generated map (its accepted levelgen layout: walls, building footprints, ladders), the bot's planned route (numbered, wall / climb waypoints marked), the authored ambush points and - in a report - where the
 // bot got stuck and where the contacts happened. X right, Y up on screen - the lab's compass (its towers T_NE at +X +Y, T_SW at -X -Y).
 import React, { useEffect, useRef } from 'react';
 
 export interface LabWall { id: string; a: [number, number]; b: [number, number]; thickness?: number }
 export interface LabTower { id: string; center: [number, number]; size: [number, number] }
-export interface LabLayout { bounds: { min: [number, number]; max: [number, number] } | null; walls: LabWall[]; towers: LabTower[]; spawn?: { pos: [number, number] } | null }
+export interface LabBuilding { id: string; min: [number, number]; max: [number, number]; floors?: number }
+export interface LabLadder { id: string; pos: [number, number] }
+export interface LabLayout {
+  bounds: { min: [number, number]; max: [number, number] } | null; walls: LabWall[]; towers: LabTower[]; spawn?: { pos: [number, number] } | null;
+  /** Generated maps only: building footprints (outlined) and ladder markers. */
+  buildings?: LabBuilding[]; ladders?: LabLadder[];
+}
 export interface LabRoutePoint { at: [number, number]; label?: string; action?: string; wall?: [number, number] }
 export interface LabMark { at: [number, number]; kind: 'stuck' | 'skipped' | 'patrol' | 'ambush' | 'coordinated' | 'end'; title?: string }
 
@@ -63,10 +69,17 @@ export const CombatLabMap: React.FC<Props> = ({ layout, route = [], loop = true,
       g.lineWidth = Math.max(2, (wall.thickness ?? 40) * scale);
       g.beginPath(); g.moveTo(sx(wall.a), sy(wall.a)); g.lineTo(sx(wall.b), sy(wall.b)); g.stroke();
     }
-    g.fillStyle = '#475569';
-    g.strokeStyle = '#cbd5e1';
+    g.fillStyle = 'rgba(71,85,105,0.35)';
+    g.strokeStyle = '#64748b';
     g.lineWidth = 1;
     g.font = '10px sans-serif';
+    for (const b of layout.buildings ?? []) {
+      const x0 = sx([b.min[0], b.max[1]]), y0 = sy([b.min[0], b.max[1]]);
+      g.fillRect(x0, y0, (b.max[0] - b.min[0]) * scale, (b.max[1] - b.min[1]) * scale);
+      g.strokeRect(x0, y0, (b.max[0] - b.min[0]) * scale, (b.max[1] - b.min[1]) * scale);
+    }
+    g.fillStyle = '#475569';
+    g.strokeStyle = '#cbd5e1';
     for (const t of layout.towers) {
       const [cx, cy] = t.center, [sizeX, sizeY] = t.size;
       const x0 = sx([cx - sizeX / 2, cy + sizeY / 2]), y0 = sy([cx - sizeX / 2, cy + sizeY / 2]);
@@ -76,6 +89,8 @@ export const CombatLabMap: React.FC<Props> = ({ layout, route = [], loop = true,
       g.fillText(t.id, x0 + sizeX * scale + 3, y0 + 8);
       g.fillStyle = '#475569';
     }
+    g.fillStyle = '#a78bfa';
+    for (const l of layout.ladders ?? []) g.fillRect(sx(l.pos) - 2, sy(l.pos) - 2, 4, 4);
     if (layout.spawn) {
       g.fillStyle = '#22c55e';
       g.beginPath(); g.arc(sx(layout.spawn.pos), sy(layout.spawn.pos), 5, 0, Math.PI * 2); g.fill();

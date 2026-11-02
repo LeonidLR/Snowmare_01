@@ -15,11 +15,13 @@ if (!dir || !fs.existsSync(dir)) {
 const read = (name: string) => (fs.existsSync(path.join(dir, name)) ? fs.readFileSync(path.join(dir, name), 'utf8').replace(/^﻿/, '') : '');
 const { runs, skipped } = parseRunsJsonl(read('runs.jsonl'));
 let preset: string | undefined;
+let level: string | undefined;
 try {
   const batch = JSON.parse(read('batch.json') || '{}');
   preset = typeof batch.preset === 'string' && batch.preset ? batch.preset : undefined;
+  level = typeof batch.level === 'string' && batch.level ? batch.level : undefined;
 } catch { /* no batch.json: fine */ }
-const markdown = reportMarkdown(runs, { id: path.basename(path.resolve(dir)), preset, jev: read('jev.txt') || undefined });
+const markdown = reportMarkdown(runs, { id: path.basename(path.resolve(dir)), preset, level, jev: read('jev.txt') || undefined });
 fs.writeFileSync(path.join(dir, 'report.md'), markdown);
 fs.writeFileSync(path.join(dir, 'aggregate.json'), `${JSON.stringify({ skipped_lines: skipped, ...aggregate(runs) }, null, 2)}\n`);
 console.log(markdown);

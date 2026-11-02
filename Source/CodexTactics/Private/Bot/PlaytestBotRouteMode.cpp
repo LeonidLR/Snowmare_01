@@ -5,6 +5,11 @@
 // it does for the player: a ground click = the formation move, a click on a wall face = the group cover / formation wall layout, a click
 // on a tower roof = a walk up its ladder (Solo, the leader alone). In a fight the squad first takes COVER AT A WALL facing the threat (the same
 // wall click; BotCoverRules - game designer decision 5, 2026-11-01 night).
+// Generated maps (2026-11-02, docs/design/levelgen/LEVEL_GENERATOR.md section 8): a waypoint's "z" puts the click just above its own
+// level (a floor under a roof, the roof above a floor) and is checked on arrival; a "drop" leg goes down through a roof / floor hole by
+// the builder's drop nav link (the leader walks off the rim and falls) - recorded per drop (fell / scripted), and a drop leg that gets
+// stuck is SCRIPTED: the bot puts the squad down at the waypoint itself and the record says so. Codex.Bot.Route starts the mode from the
+// console (LevelGenRouteSmoke, the clip recorder).
 #include "Bot/PlaytestBotSubsystem.h"
 
 #include "AI/AmbushWatchRules.h"
@@ -24,6 +29,8 @@
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/PlatformTime.h"
 #include "Ladders/LadderActor.h"
@@ -50,6 +57,11 @@ namespace BotRouteModeLocal
 	constexpr float WallSettleLimit = 10.f;
 	/** On the roof / back on the ground: feet within this of the level, cm. */
 	constexpr float LevelToleranceCm = 30.f;
+	/** A waypoint with a "z": the click trace runs from this far above its level down to this far below it, cm (under the next level). */
+	constexpr float LevelClickAboveCm = 150.f;
+	constexpr float LevelClickBelowCm = 200.f;
+	/** A scripted drop puts the members on a ring this wide round the waypoint, cm. */
+	constexpr float DropRingCm = 90.f;
 
 	FVector2D To2D(const FVector& Point)
 	{
@@ -82,6 +94,10 @@ bool UPlaytestBotSubsystem::TrySetupRouteMode()
 	const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
 	int32 RouteSwitch = -1;
 	FParse::Value(FCommandLine::Get(), TEXT("BotRoute="), RouteSwitch);
+	if (RouteForce >= 0)
+	{
+		RouteSwitch = RouteForce;
+	}
 	const bool bHasRoute = Level && Level->Config.BotRoute.IsValid();
 	const bool bEndless = Level && Level->Config.Pressure.bEnabled;
 	if (RouteSwitch == 0 || !bHasRoute || (RouteSwitch < 0 && !bEndless))
@@ -102,6 +118,10 @@ bool UPlaytestBotSubsystem::TrySetupRouteMode()
 	bStealthLevel = false;
 	Stage = EBotStage::Route;
 	FParse::Value(FCommandLine::Get(), TEXT("BotDuration="), RouteDurationSeconds);
+	if (RouteDurationOverride > 0.f)
+	{
+		RouteDurationSeconds = RouteDurationOverride;
+	}
 	RouteDurationSeconds = FMath::Max(10.f, RouteDurationSeconds);
 	FParse::Value(FCommandLine::Get(), TEXT("CombatLabReport="), CombatLabReportFile);
 	RoutePressureSeed = Level->Config.Pressure.Seed;
@@ -120,6 +140,8 @@ bool UPlaytestBotSubsystem::TrySetupRouteMode()
 	RouteClickCooldown = 0.f;
 	RouteLoggedStucks = 0;
 	RouteLoggedIndex = 0;
+	RouteDrops.Reset();
+	RouteDropActive = INDEX_NONE;
 	const FBotRouteConfig& Route = Level->Config.BotRoute;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route mode: route '%s' (%d waypoints, lap %.0f m, loop %d), %.0f s by time, pressure seed %d, immortal %d, infinite ammo %d, report %s"),
 		*Route.Name, Route.Points.Num(), Route.LapLengthCm() / 100.f, Route.bLoop ? 1 : 0, RouteDurationSeconds, RoutePressureSeed,
@@ -137,6 +159,7 @@ FBotRouteInput UPlaytestBotSubsystem::RouteInput() const
 	if (Leader)
 	{
 		In.Leader = BotRouteModeLocal::To2D(Leader->GetActorLocation());
+		In.LeaderFeetZ = BotRouteModeLocal::RouteFeetZ(*Leader);
 	}
 	const ULadderClimbComponent* Climb = Leader ? Leader->LadderClimb.Get() : nullptr;
 	In.bPaused = bRouteFightHold || RoutePhase != ERouteActionPhase::None || !Leader || Leader->IsKnockedDown() || (Climb && Climb->IsOnLadder());
@@ -235,6 +258,7 @@ void UPlaytestBotSubsystem::TickRoute(float DeltaTime)
 	{
 		TickRouteAction(DeltaTime);
 	}
+	TrackRouteDrop();
 	const EBotRouteCommand Command = RouteTracker.Tick(RouteInput());
 	if (Command != EBotRouteCommand::None)
 	{
@@ -271,6 +295,10 @@ void UPlaytestBotSubsystem::HandleRouteCommand(EBotRouteCommand Command)
 		IssueRouteMove(TEXT("move"));
 		return;
 	case EBotRouteCommand::Retry:
+		if (ScriptedRouteDrop())
+		{
+			return;
+		}
 		IssueRouteMove(TEXT("retry"));
 		return;
 	case EBotRouteCommand::StartAction:
@@ -365,8 +393,11 @@ bool UPlaytestBotSubsystem::RouteClick(const FVector& Start, const FVector& End,
 		}
 	}
 	FHitResult Hit;
-	if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
+	// Visibility first (the cursor's channel). A slab the view cuts away round the squad inside a building (a generated map's floor under
+	// the leader's roof hole, 2026-11-02) ignores Visibility but still blocks WorldStatic: the click lands on it then.
+	if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params) && !World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Params))
 	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route click (%s) from %s to %s hit nothing"), What, *Start.ToCompactString(), *End.ToCompactString());
 		return false;
 	}
 	Controller->HandleWorldHit(Hit);
@@ -379,7 +410,7 @@ void UPlaytestBotSubsystem::IssueRouteMove(const TCHAR* Why)
 	using namespace BotRouteModeLocal;
 	const FBotRouteWaypoint* Waypoint = RouteTracker.GetWaypoint();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Waypoint || !Leader)
 	{
 		return;
@@ -390,13 +421,28 @@ void UPlaytestBotSubsystem::IssueRouteMove(const TCHAR* Why)
 		return;
 	}
 	RouteClickCooldown = ClickInterval;
-	const FVector Target(Waypoint->At.X, Waypoint->At.Y, RouteFeetZ(*Leader));
-	if (!RouteClick(Target + FVector(0.f, 0.f, 400.f), Target - FVector(0.f, 0.f, 600.f), TEXT("move")))
+	// A waypoint with its level ("z"): the click just above that level (never the roof over it, never the floor under it); else from
+	// above the leader's own level as before.
+	const FVector Target(Waypoint->At.X, Waypoint->At.Y, Waypoint->bHasZ ? Waypoint->Z : RouteFeetZ(*Leader));
+	const float Above = Waypoint->bHasZ ? LevelClickAboveCm : 400.f;
+	const float Below = Waypoint->bHasZ ? LevelClickBelowCm : 600.f;
+	if (!RouteClick(Target + FVector(0.f, 0.f, Above), Target - FVector(0.f, 0.f, Below), TEXT("move")))
 	{
 		HandleRouteCommand(RouteTracker.NotifyOrderFailed(RouteInput(), TEXT("no_ground_hit")));
 		return;
 	}
 	bRouteReorder = false;
+	// A walk waypoint within the wall-click reach of a wall (a generated map's point 2.7 m off a building corner, 2026-11-02): the click
+	// became a COVER preview that waits for a second click - the route means a walk: the preview is dropped and the leader ordered there
+	// (the formation follows him as on any leader move).
+	ACodexTacticsPlayerController* Controller = Cast<ACodexTacticsPlayerController>(GetWorld()->GetFirstPlayerController());
+	if (Controller && Controller->HasCoverPreview())
+	{
+		Controller->HideCoverPreview();
+		Leader->OrderMoveTo(Target, false);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: the click on #%d (%s) was a wall-cover preview - dropped, the leader walks there"), RouteTracker.GetIndex(),
+			*Waypoint->Label);
+	}
 	RouteTracker.NotifyOrder(FString::Printf(TEXT("%s: move to #%d %s (%.0f, %.0f)"), Why, RouteTracker.GetIndex(), *Waypoint->Label, Waypoint->At.X, Waypoint->At.Y));
 }
 
@@ -683,6 +729,7 @@ void UPlaytestBotSubsystem::WriteCombatLabReport(const TCHAR* Result) const
 	Meta.Map = World->GetMapName();
 	Meta.TimestampUtc = FDateTime::UtcNow().ToIso8601();
 	Meta.PlannedSeconds = RouteDurationSeconds;
+	Meta.Drops = GetRouteDrops();
 	Meta.RealSeconds = static_cast<float>(FPlatformTime::Seconds() - StartRealTime);
 	Meta.bImmortal = CombatCheats::IsImmortal(World);
 	Meta.bInfiniteAmmo = CombatCheats::IsInfiniteAmmo(World);
@@ -709,6 +756,17 @@ void UPlaytestBotSubsystem::WriteCombatLabReport(const TCHAR* Result) const
 		RouteTracker.GetStucks().Num(), Final.GetContacts().Num(), Final.CountContacts(ECombatLabContactKind::Patrol), Final.CountContacts(ECombatLabContactKind::Ambush),
 		Final.CountContacts(ECombatLabContactKind::Coordinated), Final.CountUnwatchedStrikes(), Final.GetFormationChanges(), Final.GetWallHugs(),
 		Final.GetCoverTaken(), Final.GetCoverOrders(), Final.GetCoverSeconds(), Final.GetStanceChanges(), Final.GetClimbsUp(), Final.GetKnockdowns(), Final.GetRounds(), Final.GetDamageTaken(), Final.GetDamageAbsorbed());
+	if (!Meta.Drops.IsEmpty())
+	{
+		int32 Fell = 0;
+		int32 Scripted = 0;
+		for (const FBotRouteDrop& Drop : Meta.Drops)
+		{
+			Fell += Drop.bFell ? 1 : 0;
+			Scripted += Drop.bScripted ? 1 : 0;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route report: drops %d (fell through the hole %d, scripted %d)"), Meta.Drops.Num(), Fell, Scripted);
+	}
 	if (!CombatLabReportFile.IsEmpty())
 	{
 		if (!FFileHelper::SaveStringToFile(Line + TEXT("\n"), *CombatLabReportFile, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
@@ -717,3 +775,129 @@ void UPlaytestBotSubsystem::WriteCombatLabReport(const TCHAR* Result) const
 		}
 	}
 }
+
+void UPlaytestBotSubsystem::TrackRouteDrop()
+{
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	const float Now = static_cast<float>(GetWorld()->GetTimeSeconds() - RouteStartTime);
+	const FBotRouteWaypoint* Waypoint = RouteTracker.IsFinished() ? nullptr : RouteTracker.GetWaypoint();
+	if (RouteDrops.IsValidIndex(RouteDropActive) && (RouteDrops[RouteDropActive].Waypoint != RouteTracker.GetIndex() || RouteTracker.IsFinished()))
+	{
+		FBotRouteDrop& Done = RouteDrops[RouteDropActive];
+		Done.bReached = RouteTracker.GetTotalReached() > RouteDropReachedBase;
+		Done.Seconds = Now - RouteDropStart;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: DROP %s to #%d (%s) %s after %.1f s: %s"), *Done.Via, Done.Waypoint, *Done.Label,
+			Done.bReached ? TEXT("reached") : TEXT("GIVEN UP"), Done.Seconds,
+			Done.bScripted ? TEXT("SCRIPTED (the squad put down by the bot)")
+				: (Done.bFell ? TEXT("the leader fell through the hole (drop nav link)") : TEXT("no fall - walked round by the stairs")));
+		RouteDropActive = INDEX_NONE;
+	}
+	if (RouteDropActive == INDEX_NONE && Waypoint && !Waypoint->Drop.IsEmpty() && !RouteTracker.IsInAction())
+	{
+		FBotRouteDrop Drop;
+		Drop.Waypoint = RouteTracker.GetIndex();
+		Drop.Label = Waypoint->Label;
+		Drop.Via = Waypoint->Drop;
+		RouteDropActive = RouteDrops.Add(Drop);
+		RouteDropReachedBase = RouteTracker.GetTotalReached();
+		RouteDropStart = Now;
+	}
+	if (RouteDrops.IsValidIndex(RouteDropActive) && !RouteDrops[RouteDropActive].bFell && Leader && Leader->GetCharacterMovement()
+		&& Leader->GetCharacterMovement()->IsFalling())
+	{
+		RouteDrops[RouteDropActive].bFell = true;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: the leader drops through %s at %.1f s (feet z %.0f)"), *RouteDrops[RouteDropActive].Via, Now,
+			BotRouteModeLocal::RouteFeetZ(*Leader));
+	}
+}
+
+bool UPlaytestBotSubsystem::ScriptedRouteDrop()
+{
+	using namespace BotRouteModeLocal;
+	const FBotRouteWaypoint* Waypoint = RouteTracker.GetWaypoint();
+	USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	if (!Waypoint || Waypoint->Drop.IsEmpty() || !Waypoint->bHasZ || !Squad || !RouteDrops.IsValidIndex(RouteDropActive) || RouteDrops[RouteDropActive].bFell)
+	{
+		return false;
+	}
+	// The drop nav link did not take the squad down (no link / the leg stuck): the living members are put down at the waypoint's level on a
+	// small ring round it - a SCRIPTED drop, marked in the record (the report shows it apart from a real fall).
+	int32 Placed = 0;
+	const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+	for (int32 Each = 0; Each < Members.Num(); ++Each)
+	{
+		AOperativeCharacter* Member = Members[Each];
+		if (!Member || !IsLiving(Member))
+		{
+			continue;
+		}
+		const float Angle = 2.f * PI * static_cast<float>(Each) / static_cast<float>(FMath::Max(1, Members.Num()));
+		const FVector2D Spot = Waypoint->At + (Each == 0 ? FVector2D::ZeroVector : FVector2D(FMath::Cos(Angle), FMath::Sin(Angle)) * DropRingCm);
+		Member->TeleportTo(FVector(Spot.X, Spot.Y, Waypoint->Z + Member->GetSimpleCollisionHalfHeight() + 5.f), Member->GetActorRotation(), false, false);
+		++Placed;
+	}
+	RouteDrops[RouteDropActive].bScripted = true;
+	RouteTracker.NotifyOrder(FString::Printf(TEXT("scripted drop through %s to #%d"), *Waypoint->Drop, RouteTracker.GetIndex()));
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: SCRIPTED DROP through %s to #%d (%s): %d members put down at (%.0f, %.0f, %.0f) - the drop leg got stuck"),
+		*Waypoint->Drop, RouteTracker.GetIndex(), *Waypoint->Label, Placed, Waypoint->At.X, Waypoint->At.Y, Waypoint->Z);
+	RouteClickCooldown = 0.f;
+	IssueRouteMove(TEXT("after the scripted drop"));
+	return true;
+}
+
+TArray<FBotRouteDrop> UPlaytestBotSubsystem::GetRouteDrops() const
+{
+	TArray<FBotRouteDrop> Out = RouteDrops;
+	if (Out.IsValidIndex(RouteDropActive))
+	{
+		Out[RouteDropActive].Seconds = static_cast<float>(GetWorld()->GetTimeSeconds() - RouteStartTime) - RouteDropStart;
+	}
+	return Out;
+}
+
+void UPlaytestBotSubsystem::StartRouteRun(float DurationSeconds, bool bQuitAtEnd, int32 InSeed)
+{
+	RouteForce = 1;
+	RouteDurationOverride = DurationSeconds;
+	// A console start has no -BotTimeout: the real-time cap only guards against a hung game (the route ends by game time).
+	TimeoutSeconds = FMath::Max(TimeoutSeconds, FMath::Max(3600.f, (DurationSeconds > 0.f ? DurationSeconds : 600.f) * 6.f));
+	StartBot(EBotProfile::Normal, bQuitAtEnd, false, InSeed);
+}
+
+#if CODEX_WITH_PLAYTEST_BOT
+namespace PlaytestBotRouteCommand
+{
+	void Run(const TArray<FString>& Args, UWorld* World)
+	{
+		UPlaytestBotSubsystem* Bot = World ? World->GetSubsystem<UPlaytestBotSubsystem>() : nullptr;
+		if (!Bot)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Bot] Codex.Bot.Route: no bot in this world"));
+			return;
+		}
+		float Seconds = 0.f;
+		int32 RunSeed = 1;
+		bool bQuitAtEnd = false;
+		for (const FString& Arg : Args)
+		{
+			if (Arg.StartsWith(TEXT("seconds=")))
+			{
+				Seconds = FCString::Atof(*Arg.Mid(8));
+			}
+			else if (Arg.StartsWith(TEXT("seed=")))
+			{
+				RunSeed = FCString::Atoi(*Arg.Mid(5));
+			}
+			bQuitAtEnd |= Arg == TEXT("quit");
+		}
+		Bot->StartRouteRun(Seconds, bQuitAtEnd, RunSeed);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Codex.Bot.Route: route mode for %.0f s (quit %d, seed %d)"), Seconds, bQuitAtEnd ? 1 : 0, RunSeed);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs Command(TEXT("Codex.Bot.Route"),
+		TEXT("Dev (2026-11-02): the playtest bot walks the level's bot_route (route mode, also without an endless pressure): ")
+		TEXT("Codex.Bot.Route [seconds=<game s>] [seed=<n>] [quit] (quit: exit the game when the time is up)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
+}
+#endif // CODEX_WITH_PLAYTEST_BOT

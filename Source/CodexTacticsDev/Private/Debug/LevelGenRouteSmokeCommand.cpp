@@ -7,20 +7,28 @@
 // or the leg where the squad got stuck (the leg's layer, the leader's position, the last order), then PASS / FAIL and exits.
 //   powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands LevelGenRouteSmoke -ExtraArgs "-Multiprocess"
 //   (map /Game/Maps/Generated/L_Gen_Depot_1, "-LevelJson=L_Gen_Depot_1.json" - Scripts/test_map.json smokeOptions)
-// Arguments: layout=<accepted name> (default: the level JSON's levelgen_layout, else the newest accepted file), route=<id> (default
-// the mandatory route).
-// TODO(route-mode): once the combat-lab bot ROUTE mode lands (PlaytestBotRouteMode / BotRouteRules, branch tools/tg-combat-lab),
-// hand the walk to `Codex.Bot.Route <route id>` and only read its result (the console object is probed below and reported);
-// this carrot walk stays the fallback.
+// Arguments: map=<L_Gen_...> (the generated map to check - its level JSON / accepted layout; it must be the loaded map: run the game on it,
+// e.g. Scripts/levelgen_route_smoke.ps1 -Map /Game/Maps/Generated/<map>), layout=<accepted name> (default: the level JSON's
+// levelgen_layout, else the newest accepted file), route=<id> (default the mandatory route), walk=bot|carrot (default bot).
+// THE BOT ROUTE MODE (2026-11-02, the hook of LEVEL_GENERATOR.md section 8): when the level JSON has a "bot_route" (the builder writes it
+// from the mandatory route, Scripts/Editor/levelgen_bot_route.py) the walk is handed to the playtest bot's route mode (Codex.Bot.Route,
+// PlaytestBotRouteMode.cpp: the player's own clicks, the formation, the drop nav links through the holes), the pressure switched off
+// (Codex.Pressure.Enabled 0: a walk check, not a fight); the smoke only reads its tracker: PASS = every waypoint of the route reached once
+// with none skipped; each hole drop is reported (fell through the drop nav link / scripted by the bot). No bot route (or walk=carrot):
+// the carrot walk below, as before (its hole drops teleported).
 // Godot reference: none (UE-only).
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Bot/BotRouteRules.h"
+#include "Bot/PlaytestBotSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/WaveConfigTypes.h"
 #include "Containers/Ticker.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
@@ -44,6 +52,8 @@ namespace LevelGenRouteSmoke
 	constexpr float LegMinSeconds = 25.f;
 	constexpr float LevelTolCm = 160.f;        // the leader stands on the leg's level within this (a ladder / ramp arrival)
 	constexpr float StuckReorderSeconds = 6.f;
+	/** The bot route walk must have reached every waypoint within this much game time, s. */
+	constexpr float BotRouteLimitSeconds = 1500.f;
 
 	struct FLeg
 	{
@@ -56,7 +66,7 @@ namespace LevelGenRouteSmoke
 		FString Via;
 	};
 
-	enum class EStage : uint8 { Walk, Done };
+	enum class EStage : uint8 { Walk, BotRoute, Done };
 
 	struct FState
 	{
@@ -82,8 +92,10 @@ namespace LevelGenRouteSmoke
 
 	bool Finish(FState& State, bool bComplete)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRouteSmoke %s route %s: %d / %d legs, %.0f s, %d hole drops teleported"), *State.LayoutName, *State.RouteId,
-			State.Leg, State.Legs.Num(), State.Total, State.Teleports);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRouteSmoke %s route %s (%s): %d / %d %s, %.0f s, %d hole drops %s"), *State.LayoutName, *State.RouteId,
+			State.Stage == EStage::BotRoute ? TEXT("bot route mode") : TEXT("carrot walk"), State.Leg, State.Stage == EStage::BotRoute ? State.Legs.Num() + 1 : State.Legs.Num(),
+			State.Stage == EStage::BotRoute ? TEXT("waypoints") : TEXT("legs"), State.Total, State.Teleports,
+			State.Stage == EStage::BotRoute ? TEXT("scripted") : TEXT("teleported"));
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		State.Stage = EStage::Done;
 		FPlatformMisc::RequestExit(false, TEXT("LevelGenRouteSmoke"));
@@ -129,14 +141,20 @@ namespace LevelGenRouteSmoke
 	}
 
 	/** The accepted layout file: the argument, the level JSON's "levelgen_layout", else the newest accepted file. */
-	FString FindLayoutFile(const UWorld* World, const FString& Arg)
+	/** The loaded map's leaf name (no PIE prefix). */
+	FString LoadedMapName(const UWorld* World)
+	{
+		return World ? World->GetMapName().Replace(TEXT("UEDPIE_0_"), TEXT("")) : FString();
+	}
+
+	FString FindLayoutFile(const UWorld* World, const FString& Arg, const FString& MapArg)
 	{
 		const FString Accepted = FPaths::ProjectContentDir() / TEXT("Data/LevelGen/accepted");
 		if (!Arg.IsEmpty())
 		{
 			return Accepted / Arg + TEXT(".json");
 		}
-		const FString MapName = World ? World->GetMapName().Replace(TEXT("UEDPIE_0_"), TEXT("")) : FString();
+		const FString MapName = MapArg.IsEmpty() ? LoadedMapName(World) : MapArg;
 		const FString LevelFile = FPaths::ProjectContentDir() / TEXT("Data/LevelJson") / MapName + TEXT(".json");
 		FString Text;
 		if (FFileHelper::LoadFileToString(Text, *LevelFile))
@@ -167,9 +185,9 @@ namespace LevelGenRouteSmoke
 		return Best;
 	}
 
-	bool LoadLegs(const UWorld* World, FState& State, const FString& LayoutArg, const FString& RouteArg, FString& Error)
+	bool LoadLegs(const UWorld* World, FState& State, const FString& LayoutArg, const FString& RouteArg, const FString& MapArg, FString& Error)
 	{
-		const FString File = FindLayoutFile(World, LayoutArg);
+		const FString File = FindLayoutFile(World, LayoutArg, MapArg);
 		FString Text;
 		if (File.IsEmpty() || !FFileHelper::LoadFileToString(Text, *File))
 		{
@@ -336,21 +354,108 @@ namespace LevelGenRouteSmoke
 		return true;
 	}
 
-	void Start(UWorld* World, const FString& LayoutArg, const FString& RouteArg)
+	/** The bot route walk: reads the route mode's tracker (the bot drives the squad). */
+	bool StepBotRoute(UWorld* World, FState& State, float Dt)
+	{
+		if (State.Stage == EStage::Done)
+		{
+			return false;
+		}
+		State.Total += Dt;
+#if CODEX_WITH_PLAYTEST_BOT
+		const UPlaytestBotSubsystem* Bot = World->GetSubsystem<UPlaytestBotSubsystem>();
+		if (!Bot || !Bot->IsRouteMode())
+		{
+			if (State.Total > 20.f)
+			{
+				Check(State, false, TEXT("the bot's route mode started (Codex.Bot.Route)"));
+				return Finish(State, false);
+			}
+			return true;
+		}
+		const FBotRouteTracker& Tracker = Bot->GetRouteTracker();
+		const int32 Num = Tracker.GetConfig().Points.Num();
+		State.Leg = FMath::Min(Tracker.GetTotalReached(), Num);
+		const bool bSkipped = Tracker.GetTotalSkipped() > 0;
+		const bool bAll = Tracker.GetTotalReached() >= Num;
+		if (!bSkipped && !bAll && State.Total < BotRouteLimitSeconds)
+		{
+			return true;
+		}
+		for (const FBotRouteStuck& Stuck : Tracker.GetStucks())
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: stuck at %.0f s on #%d (%s) at (%.0f, %.0f): %s, last order '%s'%s"), Stuck.Time, Stuck.Waypoint, *Stuck.Label,
+				Stuck.Position.X, Stuck.Position.Y, *Stuck.Reason, *Stuck.LastOrder, Stuck.bSkipped ? TEXT(" -> SKIPPED") : TEXT(""));
+		}
+		for (const FBotRouteDrop& Drop : Bot->GetRouteDrops())
+		{
+			const bool bTeleport = Drop.bScripted;
+			State.Teleports += bTeleport ? 1 : 0;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: drop through %s to #%d (%s): %s, %.1f s"), bTeleport ? TEXT("known") : TEXT("ok  "), *Drop.Via, Drop.Waypoint, *Drop.Label,
+				Drop.bScripted ? TEXT("SCRIPTED by the bot (the drop leg got stuck)") : (Drop.bFell ? TEXT("the leader fell through the drop nav link") : TEXT("no fall (walked round)")),
+				Drop.Seconds);
+		}
+		Check(State, bAll && !bSkipped, FString::Printf(TEXT("the bot walked the route %s: %d / %d waypoints reached, %d skipped, %d stuck events, %.0f m in %.0f s"),
+			*Tracker.GetConfig().Name, Tracker.GetTotalReached(), Num, Tracker.GetTotalSkipped(), Tracker.GetStucks().Num(), Tracker.GetDistanceCm() / 100.f, State.Total));
+		return Finish(State, bAll && !bSkipped);
+#else
+		Check(State, false, TEXT("the playtest bot exists in this build"));
+		return Finish(State, false);
+#endif
+	}
+
+	/** The level JSON has a bot route and the bot exists: the walk goes to the route mode. */
+	bool CanUseBotRoute(UWorld* World)
+	{
+#if CODEX_WITH_PLAYTEST_BOT
+		const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
+		const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+		return Level && Level->Config.BotRoute.IsValid() && World->GetSubsystem<UPlaytestBotSubsystem>() != nullptr;
+#else
+		return false;
+#endif
+	}
+
+	void Start(UWorld* World, const FString& LayoutArg, const FString& RouteArg, const FString& MapArg, bool bCarrot)
 	{
 		TSharedRef<FState> State = MakeShared<FState>();
 		FString Error;
-		if (!LoadLegs(World, *State, LayoutArg, RouteArg, Error))
+		if (!MapArg.IsEmpty() && !MapArg.Equals(LoadedMapName(World), ESearchCase::IgnoreCase))
+		{
+			Check(*State, false, FString::Printf(TEXT("map=%s is the loaded map (loaded: %s; run the game on it: Scripts/levelgen_route_smoke.ps1 -Map /Game/Maps/Generated/%s)"),
+				*MapArg, *LoadedMapName(World), *MapArg));
+			Finish(*State, false);
+			return;
+		}
+		if (!LoadLegs(World, *State, LayoutArg, RouteArg, MapArg, Error))
 		{
 			Check(*State, false, FString::Printf(TEXT("layout: %s"), *Error));
 			Finish(*State, false);
 			return;
 		}
-		// TODO(route-mode): hand over to the combat-lab bot's route mode when its console command exists.
-		const bool bRouteMode = IConsoleManager::Get().FindConsoleObject(TEXT("Codex.Bot.Route")) != nullptr;
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRouteSmoke layout %s route %s: %d legs; bot route mode %s"), *State->LayoutName, *State->RouteId, State->Legs.Num(),
-			bRouteMode ? TEXT("available (TODO: delegate the walk to Codex.Bot.Route)") : TEXT("not merged yet - the carrot walk"));
 		TWeakObjectPtr<UWorld> WeakWorld(World);
+		if (!bCarrot && RouteArg.IsEmpty() && CanUseBotRoute(World))
+		{
+#if CODEX_WITH_PLAYTEST_BOT
+			// A walk check: no pressure enemies on the way (the bot batches fight them).
+			if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
+			{
+				Pressure->Set(0, ECVF_SetByConsole);
+			}
+			World->GetSubsystem<UPlaytestBotSubsystem>()->StartRouteRun(BotRouteLimitSeconds + 60.f, false, 1);
+			State->Stage = EStage::BotRoute;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRouteSmoke layout %s route %s on %s: the walk handed to the bot's route mode (Codex.Bot.Route; the pressure off)"),
+				*State->LayoutName, *State->RouteId, *LoadedMapName(World));
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
+			{
+				UWorld* W = WeakWorld.Get();
+				return W && State->Stage != EStage::Done && StepBotRoute(W, *State, W->IsPaused() ? 0.f : W->GetDeltaSeconds());
+			}), 0.f);
+			return;
+#endif
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRouteSmoke layout %s route %s: %d legs; the carrot walk (%s)"), *State->LayoutName, *State->RouteId, State->Legs.Num(),
+			bCarrot ? TEXT("walk=carrot") : (RouteArg.IsEmpty() ? TEXT("no bot route in the level JSON") : TEXT("a route other than the bot's")));
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			UWorld* W = WeakWorld.Get();
@@ -364,9 +469,15 @@ namespace LevelGenRouteSmoke
 		{
 			return;
 		}
-		FString LayoutArg, RouteArg;
+		FString LayoutArg, RouteArg, MapArg;
+		bool bCarrot = false;
 		for (const FString& Arg : Args)
 		{
+			if (Arg.StartsWith(TEXT("map=")))
+			{
+				MapArg = FPaths::GetBaseFilename(Arg.Mid(4));
+			}
+			bCarrot |= Arg == TEXT("walk=carrot");
 			if (Arg.StartsWith(TEXT("layout=")))
 			{
 				LayoutArg = Arg.Mid(7);
@@ -378,11 +489,11 @@ namespace LevelGenRouteSmoke
 		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTimerHandle Handle;
-		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld, LayoutArg, RouteArg]()
+		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld, LayoutArg, RouteArg, MapArg, bCarrot]()
 		{
 			if (UWorld* W = WeakWorld.Get())
 			{
-				Start(W, LayoutArg, RouteArg);
+				Start(W, LayoutArg, RouteArg, MapArg, bCarrot);
 			}
 		}), NavWarmupSeconds, false);
 	}
@@ -390,7 +501,8 @@ namespace LevelGenRouteSmoke
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.LevelGenRouteSmoke"),
 		TEXT("Dev check (2026-11-01, docs/design/levelgen/LEVEL_GENERATOR.md 8): the squad walks the mandatory route of the generated map's accepted layout ")
-		TEXT("(ladders / stairs through the nav links; hole drops teleported and reported); [layout=<accepted name>] [route=<id>]. PASS/FAIL, then exits."),
+		TEXT("- by the bot's route mode when the level JSON has a bot_route (drops through the drop nav links), else the carrot walk (hole drops teleported); ")
+		TEXT("[map=<L_Gen_...>] [layout=<accepted name>] [route=<id>] [walk=carrot]. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
