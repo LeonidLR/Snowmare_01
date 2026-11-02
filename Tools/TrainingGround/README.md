@@ -69,6 +69,13 @@ npm run dev
   симулятор проверяет обязательный маршрут (он должен быть проходим), механики, обзор, засады и сходство с эталоном; критики —
   Jev (типизированные суждения, бесплатно) и Claude API (видит обе картинки, лимит в долларах); принятые раскладки —
   `Content/Data/LevelGen/accepted/` для сборки карты в UE (`Scripts/Editor/build_levelgen_map.py`).
+  * **Боевой симулятор** (с 2026-11-02, `docs/design/levelgen/COMBAT_SIM.md`, `src/combatSim/`) — раскладка оценивается С ВРАГАМИ за секунды до
+    сборки карты: отряд идёт строем по обязательному маршруту (трек симулятора перемещения), давление боевой лаборатории работает по точным
+    портам правил игры (патрули, засады у концов стен / проёмов / авторских точек, правило взгляда, скоординированные засады, перенос), бои
+    упрощённые, но явные; детерминированно по сиду, ~0.1 с на 10-минутный прогон. Результат `combatsim.json` (схема `codex.combat_sim/1`) +
+    `report.md` ≤ 40 строк с диагностикой: почему засад мало (исход каждого события, по каждой скоординированной попытке — какой сектор остался
+    без укрытой точки, судьба каждой точки засады, тепловая карта контактов). Калибровка по серии ботов в Unreal — `combatsim:calibrate`.
+    Панель в Training Ground — следующий этап (схема стабильна, пример — `src/combatSim/fixtures/combatsim.example.json`).
 
 Командная строка (`Tools/TrainingGround`):
 
@@ -81,6 +88,8 @@ npm run dev
 | `node src/combatLab/cli/report.ts --batch <папка серии>` | отчёт серии ботов боевой лаборатории заново (`report.md`, `aggregate.json`); серию запускает страница или `Scripts/bot_run.ps1 -Map /Game/Maps/L_FormationLabCombat -ReportDir <папка> -DurationSec 600 -Runs 4 -Parallel 2` |
 | `npm run levelgen -- --seed 1 --seeds 3 [--size 177x124 --density 1 --variants 3 --verticality 3 --no-sim] [--accept <name>]` | генератор уровней: кандидаты + оценка → `Saved/TrainingGround/levelgen/<name>.json`, `.eval.json`, `report.md` (≤ 30 строк на кандидата); `--accept` копирует кандидата в `Content/Data/LevelGen/accepted/` |
 | `npm run levelgen:critic -- --layout <name> --client claude\|jev\|mock --budget-usd 2 [--model claude-opus-5-5] [--dry-run]` | критик кандидата: Claude (картинки + метрики, расход в `critic_ledger.json`), Jev (типизированные суждения), эвристика |
+| `npm run combatsim -- --layout <name\|путь> --seeds 200 [--minutes 10] [--pressure <json\|файл>] [--level <json уровня>] [--constants <json>] [--out <папка>]` | боевой симулятор раскладки (`docs/design/levelgen/COMBAT_SIM.md`): 200 сидов × 10 мин за ~10 с → `Saved/TrainingGround/combatsim/<раскладка>/combatsim.json` (`codex.combat_sim/1`) + `report.md` (≤ 40 строк) |
+| `npm run combatsim:calibrate -- --batch <папка серии ботов> [--seeds 200]` | таблица сим / Unreal по метрикам серии (`calibration.md`; код выхода 1, если главная метрика вне полосы 0.6..1.6); путь с пробелами — `node src/combatSim/cli/calibrate.ts ...` |
 | `npm test`, `npm run typecheck` | тесты логики и проверка типов |
 
 Платные только вызовы модели в обучении: ключ берётся из окружения этого компьютера (`ANTHROPIC_API_KEY` / `TYPESAFE_API_KEY`)

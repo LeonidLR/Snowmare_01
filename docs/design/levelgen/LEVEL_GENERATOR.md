@@ -24,7 +24,8 @@
 | Bot route + drop links | `Scripts/Editor/levelgen_bot_route.py` (pure: the level JSON's `bot_route` from the mandatory route, the hole drop links; `--test`; alone it patches a level JSON without a rebuild) |
 | Combat bot runs / video | `Scripts/bot_run.ps1 -ReportDir` (section 8.1), `Scripts/levelgen_record_run.ps1` + `Scripts/Tools/clip_assemble.py` (section 8.2); the Training Ground «Боевая лаборатория» lists every generated map with a `bot_route` |
 | Pipeline job status | `Scripts/job_status.ps1` (`codex.job_status/1`, section 8.3) |
-| Tests | `src/levelgen/levelgen.test.ts` (`npm test`) |
+| Combat simulator (a layout judged WITH enemies before the build) | `src/combatSim/` (section 8.4; `docs/design/levelgen/COMBAT_SIM.md`): `npm run combatsim -- --layout <name> --seeds 200`, `npm run combatsim:calibrate -- --batch <Unreal batch dir>`; output `codex.combat_sim/1` |
+| Tests | `src/levelgen/levelgen.test.ts`, `src/combatSim/combatSim.test.ts` (`npm test`) |
 
 ## 2. The layout format `codex.levelgen_layout/1`
 
@@ -272,6 +273,14 @@ recording (clips.json is per folder). Rendering runs at ~6-9 frames per real sec
 back to the spawn), 19 s each; the route lap completed, both drops a real fall (events in clips.json). Only two fights in that seed - more
 with `-Seed` 2 (the batch's run 2 had 5 contacts).
 
+**Pressure of generated maps since 2026-11-02 (`tools/combat-sim`, COMBAT_SIM.md section 5):** the user's watch of the first run ("few
+enemies, almost no ambushes") and the combat simulator's diagnosis (the event mix, not the hiding spots: 60 % patrols and 5 events in 10 min left
+~2 ambush-type events a run; 37 % of the coordinated plans found no concealed spot on the squad's open flank) moved the template in `generate.ts`
+and `L_Gen_Depot_1.json` to `patrol_share` **0.3**, `ambush.coordinated.share` **0.5**, `interval_sec` **90**, `max_alive` **8**,
+`ambush.coordinated.max_alive` **8** (groups 2-4 kept; the lab's own level keeps the designer's 60 % / 35 % / 120 s). Check batch
+`Saved/Telemetry/combat_lab/combatsim_check_02` (2 x 10 min): contacts 13 (patrol 6 / ambush 6 / coordinated 1), fights 10 (452 s), 40 enemies,
+5 of 6 ambushes struck from an unwatched side, 1 of 4 plans laid out (3 "no coordinated layout" - the open flank again), route 2 / 2, stuck 0.
+
 ### 8.3 Job status for the Training Ground pipeline
 
 Every pipeline script writes a status JSON the server can poll (`Scripts/job_status.ps1`, schema `codex.job_status/1`):
@@ -287,6 +296,23 @@ started}, result: {...}}`. A running / waiting_lock status whose `pid` is gone =
 | `bot_run.ps1 ... -ReportDir <dir> [-JobStatusFile] [-LockWaitMinutes 240]` | `<dir>/status.json` | 0 ok, 1 a run errored / timed out, 3 lock | `report_dir, map, level_json, runs, duration_sec, parallel, finished, results, runs_jsonl, report_md, aggregate, jev, logs` |
 | `levelgen_record_run.ps1 -Map -LevelJson -Name [-StatusFile]` | `<OutDir>/<Name>.status.json` | 0 done, 1 no video, 2 a clip failed its check, 3 lock, 4 the game did not start | `map, level_json, name, seconds, speedup, frames_dir, out_dir, game_pid, frames_encoded, segments, game_exit_code, manifest, files, video_sec, run_report, game_log` |
 | `levelgen_route_smoke.ps1 -Map [-Carrot] [-StatusFile]` | `Saved/LevelGen/route_smoke_<map>.json` | 0 PASS, 1 FAIL, 2 no level JSON, 3 lock / timeout | `map, level_json, result, summary, checks` |
+
+### 8.4 The combat simulator (2026-11-02, branch `tools/combat-sim`)
+
+`Tools/TrainingGround/src/combatSim/` - the full design in `docs/design/levelgen/COMBAT_SIM.md`. A layout is judged WITH enemies in seconds before
+it is built: the squad replays its formation walk along the mandatory route (the formation simulator's track, cached), the combat-lab pressure runs
+with faithful ports of the game's pure rules (`CombatPressureRules`, `AmbushSpotRules`, `AmbushWatchRules`, `AmbushPlanRules`, `AmbushRelocateRules`;
+the C++ stays the reference), fights are simplified but explicit (2.5D sight, who saw first, the bot's wall cover, DPS / HP, knockdowns, the
+immortality cheat). Deterministic per seed; ~0.1 s a 10-minute run, 200 seeds ~10 s.
+- `npm run combatsim -- --layout L_Gen_Depot_1 --seeds 200 [--pressure <json>] [--out <dir>]` -> `combatsim.json` (`codex.combat_sim/1`) + a <= 40-line
+  `report.md`: contacts by kind / trigger, fights, knockdowns, rounds, the pressure's counters, and the DIAGNOSTICS - every event's outcome and
+  fallback, every coordinated attempt's failing condition (which sector had no concealed spot), every hiding spot's fate (chosen / why rejected), a
+  20 m contact heat map by zone.
+- `npm run combatsim:calibrate -- --batch <Saved/Telemetry/combat_lab/<id>>` -> the per-metric sim / Unreal table (6 main metrics held to 0.6..1.6;
+  on the 2026-11-02 Depot batch 6 / 6 in band, 17 / 19 in all).
+- A filter, not a replacement: the Unreal bot batch (8.1) remains the ground truth; the simulator says WHY (the event mix, the open flank) and lets
+  the pressure template / the generator be tuned before a build. The Training Ground panel over `combatsim.json` is a later task (the schema is
+  stable; `src/combatSim/fixtures/combatsim.example.json` is its sample).
 
 ## 9. Status
 

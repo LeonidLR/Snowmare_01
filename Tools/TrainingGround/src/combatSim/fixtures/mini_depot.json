@@ -1,0 +1,42 @@
+{
+  "schema": "codex.levelgen_layout/1",
+  "name": "mini_depot_fixture",
+  "comment": "Combat simulator test fixture (docs/design/levelgen/COMBAT_SIM.md): a 60 x 40 m street with a facade on its north side, a fenced yard with a gate (a doorway) south of it, two wrecks and a dead-end alley at the far end. Hand-made; UE cm, X north, Y east.",
+  "profile": "fixture",
+  "seed": 1,
+  "params": { "size_m": [60, 40], "density": 1, "variants": 0, "verticality": 0 },
+  "bounds": { "min": [-2000, -3000], "max": [2000, 3000] },
+  "ground_z": 0,
+  "spawn": { "pos": [600, -2600], "yaw": 90 },
+  "end": [1200, 2750],
+  "walls": [
+    { "id": "W_facade", "a": [1100, -2800], "b": [1100, 1800], "height": 600, "thickness": 30, "kind": "building" },
+    { "id": "W_yard_n_a", "a": [-200, -1800], "b": [-200, -400], "height": 250, "thickness": 10, "kind": "fence" },
+    { "id": "W_yard_n_b", "a": [-200, -100], "b": [-200, 1200], "height": 250, "thickness": 10, "kind": "fence" },
+    { "id": "W_yard_w", "a": [-200, -1800], "b": [-1700, -1800], "height": 250, "thickness": 10, "kind": "fence" },
+    { "id": "W_yard_e", "a": [-200, 1200], "b": [-1700, 1200], "height": 250, "thickness": 10, "kind": "fence" },
+    { "id": "W_yard_s", "a": [-1700, -1800], "b": [-1700, 1200], "height": 250, "thickness": 10, "kind": "fence" },
+    { "id": "W_deadend_w", "a": [900, 2000], "b": [900, 2900], "height": 300, "thickness": 40, "kind": "wall" },
+    { "id": "W_deadend_e", "a": [1500, 2000], "b": [1500, 2900], "height": 300, "thickness": 40, "kind": "wall" },
+    { "id": "W_deadend_n", "a": [900, 2900], "b": [1500, 2900], "height": 300, "thickness": 40, "kind": "wall" }
+  ],
+  "buildings": [],
+  "ladders": [],
+  "covers": [
+    { "id": "COV_wreck_1", "pos": [-900, -900], "yaw": 20, "size": [420, 180, 150], "kind": "wreck" },
+    { "id": "COV_wreck_2", "pos": [-1100, 600], "yaw": 100, "size": [420, 180, 150], "kind": "wreck" },
+    { "id": "COV_crate_1", "pos": [300, 1500], "yaw": 0, "size": [120, 120, 110], "kind": "crate" }
+  ],
+  "zones": [
+    { "id": "Z_street", "kind": "wall_run", "set_piece": "street", "poly": [[0, -3000], [1100, -3000], [1100, 2000], [0, 2000]] },
+    { "id": "Z_yard", "kind": "open", "set_piece": "one_entry_compound", "poly": [[-1700, -1800], [-200, -1800], [-200, 1200], [-1700, 1200]] },
+    { "id": "Z_deadend", "kind": "wall_end", "set_piece": "dead_end", "poly": [[900, 2000], [1500, 2000], [1500, 2900], [900, 2900]] }
+  ],
+  "routes": [
+    { "id": "R_main", "pace": "walk", "mandatory": true, "points": [[600, -2600], [600, -300], [600, 1900], [1200, 2750]], "layers": ["ground", "ground", "ground", "ground"], "expect": [{ "zone": "Z_deadend", "formation": "wall" }] }
+  ],
+  "spawn_points": [{ "id": "SPAWN_1", "pos": [-1800, 2800], "kind": "edge" }],
+  "ambush_points": [{ "id": "AMB_1", "pos": [-350, -250] }, { "id": "AMB_2", "pos": [-1300, -600] }],
+  "patrol_routes": [{ "id": "PAT_1", "points": [[-900, -1200], [-1300, -1200], [-1300, 300], [-900, 300]] }],
+  "pressure": { "first_event_sec": 10, "interval_sec": 60, "group_min": 2, "group_max": 3, "max_alive": 6, "patrol_share": 0.4, "seed": 1, "ambush": { "coordinated": { "share": 0.5 } } }
+}

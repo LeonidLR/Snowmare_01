@@ -1,0 +1,1427 @@
+{
+ "schema": "codex.combat_sim/1",
+ "created_utc": "2026-11-02T11:11:14.590Z",
+ "layout": {
+  "name": "mini_depot_fixture",
+  "file": "Tools/TrainingGround/src/combatSim/fixtures/mini_depot.json",
+  "seed": 1,
+  "profile": "fixture",
+  "members": 3,
+  "track_seconds": 67.8,
+  "track_meters": 109
+ },
+ "pressure": {
+  "first_event_sec": 10,
+  "interval_sec": 60,
+  "group_min": 2,
+  "group_max": 3,
+  "max_alive": 6,
+  "patrol_share": 0.4,
+  "seed": 1,
+  "ambush": {
+   "coordinated": {
+    "share": 0.5
+   }
+  }
+ },
+ "constants": {
+  "dt": 0.1,
+  "eyeLiftCm": 150,
+  "targetLiftCm": 110,
+  "sightEyeCm": 160,
+  "sightRangeCm": 6000,
+  "sightHalfAngleDeg": 70,
+  "contactRangeCm": 3000,
+  "groupSpacingCm": 220,
+  "spotCandidates": 72,
+  "relocateAvoidCm": 600,
+  "relocateRoutes": 8,
+  "runLegAcceptCm": 150,
+  "runArriveCm": 120,
+  "followStepSeconds": 2,
+  "followRepostCm": 300,
+  "rifleDamage": 18,
+  "rifleInterval": 1.54,
+  "rifleRangeCm": 2500,
+  "rifleReturnFireRangeCm": 3500,
+  "rifleCellCm": 312.5,
+  "rifleHitChances": [
+   0.95,
+   0.85,
+   0.75,
+   0.65,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.47,
+   0.44,
+   0.41,
+   0.38,
+   0.35,
+   0.32,
+   0.29,
+   0.26
+  ],
+  "enemyArmor": 0.1,
+  "reactionSeconds": 0.6,
+  "coverSearchCm": 1500,
+  "coverHoldSeconds": 45,
+  "coverMinWallCm": 200,
+  "coverMinHeightCm": 120,
+  "coverMinThreatCm": 400,
+  "coverMinFacingCos": 0.5,
+  "coverEndInsetCm": 60,
+  "fightHoldSeconds": 20,
+  "squadWalkSpeedCmS": 220,
+  "coverHitMultiplier": 0.35,
+  "knockdownDamage": 40,
+  "knockdownSeconds": 2.2,
+  "knockdownImmunitySeconds": 1.5,
+  "houndPounceRunUpSeconds": 1,
+  "houndPounceCooldownSeconds": 12,
+  "endWallHoldSeconds": 3,
+  "dropSeconds": 2.8,
+  "patrolPace": 1,
+  "lostAfterSeconds": 30,
+  "hitStaggerSeconds": 0.6,
+  "enemyHpScale": 1.5,
+  "meleeCadence": 2.5,
+  "meleeWindupSeconds": 1
+ },
+ "cheats": {
+  "immortal": true,
+  "infinite_ammo": true
+ },
+ "duration_sec": 300,
+ "seeds": [
+  1,
+  2,
+  3
+ ],
+ "wall_ms": 206,
+ "aggregate": {
+  "runs": 3,
+  "minutesPerRun": 5,
+  "minutes": 15,
+  "contacts": 5,
+  "byKind": {
+   "patrol": 2,
+   "ambush": 3,
+   "coordinated": 0
+  },
+  "byTrigger": {
+   "seen": 3,
+   "engaged": 0,
+   "sprung": 2
+  },
+  "unwatchedStrikes": 1.33,
+  "neverLooked": 0,
+  "reactionMean": 0.31,
+  "firstSightMeanSec": 20.63,
+  "fights": 5,
+  "fightSeconds": 81.3,
+  "fightSecondsPerFight": 16.26,
+  "formationChanges": 16.67,
+  "wallHugs": 5.33,
+  "coverOrders": 2.33,
+  "coverTaken": 2.33,
+  "coverSeconds": 26.07,
+  "knockdowns": 2.33,
+  "damage": 0,
+  "absorbed": 497.33,
+  "rounds": 120.67,
+  "enemiesSpawned": 12.67,
+  "enemiesKilled": 12.67,
+  "routeLaps": 3,
+  "routeProgress": 1,
+  "distanceM": 371.67,
+  "underFireSeconds": 3.87,
+  "unwatchedHits": 0.67,
+  "pressure": {
+   "events": 5,
+   "events_delayed": 0,
+   "sprung_by_watch": 2.33,
+   "sprung_by_hold": 0,
+   "relocations": 0.33,
+   "runs_spotted": 0,
+   "no_route": 0,
+   "followers": 0,
+   "recycled": 0,
+   "lost": 0
+  },
+  "eventOutcomes": {
+   "patrol": 6,
+   "ambush": 2,
+   "coordinated": 0,
+   "ambush_fallback_patrol": 0,
+   "coordinated_fallback_ambush": 7,
+   "coordinated_fallback_patrol": 0,
+   "no_spot": 0,
+   "no_room": 0
+  },
+  "coordinatedOutcomes": {
+   "ok": 0,
+   "no_room": 0,
+   "no_layout": 7,
+   "unreachable": 0
+  },
+  "coordinatedMissing": {
+   "flank_left": 3,
+   "flank_right": 5,
+   "front": 2,
+   "rear": 0,
+   "single": 0
+  },
+  "spotRejections": {
+   "too_close": 47,
+   "too_far": 28,
+   "near_squad": 20,
+   "wall_clearance": 0,
+   "out_of_bounds": 0,
+   "off_nav": 0,
+   "not_concealed": 45,
+   "unreachable": 0,
+   "behind": 0
+  },
+  "contactsHistogram": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   3
+  ],
+  "ambushHistogram": [
+   0,
+   0,
+   1,
+   1,
+   1
+  ]
+ },
+ "runs": [
+  {
+   "seed": 1,
+   "contacts": 5,
+   "patrol": 2,
+   "ambush": 3,
+   "coordinated": 0,
+   "sprung": 3,
+   "unwatched": 2,
+   "fights": 5,
+   "fight_seconds": 76,
+   "knockdowns": 3,
+   "absorbed": 566,
+   "rounds": 135,
+   "laps": 3,
+   "progress": 1,
+   "events": 5
+  },
+  {
+   "seed": 2,
+   "contacts": 5,
+   "patrol": 1,
+   "ambush": 4,
+   "coordinated": 0,
+   "sprung": 2,
+   "unwatched": 1,
+   "fights": 5,
+   "fight_seconds": 90.9,
+   "knockdowns": 0,
+   "absorbed": 452,
+   "rounds": 120,
+   "laps": 3,
+   "progress": 1,
+   "events": 5
+  },
+  {
+   "seed": 3,
+   "contacts": 5,
+   "patrol": 3,
+   "ambush": 2,
+   "coordinated": 0,
+   "sprung": 1,
+   "unwatched": 1,
+   "fights": 5,
+   "fight_seconds": 77,
+   "knockdowns": 4,
+   "absorbed": 474,
+   "rounds": 107,
+   "laps": 3,
+   "progress": 1,
+   "events": 5
+  }
+ ],
+ "spots": [
+  {
+   "index": 0,
+   "kind": "authored",
+   "pos": [
+    -350,
+    -250
+   ],
+   "no_wall": true,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 1,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_close": 6,
+    "not_concealed": 1,
+    "near_squad": 1,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "no_wall"
+  },
+  {
+   "index": 1,
+   "kind": "authored",
+   "pos": [
+    -1300,
+    -600
+   ],
+   "no_wall": true,
+   "considered": 9,
+   "chosen": 2,
+   "sprung_by_watch": 1,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "not_concealed": 4,
+    "too_far": 1
+   },
+   "runs_chosen": 1,
+   "main_reason": "chosen"
+  },
+  {
+   "index": 2,
+   "kind": "wall_end",
+   "pos": [
+    1005,
+    1700
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "not_concealed": 2,
+    "near_squad": 3,
+    "too_close": 3,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "near_squad"
+  },
+  {
+   "index": 3,
+   "kind": "wall_end",
+   "pos": [
+    1195,
+    1700
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 2,
+   "sprung_by_watch": 2,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "near_squad": 3,
+    "too_close": 3,
+    "too_far": 1
+   },
+   "runs_chosen": 2,
+   "main_reason": "chosen"
+  },
+  {
+   "index": 4,
+   "kind": "wall_end",
+   "pos": [
+    1005,
+    -2700
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "not_concealed": 5,
+    "too_far": 3,
+    "too_close": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  },
+  {
+   "index": 5,
+   "kind": "wall_end",
+   "pos": [
+    1195,
+    -2700
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 3,
+   "sprung_by_watch": 3,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_far": 3,
+    "too_close": 1
+   },
+   "runs_chosen": 2,
+   "main_reason": "chosen"
+  },
+  {
+   "index": 6,
+   "kind": "doorway",
+   "pos": [
+    -285,
+    -500
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_close": 6,
+    "not_concealed": 1,
+    "near_squad": 1,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  },
+  {
+   "index": 7,
+   "kind": "doorway",
+   "pos": [
+    -115,
+    -500
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_close": 7,
+    "not_concealed": 1,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  },
+  {
+   "index": 8,
+   "kind": "doorway",
+   "pos": [
+    -285,
+    0
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_close": 7,
+    "near_squad": 1,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "near_squad"
+  },
+  {
+   "index": 9,
+   "kind": "doorway",
+   "pos": [
+    -115,
+    0
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_close": 7,
+    "near_squad": 1,
+    "not_concealed": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "near_squad"
+  },
+  {
+   "index": 10,
+   "kind": "wall_end",
+   "pos": [
+    800,
+    2100
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "not_concealed": 6,
+    "near_squad": 1,
+    "too_far": 1,
+    "too_close": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  },
+  {
+   "index": 11,
+   "kind": "wall_end",
+   "pos": [
+    1000,
+    2100
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "not_concealed": 6,
+    "near_squad": 1,
+    "too_far": 1,
+    "too_close": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  },
+  {
+   "index": 12,
+   "kind": "wall_end",
+   "pos": [
+    1400,
+    2100
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 1,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_far": 3,
+    "near_squad": 1,
+    "too_close": 1
+   },
+   "runs_chosen": 1,
+   "main_reason": "chosen"
+  },
+  {
+   "index": 13,
+   "kind": "wall_end",
+   "pos": [
+    1600,
+    2100
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_far": 3,
+    "near_squad": 1,
+    "too_close": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "near_squad"
+  },
+  {
+   "index": 14,
+   "kind": "wall_end",
+   "pos": [
+    -854.7772360789138,
+    -702.6300387005721
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "near_squad": 2,
+    "not_concealed": 5,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  },
+  {
+   "index": 15,
+   "kind": "wall_end",
+   "pos": [
+    -738.4903873481865,
+    -1022.1255297677809
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_close": 2,
+    "not_concealed": 2,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  },
+  {
+   "index": 16,
+   "kind": "wall_end",
+   "pos": [
+    -1061.5096126518135,
+    -777.8744702322191
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "not_concealed": 5,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  },
+  {
+   "index": 17,
+   "kind": "wall_end",
+   "pos": [
+    -945.2227639210862,
+    -1097.369961299428
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "near_squad": 2,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "near_squad"
+  },
+  {
+   "index": 18,
+   "kind": "wall_end",
+   "pos": [
+    -1286.5186175554377,
+    678.8086626279647
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "too_far"
+  },
+  {
+   "index": 19,
+   "kind": "wall_end",
+   "pos": [
+    -951.6839815312869,
+    737.8490430347211
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 1,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 1,
+   "never_struck": 0,
+   "rejected": {
+    "not_concealed": 3,
+    "near_squad": 1
+   },
+   "runs_chosen": 1,
+   "main_reason": "chosen"
+  },
+  {
+   "index": 20,
+   "kind": "wall_end",
+   "pos": [
+    -1248.316018468713,
+    462.15095696527897
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "too_far"
+  },
+  {
+   "index": 21,
+   "kind": "wall_end",
+   "pos": [
+    -913.4813824445623,
+    521.1913373720353
+   ],
+   "no_wall": false,
+   "considered": 9,
+   "chosen": 0,
+   "sprung_by_watch": 0,
+   "sprung_by_hold": 0,
+   "relocated": 0,
+   "never_struck": 0,
+   "rejected": {
+    "not_concealed": 3,
+    "near_squad": 1,
+    "too_far": 1
+   },
+   "runs_chosen": 0,
+   "main_reason": "not_concealed"
+  }
+ ],
+ "coordinated": [
+  {
+   "time": 10,
+   "outcome": "no_layout",
+   "missing": [
+    "flank_left"
+   ],
+   "sectors": {
+    "single": 0,
+    "flank_left": 0,
+    "flank_right": 7,
+    "front": 1,
+    "rear": 1
+   },
+   "candidates": 9,
+   "alive": 0
+  },
+  {
+   "time": 250,
+   "outcome": "no_layout",
+   "missing": [
+    "flank_right"
+   ],
+   "sectors": {
+    "single": 0,
+    "flank_left": 8,
+    "flank_right": 0,
+    "front": 1,
+    "rear": 3
+   },
+   "candidates": 12,
+   "alive": 0
+  },
+  {
+   "time": 70,
+   "outcome": "no_layout",
+   "missing": [
+    "flank_right",
+    "front"
+   ],
+   "sectors": {
+    "single": 0,
+    "flank_left": 7,
+    "flank_right": 0,
+    "front": 0,
+    "rear": 1
+   },
+   "candidates": 8,
+   "alive": 0
+  },
+  {
+   "time": 130,
+   "outcome": "no_layout",
+   "missing": [
+    "flank_left"
+   ],
+   "sectors": {
+    "single": 0,
+    "flank_left": 0,
+    "flank_right": 4,
+    "front": 3,
+    "rear": 1
+   },
+   "candidates": 8,
+   "alive": 0
+  },
+  {
+   "time": 190,
+   "outcome": "no_layout",
+   "missing": [
+    "flank_right"
+   ],
+   "sectors": {
+    "single": 0,
+    "flank_left": 5,
+    "flank_right": 0,
+    "front": 1,
+    "rear": 3
+   },
+   "candidates": 9,
+   "alive": 0
+  },
+  {
+   "time": 70,
+   "outcome": "no_layout",
+   "missing": [
+    "flank_right"
+   ],
+   "sectors": {
+    "single": 0,
+    "flank_left": 8,
+    "flank_right": 0,
+    "front": 1,
+    "rear": 3
+   },
+   "candidates": 12,
+   "alive": 0
+  },
+  {
+   "time": 130,
+   "outcome": "no_layout",
+   "missing": [
+    "flank_left",
+    "flank_right",
+    "front"
+   ],
+   "sectors": {
+    "single": 0,
+    "flank_left": 0,
+    "flank_right": 0,
+    "front": 0,
+    "rear": 1
+   },
+   "candidates": 1,
+   "alive": 0
+  }
+ ],
+ "events": [
+  {
+   "time": 10,
+   "picked": "coordinated",
+   "outcome": "coordinated_fallback_ambush",
+   "size": 3,
+   "waypoint": 0,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 14,
+    "clear": 12,
+    "concealed": 6,
+    "reachable": 1
+   },
+   "spot_kind": "wall_end",
+   "spot_index": 3,
+   "seed": 1
+  },
+  {
+   "time": 70,
+   "picked": "ambush",
+   "outcome": "ambush",
+   "size": 3,
+   "waypoint": 4,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 17,
+    "clear": 15,
+    "concealed": 9,
+    "reachable": 1
+   },
+   "spot_kind": "wall_end",
+   "spot_index": 5,
+   "seed": 1
+  },
+  {
+   "time": 130,
+   "picked": "patrol",
+   "outcome": "patrol",
+   "size": 3,
+   "waypoint": 2,
+   "layer": "ground",
+   "seed": 1
+  },
+  {
+   "time": 190,
+   "picked": "patrol",
+   "outcome": "patrol",
+   "size": 2,
+   "waypoint": 0,
+   "layer": "ground",
+   "seed": 1
+  },
+  {
+   "time": 250,
+   "picked": "coordinated",
+   "outcome": "coordinated_fallback_ambush",
+   "size": 3,
+   "waypoint": 4,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 17,
+    "clear": 15,
+    "concealed": 9,
+    "reachable": 1
+   },
+   "spot_kind": "wall_end",
+   "spot_index": 5,
+   "seed": 1
+  },
+  {
+   "time": 10,
+   "picked": "ambush",
+   "outcome": "ambush",
+   "size": 3,
+   "waypoint": 0,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 14,
+    "clear": 12,
+    "concealed": 6,
+    "reachable": 1
+   },
+   "spot_kind": "wall_end",
+   "spot_index": 3,
+   "seed": 2
+  },
+  {
+   "time": 70,
+   "picked": "coordinated",
+   "outcome": "coordinated_fallback_ambush",
+   "size": 3,
+   "waypoint": 4,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 16,
+    "clear": 12,
+    "concealed": 6,
+    "reachable": 1
+   },
+   "spot_kind": "authored",
+   "spot_index": 1,
+   "seed": 2
+  },
+  {
+   "time": 130,
+   "picked": "coordinated",
+   "outcome": "coordinated_fallback_ambush",
+   "size": 2,
+   "waypoint": 1,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 14,
+    "clear": 11,
+    "concealed": 5,
+    "reachable": 1
+   },
+   "spot_kind": "wall_end",
+   "spot_index": 12,
+   "seed": 2
+  },
+  {
+   "time": 190,
+   "picked": "coordinated",
+   "outcome": "coordinated_fallback_ambush",
+   "size": 2,
+   "waypoint": 4,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 12,
+    "clear": 9,
+    "concealed": 7,
+    "reachable": 1
+   },
+   "spot_kind": "authored",
+   "spot_index": 1,
+   "seed": 2
+  },
+  {
+   "time": 250,
+   "picked": "patrol",
+   "outcome": "patrol",
+   "size": 2,
+   "waypoint": 4,
+   "layer": "ground",
+   "seed": 2
+  },
+  {
+   "time": 10,
+   "picked": "patrol",
+   "outcome": "patrol",
+   "size": 2,
+   "waypoint": 0,
+   "layer": "ground",
+   "seed": 3
+  },
+  {
+   "time": 70,
+   "picked": "coordinated",
+   "outcome": "coordinated_fallback_ambush",
+   "size": 2,
+   "waypoint": 4,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 17,
+    "clear": 15,
+    "concealed": 9,
+    "reachable": 1
+   },
+   "spot_kind": "wall_end",
+   "spot_index": 5,
+   "seed": 3
+  },
+  {
+   "time": 130,
+   "picked": "coordinated",
+   "outcome": "coordinated_fallback_ambush",
+   "size": 3,
+   "waypoint": 3,
+   "layer": "ground",
+   "funnel": {
+    "in_band": 2,
+    "clear": 2,
+    "concealed": 1,
+    "reachable": 1
+   },
+   "spot_kind": "wall_end",
+   "spot_index": 19,
+   "seed": 3
+  },
+  {
+   "time": 190,
+   "picked": "patrol",
+   "outcome": "patrol",
+   "size": 2,
+   "waypoint": 0,
+   "layer": "ground",
+   "seed": 3
+  },
+  {
+   "time": 250,
+   "picked": "patrol",
+   "outcome": "patrol",
+   "size": 3,
+   "waypoint": 4,
+   "layer": "ground",
+   "seed": 3
+  }
+ ],
+ "heat": {
+  "cell_cm": 2000,
+  "origin": [
+   -2000,
+   -3000
+  ],
+  "cells": [
+   {
+    "i": 0,
+    "j": 1,
+    "count": 5,
+    "kinds": {
+     "patrol": 2,
+     "ambush": 3,
+     "coordinated": 0
+    }
+   },
+   {
+    "i": 1,
+    "j": 2,
+    "count": 4,
+    "kinds": {
+     "patrol": 1,
+     "ambush": 3,
+     "coordinated": 0
+    }
+   },
+   {
+    "i": 1,
+    "j": 0,
+    "count": 3,
+    "kinds": {
+     "patrol": 0,
+     "ambush": 3,
+     "coordinated": 0
+    }
+   },
+   {
+    "i": 1,
+    "j": 1,
+    "count": 1,
+    "kinds": {
+     "patrol": 1,
+     "ambush": 0,
+     "coordinated": 0
+    }
+   },
+   {
+    "i": 0,
+    "j": 2,
+    "count": 1,
+    "kinds": {
+     "patrol": 1,
+     "ambush": 0,
+     "coordinated": 0
+    }
+   },
+   {
+    "i": 0,
+    "j": 0,
+    "count": 1,
+    "kinds": {
+     "patrol": 1,
+     "ambush": 0,
+     "coordinated": 0
+    }
+   }
+  ],
+  "zones": {
+   "": 9,
+   "Z_yard": 5,
+   "Z_deadend": 1
+  }
+ },
+ "contacts": [
+  {
+   "id": 1,
+   "kind": "ambush",
+   "trigger": "sprung",
+   "time": 15.8,
+   "position": [
+    1195,
+    1700
+   ],
+   "formation": "wedge",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": null,
+   "since_spawn_sec": 5.8,
+   "enemies": 3,
+   "seed": 1
+  },
+  {
+   "id": 2,
+   "kind": "ambush",
+   "trigger": "sprung",
+   "time": 83.8,
+   "position": [
+    1195,
+    -2700
+   ],
+   "formation": "column",
+   "watched_at_start": false,
+   "unwatched_strike": true,
+   "reaction_sec": 0.3,
+   "zone": null,
+   "since_spawn_sec": 13.8,
+   "enemies": 3,
+   "seed": 1
+  },
+  {
+   "id": 3,
+   "kind": "patrol",
+   "trigger": "seen",
+   "time": 143.1,
+   "position": [
+    -247.09956195093275,
+    -124.18605247333753
+   ],
+   "formation": "column",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": "Z_yard",
+   "since_spawn_sec": 13.1,
+   "enemies": 3,
+   "seed": 1
+  },
+  {
+   "id": 4,
+   "kind": "patrol",
+   "trigger": "seen",
+   "time": 214.3,
+   "position": [
+    1631.7296507059068,
+    820.3734891688703
+   ],
+   "formation": "column",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": null,
+   "since_spawn_sec": 24.3,
+   "enemies": 2,
+   "seed": 1
+  },
+  {
+   "id": 5,
+   "kind": "ambush",
+   "trigger": "sprung",
+   "time": 264.1,
+   "position": [
+    1195,
+    -2700
+   ],
+   "formation": "column",
+   "watched_at_start": false,
+   "unwatched_strike": true,
+   "reaction_sec": 0.3,
+   "zone": null,
+   "since_spawn_sec": 14.1,
+   "enemies": 3,
+   "seed": 1
+  },
+  {
+   "id": 1,
+   "kind": "ambush",
+   "trigger": "sprung",
+   "time": 15.8,
+   "position": [
+    1195,
+    1700
+   ],
+   "formation": "wedge",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": null,
+   "since_spawn_sec": 5.8,
+   "enemies": 3,
+   "seed": 2
+  },
+  {
+   "id": 2,
+   "kind": "ambush",
+   "trigger": "seen",
+   "time": 70.2,
+   "position": [
+    -1300,
+    -600
+   ],
+   "formation": "column",
+   "watched_at_start": false,
+   "unwatched_strike": false,
+   "reaction_sec": 1.3,
+   "zone": "Z_yard",
+   "since_spawn_sec": 0.2,
+   "enemies": 3,
+   "seed": 2
+  },
+  {
+   "id": 3,
+   "kind": "ambush",
+   "trigger": "seen",
+   "time": 134.1,
+   "position": [
+    1400,
+    2100
+   ],
+   "formation": "wedge",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": "Z_deadend",
+   "since_spawn_sec": 4.1,
+   "enemies": 2,
+   "seed": 2
+  },
+  {
+   "id": 4,
+   "kind": "ambush",
+   "trigger": "sprung",
+   "time": 205.7,
+   "position": [
+    -1300,
+    -600
+   ],
+   "formation": "wedge",
+   "watched_at_start": false,
+   "unwatched_strike": true,
+   "reaction_sec": 0.1,
+   "zone": "Z_yard",
+   "since_spawn_sec": 15.7,
+   "enemies": 2,
+   "seed": 2
+  },
+  {
+   "id": 5,
+   "kind": "patrol",
+   "trigger": "seen",
+   "time": 260.5,
+   "position": [
+    -1183.9788948430207,
+    -507.6574473736369
+   ],
+   "formation": "column",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": "Z_yard",
+   "since_spawn_sec": 10.5,
+   "enemies": 2,
+   "seed": 2
+  },
+  {
+   "id": 1,
+   "kind": "patrol",
+   "trigger": "seen",
+   "time": 28.4,
+   "position": [
+    1585.271108434079,
+    1589.7800559999525
+   ],
+   "formation": "column",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": null,
+   "since_spawn_sec": 18.4,
+   "enemies": 2,
+   "seed": 3
+  },
+  {
+   "id": 2,
+   "kind": "ambush",
+   "trigger": "sprung",
+   "time": 83.9,
+   "position": [
+    1195,
+    -2700
+   ],
+   "formation": "column",
+   "watched_at_start": false,
+   "unwatched_strike": true,
+   "reaction_sec": 0.3,
+   "zone": null,
+   "since_spawn_sec": 13.9,
+   "enemies": 2,
+   "seed": 3
+  },
+  {
+   "id": 3,
+   "kind": "ambush",
+   "trigger": "seen",
+   "time": 155.7,
+   "position": [
+    -951.6839815312869,
+    737.8490430347211
+   ],
+   "formation": "column",
+   "watched_at_start": false,
+   "unwatched_strike": false,
+   "reaction_sec": 2.3,
+   "zone": "Z_yard",
+   "since_spawn_sec": 25.7,
+   "enemies": 3,
+   "seed": 3
+  },
+  {
+   "id": 4,
+   "kind": "patrol",
+   "trigger": "seen",
+   "time": 200.2,
+   "position": [
+    -1163.2550969688773,
+    1977.790267154628
+   ],
+   "formation": "wedge",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": null,
+   "since_spawn_sec": 10.2,
+   "enemies": 2,
+   "seed": 3
+  },
+  {
+   "id": 5,
+   "kind": "patrol",
+   "trigger": "seen",
+   "time": 256.9,
+   "position": [
+    -1395.5179196438844,
+    -2240.938139683457
+   ],
+   "formation": "column",
+   "watched_at_start": true,
+   "unwatched_strike": false,
+   "reaction_sec": 0,
+   "zone": null,
+   "since_spawn_sec": 6.9,
+   "enemies": 3,
+   "seed": 3
+  }
+ ],
+ "report": [
+  "# Combat sim - mini_depot_fixture (3 seeds x 5 min, 3 operatives; immortal on, infinite ammo on; 0 s wall)",
+  "per run: contacts 5 (patrol 2 / ambush 3 / coordinated 0; triggers seen 3 / engaged 0 / sprung 2), unwatched strikes 1.3, first look 0.3 s, first sight at 20.6 s",
+  "per run: fights 5 (81.3 s, 16.3 s each), knockdowns 2.3, damage 0 / absorbed 497.3, rounds 120.7, under fire 3.9 s, unwatched hits 0.7, enemies 12.7 spawned / 12.7 killed",
+  "per run: formation changes 16.7, wall hugs 5.3, cover 2.3 of 2.3 orders (26.1 s at the wall), route 3 laps / progress 100 % / 371.7 m",
+  "pressure per run: events 5 (delayed by the cap 0), sprung by the watch 2.3 / after the hold 0, relocations 0.3 (spotted 0), no route 0, followers 0, recycled 0, lost (stuck / unreachable) 0",
+  "events (15 in all): patrol 6, ambush 2, coordinated 0; FALLBACKS: ambush -> patrol 0, coordinated -> ambush 7, coordinated -> patrol 0; no spot 0, no room 0",
+  "coordinated attempts: ok 0, no room 0, no layout 7 (missing a concealed spot: flank left 3, flank right 5, front 2, rear 0), unreachable 0",
+  "hiding spots at ambush events: out of the band 75 (too far 28, too close 47); in the band 65 rejected - not concealed 45, too near an operative 20, wall clearance 0, off the navmesh 0, out of bounds 0, unreachable 0, behind 0",
+  "spots: 22 (authored 2, doorway 4, wall end 16); ever chosen 5; authored points in the open (no wall) 2; never in the band 0",
+  "most chosen: #5 wall_end (1195, -2700) x3 - watch 3, hold 0, relocated 0, never struck 0; #1 authored (-1300, -600) x2 - watch 1, hold 0, relocated 0, never struck 0; #3 wall_end (1195, 1700) x2 - watch 2, hold 0, relocated 0, never struck 0; #12 wall_end (1400, 2100) x1 - watch 0, hold 0, relocated 0, never struck 0; #19 wall_end (-952, 738) x1 - watch 0, hold 0, relocated 1, never struck 0",
+  "never chosen by main reason: not_concealed 9, near_squad 5, too_far 2, no_wall 1",
+  "contacts by zone (all runs): outside 9, Z_yard 5, Z_deadend 1",
+  "hottest 20 m cells: (-1000, 0) x5; (1000, 2000) x4; (1000, -2000) x3; (1000, 0) x1; (-1000, 2000) x1",
+  "contacts per run: 0:0 1:0 2:0 3:0 4:0 5:3; ambush-type per run: 0:0 1:0 2:1 3:1 4:1"
+ ]
+}

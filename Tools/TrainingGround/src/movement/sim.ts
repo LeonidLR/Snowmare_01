@@ -57,6 +57,11 @@ export interface MemberFrame {
   approachDuty: ApproachDuty | null;
   /** v2.6 (Q2 = b): the rear guard lags behind his slot and catches up facing forwards (FormationSectorRules.RearCatchUp). */
   rearTurned: boolean;
+  /**
+   * Combat simulator (COMBAT_SIM.md): the look the rules asked of him this frame (his formation sector look / corner watch / wall look),
+   * degrees - the body (`yaw`) turns towards it at facing.turn_speed. The C++ AmbushWatchRules count both (GetFormationLookYaw).
+   */
+  lookYaw?: number;
 }
 
 /** v2.1: a bypass decision (FormationBypassRules.ChooseSide) taken when a route leg starts and a wall blocks it. */
@@ -508,7 +513,7 @@ export function simulate(o: SimOptions): number {
       const moving = len(moveDir) > 0.5;
       const backwards = moving && angleDiff(yawOf(moveDir), m.yaw) > 120;
       frames.push({ role: m.role, place: m.place, pos: m.pos, yaw: m.yaw, slot, slotFallback, slotInvalid, backwards, moveYaw: moving ? yawOf(moveDir) : null, cornerWatch: looks.some((l) => l.role === m.place), rearGuard: m.place === rearGuard,
-        approachDuty: approachLook?.duty ?? null, rearTurned: m.rearTurned });
+        approachDuty: approachLook?.duty ?? null, rearTurned: m.rearTurned, lookYaw: normYaw(desired) });
     }
     // Light separation standing in for the engine's crowd avoidance (the game's RVO / detour crowd): two members closer than
     // slot.min_spacing drift apart at up to SEPARATION_SPEED; the leader is never pushed (he walks his path).
