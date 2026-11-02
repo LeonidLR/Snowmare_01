@@ -171,6 +171,11 @@ namespace FormationGuardRuntime
 		return true;
 	}
 
+	bool IsSameLevelLeg(float LeaderFeetZ, float DestinationZ)
+	{
+		return FMath::Abs(DestinationZ - LeaderFeetZ) <= BypassLevelChangeCm;
+	}
+
 	TOptional<int32> FirstBlockingWall(const TArray<FFormationWall>& Walls, const FVector2D& From, const FVector2D& To, double Radius, bool bFreeStandingOnly)
 	{
 		TOptional<int32> Best;

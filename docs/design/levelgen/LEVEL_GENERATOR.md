@@ -20,7 +20,8 @@
 | Department page | `src/departments/LevelGenDepartment.tsx` + `LayoutView.tsx` (the canvas); server `server/levelgenApi.ts` (`/api/levelgen/*`) |
 | Renders | `Scripts/Tools/levelgen_render.py` (profile schematic over the un-skewed reference, candidate top-down, the critic's reference JPEG) |
 | UE builder | `Scripts/Editor/build_levelgen_map.py` (section 7; generalises `build_formation_lab.py`) -> `/Game/Maps/Generated/L_Gen_<profile>_<seed>` + `Content/Data/LevelJson/L_Gen_<...>.json` |
-| In-game check | `CodexTactics.LevelGenRouteSmoke` (section 8; any generated map: `Scripts/levelgen_route_smoke.ps1 -Map <map>`) |
+| In-game check | `CodexTactics.LevelGenRouteSmoke` (section 8; any generated map: `Scripts/levelgen_route_smoke.ps1 -Map <map>`); `CodexTactics.LevelGenLaddersSmoke` (section 8.5: every ladder up / down, the cut's ramp / bridge / ladder ways in and out) |
+| Ladders + cut ways (builder) | `Scripts/Editor/levelgen_ladders.py` (pure, `--test`: the ladder frame from pos -> foot, 10 cm off the wall's outer face, the top exit openings, the trench faces, the cut ramps; section 7) |
 | Bot route + drop links | `Scripts/Editor/levelgen_bot_route.py` (pure: the level JSON's `bot_route` from the mandatory route, the hole drop links; `--test`; alone it patches a level JSON without a rebuild) |
 | Combat bot runs / video | `Scripts/bot_run.ps1 -ReportDir` (section 8.1), `Scripts/levelgen_record_run.ps1` + `Scripts/Tools/clip_assemble.py` (section 8.2); the Training Ground «Боевая лаборатория» lists every generated map with a `bot_route` |
 | Pipeline job status | `Scripts/job_status.ps1` (`codex.job_status/1`, section 8.3) |
@@ -215,6 +216,32 @@ JSON's `pressure` / `cheats` (tuned on the combat lab page) when it was written 
 `L_Gen_Depot_1` was rebuilt with the links (3 drop link actors, 12 links; navmesh Default 440 tiles).
 `Scripts/levelgen_build_map.ps1` writes a job status (section 8.3) and refuses with a clear status when the editor is open.
 
+**2026-11-02 (branch `fix/levelgen-ladders-cut`, the game designer's bug report on `L_Gen_Depot_1`).** "The ladders on the building walls are sunk
+into the wall, nobody can climb them; the cut's ladder cannot be climbed; the cut cannot be entered at all - the squad runs round it and stops."
+Root causes and fixes (the pure part in `Scripts/Editor/levelgen_ladders.py`, `--test`; the builder imports it):
+1. **Every ladder faced its wall.** `generate.ts` converted the profile yaw with `90 - profile` (a MIRROR; the right conversion for `toUE` is
+   `profile + 90`), so every ladder's +X pointed INTO its wall (LADDERS.md 3.1 wants +X away from it): the hang line, the bottom link point and the
+   plinth inside the wall, the top link point in the air off the edge, the brackets / grab bars sticking out - no link point on the navmesh. The
+   builder now takes the actor's yaw from the geometry (`pos` -> the layout's `foot`; the accepted layouts keep their mirrored `yaw`, the report
+   says "MIRRORED in the layout, fixed"); `yawToUE` is fixed for new layouts (cover yaws: a box turned 180 deg is the same box; the wrecks' +-30 deg
+   jitter is mirrored, which is still random).
+2. **The rung plane stood inside the building wall.** The builder stands a wall on its centre line, so a 30 cm perimeter wall reaches 15 cm past
+   the footprint the generator measured `pos` from (10 cm off it): the plane was 5 cm inside the wall. The builder finds the wall behind each
+   ladder (the walls on its lower level; the trench's faces for a cut ladder) and moves the ladder out to stand 10 cm off its OUTER face
+   (`LAD_B_gallery`: 15 cm). The plinth now turns with the ladder (110 x 140 cm, from 5 cm in front of the rungs).
+3. **The cut ladders climbed out into the cut wall.** The cut's retaining wall (`cut_wall`, 2.2 m tall, 1.5 m thick) stands right behind the
+   ladders' top; the climb out ended inside it. Every wall on a ladder's upper level that the top exit crosses (rung plane -> the layout's `top`)
+   gets a 2 m opening (`CUTWALL_S_0_l0 / _l1 / _l2`, `CUTWALL_S_1_l0 / _l1`). The trench's below-ground faces now stand OUTSIDE the trench (their
+   inner face on its edge; they narrowed the floor by 10 cm a side and put the cut ladders' rungs on the face).
+4. **The cut ramp joined nothing.** The old ramp ran from 5 m before the crossing's middle (its top end in the air over the trench) to 3 m past it,
+   under the bridge slab with 0.7 m of head room. Now (`cut_ramps`) it leaves the bridge slab's far edge (tucked 5 cm under it) and runs down
+   ALONG the trench onto its floor: 7 m run, 23 deg, 3 m wide (1.5 m walkway on each side; the trench floor passes under the bridge, 2.8 m).
+5. **C++ (formation, not the ladder rules):** with the map connected, the squad still went round the trench's end (the formation bypass read the
+   below-ground face as a free-standing wall between the leader and a goal on the rim), the leader walked to a stale bypass waypoint after a
+   ladder, and the followers did not follow him DOWN a ladder (their slots were projected from their own height) - `docs/systems/squad-and-orders.md`
+   "The formation across height levels". LADDERS.md is unchanged.
+Walking off the rim / jumping down into the cut (the falls system) is a separate later task.
+
 ## 8. The in-game check
 
 `CodexTactics.LevelGenRouteSmoke` (CodexTacticsDev) loads the generated map's layout JSON (by the map name from
@@ -314,6 +341,25 @@ immortality cheat). Deterministic per seed; ~0.1 s a 10-minute run, 200 seeds ~1
   the pressure template / the generator be tuned before a build. The Training Ground panel over `combatsim.json` is a later task (the schema is
   stable; `src/combatSim/fixtures/combatsim.example.json` is its sample).
 
+### 8.5 The ladders and the cut's ways in / out (2026-11-02, branch `fix/levelgen-ladders-cut`)
+
+`CodexTactics.LevelGenLaddersSmoke` (`map=<L_Gen_...>` = the loaded map, `layout=`, `only=<id>`, `noladders`, `nocut`; registered in
+`Scripts/test_map.json` with `-LevelJson=L_Gen_Depot_1.json`), the pressure off:
+- **every ladder of the accepted layout**: its actor (tag `ladder=<id>`, else the nearest to `pos`) is climbable with the layout's rungs, has a wall
+  behind it, FACES AWAY from it (+X . (foot - pos) > 0.9), tops out on its upper level within 8 cm, both link points on the navmesh; then the leader
+  alone (Solo, the others holding beside the foot) climbs it UP by a move order to the upper level behind the top and DOWN again to the ground in
+  front of the foot - the climb must be seen on that ladder;
+- **the cut, with the whole squad**: per `ramp` crossing into the trench (every member on the cut floor, nobody on a ladder) and out again; per
+  `bridge` crossing across at ground level (never below it); out of the trench by the cut ladder the routes use (V3's `LAD_cut_3`) and back in
+  by it (goals 8 m along the rim / the trench so the column trails on the goal's level) - every member climbs;
+- each leg is reported by its id; a leg that stops short (still 8 s off the goal) or times out fails with the leader's position, his climb state,
+  every member's feet and a navmesh path check (`PARTIAL` = the goal is not connected).
+**On the old map (main `fd3511cb`): FAIL, 1 / 13 legs** - all four ladders "FACES THE WALL", no link point on the navmesh; every ladder leg and the
+ramp legs "STOPPED SHORT", navmesh path PARTIAL (only the X_ne bridge crossing passed). **On the rebuilt map: PASS, 13 / 13**: `LAD_cut_1/2/3`
+up 7.7-8.0 s / down 8.4-8.5 s, `LAD_B_gallery` up 7.1 / down 7.8 s, X_centre into the cut 9.9 s / out 10.1 s (the ramp), X_ne across 7.7 s,
+the squad out of the cut by `LAD_cut_3` 20.5 s (3 / 3 climbed) and back in 27.5 s (3 / 3). Pictures (rendered offscreen, the game's own camera):
+`CodexTactics.LevelGenLaddersShots` -> `Saved/Screenshots/LevelGenLadders/ladder_gallery.png`, `ladder_cut.png`, `cut_ramp.png`.
+
 ## 9. Status
 
 | Phase | State |
@@ -322,7 +368,7 @@ immortality cheat). Deterministic per seed; ~0.1 s a 10-minute run, 200 seeds ~1
 | 2 generator core + evaluation + tests | done (`npm test`: the levelgen suite; every seed 1..8 completable with its variants) |
 | 3 department page | done (`/api/levelgen/*`, `LevelGenDepartment.tsx`) |
 | 4 Jev + Claude critic | done (real calls verified 2026-11-01; ledger) |
-| 5 UE builder + one generated map + smoke | done. `Scripts/levelgen_build_map.ps1` = the commandlet + the navmesh bake; `/Game/Maps/Generated/L_Gen_Depot_1` rebuilt 2026-11-02 from the accepted seed 1 with the designer's answers (539 actors, 4 climbable ladders, the halls' roofs on +3, the chimneys as cylinders, navmesh 440 tiles, bounds up to 12 m) + `Content/Data/LevelJson/L_Gen_Depot_1.json` (minimap floors 300 / 600 / 900). **`LevelGenRouteSmoke` PASSES the whole mandatory route** (24 / 24 legs, 307 s game time, ~74 s wall: the ground loop, the external stair onto the ruin's roof, the roof to the hole's rim, the two hole drops teleported as designed, the tank farm, the dead end); its knownFail is gone. **The stair fix** (2026-11-01 knownFail): the landing was centred on the ramp's top end, so its west half sat over the 35 deg ramp and left a ~52 cm step (above the navmesh agent's 35 cm step) - the landing now starts at the ramp's top (5 cm tucked under it); the stairwell openings end exactly at their ramps' tops (they ran 25 cm past - a gap); the roof / floor legs end on the holes' rims (a point over an open hole is off the navmesh). 2026-11-02 (`tools/levelgen-bot-runs`): the drop nav links (no teleport), the `bot_route`, `LevelGenRouteSmoke` through the bot's route mode (PASS 25 / 25), combat bot runs + the run video (sections 8.1-8.3). |
+| 5 UE builder + one generated map + smoke | done. `Scripts/levelgen_build_map.ps1` = the commandlet + the navmesh bake; `/Game/Maps/Generated/L_Gen_Depot_1` rebuilt 2026-11-02 from the accepted seed 1 with the designer's answers (539 actors, 4 climbable ladders, the halls' roofs on +3, the chimneys as cylinders, navmesh 440 tiles, bounds up to 12 m) + `Content/Data/LevelJson/L_Gen_Depot_1.json` (minimap floors 300 / 600 / 900). **`LevelGenRouteSmoke` PASSES the whole mandatory route** (24 / 24 legs, 307 s game time, ~74 s wall: the ground loop, the external stair onto the ruin's roof, the roof to the hole's rim, the two hole drops teleported as designed, the tank farm, the dead end); its knownFail is gone. **The stair fix** (2026-11-01 knownFail): the landing was centred on the ramp's top end, so its west half sat over the 35 deg ramp and left a ~52 cm step (above the navmesh agent's 35 cm step) - the landing now starts at the ramp's top (5 cm tucked under it); the stairwell openings end exactly at their ramps' tops (they ran 25 cm past - a gap); the roof / floor legs end on the holes' rims (a point over an open hole is off the navmesh). 2026-11-02 (`tools/levelgen-bot-runs`): the drop nav links (no teleport), the `bot_route`, `LevelGenRouteSmoke` through the bot's route mode (PASS 25 / 25), combat bot runs + the run video (sections 8.1-8.3). 2026-11-02 (`fix/levelgen-ladders-cut`, the designer's bug report): the ladders face away from their walls (the builder's yaw from pos -> foot; `yawToUE` fixed), stand 10 cm off the walls' outer faces, the cut wall opens behind each cut ladder, the trench faces stand outside the trench, the X_centre ramp joins the bridge to the trench floor; `L_Gen_Depot_1` rebuilt (545 actors, navmesh Default 440 tiles); **`LevelGenLaddersSmoke` PASS 13 / 13** (FAIL 1 / 13 on the old map), `LevelGenRouteSmoke` still PASS (section 8.5). |
 
 ## 10. The game designer's answers (2026-11-02)
 

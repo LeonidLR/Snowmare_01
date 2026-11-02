@@ -181,6 +181,20 @@ bool FFormationGuardRuntimeHudTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_GUARD_RUNTIME_TEST(FFormationGuardRuntimeSameLevelTest, "BypassSameLevel")
+bool FFormationGuardRuntimeSameLevelTest::RunTest(const FString&)
+{
+	// Bug 2026-11-02 (L_Gen_Depot_1's cut): the bypass plans on the leader's own level only; a goal a 3 m level up / down is the nav mesh's way.
+	TestTrue(TEXT("a click on the same ground"), FormationGuardRuntime::IsSameLevelLeg(0.f, 10.f));
+	TestTrue(TEXT("a click on the same roof"), FormationGuardRuntime::IsSameLevelLeg(302.f, 300.f));
+	TestTrue(TEXT("a ramp's foot within half a level"), FormationGuardRuntime::IsSameLevelLeg(0.f, -FormationGuardRuntime::BypassLevelChangeCm));
+	TestFalse(TEXT("from the cut's floor to the rim"), FormationGuardRuntime::IsSameLevelLeg(-300.f, 50.f));
+	TestFalse(TEXT("from the ground into the cut"), FormationGuardRuntime::IsSameLevelLeg(0.f, -250.f));
+	TestFalse(TEXT("from the ground onto a roof"), FormationGuardRuntime::IsSameLevelLeg(0.f, 300.f));
+	TestFalse(TEXT("just past half a level"), FormationGuardRuntime::IsSameLevelLeg(0.f, FormationGuardRuntime::BypassLevelChangeCm + 1.f));
+	return true;
+}
+
 FORMATION_GUARD_RUNTIME_TEST(FFormationGuardRuntimeClearLookTest, "ShouldClearLook")
 bool FFormationGuardRuntimeClearLookTest::RunTest(const FString&)
 {

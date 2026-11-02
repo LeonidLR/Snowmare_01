@@ -37,6 +37,8 @@ namespace FormationGuardRuntime
 	inline constexpr float AgentRadiusCm = 35.f;
 	/** A leg shorter than this never plans a bypass (the click is next to him), cm. */
 	inline constexpr float BypassMinLegCm = 300.f;
+	/** Half a height level (the 3 m levels of the generated maps): a destination this far above / below his feet is on another level, cm. */
+	inline constexpr float BypassLevelChangeCm = 150.f;
 	/** The steered leader takes the next bypass waypoint this close to the current one, cm. */
 	inline constexpr float BypassHandoverCm = 120.f;
 	/** Check 7 (checks.ts LIMITS.splitSeconds): a cut lasting this long is a split, s. */
@@ -90,6 +92,13 @@ namespace FormationGuardRuntime
 	 */
 	CODEXTACTICS_API TOptional<int32> FirstBlockingWall(const TArray<FFormationWall>& Walls, const FVector2D& From, const FVector2D& To, double Radius,
 		bool bFreeStandingOnly);
+
+	/**
+	 * The bypass plans on the leader's own level only: true when the destination's height is within BypassLevelChangeCm of his feet. A walk to
+	 * another level goes through a ramp / stair / ladder the 2D leg does not see (bug 2026-11-02: in a generated map's cut the trench's
+	 * retaining face read as a free-standing wall between him and a goal up on the rim, and the squad was steered round the trench's far end).
+	 */
+	CODEXTACTICS_API bool IsSameLevelLeg(float LeaderFeetZ, float DestinationZ);
 
 	/** The points the leader is steered through round the wall: FFormationBypassChoice::Path without its first (him) and last (the destination). */
 	CODEXTACTICS_API TArray<FVector2D> BypassWaypoints(const FFormationBypassChoice& Choice);

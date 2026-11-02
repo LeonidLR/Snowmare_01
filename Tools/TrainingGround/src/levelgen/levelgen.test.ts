@@ -43,6 +43,21 @@ test('profile metres <-> UE cm round trip and the target score', () => {
   assert.equal(targetScore(1, undefined), 1);
 });
 
+test('bug 2026-11-02 (ladders sunk into the walls): every ladder yaw is UE +X away from its wall, from pos towards the foot (LADDERS.md 3.1)', () => {
+  for (let seed = 1; seed <= 4; seed++) {
+    const l = generateLayout({ profile, seed });
+    assert.ok(l.ladders.length >= 1, `seed ${seed}: ladders`);
+    for (const ld of l.ladders) {
+      const want = ((Math.atan2(ld.foot[1] - ld.pos[1], ld.foot[0] - ld.pos[0]) * 180) / Math.PI + 360) % 360;
+      const delta = Math.abs(((ld.yaw - want + 540) % 360) - 180);
+      assert.ok(delta < 0.5, `seed ${seed} ${ld.id}: yaw ${ld.yaw}, pos -> foot ${want.toFixed(1)}`);
+      // the top lies behind the rung plane (on the wall's side), the foot in front of it
+      const out: [number, number] = [Math.cos((ld.yaw * Math.PI) / 180), Math.sin((ld.yaw * Math.PI) / 180)];
+      assert.ok((ld.top[0] - ld.pos[0]) * out[0] + (ld.top[1] - ld.pos[1]) * out[1] < 0, `seed ${seed} ${ld.id}: the top behind the rungs`);
+    }
+  }
+});
+
 test('a generated layout is deterministic for a seed and differs between seeds', () => {
   const a = generateLayout({ profile, seed: 7 });
   const b = generateLayout({ profile, seed: 7 });
