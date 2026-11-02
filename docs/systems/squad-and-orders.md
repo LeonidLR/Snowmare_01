@@ -699,6 +699,16 @@ Two formation deadlocks found by smokes that had been red / flaky on main (the r
   team-mate stops it). Tests `CodexTactics.Formation.WallEnd.StepRoundNarrow`; the debug line `[Formation] <name> <role>: ... cm off his slot` (`Codex.Formation.Debug 2`)
   now also prints his position, his move target and his speed. Checked: start offsets -8 .. +12 cm all green (two failed before), 5 / 5 plain runs.
 
+- **The covered approach's cleared looks flickered (FormationWallGroupSmoke scene 5, red on main: "somebody held the rear all the way in", missed
+  0.05 s):** `FormationWallRules::Approach` clears every approach look from scratch (`ClearLook` with no held look - the golden rule, unchanged); with a
+  wall within `look.wall_dist` behind the rear man his cleared rear look jumped between the two sides of the blocked span nearly every frame (71, -64,
+  71, -66 ... deg: 9 side changes in ~0.5 s, the body wobbling between them). Since bdf43021 the scene's squad stood that close to a wall (the wall route
+  changed scene 4's end; `Codex.Formation.WallRoute 0` passed). Now the runtime keeps last frame's side while it is still clear
+  (`FormationWallRules::HoldApproachLooks`: `ClearLook` with the last look as current and held; console `Codex.Formation.ApproachHold`, A/B 0;
+  test `CodexTactics.Formation.Approach.HoldLooks`): 1 side change (when the wall left his reach). The smoke judged the rear against the bare
+  normal; the rule clears it (nobody looks into a wall a step behind him), so it now accepts the rear man's cleared rear look, gives the same 1 s
+  turn after every new rear look as at the order, and checks "the rear look kept its side (<= 2 changes)".
+
 ## The custom formation (game designer decisions 2026-11-01; branch formation/custom)
 
 Design and UX: `docs/design/FORMATION_SECTORS.md` "Custom formation"; data contract `docs/design/FORMATION_CONTRACT.md` 16; TS reference

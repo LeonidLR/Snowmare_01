@@ -25,6 +25,9 @@
 // knockdowns per phase; a phase with one accepts the knockdown's DuckForSafety, counts his shots in any stance (he fights on from
 // the open), excludes the downed / get-up frames from the left-hand IK check, and - like a player - re-orders the corner once he is
 // up. Hard requirements stay: he gets up every time, keeps firing, the flank rush is beaten and he survives.
+// 2026-11-02 (flaky since the melee close-in: the knockdown / kill rolls differ run to run): the player re-orders the corner ONCE per
+// knockdown (also in the calm phase after the stream), and in the open-side stream a step off the wall after he went back to the corner
+// and fought from it again is a new engagement. "Seed=1..32" all pass (Seed=4 / 5 / 8 failed before).
 
 #include "CoreMinimal.h"
 
@@ -101,7 +104,10 @@ namespace CornerHoldSmoke
 		ECoverFacing LastFacing = ECoverFacing::Right;
 		bool bLastInCover = false;
 		int32 FacingFlips = 0;
+		/** Every step off the wall / those that started no new engagement (no corner-hold shot since he last entered the cover). */
 		int32 CoverLeaves = 0;
+		int32 EngagementLeaves = 0;
+		int32 CornerShotsAtEntry = 0;
 		int32 IKSamples = 0;
 		int32 IKLow = 0;
 		int32 TotalOpenShots = 0;
@@ -237,9 +243,20 @@ namespace CornerHoldSmoke
 		{
 			++State.FacingFlips;
 		}
+		// "One step off the wall per engagement" (the user's PIE video: on / off the wall over and over for one hound stream). A step off
+		// after he went back to the corner AND fought from it again (a corner-hold shot since he re-entered) starts a NEW engagement
+		// (2026-11-02, Seed=8: the stream reached him in two waves - kill rolls - he held the corner and fired between them; the old
+		// count took the whole 26 s stream as one engagement). CoverLeaves keeps every leave (the flank rush's one posture switch).
+		const int32 CornerShots = Op->GetCoverLeanShots() + Op->GetCoverBlindShots();
+		if (!State.bLastInCover && Op->bInCover)
+		{
+			State.CornerShotsAtEntry = CornerShots;
+		}
 		if (State.bLastInCover && !Op->bInCover)
 		{
 			++State.CoverLeaves;
+			State.EngagementLeaves += CornerShots > State.CornerShotsAtEntry ? 0 : 1;
+			State.CornerShotsAtEntry = CornerShots;
 		}
 		State.LastFacing = Op->CoverFacing;
 		State.bLastInCover = Op->bInCover;
@@ -275,6 +292,8 @@ namespace CornerHoldSmoke
 	{
 		State.FacingFlips = 0;
 		State.CoverLeaves = 0;
+		State.EngagementLeaves = 0;
+		State.CornerShotsAtEntry = Op->GetCoverLeanShots() + Op->GetCoverBlindShots();
 		State.IKSamples = 0;
 		State.IKLow = 0;
 		State.LastFacing = Op->CoverFacing;
@@ -373,6 +392,14 @@ namespace CornerHoldSmoke
 		}
 		State.ReorderTimer = 3.f;
 		const EOperativeOrderResult Result = Op->OrderTakeCover(State.Corner, true);
+		// 2026-11-02 (flaky; Seed=5 / 8 reproduce it): like a player, ONE re-order per knockdown. The old rule re-ordered every 3 s until a
+		// 50 ms sample caught him at the corner: back at the wall he at once stepped off again for an open shot at the hound in front (the
+		// game's engagement rule), so each of the smoke's own re-orders counted as one more "step off the wall per engagement".
+		// After the one re-order the game's own return to the cover brings him back between engagements.
+		if (Result == EOperativeOrderResult::Accepted)
+		{
+			State.bKnockedOutOfCorner = false;
+		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: up again after a knockdown - the player re-orders the corner (%s)"),
 			Result == EOperativeOrderResult::Accepted ? TEXT("accepted") : TEXT("refused"));
 	}
@@ -1000,11 +1027,11 @@ namespace CornerHoldSmoke
 				return true;
 			}
 			LogPhase(TEXT("open-side stream"), Phase);
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: open-side stream - facing flips %d, cover leaves %d, IK below 0.9 in %d of %d frames"),
-				State.FacingFlips, State.CoverLeaves, State.IKLow, State.IKSamples);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: open-side stream - facing flips %d, cover leaves %d (%d without fighting from the corner since he re-entered), IK below 0.9 in %d of %d frames"),
+				State.FacingFlips, State.CoverLeaves, State.EngagementLeaves, State.IKLow, State.IKSamples);
 			Check(State, State.FacingFlips <= 1, FString::Printf(TEXT("open-side stream: the fire stance keeps its side (%d flips)"), State.FacingFlips));
-			Check(State, State.CoverLeaves <= 1 + Phase.Knockdowns, FString::Printf(TEXT("open-side stream: at most one step off the wall per engagement (%d, + %d knockdowns)"),
-				State.CoverLeaves, Phase.Knockdowns));
+			Check(State, State.EngagementLeaves <= 1 + Phase.Knockdowns, FString::Printf(TEXT("open-side stream: at most one step off the wall per engagement (%d, + %d knockdowns; %d leaves in all)"),
+				State.EngagementLeaves, Phase.Knockdowns, State.CoverLeaves));
 			// Each knockdown costs ~2.7 s on the ground plus the walk back to the corner (~4 of his shots at 0.65 s): with one, 5.
 			Check(State, Phase.Shots + Phase.OpenShots >= 8 || (Phase.Knockdowns > 0 && Phase.AnyShots >= 5),
 				FString::Printf(TEXT("open-side stream: he keeps firing (%d corner + %d open shots, %d in any stance, %d knockdowns)"), Phase.Shots, Phase.OpenShots,
@@ -1023,7 +1050,10 @@ namespace CornerHoldSmoke
 			return true;
 		}
 		case 6:
-			// Back to the corner after the open-side stream (calm), in the corner hold again (re-ordered after a knockdown).
+			// Back to the corner after the open-side stream (calm), in the corner hold again (re-ordered after a knockdown). No Track here:
+			// the time since he got up runs on its own (2026-11-02: knocked down in the stream's last second, SinceUp stayed 0 and the
+			// re-order never came - "calm: back at the corner" failed after 12 s).
+			State.SinceUp = Op->IsKnockedDown() ? 0.f : State.SinceUp + 0.05f;
 			ReorderCornerAfterKnockdown(State, Op);
 			if (!(Op->bInCover && Op->IsCornerAimActive()) && State.StageTime < 12.f)
 			{
