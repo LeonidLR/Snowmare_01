@@ -103,12 +103,19 @@ namespace SquadFireSmoke
 		{
 		case 0:
 		{
-			// The other operatives step aside so only the commander's line matters.
+			// The other operatives step aside so only the commander's line matters - and they are the squad's eyes on the hound: the prone
+			// commander cannot see it over the barricade, and an enemy the squad does not see is not aimed at (Sprint 08), so without a
+			// spotter there is no barricade verdict at all. Solo keeps them where they are put, facing the hound: in the formation (look sectors,
+			// on by default since 9cd47737, 2026-10-25) they turned to their look sectors, away from it - failing since then (the old set-up
+			// passes with Codex.Formation.Sectors 0).
+			Squad->EnterSoloMode();
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				if (Member != Commander)
 				{
-					Member->TeleportTo(SmokeUtils::LevelPoint(World, FVector(-600.f, 600.f * Member->SquadIndex, 100.f)), Member->GetActorRotation(), false, true);
+					Member->StopOperative();
+					Member->TeleportTo(SmokeUtils::LevelPoint(World, FVector(-600.f, 600.f * Member->SquadIndex, 100.f)), SmokeUtils::LayoutTransform(World).Rotator(),
+						false, true);
 				}
 			}
 			Commander->TeleportTo(SmokeUtils::LevelPoint(World, FVector(0.f, 0.f, 100.f)), SmokeUtils::LayoutTransform(World).Rotator(), false, true);

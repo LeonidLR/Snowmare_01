@@ -52,6 +52,9 @@ namespace BridgeFenceSmoke
 		int32 Passed = 0;
 		float LeaderMaxAlongFence = -10000.f;
 		TWeakObjectPtr<AOperativeCharacter> Crawler;
+		/** The crevasse banks of part 1 (3 m high blocks): removed before the fence part, so they never stand in its run. */
+		TArray<TWeakObjectPtr<AStaticMeshActor>> Banks;
+		bool bBanksCleared = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -93,6 +96,52 @@ namespace BridgeFenceSmoke
 		Block->GetStaticMeshComponent()->SetCanEverAffectNavigation(true);
 		Block->FinishSpawning(FTransform(Rotation, Centre, Scale));
 		return Block;
+	}
+
+	/**
+	 * The fence's axis: the leader's forward or the first turn (+-30 / 60 / 90 ...) where the whole run - the fence 6 m ahead, the
+	 * point beyond it 11 m ahead (the move target of this part) and 13 m - lies ON the navmesh (within 20 cm, not just the default
+	 * 80 cm query extent) with a straight, full path. 2026-11-02: since the formation look sectors (on by default since 9cd47737,
+	 * 2026-10-25; the old set-up passes with Codex.Formation.Sectors 0) the leader stands past the bridge facing on towards
+	 * L_MovementTest's 3 m end wall (x -3800): the point 11 m ahead lay on its top, off the floor's navmesh - no path at all, so every
+	 * fence check failed.
+	 */
+	FVector ChooseFenceAxis(UWorld* World, const FVector& From, float FeetZ, const FVector& Forward)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		if (!Nav)
+		{
+			return Forward;
+		}
+		for (const float Turn : { 0.f, 30.f, -30.f, 60.f, -60.f, 90.f, -90.f, 120.f, -120.f, 150.f, -150.f, 180.f })
+		{
+			const FVector Dir = Forward.RotateAngleAxis(Turn, FVector::UpVector).GetSafeNormal2D();
+			bool bClear = true;
+			float FailAt = 0.f;
+			FNavLocation Last;
+			for (const float Along : { 300.f, 600.f, 900.f, 1100.f, 1300.f })
+			{
+				FNavLocation OnNav;
+				const FVector Point = From + Dir * Along;
+				if (!Nav->ProjectPointToNavigation(Point, OnNav, FVector(20.f, 20.f, 300.f)) || FMath::Abs(OnNav.Location.Z - FeetZ) > 100.f)
+				{
+					bClear = false;
+					FailAt = Along;
+					break;
+				}
+				Last = OnNav;
+			}
+			FVector Hit;
+			const bool bRay = bClear && Nav->NavigationRaycast(World, From, Last.Location, Hit);
+			const UNavigationPath* Path = bClear && !bRay ? UNavigationSystemV1::FindPathToLocationSynchronously(World, From, Last.Location) : nullptr;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke fence axis: turn %.0f - %s"), Turn, !bClear ? *FString::Printf(TEXT("off the navmesh at %.0f cm"), FailAt)
+				: (bRay ? TEXT("navmesh raycast blocked") : (Path && Path->IsValid() && !Path->IsPartial() ? TEXT("clear") : TEXT("no full path"))));
+			if (Path && Path->IsValid() && !Path->IsPartial())
+			{
+				return Dir;
+			}
+		}
+		return Forward;
 	}
 
 	int32 CountMessages(UWorld* World, const FString& Part)
@@ -148,8 +197,10 @@ namespace BridgeFenceSmoke
 			State.BridgeAxis = Axis;
 			// The crevasse banks: blocking cubes 6 x 30 x 3 m on both sides of the 2.2 m span (the span is the only way across).
 			const FVector Right = FVector::CrossProduct(FVector::UpVector, Axis).GetSafeNormal();
-			SpawnBlock(World, Centre + Right * 1610.f + FVector(0.f, 0.f, 150.f), Axis.Rotation(), FVector(6.f, 30.f, 3.f));
-			SpawnBlock(World, Centre - Right * 1610.f + FVector(0.f, 0.f, 150.f), Axis.Rotation(), FVector(6.f, 30.f, 3.f));
+			State.Banks.Add(SpawnBlock(World, Centre + Right * 1610.f + FVector(0.f, 0.f, 150.f), Axis.Rotation(), FVector(6.f, 30.f, 3.f)));
+			State.Banks.Add(SpawnBlock(World, Centre - Right * 1610.f + FVector(0.f, 0.f, 150.f), Axis.Rotation(), FVector(6.f, 30.f, 3.f)));
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: bridge at %s axis %s (leader %s facing %s)"), *Centre.ToCompactString(), *Axis.ToCompactString(),
+				*Leader->GetActorLocation().ToCompactString(), *Forward.ToCompactString());
 			Check(State, Bridge && Bridge->Capacity == 1 && Bridge->GetOccupantCount() == 0, TEXT("bridge placed: capacity 1, empty, banks blocked"));
 			Next(State);
 			return true;
@@ -221,15 +272,36 @@ namespace BridgeFenceSmoke
 		}
 		case 2:
 		{
-			// The fence: 6 m ahead of the leader (fresh direction), 6 m wide, clearance 90 cm.
-			for (AOperativeCharacter* Member : Squad->GetMembers())
+			// The fence: 6 m ahead of the leader (a clear direction, ChooseFenceAxis), 6 m wide, clearance 90 cm. First the bridge part's
+			// banks (3 m blocks) and span go and the navmesh drops them: the clear direction may be back over the crevasse.
+			if (!State.bBanksCleared)
 			{
-				Member->StopOperative();
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					Member->StopOperative();
+				}
+				for (const TWeakObjectPtr<AStaticMeshActor>& Bank : State.Banks)
+				{
+					if (AStaticMeshActor* Block = Bank.Get())
+					{
+						Block->Destroy();
+					}
+				}
+				if (ABridgeCrossingVolume* Bridge = State.Bridge.Get())
+				{
+					Bridge->Destroy();
+				}
+				State.bBanksCleared = true;
+				State.StageTime = 0.f;
+				return true;
+			}
+			if (State.StageTime < 4.f)
+			{
+				return true;
 			}
 			const FVector Forward = Leader->GetActorForwardVector().GetSafeNormal2D();
-			const FVector Far = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Forward * 1400.f);
-			const FVector Axis = (Far - Leader->GetActorLocation()).GetSafeNormal2D();
 			const float FloorZ = Leader->GetActorLocation().Z - Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+			const FVector Axis = ChooseFenceAxis(World, Leader->GetActorLocation(), FloorZ, Forward);
 			const FVector Centre = FVector(Leader->GetActorLocation().X, Leader->GetActorLocation().Y, FloorZ) + Axis * 600.f;
 			FActorSpawnParameters Params;
 			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;

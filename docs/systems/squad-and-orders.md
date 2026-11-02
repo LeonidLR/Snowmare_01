@@ -680,6 +680,25 @@ Commander went round one end, the Engineer + the Medic-Sapper round the other. F
   before); the far side of a LOW wall is the old click (a vault / a move); the side split uses the wall's two faces along the camera's view (a wall seen
   end-on has no far half - its faces are the ends).
 
+## Red smokes made green (2026-11-02, branch fix/red-smokes)
+
+Two formation deadlocks found by smokes that had been red / flaky on main (the rest of that pass were stale smokes - CHANGELOG):
+- **The wall route's column man ahead of the leader (FormationWallSwitchSmoke variant 0, red since bdf43021 "one route round it", 2026-11-01):** a
+  follower cut from his wall slot walks a column place on the leader's trail BEHIND him; one who stood ahead of the leader on that route (crouched beside
+  him at the long wall, the route round its far end) waited there while the leader ran into him - both stood still for good (`Codex.Formation.WallRoute 0`
+  passed). Now the yield-to-leader rule (`Codex.Formation.YieldToLeader`, bug 2026-10-28) also covers a wall-routed follower during the wall order: he steps
+  aside out of the leader's PATH (`BuildLeaderWay` + `FormationRuntime::YieldFromLeaderPath`: the navmesh way round the wall, not the straight line to the
+  slot behind it) to a spot he walks straight to (navmesh raycast clear: never one behind the wall); the other wall-order rules are unchanged.
+- **The 2 m passage (FormationWallHugSmoke, flaky ~1 in 10, the last scene "narrow passage, real-time fight"):** two causes, each reproduced
+  deterministically by offsetting the scene's start spots a few cm: (1) the bug-D step round (`FormationWallEnd::StepRound`, 110 cm out from the team-mate)
+  put the rear man's way point in / beyond the passage's low wall - off the nav mesh, he stood at its edge for good; now the step out shrinks to what the
+  passage holds (`StepRound(..., OutCm)`, `StepRoundOutSteps`: 100 .. 75 cm, `StepRoundMinOutCm` = two capsules + margin) - the first point a margin inside the
+  nav mesh he walks straight to; (2) the leader's run-in stops ~25 cm out of the wall (its acceptance radius) and on the covered approach he takes the wall
+  pose (and the glide onto his slot that came with it, bug 2026-10-27) only when everyone is at the wall - the rear man could not get past him in the
+  passage, so neither ever arrived. Now the leader glides onto his slot as soon as his own run-in is over (`GlideToWallSlot(..., bBeforePose)`, swept: a
+  team-mate stops it). Tests `CodexTactics.Formation.WallEnd.StepRoundNarrow`; the debug line `[Formation] <name> <role>: ... cm off his slot` (`Codex.Formation.Debug 2`)
+  now also prints his position, his move target and his speed. Checked: start offsets -8 .. +12 cm all green (two failed before), 5 / 5 plain runs.
+
 ## The custom formation (game designer decisions 2026-11-01; branch formation/custom)
 
 Design and UX: `docs/design/FORMATION_SECTORS.md` "Custom formation"; data contract `docs/design/FORMATION_CONTRACT.md` 16; TS reference
