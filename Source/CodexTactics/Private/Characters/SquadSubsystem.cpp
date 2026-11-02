@@ -11,6 +11,7 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TrapSpotRules.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -49,6 +50,31 @@ namespace
 		TEXT("1 (default, user decision 2026-10-26): the group cover order without a box selection (the others take cover too, the wall layout, the corner stack) runs in the fight too - real time and the tactical pause, not turn-based; 0: the old rule (exploration only - in a fight a cover click is the selected operative's own order)."));
 	TAutoConsoleVariable<int32> CVarSquadSlotFallback(TEXT("Codex.Squad.SlotFallback"), 1,
 		TEXT("1 (default): a formation slot off the navmesh (wall, generator, a fallen mate's remains) is replaced by the nearest navigable spot round the leader (bug 2026-10-23); 0: the old rule (the follower stays where he is)."));
+	TAutoConsoleVariable<int32> CVarSquadDropPendingCover(TEXT("Codex.Squad.DropPendingCover"), 1,
+		TEXT("1 (default): a follower the squad takes out of his cover drops his pending cover slot and its walk - Regroup any (a walk to a cover slot too), the leave to follow only the side-step along the wall he leaves, e.g. the automatic walk to the corner (bug 2026-11-02); 0: the old rule (the walk ran on and he entered the cover again)."));
+
+	/**
+	 * Bug 2026-11-02 (the Medic-Sapper back in her cover after Regroup): ends a follower's pending cover slot and the walk to it when
+	 * SquadOrderRules::DropsPendingCover says so. Call it BEFORE he leaves his cover (it reads his cover slot). True when it dropped one.
+	 */
+	bool DropSquadPendingCoverWalk(AOperativeCharacter& Operative, bool bRegroup, const TCHAR* Why)
+	{
+		if (CVarSquadDropPendingCover.GetValueOnGameThread() == 0 || !Operative.HasPendingCover())
+		{
+			return false;
+		}
+		const bool bSameWall = Operative.bInCover && CoverTraceRules::IsSameWall(Operative.GetCoverSlot(), Operative.GetPendingCoverSlot());
+		if (!SquadOrderRules::DropsPendingCover(true, bRegroup, Operative.bInCover, bSameWall))
+		{
+			return false;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: %s - drops the %s to (%.0f, %.0f)"), *Operative.DisplayName.ToString(), Why,
+			bSameWall ? TEXT("side-step along his wall") : TEXT("walk to a cover slot"), Operative.GetPendingCoverSlot().WorldLocation.X,
+			Operative.GetPendingCoverSlot().WorldLocation.Y);
+		Operative.ClearPendingCover();
+		Operative.StopOperative();
+		return true;
+	}
 }
 
 bool USquadSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -660,6 +686,9 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 				// Rev 5g: Regroup ends a follower's own move order - everybody comes back to the leader (a use / object task
 				// still finishes first, SquadOrderRules).
 				Operative->ReleaseOwnMoveOrder();
+				// Bug 2026-11-02: ... his cover claim ends too - a side-step along his wall (the automatic walk to its corner) or a walk to a
+				// cover slot ran on (FollowTo refuses while a cover is pending) and put him back into the cover.
+				DropSquadPendingCoverWalk(*Operative, /*bRegroup*/ true, TEXT("regroup"));
 				// ... and a follower hugging a wall (e.g. stacked at a door in Solo) leaves it ("Teammates leave cover and regroup").
 				if (Operative->bInCover)
 				{
@@ -1451,6 +1480,7 @@ void USquadSubsystem::LeaveCoverForSquad(FFollowerState& Follower, AOperativeCha
 {
 	AOperativeCharacter* Operative = &OperativeRef;
 	const bool bGroupCoverProne = HasGroupCoverProne(Operative);
+	DropSquadPendingCoverWalk(*Operative, /*bRegroup*/ false, Why); // a side-step along the wall he leaves ends with the cover (bug 2026-11-02)
 	Operative->LeaveCoverToMove(Why);
 	if (bGroupCoverProne)
 	{

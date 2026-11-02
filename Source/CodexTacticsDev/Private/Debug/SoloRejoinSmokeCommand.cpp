@@ -16,6 +16,10 @@
 // others copy his crouch), A selected and sent sprinting 15 m: B and C stand up and sprint too (speed >= 90 % of A's within 2.5 s).
 // Run twice: Codex.Squad.SprintStandUp 0 (the old rule) reproduces the bug (they stay crouched), 1 (default) is checked; then the
 // player's own squad crouch (Alt + C) is kept when the leader sprints.
+// Bug 2026-11-02 (the Medic-Sapper, C): Solo, C ordered into cover 1.8 m from the wall's free end walks on to the corner by herself (the
+// automatic corner snap side-step); Regroup while she side-steps, the leader standing: she drops that cover walk and rejoins the formation
+// (was: the side-step ran on - FollowTo refuses while a cover is pending - and she entered the cover at the corner again and held it).
+// Stages 123-126; A/B: Codex.Squad.DropPendingCover 0 = the old rule (fails there).
 
 #include "CoreMinimal.h"
 
@@ -95,6 +99,10 @@ namespace SoloRejoinSmoke
 		float FastAt[2] = { -1.f, -1.f };
 		float BestRatio[2] = { 0.f, 0.f };
 		bool bStoodUp[2] = { false, false };
+
+		// Regroup during the corner snap side-step (bug 2026-11-02): her cover slot near the wall's end, the corner slot she side-steps to.
+		FCoverSlot EndSlot;
+		FVector SnapGoal = FVector::ZeroVector;
 	};
 
 	/**
@@ -478,8 +486,8 @@ namespace SoloRejoinSmoke
 				return true;
 			}
 			// A, the old leader, holds as a guard now: crouched, or still standing out hold_crouch_after_sec (2026-11-02). Not waited for:
-			// the regroup below copies B's crouch to him anyway, and a longer wait lets C shimmy to the wall's corner, whose cover move
-			// survives the regroup (C re-enters the cover standing) - pass 0 would no longer reproduce the old rule's bug.
+			// the regroup below copies B's crouch to him anyway. (A longer wait let C shimmy to the wall's corner, and that cover walk survived
+			// the regroup - C re-entered the cover standing: the bug of 2026-11-02, fixed and checked by stages 123-126.)
 			const bool bAGuards = A->GetStance() == EOperativeStance::Crouching || Squad->IsSoloGuardCrouchWaiting(A);
 			Check(State, C->bInCover && B->GetStance() == EOperativeStance::Crouching && bAGuards,
 				FString::Printf(TEXT("[regroup sprint %d] Solo: C stacked in cover %d, B (selected) crouched %d, A guards (crouched %d, waiting %d)"), State.SprintPass,
@@ -593,6 +601,72 @@ namespace SoloRejoinSmoke
 			}
 			Check(State, B->GetStance() == EOperativeStance::Crouching && C->GetStance() == EOperativeStance::Crouching,
 				TEXT("[regroup sprint] the player's squad crouch (Alt + C) is kept when the leader sprints (user decision 2026-10-01)"));
+			NextStage(State);
+			return true;
+		}
+		case 123:
+			// Regroup during the corner snap side-step (bug 2026-11-02): a fresh start at the wall.
+			ResetSquad(World, Squad, State);
+			NextStage(State);
+			return true;
+		case 124:
+		{
+			if (State.StageTime < SettleSeconds)
+			{
+				return true;
+			}
+			// Solo; the player selects C, orders her into cover 1.8 m from the wall's (free) right end and selects A again.
+			const bool bSlot = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 380.f + State.R * 220.f + FVector(0.f, 0.f, 90.f), State.F,
+				State.EndSlot);
+			Check(State, bSlot, TEXT("[regroup cover walk] a cover slot 1.8 m from the wall's end"));
+			if (!bSlot)
+			{
+				return Finish(State, false);
+			}
+			Squad->EnterSoloMode();
+			Squad->SetLeader(C);
+			C->OrderTakeCover(State.EndSlot, false);
+			Squad->SetLeader(A);
+			NextStage(State);
+			return true;
+		}
+		case 125:
+		{
+			// She enters the cover, then walks on along the wall to its corner by herself (TrySnapToCoverCorner's side-step).
+			const bool bSideStep = C->bInCover && C->bShimmying && C->HasPendingCover();
+			if (!bSideStep && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, bSideStep, FString::Printf(TEXT("[regroup cover walk] Solo: C took the cover and side-steps to the wall's corner (in cover %d, shimmying %d, pending %d)"),
+				C->bInCover ? 1 : 0, C->bShimmying ? 1 : 0, C->HasPendingCover() ? 1 : 0));
+			if (!bSideStep)
+			{
+				return Finish(State, false);
+			}
+			State.SnapGoal = C->GetPendingCoverSlot().WorldLocation;
+			// Regroup (B) while she side-steps; the leader A stands where he is.
+			Squad->ToggleSoloMode();
+			Check(State, !Squad->IsSoloMode() && !C->bInCover, FString::Printf(TEXT("[regroup cover walk] Regroup %.0f cm short of the corner slot: C left the cover"),
+				FVector::Dist2D(C->GetActorLocation(), State.SnapGoal)));
+			State.bFlag = false;
+			NextStage(State);
+			return true;
+		}
+		case 126:
+		{
+			// Every frame: she never goes back into that cover; she walks to her formation place by the standing leader.
+			State.bFlag |= C->bInCover;
+			const float ToA = FVector::Dist2D(C->GetActorLocation(), A->GetActorLocation());
+			const bool bRejoined = !C->bInCover && !C->HasPendingCover() && ToA <= 400.f && !C->IsMoving();
+			if ((!bRejoined || State.StageTime < 2.f) && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			const float FromCorner = FVector::Dist2D(C->GetActorLocation(), State.SnapGoal);
+			Check(State, !State.bFlag && bRejoined && FromCorner > 150.f,
+				FString::Printf(TEXT("[regroup cover walk] after Regroup C re-entered the cover %d (in cover %d, pending %d) and rejoined the formation: %.0f cm from A, %.0f cm from the corner slot"),
+					State.bFlag ? 1 : 0, C->bInCover ? 1 : 0, C->HasPendingCover() ? 1 : 0, ToA, FromCorner));
 			return Finish(State, true);
 		}
 		default:
@@ -615,7 +689,7 @@ namespace SoloRejoinSmoke
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-		if (!Leader || Squad->GetMembers().Num() < 3 || State.Time > 420.f)
+		if (!Leader || Squad->GetMembers().Num() < 3 || State.Time > 480.f)
 		{
 			Check(State, false, FString::Printf(TEXT("squad / timeout (stage %d, variant %d)"), State.Stage, State.Variant));
 			return Finish(State, false);
@@ -803,7 +877,7 @@ namespace SoloRejoinSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.SoloRejoinSmoke"),
-		TEXT("Dev check: squad prone -> solo -> solo off: followers stand up in place, then walk to the leader (no sliding); orders survive a selection switch (group / Solo); followers in cover follow a leader walking away in group mode; logs PASS/FAIL, then exits."),
+		TEXT("Dev check: squad prone -> solo -> solo off: followers stand up in place, then walk to the leader (no sliding); orders survive a selection switch (group / Solo); followers in cover follow a leader walking away in group mode; Regroup during the corner side-step rejoins; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

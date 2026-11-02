@@ -140,6 +140,23 @@ bool FSquadOrderStandToSprintTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_ORDER_TEST(FSquadOrderDropsPendingCoverTest, "DropsPendingCover")
+bool FSquadOrderDropsPendingCoverTest::RunTest(const FString&)
+{
+	// Bug 2026-11-02: the Medic-Sapper, ordered into cover in Solo, side-stepped to the wall's corner by herself; Regroup took her out of
+	// the cover, but the side-step's pending slot kept its walk running and she entered the cover at the corner again and held it.
+	using namespace SquadOrderRules;
+	TestTrue(TEXT("Regroup during the side-step to the corner: it ends"), DropsPendingCover(true, true, true, true));
+	TestTrue(TEXT("Regroup during a walk to a cover slot (not in cover yet): it ends - everybody comes back"), DropsPendingCover(true, true, false, false));
+	TestTrue(TEXT("Regroup in cover with a walk to another wall pending: it ends"), DropsPendingCover(true, true, true, false));
+	TestFalse(TEXT("Regroup, nothing pending: nothing to drop"), DropsPendingCover(false, true, true, true));
+	TestTrue(TEXT("Leaving the cover to follow during the side-step along that wall: it ends with the cover"), DropsPendingCover(true, false, true, true));
+	TestFalse(TEXT("Leaving to follow, a walk to another wall pending: the caller's"), DropsPendingCover(true, false, true, false));
+	TestFalse(TEXT("Not in cover on the way to a slot, no Regroup: the caller's"), DropsPendingCover(true, false, false, false));
+	TestFalse(TEXT("Leaving to follow, nothing pending"), DropsPendingCover(false, false, true, true));
+	return true;
+}
+
 SQUAD_ORDER_TEST(FSquadOrderPostFightHoldTest, "PostFightHold")
 bool FSquadOrderPostFightHoldTest::RunTest(const FString&)
 {

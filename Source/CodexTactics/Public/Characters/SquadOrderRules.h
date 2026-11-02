@@ -92,6 +92,16 @@ namespace SquadOrderRules
 	CODEXTACTICS_API bool ShouldLeaveCoverToFollow(const FCoverFollowFacts& Facts, float LeaveDistanceCm = CoverLeaveSlotDistanceCm);
 
 	/**
+	 * Bug 2026-11-02 (the Medic-Sapper back in her cover after Regroup): the squad takes a follower out of his cover - does his pending
+	 * cover slot (AOperativeCharacter::HasPendingCover) end with it? A pending slot kept its walk running (FollowTo refuses him while a
+	 * cover is pending) and the arrival put him back into the cover, where he held. bRegroup: Regroup / Solo off - every cover claim ends,
+	 * a walk to a cover slot too (everybody comes back). Otherwise (the followers-in-cover rule, a wall order, wall leadership releasing
+	 * him): only the side-step along the wall he leaves (bInCover + bPendingOnSameWall: a shimmy, the automatic walk to the threat-side
+	 * corner); a walk to another cover stays the caller's.
+	 */
+	CODEXTACTICS_API bool DropsPendingCover(bool bHasPendingCover, bool bRegroup, bool bInCover, bool bPendingOnSameWall);
+
+	/**
 	 * Group cover order (game designer 2026-10-20, reverses the 2026-10-11 "no automatic cover stacking" for GROUP orders): who
 	 * goes along when the player orders the direct-order operative (the leader) into cover.
 	 */
