@@ -49,6 +49,11 @@ namespace CombatMoveSmoke
 		int32 SidewaysSamples = 0;
 		float MaxBarrelError = 0.f;
 		float MaxPlayRate = 0.f;
+		/** The sprint stage: seen running, the run's end (game time into the stage), shots until then. */
+		bool bSawRunning = false;
+		float RunEndTime = -1.f;
+		int32 RunShots = 0;
+		float TopSpeed = 0.f;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -71,6 +76,10 @@ namespace CombatMoveSmoke
 		State.ShotsAtStageStart = State.Shots;
 		State.Samples = State.FacingSamples = State.AimingSamples = State.SidewaysSamples = 0;
 		State.MaxBarrelError = State.MaxPlayRate = 0.f;
+		State.bSawRunning = false;
+		State.RunEndTime = -1.f;
+		State.RunShots = 0;
+		State.TopSpeed = 0.f;
 	}
 
 	/** Barrel direction vs the direction to the target, degrees (yaw only). */
@@ -214,24 +223,32 @@ namespace CombatMoveSmoke
 			NextStage(State);
 			return true;
 		case 3:
-			// Skip the first 0.3 s (the shot in flight, the turn to the run).
-			if (State.StageTime > 0.3f)
+		{
+			// The sprint is judged WHILE HE RUNS (2026-11-02: the fixed 1.6 s window outlived the run - the walk leg is shorter at the
+			// formation's patrol pace since 9cd47737 / b75e3cef, the sprint back arrived at ~1.3 s, he stopped, faced the brute and fired,
+			// and the window's last samples / shot were his normal stop: "sprint order: running" failed with him standing at the spot).
+			// Skip the first 0.3 s (the shot in flight, the turn to the run); the run ends when he stops moving.
+			const float Speed = Commander->GetVelocity().Size2D();
+			State.TopSpeed = FMath::Max(State.TopSpeed, Speed);
+			const bool bRunning = Commander->IsMoving() && Speed > 5.f;
+			if (State.StageTime > 0.3f && bRunning)
 			{
 				Sample(State, Commander);
+				State.bSawRunning |= Commander->IsSprinting() || Speed > 300.f;
+				State.RunShots = State.Shots - State.ShotsAtStageStart;
 			}
-			if (State.StageTime < 1.6f)
+			if ((bRunning || State.StageTime < 0.5f) && State.StageTime < 6.f)
 			{
 				return true;
 			}
-			{
-				const int32 Shots = State.Shots - State.ShotsAtStageStart;
-				Check(State, Commander->IsSprinting() || Commander->GetVelocity().Size2D() > 300.f, TEXT("sprint order: running"));
-				Check(State, Shots <= 1 && State.AimingSamples == 0 && State.FacingSamples == 0 && State.SidewaysSamples == 0,
-					FString::Printf(TEXT("sprint: %d shots, aiming %d, facing the brute %d, sideways %d of %d samples"),
-						Shots, State.AimingSamples, State.FacingSamples, State.SidewaysSamples, State.Samples));
-			}
+			State.RunEndTime = State.StageTime;
+			Check(State, State.bSawRunning, FString::Printf(TEXT("sprint order: running (top %.0f cm/s, the run over after %.1f s)"), State.TopSpeed, State.RunEndTime));
+			Check(State, State.Samples >= 5 && State.RunShots <= 1 && State.AimingSamples == 0 && State.FacingSamples == 0 && State.SidewaysSamples == 0,
+				FString::Printf(TEXT("sprint: %d shots, aiming %d, facing the brute %d, sideways %d of %d samples while running"),
+					State.RunShots, State.AimingSamples, State.FacingSamples, State.SidewaysSamples, State.Samples));
 			NextStage(State);
 			return true;
+		}
 		case 4:
 			// Arrived: back to facing the brute and firing.
 			if (Commander->GetVelocity().Size2D() > 5.f || State.StageTime < 2.5f)
