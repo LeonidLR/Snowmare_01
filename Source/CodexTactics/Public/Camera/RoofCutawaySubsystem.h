@@ -78,6 +78,14 @@ namespace RoofCutawayRules
 	 */
 	CODEXTACTICS_API bool ShouldCutForOperative(bool bInsideShownZoneCamera);
 
+	/**
+	 * Whose roof is cut (game designer bug report 2026-11-02, item 8: "the cutaway must follow the operative I am WORKING WITH"): with
+	 * bFollowSelected only the selected operative's - the squad leader (the selected man; the leader of a box-selected group; the active
+	 * unit in turn-based combat) - so a selected man on a roof keeps it drawn while a team-mate stands under it; without it every
+	 * operative's (the old rule, Codex.RoofCutaway.FollowSelected 0).
+	 */
+	CODEXTACTICS_API bool ShouldEvaluateOperative(bool bIsSelected, bool bFollowSelected);
+
 	/** A cut piece no operative is under any more is restored once RestoreDelaySeconds have passed since he last was. */
 	CODEXTACTICS_API bool ShouldRestore(double LastCoveredSeconds, double NowSeconds, float RestoreDelaySeconds);
 }
@@ -85,7 +93,9 @@ namespace RoofCutawayRules
 /**
  * Roofs disappear while operatives are inside (Demo 01 rev 5h, game designer 2026-10-15; every level, UE-only). A building
  * without a fixed interior camera hid the squad under its roof / ceiling (walls already show them through the silhouette).
- * ~10 times a second, for every squad operative: a trace straight up from his head finds the roof (the first static mesh
+ * ~10 times a second, for the SELECTED operative (the squad leader: the selected man, a group's leader, the turn-based active unit -
+ * bug report 2026-11-02 item 8; Codex.RoofCutaway.FollowSelected 0 = every operative, the old rule): a trace straight up from his head
+ * finds the roof (the first static mesh
  * above him); every piece of that actor whose bottom is above his head + 40 cm is cut away, and for graybox buildings made
  * of separate actors also every piece of other actors overlapping the roof's footprint above his head (ceilings, upper
  * floors). Cut away = not drawn in the main / depth pass (SetRenderInMainPass / SetRenderInDepthPass false) but still

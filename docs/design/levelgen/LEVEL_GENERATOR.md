@@ -242,6 +242,14 @@ Root causes and fixes (the pure part in `Scripts/Editor/levelgen_ladders.py`, `-
    "The formation across height levels". LADDERS.md is unchanged.
 Walking off the rim / jumping down into the cut (the falls system) is a separate later task.
 
+**2026-11-02 (branch `fix/ramp-roof-cutaway`, `LevelGenRampSmoke`): `B_hall_n`'s stairwell is cut.** The accepted layout `gen_ref_01_02_depot_1`
+overlaps two buildings: `B_office_w` ((5200, -8750) - (6100, -2850), 9 m) reaches 4 m into `B_hall_n` ((3200, -3250) - (5700, 550)); its north wall
+`B_office_w_E_0` (y -2850, 9 m) crosses the hall's stairwell ramp `B_hall_n_stair_0` 2.8 m up - the navmesh along the ramp stops there ("ramp nav ...
+24 92 152 --- 305 ..."), the 9 m roof is not reachable by it. `LevelGenRampSmoke` reports it as `Smoke WARN` and skips it (`strictnav` = a FAIL). The
+generator's validator should refuse overlapping building footprints; the map is unchanged here (no rebuild: the squad's ramp fix does not need one) -
+open for the generator task. The other four stairs from the ground (`STAIR_ext_7`, `STAIR_in_8`, the warehouse / steelworks 9 m stairwells) are
+connected and walked by the squad (docs/systems/squad-and-orders.md "The squad on a narrow ramp").
+
 ## 8. The in-game check
 
 `CodexTactics.LevelGenRouteSmoke` (CodexTacticsDev) loads the generated map's layout JSON (by the map name from

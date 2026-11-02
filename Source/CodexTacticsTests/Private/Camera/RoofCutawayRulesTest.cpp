@@ -84,4 +84,16 @@ bool FRoofCutawayZoneAndRestoreTest::RunTest(const FString&)
 	return true;
 }
 
+ROOF_CUTAWAY_TEST(FRoofCutawayFollowSelectedTest, "FollowSelected")
+bool FRoofCutawayFollowSelectedTest::RunTest(const FString&)
+{
+	using namespace RoofCutawayRules;
+	// Bug report 2026-11-02 item 8: 2 men on a roof, 1 under it - the roof follows the man the player works with (the squad leader).
+	TestTrue(TEXT("the selected man under a roof: his roof is cut"), ShouldEvaluateOperative(true, true));
+	TestFalse(TEXT("a team-mate under the roof while the selected man stands on it: no cut for him"), ShouldEvaluateOperative(false, true));
+	TestTrue(TEXT("Codex.RoofCutaway.FollowSelected 0 (the old rule): every operative counts"), ShouldEvaluateOperative(false, false));
+	TestTrue(TEXT("... the selected one too"), ShouldEvaluateOperative(true, false));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

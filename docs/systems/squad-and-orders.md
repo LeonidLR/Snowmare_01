@@ -196,6 +196,49 @@ Three cross-level faults found by `LevelGenLaddersSmoke` once the generated map'
   tower ladder too (before, their +-250 cm query never reached 4 m, so they waited below) - Solo keeps them where they are (`CombatLabTowerSmoke`
   now puts its followers beside the tower: its 27 m teleport of the leader broke the solo leash).
 
+### The squad on a narrow ramp (2026-11-02, branch fix/ramp-roof-cutaway; the game designer's bug report on `L_Gen_Depot_1`, item 7)
+
+Report: "the squad stands together at the foot of a ramp; one operative ordered up onto the roof ('Run to position!', 'Group (3 operatives) moving
+into position!') - they all just get STUCK at the bottom; moved aside and ordered again, 2 of 3 went up, 1 stayed on the ground". The generated maps'
+external stairs / stairwells are 1.5 m wide: their navmesh corridor is **80 cm** (150 - 2 x the 35 cm agent radius) - ONE 80 cm body. Root causes
+(`LevelGenRampSmoke` traces, every 0.5 s):
+- **Shoulder to shoulder in the Detour crowd.** A box-selected group (each man his own order) or a follower catching up entered the ramp beside
+  another man: the crowd's separation / avoidance pressed the two together in the corridor and they crawled at 5-15 cm/s until the path following
+  gave up ("blocked") - the order was gone, the men stood at the foot.
+- **A follower parked ON the ramp.** The trail column's slots lie on the leader's path: a leader who stopped just past the ramp's top had his
+  followers' slots on the ramp - a man who had already reached the roof walked back down to it and parked there; the next man up pushed into him
+  for good (the 1 of 3 "left on the ground").
+- **Solo: the holding team-mates in the ramp's mouth.** Nobody stepped aside; the selected man's walk pushed into them and ended blocked.
+- (Not the squad's: `B_hall_n`'s 9 m stairwell is cut on the navmesh 2.8 m up - the overlapping `B_office_w`'s wall `E_0` (y -2850, 9 m) crosses it
+  in the accepted layout; `LevelGenRampSmoke` reports it as a WARN, see `docs/design/levelgen/LEVEL_GENERATOR.md` 7.)
+
+Fix (`Formation/RampFileRules` pure, tests `CodexTactics.Formation.RampFile.*`; runtime `Characters/SquadSubsystemRampFile.cpp`, every frame from
+`USquadSubsystem::Tick`; CVar `Codex.Squad.RampFile` 1, 0 = the old behaviour, A/B; `Codex.Squad.RampFile.Debug 1` logs the holder-yield checks):
+- **The ramp file** (the ladder queue's idea without a lease). A ramp = the walker's floor is a static mesh (never terrain) sloped >= 12 deg
+  (`IsRampSurface`; the axis from the ramp component's up vector). Per ramp in use one file: the men on it plus the men in its mouth (off it, <= 2.6 m
+  from a man on it, <= 1 m off its line, BEHIND him in their way - `IsInMouth`), all changing level the same way (`TravelDirection`: the walk's goal
+  >= 150 cm above / below his feet, or walking the ramp's axis). `FindWaitBehind`: a man waits while the nearest man ahead of him in their way is
+  closer than 170 cm (210 once waiting) and makes progress (walked >= 30 cm/s in the last 0.6 s, or waits in the file himself); level within 5 cm
+  the earlier priority (leader, then roster) is ahead - a strict order, the front man always walks. Waiting = an own walk PAUSED (resumed, never
+  dropped), a formation follower held by a traffic hold (the formation re-paths him on release); no wait over 6 s (then 2 s free). Log
+  `[RampFile] X waits (...): Y is N cm ahead of him up the ramp` / `walks on after T s`.
+- **No formation slot on a ramp while the leader stands on a floor** (`ShouldDropRampSlot`, `USquadSubsystem::KeepSlotOffRamp` right after
+  `ResolveReachableSlot` in `UpdateSectorFollower`): a stand-in round the leader on his floor (`ComputeFallbackSlots`, his side of walls, slot spacing).
+  While the leader himself walks the ramp, the column trails him on it (single file).
+- **Holders step out of the selected man's path** (Solo / a perimeter hold, never a trap Solo): a still holder within 8 m of the selected man, on his
+  level, standing on his PATH (the corners of a string-pulled navmesh path - the crowd's own path keeps only its ends; `FormationRuntime::
+  YieldFromLeaderPath`, the 80 cm corridor 6 m ahead) walks to the first `RampFileRules::YieldSpots` spot (rings of 1.3-3.1 m round him, >= 130 cm
+  off the path, his own side first) on the navmesh, on his level, off a ramp, straight-walkable (no wall between: a spot outside the building is a
+  walk round through its door), >= 1 m from the others and their spots; once per order. The selected man waits while such a holder is still on his
+  way within 2.6 m (`... waits: X steps out of his way`). Solo keeps him there (he does not walk back).
+
+Checks: `LevelGenRampSmoke` (`L_Gen_Depot_1`, every ground stair: `STAIR_ext_7` 6 m, `STAIR_in_8` 3 m, the warehouse / steelworks 9 m stairwells;
+per stair the squad bunched in its mouth, the man at the BACK selected: squad mode = all three on the top level, all three box-selected + sprint =
+all up, Solo = only he goes up; a member still 10 s off the top fails the leg with every member's position, order and path): before
+(`-PreCmds "Codex.Squad.RampFile 0"`) FAIL 7 / 12 (all four Solo legs stuck at the foot, the steelworks group stuck on the ramp; on other seeds the
+squad / group legs too), after PASS 12 / 12. Pictures `CodexTactics.RampRoofShots` -> `Saved/Screenshots/RampRoof/ramp_squad.png`.
+Open: two men meeting head-on on a ramp (one up, one down) are not sorted (the crowd's own avoidance); the file looks only at squad members.
+
 ### The squad corner peek played twice (2026-11-01, branch fix/squad-corner-peek-anim; the game designer's play-test video `Saved/BugReport/1.11.26_bug_01.avi`)
 
 Report: "when peeking round a corner the animation plays TWICE" - the peeker (the Medic-Sapper on L_FormationLab's W_B_2) made two blurred spins
