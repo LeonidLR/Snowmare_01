@@ -110,6 +110,8 @@ namespace SaveRoundTripSmoke
 		bool bPatrolSpeedWrong = false;
 		float SearchEndedAt = -1.f;
 		TWeakObjectPtr<APatrolRouteActor> RouteB;
+		/** Stage 2: the fresh world's frostbitten patroller was found (a stage-3 failure tells "gone" from "never found"). */
+		bool bSearcherFound = false;
 		FString KilledLevelEnemy;
 		FString HurtLevelEnemy;
 		FString BarrelName;
@@ -1041,10 +1043,21 @@ namespace SaveRoundTripSmoke
 			{
 				if (AppliedSlot == Slot && AppliedWorld)
 				{
+					// Blind again in the SAME frame the save is applied (2026-11-02, flaky ~1 in 30 in the full registry): the smoke's
+					// senseless override is runtime only, and stage 2 re-applied it on its next ticker step - up to a few frames later.
+					// A recreated enemy's first sight check comes after a random 0-0.2 s (EnemyCharacterPatrol.cpp) and the run's random
+					// rolls differ run to run - a frostbitten that saw the squad in that gap left his patrol and was no searcher any more
+					// (the likely cause of "walking the route again at the patrol speed -1"; not reproduced in 19 runs, alone and under
+					// load). The snapshot below is taken first.
 					if (const USaveGameSubsystem* AppliedSaves = AppliedWorld->GetSubsystem<USaveGameSubsystem>())
 					{
 						StatePtr->SnapshotTravel = Snapshot(*AppliedSaves);
 						StatePtr->bTravelApplied = true;
+					}
+					for (TActorIterator<AEnemyCharacter> It(AppliedWorld); It; ++It)
+					{
+						It->bOverridePerception = true;
+						It->PerceptionOverride = Senseless();
 					}
 				}
 			});
@@ -1104,6 +1117,7 @@ namespace SaveRoundTripSmoke
 					if (It->GetArchetype() == EEnemyArchetype::Frostbitten)
 					{
 						State.Searcher = *It; // the route-B frostbitten (searching when saved; its search may already be over)
+						State.bSearcherFound = true;
 					}
 					if (AMarksmanEnemyCharacter* FreshMarksman = Cast<AMarksmanEnemyCharacter>(*It))
 					{
@@ -1144,6 +1158,11 @@ namespace SaveRoundTripSmoke
 				return true;
 			}
 			const float Speed = Searcher ? Searcher->GetCharacterMovement()->MaxWalkSpeed : -1.f;
+			if (!Searcher)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: no searcher in stage 3 - %s"), State.bSearcherFound
+					? TEXT("the fresh world's frostbitten patroller is gone (see its [Health] line)") : TEXT("no frostbitten was on patrol / searching when the fresh world was checked"));
+			}
 			Check(State, bWalking && FMath::IsNearlyEqual(Speed, DesignerPatrolSpeed, 1.f) && Searcher->GetVelocity().Size2D() <= DesignerPatrolSpeed + 5.f,
 				FString::Printf(TEXT("the search ended, walking the route again at the patrol speed %.0f (wanted %.0f, moving %.0f cm/s)"), Speed,
 					DesignerPatrolSpeed, Searcher ? Searcher->GetVelocity().Size2D() : -1.f));

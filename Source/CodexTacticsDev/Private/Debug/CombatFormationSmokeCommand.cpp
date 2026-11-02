@@ -12,7 +12,7 @@
 //  2. both reach their spots (their orders run to the end, the formation does not pull them back meanwhile), Solo still off;
 //  3. their orders done, both rejoin the formation round the leader A, who stands still;
 //  4. A walks 11 m: both follow him (the squad stays together in the fight);
-//  5. B (the key, the real input path) in the fight: Solo on - A walks 8 m, the two hold where they are;
+//  5. B (the key, the real input path) in the fight: Solo on - A walks 8 m to the side (off his team-mates' line), the two hold where they are;
 //  6. B again: Solo off (Regroup) - both come back to A. The fight runs all the time (WaveCombat).
 
 #include "CoreMinimal.h"
@@ -283,7 +283,11 @@ namespace CombatFormationSmoke
 			State.StartA = A->GetActorLocation();
 			State.StartB = B->GetActorLocation();
 			State.StartC = C->GetActorLocation();
-			State.WalkTarget = Ground(World, A->GetActorLocation(), A->GetActorLocation() - State.F * 800.f);
+			// Sideways, away from the two (2026-11-02, flaky ~1 in 3 under load): walking 8 m BACK took him through the formation behind him,
+			// and since e3423ec1 (bug report 2026-11-02 item 7) a holding team-mate on the leader's way in Solo steps aside out of it - one
+			// step of 130-190 cm by the side the cm-exact positions picked, against the 150 cm "held" limit. This scene checks that Solo
+			// holds them while A walks off, not the yield (LevelGenRampSmoke's solo leg walks past the holders).
+			State.WalkTarget = Ground(World, A->GetActorLocation(), A->GetActorLocation() + State.R * 800.f);
 			A->OrderMoveTo(State.WalkTarget, false);
 			Next(State);
 			return true;
