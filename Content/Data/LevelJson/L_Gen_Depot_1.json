@@ -1,0 +1,153 @@
+{
+  "$schema": "../Schemas/level_config.schema.json",
+  "level_id": "L_Gen_Depot_1",
+  "level_name": "Generated ref_01_02_depot (seed 1)",
+  "description": "Generated greybox (docs/design/levelgen/LEVEL_GENERATOR.md) from ref_01_02_depot seed 1 by Scripts/Editor/build_levelgen_map.py; the squad walks the mandatory route (LevelGenRouteSmoke); combat-lab style pressure. ONE small wave only (a valid wave list is required).",
+  "combat_start": "ambush",
+  "ambush_fight": "skirmish",
+  "susanin_wave": 0,
+  "horde_enabled": false,
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "cold_rate_mult": 0,
+  "intro_dialogue": false,
+  "cheats": {
+    "immortal": true,
+    "infinite_ammo": true
+  },
+  "levelgen_layout": "Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json",
+  "minimap": {
+    "floors_cm": [
+      300.0,
+      600.0,
+      900.0
+    ]
+  },
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 2,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1,
+        "enemy_damage_mult": 1,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  },
+  "pressure": {
+    "first_event_sec": 30,
+    "interval_sec": 120,
+    "group_min": 1,
+    "group_max": 3,
+    "max_alive": 4,
+    "patrol_share": 0.6,
+    "seed": 1,
+    "ambush": {
+      "points": [
+        [
+          350,
+          -7150
+        ],
+        [
+          -2060,
+          -3342
+        ],
+        [
+          -1540,
+          -3342
+        ],
+        [
+          -2060,
+          -2642
+        ],
+        [
+          -1540,
+          -2642
+        ],
+        [
+          -2132,
+          3990
+        ],
+        [
+          5160,
+          3410
+        ],
+        [
+          -1240,
+          4090
+        ],
+        [
+          -3915,
+          3960
+        ],
+        [
+          -2220,
+          -3921
+        ],
+        [
+          -3393,
+          -4044
+        ],
+        [
+          4902,
+          -5929
+        ],
+        [
+          2706,
+          4220
+        ],
+        [
+          3645,
+          4858
+        ],
+        [
+          4335,
+          4867
+        ],
+        [
+          3357,
+          5850
+        ],
+        [
+          -2883,
+          -4253
+        ],
+        [
+          -2006,
+          -1348
+        ],
+        [
+          -3276,
+          -5799
+        ],
+        [
+          -1595,
+          -8125
+        ],
+        [
+          -3953,
+          -6220
+        ],
+        [
+          -6039,
+          1480
+        ]
+      ]
+    }
+  }
+}

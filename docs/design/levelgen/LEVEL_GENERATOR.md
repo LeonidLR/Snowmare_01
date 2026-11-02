@@ -1,0 +1,232 @@
+# Level generator (Training Ground department «Генератор уровней») - design and status
+
+> Branch `tools/level-generator` (2026-11-01). The game designer's request: a generator that uses his annotated reference maps
+> (`REF_01_02_DEPOT.md`, the first one) as visual / statistical guidance and produces ORIGINAL greybox layouts for our tactical
+> squad game, evaluates them (the mandatory route must be completable in the formation simulator; mechanic coverage, sightlines,
+> ambush quality, similarity to the reference), lets critics (Jev, the Claude API) judge them, and builds the accepted ones as
+> new UE maps the bot walks. Nothing here copies the reference's layout or art: structure, proportions, densities and tactical
+> patterns only. UE-only (no Godot reference).
+
+## 1. Where things are
+
+| What | Where |
+|---|---|
+| Reference profiles (the numbers a reference gives the generator) | `Content/Data/LevelGen/refs/<id>.json`, schema `codex.levelgen_ref/1` (`src/levelgen/profile.ts`); the reading: `docs/design/levelgen/REF_*.md` |
+| Generated layouts | schema `codex.levelgen_layout/1` (`src/levelgen/schema.ts`), an extension of the lab's `codex.formation_layout/1`; candidates in `Saved/TrainingGround/levelgen/<name>.json` (+ `.eval.json`, `.verdicts.json`, `.png`), accepted ones in `Content/Data/LevelGen/accepted/<name>.json` (+ `.meta.json`) |
+| Generator | `Tools/TrainingGround/src/levelgen/generate.ts` (pure, deterministic: profile + seed + params) |
+| Evaluator | `src/levelgen/evaluate.ts` (pure; uses the lab's nav grid and the formation simulator) |
+| Critics | `src/levelgen/critic.ts` (Claude API over fetch as `clients.ts`, Jev System One, the offline heuristic); CLI `src/levelgen/cli/critic.ts` |
+| CLI | `npm run levelgen -- --seed 1 --seeds 3 [--size 177x124 --density 1 --variants 3 --verticality 3 --no-sim --accept <name>]`, `npm run levelgen:critic -- --layout <name> --client claude|jev|mock --budget-usd 2 [--model claude-opus-5-5] [--dry-run]` |
+| Department page | `src/departments/LevelGenDepartment.tsx` + `LayoutView.tsx` (the canvas); server `server/levelgenApi.ts` (`/api/levelgen/*`) |
+| Renders | `Scripts/Tools/levelgen_render.py` (profile schematic over the un-skewed reference, candidate top-down, the critic's reference JPEG) |
+| UE builder | `Scripts/Editor/build_levelgen_map.py` (section 7; generalises `build_formation_lab.py`) -> `/Game/Maps/Generated/L_Gen_<profile>_<seed>` + `Content/Data/LevelJson/L_Gen_<...>.json` |
+| In-game check | `CodexTactics.LevelGenRouteSmoke` (section 8) |
+| Tests | `src/levelgen/levelgen.test.ts` (`npm test`) |
+
+## 2. The layout format `codex.levelgen_layout/1`
+
+Everything the lab format has keeps its meaning (`bounds`, `ground_z`, `spawn`, `walls`, `zones`, `routes`, `props`; UE cm, X
+north = up, Y east = right); `toFormationLayout(layout, layer)` flattens one LAYER into a plain lab layout, so the simulator,
+the audit, the movement bot and the map builder read a generated layout unchanged. The extension:
+
+- **Height levels** (game designer decision 2026-11-01, night): every map is split into discrete levels 3 m apart - level -1 =
+  -3 m (the rail cut / canal, pits, craters, trenches, basements), 0 = the ground, +1 = +3 m (first floors, low roofs,
+  platforms, raised rims), +2 = +6 m (second floors, the ruin's roof), +3 = +9 m (the tall halls' roofs - game designer
+  2026-11-02, `HALL_ROOF_LEVEL`: the sawtooth hall, the warehouse, the Steel Works, for the view from the roofs), upward in 3 m
+  steps when needed (`LEVEL_HEIGHT` 300, `levelZ(level)`). A **layer** is one walkable surface on one level: `ground` (0), `cut` (-1), `floor:<building>:<n>`
+  (level n), `roof:<building>` (level = the building's `floors`). `layersOf`, `layerLevel`, `levelsOf` enumerate them.
+- `walls[]`: the lab wall + `floor` (the level it stands on), `kind` (wall / fence / curb / cut_wall / building / parapet /
+  interior), `building`.
+- `buildings[]`: an axis-aligned `footprint` [min, max], `height` (= `floors` x 3 m when the roof is walkable), `floors`
+  (interior floors counting the ground floor; floor n on level n; the roof on level `floors`), `hollow` (no intermediate slabs:
+  halls, towers - the stairwell climbs ground -> roof in one flight), `enterable`, `roof_walkable`, `doors` (cut out of the
+  perimeter walls), `stairs` (`stairwell` inside / `external` on a face; `pos` on the lower level, `top` on the upper),
+  `roof_holes` (down onto the top floor), `floor_holes` (down one floor), `set_piece`. A `chimney` set-piece (`NEVER_CLIMBABLE`)
+  is an obstacle only: never enterable, never a walkable roof, no stairs, no ladder onto it, no layer / level of its own - the
+  validator refuses anything else (game designer 2026-11-02: "chimneys are NOT ladder towers").
+- `cut`: the trench polygon on level -1 (`floor_z` -300), its `crossings` (ramps / bridges at ground level); the retaining
+  walls are ground-layer `cut_wall` walls (a 2.2 m parapet + fence) with gaps at the crossings.
+- `ladders[]`: the actor origin `pos` (the bottom centre of the rung plane, on the lower level, 10 cm off the face), `yaw`
+  (+X away from the wall, LADDERS.md 3.1), the layers `from` / `to` and their `level_from` / `level_to`, `rungs` +
+  `plinth_cm` (`ladderForLevels`: one level = 8 rungs x 36.4 cm + an 8.8 cm plinth under the foot, two = 16 + 17.6, so the
+  top lands exactly on the level within LADDERS.md's 8 cm), the link points `foot` (1 m out, where a route arrives) and `top`.
+  Fewer than 7 rungs is decoration (LADDERS.md) - the validator refuses it.
+- `covers[]`: `pos`, `yaw`, `size` [l, w, h] cm, `kind` (jersey / sandbag / crate / wreck / barrel / silo / boiler); >= 140 cm
+  tall ones block sight.
+- `routes[]`: the lab route + `mandatory` (exactly one), `layers[]` (the layer of every point), `links[]` (`{ at, via }`:
+  the leg ending at point `at` goes through the ladder / stair / hole (`hole_roof_<i>`, `hole_floor_<i>`) / crossing `via`),
+  `set_pieces[]`, `intent` + `intent_note` (`'kill_zone'`: a deliberately exposed passage the designer wants - V3 along the cut
+  floor, 2026-11-02; never on the mandatory route). A leg that ends at an open hole stops on its RIM (`HOLE_RIM_M` = the hole's
+  half side 1.2 m + 0.8 m, on the side it comes from); the drop leg lands 1 m past the hole's centre on the level below.
+- `zones[].intent`: `'kill_zone'` on the cut (`Z_cut`).
+- `end`, `spawn_points[]` (edge spawns), `ambush_points[]` (authored hiding spots, the AmbushSpotRules vocabulary), `patrol_routes[]`,
+  `pressure` (a combat-lab style block for the level JSON, COMBAT_LAB.md section 2).
+
+## 3. The grammar (`generate.ts`)
+
+The map is a STREET SKELETON laid out to the profile's proportions (every position jittered by the seed): the west street,
+the T-junction cross street, the north street along the cut's north wall (the marksman lane), the east yard street, the south
+street (the second lane), the inner south street. The cut is a band across the middle with two crossings (a central ramp by
+the silos, a NE bridge) and three ladders on its south wall. The BLOCKS between the streets are filled with set-pieces, each a
+function emitting walls / buildings / covers / zones:
+
+| Set-piece | What it emits | Reference part |
+|---|---|---|
+| facade | a closed tall block (3 levels, hollow) | the NW office blocks |
+| ladder_overwatch | a 1-level platform with a ladder onto its roof | the pipe gallery B2 |
+| one_entry_compound | a fence with one gate, a shed with a door, covers | the west compound; the boiler yard |
+| industrial_hall | an enterable hollow hall, walkable roof on +3 = 9 m, one stairwell flight ground -> roof (12.9 m run; verticality >= 2), two doors | the sawtooth hall, the Steel Works |
+| warehouse | a hollow hall, roof on +3, + a fenced front lot with gates | the warehouse |
+| junkyard_field | a fence with two gaps and a very dense wreck field | the junkyard |
+| tank_farm | two silos (round covers), a fenced lot with three gates, a pump house | the tanks |
+| open_square | open ground with few covers | the park |
+| dead_end | a 5 m alley closed at one end (the wall layout at the end) | - |
+| ruined_two_level | 2 floors, roof holes (verticality 3) + a floor hole, an external stair to the roof, interior partitions with doorways, an annex 2.5 m west | the ruined factory |
+| chimney | a 3 x 3 m closed 20 m obstacle (a cylinder in UE): blocks sight, never climbable, no level (designer 2026-11-02) | the chimneys |
+| tower | (vocabulary only; the generator places none since 2026-11-02) a hollow block with a ladder | - |
+| street / marksman_lane / alley / t_junction | the lab zone kinds for the checks (wall_run / corridor / corner) | the streets |
+
+**Routes.** The mandatory route is the designer's loop: the west street -> the west compound (its one gate, to the shed's door
+and back) -> the T-junction -> the north street full length (the lane) -> the NE crossing -> the east yard round the Steel Works
+-> the south street -> the ruined factory FROM ABOVE (the external stair onto the roof, a roof hole down to floor 1, a floor
+hole down to the ground; with verticality < 3 through its doors) -> the tank farm past the pump house -> the dead end (the
+wall layout at the end). It HUGS one side of every street (2.6 m off the facade / fence / cut wall) so the classifier sees the
+wall and picks the echelon or the column instead of the open middle. Variants: V1 the gallery ladder + roof (an overwatch over
+the start), V2 the north blocks (the boiler yard gate, the alley between the office and the lot, the lot gate, the warehouse's
+south door and its stairwell onto the roof), V3 through the cut (the central ramp, the trench floor, out by the last ladder onto
+the inner street), V4 the inner street and the ruin from below (its south door in, west door out). `params.variants` keeps
+the first n. **V3 is a deliberate kill zone** (game designer 2026-11-02): `intent: 'kill_zone'` on the route and on `Z_cut`;
+the evaluation reports it as intended and the critics are told it is not a defect. The junkyard stays an ambush field beside
+the north street, never a route (designer 2026-11-02); the route ends in the SW dead end (kept).
+
+**Covers** per zone by the profile's density x `params.density` (one greybox cover object ~ 1.7 of the reference's small
+covers), never within 2.6 m of a route, 1.2 m of another cover or 1 m of a building. **Ambush points** (COMBAT_LAB.md 2.1's
+spot vocabulary): per free wall end one spot on each face (1 m inside the end, 2.6 m off the face), every building's outside
+corners (1.6 m out diagonally), the far side of every tall cover - kept when 14-30 m from a route. **Patrol loops** (4
+points, radius 4-12 m) in the open set-pieces >= 30 m from the start; **spawn points** at the edges >= 40 m from the start.
+
+**Parameters.** `size_m` (default the profile's 177 x 124; everything scales with it), `density` (cover multiplier),
+`variants` (0-4), `verticality` 0 flat / 1 ladders + roofs / 2 + stairwells and floors / 3 + the ruin's holes.
+
+## 4. The evaluation (`evaluate.ts`), 0 tokens
+
+1. **Completability (required).** Every leg of every route is pathed on its layer with the lab's nav grid (walls widened by
+   the 35 cm agent radius); a layer change needs a link the route touches at both ends (within 5 m). The first failure names
+   the leg and why (`point in a wall / off the layer`, `unreachable`, `no link`, `missing link`, `link off the leg`).
+2. **Mechanic coverage.** The formation simulator (`sim.ts`, 4 men, the lab's `formation_config.json`) walks the mandatory
+   route's ground legs: the share of time per terrain class (open / wall_left / wall_right / corridor / at_wall) and per
+   formation (diamond / column / echelons / wall), corner watches, wall layouts, doorways crossed, ladder / stair / hole uses,
+   roofs and floors visited, the height levels visited and the share of route points per level.
+3. **Sightlines.** Every 2 m along the mandatory route, 36 rays against the layer's walls and the tall covers, clipped at the
+   map's edge: p50 / p90 / max of the longest ray (how far the squad can see or be seen), the share of samples under 40 m
+   (short-sightline zones), the number of lanes >= 80 m (runs of >= 24 m), the mean ray (openness). **Elevated vision** (2026-11-02):
+   on a ROOF the eye stands at the roof's level + 1.6 m and only obstacles whose top reaches that height block a ray (walls on
+   their level, buildings, covers by their height; a 20 m chimney and a 12 m silo block even the +3 roofs). **Roof views**: from
+   every walkable roof (its centre + 4 points 1.5 m inside the corners, 36 rays each) the mean / longest ray and the share of rays
+   >= 60 m - seed 1: the three halls on +3 mean 64-73 m, the ruin on +2 58 m, the gallery on +1 40 m; the same sawtooth hall on +2
+   sees less (test). The metric keeps the LONGEST line; the dead zone behind a roof's edge is the in-game vision cone's job
+   (main `fix/elevated-vision-cone`).
+4. **Ambush quality.** The layout's ambush points 14-30 m from the route AND concealed from the nearest route sample, per
+   100 m of route; the share of route samples round which a coordinated plan (3+ concealed spots in 3+ sectors) could be laid.
+5. **Kill zones (intended).** Every route with `intent: 'kill_zone'`: its metres on the killing ground (the cut layer or a zone
+   marked `kill_zone`), their share of the route, the ways out of the ground (ramps + cut ladders) - one report line "kill zone
+   (INTENDED, not a defect)"; the variant line carries "[kill zone by design]". Nothing in the score penalises it.
+6. **Profile similarity.** Every `targets` range of the profile (route length, variants, ladders, walkable roofs, stairwells,
+   enterable buildings, cut crossings, lanes >= 80 m, the short share, the cover density, the height levels on the map and on
+   the route) scored 1 inside, decaying to 0 one range-width outside; the mean is the similarity.
+
+Score = 0.4 x completable + 0.2 x similarity + 0.2 x terrain diversity + 0.2 x ambush quality. The report is <= 30 lines.
+
+**Limits of the per-level simulation (documented on purpose).** Each level is simulated as its own 2D layer: a roof is its
+parapet, a floor its perimeter + interior walls, the cut its trench edges; the links are instantaneous (no climb time, no
+queue at the ladder), holes are one-way links, nobody falls, and the formation logic is only measured on the GROUND legs (the
+squad on a roof or a floor is not classified - the lab's rules have no floors). The real climb, the queue and the formation on
+a roof are the in-game smoke's job (section 8).
+
+## 5. The critics (`critic.ts`)
+
+- **Claude API critic** (offline, Node; the server holds the key, never the page): sees the candidate's top-down render (the
+  page's canvas, PNG), the reference's un-skewed annotated map (JPEG, 1200 px) and the evaluation JSON + the profile targets,
+  answers strict JSON `{ fits, confidence, reasons[], fixes[] }`. Default model `claude-opus-5-5` (the claude-api skill's
+  default; `--model claude-fable-5-1` / `claude-sonnet-5-5`), `output_config.effort low`, adaptive thinking. **Budget cap in
+  USD** like the red team: the ledger `Saved/TrainingGround/levelgen/critic_ledger.json` keeps the cumulative spend across the
+  page and the CLI; a call is skipped when spend + the estimate (~$0.03-0.07 per call) would exceed `--budget-usd` (default 2).
+- **Jev (TypeSafe System One)**: typed judgments over the metrics only, for mass ranking at no USD cost - `fits` (a Noul
+  probability), `quality` (a Score over 5 described levels), `weakest` (a Choice among route / scale / verticality / covers /
+  sightlines / ambush / similarity). Without `TYPESAFE_API_KEY` the offline heuristic answers and says so (`offline: true`).
+- **Mock / offline heuristic**: fits when the route and the variants complete and the similarity is >= 0.75.
+- **The designer's decisions in every critic** (2026-11-02): the Claude system prompt lists them as "not defects" (chimneys are
+  obstacles, never towers; a route marked `kill_zone` is a deliberate killing zone; the junkyard is an ambush field; the route
+  ends in the SW dead end; the hall roofs sit on +3 for the view), the prompt carries `roof_views` and `kill_zones_intended`, Jev's
+  `fits` instructions and state say the same, the heuristic adds an "intended kill zone - by design" reason.
+
+Every verdict goes to `<name>.verdicts.json`; the page shows them under the metrics; an accepted layout keeps them in its
+`.meta.json`. First real run 2026-11-01 on seed 1 (before the compound / ruin legs were folded in): Jev "does not fit 44 %,
+quality 3.1 / 5, weakest sightlines"; Claude Opus 5.5 "does not fit 80 %" - the route stayed on long streets, never crossed a
+short-sightline compound, used none of the verticality ($0.033). Both were right; the generator was changed accordingly.
+
+## 6. The department page
+
+Left: the profile, seed, candidate count, size / density / variants / verticality, Generate (in the browser, structural checks
+only - fast), the candidate list (score, route ok, verdict icons), the accepted list. Middle: the candidate's top-down canvas
+(layer selector: all / ground / cut / each roof and floor) next to the reference image; «Прогнать отряд» runs the simulator
+walk (~5-20 s); «Принять» saves to `Content/Data/LevelGen/accepted/` (+ `.meta.json` with the summary and the verdicts),
+«Отклонить» drops it (logged to `rejected.jsonl`). Right: the route verdict with the failing leg, the variants, the metrics,
+the similarity per metric, the critic buttons (Jev / Claude with the budget and model / heuristic), the verdicts, the <= 30-line
+report. What a verdict means: FITS / DOES NOT FIT with the confidence (Claude: self-reported; Jev: the probability), Jev's
+quality 1-5, the reasons (each should cite a metric or a place) and the fixes (one change each); «offline» = no model answered,
+only the heuristic.
+
+## 7. The UE builder (phase 5)
+
+`Scripts/Editor/build_levelgen_map.py` generalises `build_formation_lab.py`: for an accepted layout it creates
+`/Game/Maps/Generated/L_Gen_<profile>_<seed>` (never an existing map; `L_Demo01_B_FrozenFactory` is not touched) with a ground
+slab sized to the bounds + a 10 m margin, the walls (per level: a floor-n wall stands on its slab at `levelZ(n)`), the buildings
+(perimeter walls with door gaps, floor slabs at `levelZ(n)` with the floor holes cut as four slabs round the hole, a roof slab
+with its holes, stairwells as sloped cubes between the levels - the slab opening above a stairwell covers the ramp's last 3.5 m
+and ENDS exactly at its top end (no gap the navmesh cannot cross), an external stair's ramp ends exactly where its flat landing
+starts (5 cm tucked under it; the landing used to be centred on the ramp's top and left a ~50 cm step over the 35 deg ramp -
+above the navmesh agent's 35 cm step, the 2026-11-01 knownFail) and the landing crosses the wall's top onto the roof; a
+`chimney` is one closed cylinder, its 2D walls are not built), the cut (the ground slab
+split round the trench, a trench floor slab at -300, the retaining walls from -300 up to the parapet, crossing slabs / ramps),
+the ladders (`ALadderActor`, `Height` = rungs x pitch, a plinth cube under the foot), the covers (cubes / cylinders), the
+fences, PlayerStart at the start, route TargetPoints (tags `LevelGenRoute` + the route id, label `<route>_<n>`, with the layer
+in a tag), spawn / ambush / patrol TargetPoints (tags `CodexAmbushPoint` for the pressure subsystem), NavMeshBoundsVolume over
+the bounds from -4 m to 3 m above the highest walkable level (12 m with the +3 halls; a chimney's top stays outside, so it gets
+no navmesh island), then `Scripts/bake_navmesh.ps1 -Map <name>`. The level JSON's `minimap.floors_cm` lists every level from +1
+to the highest walkable one (300 / 600 / 900). It writes the level JSON
+`Content/Data/LevelJson/<map>.json` from a template (combat_start ambush, skirmish, no cold, cheats on, the layout's `pressure`
+block). Status: see section 9.
+
+## 8. The in-game check
+
+`CodexTactics.LevelGenRouteSmoke` (CodexTacticsDev) loads the generated map's layout JSON (by the map name from
+`Content/Data/LevelGen/accepted/`), walks the squad along the mandatory route with the leader's move orders (the FormationLabSmoke
+carrot pattern: a point every 6 m ahead, renewed every second; ladders and stairs through the nav links; a leg has 3 x its
+walking time to finish) and reports completion or the leg where it got stuck (position, the leg's layer, the last order).
+**TODO (hook):** once the combat-lab bot ROUTE mode lands (`PlaytestBotRouteMode`, `BotRouteRules*`, branch
+`tools/tg-combat-lab`), the smoke hands the walk to it (`Codex.Bot.Route <route id>`) and only reads its result; the carrot walk
+stays the fallback. Status: see section 9.
+
+## 9. Status
+
+| Phase | State |
+|---|---|
+| 1 reference analysis + profile + schematic | done (`REF_01_02_DEPOT.md`, `ref_01_02_depot.json`, `Saved/Screenshots/LevelGen/`) |
+| 2 generator core + evaluation + tests | done (`npm test`: the levelgen suite; every seed 1..8 completable with its variants) |
+| 3 department page | done (`/api/levelgen/*`, `LevelGenDepartment.tsx`) |
+| 4 Jev + Claude critic | done (real calls verified 2026-11-01; ledger) |
+| 5 UE builder + one generated map + smoke | done. `Scripts/levelgen_build_map.ps1` = the commandlet + the navmesh bake; `/Game/Maps/Generated/L_Gen_Depot_1` rebuilt 2026-11-02 from the accepted seed 1 with the designer's answers (539 actors, 4 climbable ladders, the halls' roofs on +3, the chimneys as cylinders, navmesh 440 tiles, bounds up to 12 m) + `Content/Data/LevelJson/L_Gen_Depot_1.json` (minimap floors 300 / 600 / 900). **`LevelGenRouteSmoke` PASSES the whole mandatory route** (24 / 24 legs, 307 s game time, ~74 s wall: the ground loop, the external stair onto the ruin's roof, the roof to the hole's rim, the two hole drops teleported as designed, the tank farm, the dead end); its knownFail is gone. **The stair fix** (2026-11-01 knownFail): the landing was centred on the ramp's top end, so its west half sat over the 35 deg ramp and left a ~52 cm step (above the navmesh agent's 35 cm step) - the landing now starts at the ramp's top (5 cm tucked under it); the stairwell openings end exactly at their ramps' tops (they ran 25 cm past - a gap); the roof / floor legs end on the holes' rims (a point over an open hole is off the navmesh). Still open: a real drop nav link for the holes (the smoke teleports). |
+
+## 10. The game designer's answers (2026-11-02)
+
+1. The route ends at the SW dead end - kept.
+2. Scale B 177 x 124 m - kept (the default).
+3. The junkyard stays an ambush field beside the north street, not a route variant.
+4. Factory chimneys are NOT ladder towers (no extra height): the `chimney` set-piece, closed 20 m obstacles, the validator refuses
+   a ladder / roof / entry on one; the tower ladders are gone (ladders 6 -> 4, inside the profile's 4-7).
+5. The canal-floor variant (V3) IS a deliberate kill zone: `intent: 'kill_zone'` on the route and `Z_cut`, reported as intended,
+   the critics are told (section 4.5 / 5).
+6. The workshop / hall roofs go to +3 = 9 m for the view from the roofs (the sawtooth hall, the warehouse, the Steel Works; the
+   ruin keeps its two storeys, roof +2 - the reference reads it as 8 m / 2 floors): hollow halls with one 9 m stairwell flight
+   (12.9 m run at 35 deg), walls 9 m, the profile's `height_levels` target 4-5, the elevated-vision roof views (section 4.3).

@@ -9,6 +9,7 @@ import { registerRealClient } from './ai.ts';
 
 /** USD per 1M tokens. Source: the claude-api skill model table (cached 2026-10-06; Anthropic first-party rates). One place. */
 export const PRICES_PER_MTOK: Record<string, { input: number; output: number }> = {
+  'claude-fable-5-1': { input: 10, output: 50 },
   'claude-opus-5-5': { input: 4, output: 20 },
   'claude-sonnet-5-5': { input: 2, output: 10 },
   'claude-haiku-5-5': { input: 0.1, output: 0.5 },

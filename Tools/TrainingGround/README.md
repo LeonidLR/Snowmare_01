@@ -50,6 +50,12 @@ npm run dev
     застреваний и контактов и сводка Jev в 3 строки. Файлы серии: `Saved/Telemetry/combat_lab/<серия>/` (`runs.jsonl`, `report.md`,
     `aggregate.json`, `jev.txt`, `Bot-<n>.log`).
   * **Редактор карты** и **Симулятор** — следующий этап (вкладки зарезервированы).
+* **Генератор уровней** (`docs/design/levelgen/LEVEL_GENERATOR.md`) — по эталону дизайнера (`Content/Data/LevelGen/refs/*.json`,
+  прочтение его карты в `docs/design/levelgen/REF_*.md`), seed и параметрам (размер, плотность укрытий, варианты маршрута,
+  вертикальность) генератор делает оригинальные серые раскладки с уровнями высоты по 3 м (−1 канал, 0 земля, +1, +2 крыши),
+  симулятор проверяет обязательный маршрут (он должен быть проходим), механики, обзор, засады и сходство с эталоном; критики —
+  Jev (типизированные суждения, бесплатно) и Claude API (видит обе картинки, лимит в долларах); принятые раскладки —
+  `Content/Data/LevelGen/accepted/` для сборки карты в UE (`Scripts/Editor/build_levelgen_map.py`).
 
 Командная строка (`Tools/TrainingGround`):
 
@@ -60,6 +66,8 @@ npm run dev
 | `npm run redteam -- --budget-usd 5 --rounds 4 --client claude` | «красная команда»: модель придумывает раскладки, ломающие правила строя; бот их проходит (auto + все ручные формации), упавшие сохраняются в `Content/Data/FormationLab/redteam/` как регрессия (`expected_fail`) → `redteam_report.md`; `bot:movement -- --layouts redteam` — прогон регрессии |
 | `npm run golden` (`-- --check`) | эталонные векторы для C++ parity-тестов (`golden/formation_<Rule>.json`, `golden/combatlab_pressure_fields.json`) |
 | `node src/combatLab/cli/report.ts --batch <папка серии>` | отчёт серии ботов боевой лаборатории заново (`report.md`, `aggregate.json`); серию запускает страница или `Scripts/bot_run.ps1 -Map /Game/Maps/L_FormationLabCombat -ReportDir <папка> -DurationSec 600 -Runs 4 -Parallel 2` |
+| `npm run levelgen -- --seed 1 --seeds 3 [--size 177x124 --density 1 --variants 3 --verticality 3 --no-sim] [--accept <name>]` | генератор уровней: кандидаты + оценка → `Saved/TrainingGround/levelgen/<name>.json`, `.eval.json`, `report.md` (≤ 30 строк на кандидата); `--accept` копирует кандидата в `Content/Data/LevelGen/accepted/` |
+| `npm run levelgen:critic -- --layout <name> --client claude\|jev\|mock --budget-usd 2 [--model claude-opus-5-5] [--dry-run]` | критик кандидата: Claude (картинки + метрики, расход в `critic_ledger.json`), Jev (типизированные суждения), эвристика |
 | `npm test`, `npm run typecheck` | тесты логики и проверка типов |
 
 Платные только вызовы модели в обучении: ключ берётся из окружения этого компьютера (`ANTHROPIC_API_KEY` / `TYPESAFE_API_KEY`)

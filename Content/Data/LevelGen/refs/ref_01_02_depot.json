@@ -1,0 +1,1894 @@
+{
+  "schema": "codex.levelgen_ref/1",
+  "id": "ref_01_02_depot",
+  "title": "Mission 2 'Depot' reference profile - read from the game designer's annotated Fallout Tactics map 'Great Bend' (2026-11-01)",
+  "comment": "The numbers the level generator targets (docs/design/levelgen/REF_01_02_DEPOT.md explains every entry). Frame: metres, x = east along the long edge of the iso map (its left corner -> top corner), y = south along the short edge (top corner -> right corner), origin = the map's west corner. The generator maps it to UE cm as X = -y * 100 (forward = north), Y = x * 100 (right = east). Scale B (architecture / vehicles / street widths, 12.5 px per m on the 3840 px render) is the recommended one; scale A (the FOT hex / character sprites, 20 px per m) shrinks everything by 0.62 and is kept for the record. Nothing here is a 1:1 copy: structure, proportions, densities, tactical patterns only.",
+  "source": {
+    "clean_image": "Saved/MapRefs/FOT_Map_Great_Bend.webp",
+    "annotated_image": "Saved/MapRefs/Map_Ref_01_02_Depot.jpg",
+    "image_px": [
+      3840,
+      2160
+    ],
+    "iso_corners_px": {
+      "left": [
+        62,
+        1141
+      ],
+      "top": [
+        2271,
+        40
+      ],
+      "right": [
+        3788,
+        872
+      ],
+      "bottom": [
+        1530,
+        2103
+      ]
+    },
+    "annotation_colours": {
+      "route": "blue",
+      "ladders": "yellow",
+      "start": "green circle"
+    },
+    "annotation_counts": {
+      "route_segments": 23,
+      "ladder_marks": 4,
+      "start_marks": 1
+    }
+  },
+  "scale": {
+    "recommended": "B",
+    "B": {
+      "px_per_m": 12.5,
+      "size_m": [
+        177,
+        124
+      ],
+      "basis": "sedan 4.5 m, pump house 12 x 10 m, 2-lane streets 7-9 m, fence panels 1.4 m"
+    },
+    "A": {
+      "px_per_m": 20,
+      "size_m": [
+        110,
+        77
+      ],
+      "basis": "FOT hex 1 m: human sprites 1.8 m, oil drums 0.6 x 0.9 m (sprites are oversized against vehicles / buildings)"
+    },
+    "ue_ground_plane_m": {
+      "recommended": [
+        200,
+        150
+      ],
+      "note": "layout 177 x 124 + a 10 m margin; L_Demo01_B_FrozenFactory today: ~60 m wide (side walls X -3800..2200) x ~160 m long incl. the lake compound - about half the area and a third of the width"
+    }
+  },
+  "bounds": {
+    "min": [
+      0,
+      0
+    ],
+    "max": [
+      177,
+      124
+    ]
+  },
+  "start": {
+    "pos": [
+      1,
+      38
+    ],
+    "yaw_deg": 0,
+    "note": "the road entering at the west corner (green circle); heading east along the west street"
+  },
+  "end": {
+    "pos": [
+      62,
+      116
+    ],
+    "note": "the SW end of the south street at the tanks (open question 1: the designer's blue loop has no explicit end; this closes it)"
+  },
+  "cut": {
+    "kind": "sunken rail cut / canal with concrete retaining walls",
+    "axis": [
+      [
+        0,
+        67
+      ],
+      [
+        177,
+        64
+      ]
+    ],
+    "trench_width_m": 6,
+    "wall_thickness_m": 1.5,
+    "depth_m": 3.5,
+    "fence_on_top": true,
+    "crossings": [
+      {
+        "id": "X_centre",
+        "pos": [
+          61,
+          66
+        ],
+        "kind": "slab bridge / ramp",
+        "width_m": 5,
+        "note": "by the silos: the one ground-level crossing in the middle of the map"
+      },
+      {
+        "id": "X_ne",
+        "pos": [
+          166,
+          63
+        ],
+        "kind": "footbridge at the NE end",
+        "width_m": 3,
+        "note": "the route turns south here; the cut ends 10 m further east"
+      },
+      {
+        "id": "X_w",
+        "pos": [
+          2,
+          68
+        ],
+        "kind": "the cut's open west end at the map edge",
+        "width_m": 6,
+        "note": "walkable round the end only at the very edge; off the route"
+      }
+    ],
+    "level": -1
+  },
+  "ladders": [
+    {
+      "id": "L1",
+      "pos": [
+        12,
+        21
+      ],
+      "height_m": 4,
+      "rungs": 11,
+      "connects": [
+        "Z_W_PIPEWORKS ground",
+        "B2 pipe gallery platform"
+      ],
+      "note": "the stair building / pipe gallery on the far west: an overwatch over the west street and the start (route variant V1)",
+      "levels": [
+        0,
+        1
+      ]
+    },
+    {
+      "id": "L2",
+      "pos": [
+        6,
+        70
+      ],
+      "height_m": 3.5,
+      "rungs": 10,
+      "connects": [
+        "cut floor",
+        "south bank (Z_SW_GREEN)"
+      ],
+      "note": "the cut's south wall at the west end",
+      "levels": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "L3",
+      "pos": [
+        43,
+        70
+      ],
+      "height_m": 3.5,
+      "rungs": 10,
+      "connects": [
+        "cut floor",
+        "south bank (Z_TANKS north fence)"
+      ],
+      "note": "the cut's south wall by the silos; route variant V3 (through the cut)",
+      "levels": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "L4",
+      "pos": [
+        125,
+        68
+      ],
+      "height_m": 3.5,
+      "rungs": 10,
+      "connects": [
+        "cut floor",
+        "Z_S_INNER_STREET at the NW chimney"
+      ],
+      "note": "the cut's south wall at the Steel Works; route variant V3's exit",
+      "levels": [
+        -1,
+        0
+      ]
+    }
+  ],
+  "zones": [
+    {
+      "id": "Z_W_OFFICES",
+      "kind": "facade",
+      "poly": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ],
+        [
+          60,
+          10
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "cover_per_100m2": 0.5,
+      "sightline_m": [
+        20,
+        60
+      ],
+      "mechanics": [
+        "wall layout along the facade",
+        "corner peek at the block ends"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_W_PIPEWORKS",
+      "kind": "pipe_yard",
+      "poly": [
+        [
+          0,
+          10
+        ],
+        [
+          35,
+          10
+        ],
+        [
+          35,
+          32
+        ],
+        [
+          0,
+          32
+        ]
+      ],
+      "cover_per_100m2": 3.5,
+      "sightline_m": [
+        8,
+        25
+      ],
+      "mechanics": [
+        "ladder L1 + elevated vision from the gallery",
+        "custom formation among the racks"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_W_STREET",
+      "kind": "street",
+      "poly": [
+        [
+          0,
+          32
+        ],
+        [
+          55,
+          32
+        ],
+        [
+          55,
+          47
+        ],
+        [
+          0,
+          47
+        ]
+      ],
+      "cover_per_100m2": 2.0,
+      "sightline_m": [
+        30,
+        55
+      ],
+      "mechanics": [
+        "column / diamond on the road",
+        "wall layout at the curbs",
+        "patrol contact head-on"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_W_COMPOUND",
+      "kind": "compound",
+      "poly": [
+        [
+          3,
+          47
+        ],
+        [
+          50,
+          47
+        ],
+        [
+          50,
+          62
+        ],
+        [
+          3,
+          62
+        ]
+      ],
+      "cover_per_100m2": 3.5,
+      "sightline_m": [
+        8,
+        25
+      ],
+      "entrances": [
+        [
+          30,
+          47
+        ]
+      ],
+      "mechanics": [
+        "one-entry compound: doorway classification, corner peek at the gate",
+        "ambush at the shed corners"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_N_CROSS",
+      "kind": "t_junction",
+      "poly": [
+        [
+          50,
+          32
+        ],
+        [
+          66,
+          32
+        ],
+        [
+          66,
+          60
+        ],
+        [
+          50,
+          60
+        ]
+      ],
+      "cover_per_100m2": 2.5,
+      "sightline_m": [
+        15,
+        40
+      ],
+      "mechanics": [
+        "T-junction: the squad turns from the west street into the north street; far side of a wall at the corner"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_N_SAWTOOTH",
+      "kind": "industrial_hall",
+      "poly": [
+        [
+          40,
+          5
+        ],
+        [
+          95,
+          5
+        ],
+        [
+          95,
+          35
+        ],
+        [
+          40,
+          35
+        ]
+      ],
+      "cover_per_100m2": 3.0,
+      "sightline_m": [
+        10,
+        30
+      ],
+      "mechanics": [
+        "enterable hall + roof (elevated vision)",
+        "the boiler yard = a one-entry compound (route variant V2)"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_N_OFFICE",
+      "kind": "block",
+      "poly": [
+        [
+          66,
+          32
+        ],
+        [
+          95,
+          32
+        ],
+        [
+          95,
+          50
+        ],
+        [
+          66,
+          50
+        ]
+      ],
+      "cover_per_100m2": 2.0,
+      "sightline_m": [
+        10,
+        30
+      ],
+      "mechanics": [
+        "facade + doorway",
+        "alley between the office and the warehouse (route variant V2)"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_WAREHOUSE",
+      "kind": "warehouse",
+      "poly": [
+        [
+          95,
+          10
+        ],
+        [
+          122,
+          10
+        ],
+        [
+          122,
+          52
+        ],
+        [
+          95,
+          52
+        ]
+      ],
+      "cover_per_100m2": 1.5,
+      "sightline_m": [
+        10,
+        40
+      ],
+      "mechanics": [
+        "roof overwatch over the north street and the junkyard",
+        "stairwell"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_JUNKYARD",
+      "kind": "junkyard",
+      "poly": [
+        [
+          122,
+          0
+        ],
+        [
+          177,
+          0
+        ],
+        [
+          177,
+          50
+        ],
+        [
+          122,
+          50
+        ]
+      ],
+      "cover_per_100m2": 9.0,
+      "sightline_m": [
+        4,
+        15
+      ],
+      "entrances": [
+        [
+          123,
+          48
+        ],
+        [
+          170,
+          50
+        ]
+      ],
+      "mechanics": [
+        "coordinated ambush ground (every wreck a hiding spot)",
+        "custom formation",
+        "no long lanes: suppression useless, grenades / close fight"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_N_STREET",
+      "kind": "street",
+      "poly": [
+        [
+          55,
+          50
+        ],
+        [
+          177,
+          50
+        ],
+        [
+          177,
+          61
+        ],
+        [
+          55,
+          61
+        ]
+      ],
+      "cover_per_100m2": 2.0,
+      "sightline_m": [
+        60,
+        115
+      ],
+      "mechanics": [
+        "THE marksman lane: column along the cut wall, suppression, wall layout at the curb blocks",
+        "patrol contact at long range"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_CUT",
+      "kind": "cut",
+      "poly": [
+        [
+          0,
+          61
+        ],
+        [
+          177,
+          58
+        ],
+        [
+          177,
+          72
+        ],
+        [
+          0,
+          75
+        ]
+      ],
+      "cover_per_100m2": 0.5,
+      "sightline_m": [
+        100,
+        177
+      ],
+      "mechanics": [
+        "killing zone BY DESIGN (game designer 2026-11-02): anyone inside is seen from both walls; crossings = chokepoints; the variant through it is intended, not a defect",
+        "ladders L2-L4 in and out",
+        "elevated vision from the walls' tops"
+      ],
+      "level": -1,
+      "intent": "kill_zone"
+    },
+    {
+      "id": "Z_S_INNER_STREET",
+      "kind": "street",
+      "poly": [
+        [
+          55,
+          72
+        ],
+        [
+          130,
+          72
+        ],
+        [
+          130,
+          81
+        ],
+        [
+          55,
+          81
+        ]
+      ],
+      "cover_per_100m2": 1.5,
+      "sightline_m": [
+        40,
+        75
+      ],
+      "mechanics": [
+        "column along the cut's south wall",
+        "corner peek at the chimney base",
+        "wall layout against the silo lot's fence"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_TANKS",
+      "kind": "tank_farm",
+      "poly": [
+        [
+          45,
+          78
+        ],
+        [
+          85,
+          78
+        ],
+        [
+          85,
+          120
+        ],
+        [
+          45,
+          120
+        ]
+      ],
+      "cover_per_100m2": 3.5,
+      "sightline_m": [
+        10,
+        35
+      ],
+      "mechanics": [
+        "fenced lots with gates (doorways)",
+        "round covers (silos) = wrap round a cover object",
+        "pump house enterable"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_SW_GREEN",
+      "kind": "open",
+      "poly": [
+        [
+          0,
+          75
+        ],
+        [
+          45,
+          75
+        ],
+        [
+          45,
+          124
+        ],
+        [
+          0,
+          124
+        ]
+      ],
+      "cover_per_100m2": 1.0,
+      "sightline_m": [
+        20,
+        45
+      ],
+      "mechanics": [
+        "open square: diamond / wedge, all-round watch vs ambush"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_RUINED_FACTORY",
+      "kind": "ruin_two_level",
+      "poly": [
+        [
+          88,
+          80
+        ],
+        [
+          122,
+          80
+        ],
+        [
+          122,
+          112
+        ],
+        [
+          88,
+          112
+        ]
+      ],
+      "cover_per_100m2": 2.5,
+      "sightline_m": [
+        6,
+        25
+      ],
+      "mechanics": [
+        "entered from below (wall holes, doors) AND above (roof holes, external stair)",
+        "floors + holes in the floor",
+        "doorways, corners, dead ends inside"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_STEEL_WORKS",
+      "kind": "industrial_hall",
+      "poly": [
+        [
+          122,
+          70
+        ],
+        [
+          166,
+          70
+        ],
+        [
+          166,
+          112
+        ],
+        [
+          122,
+          112
+        ]
+      ],
+      "cover_per_100m2": 1.5,
+      "sightline_m": [
+        15,
+        45
+      ],
+      "mechanics": [
+        "the biggest facade: wall layout + wall slide along it",
+        "roof overwatch via the pipe stair",
+        "the chimneys = tall obstacles (never climbable)"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_E_YARD",
+      "kind": "yard",
+      "poly": [
+        [
+          164,
+          58
+        ],
+        [
+          177,
+          58
+        ],
+        [
+          177,
+          118
+        ],
+        [
+          164,
+          118
+        ]
+      ],
+      "cover_per_100m2": 2.5,
+      "sightline_m": [
+        20,
+        55
+      ],
+      "mechanics": [
+        "narrow yard between the hall and the fence: column, echelon along the wall"
+      ],
+      "level": 0
+    },
+    {
+      "id": "Z_S_STREET",
+      "kind": "street",
+      "poly": [
+        [
+          55,
+          112
+        ],
+        [
+          166,
+          112
+        ],
+        [
+          166,
+          121
+        ],
+        [
+          55,
+          121
+        ]
+      ],
+      "cover_per_100m2": 2.5,
+      "sightline_m": [
+        50,
+        110
+      ],
+      "mechanics": [
+        "the second marksman lane: jersey barriers and sandbags = low covers",
+        "ambush from the fence line",
+        "the way back SW"
+      ],
+      "level": 0
+    }
+  ],
+  "buildings": [
+    {
+      "id": "B1_OfficeBlock_W",
+      "footprint": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          10
+        ]
+      ],
+      "height_m": 9,
+      "height_class": "tall",
+      "floors": 3,
+      "enterable": false,
+      "roof_access": false,
+      "note": "office blocks along the NW edge: facades only",
+      "level_top": 3,
+      "levels_walkable": []
+    },
+    {
+      "id": "B1b_LongBlock_N",
+      "footprint": [
+        [
+          35,
+          0
+        ],
+        [
+          60,
+          10
+        ]
+      ],
+      "height_m": 8,
+      "height_class": "tall",
+      "floors": 2,
+      "enterable": false,
+      "roof_access": false,
+      "level_top": 3,
+      "levels_walkable": []
+    },
+    {
+      "id": "B2_PipeGallery_W",
+      "footprint": [
+        [
+          8,
+          12
+        ],
+        [
+          28,
+          28
+        ]
+      ],
+      "height_m": 4,
+      "height_class": "platform",
+      "floors": 1,
+      "enterable": true,
+      "roof_access": true,
+      "stairwell": false,
+      "ladders": [
+        "L1"
+      ],
+      "note": "an open pipe-rack structure; its 4 m platform is the overwatch of route variant V1",
+      "level_top": 1,
+      "levels_walkable": [
+        0,
+        1
+      ]
+    },
+    {
+      "id": "B3_RedRoofShed",
+      "footprint": [
+        [
+          3,
+          50
+        ],
+        [
+          18,
+          62
+        ]
+      ],
+      "height_m": 4,
+      "height_class": "low",
+      "floors": 1,
+      "enterable": true,
+      "doors": [
+        [
+          18,
+          56
+        ]
+      ],
+      "roof_access": false,
+      "level_top": 1,
+      "levels_walkable": [
+        0
+      ]
+    },
+    {
+      "id": "B4_SawtoothHall",
+      "footprint": [
+        [
+          55,
+          5
+        ],
+        [
+          95,
+          32
+        ]
+      ],
+      "height_m": 9,
+      "height_class": "tall",
+      "floors": 2,
+      "enterable": true,
+      "doors": [
+        [
+          70,
+          32
+        ],
+        [
+          90,
+          32
+        ]
+      ],
+      "roof_access": true,
+      "stairwell": true,
+      "note": "sawtooth roof walkable (figures on it); one big floor + a mezzanine",
+      "level_top": 3,
+      "levels_walkable": [
+        0,
+        3
+      ]
+    },
+    {
+      "id": "B5_BoilerYard",
+      "footprint": [
+        [
+          40,
+          15
+        ],
+        [
+          58,
+          35
+        ]
+      ],
+      "height_m": 2.5,
+      "height_class": "fence",
+      "floors": 0,
+      "enterable": true,
+      "doors": [
+        [
+          48,
+          35
+        ]
+      ],
+      "roof_access": false,
+      "note": "a fenced yard with boilers = covers; one gate",
+      "level_top": 0,
+      "levels_walkable": [
+        0
+      ]
+    },
+    {
+      "id": "B6_OfficeSmall",
+      "footprint": [
+        [
+          70,
+          36
+        ],
+        [
+          85,
+          48
+        ]
+      ],
+      "height_m": 4.5,
+      "height_class": "low",
+      "floors": 1,
+      "enterable": true,
+      "doors": [
+        [
+          78,
+          48
+        ]
+      ],
+      "roof_access": false,
+      "level_top": 2,
+      "levels_walkable": [
+        0
+      ]
+    },
+    {
+      "id": "B7_Warehouse",
+      "footprint": [
+        [
+          97,
+          12
+        ],
+        [
+          121,
+          45
+        ]
+      ],
+      "height_m": 8,
+      "height_class": "tall",
+      "floors": 1,
+      "enterable": true,
+      "doors": [
+        [
+          97,
+          30
+        ],
+        [
+          110,
+          45
+        ]
+      ],
+      "roof_access": true,
+      "stairwell": true,
+      "note": "flat roof walkable (figures on it): an inner stairwell in the UE version",
+      "level_top": 3,
+      "levels_walkable": [
+        0,
+        3
+      ]
+    },
+    {
+      "id": "B8_WarehouseLot",
+      "footprint": [
+        [
+          95,
+          45
+        ],
+        [
+          121,
+          52
+        ]
+      ],
+      "height_m": 2.5,
+      "height_class": "fence",
+      "floors": 0,
+      "enterable": true,
+      "doors": [
+        [
+          108,
+          52
+        ]
+      ],
+      "roof_access": false,
+      "level_top": 0,
+      "levels_walkable": [
+        0
+      ]
+    },
+    {
+      "id": "B9_JunkyardFence",
+      "footprint": [
+        [
+          122,
+          0
+        ],
+        [
+          177,
+          50
+        ]
+      ],
+      "height_m": 2.5,
+      "height_class": "fence",
+      "floors": 0,
+      "enterable": true,
+      "doors": [
+        [
+          123,
+          48
+        ],
+        [
+          170,
+          50
+        ]
+      ],
+      "roof_access": false,
+      "note": "the field inside: 40-60 wrecks / cars / buses, each a cover object",
+      "level_top": 0,
+      "levels_walkable": [
+        0
+      ]
+    },
+    {
+      "id": "B11_Silos",
+      "footprint": [
+        [
+          48,
+          80
+        ],
+        [
+          60,
+          100
+        ]
+      ],
+      "height_m": 12,
+      "height_class": "tall",
+      "floors": 0,
+      "enterable": false,
+      "roof_access": false,
+      "note": "two cylinders dia 8 m: round cover objects",
+      "level_top": 3,
+      "levels_walkable": []
+    },
+    {
+      "id": "B12_PumpHouse",
+      "footprint": [
+        [
+          65,
+          100
+        ],
+        [
+          78,
+          115
+        ]
+      ],
+      "height_m": 4.5,
+      "height_class": "low",
+      "floors": 1,
+      "enterable": true,
+      "doors": [
+        [
+          65,
+          108
+        ]
+      ],
+      "roof_access": false,
+      "note": "concrete, pipes on the roof",
+      "level_top": 2,
+      "levels_walkable": [
+        0
+      ]
+    },
+    {
+      "id": "B13_RuinedFactory_Main",
+      "footprint": [
+        [
+          100,
+          82
+        ],
+        [
+          119,
+          100
+        ]
+      ],
+      "height_m": 8,
+      "height_class": "tall",
+      "floors": 2,
+      "enterable": true,
+      "doors": [
+        [
+          100,
+          95
+        ],
+        [
+          112,
+          100
+        ]
+      ],
+      "roof_access": true,
+      "stairwell": false,
+      "external_stair": [
+        108,
+        100
+      ],
+      "roof_holes": 2,
+      "floor_holes": 2,
+      "note": "sloped roof with two holes onto floor 1; floor 1 has two holes down to the ground floor; entered from below AND above",
+      "level_top": 2,
+      "levels_walkable": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "id": "B14_RuinedFactory_Annex",
+      "footprint": [
+        [
+          91,
+          92
+        ],
+        [
+          100,
+          111
+        ]
+      ],
+      "height_m": 4,
+      "height_class": "low",
+      "floors": 1,
+      "enterable": true,
+      "doors": [
+        [
+          91,
+          100
+        ]
+      ],
+      "wall_holes": [
+        [
+          95,
+          92
+        ],
+        [
+          100,
+          105
+        ]
+      ],
+      "roof_access": false,
+      "level_top": 1,
+      "levels_walkable": [
+        0
+      ]
+    },
+    {
+      "id": "B15_SteelWorks_Hall",
+      "footprint": [
+        [
+          130,
+          75
+        ],
+        [
+          162,
+          108
+        ]
+      ],
+      "height_m": 12,
+      "height_class": "tall",
+      "floors": 1,
+      "enterable": true,
+      "doors": [
+        [
+          146,
+          108
+        ],
+        [
+          130,
+          100
+        ]
+      ],
+      "roof_access": true,
+      "stairwell": true,
+      "note": "'STEEL WORKS' on the roof, figures on it: the pipe stair on the north face / an inner stairwell; one open hall + a gallery",
+      "level_top": 3,
+      "levels_walkable": [
+        0,
+        3
+      ]
+    },
+    {
+      "id": "B16_SteelWorks_Annex",
+      "footprint": [
+        [
+          122,
+          95
+        ],
+        [
+          131,
+          112
+        ]
+      ],
+      "height_m": 5,
+      "height_class": "low",
+      "floors": 1,
+      "enterable": false,
+      "roof_access": false,
+      "note": "pipe racks and a low block between the ruined factory and the hall",
+      "level_top": 2,
+      "levels_walkable": []
+    },
+    {
+      "id": "B17a_Chimney_NW",
+      "footprint": [
+        [
+          119,
+          70
+        ],
+        [
+          123,
+          74
+        ]
+      ],
+      "height_m": 25,
+      "height_class": "tower",
+      "floors": 0,
+      "enterable": false,
+      "roof_access": false,
+      "note": "not climbable in the original; game designer 2026-11-02: NOT a ladder tower in ours either - a tall obstacle (sight blocker) with no level of its own",
+      "level_top": null,
+      "levels_walkable": []
+    },
+    {
+      "id": "B17b_Chimney_S",
+      "footprint": [
+        [
+          122,
+          90
+        ],
+        [
+          125,
+          93
+        ]
+      ],
+      "height_m": 20,
+      "height_class": "tower",
+      "floors": 0,
+      "enterable": false,
+      "roof_access": false,
+      "level_top": null,
+      "levels_walkable": [],
+      "note": "not climbable in the original; game designer 2026-11-02: NOT a ladder tower in ours either - a tall obstacle (sight blocker) with no level of its own"
+    },
+    {
+      "id": "B18_EastYardFence",
+      "footprint": [
+        [
+          164,
+          58
+        ],
+        [
+          177,
+          118
+        ]
+      ],
+      "height_m": 2.5,
+      "height_class": "fence",
+      "floors": 0,
+      "enterable": true,
+      "doors": [
+        [
+          166,
+          58
+        ],
+        [
+          166,
+          118
+        ]
+      ],
+      "roof_access": false,
+      "level_top": 0,
+      "levels_walkable": [
+        0
+      ]
+    },
+    {
+      "id": "B19_SouthFence",
+      "footprint": [
+        [
+          55,
+          119
+        ],
+        [
+          166,
+          121
+        ]
+      ],
+      "height_m": 2.5,
+      "height_class": "fence",
+      "floors": 0,
+      "enterable": false,
+      "roof_access": false,
+      "level_top": 0,
+      "levels_walkable": []
+    }
+  ],
+  "route": {
+    "main": {
+      "id": "R_main",
+      "points": [
+        [
+          1,
+          38
+        ],
+        [
+          50,
+          38
+        ],
+        [
+          55,
+          38
+        ],
+        [
+          63,
+          56
+        ],
+        [
+          66,
+          58
+        ],
+        [
+          122,
+          56
+        ],
+        [
+          165,
+          57
+        ],
+        [
+          166,
+          60
+        ],
+        [
+          166,
+          111
+        ],
+        [
+          163,
+          113
+        ],
+        [
+          117,
+          116
+        ],
+        [
+          102,
+          115
+        ],
+        [
+          73,
+          110
+        ],
+        [
+          73,
+          98
+        ],
+        [
+          62,
+          99
+        ],
+        [
+          62,
+          116
+        ]
+      ],
+      "length_m": 365,
+      "legs": [
+        {
+          "to": 1,
+          "zone": "Z_W_STREET",
+          "note": "east along the west street, 49 m"
+        },
+        {
+          "to": 3,
+          "zone": "Z_N_CROSS",
+          "note": "the T-junction into the cross street, SE 20 m"
+        },
+        {
+          "to": 6,
+          "zone": "Z_N_STREET",
+          "note": "the north street along the cut, 100 m, the marksman lane"
+        },
+        {
+          "to": 8,
+          "zone": "Z_E_YARD",
+          "note": "over the NE footbridge, south down the east yard round the Steel Works, 51 m"
+        },
+        {
+          "to": 11,
+          "zone": "Z_S_STREET",
+          "note": "west along the south street, 61 m"
+        },
+        {
+          "to": 13,
+          "zone": "Z_TANKS",
+          "note": "north into the tank farm, 29 m"
+        },
+        {
+          "to": 15,
+          "zone": "Z_TANKS",
+          "note": "back out to the south street's SW end, 28 m"
+        }
+      ],
+      "note": "The bare skeleton is 365 m; the designer's full loop with the compound and the ruined factory folded in (his description) runs ~520 m. Target 320-600."
+    },
+    "variants": [
+      {
+        "id": "V1_west_gallery",
+        "points": [
+          [
+            1,
+            38
+          ],
+          [
+            14,
+            36
+          ],
+          [
+            12,
+            24
+          ],
+          [
+            12,
+            21
+          ],
+          [
+            22,
+            19
+          ]
+        ],
+        "length_m": 39,
+        "note": "up ladder L1 onto the pipe gallery: an overwatch over the start and the west street before the squad commits to it (elevated vision)",
+        "requires": [
+          "L1"
+        ]
+      },
+      {
+        "id": "V2_north_blocks",
+        "points": [
+          [
+            63,
+            56
+          ],
+          [
+            67,
+            34
+          ],
+          [
+            80,
+            36
+          ],
+          [
+            71,
+            24
+          ],
+          [
+            68,
+            30
+          ],
+          [
+            84,
+            36
+          ],
+          [
+            84,
+            46
+          ],
+          [
+            95,
+            50
+          ]
+        ],
+        "length_m": 96,
+        "note": "instead of the cross street straight on: the boiler yard gate (one-entry compound), round the small office, the alley between it and the warehouse lot, back to the north street",
+        "requires": []
+      },
+      {
+        "id": "V3_through_the_cut",
+        "points": [
+          [
+            61,
+            66
+          ],
+          [
+            60,
+            69
+          ],
+          [
+            120,
+            66
+          ],
+          [
+            125,
+            68
+          ],
+          [
+            124,
+            76
+          ]
+        ],
+        "length_m": 77,
+        "note": "down into the cut at the central crossing, along the trench floor (the killing zone - the walls' tops see all of it) and out by ladder L4 at the chimney onto the inner south street",
+        "requires": [
+          "L4"
+        ],
+        "intent": "kill_zone"
+      },
+      {
+        "id": "V4_inner_street",
+        "points": [
+          [
+            61,
+            66
+          ],
+          [
+            67,
+            78
+          ],
+          [
+            124,
+            76
+          ],
+          [
+            120,
+            100
+          ],
+          [
+            112,
+            100
+          ],
+          [
+            108,
+            100
+          ],
+          [
+            108,
+            96
+          ],
+          [
+            105,
+            112
+          ],
+          [
+            102,
+            115
+          ]
+        ],
+        "length_m": 131,
+        "note": "the inner south street along the cut's south wall to the Steel Works' NW corner, the chimney base, into the ruined factory from above (the external stair + roof holes) and out below onto the south street - the designer's 'round the Steel Works -> the ruined factory' leg from the other side",
+        "requires": [
+          "B13 external stair"
+        ]
+      },
+      {
+        "id": "V5_ruin_from_below",
+        "points": [
+          [
+            117,
+            116
+          ],
+          [
+            112,
+            103
+          ],
+          [
+            112,
+            100
+          ],
+          [
+            100,
+            95
+          ],
+          [
+            91,
+            100
+          ],
+          [
+            88,
+            112
+          ],
+          [
+            102,
+            115
+          ]
+        ],
+        "length_m": 67,
+        "note": "the ruined factory entered from the south street through the main doors, through the annex's wall holes and out west",
+        "requires": []
+      }
+    ]
+  },
+  "sightlines": {
+    "lanes": [
+      {
+        "id": "LANE_north_street",
+        "a": [
+          55,
+          56
+        ],
+        "b": [
+          177,
+          55
+        ],
+        "length_m": 122,
+        "kind": "marksman"
+      },
+      {
+        "id": "LANE_cut",
+        "a": [
+          0,
+          67
+        ],
+        "b": [
+          177,
+          64
+        ],
+        "length_m": 177,
+        "kind": "killing_zone"
+      },
+      {
+        "id": "LANE_south_street",
+        "a": [
+          55,
+          116
+        ],
+        "b": [
+          166,
+          114
+        ],
+        "length_m": 111,
+        "kind": "marksman"
+      },
+      {
+        "id": "LANE_inner_street",
+        "a": [
+          55,
+          77
+        ],
+        "b": [
+          130,
+          76
+        ],
+        "length_m": 75,
+        "kind": "lane"
+      },
+      {
+        "id": "LANE_west_street",
+        "a": [
+          0,
+          39
+        ],
+        "b": [
+          55,
+          38
+        ],
+        "length_m": 55,
+        "kind": "lane"
+      },
+      {
+        "id": "LANE_east_yard",
+        "a": [
+          168,
+          58
+        ],
+        "b": [
+          168,
+          118
+        ],
+        "length_m": 60,
+        "kind": "lane"
+      },
+      {
+        "id": "LANE_cross_street",
+        "a": [
+          58,
+          32
+        ],
+        "b": [
+          58,
+          60
+        ],
+        "length_m": 28,
+        "kind": "short"
+      }
+    ],
+    "stats_m": {
+      "p50": 25,
+      "p90": 75,
+      "max": 177,
+      "short_zone_share": 0.18,
+      "note": "p50 / p90 of the longest free line of sight sampled along the main route (streets long, compounds / yards short); short_zone_share = the share of the main route's length in zones whose longest sightline is under 40 m (the T-junction and the tank farm: ~65 of 365 m)"
+    }
+  },
+  "densities": {
+    "buildings_per_ha": 9,
+    "enterable_share": 0.6,
+    "roof_access_share": 0.35,
+    "ladders_per_ha": 1.8,
+    "covers_per_100m2": {
+      "street": 2.0,
+      "compound": 3.5,
+      "junkyard": 9.0,
+      "open": 1.0,
+      "cut": 0.5,
+      "yard": 2.5
+    },
+    "fence_length_m": 520,
+    "wall_length_m": 760
+  },
+  "set_pieces": {
+    "alley": 3,
+    "t_junction": 3,
+    "facade": 5,
+    "one_entry_compound": 4,
+    "open_square": 2,
+    "cut_crossing": 2,
+    "ladder_overwatch": 4,
+    "chimney": 2,
+    "ruined_two_level": 1,
+    "dead_end": 2,
+    "junkyard_field": 1,
+    "marksman_lane": 2
+  },
+  "targets": {
+    "route_length_m": [
+      320,
+      600
+    ],
+    "variants": [
+      3,
+      5
+    ],
+    "ladders": [
+      4,
+      7
+    ],
+    "roofs_walkable": [
+      3,
+      5
+    ],
+    "stairwells": [
+      2,
+      4
+    ],
+    "enterable_buildings": [
+      6,
+      10
+    ],
+    "cut_crossings": [
+      2,
+      3
+    ],
+    "long_lanes_over_80m": [
+      2,
+      3
+    ],
+    "short_zone_share": [
+      0.1,
+      0.3
+    ],
+    "cover_per_100m2_mean": [
+      2.0,
+      3.5
+    ],
+    "height_levels": [
+      4,
+      5
+    ],
+    "route_levels": [
+      2,
+      4
+    ]
+  },
+  "open_questions": [
+    "answered 2026-11-02 - see designer_answers"
+  ],
+  "height_levels": {
+    "step_m": 3,
+    "decision": "game designer 2026-11-01: every map is split into discrete height levels 3 m apart; the layout layers, the generator, the simulator's per-level evaluation and the UE builder use them",
+    "levels": {
+      "-1": "-3 m: the cut floor (rail cut / canal), pits, craters, trenches, basements",
+      "0": "0 m: streets, yards, compounds, the junkyard field",
+      "1": "+3 m: first floors, low roofs (shed, offices, pump house), the pipe gallery platform, the cut's rims",
+      "2": "+6 m: second floors, the ruined factory's roof (B13)",
+      "3": "+9 m: the tall halls' walkable roofs - the sawtooth hall, the warehouse, the Steel Works (game designer 2026-11-02: raised from +2 for the view from the roofs)"
+    },
+    "reference_parts": {
+      "cut floor": -1,
+      "streets / yards / compounds": 0,
+      "B2 pipe gallery platform": 1,
+      "B3 / B6 / B12 / B14 low buildings' roofs (not walkable)": 1,
+      "B13 ruined factory upper floor": 1,
+      "B13 roof with its holes": 2,
+      "B4 / B7 / B15 hall roofs (walkable; the originals are 8-12 m; game designer 2026-11-02: +3)": 3,
+      "B17 chimneys (obstacles, never climbable, no level of their own - game designer 2026-11-02)": null
+    }
+  },
+  "designer_answers": {
+    "date": "2026-11-02",
+    "1_end": "the route ends at the SW dead end - keep it",
+    "2_scale": "scale B 177 x 124 m is OK",
+    "3_junkyard": "stays an ambush field beside the north street, not a route variant",
+    "4_chimneys": "factory chimneys are NOT ladder towers (no extra height); the generator never makes them climbable",
+    "5_cut_variant": "the canal-floor route variant IS a deliberate kill zone: marked intent kill_zone in the layout and the evaluation, the critics treat it as intended",
+    "6_hall_roofs": "the workshop / hall roofs go to level +3 = 9 m for the view from the roofs; ladders and stairs sized to the level difference"
+  }
+}

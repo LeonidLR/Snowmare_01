@@ -12,6 +12,7 @@
   "include": [
     "src/movement/**/*.ts",
     "src/combatLab/**/*.ts",
+    "src/levelgen/**/*.ts",
     "server/**/*.ts"
   ],
   "exclude": [

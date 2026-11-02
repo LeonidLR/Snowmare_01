@@ -2,19 +2,22 @@
 // editor as before; «Перемещение» the squad movement simulator, bot and tuner; «Левел-дизайн» the layout audit; «Боевая лаборатория»
 // (2026-11-01) the combat lab map's pressure settings, presets and bot runs in Unreal with their report.
 import React, { useState } from 'react';
-import { Crosshair, Footprints, Map, Swords } from 'lucide-react';
+import { Boxes, Crosshair, Footprints, Map, Swords } from 'lucide-react';
 import { App as WavesDepartment } from './App';
 import { MovementDepartment } from './departments/MovementDepartment';
 import { LevelDesignDepartment } from './departments/LevelDesignDepartment';
 import { CombatLabDepartment } from './departments/CombatLabDepartment';
+// levelgen (tools/level-generator): the «Генератор уровней» department - registered in its own small hunk
+import { LevelGenDepartment } from './departments/LevelGenDepartment';
 
-type DepartmentId = 'waves' | 'movement' | 'level' | 'combat';
+type DepartmentId = 'waves' | 'movement' | 'level' | 'combat' | 'levelgen';
 
 const DEPARTMENTS: { id: DepartmentId; name: string; icon: React.ReactNode; hint: string }[] = [
   { id: 'waves', name: 'Волны', icon: <Swords size={15} />, hint: 'Волны, оружие, скрытность, бот боя (Unreal)' },
   { id: 'movement', name: 'Перемещение', icon: <Footprints size={15} />, hint: 'Построения, сектора взгляда, бот и обучение' },
   { id: 'level', name: 'Левел-дизайн', icon: <Map size={15} />, hint: 'Проверка раскладок тестовых уровней' },
   { id: 'combat', name: 'Боевая лаборатория', icon: <Crosshair size={15} />, hint: 'L_FormationLabCombat: давление врагов, засады, пресеты, боты по маршруту и отчёт' },
+  { id: 'levelgen', name: 'Генератор уровней', icon: <Boxes size={15} />, hint: 'Серые раскладки по эталону дизайнера: генерация, проверка маршрута, критики, приёмка' },
 ];
 
 const STORAGE_KEY = 'training_ground_department';
@@ -22,7 +25,7 @@ const STORAGE_KEY = 'training_ground_department';
 function initialDepartment(): DepartmentId {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === 'waves' || v === 'movement' || v === 'level' || v === 'combat') return v;
+    if (v === 'waves' || v === 'movement' || v === 'level' || v === 'combat' || v === 'levelgen') return v;
   } catch { /* storage blocked: default */ }
   return 'waves';
 }
@@ -49,6 +52,7 @@ export const TrainingGround: React.FC = () => {
       {department === 'movement' && <MovementDepartment />}
       {department === 'level' && <LevelDesignDepartment />}
       {department === 'combat' && <CombatLabDepartment />}
+      {department === 'levelgen' && <LevelGenDepartment />}
     </div>
   );
 };
