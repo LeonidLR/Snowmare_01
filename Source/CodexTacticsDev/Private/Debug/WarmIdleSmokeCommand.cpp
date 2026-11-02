@@ -950,13 +950,23 @@ namespace WarmIdleSmoke
 			if (State.StageTime >= 5.f)
 			{
 				const AActor* Stove = State.Stove.Get();
-				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && !IsPulledTo(World, Medic, Stove) && !IsPulledTo(World, Engineer, Stove)
-					&& Stove && FVector::Dist2D(Medic->GetActorLocation(), Stove->GetActorLocation()) >= State.StartDistMedic - 100.f
-					&& FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation()) >= State.StartDistEngineer - 100.f,
-					FString::Printf(TEXT("wave fight (phase %d): nobody is pulled to the stove (Medic %.0f cm, Engineer %.0f cm away, started %.0f / %.0f)"),
-						static_cast<int32>(Flow->GetPhase()),
+				// User decision 2026-10-26 "the squad stays in formation in the fight" (docs/systems/squad-and-orders.md): the followers walk
+				// back to their formation places behind the leader - and he stands beside the stove, so they come closer to it, but as the
+				// leader's formation, never as the warm pull (no pull source, no weather pose). Only with the old rule
+				// (Codex.Squad.CombatFormation 0: nobody follows in the fight) do they stay where they were put.
+				const bool bCombatFormation = World->GetSubsystem<USquadSubsystem>()->IsFormationActive();
+				const auto StayedAway = [Stove](const AOperativeCharacter* Follower, float StartDist)
+				{
+					return Stove && FVector::Dist2D(Follower->GetActorLocation(), Stove->GetActorLocation()) >= StartDist - 100.f;
+				};
+				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Stove && !IsPulledTo(World, Medic, Stove) && !IsPulledTo(World, Engineer, Stove)
+					&& !Anim(Medic)->bWarmIdleActive && !Anim(Engineer)->bWarmIdleActive
+					&& (bCombatFormation || (StayedAway(Medic, State.StartDistMedic) && StayedAway(Engineer, State.StartDistEngineer))),
+					FString::Printf(TEXT("wave fight (phase %d, formation %s): nobody is pulled to the stove (Medic %.0f cm, Engineer %.0f cm away, started %.0f / %.0f; pull source %s / %s)"),
+						static_cast<int32>(Flow->GetPhase()), bCombatFormation ? TEXT("on: they follow the leader") : TEXT("off: they stay"),
 						Stove ? FVector::Dist2D(Medic->GetActorLocation(), Stove->GetActorLocation()) : -1.f,
-						Stove ? FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation()) : -1.f, State.StartDistMedic, State.StartDistEngineer));
+						Stove ? FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation()) : -1.f, State.StartDistMedic, State.StartDistEngineer,
+						IsPulledTo(World, Medic, Stove) ? TEXT("STOVE") : TEXT("none"), IsPulledTo(World, Engineer, Stove) ? TEXT("STOVE") : TEXT("none")));
 				return Finish(State, true);
 			}
 			return true;

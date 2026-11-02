@@ -180,6 +180,35 @@ bool FFormationWallEndStepRoundTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_WALL_END_TEST(FFormationWallEndStepRoundNarrowTest, "StepRoundNarrow")
+bool FFormationWallEndStepRoundNarrowTest::RunTest(const FString&)
+{
+	using namespace FormationWallEndTestUtil;
+	// FormationWallHugSmoke flake (2026-11-02): the 2 m passage - a narrower step out keeps the same side and the same 55 cm past him.
+	const FVector2D Here(128.0, -65.0);
+	const FVector2D Place(308.0, -65.0);
+	const TArray<FVector2D> Others = { FVector2D(208.0, -65.0) };
+	const TOptional<FVector2D> Narrow = FormationWallEnd::StepRound(Here, Place, Others, WallEndNormalYaw, 90.f);
+	if (TestTrue(TEXT("A narrower step round is still a step round"), Narrow.IsSet()))
+	{
+		TestTrue(TEXT("... 90 cm out from him on the open side, 55 cm past him"), Narrow->Equals(FVector2D(263.0, -155.0), 0.01));
+	}
+	const TOptional<FVector2D> Floor = FormationWallEnd::StepRound(Here, Place, Others, WallEndNormalYaw, 20.f);
+	if (TestTrue(TEXT("A step out under the minimum ..."), Floor.IsSet()))
+	{
+		TestTrue(TEXT("... is the minimum (a body's width past him)"), Floor->Equals(FVector2D(263.0, -65.0 - FormationWallEnd::StepRoundMinOutCm), 0.01));
+	}
+	const TArray<float> Steps = FormationWallEnd::StepRoundOutSteps();
+	TestTrue(TEXT("The narrower steps: widest first, below the full step, down to the minimum"), Steps.Num() >= 2
+		&& Steps[0] < FormationWallEnd::StepRoundOutCm && FMath::IsNearlyEqual(Steps.Last(), FormationWallEnd::StepRoundMinOutCm));
+	for (int32 Index = 1; Index < Steps.Num(); ++Index)
+	{
+		TestTrue(FString::Printf(TEXT("Step %d narrower than step %d"), Index, Index - 1), Steps[Index] < Steps[Index - 1]);
+	}
+	TestTrue(TEXT("The minimum passes a body (two 35 cm capsules)"), FormationWallEnd::StepRoundMinOutCm >= 70.f);
+	return true;
+}
+
 FORMATION_WALL_END_TEST(FFormationWallEndSquadPeekTest, "SquadPeek")
 bool FFormationWallEndSquadPeekTest::RunTest(const FString&)
 {

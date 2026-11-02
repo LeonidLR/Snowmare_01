@@ -2,6 +2,8 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.CameraZoneSmoke
 // The leader walks into the bunker camera zone, then back out. Checks that the view switches to the zone
 // camera while the leader is inside, followers hold outside, and the view returns to the camera pawn after.
+// Waits on conditions, not on fixed seconds (2026-11-02): since the formation runtime (b75e3cef, user decision 2026-10-25: the squad
+// walks at the patrol pace, ~80 % of the walk) the leader reached the zone after the old fixed 12 s check.
 
 #include "CoreMinimal.h"
 
@@ -23,13 +25,22 @@
 namespace CameraZoneSmoke
 {
 	constexpr float NavWarmupSeconds = 3.f;
-	constexpr int32 EnterCheckSecond = 12;
-	constexpr int32 ExitCheckSecond = 24;
+	/** The leader must be inside the zone by then (the walk there takes ~11 s at the patrol pace). */
+	constexpr int32 EnterCapSeconds = 45;
+	/** Seconds inside the zone before the enter check (the followers have stopped at the perimeter). */
+	constexpr int32 InsideSettleSeconds = 2;
+	/** The leader must be out of the zone and the view back by then, counted from the order out. */
+	constexpr int32 ExitCapSeconds = 40;
 
 	struct FState
 	{
 		int32 Second = 0;
+		int32 InsideSeconds = 0;
+		int32 ExitSecond = 0;
+		bool bEnterChecked = false;
 		bool bEnterOk = false;
+		bool bDone = false;
+		FVector Start = FVector::ZeroVector;
 	};
 
 	ACameraZoneVolume* FindZone(UWorld* World)
@@ -38,12 +49,23 @@ namespace CameraZoneSmoke
 		return It ? *It : nullptr;
 	}
 
+	void Finish(bool bEnterOk, bool bExitOk)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke enter=%d exit=%d"), bEnterOk ? 1 : 0, bExitOk ? 1 : 0);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bEnterOk && bExitOk ? TEXT("PASS") : TEXT("FAIL"));
+		FPlatformMisc::RequestExit(false, TEXT("CameraZoneSmoke"));
+	}
+
 	void Step(UWorld* World, FState& State)
 	{
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Leader = Squad->GetLeader();
 		ACameraZoneVolume* Zone = FindZone(World);
 		APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+		if (State.bDone)
+		{
+			return;
+		}
 		++State.Second;
 
 		const bool bViewOnZone = PC && Zone && PC->GetViewTarget() == Zone->TargetCamera;
@@ -59,17 +81,26 @@ namespace CameraZoneSmoke
 			State.Second, Leader->GetActorLocation().X, Leader->GetActorLocation().Y, Zone && Zone->IsZoneActive() ? 1 : 0,
 			bViewOnZone ? 1 : 0, Squad->AreFollowersHolding() ? 1 : 0, FollowersInside);
 
-		if (State.Second == EnterCheckSecond)
+		if (!State.bEnterChecked)
 		{
+			State.InsideSeconds = Leader->bInCameraZone ? State.InsideSeconds + 1 : 0;
+			if (State.InsideSeconds < InsideSettleSeconds && State.Second < EnterCapSeconds)
+			{
+				return;
+			}
+			State.bEnterChecked = true;
 			State.bEnterOk = bViewOnZone && Squad->AreFollowersHolding() && FollowersInside == 0 && Leader->bInCameraZone;
-			Leader->OrderMoveTo(FVector::ZeroVector, false);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke enter check at t=%ds: %s"), State.Second, State.bEnterOk ? TEXT("ok") : TEXT("FAIL"));
+			// Back out to where he started (outside the zone).
+			Leader->OrderMoveTo(State.Start, false);
+			State.ExitSecond = State.Second;
+			return;
 		}
-		if (State.Second == ExitCheckSecond)
+		const bool bExitOk = PC && PC->GetViewTarget() == PC->GetPawn() && !Squad->AreFollowersHolding() && !Leader->bInCameraZone;
+		if ((bExitOk && !Leader->IsMoving()) || State.Second - State.ExitSecond >= ExitCapSeconds)
 		{
-			const bool bExitOk = PC && PC->GetViewTarget() == PC->GetPawn() && !Squad->AreFollowersHolding() && !Leader->bInCameraZone;
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke enter=%d exit=%d"), State.bEnterOk ? 1 : 0, bExitOk ? 1 : 0);
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.bEnterOk && bExitOk ? TEXT("PASS") : TEXT("FAIL"));
-			FPlatformMisc::RequestExit(false, TEXT("CameraZoneSmoke"));
+			State.bDone = true;
+			Finish(State.bEnterOk, bExitOk);
 		}
 	}
 
@@ -84,9 +115,9 @@ namespace CameraZoneSmoke
 			FPlatformMisc::RequestExit(false, TEXT("CameraZoneSmoke"));
 			return;
 		}
-		Leader->OrderMoveTo(Zone->GetActorLocation(), false);
-
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->Start = Leader->GetActorLocation();
+		Leader->OrderMoveTo(Zone->GetActorLocation(), false);
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTimerHandle Handle;
 		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld, State]()

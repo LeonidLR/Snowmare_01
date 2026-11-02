@@ -19,8 +19,9 @@
 //    faces a wall, and for 3 s nobody's look or place moves (no flicker / reshuffle). Codex.Formation.WallEnd 0: the face looks (logged);
 //  5 (rules v2.5, user rule 2026-10-26: the covered approach to the wall) the squad patrols across the arena towards E's long face and the
 //    player clicks the cover in its middle
-//    (the group cover order = the formation wall layout): on the way somebody always holds the rear (away from the wall, after ApproachTurnSeconds (1 s of game time) to
-//    turn), somebody a flank for >= 90 % of the way, the leader at the wall first looks along it; then everyone in the wall layout's look.
+//    (the group cover order = the formation wall layout): on the way somebody always holds the rear (away from the wall - or the rear man
+//    his CLEARED rear look when a wall a step behind him blocks it, ClearLook; after ApproachTurnSeconds (1 s of game time) to turn at the
+//    order and after every new rear look), somebody a flank for >= 90 % of the way, the leader at the wall first looks along it; then everyone in the wall layout's look.
 //    Codex.Formation.Approach 0: everyone walks in facing his travel (the rear checks fail - the user's report).
 // Codex.Formation.Sectors 0: the old facing untouched (no wall group, nobody taken out of his slot, every follower in cover or prone with
 // his own CoverFacingRules); the gap is logged only. Godot reference: none (UE-only).
@@ -105,6 +106,11 @@ namespace FormationWallGroupSmoke
 		double LastGameTime = -1.0;
 		float BestAlongDeg = 180.f;
 		FString FirstRearMiss;
+		/** Scene 5: the rear cover's assigned (cleared) look and the approach time it was last turned to a new one (> the sector margin). */
+		TOptional<float> RearTarget;
+		float RearTargetSince = 0.f;
+		/** Scene 5: how often the rear look jumped to a new side (> the sector margin) on the way in. */
+		int32 RearTargetChanges = 0;
 	};
 
 	/** Scene 4's thin wall E: along F from F -450 to F -50 at R -600 (40 cm thick); its free end face is at F -50, facing +F. */
@@ -835,6 +841,9 @@ namespace FormationWallGroupSmoke
 			State.LastGameTime = -1.0;
 			State.BestAlongDeg = 180.f;
 			State.FirstRearMiss.Reset();
+			State.RearTarget.Reset();
+			State.RearTargetSince = 0.f;
+			State.RearTargetChanges = 0;
 			Next(State, 33);
 			return true;
 		}
@@ -863,13 +872,36 @@ namespace FormationWallGroupSmoke
 				State.LastGameTime = Now;
 				State.ApproachTime += Dt;
 				const float Lim = 0.5f * FormationTuning::Get().SightFov - 30.f; // the rear sector +-30 inside a cone (check 2's margin)
+				// The rear cover's look is the CLEARED rear (rules v2.5: every approach look goes through ClearLook - nobody stares into a
+				// wall a step behind him): with a wall within look.wall_dist behind the rear man his look is the edge of the blocked span,
+				// up to look.wall_angle off the normal, and turns to the normal once the wall is out of reach (2026-11-02: at t = 1.00 s
+				// the engineer held -135 = the cleared rear while the normal 170 was blocked, and the old check called it a miss). He gets
+				// ApproachTurnSeconds to turn after every new rear look as at the order.
+				TOptional<float> RearLook;
+				EFormationRole RearRole = EFormationRole::Commander;
+				for (const FFormationApproachLook& Each : Looks)
+				{
+					if (Each.Duty == EFormationApproachDuty::Rear && Each.Yaw.IsSet())
+					{
+						RearLook = Each.Yaw.GetValue();
+						RearRole = Each.Role;
+					}
+				}
+				if (RearLook.IsSet() && (!State.RearTarget.IsSet() || FormationMath::AngleBetween(RearLook.GetValue(), State.RearTarget.GetValue()) > Lim))
+				{
+					State.RearTargetChanges += State.RearTarget.IsSet() ? 1 : 0;
+					State.RearTarget = RearLook;
+					State.RearTargetSince = State.ApproachTime;
+				}
 				bool bRear = false;
 				bool bFlank = false;
 				FString Line;
 				for (int32 Index = 0; Index < 3; ++Index)
 				{
 					const float Look = static_cast<float>(Member(State, Index)->GetSightFacing().Rotation().Yaw);
-					bRear |= FormationMath::AngleBetween(Look, NormalYaw) <= Lim;
+					EFormationRole Role;
+					const bool bRearMan = RearLook.IsSet() && Squad->GetFormationRole(Member(State, Index), Role) && Role == RearRole;
+					bRear |= FormationMath::AngleBetween(Look, NormalYaw) <= Lim || (bRearMan && FormationMath::AngleBetween(Look, RearLook.GetValue()) <= Lim);
 					bFlank |= FormationMath::AngleBetween(Look, NormalYaw + 90.f) <= Lim || FormationMath::AngleBetween(Look, NormalYaw - 90.f) <= Lim;
 					Line += FString::Printf(TEXT(" %s %.0f"), *Member(State, Index)->DisplayName.ToString(), Look);
 				}
@@ -877,7 +909,7 @@ namespace FormationWallGroupSmoke
 				{
 					State.JudgedTime += Dt;
 					State.FlankTime += bFlank ? Dt : 0.f;
-					if (!bRear)
+					if (!bRear && State.ApproachTime - State.RearTargetSince >= ApproachTurnSeconds)
 					{
 						State.RearMissTime += Dt;
 						if (State.FirstRearMiss.IsEmpty())
@@ -899,11 +931,13 @@ namespace FormationWallGroupSmoke
 			{
 				return true; // the approach begins with the next formation frame
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: 5 the covered approach: %.1f s, rear missed %.2f s%s, a flank held %.0f %%, the leader's best look along the wall %.0f deg off"),
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: 5 the covered approach: %.1f s, rear missed %.2f s%s (the rear look changed side %d x), a flank held %.0f %%, the leader's best look along the wall %.0f deg off"),
 				State.ApproachTime, State.RearMissTime, State.FirstRearMiss.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (first %s)"), *State.FirstRearMiss),
-				State.JudgedTime > 0.f ? 100.f * State.FlankTime / State.JudgedTime : 0.f, State.BestAlongDeg);
+				State.RearTargetChanges, State.JudgedTime > 0.f ? 100.f * State.FlankTime / State.JudgedTime : 0.f, State.BestAlongDeg);
 			Check(State, State.bApproachSeen && State.ApproachTime > 1.f, FString::Printf(TEXT("5: the squad walked a covered approach (%.1f s game time, %.1f s judged)"), State.ApproachTime, State.JudgedTime));
 			Check(State, State.RearMissTime <= 0.f, FString::Printf(TEXT("5: somebody held the rear all the way in (missed %.2f s)"), State.RearMissTime));
+			// No flicker (Codex.Formation.ApproachHold 0: the cleared rear look flipped sides 9 x in ~0.5 s with a wall behind the rear man).
+			Check(State, State.RearTargetChanges <= 2, FString::Printf(TEXT("5: the rear look kept its side (changed %d x, <= 2)"), State.RearTargetChanges));
 			Check(State, State.JudgedTime > 0.5f && State.FlankTime >= 0.9f * State.JudgedTime,
 				FString::Printf(TEXT("5: somebody held a flank >= 90 %% of the way (%.0f %%)"), State.JudgedTime > 0.f ? 100.f * State.FlankTime / State.JudgedTime : 0.f));
 			Check(State, State.BestAlongDeg <= 30.f, FString::Printf(TEXT("5: the leader, first at the wall, looked along it (within %.0f deg of his along look)"), State.BestAlongDeg));

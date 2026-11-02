@@ -338,7 +338,7 @@ namespace FormationWallEnd
 		return Plan;
 	}
 
-	TOptional<FVector2D> StepRound(const FVector2D& Here, const FVector2D& Place, const TArray<FVector2D>& Others, float NormalYaw)
+	TOptional<FVector2D> StepRound(const FVector2D& Here, const FVector2D& Place, const TArray<FVector2D>& Others, float NormalYaw, float OutCm)
 	{
 		const FVector2D Way = Place - Here;
 		const double Length = Way.Size();
@@ -363,9 +363,20 @@ namespace FormationWallEnd
 				// Out from him on the open side and a little past him along the wall: from there the way to the place is clear.
 				const FVector2D Normal = FormationMath::Forward(NormalYaw);
 				const FVector2D AlongWall = (Dir - Normal * FVector2D::DotProduct(Dir, Normal)).GetSafeNormal();
-				Step = Other + Normal * StepRoundOutCm + AlongWall * StepRoundLaneCm;
+				Step = Other + Normal * FMath::Max(OutCm, StepRoundMinOutCm) + AlongWall * StepRoundLaneCm;
 			}
 		}
 		return Step;
+	}
+
+	TArray<float> StepRoundOutSteps()
+	{
+		TArray<float> Steps;
+		for (float OutCm = StepRoundOutCm - 10.f; OutCm > StepRoundMinOutCm; OutCm -= 10.f)
+		{
+			Steps.Add(OutCm);
+		}
+		Steps.Add(StepRoundMinOutCm);
+		return Steps;
 	}
 }

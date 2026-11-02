@@ -187,6 +187,19 @@ namespace FormationWallRules
 		const TArray<FFormationSlot>& Members, const TOptional<FFormationApproachState>& State, const FFormationConfig& Config = FFormationConfig());
 
 	/**
+	 * Runtime hysteresis for Approach's cleared looks (FormationWallGroupSmoke 2026-11-02: the rear man walking in with a wall within
+	 * look.wall_dist behind him got a new cleared rear look nearly every frame - 71, -64, 71, -66 ... deg - and his body wobbled between
+	 * them). Approach clears each look from scratch (ClearLook with no held look: the golden rule, kept); here every Rear / Flank / Along
+	 * look whose role had the same duty and a look last frame (Previous) is cleared again with that look as the current and held one
+	 * (ClearLook's hold: kept while no wall is near it and the wanted look itself stays blocked; a turn across a wall costs more). The wanted
+	 * looks are Approach's: Rear = NormalYaw, a flank = NormalYaw +- 90 by his side, the runner's along look = NormalYaw + AlongSide x 90.
+	 * Members = where everyone is now (by role). Layout / Run looks and looks with no history are left as they are.
+	 */
+	CODEXTACTICS_API void HoldApproachLooks(const TArray<FFormationWall>& Walls, float NormalYaw, const TArray<FFormationSlot>& Members,
+		const FFormationApproachState& State, const TArray<FFormationApproachLook>& Previous, TArray<FFormationApproachLook>& InOutLooks,
+		const FFormationConfig& Config = FFormationConfig());
+
+	/**
 	 * v2.4: the wall layout's looks at a wall end (see the header comment). Slots = Layout's (K first), Walls = the walls round them; Fixed = more
 	 * roles whose looks a higher rule decided (the corner stack's point man and trailing end): like K they keep their looks, their cones held first.
 	 */
