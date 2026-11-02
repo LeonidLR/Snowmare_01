@@ -1100,7 +1100,7 @@ private:
 	 * cover, FCoverTraceConfig::SlotOffsetCm) - the path follower stops AcceptanceRadius / the formation's stop radius short of it, a
 	 * hand-span off the wall. A swept glide, only within MaxCm of the slot (farther he is not at it). Codex.Formation.WallSnap 0 = off (A/B).
 	 */
-	void GlideToWallSlot(AOperativeCharacter& Member, const FVector2D& Slot, float MaxCm, float DeltaTime) const;
+	void GlideToWallSlot(AOperativeCharacter& Member, const FVector2D& Slot, float MaxCm, float DeltaTime, bool bBeforePose = false) const;
 	/**
 	 * Finds the wall face along TowardsWall from Origin within MaxDistance (its point, outward normal) and its free room each side
 	 * (left / right of a man facing it); false when there is none.

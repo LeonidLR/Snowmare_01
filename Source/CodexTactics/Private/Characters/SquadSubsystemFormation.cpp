@@ -53,6 +53,10 @@ namespace SquadSubsystemFormationLocal
 		TEXT("Bug 2026-10-28 (CoverSmoke): 1 = a formation follower on the leader's way while the leader walks an own order (cover / move) steps aside out of it, then takes his slot again; 0 = the old follow (he may stand in the leader's way: the walk ends Blocked, A/B)"));
 	/** A yield point must project onto the nav mesh this close (it is no point inside / at a wall), cm. */
 	constexpr float FormationYieldNavSnapCm = 30.f;
+	/** A step-round point (FormationWallEnd::StepRound) must lie on the nav mesh this exactly ... */
+	constexpr float FormationStepRoundNavSnapCm = 5.f;
+	/** ... and this much farther out still be on it (not on the mesh's edge at the passage's other wall), cm. */
+	constexpr float FormationStepRoundNavMarginCm = 20.f;
 	/** v2.4: the world walls for EndLooks are gathered this far beyond the probe ring round the layout, cm. */
 	constexpr float WallEndGatherMarginCm = 300.f;
 	/** The last raw class logged (Codex.Formation.Debug). */
@@ -367,11 +371,12 @@ bool USquadSubsystem::TraceFormationWall(FHitResult& OutHit, const FVector& Star
 	return true;
 }
 
-void USquadSubsystem::GlideToWallSlot(AOperativeCharacter& Member, const FVector2D& Slot, float MaxCm, float DeltaTime) const
+void USquadSubsystem::GlideToWallSlot(AOperativeCharacter& Member, const FVector2D& Slot, float MaxCm, float DeltaTime, bool bBeforePose) const
 {
 	using namespace SquadSubsystemFormationLocal;
-	// In the wall pose and his walk over (a follower parks within the formation's stop radius; farther he still walks in himself).
-	if (CVarFormationWallSnap.GetValueOnGameThread() == 0 || !Member.IsInFormationWallPose() || Member.IsMoving())
+	// In the wall pose (bBeforePose: the leader, also before it) and his walk over (a follower parks within the formation's stop radius;
+	// farther he still walks in himself).
+	if (CVarFormationWallSnap.GetValueOnGameThread() == 0 || (!bBeforePose && !Member.IsInFormationWallPose()) || Member.IsMoving())
 	{
 		return;
 	}
@@ -1062,28 +1067,85 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 			MoveTarget = Held;
 			SlotVelocity = FVector2D::ZeroVector;
 		}
-		else if (const TOptional<FVector2D> Step = FormationWallEnd::StepRound(Here, Target, Others, Sectors.WallNormalYaw); Step.IsSet())
+		else if (TOptional<FVector2D> Step = FormationWallEnd::StepRound(Here, Target, Others, Sectors.WallNormalYaw); Step.IsSet())
 		{
+			// FormationWallHugSmoke flake (2026-11-02): in a passage narrower than the full step out (the lake yard's 2 m passage, a low
+			// wall opposite the face) the step-round point lay in / beyond the passage's other wall - off the nav mesh, the man stood
+			// against that wall for good beside the leader, and the leader (who settles once all are at the wall) with him. The step out
+			// shrinks to what the passage holds (FormationWallEnd::StepRoundOutSteps: still a body's width past the team-mate): the
+			// first point on the nav mesh he walks straight to.
+			if (const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+			{
+				// Out from the team-mate (the step's own direction): the point must lie a margin inside the nav mesh, not on its edge.
+				const TOptional<FVector2D> Least = FormationWallEnd::StepRound(Here, Target, Others, Sectors.WallNormalYaw, FormationWallEnd::StepRoundMinOutCm);
+				const FVector2D Out = Least.IsSet() ? (Step.GetValue() - Least.GetValue()).GetSafeNormal() : FVector2D::ZeroVector;
+				const auto Walkable = [Nav, &Operative, &Out](const FVector2D& Point)
+				{
+					for (const FVector2D& Each : { Point, Point + Out * FormationStepRoundNavMarginCm })
+					{
+						FNavLocation OnNav;
+						FVector Hit;
+						const FVector Probe(Each.X, Each.Y, Operative.GetActorLocation().Z);
+						if (!Nav->ProjectPointToNavigation(Probe, OnNav, FVector(FormationYieldNavSnapCm, FormationYieldNavSnapCm, 250.f))
+							|| FVector2D::Distance(FVector2D(OnNav.Location), Each) > FormationStepRoundNavSnapCm
+							|| UNavigationSystemV1::NavigationRaycast(Operative.GetWorld(), Operative.GetActorLocation(), OnNav.Location, Hit))
+						{
+							return false;
+						}
+					}
+					return true;
+				};
+				if (!Walkable(Step.GetValue()))
+				{
+					for (const float OutCm : FormationWallEnd::StepRoundOutSteps())
+					{
+						const TOptional<FVector2D> Narrower = FormationWallEnd::StepRound(Here, Target, Others, Sectors.WallNormalYaw, OutCm);
+						if (Narrower.IsSet() && Walkable(Narrower.GetValue()))
+						{
+							Step = Narrower;
+							break;
+						}
+					}
+				}
+			}
 			MoveTarget = Step.GetValue();
 			SlotVelocity = FVector2D::ZeroVector;
 		}
 	}
 	// Bug 2026-10-28 (CoverSmoke, the formation stays on in the fight): the leader's own walk (a cover / move order) ended Blocked at
 	// velocity 0 - a follower stood on his way along the wall (the nav mesh ignores bodies). He steps aside out of it (the first side
-	// on the nav mesh), then takes his slot again once the leader is past / his walk is over. Not the wall order / slide (their own rules).
+	// on the nav mesh), then takes his slot again once the leader is past / his walk is over. Not the wall order / slide (their own rules) -
+	// except a man walking the wall order's route round an obstacle (fixes d / e): his column place is behind the leader on his trail, so a
+	// man who stood AHEAD of the leader on that route (FormationWallSwitchSmoke variant 0, 2026-11-02: the engineer crouched beside the
+	// leader at the long wall, the route round its far end) waited there for his place while the leader pushed into him for good. He steps
+	// aside out of the leader's PATH (the navmesh way round the wall, not the straight line to the slot behind it), to a spot he walks
+	// straight to (never one behind the wall).
 	bool bYield = false;
-	if (CVarFormationYieldToLeader.GetValueOnGameThread() != 0 && !Sectors.bSlide && !Sectors.bWallOrder && LeaderRef.HasOwnMoveOrder())
+	const bool bRouteYield = bRouted && Sectors.bWallOrder;
+	if (CVarFormationYieldToLeader.GetValueOnGameThread() != 0 && !Sectors.bSlide && (!Sectors.bWallOrder || bRouteYield) && LeaderRef.HasOwnMoveOrder())
 	{
 		const FVector2D LeaderPos(LeaderRef.GetActorLocation());
 		const FVector LeaderGoal = LeaderRef.GetLastMoveDestination();
-		const TArray<FVector2D> Aside = FormationRuntime::YieldFromLeaderWay(LeaderPos, FVector2D(LeaderGoal), Here, MoveTarget);
+		TArray<FVector2D> Aside;
+		if (bRouteYield)
+		{
+			TArray<FVector2D> Way;
+			BuildLeaderWay(LeaderRef, Way);
+			Aside = FormationRuntime::YieldFromLeaderPath(Way, Here);
+		}
+		else
+		{
+			Aside = FormationRuntime::YieldFromLeaderWay(LeaderPos, FVector2D(LeaderGoal), Here, MoveTarget);
+		}
 		const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 		for (const FVector2D& Point : Aside)
 		{
 			FNavLocation OnNav;
 			const FVector Probe(Point.X, Point.Y, Operative.GetActorLocation().Z);
+			FVector NavHit;
 			if (!Nav || (Nav->ProjectPointToNavigation(Probe, OnNav, FVector(FormationYieldNavSnapCm, FormationYieldNavSnapCm, 250.f))
-				&& FVector2D::Distance(FVector2D(OnNav.Location), Point) <= FormationYieldNavSnapCm))
+				&& FVector2D::Distance(FVector2D(OnNav.Location), Point) <= FormationYieldNavSnapCm
+				&& (!bRouteYield || !UNavigationSystemV1::NavigationRaycast(GetWorld(), Operative.GetActorLocation(), OnNav.Location, NavHit))))
 			{
 				MoveTarget = Point;
 				SlotVelocity = FVector2D::ZeroVector;
@@ -1127,9 +1189,10 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	const EOperativeOrderResult Result = Operative.FollowTo(FVector(Destination.X, Destination.Y, SlotLocation.Z), Move.Speed);
 	if (CVarFormationDebug.GetValueOnGameThread() >= 2)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s %s: %.0f cm off his slot, slot %.0f cm/s, speed %.0f%s -> %d"), *Operative.DisplayName.ToString(),
-			FormationNames::ToString(Role.GetValue()), Distance, SlotVelocity.Size(), Move.Speed, Move.bBackward ? TEXT(" (backwards)") : TEXT(""),
-			static_cast<int32>(Result));
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s %s: %.0f cm off his slot, slot %.0f cm/s, speed %.0f%s -> %d (at %.0f, %.0f, to %.0f, %.0f, v %.0f)"),
+			*Operative.DisplayName.ToString(), FormationNames::ToString(Role.GetValue()), Distance, SlotVelocity.Size(), Move.Speed,
+			Move.bBackward ? TEXT(" (backwards)") : TEXT(""), static_cast<int32>(Result), Here.X, Here.Y, Destination.X, Destination.Y,
+			Operative.GetVelocity().Size2D());
 	}
 	return true;
 }
@@ -1189,10 +1252,13 @@ void USquadSubsystem::UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, f
 	{
 		SettleFormationWallPose(*OrderLeader);
 	}
-	// Bug 2026-10-27: his own move stopped AcceptanceRadius short of his slot - onto it, as one operative in cover.
+	// Bug 2026-10-27: his own move stopped AcceptanceRadius short of his slot - onto it, as one operative in cover. FormationWallHugSmoke
+	// flake (2026-11-02): also before his wall pose. On the covered approach he takes the pose only when everyone is at the wall (his look
+	// is the run-in's until then), and in the lake yard's 2 m passage the rear man walking past him to his place could not get by the
+	// leader standing ~25 cm out of the wall (his run-in's acceptance radius): neither ever arrived. Swept, so a team-mate stops it.
 	if (Lead && !Sectors.bSlide && !OrderLeader->IsMoving() && !IsFormationPeeker(OrderLeader) && !OrderLeader->bInCover)
 	{
-		GlideToWallSlot(*OrderLeader, Lead->Position, WallLeaderSettleCm, DeltaTime);
+		GlideToWallSlot(*OrderLeader, Lead->Position, WallLeaderSettleCm, DeltaTime, /*bBeforePose*/ !OrderLeader->HasOwnMoveOrder());
 	}
 }
 

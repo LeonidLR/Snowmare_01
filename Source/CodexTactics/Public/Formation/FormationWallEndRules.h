@@ -147,7 +147,19 @@ namespace FormationWallEnd
 	 * Bug D (2026-10-26): a member walking along the wall into his wall-layout place (a re-form after a leader switch: K in the middle) and a
 	 * team-mate standing on his straight way there (within StepRoundLaneCm of it, more than StepRoundLaneCm from both ends) -> the point
 	 * StepRoundOutCm out from that team-mate (NormalYaw = the wall's outward normal) and StepRoundLaneCm past him along the wall to walk to first; the nearest such team-mate. Unset: the
-	 * way is clear. The nav mesh ignores bodies: without it he pushed against the crouched leader for good.
+	 * way is clear. The nav mesh ignores bodies: without it he pushed against the crouched leader for good. OutCm: the step out (a narrower
+	 * one for a passage that does not hold the full step, never under StepRoundMinOutCm).
 	 */
-	CODEXTACTICS_API TOptional<FVector2D> StepRound(const FVector2D& Here, const FVector2D& Place, const TArray<FVector2D>& Others, float NormalYaw);
+	CODEXTACTICS_API TOptional<FVector2D> StepRound(const FVector2D& Here, const FVector2D& Place, const TArray<FVector2D>& Others, float NormalYaw,
+		float OutCm = StepRoundOutCm);
+
+	/** The narrowest step out that still passes a team-mate: two capsules (35 cm) and a margin, cm. */
+	inline constexpr float StepRoundMinOutCm = 75.f;
+
+	/**
+	 * FormationWallHugSmoke flake (2026-11-02): the narrower steps out to try, widest first, when the full StepRoundOutCm point is not
+	 * walkable (a passage narrower than the step: the lake yard's 2 m passage with a low wall opposite the face) - StepRoundOutCm - 10
+	 * down to StepRoundMinOutCm.
+	 */
+	CODEXTACTICS_API TArray<float> StepRoundOutSteps();
 }
