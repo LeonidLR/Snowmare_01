@@ -428,3 +428,5 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 | `70f0a2a` | Selection click, camera yaw, stances, solo mode, role colours |
 | `a122289`, `274818b`, `b75ced1`, `5dfdbc3` | (Gemini) Gorky grid; squad shooting; enemies / waves; combat data + health |
 | `6a2d5aa` … `2b3b110` | Space input & pause planning, quests, camera, reference docs, movement, game flow, skeleton |
+
+- 2026-11-03 test(smokes): `Codex.Mine.Mishap` (1 default, 0 = a mine never goes off while placed); TutorialAmbushLakeMineSmoke sets 0 - the ~10 % cold slip risk made it flaky in the full registry run.

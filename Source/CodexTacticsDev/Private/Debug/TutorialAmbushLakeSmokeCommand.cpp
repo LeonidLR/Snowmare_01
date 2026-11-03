@@ -715,6 +715,10 @@ namespace TutorialAmbushLakeSmoke
 			if (State.Mode == EMode::MineKill)
 			{
 				// 2026-10-23: the mine on his path (the leg's middle), the REAL placement (F, a click).
+				if (IConsoleVariable* Mishap = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Mine.Mishap")))
+				{
+					Mishap->Set(0, ECVF_SetByConsole); // 2026-11-03: the cold slip risk (~10 %) made the smoke flaky
+				}
 				Check(State, Relocation && Relocation->StartDeployPlacement(EDeployableType::Mine, Rigger), TEXT("the Engineer opens the mine placement"));
 				if (Relocation)
 				{

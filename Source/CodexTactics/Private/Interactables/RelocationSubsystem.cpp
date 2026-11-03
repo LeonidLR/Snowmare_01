@@ -31,11 +31,15 @@
 #include "NavModifierComponent.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
+#include "HAL/IConsoleManager.h"
 
 #define LOCTEXT_NAMESPACE "RelocationSubsystem"
 
 namespace
 {
+	TAutoConsoleVariable<int32> CVarMineMishap(TEXT("Codex.Mine.Mishap"), 1,
+		TEXT("1 (default): a mine can go off while being placed (DeployableRules::GetMineMishapChance); 0: never (smokes that need the mine placed)."));
+
 	/** How often a stalled worker gets its move order again, s. */
 	constexpr float RetryInterval = 1.f;
 	/** Push follow speeds (Godot lerp 24 * dt for position, 16 * dt for yaw). */
@@ -499,7 +503,7 @@ bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
 		const bool bSapper = Worker->SquadRole == EOperativeRole::MedicSapper;
 		const float Chance = DeployableRules::GetMineMishapChance(bSapper, Worker->ColdLevel);
 		const FNumberFormattingOptions OneDigit = FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1);
-		if (FMath::FRand() * 100.f < Chance)
+		if (CVarMineMishap.GetValueOnGameThread() != 0 && FMath::FRand() * 100.f < Chance)
 		{
 			Post(Name, FText::Format(LOCTEXT("Mishap", "💥 MINE-LAYING ERROR! {0}'s detonator slipped (Risk: {1}%, Cold: {2}%)! The mine went off while placing!"),
 				Name, FText::AsNumber(Chance, &OneDigit), FMath::FloorToInt(Worker->ColdLevel)));
