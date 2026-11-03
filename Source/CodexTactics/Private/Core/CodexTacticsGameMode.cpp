@@ -251,7 +251,7 @@ void ACodexTacticsGameMode::SpawnSquad()
 }
 
 AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpawn& Entry, int32 SquadIndex, const FVector& Location,
-	const FRotator& Facing, bool bRecruited)
+	const FRotator& Facing, bool bRecruited, int32 InTeamId)
 {
 	UWorld* World = GetWorld();
 	bool bApplyBodyMesh = true;
@@ -268,6 +268,7 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 			return nullptr;
 		}
 		Operative->bRecruited = bRecruited;
+		Operative->TeamId = InTeamId; // teams 2026-11-03: a hostile PMC fighter (InTeamId != 0) never joins the player's squad
 		Operative->SquadIndex = SquadIndex;
 		Operative->DisplayName = Entry.DisplayName;
 		Operative->BodyColor = Entry.Color;

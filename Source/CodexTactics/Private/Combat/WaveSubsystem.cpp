@@ -1,4 +1,5 @@
 #include "Combat/WaveSubsystem.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/FallbackWaveRules.h"
 #include "Math/RandomStream.h"
@@ -480,7 +481,8 @@ void UWaveSubsystem::CheckWaveCompletion()
 	}
 	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AEnemyCharacter>& E) { return !E.IsValid() || E->IsDying(); });
 
-	if (bWaveActive && PendingSpawns.Num() == 0 && AliveEnemies.Num() == 0)
+	// Teams (2026-11-03): a fight with living hostile PMC fighters in it goes on until they are down too.
+	if (bWaveActive && PendingSpawns.Num() == 0 && AliveEnemies.Num() == 0 && !UPmcSquadSubsystem::HasLiveHostileOperatives(GetWorld()))
 	{
 		bWaveActive = false;
 

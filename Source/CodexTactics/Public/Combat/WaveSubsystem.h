@@ -76,6 +76,9 @@ public:
 	/** Enemies of the current wave when it started (Godot total_wave_enemies). */
 	int32 GetTotalWaveEnemies() const { return TotalWaveEnemies; }
 
+	/** A hostile PMC fighter (an operative of another team, UPmcSquadSubsystem) died: the fight ends when he was the last hostile. */
+	void NotifyHostileOperativeDied() { CheckWaveCompletion(); }
+
 	/**
 	 * Environment phase 2b: the spawn entries the current wave started with, AFTER the weather / time-of-day roster
 	 * (EnvironmentRosterRules, resolved once in StartWave from the level's written wave; empty for an ambush / skirmish fight).

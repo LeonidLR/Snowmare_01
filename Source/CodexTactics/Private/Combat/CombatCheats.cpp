@@ -54,5 +54,7 @@ bool CombatCheats::IsInfiniteAmmo(const UWorld* World)
 
 bool CombatCheats::IsImmortalActor(const AActor* Actor)
 {
-	return Actor && Actor->IsA<AOperativeCharacter>() && IsImmortal(Actor->GetWorld());
+	// Teams (2026-11-03): the cheat is the player squad's; a hostile PMC fighter dies like any enemy.
+	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Actor);
+	return Operative && Operative->IsPlayerTeam() && IsImmortal(Actor->GetWorld());
 }

@@ -4,6 +4,7 @@
 
 #include "Characters/OperativeCharacter.h"
 
+#include "AI/PmcSquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacterInternal.h"
@@ -85,6 +86,15 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 	const bool bDefeat = bSquadMember && MissionRules::ShouldFailMission(SquadRole == EOperativeRole::Commander, Living);
 	UE_LOG(LogCodexTactics, Display, TEXT("%s killed in action (%s, %d squad members alive)%s"), *DisplayName.ToString(),
 		*UEnum::GetValueAsString(SquadRole), Living, bDefeat ? TEXT(" -> mission failed after the death cinematic") : TEXT(""));
+	// A hostile PMC fighter (teams, 2026-11-03): no HQ radio, no remains crate, no death cinematic - his squad and the fight's end check.
+	if (!IsPlayerTeam())
+	{
+		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld()))
+		{
+			Pmc->NotifyOperativeDied(this, AttackerSource);
+		}
+		return;
+	}
 	if (!bDefeat)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())

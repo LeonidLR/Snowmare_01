@@ -78,11 +78,20 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	const TCHAR*& Reason = OutReason ? *OutReason : Unused;
 	Reason = TEXT("ok");
 	UWorld* World = GetWorld();
-	// Sprint 08: an enemy the squad does not see is not aimed at (blind fire at its silhouette is an order).
-	if (const UTacticalSightSubsystem* Sight = World ? World->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
-		Sight && Enemy && !Sight->IsVisibleToSquad(Enemy))
+	// Sprint 08: an enemy the squad does not see is not aimed at (blind fire at its silhouette is an order). Teams (2026-11-03): a
+	// hostile fighter aims only at what HIS team sees (UPmcSquadSubsystem's team sight, the same eye / FOV / height rules).
+	if (IsPlayerTeam())
 	{
-		Reason = TEXT("not visible to the squad");
+		if (const UTacticalSightSubsystem* Sight = World ? World->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+			Sight && Enemy && !Sight->IsVisibleToSquad(Enemy))
+		{
+			Reason = TEXT("not visible to the squad");
+			return false;
+		}
+	}
+	else if (const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World); Pmc && Enemy && !Pmc->IsVisibleToTeam(TeamId, Enemy))
+	{
+		Reason = TEXT("not visible to the team");
 		return false;
 	}
 	const FVector MyFeet = OperativeCharacterInternal::ShotFeet(this);
@@ -220,7 +229,7 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 	bool bBlocked = false;
 	if (AActor* Priority = ManualPriorityTarget.Get())
 	{
-		if (!OperativeCharacterInternal::IsLiveEnemy(Priority))
+		if (!OperativeCharacterInternal::IsLiveTargetOf(*this, Priority))
 		{
 			ManualPriorityTarget.Reset();
 		}
@@ -231,9 +240,9 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 	}
 	AActor* Best = nullptr;
 	float BestDistance = TNumericLimits<float>::Max();
-	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
+	for (AActor* Enemy : OperativeCharacterInternal::GatherTargetsFor(*this))
 	{
-		if (OperativeCharacterInternal::IsLiveEnemy(Enemy) && EvaluateShotLine(Enemy, false, Candidate, bBlocked) && Candidate.Distance < BestDistance)
+		if (OperativeCharacterInternal::IsLiveTargetOf(*this, Enemy) && EvaluateShotLine(Enemy, false, Candidate, bBlocked) && Candidate.Distance < BestDistance)
 		{
 			BestDistance = Candidate.Distance;
 			Best = Candidate.Enemy;
@@ -246,7 +255,7 @@ bool AOperativeCharacter::CanHitEnemy(AActor* Enemy) const
 {
 	FShootCandidate Candidate;
 	bool bBlocked = false;
-	return OperativeCharacterInternal::IsLiveEnemy(Enemy) && EvaluateShotLine(Enemy, true, Candidate, bBlocked);
+	return OperativeCharacterInternal::IsLiveTargetOf(*this, Enemy) && EvaluateShotLine(Enemy, true, Candidate, bBlocked);
 }
 
 FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllowAutoTargets)
@@ -257,7 +266,7 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	// 1. The manual priority target (Ctrl + click) while it can be hit.
 	if (AActor* Priority = ManualPriorityTarget.Get())
 	{
-		if (!OperativeCharacterInternal::IsLiveEnemy(Priority))
+		if (!OperativeCharacterInternal::IsLiveTargetOf(*this, Priority))
 		{
 			ManualPriorityTarget.Reset();
 		}
@@ -310,7 +319,7 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	// 1b. Commander Mode: the target the ROE policy picked (Sprint 07-C) - if the posture lets him fire at it on his own.
 	if (AActor* Chosen = AutonomyTarget.Get())
 	{
-		if (!OperativeCharacterInternal::IsLiveEnemy(Chosen))
+		if (!OperativeCharacterInternal::IsLiveTargetOf(*this, Chosen))
 		{
 			AutonomyTarget.Reset();
 		}
@@ -325,10 +334,10 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	// 2. Visible enemies, closest first.
 	TArray<FShootCandidate> Visible;
 	int32 BarricadeBlocked = 0;
-	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
+	for (AActor* Enemy : OperativeCharacterInternal::GatherTargetsFor(*this))
 	{
 		// User decision 2026-10-19: a Defensive operative leaves the enemies that have not detected the squad alone.
-		if (!OperativeCharacterInternal::IsLiveEnemy(Enemy) || !MayAutoFireAtEnemy(Enemy))
+		if (!OperativeCharacterInternal::IsLiveTargetOf(*this, Enemy) || !MayAutoFireAtEnemy(Enemy))
 		{
 			continue;
 		}
@@ -354,7 +363,7 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	}
 	Visible.Sort([](const FShootCandidate& A, const FShootCandidate& B) { return A.Distance < B.Distance; });
 	const FShootCandidate& Closest = Visible[0];
-	const FShootCandidate* Current = OperativeCharacterInternal::IsLiveEnemy(CurrentCombatTarget.Get())
+	const FShootCandidate* Current = OperativeCharacterInternal::IsLiveTargetOf(*this, CurrentCombatTarget.Get())
 		? Visible.FindByPredicate([this](const FShootCandidate& Entry) { return Entry.Enemy == CurrentCombatTarget.Get(); }) : nullptr;
 	// A melee enemy closing in on him at a cover (a flank rush while he holds the corner, user PIE video CoverBug_02
 	// 2026-10-07) takes over at once. Out in the open the Godot stance reaction delay below stays (parity: SquadFireSmoke
@@ -550,8 +559,9 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 					return TEXT("not a real-time fight");
 				}
 				const FShootCandidate Opening = FindShootTarget(DeltaTime, true);
+				// Teams (2026-11-03): a hostile fighter's opening shot is the enemy contact (the source is himself).
 				if (!Opening.Enemy || Opening.bBlind
-					|| !ULevelEncounterSubsystem::NotifyHostileContactIn(World, EAmbushTrigger::SquadAutoFire, Opening.Enemy))
+					|| !ULevelEncounterSubsystem::NotifyHostileContactIn(World, EAmbushTrigger::SquadAutoFire, IsPlayerTeam() ? Opening.Enemy : this))
 				{
 					CurrentCombatTarget.Reset();
 					return TEXT("exploring: no opening shot");

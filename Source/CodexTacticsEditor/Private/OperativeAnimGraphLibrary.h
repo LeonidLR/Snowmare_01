@@ -119,6 +119,16 @@ public:
 	static bool SetSkeletalMeshSkeleton(USkeletalMesh* Mesh, USkeleton* Skeleton, FString& OutReport);
 
 	/**
+	 * Renames bones of a skeletal mesh's reference skeleton in place (a Claude-owned copy, never a pack asset; the render data refers to
+	 * bones by index, so nothing else moves). PMC Operator body (2026-11-03, Scripts/Editor/setup_pmc_operator_body.py): the FBX scene
+	 * root above "root" becomes "root" so the operative Animation Blueprint's skeleton knows every mesh bone or an ancestor of it
+	 * (USkeleton::IsCompatibleMesh, the anim instance gate). Give the mesh a fresh skeleton afterwards (CreateSkeletonFromMesh +
+	 * SetSkeletalMeshSkeleton); its old one no longer matches. Not saved.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool RenameMeshBones(USkeletalMesh* Mesh, const TArray<FName>& OldNames, const TArray<FName>& NewNames, FString& OutReport);
+
+	/**
 	 * Adds the fall states to an EXISTING operative AnimGraph without rebuilding it (the user's polish stays; 2026-11-03,
 	 * Scripts/Editor/setup_operative_fall_animation.py): the pose feeding the SlotName slot (the full-body "FullBody" one, so a knockdown /
 	 * death montage still wins) is cached as "PreFallPose" and replaced by a state machine "FallStates" - Grounded (that cached pose),

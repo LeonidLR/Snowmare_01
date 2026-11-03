@@ -519,6 +519,19 @@ public:
 	bool bRecruited = true;
 
 	/**
+	 * Team (user request 2026-11-03, docs/systems/pmc-squad-ai.md): 0 = the player's squad; 1.. = a hostile PMC squad - the same body
+	 * and skills on the other side. A hostile operative never joins USquadSubsystem (no selection / HUD / formation / saves / campaign
+	 * carry); he registers in UPmcSquadSubsystem (its team sight, targets and commander) and carries the "Enemy" tag for the player's
+	 * men. Set before BeginPlay (ACodexTacticsGameMode::SpawnOperative / UPmcSquadSubsystem::SpawnFighter).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative")
+	int32 TeamId = 0;
+
+	/** The player's side (TeamId 0). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
+	bool IsPlayerTeam() const { return TeamId == 0; }
+
+	/**
 	 * Godot is_expendable (recruit_susanin.gd): the death of such a member (the recruit) does not fail the mission — he
 	 * leaves the squad and the HQ reports it; the recruit role is always expendable.
 	 */

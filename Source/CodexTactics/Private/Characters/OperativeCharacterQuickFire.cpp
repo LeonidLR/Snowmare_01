@@ -359,10 +359,12 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 	OperativeCharacterInternal::AddShotLineAllies(World, Params);
 	TArray<FQuickFireCapsule> Capsules;
 	TArray<AActor*> CapsuleActors;
-	for (AActor* Each : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
+	// Teams (2026-11-03): the capsules a round may cross are the shooter's side's targets (the registry for the player's men, the team's
+	// seen targets for a hostile fighter) - never himself or a mate (a PMC fighter carries the "Enemy" tag too).
+	for (AActor* Each : OperativeCharacterInternal::GatherTargetsFor(*this))
 	{
 		const UHealthComponent* Health = IsValid(Each) ? Each->FindComponentByClass<UHealthComponent>() : nullptr;
-		if (!IsValid(Each) || (Health && !Health->IsAlive()))
+		if (!IsValid(Each) || Each == this || (Health && !Health->IsAlive()) || !OperativeCharacterInternal::IsLiveTargetOf(*this, Each))
 		{
 			continue;
 		}

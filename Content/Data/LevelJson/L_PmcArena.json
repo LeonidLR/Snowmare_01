@@ -1,0 +1,44 @@
+{
+  "$schema": "../Schemas/level_config.schema.json",
+  "level_id": "L_PmcArena",
+  "level_name": "PMC Arena (Formation Lab - Combat)",
+  "description": "The PMC self-play arena's level data for L_FormationLabCombat (user request 2026-11-03, docs/systems/pmc-squad-ai.md 'Arena'): the combat lab map without its monster pressure (no patrols / ambushers), no cheats (real deaths), fights start on contact (combat_start ambush) as skirmishes and end in exploration when a side is down, no cold, no intro. ONE small wave only because the level file must hold a valid wave (never played). Run: -LevelJson=L_PmcArena.json with CodexTactics.PmcArena.",
+  "combat_start": "ambush",
+  "ambush_fight": "skirmish",
+  "susanin_wave": 0,
+  "horde_enabled": false,
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "cold_rate_mult": 0,
+  "intro_dialogue": false,
+  "cheats": {
+    "immortal": false,
+    "infinite_ammo": false
+  },
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 2,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1,
+        "enemy_damage_mult": 1,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  }
+}

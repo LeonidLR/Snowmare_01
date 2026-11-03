@@ -215,7 +215,7 @@ public:
 	 * arsenal (Godot player.gd _ready + apply_balance_config + _init_weapons). bRecruited false keeps it out of the squad.
 	 */
 	AOperativeCharacter* SpawnOperative(const FSquadMemberSpawn& Entry, int32 SquadIndex, const FVector& Location,
-		const FRotator& Facing, bool bRecruited = true);
+		const FRotator& Facing, bool bRecruited = true, int32 InTeamId = 0);
 
 	/**
 	 * The class Entry spawns from and whether its BodyMesh applies (SquadSpawnRules::ChooseMemberClass): its

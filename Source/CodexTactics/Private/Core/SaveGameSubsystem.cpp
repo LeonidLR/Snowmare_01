@@ -1064,7 +1064,7 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	TArray<const AOperativeCharacter*> Fallen;
 	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
 	{
-		if (It->IsKilledInAction() && !It->IsActorBeingDestroyed() && !(Squad && Squad->GetMembers().Contains(*It)))
+		if (It->IsKilledInAction() && It->IsPlayerTeam() && !It->IsActorBeingDestroyed() && !(Squad && Squad->GetMembers().Contains(*It))) // teams 2026-11-03: a fallen PMC fighter is no squad member
 		{
 			Fallen.Add(*It);
 		}

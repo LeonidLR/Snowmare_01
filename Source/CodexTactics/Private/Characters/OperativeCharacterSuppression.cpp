@@ -173,7 +173,8 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	// The enemy while he lives (seen: his spot follows him; unseen: his last spot - the rounds keep hammering his cover).
 	AActor* Enemy = SuppressTarget.Get();
 	const UHealthComponent* EnemyHealth = Enemy ? Enemy->FindComponentByClass<UHealthComponent>() : nullptr;
-	const bool bEnemyAlive = IsValid(Enemy) && Enemy->ActorHasTag(CombatQueries::EnemyTag) && (!EnemyHealth || EnemyHealth->IsAlive());
+	// Teams (2026-11-03): a hostile fighter's target is a man of another team, not an "Enemy"-tagged actor (IsLiveTargetOf).
+	const bool bEnemyAlive = OperativeCharacterInternal::IsLiveTargetOf(*this, Enemy) && (!EnemyHealth || EnemyHealth->IsAlive());
 	const ESuppressOrderStop Stop = SuppressionRules::CheckOrder(Config, bSuppressAtTarget, bEnemyAlive, UsesAmmo(), CurrentClip, ReserveAmmo);
 	if (Stop != ESuppressOrderStop::None)
 	{

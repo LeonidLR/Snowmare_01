@@ -7,8 +7,11 @@
 
 #include "Characters/OperativeCharacter.h"
 
+#include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/PanicComponent.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Characters/RageComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -176,9 +179,23 @@ void AOperativeCharacter::BeginPlay()
 	ApplyBodyColor();
 
 	USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	if (Squad && bRecruited)
+	if (Squad && bRecruited && IsPlayerTeam())
 	{
 		Squad->RegisterOperative(this);
+	}
+	else if (!IsPlayerTeam())
+	{
+		// A hostile PMC fighter (2026-11-03): the "Enemy" tag makes him a target of the player's men (registry, plates, Ctrl + click),
+		// UPmcSquadSubsystem is his squad.
+		Tags.AddUnique(CombatQueries::EnemyTag);
+		if (UEnemyRegistrySubsystem* Registry = GetWorld()->GetSubsystem<UEnemyRegistrySubsystem>())
+		{
+			Registry->RegisterTaggedActor(this);
+		}
+		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld()))
+		{
+			Pmc->RegisterOperative(this);
+		}
 	}
 }
 
@@ -268,6 +285,10 @@ void AOperativeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
 		{
 			Squad->UnregisterOperative(this);
+		}
+		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+		{
+			Pmc->UnregisterOperative(this);
 		}
 	}
 	Super::EndPlay(EndPlayReason);
