@@ -17,7 +17,7 @@ import { runBatch, seedRange } from './batch.ts';
 import { DEFAULT_SIM_CONSTANTS, parsePressureConfig } from './config.ts';
 import { calibrationMarkdown, calibrationTable } from './report.ts';
 import type { PressureBox, Watcher } from './rules.ts';
-import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_PLAN_PARAMS, DEFAULT_RELOCATE_PARAMS, DEFAULT_SPOT_PARAMS, DEFAULT_WATCH_PARAMS, findDeltaAngleDeg, unwindDeg } from './rules.ts';
+import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, DEFAULT_PLAN_PARAMS, DEFAULT_RELOCATE_PARAMS, DEFAULT_SPOT_PARAMS, DEFAULT_WATCH_PARAMS, HeightSightRules, findDeltaAngleDeg, unwindDeg } from './rules.ts';
 import { validateCombatSimBatch } from './schema.ts';
 import { runCombatSim } from './sim.ts';
 import { buildSquadTrack } from './squadTrack.ts';
@@ -40,6 +40,31 @@ test('FindDeltaAngleDegrees / UnwindDegrees as FMath', () => {
   assert.equal(findDeltaAngleDeg(0, 180), 180);
   assert.equal(unwindDeg(370), 10);
   assert.equal(unwindDeg(-190), 170);
+});
+
+test('HeightSightRules: the sight range from a height as SightRules (CodexTactics.Combat.Sight.HeightRange)', () => {
+  const H = HeightSightRules;
+  const c = DEFAULT_HEIGHT_SIGHT;
+  assert.equal(H.heightLevel(160), 0); // standing on the ground
+  assert.equal(H.heightLevel(25), 0); // prone in the -3 m cut, his ground the cut floor
+  assert.equal(H.heightLevel(-200), 0); // never negative
+  assert.equal(H.heightLevel(460), 1); // standing on a +1 roof
+  assert.equal(H.heightLevel(625), 2); // prone on the ruin's +2 roof
+  assert.equal(H.heightLevel(925), 3); // prone on a +3 hall roof
+  assert.equal(H.heightLevel(300), 1);
+  assert.equal(H.heightLevel(299), 0);
+  assert.equal(H.heightLevel(925, 0), 0);
+  assert.deepEqual([-1, 0, 1, 2, 3, 4, 7].map((l) => H.rangeMultiplier(c, l)), [1, 1, 1.25, 1.5, 1.75, 2, 2]);
+  assert.equal(H.rangeMultiplierAt(c, 925), 1.75);
+  assert.equal(6000 * H.rangeMultiplier(c, 3), 10500);
+  assert.equal(H.rangeMultiplier({ levelStepCm: 400, bonusPerLevel: 0.5, maxMultiplier: 1.8 }, 2), 1.8);
+  assert.equal(H.rangeMultiplierAt({ levelStepCm: 400, bonusPerLevel: 0.5, maxMultiplier: 1.8 }, 625), 1.5);
+  assert.equal(H.rangeMultiplier({ levelStepCm: 300, bonusPerLevel: -1, maxMultiplier: 0.5 }, 3), 1);
+  // the data file the game reads (the defaults mirror it)
+  const perception = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/AI/enemy_perception.json'), 'utf8'));
+  assert.equal(perception.height_sight.level_step_m * 100, c.levelStepCm);
+  assert.equal(perception.height_sight.bonus_per_level, c.bonusPerLevel);
+  assert.equal(perception.height_sight.max_multiplier, c.maxMultiplier);
 });
 
 test('CombatPressureRules: the schedule, group size, event kinds, type pick, box distance, spot score', () => {

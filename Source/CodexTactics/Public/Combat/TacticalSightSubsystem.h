@@ -133,6 +133,35 @@ public:
 	static SightRules::FSightFovConfig GetFovConfig();
 
 	/**
+	 * Sight from a height (game designer 2026-11-02, L_Gen_Depot_1, numbers PENDING the user's confirmation): the observer's eye height above
+	 * the ground below him - the lowest surface a column traced straight down from his feet meets (SightRules::GroundBelowZ: a roof slab,
+	 * the hall floor and the street under them; pawns skipped), not the absolute Z; in the -3 m cut the cut floor. Cached per observer (the
+	 * ground Z) while he stays within 25 cm, at most HeightCacheSeconds.
+	 */
+	float GetEyeAboveGroundCm(const AActor& Observer) const;
+	/** His height level: floor(GetEyeAboveGroundCm / the data's step) (SightRules::HeightLevel; 0 on the ground and below it). */
+	int32 GetHeightLevel(const AActor& Observer) const;
+	/**
+	 * The sight range multiplier of Observer: SightRules::HeightRangeMultiplier of his height level (EnemyPerception::GetHeightSight) for the
+	 * squad and the armed human enemies (UsesSharedSight), x1 for beasts or with Codex.Sight.HeightRange 0.
+	 */
+	float GetSightRangeMultiplier(const AActor& Observer) const;
+	/** How far Observer's own eyes reach in the fight / exploration sight: MaxSightCm x GetSightRangeMultiplier. */
+	float GetSightRangeCm(const AActor& Observer) const;
+	/**
+	 * One vision model (game designer 2026-11-02): the operatives and the armed human / humanoid enemies (AEnemyCharacter::UsesHumanSight -
+	 * the Marksman, the PMC fighters, every ladder-climbing human) share the eye / profile points, the 3D sight trace, the 2.5D occluded cone
+	 * and the height range bonus; hounds and the other beasts keep their own senses (no height bonus).
+	 */
+	static bool UsesSharedSight(const AActor& Observer);
+	/** Codex.Sight.HeightRange (1 default; 0 = the old flat range at every height). */
+	static bool IsHeightRangeOn();
+	/** The uncached measurement (any world; GetEyeAboveGroundCm caches it): eye Z - SightRules::GroundBelowZ of the column under his feet. */
+	static float MeasureEyeAboveGroundCm(const UWorld& World, const AActor& Observer);
+	/** The height-cache entry's lifetime, s. */
+	static constexpr float HeightCacheSeconds = 1.f;
+
+	/**
 	 * Observer eye / target profile points of a character (stance heights; enemies by their size or the marksman's stance). A peeking
 	 * operative's profile point is his leaned-out head and shoulder (AOperativeCharacter::GetPeekExposedPoint, 2026-10-19), so enemies
 	 * see the point he looks from; his eye point stays the capsule's (the peek view is CanOperativeSee's second line).
@@ -191,6 +220,14 @@ private:
 	TMap<TWeakObjectPtr<AActor>, double> DemaskUntil;
 	/** Pawns ignored by the sight traces (rebuilt every update). */
 	TArray<TWeakObjectPtr<AActor>> IgnoredPawns;
+	/** The ground below each observer (GetEyeAboveGroundCm): where his feet were, the ground Z, the world time it was measured. */
+	struct FGroundCache
+	{
+		FVector Feet = FVector::ZeroVector;
+		float GroundZ = 0.f;
+		double Time = -1.0;
+	};
+	mutable TMap<const AActor*, FGroundCache> GroundCache;
 	FSavedAnimTickOptions SavedAnimTickOptions;
 
 	UPROPERTY(Transient)

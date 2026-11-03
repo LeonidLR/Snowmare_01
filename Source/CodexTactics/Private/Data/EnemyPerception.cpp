@@ -33,6 +33,7 @@ namespace EnemyPerception
 	static TMap<EEnemyArchetype, FEnemyPerceptionParams> Overrides;
 	static FPatrolSearchParams CurrentSearch;
 	static FStealthLureParams CurrentLure;
+	static SightRules::FHeightSightConfig CurrentHeightSight;
 
 	static void ReadMeters(const FJsonObject& Json, const TCHAR* Key, float& OutCm)
 	{
@@ -171,6 +172,28 @@ void EnemyPerception::ResetToDefaults()
 	Overrides.Reset();
 	CurrentSearch = FPatrolSearchParams();
 	CurrentLure = FStealthLureParams();
+	CurrentHeightSight = SightRules::FHeightSightConfig();
+}
+
+SightRules::FHeightSightConfig EnemyPerception::GetHeightSight()
+{
+	return CurrentHeightSight;
+}
+
+void EnemyPerception::SetHeightSight(const SightRules::FHeightSightConfig& Config)
+{
+	CurrentHeightSight = Config;
+}
+
+SightRules::FHeightSightConfig EnemyPerception::HeightSightFromJson(const FJsonObject& Json, const SightRules::FHeightSightConfig& Base)
+{
+	SightRules::FHeightSightConfig Out = Base;
+	ReadMeters(Json, TEXT("level_step_m"), Out.LevelStepCm);
+	ReadNumber(Json, TEXT("bonus_per_level"), Out.BonusPerLevel);
+	ReadNumber(Json, TEXT("max_multiplier"), Out.MaxMultiplier);
+	Out.LevelStepCm = FMath::Max(Out.LevelStepCm, 1.f);
+	Out.MaxMultiplier = FMath::Max(Out.MaxMultiplier, 1.f);
+	return Out;
 }
 
 FEnemyPerceptionParams EnemyPerception::ParamsFromJson(const FJsonObject& Json, const FEnemyPerceptionParams& Base)
@@ -233,6 +256,9 @@ bool EnemyPerception::ApplyJson(const FString& Text)
 		? SearchFromJson(**Search) : FPatrolSearchParams();
 	const TSharedPtr<FJsonObject>* Lure = nullptr;
 	CurrentLure = Root->TryGetObjectField(TEXT("lure"), Lure) && Lure && Lure->IsValid() ? LureFromJson(**Lure) : FStealthLureParams();
+	const TSharedPtr<FJsonObject>* HeightSight = nullptr;
+	CurrentHeightSight = Root->TryGetObjectField(TEXT("height_sight"), HeightSight) && HeightSight && HeightSight->IsValid()
+		? HeightSightFromJson(**HeightSight) : SightRules::FHeightSightConfig();
 	const TSharedPtr<FJsonObject>* Archetypes = nullptr;
 	if (Root->TryGetObjectField(TEXT("archetypes"), Archetypes) && Archetypes && Archetypes->IsValid())
 	{

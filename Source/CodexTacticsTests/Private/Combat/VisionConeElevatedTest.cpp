@@ -97,12 +97,15 @@ namespace VisionConeElevatedTest
 	 * below it (GroundCm -RoofCm, the perch obstacle 0 .. edge hiding what stands under it), then the boxes as full walls (top at least
 	 * the high trace) or low obstacles (above the low trace), heights from the observer's feet.
 	 */
-	void SampleTowerScene(const FVisionConeSightSpec& Spec, const FTowerScene& Scene, bool bElevated, float AngleDeg, FVisionConeRay& Ray)
+	void SampleTowerScene(const FVisionConeSightSpec& Spec, const FTowerScene& Scene, bool bElevated, float AngleDeg, FVisionConeRay& Ray,
+		int32 MaxLow = -1, bool bLostPerch = false)
 	{
 		const float Radians = FMath::DegreesToRadians(AngleDeg);
 		const FVector2D Dir(FMath::Cos(Radians), FMath::Sin(Radians));
 		const float Range = Spec.GetMaxRange();
-		const float FeetZ = bElevated ? Scene.RoofCm : 0.f;
+		// bLostPerch: the 2026-11-02 failure - on the roof, but the perch was not found (a multi-slab roof, the wall top under its edge):
+		// the flat model at the roof's level (targets assumed up there, no perch obstacle).
+		const float FeetZ = bElevated || bLostPerch ? Scene.RoofCm : 0.f;
 		float Edge = 0.f;
 		if (bElevated)
 		{
@@ -137,6 +140,8 @@ namespace VisionConeElevatedTest
 		{
 			Ray.Obstacles.Add({ Wall, Wall, VisionConeVisibility::FullHeightCm, Ray.BlockerNormal, Ray.BlockerNormal });
 		}
+		// The low obstacles nearest first, at most MaxLow of them (the component's per-ray budget; < 0 = all).
+		TArray<FVisionConeObstacle> LowObstacles;
 		for (const FTowerGroundBox& Box : Scene.Boxes)
 		{
 			float Near = 0.f;
@@ -146,8 +151,13 @@ namespace VisionConeElevatedTest
 			const float Top = Box.TopCm - FeetZ;
 			if (Top < High && Top > Low && SegmentCrossing(Dir, Range, Box.Box, Near, Far, &NearNormal, &FarNormal) && Near < Wall - 1.f && Near > Edge)
 			{
-				Ray.Obstacles.Add({ Near, FMath::Min(Far, Wall), Top, NearNormal, FarNormal });
+				LowObstacles.Add({ Near, FMath::Min(Far, Wall), Top, NearNormal, FarNormal });
 			}
+		}
+		LowObstacles.Sort([](const FVisionConeObstacle& A, const FVisionConeObstacle& B) { return A.NearCm < B.NearCm; });
+		for (int32 Index = 0; Index < LowObstacles.Num() && (MaxLow < 0 || Index < MaxLow); ++Index)
+		{
+			Ray.Obstacles.Add(LowObstacles[Index]);
 		}
 	}
 
@@ -393,5 +403,67 @@ bool FVisionConeElevatedConeTest::RunTest(const FString& Parameters)
 	const TArray<FVisionConeRay> Ground = CastRays(Spec, [&](float Angle, FVisionConeRay& Ray) { SampleTowerScene(Spec, Scene, false, Angle, Ray); });
 	TestEqual(TEXT("ground: far behind the wall cut"), LevelAtPoint(Ground, Spec.HalfAngleDeg, FVector2D(2200.f, 0.f)), static_cast<uint8>(0));
 	TestEqual(TEXT("ground: the foot of the tower seen (no perch)"), LevelAtPoint(Ground, Spec.HalfAngleDeg, FVector2D(300.f, 0.f)), static_cast<uint8>(2));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FVisionConeElevatedRoofSniperTest, "CodexTactics.Combat.VisionCone.Elevated.RoofSniperOverWalls",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVisionConeElevatedRoofSniperTest::RunTest(const FString& Parameters)
+{
+	// Game designer 2026-11-02 (L_Gen_Depot_1): the Engineer PRONE at the edge of a +3 hall roof (9 m), a sniper - his cone still covered the
+	// ground behind the walls below. The model, solved exactly, cuts every wall's shadow; the two ways the old sampler lost them are shown
+	// here: (1) a wall behind three crates was never measured (3 low obstacles per ray - from a roof every wall below the eye is "low"),
+	// (2) a perch not recognised (a multi-slab roof / the wall top flush with its edge) fell back to the flat model at the roof's level.
+	using namespace VisionConeVisibility;
+	using namespace VisionConeElevatedTest;
+	FTowerScene Scene;
+	Scene.RoofCm = 900.f;
+	Scene.Tower = { FBox2D(FVector2D(-2500.f, -1500.f), FVector2D(30.f, 1500.f)), 900.f }; // the hall's roof, its edge 30 cm in front of him
+	Scene.Boxes.Reset();
+	Scene.Boxes.Add({ FBox2D(FVector2D(400.f, -60.f), FVector2D(520.f, 60.f)), 110.f });    // three crates in a row on the street
+	Scene.Boxes.Add({ FBox2D(FVector2D(700.f, -60.f), FVector2D(820.f, 60.f)), 110.f });
+	Scene.Boxes.Add({ FBox2D(FVector2D(1000.f, -60.f), FVector2D(1120.f, 60.f)), 110.f });
+	Scene.Boxes.Add({ FBox2D(FVector2D(1300.f, 400.f), FVector2D(1420.f, 520.f)), 150.f }); // a wreck
+	Scene.Boxes.Add({ FBox2D(FVector2D(1800.f, -800.f), FVector2D(1830.f, 800.f)), 300.f }); // a 3 m wall 18 m out
+	Scene.Boxes.Add({ FBox2D(FVector2D(2500.f, -1200.f), FVector2D(2510.f, 400.f)), 250.f }); // a fence
+	Scene.Boxes.Add({ FBox2D(FVector2D(3100.f, -400.f), FVector2D(3130.f, 1200.f)), 300.f }); // another wall
+	FVisionConeSightSpec Spec = VisionConeVisibility::MakeOperativeSightSpec(SightRules::EyeHeight(EOperativeStance::Prone), 4000.f);
+	Spec.HalfAngleDeg = 30.f;
+	Spec.MaxRays = 2048;
+	const float Eye = Scene.RoofCm + Spec.EyeHeightCm; // 925 over the street
+
+	const TArray<FVisionConeRay> Rays = CastRays(Spec, [&](float Angle, FVisionConeRay& Ray) { SampleTowerScene(Spec, Scene, true, Angle, Ray); });
+	int32 Checked = 0;
+	int32 Mismatches = 0;
+	int32 Cut = 0;
+	FString First;
+	CompareTowerGrid(Spec, Scene, true, Rays, Checked, Mismatches, Cut, First);
+	TestTrue(FString::Printf(TEXT("hall roof: enough points %d (cut %d)"), Checked, Cut), Checked > 2000 && Cut > 300);
+	TestEqual(FString::Printf(TEXT("hall roof: drawn level = exact 3D sight, every wall's shadow cut (first mismatch %s)"), *First), Mismatches, 0);
+	// The wall's shadow on the street: 300 x 1830 / (925 - 300) = 8.8 m of ground; a standing man 4.4 m, a crouched one 5.6 m behind it.
+	const float GroundShadow = WallShadowLengthCm(Eye, 300.f, 1830.f);
+	TestEqual(TEXT("ground shadow of the 3 m wall from the 9 m roof"), GroundShadow, 300.f * 1830.f / 625.f, 0.5f);
+	const FVector2D InShadow(1830.f + 0.5f * WallShadowLengthCm(Eye, 300.f, 1830.f, 150.f), 0.f);
+	const FVector2D Beyond(1830.f + WallShadowLengthCm(Eye, 300.f, 1830.f, 90.f) + 120.f, 600.f); // past the fence's end
+	TestEqual(TEXT("behind the wall (its shadow): cut"), LevelAtPoint(Rays, Spec.HalfAngleDeg, InShadow), static_cast<uint8>(0));
+	TestEqual(TEXT("beyond the shadow: seen over the wall"), LevelAtPoint(Rays, Spec.HalfAngleDeg, Beyond), static_cast<uint8>(2));
+	TestEqual(TEXT("the street right under the roof's edge: the dead zone"), LevelAtPoint(Rays, Spec.HalfAngleDeg, FVector2D(150.f, 0.f)), static_cast<uint8>(0));
+
+	// (1) The old budget: 3 low obstacles per ray - along the crates' row the wall behind them is never measured and its shadow is drawn seen.
+	const TArray<FVisionConeRay> Capped = CastRays(Spec, [&](float Angle, FVisionConeRay& Ray) { SampleTowerScene(Spec, Scene, true, Angle, Ray, 3); });
+	TestEqual(TEXT("budget 3: the shadow behind three crates drawn as seen (the bug)"), LevelAtPoint(Capped, Spec.HalfAngleDeg, InShadow), static_cast<uint8>(2));
+	const TArray<FVisionConeRay> Budget = CastRays(Spec, [&](float Angle, FVisionConeRay& Ray) { SampleTowerScene(Spec, Scene, true, Angle, Ray, 12); });
+	TestEqual(TEXT("budget 12 (MaxLowObstaclesPerRayElevated): the shadow cut"), LevelAtPoint(Budget, Spec.HalfAngleDeg, InShadow), static_cast<uint8>(0));
+
+	// (2) The perch lost: the flat model at the roof's level - every wall below the sight lines, nothing behind them cut.
+	const TArray<FVisionConeRay> Lost = CastRays(Spec, [&](float Angle, FVisionConeRay& Ray) { SampleTowerScene(Spec, Scene, false, Angle, Ray, -1, true); });
+	TestEqual(TEXT("perch lost: the wall's shadow drawn as seen (the bug)"), LevelAtPoint(Lost, Spec.HalfAngleDeg, InShadow), static_cast<uint8>(2));
+	bool bFlat = true;
+	for (const FVisionConeRay& Ray : Lost)
+	{
+		bFlat &= Ray.GroundCm == 0.f;
+	}
+	TestTrue(TEXT("perch lost: every ray at the roof's level"), bFlat);
 	return true;
 }

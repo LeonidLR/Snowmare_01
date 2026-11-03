@@ -130,7 +130,9 @@ points, radius 4-12 m) in the open set-pieces >= 30 m from the start; **spawn po
    every walkable roof (its centre + 4 points 1.5 m inside the corners, 36 rays each) the mean / longest ray and the share of rays
    >= 60 m - seed 1: the three halls on +3 mean 64-73 m, the ruin on +2 58 m, the gallery on +1 40 m; the same sawtooth hall on +2
    sees less (test). The metric keeps the LONGEST line; the dead zone behind a roof's edge is the in-game vision cone's job
-   (main `fix/elevated-vision-cone`).
+   (main `fix/elevated-vision-cone`). Documented gap (2026-11-02, `fix/vision-from-height`): the metric has no sight RANGE (rays to 200 m);
+   the game's range grows with the height level (`SightRules::HeightRangeMultiplier`: +3 = x1.75 of 60 m) - mirrored in the combat sim
+   (`HeightSightRules`), not here, since this metric measures the open lines a level offers, not who sees whom.
 4. **Ambush quality.** The layout's ambush points 14-30 m from the route AND concealed from the nearest route sample, per
    100 m of route; the share of route samples round which a coordinated plan (3+ concealed spots in 3+ sectors) could be laid.
 5. **Kill zones (intended).** Every route with `intent: 'kill_zone'`: its metres on the killing ground (the cut layer or a zone

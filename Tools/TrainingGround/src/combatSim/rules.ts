@@ -177,6 +177,37 @@ export const AmbushWatchRules = {
   },
 };
 
+// --- HeightSightRules (SightRules::HeightLevel / HeightRangeMultiplier) -------------------------------------------------------------
+
+/**
+ * The sight range from a height (Source/CodexTactics/Public/Combat/SightRules.h, game designer 2026-11-02; the NUMBERS ARE PENDING the user's
+ * confirmation): an observer's height level = floor(his eye height above the ground below him / levelStepCm) - the ground and the -3 m cut
+ * are level 0 - and his sight range x (1 + bonusPerLevel x level) for level >= 1, at most maxMultiplier. One model for the squad and the armed
+ * human enemies. Data: Content/Data/AI/enemy_perception.json "height_sight" (these defaults mirror it).
+ */
+export interface HeightSightConfig { levelStepCm: number; bonusPerLevel: number; maxMultiplier: number }
+export const DEFAULT_HEIGHT_SIGHT: HeightSightConfig = { levelStepCm: 300, bonusPerLevel: 0.25, maxMultiplier: 2 };
+
+export const HeightSightRules = {
+  /** SightRules::HeightLevel: floor(h / step), never below 0 (a non-positive step: 0). */
+  heightLevel(eyeAboveGroundCm: number, levelStepCm = 300): number {
+    if (!(levelStepCm > 0) || !Number.isFinite(eyeAboveGroundCm)) return 0;
+    return Math.max(0, Math.floor(eyeAboveGroundCm / levelStepCm));
+  },
+
+  /** SightRules::HeightRangeMultiplier: 1 + bonus x level for level >= 1, capped at maxMultiplier, never below 1. */
+  rangeMultiplier(c: HeightSightConfig, level: number): number {
+    if (level <= 0) return 1;
+    const m = 1 + Math.max(c.bonusPerLevel, 0) * level;
+    return Math.min(Math.max(m, 1), Math.max(c.maxMultiplier, 1));
+  },
+
+  /** SightRules::HeightRangeMultiplierAt. */
+  rangeMultiplierAt(c: HeightSightConfig, eyeAboveGroundCm: number): number {
+    return HeightSightRules.rangeMultiplier(c, HeightSightRules.heightLevel(eyeAboveGroundCm, c.levelStepCm));
+  },
+};
+
 // --- CombatPressureRules --------------------------------------------------------------------------------------------------------------
 
 export const CombatPressureRules = {

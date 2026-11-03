@@ -131,6 +131,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0", ClampMax = "8"))
 	int32 MaxLowObstaclesPerRay = 3;
 
+	/**
+	 * Low obstacles measured per ray from a perch (a roof, a tower; 2026-11-02): from up there every wall below the eye is a low obstacle and
+	 * competes with the crates in front of it - a wall behind MaxLowObstaclesPerRay crates cast no shadow. 3 traces each.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0", ClampMax = "24"))
+	int32 MaxLowObstaclesPerRayElevated = 12;
 	/** How deep a low obstacle is probed for its back face, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "10"))
 	float ObstacleDepthProbeCm = 400.f;

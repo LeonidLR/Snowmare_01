@@ -43,6 +43,42 @@ bool SightRules::IsInFieldOfView(const FVector& Eye, const FVector& Facing, cons
 	return FVector::DotProduct(Forward, ToTarget) >= CosHalf;
 }
 
+int32 SightRules::HeightLevel(float EyeAboveGroundCm, float LevelStepCm)
+{
+	if (LevelStepCm <= 0.f || !FMath::IsFinite(EyeAboveGroundCm))
+	{
+		return 0;
+	}
+	return FMath::Max(0, FMath::FloorToInt(EyeAboveGroundCm / LevelStepCm));
+}
+
+float SightRules::HeightRangeMultiplier(const FHeightSightConfig& Config, int32 Level)
+{
+	if (Level <= 0)
+	{
+		return 1.f;
+	}
+	const float Multiplier = 1.f + FMath::Max(Config.BonusPerLevel, 0.f) * static_cast<float>(Level);
+	return FMath::Clamp(Multiplier, 1.f, FMath::Max(Config.MaxMultiplier, 1.f));
+}
+
+float SightRules::HeightRangeMultiplierAt(const FHeightSightConfig& Config, float EyeAboveGroundCm)
+{
+	return HeightRangeMultiplier(Config, HeightLevel(EyeAboveGroundCm, Config.LevelStepCm));
+}
+
+float SightRules::GroundBelowZ(float FeetZ, TArrayView<const float> SurfaceZs)
+{
+	float Ground = FeetZ;
+	bool bAny = false;
+	for (const float Z : SurfaceZs)
+	{
+		Ground = bAny ? FMath::Min(Ground, Z) : Z;
+		bAny = true;
+	}
+	return Ground;
+}
+
 float SightRules::EyeHeight(EOperativeStance Stance)
 {
 	switch (Stance)

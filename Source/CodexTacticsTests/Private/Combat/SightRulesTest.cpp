@@ -189,3 +189,61 @@ bool FSightBearingsNearestFirstTest::RunTest(const FString&)
 	TestEqual(TEXT("no step: just the preferred"), SightRules::BearingsNearestFirst(10.f, 0.f).Num(), 1);
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightHeightRangeTest, "CodexTactics.Combat.Sight.HeightRange",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightHeightRangeTest::RunTest(const FString& Parameters)
+{
+	// Game designer 2026-11-02 (L_Gen_Depot_1, numbers pending his confirmation): the sight range grows with the height level - 3 m steps of the
+	// eye over the ground below; the ground and everything below it x1, +1 x1.25, +2 x1.5, +3 x1.75, capped at x2.
+	using namespace SightRules;
+	const FHeightSightConfig Config;
+	TestEqual(TEXT("default step 3 m"), Config.LevelStepCm, 300.f);
+	// The level from the eye height above the ground below him (eye = feet + stance eye).
+	TestEqual(TEXT("standing on the ground (eye 160): level 0"), HeightLevel(160.f), 0);
+	TestEqual(TEXT("prone in the -3 m cut, his ground the cut floor (eye 25): level 0"), HeightLevel(25.f), 0);
+	TestEqual(TEXT("an eye below the ground below him (a pit's lip): level 0, never negative"), HeightLevel(-200.f), 0);
+	TestEqual(TEXT("standing on a +1 roof (300 + 160): level 1"), HeightLevel(460.f), 1);
+	TestEqual(TEXT("prone on a +1 roof (300 + 25): level 1"), HeightLevel(325.f), 1);
+	TestEqual(TEXT("prone on the ruin's +2 roof (600 + 25): level 2"), HeightLevel(625.f), 2);
+	TestEqual(TEXT("prone on a +3 hall roof (900 + 25): level 3"), HeightLevel(925.f), 3);
+	TestEqual(TEXT("standing on a +3 hall roof (900 + 160): level 3"), HeightLevel(1060.f), 3);
+	TestEqual(TEXT("exactly 3 m: level 1 (floor)"), HeightLevel(300.f), 1);
+	TestEqual(TEXT("just under 3 m: level 0"), HeightLevel(299.f), 0);
+	TestEqual(TEXT("no step: level 0"), HeightLevel(925.f, 0.f), 0);
+	// The multiplier ladder.
+	TestEqual(TEXT("level -1 (below ground): x1, never less"), HeightRangeMultiplier(Config, -1), 1.f);
+	TestEqual(TEXT("level 0 (ground): x1"), HeightRangeMultiplier(Config, 0), 1.f);
+	TestEqual(TEXT("level +1 (3 m): x1.25"), HeightRangeMultiplier(Config, 1), 1.25f);
+	TestEqual(TEXT("level +2 (6 m): x1.5"), HeightRangeMultiplier(Config, 2), 1.5f);
+	TestEqual(TEXT("level +3 (9 m): x1.75"), HeightRangeMultiplier(Config, 3), 1.75f);
+	TestEqual(TEXT("level +4 (12 m): x2 (the cap)"), HeightRangeMultiplier(Config, 4), 2.f);
+	TestEqual(TEXT("level +7: still x2"), HeightRangeMultiplier(Config, 7), 2.f);
+	TestEqual(TEXT("eye 925 over the ground: x1.75"), HeightRangeMultiplierAt(Config, 925.f), 1.75f);
+	TestEqual(TEXT("eye 160 over the ground: x1"), HeightRangeMultiplierAt(Config, 160.f), 1.f);
+	// The squad's 60 m on a +3 roof reaches 105 m; a Marksman (45 m) on it 78.75 m.
+	TestEqual(TEXT("60 m x +3 = 105 m"), 6000.f * HeightRangeMultiplier(Config, 3), 10500.f);
+	TestEqual(TEXT("marksman 45 m x +3 = 78.75 m"), 4500.f * HeightRangeMultiplier(Config, 3), 7875.f, 0.01f);
+	// Data-tuned: another bonus / cap / step.
+	FHeightSightConfig Tuned;
+	Tuned.BonusPerLevel = 0.5f;
+	Tuned.MaxMultiplier = 1.8f;
+	Tuned.LevelStepCm = 400.f;
+	TestEqual(TEXT("tuned: +1 x1.5"), HeightRangeMultiplier(Tuned, 1), 1.5f);
+	TestEqual(TEXT("tuned: +2 capped at x1.8"), HeightRangeMultiplier(Tuned, 2), 1.8f);
+	TestEqual(TEXT("tuned step 4 m: eye 625 = level 1"), HeightRangeMultiplierAt(Tuned, 625.f), 1.5f);
+	FHeightSightConfig Broken;
+	Broken.MaxMultiplier = 0.5f;
+	Broken.BonusPerLevel = -1.f;
+	TestEqual(TEXT("a cap below 1 / a negative bonus never shrink the range"), HeightRangeMultiplier(Broken, 3), 1.f);
+	// The ground below him: the lowest surface the column under his feet crosses.
+	const float HallRoof[] = { 900.f, 900.f, 0.f };
+	TestEqual(TEXT("hall roof edge: roof slab, the wall top under it, the street -> the street"), GroundBelowZ(900.f, HallRoof), 0.f);
+	const float Ruin[] = { 600.f, 300.f, 0.f };
+	TestEqual(TEXT("ruin roof: roof, +1 floor, street -> the street (+2, not +1)"), GroundBelowZ(600.f, Ruin), 0.f);
+	const float Cut[] = { -300.f };
+	TestEqual(TEXT("in the cut: the cut floor is his ground"), GroundBelowZ(-300.f, Cut), -300.f);
+	TestEqual(TEXT("nothing below: his feet"), GroundBelowZ(120.f, TArrayView<const float>()), 120.f);
+	return true;
+}

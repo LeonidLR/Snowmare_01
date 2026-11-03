@@ -79,6 +79,38 @@ namespace SightRules
 	 */
 	CODEXTACTICS_API bool IsInFieldOfView(const FVector& Eye, const FVector& Facing, const FVector& Target, float FovDeg);
 
+	/**
+	 * Sight range from a height (game designer 2026-11-02, L_Gen_Depot_1: "the sight RANGE grows with the height level"; numbers PENDING the
+	 * user's confirmation): an observer's height level is floor(eye height above the ground below him / LevelStepCm) - 3 m steps like the
+	 * level generator's levels (0 ground, +1 = 3 m, +2 = 6 m, +3 = 9 m; below ground / in the -3 m cut the floor below him counts, so it is
+	 * level 0, never less). Range x (1 + BonusPerLevel x level), at most MaxMultiplier; level <= 0 -> x1. One model for the squad and the
+	 * armed human enemies (the Marksman, the PMC fighters, the climbing humans); beasts keep their own senses. Obstacles / dead zones apply
+	 * at every height (the traces are 3D). Data: enemy_perception.json "height_sight" (EnemyPerception::GetHeightSight); console
+	 * Codex.Sight.HeightRange 0 = off (A/B).
+	 */
+	struct FHeightSightConfig
+	{
+		float LevelStepCm = 300.f;
+		float BonusPerLevel = 0.25f;
+		float MaxMultiplier = 2.f;
+	};
+
+	/** The height level of an eye EyeAboveGroundCm over the ground below it: floor(h / step), never below 0 (a non-positive step: 0). */
+	CODEXTACTICS_API int32 HeightLevel(float EyeAboveGroundCm, float LevelStepCm = 300.f);
+
+	/** The sight range multiplier of a height level: 1 + bonus x level for level >= 1, capped at MaxMultiplier (never below 1). */
+	CODEXTACTICS_API float HeightRangeMultiplier(const FHeightSightConfig& Config, int32 Level);
+
+	/** HeightRangeMultiplier(HeightLevel(EyeAboveGroundCm)). */
+	CODEXTACTICS_API float HeightRangeMultiplierAt(const FHeightSightConfig& Config, float EyeAboveGroundCm);
+
+	/**
+	 * The ground below an observer from the surfaces a column traced straight down from his feet meets, top first (SurfaceZs; the ground /
+	 * navmesh floor below him, not the absolute world Z): the LOWEST of them - a roof's slab, the hall's floor 9 m below, a ruin's +1 floor
+	 * and the street under it all lie in one column, the street is his ground. FeetZ when the column met nothing.
+	 */
+	CODEXTACTICS_API float GroundBelowZ(float FeetZ, TArrayView<const float> SurfaceZs);
+
 	/** Observer eye height above the feet: standing 160, crouching 95, prone 25 cm. */
 	CODEXTACTICS_API float EyeHeight(EOperativeStance Stance);
 	/** Target profile height above the feet (the point looked at): standing 150, crouching 90, prone 25 cm. */

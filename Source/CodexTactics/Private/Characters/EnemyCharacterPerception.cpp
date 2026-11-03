@@ -25,10 +25,32 @@ FEnemyPerceptionParams AEnemyCharacter::GetPerception() const
 	return bOverridePerception ? PerceptionRules::Sanitize(Archetype, PerceptionOverride) : EnemyPerception::Get(Archetype);
 }
 
+bool AEnemyCharacter::UsesHumanSight() const
+{
+	return Archetype == EEnemyArchetype::Marksman || bCanClimbLadders;
+}
+
+float AEnemyCharacter::GetSightHeightMultiplier() const
+{
+	const UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+	return Sight ? Sight->GetSightRangeMultiplier(*this) : 1.f;
+}
+
 FEnemyPerceptionParams AEnemyCharacter::GetPatrolPerception() const
 {
-	const FEnemyPerceptionParams Params = GetPerception();
-	return bSearching ? PerceptionRules::Scaled(Params, EnemyPerception::GetSearch().PerceptionMultiplier) : Params;
+	FEnemyPerceptionParams Params = GetPerception();
+	if (bSearching)
+	{
+		Params = PerceptionRules::Scaled(Params, EnemyPerception::GetSearch().PerceptionMultiplier);
+	}
+	// One vision model (game designer 2026-11-02): an armed human on a roof / tower sees farther, like an operative up there (x1 for beasts).
+	Params.SightRangeCm *= GetSightHeightMultiplier();
+	return Params;
+}
+
+AActor* AEnemyCharacter::FindVisibleOperativeNow(float& OutDistance, float& OutRange) const
+{
+	return FindVisibleOperative(GetPatrolPerception(), OutDistance, OutRange);
 }
 
 AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Params, float& OutDistance, float& OutRange) const
