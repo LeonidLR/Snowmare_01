@@ -301,6 +301,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Enemy|Ladder")
 	TObjectPtr<class ULadderClimbComponent> LadderClimb;
 
+	/** Falls (2026-11-03): a knockdown at an open edge throws it over, the landing's fall damage (no drop links: the enemies' filters close them). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Falls")
+	TObjectPtr<class ULedgeFallComponent> LedgeFall;
+
 	/** bCanClimbLadders and the clips are there (the AI controller's nav filter follows it). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy|Ladder")
 	bool CanClimbLadders() const;

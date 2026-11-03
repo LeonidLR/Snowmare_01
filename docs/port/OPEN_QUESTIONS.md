@@ -4,6 +4,17 @@
 
 ## 7. Open user decisions / questions
 
+- **Falls and drops (2026-11-03, `fix/falls-and-drops`) - defaults chosen while the designer slept, to confirm** (`docs/systems/stances-and-movement.md`
+  "Falls and drops"; all in `Content/Data/Movement/falls.json` / the nav areas): (1) fall damage = the ladder-fall curve with one level free: safe
+  320 cm, 0.1 HP / cm, max 40 (9 m and more = 40), no lethal height (`damage.lethal_height_cm` 0) - set a lethal height? (2) drop links where a walkable
+  surface lies 1.5-6.5 m below and <= 2.5 m beyond an open edge, made if a 600 cm/s run-up reaches it; (3) a drop costs the pathfinder 3 x its length
+  + 10 m, a hurting one + 25 m (`UNavArea_Drop` / `_DropHurt`), so a stair / ramp / ladder of a similar length wins; (4) knockback falls only from
+  the existing knockdowns, never over an obstacle of 80 cm or more; (5) every operative drops, Solo and squad, one at a time per landing spot (2.2 m);
+  (6) the links only on maps whose level JSON says `"drop_links": true` (the level generator's maps) - also on the hand-made maps
+  (`Codex.Fall.DropLinks 2`)? (7) enemies never path through drops (only knockback falls) - let some enemy types drop? (8) `L_Gen_Depot_1`: the
+  cut's 2.2 m walls leave drops into the cut only off the crossings; `B_shed` overlaps the north cut wall - open the cut rim in places / keep
+  buildings off it in the generator? (9) the fall clips play on the FullBody slot from C++ (the ABP has no falling state) - fine, or a state in the ABP?
+
 - **Custom formation (2026-11-01, formation/custom) - picked conservatively, can be flipped** (`docs/design/FORMATION_SECTORS.md` "Custom formation"):
   (1) no turn fold for a custom shape (as Q2 = a for the manual tight shapes): a very wide custom shape swings round a sharp turn unless a wall cuts it;
   (2) the 10 m reach round the leader's ghost and a member the shape lacks walking behind its rearmost place; (3) the corner watch (slicing the pie) is off in

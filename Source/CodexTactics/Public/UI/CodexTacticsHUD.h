@@ -287,6 +287,12 @@ private:
 	void DrawCoverSwitchPreview();
 	/** Bug C 2026-10-26: the squad's guide lines along / round its wall (ACodexTacticsPlayerController::GetSquadMovePreviewPaths). */
 	void DrawSquadMovePreview();
+	/**
+	 * Falls and drops (2026-11-03; CodexTacticsHUDDrops.cpp): every drop on a squad member's order path (UDropLinkSubsystem::GatherSquadMarkers)
+	 * - his path to the edge dashed, the drop itself in amber (a free drop) or red (it hurts / his run-up falls short), a down chevron over the
+	 * gap and the label "DROP 3.0 m" / "DROP 6.0 m  -28 HP" / "... TOO FAR".
+	 */
+	void DrawDropMarkers();
 	/** The custom formation's placement mode (2026-11-01): each ghost's look arrow on the ground, the drag in progress, the banner. */
 	void DrawFormationPlacement();
 	/** A ground arrow from Feet along Yaw (a shaft from 35 cm to Length, a head), projected; Thickness px. */

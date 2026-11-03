@@ -19,6 +19,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TripwireRules.h"
+#include "Falls/LedgeFallComponent.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "Level/CrawlGapActor.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -190,6 +191,10 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	{
 		return EOperativeOrderResult::Refused; // on a ladder / waiting for one (LADDERS.md 7.1): the formation waits for him
 	}
+	if (LedgeFall && LedgeFall->IsBusy())
+	{
+		return EOperativeOrderResult::Refused; // dropping off an edge / waiting for his turn at a drop (2026-11-03): the formation waits for him
+	}
 	// Rev 5i: a tutorial confinement asks for a stance ("crouch first"): a follower copies the leader's low stance before he
 	// follows, else he holds (the squad retries, as for a stance clip below).
 	if (const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr; Tutorial && Tutorial->IsConfining())
@@ -265,6 +270,18 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	if (LadderClimb && LadderClimb->IsQueued())
 	{
 		LadderClimb->AbortClimb(ELadderAbortReason::None);
+	}
+	// Drops (2026-11-03): mid-drop a new order is walked to after the landing; waiting at a drop link, the new order replaces the wait.
+	if (LedgeFall && LedgeFall->IsWaiting())
+	{
+		LedgeFall->CancelWait();
+	}
+	else if (LedgeFall && LedgeFall->IsBusy())
+	{
+		LedgeFall->HandleNewOrder(InDestination);
+		LastMoveDestination = InDestination;
+		bHasMoveOrder = true;
+		return EOperativeOrderResult::Accepted;
 	}
 	// Rev 5i (game designer 2026-10-15): a tutorial confinement keeps the squad in its area. Own orders are judged (cover orders,
 	// shimmies, replays of deferred orders reach this without OrderMoveTo's check); formation moves are pulled into the area.

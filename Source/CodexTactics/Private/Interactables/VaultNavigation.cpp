@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/InteractableActor.h"
+#include "Falls/DropLinkNavigation.h"
 #include "Ladders/LadderNavigation.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
@@ -43,6 +44,13 @@ UNavFilter_NoVault::UNavFilter_NoVault()
 	FNavigationFilterArea& SquadLadder = Areas.AddDefaulted_GetRef();
 	SquadLadder.AreaClass = UNavArea_LadderSquadOnly::StaticClass();
 	SquadLadder.bIsExcluded = true;
+	// The generated drop links (2026-11-03): the squad's only - an enemy never paths off an edge (a knockback can still throw it over one).
+	for (const TSubclassOf<UNavArea> DropArea : { TSubclassOf<UNavArea>(UNavArea_Drop::StaticClass()), TSubclassOf<UNavArea>(UNavArea_DropHurt::StaticClass()) })
+	{
+		FNavigationFilterArea& Drop = Areas.AddDefaulted_GetRef();
+		Drop.AreaClass = DropArea;
+		Drop.bIsExcluded = true;
+	}
 }
 
 UNavFilter_NoVaultLadder::UNavFilter_NoVaultLadder()

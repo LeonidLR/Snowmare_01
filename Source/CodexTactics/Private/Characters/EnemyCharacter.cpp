@@ -21,6 +21,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/VisionConeComponent.h"
+#include "Falls/LedgeFallComponent.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -46,6 +47,10 @@ AEnemyCharacter::AEnemyCharacter()
 	KnockdownComponent->bCanBeKnockedDown = false; // ConfigureKnockdown by archetype
 	// Ladders (docs/design/LADDERS.md 7.5): every enemy carries the climb; it ticks only on a climbing class (BeginPlay).
 	LadderClimb = CreateDefaultSubobject<ULadderClimbComponent>(TEXT("LadderClimb"));
+	// Falls (2026-11-03): knockback falls over an edge and the fall damage; no fall clips (the enemy skeletons differ: it falls in its pose).
+	LedgeFall = CreateDefaultSubobject<ULedgeFallComponent>(TEXT("LedgeFall"));
+	LedgeFall->FallLoopClip.Reset();
+	LedgeFall->LandClip.Reset();
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));

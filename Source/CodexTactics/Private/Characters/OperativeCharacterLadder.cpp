@@ -3,6 +3,7 @@
 
 #include "Characters/OperativeCharacter.h"
 
+#include "Falls/LedgeFallComponent.h"
 #include "Ladders/LadderClimbComponent.h"
 
 bool AOperativeCharacter::IsClimbingLadder() const
@@ -25,5 +26,9 @@ FVector AOperativeCharacter::GetFloorReferenceLocation() const
 
 FVector AOperativeCharacter::GetSaveLocation() const
 {
-	return LadderClimb && LadderClimb->IsOnLadder() ? LadderClimb->GetSaveLocation() : GetActorLocation();
+	if (LadderClimb && LadderClimb->IsOnLadder())
+	{
+		return LadderClimb->GetSaveLocation();
+	}
+	return LedgeFall && LedgeFall->IsBusy() ? LedgeFall->GetSaveLocation() : GetActorLocation(); // mid-drop: the landing (2026-11-03)
 }

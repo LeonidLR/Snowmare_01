@@ -36,7 +36,7 @@ float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativ
 
 void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 {
-	if (Stance == NewStance || IsKnockedDown() || IsClimbingLadder())
+	if (Stance == NewStance || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge())
 	{
 		return; // knocked down: he gets up standing (the get-up clip); on a ladder: standing until he is off it
 	}
