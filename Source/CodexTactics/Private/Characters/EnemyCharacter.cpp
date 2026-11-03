@@ -123,8 +123,9 @@ void AEnemyCharacter::Tick(float DeltaTime)
 	const float MaxSpeed = GetCharacterMovement() ? GetCharacterMovement()->MaxWalkSpeed : 0.f;
 	RunUpSeconds = MaxSpeed > 0.f && GetVelocity().Size2D() >= MaxSpeed * 0.7f ? RunUpSeconds + DeltaTime : FMath::Max(0.f, RunUpSeconds - DeltaTime * 2.f);
 	SecondsSinceHoundPounce += DeltaTime;
-	// On a ladder / waiting for one (LADDERS.md 7.5): ULadderClimbComponent moves and turns the body, the AI waits.
-	if (!IsLadderBusy())
+	// On a ladder / waiting for one (LADDERS.md 7.5): ULadderClimbComponent moves and turns the body, the AI waits. The same for a drop link's
+	// run-up, flight and landing (ULedgeFallComponent, 2026-11-03).
+	if (!IsLadderBusy() && !(LedgeFall && LedgeFall->IsBusy()))
 	{
 		TickBehavior(DeltaTime);
 		UpdateMovementFacing(DeltaTime);

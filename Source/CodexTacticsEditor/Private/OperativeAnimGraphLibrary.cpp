@@ -815,6 +815,234 @@ USkeleton* UOperativeAnimGraphLibrary::CreateSkeletonFromMesh(USkeletalMesh* Mes
 	return Skeleton;
 }
 
+namespace OperativeAnimGraph
+{
+	UEdGraph* FindAnimGraph(UAnimBlueprint* AnimBlueprint)
+	{
+		if (!AnimBlueprint)
+		{
+			return nullptr;
+		}
+		for (UEdGraph* Graph : AnimBlueprint->FunctionGraphs)
+		{
+			if (Graph && Graph->GetFName() == UEdGraphSchema_K2::GN_AnimGraph)
+			{
+				return Graph;
+			}
+		}
+		return nullptr;
+	}
+
+	FString NodeLabel(const UEdGraphNode* Node)
+	{
+		if (!Node)
+		{
+			return TEXT("-");
+		}
+		FString Label = Node->GetClass()->GetName().Replace(TEXT("AnimGraphNode_"), TEXT(""));
+		if (const UAnimGraphNode_Slot* Slot = Cast<UAnimGraphNode_Slot>(Node))
+		{
+			Label += FString::Printf(TEXT("(%s)"), *Slot->Node.SlotName.ToString());
+		}
+		else if (const UAnimGraphNode_SaveCachedPose* Save = Cast<UAnimGraphNode_SaveCachedPose>(Node))
+		{
+			Label += FString::Printf(TEXT("(%s)"), *Save->CacheName);
+		}
+		else if (const UAnimGraphNode_StateMachine* Machine = Cast<UAnimGraphNode_StateMachine>(Node))
+		{
+			Label += FString::Printf(TEXT("(%s)"), *const_cast<UAnimGraphNode_StateMachine*>(Machine)->GetStateMachineName());
+		}
+		return Label;
+	}
+}
+
+FString UOperativeAnimGraphLibrary::DescribeAnimGraph(UAnimBlueprint* AnimBlueprint)
+{
+	using namespace OperativeAnimGraph;
+	const UEdGraph* AnimGraph = FindAnimGraph(AnimBlueprint);
+	if (!AnimGraph)
+	{
+		return TEXT("no AnimGraph");
+	}
+	FString Out;
+	for (const UEdGraphNode* Node : AnimGraph->Nodes)
+	{
+		if (!Node || !Node->IsA<UAnimGraphNode_Base>())
+		{
+			continue;
+		}
+		Out += NodeLabel(Node);
+		for (const UEdGraphPin* Pin : Node->Pins)
+		{
+			if (Pin->Direction == EGPD_Input && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Struct && !Pin->LinkedTo.IsEmpty())
+			{
+				Out += FString::Printf(TEXT(" %s<-%s"), *Pin->PinName.ToString(), *NodeLabel(Pin->LinkedTo[0]->GetOwningNode()));
+			}
+		}
+		Out += TEXT("\n");
+	}
+	return Out;
+}
+
+bool UOperativeAnimGraphLibrary::AddFallStateMachine(UAnimBlueprint* AnimBlueprint, FName SlotName, UAnimSequenceBase* FallLoop, UAnimSequenceBase* Land,
+	float FallBlendIn, float LandBlendIn, float GroundBlendIn, FString& OutReport)
+{
+	using namespace OperativeAnimGraph;
+	OutReport.Reset();
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBlueprint);
+	if (!AnimGraph || !FallLoop || !Land)
+	{
+		OutReport = TEXT("missing AnimBlueprint / AnimGraph / fall clips");
+		return false;
+	}
+	TArray<UAnimGraphNode_StateMachine*> Machines;
+	AnimGraph->GetNodesOfClass(Machines);
+	for (UAnimGraphNode_StateMachine* Existing : Machines)
+	{
+		if (Existing->GetStateMachineName() == TEXT("FallStates"))
+		{
+			OutReport = TEXT("the AnimGraph already has FallStates - left alone");
+			return true;
+		}
+	}
+	// The full-body slot and the pose that feeds it.
+	TArray<UAnimGraphNode_Slot*> Slots;
+	AnimGraph->GetNodesOfClass(Slots);
+	UAnimGraphNode_Slot* FullBody = nullptr;
+	for (UAnimGraphNode_Slot* Slot : Slots)
+	{
+		FullBody = Slot->Node.SlotName == SlotName ? Slot : FullBody;
+	}
+	UEdGraphPin* SlotSource = FullBody ? FullBody->FindPin(TEXT("Source"), EGPD_Input) : nullptr;
+	UEdGraphPin* Upstream = SlotSource && SlotSource->LinkedTo.Num() == 1 ? SlotSource->LinkedTo[0] : nullptr;
+	if (!Upstream)
+	{
+		OutReport = FString::Printf(TEXT("no %s slot with one pose feeding it"), *SlotName.ToString());
+		return false;
+	}
+	AnimGraph->Modify();
+	FBuilder Build{AnimGraph, OutReport};
+	const int32 Column = FullBody->NodePosX / ColumnWidth;
+	const int32 Row = FullBody->NodePosY / RowHeight;
+	// The pose that fed the slot, cached for the Grounded state.
+	UEdGraphNode* UpstreamNode = Upstream->GetOwningNode();
+	SlotSource->BreakLinkTo(Upstream);
+	UAnimGraphNode_SaveCachedPose* Save = Build.Spawn<UAnimGraphNode_SaveCachedPose>(Column, Row + 2, [](UAnimGraphNode_SaveCachedPose& Node)
+	{
+		Node.CacheName = TEXT("PreFallPose");
+	});
+	Build.Link(Upstream, Build.Pin(Save, TEXT("Pose"), EGPD_Input));
+	UAnimGraphNode_StateMachine* Machine = Build.Spawn<UAnimGraphNode_StateMachine>(Column, Row + 1, [](UAnimGraphNode_StateMachine&) {});
+	UAnimationStateMachineGraph* MachineGraph = Machine->EditorStateMachineGraph;
+	if (!MachineGraph || !MachineGraph->EntryNode)
+	{
+		OutReport += TEXT("the state machine has no graph / entry node");
+		return false;
+	}
+	Machine->OnRenameNode(TEXT("FallStates"));
+	Build.Link(Build.Pin(Machine, TEXT("Pose"), EGPD_Output), SlotSource);
+
+	auto AddState = [&](const TCHAR* Name, int32 X, int32 Y) -> UAnimStateNode*
+	{
+		FGraphNodeCreator<UAnimStateNode> Creator(*MachineGraph);
+		UAnimStateNode* State = Creator.CreateNode();
+		State->NodePosX = X * 320;
+		State->NodePosY = Y * 200;
+		Creator.Finalize();
+		State->OnRenameNode(Name);
+		return State;
+	};
+	auto StateResult = [&](UAnimStateNode* State) -> UEdGraphPin*
+	{
+		UAnimationStateGraph* StateGraph = Cast<UAnimationStateGraph>(State->BoundGraph);
+		if (!StateGraph || !StateGraph->GetResultNode())
+		{
+			OutReport += FString::Printf(TEXT("state %s has no graph\n"), *State->GetStateName());
+			Build.bOk = false;
+			return nullptr;
+		}
+		return StateGraph->GetResultNode()->FindPin(TEXT("Result"), EGPD_Input);
+	};
+	auto FillWithAsset = [&](UAnimStateNode* State, UAnimSequenceBase* Clip, bool bLoop)
+	{
+		UEdGraphPin* Result = StateResult(State);
+		if (!Result)
+		{
+			return;
+		}
+		FBuilder Sub{State->BoundGraph, OutReport};
+		UAnimGraphNode_SequencePlayer* Player = Sub.Spawn<UAnimGraphNode_SequencePlayer>(-1, 0, [Clip](UAnimGraphNode_SequencePlayer& Node)
+		{
+			Node.SetAnimationAsset(Clip);
+		});
+		if (const FBoolProperty* Loop = CastField<FBoolProperty>(FAnimNode_SequencePlayer::StaticStruct()->FindPropertyByName(TEXT("bLoopAnimation"))))
+		{
+			Loop->SetPropertyValue_InContainer(&Player->Node, bLoop);
+		}
+		Sub.Link(Sub.Pin(Player, TEXT("Pose"), EGPD_Output), Result);
+		Build.bOk &= Sub.bOk;
+	};
+
+	UAnimStateNode* Grounded = AddState(TEXT("Grounded"), 2, 1);
+	UAnimStateNode* Falling = AddState(TEXT("Falling"), 4, 0);
+	UAnimStateNode* Landing = AddState(TEXT("Landing"), 4, 2);
+	if (UEdGraphPin* Result = StateResult(Grounded))
+	{
+		FBuilder Sub{Grounded->BoundGraph, OutReport};
+		UAnimGraphNode_UseCachedPose* Use = Sub.Spawn<UAnimGraphNode_UseCachedPose>(-1, 0, [Save](UAnimGraphNode_UseCachedPose& Node)
+		{
+			Node.SaveCachedPoseNode = Save;
+		});
+		Sub.Link(Sub.Pin(Use, TEXT("Pose"), EGPD_Output), Result);
+		Build.bOk &= Sub.bOk;
+	}
+	FillWithAsset(Falling, FallLoop, true);
+	FillWithAsset(Landing, Land, false);
+
+	UEdGraphPin* EntryOut = nullptr;
+	for (UEdGraphPin* Each : MachineGraph->EntryNode->Pins)
+	{
+		EntryOut = Each->Direction == EGPD_Output ? Each : EntryOut;
+	}
+	if (!EntryOut)
+	{
+		OutReport += TEXT("entry node without an output pin\n");
+		return false;
+	}
+	EntryOut->MakeLinkTo(Grounded->GetInputPin());
+
+	int32 Transitions = 0;
+	auto AddTransition = [&](UAnimStateNode* From, UAnimStateNode* To, FName Flag, float Crossfade)
+	{
+		FGraphNodeCreator<UAnimStateTransitionNode> Creator(*MachineGraph);
+		UAnimStateTransitionNode* Transition = Creator.CreateNode();
+		Transition->NodePosX = (From->NodePosX + To->NodePosX) / 2;
+		Transition->NodePosY = (From->NodePosY + To->NodePosY) / 2;
+		Creator.Finalize();
+		Transition->CreateConnections(From, To);
+		Transition->CrossfadeDuration = Crossfade;
+		UAnimationTransitionGraph* RuleGraph = Cast<UAnimationTransitionGraph>(Transition->BoundGraph);
+		if (!RuleGraph || !RuleGraph->GetResultNode())
+		{
+			OutReport += FString::Printf(TEXT("transition %s -> %s has no rule graph\n"), *From->GetStateName(), *To->GetStateName());
+			Build.bOk = false;
+			return;
+		}
+		FBuilder Rule{RuleGraph, OutReport};
+		Rule.BindVariable(Flag, RuleGraph->GetResultNode(), TEXT("bCanEnterTransition"));
+		Build.bOk &= Rule.bOk;
+		++Transitions;
+	};
+	AddTransition(Grounded, Falling, TEXT("bFallAirborne"), FallBlendIn);
+	AddTransition(Falling, Landing, TEXT("bFallLanding"), LandBlendIn);
+	AddTransition(Falling, Grounded, TEXT("bFallGrounded"), GroundBlendIn);
+	AddTransition(Landing, Grounded, TEXT("bFallGrounded"), GroundBlendIn);
+	AddTransition(Landing, Falling, TEXT("bFallAirborne"), FallBlendIn);
+	OutReport += FString::Printf(TEXT("FallStates: 3 states, %d transitions, between %s and the %s slot\n"), Transitions, *NodeLabel(UpstreamNode),
+		*SlotName.ToString());
+	return Build.bOk && CompileAnimGraphAndReport(AnimBlueprint, AnimGraph, OutReport);
+}
+
 bool UOperativeAnimGraphLibrary::SetSkeletalMeshSkeleton(USkeletalMesh* Mesh, USkeleton* Skeleton, FString& OutReport)
 {
 	if (!Mesh || !Skeleton)

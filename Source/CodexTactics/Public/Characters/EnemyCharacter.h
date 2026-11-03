@@ -9,6 +9,7 @@
 #include "GameFramework/Character.h"
 #include "Data/CombatTypes.h"
 #include "Combat/KnockdownTypes.h"
+#include "Falls/FallRules.h"
 #include "EnemyCharacter.generated.h"
 
 class AAIController;
@@ -20,6 +21,17 @@ class UMaterialInstanceDynamic;
 class UVisionConeComponent;
 enum class ENoiseReaction : uint8;
 enum class ESuppressionWeapon : uint8; // Combat/SuppressionRules.h
+
+/** A Blueprint's override of its enemy type's drop link use (Content/Data/Movement/falls.json enemy_drops.<archetype>, user decision 2026-11-03). */
+UENUM(BlueprintType)
+enum class EEnemyDropLinkOverride : uint8
+{
+	/** The archetype's enemy_drops value. */
+	FromData UMETA(DisplayName = "From falls.json"),
+	Never UMETA(DisplayName = "Never"),
+	FreeDrops UMETA(DisplayName = "Free drops"),
+	Jumper UMETA(DisplayName = "Jumper")
+};
 
 /** A loud squad action enemies can hear (PerceptionRules gunshot / grenade radius). */
 enum class ESquadNoise : uint8
@@ -301,9 +313,19 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Enemy|Ladder")
 	TObjectPtr<class ULadderClimbComponent> LadderClimb;
 
-	/** Falls (2026-11-03): a knockdown at an open edge throws it over, the landing's fall damage (no drop links: the enemies' filters close them). */
+	/**
+	 * Falls (2026-11-03): a knockdown at an open edge throws it over, the landing's fall damage / heavy wound (knocked down) / death; a type
+	 * that uses drop links (GetDropLinkUse) paths off roof / bridge edges through them and takes them like an operative (run-up, flight, landing).
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Falls")
 	TObjectPtr<class ULedgeFallComponent> LedgeFall;
+
+	/** This Blueprint's drop link use instead of its archetype's (falls.json enemy_drops.<archetype>). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Falls")
+	EEnemyDropLinkOverride DropLinkUseOverride = EEnemyDropLinkOverride::FromData;
+
+	/** Which drop links it paths through (user decision 2026-11-03): the override, else FallRules::EnemyDropUse of its archetype. */
+	FallRules::EEnemyDropUse GetDropLinkUse() const;
 
 	/** bCanClimbLadders and the clips are there (the AI controller's nav filter follows it). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy|Ladder")

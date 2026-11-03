@@ -20,6 +20,7 @@
 #include "Falls/FallRules.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -28,6 +29,26 @@
 
 namespace LedgeFallInternal
 {
+	static TAutoConsoleVariable<int32> CVarFallSlotClips(
+		TEXT("Codex.Fall.SlotClips"),
+		2,
+		TEXT("The fall loop / land clips on the full-body slot from C++ (the fallback of the operative ABP's FallStates state machine, 2026-11-03): ")
+		TEXT("0 never, 1 always, 2 (default) only when the body's ABP has no FallStates machine."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarFallAirGravity(
+		TEXT("Codex.Fall.AirGravity"),
+		2,
+		TEXT("The ledge fall's stronger gravity (falls.json air.gravity_scale, 2026-11-03): 0 off, 1 drop links and knockback throws, ")
+		TEXT("2 (default) also any other walk / push off a ledge."),
+		ECVF_Default);
+
+	/** An "other" fall (walked / pushed off) gets the air gravity once this far below its start. */
+	constexpr float OtherFallGravityDropCm = 40.f;
+
+	/** The operative ABP's fall state machine (Scripts/Editor/setup_operative_fall_animation.py). */
+	const FName FallStateMachineName(TEXT("FallStates"));
+
 	const TCHAR* const FallLoopPath = TEXT("/Game/Characters/Mannequins/Anims/Rifle/Jump/MM_Rifle_Jump_Fall_Loop.MM_Rifle_Jump_Fall_Loop");
 	const TCHAR* const LandPath = TEXT("/Game/Characters/Mannequins/Anims/Rifle/Jump/MM_Rifle_Jump_Fall_Land.MM_Rifle_Jump_Fall_Land");
 
@@ -79,6 +100,7 @@ void ULedgeFallComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		Links->ReleaseLease(ActiveLink, GetOwner(), 0.f);
 	}
+	SetAirGravity(false);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -99,11 +121,35 @@ float ULedgeFallComponent::FeetZ() const
 	return Owner ? static_cast<float>(Owner->GetActorLocation().Z) - GetHalfHeight() : 0.f;
 }
 
+float ULedgeFallComponent::WorldGravity() const
+{
+	const UWorld* World = GetWorld();
+	return World ? FMath::Abs(World->GetGravityZ()) : 980.f;
+}
+
 float ULedgeFallComponent::Gravity() const
 {
+	return FallRules::AirGravity(WorldGravity(), FallRules::GetConfig());
+}
+
+void ULedgeFallComponent::SetAirGravity(bool bOn)
+{
 	const ACharacter* Character = GetCharacter();
-	const UCharacterMovementComponent* Movement = Character ? Character->GetCharacterMovement() : nullptr;
-	return Movement ? FMath::Abs(Movement->GetGravityZ()) : 980.f;
+	UCharacterMovementComponent* Movement = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!Movement || bOn == bAirGravityOn || (bOn && LedgeFallInternal::CVarFallAirGravity.GetValueOnGameThread() <= 0))
+	{
+		return;
+	}
+	if (bOn)
+	{
+		SavedGravityScale = Movement->GravityScale;
+		Movement->GravityScale = SavedGravityScale * FMath::Max(0.1f, FallRules::GetConfig().AirGravityScale);
+	}
+	else
+	{
+		Movement->GravityScale = SavedGravityScale;
+	}
+	bAirGravityOn = bOn;
 }
 
 UDropLinkSubsystem* ULedgeFallComponent::GetLinks() const
@@ -114,7 +160,12 @@ UDropLinkSubsystem* ULedgeFallComponent::GetLinks() const
 float ULedgeFallComponent::GetTakeoffCap() const
 {
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetOwner());
-	const float Cap = Operative ? Operative->GetSprintSpeedCap() : FallRules::GetConfig().TakeoffMaxSpeedCms;
+	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetOwner());
+	const FallRules::FFallConfig& Config = FallRules::GetConfig();
+	// A jumping enemy (the hound, the cutter) pounces off the edge (enemy_drops.jumper_max_speed_cms).
+	const float Cap = Operative ? Operative->GetSprintSpeedCap()
+		: Enemy && Enemy->GetDropLinkUse() == FallRules::EEnemyDropUse::Jumper ? FMath::Max(Config.TakeoffMaxSpeedCms, Config.JumperTakeoffMaxSpeedCms)
+		: Config.TakeoffMaxSpeedCms;
 	return Cap * FMath::Max(0.f, TakeoffSpeedScale);
 }
 
@@ -151,6 +202,12 @@ void ULedgeFallComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	StateTime += DeltaTime;
+	UpdateAnimPhase(DeltaTime);
+	if (bPendingFallKnockdown)
+	{
+		bPendingFallKnockdown = false;
+		StartFallKnockdown(EKnockdownDirection::Back, EKnockdownCause::Fall);
+	}
 	if (PendingLink != INDEX_NONE)
 	{
 		StartDrop();
@@ -162,6 +219,12 @@ void ULedgeFallComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		if (bTrackingOtherFall)
 		{
 			PeakFeetZ = FMath::Max(PeakFeetZ, FeetZ());
+			// Walked / pushed off a ledge: the same faster fall once it is a real fall (40 cm down) - never on a stair step's micro-fall
+			// (that broke a stair walk: LevelGenRampSmoke, 2026-11-03).
+			if (LedgeFallInternal::CVarFallAirGravity.GetValueOnGameThread() >= 2 && PeakFeetZ - FeetZ() > LedgeFallInternal::OtherFallGravityDropCm)
+			{
+				SetAirGravity(true);
+			}
 		}
 		break;
 	case ELedgeFallState::Waiting: TickWaiting(DeltaTime); break;
@@ -375,6 +438,7 @@ void ULedgeFallComponent::StartDrop()
 	++DropCount;
 	LastAirSpeed = 0.f;
 	bPlayedFallClip = false;
+	bLastFallAnimFalling = false;
 	EnterState(ELedgeFallState::RunUp);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s drops off link %d (%s -> %s, out %s) from %s: %.0f cm down, edge %.0f / lower surface %.0f..%.0f cm out; approach %.0f cm/s, cap %.0f -> run-up %.0f cm/s, lands at %.0f cm (%s)"),
 		*GetNameSafe(Character), Index, *Link->Start.ToCompactString(), *Link->End.ToCompactString(), *Link->Dir.ToCompactString(), *Character->GetActorLocation().ToCompactString(),
@@ -429,6 +493,7 @@ void ULedgeFallComponent::TickRunUp(float DeltaTime)
 
 void ULedgeFallComponent::BeginAirborne()
 {
+	SetAirGravity(true); // the falls look 1.5x faster (air.gravity_scale)
 	PeakFeetZ = FMath::Max(PeakFeetZ, FeetZ());
 	EnterState(ELedgeFallState::Airborne);
 	SetRootMotionIgnored(true);
@@ -466,11 +531,8 @@ void ULedgeFallComponent::Land()
 	}
 	const FallRules::FFallConfig& Config = FallRules::GetConfig();
 	const float LandFeet = FeetZ();
-	LastFallHeight = FMath::Max(0.f, PeakFeetZ - LandFeet);
-	LastFallDamage = FallRules::FallDamage(LastFallHeight, Config);
+	const float Height = FMath::Max(0.f, PeakFeetZ - LandFeet);
 	LastFallKind = Kind;
-	LastLandingLocation = Character->GetActorLocation() - FVector(0.f, 0.f, GetHalfHeight());
-	++LandingCount;
 	UDropLinkSubsystem* Links = GetLinks();
 	const FDropLink* Link = Links ? Links->GetLink(ActiveLink) : nullptr;
 	bLastLandedOnTarget = Link && FMath::Abs(LandFeet - Link->End.Z) <= 60.f;
@@ -479,39 +541,73 @@ void ULedgeFallComponent::Land()
 	UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
 	Movement->Velocity = FVector(Movement->Velocity.X * 0.3f, Movement->Velocity.Y * 0.3f, Movement->Velocity.Z);
 	RestoreMovement();
-	UHealthComponent* Health = Character->FindComponentByClass<UHealthComponent>();
-	UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s landed after a %.0f cm %s: %.1f fall damage%s (run-up %.0f cm/s, air speed %.0f cm/s%s)"), *GetNameSafe(Character),
-		LastFallHeight, LedgeFallInternal::KindName(Kind), LastFallDamage, bKnockdownOnLanding ? TEXT(", knocked down") : TEXT(""), PlannedSpeed, LastAirSpeed,
+	const FallRules::FFallVerdict Verdict = ApplyLanding(*Character, Height);
+	const UHealthComponent* Health = Character->FindComponentByClass<UHealthComponent>();
+	const bool bAlive = !Health || Health->IsAlive();
+	const bool bKnockdown = bKnockdownOnLanding || (Verdict.bKnockdown && bAlive);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s landed after a %.0f cm %s: %.1f fall damage%s%s (run-up %.0f cm/s, air speed %.0f cm/s%s)"), *GetNameSafe(Character),
+		LastFallHeight, LedgeFallInternal::KindName(Kind), FMath::Min(LastFallDamage, 99999.f),
+		Verdict.Outcome == FallRules::EFallOutcome::Lethal ? TEXT(", LETHAL") : Verdict.Outcome == FallRules::EFallOutcome::HeavyWound ? TEXT(", a heavy wound") : TEXT(""),
+		bKnockdown ? TEXT(", knocked down") : TEXT(""), PlannedSpeed, LastAirSpeed,
 		Link ? (bLastLandedOnTarget ? TEXT(", on the link's lower surface") : TEXT(", MISSED the link's lower surface")) : TEXT(""));
-	if (Health && Health->IsAlive() && LastFallDamage > 0.f)
-	{
-		Health->ApplyDirectHealthLoss(LastFallDamage, TEXT("Fall"));
-		if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Character))
-		{
-			UFloatingTextSubsystem::SpawnAboveOperative(Operative, FString::Printf(TEXT("FALL -%d"), FMath::RoundToInt(FMath::Min(LastFallDamage, 999.f))),
-				FLinearColor(1.f, 0.45f, 0.15f));
-		}
-	}
 	if (Links && ActiveLink != INDEX_NONE)
 	{
 		Links->ReleaseLease(ActiveLink, Character, Config.LeaseHoldAfterLandingSeconds);
 	}
-	if (bKnockdownOnLanding)
+	if (bKnockdown)
 	{
-		// The knockdown that threw him plays now (by the normal rules: the immunity, the death while down).
-		const EKnockdownDirection Side = KnockdownSide;
-		const EKnockdownCause Cause = KnockdownCause;
+		// The knockdown that threw him plays now (by the normal rules: the immunity, the death while down); a heavy wound (9-12 m) floors him the
+		// same way (user decision 2026-11-03): he lies for the knockdown's downed time, then gets up.
+		const EKnockdownDirection Side = bKnockdownOnLanding ? KnockdownSide : EKnockdownDirection::Back;
+		const EKnockdownCause Cause = bKnockdownOnLanding ? KnockdownCause : EKnockdownCause::Fall;
 		bKnockdownOnLanding = false;
 		Finish(false);
-		if (UKnockdownComponent* Knockdown = Character->FindComponentByClass<UKnockdownComponent>(); Knockdown && (!Health || Health->IsAlive()))
-		{
-			TGuardValue<bool> NoSecondThrow(bLandingKnockdown, true);
-			Knockdown->ForceKnockDown(Side, Cause);
-		}
+		StartFallKnockdown(Side, Cause);
 		return;
 	}
 	PlayLandClip();
 	EnterState(ELedgeFallState::Landed);
+}
+
+FallRules::FFallVerdict ULedgeFallComponent::ApplyLanding(ACharacter& Character, float Height)
+{
+	UHealthComponent* Health = Character.FindComponentByClass<UHealthComponent>();
+	const FallRules::FFallVerdict Verdict = FallRules::JudgeFallForBody(Height, Health ? Health->GetMaxHealth() : 0.f, FallRules::GetConfig());
+	LastFallHeight = Height;
+	LastFallDamage = Verdict.Damage;
+	LastFallOutcome = Verdict.Outcome;
+	LastLandingLocation = Character.GetActorLocation() - FVector(0.f, 0.f, GetHalfHeight());
+	++LandingCount;
+	HeavyWoundCount += Verdict.Outcome == FallRules::EFallOutcome::HeavyWound ? 1 : 0;
+	LethalFallCount += Verdict.Outcome == FallRules::EFallOutcome::Lethal ? 1 : 0;
+	if (Health && Health->IsAlive() && Verdict.Damage > 0.f)
+	{
+		Health->ApplyDirectHealthLoss(Verdict.Damage, TEXT("Fall"));
+		if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(&Character))
+		{
+			const FString Text = Verdict.Outcome == FallRules::EFallOutcome::Lethal ? FString(TEXT("FATAL FALL"))
+				: FString::Printf(TEXT("%s -%d"), Verdict.Outcome == FallRules::EFallOutcome::HeavyWound ? TEXT("HEAVY FALL") : TEXT("FALL"),
+					FMath::RoundToInt(FMath::Min(Verdict.Damage, 999.f)));
+			UFloatingTextSubsystem::SpawnAboveOperative(Operative, Text, FLinearColor(1.f, 0.45f, 0.15f));
+		}
+	}
+	return Verdict;
+}
+
+void ULedgeFallComponent::StartFallKnockdown(EKnockdownDirection Side, EKnockdownCause Cause)
+{
+	ACharacter* Character = GetCharacter();
+	const UHealthComponent* Health = Character ? Character->FindComponentByClass<UHealthComponent>() : nullptr;
+	UKnockdownComponent* Knockdown = Character ? Character->FindComponentByClass<UKnockdownComponent>() : nullptr;
+	if (!Knockdown || (Health && !Health->IsAlive()))
+	{
+		return;
+	}
+	TGuardValue<bool> NoSecondThrow(bLandingKnockdown, true); // the knockdown at the landing spot never throws him over another edge
+	if (!Knockdown->ForceKnockDown(Side, Cause))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s: no knockdown on landing (this body cannot be knocked down now)"), *GetNameSafe(Character));
+	}
 }
 
 void ULedgeFallComponent::TickLanded(float DeltaTime)
@@ -524,6 +620,7 @@ void ULedgeFallComponent::TickLanded(float DeltaTime)
 
 void ULedgeFallComponent::RestoreMovement()
 {
+	SetAirGravity(false);
 	ACharacter* Character = GetCharacter();
 	if (Character && bMovementSaved)
 	{
@@ -636,7 +733,8 @@ bool ULedgeFallComponent::TryKnockbackFall(EKnockdownDirection Side, EKnockdownC
 		const FVector From = Base + FVector(0.f, 0.f, Height);
 		bObstacle |= World->SweepSingleByChannel(Wall, From, From + Dir * (EdgeCm + 15.f), FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(12.f), Params);
 	}
-	if (!FallRules::KnockbackGoesOver(EdgeCm, bObstacle, DropCm, Radius, Gravity(), Config))
+	// The world's gravity here: the throw's speeds go up by sqrt(air.gravity_scale) below, so its arc (and reach) is the unscaled one.
+	if (!FallRules::KnockbackGoesOver(EdgeCm, bObstacle, DropCm, Radius, WorldGravity(), Config))
 	{
 		UE_LOG(LogCodexTactics, Verbose, TEXT("[Fall] %s: no knockback fall (edge %.0f cm, drop %.0f cm, parapet %d)"), *GetNameSafe(Character), EdgeCm, DropCm, bObstacle ? 1 : 0);
 		return false;
@@ -658,14 +756,16 @@ bool ULedgeFallComponent::TryKnockbackFall(EKnockdownDirection Side, EKnockdownC
 	KnockdownCause = Cause;
 	StartFeetZ = Feet;
 	PeakFeetZ = Feet;
-	PlannedSpeed = Config.KnockbackSpeedCms;
+	PlannedSpeed = Config.KnockbackSpeedCms * FallRules::KnockbackLaunchScale(Config);
 	bPlannedReach = false;
 	LastAirSpeed = 0.f;
 	bPlayedFallClip = false;
+	bLastFallAnimFalling = false;
 	++KnockbackFallCount;
 	BeginAirborne(); // the state first: the movement mode change below is this component's own fall
 	Movement->SetMovementMode(MOVE_Falling);
-	Movement->Velocity = Dir * Config.KnockbackSpeedCms + FVector(0.f, 0.f, Config.KnockbackUpCms);
+	const float Launch = FallRules::KnockbackLaunchScale(Config);
+	Movement->Velocity = (Dir * Config.KnockbackSpeedCms + FVector(0.f, 0.f, Config.KnockbackUpCms)) * Launch;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s is thrown over the edge %.0f cm away (%.0f cm drop, cause %d)"), *GetNameSafe(Character), EdgeCm, DropCm,
 		static_cast<int32>(Cause));
 	return true;
@@ -675,6 +775,10 @@ bool ULedgeFallComponent::TryKnockbackFall(EKnockdownDirection Side, EKnockdownC
 
 void ULedgeFallComponent::HandleMovementModeChanged(ACharacter* Character, EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
 {
+	if (Character && !Character->GetCharacterMovement()->IsFalling() && State != ELedgeFallState::Airborne)
+	{
+		SetAirGravity(false); // a fall of any kind is over
+	}
 	if (!Character || State != ELedgeFallState::None)
 	{
 		bTrackingOtherFall = false;
@@ -690,6 +794,7 @@ void ULedgeFallComponent::HandleMovementModeChanged(ACharacter* Character, EMove
 	if (Movement->IsFalling() && bWasGround && !bIgnored)
 	{
 		bTrackingOtherFall = true;
+		bLastFallAnimFalling = false;
 		StartFeetZ = FeetZ();
 		PeakFeetZ = StartFeetZ;
 		return;
@@ -703,24 +808,45 @@ void ULedgeFallComponent::HandleMovementModeChanged(ACharacter* Character, EMove
 		{
 			return;
 		}
-		LastFallHeight = Height;
-		LastFallDamage = FallRules::FallDamage(Height, Config);
 		LastFallKind = ELedgeFallKind::Other;
-		LastLandingLocation = Character->GetActorLocation() - FVector(0.f, 0.f, GetHalfHeight());
 		bLastLandedOnTarget = false;
-		++LandingCount;
-		UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s landed after a %.0f cm fall: %.1f fall damage"), *GetNameSafe(Character), Height, LastFallDamage);
-		UHealthComponent* Health = Character->FindComponentByClass<UHealthComponent>();
-		if (Health && Health->IsAlive() && LastFallDamage > 0.f)
-		{
-			Health->ApplyDirectHealthLoss(LastFallDamage, TEXT("Fall"));
-			if (Operative)
-			{
-				UFloatingTextSubsystem::SpawnAboveOperative(Operative, FString::Printf(TEXT("FALL -%d"), FMath::RoundToInt(FMath::Min(LastFallDamage, 999.f))),
-					FLinearColor(1.f, 0.45f, 0.15f));
-			}
-		}
+		const FallRules::FFallVerdict Verdict = ApplyLanding(*Character, Height);
+		const UHealthComponent* Health = Character->FindComponentByClass<UHealthComponent>();
+		UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s landed after a %.0f cm fall: %.1f fall damage%s"), *GetNameSafe(Character), Height, FMath::Min(LastFallDamage, 99999.f),
+			Verdict.Outcome == FallRules::EFallOutcome::Lethal ? TEXT(", LETHAL") : Verdict.Outcome == FallRules::EFallOutcome::HeavyWound ? TEXT(", a heavy wound: knocked down") : TEXT(""));
+		// A heavy wound: the knockdown starts on the next tick (not inside the movement mode change).
+		bPendingFallKnockdown = Verdict.bKnockdown && (!Health || Health->IsAlive());
 	}
+}
+
+void ULedgeFallComponent::UpdateAnimPhase(float DeltaTime)
+{
+	const ACharacter* Character = GetCharacter();
+	const UCharacterMovementComponent* Movement = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!Movement)
+	{
+		return;
+	}
+	// The ladder, a vault, a pounce and a vehicle have their own animation: no fall state then.
+	const ULadderClimbComponent* Ladder = Character->FindComponentByClass<ULadderClimbComponent>();
+	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Character);
+	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Character);
+	const bool bOwnAnimation = (Ladder && Ladder->IsBusy()) || (Operative && Operative->IsVaulting()) || (Enemy && Enemy->IsJumpAttacking())
+		|| VehicleQueries::IsMounted(Character);
+	const bool bDropAirborne = State == ELedgeFallState::Airborne && !bOwnAnimation;
+	FallingSeconds = Movement->IsFalling() && !bOwnAnimation ? FallingSeconds + DeltaTime : 0.f;
+	const FallRules::FFallConfig& Config = FallRules::GetConfig();
+	const bool bFallingNow = bDropAirborne || (FallingSeconds > 0.f && FallingSeconds >= Config.AnimFallMinSeconds);
+	if (AnimPhase == FallRules::EFallAnimPhase::Falling && !bFallingNow)
+	{
+		SecondsSinceFallEnded = 0.f;
+	}
+	else if (SecondsSinceFallEnded >= 0.f)
+	{
+		SecondsSinceFallEnded = bFallingNow || SecondsSinceFallEnded > Config.AnimLandSeconds + 1.f ? -1.f : SecondsSinceFallEnded + DeltaTime;
+	}
+	AnimPhase = FallRules::FallAnimPhase(bDropAirborne, FallingSeconds, SecondsSinceFallEnded, Config);
+	bLastFallAnimFalling |= AnimPhase == FallRules::EFallAnimPhase::Falling;
 }
 
 // --- Clips ---------------------------------------------------------------------------------------------------------------
@@ -752,11 +878,27 @@ void ULedgeFallComponent::SetRootMotionIgnored(bool bIgnored)
 	}
 }
 
+bool ULedgeFallComponent::UseSlotClips() const
+{
+	const int32 Mode = LedgeFallInternal::CVarFallSlotClips.GetValueOnGameThread();
+	if (Mode <= 0 || (FallLoopClip.IsNull() && LandClip.IsNull()))
+	{
+		return false;
+	}
+	if (Mode == 1)
+	{
+		return true;
+	}
+	const ACharacter* Character = GetCharacter();
+	const UAnimInstance* Anim = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
+	return Anim && Anim->GetStateMachineIndex(LedgeFallInternal::FallStateMachineName) == INDEX_NONE;
+}
+
 void ULedgeFallComponent::PlayFallLoop()
 {
 	const ACharacter* Character = GetCharacter();
 	UAnimInstance* Anim = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
-	UAnimSequenceBase* Clip = LoadClip(FallLoopClip);
+	UAnimSequenceBase* Clip = UseSlotClips() ? LoadClip(FallLoopClip) : nullptr;
 	if (!Anim || !Clip)
 	{
 		return;
@@ -780,7 +922,7 @@ void ULedgeFallComponent::PlayLandClip()
 {
 	const ACharacter* Character = GetCharacter();
 	UAnimInstance* Anim = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
-	UAnimSequenceBase* Clip = LoadClip(LandClip);
+	UAnimSequenceBase* Clip = UseSlotClips() ? LoadClip(LandClip) : nullptr;
 	if (Anim && Clip)
 	{
 		LandMontage = Anim->PlaySlotAnimationAsDynamicMontage(Clip, MontageSlot, 0.05f, 0.2f, 1.f, 1);

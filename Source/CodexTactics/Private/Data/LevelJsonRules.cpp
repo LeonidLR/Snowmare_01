@@ -433,7 +433,25 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	// UE-only (falls and drops 2026-11-03): the generated drop nav links on this map.
 	{
 		bool bDropLinks = false;
-		Config.bDropLinks = Root->TryGetBoolField(TEXT("drop_links"), bDropLinks) && bDropLinks;
+		const bool bHasDropLinks = Root->TryGetBoolField(TEXT("drop_links"), bDropLinks);
+		Config.bDropLinks = bHasDropLinks && bDropLinks;
+		Config.bDropLinksOff = bHasDropLinks && !bDropLinks;
+		const TArray<TSharedPtr<FJsonValue>>* Boxes = nullptr;
+		if (Root->TryGetArrayField(TEXT("drop_link_exclusions"), Boxes))
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Boxes)
+			{
+				const TSharedPtr<FJsonObject> Box = Value.IsValid() ? Value->AsObject() : nullptr;
+				const TArray<TSharedPtr<FJsonValue>>* Min = nullptr;
+				const TArray<TSharedPtr<FJsonValue>>* Max = nullptr;
+				if (Box && Box->TryGetArrayField(TEXT("min"), Min) && Box->TryGetArrayField(TEXT("max"), Max) && Min->Num() == 3 && Max->Num() == 3)
+				{
+					const FVector A((*Min)[0]->AsNumber(), (*Min)[1]->AsNumber(), (*Min)[2]->AsNumber());
+					const FVector B((*Max)[0]->AsNumber(), (*Max)[1]->AsNumber(), (*Max)[2]->AsNumber());
+					Config.DropLinkExclusions.Add(FBox(A.ComponentMin(B), A.ComponentMax(B)));
+				}
+			}
+		}
 	}
 
 	// UE-only (minimap 2026-10-18): the upper floors' walking heights and the mapped area.

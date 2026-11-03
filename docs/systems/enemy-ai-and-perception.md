@@ -167,3 +167,22 @@ combat-lab ambush's concealed relocation route; the next leg's MoveTo replaces t
 on arrival), never a teleport; without it the post moves as before (it stands there). `GetBaseWalkSpeed()` gives the run's pace. The routes,
 the spotting and the "following patrol" (a former ambush whose guard post is walked after the squad's leader) are `UCombatPressureSubsystem`'s
 - `docs/design/COMBAT_LAB.md` 2.1.
+
+## Enemies take the drop links, per type (user decision 2026-11-03, branch fix/falls-followup)
+
+Since 2026-11-03 every map has generated one-way drop nav links off its roof / bridge / ledge edges (`UDropLinkSubsystem`,
+`docs/systems/stances-and-movement.md` "Falls and drops"). The enemies path through them by type - data `Content/Data/Movement/falls.json`
+`enemy_drops.<archetype>` (0 never, 1 free drops, 2 jumper; `FallRules::EnemyDropUse`), a Blueprint may override it
+(`AEnemyCharacter::DropLinkUseOverride`: From falls.json / Never / Free drops / Jumper):
+
+| Type | Use | Nav filter (`DropLinkNavigation::EnemyFilterClass`) |
+|---|---|---|
+| Frost Hound, Cutter (the pouncers) | jumper: every drop at its area's cost, run-up up to `enemy_drops.jumper_max_speed_cms` 900 | `UNavFilter_EnemyDropJumper` |
+| Base / Frostbitten (zombies, the PMC fighters and the Military Zombie bodies), Marksman | free drops; a hurting one costs `enemy_drops.hurt_entering_cm` 60 m extra | `UNavFilter_EnemyDropFree` (`...Ladder` for climbers) |
+| Brute, Spitter, Cryo Drone | never | `UNavFilter_NoVault` / `UNavFilter_NoVaultLadder` |
+
+`AEnemyAIController::RefreshNavigationFilter` picks the filter (on possession and after BeginPlay). When its path reaches a link the enemy's
+`ULedgeFallComponent` takes the body over like an operative's (run-up, flight keeping the speed, landing, the fall rules - heavy wound 9-12 m with the
+knockdown, dead from 12 m) and resumes the path's goal (`ResumeMoveAfterLadder`); `TickBehavior` waits meanwhile. Checked by `FallDropSmoke` stages
+10-12 (a Frostbitten and a hound drop off the ruin roof after the leader on `L_Gen_Depot_1`; a Brute never does). Open: wider "leap" gaps only a jumper
+may take (a separate area the operatives' default filter would have to exclude).

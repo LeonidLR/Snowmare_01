@@ -29,9 +29,10 @@ namespace DropLinkGenInternal
 {
 	static TAutoConsoleVariable<int32> CVarFallDropLinks(
 		TEXT("Codex.Fall.DropLinks"),
-		1,
-		TEXT("Generated drop nav links (2026-11-03, docs/systems/stances-and-movement.md 'Falls and drops'): 0 none; 1 (default) on maps whose level JSON says ")
-		TEXT("\"drop_links\": true (the level generator's maps); 2 on every map. Read when the level starts (CodexTactics.DropLinks regenerates)."),
+		2,
+		TEXT("Generated drop nav links (2026-11-03, docs/systems/stances-and-movement.md 'Falls and drops'): 0 none; 1 only on maps whose level JSON says ")
+		TEXT("\"drop_links\": true; 2 (default, user decision 2026-11-03) on every map unless its level JSON says \"drop_links\": false. ")
+		TEXT("Read when the level starts (CodexTactics.DropLinks regenerates)."),
 		ECVF_Default);
 
 	/** The operatives' capsule for the flight arc check (radius / half height, a little slimmer than the body). */
@@ -88,14 +89,15 @@ bool UDropLinkSubsystem::IsEnabledForWorld() const
 	{
 		return false;
 	}
-	if (Mode >= 2)
-	{
-		return true;
-	}
+	const ULevelConfigAsset* Level = GetLevelConfig();
+	return Mode >= 2 ? !(Level && Level->Config.bDropLinksOff) : Level && Level->Config.bDropLinks;
+}
+
+const ULevelConfigAsset* UDropLinkSubsystem::GetLevelConfig() const
+{
 	UWorld* World = GetWorld();
 	ACodexTacticsGameMode* GameMode = World ? World->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr;
-	const ULevelConfigAsset* Level = GameMode ? GameMode->PeekLevelConfig() : nullptr;
-	return Level && Level->Config.bDropLinks;
+	return GameMode ? GameMode->PeekLevelConfig() : nullptr;
 }
 
 void UDropLinkSubsystem::OnWorldBeginPlay(UWorld& InWorld)
@@ -104,7 +106,7 @@ void UDropLinkSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	FallRules::ReloadConfig();
 	if (!IsEnabledForWorld())
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("[DropLinks] off on %s (Codex.Fall.DropLinks %d, level JSON \"drop_links\" not set)"), *InWorld.GetMapName(),
+		UE_LOG(LogCodexTactics, Display, TEXT("[DropLinks] off on %s (Codex.Fall.DropLinks %d, level JSON \"drop_links\")"), *InWorld.GetMapName(),
 			DropLinkGenInternal::CVarFallDropLinks.GetValueOnGameThread());
 		return;
 	}
@@ -190,6 +192,10 @@ int32 UDropLinkSubsystem::Generate()
 	TArray<FVector> KeptStarts;
 	TArray<float> KeptLandZ;
 	int32 Verdicts[static_cast<int32>(EProfileVerdict::Count)] = {};
+	// The level JSON's local suppressions (an unwanted shortcut): no link starts or lands in them.
+	const ULevelConfigAsset* Level = GetLevelConfig();
+	const TArray<FBox> Exclusions = Level ? Level->Config.DropLinkExclusions : TArray<FBox>();
+	int32 Excluded = 0;
 	Sampled = 0;
 	const int32 MaxLinks = FMath::Max(1, FMath::RoundToInt(Config.MaxLinks));
 	const float Spacing = FMath::Max(30.f, Config.LinkSpacingCm);
@@ -223,6 +229,11 @@ int32 UDropLinkSubsystem::Generate()
 			EProfileVerdict Verdict = EProfileVerdict::NoEdge;
 			if (BuildLinkAt(Point, Normal, Config, Params, Link, Verdict) && !IsDuplicateStart(Link.Start, static_cast<float>(Link.End.Z), KeptStarts, KeptLandZ, Spacing))
 			{
+				if (Exclusions.ContainsByPredicate([&Link](const FBox& Box) { return Box.IsInsideOrOn(Link.Start) || Box.IsInsideOrOn(Link.End); }))
+				{
+					++Excluded;
+					continue;
+				}
 				KeptStarts.Add(Link.Start);
 				KeptLandZ.Add(static_cast<float>(Link.End.Z));
 				Links.Add(Link);
@@ -264,9 +275,9 @@ int32 UDropLinkSubsystem::Generate()
 		Hurt += Link.bHurt ? 1 : 0;
 	}
 	UE_LOG(LogCodexTactics, Display,
-		TEXT("[DropLinks] %s: %d drop links (%d hurt) from %d edge segments, %d points probed in %.0f ms%s - rejected: no edge %d, blocked %d, low step %d, gap %d, ")
-		TEXT("no lower surface %d, too shallow %d, unreachable %d, no landing %d, arc blocked %d"),
-		*World->GetMapName(), Links.Num(), Hurt, Edges.Num() / 2, Sampled, GenerationMs, bCapped ? TEXT(" (CAPPED at link.max_links)") : TEXT(""),
+		TEXT("[DropLinks] %s: %d drop links (%d hurt) from %d edge segments, %d points probed in %.0f ms%s - rejected: level JSON exclusions %d, no edge %d, ")
+		TEXT("blocked %d, low step %d, gap %d, no lower surface %d, too shallow %d, unreachable %d, no landing %d, arc blocked %d"),
+		*World->GetMapName(), Links.Num(), Hurt, Edges.Num() / 2, Sampled, GenerationMs, bCapped ? TEXT(" (CAPPED at link.max_links)") : TEXT(""), Excluded,
 		Verdicts[static_cast<int32>(EProfileVerdict::NoEdge)], Verdicts[static_cast<int32>(EProfileVerdict::Blocked)], Verdicts[static_cast<int32>(EProfileVerdict::LowStep)],
 		Verdicts[static_cast<int32>(EProfileVerdict::GapTooWide)], Verdicts[static_cast<int32>(EProfileVerdict::NoLowerSurface)],
 		Verdicts[static_cast<int32>(EProfileVerdict::TooShallow)], Verdicts[static_cast<int32>(EProfileVerdict::Unreachable)],
@@ -385,7 +396,7 @@ bool UDropLinkSubsystem::BuildLinkAt(const FVector& EdgePoint, const FVector& Ed
 		return false;
 	}
 	// A run-up at the reference speed must reach the lower surface.
-	const float Gravity = FMath::Abs(World->GetGravityZ());
+	const float Gravity = AirGravity(World->GetGravityZ(), Config); // the ledge fall's own gravity (air.gravity_scale)
 	const FTakeoffPlan Plan = PlanTakeoff(0.f, Config.ReferenceSpeedCms, Profile.EdgeCm, Profile.NearCm, Profile.FarCm, Profile.DropCm, Gravity, Config);
 	if (!Plan.bReaches)
 	{

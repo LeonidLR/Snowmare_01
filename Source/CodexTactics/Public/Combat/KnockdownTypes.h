@@ -42,5 +42,7 @@ enum class EKnockdownCause : uint8
 	/** F-1 grenade / fuel barrel blast close by. */
 	Explosion UMETA(DisplayName = "Explosion"),
 	/** A single heavy hit (>= the damage threshold), e.g. a point-blank shotgun blast. */
-	HeavyHit UMETA(DisplayName = "Heavy Hit")
+	HeavyHit UMETA(DisplayName = "Heavy Hit"),
+	/** A fall of 9-12 m (a heavy wound: he lies in the knockdown pose for its downed time; ULedgeFallComponent, 2026-11-03). */
+	Fall UMETA(DisplayName = "Fall")
 };

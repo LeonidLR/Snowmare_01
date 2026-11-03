@@ -2,6 +2,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
+#include "Falls/DropLinkNavigation.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/VaultNavigation.h"
 #include "Ladders/LadderNavigation.h"
@@ -47,7 +48,9 @@ void AEnemyAIController::OnPossess(APawn* InPawn)
 void AEnemyAIController::RefreshNavigationFilter()
 {
 	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetPawn());
-	DefaultNavigationFilterClass = Enemy && Enemy->CanClimbLadders() ? UNavFilter_NoVaultLadder::StaticClass() : UNavFilter_NoVault::StaticClass();
+	// The drop links (user decision 2026-11-03): open per enemy type (falls.json enemy_drops.<archetype> / the Blueprint's override).
+	DefaultNavigationFilterClass = DropLinkNavigation::EnemyFilterClass(Enemy ? Enemy->GetDropLinkUse() : FallRules::EEnemyDropUse::None,
+		Enemy && Enemy->CanClimbLadders());
 }
 
 FPathFollowingRequestResult AEnemyAIController::MoveTo(const FAIMoveRequest& MoveRequest, FNavPathSharedPtr* OutPath)

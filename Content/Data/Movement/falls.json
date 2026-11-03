@@ -1,10 +1,14 @@
 {
-  "comment": "Falls from heights, running drops off an edge (generated drop nav links) and knockback falls (game designer items 6 / 10 / 11a, 2026-11-03; docs/systems/stances-and-movement.md 'Falls and drops'). Read by FallRules::GetConfig (Source/CodexTactics/Public/Falls/FallRules.h) at game start; FFallConfig's defaults mirror these values (test CodexTactics.Falls.Rules.TuningFileMirrorsDefaults). Distances cm, speeds cm/s, times s. DEFAULTS PENDING the game designer's confirmation: the ladder-fall damage curve with one 3 m level free (safe 320 cm, 0.1 HP / cm, max 40, no lethal height), links for drops of 1.5-6.5 m with a gap of at most 2.5 m. The pathfinder's extra cost of a drop is in the nav areas (UNavArea_Drop / UNavArea_DropHurt: DefaultCost / FixedAreaEnteringCost, overridable in DefaultEngine.ini). Console: Codex.Fall.DropLinks 0 off / 1 per level JSON \"drop_links\" / 2 everywhere.",
+  "comment": "Falls from heights, running drops off an edge (generated drop nav links) and knockback falls (game designer items 6 / 10 / 11a, 2026-11-03; docs/systems/stances-and-movement.md 'Falls and drops'). Read by FallRules::GetConfig (Source/CodexTactics/Public/Falls/FallRules.h) at game start; FFallConfig's defaults mirror these values (test CodexTactics.Falls.Rules.TuningFileMirrorsDefaults). Distances cm, speeds cm/s, times s. Landing (user decision 2026-11-03): below damage.heavy_height_cm (9 m) the ladder-fall curve with one 3 m level free (safe 320 cm, 0.1 HP / cm, max 40); 9-12 m a heavy wound (damage.heavy_min 60 at 9 m .. damage.heavy_max 80 at 12 m capped at damage.heavy_max_health_fraction 0.85 of the body's max health - anyone at full health survives - and the knockdown pose on landing); 12 m and more (damage.lethal_height_cm) kills; operatives and enemies alike. Links for drops of 1.5-6.5 m with a gap of at most 2.5 m. enemy_drops.<archetype>: 0 never, 1 free drops (a hurting one only when there is no other way: + enemy_drops.hurt_entering_cm), 2 jumper (every drop, a pouncing run-up). air.gravity_scale 2.25: gravity x 2.25 in a ledge fall (falls 1.5x faster, user 2026-11-03; the run-up plan / link reach use it, a knockback throw's speeds x 1.5 keep its arc). anim.*: the operative ABP's Falling / Landing states. The pathfinder's extra cost of a drop is in the nav areas (UNavArea_Drop / UNavArea_DropHurt: DefaultCost / FixedAreaEnteringCost, overridable in DefaultEngine.ini). Console: Codex.Fall.DropLinks 0 off / 1 per level JSON \"drop_links\" / 2 (default) everywhere; a level JSON \"drop_link_exclusions\" box list suppresses links locally.",
   "params": {
     "damage.safe_height_cm": 320,
     "damage.per_cm": 0.1,
     "damage.max": 40,
-    "damage.lethal_height_cm": 0,
+    "damage.heavy_height_cm": 900,
+    "damage.heavy_min": 60,
+    "damage.heavy_max": 80,
+    "damage.heavy_max_health_fraction": 0.85,
+    "damage.lethal_height_cm": 1200,
     "track.min_fall_cm": 50,
     "link.min_drop_cm": 150,
     "link.max_drop_cm": 650,
@@ -21,6 +25,7 @@
     "takeoff.speed_margin": 1.1,
     "takeoff.max_speed_cms": 725,
     "takeoff.runup_timeout_s": 1.5,
+    "air.gravity_scale": 2.25,
     "air.timeout_s": 6,
     "land.settle_s": 0.35,
     "lease.radius_cm": 220,
@@ -29,6 +34,18 @@
     "knockback.speed_cms": 420,
     "knockback.up_cms": 200,
     "knockback.parapet_height_cm": 80,
-    "knockback.min_fall_cm": 150
+    "knockback.min_fall_cm": 150,
+    "anim.fall_min_s": 0.25,
+    "anim.land_s": 0.45,
+    "enemy_drops.base": 1,
+    "enemy_drops.frost_hound": 2,
+    "enemy_drops.spitter": 0,
+    "enemy_drops.brute": 0,
+    "enemy_drops.frostbitten": 1,
+    "enemy_drops.cutter": 2,
+    "enemy_drops.cryo_drone": 0,
+    "enemy_drops.marksman": 1,
+    "enemy_drops.hurt_entering_cm": 6000,
+    "enemy_drops.jumper_max_speed_cms": 900
   }
 }

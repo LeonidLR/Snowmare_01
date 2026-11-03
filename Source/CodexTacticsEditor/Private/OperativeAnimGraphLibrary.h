@@ -6,6 +6,7 @@
 
 class UAnimBlueprint;
 class UAnimMontage;
+class UAnimSequenceBase;
 class UBlendSpace;
 class USkeletalMesh;
 class USkeleton;
@@ -116,4 +117,20 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static bool SetSkeletalMeshSkeleton(USkeletalMesh* Mesh, USkeleton* Skeleton, FString& OutReport);
+
+	/**
+	 * Adds the fall states to an EXISTING operative AnimGraph without rebuilding it (the user's polish stays; 2026-11-03,
+	 * Scripts/Editor/setup_operative_fall_animation.py): the pose feeding the SlotName slot (the full-body "FullBody" one, so a knockdown /
+	 * death montage still wins) is cached as "PreFallPose" and replaced by a state machine "FallStates" - Grounded (that cached pose),
+	 * Falling (FallLoop, looping), Landing (Land, once) - whose transitions read UOperativeAnimInstance::bFallAirborne / bFallLanding /
+	 * bFallGrounded (ULedgeFallComponent decides them). Idempotent: an AnimGraph that already has "FallStates" is left alone (true).
+	 * Compiles; the caller saves.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool AddFallStateMachine(UAnimBlueprint* AnimBlueprint, FName SlotName, UAnimSequenceBase* FallLoop, UAnimSequenceBase* Land, float FallBlendIn,
+		float LandBlendIn, float GroundBlendIn, FString& OutReport);
+
+	/** One line per AnimGraph node with its pose inputs (what feeds them) - the setup scripts' report. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static FString DescribeAnimGraph(UAnimBlueprint* AnimBlueprint);
 };

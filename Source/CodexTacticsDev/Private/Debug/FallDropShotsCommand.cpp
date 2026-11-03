@@ -2,10 +2,12 @@
 // "Falls and drops", smoke FallDropSmoke):
 //   UnrealEditor.exe <uproject> /Game/Maps/Generated/L_Gen_Depot_1 -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -benchmark -fps=30
 //     -LevelJson=L_Gen_Depot_1.json -ExecCmds="CodexTactics.FallDropShots"
-// In Clear 13:00, from the game's own rendered view (an own camera, never a desktop capture), into Saved/Screenshots/FallsDrops/:
+// In Clear 13:00, from the game's own rendered view (an own camera, never a desktop capture), into Saved/Screenshots/FallsFollowup/:
 //  1. drop_marker.png - the squad on the cut's rim ordered onto the cut floor: the HUD's drop marker on the leader's path off the X_ne bridge;
-//  2. drop_midair.png - the leader sprinting off the ruin roof (+2) onto the annex roof (+1): in mid-air, the fall clip playing;
-//  3. drop_landed.png - the same a moment later, landed on the annex roof.
+//  2. drop_midair.png - the leader sprinting off the ruin roof (+2) onto the annex roof (+1): in mid-air, the ABP's FallStates "Falling" state;
+//  3. drop_landed.png - the same a moment later, landed on the annex roof;
+//  4. heavy_fall_lying.png - the leader after a walk-off from a 10.5 m test platform: a heavy wound, lying in the knockdown pose (2026-11-03);
+//  5. enemy_drop.png - a Frostbitten chasing the leader off the ruin roof through the drop link, in mid-air (2026-11-03).
 // Labels drawn in-engine. Exits when done. Godot reference: none (UE-only).
 
 #include "CoreMinimal.h"
@@ -17,7 +19,12 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "CanvasItem.h"
+#include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
+#include "Combat/EnemyRegistrySubsystem.h"
+#include "Combat/KnockdownComponent.h"
+#include "Debug/FallSmokeUtils.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Components/CapsuleComponent.h"
@@ -48,11 +55,11 @@ namespace FallDropShots
 	constexpr int32 MaxWaitFrames = 30 * 40;
 	constexpr int32 MaxFrames = 30 * 300;
 
-	enum class EShot : uint8 { Marker, MidAir, Landed };
+	enum class EShot : uint8 { Marker, MidAir, Landed, HeavyLying, EnemyDrop };
 	enum class EStep : uint8 { Warmup, Setup, Wait, Shot, Write, Done };
 
-	const EShot Shots[] = { EShot::Marker, EShot::MidAir, EShot::Landed };
-	const TCHAR* Files[] = { TEXT("drop_marker.png"), TEXT("drop_midair.png"), TEXT("drop_landed.png") };
+	const EShot Shots[] = { EShot::Marker, EShot::MidAir, EShot::Landed, EShot::HeavyLying, EShot::EnemyDrop };
+	const TCHAR* Files[] = { TEXT("drop_marker.png"), TEXT("drop_midair.png"), TEXT("drop_landed.png"), TEXT("heavy_fall_lying.png"), TEXT("enemy_drop.png") };
 
 	struct FRunner
 	{
@@ -72,6 +79,12 @@ namespace FallDropShots
 		int32 RoofLink = INDEX_NONE;
 		int32 LandingsAtSetup = 0;
 		int32 AirFrames = 0;
+		/** The heavy-wound shot: its platform and the push. */
+		TWeakObjectPtr<AStaticMeshActor> Platform;
+		bool bPushed = false;
+		int32 DownFrames = 0;
+		TWeakObjectPtr<AEnemyCharacter> Enemy;
+		FName AbpState;
 	};
 
 	TSharedPtr<FRunner> Runner;
@@ -84,6 +97,10 @@ namespace FallDropShots
 
 	void Finish()
 	{
+		if (AStaticMeshActor* Platform = Runner->Platform.Get())
+		{
+			Platform->Destroy();
+		}
 		UE_LOG(LogCodexTactics, Display, TEXT("FallDropShots RESULT: %s -> %s"), Runner->Failures == 0 ? TEXT("PASS") : TEXT("FAIL"), *Runner->Dir);
 		FCoreDelegates::OnEndFrame.Remove(Runner->EndFrameHandle);
 		UDebugDrawService::Unregister(Runner->DrawHandle);
@@ -209,6 +226,36 @@ namespace FallDropShots
 			R.Label = TEXT("L_Gen_Depot_1: an order into the cut - the path's drop off the bridge is marked (DROP 3.0 m)");
 			return true;
 		}
+		if (Shot == EShot::HeavyLying)
+		{
+			if (!Squad.IsSoloMode())
+			{
+				Squad.EnterSoloMode();
+			}
+			Squad.SetFollowersHolding(true);
+			FVector Feet;
+			if (!FallSmokeUtils::FindOpenGround(*World, FallSmokeUtils::DepotOpenSpots(), 0.f, 1250.f, Feet))
+			{
+				Check(false, TEXT("open ground for the 10.5 m test platform"));
+				return false;
+			}
+			AStaticMeshActor* Platform = FallSmokeUtils::SpawnPlatform(*World, Feet, 1050.f);
+			R.Platform = Platform;
+			if (!Platform)
+			{
+				return false;
+			}
+			FallSmokeUtils::StandOnPlatformEdge(*Leader, *Platform, FVector(1.f, 0.f, 0.f));
+			Leader->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			R.bPushed = false;
+			R.DownFrames = 0;
+			R.LandingsAtSetup = Leader->LedgeFall->GetLandingCount();
+			R.Look = Feet + FVector(260.f, 0.f, 40.f);
+			R.Eye = R.Look + FVector(250.f, -650.f, 260.f);
+			R.Fov = 55.f;
+			R.Label = TEXT("L_Gen_Depot_1: a walk-off from a 10.5 m test platform - a heavy wound (9-12 m): 70 HP, lying in the knockdown pose");
+			return true;
+		}
 		R.RoofLink = Links ? FindRoofLink(*Links) : INDEX_NONE;
 		const FDropLink* Link = Links ? Links->GetLink(R.RoofLink) : nullptr;
 		Check(Link != nullptr, TEXT("the ruin roof -> annex roof drop link"));
@@ -229,6 +276,44 @@ namespace FallDropShots
 				PutAt(*Member, OnNav(World, FVector(-1500.f + 200.f * Slot++, -6000.f, 0.f)), 0.f);
 			}
 		}
+		if (AStaticMeshActor* Platform = R.Platform.Get())
+		{
+			Platform->Destroy();
+		}
+		if (Shot == EShot::EnemyDrop)
+		{
+			// A Frostbitten (free drops) on the ruin roof sent after the leader on the annex roof: it drops through the link.
+			PutAt(*Leader, OnNav(World, Link->End + Link->Dir * 350.f), (-Link->Dir).Rotation().Yaw);
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+			UClass* Class = LoadClass<AEnemyCharacter>(nullptr, TEXT("/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten.BP_Enemy_Frostbitten_C"));
+			const FVector Start = OnNav(World, Link->Start - Link->Dir * 450.f);
+			AEnemyCharacter* Enemy = Class ? World->SpawnActor<AEnemyCharacter>(Class, Start + FVector(0.f, 0.f, 120.f), Link->Dir.Rotation(), Params) : nullptr;
+			R.Enemy = Enemy;
+			Check(Enemy != nullptr, TEXT("a Frostbitten on the ruin roof"));
+			if (!Enemy)
+			{
+				return false;
+			}
+			Enemy->SetActorTickEnabled(false);
+			if (UEnemyRegistrySubsystem* Registry = World->GetSubsystem<UEnemyRegistrySubsystem>())
+			{
+				Registry->UnregisterEnemy(Enemy);
+			}
+			Enemy->Tags.Remove(FName(TEXT("Enemy")));
+			Enemy->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			if (AAIController* AI = Cast<AAIController>(Enemy->GetController()))
+			{
+				AI->MoveToActor(Leader, 120.f);
+			}
+			R.AirFrames = 0;
+			const FVector Side = FVector::CrossProduct(FVector::UpVector, Link->Dir).GetSafeNormal();
+			R.Look = (Link->Start + Link->End) * 0.5f + FVector(0.f, 0.f, 80.f);
+			R.Eye = R.Look + Side * 1150.f - Link->Dir * 100.f + FVector(0.f, 0.f, 90.f);
+			R.Fov = 55.f;
+			R.Label = TEXT("L_Gen_Depot_1: a Frostbitten chases the leader off the ruin roof through the drop link (enemy_drops: free drops)");
+			return true;
+		}
 		PutAt(*Leader, OnNav(World, Link->Start - Link->Dir * 450.f), Link->Dir.Rotation().Yaw);
 		Leader->OrderMoveTo(Link->End + Link->Dir * 150.f, /*bSprint*/ true);
 		R.LandingsAtSetup = Leader->LedgeFall->GetLandingCount();
@@ -237,7 +322,7 @@ namespace FallDropShots
 		R.Look = (Link->Start + Link->End) * 0.5f + FVector(0.f, 0.f, 80.f);
 		R.Eye = R.Look + Side * 1150.f - Link->Dir * 100.f + FVector(0.f, 0.f, 90.f);
 		R.Fov = 55.f;
-		R.Label = TEXT("L_Gen_Depot_1: a sprint off the ruin roof (+2) onto the annex roof (+1), 2.5 m across, 3 m down");
+		R.Label = TEXT("L_Gen_Depot_1: a sprint off the ruin roof (+2) onto the annex roof (+1), 2.5 m across, 3 m down - the ABP's Falling state");
 		return true;
 	}
 
@@ -259,8 +344,39 @@ namespace FallDropShots
 			return !Markers.IsEmpty() && R.StepFrame > 20;
 		}
 		case EShot::MidAir:
+		{
 			R.AirFrames = Fall->IsAirborne() ? R.AirFrames + 1 : 0;
+			const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Leader->GetMesh()->GetAnimInstance());
+			R.AbpState = Anim ? Anim->GetFallStateName() : NAME_None;
+			if (R.AirFrames >= 9)
+			{
+				Check(R.AbpState == TEXT("Falling"), FString::Printf(TEXT("drop_midair.png: the ABP's FallStates machine is in %s"), *R.AbpState.ToString()));
+			}
 			return R.AirFrames >= 9; // ~0.3 s into the fall at 30 fps
+		}
+		case EShot::HeavyLying:
+		{
+			AOperativeCharacter* Body = Squad.GetLeader();
+			if (!R.bPushed && R.StepFrame > 30)
+			{
+				FallSmokeUtils::PushOffEdge(*Body, FVector(1.f, 0.f, 0.f));
+				R.bPushed = true;
+			}
+			const bool bDown = Body->KnockdownComponent && Body->KnockdownComponent->GetPhase() == EKnockdownPhase::Downed;
+			R.DownFrames = bDown && Fall->GetLandingCount() > R.LandingsAtSetup ? R.DownFrames + 1 : 0;
+			if (R.DownFrames >= 12)
+			{
+				Check(Fall->GetLastFallOutcome() == FallRules::EFallOutcome::HeavyWound, FString::Printf(TEXT("heavy_fall_lying.png: a heavy wound after %.0f cm (%.0f HP)"),
+					Fall->GetLastFallHeight(), Fall->GetLastFallDamage()));
+			}
+			return R.DownFrames >= 12;
+		}
+		case EShot::EnemyDrop:
+		{
+			const AEnemyCharacter* Enemy = R.Enemy.Get();
+			R.AirFrames = Enemy && Enemy->LedgeFall->IsAirborne() ? R.AirFrames + 1 : 0;
+			return R.AirFrames >= 6;
+		}
 		case EShot::Landed:
 			return Fall->GetLandingCount() > R.LandingsAtSetup && R.StepFrame > 15;
 		default:
@@ -355,18 +471,20 @@ namespace FallDropShots
 		{
 			Pressure->Set(0, ECVF_SetByConsole);
 		}
-		Runner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("FallsDrops"));
+		Runner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("..") / TEXT("FallsFollowup"));
 		FPaths::CollapseRelativeDirectories(Runner->Dir);
 		IFileManager::Get().MakeDirectory(*Runner->Dir, true);
 		Runner->DrawHandle = UDebugDrawService::Register(TEXT("Game"), FDebugDrawDelegate::CreateStatic(&OnDraw));
 		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
-		UE_LOG(LogCodexTactics, Display, TEXT("FallDropShots: the drop marker, a roof-to-roof drop in mid-air and landed -> %s"), *Runner->Dir);
+		UE_LOG(LogCodexTactics, Display, TEXT("FallDropShots: the drop marker, a roof-to-roof drop in mid-air (the ABP fall state) and landed, a heavy-wound landing, an enemy's drop -> %s"),
+			*Runner->Dir);
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.FallDropShots"),
 		TEXT("Dev: rendered pictures of the running drops on L_Gen_Depot_1 (the order path's drop marker into the cut, a sprint off the ruin roof onto the annex ")
-		TEXT("roof in mid-air and landed) into Saved/Screenshots/FallsDrops; needs rendering, then exits."),
+		TEXT("roof in mid-air - the ABP fall state - and landed, a 10.5 m heavy-wound landing lying down, a Frostbitten dropping after the leader) into ")
+		TEXT("Saved/Screenshots/FallsFollowup; needs rendering, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
