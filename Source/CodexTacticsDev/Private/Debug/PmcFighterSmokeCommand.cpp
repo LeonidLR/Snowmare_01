@@ -402,6 +402,12 @@ namespace PmcFighterSmoke
 				FString::Printf(TEXT("body %.0f cm tall in a %.0f cm capsule"), Bounds.GetSize().Z, 2.f * Capsule->GetScaledCapsuleHalfHeight()));
 			Shot(State, World, Pmc, TEXT("idle"));
 			State.LeaderHpBefore = Leader ? Leader->HealthComponent->GetCurrentHealth() : 0.f;
+			if (Leader)
+			{
+				// The blow must land: no 10 % luck dodge (2026-11-03: with -FixedSeed the falls follow-up shifted the random draws and the first blow
+				// became a dodge - "hits Commander for 0.0" - which this check read as a lost blow; EnemyAISmoke does the same).
+				Leader->ForcedDodgeRollForTesting = 0.f;
+			}
 			ResetSamples(State);
 			Pmc->SetActorTickEnabled(true); // hunts the squad
 			Next();

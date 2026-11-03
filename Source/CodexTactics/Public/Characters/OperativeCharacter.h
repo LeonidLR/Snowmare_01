@@ -711,6 +711,13 @@ public:
 	/** His sprint speed now (standing; wounds, the cold, a load): the fastest run-up he can take off an edge, cm/s. */
 	float GetSprintSpeedCap() const;
 
+	/**
+	 * His running path takes a plain nav link that drops a level (the level generator's hole links - not a ladder / generated drop link, those
+	 * have their components) and he is at it or already over it (FallRules::IsCommittedToDrop): the formation leaves his path alone until he
+	 * has dropped (the soft-lock of 2026-11-03: re-pathed from the rim's navmesh-free band, the followers stopped ON the rim of a roof hole).
+	 */
+	bool IsCommittedToNavLinkDrop() const;
+
 	/** Where a save puts him: on a ladder, the link point of the end he is heading to (LADDERS.md 7.8). */
 	FVector GetSaveLocation() const;
 

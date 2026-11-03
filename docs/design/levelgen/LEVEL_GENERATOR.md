@@ -386,6 +386,10 @@ walls (answered 2026-11-03, `fix/falls-followup`: the validator rule "no buildin
 `Scripts/levelgen_build_map.ps1`). The builder's own hole links (`Drop_<building>_<hole>`, section 7) stay; their 3 m falls are free under the fall
 rules. Since 2026-11-03 every map gets drop links (`Codex.Fall.DropLinks` 2), and the enemies take them per type.
 Rules, defaults (pending the designer) and checks: `docs/systems/stances-and-movement.md` "Falls and drops"; smoke `CodexTactics.FallDropSmoke`.
+2026-11-03 (`fix/drop-softlock`, the roof-hole soft-lock): a man crossing a hole link's rim is no longer re-pathed off it (he drops); a generated
+drop link must land where the player start is reachable (12 dead-end links of `L_Gen_Depot_1` rejected at level start - strips at the map's edges
+and beside ramps; the builder's hole links all pass the sweep); smoke `CodexTactics.DropSoftlockSmoke` ("The soft-lock" in
+`docs/systems/stances-and-movement.md`).
 
 ## 9. Status
 

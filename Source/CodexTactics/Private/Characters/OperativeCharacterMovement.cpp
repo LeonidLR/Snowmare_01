@@ -195,6 +195,10 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	{
 		return EOperativeOrderResult::Refused; // dropping off an edge / waiting for his turn at a drop (2026-11-03): the formation waits for him
 	}
+	if (IsCommittedToNavLinkDrop())
+	{
+		return EOperativeOrderResult::Refused; // over a hole link's rim (the soft-lock of 2026-11-03): no re-path off the rim - he drops first
+	}
 	// Rev 5i: a tutorial confinement asks for a stance ("crouch first"): a follower copies the leader's low stance before he
 	// follows, else he holds (the squad retries, as for a stance clip below).
 	if (const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr; Tutorial && Tutorial->IsConfining())
@@ -320,9 +324,15 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	{
 		return EOperativeOrderResult::NoController;
 	}
-	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
+	EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
 		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
 		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter());
+	// The soft-lock safety net (user bug 2026-11-03): no path starts where he stands off the navmesh (every order "unreachable") - he is put on
+	// the nearest navmesh point that reaches the main area and the order is asked again.
+	if (Result == EPathFollowingRequestResult::Failed && LedgeFall && LedgeFall->RescueIfOffNavmesh(TEXT("an order could not start"), /*bResumeOrder*/ false))
+	{
+		Result = AIController->MoveToLocation(Destination, MovementConfig.AcceptanceRadius, false, true, true, false, ChooseMoveFilter());
+	}
 	if (Result == EPathFollowingRequestResult::Failed)
 	{
 		bHasMoveOrder = false;

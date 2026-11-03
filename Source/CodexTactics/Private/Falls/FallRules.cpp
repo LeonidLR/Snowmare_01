@@ -57,6 +57,12 @@ namespace FallRules
 		{ TEXT("knockback.min_fall_cm"), &FFallConfig::KnockbackMinFallCm },
 		{ TEXT("anim.fall_min_s"), &FFallConfig::AnimFallMinSeconds },
 		{ TEXT("anim.land_s"), &FFallConfig::AnimLandSeconds },
+		{ TEXT("link.commit_radius_cm"), &FFallConfig::LinkCommitRadiusCm },
+		{ TEXT("rescue.after_s"), &FFallConfig::RescueAfterSeconds },
+		{ TEXT("rescue.watch_s"), &FFallConfig::RescueWatchSeconds },
+		{ TEXT("rescue.max_cm"), &FFallConfig::RescueMaxCm },
+		{ TEXT("rescue.level_tolerance_cm"), &FFallConfig::RescueLevelToleranceCm },
+		{ TEXT("rescue.cooldown_s"), &FFallConfig::RescueCooldownSeconds },
 		{ TEXT("enemy_drops.base"), &FFallConfig::EnemyDropsBase },
 		{ TEXT("enemy_drops.frost_hound"), &FFallConfig::EnemyDropsFrostHound },
 		{ TEXT("enemy_drops.spitter"), &FFallConfig::EnemyDropsSpitter },
@@ -138,6 +144,52 @@ namespace FallRules
 			return EFallAnimPhase::Falling;
 		}
 		return SecondsSinceFallEnded >= 0.f && SecondsSinceFallEnded < Config.AnimLandSeconds ? EFallAnimPhase::Landing : EFallAnimPhase::Grounded;
+	}
+
+	bool IsCommittedToDrop(const FVector& Feet, const FVector& PathGoal, const FVector& LinkA, const FVector& LinkB, const FFallConfig& Config)
+	{
+		const FVector& Start = LinkA.Z >= LinkB.Z ? LinkA : LinkB;
+		const FVector& End = LinkA.Z >= LinkB.Z ? LinkB : LinkA;
+		constexpr float LevelToleranceCm = 80.f;
+		if (Start.Z - End.Z < Config.LinkMinDropCm || FMath::Abs(Feet.Z - Start.Z) > LevelToleranceCm || PathGoal.Z > Start.Z - Config.LinkMinDropCm * 0.5f)
+		{
+			return false;
+		}
+		const double ToStart = FVector::Dist2D(Feet, Start);
+		const double StartToEnd = FVector::Dist2D(Start, End);
+		// At its start, or past it on the way to its end (between them and nearer the end than the start is).
+		return ToStart <= Config.LinkCommitRadiusCm || (FVector::Dist2D(Feet, End) < StartToEnd && ToStart <= StartToEnd + Config.LinkCommitRadiusCm);
+	}
+
+	bool ShouldRescue(ENavStanding Standing, float BadSeconds, float SinceLanding, const FFallConfig& Config)
+	{
+		return Standing != ENavStanding::Fine && SinceLanding <= Config.RescueWatchSeconds && BadSeconds >= Config.RescueAfterSeconds;
+	}
+
+	int32 PickRescuePoint(const FVector& Feet, const TArray<FRescueCandidate>& Candidates, const FFallConfig& Config)
+	{
+		int32 BestLevel = INDEX_NONE;
+		double BestLevelDist = TNumericLimits<double>::Max();
+		const double MaxSq = FMath::Square(static_cast<double>(Config.RescueMaxCm));
+		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+		{
+			const FRescueCandidate& Candidate = Candidates[Index];
+			const double DistSq = FVector::DistSquared(Candidate.Point, Feet);
+			if (!Candidate.bReaches || DistSq > MaxSq)
+			{
+				continue;
+			}
+			if (FMath::Abs(Candidate.Point.Z - Feet.Z) <= Config.RescueLevelToleranceCm)
+			{
+				const double Flat = FVector::DistSquared2D(Candidate.Point, Feet);
+				if (Flat < BestLevelDist)
+				{
+					BestLevelDist = Flat;
+					BestLevel = Index;
+				}
+			}
+		}
+		return BestLevel;
 	}
 
 	bool IsHurtingDrop(float DropCm, const FFallConfig& Config)

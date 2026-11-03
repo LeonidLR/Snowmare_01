@@ -27,6 +27,6 @@ public class CodexTactics : ModuleRules
 			"ProceduralMeshComponent"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "RenderCore", "AnimationCore" }); // RenderCore: GWhiteTexture for the minimap canvas triangles; AnimationCore: the ladder rung IK (TwoBoneIK)
+		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "RenderCore", "AnimationCore", "Navmesh" }); // RenderCore: GWhiteTexture for the minimap canvas triangles; AnimationCore: the ladder rung IK (TwoBoneIK); Navmesh: Detour's nav link directions (FDropLinkReach)
 	}
 }
