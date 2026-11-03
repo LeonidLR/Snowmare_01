@@ -321,6 +321,15 @@ void UTacticalSightSubsystem::NotifyFired(AActor* Shooter)
 	}
 	DemaskUntil.Add(Shooter, GetWorld()->GetTimeSeconds() + SightRules::DemaskSeconds);
 	++Stats.Demasks;
+	// Muzzle flash: a concealed hostile PMC fighter shows up at once too.
+	if (AOperativeCharacter* Hostile = Cast<AOperativeCharacter>(Shooter); Hostile && !Hostile->IsPlayerTeam())
+	{
+		if (FHostileOperativeState* State = HostileStates.Find(Hostile); State && State->bHidden)
+		{
+			SetOperativeConcealed(*Hostile, *State, false);
+			++Stats.Revealed;
+		}
+	}
 	// Muzzle flash: a hidden enemy shows up at once (no wait for the next update).
 	if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Shooter); Enemy && IsSquadSightActive())
 	{
@@ -342,7 +351,7 @@ bool UTacticalSightSubsystem::IsVisibleToSquad(const AActor* Enemy) const
 		return true;
 	}
 	// A hostile PMC fighter (an operative of another team, 2026-11-03): the player's men see him by the same eye rules, kept per team
-	// by UPmcSquadSubsystem (he is never hidden / ghosted like a monster yet - follow-up).
+	// by UPmcSquadSubsystem; unseen he is concealed (UpdateHostileOperatives), with no silhouette yet.
 	if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Enemy))
 	{
 		const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld());
@@ -521,9 +530,114 @@ void UTacticalSightSubsystem::DropGhost(FEnemyState& State)
 	State.Ghost.Reset();
 }
 
+bool UTacticalSightSubsystem::IsHostileOperativeConcealed(const AActor* Operative) const
+{
+	const FHostileOperativeState* State = HostileStates.Find(Cast<AOperativeCharacter>(const_cast<AActor*>(Operative)));
+	return State && State->bHidden;
+}
+
+void UTacticalSightSubsystem::SetOperativeConcealed(AOperativeCharacter& Operative, FHostileOperativeState& State, bool bHidden)
+{
+	if (bHidden)
+	{
+		// Every shown component of him and his attached actors (weapon, overlays); repeated while concealed so a weapon drawn
+		// meanwhile is hidden too. The actor itself stays shown: the team / AI systems keep him present (IsHidden = absent there).
+		TArray<AActor*> Actors;
+		Actors.Add(&Operative);
+		Operative.GetAttachedActors(Actors, false, true);
+		for (AActor* Actor : Actors)
+		{
+			TArray<USceneComponent*> Components;
+			Actor->GetComponents<USceneComponent>(Components);
+			for (USceneComponent* Component : Components)
+			{
+				if (Component && !Component->bHiddenInGame)
+				{
+					Component->SetHiddenInGame(true);
+					State.HiddenComponents.AddUnique(Component);
+					if (USkinnedMeshComponent* Mesh = Cast<USkinnedMeshComponent>(Component))
+					{
+						KeepPoseWhileHidden(*Mesh, true, SavedAnimTickOptions);
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		for (const TWeakObjectPtr<USceneComponent>& Weak : State.HiddenComponents)
+		{
+			if (USceneComponent* Component = Weak.Get())
+			{
+				Component->SetHiddenInGame(false);
+				if (USkinnedMeshComponent* Mesh = Cast<USkinnedMeshComponent>(Component))
+				{
+					KeepPoseWhileHidden(*Mesh, false, SavedAnimTickOptions);
+				}
+			}
+		}
+		State.HiddenComponents.Reset();
+	}
+	Stats.Hidden += bHidden && !State.bHidden ? 1 : 0;
+	State.bHidden = bHidden;
+}
+
+void UTacticalSightSubsystem::UpdateHostileOperatives()
+{
+	UWorld* World = GetWorld();
+	const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+	TArray<AOperativeCharacter*> Hostiles;
+	if (Pmc)
+	{
+		Hostiles = Pmc->GetHostileOperatives();
+	}
+	// Gone fighters: forget; the fallen are shown (a kill is seen, like a monster's).
+	for (auto It = HostileStates.CreateIterator(); It; ++It)
+	{
+		AOperativeCharacter* Operative = It->Key.Get();
+		const bool bLive = Operative && Hostiles.Contains(Operative) && !Operative->IsKilledInAction() && Operative->HealthComponent
+			&& Operative->HealthComponent->IsAlive();
+		if (!bLive)
+		{
+			if (Operative && It->Value.bHidden)
+			{
+				SetOperativeConcealed(*Operative, It->Value, false);
+			}
+			It.RemoveCurrent();
+		}
+	}
+	for (AOperativeCharacter* Operative : Hostiles)
+	{
+		if (!IsValid(Operative) || Operative->IsHidden() || Operative->IsKilledInAction() || !Operative->HealthComponent || !Operative->HealthComponent->IsAlive())
+		{
+			continue;
+		}
+		FHostileOperativeState& State = HostileStates.FindOrAdd(Operative);
+		const bool bSeen = bCinematicReveal || bRevealHostileOperatives || IsDemasked(Operative) || UTacticalHeatSubsystem::IsRevealedByFlare(World, Operative->GetActorLocation())
+			|| !Pmc || Pmc->IsVisibleToTeam(PmcTeam::Player, Operative);
+		if (!bSeen)
+		{
+			SetOperativeConcealed(*Operative, State, true); // every update: keeps a newly drawn weapon hidden too
+		}
+		else if (State.bHidden)
+		{
+			SetOperativeConcealed(*Operative, State, false);
+			++Stats.Revealed;
+		}
+	}
+}
+
 void UTacticalSightSubsystem::RestoreAll()
 {
 	bWasActive = false;
+	for (TPair<TWeakObjectPtr<AOperativeCharacter>, FHostileOperativeState>& Pair : HostileStates)
+	{
+		if (AOperativeCharacter* Operative = Pair.Key.Get(); Operative && Pair.Value.bHidden)
+		{
+			SetOperativeConcealed(*Operative, Pair.Value, false);
+		}
+	}
+	HostileStates.Reset();
 	bBeliefWasActive = false;
 	for (TPair<TWeakObjectPtr<AEnemyCharacter>, FEnemyState>& Pair : EnemyStates)
 	{
@@ -587,6 +701,9 @@ void UTacticalSightSubsystem::Update()
 			Enemies.Add(Enemy);
 		}
 	}
+
+	// Hostile PMC fighters: concealed while the player's team does not see them (fog of war, 2026-11-03).
+	UpdateHostileOperatives();
 
 	// Stale ground-below entries (observers gone or long still: re-measured on demand).
 	for (auto It = GroundCache.CreateIterator(); It; ++It)

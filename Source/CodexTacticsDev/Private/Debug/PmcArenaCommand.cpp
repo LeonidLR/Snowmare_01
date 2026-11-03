@@ -44,6 +44,7 @@
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "GameFramework/HUD.h"
@@ -1169,6 +1170,12 @@ namespace PmcArena
 			if (ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>())
 			{
 				Encounter->SetCombatStartOverride(ECombatStartMode::Ambush);
+			}
+			// The arena is watched from above: the fog of war on the hostile fighters (2026-11-03) is off (rendering only; the teams'
+			// own sight still decides who shoots whom).
+			if (UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>())
+			{
+				Sight->SetRevealHostileOperatives(true);
 			}
 			// The lab's immortality / infinite ammo cheats are the player squad's level defaults: off for a real fight.
 			for (const TCHAR* Name : { TEXT("Codex.Cheat.Immortal"), TEXT("Codex.Cheat.InfiniteAmmo") })
