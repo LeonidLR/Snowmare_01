@@ -22,9 +22,9 @@
     "_comment": "Each candidate plays these jobs per generation (one game process each, rounds_per_job rounds, a different seed per job; all candidates of a generation share the seeds). opponent: champion = PMC vs PMC self-play against the current champion, bot = the player squad driven by the playtest bot.",
     "rounds_per_job": 4,
     "matches": [
-      {"opponent": "champion", "jobs": 1},
-      {"opponent": "bot", "jobs": 1}
-    ]
+      {"opponent": "champion", "jobs": 2}
+    ],
+    "_bot_note": "2026-11-03: the bot match is off - the arena plays only 1 round vs the bot / player squad and the bot does not yet see hostile operatives (docs/systems/pmc-squad-ai.md follow-ups). Add {\"opponent\": \"bot\", \"jobs\": 1} back with rounds_per_job 1 once that lands."
   },
   "fitness": {
     "win": 10.0,
@@ -53,7 +53,7 @@
     "console_command": "CodexTactics.PmcArena",
     "arg_template": ["Map={map}", "Rounds={rounds}", "Seed={seed}", "WeightsA={weights_a}", "Opponent={opponent}", "WeightsB={weights_b}", "TimeLimit={time_limit_s}", "Out={out}"],
     "opponent_names": {"bot": "Bot", "champion": "Pmc"},
-    "engine_args": ["-game", "-nullrhi", "-nosplash", "-nosound", "-unattended", "-windowed", "-FORCELOGFLUSH", "-NoTelemetry", "-UseFixedTimeStep", "-FPS=60", "-FixedSeed", "-Multiprocess"],
+    "engine_args": ["-game", "-nullrhi", "-nosplash", "-nosound", "-unattended", "-windowed", "-FORCELOGFLUSH", "-NoTelemetry", "-UseFixedTimeStep", "-FPS=60", "-FixedSeed", "-Multiprocess", "-LevelJson=L_PmcArena.json"],
     "time_limit_s": 300,
     "output_dir": "Saved/Arena",
     "parallel": 2,
@@ -65,7 +65,7 @@
       "arg_template_extra": ["Record=1"],
       "clip_command": "CodexTactics.ClipRecorder {clip} seconds={seconds}",
       "frames_dir": "Saved/Screenshots/Clips/{clip}",
-      "engine_args": ["-game", "-RenderOffscreen", "-ResX=1280", "-ResY=720", "-nosound", "-nosplash", "-unattended", "-NoTelemetry", "-Multiprocess", "-benchmark", "-fps=30", "-FixedSeed"]
+      "engine_args": ["-game", "-RenderOffscreen", "-ResX=1280", "-ResY=720", "-nosound", "-nosplash", "-unattended", "-NoTelemetry", "-Multiprocess", "-benchmark", "-fps=30", "-FixedSeed", "-LevelJson=L_PmcArena.json"]
     },
     "result": {
       "schema": "codex.pmc_arena/1",
