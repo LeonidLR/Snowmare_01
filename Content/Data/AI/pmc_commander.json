@@ -24,5 +24,7 @@
   "decision_interval": 0.5,
   "switch_margin": 0.1,
   "move_switch_margin": 0.45,
-  "commit_seconds": 2
+  "commit_seconds": 2,
+  "high_ground": 0.2,
+  "high_ground_max_levels": 3
 }

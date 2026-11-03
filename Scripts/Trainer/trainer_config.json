@@ -49,12 +49,12 @@
     "_comment": "Adapter contract (nighttrainer/adapter.py). Fit console_command / arg_template / result.* to the real CodexTactics.PmcArena when it lands.",
     "engine_root": "C:/Program Files/Epic Games/UE_5.8",
     "uproject": "CodexTactics.uproject",
-    "map": "/Game/Maps/L_FormationLabCombat",
+    "map": "/Game/Maps/Generated/L_Gen_Depot_1",
     "console_command": "CodexTactics.PmcArena",
-    "arg_template": ["Map={map}", "Rounds={rounds}", "Seed={seed}", "WeightsA={weights_a}", "Opponent={opponent}", "WeightsB={weights_b}", "TimeLimit={time_limit_s}", "Out={out}"],
+    "arg_template": ["Map={map}", "Rounds={rounds}", "Seed={seed}", "WeightsA={weights_a}", "Opponent={opponent}", "WeightsB={weights_b}", "TimeLimit={time_limit_s}", "Out={out}", "Spawns=Random"],
     "opponent_names": {"bot": "Bot", "champion": "Pmc"},
-    "engine_args": ["-game", "-nullrhi", "-nosplash", "-nosound", "-unattended", "-windowed", "-FORCELOGFLUSH", "-NoTelemetry", "-UseFixedTimeStep", "-FPS=60", "-FixedSeed", "-Multiprocess", "-LevelJson=L_PmcArena.json"],
-    "time_limit_s": 300,
+    "engine_args": ["-game", "-nullrhi", "-nosplash", "-nosound", "-unattended", "-windowed", "-FORCELOGFLUSH", "-NoTelemetry", "-UseFixedTimeStep", "-FPS=60", "-FixedSeed", "-Multiprocess", "-LevelJson=L_PmcArenaDepot.json"],
+    "time_limit_s": 240,
     "output_dir": "Saved/Arena",
     "parallel": 2,
     "timeout_s": 1800,
@@ -65,7 +65,7 @@
       "arg_template_extra": ["Record=1"],
       "clip_command": "CodexTactics.ClipRecorder {clip} seconds={seconds}",
       "frames_dir": "Saved/Screenshots/Clips/{clip}",
-      "engine_args": ["-game", "-RenderOffscreen", "-ResX=1280", "-ResY=720", "-nosound", "-nosplash", "-unattended", "-NoTelemetry", "-Multiprocess", "-benchmark", "-fps=30", "-FixedSeed", "-LevelJson=L_PmcArena.json"]
+      "engine_args": ["-game", "-RenderOffscreen", "-ResX=1280", "-ResY=720", "-nosound", "-nosplash", "-unattended", "-NoTelemetry", "-Multiprocess", "-benchmark", "-fps=30", "-FixedSeed", "-LevelJson=L_PmcArenaDepot.json"]
     },
     "result": {
       "schema": "codex.pmc_arena/1",

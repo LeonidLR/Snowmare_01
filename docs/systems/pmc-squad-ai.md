@@ -105,6 +105,13 @@ considerations (`ScoreOrder`); `PickWithMargin` keeps a running order within `sw
 | Sidearm | an empty clip, a seen threat under 4 m, a pistol | `SwitchToWeaponById("pistol")` |
 | Crouch | in contact, standing still in the open | crouch |
 
+**High ground** (2026-11-03, the Depot arena): `FindCoverNear` (the one search behind TakeCover, Relocate and Ambush) scores every slot x
+`HighGroundFactor(level)` = 1 + `high_ground` (0.2) x min(level, `high_ground_max_levels` 3), the level = `SightRules::HeightLevel` (3 m steps) of the
+slot over the ground under the fighter (the shared sight's ground measurement). Besides the 16 rays round him it probes navmesh spots 1-3 floors up at
+8 bearings (0.6 x the search radius away) and tries walls there facing the threat; such an elevated slot is only taken with a full navmesh path
+(ladders / ramps / drop links; length <= 3 x the straight distance + 30 m, at most two path queries per decision). Tested in
+`CodexTactics.AI.PmcCommander.HighGround`; the trainer's bounds sidecar has `/high_ground` 0.1-0.3 (`high_ground_max_levels` frozen).
+
 Statistics per team (`FPmcTeamStats`): kills, flanks attempted / succeeded (the point reached), suppressions + seconds, ambushes sprung, retreats, heals,
 relocations, advances, covers, friendly-fire hits (`OnWeaponFiredNative` on a mate), stuck events (a walk with < 1 m of progress for 4 s is dropped),
 orders issued. `OnFighterOrder` broadcasts every order taken (the arena's track).
@@ -126,8 +133,19 @@ Args (keys case-insensitive; the night trainer's template `Map=.. Rounds=.. Seed
 of `docs/tools/night-trainer.md` 6 fits as it is): `rounds=N seed=S weightsA=<file> weightsB=<file>|None` (absolute, project-relative, or a name in
 `Content/Data/AI`; missing = defaults) `opponent=pmc|player|bot` `time|timelimit=<s>` (120) `out=<project-relative result path>` (the tracks go to
 `<out dir>/<out basename>/round_<n>.track.json`; without it `Saved/Arena/<run>.json` + `Saved/Arena/<run>/`) `map=<informational>` `squad=<men per side>`
-(3) `distance=<cm>` (3000) `shot=0|1` `record=0|1`. Round n's seed = `seed + n - 1`; the attacker is the round seed's parity (even = A), so `Rounds=1
-Seed=<round seed>` replays a round with its attacker. Side A = team 1 at the player start; side B 30 m away at the first bearing with a navmesh path.
+(3) `distance=<cm>` (3000) `shot=0|1` `record=0|1` `spawns=random|fixed` `spawnmin=<m>` (35) `spawnmax=<m>` (80). Round n's seed = `seed + n - 1`; the attacker is the round seed's parity (even = A), so `Rounds=1
+Seed=<round seed>` replays a round with its attacker. Spawns: `fixed` (the default on L_FormationLabCombat) = side A (team 1) at the player start, side B 30 m away at the first bearing with a navmesh path;
+`random` (the default on any other map, or `spawns=random`) = per round from the round seed up to 48 navmesh spots anywhere in the navmesh bounds
+on a random level (ground, +3 / +6 / +9 m: roofs, walkways, the cut; level = `SightRules::HeightLevel` over the ground under the player start),
+then `PmcCommanderRules::PickSpawnPair`: pairs 35-80 m apart (planar), keyed by a seeded draw + a variety bias (+0.35 different levels, +0.15 one
+above the ground), the first with a navmesh path BOTH ways wins (24 tries); the seed also decides which spot is A. Each squad then stands round
+its spot on free navmesh (`SmokeUtils::FreeSpot`), facing the other. Same seed + map = the same pair; the log line `[PmcArena] spawns seed N: A
+<xyz> level L, B <xyz> level L, D m apart`. Tested in `CodexTactics.AI.PmcCommander.SpawnPair`. **Depot arena** (the night trainer's default since
+2026-11-03): map `/Game/Maps/Generated/L_Gen_Depot_1` + `-LevelJson=L_PmcArenaDepot.json` (L_PmcArena.json + the Depot's floors 300 / 600 / 900 +
+drop links on), `time_limit_s` 240, `Spawns=Random` in the trainer's `arg_template`. A walk goal at the fighter's height that hangs over a drop or has no full path (a roof squad's advance point over the street)
+is retried on the threat's level (`ExecuteOrder` Walk, only when the two levels differ by > 2.5 m). First Depot run (seed 7, 2 rounds, 240 s):
+round 1 (B on a +9 m roof, 37 m) a draw without contact - B's advance from the roof stuck 13x; round 2 (A on a +9 m roof, 52 m) contact, a ladder
+climbed, 1 kill, 3 flanks, suppression, still a time-limit draw (A's roof advance stuck 13x). Open: the stuck walks down from the high roofs.
 The game quits after the last round. `opponent=pmc`: team 2 with weights B, the player's squad parked (any number of rounds); `player`: the player's squad
 commanded with weights B (one round: the fallen cannot be revived); `bot`: the player's squad driven by `UPlaytestBotSubsystem` (one round, development
 builds; the bot does not yet see hostile operatives as threats - the squad's own Aggressive fire does the fighting). The attacker alternates per round

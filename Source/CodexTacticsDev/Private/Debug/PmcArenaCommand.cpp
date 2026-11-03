@@ -16,6 +16,8 @@
 // Args (keys case-insensitive, the night trainer's template "Map=.. Rounds=.. Seed=.. WeightsA=.. Opponent=Bot|Pmc WeightsB=..|None TimeLimit=.. Out=.."
 // fits, docs/tools/night-trainer.md 6): rounds=N seed=S weightsA=<file> weightsB=<file>|None opponent=pmc|player|bot time|timelimit=<s> out=<project-relative
 // result path> map=<informational> squad=<men per side> distance=<cm> shot=0|1 smoke=0|1 record=0|1. Round n's seed = seed + n - 1 (Rounds=1 Seed=<it> replays it).
+//   spawns=random|fixed (default: random off L_FormationLabCombat, fixed on it) spawnmin=<m> spawnmax=<m> (35 / 80): random = per round a seeded pair of
+//   navmesh spots on any level (ground, roofs, the cut), reachable from each other, spawnmin..spawnmax apart (PmcCommanderRules::PickSpawnPair).
 //   opponent=pmc: team 1 (A) vs team 2 (B), the player's squad parked (any number of rounds); player: A vs the player's squad commanded with
 //   weights B (one round: the fallen cannot be revived); bot: A vs the player's squad driven by the playtest bot (one round, development builds).
 // CodexTactics.PmcArenaSmoke = one pmc round + the JSON validated (Smoke RESULT: PASS / FAIL).
@@ -36,6 +38,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/SightRules.h"
 #include "Containers/Ticker.h"
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
@@ -48,9 +51,11 @@
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
+#include "Math/RandomStream.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "NavigationData.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Serialization/JsonReader.h"
@@ -84,6 +89,11 @@ namespace PmcArena
 		FString OutPath;
 		/** Map=<path> as the trainer passes it (informational: the launcher picks the map). */
 		FString MapArg;
+		/** Spawns=Random|Fixed: 0 = not given (random off L_FormationLabCombat), 1 = fixed (start + far spot), 2 = random (seeded pairs). */
+		int32 SpawnMode = 0;
+		/** The random spawn pair's planar distance range, cm (SpawnMin= / SpawnMax= in metres). */
+		float SpawnMinCm = 3500.f;
+		float SpawnMaxCm = 8000.f;
 	};
 
 	struct FSide
@@ -143,6 +153,9 @@ namespace PmcArena
 	struct FState
 	{
 		FOptions Options;
+		/** Spawns=Random resolved (seeded spawn pairs per round) and the ground Z under the start (the height levels' reference). */
+		bool bRandomSpawns = false;
+		float GroundZ = 0.f;
 		FPmcWeights WeightsA;
 		FPmcWeights WeightsB;
 		bool bWeightsALoaded = false;
@@ -196,6 +209,9 @@ namespace PmcArena
 			else if (Key == TEXT("shot")) { Options.bShots = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("smoke")) { Options.bSmoke = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("record")) { Options.bRecord = FCString::Atoi(*Value) != 0; }
+			else if (Key == TEXT("spawns")) { Options.SpawnMode = Value.Equals(TEXT("random"), ESearchCase::IgnoreCase) ? 2 : 1; }
+			else if (Key == TEXT("spawnmin")) { Options.SpawnMinCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 200.f) * 100.f; }
+			else if (Key == TEXT("spawnmax")) { Options.SpawnMaxCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 300.f) * 100.f; }
 			else if (Key == TEXT("opponent"))
 			{
 				const FString Lower = Value.ToLower();
@@ -309,6 +325,77 @@ namespace PmcArena
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Spawns=Random: from the round seed, up to 48 navmesh spots anywhere in the navmesh bounds on a random level (ground, +3 / +6 /
+	 * +9 m: roofs, walkways, the cut), then PmcCommanderRules::PickSpawnPair - SpawnMin..SpawnMax apart, a path both ways (ladders /
+	 * drop links included), variety favoured. Same seed + map -> the same pair. Sets both sides' spawn and facing (towards each other).
+	 */
+	bool PickRandomSpawns(FState& State, UWorld* World, int32 Seed)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
+		const FBox Bounds = NavData ? NavData->GetBounds() : FBox(ForceInit);
+		if (!Bounds.IsValid)
+		{
+			return false;
+		}
+		const float EyeCm = SightRules::EyeHeight(EOperativeStance::Standing);
+		FRandomStream Stream(Seed * 7919 + 101);
+		TArray<FPmcSpawnCandidate> Candidates;
+		for (int32 Try = 0; Try < 200 && Candidates.Num() < 48; ++Try)
+		{
+			const float X = Stream.FRandRange(static_cast<float>(Bounds.Min.X), static_cast<float>(Bounds.Max.X));
+			const float Y = Stream.FRandRange(static_cast<float>(Bounds.Min.Y), static_cast<float>(Bounds.Max.Y));
+			const int32 Level = Stream.RandRange(0, 3);
+			FNavLocation OnNav;
+			if (!Nav->ProjectPointToNavigation(FVector(X, Y, State.GroundZ + Level * 300.f + 100.f), OnNav, FVector(300.f, 300.f, 200.f)))
+			{
+				continue;
+			}
+			Candidates.Add({ OnNav.Location, SightRules::HeightLevel(static_cast<float>(OnNav.Location.Z) + EyeCm - State.GroundZ) });
+		}
+		auto HasPath = [World, Nav](const FVector& From, const FVector& To)
+		{
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, From, To);
+			return Path && Path->IsValid() && !Path->IsPartial();
+		};
+		int32 IndexA = INDEX_NONE;
+		int32 IndexB = INDEX_NONE;
+		const bool bPicked = PmcCommanderRules::PickSpawnPair(Candidates, State.Options.SpawnMinCm, FMath::Max(State.Options.SpawnMinCm, State.Options.SpawnMaxCm), Seed,
+			[&Candidates, &HasPath](int32 I, int32 J) { return HasPath(Candidates[I].Location, Candidates[J].Location) && HasPath(Candidates[J].Location, Candidates[I].Location); },
+			IndexA, IndexB, 24);
+		if (!bPicked)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] seed %d: no random spawn pair (%d candidates) - the previous spawns stay"), Seed, Candidates.Num());
+			return false;
+		}
+		const FPmcSpawnCandidate& SpotA = Candidates[IndexA];
+		const FPmcSpawnCandidate& SpotB = Candidates[IndexB];
+		State.Sides[0].Spawn = SpotA.Location;
+		State.Sides[1].Spawn = SpotB.Location;
+		State.Sides[0].Facing = (SpotB.Location - SpotA.Location).GetSafeNormal2D().Rotation();
+		State.Sides[1].Facing = (SpotA.Location - SpotB.Location).GetSafeNormal2D().Rotation();
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] spawns seed %d: A %s level %d, B %s level %d, %.0f m apart (%d candidates)"), Seed,
+			*SpotA.Location.ToCompactString(), SpotA.Level, *SpotB.Location.ToCompactString(), SpotB.Level, FVector::Dist2D(SpotA.Location, SpotB.Location) / 100.f,
+			Candidates.Num());
+		return true;
+	}
+
+	/** Spawns=Random: the squad round its spawn spot on free navmesh (SmokeUtils::FreeSpot keeps a roof squad on its roof), facing the other side. */
+	void PlaceAround(UWorld* World, const FSide& Side)
+	{
+		const FVector Right = Side.Facing.RotateVector(FVector::RightVector);
+		const int32 Count = Side.Members.Num();
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			if (AOperativeCharacter* Member = Side.Members[Index].Get())
+			{
+				const FVector Spot = SmokeUtils::FreeSpot(World, Side.Spawn + Right * ((Index - (Count - 1) * 0.5f) * 150.f) + FVector(0.f, 0.f, 50.f), Member);
+				Member->TeleportTo(Spot, Side.Facing, false, true);
+			}
+		}
 	}
 
 	void ParkPlayerSquad(FState& State, UWorld* World)
@@ -872,11 +959,16 @@ namespace PmcArena
 		}
 		Pmc->ResetTeam(TeamA);
 		Pmc->ResetTeam(TeamB);
-		// Side A: a PMC squad at the start.
+		const bool bRandomPair = State.bRandomSpawns && PickRandomSpawns(State, World, Seed);
+		// Side A: a PMC squad at the start (or at the round's random spot).
 		FSide& A = State.Sides[0];
 		for (AOperativeCharacter* Fighter : Pmc->SpawnSquad(TeamA, A.Spawn, A.Facing, State.Options.Squad, Seed))
 		{
 			A.Members.Add(Fighter);
+		}
+		if (bRandomPair)
+		{
+			PlaceAround(World, A);
 		}
 		Pmc->SetTeamCommanded(TeamA, true, &State.WeightsA);
 		// Side B.
@@ -886,6 +978,10 @@ namespace PmcArena
 			for (AOperativeCharacter* Fighter : Pmc->SpawnSquad(TeamB, B.Spawn, B.Facing, State.Options.Squad, Seed + 1000))
 			{
 				B.Members.Add(Fighter);
+			}
+			if (bRandomPair)
+			{
+				PlaceAround(World, B);
 			}
 			Pmc->SetTeamCommanded(TeamB, true, &State.WeightsB);
 		}
@@ -1049,6 +1145,17 @@ namespace PmcArena
 			State.Sides[1].Label = TEXT("B");
 			State.Sides[1].Spawn = Far;
 			State.Sides[1].Facing = (Start - Far).GetSafeNormal2D().Rotation();
+			// Spawns=Random (the default off the combat lab): seeded spawn pairs per round, height levels over the ground under the start.
+			State.bRandomSpawns = State.Options.SpawnMode == 2 || (State.Options.SpawnMode == 0 && !World->GetMapName().Contains(TEXT("FormationLabCombat")));
+			State.GroundZ = static_cast<float>(Start.Z) - 92.f;
+			if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+			{
+				FNavLocation OnNav;
+				if (Nav->ProjectPointToNavigation(Start, OnNav, FVector(200.f, 200.f, 300.f)))
+				{
+					State.GroundZ = static_cast<float>(OnNav.Location.Z);
+				}
+			}
 			if (State.Options.Opponent == EOpponent::Pmc)
 			{
 				ParkPlayerSquad(State, World);

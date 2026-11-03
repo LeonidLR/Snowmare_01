@@ -1,6 +1,7 @@
 #include "AI/PmcCommanderRules.h"
 
 #include "Dom/JsonObject.h"
+#include "Math/RandomStream.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
@@ -240,8 +241,59 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("switch_margin"), Out.SwitchMargin);
 		ReadNumber(Json, TEXT("move_switch_margin"), Out.MoveSwitchMargin);
 		ReadNumber(Json, TEXT("commit_seconds"), Out.CommitSeconds);
+		ReadNumber(Json, TEXT("high_ground"), Out.HighGround);
+		float MaxLevels = static_cast<float>(Out.HighGroundMaxLevels);
+		ReadNumber(Json, TEXT("high_ground_max_levels"), MaxLevels);
+		Out.HighGroundMaxLevels = FMath::Max(0, FMath::RoundToInt(MaxLevels));
 		Out.DecisionInterval = FMath::Max(0.1f, Out.DecisionInterval);
 		return Out;
+	}
+
+	float HighGroundFactor(int32 Level, const FPmcWeights& Weights)
+	{
+		return 1.f + FMath::Max(0.f, Weights.HighGround) * static_cast<float>(FMath::Clamp(Level, 0, FMath::Max(0, Weights.HighGroundMaxLevels)));
+	}
+
+	bool PickSpawnPair(const TArray<FPmcSpawnCandidate>& Candidates, float MinDistCm, float MaxDistCm, int32 Seed,
+		TFunctionRef<bool(int32 A, int32 B)> IsReachable, int32& OutA, int32& OutB, int32 MaxReachChecks)
+	{
+		struct FPair
+		{
+			int32 A = 0;
+			int32 B = 0;
+			float Key = 0.f;
+		};
+		FRandomStream Stream(Seed);
+		TArray<FPair> Pairs;
+		for (int32 I = 0; I < Candidates.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < Candidates.Num(); ++J)
+			{
+				const float Distance = static_cast<float>(FVector::Dist2D(Candidates[I].Location, Candidates[J].Location));
+				if (Distance < MinDistCm || Distance > MaxDistCm)
+				{
+					continue;
+				}
+				const int32 LevelI = Candidates[I].Level;
+				const int32 LevelJ = Candidates[J].Level;
+				const float Key = Stream.FRand() + (LevelI != LevelJ ? 0.35f : 0.f) + (FMath::Max(LevelI, LevelJ) > 0 ? 0.15f : 0.f);
+				Pairs.Add({ I, J, Key });
+			}
+		}
+		// Stable: equal keys keep the deterministic candidate order.
+		Pairs.StableSort([](const FPair& Left, const FPair& Right) { return Left.Key > Right.Key; });
+		const int32 Tries = FMath::Min(Pairs.Num(), FMath::Max(1, MaxReachChecks));
+		for (int32 Index = 0; Index < Tries; ++Index)
+		{
+			if (IsReachable(Pairs[Index].A, Pairs[Index].B))
+			{
+				const bool bSwap = (Stream.RandHelper(2) == 1);
+				OutA = bSwap ? Pairs[Index].B : Pairs[Index].A;
+				OutB = bSwap ? Pairs[Index].A : Pairs[Index].B;
+				return true;
+			}
+		}
+		return false;
 	}
 
 	FString DefaultWeightsPath()

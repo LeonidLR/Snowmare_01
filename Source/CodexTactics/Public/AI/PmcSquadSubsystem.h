@@ -171,8 +171,9 @@ private:
 	bool IsOrderRunning(const AOperativeCharacter& Fighter, const FFighterState& State) const;
 	bool ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State, EPmcOrder Order, const FPmcFighterView& View,
 		AActor* ThreatActor, const FCoverSlot& Cover, const TArray<AOperativeCharacter*>& Mates);
-	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, FCoverSlot& OutSlot,
-		float& OutQuality) const;
+	/** The best cover slot against Threat within RadiusCm (rays round him + spots up to Weights.HighGroundMaxLevels floors up), high ground favoured. */
+	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
+		FCoverSlot& OutSlot, float& OutQuality) const;
 	bool ProjectToNav(const FVector& Point, FVector& OutPoint) const;
 	bool IsExposedTo(int32 TeamId, const AOperativeCharacter& Fighter) const;
 	void HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit);
