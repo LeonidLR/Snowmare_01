@@ -216,6 +216,7 @@ void ULedgeFallComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 	{
 	case ELedgeFallState::None:
 		PollLinks(DeltaTime);
+		TickRescueWatch(DeltaTime);
 		if (bTrackingOtherFall)
 		{
 			PeakFeetZ = FMath::Max(PeakFeetZ, FeetZ());
@@ -419,6 +420,7 @@ void ULedgeFallComponent::StartDrop()
 	Movement->bCanWalkOffLedges = true;
 	StartFeetZ = FeetZ();
 	PeakFeetZ = StartFeetZ;
+	FallStartFeet = FVector(Character->GetActorLocation().X, Character->GetActorLocation().Y, StartFeetZ);
 	// The plan from where he stands (he is at the link start, give or take the crowd's arrival radius).
 	const float Along = static_cast<float>(FVector::DotProduct(Character->GetActorLocation() - Link->Start, Link->Dir));
 	const FallRules::FFallConfig& Config = FallRules::GetConfig();
@@ -554,6 +556,7 @@ void ULedgeFallComponent::Land()
 	{
 		Links->ReleaseLease(ActiveLink, Character, Config.LeaseHoldAfterLandingSeconds);
 	}
+	ArmRescueWatch(); // the soft-lock safety net: off the navmesh / in a dead end after the landing -> brought back
 	if (bKnockdown)
 	{
 		// The knockdown that threw him plays now (by the normal rules: the immunity, the death while down); a heavy wound (9-12 m) floors him the
@@ -756,6 +759,7 @@ bool ULedgeFallComponent::TryKnockbackFall(EKnockdownDirection Side, EKnockdownC
 	KnockdownCause = Cause;
 	StartFeetZ = Feet;
 	PeakFeetZ = Feet;
+	FallStartFeet = Base;
 	PlannedSpeed = Config.KnockbackSpeedCms * FallRules::KnockbackLaunchScale(Config);
 	bPlannedReach = false;
 	LastAirSpeed = 0.f;
@@ -797,6 +801,7 @@ void ULedgeFallComponent::HandleMovementModeChanged(ACharacter* Character, EMove
 		bLastFallAnimFalling = false;
 		StartFeetZ = FeetZ();
 		PeakFeetZ = StartFeetZ;
+		FallStartFeet = FVector(Character->GetActorLocation().X, Character->GetActorLocation().Y, StartFeetZ);
 		return;
 	}
 	if (PrevMovementMode == MOVE_Falling && Movement->IsMovingOnGround() && bTrackingOtherFall)
@@ -814,6 +819,7 @@ void ULedgeFallComponent::HandleMovementModeChanged(ACharacter* Character, EMove
 		const UHealthComponent* Health = Character->FindComponentByClass<UHealthComponent>();
 		UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s landed after a %.0f cm fall: %.1f fall damage%s"), *GetNameSafe(Character), Height, FMath::Min(LastFallDamage, 99999.f),
 			Verdict.Outcome == FallRules::EFallOutcome::Lethal ? TEXT(", LETHAL") : Verdict.Outcome == FallRules::EFallOutcome::HeavyWound ? TEXT(", a heavy wound: knocked down") : TEXT(""));
+		ArmRescueWatch(); // the soft-lock safety net (a walk-off through a hole link left the whole squad stuck, 2026-11-03)
 		// A heavy wound: the knockdown starts on the next tick (not inside the movement mode change).
 		bPendingFallKnockdown = Verdict.bKnockdown && (!Health || Health->IsAlive());
 	}

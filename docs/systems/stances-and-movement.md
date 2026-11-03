@@ -154,3 +154,50 @@ Frostbitten chasing the leader off the ruin roof through a free drop link; 11: a
 13: a follower dead after 13 m). The platforms: `Debug/FallSmokeUtils.h` (open ground with a clear landing zone, a 3 x 3 m slab). Pictures:
 `CodexTactics.FallDropShots` -> `Saved/Screenshots/FallsFollowup/` (`drop_midair.png` with the ABP in Falling, `heavy_fall_lying.png`,
 `enemy_drop.png`, + the marker / landed ones).
+
+#### The soft-lock after a roof-hole drop (P0 user bug 2026-11-03, branch `fix/drop-softlock`)
+
+User, editor PIE on `L_Gen_Depot_1`: "When dropping through a hole in the roof the characters just got stuck. All three got hard stuck." - the
+squad on the ruin's roof (+2), the leader clicked onto the floor below (-2738, 2783, +1); afterwards every order of every member was "unreachable".
+
+**Root cause** (reproduced headlessly, `DropSoftlockSmoke` with `Codex.Fall.LinkCommit 0`): the leader's path ran through the generator's hole link
+(`Drop_B_ruin_hole_roof_1`, a plain one-way `NavLinkProxy` point link 70 cm outside the hole's edge -> the hole's centre one level down) and he
+walked off and fell (the "275 cm fall" of the log). The followers' formation slots lay below the hole too, but the squad re-paths a follower
+every tick (`FollowTo`): once he stepped past the link's start into the rim's navmesh-free band (the navmesh is eroded by the agent radius at
+every ledge), the next request from there came back "already at goal" (the 2D test of a goal 3 m below) - he stopped ON the hole's rim with his
+centre 14-22 cm over the hole, held up by the slab's edge, OFF the navmesh. From there no path can start (`MoveToLocation` fails: "unreachable")
+- all orders, forever (the leader got the same later from the user's quick re-clicks while crossing a rim). The user's screenshot shows exactly
+this: two operatives standing in the dark squares of the roof holes.
+
+**Fixes** (generic):
+1. **No re-path off a drop link's rim**: a man whose running path takes a plain (non-smart) nav link that drops a level towards the path's goal
+   (the goal lies below the link's upper level - a path that only brushes past a hole on its own floor does not count: that broke the bot's route
+   through the ruin) and who stands at its start (within `link.commit_radius_cm` 200) or already over it keeps that path - `FollowTo` is refused
+   until he has dropped
+   (`AOperativeCharacter::IsCommittedToNavLinkDrop`: the path CORRIDOR's link polys - a crowd path has only 2 points; `FallRules::IsCommittedToDrop`,
+   test `CodexTactics.Falls.Reach.CommittedToDrop`). Ladders and the generated drop links are smart links with their own components (not here).
+   Console `Codex.Fall.LinkCommit` 1 (0 = the old behaviour, for the smoke's rescue stage).
+2. **No drop into a dead-end pocket**: `UDropLinkSubsystem::Generate` keeps a drop link only when its landing poly reaches the main area (the
+   player start) over the navmesh, its other nav links (ladders, the generator's hole links - in their own direction) and the other KEPT drops
+   (a chain of drops is fine): `FDropLinkReach` (the navmesh's poly graph, ~1-3 ms) + `FReachGraph::SelectLinks` (pure, a fixed point; tests
+   `CodexTactics.Falls.Reach.Solve` / `SelectLinks`). On `L_Gen_Depot_1` this rejects 12 links (`[DropLinks] ... rejected: dead end 12`, each
+   logged "no link A -> B: it lands in a dead end"): strips behind buildings / beside ramps at the map's edges the pathfinder confirms as dead
+   ends (a partial path back). The Lake: 0. Console `Codex.Fall.DropLinkReach` 1 (0 off).
+3. **The safety net** (`Falls/LedgeFallComponentRescue.cpp`, falls.json `rescue.*`): after every landing an operative is watched for
+   `rescue.watch_s` 20 s; off the navmesh, or on an island he can walk neither back to his fall's start nor to a player start, for
+   `rescue.after_s` 2 s -> he is put on the nearest navmesh point of HIS level that reaches the main area (within `rescue.level_tolerance_cm`
+   80 of his feet, at most `rescue.max_cm` 1500 away - never a teleport up / down a floor: a man on a runtime test platform 13 m up is left
+   alone; `FallRules::PickRescuePoint`, test `Rescue`) and his own order goes on.
+   Any time an order cannot start because he stands off the navmesh, the same rescue runs at once and the order is asked again
+   (`AOperativeCharacter::RequestMove`; at most every `rescue.cooldown_s` 3 s, a failed try included - no teleport loop, no graph build per
+   formation tick). It also catches a follower whose crowd steering cut a corner into a hole's rim band (`LevelGenRouteSmoke`: the Commander
+   on the floor hole's rim, 4 rescues of 51-75 cm instead of the old stuck events). Log `[Fall] rescue: <who> was off the navmesh at
+   ... - put on ... (64 cm away)` (Warning). Console `Codex.Fall.Rescue` 1 (0 off).
+
+**Checks:** `CodexTactics.DropSoftlockSmoke` on `L_Gen_Depot_1` (7 legs): the user's case (roof -> the click below -> the click on the ground outside:
+everybody drops through the hole and reaches the ground, no rescue needed), the same through every ruin hole (`hole_roof_0/1`, `hole_floor_0`),
+the sweep (every drop link and one-way hole link lands where the main navmesh is reachable; a bad one is listed with the pathfinder's second
+opinion), rescue A (the Engineer put on the user's rim spot, off the navmesh: back on his level's navmesh after 2 s, 64 cm) and rescue B (the
+user's case with `Codex.Fall.LinkCommit 0`: the soft-lock happens, the safety net gets everybody down). `CodexTactics.DropLinkReachSmoke`: the
+sweep on the Lake (67 drop links, 0 dead ends). Arguments: `stages=user+holes+sweep+rescue`, `trace`, `shots` (rendered, `-RenderOffscreen`:
+`Saved/Screenshots/DropSoftlock/`), `regen`, `probe=<x>_<y>_<z>`.

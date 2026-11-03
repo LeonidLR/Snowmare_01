@@ -103,6 +103,26 @@ namespace FallRules
 		float AnimLandSeconds = 0.45f;
 
 		/**
+		 * The soft-lock safety net (user bug 2026-11-03: the whole squad stuck after a roof-hole drop on L_Gen_Depot_1). After a fall an operative
+		 * is watched for rescue.watch_s: off the navmesh, or on a navmesh island that never reaches the main area, for rescue.after_s -> he is put
+		 * on the nearest point that reaches it (his level first: within rescue.level_tolerance_cm of his feet; at most rescue.max_cm away) and his
+		 * order goes on. An order he cannot start because he stands off the navmesh triggers it at once (any time).
+		 */
+		/**
+		 * link.commit_radius_cm: a man whose path takes a plain (non-smart) nav link that drops a level (the level generator's hole links) is
+		 * committed to it within this distance of its start: the formation no longer re-paths him (a re-path every tick from the ledge's
+		 * navmesh-free rim band stopped the followers ON the rim of a roof hole, off the navmesh - the soft-lock of 2026-11-03).
+		 */
+		float LinkCommitRadiusCm = 200.f;
+
+		float RescueAfterSeconds = 2.f;
+		float RescueWatchSeconds = 20.f;
+		float RescueMaxCm = 1500.f;
+		float RescueLevelToleranceCm = 80.f;
+		/** rescue.cooldown_s: after a rescue the next one for a failed order waits this long (no teleport loop when something keeps sending him back). */
+		float RescueCooldownSeconds = 3.f;
+
+		/**
 		 * enemy_drops.<archetype>: which generated drop links an enemy type paths through (user decision 2026-11-03; EEnemyDropUse as a number:
 		 * 0 none, 1 free drops (no damage; a hurting one only when there is no other way), 2 jumper (every drop at its normal cost, a faster
 		 * run-up). Defaults: the hound / the cutter jump; the zombies, the PMC fighters (Frostbitten bodies) and the Marksman drop; the Brute, the
@@ -184,6 +204,41 @@ namespace FallRules
 	 * least anim.fall_min_s; Landing for anim.land_s after a Falling phase ended (SecondsSinceFallEnded); Grounded else.
 	 */
 	CODEXTACTICS_API EFallAnimPhase FallAnimPhase(bool bDropAirborne, float FallingSeconds, float SecondsSinceFallEnded, const FFallConfig& Config);
+
+	/**
+	 * A man at Feet whose running path (to PathGoal) takes a plain nav link between LinkA and LinkB (either order: the higher end is its start) is
+	 * committed to it: the link drops at least link.min_drop_cm, his path's goal lies below the link's upper level (the path means the drop - a path
+	 * that only brushes past a hole on its own floor does not), he stands on its upper level (within 80 cm) and within link.commit_radius_cm of its
+	 * start or already past it towards its end. The formation then leaves his path alone until he has dropped (the soft-lock of 2026-11-03).
+	 */
+	CODEXTACTICS_API bool IsCommittedToDrop(const FVector& Feet, const FVector& PathGoal, const FVector& LinkA, const FVector& LinkB, const FFallConfig& Config);
+
+	/** Where a body stands after a fall (the soft-lock safety net, rescue.*). */
+	enum class ENavStanding : uint8
+	{
+		/** On a navmesh poly that reaches the main area. */
+		Fine,
+		/** No navmesh poly under him (every order fails: "unreachable"). */
+		OffNavmesh,
+		/** On a navmesh island he can never walk out of (a dead-end pocket). */
+		DeadEnd
+	};
+
+	/** The watch after a fall: true when a bad standing lasted rescue.after_s (BadSeconds) inside the watch window (SinceLanding <= rescue.watch_s). */
+	CODEXTACTICS_API bool ShouldRescue(ENavStanding Standing, float BadSeconds, float SinceLanding, const FFallConfig& Config);
+
+	/** A rescue candidate: a navmesh point and whether it reaches the main area. */
+	struct FRescueCandidate
+	{
+		FVector Point = FVector::ZeroVector;
+		bool bReaches = false;
+	};
+
+	/**
+	 * The rescue point for a body at Feet: the nearest reaching candidate on HIS level (|dz| <= rescue.level_tolerance_cm, 2D distance), none
+	 * farther than rescue.max_cm - never another level (no teleport up or down a floor). INDEX_NONE when none qualifies.
+	 */
+	CODEXTACTICS_API int32 PickRescuePoint(const FVector& Feet, const TArray<FRescueCandidate>& Candidates, const FFallConfig& Config);
 
 	/** What FallDamage returns for a lethal fall (more than any body's health). */
 	constexpr float LethalDamage = 100000.f;

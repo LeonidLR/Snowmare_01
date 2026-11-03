@@ -145,6 +145,29 @@ public:
 	int32 GetHeavyWoundCount() const { return HeavyWoundCount; }
 	int32 GetLethalFallCount() const { return LethalFallCount; }
 
+	// --- The soft-lock safety net (user bug 2026-11-03: the whole squad stuck after a roof-hole drop; FallRules rescue.*) ---
+
+	/**
+	 * Where he stands now: on a navmesh poly that reaches the main area, off the navmesh, or on an island he cannot walk out of (neither back to
+	 * where his last fall started nor to a player start). bOffNavmeshOnly skips the dead-end paths (cheap).
+	 */
+	FallRules::ENavStanding EvaluateStanding(bool bOffNavmeshOnly = false) const;
+
+	/**
+	 * An operative standing off the navmesh (his order cannot start) is put on the nearest point that reaches the main area. True when moved;
+	 * bResumeOrder: his own order is asked again from there (false: the caller does it).
+	 */
+	bool RescueIfOffNavmesh(const TCHAR* Why, bool bResumeOrder = true);
+
+	/** Starts the watch after a fall (every landing does; the smokes too): rescue.after_s of a bad standing within rescue.watch_s -> the rescue. */
+	void ArmRescueWatch();
+
+	/** Rescues done (smokes) and the last one's spots. */
+	int32 GetRescueCount() const { return RescueCount; }
+	FVector GetLastRescueFrom() const { return LastRescueFrom; }
+	FVector GetLastRescueTo() const { return LastRescueTo; }
+	bool IsRescueWatchArmed() const { return RescueWatchTime >= 0.f; }
+
 	/** The animation phase of a fall this frame (FallRules::FallAnimPhase): the operative ABP's FallStates machine follows it. */
 	FallRules::EFallAnimPhase GetAnimPhase() const { return AnimPhase; }
 
@@ -191,6 +214,13 @@ private:
 	void UpdateAnimPhase(float DeltaTime);
 	/** A heavy-wound knockdown of a fall this component did not run (deferred out of the movement mode callback). */
 	void StartFallKnockdown(EKnockdownDirection Side, EKnockdownCause Cause);
+
+	/** The watch after a fall (State None): every 0.5 s while armed. */
+	void TickRescueWatch(float DeltaTime);
+	/** He may be moved by the rescue now: an operative alive, up, on the ground, on no ladder / vault / vehicle, no drop running. */
+	bool CanBeRescued() const;
+	/** Puts him on the nearest point that reaches the main area (FDropLinkReach) and lets his own order go on. True when moved. */
+	bool RescueNow(FallRules::ENavStanding Standing, const TCHAR* Why, bool bResumeOrder = true);
 
 	UFUNCTION()
 	void HandleMovementModeChanged(ACharacter* Character, EMovementMode PrevMovementMode, uint8 PreviousCustomMode);
@@ -258,6 +288,20 @@ private:
 	int32 LethalFallCount = 0;
 	/** A heavy-wound knockdown of an "other" fall, started on the next tick. */
 	bool bPendingFallKnockdown = false;
+
+	/** Where his last fall started (feet; the dead-end check paths back there). */
+	FVector FallStartFeet = FVector::ZeroVector;
+	/** Seconds since the watched landing (-1 = no watch), the bad standing's seconds, the check clock. */
+	float RescueWatchTime = -1.f;
+	float RescueBadSeconds = 0.f;
+	float RescueCheckClock = 0.f;
+	/** The dead-end check is done (it found him fine once): only the cheap off-navmesh check for the rest of the watch. */
+	bool bRescueDeadEndCleared = false;
+	int32 RescueCount = 0;
+	/** World seconds of the last rescue (rescue.cooldown_s; -1 = none yet). */
+	double LastRescueTime = -1.0;
+	FVector LastRescueFrom = FVector::ZeroVector;
+	FVector LastRescueTo = FVector::ZeroVector;
 
 	FallRules::EFallAnimPhase AnimPhase = FallRules::EFallAnimPhase::Grounded;
 	/** Seconds the movement has been Falling (0 on the ground) and since the last Falling phase ended (-1 = long ago). */

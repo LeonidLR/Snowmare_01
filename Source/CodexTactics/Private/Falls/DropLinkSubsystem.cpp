@@ -14,6 +14,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Falls/DropLinkNavigation.h"
+#include "Falls/DropLinkReach.h"
 #include "Falls/LedgeFallComponent.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
@@ -33,6 +34,13 @@ namespace DropLinkGenInternal
 		TEXT("Generated drop nav links (2026-11-03, docs/systems/stances-and-movement.md 'Falls and drops'): 0 none; 1 only on maps whose level JSON says ")
 		TEXT("\"drop_links\": true; 2 (default, user decision 2026-11-03) on every map unless its level JSON says \"drop_links\": false. ")
 		TEXT("Read when the level starts (CodexTactics.DropLinks regenerates)."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarFallDropLinkReach(
+		TEXT("Codex.Fall.DropLinkReach"),
+		1,
+		TEXT("The soft-lock fix (user bug 2026-11-03): 1 (default) a generated drop link must land where the main area (the player start) is reachable ")
+		TEXT("over the navmesh and the other kept links - no drop into a dead-end pocket; 0 off (every link the profile allows). Read by Generate."),
 		ECVF_Default);
 
 	/** The operatives' capsule for the flight arc check (radius / half height, a little slimmer than the body). */
@@ -247,6 +255,43 @@ int32 UDropLinkSubsystem::Generate()
 		}
 	}
 
+	// The soft-lock fix (user bug 2026-11-03: the whole squad stuck after a drop on L_Gen_Depot_1): a one-way drop must land where the main area
+	// (the player start) is reachable - over the navmesh, its other nav links (ladders, the generator's hole links) and the other KEPT drops.
+	// A drop into a dead-end pocket is never made.
+	int32 DeadEnds = 0;
+	double ReachMs = 0.0;
+	if (!Links.IsEmpty() && DropLinkGenInternal::CVarFallDropLinkReach.GetValueOnGameThread() > 0)
+	{
+		FDropLinkReach Reach;
+		if (Reach.Build(*World))
+		{
+			TArray<FReachGraph::FCandidate> Candidates;
+			Candidates.Reserve(Links.Num());
+			for (const FDropLink& Link : Links)
+			{
+				// The start lies on the navmesh's border: a step back inwards finds its poly when the border point itself does not.
+				int32 StartNode = Reach.NodeOf(Reach.FindPoly(*World, Link.Start, FVector(60.f, 60.f, 120.f)));
+				if (StartNode == INDEX_NONE)
+				{
+					StartNode = Reach.NodeOf(Reach.FindPoly(*World, Link.Start - Link.Dir * 50.f, FVector(60.f, 60.f, 120.f)));
+				}
+				Candidates.Add({ StartNode, Reach.NodeOf(Reach.FindPoly(*World, Link.End)) });
+			}
+			const TArray<bool> Kept = Reach.GetGraph().SelectLinks(Candidates);
+			for (int32 Index = Links.Num() - 1; Index >= 0; --Index)
+			{
+				if (!Kept[Index])
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[DropLinks] no link %s -> %s: it lands in a dead end (no way from there back to the main area)"),
+						*Links[Index].Start.ToCompactString(), *Links[Index].End.ToCompactString());
+					Links.RemoveAt(Index);
+					++DeadEnds;
+				}
+			}
+		}
+		ReachMs = Reach.GetBuildMs();
+	}
+
 	if (!Links.IsEmpty())
 	{
 		FActorSpawnParameters SpawnParams;
@@ -275,9 +320,9 @@ int32 UDropLinkSubsystem::Generate()
 		Hurt += Link.bHurt ? 1 : 0;
 	}
 	UE_LOG(LogCodexTactics, Display,
-		TEXT("[DropLinks] %s: %d drop links (%d hurt) from %d edge segments, %d points probed in %.0f ms%s - rejected: level JSON exclusions %d, no edge %d, ")
+		TEXT("[DropLinks] %s: %d drop links (%d hurt) from %d edge segments, %d points probed in %.0f ms%s - rejected: dead end %d (reach graph %.0f ms), level JSON exclusions %d, no edge %d, ")
 		TEXT("blocked %d, low step %d, gap %d, no lower surface %d, too shallow %d, unreachable %d, no landing %d, arc blocked %d"),
-		*World->GetMapName(), Links.Num(), Hurt, Edges.Num() / 2, Sampled, GenerationMs, bCapped ? TEXT(" (CAPPED at link.max_links)") : TEXT(""), Excluded,
+		*World->GetMapName(), Links.Num(), Hurt, Edges.Num() / 2, Sampled, GenerationMs, bCapped ? TEXT(" (CAPPED at link.max_links)") : TEXT(""), DeadEnds, ReachMs, Excluded,
 		Verdicts[static_cast<int32>(EProfileVerdict::NoEdge)], Verdicts[static_cast<int32>(EProfileVerdict::Blocked)], Verdicts[static_cast<int32>(EProfileVerdict::LowStep)],
 		Verdicts[static_cast<int32>(EProfileVerdict::GapTooWide)], Verdicts[static_cast<int32>(EProfileVerdict::NoLowerSurface)],
 		Verdicts[static_cast<int32>(EProfileVerdict::TooShallow)], Verdicts[static_cast<int32>(EProfileVerdict::Unreachable)],
