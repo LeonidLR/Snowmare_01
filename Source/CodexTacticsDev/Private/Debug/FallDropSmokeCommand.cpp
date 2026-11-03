@@ -16,6 +16,16 @@
 //     (damage) and the knockdown plays on landing;
 //  6. parapet: the same blow next to the cut's 2.2 m wall: no throw, the knockdown plays where he stands;
 //  7. enemy: a Frostbitten on the ruin roof's edge is knocked down the same way: it falls too.
+// Follow-up (user decisions 2026-11-03):
+//  3. (above) the operative ABP's FallStates machine is in "Falling" in mid-air and "Landing" after it (no C++ slot clip);
+//  8. heavy wound: the leader walks off a test platform spawned 10.5 m up (no roof that high here): 60..80 HP (70), knocked down (lies in
+//     the knockdown pose for its downed time), gets up, alive;
+//  9. enemy heights: two Frostbittens off platforms 10.5 m (heavy wound: knocked down, alive) and 13 m (dead);
+// 10. enemy chase: a Frostbitten (free drops) on the ruin roof sent after the leader on the annex roof: its path takes a drop link, it drops
+//     (no damage) and reaches him;
+// 11. jumper: a Frost Hound (jumper) the same way across the roof gap;
+// 12. Brute: never paths through a drop link (its filter keeps them closed), stays on the ruin roof;
+// 13. lethal: a follower (not the commander) walks off a 13 m platform: dead.
 // PASS / FAIL, then exits.
 //   powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands CodexTactics.FallDropSmoke -ExtraArgs "-Multiprocess"
 //   (map /Game/Maps/Generated/L_Gen_Depot_1, "-LevelJson=L_Gen_Depot_1.json" - Scripts/test_map.json smokeOptions)
@@ -36,6 +46,10 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
+#include "Characters/OperativeAnimInstance.h"
+#include "Debug/FallSmokeUtils.h"
+#include "Engine/StaticMeshActor.h"
+#include "Falls/DropLinkNavigation.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "Falls/DropLinkSubsystem.h"
@@ -57,11 +71,16 @@
 namespace FallDropSmoke
 {
 	constexpr float StepSeconds = 0.05f;
-	constexpr float TotalLimitSeconds = 900.f;
+	constexpr float TotalLimitSeconds = 1500.f;
 	const TCHAR* const LayoutFile = TEXT("Data/LevelGen/accepted/gen_ref_01_02_depot_1.json");
 	const TCHAR* const FrostbittenPath = TEXT("/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten.BP_Enemy_Frostbitten_C");
+	const TCHAR* const HoundPath = TEXT("/Game/Characters/Enemies/Hound/BP_Enemy_Hound.BP_Enemy_Hound_C");
+	const TCHAR* const BrutePath = TEXT("/Game/Characters/Enemies/Brute/BP_Enemy_Brute.BP_Enemy_Brute_C");
+	/** The test platforms' heights: inside the heavy-wound band (9-12 m) and above the lethal height (12 m). */
+	constexpr float HeavyPlatformCm = 1050.f;
+	constexpr float LethalPlatformCm = 1300.f;
 
-	enum class EStage : uint8 { Cut, WalkOff, RoofLand, RoofMiss, Knockback, Parapet, Enemy, Count };
+	enum class EStage : uint8 { Cut, WalkOff, RoofLand, RoofMiss, Knockback, Parapet, Enemy, HeavyFall, EnemyHeights, EnemyChase, JumperGap, BruteNoDrops, LethalFall, Count };
 	enum class EPhase : uint8 { WaitLinks, Setup, Order, Run, Done };
 
 	const TCHAR* StageName(EStage Stage)
@@ -75,6 +94,12 @@ namespace FallDropSmoke
 		case EStage::Knockback: return TEXT("5 knockback: thrown over the ruin roof's edge");
 		case EStage::Parapet: return TEXT("6 parapet: the blow next to the cut wall throws nobody");
 		case EStage::Enemy: return TEXT("7 enemy: a Frostbitten thrown over the ruin roof's edge");
+		case EStage::HeavyFall: return TEXT("8 heavy wound: the leader off a 10.5 m platform");
+		case EStage::EnemyHeights: return TEXT("9 enemy heights: Frostbittens off 10.5 m (knocked down) and 13 m (dead)");
+		case EStage::EnemyChase: return TEXT("10 enemy chase: a Frostbitten drops off the ruin roof after the leader");
+		case EStage::JumperGap: return TEXT("11 jumper: a Frost Hound crosses the roof gap after the leader");
+		case EStage::BruteNoDrops: return TEXT("12 Brute: no drop links");
+		case EStage::LethalFall: return TEXT("13 lethal: a follower off a 13 m platform");
 		default: return TEXT("?");
 		}
 	}
@@ -124,6 +149,24 @@ namespace FallDropSmoke
 		int32 MaxAirborne = 0;
 		TMap<TWeakObjectPtr<AOperativeCharacter>, int32> MemberDrops;
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
+		// Follow-up stages (2026-11-03).
+		TWeakObjectPtr<AEnemyCharacter> Enemy2;
+		TArray<TWeakObjectPtr<AStaticMeshActor>> Platforms;
+		TWeakObjectPtr<AOperativeCharacter> Victim;
+		FVector PlatformDir = FVector::ForwardVector;
+		bool bPushed = false;
+		bool bHadWalkOff = false;
+		bool bAbpFalling = false;
+		bool bAbpLanding = false;
+		bool bDownedSeen = false;
+		int32 RecoveriesBefore = 0;
+		int32 HeavyBefore = 0;
+		float MinEnemyFeet = 1e9f;
+		FString AbpStates;
+		/** The 13 m Frostbitten's landing (its body may be removed after its death). */
+		int32 DeadOutcome = -1;
+		bool bDeadDied = false;
+		FString DeadNote;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -132,8 +175,21 @@ namespace FallDropSmoke
 		State.Failures += bOk ? 0 : 1;
 	}
 
+	void ClearPlatforms(FState& State)
+	{
+		for (const TWeakObjectPtr<AStaticMeshActor>& Platform : State.Platforms)
+		{
+			if (AStaticMeshActor* Actor = Platform.Get())
+			{
+				Actor->Destroy();
+			}
+		}
+		State.Platforms.Reset();
+	}
+
 	bool Finish(FState& State, bool bComplete)
 	{
+		ClearPlatforms(State);
 		for (const FString& Line : State.Summary)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke summary: %s"), *Line);
@@ -314,12 +370,65 @@ namespace FallDropSmoke
 		}
 	}
 
+	/** Spawns an enemy of ClassPath at Feet with no AI of its own (the smoke orders its moves), out of the registry (the squad does not shoot it). */
+	AEnemyCharacter* SpawnQuietEnemy(UWorld* World, const TCHAR* ClassPath, const FVector& Feet, float Yaw)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		UClass* Class = LoadClass<AEnemyCharacter>(nullptr, ClassPath);
+		AEnemyCharacter* Enemy = Class ? World->SpawnActor<AEnemyCharacter>(Class, Feet + FVector(0.f, 0.f, 120.f), FRotator(0.f, Yaw, 0.f), Params) : nullptr;
+		if (!Enemy)
+		{
+			return nullptr;
+		}
+		Enemy->SetActorTickEnabled(false);
+		if (UEnemyRegistrySubsystem* Registry = World->GetSubsystem<UEnemyRegistrySubsystem>())
+		{
+			Registry->UnregisterEnemy(Enemy);
+		}
+		Enemy->Tags.Remove(FName(TEXT("Enemy")));
+		Enemy->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		PutAt(*Enemy, Feet, Yaw);
+		return Enemy;
+	}
+
+	/** A test platform HeightCm up on open ground (a new spot each time); null when none. */
+	AStaticMeshActor* SpawnTestPlatform(FState& State, UWorld* World, float HeightCm)
+	{
+		TArray<FVector2D> Spots = FallSmokeUtils::DepotOpenSpots();
+		for (const TWeakObjectPtr<AStaticMeshActor>& Old : State.Platforms)
+		{
+			if (const AStaticMeshActor* Used = Old.Get())
+			{
+				Spots.RemoveAll([Used](const FVector2D& XY) { return FVector2D::Distance(XY, FVector2D(Used->GetActorLocation())) < 50.f; });
+			}
+		}
+		FVector Feet;
+		if (!FallSmokeUtils::FindOpenGround(*World, Spots, State.GroundZ, HeightCm + 200.f, Feet))
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Smoke: no open ground for a %.0f cm test platform"), HeightCm);
+			return nullptr;
+		}
+		AStaticMeshActor* Platform = FallSmokeUtils::SpawnPlatform(*World, Feet, HeightCm);
+		State.Platforms.Add(Platform);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: a test platform %.0f cm up at %s"), HeightCm, *Feet.ToCompactString());
+		return Platform;
+	}
+
+	/** The ABP's fall state now (the operative's FallStates machine). */
+	FName AbpFallState(const AOperativeCharacter& Operative)
+	{
+		const UOperativeAnimInstance* Anim = Operative.GetMesh() ? Cast<UOperativeAnimInstance>(Operative.GetMesh()->GetAnimInstance()) : nullptr;
+		return Anim ? Anim->GetFallStateName() : NAME_None;
+	}
+
 	void Setup(FState& State, UWorld* World, USquadSubsystem& Squad)
 	{
 		AOperativeCharacter* Leader = Squad.GetLeader();
 		UDropLinkSubsystem* Links = World->GetSubsystem<UDropLinkSubsystem>();
 		const EStage Stage = static_cast<EStage>(State.Stage);
 		HealAll(Squad);
+		State.Victim = Leader;
 		Leader->LedgeFall->TakeoffSpeedScale = 1.f;
 		State.bMarkerSeen = false;
 		State.MarkerLabel.Empty();
@@ -336,6 +445,18 @@ namespace FallDropSmoke
 		State.MemberDrops.Reset();
 		State.StillTime = 0.f;
 		State.DoneFor = 0.f;
+		State.bPushed = false;
+		State.bAbpFalling = false;
+		State.bAbpLanding = false;
+		State.bDownedSeen = false;
+		State.MinEnemyFeet = 1e9f;
+		State.AbpStates.Empty();
+		State.DeadOutcome = -1;
+		State.bDeadDied = false;
+		State.DeadNote.Empty();
+		State.RecoveriesBefore = Leader->KnockdownComponent ? Leader->KnockdownComponent->GetRecoveryCount() : 0;
+		State.HeavyBefore = Leader->LedgeFall->GetHeavyWoundCount();
+		ClearPlatforms(State);
 		const FDropLink* Roof = Links->GetLink(State.RoofLink);
 		const FDropLink* Hurt = Links->GetLink(State.HurtLink);
 		switch (Stage)
@@ -404,6 +525,62 @@ namespace FallDropSmoke
 				}
 			}
 			break;
+		case EStage::HeavyFall:
+		case EStage::LethalFall:
+		{
+			SoloLeader(World, Squad);
+			AStaticMeshActor* Platform = SpawnTestPlatform(State, World, Stage == EStage::HeavyFall ? HeavyPlatformCm : LethalPlatformCm);
+			AOperativeCharacter* Body = Leader;
+			if (Stage == EStage::LethalFall)
+			{
+				Body = nullptr;
+				for (AOperativeCharacter* Member : Squad.GetMembers())
+				{
+					Body = !Body && Member && Member != Leader && Member->SquadRole != EOperativeRole::Commander && Member->HealthComponent->IsAlive() ? Member : Body;
+				}
+			}
+			State.Victim = Body;
+			State.PlatformDir = FVector(1.f, 0.f, 0.f);
+			if (Platform && Body)
+			{
+				FallSmokeUtils::StandOnPlatformEdge(*Body, *Platform, State.PlatformDir);
+				Body->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				State.HealthBefore = Body->HealthComponent->GetCurrentHealth();
+				State.LandingsBefore = Body->LedgeFall->GetLandingCount();
+				State.HeavyBefore = Body->LedgeFall->GetHeavyWoundCount();
+			}
+			break;
+		}
+		case EStage::EnemyHeights:
+		{
+			SoloLeader(World, Squad);
+			PutAt(*Leader, OnNav(World, FVector(-800.f, -6000.f, State.GroundZ)), 0.f); // out of the landing zones (the last stage left him there)
+			AStaticMeshActor* High = SpawnTestPlatform(State, World, HeavyPlatformCm);
+			AStaticMeshActor* Higher = SpawnTestPlatform(State, World, LethalPlatformCm);
+			State.PlatformDir = FVector(1.f, 0.f, 0.f);
+			if (High && Higher)
+			{
+				State.Enemy = SpawnQuietEnemy(World, FrostbittenPath, High->GetActorLocation() + FVector(0.f, 0.f, 20.f), 0.f);
+				State.Enemy2 = SpawnQuietEnemy(World, FrostbittenPath, Higher->GetActorLocation() + FVector(0.f, 0.f, 20.f), 0.f);
+				if (State.Enemy.IsValid() && State.Enemy2.IsValid())
+				{
+					FallSmokeUtils::StandOnPlatformEdge(*State.Enemy, *High, State.PlatformDir);
+					FallSmokeUtils::StandOnPlatformEdge(*State.Enemy2, *Higher, State.PlatformDir);
+				}
+			}
+			break;
+		}
+		case EStage::EnemyChase:
+		case EStage::JumperGap:
+		case EStage::BruteNoDrops:
+		{
+			SoloLeader(World, Squad);
+			PutAt(*Leader, OnNav(World, Roof->End + Roof->Dir * 350.f), (-Roof->Dir).Rotation().Yaw);
+			const TCHAR* Path = Stage == EStage::EnemyChase ? FrostbittenPath : Stage == EStage::JumperGap ? HoundPath : BrutePath;
+			State.Enemy = SpawnQuietEnemy(World, Path, OnNav(World, Roof->Start - Roof->Dir * 450.f), Roof->Dir.Rotation().Yaw);
+			State.Goal = Leader->GetActorLocation();
+			break;
+		}
 		case EStage::Parapet:
 		{
 			SoloLeader(World, Squad);
@@ -453,6 +630,46 @@ namespace FallDropSmoke
 			{
 				Enemy->KnockdownComponent->bCanBeKnockedDown = true;
 				Enemy->KnockdownComponent->ForceKnockDown(EKnockdownDirection::Back, EKnockdownCause::HeavyHit);
+			}
+			break;
+		case EStage::HeavyFall:
+		case EStage::LethalFall:
+			if (AOperativeCharacter* Body = State.Victim.Get(); Body && !State.Platforms.IsEmpty())
+			{
+				State.bHadWalkOff = FallSmokeUtils::PushOffEdge(*Body, State.PlatformDir);
+				State.bPushed = true;
+			}
+			break;
+		case EStage::EnemyHeights:
+			for (AEnemyCharacter* Enemy : { State.Enemy.Get(), State.Enemy2.Get() })
+			{
+				if (Enemy)
+				{
+					FallSmokeUtils::PushOffEdge(*Enemy, State.PlatformDir);
+					State.bPushed = true;
+				}
+			}
+			break;
+		case EStage::EnemyChase:
+		case EStage::JumperGap:
+		case EStage::BruteNoDrops:
+			if (AEnemyCharacter* Enemy = State.Enemy.Get())
+			{
+				AAIController* AI = Cast<AAIController>(Enemy->GetController());
+				TArray<int32> OnPath;
+				if (AI)
+				{
+					UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(World, Enemy->GetActorLocation(), Leader->GetActorLocation(), Enemy,
+						AI->GetDefaultNavigationFilterClass());
+					if (Path && Path->GetPath().IsValid())
+					{
+						World->GetSubsystem<UDropLinkSubsystem>()->FindLinksOnPath(*Path->GetPath(), OnPath);
+					}
+					AI->MoveToActor(Leader, 120.f);
+				}
+				State.bPathHasDrop = OnPath.Num() > 0;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s - %s (filter %s, drop use %d) sent after the leader: drop links on its path %d"), StageName(Stage),
+					*Enemy->GetName(), AI ? *GetNameSafe(AI->GetDefaultNavigationFilterClass().Get()) : TEXT("-"), static_cast<int32>(Enemy->GetDropLinkUse()), OnPath.Num());
 			}
 			break;
 		default:
@@ -510,6 +727,17 @@ namespace FallDropSmoke
 		const EStage Stage = static_cast<EStage>(State.Stage);
 		const FallRules::FFallConfig& Config = FallRules::GetConfig();
 		SeeMarker(State, World);
+		// The operative ABP's fall states (2026-11-03): "Falling" in the air, "Landing" after it.
+		if (const AOperativeCharacter* Watched = State.Victim.IsValid() ? State.Victim.Get() : Leader)
+		{
+			const FName AbpState = AbpFallState(*Watched);
+			State.bAbpFalling |= AbpState == TEXT("Falling");
+			State.bAbpLanding |= AbpState == TEXT("Landing");
+			if (!AbpState.IsNone() && !State.AbpStates.EndsWith(AbpState.ToString()))
+			{
+				State.AbpStates += (State.AbpStates.IsEmpty() ? TEXT("") : TEXT(">")) + AbpState.ToString();
+			}
+		}
 		const bool bLanded = Fall.GetLandingCount() > State.LandingsBefore;
 		if (bLanded && State.LandedAt < 0.f)
 		{
@@ -572,14 +800,15 @@ namespace FallDropSmoke
 				else if (Stage == EStage::RoofLand)
 				{
 					bOk &= Fall.DidLastDropLandOnTarget() && Height > 240.f && Height < 360.f && Lost < 0.5f && Fall.GetLastAirSpeed() >= 400.f && !State.bMarkerDanger
-						&& Dist <= 250.f;
+						&& Dist <= 250.f && State.bAbpFalling && State.bAbpLanding && !Fall.PlayedFallClip();
 				}
 				else
 				{
 					bOk &= !Fall.DidLastDropLandOnTarget() && Height > 540.f && Lost > 15.f && State.bMarkerDanger && State.MarkerLabel.Contains(TEXT("TOO FAR"));
 				}
-				EndStage(State, bOk, FString::Printf(TEXT("in %.1f s, the leader %.0f cm from the goal at feet %.0f: %s; health -%.1f; path drop %d, marker \"%s\"%s"),
-					State.PhaseTime, Dist, FeetZ(*Leader), *FallNote(Fall), Lost, State.bPathHasDrop ? 1 : 0, *State.MarkerLabel, State.bMarkerDanger ? TEXT(" (red)") : TEXT("")));
+				EndStage(State, bOk, FString::Printf(TEXT("in %.1f s, the leader %.0f cm from the goal at feet %.0f: %s; health -%.1f; path drop %d, marker \"%s\"%s; ABP %s"),
+					State.PhaseTime, Dist, FeetZ(*Leader), *FallNote(Fall), Lost, State.bPathHasDrop ? 1 : 0, *State.MarkerLabel, State.bMarkerDanger ? TEXT(" (red)") : TEXT(""),
+					*State.AbpStates));
 				if (Stage == EStage::RoofMiss)
 				{
 					Leader->StopOperative();
@@ -634,6 +863,141 @@ namespace FallDropSmoke
 			{
 				EndStage(State, false, FString::Printf(TEXT("TIMED OUT: thrown %d, feet %.0f, can be knocked down %d"), EnemyFall->GetKnockbackFallCount(), FeetZ(*Enemy),
 					Enemy->KnockdownComponent && Enemy->KnockdownComponent->bCanBeKnockedDown ? 1 : 0));
+				Enemy->Destroy();
+			}
+			return;
+		}
+		case EStage::HeavyFall:
+		case EStage::LethalFall:
+		{
+			AOperativeCharacter* Body = State.Victim.Get();
+			if (!Body || !State.bPushed)
+			{
+				EndStage(State, false, FString::Printf(TEXT("no platform / body (platforms %d, body %d)"), State.Platforms.Num(), Body ? 1 : 0));
+				return;
+			}
+			const ULedgeFallComponent& BodyFall = *Body->LedgeFall;
+			const bool bBodyLanded = BodyFall.GetLandingCount() > State.LandingsBefore;
+			const UKnockdownComponent* Knockdown = Body->KnockdownComponent;
+			State.bDownedSeen |= Knockdown && Knockdown->GetPhase() == EKnockdownPhase::Downed;
+			const bool bAlive = Body->HealthComponent->IsAlive();
+			const float Lost = State.HealthBefore - Body->HealthComponent->GetCurrentHealth();
+			if (Stage == EStage::HeavyFall)
+			{
+				const bool bUp = bBodyLanded && State.bDownedSeen && Knockdown && Knockdown->GetPhase() == EKnockdownPhase::None
+					&& Knockdown->GetRecoveryCount() > State.RecoveriesBefore;
+				if (bUp && State.PhaseTime > 2.f)
+				{
+					const float Expected = FallRules::FallDamage(BodyFall.GetLastFallHeight(), Config);
+					const bool bOk = bAlive && BodyFall.GetLastFallOutcome() == FallRules::EFallOutcome::HeavyWound && BodyFall.GetHeavyWoundCount() == State.HeavyBefore + 1
+						&& BodyFall.GetLastFallHeight() >= 900.f && BodyFall.GetLastFallHeight() < 1200.f && FMath::IsNearlyEqual(Lost, Expected, 0.6f)
+						&& Lost >= Config.HeavyDamageMin - 0.5f && Lost <= Config.HeavyDamageMax + 0.5f && State.bAbpFalling;
+					EndStage(State, bOk, FString::Printf(TEXT("in %.1f s: %s; health -%.1f (expected %.1f), alive %d, lay in the knockdown pose %d and got up; ABP %s"),
+						State.PhaseTime, *FallNote(BodyFall), Lost, Expected, bAlive ? 1 : 0, State.bDownedSeen ? 1 : 0, *State.AbpStates));
+					Body->GetCharacterMovement()->bCanWalkOffLedges = State.bHadWalkOff;
+				}
+				else if (State.PhaseTime > 40.f)
+				{
+					EndStage(State, false, FString::Printf(TEXT("TIMED OUT: landed %d, downed seen %d, phase %d, alive %d, health -%.1f, feet %.0f"), bBodyLanded ? 1 : 0,
+						State.bDownedSeen ? 1 : 0, Knockdown ? static_cast<int32>(Knockdown->GetPhase()) : -1, bAlive ? 1 : 0, Lost, FeetZ(*Body)));
+					Body->GetCharacterMovement()->bCanWalkOffLedges = State.bHadWalkOff;
+				}
+				return;
+			}
+			if (bBodyLanded && State.PhaseTime > 2.f)
+			{
+				const bool bOk = !bAlive && BodyFall.GetLastFallOutcome() == FallRules::EFallOutcome::Lethal && BodyFall.GetLastFallHeight() >= 1200.f;
+				EndStage(State, bOk, FString::Printf(TEXT("in %.1f s: %s %s; outcome %d, dead %d"), State.PhaseTime, *Body->GetName(), *FallNote(BodyFall),
+					static_cast<int32>(BodyFall.GetLastFallOutcome()), bAlive ? 0 : 1));
+			}
+			else if (State.PhaseTime > 30.f)
+			{
+				EndStage(State, false, FString::Printf(TEXT("TIMED OUT: landed %d, alive %d, feet %.0f"), bBodyLanded ? 1 : 0, bAlive ? 1 : 0, FeetZ(*Body)));
+			}
+			return;
+		}
+		case EStage::EnemyHeights:
+		{
+			AEnemyCharacter* Heavy = State.Enemy.Get();
+			AEnemyCharacter* Dead = State.Enemy2.Get();
+			if (Dead && Dead->LedgeFall->GetLandingCount() > 0 && State.DeadOutcome < 0)
+			{
+				State.DeadOutcome = static_cast<int32>(Dead->LedgeFall->GetLastFallOutcome());
+				State.bDeadDied = !Dead->GetHealthComponent()->IsAlive();
+				State.DeadNote = FallNote(*Dead->LedgeFall);
+			}
+			if (!Heavy || !State.bPushed || (!Dead && State.DeadOutcome < 0))
+			{
+				EndStage(State, false, FString::Printf(TEXT("no Frostbittens / platforms (platforms %d, 10.5 m %d, 13 m %d)"), State.Platforms.Num(), Heavy ? 1 : 0, Dead ? 1 : 0));
+				return;
+			}
+			State.bDownedSeen |= Heavy->KnockdownComponent && Heavy->KnockdownComponent->GetPhase() == EKnockdownPhase::Downed;
+			const bool bBothLanded = Heavy->LedgeFall->GetLandingCount() > 0 && State.DeadOutcome >= 0;
+			if (bBothLanded && State.PhaseTime > 3.f && State.bDownedSeen)
+			{
+				const bool bOk = Heavy->GetHealthComponent()->IsAlive() && Heavy->LedgeFall->GetLastFallOutcome() == FallRules::EFallOutcome::HeavyWound
+					&& State.bDeadDied && State.DeadOutcome == static_cast<int32>(FallRules::EFallOutcome::Lethal);
+				EndStage(State, bOk, FString::Printf(TEXT("in %.1f s: 10.5 m - %s, alive %d, knocked down %d; 13 m - %s, dead %d"), State.PhaseTime, *FallNote(*Heavy->LedgeFall),
+					Heavy->GetHealthComponent()->IsAlive() ? 1 : 0, State.bDownedSeen ? 1 : 0, *State.DeadNote, State.bDeadDied ? 1 : 0));
+				Heavy->Destroy();
+				if (Dead)
+				{
+					Dead->Destroy();
+				}
+			}
+			else if (State.PhaseTime > 30.f)
+			{
+				EndStage(State, false, FString::Printf(TEXT("TIMED OUT: 10.5 m landings %d at feet %.0f, downed %d, alive %d; 13 m outcome %d, dead %d"), Heavy->LedgeFall->GetLandingCount(),
+					FeetZ(*Heavy), State.bDownedSeen ? 1 : 0, Heavy->GetHealthComponent()->IsAlive() ? 1 : 0, State.DeadOutcome, State.bDeadDied ? 1 : 0));
+				Heavy->Destroy();
+				if (Dead)
+				{
+					Dead->Destroy();
+				}
+			}
+			return;
+		}
+		case EStage::EnemyChase:
+		case EStage::JumperGap:
+		case EStage::BruteNoDrops:
+		{
+			AEnemyCharacter* Enemy = State.Enemy.Get();
+			if (!Enemy)
+			{
+				EndStage(State, false, TEXT("no enemy spawned"));
+				return;
+			}
+			const AAIController* AI = Cast<AAIController>(Enemy->GetController());
+			const UClass* Filter = AI ? AI->GetDefaultNavigationFilterClass().Get() : nullptr;
+			const ULedgeFallComponent& EnemyFall = *Enemy->LedgeFall;
+			State.MinEnemyFeet = State.PhaseTime > 1.f ? FMath::Min(State.MinEnemyFeet, FeetZ(*Enemy)) : State.MinEnemyFeet; // after the spawn settled
+			const float ToLeader = static_cast<float>(FVector::Dist2D(Enemy->GetActorLocation(), Leader->GetActorLocation()));
+			if (Stage == EStage::BruteNoDrops)
+			{
+				if (State.PhaseTime > 10.f)
+				{
+					const bool bOk = Filter == UNavFilter_NoVault::StaticClass() && Enemy->GetDropLinkUse() == FallRules::EEnemyDropUse::None && !State.bPathHasDrop
+						&& EnemyFall.GetDropCount() == 0 && EnemyFall.GetLandingCount() == 0 && State.MinEnemyFeet > State.GroundZ + 450.f;
+					EndStage(State, bOk, FString::Printf(TEXT("filter %s, drop use %d, path drop %d, drops %d, falls %d, lowest feet %.0f (the ruin roof at %.0f)"), *GetNameSafe(Filter),
+						static_cast<int32>(Enemy->GetDropLinkUse()), State.bPathHasDrop ? 1 : 0, EnemyFall.GetDropCount(), EnemyFall.GetLandingCount(), State.MinEnemyFeet, State.GroundZ + 600.f));
+					Enemy->Destroy();
+				}
+				return;
+			}
+			const UClass* Wanted = Stage == EStage::JumperGap ? UNavFilter_EnemyDropJumper::StaticClass() : UNavFilter_EnemyDropFree::StaticClass();
+			if (EnemyFall.GetDropCount() > 0 && EnemyFall.GetLandingCount() > 0 && !EnemyFall.IsBusy() && ToLeader <= 350.f)
+			{
+				const bool bOk = Filter == Wanted && State.bPathHasDrop && EnemyFall.GetLastFallKind() == ELedgeFallKind::DropLink && EnemyFall.DidLastDropLandOnTarget()
+					&& EnemyFall.GetLastFallDamage() < 0.5f && Enemy->GetHealthComponent()->IsAlive();
+				EndStage(State, bOk, FString::Printf(TEXT("in %.1f s: %s (filter %s) %.0f cm from the leader: %s; path drop %d"), State.PhaseTime, *Enemy->GetName(), *GetNameSafe(Filter),
+					ToLeader, *FallNote(EnemyFall), State.bPathHasDrop ? 1 : 0));
+				Enemy->Destroy();
+			}
+			else if (State.PhaseTime > 45.f)
+			{
+				EndStage(State, false, FString::Printf(TEXT("TIMED OUT: %s (filter %s) at %s, %.0f cm from the leader, drops %d, landings %d, fall state %d, path drop %d"), *Enemy->GetName(),
+					*GetNameSafe(Filter), *Enemy->GetActorLocation().ToCompactString(), ToLeader, EnemyFall.GetDropCount(), EnemyFall.GetLandingCount(),
+					static_cast<int32>(EnemyFall.GetState()), State.bPathHasDrop ? 1 : 0));
 				Enemy->Destroy();
 			}
 			return;
@@ -772,7 +1136,9 @@ namespace FallDropSmoke
 		TEXT("CodexTactics.FallDropSmoke"),
 		TEXT("Dev check (2026-11-03, docs/systems/stances-and-movement.md 'Falls and drops') on L_Gen_Depot_1: the generated drop links, the squad dropping off ")
 		TEXT("the bridge into the cut by a move order (one at a time, the HUD marker), a 6 m walk-off with fall damage, a sprint roof-to-roof drop that lands and a ")
-		TEXT("slow one that falls short, a knockback throw over the roof edge, none at the cut wall, an enemy thrown too; [only=<1..7>]. PASS/FAIL, then exits."),
+		TEXT("slow one that falls short, a knockback throw over the roof edge, none at the cut wall, an enemy thrown too; the ABP fall states; 9-12 m heavy wounds ")
+		TEXT("and 12 m+ deaths off test platforms (operatives, enemies); enemies chasing through drop links (a Frostbitten, a jumping hound; never a Brute); ")
+		TEXT("[only=<1..13>]. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunCommand));
 }
 

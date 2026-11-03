@@ -275,7 +275,7 @@ namespace LadderEnemySmoke
 		}
 		const AEnemyAIController* Controller = Cast<AEnemyAIController>(Enemy->GetController());
 		const UClass* Filter = Controller ? Controller->GetDefaultNavigationFilterClass().Get() : nullptr;
-		const bool bClimbFilter = Filter == UNavFilter_NoVaultLadder::StaticClass();
+		const bool bClimbFilter = Filter && Filter->IsChildOf(UNavFilter_NoVaultLadder::StaticClass()); // (+ the drop links per type, 2026-11-03)
 		Check(State, Enemy->bCanClimbLadders == Run.bClimber && Enemy->CanClimbLadders() == Run.bClimber && bClimbFilter == Run.bClimber
 			&& Enemy->LadderClimb && Enemy->LadderClimb->IsComponentTickEnabled() == Run.bClimber,
 			FString::Printf(TEXT("%s: bCanClimbLadders %d, can climb %d, nav filter %s, climb ticks %d (a %s)"), Run.Name, Enemy->bCanClimbLadders ? 1 : 0,

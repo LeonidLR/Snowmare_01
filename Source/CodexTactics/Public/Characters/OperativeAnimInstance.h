@@ -554,6 +554,21 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	bool bIsVaulting = false;
 
+	/**
+	 * The ABP's "FallStates" state machine (2026-11-03, Scripts/Editor/setup_operative_fall_animation.py): exactly one is set from
+	 * ULedgeFallComponent::GetAnimPhase - Falling (a drop / knockback in the air, or falling longer than anim.fall_min_s: the fall loop),
+	 * Landing (anim.land_s after it: the land clip), Grounded (the locomotion). Montages on the full-body slot (a knockdown) still win.
+	 */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
+	bool bFallAirborne = false;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
+	bool bFallLanding = false;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
+	bool bFallGrounded = true;
+
+	/** The current state of the ABP's "FallStates" machine (NAME_None without it; smokes / shots). */
+	FName GetFallStateName() const;
+
 	/** Rifle raised: the turn-based attack mode of this operative, or a recent shot. */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	bool bIsAiming = false;

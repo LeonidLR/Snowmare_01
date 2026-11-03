@@ -15,7 +15,7 @@ import { generateLayout, HOLE_RIM_M } from './generate.ts';
 import type { Profile } from './profile.ts';
 import { fromUE, targetScore, toUE, validateProfile } from './profile.ts';
 import type { GenLayout } from './schema.ts';
-import { HALL_ROOF_LEVEL, HOLE_HALF_CM, ladderForLevels, layerLevel, layersOf, LEVEL_HEIGHT, levelsOf, mandatoryRoute, STAIR_RUN_PER_RISE, toFormationLayout, validateGenLayout } from './schema.ts';
+import { CUT_BUILDING_MARGIN_CM, HALL_ROOF_LEVEL, HOLE_HALF_CM, ladderForLevels, layerLevel, layersOf, LEVEL_HEIGHT, levelsOf, mandatoryRoute, STAIR_RUN_PER_RISE, toFormationLayout, validateGenLayout } from './schema.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const profile = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/refs/ref_01_02_depot.json'), 'utf8')) as Profile;
@@ -294,4 +294,31 @@ test('the size and density parameters scale the layout', () => {
   assert.ok(small.covers.length < big.covers.length / 2);
   const ev = evaluateLayout({ layout: small, profile, config, noSim: true });
   assert.ok(ev.route.completable, ev.route.fail);
+});
+
+test('game designer 2026-11-03: no building on the cut walls - the footprint keeps the wall thickness + margin clear of the cut', () => {
+  const l = generateLayout({ profile, seed: 1 });
+  assert.ok(l.cut, 'the reference profile has a cut');
+  const wallT = Math.max(...l.walls.filter((w) => w.kind === 'cut_wall').map((w) => w.thickness));
+  const ys = l.cut.poly.map((p) => p[1]), xs = l.cut.poly.map((p) => p[0]);
+  const yMin = Math.min(...ys), yMax = Math.max(...ys), xMid = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const withShed = (y0: number, y1: number): GenLayout => ({
+    ...l, buildings: l.buildings.map((b) => b.id === 'B_shed' ? { ...b, footprint: [[xMid - 500, y0], [xMid + 500, y1]] as [[number, number], [number, number]] } : b),
+  });
+  const reach = wallT + CUT_BUILDING_MARGIN_CM;
+  // on the wall: the north wall spans yMin - wallT .. yMin
+  const bad = validateGenLayout(withShed(yMin - wallT - 1000, yMin - wallT + 50)).filter((m) => m.includes('B_shed') && m.includes('cut wall'));
+  assert.equal(bad.length, 1, 'a shed on the cut wall fails with the cut-wall message');
+  // inside the margin: still fails
+  assert.equal(validateGenLayout(withShed(yMin - reach - 1000, yMin - reach + 10)).filter((m) => m.includes('cut wall')).length, 1);
+  // margin respected: passes the rule
+  assert.deepEqual(validateGenLayout(withShed(yMin - reach - 1000, yMin - reach)).filter((m) => m.includes('cut wall')), []);
+  assert.deepEqual(validateGenLayout(withShed(yMax + reach, yMax + reach + 1000)).filter((m) => m.includes('cut wall')), []);
+});
+
+test('game designer 2026-11-03: generated layouts keep every building off the cut walls (seeds 1..8)', () => {
+  for (let seed = 1; seed <= 8; seed++) {
+    const l = generateLayout({ profile, seed });
+    assert.deepEqual(validateGenLayout(l).filter((m) => m.includes('cut wall')), [], `seed ${seed}`);
+  }
 });

@@ -8,8 +8,8 @@
  * docs/systems/stances-and-movement.md "Falls and drops"). No UObject: unit tested in CodexTactics.Falls.Rules.*. UE-only system (no Godot
  * reference). The values are tuned in Content/Data/Movement/falls.json (FFallConfig mirrors it, test TuningFileMirrorsDefaults).
  *
- * DEFAULTS PENDING the game designer's confirmation (set 2026-11-03 while he slept): the fall damage reuses the ladder-fall curve
- * (LadderRules::FallDamage: clamp((H - Safe) * PerCm, 0, Max)) with one level free (Safe 320 cm), no lethal height (0 = off); drop links where a
+ * The fall damage reuses the ladder-fall curve (LadderRules::FallDamage: clamp((H - Safe) * PerCm, 0, Max)) with one level free (Safe 320 cm)
+ * below 9 m; 9-12 m is a heavy wound (60-80 HP and the knockdown pose on landing), 12 m and more kills (user decision 2026-11-03); drop links where a
  * walkable lower surface is 1.5-6.5 m below and at most 2.5 m beyond the edge; drops cost the pathfinder extra (UNavArea_Drop / _DropHurt) so a
  * stair / ramp / ladder of similar length is preferred; knockback falls only from the existing knockdowns, never over a waist-high parapet.
  */
@@ -24,8 +24,21 @@ namespace FallRules
 		float DamagePerCm = 0.1f;
 		/** damage.max: the damage cap of the curve. */
 		float MaxDamage = 40.f;
-		/** damage.lethal_height_cm: a fall at least this high kills; 0 = off (the ladder rule has none). */
-		float LethalHeightCm = 0.f;
+		/**
+		 * damage.heavy_height_cm: from this height (up to the lethal one) a fall is a HEAVY WOUND (user decision 2026-11-03: 9-12 m): the damage
+		 * runs from damage.heavy_min at this height to damage.heavy_max at the lethal height (an operative at full health, 100 HP, survives it)
+		 * and he stays down in the knockdown pose for the knockdown's downed time before he gets up. 0 = off (the curve up to the lethal height).
+		 */
+		float HeavyHeightCm = 900.f;
+		float HeavyDamageMin = 60.f;
+		float HeavyDamageMax = 80.f;
+		/**
+		 * damage.heavy_max_health_fraction: a heavy wound never takes more than this share of the body's max health (anyone at full health
+		 * survives 9-12 m, as the user decided - a 60 HP Frostbitten loses at most 51, a 45 HP hound 38; the operatives' 100 HP: 60-80 as is).
+		 */
+		float HeavyMaxHealthFraction = 0.85f;
+		/** damage.lethal_height_cm: a fall at least this high kills (user decision 2026-11-03: 12 m, operatives and enemies); 0 = off. */
+		float LethalHeightCm = 1200.f;
 		/** track.min_fall_cm: a fall shorter than this is not logged / counted (steps, spawn settles). */
 		float MinTrackedFallCm = 50.f;
 
@@ -59,6 +72,12 @@ namespace FallRules
 		float TakeoffMaxSpeedCms = 725.f;
 		/** takeoff.runup_timeout_s: the run-up to the edge gives up after this long (blocked). */
 		float RunUpTimeoutSeconds = 1.5f;
+		/**
+		 * air.gravity_scale: gravity x this while a body is in a drop / knockback throw / any other ledge fall (user 2026-11-03: the falls looked
+		 * like gliding - 2.25 = the fall time / 1.5, sqrt(2.25) = 1.5). The run-up plan, the link generation's reach and the HUD's "TOO FAR" use the
+		 * same gravity (AirGravity); a knockback throw's speeds are x sqrt(scale), so its arc - and reach - stay and only play 1.5x faster.
+		 */
+		float AirGravityScale = 2.25f;
 		/** air.timeout_s: a fall that never lands is ended after this long. */
 		float AirTimeoutSeconds = 6.f;
 		/** land.settle_s: after landing he stands this long (the land clip) before the path goes on. */
@@ -77,12 +96,94 @@ namespace FallRules
 		float ParapetHeightCm = 80.f;
 		/** knockback.min_fall_cm: a knockback fall needs at least this drop beyond the edge. */
 		float KnockbackMinFallCm = 150.f;
+
+		/** anim.fall_min_s: a body falls this long (movement mode Falling) before the operative ABP's Falling state takes over (a step down never shows it). */
+		float AnimFallMinSeconds = 0.25f;
+		/** anim.land_s: after a fall the ABP's Landing state (the land clip) plays this long before locomotion comes back. */
+		float AnimLandSeconds = 0.45f;
+
+		/**
+		 * enemy_drops.<archetype>: which generated drop links an enemy type paths through (user decision 2026-11-03; EEnemyDropUse as a number:
+		 * 0 none, 1 free drops (no damage; a hurting one only when there is no other way), 2 jumper (every drop at its normal cost, a faster
+		 * run-up). Defaults: the hound / the cutter jump; the zombies, the PMC fighters (Frostbitten bodies) and the Marksman drop; the Brute, the
+		 * Spitter and the Cryo Drone never. A Blueprint may override it (AEnemyCharacter::DropLinkUseOverride).
+		 */
+		float EnemyDropsBase = 1.f;
+		float EnemyDropsFrostHound = 2.f;
+		float EnemyDropsSpitter = 0.f;
+		float EnemyDropsBrute = 0.f;
+		float EnemyDropsFrostbitten = 1.f;
+		float EnemyDropsCutter = 2.f;
+		float EnemyDropsCryoDrone = 0.f;
+		float EnemyDropsMarksman = 1.f;
+		/** enemy_drops.hurt_entering_cm: a free-drop enemy's extra path cost of a hurting drop (cm of path; it takes one only when there is no other way). */
+		float EnemyHurtDropEnteringCm = 6000.f;
+		/** enemy_drops.jumper_max_speed_cms: a jumper's run-up cap off an edge (a pouncing body; the others: takeoff.max_speed_cms). */
+		float JumperTakeoffMaxSpeedCms = 900.f;
+	};
+
+	/** What a fall did to the body (FallRules::JudgeFall). */
+	enum class EFallOutcome : uint8
+	{
+		/** Up to damage.safe_height_cm: nothing. */
+		Unhurt,
+		/** The ladder curve's damage. */
+		Hurt,
+		/** damage.heavy_height_cm .. damage.lethal_height_cm: big damage and the knockdown on landing. */
+		HeavyWound,
+		/** damage.lethal_height_cm and more: dead. */
+		Lethal
+	};
+
+	/** The landing's verdict: the damage, the outcome band and whether he goes down in the knockdown pose. */
+	struct FFallVerdict
+	{
+		float Damage = 0.f;
+		EFallOutcome Outcome = EFallOutcome::Unhurt;
+		bool bKnockdown = false;
+	};
+
+	/** Which drop links an enemy type may path through (enemy_drops.<archetype>). */
+	enum class EEnemyDropUse : uint8
+	{
+		None,
+		/** No-damage drops; a hurting one costs enemy_drops.hurt_entering_cm extra (only when there is no other way). */
+		Free,
+		/** Every drop at its normal cost and a pouncing run-up (enemy_drops.jumper_max_speed_cms). */
+		Jumper
+	};
+
+	/** The operative ABP's fall states (UOperativeAnimInstance bFallAirborne / bFallLanding / bFallGrounded). */
+	enum class EFallAnimPhase : uint8
+	{
+		Grounded,
+		Falling,
+		Landing
 	};
 
 	// --- Damage ----------------------------------------------------------------------------------------------------------
 
-	/** Damage of a fall of HeightCm: the lethal height (when on) kills (LethalDamage), else the ladder-fall curve. */
+	/**
+	 * The landing of a fall of HeightCm (user decision 2026-11-03): below damage.heavy_height_cm the ladder-fall curve (one level free); from it
+	 * to damage.lethal_height_cm a heavy wound (heavy_min .. heavy_max, linear, and the knockdown); from the lethal height dead (LethalDamage).
+	 * A band whose height is 0 is off.
+	 */
+	CODEXTACTICS_API FFallVerdict JudgeFall(float HeightCm, const FFallConfig& Config);
+
+	/** JudgeFall for a body of MaxHealth: a heavy wound's damage capped at damage.heavy_max_health_fraction of it (MaxHealth <= 0 = no cap). */
+	CODEXTACTICS_API FFallVerdict JudgeFallForBody(float HeightCm, float MaxHealth, const FFallConfig& Config);
+
+	/** JudgeFall(HeightCm).Damage. */
 	CODEXTACTICS_API float FallDamage(float HeightCm, const FFallConfig& Config);
+
+	/** The enemy type's drop use: enemy_drops.<archetype> (ArchetypeIndex = EEnemyArchetype as a number; unknown = None). */
+	CODEXTACTICS_API EEnemyDropUse EnemyDropUse(int32 ArchetypeIndex, const FFallConfig& Config);
+
+	/**
+	 * The ABP fall phase this frame: Falling while a drop / knockback is in the air (bDropAirborne) or the movement has been Falling for at
+	 * least anim.fall_min_s; Landing for anim.land_s after a Falling phase ended (SecondsSinceFallEnded); Grounded else.
+	 */
+	CODEXTACTICS_API EFallAnimPhase FallAnimPhase(bool bDropAirborne, float FallingSeconds, float SecondsSinceFallEnded, const FFallConfig& Config);
 
 	/** What FallDamage returns for a lethal fall (more than any body's health). */
 	constexpr float LethalDamage = 100000.f;
@@ -91,6 +192,12 @@ namespace FallRules
 	CODEXTACTICS_API bool IsHurtingDrop(float DropCm, const FFallConfig& Config);
 
 	// --- Ballistics ------------------------------------------------------------------------------------------------------
+
+	/** The gravity of a ledge fall (cm/s2): WorldGravityCmS2 x air.gravity_scale (at least x 0.1). */
+	CODEXTACTICS_API float AirGravity(float WorldGravityCmS2, const FFallConfig& Config);
+
+	/** A knockback throw's speeds x this (sqrt of air.gravity_scale): the same arc under the stronger gravity, played faster. */
+	CODEXTACTICS_API float KnockbackLaunchScale(const FFallConfig& Config);
 
 	/** Seconds to fall DropCm from rest (vertically): sqrt(2 H / g); 0 for H <= 0 or g <= 0. */
 	CODEXTACTICS_API float FallSeconds(float DropCm, float GravityCmS2);

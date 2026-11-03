@@ -31,6 +31,7 @@ namespace
 #include "TwoBoneIK.h"
 #include "Characters/ColdAnimationRules.h"
 #include "Characters/OperativeCharacter.h"
+#include "Falls/LedgeFallComponent.h"
 #include "Combat/HealthComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -886,6 +887,12 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	bWasReloading = bIsReloading;
 }
 
+FName UOperativeAnimInstance::GetFallStateName() const
+{
+	const int32 Machine = GetStateMachineIndex(TEXT("FallStates"));
+	return Machine == INDEX_NONE ? NAME_None : GetCurrentStateName(Machine);
+}
+
 void UOperativeAnimInstance::UpdateState()
 {
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner());
@@ -910,6 +917,11 @@ void UOperativeAnimInstance::UpdateState()
 		Speed = TacticalSpeed;
 		Direction = 0.f;
 	}
+	// The fall states (2026-11-03): ULedgeFallComponent decides the phase.
+	const FallRules::EFallAnimPhase FallPhase = Operative->LedgeFall ? Operative->LedgeFall->GetAnimPhase() : FallRules::EFallAnimPhase::Grounded;
+	bFallAirborne = FallPhase == FallRules::EFallAnimPhase::Falling;
+	bFallLanding = FallPhase == FallRules::EFallAnimPhase::Landing;
+	bFallGrounded = FallPhase == FallRules::EFallAnimPhase::Grounded;
 	// A vault moves the actor directly too (Godot "Vault" state; the graph may play its own clip on bIsVaulting).
 	bIsVaulting = Operative->IsVaulting();
 	if (bIsVaulting)

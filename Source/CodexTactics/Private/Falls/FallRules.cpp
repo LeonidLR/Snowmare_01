@@ -24,6 +24,10 @@ namespace FallRules
 		{ TEXT("damage.safe_height_cm"), &FFallConfig::SafeHeightCm },
 		{ TEXT("damage.per_cm"), &FFallConfig::DamagePerCm },
 		{ TEXT("damage.max"), &FFallConfig::MaxDamage },
+		{ TEXT("damage.heavy_height_cm"), &FFallConfig::HeavyHeightCm },
+		{ TEXT("damage.heavy_min"), &FFallConfig::HeavyDamageMin },
+		{ TEXT("damage.heavy_max"), &FFallConfig::HeavyDamageMax },
+		{ TEXT("damage.heavy_max_health_fraction"), &FFallConfig::HeavyMaxHealthFraction },
 		{ TEXT("damage.lethal_height_cm"), &FFallConfig::LethalHeightCm },
 		{ TEXT("track.min_fall_cm"), &FFallConfig::MinTrackedFallCm },
 		{ TEXT("link.min_drop_cm"), &FFallConfig::LinkMinDropCm },
@@ -41,6 +45,7 @@ namespace FallRules
 		{ TEXT("takeoff.speed_margin"), &FFallConfig::TakeoffSpeedMargin },
 		{ TEXT("takeoff.max_speed_cms"), &FFallConfig::TakeoffMaxSpeedCms },
 		{ TEXT("takeoff.runup_timeout_s"), &FFallConfig::RunUpTimeoutSeconds },
+		{ TEXT("air.gravity_scale"), &FFallConfig::AirGravityScale },
 		{ TEXT("air.timeout_s"), &FFallConfig::AirTimeoutSeconds },
 		{ TEXT("land.settle_s"), &FFallConfig::LandSettleSeconds },
 		{ TEXT("lease.radius_cm"), &FFallConfig::LeaseRadiusCm },
@@ -50,6 +55,24 @@ namespace FallRules
 		{ TEXT("knockback.up_cms"), &FFallConfig::KnockbackUpCms },
 		{ TEXT("knockback.parapet_height_cm"), &FFallConfig::ParapetHeightCm },
 		{ TEXT("knockback.min_fall_cm"), &FFallConfig::KnockbackMinFallCm },
+		{ TEXT("anim.fall_min_s"), &FFallConfig::AnimFallMinSeconds },
+		{ TEXT("anim.land_s"), &FFallConfig::AnimLandSeconds },
+		{ TEXT("enemy_drops.base"), &FFallConfig::EnemyDropsBase },
+		{ TEXT("enemy_drops.frost_hound"), &FFallConfig::EnemyDropsFrostHound },
+		{ TEXT("enemy_drops.spitter"), &FFallConfig::EnemyDropsSpitter },
+		{ TEXT("enemy_drops.brute"), &FFallConfig::EnemyDropsBrute },
+		{ TEXT("enemy_drops.frostbitten"), &FFallConfig::EnemyDropsFrostbitten },
+		{ TEXT("enemy_drops.cutter"), &FFallConfig::EnemyDropsCutter },
+		{ TEXT("enemy_drops.cryo_drone"), &FFallConfig::EnemyDropsCryoDrone },
+		{ TEXT("enemy_drops.marksman"), &FFallConfig::EnemyDropsMarksman },
+		{ TEXT("enemy_drops.hurt_entering_cm"), &FFallConfig::EnemyHurtDropEnteringCm },
+		{ TEXT("enemy_drops.jumper_max_speed_cms"), &FFallConfig::JumperTakeoffMaxSpeedCms },
+	};
+
+	/** enemy_drops.<archetype> in EEnemyArchetype order (Base, FrostHound, Spitter, Brute, Frostbitten, Cutter, CryoDrone, Marksman). */
+	static float FFallConfig::* const FallEnemyDropMembers[] = {
+		&FFallConfig::EnemyDropsBase, &FFallConfig::EnemyDropsFrostHound, &FFallConfig::EnemyDropsSpitter, &FFallConfig::EnemyDropsBrute,
+		&FFallConfig::EnemyDropsFrostbitten, &FFallConfig::EnemyDropsCutter, &FFallConfig::EnemyDropsCryoDrone, &FFallConfig::EnemyDropsMarksman,
 	};
 
 	static FFallConfig& FallConfigInForce()
@@ -60,18 +83,76 @@ namespace FallRules
 
 	static bool bFallConfigLoaded = false;
 
-	float FallDamage(float HeightCm, const FFallConfig& Config)
+	FFallVerdict JudgeFall(float HeightCm, const FFallConfig& Config)
 	{
+		FFallVerdict Verdict;
 		if (Config.LethalHeightCm > 0.f && HeightCm >= Config.LethalHeightCm)
 		{
-			return LethalDamage;
+			Verdict.Damage = LethalDamage;
+			Verdict.Outcome = EFallOutcome::Lethal;
+			return Verdict;
 		}
-		return LadderRules::FallDamage(HeightCm, LadderRules::FFallDamage{ Config.SafeHeightCm, Config.DamagePerCm, Config.MaxDamage });
+		if (Config.HeavyHeightCm > 0.f && HeightCm >= Config.HeavyHeightCm)
+		{
+			const float Span = Config.LethalHeightCm > Config.HeavyHeightCm ? Config.LethalHeightCm - Config.HeavyHeightCm : 0.f;
+			const float Alpha = Span > 0.f ? FMath::Clamp((HeightCm - Config.HeavyHeightCm) / Span, 0.f, 1.f) : 0.f;
+			Verdict.Damage = FMath::Max(0.f, FMath::Lerp(Config.HeavyDamageMin, Config.HeavyDamageMax, Alpha));
+			Verdict.Outcome = EFallOutcome::HeavyWound;
+			Verdict.bKnockdown = true;
+			return Verdict;
+		}
+		Verdict.Damage = LadderRules::FallDamage(HeightCm, LadderRules::FFallDamage{ Config.SafeHeightCm, Config.DamagePerCm, Config.MaxDamage });
+		Verdict.Outcome = Verdict.Damage > 0.f ? EFallOutcome::Hurt : EFallOutcome::Unhurt;
+		return Verdict;
+	}
+
+	FFallVerdict JudgeFallForBody(float HeightCm, float MaxHealth, const FFallConfig& Config)
+	{
+		FFallVerdict Verdict = JudgeFall(HeightCm, Config);
+		if (Verdict.Outcome == EFallOutcome::HeavyWound && MaxHealth > 0.f && Config.HeavyMaxHealthFraction > 0.f)
+		{
+			Verdict.Damage = FMath::Min(Verdict.Damage, MaxHealth * Config.HeavyMaxHealthFraction);
+		}
+		return Verdict;
+	}
+
+	float FallDamage(float HeightCm, const FFallConfig& Config)
+	{
+		return JudgeFall(HeightCm, Config).Damage;
+	}
+
+	EEnemyDropUse EnemyDropUse(int32 ArchetypeIndex, const FFallConfig& Config)
+	{
+		if (ArchetypeIndex < 0 || ArchetypeIndex >= static_cast<int32>(UE_ARRAY_COUNT(FallEnemyDropMembers)))
+		{
+			return EEnemyDropUse::None;
+		}
+		const int32 Value = FMath::RoundToInt(Config.*(FallEnemyDropMembers[ArchetypeIndex]));
+		return Value >= 2 ? EEnemyDropUse::Jumper : Value == 1 ? EEnemyDropUse::Free : EEnemyDropUse::None;
+	}
+
+	EFallAnimPhase FallAnimPhase(bool bDropAirborne, float FallingSeconds, float SecondsSinceFallEnded, const FFallConfig& Config)
+	{
+		if (bDropAirborne || (FallingSeconds > 0.f && FallingSeconds >= Config.AnimFallMinSeconds))
+		{
+			return EFallAnimPhase::Falling;
+		}
+		return SecondsSinceFallEnded >= 0.f && SecondsSinceFallEnded < Config.AnimLandSeconds ? EFallAnimPhase::Landing : EFallAnimPhase::Grounded;
 	}
 
 	bool IsHurtingDrop(float DropCm, const FFallConfig& Config)
 	{
 		return FallDamage(DropCm, Config) > 0.f;
+	}
+
+	float AirGravity(float WorldGravityCmS2, const FFallConfig& Config)
+	{
+		return FMath::Abs(WorldGravityCmS2) * FMath::Max(0.1f, Config.AirGravityScale);
+	}
+
+	float KnockbackLaunchScale(const FFallConfig& Config)
+	{
+		return FMath::Sqrt(FMath::Max(0.1f, Config.AirGravityScale));
 	}
 
 	float FallSeconds(float DropCm, float GravityCmS2)

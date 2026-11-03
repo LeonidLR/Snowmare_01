@@ -15,6 +15,7 @@ public class CodexTacticsTests : ModuleRules
 			"UMG",
 			"CommonUI",
 			"GameplayTags",
+			"NavigationSystem",
 			"CodexTactics"
 		});
 	}

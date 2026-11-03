@@ -70,7 +70,9 @@ public:
  * navmesh that a run-up at link.reference_speed_cms reaches (FallRules::PlanTakeoff) and a clear flight arc gets a one-way smart link
  * (UNavArea_Drop / UNavArea_DropHurt) - so a move order may path off a roof / bridge edge; the operative's ULedgeFallComponent takes the link
  * over (run-up, the fall keeping his speed, landing, fall damage, the path goes on). One at a time per landing spot (TryLease).
- * Which maps: Codex.Fall.DropLinks 0 off / 1 (default) the level JSON's "drop_links": true (the level generator's maps) / 2 every map.
+ * Which maps: Codex.Fall.DropLinks 0 off / 1 the level JSON's "drop_links": true / 2 (default, user decision 2026-11-03) every map unless its
+ * level JSON says "drop_links": false; the level JSON's "drop_link_exclusions" boxes suppress links locally. The enemies take them per type
+ * (FallRules::EnemyDropUse, DropLinkNavigation::EnemyFilterClass).
  * UE-only (no Godot reference).
  */
 UCLASS()
@@ -130,6 +132,8 @@ public:
 
 private:
 	void PollNavigationReady();
+	/** The level config of this map (the game mode's), null without. */
+	const class ULevelConfigAsset* GetLevelConfig() const;
 	void HandleLinkReached(UNavLinkCustomComponent* ThisComp, UObject* PathComp, const FVector& DestPoint);
 	/** One edge sample -> a link (filled in OutLink) or a verdict. */
 	bool BuildLinkAt(const FVector& EdgePoint, const FVector& EdgeNormal, const FallRules::FFallConfig& Config, const FCollisionQueryParams& Params,

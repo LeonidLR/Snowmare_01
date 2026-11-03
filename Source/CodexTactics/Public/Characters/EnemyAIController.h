@@ -43,8 +43,9 @@ public:
 
 	/**
 	 * The nav filter of the pawn (docs/design/LADDERS.md 7.4 / 7.5): UNavFilter_NoVaultLadder for a climbing enemy
-	 * (AEnemyCharacter::CanClimbLadders - the ladder links open), else UNavFilter_NoVault (closed). On possession and after the
-	 * enemy's BeginPlay checked its clips.
+	 * (AEnemyCharacter::CanClimbLadders - the ladder links open), else UNavFilter_NoVault (closed); with the drop links open per
+	 * AEnemyCharacter::GetDropLinkUse (DropLinkNavigation::EnemyFilterClass, 2026-11-03). On possession and after the enemy's BeginPlay
+	 * checked its clips.
 	 */
 	void RefreshNavigationFilter();
 

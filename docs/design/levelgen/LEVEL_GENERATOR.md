@@ -49,6 +49,7 @@ the audit, the movement bot and the map builder read a generated layout unchange
   `roof_holes` (down onto the top floor), `floor_holes` (down one floor), `set_piece`. A `chimney` set-piece (`NEVER_CLIMBABLE`)
   is an obstacle only: never enterable, never a walkable roof, no stairs, no ladder onto it, no layer / level of its own - the
   validator refuses anything else (game designer 2026-11-02: "chimneys are NOT ladder towers").
+- **No building on the cut walls (game designer 2026-11-03, `validateGenLayout` in `schema.ts`):** a building footprint must not overlap the cut polygon's bounding box grown by the wall thickness (the `cut_wall` walls' thickness, 150 cm by default, `CUT_WALL_DEFAULT_THICKNESS_CM`) plus `CUT_BUILDING_MARGIN_CM` = 100 cm; the message is "footprint overlaps the cut wall". The generator keeps the band free (`keepFree` in `generate.ts`, chimneys are pushed out of it). The accepted `gen_ref_01_02_depot_1`: `B_shed` min x 250 -> 540 (east wall stays at 1200; its walls and the `AMB_shed_4` ambush point follow) - the map needs a rebuild.
 - `cut`: the trench polygon on level -1 (`floor_z` -300), its `crossings` (ramps / bridges at ground level); the retaining
   walls are ground-layer `cut_wall` walls (a 2.2 m parapet + fence) with gaps at the crossings.
 - `ladders[]`: the actor origin `pos` (the bottom centre of the rung plane, on the lower level, 10 cm off the face), `yaw`
@@ -379,7 +380,11 @@ The game designer's play-test items 6 / 10 / 11a (falls from heights, roof-to-ro
 one level), among them 8 off the X_ne bridge into the cut and the ruin roof (+2) -> the annex roof (+1) across the 2.5 m gap. The cut's long sides
 stay closed: its `cut_wall` walls (2.2 m) stand on the rim everywhere but the crossings, so a drop into the cut starts on a bridge / the ramp's
 crossing; `B_shed` overlaps the north cut wall (footprint X 250..1200 against the wall's 283..433) - the generator should keep buildings off the cut
-walls (open question). The builder's own hole links (`Drop_<building>_<hole>`, section 7) stay; their 3 m falls are free under the fall rules.
+walls (answered 2026-11-03, `fix/falls-followup`: the validator rule "no building on the cut walls" - the cut polygon's box grown by the
+`cut_wall` thickness (150) + `CUT_BUILDING_MARGIN_CM` 100, `validateGenLayout`; the generator keeps the band free and pushes a chimney out of it;
+`B_shed` of the accepted layout shrunk to X 540..1200 (its walls and the ambush point `AMB_shed_4` follow) and `L_Gen_Depot_1` rebuilt with
+`Scripts/levelgen_build_map.ps1`). The builder's own hole links (`Drop_<building>_<hole>`, section 7) stay; their 3 m falls are free under the fall
+rules. Since 2026-11-03 every map gets drop links (`Codex.Fall.DropLinks` 2), and the enemies take them per type.
 Rules, defaults (pending the designer) and checks: `docs/systems/stances-and-movement.md` "Falls and drops"; smoke `CodexTactics.FallDropSmoke`.
 
 ## 9. Status

@@ -96,4 +96,61 @@ character movement never left the navmesh's ground, the knockdown played in plac
   `Saved/Screenshots/FallsDrops/drop_marker.png`, `drop_midair.png`, `drop_landed.png`.
 - **Not done / open**: enemies do not use the drop links (their filters exclude them; a "may drop" enemy filter is one area flag); the cut on
   `L_Gen_Depot_1` is walled by its 2.2 m cut walls everywhere but the crossings, so the drop into it is off the bridges' open sides (the shed
-  `B_shed` overlaps the cut wall - a layout issue for the generator); no mp4 clip was recorded.
+  `B_shed` overlaps the cut wall - a layout issue for the generator); no mp4 clip was recorded. (All three answered on 2026-11-03: see the follow-up below.)
+
+#### Follow-up: the designer's answers (2026-11-03, branch `fix/falls-followup`)
+
+1. **Drop links on every map.** `Codex.Fall.DropLinks` defaults to **2**: every map generates them at level start unless its level JSON says
+   `"drop_links": false` (`FLevelCombatConfig::bDropLinksOff`; 1 = only maps that say `true`, 0 = none). A local suppression, without switching the
+   feature off: the level JSON's `"drop_link_exclusions": [{"min": [x, y, z], "max": [x, y, z], "why": "..."}]` - no link starts or lands in a box
+   (`FLevelCombatConfig::DropLinkExclusions`, counted in the `[DropLinks]` log line; test `CodexTactics.Falls.LevelJson.DropLinks`). The whole smoke
+   registry (219, every hand-made map: the lake, the factory, the formation / combat labs, the tutorials, `L_MovementTest`, ...) ran with the links on:
+   0 failed, and no smoke but `FallDropSmoke` took a drop link, so no exclusion box was needed. Links per map at level start: `L_MovementTest` 8 (0
+   hurt), `L_Demo01_A_FrozenLake` 90 (42), `L_Demo01_B_FrozenFactory` 48 (38), `L_FormationLabCombat` 16 (16), `L_FormationLab` / `L_PatrolTest` 0,
+   `L_WeatherRainTest` 12, `L_Gen_Depot_1` 609 (172) - 486 (26) with the faster falls of item 6 (a shorter reach).
+2. **Height bands** (`FallRules::JudgeFall` / `JudgeFallForBody`, tests `CodexTactics.Falls.Rules.HeightBands`): below `damage.heavy_height_cm` (900) the
+   ladder curve as before (6 m = 28, up to 40); **9-12 m a heavy wound** - `damage.heavy_min` 60 at 9 m rising linearly to `damage.heavy_max` 80 at
+   12 m, never more than `damage.heavy_max_health_fraction` 0.85 of the body's max health (an operative at full health, 100 HP, survives: 60-80; a 60 HP
+   Frostbitten loses at most 51, a 45 HP hound 38), and he goes down in the existing knockdown pose (`UKnockdownComponent::ForceKnockDown`, the new cause
+   `EKnockdownCause::Fall`, feed "... is badly hurt by the fall!"), lies for the knockdown's downed time and gets up by its normal rules (a body that
+   cannot be knocked down - the hound, the cutter - only takes the damage); **12 m and more (`damage.lethal_height_cm` 1200) kills**. Operatives and
+   enemies alike, for drop links, knockback throws and any other fall (the knockdown of an "other" fall starts on the next tick, outside the movement
+   mode callback; a knockback throw that lands in the band plays its own knockdown once). Floating text "FALL -28" / "HEAVY FALL -70" / "FATAL FALL".
+3. **Enemies use the drop links, per type** (`FallRules::EnemyDropUse`, falls.json `enemy_drops.<archetype>`: 0 never, 1 free drops, 2 jumper; a
+   Blueprint may override it: `AEnemyCharacter::DropLinkUseOverride`; tests `EnemyDropUse`, `EnemyFilters`). The AI controller's filter
+   (`DropLinkNavigation::EnemyFilterClass`): **jumpers** - the Frost Hound and the Cutter (the pouncers) - `UNavFilter_EnemyDropJumper`: both drop areas
+   at their own costs, and a pouncing run-up cap `enemy_drops.jumper_max_speed_cms` 900 (others 725); **free drops** - the zombies (Base,
+   Frostbitten - also the PMC fighters / Military Zombie bodies) and the Marksman - `UNavFilter_EnemyDropFree` (+ `...Ladder` for climbers): the free
+   drops open, a hurting one costs `enemy_drops.hurt_entering_cm` 60 m extra (taken only when there is no other way); **never** - the Brute, the
+   Spitter, the Cryo Drone - the base `UNavFilter_NoVault` keeps both areas closed. An enemy at a link is taken over by its `ULedgeFallComponent`
+   exactly like an operative (run-up, flight, landing, fall damage, `ResumeMoveAfterLadder` to the path's goal); its AI (`TickBehavior`) waits while
+   the component is busy (like the ladder). Open: wider-gap "leap" links only a jumper may take (needs an area the operatives' default filter excludes).
+4. **Generator** (section 8.6 of `docs/design/levelgen/LEVEL_GENERATOR.md`): no building on the cut walls; `B_shed` of `L_Gen_Depot_1` shrunk off the
+   east cut wall, the map rebuilt.
+5. **The fall animation is a state of the operative ABP** (`ABP_Operative`, backed up in `Saved/Backups/falls_followup_2026-11-03/`): a state machine
+   **`FallStates`** inserted (not rebuilt - the user's polish stays) between the cold-layer blend and the `FullBody` slot - **Grounded** (the cached
+   pose "PreFallPose" = everything the graph had before), **Falling** (`MM_Rifle_Jump_Fall_Loop`, looping), **Landing** (`MM_Rifle_Jump_Fall_Land`,
+   once); transitions on `UOperativeAnimInstance::bFallAirborne` / `bFallLanding` / `bFallGrounded` (crossfades 0.15 / 0.1 / 0.25 s). The phase comes
+   from `ULedgeFallComponent::GetAnimPhase` (`FallRules::FallAnimPhase`, test `AnimPhase`): Falling during a drop / throw flight or after
+   `anim.fall_min_s` (0.25 s) of movement mode Falling (a step down never shows it; ladder, vault, pounce and vehicle excluded), Landing for
+   `anim.land_s` (0.45 s) after it. A knockdown / death montage on `FullBody` still wins over it. Built headlessly by
+   `Scripts/Editor/setup_operative_fall_animation.py` -> `UOperativeAnimGraphLibrary::AddFallStateMachine` (idempotent; `DescribeAnimGraph` writes the
+   graph before / after to `Saved/Logs/setup_operative_fall_animation.txt`). The old C++ slot clips stay only as a fallback behind
+   `Codex.Fall.SlotClips` (2 default = only for an ABP without `FallStates`, 1 always, 0 never). Enemies keep falling in their current pose.
+
+6. **Faster falls** (the user after testing main, 2026-11-03: "as if they glide down on wings"): while a body is in a ledge fall - a drop link's
+   flight, a knockback throw, any walk / push off a ledge - its movement's gravity is x `air.gravity_scale` **2.25** (`ULedgeFallComponent::SetAirGravity`,
+   back to its own on landing / EndPlay): the fall time is 1 / 1.5 of before (3 m: 0.78 s -> 0.52 s). A walk / push off a ledge gets it once it is
+   40 cm down (a stair step's micro-fall never: applying it at once broke the stairwell walk of `LevelGenRampSmoke`). Console `Codex.Fall.AirGravity`
+   0 off / 1 drop links and throws only / 2 (default) also the other falls. Consistent everywhere: the run-up plan and the HUD
+   prediction ("TOO FAR") use `FallRules::AirGravity` (so the ruin -> annex gap now needs ~612 cm/s - a walk speeds up to it, the sprint 725 keeps), the
+   link generation's reach too (a run-up at 600 cm/s covers 2/3 of the old distance: fewer long-gap links); a knockback throw's speeds are x 1.5
+   (`KnockbackLaunchScale`) so its arc and reach (1.7 m) stay and it only plays faster. Not on this path (unchanged): the ladder's own drop
+   (`ULadderClimbComponent::TickDropping`) and the cutter's / hound's pounce (its own ballistic flight). Test `CodexTactics.Falls.Rules.AirGravity`.
+
+**Checks:** `CodexTactics.FallDropSmoke` grew to 13 stages (stage 3 now also needs the ABP's Falling -> Landing and no slot clip; 8: the leader off a
+test platform spawned 10.5 m up - 71.4 HP, knocked down, gets up; 9: Frostbittens off 10.5 m (51, knocked down, alive) and 13 m (dead); 10: a
+Frostbitten chasing the leader off the ruin roof through a free drop link; 11: a Frost Hound across the same roof gap; 12: a Brute never takes a link;
+13: a follower dead after 13 m). The platforms: `Debug/FallSmokeUtils.h` (open ground with a clear landing zone, a 3 x 3 m slab). Pictures:
+`CodexTactics.FallDropShots` -> `Saved/Screenshots/FallsFollowup/` (`drop_midair.png` with the ABP in Falling, `heavy_fall_lying.png`,
+`enemy_drop.png`, + the marker / landed ones).

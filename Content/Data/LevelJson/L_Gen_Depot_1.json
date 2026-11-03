@@ -16,7 +16,6 @@
     "infinite_ammo": true
   },
   "levelgen_layout": "Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json",
-  "drop_links": true,
   "minimap": {
     "floors_cm": [
       300.0,
@@ -24,6 +23,7 @@
       900.0
     ]
   },
+  "drop_links": true,
   "waves": [
     {
       "wave_index": 1,

@@ -4,6 +4,7 @@
 // resumed move, the save point. UE-only system (no Godot reference).
 
 #include "Characters/EnemyCharacter.h"
+#include "Falls/LedgeFallComponent.h"
 
 #include "AIController.h"
 #include "Characters/EnemyAIController.h"
@@ -45,6 +46,17 @@ bool AEnemyCharacter::IsLadderBusy() const
 	return LadderClimb && LadderClimb->IsBusy();
 }
 
+FallRules::EEnemyDropUse AEnemyCharacter::GetDropLinkUse() const
+{
+	switch (DropLinkUseOverride)
+	{
+	case EEnemyDropLinkOverride::Never: return FallRules::EEnemyDropUse::None;
+	case EEnemyDropLinkOverride::FreeDrops: return FallRules::EEnemyDropUse::Free;
+	case EEnemyDropLinkOverride::Jumper: return FallRules::EEnemyDropUse::Jumper;
+	default: return FallRules::EnemyDropUse(static_cast<int32>(Archetype), FallRules::GetConfig());
+	}
+}
+
 void AEnemyCharacter::ResumeMoveAfterLadder(const FVector& Destination)
 {
 	// Every move flag the AI keeps is reset (the climb stopped the path): the throttled AI asks again this tick; a patrol / search
@@ -62,5 +74,9 @@ void AEnemyCharacter::ResumeMoveAfterLadder(const FVector& Destination)
 
 FVector AEnemyCharacter::GetSaveLocation() const
 {
-	return LadderClimb && LadderClimb->IsOnLadder() ? LadderClimb->GetSaveLocation() : GetActorLocation();
+	if (LadderClimb && LadderClimb->IsOnLadder())
+	{
+		return LadderClimb->GetSaveLocation();
+	}
+	return LedgeFall && LedgeFall->IsDropping() ? LedgeFall->GetSaveLocation() : GetActorLocation();
 }

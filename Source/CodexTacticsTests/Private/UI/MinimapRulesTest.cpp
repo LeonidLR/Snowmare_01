@@ -432,6 +432,32 @@ bool FMinimapLevelJsonTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelJsonDropLinksTest, "CodexTactics.Falls.LevelJson.DropLinks",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FLevelJsonDropLinksTest::RunTest(const FString&)
+{
+	// The level JSON's drop link switches (2026-11-03): unset = the default (every map), true / false, and the local exclusion boxes.
+	FString Error;
+	FLevelCombatConfig Plain;
+	TestTrue(TEXT("parses without the keys"), LevelJsonRules::ParseLevel(TEXT("{\"level_id\":\"p\",\"waves\":[]}"), TEXT("p"), Plain, Error));
+	TestTrue(TEXT("... neither on nor off, no exclusions"), !Plain.bDropLinks && !Plain.bDropLinksOff && Plain.DropLinkExclusions.IsEmpty());
+	FLevelCombatConfig On;
+	TestTrue(TEXT("parses true"), LevelJsonRules::ParseLevel(TEXT("{\"level_id\":\"o\",\"waves\":[],\"drop_links\":true}"), TEXT("o"), On, Error));
+	TestTrue(TEXT("... on"), On.bDropLinks && !On.bDropLinksOff);
+	FLevelCombatConfig Off;
+	TestTrue(TEXT("parses false"), LevelJsonRules::ParseLevel(TEXT("{\"level_id\":\"f\",\"waves\":[],\"drop_links\":false}"), TEXT("f"), Off, Error));
+	TestTrue(TEXT("... off"), !Off.bDropLinks && Off.bDropLinksOff);
+	FLevelCombatConfig Boxes;
+	TestTrue(TEXT("parses exclusions"), LevelJsonRules::ParseLevel(
+		TEXT("{\"level_id\":\"x\",\"waves\":[],\"drop_link_exclusions\":[{\"min\":[100,200,-50],\"max\":[0,0,300],\"why\":\"gate\"},{\"min\":[1,2]}]}"), TEXT("x"), Boxes, Error));
+	TestEqual(TEXT("... one valid box (a broken one skipped)"), Boxes.DropLinkExclusions.Num(), 1);
+	if (Boxes.DropLinkExclusions.Num() == 1)
+	{
+		TestTrue(TEXT("... min / max sorted"), Boxes.DropLinkExclusions[0].Min.Equals(FVector(0.f, 0.f, -50.f)) && Boxes.DropLinkExclusions[0].Max.Equals(FVector(100.f, 200.f, 300.f)));
+	}
+	return true;
+}
+
 MINIMAP_TEST(FMinimapFloorLadderTest, "Floors.Ladder")
 bool FMinimapFloorLadderTest::RunTest(const FString&)
 {

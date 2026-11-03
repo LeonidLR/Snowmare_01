@@ -49,8 +49,12 @@ enum class ELedgeFallKind : uint8
  *  - A knockdown (UKnockdownComponent::StartKnockdown) near an open edge (no waist-high parapet) throws him over it: he falls, lands with the
  *    fall damage, then the knockdown plays (operatives and enemies).
  *  - Any other fall (walking off by any other means): the landing is judged the same way.
- * During a drop / knockback fall the operative plays the mannequin rifle fall loop and the land clip on the full-body slot (the ABP has no
- * falling state; root motion is ignored while they play). UE-only (no Godot reference).
+ *  - The landing (user decision 2026-11-03, FallRules::JudgeFall): below 9 m the ladder curve, 9-12 m a heavy wound (60-80 HP, then he lies
+ *    in the knockdown pose for its downed time and gets up), 12 m and more kills - operatives and enemies.
+ *  - The animation: GetAnimPhase (Grounded / Falling / Landing) drives the operative ABP's "FallStates" state machine (UOperativeAnimInstance
+ *    bFallAirborne / bFallLanding / bFallGrounded; the fall loop and the land clip are in the ABP). The old C++ full-body slot clips are a
+ *    fallback behind Codex.Fall.SlotClips (an ABP without the state machine). An enemy body falls in its current pose.
+ * UE-only (no Godot reference).
  */
 UCLASS(ClassGroup = (CodexTactics), meta = (BlueprintSpawnableComponent))
 class CODEXTACTICS_API ULedgeFallComponent : public UActorComponent
@@ -131,14 +135,29 @@ public:
 	FVector GetLastLandingLocation() const { return LastLandingLocation; }
 	/** The highest horizontal speed of the last fall (cm/s): the run-up kept in the air. */
 	float GetLastAirSpeed() const { return LastAirSpeed; }
-	/** The fall loop clip played in the last fall (smokes / shots). */
+	/** The fall loop clip played on the slot in the last fall (the Codex.Fall.SlotClips fallback; smokes / shots). */
 	bool PlayedFallClip() const { return bPlayedFallClip; }
+	/** The last fall reached the ABP's Falling phase (GetAnimPhase) - the operative ABP's fall state (smokes). */
+	bool ReachedAnimFalling() const { return bLastFallAnimFalling; }
+	/** The last landing's outcome band (FallRules::JudgeFall). */
+	FallRules::EFallOutcome GetLastFallOutcome() const { return LastFallOutcome; }
+	/** Heavy-wound landings (knocked down by the fall) and deadly ones (smokes). */
+	int32 GetHeavyWoundCount() const { return HeavyWoundCount; }
+	int32 GetLethalFallCount() const { return LethalFallCount; }
+
+	/** The animation phase of a fall this frame (FallRules::FallAnimPhase): the operative ABP's FallStates machine follows it. */
+	FallRules::EFallAnimPhase GetAnimPhase() const { return AnimPhase; }
 
 private:
 	ACharacter* GetCharacter() const;
 	float GetHalfHeight() const;
 	float FeetZ() const;
+	/** The gravity of his ledge falls (the world's x air.gravity_scale): the run-up plan and the HUD prediction. */
 	float Gravity() const;
+	/** The world's gravity (cm/s2, positive). */
+	float WorldGravity() const;
+	/** The ledge fall's stronger gravity on his movement (air.gravity_scale) on / back to his own; idempotent. */
+	void SetAirGravity(bool bOn);
 	class UDropLinkSubsystem* GetLinks() const;
 
 	void StartDrop();
@@ -163,6 +182,15 @@ private:
 	void PlayLandClip();
 	UAnimSequenceBase* LoadClip(const TSoftObjectPtr<UAnimSequenceBase>& Clip) const;
 	void SetRootMotionIgnored(bool bIgnored);
+
+	/** The slot clip fallback is on (Codex.Fall.SlotClips: 1 always, 2 when the ABP has no "FallStates" machine). */
+	bool UseSlotClips() const;
+	/** The landing's damage, floating text, counters; the knockdown of a heavy wound is returned (the caller starts it at a safe point). */
+	FallRules::FFallVerdict ApplyLanding(ACharacter& Character, float Height);
+	/** The ABP phase (GetAnimPhase) from his movement and this component's state. */
+	void UpdateAnimPhase(float DeltaTime);
+	/** A heavy-wound knockdown of a fall this component did not run (deferred out of the movement mode callback). */
+	void StartFallKnockdown(EKnockdownDirection Side, EKnockdownCause Cause);
 
 	UFUNCTION()
 	void HandleMovementModeChanged(ACharacter* Character, EMovementMode PrevMovementMode, uint8 PreviousCustomMode);
@@ -202,6 +230,9 @@ private:
 	bool bMovementSaved = false;
 	uint8 SavedRootMotionMode = 0;
 	bool bRootMotionSaved = false;
+	/** His movement's own GravityScale while the air gravity is on. */
+	float SavedGravityScale = 1.f;
+	bool bAirGravityOn = false;
 
 	/** A fall this component did not start (walked / pushed off by other means): judged on landing. */
 	bool bTrackingOtherFall = false;
@@ -221,4 +252,15 @@ private:
 	FVector LastLandingLocation = FVector::ZeroVector;
 	float LastAirSpeed = 0.f;
 	bool bPlayedFallClip = false;
+	bool bLastFallAnimFalling = false;
+	FallRules::EFallOutcome LastFallOutcome = FallRules::EFallOutcome::Unhurt;
+	int32 HeavyWoundCount = 0;
+	int32 LethalFallCount = 0;
+	/** A heavy-wound knockdown of an "other" fall, started on the next tick. */
+	bool bPendingFallKnockdown = false;
+
+	FallRules::EFallAnimPhase AnimPhase = FallRules::EFallAnimPhase::Grounded;
+	/** Seconds the movement has been Falling (0 on the ground) and since the last Falling phase ended (-1 = long ago). */
+	float FallingSeconds = 0.f;
+	float SecondsSinceFallEnded = -1.f;
 };

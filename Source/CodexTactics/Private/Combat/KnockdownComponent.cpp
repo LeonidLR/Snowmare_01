@@ -234,10 +234,10 @@ bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdo
 	SetPhase(EKnockdownPhase::Falling, Old); // the owner interrupts its actions first (stops the upper-body montages)
 	PlayPhaseClip();
 	static const TCHAR* Causes[] = { TEXT("knocked down"), TEXT("knocked down by a pounce"), TEXT("knocked down by a heavy blow"),
-		TEXT("knocked down by the blast"), TEXT("knocked down by a heavy hit") };
-	PostFeedLine(FString::Printf(TEXT("%s is %s!"), *GetUnitName(), Causes[FMath::Clamp(static_cast<int32>(Cause), 0, 4)]));
+		TEXT("knocked down by the blast"), TEXT("knocked down by a heavy hit"), TEXT("badly hurt by the fall") };
+	PostFeedLine(FString::Printf(TEXT("%s is %s!"), *GetUnitName(), Causes[FMath::Clamp(static_cast<int32>(Cause), 0, static_cast<int32>(UE_ARRAY_COUNT(Causes)) - 1)]));
 	UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s %s, falls on the %s (fall %.2f s, downed %.2f s, get-up %.2f s at %.2fx)"),
-		*GetUnitName(), Causes[FMath::Clamp(static_cast<int32>(Cause), 0, 4)], Side == EKnockdownDirection::Front ? TEXT("face") : TEXT("back"),
+		*GetUnitName(), Causes[FMath::Clamp(static_cast<int32>(Cause), 0, static_cast<int32>(UE_ARRAY_COUNT(Causes)) - 1)], Side == EKnockdownDirection::Front ? TEXT("face") : TEXT("back"),
 		State.FallDuration, State.DownedDuration, State.GetUpDuration, GetUpPlayRate);
 	return true;
 }

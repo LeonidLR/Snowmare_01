@@ -330,12 +330,20 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	TArray<float> MinimapFloorsCm;
 	/**
-	 * "drop_links": true (UE-only, 2026-11-03, docs/systems/stances-and-movement.md "Falls and drops"): UDropLinkSubsystem generates the
-	 * one-way drop nav links off this map's navmesh edges at level start (Codex.Fall.DropLinks 1, the default; 0 = never, 2 = every map).
-	 * The level generator's builder writes it into its maps' level JSON; the hand-made maps stay without until the game designer decides.
+	 * "drop_links": true / false (UE-only, 2026-11-03, docs/systems/stances-and-movement.md "Falls and drops"): UDropLinkSubsystem generates
+	 * the one-way drop nav links off this map's navmesh edges at level start. User decision 2026-11-03: every map has them (Codex.Fall.DropLinks
+	 * 2, the default) unless its level JSON says "drop_links": false (bDropLinksOff); with Codex.Fall.DropLinks 1 only the maps that say true.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	bool bDropLinks = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	bool bDropLinksOff = false;
+	/**
+	 * "drop_link_exclusions": [{"min": [x, y, z], "max": [x, y, z], "why": "..."}] (cm, world): no drop link starts or lands inside these boxes
+	 * (a local suppression of an unwanted shortcut, e.g. one that skips a scripted tutorial gate).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	TArray<FBox> DropLinkExclusions;
 	/** "minimap": {"bounds_cm": [min_x, min_y, max_x, max_y]}: the mapped area; invalid = the navmesh bounds volumes. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FBox2D MinimapBoundsCm = FBox2D(ForceInit);
