@@ -468,7 +468,8 @@ ordered peek - the v2.4 corner stack of a plain move to a wall's end is unchange
 - *Who* (`PickCornerLeader`): the able member farthest along the wall towards the ordered corner (the wall line's direction from K's place
   to the corner); within 10 cm along the wall the one nearer the corner point. Able (`USquadSubsystem::CanTakeWallLead`): alive, not knocked
   down, not on a ladder, not panicking, not on Guard (the per-man hold - such a man is not in the formation anyway). Solo is squad-wide in
-  the game: in Solo there is no squad peek at all (the single operative's peek applies), so "in solo mode" is covered by that.
+  the game: in Solo there is no squad peek at all (the single operative's peek applies), so "in solo mode" is covered by that - except a
+  BOX SELECTION in cover along one wall (2026-11-03, below): the same "nearest that corner" rule for the selected members.
 - *The stack* (`StackOrder`, `StackLine`, `Plan`): the others in the order they stood from the corner (nobody crosses another), those who
   cannot walk last; the leader's place = his own position projected onto the wall layout's line, the first man one wall spacing + 30 cm
   behind him (`FormationWallEnd::AtEndGapCm`: the leader in his corner cover stands ~20 cm behind his stack place), the rest a spacing
@@ -491,6 +492,18 @@ way; (e) while the leader peeks at one corner, the squad's guide lines along the
 own wall-edge cover switch (a dash alone).
 Runtime: `Codex.Formation.WallLeadership` (default 1; 0 = the v2.4 squad peek, A/B). Details: `docs/systems/squad-and-orders.md` "Wall
 leadership"; smoke `WallLeadershipSmoke`.
+
+**The walk into the stack along the same wall (the game designer's bug 2026-11-03, branch fix/wall-slide-solo-peek; runtime only).** A member
+whose walk into the stack runs along the SAME wall (within `squad_walls.json` `reform_along_wall_off_m` 1.2 m of the stack's face line) keeps
+his crouch and his look sector - the rear-looker walks backwards / sideways (`move.backward_mult`); the 2026-11-03 item 2 speed-ups (stand up
+beyond `reform_stand_m`, the man looking back faces his walk) apply only to a walk that leaves the wall. The steered last 3 m and the short
+path braking stay. `Codex.Formation.ReformAlongWall` (1; 0 = item 2's rules everywhere). Smoke `WallLeadershipSlideSmoke`.
+
+**The box selection's corner peek (the game designer's bug 2026-11-03).** Solo mode (or a box selection in group mode), the selected members
+in cover along one wall, a corner peek ordered at its end: the selected member nearest that end along the wall takes the corner and peeks,
+the others side-step along the wall into a stack behind him, 1 m apart, in the order they stand (`FormationWallLeadership::PlanGroupCornerPeek`,
+`ACodexTacticsPlayerController::PlanGroupCornerPeek`); no leader change. `Codex.Squad.GroupCornerPeek` (1; 0 = the selection's leader alone).
+Smoke `GroupCornerPeekSmoke`.
 
 ## The far side of a wall - one route round it (game designer play-test 2026-11-01; runtime only, no TS / golden change; branch formation/wall-far-side)
 

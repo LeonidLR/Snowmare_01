@@ -27,6 +27,13 @@ struct CODEXTACTICS_API FSquadWallTuning
 	 */
 	float ReformStandCm = 300.f;
 	/**
+	 * Bug 2026-11-03 (the game designer, L_Gen_Depot_1: a corner peek at the far end of the same 31 m wall - all three stood up and faced
+	 * their walk, the rear wide open): a member within this of the new stack's face line walks into it ALONG THE SAME WALL - he keeps his
+	 * crouch and his look sector (the rear-looker walks backwards / sideways); ReformStandCm and the face-the-walk rule apply only to a walk
+	 * that leaves the wall. 0 = item 2's rules everywhere, cm (reform_along_wall_off_m, metres in the file).
+	 */
+	float ReformAlongWallOffCm = 120.f;
+	/**
 	 * Item 2: the path braking distance of a follower's move into a wall order's place, cm (wall_path_braking_cm; an own order keeps the
 	 * movement config's 140 cm). The formation's own arrival law (FormationRuntime::FollowerMove, speed = distance x FollowGain) already slows
 	 * him; the path's braking on top of it made the last metre a crawl (2-40 cm/s for seconds - the "shuffle in place").

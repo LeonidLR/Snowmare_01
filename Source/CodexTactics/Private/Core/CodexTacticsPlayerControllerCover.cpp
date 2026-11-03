@@ -19,6 +19,7 @@
 #include "Tactics/GroupCoverRules.h"
 #include "Data/SquadWallTuning.h"
 #include "Formation/FormationRuntimeRules.h"
+#include "Formation/FormationWallLeadershipRules.h"
 #include "Tactics/CoverWrapRules.h"
 #include "Tactics/WallSideRules.h"
 #include "NavigationPath.h"
@@ -49,6 +50,11 @@ namespace
 		TEXT("1 (default): in a group cover order the others wait ~1.6 m off the wall until the leader has taken his cover (game designer 2026-10-23); 0: the old rule (everybody runs straight into his slot)."));
 	TAutoConsoleVariable<int32> CVarGroupCoverNearbyCovers(TEXT("Codex.GroupCover.NearbyCovers"), 1,
 		TEXT("1 (default; game designer bug report 2026-11-02 item 3): in a group cover order a member with no slot at the leader's wall takes a free cover of another object within squad_walls.json follower_cover_radius_m facing the same side, prone behind the leader's cover only when none fits; 0: prone behind it at once (before 2026-11-03)."));
+
+	TAutoConsoleVariable<int32> CVarGroupCornerPeek(TEXT("Codex.Squad.GroupCornerPeek"), 1,
+		TEXT("1 (default; the game designer's bug 2026-11-03): a corner peek ordered for a box selection in cover along one wall - the selected member nearest that end takes the corner, the others side-step into a stack behind him (the formation's wall-leadership rule); 0: the selection's leader alone peeks (before)."));
+	/** A box-selected member within this of his place in the group's corner stack stays where he is (no side-step), cm. */
+	constexpr double GroupCornerPeekKeepCm = 30.0;
 
 	/** Knee height of the nearby cover traces above the slot's feet (finds 60 cm covers, as CoverTraceRules' knee trace), cm. */
 	constexpr float NearbyCoverKneeCm = 45.f;
@@ -198,14 +204,36 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		{
 			HideCoverPreview();
 			UpdateCornerPeekHover(Operative, nullptr);
-			const EOperativeOrderResult Result = Operative->OrderCornerPeek(PeekSide, PeekEdge);
+			// The game designer's bug 2026-11-03: a box selection in cover along that wall - the member nearest the end takes the corner, the
+			// others side-step into a stack behind him (not the selection's leader alone, round the man between him and the corner).
+			AOperativeCharacter* GroupPeeker = nullptr;
+			ECoverFacing GroupSide = PeekSide;
+			float GroupEdge = PeekEdge;
+			TArray<TPair<AOperativeCharacter*, FCoverSlot>> GroupStack;
+			const bool bGroupPeek = !TurnBased && PlanGroupCornerPeek(Operative, Hit, GroupPeeker, GroupSide, GroupEdge, &GroupStack) && GroupPeeker;
+			AOperativeCharacter* PeekOperative = bGroupPeek ? GroupPeeker : Operative;
+			const EOperativeOrderResult Result = PeekOperative->OrderCornerPeek(bGroupPeek ? GroupSide : PeekSide, bGroupPeek ? GroupEdge : PeekEdge);
+			if (bGroupPeek && Result == EOperativeOrderResult::Accepted)
+			{
+				FString Line;
+				for (const TPair<AOperativeCharacter*, FCoverSlot>& Each : GroupStack)
+				{
+					const EOperativeOrderResult Step = Each.Key->OrderShimmyTo(Each.Value);
+					Line += FString::Printf(TEXT(" %s -> (%.0f, %.0f) %d;"), *Each.Key->DisplayName.ToString(), Each.Value.WorldLocation.X, Each.Value.WorldLocation.Y,
+						static_cast<int32>(Step));
+				}
+				UE_LOG(LogCodexTactics, Display, TEXT("[Cover] group corner peek: %s (nearest the %s end) takes the corner, the selection's leader %s; the stack behind him:%s"),
+					*PeekOperative->DisplayName.ToString(), GroupSide == ECoverFacing::Left ? TEXT("left") : TEXT("right"), *Operative->DisplayName.ToString(),
+					Line.IsEmpty() ? TEXT(" everyone in place") : *Line);
+			}
 			UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
 			if (Result == EOperativeOrderResult::Accepted)
 			{
-				ControllerCommands::Report(this, PlayerCommands::CoverCornerPeek, nullptr, false, false, Operative, Hit.ImpactPoint);
+				ControllerCommands::Report(this, PlayerCommands::CoverCornerPeek, nullptr, false, bGroupPeek, PeekOperative, Hit.ImpactPoint);
 				if (Messages)
 				{
-					Messages->PostMessage(Operative->DisplayName, LOCTEXT("CornerPeek", "🎯 Covering the corner."));
+					Messages->PostMessage(PeekOperative->DisplayName, bGroupPeek ? LOCTEXT("GroupCornerPeek", "🎯 Covering the corner - the others stack up behind me.")
+						: LOCTEXT("CornerPeek", "🎯 Covering the corner."));
 				}
 			}
 			else if (Messages)
@@ -362,6 +390,78 @@ bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharact
 	return FindCornerPeekForSlot(Operative->GetCoverSlot(), Hit, OutSide, OutEdgeAlongCm);
 }
 
+bool ACodexTacticsPlayerController::PlanGroupCornerPeek(AOperativeCharacter* Operative, const FHitResult& Hit, AOperativeCharacter*& OutPeeker, ECoverFacing& OutSide,
+	float& OutEdgeAlongCm, TArray<TPair<AOperativeCharacter*, FCoverSlot>>* OutStack) const
+{
+	OutPeeker = nullptr;
+	if (OutStack)
+	{
+		OutStack->Reset();
+	}
+	const USquadSubsystem* Squad = GetSquad();
+	UWorld* World = GetWorld();
+	ECoverFacing Side = ECoverFacing::Right;
+	float EdgeAlong = 0.f;
+	if (CVarGroupCornerPeek.GetValueOnGameThread() == 0 || !Squad || !World || !Operative || !Squad->HasMultiSelection() || !Squad->IsGroupSelected(Operative)
+		|| GetActiveTurnBased() || !FindCornerPeekForHit(Operative, Hit, Side, EdgeAlong))
+	{
+		return false;
+	}
+	// The selected members in cover at his wall, each one's place along it (from his slot, as the edge).
+	const FCoverSlot Base = Operative->GetCoverSlot();
+	TArray<AOperativeCharacter*> Who;
+	TArray<double> Along;
+	TArray<bool> Able;
+	for (AOperativeCharacter* Member : Squad->GetSelectedGroup())
+	{
+		if (!Member || !Member->bInCover || !CoverTraceRules::IsSameWall(Base, Member->GetCoverSlot()))
+		{
+			continue;
+		}
+		Who.Add(Member);
+		Along.Add(CoverTraceRules::AlongWallDistance(Base, Member->GetActorLocation()));
+		Able.Add(Member->IsInPeekableCover() && !Member->IsKnockedDown() && !Member->IsPanicking() && !Member->IsRaging());
+	}
+	if (Who.Num() < 2)
+	{
+		return false;
+	}
+	const float StandOff = CoverFacingRules::CornerStandOff(Side, Operative->GetStance() == EOperativeStance::Crouching || Base.Height == ECoverHeight::LowCover,
+		Operative->GetCoverFacingConfig());
+	const FGroupCoverConfig GroupConfig;
+	const FormationWallLeadership::FGroupCornerPeekPlan Plan = FormationWallLeadership::PlanGroupCornerPeek(Along, Able, EdgeAlong,
+		CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlong, StandOff), GroupConfig.SlotSpacingCm, GroupCornerPeekKeepCm);
+	if (!Who.IsValidIndex(Plan.Peeker))
+	{
+		return false;
+	}
+	AOperativeCharacter* Peeker = Who[Plan.Peeker];
+	if (Peeker == Operative)
+	{
+		OutSide = Side;
+		OutEdgeAlongCm = EdgeAlong;
+	}
+	else if (!FindCornerPeekForHit(Peeker, Hit, OutSide, OutEdgeAlongCm))
+	{
+		return false;
+	}
+	OutPeeker = Peeker;
+	if (OutStack)
+	{
+		for (int32 Position = 0; Position < Plan.Order.Num() && Position < Plan.PlaceAlong.Num(); ++Position)
+		{
+			AOperativeCharacter* Member = Who[Plan.Order[Position]];
+			FCoverSlot Target;
+			if (FMath::Abs(Plan.PlaceAlong[Position] - Along[Plan.Order[Position]]) > 1.0
+				&& CoverTraceRules::FindShimmySlot(World, Member->GetCoverSlot(), Base.WallPoint + Base.RightTangent() * static_cast<float>(Plan.PlaceAlong[Position]), Target))
+			{
+				OutStack->Add(TPair<AOperativeCharacter*, FCoverSlot>(Member, Target));
+			}
+		}
+	}
+	return true;
+}
+
 bool ACodexTacticsPlayerController::FindCornerPeekForSlot(const FCoverSlot& Slot, const FHitResult& Hit, ECoverFacing& OutSide, float& OutEdgeAlongCm) const
 {
 	const AActor* HitActor = Hit.GetActor();
@@ -503,6 +603,17 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 			PeekHoverPoint = Hit->ImpactPoint;
 			PeekHoverSlotLocation = Operative->GetCoverSlot().WorldLocation;
 			bPeekHoverEdge = FindCornerPeekForHit(Operative, *Hit, PeekHoverSide, PeekHoverEdgeAlong);
+			// The game designer's bug 2026-11-03: a box selection along that wall - the ghost is the member who would take the corner.
+			AOperativeCharacter* GroupPeeker = nullptr;
+			ECoverFacing GroupSide = PeekHoverSide;
+			float GroupEdge = PeekHoverEdgeAlong;
+			PeekHoverGroupPeeker.Reset();
+			if (bPeekHoverEdge && PlanGroupCornerPeek(Operative, *Hit, GroupPeeker, GroupSide, GroupEdge, nullptr) && GroupPeeker && GroupPeeker != Operative)
+			{
+				PeekHoverGroupPeeker = GroupPeeker;
+				PeekHoverSide = GroupSide;
+				PeekHoverEdgeAlong = GroupEdge;
+			}
 		}
 		bEdge = bPeekHoverEdge;
 	}
@@ -537,6 +648,10 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 	else if (CornerPeekGhost)
 	{
 		// The corner stand point: the cover slot moved along the wall to the stand-off from that edge.
+		if (AOperativeCharacter* GroupPeeker = PeekHoverGroupPeeker.Get(); GroupPeeker && GroupPeeker->IsInPeekableCover() && HoverSquad && HoverSquad->HasMultiSelection())
+		{
+			Operative = GroupPeeker; // the box selection's corner peek (bug 2026-11-03): his ghost, from his slot
+		}
 		FCoverSlot Corner = Operative->GetCoverSlot();
 		const float StandOff = CoverFacingRules::CornerStandOff(PeekHoverSide, Operative->GetStance() == EOperativeStance::Crouching
 			|| Operative->CurrentCoverHeight == ECoverHeight::LowCover, Operative->GetCoverFacingConfig());

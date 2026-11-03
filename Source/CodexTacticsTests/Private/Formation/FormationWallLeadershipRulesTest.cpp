@@ -218,4 +218,56 @@ bool FFormationWallLeadershipReformTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipAlongWallTest, "AlongWallKeepsPose")
+bool FFormationWallLeadershipAlongWallTest::RunTest(const FString&)
+{
+	// The game designer's bug 2026-11-03 (L_Gen_Depot_1: the right-end peek after the left-end one at the same 31 m wall - all three stood
+	// up and faced their walk, the rear open): a walk along the same wall keeps the crouch and the rear look; leaving the wall does not.
+	using namespace FormationWallLeadership;
+	using namespace FormationWallLeadershipTestUtil;
+	const FFormationConfig Config;
+	const FVector2D Place(500.0, -65.0);
+	TestTrue(TEXT("31 m along the wall line (on it): along the wall"), ReformAlongWall(FVector2D(-2600.0, -65.0), Place, LeadNormalYaw, 120.0));
+	TestTrue(TEXT("a man 1 m off the face line (stepped out a little): still along the wall"), ReformAlongWall(FVector2D(-1000.0, -165.0), Place, LeadNormalYaw, 120.0));
+	TestFalse(TEXT("a man in a cover 4 m out in front of the wall: leaves it"), ReformAlongWall(FVector2D(-200.0, -465.0), Place, LeadNormalYaw, 120.0));
+	TestFalse(TEXT("reform_along_wall_off_m 0: item 2's rules everywhere"), ReformAlongWall(FVector2D(-2600.0, -65.0), Place, LeadNormalYaw, 0.0));
+	TestFalse(TEXT("along the wall, crouched, 31 m: no stand-up"), ReformStands(3100.0, true, 300.0, true));
+	TestTrue(TEXT("off the wall, crouched, 4 m: stands up for the walk (item 2)"), ReformStands(400.0, true, 300.0, false));
+	TestFalse(TEXT("along the wall, 31 m: the rear-looker keeps looking back"), ReformRearFacesWalk(3100.0, false, Config, true));
+	TestFalse(TEXT("along the wall, already turned: looks back again at once"), ReformRearFacesWalk(3100.0, true, Config, true));
+	TestTrue(TEXT("off the wall, far: faces his walk (item 2)"), ReformRearFacesWalk(1000.0, false, Config, false));
+	return true;
+}
+
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipGroupPeekTest, "GroupCornerPeek")
+bool FFormationWallLeadershipGroupPeekTest::RunTest(const FString&)
+{
+	// The game designer's bug 2026-11-03 (solo mode, three box-selected in cover along a wall, a corner peek: the middle man - the selection's
+	// leader - side-stepped slowly to the corner round the end man): the man nearest the clicked end takes it, the others stack behind him.
+	using namespace FormationWallLeadership;
+	// Three along the wall at -100 / 0 / +100 (the middle one is the selection's leader), the walls ends at -300 / +300, stand 40 cm in.
+	const TArray<double> Along = { 0.0, -100.0, 100.0 };
+	const TArray<bool> Able = { true, true, true };
+	const FGroupCornerPeekPlan Left = PlanGroupCornerPeek(Along, Able, -300.0, -260.0, 100.0, 30.0);
+	TestEqual(TEXT("left end: the left-end man (index 1) peeks, not the middle one"), Left.Peeker, 1);
+	TestEqual(TEXT("left end: towards -X"), Left.Toward, -1.0);
+	TestTrue(TEXT("left end: the middle man, then the right one behind him"), Left.Order == TArray<int32>({ 0, 2 }));
+	TestTrue(TEXT("left end: places 1 m apart behind his stand point"), Left.PlaceAlong.Num() == 2 && FMath::IsNearlyEqual(Left.PlaceAlong[0], -160.0)
+		&& FMath::IsNearlyEqual(Left.PlaceAlong[1], -60.0));
+	const FGroupCornerPeekPlan Right = PlanGroupCornerPeek(Along, Able, 300.0, 260.0, 100.0, 30.0);
+	TestEqual(TEXT("right end: the right-end man (index 2) peeks"), Right.Peeker, 2);
+	TestTrue(TEXT("right end: the middle man, then the left one"), Right.Order == TArray<int32>({ 0, 1 }) && FMath::IsNearlyEqual(Right.PlaceAlong[0], 160.0)
+		&& FMath::IsNearlyEqual(Right.PlaceAlong[1], 60.0));
+	// Already stacked at the end: nobody moves (within KeepCm).
+	const FGroupCornerPeekPlan Kept = PlanGroupCornerPeek({ 250.0, 150.0, 60.0 }, Able, 300.0, 260.0, 100.0, 30.0);
+	TestTrue(TEXT("a stack already at the end: the others stay where they are"), Kept.Peeker == 0 && FMath::IsNearlyEqual(Kept.PlaceAlong[0], 150.0)
+		&& FMath::IsNearlyEqual(Kept.PlaceAlong[1], 60.0));
+	// The end man cannot (knocked down): the next nearest takes it; the unable one stays out of the line.
+	const FGroupCornerPeekPlan Down = PlanGroupCornerPeek(Along, { true, false, true }, -300.0, -260.0, 100.0, 30.0);
+	TestTrue(TEXT("the left-end man down: the middle man peeks, the right one behind him, the down man not in the line"), Down.Peeker == 0
+		&& Down.Order == TArray<int32>({ 2 }));
+	TestEqual(TEXT("nobody able: no plan"), PlanGroupCornerPeek(Along, { false, false, false }, 300.0, 260.0, 100.0, 30.0).Peeker, static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

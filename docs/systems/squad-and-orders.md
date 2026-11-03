@@ -309,6 +309,46 @@ from") - the squad only walked to that wall, the member who had peeked stayed in
   his corner within ~0.5-0.7 s, one carried peek, the peek pose held, the others at W_D_10 behind him, nobody left at W_D_9. A/B
   `-PreCmds "Codex.Formation.PeekCarry 0"`. Stills `Saved/Screenshots/Bug04/` (`... SquadPeekNextWallSmoke Shot`, rendered).
 
+### The squad at walls - follow-up (2026-11-03, branch fix/wall-slide-solo-peek; the game designer's two bugs on `L_Gen_Depot_1`, editor PIE)
+
+- **1 - the long same-wall slide stood everyone up (a regression of item 2 below, commit ab5494bf).** Formation mode, the three crouched along a
+  long wall: the corner peek at its LEFT end was fine, then the RIGHT end (31 m along the same wall) - all three stood up, turned to face their
+  walk and walked along the wall, the rear wide open; "it worked better before". Cause: item 2's speed-ups were written for the re-form's
+  slowness in general - `FormationWallLeadership::ReformStands` stood every crouched man > `reform_stand_m` (3 m) from his place up and
+  `ReformRearFacesWalk` turned the man looking back to his walk - so a walk along the SAME wall lost the crouch and the rear look (the user's log:
+  `wall leadership: Engineer stands up for the walk to his place in the stack (3156 cm)`, `Medic-Sapper (looking back) faces his walk into the
+  stack: 3225 cm off his place`). **Fix:** `FormationWallLeadership::ReformAlongWall` - a member within `reform_along_wall_off_m` (1.2 m,
+  `squad_walls.json`; 0 = item 2's rules everywhere) of the new stack's face line walks into it along the same wall: `OrderWallLeadershipPeek`
+  marks him (`FFollowerState::bReformAlongWall`), he keeps his crouch (the old peeker who stands in his high corner cover crouches for the walk
+  when the wall order is crouched) and his look - the rear-looker walks backwards / sideways at `move.backward_mult` as before item 2
+  (`ReformStands` / `ReformRearFacesWalk` take `bAlongWall`). The stand-up and the face-the-walk rule stay for a walk that LEAVES the wall
+  (another object's cover - item 3's nearby covers -, a prone spot, the open ground). Kept from item 2: the steered last 3 m into a wall place,
+  the 30 cm path braking (they removed the jostling: 0 restarts). Log `[Formation] wall leadership: X walks along the wall into his place in
+  the stack (N cm) - crouched, keeps his look`. A/B `Codex.Formation.ReformAlongWall 0`. Numbers (`WallLeadershipSlideSmoke`, lab W_B_3,
+  the west peek from mid-wall then the east peek, 11 / 22 m): before - both followers stood up, the rear watched 0 % of the walk (gaps
+  4.7 / 9.4 s), settled 6.5 / 11.4 s after the click; after - nobody stands, the rear watched 100 % (no gap), settled 10.3 / 19.9 s after the
+  click (the crouched backward pace, 0.9 x 125 cm/s), 0 restarts. The cost: a long slide takes longer (the leader walks upright and reaches his
+  corner first: 5.3 / 10.1 s). `WallLeadershipSmoke`'s re-form target: <= 1.5 s after the leader for a re-form whose longest walk is <= 3 m,
+  the slide's crouched-pace bound (0.9 s per metre of the longest walk + 4 s after the click) for a longer one.
+- **2 - a box-selected group's corner peek (solo mode).** Solo mode, all three box-selected in cover along a wall (the legacy group cover
+  order), a corner peek ordered at its end: the MIDDLE man - the selection's leader - side-stepped to the corner, round the end man off the wall
+  (89 cm off the cover line), 5.3 s for 3.7 m, while the end man stayed. Cause: the click's corner peek (`TryHandleCoverClick`) was the
+  single operative's `OrderCornerPeek` on the selection's leader; the formation's wall leadership (`PlanWallLeadership`) refuses solo mode and a
+  box selection. **Fix:** `ACodexTacticsPlayerController::PlanGroupCornerPeek` (pure `FormationWallLeadership::PlanGroupCornerPeek`, the wall
+  leadership's rule for the selection): of the selected members in cover at the leader's wall the one NEAREST the clicked end (along the wall)
+  takes the corner and peeks (`OrderCornerPeek` from his own slot); the others side-step along the wall (`OrderShimmyTo`, the cover side-step
+  pace) into a stack behind his stand point, a group cover slot spacing (100 cm) apart, in the order they stand (nobody crosses another, a man
+  within 30 cm of his place stays); a knocked-down / panicking member stays where he is. The hover ghost is that man's. The selection and its
+  leader do not change (solo mode keeps its scout). Log `[Cover] group corner peek: X (nearest the left end) takes the corner, the selection's
+  leader Y; the stack behind him: ...`. A/B `Codex.Squad.GroupCornerPeek 0`. Numbers (`GroupCornerPeekSmoke`, W_B_3): west end (group 4 m
+  from it) before - the Commander (middle) peeked, 89 cm off the wall, the Engineer left 100 cm "ahead" of him, 5.3 s; after - the Engineer
+  (west end) peeks, the others 100 / 200 cm behind him in cover, max 13 cm off the cover line, 2.6 s; east end from that stack (22 m): the
+  Medic-Sapper (east end) peeks, the others behind him, 20.9 s at the side-step pace. Not covered: a box selection NOT in cover (e.g. the
+  formation's wall layout, then solo + box select): the end click there stays the group's cover order at that end.
+- **Checks:** tests `CodexTactics.Formation.WallLeadership.AlongWallKeepsPose`, `.GroupCornerPeek`; smokes `WallLeadershipSlideSmoke`,
+  `GroupCornerPeekSmoke` (new, L_FormationLab), `WallLeadershipSmoke`; stills `Saved/Screenshots/WallSlide/`
+  (`-RenderOffscreen ... "-ExecCmds=CodexTactics.WallLeadershipSlideSmoke Shot"` / `GroupCornerPeekSmoke Shot`).
+
 ### The squad at walls (2026-11-03, branch fix/squad-at-walls; the game designer's bug report 2026-11-02 items 5 / 3 / 2 / 2b on `L_Gen_Depot_1`)
 
 Tunables: `Content/Data/AI/squad_walls.json` (`SquadWallTuning`, read once on first use; **every default is the agent's proposal, pending the

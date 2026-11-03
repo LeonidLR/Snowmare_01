@@ -25,6 +25,9 @@ namespace SquadSubsystemWallLeadershipLocal
 	TAutoConsoleVariable<int32> CVarFormationWallLeadership(TEXT("Codex.Formation.WallLeadership"), 1,
 		TEXT("Game designer 2026-11-01: 1 = the squad's corner peek makes the member nearest that corner the formation leader, the others stack behind him along the near face; 0 = the v2.4 squad peek (the corner stack's point man peeks, the leader stays) - A/B"));
 
+	TAutoConsoleVariable<int32> CVarFormationReformAlongWall(TEXT("Codex.Formation.ReformAlongWall"), 1,
+		TEXT("The game designer's bug 2026-11-03 (a corner peek at the far end of the same long wall: all three stood up and faced their walk, the rear open): 1 = a member walking into the wall-leadership stack ALONG THE SAME WALL keeps his crouch and his look (squad_walls.json reform_along_wall_off_m); 0 = item 2's stand-up / face-the-walk for every far member (A/B)"));
+
 	/** Already in cover at that wall within this of the corner slot: the peek from where he is (no walk), cm. */
 	constexpr float InPlaceCm = 120.f;
 }
@@ -179,23 +182,50 @@ bool USquadSubsystem::OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const
 	HoldCornerStack(*Peeker, Plan.StackSlots, Plan.End, bCrouch);
 	// Item 2 (game designer 2026-11-02: the stack ended right but took far too long - the others crept along crouched): a crouched member far
 	// from his place in the stack stands up for the walk (squad_walls.json reform_stand_m); he crouches again at his place (SettleFormationWallPose).
-	const float StandCm = SquadWallTuning::Get().ReformStandCm;
+	// The game designer's bug 2026-11-03 (L_Gen_Depot_1, the right-end peek after the left-end one at the same 31 m wall: all three stood up,
+	// faced their walk and walked along the wall, the rear wide open): a walk ALONG THE SAME WALL keeps his crouch and his look (the
+	// rear-looker walks backwards / sideways as before item 2); the stand-up and the face-the-walk rule only for a walk that leaves the wall.
+	const FSquadWallTuning& WallTuning = SquadWallTuning::Get();
+	const float StandCm = WallTuning.ReformStandCm;
+	const float AlongOffCm = CVarFormationReformAlongWall.GetValueOnGameThread() != 0 ? WallTuning.ReformAlongWallOffCm : 0.f;
 	for (int32 Index = 0; Index < Who.Num(); ++Index)
 	{
 		AOperativeCharacter* Member = Who[Index];
 		const FFormationSlot* Place = Plan.Roles.IsValidIndex(Index)
 			? Plan.StackSlots.FindByPredicate([&Plan, Index](const FFormationSlot& Each) { return Each.Role == Plan.Roles[Index]; }) : nullptr;
+		FFollowerState* State = Member ? Followers.FindByPredicate([Member](const FFollowerState& Each) { return Each.Operative.Get() == Member; }) : nullptr;
+		if (State)
+		{
+			State->bReformAlongWall = false;
+			State->bReformTurned = false;
+		}
 		if (Index == Plan.Leader || !Member || !Place || !CanTakeWallLead(Member) || Member->bInCover)
 		{
 			continue;
 		}
 		const double Distance = FVector2D::Distance(FVector2D(Member->GetActorLocation()), Place->Position);
-		if (FormationWallLeadership::ReformStands(Distance, Member->GetStance() == EOperativeStance::Crouching, StandCm))
+		const bool bAlongWall = FormationWallLeadership::ReformAlongWall(FVector2D(Member->GetActorLocation()), Place->Position, Sectors.WallNormalYaw, AlongOffCm);
+		if (State)
+		{
+			State->bReformAlongWall = bAlongWall;
+		}
+		if (bAlongWall && bCrouch && Distance > StandCm && Member->GetStance() == EOperativeStance::Standing)
+		{
+			// The old peeker out of his (high) corner cover stands: the crouched wall order's walk along the wall is crouched too.
+			Member->SetStance(EOperativeStance::Crouching);
+			Member->MarkStanceFromSquad();
+		}
+		if (bAlongWall && Distance > StandCm)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall leadership: %s walks along the wall into his place in the stack (%.0f cm) - %s, keeps his look"),
+				*Member->DisplayName.ToString(), Distance, Member->GetStance() == EOperativeStance::Crouching ? TEXT("crouched") : TEXT("in his stance"));
+		}
+		if (FormationWallLeadership::ReformStands(Distance, Member->GetStance() == EOperativeStance::Crouching, StandCm, bAlongWall))
 		{
 			Member->SetFormationWallPose(false);
 			Member->SetStance(EOperativeStance::Standing);
 			Member->MarkStanceFromSquad(); // the squad's stance: he crouches again at his place
-			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall leadership: %s stands up for the walk to his place in the stack (%.0f cm)"), *Member->DisplayName.ToString(),
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall leadership: %s stands up for the walk to his place in the stack (%.0f cm, off the wall)"), *Member->DisplayName.ToString(),
 				Distance);
 		}
 	}

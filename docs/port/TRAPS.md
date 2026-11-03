@@ -41,4 +41,8 @@
 - **Holding a montage on its last frame:** clear `bEnableAutoBlendOut` on the running instance (`GetActiveInstanceForMontage(Montage)->bEnableAutoBlendOut = false`); the instance copies the montage's flag when it starts, so changing the montage after `PlaySlotAnimationAsDynamicMontage` has no effect.
 - **Blend spaces made by script** (`UOperativeAnimGraphLibrary::FillDirectionalBlendSpace`) need `ValidateSampleData` + `ResampleData`; `PostEditChange()` alone leaves them empty and the player outputs the reference pose (T-pose height) with no error.
 
+- **Never edit a header while a build of that worktree runs (2026-11-03, fix/wall-slide-solo-peek):** a translation unit that started compiling
+  before the edit and finished after it gets an object NEWER than the header but built from the OLD layout, so UBT never rebuilds it - an
+  inline accessor in another module then reads the wrong member (`SquadPeekNextWallSmoke`: `GetSquadPeekCarryCount()` read 2 for 1 carry
+  after `PeekHoverGroupPeeker` was added next to `PeekCarryFired`). Fix: touch the edited headers and rebuild (or `build.ps1 -FullUnity`).
 - **Two agents, one checkout:** set `$env:CODEX_AGENT` (claude / gemini); every build / test / smoke / verify_all takes `Saved/agent.lock` and waits for the other agent (`Scripts/agent_lock.ps1 -Status` shows the holder). Roles and file ownership: `docs/port/TANDEM.md`.

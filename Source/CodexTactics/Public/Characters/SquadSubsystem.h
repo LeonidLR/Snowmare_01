@@ -738,6 +738,11 @@ private:
 		bool bRearTurned = false;
 		/** Item 2 (2026-11-03): the wall-leadership re-form's rear cover faces his walk while his place is far (FormationWallLeadership::ReformRearFacesWalk). */
 		bool bReformTurned = false;
+		/**
+		 * Bug 2026-11-03 (the long same-wall slide): his walk into the wall-leadership stack runs along the same wall (FormationWallLeadership::
+		 * ReformAlongWall, set by OrderWallLeadershipPeek) - he keeps his crouch and his look, no bReformTurned.
+		 */
+		bool bReformAlongWall = false;
 		/** Item 2 (2026-11-03): steering the final approach into his wall place (TryWallFinalApproach); logged once per approach. */
 		bool bFinalApproach = false;
 	};

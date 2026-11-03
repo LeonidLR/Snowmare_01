@@ -1011,8 +1011,9 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		bBackwardDuty = Look && Look->Yaw.IsSet()
 			&& FormationMath::AngleBetween(Look->Yaw.GetValue(), FormationMath::YawOf(Target - Here)) > FormationRuntime::BackwardAngleDeg;
 	}
+	// The game designer's bug 2026-11-03: not along the same wall - he keeps looking back and walks backwards / sideways into the stack.
 	Follower.bReformTurned = bLeadershipReform && bBackwardDuty
-		&& FormationWallLeadership::ReformRearFacesWalk(Distance, Follower.bReformTurned, FormationTuning::Get());
+		&& FormationWallLeadership::ReformRearFacesWalk(Distance, Follower.bReformTurned, FormationTuning::Get(), Follower.bReformAlongWall);
 	if (Follower.bReformTurned != bWasReformTurned)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall leadership: %s (looking back) %s: %.0f cm off his place in the stack"), *Operative.DisplayName.ToString(),
