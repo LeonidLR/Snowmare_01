@@ -857,6 +857,8 @@ private:
 	FVector PeekHoverPoint = FVector(TNumericLimits<float>::Max());
 	FVector PeekHoverSlotLocation = FVector::ZeroVector;
 	bool bPeekHoverEdge = false;
+	/** The box-selected group's corner peek under the cursor (PlanGroupCornerPeek): the member who would take it (the ghost is his). */
+	TWeakObjectPtr<AOperativeCharacter> PeekHoverGroupPeeker;
 	ECoverFacing PeekHoverSide = ECoverFacing::Right;
 	float PeekHoverEdgeAlong = 0.f;
 	/** The squad's corner peek under the cursor (FindSquadCornerPeekForHit; cached while the cursor and the leader rest). */
@@ -877,6 +879,16 @@ private:
 	void StartSquadPeekCarry(USquadSubsystem& Squad, AOperativeCharacter& Leader, const FCoverSlot& Slot, bool bPeekInForce);
 	/** FindCornerPeekForHit's rule from a given wall slot (the operative's own, or the squad's wall behind the leader). */
 	bool FindCornerPeekForSlot(const FCoverSlot& Slot, const FHitResult& Hit, ECoverFacing& OutSide, float& OutEdgeAlongCm) const;
+	/**
+	 * The game designer's bug 2026-11-03 (solo mode, three box-selected in cover along a wall, a corner peek on its end: the MIDDLE man - the
+	 * selection's leader - side-stepped slowly to the corner, round the end man off the wall): the box-selected group's corner peek, the
+	 * formation's wall-leadership rule. Of the selected members in cover at Operative's wall the one nearest the clicked end takes it
+	 * (FormationWallLeadership::PlanGroupCornerPeek): OutPeeker with the side / edge from his own slot; OutStack (optional) = the others'
+	 * side-steps along the wall into their places behind him. False = no group peek here (no box selection, fewer than two of it at that
+	 * wall, not an end of it, Codex.Squad.GroupCornerPeek 0): the single operative's peek.
+	 */
+	bool PlanGroupCornerPeek(AOperativeCharacter* Operative, const FHitResult& Hit, AOperativeCharacter*& OutPeeker, ECoverFacing& OutSide, float& OutEdgeAlongCm,
+		TArray<TPair<AOperativeCharacter*, FCoverSlot>>* OutStack) const;
 
 	/** Godot _set_squad_tactical_cease_fire. */
 	void SetSquadCeaseFire(bool bCease);

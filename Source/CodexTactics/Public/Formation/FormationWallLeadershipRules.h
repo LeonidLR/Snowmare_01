@@ -118,7 +118,7 @@ namespace FormationWallLeadership
 	 * others crept along crouched, the trailing man walked backwards, the last metre was a crawl): a crouched member whose place in the stack
 	 * lies farther than StandCm stands up for the walk (squad_walls.json reform_stand_m; he crouches again at his place).
 	 */
-	CODEXTACTICS_API bool ReformStands(double DistanceToPlaceCm, bool bCrouched, double StandCm);
+	CODEXTACTICS_API bool ReformStands(double DistanceToPlaceCm, bool bCrouched, double StandCm, bool bAlongWall = false);
 
 	/**
 	 * The re-form: the man with the covered approach's REAR duty (looking back the way they came - walking backwards at move.backward_mult) -
@@ -126,5 +126,38 @@ namespace FormationWallLeadership
 	 * faces his walk while his place is far, the walking rear guard's rule v2.6 (FormationSectorRules::RearCatchUp: forward beyond
 	 * move.rear_turn_lag, the rear look again within move.rear_turn_back). bTurned = the last tick's answer.
 	 */
-	CODEXTACTICS_API bool ReformRearFacesWalk(double DistanceToPlaceCm, bool bTurned, const FFormationConfig& Config);
+	CODEXTACTICS_API bool ReformRearFacesWalk(double DistanceToPlaceCm, bool bTurned, const FFormationConfig& Config, bool bAlongWall = false);
+
+	/**
+	 * The game designer's bug 2026-11-03 (L_Gen_Depot_1: a corner peek at the far end of the same long wall - all three stood up, turned to
+	 * their walk and walked along the wall, the rear wide open; "it worked better before"): his walk into the stack runs ALONG THE SAME WALL
+	 * when he stands within OffCm of the stack's face line (the line through his place along the wall; NormalYaw = its outward normal). Then
+	 * he keeps his crouch and his look (the rear-looker walks backwards / sideways as before item 2) - ReformStands / ReformRearFacesWalk's
+	 * bAlongWall; the stand-up and the face-the-walk rules stay for a walk that leaves the wall (another object's cover, a prone spot, the
+	 * open ground). OffCm <= 0 = never (item 2's rules everywhere; squad_walls.json reform_along_wall_off_m).
+	 */
+	CODEXTACTICS_API bool ReformAlongWall(const FVector2D& MemberPos, const FVector2D& PlacePos, float NormalYaw, double OffCm);
+
+	/** The plan of a box-selected group's corner peek at its wall (PlanGroupCornerPeek); indices into the members. */
+	struct FGroupCornerPeekPlan
+	{
+		/** The member who takes the corner and peeks: the able one nearest the clicked end along the wall; INDEX_NONE = nobody able. */
+		int32 Peeker = INDEX_NONE;
+		/** +1 / -1: the corner lies that way along the wall (the along axis of the members' coordinates). */
+		double Toward = 1.0;
+		/** The others behind him, the nearest the corner first (the able ones; those who cannot walk stay where they are, not listed). */
+		TArray<int32> Order;
+		/** Each Order member's place along the wall (same axis); equal to where he stands when he is within KeepCm of his stack place. */
+		TArray<double> PlaceAlong;
+	};
+
+	/**
+	 * The game designer's bug 2026-11-03 (solo mode, three box-selected along a wall, a corner peek ordered: the MIDDLE man - the selection's
+	 * leader - side-stepped slowly to the corner, off the wall round the end man): the formation's wall-leadership rule for the box-selected
+	 * group - the able member NEAREST the clicked end (MemberAlong = each one's place along the wall, EdgeAlong = the end's; within TieCm the
+	 * nearer wins either way) takes the corner and peeks; the others line up behind his stand point (PeekerStandAlong) along the wall, a
+	 * SpacingCm apart, in the order they stand (nobody crosses another); a man already within KeepCm of his place stays where he is.
+	 */
+	CODEXTACTICS_API FGroupCornerPeekPlan PlanGroupCornerPeek(const TArray<double>& MemberAlong, const TArray<bool>& Able, double EdgeAlong, double PeekerStandAlong,
+		double SpacingCm, double KeepCm);
 }

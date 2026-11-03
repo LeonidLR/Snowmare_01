@@ -152,14 +152,73 @@ namespace FormationWallLeadership
 		return Over > 0.0 ? Target - Toward * Over : Target;
 	}
 
-	bool ReformStands(double DistanceToPlaceCm, bool bCrouched, double StandCm)
+	bool ReformStands(double DistanceToPlaceCm, bool bCrouched, double StandCm, bool bAlongWall)
 	{
-		return bCrouched && StandCm > 0.0 && DistanceToPlaceCm > StandCm;
+		return !bAlongWall && bCrouched && StandCm > 0.0 && DistanceToPlaceCm > StandCm;
 	}
 
-	bool ReformRearFacesWalk(double DistanceToPlaceCm, bool bTurned, const FFormationConfig& Config)
+	bool ReformRearFacesWalk(double DistanceToPlaceCm, bool bTurned, const FFormationConfig& Config, bool bAlongWall)
 	{
-		return FormationSectorRules::RearCatchUp(static_cast<float>(DistanceToPlaceCm), bTurned, /*bWayBlocked*/ false, Config);
+		return !bAlongWall && FormationSectorRules::RearCatchUp(static_cast<float>(DistanceToPlaceCm), bTurned, /*bWayBlocked*/ false, Config);
+	}
+
+	bool ReformAlongWall(const FVector2D& MemberPos, const FVector2D& PlacePos, float NormalYaw, double OffCm)
+	{
+		return OffCm > 0.0 && FMath::Abs(FVector2D::DotProduct(MemberPos - PlacePos, FormationMath::Forward(NormalYaw))) <= OffCm;
+	}
+
+	FGroupCornerPeekPlan PlanGroupCornerPeek(const TArray<double>& MemberAlong, const TArray<bool>& Able, double EdgeAlong, double PeekerStandAlong,
+		double SpacingCm, double KeepCm)
+	{
+		FGroupCornerPeekPlan Plan;
+		if (MemberAlong.IsEmpty() || Able.Num() != MemberAlong.Num())
+		{
+			return Plan;
+		}
+		// The corner's side: from the group's middle towards the clicked end.
+		double Sum = 0.0;
+		for (const double Along : MemberAlong)
+		{
+			Sum += Along;
+		}
+		Plan.Toward = EdgeAlong >= Sum / MemberAlong.Num() ? 1.0 : -1.0;
+		for (int32 Index = 0; Index < MemberAlong.Num(); ++Index)
+		{
+			if (!Able[Index])
+			{
+				continue;
+			}
+			if (Plan.Peeker == INDEX_NONE)
+			{
+				Plan.Peeker = Index;
+				continue;
+			}
+			const double Ahead = (MemberAlong[Index] - MemberAlong[Plan.Peeker]) * Plan.Toward;
+			if (Ahead > TieCm || (Ahead >= -TieCm && FMath::Abs(EdgeAlong - MemberAlong[Index]) < FMath::Abs(EdgeAlong - MemberAlong[Plan.Peeker])))
+			{
+				Plan.Peeker = Index;
+			}
+		}
+		if (Plan.Peeker == INDEX_NONE)
+		{
+			return Plan;
+		}
+		for (int32 Index = 0; Index < MemberAlong.Num(); ++Index)
+		{
+			if (Index != Plan.Peeker && Able[Index])
+			{
+				Plan.Order.Add(Index);
+			}
+		}
+		const double Toward = Plan.Toward;
+		Plan.Order.StableSort([&MemberAlong, Toward](const int32 A, const int32 B) { return MemberAlong[A] * Toward > MemberAlong[B] * Toward; });
+		for (int32 Position = 0; Position < Plan.Order.Num(); ++Position)
+		{
+			const double Place = PeekerStandAlong - Toward * SpacingCm * (Position + 1);
+			const double Here = MemberAlong[Plan.Order[Position]];
+			Plan.PlaceAlong.Add(FMath::Abs(Here - Place) <= KeepCm ? Here : Place);
+		}
+		return Plan;
 	}
 
 	int32 AheadInLine(const TArray<bool>& Able, int32 Position)

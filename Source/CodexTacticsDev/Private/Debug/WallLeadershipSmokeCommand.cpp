@@ -9,6 +9,12 @@
 // same checks mirrored; then a ground click away from the wall -> the new leader and the followers' order are kept (no revert); then the
 // layout again mid-wall, the west-end man knocked down, the west end clicked -> the next nearest takes the corner and the lead.
 // A/B: -PreCmds "Codex.Formation.WallLeadership 0" = the v2.4 squad peek (the leader stays: the leadership checks fail).
+// CodexTactics.WallLeadershipSlideSmoke (the game designer's bug 2026-11-03 on L_Gen_Depot_1: the right-end peek after the left-end one at the
+// same long wall - all three stood up, faced their walk and walked along the wall, the rear wide open; item 2's re-form rules): the same
+// path up to the east peek from the west stack (a 22 m slide along the SAME wall), checked for: no follower stands up, someone keeps
+// looking back the way they came (the rear covered) through the walk, the stack settled in a reasonable time (crouched pace), <= 1
+// restart per man. A/B: -PreCmds "Codex.Formation.ReformAlongWall 0" = item 2's stand-up / face-the-walk (the checks fail).
+// "Shot" there saves a still mid-walk and of each stack to Saved/Screenshots/WallSlide/.
 // "Shot" (rendered: UnrealEditor.exe <uproject> /Game/Maps/L_FormationLab -game -RenderOffscreen -ResX=1280 -ResY=720 -UseFixedTimeStep -FPS=60
 // "-LevelJson=L_FormationLab.json" "-ExecCmds=CodexTactics.WallLeadershipSmoke Shot") saves stills of the stack behind the new leader to
 // Saved/Screenshots/WallLeadership/.
@@ -105,6 +111,17 @@ namespace WallLeadershipSmoke
 		/** The worst re-form of the run (s after the leader's arrival) and the most restarts of one man in one re-form. */
 		float WorstReform = 0.f;
 		int32 WorstRestarts = 0;
+		/**
+		 * WallLeadershipSlideSmoke (bug 2026-11-03): the run checks the long same-wall slides - per member whether he stood up during the walk;
+		 * the walk's frames and those with a follower looking back the way they came; the mid-walk still taken.
+		 */
+		bool bSlideMode = false;
+		TArray<bool> Stood;
+		int32 WalkFrames = 0;
+		int32 RearFrames = 0;
+		float LongestGapSeconds = 0.f;
+		float GapSeconds = 0.f;
+		int32 MidShot = 0;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -296,8 +313,8 @@ namespace WallLeadershipSmoke
 
 	void ShootStill(FState& State, const TCHAR* Tag, int32 Angle)
 	{
-		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("WallLeadership") / FString::Printf(TEXT("wall_leadership_%s_%d_%02d.png"), Tag, Angle,
-			State.ShotIndex++);
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / (State.bSlideMode ? TEXT("WallSlide") : TEXT("WallLeadership"))
+			/ FString::Printf(TEXT("%s_%s_%d_%02d.png"), State.bSlideMode ? TEXT("wall_slide") : TEXT("wall_leadership"), Tag, Angle, State.ShotIndex++);
 		FScreenshotRequest::RequestScreenshot(Path, false, false);
 		UE_LOG(LogCodexTactics, Display, TEXT("WallLeadershipSmoke: still %s"), *Path);
 	}
@@ -328,6 +345,12 @@ namespace WallLeadershipSmoke
 		State.bOldLeaderOut = false;
 		State.OldLeaderOutAt = -1.f;
 		State.LeaderArriveAt = -1.f;
+		State.Stood.Init(false, State.Members.Num());
+		State.WalkFrames = 0;
+		State.RearFrames = 0;
+		State.LongestGapSeconds = 0.f;
+		State.GapSeconds = 0.f;
+		State.MidShot = 0;
 		State.Moved.Init(false, State.Members.Num());
 		State.StillFor.Init(0.f, State.Members.Num());
 		State.Restarts.Init(0, State.Members.Num());
@@ -346,6 +369,19 @@ namespace WallLeadershipSmoke
 	/** Item 2 targets (the game designer's bug report 2026-11-02; pending his confirmation): everyone settled this soon after the leader is at his corner, s, and no man starts walking again after a stop more than this often. */
 	constexpr float ReformTargetSeconds = 1.5f;
 	constexpr int32 ReformMaxRestarts = 1;
+
+	/**
+	 * The game designer's bug 2026-11-03: a re-form whose longest walk is farther than this runs along the same wall crouched, the rear-looker
+	 * walking backwards (squad_walls.json reform_along_wall_off_m) - its target is the slide's crouched pace below, not item 2's 1.5 s after
+	 * the leader (who walks upright to his corner); a shorter re-form keeps item 2's target, cm.
+	 */
+	constexpr float ReformLongSlideCm = 300.f;
+	/**
+	 * A reasonable time for the slide at the crouched pace: settled within this much time per metre of the longest walk plus a margin - the
+	 * rear-looker walks backwards at move.backward_mult 0.9 x the crouch walk 125 cm/s = 112 cm/s (0.89 s/m).
+	 */
+	constexpr float SlideSecondsPerMetre = 0.9f;
+	constexpr float SlideMarginSeconds = 4.f;
 
 	/** One frame of the re-form's measurement (item 2). */
 	void SampleReform(FState& State, const AOperativeCharacter* Leader, bool bWest, float DeltaTime, const USquadSubsystem* Squad)
@@ -415,14 +451,104 @@ namespace WallLeadershipSmoke
 				Line += FString::Printf(TEXT(" %s %d restarts, %.0f cm walked;"), *NameOf(Op), State.Restarts[Index], State.PathCm[Index]);
 			}
 		}
+		float LongestCm = 0.f;
+		for (int32 Index = 0; Index < State.Members.Num() && Index < State.PathCm.Num(); ++Index)
+		{
+			const AOperativeCharacter* Op = State.Members[Index].Get();
+			if (Op && Op != Leader && !Op->IsKnockedDown() && Op != State.Knocked.Get())
+			{
+				LongestCm = FMath::Max(LongestCm, State.PathCm[Index]);
+			}
+		}
 		State.WorstReform = FMath::Max(State.WorstReform, Reform);
 		State.WorstRestarts = FMath::Max(State.WorstRestarts, MostRestarts);
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s: re-form %.2f s after the leader reached his corner (he arrived %.2f s, all settled %.2f s after the click):%s"), Label,
-			Reform, State.LeaderArriveAt, SettledAt, *Line);
-		Check(State, Reform <= ReformTargetSeconds, FString::Printf(TEXT("%s: the stack settled %.2f s after the leader reached his corner (target <= %.1f s)"), Label, Reform,
-			ReformTargetSeconds));
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s: re-form %.2f s after the leader reached his corner (he arrived %.2f s, all settled %.2f s after the click; the longest walk %.0f cm):%s"), Label,
+			Reform, State.LeaderArriveAt, SettledAt, LongestCm, *Line);
+		if (LongestCm > ReformLongSlideCm)
+		{
+			// Bug 2026-11-03: a long slide along the same wall - crouched, the rear watched: the crouched pace's bound from the click.
+			const float Limit = LongestCm / 100.f * SlideSecondsPerMetre + SlideMarginSeconds;
+			Check(State, SettledAt <= Limit, FString::Printf(TEXT("%s: a long slide along the same wall (%.0f cm) - the stack settled %.2f s after the click at the crouched pace (<= %.1f s)"),
+				Label, LongestCm, SettledAt, Limit));
+		}
+		else
+		{
+			Check(State, Reform <= ReformTargetSeconds, FString::Printf(TEXT("%s: the stack settled %.2f s after the leader reached his corner (target <= %.1f s)"), Label, Reform,
+				ReformTargetSeconds));
+		}
 		Check(State, MostRestarts <= ReformMaxRestarts, FString::Printf(TEXT("%s: no milling about - at most %d restart(s) after a stop per man (%d):%s"), Label, ReformMaxRestarts,
 			MostRestarts, *Line));
+	}
+
+	/** A follower looks back the way they came within this of straight back along the wall (his sight sector covers the rear), deg. */
+	constexpr float RearConeDeg = 70.f;
+	/** The walk lasts while a follower is farther than this from his place in the stack, cm. */
+	constexpr float WalkFarCm = 150.f;
+	/** The rear covered on at least this share of the walk's frames (a turn round a team-mate may take a moment). */
+	constexpr float RearShareMin = 0.85f;
+	/** ... and never unwatched longer than this at a stretch, s. */
+	constexpr float RearGapMaxSeconds = 1.5f;
+
+	/** WallLeadershipSlideSmoke: one frame of the slide - nobody stands, the rear watched (bWest = the walk goes west). */
+	void SampleSlide(FState& State, const AOperativeCharacter* Leader, bool bWest, float DeltaTime, const USquadSubsystem* Squad)
+	{
+		const float RearYaw = bWest ? 0.f : 180.f; // back along the wall, the way they came
+		bool bWalking = false;
+		bool bRear = false;
+		for (int32 Index = 0; Index < State.Members.Num() && Index < State.Stood.Num(); ++Index)
+		{
+			const AOperativeCharacter* Op = State.Members[Index].Get();
+			if (!Op || Op == Leader || Op->IsKnockedDown())
+			{
+				continue;
+			}
+			State.Stood[Index] |= Op->GetStance() == EOperativeStance::Standing;
+			FVector Slot = FVector::ZeroVector;
+			float Look = 0.f;
+			bWalking |= Squad && Squad->GetFormationTarget(Op, Slot, Look) && FVector::Dist2D(Slot, Op->GetActorLocation()) > WalkFarCm;
+			const float Yaw = static_cast<float>(Op->GetSightFacing().Rotation().Yaw);
+			bRear |= FMath::Abs(FRotator::NormalizeAxis(Yaw - RearYaw)) <= RearConeDeg;
+		}
+		if (!bWalking || State.StageTime < 1.f)
+		{
+			return; // the first second: the order's turn
+		}
+		++State.WalkFrames;
+		State.RearFrames += bRear ? 1 : 0;
+		State.GapSeconds = bRear ? 0.f : State.GapSeconds + DeltaTime;
+		State.LongestGapSeconds = FMath::Max(State.LongestGapSeconds, State.GapSeconds);
+	}
+
+	/** WallLeadershipSlideSmoke: the slide's checks once the stack is held. */
+	void CheckSlide(FState& State, const TCHAR* Label, const AOperativeCharacter* Leader)
+	{
+		const float SettledAt = State.StageTime - State.HoldTime;
+		float LongestCm = 0.f;
+		int32 MostRestarts = 0;
+		FString Stood;
+		FString Line;
+		for (int32 Index = 0; Index < State.Members.Num() && Index < State.Stood.Num(); ++Index)
+		{
+			const AOperativeCharacter* Op = State.Members[Index].Get();
+			if (!Op || Op == Leader || Op->IsKnockedDown())
+			{
+				continue;
+			}
+			LongestCm = FMath::Max(LongestCm, State.PathCm.IsValidIndex(Index) ? State.PathCm[Index] : 0.f);
+			MostRestarts = FMath::Max(MostRestarts, State.Restarts.IsValidIndex(Index) ? State.Restarts[Index] : 0);
+			Stood += State.Stood[Index] ? FString::Printf(TEXT(" %s;"), *NameOf(Op)) : FString();
+			Line += FString::Printf(TEXT(" %s %.0f cm, %d restarts;"), *NameOf(Op), State.PathCm.IsValidIndex(Index) ? State.PathCm[Index] : 0.f,
+				State.Restarts.IsValidIndex(Index) ? State.Restarts[Index] : 0);
+		}
+		const float Share = State.WalkFrames > 0 ? static_cast<float>(State.RearFrames) / static_cast<float>(State.WalkFrames) : 1.f;
+		const float Limit = LongestCm / 100.f * SlideSecondsPerMetre + SlideMarginSeconds;
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s slide: settled %.2f s after the click (limit %.1f s for the longest walk %.0f cm; the leader at his corner %.2f s), rear watched %.0f %% of %d walk frames (longest gap %.2f s), stood up:%s;%s"),
+			Label, SettledAt, Limit, LongestCm, State.LeaderArriveAt, Share * 100.f, State.WalkFrames, State.LongestGapSeconds, Stood.IsEmpty() ? TEXT(" nobody") : *Stood, *Line);
+		Check(State, Stood.IsEmpty(), FString::Printf(TEXT("%s slide: no follower stood up for the walk along the same wall (stood:%s)"), Label, Stood.IsEmpty() ? TEXT(" nobody") : *Stood));
+		Check(State, Share >= RearShareMin && State.LongestGapSeconds <= RearGapMaxSeconds, FString::Printf(TEXT("%s slide: the rear watched - a follower looked back the way they came on %.0f %% of the walk (>= %.0f %%), the longest gap %.2f s (<= %.1f s)"),
+			Label, Share * 100.f, RearShareMin * 100.f, State.LongestGapSeconds, RearGapMaxSeconds));
+		Check(State, SettledAt <= Limit, FString::Printf(TEXT("%s slide: the stack settled in a reasonable time - %.2f s after the click (<= %.1f s for %.0f cm)"), Label, SettledAt, Limit, LongestCm));
+		Check(State, MostRestarts <= ReformMaxRestarts, FString::Printf(TEXT("%s slide: no milling about - at most %d restart(s) per man (%d):%s"), Label, ReformMaxRestarts, MostRestarts, *Line));
 	}
 
 	/** One frame of the walk into the stack: nobody passes the leader, nobody past the corner. */
@@ -669,6 +795,22 @@ namespace WallLeadershipSmoke
 			if (State.HoldTime <= 0.f)
 			{
 				SampleReform(State, Leader, bWest, DeltaTime, Squad);
+				if (State.bSlideMode)
+				{
+					SampleSlide(State, Leader, bWest, DeltaTime, Squad);
+				}
+			}
+			// WallLeadershipSlideSmoke "Shot": a still of the walk along the wall (the followers crouched, the rear watched).
+			if (State.bShot && State.bSlideMode && State.Stage == 7 && State.MidShot == 0 && State.StageTime >= 3.f)
+			{
+				const FVector Middle(0.5f * (WallWestX + WallEastX), WallFaceY - 60.f, State.GroundZ + 80.f);
+				PlaceCamera(World, State, Middle + FVector(-300.f, -1400.f, 1100.f), Middle + FVector(-200.f, 0.f, 0.f));
+				State.MidShot = 1;
+			}
+			else if (State.bShot && State.bSlideMode && State.MidShot == 1 && State.StageTime >= 3.6f)
+			{
+				ShootStill(State, TEXT("walk"), 0);
+				State.MidShot = 2;
 			}
 			State.HoldTime = StackSettled(State, Leader, bWest) ? State.HoldTime + DeltaTime : 0.f;
 			if (State.HoldTime < HoldSeconds && State.StageTime < 50.f)
@@ -684,7 +826,14 @@ namespace WallLeadershipSmoke
 					*NameOf(Old), State.OldLeaderOutAt));
 			}
 			CheckStack(State, Label, Leader, bWest);
-			CheckReform(State, Label, Leader);
+			if (State.bSlideMode)
+			{
+				CheckSlide(State, Label, Leader);
+			}
+			else
+			{
+				CheckReform(State, Label, Leader);
+			}
 			if (State.bShot)
 			{
 				AimStill(World, State, bWest, 0);
@@ -731,6 +880,11 @@ namespace WallLeadershipSmoke
 			State.OldLeader = Leader;
 			State.SwitchesBefore = Squad->GetWallLeadershipSwitchCount();
 			const TArray<AOperativeCharacter*> Sorted = AlongWall(State);
+			if (State.Stage == 1070 && State.bSlideMode)
+			{
+				Next(State, 30); // WallLeadershipSlideSmoke: the slides are checked
+				return true;
+			}
 			if (State.Stage == 1050 && Sorted.Num() == 3)
 			{
 				// Decision 3: then the east corner from that stack.
@@ -792,13 +946,14 @@ namespace WallLeadershipSmoke
 		}
 	}
 
-	void Run(const TArray<FString>& Args, UWorld* World)
+	void Run(const TArray<FString>& Args, UWorld* World, bool bSlideMode)
 	{
 		if (!World)
 		{
 			return;
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->bSlideMode = bSlideMode;
 		State->bShot = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); });
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		State->PreTickHandle = FWorldDelegates::OnWorldPreActorTick.AddLambda([WeakWorld, State](UWorld* Ticking, ELevelTick, float)
@@ -818,7 +973,12 @@ namespace WallLeadershipSmoke
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.WallLeadershipSmoke"),
 		TEXT("Dev check (game designer 2026-11-01, wall leadership): on L_FormationLab the squad at W_B_3 with the Commander mid-wall - a west-corner peek makes the west-end man the leader with the others behind him, then the east corner the east-end man, leaving the wall keeps them, a knocked-down end man is skipped; PASS/FAIL, exits. 'Shot' = stills in Saved/Screenshots/WallLeadership/."),
-		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(Args, World); }));
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(Args, World, false); }));
+
+	static FAutoConsoleCommandWithWorldAndArgs SlideCommand(
+		TEXT("CodexTactics.WallLeadershipSlideSmoke"),
+		TEXT("Dev check (the game designer's bug 2026-11-03): on L_FormationLab the squad at W_B_3 - the west-corner peek, then the east corner (a 22 m slide along the SAME wall): no follower stands up, the rear stays watched, the stack settles in a reasonable time; PASS/FAIL, exits. 'Shot' = stills in Saved/Screenshots/WallSlide/."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(Args, World, true); }));
 }
 
 #endif // !UE_BUILD_SHIPPING
