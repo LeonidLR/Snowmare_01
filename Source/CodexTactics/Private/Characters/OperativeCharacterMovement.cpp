@@ -169,7 +169,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	return Result;
 }
 
-EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, float Speed)
+EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, float Speed, float PathBrakingCm)
 {
 	if (IsPanicking() || IsKnockedDown())
 	{
@@ -240,6 +240,10 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	}
 	bOwnMoveOrder = false; // a formation move replaces any own order
 	ApplyMovementParams(Speed);
+	if (PathBrakingCm >= 0.f)
+	{
+		GetCharacterMovement()->GetNavMovementProperties()->FixedPathBrakingDistance = PathBrakingCm; // ApplyMovementParams restored the config's
+	}
 	return RequestMove(Destination, /*bFormationMove*/ true);
 }
 
@@ -587,6 +591,22 @@ void AOperativeCharacter::SetColdSpeedMultiplier(float Multiplier)
 	}
 }
 
+void AOperativeCharacter::SteerFormationMove(const FVector2D& Direction, float Speed)
+{
+	if (bHasMoveOrder)
+	{
+		if (AController* OwnerController = GetController())
+		{
+			OwnerController->StopMovement(); // the path move ends here; the steering carries his speed on (no StopMovementImmediately)
+		}
+		bHasMoveOrder = false;
+		bOwnMoveOrder = false;
+		bSteeringOwnMove = false;
+	}
+	ApplyMovementParams(Speed);
+	AddMovementInput(FVector(Direction.X, Direction.Y, 0.f), 1.f);
+}
+
 bool AOperativeCharacter::IsMoving() const
 {
 	return bHasMoveOrder || GetVelocity().Size2D() > MovingSpeedThreshold;
@@ -599,6 +619,7 @@ void AOperativeCharacter::ApplyMovementParams(float SpeedOverride)
 	// own speed (FormationPaceMultiplier stays 1 with the console off).
 	Movement->MaxWalkSpeed = SpeedOverride >= 0.f ? SpeedOverride : GetMaxSpeed() * (bSprinting ? 1.f : FormationPaceMultiplier);
 	Movement->RotationRate = FRotator(0.f, OperativeMovementRules::GetTurnRate(MovementConfig, Stance), 0.f);
+	Movement->GetNavMovementProperties()->FixedPathBrakingDistance = MovementConfig.PathBrakingDistance; // FollowTo may shorten it for one move
 }
 
 void AOperativeCharacter::SetFormationPaceMultiplier(float Multiplier)

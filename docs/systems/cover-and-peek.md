@@ -105,6 +105,12 @@ walls never fade.) Details: [squad-and-orders](squad-and-orders.md) "The far sid
   off their spots, hidden from an eye 10 m beyond it, still there 2 s later, then the leader walks 8 m away -> they get up and follow;
   wave fight + tactical pause with a box of three -> only planned (3 planned moves), the release -> leader in cover, two prone).
 
+- **2026-11-03 (the game designer's bug report item 3 on `L_Gen_Depot_1`): prone behind the leader ONLY when there is no cover nearby.** A member
+  with no slot along the leader's own wall first takes a free cover slot of ANOTHER object within `squad_walls.json` `follower_cover_radius_m` (6 m)
+  of the leader's slot, facing the same threat side (`follower_cover_side_deg` 60), one man per spot, by minimal travel; prone behind the cover only
+  for whoever is left (`Codex.GroupCover.NearbyCovers` 0 = the old rule). Details: `docs/systems/squad-and-orders.md` "The squad at walls", smoke
+  `GroupCoverNearbySmoke`.
+
 ## Wall-edge cover switch (game designer 2026-10-20, every level)
 
 > "Standing at the left end of a wall in cover, I hover another wall across from me, DOUBLE-CLICK, and he runs over into that cover

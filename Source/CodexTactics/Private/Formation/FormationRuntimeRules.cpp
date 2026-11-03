@@ -346,6 +346,19 @@ namespace FormationRuntime
 		return Nearest;
 	}
 
+	TOptional<FWallFinalApproach> WallFinalApproach(const FVector2D& Here, const FVector2D& Slot, float TopSpeed)
+	{
+		const double Distance = FVector2D::Distance(Here, Slot);
+		if (Distance > static_cast<double>(WallFinalApproachCm) || Distance <= static_cast<double>(WallFinalApproachDoneCm) || TopSpeed <= 0.f)
+		{
+			return TOptional<FWallFinalApproach>();
+		}
+		FWallFinalApproach Approach;
+		Approach.Direction = (Slot - Here) / Distance;
+		Approach.Speed = FMath::Clamp(static_cast<float>(Distance) * WallFinalApproachGain, FMath::Min(WallFinalApproachMinSpeed, TopSpeed), TopSpeed);
+		return Approach;
+	}
+
 	TOptional<FVector2D> WallSlotGlide(const FVector2D& Here, const FVector2D& Slot, float MaxCm, float DeltaTime, float SpeedCmPerSec)
 	{
 		const FVector2D Way = Slot - Here;

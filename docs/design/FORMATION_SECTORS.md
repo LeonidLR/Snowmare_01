@@ -343,6 +343,14 @@ Ground simulator does not model the corner stack / the fitted layout yet (follow
 - Interpretations (coordinator / agent, for the user): the pair keeps its K 7:30 / partner 4:30 at an end too (a user decision; two cones
   cannot hold the ~330 deg there); a face whose end man stands PAST the wall's end is spread the same way (he looks round the end).
 
+## v2.7 - both wall ends watched, no duplicated sector (the game designer's bug report 2026-11-02 item 5; branch fix/squad-at-walls)
+- At a short wall / a segment between gaps the right-end man looked round his corner and the left-end man forward into K's sector (EndLooks'
+  one 6 m ring saw nothing left round the left corner). After EndLooks (unchanged, golden parity kept) `FormationWallSectorRules::Balance`: coverage
+  on two rings (3 m + 6 m); each end man at an OPEN corner looks round it - the mirror of the other end man, else `squad_walls.json`
+  `wall_corner_look_deg` 112 (pending the user's confirmation); no member keeps a duplicated sector while an open one is unwatched. A face, the pair,
+  K and the corner stack's fixed looks unchanged. UE-only so far (the Training Ground simulator does not model it yet - follow-up).
+  Details `docs/systems/squad-and-orders.md` "The squad at walls".
+
 ## v2.5 — the covered approach to the wall (user rule 2026-10-26, via the coordinator; contract section 15)
 - **The user's rule (2026-10-26, screenshots `to_wall_1/2`)**: the squad moves calmly (patrol, sectors held), then gets the order to hug a
   wall ("Formation: Wall"). Before, everyone dropped his sector and dashed to the wall, the rear wide open. Now, until they are settled at

@@ -1,6 +1,6 @@
 // CodexTactics.Tactics.GroupCover.* - the group cover order (game designer 2026-10-20, Tactics/GroupCoverRules): the others take the
-// nearest free slots along the same wall shoulder to shoulder, who does not fit goes prone behind the cover, the assignment never
-// crosses paths. UE-only (no Godot reference).
+// nearest free slots along the same wall shoulder to shoulder, who does not fit takes a free cover nearby facing the same side (2026-11-03)
+// and only then goes prone behind the cover, the assignment never crosses paths. UE-only (no Godot reference).
 
 #include "Misc/AutomationTest.h"
 #include "Tactics/GroupCoverRules.h"
@@ -218,6 +218,42 @@ bool FGroupCoverLeaderPriorityTest::RunTest(const FString&)
 	TestEqual(TEXT("A taken spare is skipped"), PickFreeSlot(Spares, { true, false, false }, FVector2D(0.f, 250.f)), 2);
 	TestEqual(TEXT("All taken: none (prone behind the cover)"), PickFreeSlot(Spares, { true, true, true }, FVector2D(0.f, 250.f)), static_cast<int32>(INDEX_NONE));
 	TestEqual(TEXT("No spares: none"), PickFreeSlot({}, {}, FVector2D::ZeroVector), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+GROUP_COVER_TEST(FGroupCoverNearbyTest, "NearbyCoverBeforeProne")
+bool FGroupCoverNearbyTest::RunTest(const FString&)
+{
+	using namespace GroupCoverRules;
+	// The game designer's bug report 2026-11-02 item 3 (L_Gen_Depot_1, low cube covers): the leader behind a cube, free cubes to his left
+	// and right facing the same way - the two followers take them (prone behind him only when there is no cover nearby).
+	const FVector2D Leader(0.0, 0.0);
+	const FVector2D Normal(0.0, 1.0); // the squad's side: +Y, the threat beyond -Y
+	TestTrue(TEXT("a cube 3 m to his left, facing the same way: usable"), IsNearbyCoverUsable(Leader, Normal, FVector2D(-300.0, 20.0), FVector2D(0.0, 1.0), false, 600.f, 60.f));
+	TestTrue(TEXT("turned 45 deg: still the same threat side"), IsNearbyCoverUsable(Leader, Normal, FVector2D(300.0, 0.0), FVector2D(0.7071, 0.7071), false, 600.f, 60.f));
+	TestFalse(TEXT("its other face (towards the threat): no"), IsNearbyCoverUsable(Leader, Normal, FVector2D(300.0, -150.0), FVector2D(0.0, -1.0), false, 600.f, 60.f));
+	TestFalse(TEXT("a side face (90 deg): no"), IsNearbyCoverUsable(Leader, Normal, FVector2D(300.0, 0.0), FVector2D(1.0, 0.0), false, 600.f, 60.f));
+	TestFalse(TEXT("7 m away: beyond the 6 m radius"), IsNearbyCoverUsable(Leader, Normal, FVector2D(700.0, 0.0), FVector2D(0.0, 1.0), false, 600.f, 60.f));
+	TestFalse(TEXT("somebody stands there: no"), IsNearbyCoverUsable(Leader, Normal, FVector2D(-300.0, 0.0), FVector2D(0.0, 1.0), true, 600.f, 60.f));
+	TestFalse(TEXT("radius 0 = off"), IsNearbyCoverUsable(Leader, Normal, FVector2D(-100.0, 0.0), FVector2D(0.0, 1.0), false, 0.f, 60.f));
+
+	// Several probes hit the same cube: one man per spot, the nearest first, never on a claimed slot.
+	const TArray<FVector2D> Candidates = { FVector2D(400.0, 0.0), FVector2D(-300.0, 0.0), FVector2D(-260.0, 0.0), FVector2D(80.0, 0.0), FVector2D(-500.0, 0.0) };
+	const TArray<int32> Two = ChooseNearbyCovers(Candidates, Leader, {}, 2, 100.f);
+	TestEqual(TEXT("two picked"), Two.Num(), 2);
+	TestTrue(TEXT("the nearest first (-260), then 400 - not -300 (40 cm from -260: the same spot), not 80 (the leader's own spot)"),
+		Two.Num() == 2 && Two[0] == 2 && Two[1] == 0);
+	const TArray<int32> Claimed = ChooseNearbyCovers(Candidates, Leader, { FVector2D(-250.0, 0.0) }, 2, 100.f);
+	TestTrue(TEXT("a claimed slot (another follower's) is skipped"), Claimed.Num() == 2 && Claimed[0] == 0 && Claimed[1] == 4);
+	TestEqual(TEXT("none wanted: none"), ChooseNearbyCovers(Candidates, Leader, {}, 0, 100.f).Num(), 0);
+
+	// The plan: the nearby covers count as slots (minimal travel), prone only for who is left.
+	const TArray<FVector2D> Members = { FVector2D(-200.0, 400.0), FVector2D(200.0, 400.0) };
+	const TArray<FGroupCoverAssignment> Plan = PlanAssignments(Members, { Candidates[2], Candidates[0] }, { FVector2D(0.0, 170.0), FVector2D(75.0, 170.0) });
+	TestTrue(TEXT("both into covers, no prone"), Plan[0].Kind == EGroupCoverSpotKind::Slot && Plan[1].Kind == EGroupCoverSpotKind::Slot);
+	TestTrue(TEXT("each to his side (no crossing)"), Plan[0].Index == 0 && Plan[1].Index == 1);
+	const TArray<FGroupCoverAssignment> One = PlanAssignments(Members, { Candidates[2] }, { FVector2D(0.0, 170.0), FVector2D(75.0, 170.0) });
+	TestTrue(TEXT("one cover: the nearer man takes it, the other prone"), One[0].Kind == EGroupCoverSpotKind::Slot && One[1].Kind == EGroupCoverSpotKind::Prone);
 	return true;
 }
 

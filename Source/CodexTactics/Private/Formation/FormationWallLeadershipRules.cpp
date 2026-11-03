@@ -1,5 +1,6 @@
 #include "Formation/FormationWallLeadershipRules.h"
 
+#include "Formation/FormationSectorRules.h"
 #include "Formation/FormationWallRules.h"
 
 namespace FormationWallLeadership
@@ -149,6 +150,16 @@ namespace FormationWallLeadership
 		const double MaxAlong = FVector2D::DotProduct(AheadPos, Toward) - Lag + SlackCm;
 		const double Over = FVector2D::DotProduct(Target, Toward) - MaxAlong;
 		return Over > 0.0 ? Target - Toward * Over : Target;
+	}
+
+	bool ReformStands(double DistanceToPlaceCm, bool bCrouched, double StandCm)
+	{
+		return bCrouched && StandCm > 0.0 && DistanceToPlaceCm > StandCm;
+	}
+
+	bool ReformRearFacesWalk(double DistanceToPlaceCm, bool bTurned, const FFormationConfig& Config)
+	{
+		return FormationSectorRules::RearCatchUp(static_cast<float>(DistanceToPlaceCm), bTurned, /*bWayBlocked*/ false, Config);
 	}
 
 	int32 AheadInLine(const TArray<bool>& Able, int32 Position)
