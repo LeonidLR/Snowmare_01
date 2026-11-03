@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AI/PerceptionRules.h"
 #include "AI/StealthLureRules.h"
+#include "Combat/SightRules.h"
 
 class FJsonObject;
 
@@ -76,6 +77,16 @@ namespace EnemyPerception
 	CODEXTACTICS_API FStealthLureParams GetLure();
 	CODEXTACTICS_API void SetLure(const FStealthLureParams& Lure);
 	CODEXTACTICS_API FStealthLureParams LureFromJson(const FJsonObject& Json, const FStealthLureParams& Base = FStealthLureParams());
+
+	/**
+	 * The sight range from a height (game designer 2026-11-02; the numbers PENDING the user's confirmation): the "height_sight" section
+	 * { "level_step_m": 3, "bonus_per_level": 0.25, "max_multiplier": 2.0 } - one model for the squad AND the armed human enemies
+	 * (SightRules::FHeightSightConfig; UTacticalSightSubsystem::GetSightRangeMultiplier). Built-in defaults = those numbers.
+	 */
+	CODEXTACTICS_API SightRules::FHeightSightConfig GetHeightSight();
+	CODEXTACTICS_API void SetHeightSight(const SightRules::FHeightSightConfig& Config);
+	CODEXTACTICS_API SightRules::FHeightSightConfig HeightSightFromJson(const FJsonObject& Json,
+		const SightRules::FHeightSightConfig& Base = SightRules::FHeightSightConfig());
 
 	/** Back to the built-in defaults (tests). */
 	CODEXTACTICS_API void ResetToDefaults();

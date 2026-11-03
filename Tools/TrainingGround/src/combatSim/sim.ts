@@ -11,7 +11,7 @@ import { add, dirOf, dist, normYaw, rng, scale, segmentBlocked, sub, yawOf } fro
 import type { EnemyStats, SimCheats, SimConstants } from './config.ts';
 import { DEFAULT_SIM_CONSTANTS, ENEMY_STATS } from './config.ts';
 import type { AmbushSpot, EnemyType, Party, PlanPhase, PressureBox, RouteCandidate, SpawnKind, SpotKind, Watcher } from './rules.ts';
-import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, PLAN_PARTIES, findDeltaAngleDeg } from './rules.ts';
+import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, HeightSightRules, PLAN_PARTIES, findDeltaAngleDeg } from './rules.ts';
 import type { SquadTrack, TrackFrame } from './squadTrack.ts';
 import { frameHeading } from './squadTrack.ts';
 import type { SimWorld } from './world.ts';
@@ -327,11 +327,17 @@ export function runCombatSim(o: RunOptions): RunResult {
     for (const m of ops) if (world.los(m.pos, m.level * 300 + K.eyeLiftCm, p, levelZ + K.targetLiftCm)) return true;
     return false;
   };
-  /** IsPointInSquadSight: the real eyes (any direction), within MaxSightCm. */
+  /**
+   * UTacticalSightSubsystem::GetSightRangeCm (2026-11-02): MaxSightCm x the height level's multiplier - his eye over the ground below him (the
+   * sim's buildings stand on the street: level x 300 + the eye; in the -3 m cut the cut floor is his ground, level 0).
+   */
+  const squadSightRangeCm = (m: Operative): number =>
+    K.sightRangeCm * HeightSightRules.rangeMultiplierAt(DEFAULT_HEIGHT_SIGHT, Math.max(0, m.level) * 300 + K.sightEyeCm);
+  /** IsPointInSquadSight: the real eyes (any direction), within his sight range (MaxSightCm x his height bonus). */
   const pointInSquadSight = (p: Vec2, z: number): boolean => {
     for (const m of ops) {
       const ez = m.level * 300 + K.sightEyeCm;
-      if (Math.hypot(dist(m.pos, p), ez - z) > K.sightRangeCm) continue;
+      if (Math.hypot(dist(m.pos, p), ez - z) > squadSightRangeCm(m)) continue;
       if (world.los(m.pos, ez, p, z)) return true;
     }
     return false;
@@ -340,7 +346,7 @@ export function runCombatSim(o: RunOptions): RunResult {
   const spottedBySquad = (e: Enemy): boolean => {
     for (const m of ops) {
       const d = dist(m.pos, e.pos);
-      if (d > K.sightRangeCm) continue;
+      if (d > squadSightRangeCm(m)) continue;
       const bearing = AmbushWatchRules.bearingDeg(m.pos, e.pos);
       const looks = [m.bodyYaw, m.lookYaw, ...(m.target >= 0 && enemyById(m.target) ? [AmbushWatchRules.bearingDeg(m.pos, enemyById(m.target)!.pos)] : [])];
       if (!looks.some((l) => Math.abs(findDeltaAngleDeg(l, bearing)) <= K.sightHalfAngleDeg)) continue;
@@ -918,6 +924,7 @@ export function runCombatSim(o: RunOptions): RunResult {
     for (const m of ops) {
       const d = dist(e.pos, m.pos);
       if (d <= PROXIMITY_CM && m.level === 0) return true;
+      // the enemies stand on the street in the sim: level 0, x1 (an armed human on a roof would get the squad's height bonus - UE only)
       if (d > e.stats.sightRangeM * 100) continue;
       if (Math.abs(findDeltaAngleDeg(e.yaw, AmbushWatchRules.bearingDeg(e.pos, m.pos))) > e.stats.sightHalfAngleDeg) continue;
       if (world.los(e.pos, K.eyeLiftCm, m.pos, m.level * 300 + K.targetLiftCm)) { seeing = true; break; }

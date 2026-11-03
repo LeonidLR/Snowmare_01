@@ -471,7 +471,8 @@ bool UCombatPressureSubsystem::IsPointInSquadSight(const FVector& Target) const
 		}
 		// His real eyes (the stance height over his capsule: a man on a tower / roof looks from up there), any direction.
 		const FVector Eye = UTacticalSightSubsystem::EyePoint(*Member);
-		if (FVector::Dist(Eye, Target) > UTacticalSightSubsystem::MaxSightCm)
+		// Its range grows with his height level (one vision model, 2026-11-02: UTacticalSightSubsystem::GetSightRangeCm).
+		if (FVector::Dist(Eye, Target) > (Sight ? Sight->GetSightRangeCm(*Member) : UTacticalSightSubsystem::MaxSightCm))
 		{
 			continue;
 		}

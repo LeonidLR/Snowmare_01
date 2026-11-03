@@ -492,6 +492,24 @@ public:
 	/** Sight / hearing / smell in force (override or the archetype's data; smell only for hounds). */
 	FEnemyPerceptionParams GetPerception() const;
 
+	/**
+	 * An armed human / humanoid (game designer 2026-11-02: ONE vision model with the squad): the Marksman and every enemy class that climbs
+	 * ladders (bCanClimbLadders: the PMC fighters, the Military Zombie, the future mercenaries). Its sight range grows with its height level
+	 * like an operative's (UTacticalSightSubsystem::GetSightRangeMultiplier: patrol sight, its cone, the fight's enemy -> squad sight);
+	 * hounds and the other beasts keep their own senses.
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Perception")
+	bool UsesHumanSight() const;
+
+	/** Its sight range multiplier from its height (x1 for a beast; UTacticalSightSubsystem::GetSightRangeMultiplier). */
+	float GetSightHeightMultiplier() const;
+
+	/**
+	 * The closest operative its patrol sight sees right now (FindVisibleOperative with GetPatrolPerception: the stance range x its height
+	 * multiplier, its field of view, the eye -> profile trace). Smokes / tools; OutDistance / OutRange as FindVisibleOperative's.
+	 */
+	AActor* FindVisibleOperativeNow(float& OutDistance, float& OutRange) const;
+
 	/** A tripwire / mine detonation this close (planar) breaks its patrol, cm (user decision 2026-10-06: 20 m). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "0"))
 	float PatrolTrapAlertRadius = PatrolRouteRules::TrapAlertRadiusCm;

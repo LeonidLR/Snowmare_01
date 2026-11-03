@@ -12,7 +12,9 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/PeekSightRules.h"
 #include "Combat/SightRules.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/SkinnedMeshComponent.h"
+#include "Data/EnemyPerception.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -33,6 +35,14 @@ namespace TacticalSight
 	static TAutoConsoleVariable<float> CVarFovStanding(TEXT("Codex.Sight.FovStandDeg"), 140.f, TEXT("Total field of view of a standing operative, degrees"));
 	static TAutoConsoleVariable<float> CVarFovCrouching(TEXT("Codex.Sight.FovCrouchDeg"), 140.f, TEXT("Total field of view of a crouching operative, degrees"));
 	static TAutoConsoleVariable<float> CVarFovProne(TEXT("Codex.Sight.FovProneDeg"), 110.f, TEXT("Total field of view of a prone operative, degrees"));
+
+	static TAutoConsoleVariable<int32> CVarHeightRange(TEXT("Codex.Sight.HeightRange"), 1,
+		TEXT("Sight range from a height (2026-11-02): 1 the squad's and the armed human enemies' sight range grows with their height level (enemy_perception.json height_sight: floor(eye over the ground below / 3 m), x(1 + 0.25 x level), max x2); 0 the same range at every height"));
+
+	/** How far below the feet the ground under an observer is searched, cm. */
+	constexpr float GroundSearchCm = 5000.f;
+	/** Surfaces one ground column may cross (a roof, a wall top, floors, the street). */
+	constexpr int32 GroundColumnHits = 8;
 
 	FVector Feet(const AActor& Actor)
 	{
@@ -172,6 +182,88 @@ FVector UTacticalSightSubsystem::ProfilePoint(const AActor& Actor)
 	return TacticalSight::Feet(Actor) + FVector(0.f, 0.f, FMath::Min(150.f, Height * 0.85f));
 }
 
+bool UTacticalSightSubsystem::IsHeightRangeOn()
+{
+	return TacticalSight::CVarHeightRange.GetValueOnGameThread() != 0;
+}
+
+bool UTacticalSightSubsystem::UsesSharedSight(const AActor& Observer)
+{
+	if (Observer.IsA<AOperativeCharacter>())
+	{
+		return true;
+	}
+	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(&Observer);
+	return Enemy && Enemy->UsesHumanSight();
+}
+
+float UTacticalSightSubsystem::MeasureEyeAboveGroundCm(const UWorld& World, const AActor& Observer)
+{
+	const FVector Feet = TacticalSight::Feet(Observer);
+	const float EyeZ = static_cast<float>(EyePoint(Observer).Z);
+	// A column straight down from just over his feet: every surface it crosses (his roof, the wall top under its edge, the floors of a
+	// building, the street), each component once; pawns are skipped. The lowest is the ground below him (SightRules::GroundBelowZ).
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(SightGroundBelow), false, &Observer);
+	const FVector Top = Feet + FVector(0.f, 0.f, 40.f);
+	const FVector Bottom = Feet - FVector(0.f, 0.f, TacticalSight::GroundSearchCm);
+	TArray<float, TInlineAllocator<TacticalSight::GroundColumnHits>> Surfaces;
+	for (int32 Step = 0; Step < TacticalSight::GroundColumnHits; ++Step)
+	{
+		FHitResult Hit;
+		if (!World.LineTraceSingleByChannel(Hit, Top, Bottom, ECC_Visibility, Params) || !Hit.GetComponent())
+		{
+			break;
+		}
+		Params.AddIgnoredComponent(Hit.GetComponent());
+		if (Hit.bStartPenetrating || Cast<APawn>(Hit.GetActor()))
+		{
+			continue;
+		}
+		Surfaces.Add(static_cast<float>(Hit.ImpactPoint.Z));
+	}
+	return EyeZ - SightRules::GroundBelowZ(static_cast<float>(Feet.Z), Surfaces);
+}
+
+float UTacticalSightSubsystem::GetEyeAboveGroundCm(const AActor& Observer) const
+{
+	const UWorld* World = GetWorld();
+	const float EyeZ = static_cast<float>(EyePoint(Observer).Z);
+	const FVector Feet = TacticalSight::Feet(Observer);
+	if (!World)
+	{
+		return EyeZ - static_cast<float>(Feet.Z);
+	}
+	const double Now = World->GetTimeSeconds();
+	FGroundCache& Entry = GroundCache.FindOrAdd(&Observer);
+	if (Entry.Time < 0.0 || Now - Entry.Time > HeightCacheSeconds || Now < Entry.Time || FVector::Dist2D(Entry.Feet, Feet) > 25.f
+		|| FMath::Abs(Entry.Feet.Z - Feet.Z) > 20.f)
+	{
+		Entry.Feet = Feet;
+		Entry.Time = Now;
+		Entry.GroundZ = EyeZ - MeasureEyeAboveGroundCm(*World, Observer);
+	}
+	return EyeZ - Entry.GroundZ;
+}
+
+int32 UTacticalSightSubsystem::GetHeightLevel(const AActor& Observer) const
+{
+	return SightRules::HeightLevel(GetEyeAboveGroundCm(Observer), EnemyPerception::GetHeightSight().LevelStepCm);
+}
+
+float UTacticalSightSubsystem::GetSightRangeMultiplier(const AActor& Observer) const
+{
+	if (!IsHeightRangeOn() || !UsesSharedSight(Observer))
+	{
+		return 1.f;
+	}
+	return SightRules::HeightRangeMultiplierAt(EnemyPerception::GetHeightSight(), GetEyeAboveGroundCm(Observer));
+}
+
+float UTacticalSightSubsystem::GetSightRangeCm(const AActor& Observer) const
+{
+	return MaxSightCm * GetSightRangeMultiplier(Observer);
+}
+
 bool UTacticalSightSubsystem::HasClearSight(const FVector& From, const FVector& To) const
 {
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(TacticalSight), false);
@@ -192,7 +284,8 @@ bool UTacticalSightSubsystem::CanOperativeSee(const AOperativeCharacter& Operati
 	// His own eyes (stance height over the capsule): what his position allows - hugging a wall, that wall hides what lies behind it.
 	// 2026-10-20: ... and only inside his field of view round his facing (stance FOV; the 2 m touch reveal is the caller's).
 	const FVector Eye = EyePoint(Operative);
-	if (FVector::Dist(Eye, TargetPoint) <= MaxSightCm && SightRules::IsInFieldOfView(Eye, Operative.GetSightFacing(), TargetPoint, GetFovDeg(Operative.GetStance()))
+	// 2026-11-02: his range grows with his height level (GetSightRangeCm; walls still hide what they hide - the trace is 3D).
+	if (FVector::Dist(Eye, TargetPoint) <= GetSightRangeCm(Operative) && SightRules::IsInFieldOfView(Eye, Operative.GetSightFacing(), TargetPoint, GetFovDeg(Operative.GetStance()))
 		&& HasClearSight(Eye, TargetPoint))
 	{
 		return true;
@@ -424,6 +517,7 @@ void UTacticalSightSubsystem::RestoreAll()
 		DropGhost(Pair.Value);
 	}
 	EnemyStates.Reset();
+	GroundCache.Reset();
 	SavedAnimTickOptions.Reset();
 	Intel.Reset();
 	DemaskUntil.Reset();
@@ -474,6 +568,15 @@ void UTacticalSightSubsystem::Update()
 		if (TacticalSight::IsLiveEnemy(Enemy))
 		{
 			Enemies.Add(Enemy);
+		}
+	}
+
+	// Stale ground-below entries (observers gone or long still: re-measured on demand).
+	for (auto It = GroundCache.CreateIterator(); It; ++It)
+	{
+		if (Now - It->Value.Time > 10.0 * HeightCacheSeconds)
+		{
+			It.RemoveCurrent();
 		}
 	}
 
@@ -529,7 +632,7 @@ void UTacticalSightSubsystem::Update()
 			// Bug hunt 2026-10-18: an enemy at arm's length is noticed without a line of sight (a frostbitten waiting 1.7 m off
 			// right behind the wall's corner stayed hidden from the corner hold, so it was never fired at).
 			bSeen |= SightRules::IsWithinTouchReveal(Distance2D);
-			if (!bSeen && Distance <= MaxSightCm + 100.f && CanOperativeSee(*Operative, Profile))
+			if (!bSeen && Distance <= GetSightRangeCm(*Operative) + 100.f && CanOperativeSee(*Operative, Profile))
 			{
 				bSeen = true;
 			}
@@ -588,13 +691,15 @@ void UTacticalSightSubsystem::Update()
 		// Enemy -> squad (symmetric).
 		TMap<TWeakObjectPtr<AOperativeCharacter>, FIntel>& Known = Intel.FindChecked(Enemy);
 		const FVector Eye = EyePoint(*Enemy);
+		// One vision model (2026-11-02): an armed human on a roof sees as far as an operative up there; beasts keep MaxSightCm.
+		const float EnemySightCm = GetSightRangeCm(*Enemy);
 		for (AOperativeCharacter* Operative : Operatives)
 		{
 			const float Distance = FVector::Dist2D(Operative->GetActorLocation(), Enemy->GetActorLocation());
 			// Sprint 12-E: high cover with the head down hides him from everything behind the wall (firing demasks).
 			const bool bCoverHidden = Operative->IsHiddenInCoverFrom(Enemy->GetActorLocation());
 			const bool bPerceives = IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance())
-				|| (!bCoverHidden && Distance <= MaxSightCm && HasClearSight(Eye, ProfilePoint(*Operative)));
+				|| (!bCoverHidden && Distance <= EnemySightCm && HasClearSight(Eye, ProfilePoint(*Operative)));
 			if (bPerceives)
 			{
 				Known.Add(Operative, { Operative->GetActorLocation(), Now, -1.0, true });

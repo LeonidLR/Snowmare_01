@@ -1141,6 +1141,7 @@ void UPlaytestBotSubsystem::GatherPatrols(TArray<AEnemyCharacter*>& OutEnemies, 
 		// The enemy's own perception in force (data file + Codex.Perception.* knobs), heightened while searching.
 		View.bSearching = It->IsSearching();
 		View.Params = View.bSearching ? PerceptionRules::Scaled(It->GetPerception(), EnemyPerception::GetSearch().PerceptionMultiplier) : It->GetPerception();
+		View.Params.SightRangeCm *= It->GetSightHeightMultiplier(); // an armed human up on a roof sees farther (2026-11-02, GetPatrolPerception)
 		View.Suspicion = It->GetSuspicion();
 		OutEnemies.Add(*It);
 		OutViews.Add(View);

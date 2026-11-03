@@ -8,6 +8,9 @@
 > - `Combat/EnemyRegistrySubsystem`, `EnemyRegistryRules`, `Characters/EnemyTacticsRules`, `Characters/EnemyCharacter`, `EnemyAIController`
 > - Data `Content/Data/AI/ai_tuning.json`; smokes `EnemyPrioritySmoke` (operatives first, last section), `EnemyAISmoke`, `EnemyTacticsSmoke`, `EnemyArchetypeSmoke`, `PmcFighterSmoke` (Frozen PMC Fighter), `MilitaryZombieSmoke` (Military Zombie, last section)
 >
+> - Sight from a height (2026-11-02): an armed human (`AEnemyCharacter::UsesHumanSight` - the Marksman, every `bCanClimbLadders` class) on a roof / tower
+>   sees farther like an operative up there (`GetPatrolPerception` x `GetSightHeightMultiplier`); beasts x1 - [sight-and-vision-cones](sight-and-vision-cones.md) "Sight from a height".
+>
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
 ## Code layout (cleanup 2026-10-19)

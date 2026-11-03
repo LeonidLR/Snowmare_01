@@ -102,7 +102,7 @@ The pressure's own numbers come from the level JSON (`parsePressureConfig`, the 
 |---|---|---|
 | `dt` | 0.1 s | the game's ambush / pressure tick |
 | `eyeLiftCm` / `targetLiftCm` | 150 / 110 | `CombatPressureLocal`: the actor location (~90) + 60 for the eye; the enemy's chest |
-| `sightEyeCm`, `sightRangeCm`, `sightHalfAngleDeg` | 160, 6000, 70 | the real eyes (`UTacticalSightSubsystem::MaxSightCm`), half the standing FOV (`Codex.Sight.FovStandDeg` 140; the fight keeps it, `FovFight` 1) |
+| `sightEyeCm`, `sightRangeCm`, `sightHalfAngleDeg` | 160, 6000, 70 | the real eyes (`UTacticalSightSubsystem::MaxSightCm`), half the standing FOV (`Codex.Sight.FovStandDeg` 140; the fight keeps it, `FovFight` 1). Since 2026-11-02 the range x the height level's multiplier (`HeightSightRules` in `rules.ts` = `SightRules::HeightLevel` / `HeightRangeMultiplier`, `DEFAULT_HEIGHT_SIGHT` = `enemy_perception.json` "height_sight": +1 x1.25, +2 x1.5, +3 x1.75, max x2; the cut x1), so an operative on a +3 roof sees 105 m; the sim's enemies stand on the street (x1) |
 | `contactRangeCm` | 3000 | the bot's `ContactRangeCm` |
 | `groupSpacingCm`, `spotCandidates`, `relocateAvoidCm`, `relocateRoutes`, `runLegAcceptCm`, `runArriveCm`, `followStepSeconds`, `followRepostCm` | 220, 72, 600, 8, 150, 120, 2, 300 | `CombatPressureLocal` |
 | `rifleDamage`, `rifleInterval`, `rifleRangeCm`, `rifleReturnFireRangeCm`, `rifleCellCm`, `rifleHitChances`, `enemyArmor`, `reactionSeconds` | 18, 1.54 s, 2500, 3500, 312.5, the 17 cells of weapons_tuning.json, 0.1, 0.6 s | the M16 (`fire_rate` 0.65 read as shots per second = 1.54 s a shot; 221 rounds in 310 s of Unreal fights), the return fire at a Marksman at its 28 m |

@@ -177,8 +177,40 @@ bool FPerceptionSmellHoundOnlyTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("enemy_perception.json applies"), EnemyPerception::ApplyJson(Text));
 		TestTrue(TEXT("shipped hound smells"), EnemyPerception::Get(EEnemyArchetype::FrostHound).SmellRadiusCm > 0.f);
 		TestEqual(TEXT("shipped search 60 s"), EnemyPerception::GetSearch().DurationSeconds, 60.f, 0.01f);
+		// The height sight (2026-11-02, pending the user's numbers): 3 m steps, +25 % per level, at most x2.
+		const SightRules::FHeightSightConfig Height = EnemyPerception::GetHeightSight();
+		TestEqual(TEXT("shipped height step 3 m"), Height.LevelStepCm, 300.f, 0.01f);
+		TestEqual(TEXT("shipped height bonus 0.25 per level"), Height.BonusPerLevel, 0.25f, 0.0001f);
+		TestEqual(TEXT("shipped height cap x2"), Height.MaxMultiplier, 2.f, 0.0001f);
 		EnemyPerception::ResetToDefaults();
 	}
+	return true;
+}
+
+PERCEPTION_TEST(FPerceptionHeightSightDataTest, "AI.Perception.HeightSightData")
+
+bool FPerceptionHeightSightDataTest::RunTest(const FString& Parameters)
+{
+	// The "height_sight" section of enemy_perception.json (one model for the squad and the armed humans, 2026-11-02).
+	EnemyPerception::ResetToDefaults();
+	const SightRules::FHeightSightConfig Defaults = EnemyPerception::GetHeightSight();
+	TestEqual(TEXT("built-in step 3 m"), Defaults.LevelStepCm, 300.f);
+	TestEqual(TEXT("built-in bonus 0.25"), Defaults.BonusPerLevel, 0.25f);
+	TestEqual(TEXT("built-in cap x2"), Defaults.MaxMultiplier, 2.f);
+	TestTrue(TEXT("json with a height section applied"), EnemyPerception::ApplyJson(
+		TEXT("{\"height_sight\":{\"level_step_m\":4,\"bonus_per_level\":0.1,\"max_multiplier\":1.3},\"archetypes\":{}}")));
+	const SightRules::FHeightSightConfig Tuned = EnemyPerception::GetHeightSight();
+	TestEqual(TEXT("step from the file (m -> cm)"), Tuned.LevelStepCm, 400.f, 0.01f);
+	TestEqual(TEXT("bonus from the file"), Tuned.BonusPerLevel, 0.1f, 0.0001f);
+	TestEqual(TEXT("cap from the file"), Tuned.MaxMultiplier, 1.3f, 0.0001f);
+	TestEqual(TEXT("tuned: +3 = x1.3 (capped)"), SightRules::HeightRangeMultiplier(Tuned, 3), 1.3f, 0.0001f);
+	TestTrue(TEXT("json without the section applied"), EnemyPerception::ApplyJson(TEXT("{\"archetypes\":{}}")));
+	TestEqual(TEXT("a file without the section: the built-in ladder"), EnemyPerception::GetHeightSight().BonusPerLevel, 0.25f);
+	TestTrue(TEXT("json with silly values applied"), EnemyPerception::ApplyJson(
+		TEXT("{\"height_sight\":{\"level_step_m\":0,\"max_multiplier\":0.2}}")));
+	TestTrue(TEXT("a zero step is clamped (>= 1 cm)"), EnemyPerception::GetHeightSight().LevelStepCm >= 1.f);
+	TestEqual(TEXT("a cap below 1 is clamped to 1"), EnemyPerception::GetHeightSight().MaxMultiplier, 1.f);
+	EnemyPerception::ResetToDefaults();
 	return true;
 }
 

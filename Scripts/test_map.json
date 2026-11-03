@@ -36,7 +36,7 @@
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke", "FormationCustomSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke", "FormationFarSideSmoke",
-    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "WallLeadershipSmoke", "CombatLabAmbushRelocateSmoke", "SquadHaltStanceSmoke", "LevelGenRouteSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke", "RoofCutawayFocusSmoke"
+    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "VisionHeightSmoke", "WallLeadershipSmoke", "CombatLabAmbushRelocateSmoke", "SquadHaltStanceSmoke", "LevelGenRouteSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke", "RoofCutawayFocusSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -93,6 +93,7 @@
     "SquadCornerPeekSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 600, "_why": "the game designer's play-test 2026-11-01 (the squad corner peek animation played twice): the squad hugs lab wall W_B_3, the hover + click on its end -> one cover entry, one peek step-out montage, no facing flip, the fire idle of the peek side; both ends" },
     "CutterWallSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 300, "_why": "bug 06 (game designer 2026-11-01): a Cutter behind a lab wall neither bites nor pounces through it (MeleeLineRules), with a clear line it pounces and bites" },
     "CombatLabTowerSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 600, "_why": "bug 07 (game designer 2026-11-01): the tower ladders climbable; a click / double click on a ladder or a roof and a ground click take the leader up and down by the controller's click path (CombatLabTowerSmokePIE: the same in PIE)" },
+    "VisionHeightSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 600, "_why": "game designer 2026-11-02 (L_Gen_Depot_1, the Engineer prone at a roof edge as a sniper): his cone cuts every wall's shadow from a +3 roof (a multi-slab roof, the wall tops flush with its edge, walls behind crates) and equals CanOperativeSee on a grid; the sight range grows with the height level (+3 x1.75: a target 63-76 m out seen from the roof, not from the ground; the -3 m cut keeps the ground range); the ruin's +2 roof x1.5; a Marksman on the roof spots the squad at the elevated range, not through walls; a hound gets no bonus" },
     "TowerVisionSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 300, "_why": "bug 09 (game designer 2026-11-01): an operative on a lab tower sees over a 3 m wall only where the line clears it - his cone on the ground below, the roof edge's dead zone and the wall's shadow cut, drawn = CanOperativeSee; an enemy in the shadow unseen, beyond it seen; a ground-level operative's cone the flat model" },
     "CombatLabAmbushRelocateSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 900, "_why": "the game designer's decisions 2026-11-01 night (docs/design/COMBAT_LAB.md 2.1): a plan watched all round strikes after its hold limit; a relocation run spotted by a ground / a tower watcher strikes at once; no concealed route -> no teleport, it stays, then follows the squad as a patrol; a single ambush watched all along strikes after its 60-90 s" },
     "SquadHaltStanceSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 600, "_why": "decision 6 (2026-11-01 night, the stance jitter): in a fight a 3 s halt crouches no follower, a long halt crouches them after squad_roe.json hold_crouch_after_sec, the next move stands them up at once, Solo's guard crouch waits the same hold_crouch_after_sec (2026-11-02)" },
@@ -512,7 +513,7 @@
       "name": "sight",
       "globs": ["Source/**/Combat/SightRules*", "Source/**/Combat/TacticalSight*", "Source/**/Tactics/GorkyLineOfSight*", "Source/**/Combat/EncounterQueries*", "Source/**/Combat/PeekSight*", "Source/**/Debug/PeekSightSmoke*"],
       "tests": ["CodexTactics.Combat.Sight", "CodexTactics.Tactics.LineOfSight"],
-      "smokes": ["SightSmoke", "PeekSightSmoke", "SquadFireSmoke", "EnemyHuntSmoke", "CornerHoldSmoke"]
+      "smokes": ["SightSmoke", "PeekSightSmoke", "VisionHeightSmoke", "SquadFireSmoke", "EnemyHuntSmoke", "CornerHoldSmoke"]
     },
     {
       "name": "quick-fire",
@@ -574,7 +575,7 @@
       "name": "enemy-perception-units",
       "globs": ["Source/**/Characters/EnemyCharacterPerception*", "Source/**/Characters/EnemyCharacterScent*", "Source/**/Characters/EnemyCharacterSearch*"],
       "tests": ["CodexTactics.Characters.EnemyUnits", "CodexTactics.AI.Perception", "CodexTactics.AI.Scent", "CodexTactics.AI.StealthLure", "CodexTactics.Combat.VisionCone"],
-      "smokes": ["SightSmoke", "VisionConeSmoke", "StealthLureSmoke", "HoundScentSmoke", "BotStealthSmoke", "PatrolSmoke"]
+      "smokes": ["SightSmoke", "VisionConeSmoke", "VisionHeightSmoke", "StealthLureSmoke", "HoundScentSmoke", "BotStealthSmoke", "PatrolSmoke"]
     },
     {
       "name": "hud-canvas",
@@ -680,9 +681,9 @@
     },
     {
       "name": "vision-cone",
-      "globs": ["Source/**/Combat/VisionCone*", "Source/**/Debug/VisionConeSmoke*", "Source/**/UI/Frontend/CodexPauseMenuScreen*", "Source/**/Debug/TowerVisionSmoke*"],
+      "globs": ["Source/**/Combat/VisionCone*", "Source/**/Debug/VisionConeSmoke*", "Source/**/UI/Frontend/CodexPauseMenuScreen*", "Source/**/Debug/TowerVisionSmoke*", "Source/**/Debug/VisionHeightSmoke*"],
       "tests": ["CodexTactics.Combat.VisionCone", "CodexTactics.AI.Perception", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": ["VisionConeSmoke", "TowerVisionSmoke", "PeekSightSmoke", "PauseMenuSmoke"]
+      "smokes": ["VisionConeSmoke", "TowerVisionSmoke", "VisionHeightSmoke", "PeekSightSmoke", "PauseMenuSmoke"]
     },
     {
       "name": "level-obstacles",

@@ -6,7 +6,8 @@
 >
 > Key files:
 > - `Combat/SightRules`, `Combat/TacticalSightSubsystem`, `Combat/VisionConeRules`, `VisionConeVisibility`, `VisionConeComponent`
-> - Smokes: `SightSmoke`, `PeekSightSmoke`, `VisionConeSmoke`; tests `CodexTactics.Combat.VisionCone.*`
+> - Smokes: `SightSmoke`, `PeekSightSmoke`, `VisionConeSmoke`, `TowerVisionSmoke`, `VisionHeightSmoke`; tests `CodexTactics.Combat.VisionCone.*`, `CodexTactics.Combat.Sight.*`
+> - Sight from a height (2026-11-02): the range ladder per height level, the roof sniper's cone, one model for the squad and the armed humans - section "Sight from a height".
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
@@ -112,6 +113,63 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
   leader on T_SW facing W_C_4: every ray looks down 402 cm, the cone drawn on the ground, dead zone / before the wall / shadow / beyond
   = drawn and CanOperativeSee, 0 mismatches on a 1 m grid; a ground operative's cone flat; an enemy in the shadow unseen, one beyond
   seen); arg `Shot` -> `Saved/Screenshots/TowerVision/tower_vision_fixed.png`, `tower_vision_close.png`.
+
+## Sight from a height: the roof sniper, the range ladder, one model (2026-11-02)
+
+- **Report (game designer, `/Game/Maps/Generated/L_Gen_Depot_1`, the Engineer PRONE at a roof edge as a sniper, cones on):** (a) "the cone does not
+  cut the wall shadows - it still covers areas behind walls he cannot see"; (b) "the sight RANGE grows with the height level"; (c) "one vision model
+  for the operatives and the armed human enemies". The cone is **2.5D, not volumetric**: a planar fan of rays from his eye, in each ray's vertical
+  plane the exact eye -> target-profile line test against the measured obstacles, drawn as a flat mesh on each ray's target ground (one ground
+  level per ray). The gameplay sight (`CanOperativeSee`, `FindVisibleOperative`) is a 3D trace and was right; only the cone was wrong.
+- **Root cause of (a) - the 2026-11-01 elevated sampler did not recognise the generated roofs as perches** (`UVisionConeComponent`, A/B console
+  `Codex.VisionCones.ElevatedFix 0` = the old sampler; smoke stage "A/B" reproduces the report on the hall's edge: 0 / 75 rays looked down, 242 of
+  759 grid points drawn although hidden, the 3 m office's shadow drawn seen):
+  1. **the perch's supports** - the generated halls' 9 m walls end FLUSH with the roof slab (walls 0 .. 900, slab 880 .. 900), a ruin's upper interior
+     walls end under its roof. A man lying at the roof's edge lies over the wall: `ProbePerch` traced down past the roof, met the wall's top 0 cm lower
+     -> "no drop" -> the FLAT model at the roof's level (targets assumed up there, every sight line above every wall: no shadow anywhere, the cone
+     drawn at the roof). Now the column skips blocks less than `ElevatedMinDropCm` below the roof (up to 4: wall tops, a second slab) until a real
+     drop, and the low trace ignores them too;
+  2. **a roof of several blocks** - a generated roof with a stairwell / roof hole is 2-4 slabs; the perch was ONE component, so a ray crossing onto
+     the next slab found "ground" at his own level past the first slab's edge -> that ray fell back to the flat model. Now `SamplePerch` follows the
+     edge across every block that carries the walking surface on at his level (the next slab, the wall top flush with the edge; a 5 cm column past
+     each edge, up to 4 hops);
+  3. **too few low obstacles** - from a roof every wall below the eye is a "low" obstacle (the high trace runs at his eye), competing with the
+     crates / barrels in front of it for `MaxLowObstaclesPerRay` 3: a wall behind three crates was never measured, its shadow not cut. From a perch
+     `MaxLowObstaclesPerRayElevated` 12 (component property);
+  4. **roofs below / around him** - a roofed lower building (the office, 3 m) or the far side of a hole in his own roof hide the ground under them, but
+     both trace heights miss a roof slab (the eye line runs above it, the profiles' line below it). From a perch a wall whose top carries on as a
+     roof gets a "roof" obstacle (`bHidesInside`) to that roof's far edge, and roofs at his own level further out along the ray are measured too.
+  Cost (VisionHeightSmoke, prone roof sniper, 40 m cone): ~8.4 traces / ray, ~1 ms of task-thread work per rebuild (the rebuild cadence unchanged:
+  12 Hz moving, 2 s still); ground-level cones are unchanged (2 traces per rebuild for the perch probe, as before).
+- **(b) The range ladder (`SightRules::FHeightSightConfig`, NUMBERS PENDING the user's confirmation):** the observer's height level =
+  floor(eye height above the ground below him / 3 m) - the ground below = the LOWEST surface a column straight down from his feet crosses
+  (`SightRules::GroundBelowZ`: roof slab, wall top, the ruin's +1 floor, the street), not the absolute Z; in the -3 m cut the cut floor is his
+  ground. Range x (1 + 0.25 x level) for level >= 1, at most x2; level <= 0 = x1 (never less than on the ground): **ground / cut x1, +1 (3 m)
+  x1.25, +2 (6 m) x1.5, +3 (9 m) x1.75, +4 and up x2**. The squad's 60 m (`MaxSightCm`) -> 105 m on a +3 roof; a Marksman's perception range
+  (45 m x the `Codex.Perception.SightRangeScale` knob) -> x1.75. The eye height decides: standing on a 1.5 m wreck (eye 3.1 m) is already +1.
+  Data: `Content/Data/AI/enemy_perception.json` `"height_sight"` (`level_step_m`, `bonus_per_level`, `max_multiplier`; `EnemyPerception::GetHeightSight`),
+  console `Codex.Sight.HeightRange 0` = the old flat range (A/B). Runtime: `UTacticalSightSubsystem::GetEyeAboveGroundCm` (cached per observer
+  1 s / 25 cm), `GetHeightLevel`, `GetSightRangeMultiplier`, `GetSightRangeCm` = `MaxSightCm` x it: `CanOperativeSee`, the fight's squad -> enemy
+  and enemy -> squad sight, `UCombatPressureSubsystem::IsPointInSquadSight`. Walls, roof edges and dead zones apply at every height (3D traces).
+- **(c) One vision model:** the operatives and the armed human / humanoid enemies (`AEnemyCharacter::UsesHumanSight`: the Marksman archetype or
+  any class with `bCanClimbLadders` - the PMC fighters, the Military Zombie, the future mercenaries) share the eye / profile points, the 3D sight
+  trace, the 2.5D occluded cone (perch, shadows) and the height bonus: `AEnemyCharacter::GetPatrolPerception` (patrol sight, its cone, the bot's
+  stealth view) multiplies the sight range by `GetSightHeightMultiplier`, the fight's enemy -> squad sight uses `GetSightRangeCm`. Hounds and the
+  other beasts keep their own senses (x1). Each side keeps its own field of view and base range (operatives 140 / 110 deg prone, 60 m; enemies
+  their `enemy_perception.json` row). **Operative cone range** stays the weapon's reach x stance (what he can shoot; the shot's own Godot
+  elevation bonus x1.25 applies to targets 1.5 m below) - his sight reaches farther than his cone; see the open question.
+- **Tests:** `CodexTactics.Combat.Sight.HeightRange` (levels, the ladder, the cap, the ground below), `CodexTactics.AI.Perception.HeightSightData`
+  (+ the shipped file's values in `SmellHoundOnly`), `CodexTactics.Combat.VisionCone.Elevated.RoofSniperOverWalls` (a prone sniper 30 cm from a
+  9 m roof's edge over crates / walls / a fence: drawn = the exact 3D test; the budget of 3 and the lost perch shown to draw the shadow as seen).
+  Smoke **`VisionHeightSmoke`** (`L_Gen_Depot_1`): the leader prone at `B_hall_n`'s west edge over its wall's top (+3: x1.75, 105 m), cone traced
+  from the perch, the office's shadow cut, beyond it seen, drawn = `CanOperativeSee` on a 1 m grid (0 mismatches), the A/B old sampler reproduces
+  the report, a target 62.5 m out seen from the roof and not with `HeightRange 0`, nor from the ground 62 m away with a clear line; in the cut
+  level 0 (50 m seen, 70 m not); prone on the ruin's +2 roof over its interior wall (x1.5, 0 mismatches); a Marksman on the roof spots an
+  operative 62.6 m out (ground 40 m, elevated 70.9 m), not one behind the office, not from the ground; a hound up there x1; the PMC class is human.
+  Arg `Shot` -> `Saved/Screenshots/VisionHeight/roof_sniper_cone.png`, `roof_sniper_shadow.png` (`-RenderOffscreen`). Training Ground:
+  `HeightSightRules` (combatSim `rules.ts`) mirrors the ladder and the sim's squad sight range uses it (its enemies stand on the street: x1).
+- **Known limits:** one target ground per ray (the ground just past the perch's edge: a target on another, lower roof is judged as on the street -
+  the cone hides it although he would see it; a target on a roof at his own level further out is hidden too); the peek cone keeps its 18 m.
 
 ## Vision cones - how to switch them on (old §6)
 
