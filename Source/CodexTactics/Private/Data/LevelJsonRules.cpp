@@ -430,6 +430,12 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		Config.VehicleShells = FMath::Max(-1, FMath::RoundToInt(LevelJsonNumber(Vehicle, TEXT("shells"), -1.f)));
 	}
 
+	// UE-only (falls and drops 2026-11-03): the generated drop nav links on this map.
+	{
+		bool bDropLinks = false;
+		Config.bDropLinks = Root->TryGetBoolField(TEXT("drop_links"), bDropLinks) && bDropLinks;
+	}
+
 	// UE-only (minimap 2026-10-18): the upper floors' walking heights and the mapped area.
 	if (const TSharedPtr<FJsonObject> Minimap = LevelJsonObject(Root, TEXT("minimap")))
 	{

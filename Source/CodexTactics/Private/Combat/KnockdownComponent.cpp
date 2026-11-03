@@ -15,6 +15,7 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/Character.h"
+#include "Falls/LedgeFallComponent.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -108,6 +109,11 @@ bool UKnockdownComponent::CanFallNow() const
 	{
 		return false;
 	}
+	// Thrown over an edge / dropping off one (2026-11-03): the knockdown comes on landing (ULedgeFallComponent).
+	if (const ULedgeFallComponent* Fall = Owner->FindComponentByClass<ULedgeFallComponent>(); Fall && Fall->IsAirborne())
+	{
+		return false;
+	}
 	if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Owner))
 	{
 		// Already lying in the snow (prone) or mid-vault: nothing to knock over.
@@ -145,6 +151,9 @@ bool UKnockdownComponent::TryKnockDown(EKnockdownCause Cause, const FVector& Sou
 	{
 		return false;
 	}
+	// The blow's source sets the knockback throw's direction (ULedgeFallComponent::TryKnockbackFall in StartKnockdown).
+	TGuardValue<bool> HasSource(bKnockbackSourceValid, true);
+	TGuardValue<FVector> Source(KnockbackSource, SourceLocation);
 	return StartKnockdown(KnockdownRules::DirectionFromLocations(Owner->GetActorForwardVector(), Owner->GetActorLocation(), SourceLocation), Cause);
 }
 
@@ -200,6 +209,14 @@ bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdo
 	if (ULadderClimbComponent* Ladder = GetOwner() ? GetOwner()->FindComponentByClass<ULadderClimbComponent>() : nullptr; Ladder && Ladder->IsClimbing())
 	{
 		return Ladder->DropForKnockdown(Side, Cause);
+	}
+	// Game designer item 6 (2026-11-03): a knockdown at an open roof / bridge edge (no waist-high parapet) throws him over it - he falls,
+	// takes the fall damage, and this knockdown plays on landing (ULedgeFallComponent).
+	if (ULedgeFallComponent* Fall = GetOwner() ? GetOwner()->FindComponentByClass<ULedgeFallComponent>() : nullptr;
+		Fall && Fall->TryKnockbackFall(Side, Cause, bKnockbackSourceValid, KnockbackSource))
+	{
+		PostFeedLine(FString::Printf(TEXT("%s is thrown off the edge!"), *GetUnitName()));
+		return true;
 	}
 	const UAnimSequenceBase* Fall = LoadClip(Side == EKnockdownDirection::Front ? KnockedFrontClip : KnockedBackClip);
 	const UAnimSequenceBase* GetUp = LoadClip(Side == EKnockdownDirection::Front ? ReviveFrontClip : ReviveBackClip);

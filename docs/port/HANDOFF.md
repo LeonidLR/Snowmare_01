@@ -255,6 +255,13 @@ The old §6 blocks (how the user places things, what the artist edits, ABP setup
 
 ## 7. Open user decisions / questions (condensed; the full text is in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md))
 
+- **Falls and drops (2026-11-03, `fix/falls-and-drops`) - defaults PENDING** (`docs/systems/stances-and-movement.md` "Falls and drops",
+  `Content/Data/Movement/falls.json`): fall damage = the ladder curve with one level free (safe 3.2 m, 0.1 HP / cm, max 40, no lethal height);
+  drop links for 1.5-6.5 m drops with a gap <= 2.5 m, generated only where the level JSON says `"drop_links": true` (the generator's maps); a drop
+  costs a ladder's 3 x its length + 10 m (25 m when it hurts) so stairs / ramps / ladders win; knockback falls only from the existing knockdowns, no
+  throw over a waist-high (80 cm) parapet; all operatives drop, Solo and squad alike, one at a time per landing spot. Questions: drop links on the
+  hand-made maps too? enemies dropping? the cut walls on `L_Gen_Depot_1` (drops into the cut only off the crossings; `B_shed` overlaps a cut wall).
+
 - **Sight from a height (2026-11-02, `fix/vision-from-height`) - numbers PENDING:** range x(1 + 0.25 x level), max x2 (+1 x1.25, +2 x1.5, +3 x1.75; ground and
   the -3 m cut x1), the level from the EYE height (standing on a 1.5 m wreck is already +1) - `enemy_perception.json` "height_sight". Also: the operative's
   cone shows his weapon's reach (what he can shoot), his sight reaches 60 m x the bonus - should the cone show the sight range instead?

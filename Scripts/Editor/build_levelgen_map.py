@@ -33,7 +33,8 @@ with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBo
     one-way point links from 70 cm outside each edge on the upper slab down to the hole's centre one level below - the squad
     (and the enemies) walk off the rim and fall 3 m instead of being teleported; only one-level drops onto a real slab;
   - the level JSON's "bot_route" (levelgen_bot_route.bot_route: the mandatory route as the playtest bot's planned route, with each
-    waypoint's floor height and the drop legs marked); a rebuild KEEPS the existing level JSON's "pressure" / "cheats" blocks
+    waypoint's floor height and the drop legs marked); a rebuild KEEPS the existing level JSON's "pressure" / "cheats" blocks;
+    "drop_links": true (2026-11-03): the runtime drop nav links off the open edges (UDropLinkSubsystem, LEVEL_GENERATOR.md 8.6)
     (tuned on the Training Ground combat lab page) when it was written for the same layout.
 Idempotent per map (every actor tagged LevelGen is deleted and placed again); never touches another map (L_Demo01_B_FrozenFactory
 is not read or written). Lighting (sun, sky, fog) placed once (tag LevelGen_Env).
@@ -390,6 +391,8 @@ def level_json(layout, map_path):
         "cheats": {"immortal": True, "infinite_ammo": True},
         "levelgen_layout": "Content/Data/LevelGen/accepted/%s.json" % layout["name"],
         "minimap": {"floors_cm": [z_of(n) for n in range(1, max_walkable_level(layout) + 1)]},
+        # falls and drops (2026-11-03): the runtime drop nav links off the roofs / bridges / into the cut (UDropLinkSubsystem)
+        "drop_links": True,
         "waves": [{"wave_index": 1, "name": "Wave 1", "max_simultaneous_enemies": 2,
                    "spawns": [{"enemy_type": "FROSTBITTEN", "count": 2, "spawn_lane": "ANY", "spawn_delay_sec": 1, "initial_delay_sec": 0}],
                    "wave_modifiers": {"enemy_hp_mult": 1, "enemy_damage_mult": 1, "enemy_speed_mult": 1, "cold_drain_mult": 1}}],

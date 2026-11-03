@@ -370,6 +370,18 @@ up 7.7-8.0 s / down 8.4-8.5 s, `LAD_B_gallery` up 7.1 / down 7.8 s, X_centre int
 the squad out of the cut by `LAD_cut_3` 20.5 s (3 / 3 climbed) and back in 27.5 s (3 / 3). Pictures (rendered offscreen, the game's own camera):
 `CodexTactics.LevelGenLaddersShots` -> `Saved/Screenshots/LevelGenLadders/ladder_gallery.png`, `ladder_cut.png`, `cut_ramp.png`.
 
+### 8.6 Drops off the edges (2026-11-03, branch `fix/falls-and-drops`)
+
+The game designer's play-test items 6 / 10 / 11a (falls from heights, roof-to-roof drops, the way down into the cut): the builder now writes
+`"drop_links": true` into the generated map's level JSON (`L_Gen_Depot_1.json` patched by hand, no rebuild needed); at level start
+`UDropLinkSubsystem` generates one-way drop nav links off every open navmesh edge with a walkable surface 1.5-6.5 m below at most 2.5 m beyond it
+(roof -> lower roof, roof -> ground, the crossings' open sides -> the cut floor). On `L_Gen_Depot_1`: ~600 links (163 of them hurt: drops of more than
+one level), among them 8 off the X_ne bridge into the cut and the ruin roof (+2) -> the annex roof (+1) across the 2.5 m gap. The cut's long sides
+stay closed: its `cut_wall` walls (2.2 m) stand on the rim everywhere but the crossings, so a drop into the cut starts on a bridge / the ramp's
+crossing; `B_shed` overlaps the north cut wall (footprint X 250..1200 against the wall's 283..433) - the generator should keep buildings off the cut
+walls (open question). The builder's own hole links (`Drop_<building>_<hole>`, section 7) stay; their 3 m falls are free under the fall rules.
+Rules, defaults (pending the designer) and checks: `docs/systems/stances-and-movement.md` "Falls and drops"; smoke `CodexTactics.FallDropSmoke`.
+
 ## 9. Status
 
 | Phase | State |

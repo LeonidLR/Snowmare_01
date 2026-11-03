@@ -682,8 +682,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Ladder")
 	bool IsClimbingLadder() const;
 
-	/** The climb ended at the other end: the path goes on to Destination (like the vault's resume). */
+	/** The climb ended at the other end: the path goes on to Destination (like the vault's resume; a drop's landing too). */
 	void ResumeMoveAfterLadder(const FVector& Destination, bool bOwnOrder = false);
+
+	// --- Falls and drops (docs/systems/stances-and-movement.md "Falls and drops"; cluster OperativeCharacterFall.cpp) ---
+
+	/** Running drops through the generated drop links, knockback falls over an edge, the landing's fall damage (2026-11-03). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Falls")
+	TObjectPtr<class ULedgeFallComponent> LedgeFall;
+
+	/** Running off an edge, in the air or landing (no fire, cover, facing or stance change meanwhile). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Falls")
+	bool IsDroppingOffLedge() const;
+
+	/** His sprint speed now (standing; wounds, the cold, a load): the fastest run-up he can take off an edge, cm/s. */
+	float GetSprintSpeedCap() const;
 
 	/** Where a save puts him: on a ladder, the link point of the end he is heading to (LADDERS.md 7.8). */
 	FVector GetSaveLocation() const;

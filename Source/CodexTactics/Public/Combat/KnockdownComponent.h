@@ -181,6 +181,9 @@ private:
 	void HandleOwnerDied(AActor* Victim, const FString& AttackerSource);
 
 	FKnockdownState State;
+	/** TryKnockDown's blow source for the knockback throw (StartKnockdown -> ULedgeFallComponent::TryKnockbackFall); invalid elsewhere. */
+	bool bKnockbackSourceValid = false;
+	FVector KnockbackSource = FVector::ZeroVector;
 	float SecondsSinceGetUp = 1000.f;
 	TFunction<void()> BufferedOrder;
 	TWeakObjectPtr<UAnimSequenceBase> PlayingClip;
