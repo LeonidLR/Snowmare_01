@@ -1065,3 +1065,37 @@ bool UOperativeAnimGraphLibrary::SetSkeletalMeshSkeleton(USkeletalMesh* Mesh, US
 	OutReport = FString::Printf(TEXT("%s -> %s"), *Mesh->GetName(), *Skeleton->GetName());
 	return true;
 }
+
+bool UOperativeAnimGraphLibrary::RenameMeshBones(USkeletalMesh* Mesh, const TArray<FName>& OldNames, const TArray<FName>& NewNames, FString& OutReport)
+{
+	if (!Mesh || OldNames.IsEmpty() || OldNames.Num() != NewNames.Num())
+	{
+		OutReport = TEXT("no mesh / the name lists differ");
+		return false;
+	}
+	FReferenceSkeleton& Bones = Mesh->GetRefSkeleton();
+	for (int32 Index = 0; Index < OldNames.Num(); ++Index)
+	{
+		if (Bones.FindRawBoneIndex(OldNames[Index]) == INDEX_NONE)
+		{
+			OutReport = FString::Printf(TEXT("%s has no bone %s"), *Mesh->GetName(), *OldNames[Index].ToString());
+			return false;
+		}
+		if (Bones.FindRawBoneIndex(NewNames[Index]) != INDEX_NONE && !OldNames.Contains(NewNames[Index]))
+		{
+			OutReport = FString::Printf(TEXT("%s already has a bone %s"), *Mesh->GetName(), *NewNames[Index].ToString());
+			return false;
+		}
+	}
+	Mesh->Modify();
+	{
+		FReferenceSkeletonModifier Modifier(Bones, nullptr); // its destructor rebuilds the name -> index map
+		for (int32 Index = 0; Index < OldNames.Num(); ++Index)
+		{
+			Modifier.Rename(OldNames[Index], NewNames[Index]);
+		}
+	}
+	Mesh->MarkPackageDirty();
+	OutReport = FString::Printf(TEXT("%s: %d bone(s) renamed, root now %s"), *Mesh->GetName(), OldNames.Num(), *Bones.GetBoneName(0).ToString());
+	return true;
+}

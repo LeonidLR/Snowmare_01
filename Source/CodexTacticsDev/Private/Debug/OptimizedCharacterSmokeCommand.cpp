@@ -92,8 +92,8 @@ namespace OptimizedCharacterSmoke
 			TEXT("/Game/Characters/Operatives/BP_Operative.BP_Operative_C"), 50000, 0 },
 		{ TEXT("Female_Soldier"), EKind::Operative, TEXT("/Game/Female_Soldier/Mesh/SK_Female_soldier.SK_Female_Soldier"),
 			TEXT("/Game/Characters/Operatives/BP_Operative_FemaleSoldier.BP_Operative_FemaleSoldier_C"), 50000, 0 },
-		{ TEXT("FrozenPMC_Fighter"), EKind::Enemy, TEXT("/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Mesh/SKM_FrozenPMC_Fighter.SKM_FrozenPMC_Fighter"),
-			TEXT("/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/BP_Enemy_FrozenPMC_Fighter.BP_Enemy_FrozenPMC_Fighter_C"), 20000, 0 },
+		// (FrozenPMC_Fighter dropped 2026-11-03: the PMC body is an operative on ABP_Operative now (docs/systems/pmc-squad-ai.md); its
+		// optimized copy would be an Operative case on the PMC operator spawn, not the superseded enemy Blueprint - a follow-up.)
 		{ TEXT("MilitaryZombie_1"), EKind::Enemy, TEXT("/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1.SKM_base_mesh_set2_1"),
 			TEXT("/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie.BP_Enemy_MilitaryZombie_C"), 20000, 3 },
 		{ TEXT("MilitaryZombie_2"), EKind::Enemy, TEXT("/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_2.SKM_base_mesh_set2_2"),

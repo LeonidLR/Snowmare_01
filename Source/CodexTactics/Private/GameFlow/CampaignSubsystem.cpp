@@ -68,7 +68,7 @@ void UCampaignSubsystem::CaptureSquad(const UWorld* World, const FString& ToMap)
 	Carry.ToMap = CampaignRules::ShortMapName(ToMap);
 	for (TActorIterator<AOperativeCharacter> It(const_cast<UWorld*>(World)); It; ++It)
 	{
-		if (It->bRecruited || It->IsKilledInAction())
+		if ((It->bRecruited || It->IsKilledInAction()) && It->IsPlayerTeam()) // a hostile PMC fighter never travels with the squad (teams, 2026-11-03)
 		{
 			Carry.Members.Add(CampaignCarry::Capture(**It));
 		}

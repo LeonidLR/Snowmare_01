@@ -45,7 +45,12 @@ log lines name the side a blow came from (front < 60 < side < 120 < back). Tests
 `EnemyTacticsSmoke` (per-hound first contact angle, a flank-role hound from the side / back, bites from the side / back).
 
 
-## Frozen PMC Fighter = a Frostbitten variant body (game designer 2026-10-20, branch agents/pmcfighter)
+## Frozen PMC Fighter = a Frostbitten variant body (game designer 2026-10-20, branch agents/pmcfighter) - SUPERSEDED 2026-11-03
+
+> User decision 2026-11-03: the PMC body runs the OPERATIVE Animation Blueprint now and the PMC fighters are hostile operatives with their own
+> commander ([pmc-squad-ai](pmc-squad-ai.md)). The child Blueprint below still exists (a placed Frostbitten-type enemy; `LadderEnemySmoke` spawns
+> it), but its asset test `CodexTactics.Characters.EnemyAssets.FrozenPmcFighter`, `PmcFighterSmoke` and its `OptimizedCharacterSmoke` /
+> `Enemy.LookVariants.BlueprintBodies` rows were retired. The text below is history.
 
 The designer added the pack `/Game/Cyberpunk_Explorer_A` and asked for a new enemy on it animated like the Frostbitten.
 `/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/BP_Enemy_FrozenPMC_Fighter` (made by `Scripts/Editor/create_frozen_pmc_fighter.py`, idempotent,

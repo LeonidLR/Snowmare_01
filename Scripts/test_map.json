@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -36,7 +36,8 @@
     "EnvironmentRosterSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "FrozenFactoryStartSmoke", "WeatherSmoke", "WeatherLakeSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "BlizzardWalkSmoke", "RegroupAfterLossesSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke",
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke", "FormationCustomSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke", "FormationFarSideSmoke",
-    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "VisionHeightSmoke", "WallLeadershipSmoke", "CombatLabAmbushRelocateSmoke", "SquadHaltStanceSmoke", "LevelGenRouteSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke", "RoofCutawayFocusSmoke", "FallDropSmoke", "DropSoftlockSmoke", "DropLinkReachSmoke", "WallSectorsSmoke", "GroupCoverNearbySmoke", "WallLeadershipSlideSmoke", "GroupCornerPeekSmoke"
+    "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "VisionHeightSmoke", "WallLeadershipSmoke", "CombatLabAmbushRelocateSmoke", "SquadHaltStanceSmoke", "LevelGenRouteSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke", "RoofCutawayFocusSmoke", "FallDropSmoke", "DropSoftlockSmoke", "DropLinkReachSmoke", "WallSectorsSmoke", "GroupCoverNearbySmoke", "WallLeadershipSlideSmoke", "GroupCornerPeekSmoke",
+    "PmcTeamSmoke", "PmcCommanderSmoke", "PmcArenaSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -110,6 +111,7 @@
     "FallDropSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 1500, "_why": "game designer items 6 / 10 / 11a (2026-11-03, docs/systems/stances-and-movement.md Falls and drops): the generated drop links; the squad drops off the X_ne bridge into the cut by a move order (one at a time, the HUD drop marker); a 6 m walk-off with fall damage; a sprint roof-to-roof drop that lands (the ABP FallStates Falling / Landing) and a slow one that falls short; a knockback throw over the ruin roof edge, none at the cut wall; an enemy thrown too; follow-up 2026-11-03: a 10.5 m heavy wound (knocked down, gets up), Frostbittens off 10.5 m / 13 m (down / dead), a Frostbitten and a jumping Frost Hound chasing the leader off the ruin roof through a drop link, a Brute that never takes one, a follower dead after 13 m" },
     "LevelGenRampSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 900, "_why": "game designer bug report 2026-11-02 item 7 (L_Gen_Depot_1): the squad bunched at a ramp's foot (the ruin's external stair, the 9 m hall stairwell) goes up when one man is sent onto the roof - squad mode: all three end on the roof, nobody stuck in the ramp mouth; all three box-selected (sprint): all up, no group target off the roof edge; Solo: only he goes up" },
     "RoofCutawayFocusSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 300, "_why": "game designer bug report 2026-11-02 item 8 (L_Gen_Depot_1): 2 men on the hall roof, 1 under it - the roof cutaway and the minimap floor follow the SELECTED man (the leader in group mode): roof man -> the roof stays, ground man -> it is cut, back -> it stays" },
+    "PmcArenaSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_PmcArena.json", "timeout": 600, "_why": "PMC self-play arena (user request 2026-11-03, docs/systems/pmc-squad-ai.md Arena): one PMC-vs-PMC round on the combat lab without its monster pressure / cheats (L_PmcArena.json), the squads meet and fight, Saved/Arena/<timestamp>.json validated against schema codex.pmc_arena/1" },
     "FormationLabSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 1200, "_why": "formation stage 6 (2026-10-25, docs/design/FORMATION_SECTORS.md): the squad (4th man spawned) walks every lab route - formation per zone, no wall stare, the rear man keeps up, patrol pace, the wall layout at the dead ends, the group cover order as the wall layout, a 3-man wedge" },
     "LadderQueueSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.1): 3 operatives ordered onto the wall ladder's roof together - one on the ladder at a time, the others wait at its foot in the order they came" },
     "LadderEnemySmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.5): the Marksman, the Frozen PMC Fighter and the Military Zombie climb the factory's test ladders through their nav links (knockdown / death on the way down drop them); the Hound, the Frostbitten and the Brute never take a ladder" },
@@ -133,8 +135,16 @@
     "SniperSmoke": { "fixedStepFps": 240, "_why": "per-frame body yaw check (max 25 deg in one frame): 41.7 at 30 fps, 20.8 at 60 fps for the same turn" },
     "TutorialSmoke": { "realTime": true, "_why": "the dialogue Enter hold (0.6 s skip) is timed on the wall clock (FPlatformTime, the dialogue pause freezes the game clock); a fixed step runs the game faster than the wall clock, so the held key is too short" }
   },
-  "nonSmokeDebugCommands": ["CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
+  "nonSmokeDebugCommands": ["PmcArena", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
   "rules": [
+    {
+      "name": "pmc-squad-ai-2026-11-03",
+      "_comment": "PMC squads on the operative body (user request 2026-11-03, docs/systems/pmc-squad-ai.md): teams (AOperativeCharacter::TeamId), UPmcSquadSubsystem (team sight, targets, the utility commander), the shared SquadOrderCatalog, PmcCommanderRules / PmcOperatorRules, the self-play arena (CodexTactics.PmcArena) and its level JSON.",
+      "globs": ["Source/**/AI/Pmc*", "Source/**/AI/SquadOrderCatalog*", "Source/**/Debug/Pmc*", "Content/Data/AI/pmc_*.json", "Content/Data/LevelJson/L_PmcArena.json",
+        "Source/**/Characters/OperativeCharacterInternal*", "Source/**/Characters/OperativeCharacterCombat*", "Source/**/Characters/OperativeCharacterHealth*", "Source/**/Combat/TacticalSightSubsystem*", "Source/**/Combat/CombatCheats*", "Source/**/Combat/WaveSubsystem*"],
+      "tests": ["CodexTactics.AI.PmcCommander", "CodexTactics.AI.PmcOperators", "CodexTactics.AI.SquadOrderCatalog", "CodexTactics.Combat.Sight", "CodexTactics.Combat.Cheats", "CodexTactics.LevelJson"],
+      "smokes": ["PmcTeamSmoke", "PmcCommanderSmoke", "PmcArenaSmoke", "SquadFireSmoke", "SightSmoke", "EnemyAISmoke", "SuppressionSmoke", "SaveLoadSmoke", "CoverSmoke", "FormationLabCombatSmoke"]
+    },
     {
       "name": "falls-drops-2026-11-03",
       "_comment": "Falls from heights, running drops and knockback falls (game designer items 6 / 10 / 11a, 2026-11-03; docs/systems/stances-and-movement.md Falls and drops): FallRules, ULedgeFallComponent, UDropLinkSubsystem (generated drop nav links), the HUD drop marker, falls.json.",
@@ -396,9 +406,9 @@
     },
     {
       "name": "anim-enemy",
-      "globs": ["Source/**/Characters/EnemyAnimInstance*", "Source/**/Characters/EnemyAnimRules*", "Source/**/Characters/MarksmanAnimInstance*", "Content/Characters/Enemies/**", "Source/**/Debug/PmcFighterSmoke*", "Source/**/Debug/MilitaryZombieSmoke*", "Scripts/Editor/create_frozen_pmc_fighter.py", "Scripts/Editor/create_military_zombie.py"],
+      "globs": ["Source/**/Characters/EnemyAnimInstance*", "Source/**/Characters/EnemyAnimRules*", "Source/**/Characters/MarksmanAnimInstance*", "Content/Characters/Enemies/**", "Source/**/Debug/MilitaryZombieSmoke*", "Scripts/Editor/create_frozen_pmc_fighter.py", "Scripts/Editor/create_military_zombie.py"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Characters.EnemyAssets", "CodexTactics.Characters.EnemyAnim"],
-      "smokes": ["EnemyHitLayerSmoke", "MarksmanSmoke", "EnemyDeathSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke"]
+      "smokes": ["EnemyHitLayerSmoke", "MarksmanSmoke", "EnemyDeathSmoke", "MilitaryZombieSmoke"]
     },
     {
       "name": "transfer-inventory",
@@ -582,7 +592,7 @@
       "name": "enemy",
       "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/Debug/EnemyArchetypeSmoke*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Characters.EnemyUnits", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
-      "smokes": ["EnemyAISmoke", "EnemyArchetypeSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke"]
+      "smokes": ["EnemyAISmoke", "EnemyArchetypeSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke", "MilitaryZombieSmoke"]
     },
     {
       "name": "enemy-combat-units",

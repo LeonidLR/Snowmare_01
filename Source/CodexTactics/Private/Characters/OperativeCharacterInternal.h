@@ -5,6 +5,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/EncounterQueries.h"
@@ -47,6 +48,47 @@ namespace OperativeCharacterInternal
 		}
 		const UHealthComponent* Health = Actor->FindComponentByClass<UHealthComponent>();
 		return !Health || Health->IsAlive();
+	}
+
+	/**
+	 * A live target of Shooter's side (teams, 2026-11-03): for the player's men IsLiveEnemy (the "Enemy" tag; a hostile PMC fighter carries
+	 * it); for a hostile fighter an operative of another team, or a monster his team defends itself from (UPmcSquadSubsystem::IsHostileTo).
+	 */
+	inline bool IsLiveTargetOf(const AOperativeCharacter& Shooter, const AActor* Actor)
+	{
+		if (!IsValid(Actor) || Actor->IsHidden())
+		{
+			return false;
+		}
+		if (const AOperativeCharacter* Other = Cast<AOperativeCharacter>(Actor))
+		{
+			return Other->TeamId != Shooter.TeamId && !Other->IsKilledInAction() && Other->HealthComponent && Other->HealthComponent->IsAlive();
+		}
+		if (Shooter.IsPlayerTeam())
+		{
+			return IsLiveEnemy(Actor);
+		}
+		const UHealthComponent* Health = Actor->FindComponentByClass<UHealthComponent>();
+		const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(Shooter.GetWorld());
+		return (!Health || Health->IsAlive()) && Pmc && Pmc->IsHostileTo(Shooter, Actor);
+	}
+
+	/** The actors Shooter may consider firing at this frame (the registry's "Enemy" actors for the player's men, the team's seen targets for a hostile fighter). */
+	inline TArray<AActor*> GatherTargetsFor(const AOperativeCharacter& Shooter)
+	{
+		TArray<AActor*> Out;
+		if (Shooter.IsPlayerTeam())
+		{
+			for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(Shooter.GetWorld()))
+			{
+				Out.Add(Enemy);
+			}
+		}
+		else if (const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(Shooter.GetWorld()))
+		{
+			Out = Pmc->GetTargetsFor(Shooter);
+		}
+		return Out;
 	}
 
 	/**

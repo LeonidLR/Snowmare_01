@@ -16,6 +16,8 @@
 #include "Interactables/BarrelActor.h"
 #include "EngineUtils.h"
 #include "AIController.h"
+#include "AI/PmcOperatorRules.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -28,6 +30,12 @@
 #include "NavigationData.h"
 #include "NavigationSystem.h"
 #include "NavFilters/NavigationQueryFilter.h"
+
+namespace EnemyBehaviorLocal
+{
+	/** A monster notices a hostile PMC fighter (teams, 2026-11-03) within this distance with a clear sight line, cm. */
+	constexpr float PmcMonsterSightCm = 2500.f;
+}
 
 namespace EnemyCharacterLocal
 {
@@ -163,7 +171,9 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	// or a morale fall-back. A turret / generator target of the Godot rules is kept.
 	FEnemyTacticOrder Order;
 	UEnemyTacticsSubsystem* Tactics = GetWorld()->GetSubsystem<UEnemyTacticsSubsystem>();
-	const bool bHasOrder = Target && Target->IsA<AOperativeCharacter>() && Tactics && Tactics->GetOrder(this, Order);
+	// Teams (2026-11-03): the pack orders are about the player's squad; a hostile PMC fighter picked by FindTarget is kept as he is.
+	const AOperativeCharacter* TargetOperative = Cast<AOperativeCharacter>(Target);
+	const bool bHasOrder = TargetOperative && TargetOperative->IsPlayerTeam() && Tactics && Tactics->GetOrder(this, Order);
 	if (bHasOrder && Order.Role == EEnemyTacticRole::FallBack && !bKnowsSquadPosition) // a horde never falls back
 	{
 		if (!bFallingBack)
@@ -548,6 +558,27 @@ AActor* AEnemyCharacter::FindTarget() const
 			Known.Add(Member);
 			Actors.Add(Member);
 			Candidates.Add({ EEnemyTargetKind::Operative, Belief - FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight() - 100.f), true });
+		}
+	}
+	// Teams (2026-11-03, pmc_operators.json "monsters_attack_pmc"): the hostile PMC fighters are human too - one in sight within
+	// PmcMonsterSightCm is a candidate like an operative (no belief memory for them yet: seen = known).
+	if (PmcOperatorRules::Get().bMonstersAttackPmc)
+	{
+		if (const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+		{
+			const FVector Eye = UTacticalSightSubsystem::EyePoint(*this);
+			for (AOperativeCharacter* Fighter : Pmc->GetHostileOperatives())
+			{
+				if (!IsValid(Fighter) || Fighter->IsHidden() || Fighter->IsKilledInAction() || !Fighter->HealthComponent || !Fighter->HealthComponent->IsAlive()
+					|| FVector::Dist2D(Eye, Fighter->GetActorLocation()) > EnemyBehaviorLocal::PmcMonsterSightCm
+					|| (Sight && !Sight->HasClearSight(Eye, UTacticalSightSubsystem::ProfilePoint(*Fighter))))
+				{
+					continue;
+				}
+				Known.Add(Fighter);
+				Actors.Add(Fighter);
+				Candidates.Add({ EEnemyTargetKind::Operative, Fighter->GetActorLocation() - FVector(0.f, 0.f, Fighter->GetSimpleCollisionHalfHeight() - 100.f), true });
+			}
 		}
 	}
 	for (TActorIterator<ATurretActor> It(World); It; ++It)

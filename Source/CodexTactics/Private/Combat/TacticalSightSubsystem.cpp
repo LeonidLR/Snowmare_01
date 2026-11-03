@@ -1,4 +1,5 @@
 #include "Combat/TacticalSightSubsystem.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Survival/TacticalHeatSubsystem.h"
@@ -271,6 +272,15 @@ bool UTacticalSightSubsystem::HasClearSight(const FVector& From, const FVector& 
 	{
 		Params.AddIgnoredActor(Pawn.Get());
 	}
+	// Teams (2026-11-03): the hostile PMC fighters are observers too - a line starting inside the observer's own capsule must not count
+	// its first hit (himself, a pawn) as "clear"; they are ignored like the squad's men.
+	if (const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld()))
+	{
+		for (const AOperativeCharacter* Fighter : Pmc->GetHostileOperatives())
+		{
+			Params.AddIgnoredActor(Fighter);
+		}
+	}
 	for (const TPair<TWeakObjectPtr<AEnemyCharacter>, FEnemyState>& Pair : EnemyStates)
 	{
 		Params.AddIgnoredActor(Pair.Value.Ghost.Get());
@@ -330,6 +340,13 @@ bool UTacticalSightSubsystem::IsVisibleToSquad(const AActor* Enemy) const
 	if (!bWasActive || !IsSquadSightActive())
 	{
 		return true;
+	}
+	// A hostile PMC fighter (an operative of another team, 2026-11-03): the player's men see him by the same eye rules, kept per team
+	// by UPmcSquadSubsystem (he is never hidden / ghosted like a monster yet - follow-up).
+	if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Enemy))
+	{
+		const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld());
+		return Pmc ? Pmc->IsVisibleToTeam(PmcTeam::Player, Operative) : true;
 	}
 	const FEnemyState* State = EnemyStates.Find(Cast<AEnemyCharacter>(const_cast<AActor*>(Enemy)));
 	return !State || !State->bHidden;
