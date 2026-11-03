@@ -29,6 +29,13 @@ export const MIN_RUNGS = 7;
 /** The cut's floor = level -1. */
 export const CUT_LEVEL = -1;
 export const CUT_DEPTH = LEVEL_HEIGHT;
+/** The cut wall's thickness when the layout has no `cut_wall` wall to read it from (the generator uses 1.5 m), cm. */
+export const CUT_WALL_DEFAULT_THICKNESS_CM = 150;
+/**
+ * Hard rule 2026-11-03 (game designer): no building footprint touches the cut's walls. The forbidden band is the cut polygon's
+ * bounding box grown by the wall thickness (the walls stand OUTSIDE the trench edge) plus this margin, cm.
+ */
+export const CUT_BUILDING_MARGIN_CM = 100;
 /**
  * The level of the tall halls' walkable roofs (the sawtooth hall, the warehouse, the Steel Works): +3 = 9 m (game designer
  * 2026-11-02, "for the view from the roofs"; the reference draws them 8-12 m tall). The ruin keeps its two storeys (+2).
@@ -234,6 +241,19 @@ export function validateGenLayout(data: unknown): string[] {
     else if (isNum(ld.rungs) && Math.abs(ld.rungs * RUNG_PITCH + (ld.plinth_cm ?? 0) - levelZ(ld.level_to - ld.level_from)) > 1) e.push(`ladder ${ld.id}: rungs x pitch + plinth must equal ${levelZ(ld.level_to - ld.level_from)} cm`);
   }
   if (l.cut && l.cut.level !== CUT_LEVEL) e.push(`cut: level must be ${CUT_LEVEL}`);
+  if (l.cut && Array.isArray(l.cut.poly) && l.cut.poly.length >= 3 && l.cut.poly.every(isVec)) {
+    // building vs cut wall (2026-11-03): the wall stands outside the trench edge, `t` thick; keep CUT_BUILDING_MARGIN_CM clear of it
+    const wallTs = (l.walls ?? []).filter((w) => w.kind === 'cut_wall').map((w) => w.thickness);
+    const t = wallTs.length ? Math.max(...wallTs) : CUT_WALL_DEFAULT_THICKNESS_CM;
+    const reach = t + CUT_BUILDING_MARGIN_CM;
+    const xs = l.cut.poly.map((p) => p[0]), ys = l.cut.poly.map((p) => p[1]);
+    const x0 = Math.min(...xs) - reach, x1 = Math.max(...xs) + reach, y0 = Math.min(...ys) - reach, y1 = Math.max(...ys) + reach;
+    for (const b of l.buildings ?? []) {
+      const f = b.footprint;
+      if (!Array.isArray(f) || f.length !== 2 || !isVec(f[0]) || !isVec(f[1])) continue;
+      if (f[0][0] < x1 && f[1][0] > x0 && f[0][1] < y1 && f[1][1] > y0) e.push(`building ${b.id}: footprint overlaps the cut wall (wall ${t} cm + margin ${CUT_BUILDING_MARGIN_CM} cm around the cut; no building on the cut walls)`);
+    }
+  }
   const mandatory = (l.routes ?? []).filter((r) => r.mandatory);
   if (mandatory.length !== 1) e.push(`routes: exactly one mandatory route (found ${mandatory.length})`);
   for (const r of l.routes ?? []) {

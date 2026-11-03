@@ -14,7 +14,7 @@ import type { ZoneKind } from '../movement/layout.ts';
 import type { Profile } from './profile.ts';
 import { toUE } from './profile.ts';
 import type { CoverKind, Door, GenBuilding, GenCover, GenCut, GenLadder, GenLayout, GenParams, GenRoute, GenWall, PatrolRoute, SetPiece, SpawnPoint, Stair } from './schema.ts';
-import { CHIMNEY_HEIGHT_CM, CUT_LEVEL, DEFAULT_PARAMS, HALL_ROOF_LEVEL, HOLE_HALF_CM, LEVELGEN_SCHEMA, LEVEL_HEIGHT, STAIR_RUN_PER_RISE, ladderForLevels, levelZ, rect } from './schema.ts';
+import { CHIMNEY_HEIGHT_CM, CUT_BUILDING_MARGIN_CM, CUT_LEVEL, DEFAULT_PARAMS, HALL_ROOF_LEVEL, HOLE_HALF_CM, LEVELGEN_SCHEMA, LEVEL_HEIGHT, STAIR_RUN_PER_RISE, ladderForLevels, levelZ, rect } from './schema.ts';
 
 type Rect = [Vec2, Vec2];
 
@@ -89,6 +89,8 @@ export function generateLayout(o: GenerateOptions): GenLayout {
       { id: 'X_centre', poly: rect.poly([[xCentreX - 2.5, cutN - CUT_WALL_T], [xCentreX + 2.5, cutS + CUT_WALL_T]]), kind: 'ramp' },
       { id: 'X_ne', poly: rect.poly([[xNeX - 2, cutN - CUT_WALL_T], [xNeX + 2, cutS + CUT_WALL_T]]), kind: 'bridge' },
     ];
+    // no building on the cut walls (2026-11-03): the retaining walls + CUT_BUILDING_MARGIN_CM (clampRect's 1 m margin) stay free
+    d.keepFree.push([[0, cutN - CUT_WALL_T], [w, cutS + CUT_WALL_T]]);
     d.cut = { poly: rect.poly([[0, cutN], [w, cutS]]), level: CUT_LEVEL, floor_z: levelZ(CUT_LEVEL), crossings };
     // the retaining walls (ground obstacles: a 2.2 m parapet + fence), split round the crossings
     const gaps = crossings.map((c) => [c.poly[0][0], c.poly[1][0]] as [number, number]);
@@ -230,7 +232,14 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     // Game designer 2026-11-02: chimneys are NOT ladder towers - a tall closed obstacle that blocks sight, no ladder, no walkable
     // top, no height level of its own (validateGenLayout refuses a climbable chimney).
     for (const [k, c] of ([[0, [r[1][0] + 2.5 + jit(0.5), r[0][1] - 2.5 + jit(0.5)]], [1, [r[0][0] - 6 + jit(1), r[1][1] - 2 + jit(1)]]] as [number, Vec2][])) {
-      const t: Rect = [[c[0] - 1.5, c[1] - 1.5], [c[0] + 1.5, c[1] + 1.5]];
+      let t: Rect = [[c[0] - 1.5, c[1] - 1.5], [c[0] + 1.5, c[1] + 1.5]];
+      if (d.cut) { // no building on the cut walls (2026-11-03): a chimney reaching the wall band moves out of it, towards the nearer side
+        const bandN = cutN - CUT_WALL_T - CUT_BUILDING_MARGIN_CM / 100, bandS = cutS + CUT_WALL_T + CUT_BUILDING_MARGIN_CM / 100;
+        if (t[1][1] > bandN && t[0][1] < bandS) {
+          const dy = c[1] < yCut ? bandN - t[1][1] : bandS - t[0][1];
+          t = [[t[0][0], t[0][1] + dy], [t[1][0], t[1][1] + dy]];
+        }
+      }
       addBuilding(d, `B_chimney_${k}`, t, { height: CHIMNEY_HEIGHT_CM, floors: 1, hollow: true, enterable: false, roof_walkable: false, set_piece: 'chimney' }, random);
       if (V >= 1) random(); // the draw the former tower ladder took: keeps the rest of every seed's layout unchanged
     }
