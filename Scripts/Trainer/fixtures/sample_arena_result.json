@@ -1,0 +1,47 @@
+{
+  "schema": "codex.pmc_arena/1",
+  "map": "/Game/Maps/L_FormationLabCombat",
+  "seed": 4242,
+  "rounds_requested": 3,
+  "time_limit_s": 300,
+  "opponent": "Pmc",
+  "weights_a": "Saved/Trainer/pmc-main/gen_0003/candidates/g0003_c05.json",
+  "weights_b": "Saved/Trainer/pmc-main/gen_0003/opponent_champion.json",
+  "started": "2026-11-08T23:14:02",
+  "finished": "2026-11-08T23:26:40",
+  "rounds": [
+    {
+      "index": 0, "seed": 4242, "winner": "A", "duration_s": 142.5, "end_reason": "elimination",
+      "sides": {
+        "A": {"team": "pmc", "survivors": 3, "squad_size": 4, "hp_lost": 160.0, "hp_max": 400.0, "kills": 4,
+              "flanks_attempted": 2, "flanks_succeeded": 1, "suppression_s": 21.5, "ambushes": 1, "retreats": 1,
+              "retreats_survived": 1, "heals": 2, "friendly_fire": 0, "stuck_events": 0},
+        "B": {"team": "pmc", "survivors": 0, "squad_size": 4, "hp_lost": 400.0, "hp_max": 400.0, "kills": 1,
+              "flanks_attempted": 1, "flanks_succeeded": 0, "suppression_s": 9.0, "ambushes": 0, "retreats": 0,
+              "retreats_survived": 0, "heals": 0, "friendly_fire": 1, "stuck_events": 0}
+      }
+    },
+    {
+      "index": 1, "seed": 4243, "winner": "B", "duration_s": 88.0, "end_reason": "elimination",
+      "sides": {
+        "A": {"team": "pmc", "survivors": 0, "squad_size": 4, "hp_lost": 400.0, "hp_max": 400.0, "kills": 2,
+              "flanks_attempted": 3, "flanks_succeeded": 0, "suppression_s": 4.0, "ambushes": 0, "retreats": 2,
+              "retreats_survived": 0, "heals": 1, "friendly_fire": 2, "stuck_events": 1},
+        "B": {"team": "pmc", "survivors": 2, "squad_size": 4, "hp_lost": 250.0, "hp_max": 400.0, "kills": 4,
+              "flanks_attempted": 1, "flanks_succeeded": 1, "suppression_s": 15.0, "ambushes": 1, "retreats": 0,
+              "retreats_survived": 0, "heals": 1, "friendly_fire": 0, "stuck_events": 0}
+      }
+    },
+    {
+      "index": 2, "seed": 4244, "winner": "draw", "duration_s": 300.0, "end_reason": "time_limit",
+      "sides": {
+        "A": {"team": "pmc", "survivors": 2, "squad_size": 4, "hp_lost": 210.0, "hp_max": 400.0, "kills": 2,
+              "flanks_attempted": 1, "flanks_succeeded": 1, "suppression_s": 40.0, "ambushes": 0, "retreats": 0,
+              "retreats_survived": 0, "heals": 3, "friendly_fire": 0, "stuck_events": 0},
+        "B": {"team": "pmc", "survivors": 2, "squad_size": 4, "hp_lost": 205.0, "hp_max": 400.0, "kills": 2,
+              "flanks_attempted": 0, "flanks_succeeded": 0, "suppression_s": 33.0, "ambushes": 0, "retreats": 1,
+              "retreats_survived": 1, "heals": 2, "friendly_fire": 0, "stuck_events": 0}
+      }
+    }
+  ]
+}

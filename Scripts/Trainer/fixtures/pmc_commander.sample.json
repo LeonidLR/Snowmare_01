@@ -1,0 +1,26 @@
+{
+  "schema": "codex.pmc_commander/1",
+  "version": 1,
+  "personality": "baseline (sample fixture for the night trainer mock mode; the real file is Content/Data/AI/pmc_commander.json)",
+  "utility": {
+    "attack": {"weight": 1.0, "min_score": 0.2, "preferred_range_m": 18.0},
+    "flank": {"weight": 0.8, "min_score": 0.3, "max_flankers": 2, "commit_time_s": 6.0},
+    "suppress": {"weight": 0.9, "burst_s": 2.5, "min_score": 0.25},
+    "ambush": {"weight": 0.6, "patience_s": 20.0, "min_score": 0.35},
+    "retreat": {"weight": 0.7, "hp_threshold_pct": 35, "min_score": 0.3},
+    "heal": {"weight": 0.5, "hp_threshold_pct": 50, "safe_radius_m": 8.0},
+    "hold": {"weight": 0.4, "min_score": 0.1}
+  },
+  "considerations": {
+    "cover_value": 1.2,
+    "exposure_penalty": 0.8,
+    "ally_down_urgency": 1.5,
+    "target_low_hp_bonus": 0.6,
+    "distance_falloff_m": 30.0
+  },
+  "squad": {"spread_m": 4.0, "regroup_dist_m": 15.0, "aggression": 0.5, "use_cover_only": true},
+  "skills": [
+    {"id": "grenade", "weight": 0.5, "cooldown_s": 12.0, "enabled": true},
+    {"id": "smoke", "weight": 0.3, "cooldown_s": 20.0, "enabled": true}
+  ]
+}
