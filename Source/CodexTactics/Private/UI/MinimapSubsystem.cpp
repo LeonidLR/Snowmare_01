@@ -1172,6 +1172,11 @@ void UMinimapSubsystem::UpdateEnemyMemory()
 		{
 			continue;
 		}
+		// A fallen hostile PMC fighter (2026-11-03) keeps his "Enemy" tag: no marker for him.
+		if (const AOperativeCharacter* Hostile = Cast<AOperativeCharacter>(Enemy); Hostile && !MinimapSubsystemLocal::IsOperativeAlive(Hostile))
+		{
+			continue;
+		}
 		Present.Add(Enemy);
 		bool bSeen = false;
 		if (!Enemy->IsHidden())

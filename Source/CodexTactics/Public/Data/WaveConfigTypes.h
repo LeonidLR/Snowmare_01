@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "AI/PmcEncounterRules.h"
 #include "Data/CombatTypes.h"
 #include "Bot/BotRouteRules.h"
 #include "Combat/CombatPressureRules.h"
@@ -372,6 +373,11 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 * docs/design/COMBAT_LAB.md section 7). Invalid (no points) without the block. Runtime data from the JSON only.
 	 */
 	FBotRouteConfig BotRoute;
+	/**
+	 * "pmc_squads": hostile PMC squads of the level (user request 2026-11-03; PmcEncounterRules::ParseSquads, UPmcEncounterSubsystem,
+	 * docs/systems/pmc-squad-ai.md 7). Empty without the block. Runtime data from the JSON only.
+	 */
+	TArray<FPmcEncounterSpec> PmcSquads;
 };
 
 UCLASS(BlueprintType)

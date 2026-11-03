@@ -11,6 +11,7 @@ class AEnemyCharacter;
 class AEnemyGhostActor;
 class AOperativeCharacter;
 class UMaterialInterface;
+class USceneComponent;
 class USkinnedMeshComponent;
 enum class EVisibilityBasedAnimTickOption : uint8;
 
@@ -99,6 +100,15 @@ public:
 	/** A shot / blow: the shooter is visible to everybody for SightRules::DemaskSeconds. */
 	void NotifyFired(AActor* Shooter);
 	bool IsDemasked(const AActor* Actor) const;
+
+	/**
+	 * A hostile PMC fighter (an operative of another team) is concealed from the player now (fog of war, 2026-11-03): his meshes,
+	 * weapon and overlays are hidden while the player's team does not see him (UPmcSquadSubsystem::IsVisibleToTeam). The ACTOR stays
+	 * shown (IsHidden false) - every team / AI system keeps treating him as present; only the rendering is off. No silhouette yet.
+	 */
+	bool IsHostileOperativeConcealed(const AActor* Operative) const;
+	/** Shows every hostile fighter whatever the player's team sees (the PMC arena watched from above); applies at the next update. */
+	void SetRevealHostileOperatives(bool bReveal) { bRevealHostileOperatives = bReveal; }
 
 	/** The silhouette of Enemy, if it is hidden and has one. */
 	AEnemyGhostActor* GetGhost(const AActor* Enemy) const;
@@ -211,6 +221,18 @@ private:
 	void Update();
 	void RestoreAll();
 	void SetEnemyHidden(AEnemyCharacter& Enemy, bool bHidden);
+
+	/** A concealed hostile fighter: the components this system hid (shown again on reveal). */
+	struct FHostileOperativeState
+	{
+		bool bHidden = false;
+		TArray<TWeakObjectPtr<USceneComponent>> HiddenComponents;
+	};
+	/** Hides / shows the hostile fighters by the player team's sight (Update). */
+	void UpdateHostileOperatives();
+	void SetOperativeConcealed(AOperativeCharacter& Operative, FHostileOperativeState& State, bool bHidden);
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FHostileOperativeState> HostileStates;
+	bool bRevealHostileOperatives = false;
 	AEnemyGhostActor* PlaceGhost(AEnemyCharacter& Enemy, FEnemyState& State);
 	void DropGhost(FEnemyState& State);
 	UMaterialInterface* GetGhostMaterial();

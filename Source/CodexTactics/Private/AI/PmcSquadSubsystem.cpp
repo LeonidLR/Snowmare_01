@@ -33,6 +33,8 @@ namespace PmcSquadLocal
 	constexpr float StuckProgressCm = 100.f;
 	constexpr float AidReachCm = 230.f;
 	constexpr float MonsterSightCm = 2500.f;
+	/** A demasked shooter (his own fire) is noticed by the teams with a man this close (planar). */
+	constexpr float GunfireHearingCm = 6000.f;
 
 	inline bool IsLiveOperative(const AOperativeCharacter* Operative)
 	{
@@ -192,12 +194,180 @@ bool UPmcSquadSubsystem::HasLiveHostileOperatives(const UWorld* World)
 	}
 	for (const AOperativeCharacter* Fighter : Self->GetHostileOperatives())
 	{
-		if (PmcSquadLocal::IsLiveOperative(Fighter))
+		if (PmcSquadLocal::IsLiveOperative(Fighter) && Self->IsTeamEngaged(Fighter->TeamId))
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+bool UPmcSquadSubsystem::IsTeamEngaged(int32 TeamId) const
+{
+	const FTeam* Team = FindTeam(TeamId);
+	if (!Team)
+	{
+		return false;
+	}
+	if (Team->bEverContact || TeamId == PmcTeam::Player)
+	{
+		return Team->bEverContact;
+	}
+	// The player's squad has seen one of its men (the fight may have started from his side).
+	if (const FTeam* Player = FindTeam(PmcTeam::Player))
+	{
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Team->Members)
+		{
+			if (Member.IsValid() && Player->Known.Contains(TWeakObjectPtr<AActor>(Member.Get())))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+void UPmcSquadSubsystem::SetTeamPosture(int32 TeamId, EPmcPosture Posture, const FVector& Anchor, const FVector& PlayerStart, int32 Seed, const FPmcWeights& Weights)
+{
+	TeamOf(PmcTeam::Player); // the player's side keeps its own sight of the hostiles
+	FTeam& Team = TeamOf(TeamId);
+	Team.Weights = Weights;
+	Team.Posture = Posture;
+	Team.PostureAnchor = Anchor;
+	Team.PlayerStart = PlayerStart;
+	Team.PostureSeed = Seed;
+	Team.PostureLeg = 0;
+	Team.PostureTimer = 0.f;
+	Team.AssaultPoint.Reset();
+	// A patrol walks on its own until contact; defend / hunt run the commander from the start (Ambush / Advance on the search point).
+	Team.bCommanded = Posture != EPmcPosture::Patrol;
+	Team.DecisionTimer = 0.f;
+}
+
+bool UPmcSquadSubsystem::GetTeamPosture(int32 TeamId, EPmcPosture& OutPosture) const
+{
+	const FTeam* Team = FindTeam(TeamId);
+	if (!Team || !Team->Posture.IsSet())
+	{
+		return false;
+	}
+	OutPosture = Team->Posture.GetValue();
+	return true;
+}
+
+void UPmcSquadSubsystem::UpdatePosture(int32 TeamId, FTeam& Team, float DeltaTime)
+{
+	if (!Team.Posture.IsSet())
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	const TArray<AOperativeCharacter*> Mates = GetTeamMembers(TeamId);
+	if (!World || Mates.IsEmpty())
+	{
+		return;
+	}
+	const EPmcPosture Posture = Team.Posture.GetValue();
+	// Contact = seen an enemy (sight, touch, a shot heard within GunfireHearingCm - a hit's shooter is demasked) or seen by the squad.
+	if (IsTeamEngaged(TeamId))
+	{
+		// The posture ends, the utility commander runs the fight (a patrol stops its roam walk first).
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] team %d engaged (%s): the commander takes over"), TeamId, PmcEncounterRules::PostureName(Posture));
+		Team.Posture.Reset();
+		Team.AssaultPoint.Reset();
+		Team.bEverContact = true;
+		Team.LastContactTime = World->GetTimeSeconds();
+		Team.bCommanded = true;
+		Team.DecisionTimer = 0.f;
+		if (Posture == EPmcPosture::Patrol)
+		{
+			for (AOperativeCharacter* Mate : Mates)
+			{
+				if (Mate->HasOwnMoveOrder())
+				{
+					FSquadOrderContext Context;
+					Context.Operative = Mate;
+					SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
+				}
+			}
+		}
+		return;
+	}
+	if (const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+		Flow && (Flow->GetCombatMode() == ECodexCombatMode::TacticalPause || Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
+	{
+		return; // nothing moves in a tactical pause / the grid fight
+	}
+	Team.PostureTimer -= DeltaTime;
+	if (Posture == EPmcPosture::Hunt && Team.PostureTimer <= 0.f)
+	{
+		// The freshest belief about the player's men (none before contact today), else the start / radio intel near the squad.
+		bool bHasBelief = false;
+		FVector Belief = FVector::ZeroVector;
+		float Freshest = TNumericLimits<float>::Max();
+		FVector SquadCentre = FVector::ZeroVector;
+		int32 Living = 0;
+		for (AOperativeCharacter* Player : MembersOf(PmcTeam::Player))
+		{
+			if (!PmcSquadLocal::IsLiveOperative(Player))
+			{
+				continue;
+			}
+			SquadCentre += Player->GetActorLocation();
+			++Living;
+			FVector Location;
+			float Since = 0.f;
+			if (GetTeamBelief(TeamId, Player, Location, &Since) && Since < Freshest)
+			{
+				bHasBelief = true;
+				Belief = Location;
+				Freshest = Since;
+			}
+		}
+		SquadCentre = Living > 0 ? SquadCentre / Living : Team.PlayerStart;
+		const FVector Wanted = PmcEncounterRules::HuntSearchPoint(bHasBelief, Belief, Team.PostureLeg, Team.PlayerStart, SquadCentre, HuntJitterCm, Team.PostureSeed);
+		FVector Point = Wanted;
+		ProjectToNav(Wanted, Point);
+		Team.AssaultPoint = Point;
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] team %d hunts: leg %d -> %s (%s)"), TeamId, Team.PostureLeg, *Point.ToCompactString(),
+			bHasBelief ? TEXT("last known") : Team.PostureLeg == 0 ? TEXT("the player start") : TEXT("radio intel"));
+		++Team.PostureLeg;
+		Team.PostureTimer = HuntLegSeconds;
+	}
+	else if (Posture == EPmcPosture::Patrol)
+	{
+		bool bAllIdle = true;
+		for (const AOperativeCharacter* Mate : Mates)
+		{
+			bAllIdle &= !Mate->HasOwnMoveOrder();
+		}
+		if (bAllIdle && Team.PostureTimer > 4.f && Team.PostureLeg > 0)
+		{
+			Team.PostureTimer = 4.f; // arrived: a short look round, then the next leg
+		}
+		if (Team.PostureTimer <= 0.f)
+		{
+			FVector Point = PmcEncounterRules::PatrolPoint(Team.PostureAnchor, PatrolRadiusCm, Team.PostureSeed, Team.PostureLeg);
+			ProjectToNav(Point, Point);
+			const FVector Heading = (Point - Mates[0]->GetActorLocation()).GetSafeNormal2D();
+			const FVector Right(-Heading.Y, Heading.X, 0.f);
+			for (int32 Index = 0; Index < Mates.Num(); ++Index)
+			{
+				FVector Spot = Point + Right * ((Index - (Mates.Num() - 1) * 0.5f) * 150.f) - Heading * (Index % 2) * 120.f;
+				if (!ProjectToNav(Spot, Spot) || FMath::Abs(Spot.Z - Point.Z) > 150.f)
+				{
+					Spot = Point;
+				}
+				FSquadOrderContext Context;
+				Context.Operative = Mates[Index];
+				Context.Location = Spot;
+				Context.bSprint = false;
+				SquadOrderCatalog::Execute(ESquadOrder::Move, Context);
+			}
+			++Team.PostureLeg;
+			Team.PostureTimer = PatrolLegSeconds;
+		}
+	}
 }
 
 TArray<int32> UPmcSquadSubsystem::GetTeamIds() const
@@ -271,6 +441,7 @@ void UPmcSquadSubsystem::Tick(float DeltaTime)
 	}
 	for (TPair<int32, FTeam>& Pair : Teams)
 	{
+		UpdatePosture(Pair.Key, Pair.Value, DeltaTime);
 		if (!Pair.Value.bCommanded)
 		{
 			continue;
@@ -328,7 +499,16 @@ void UPmcSquadSubsystem::UpdateSight()
 		}
 		auto Observe = [&](AActor* Target, const FVector& Profile, bool bAllRound)
 		{
-			bool bSeen = !bRulesActive || (Sight && Sight->IsDemasked(Target));
+			bool bSeen = !bRulesActive;
+			// A shooter demasks himself - to the teams within earshot of the shot (2026-11-03: was the whole map, so one shot at a
+			// monster told every PMC squad of the level where the player's men stood).
+			if (!bSeen && Sight && Sight->IsDemasked(Target))
+			{
+				for (const AOperativeCharacter* Observer : Observers)
+				{
+					bSeen |= FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation()) <= PmcSquadLocal::GunfireHearingCm;
+				}
+			}
 			for (AOperativeCharacter* Observer : Observers)
 			{
 				if (bSeen)
@@ -516,6 +696,7 @@ void UPmcSquadSubsystem::ResetTeam(int32 TeamId)
 	Team.LastContactTime = -1e9;
 	Team.DecisionTimer = 0.f;
 	Team.AssaultPoint.Reset();
+	Team.Posture.Reset();
 }
 
 EPmcOrder UPmcSquadSubsystem::GetFighterOrder(const AOperativeCharacter* Fighter) const

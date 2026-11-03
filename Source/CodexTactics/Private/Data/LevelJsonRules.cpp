@@ -1,4 +1,5 @@
 #include "Data/LevelJsonRules.h"
+#include "AI/PmcEncounterRules.h"
 #include "Bot/BotRouteRules.h"
 #include "CodexTactics.h"
 #include "Environment/EnvironmentRules.h"
@@ -526,6 +527,17 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		{
 			OutError = RouteError;
 			return false;
+		}
+	}
+	// PMC squads as level encounters (user request 2026-11-03, docs/systems/pmc-squad-ai.md 7): a bad entry is skipped, never the level.
+	const TArray<TSharedPtr<FJsonValue>>* PmcSquads = nullptr;
+	if (Root->TryGetArrayField(TEXT("pmc_squads"), PmcSquads))
+	{
+		TArray<FString> PmcWarnings;
+		Config.PmcSquads = PmcEncounterRules::ParseSquads(*PmcSquads, &PmcWarnings);
+		for (const FString& Warning : PmcWarnings)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Level JSON %s: %s"), *Config.LevelId, *Warning);
 		}
 	}
 

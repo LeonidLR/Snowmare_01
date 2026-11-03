@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "AI/PmcCommanderRules.h"
+#include "AI/PmcEncounterRules.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Tactics/CoverTypes.h"
 #include "PmcSquadSubsystem.generated.h"
@@ -63,7 +64,10 @@ public:
 	TArray<AOperativeCharacter*> GetTeamMembers(int32 TeamId) const;
 	/** Every registered fighter of a hostile team (alive or down). */
 	TArray<AOperativeCharacter*> GetHostileOperatives() const;
-	/** A living hostile fighter exists (the skirmish goes on while one does). */
+	/**
+	 * A living ENGAGED hostile fighter exists (the skirmish goes on while one does): his team has met an enemy, or the player's squad
+	 * has seen him. A squad still waiting unseen in its posture (a level encounter, 2026-11-03) never holds a finished fight open.
+	 */
 	static bool HasLiveHostileOperatives(const UWorld* World);
 	/** AOperativeCharacter::HandleDied of a hostile fighter: the kill statistics and the fight's end check. */
 	void NotifyOperativeDied(AOperativeCharacter* Operative, const FString& AttackerSource);
@@ -102,6 +106,24 @@ public:
 	void SetTeamAssault(int32 TeamId, const FVector* Point);
 	/** The team has met the enemy in this fight. */
 	bool HasTeamContact(int32 TeamId) const;
+
+	// --- Encounter postures (level JSON "pmc_squads", CodexTactics.PmcSpawn; docs/systems/pmc-squad-ai.md 7) ---
+	/**
+	 * What the team does until its first contact: Defend = commanded, ambush round Anchor; Hunt = commanded with an assault point
+	 * walked leg by leg (PmcEncounterRules::HuntSearchPoint: the player start, then radio intel near the squad); Patrol = NOT commanded,
+	 * walks slowly between seeded points round Anchor. Contact (seen an enemy, or a man hurt) ends the posture: the commander runs the
+	 * fight from then on. Weights = the commander's weights for the team.
+	 */
+	void SetTeamPosture(int32 TeamId, EPmcPosture Posture, const FVector& Anchor, const FVector& PlayerStart, int32 Seed, const FPmcWeights& Weights);
+	/** The team's posture while it still runs (before contact); false once engaged or without one. */
+	bool GetTeamPosture(int32 TeamId, EPmcPosture& OutPosture) const;
+	/** The team is in the fight: met an enemy, or the player's squad has seen one of its men. */
+	bool IsTeamEngaged(int32 TeamId) const;
+	/** Seconds between a hunting squad's search legs and a patrol's roam re-plans. */
+	static constexpr float HuntLegSeconds = 30.f;
+	static constexpr float PatrolLegSeconds = 25.f;
+	static constexpr float PatrolRadiusCm = 1500.f;
+	static constexpr float HuntJitterCm = 1500.f;
 
 	// --- Spawning ---
 	/**
@@ -158,6 +180,13 @@ private:
 		double LastContactTime = -1e9;
 		FPmcTeamStats Stats;
 		TOptional<FVector> AssaultPoint;
+		/** The encounter posture (before contact). */
+		TOptional<EPmcPosture> Posture;
+		FVector PostureAnchor = FVector::ZeroVector;
+		FVector PlayerStart = FVector::ZeroVector;
+		int32 PostureSeed = 0;
+		int32 PostureLeg = 0;
+		float PostureTimer = 0.f;
 	};
 
 	FTeam& TeamOf(int32 TeamId);
@@ -165,6 +194,8 @@ private:
 	TArray<AOperativeCharacter*> MembersOf(int32 TeamId) const;
 	void UpdateSight();
 	void UpdateTeamRunning(int32 TeamId, FTeam& Team, float DeltaTime);
+	/** Runs the encounter posture of a team before its contact; ends it on contact (the commander takes over). */
+	void UpdatePosture(int32 TeamId, FTeam& Team, float DeltaTime);
 	void Decide(int32 TeamId, FTeam& Team);
 	FPmcFighterView BuildFighterView(int32 TeamId, const FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State, const TArray<AOperativeCharacter*>& Mates,
 		FCoverSlot& OutCover, float& OutCoverQuality, AActor*& OutThreatActor) const;

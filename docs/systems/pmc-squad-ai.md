@@ -11,6 +11,8 @@
 > - Data: `Content/Data/AI/pmc_commander.json` (weights = a personality), `Content/Data/AI/pmc_operators.json` (body, looks, weapon pool, stats, factions),
 >   `Content/Data/LevelJson/L_PmcArena.json` (the arena's level data for `L_FormationLabCombat`)
 > - Body: `Scripts/Editor/setup_pmc_operator_body.py` -> `/Game/Characters/Enemies/PMC/Operator/` (`SKM_PmcOperator`, `SK_PmcOperator_Skeleton`, `MI_PmcOperator_*`)
+> - Encounters (section 7): `AI/PmcEncounterSubsystem` (level JSON `pmc_squads`, `CodexTactics.PmcSpawn`), `AI/PmcEncounterRules`; `PmcEncounterSmoke`,
+>   `PmcEncounterHuntSmoke`; tests `CodexTactics.AI.PmcEncounter.*`
 > - Dev: `CodexTactics.PmcArena` / `PmcArenaSmoke` (`Debug/PmcArenaCommand.cpp`), `PmcTeamSmoke`, `PmcCommanderSmoke`; tests `CodexTactics.AI.PmcCommander.*`,
 >   `CodexTactics.AI.PmcOperators.Data`, `CodexTactics.AI.SquadOrderCatalog.*`
 
@@ -63,8 +65,14 @@ and the seconds since stay per target (the commander's threat memory). While the
 Trap found on the way (TRAPS.md): a sight line starting inside the observer's own capsule counted its first hit (himself, a pawn) as clear - the hostile
 fighters are now in `HasClearSight`'s ignore list like the squad's men.
 
-Not done (follow-ups): hostile fighters are never hidden / ghosted on the screen the way monsters are (fog-of-war rendering), no hearing of them, the
-minimap does not mark them as enemies, turn-based combat ignores them, hostile rounds suppress the player's men only through the generic suppression
+**Fog of war** (2026-11-03, section 7): a hostile fighter the player's team does not see (`IsVisibleToTeam(0, ..)`; demask, flares and the cinematic
+reveal show him too) is CONCEALED by `UTacticalSightSubsystem::UpdateHostileOperatives`: every scene component of him and his attached actors is
+`SetHiddenInGame` (the pose keeps evaluating), the ACTOR stays shown - `IsHidden()` means "absent" to the PMC registry, targeting and the HUD, so it
+must stay false. A muzzle flash shows him at once; the fallen are shown. The minimap marks him as an enemy only while seen (then a fading last-known
+mark, like a monster), never once fallen. The arena turns it off (`SetRevealHostileOperatives`). A shooter's demask is noticed by the teams within
+`GunfireHearingCm` 60 m (it was the whole map: one shot told every PMC squad where the player stood).
+
+Not done (follow-ups): no last-known silhouette (ghost) for a concealed fighter, no hearing of them, turn-based combat ignores them, hostile rounds suppress the player's men only through the generic suppression
 rules, hostile fighters never loot / get looted.
 
 ## 3. The shared order catalog (`SquadOrderCatalog`)
@@ -196,8 +204,58 @@ stalls at a defender in cover (the commander's advance stops at 60 % of the rang
 
 - Learning Agents imitation / reinforcement learning on the arena (the trainer: weights files in, `Saved/Arena/*.json` out; later the player's own
   tracks as demonstrations).
-- Fog-of-war rendering of hostile fighters (hide / ghost like monsters), hearing, minimap enemy marks, turn-based combat with PMC fighters, the bot and
-  `USquadAutonomySubsystem` perceiving hostile operatives, team-aware grenades / panic, PMC corpse loot, PMC squads placed in level JSON (a `pmc_squad`
-  encounter entry), the HUD plate on a PMC fighter, suppression of the player's men by PMC rounds (checked only generically).
+- Ghost silhouettes of concealed hostile fighters, hearing, turn-based combat with PMC fighters, the bot and `USquadAutonomySubsystem` perceiving
+  hostile operatives, team-aware grenades / panic, PMC corpse loot, the HUD plate on a PMC fighter, suppression of the player's men by PMC rounds
+  (checked only generically). (Done 2026-11-03, section 7: fog-of-war hiding, minimap marks, level JSON `pmc_squads`, `CodexTactics.PmcSpawn`.)
 - The jacket material's tint / snow parameters (the user's material work) and a proper IK retarget of the Manny-only bones.
 - Routing the player's controller orders through the catalog (stance / posture / cover / suppress) and an `ISquadCommandSource` facade.
+
+## 7. Playing against PMC (level encounters, 2026-11-03)
+
+User request: "I want to play against the PMC squads myself tomorrow on the Depot". `UPmcEncounterSubsystem` (`AI/PmcEncounterSubsystem`) +
+`PmcEncounterRules` (pure) + the postures in `UPmcSquadSubsystem`.
+
+**Level JSON** (`Content/Data/LevelJson/<level>.json`, any level; a bad entry is skipped with a warning, never the level):
+```json
+"pmc_squads": [
+  { "count": 3, "weights": "pmc_commander.json", "spawn": "random", "min_m": 40, "max_m": 90, "delay_s": 30, "posture": "defend" },
+  { "count": 3, "weights": "pmc_commander.json", "spawn": "random", "min_m": 50, "max_m": 90, "delay_s": 120, "posture": "hunt" }
+]
+```
+Defaults: count 3 (1-6), weights `pmc_commander.json` (a file in `Content/Data/AI`, or a path), spawn `random` (or `[x, y(, z)]` cm), min_m 40,
+max_m 90 (from the player's squad centre), delay_s 20 (game seconds after the level start; paused in turn-based / game over), posture hunt, seed
+0 (= 1000 + 101 x the entry index). `L_Gen_Depot_1.json` has the two entries above. **Spawn spot** (`SpawnEncounter`): up to 48 seeded navmesh
+spots in the min..max ring round the squad on a random level (ground, +3 / +6 / +9 m: roofs, walkways), then `PickEncounterSpot` (seeded keys, +0.15
+for a raised spot): the first one OUT OF THE SQUAD'S VIEW - no low line (`UCombatPressureSubsystem::IsVisibleToSquad`) and no eye line from any
+man's eyes to a standing (165 cm) or crouching (110 cm) head there, not within touch reveal - with a full navmesh path both ways to the leader. The
+fighters stand in a line across the squad's direction (a rank behind / a ring round the spot when a place is off the navmesh, on another level or
+seen), facing the squad; a new hostile team id each; concealed at once. No spot -> retried 10 s later, 3 times. Log: `[PmcEncounter] team N: ...`.
+
+**Postures** (`UPmcSquadSubsystem::SetTeamPosture`; until the team is ENGAGED = it has seen an enemy - sight, touch, a shot heard within 60 m - or the
+player's team has seen one of its men; then the utility commander runs the fight, `[PmcEncounter] team N engaged`):
+- `defend`: commanded from the start -> the commander's Ambush (crouched, a cover slot within 6 m of the spot).
+- `hunt`: commanded with an assault point per leg (`HuntLegSeconds` 30 s): leg 0 the player start, then "radio intel" - the player's squad centre
+  off by a seeded 7.5-15 m (`PmcEncounterRules::HuntSearchPoint`; a known last position wins); the commander advances on it by bounding overwatch.
+- `patrol`: NOT commanded; walks (no sprint) between seeded points 6-15 m round the spot (`PatrolPoint`), a 4 s look round at each; on contact the
+  walk stops and the commander takes over.
+
+**Fight start / end.** A PMC fighter or the player's man opening fire is the ambush contact (`NotifyHostileContactIn`; combat_start `ambush` levels
+like the Depot): an ambush skirmish. `HasLiveHostileOperatives` counts only ENGAGED teams' living fighters, so a squad still waiting unseen (the 120 s
+hunters) never holds a finished fight open; the last engaged fighter down -> `[Wave] skirmish over: back to exploration`. The player's men fire at
+hostile fighters in every fire posture but Passive (an operative counts as "has detected the squad"). The Depot has the lab cheats on (immortal
+squad, infinite ammo; `Codex.Cheat.Immortal 0` / `Codex.Cheat.InfiniteAmmo 0` for a real fight).
+
+**Testing in PIE** (editor, normal play): open `/Game/Maps/Generated/L_Gen_Depot_1`, Play (the level JSON loads by the map name) - the defend
+squad comes 30 s in, the hunters 120 s in, somewhere 40-90 m away out of sight (the Output Log shows `[PmcEncounter]` lines). Any time, any map:
+console (`~`) `CodexTactics.PmcSpawn [count=3] [weights=pmc_commander.json] [posture=hunt|defend|patrol] [min=40] [max=90] [seed=N]` (positional
+in that order too: `CodexTactics.PmcSpawn 3 pmc_commander.json defend 30 60`); it never quits the session.
+
+**Checks.** Tests `CodexTactics.AI.PmcEncounter.Parse / .Spot / .Search`. `PmcEncounterSmoke` (Depot + its JSON): two squads scheduled 30 / 120 s, the
+first (defend) spawns 40-90 m away concealed, unseen and not in contact for 3 s, the squad put in sight -> revealed, the ambush skirmish, both sides
+fire, the squad down, back to exploration, the fallen shown. `PmcEncounterHuntSmoke`: `PmcSpawn` hunters close in / make contact by themselves, then
+the same fight. First runs: the defend squad down in 3-7 s against the immortal squad at 10 m; the hunters made contact 4 s in, down in 27 s.
+The first spot check (low line only) let the fighters see the squad over a low wall at spawn - hence the eye-line test.
+
+**Not done:** no ghost silhouette for a concealed fighter; no hearing of PMC steps; `USquadAutonomySubsystem` and the playtest bot still do not
+perceive hostile operatives as threats (the squad's own fire does the fighting); turn-based combat ignores them; no HUD plate / health bar over a
+PMC fighter; PMC corpses are not lootable; team-aware grenades; the radio-intel hunt is a deliberate cheat (no hearing model yet).
