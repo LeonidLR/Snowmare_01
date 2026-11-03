@@ -190,6 +190,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/verify_all.ps1              # b
 - **Docs with every commit.** The matching `docs/systems/*.md`, a row in `docs/port/CHANGELOG.md`, `PORT_MATRIX.md` where a row changes, and the TANDEM log. Keep this file short.
 
 Full build / test reference, Unreal MCP notes and the table of every smoke command: [build-test-smokes](../systems/build-test-smokes.md).
+Night trainer (PMC commander weights, overnight self-play GA from Task Scheduler, never edits `Content/` itself): [night-trainer](../tools/night-trainer.md) - `python -m unittest discover -s Scripts/Trainer/tests`.
 
 ## 4. Conventions
 

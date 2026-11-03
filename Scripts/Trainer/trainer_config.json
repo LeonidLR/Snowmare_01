@@ -1,0 +1,124 @@
+{
+  "_comment": "Night trainer config (docs/tools/night-trainer.md). Snapshotted into Saved/Trainer/<run_id>/run.json when a run is created; edit this file for NEW runs.",
+  "seed": 20261103,
+  "baseline_weights": "Content/Data/AI/pmc_commander.json",
+  "bounds": null,
+  "runs_dir": "Saved/Trainer",
+  "evolution": {
+    "population": 12,
+    "elitism": 2,
+    "tournament_k": 3,
+    "crossover_rate": 0.7,
+    "mutation_rate": 0.2,
+    "sigma_scale": 1.0,
+    "initial_mutation_rate": 0.5,
+    "initial_sigma_scale": 1.5,
+    "fresh_top_k": 3,
+    "promotion_margin": 0.0,
+    "max_generations": 1000,
+    "default_bounds_rel": 0.5
+  },
+  "evaluation": {
+    "_comment": "Each candidate plays these jobs per generation (one game process each, rounds_per_job rounds, a different seed per job; all candidates of a generation share the seeds). opponent: champion = PMC vs PMC self-play against the current champion, bot = the player squad driven by the playtest bot.",
+    "rounds_per_job": 4,
+    "matches": [
+      {"opponent": "champion", "jobs": 1},
+      {"opponent": "bot", "jobs": 1}
+    ]
+  },
+  "fitness": {
+    "win": 10.0,
+    "survivors": 3.0,
+    "hp_lost": -3.0,
+    "hp_per_unit": 100.0,
+    "duration": {"weight": 1.0, "target_s": 150.0, "tolerance_s": 120.0},
+    "bonuses": {
+      "flanks_succeeded": {"weight": 0.8, "cap": 3},
+      "suppression_s": {"weight": 0.5, "cap": 30},
+      "ambushes": {"weight": 0.8, "cap": 2},
+      "retreats_survived": {"weight": 0.4, "cap": 2},
+      "heals": {"weight": 0.3, "cap": 3}
+    },
+    "penalties": {
+      "friendly_fire": {"weight": -1.5, "cap": 3},
+      "stuck_events": {"weight": -1.0, "cap": 3}
+    },
+    "crash_penalty": -5.0
+  },
+  "arena": {
+    "_comment": "Adapter contract (nighttrainer/adapter.py). Fit console_command / arg_template / result.* to the real CodexTactics.PmcArena when it lands.",
+    "engine_root": "C:/Program Files/Epic Games/UE_5.8",
+    "uproject": "CodexTactics.uproject",
+    "map": "/Game/Maps/L_FormationLabCombat",
+    "console_command": "CodexTactics.PmcArena",
+    "arg_template": ["Map={map}", "Rounds={rounds}", "Seed={seed}", "WeightsA={weights_a}", "Opponent={opponent}", "WeightsB={weights_b}", "TimeLimit={time_limit_s}", "Out={out}"],
+    "opponent_names": {"bot": "Bot", "champion": "Pmc"},
+    "engine_args": ["-game", "-nullrhi", "-nosplash", "-nosound", "-unattended", "-windowed", "-FORCELOGFLUSH", "-NoTelemetry", "-UseFixedTimeStep", "-FPS=60", "-FixedSeed", "-Multiprocess"],
+    "time_limit_s": 300,
+    "output_dir": "Saved/Arena",
+    "parallel": 2,
+    "timeout_s": 1800,
+    "retries": 1,
+    "hold_build_lock": true,
+    "record": {
+      "_comment": "Deterministic re-run of one highlight round, rendered: <console_command + arg_template with Rounds=1 Seed=<round seed>> + arg_template_extra, then clip_command chained in -ExecCmds (comma). frames_dir = where the recorder writes f_NNNNN.png (Scripts/Tools/clip_assemble.py watch encodes them).",
+      "arg_template_extra": ["Record=1"],
+      "clip_command": "CodexTactics.ClipRecorder {clip} seconds={seconds}",
+      "frames_dir": "Saved/Screenshots/Clips/{clip}",
+      "engine_args": ["-game", "-RenderOffscreen", "-ResX=1280", "-ResY=720", "-nosound", "-nosplash", "-unattended", "-NoTelemetry", "-Multiprocess", "-benchmark", "-fps=30", "-FixedSeed"]
+    },
+    "result": {
+      "schema": "codex.pmc_arena/1",
+      "strict_schema": true,
+      "rounds_key": "rounds",
+      "winner_key": "winner",
+      "duration_key": "duration_s",
+      "time_limit_key": "time_limit_s",
+      "sides_key": "sides",
+      "candidate_side": "A",
+      "opponent_side": "B",
+      "draw_values": ["draw", "none", ""],
+      "highlight_key": "highlight_score",
+      "round_seed_key": "seed",
+      "round_index_key": "index",
+      "end_reason_key": "end_reason",
+      "track_key": "track",
+      "pad_missing_rounds_as_crash": true,
+      "fields": {
+        "survivors": "survivors",
+        "squad_size": "squad_size",
+        "hp_lost": "hp_lost",
+        "hp_max": "hp_max",
+        "kills": "kills",
+        "flanks_attempted": "flanks_attempted",
+        "flanks_succeeded": "flanks_succeeded",
+        "suppression_s": "suppression_s",
+        "ambushes": "ambushes",
+        "retreats": "retreats",
+        "retreats_survived": "retreats_survived",
+        "heals": "heals",
+        "friendly_fire": "friendly_fire",
+        "stuck_events": "stuck_events"
+      }
+    }
+  },
+  "highlights": {
+    "_comment": "Per night (local date of now - 12 h): top_n rounds by highlight_score + the champion's most decisive win. Clips: width px, crf, <= max_mb; auto_clips = render them when the run ends (or make_highlights.ps1).",
+    "enabled": true,
+    "top_n": 3,
+    "auto_clips": true,
+    "keep_all_tracks": false,
+    "width": 960,
+    "crf": 30,
+    "max_mb": 25,
+    "timeout_s": 3600,
+    "replay_stride": 2
+  },
+  "mock": {
+    "baseline_weights": "Scripts/Trainer/fixtures/pmc_commander.sample.json",
+    "bot_strength": -0.03,
+    "crash_rate": 0.03,
+    "tracks": true,
+    "in_process": false
+  }
+}
