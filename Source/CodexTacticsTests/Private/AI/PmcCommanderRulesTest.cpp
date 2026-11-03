@@ -229,4 +229,76 @@ bool FPmcOperatorsDataTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderHighGroundTest, "CodexTactics.AI.PmcCommander.HighGround",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcCommanderHighGroundTest::RunTest(const FString&)
+{
+	// The bonus grows per 3 m level up to the cap, never below 1; 0 switches it off; the JSON keys load.
+	FPmcWeights W;
+	W.HighGround = 0.2f;
+	W.HighGroundMaxLevels = 3;
+	TestEqual(TEXT("ground = 1"), PmcCommanderRules::HighGroundFactor(0, W), 1.f, 0.001f);
+	TestEqual(TEXT("below ground = 1"), PmcCommanderRules::HighGroundFactor(-2, W), 1.f, 0.001f);
+	TestEqual(TEXT("one roof up"), PmcCommanderRules::HighGroundFactor(1, W), 1.2f, 0.001f);
+	TestEqual(TEXT("capped at 3 levels"), PmcCommanderRules::HighGroundFactor(7, W), 1.6f, 0.001f);
+	TestTrue(TEXT("higher is better"), PmcCommanderRules::HighGroundFactor(2, W) > PmcCommanderRules::HighGroundFactor(1, W));
+	W.HighGround = 0.f;
+	TestEqual(TEXT("weight 0 = height ignored"), PmcCommanderRules::HighGroundFactor(3, W), 1.f, 0.001f);
+	TSharedPtr<FJsonObject> Json;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(TEXT("{\"high_ground\": 0.3, \"high_ground_max_levels\": 2}"));
+	if (!TestTrue(TEXT("json parses"), FJsonSerializer::Deserialize(Reader, Json) && Json.IsValid()))
+	{
+		return false;
+	}
+	const FPmcWeights Loaded = PmcCommanderRules::FromJson(*Json);
+	TestEqual(TEXT("high_ground read"), Loaded.HighGround, 0.3f, 0.001f);
+	TestEqual(TEXT("high_ground_max_levels read"), Loaded.HighGroundMaxLevels, 2);
+	TestEqual(TEXT("loaded cap"), PmcCommanderRules::HighGroundFactor(5, Loaded), 1.6f, 0.001f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaSpawnPairTest, "CodexTactics.AI.PmcCommander.SpawnPair",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcArenaSpawnPairTest::RunTest(const FString&)
+{
+	// A line of spots 10 m apart on alternating levels: every pick is 35..80 m apart, reachable, the same seed -> the same pair.
+	TArray<FPmcSpawnCandidate> Spots;
+	for (int32 Index = 0; Index < 12; ++Index)
+	{
+		Spots.Add({ FVector(Index * 1000.f, 0.f, (Index % 3) * 300.f), Index % 3 });
+	}
+	auto All = [](int32, int32) { return true; };
+	int32 A = INDEX_NONE;
+	int32 B = INDEX_NONE;
+	TSet<FIntPoint> Distinct;
+	int32 MixedLevels = 0;
+	for (int32 Seed = 1; Seed <= 20; ++Seed)
+	{
+		if (!TestTrue(TEXT("a pair found"), PmcCommanderRules::PickSpawnPair(Spots, 3500.f, 8000.f, Seed, All, A, B)))
+		{
+			return false;
+		}
+		const float Distance = static_cast<float>(FVector::Dist2D(Spots[A].Location, Spots[B].Location));
+		TestTrue(TEXT("35..80 m apart"), Distance >= 3500.f && Distance <= 8000.f);
+		int32 A2 = INDEX_NONE;
+		int32 B2 = INDEX_NONE;
+		PmcCommanderRules::PickSpawnPair(Spots, 3500.f, 8000.f, Seed, All, A2, B2);
+		TestTrue(TEXT("deterministic"), A == A2 && B == B2);
+		Distinct.Add(FIntPoint(A, B));
+		MixedLevels += Spots[A].Level != Spots[B].Level ? 1 : 0;
+	}
+	TestTrue(TEXT("seeds vary the pair"), Distinct.Num() >= 5);
+	TestTrue(TEXT("variety bias: mostly different levels"), MixedLevels >= 10);
+	// Reachability: only pairs touching spot 0 are walkable -> the pick includes spot 0.
+	auto OnlyZero = [](int32 I, int32 J) { return I == 0 || J == 0; };
+	TestTrue(TEXT("a reachable pair"), PmcCommanderRules::PickSpawnPair(Spots, 3500.f, 8000.f, 3, OnlyZero, A, B, 200));
+	TestTrue(TEXT("... it is the reachable one"), A == 0 || B == 0);
+	// Nothing in range / nothing reachable -> false.
+	TestFalse(TEXT("no pair in range"), PmcCommanderRules::PickSpawnPair(Spots, 20000.f, 30000.f, 1, All, A, B));
+	TestFalse(TEXT("no pair reachable"), PmcCommanderRules::PickSpawnPair(Spots, 3500.f, 8000.f, 1, [](int32, int32) { return false; }, A, B));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

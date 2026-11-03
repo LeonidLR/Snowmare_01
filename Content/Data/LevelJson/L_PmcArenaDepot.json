@@ -1,0 +1,52 @@
+{
+  "$schema": "../Schemas/level_config.schema.json",
+  "level_id": "L_PmcArenaDepot",
+  "level_name": "PMC Arena (Generated Depot)",
+  "description": "The PMC self-play arena's level data for the generated Depot map /Game/Maps/Generated/L_Gen_Depot_1 (user request 2026-11-03, docs/systems/pmc-squad-ai.md 'Arena'): a copy of L_PmcArena.json - no monster pressure, no cheats (real deaths), fights start on contact (combat_start ambush) as skirmishes, no cold, no intro - plus the Depot's floor heights (minimap floors_cm 300 / 600 / 900) and drop links on, so the squads fight across covers, ladders, roofs and the cut. ONE small wave only because the level file must hold a valid wave (never played). Run: -LevelJson=L_PmcArenaDepot.json with CodexTactics.PmcArena (Spawns=Random is the default off the combat lab).",
+  "combat_start": "ambush",
+  "ambush_fight": "skirmish",
+  "susanin_wave": 0,
+  "horde_enabled": false,
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "cold_rate_mult": 0,
+  "intro_dialogue": false,
+  "cheats": {
+    "immortal": false,
+    "infinite_ammo": false
+  },
+  "minimap": {
+    "floors_cm": [
+      300.0,
+      600.0,
+      900.0
+    ]
+  },
+  "drop_links": true,
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 2,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1,
+        "enemy_damage_mult": 1,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  }
+}

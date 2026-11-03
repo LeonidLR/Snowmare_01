@@ -21,6 +21,7 @@
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Materials/MaterialInterface.h"
+#include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Tactics/CoverTraceRules.h"
 
@@ -686,7 +687,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.CoverQuality = PmcCommanderRules::CoverQualityAgainst(Fighter.GetCoverSlot().WorldLocation, Fighter.GetCoverSlot().WallNormal, View.Threat.Location);
 		}
 		const FVector* Exclude = Fighter.bInCover ? &View.Location : nullptr;
-		View.bCoverAvailable = FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, Exclude, OutCover, OutCoverQuality)
+		View.bCoverAvailable = FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, Exclude, Team.Weights, OutCover, OutCoverQuality)
 			&& OutCoverQuality > View.CoverQuality + 0.2f;
 	}
 	// The nearest wounded mate.
@@ -818,7 +819,28 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	FVector Goal = FVector::ZeroVector;
 	auto Walk = [&](const FVector& Point, bool bSprint)
 	{
-		if (!ProjectToNav(Point, Goal))
+		// Levels (the Depot arena, 2026-11-03): a goal at the fighter's height can hang over a drop (a roof squad's advance point over
+		// the street) or lie on a roof part with no way there - then the same spot on the threat's level, walked through the normal
+		// pathing (ladders / ramps / drop links).
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		auto HasFullPath = [&](const FVector& To)
+		{
+			const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(GetWorld(), Fighter.GetActorLocation(), To) : nullptr;
+			return Path && Path->IsValid() && !Path->IsPartial();
+		};
+		bool bOnNav = ProjectToNav(Point, Goal);
+		// A goal snapped far from the asked point (the roof edge under an advance point over the street) counts as missed too.
+		if (View.bHasThreat && FMath::Abs(Point.Z - View.Threat.Location.Z) > 250.f
+			&& (!bOnNav || FVector::Dist2D(Goal, Point) > 200.f || !HasFullPath(Goal)))
+		{
+			FVector ThreatLevel;
+			if (ProjectToNav(FVector(Point.X, Point.Y, View.Threat.Location.Z), ThreatLevel) && HasFullPath(ThreatLevel))
+			{
+				Goal = ThreatLevel;
+				bOnNav = true;
+			}
+		}
+		if (!bOnNav)
 		{
 			return false;
 		}
@@ -852,9 +874,18 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		}
 		break;
 	case EPmcOrder::Advance:
-		bTaken = View.bHasThreat && Walk(PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights), !View.Threat.bSeenNow);
+	{
+		// AdvancePoint is planar: a threat on another level (a roof above him, the street below) within the stop range in plan would
+		// leave him standing under it - he goes for the threat's own spot instead (up / down through the normal pathing).
+		FVector AdvanceGoal = PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights);
+		if (FMath::Abs(View.Threat.Location.Z - View.Location.Z) > 250.f && FVector::Dist2D(AdvanceGoal, View.Location) < 100.f)
+		{
+			AdvanceGoal = View.Threat.Location;
+		}
+		bTaken = View.bHasThreat && Walk(AdvanceGoal, !View.Threat.bSeenNow);
 		Team.Stats.Advances += bTaken ? 1 : 0;
 		break;
+	}
 	case EPmcOrder::Flank:
 	{
 		FVector Centre = FVector::ZeroVector;
@@ -907,7 +938,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		{
 			FCoverSlot Near;
 			float Quality = 0.f;
-			if (FindCoverNear(Fighter, View.Location + Fighter.GetActorForwardVector() * 1000.f, 600.f, nullptr, Near, Quality))
+			if (FindCoverNear(Fighter, View.Location + Fighter.GetActorForwardVector() * 1000.f, 600.f, nullptr, Team.Weights, Near, Quality))
 			{
 				Context.Cover = Near;
 				Context.bSprint = false;
@@ -942,8 +973,8 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	return bTaken;
 }
 
-bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, FCoverSlot& OutSlot,
-	float& OutQuality) const
+bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
+	FCoverSlot& OutSlot, float& OutQuality) const
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -965,42 +996,101 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 			Params.AddIgnoredActor(Member);
 		}
 	}
-	float BestScore = 0.f;
-	bool bFound = false;
-	for (int32 Index = 0; Index < 16; ++Index)
+	// High ground (the Depot arena, 2026-11-03): every slot's score grows with its height level (3 m steps, SightRules::HeightLevel)
+	// over the ground under the fighter (his eye minus his eye height above that ground, the shared sight's measurement).
+	const bool bHighGround = Weights.HighGround > 0.f && Weights.HighGroundMaxLevels > 0;
+	const FVector Feet = Fighter.GetActorLocation() - FVector(0.f, 0.f, Fighter.GetSimpleCollisionHalfHeight());
+	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+	const float GroundZ = Sight ? static_cast<float>(UTacticalSightSubsystem::EyePoint(Fighter).Z) - Sight->GetEyeAboveGroundCm(Fighter) : static_cast<float>(Feet.Z);
+	const float EyeCm = SightRules::EyeHeight(EOperativeStance::Standing);
+	struct FCandidate
 	{
-		const float Yaw = Index * 22.5f;
-		const FVector Direction = FRotator(0.f, Yaw, 0.f).Vector();
+		FCoverSlot Slot;
+		float Quality = 0.f;
+		float Score = 0.f;
+		bool bElevated = false;
+	};
+	TArray<FCandidate, TInlineAllocator<24>> Candidates;
+	auto TryRay = [&](const FVector& Origin, const FVector& Direction, float Reach, bool bElevated)
+	{
 		FHitResult Hit;
-		if (!World->LineTraceSingleByChannel(Hit, Chest, Chest + Direction * RadiusCm, ECC_Visibility, Params) || !Hit.GetActor() || Cast<APawn>(Hit.GetActor()))
+		if (!World->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * Reach, ECC_Visibility, Params) || !Hit.GetActor() || Cast<APawn>(Hit.GetActor()))
 		{
-			continue;
+			return;
 		}
 		FCoverSlot Slot;
 		if (!CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, Direction, Slot) || !Slot.IsValid())
 		{
-			continue;
+			return;
 		}
 		if (Exclude && FVector::Dist2D(Slot.WorldLocation, *Exclude) < 300.f)
 		{
-			continue;
+			return;
 		}
 		const float Quality = PmcCommanderRules::CoverQualityAgainst(Slot.WorldLocation, Slot.WallNormal, Threat);
 		if (Quality < 0.35f)
 		{
-			continue;
+			return;
 		}
 		const float Distance = FVector::Dist2D(Chest, Slot.WorldLocation);
-		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f);
-		if (Score > BestScore)
+		const int32 Level = bHighGround ? SightRules::HeightLevel(static_cast<float>(Slot.WorldLocation.Z) + EyeCm - GroundZ) : 0;
+		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
+			* PmcCommanderRules::HighGroundFactor(Level, Weights);
+		Candidates.Add({ Slot, Quality, Score, bElevated });
+	};
+	for (int32 Index = 0; Index < 16; ++Index)
+	{
+		TryRay(Chest, FRotator(0.f, Index * 22.5f, 0.f).Vector(), RadiusCm, false);
+	}
+	// The levels above him: navmesh spots one to HighGroundMaxLevels floors up round him (roofs, walkways, the far side of a ladder)
+	// tried as cover origins too - the walk there takes the normal pathing (ladders / ramps / drop links), checked below.
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	if (bHighGround && Nav)
+	{
+		const FVector ToThreat = (Threat - Feet).GetSafeNormal2D();
+		for (int32 Bearing = 0; Bearing < 8; ++Bearing)
 		{
-			BestScore = Score;
-			OutSlot = Slot;
-			OutQuality = Quality;
-			bFound = true;
+			const FVector Direction = FRotator(0.f, Bearing * 45.f, 0.f).Vector();
+			for (int32 Level = 1; Level <= FMath::Min(3, Weights.HighGroundMaxLevels); ++Level)
+			{
+				FNavLocation OnNav;
+				const FVector Probe = Feet + Direction * RadiusCm * 0.6f + FVector(0.f, 0.f, Level * 300.f + 50.f);
+				if (!Nav->ProjectPointToNavigation(Probe, OnNav, FVector(150.f, 150.f, 150.f)) || OnNav.Location.Z - Feet.Z < 250.f)
+				{
+					continue;
+				}
+				const FVector Origin = OnNav.Location + FVector(0.f, 0.f, 120.f);
+				const FVector Facing = ToThreat.IsNearlyZero() ? Direction : ToThreat;
+				for (const float Turn : { 0.f, 45.f, -45.f })
+				{
+					TryRay(Origin, Facing.RotateAngleAxis(Turn, FVector::UpVector), 400.f, true);
+				}
+			}
 		}
 	}
-	return bFound;
+	Candidates.StableSort([](const FCandidate& Left, const FCandidate& Right) { return Left.Score > Right.Score; });
+	int32 PathChecks = 0;
+	for (const FCandidate& Candidate : Candidates)
+	{
+		if (Candidate.bElevated)
+		{
+			// A slot up a level must be walkable from here without a huge detour (at most two path queries per decision).
+			if (!Nav || PathChecks >= 2)
+			{
+				continue;
+			}
+			++PathChecks;
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, Feet, Candidate.Slot.WorldLocation);
+			if (!Path || !Path->IsValid() || Path->IsPartial() || Path->GetPathLength() > 3.f * FVector::Dist(Feet, Candidate.Slot.WorldLocation) + 3000.f)
+			{
+				continue;
+			}
+		}
+		OutSlot = Candidate.Slot;
+		OutQuality = Candidate.Quality;
+		return true;
+	}
+	return false;
 }
 
 bool UPmcSquadSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) const

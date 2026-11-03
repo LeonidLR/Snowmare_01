@@ -82,6 +82,20 @@ struct CODEXTACTICS_API FPmcWeights
 	float MoveSwitchMargin = 0.45f;
 	/** Any order holds at least this long before another replaces it, s. */
 	float CommitSeconds = 2.f;
+	/**
+	 * High ground (user request 2026-11-03, the Depot arena): a cover / relocate / ambush position's score grows by this per height
+	 * level above the ground (3 m steps, SightRules::HeightLevel), up to HighGroundMaxLevels levels. 0 = height ignored.
+	 */
+	float HighGround = 0.2f;
+	/** The level count the high-ground bonus stops growing at. */
+	int32 HighGroundMaxLevels = 3;
+};
+
+/** One spawn candidate of the arena's seeded spawn pairs: a navmesh point and its height level (0 = the ground). */
+struct CODEXTACTICS_API FPmcSpawnCandidate
+{
+	FVector Location = FVector::ZeroVector;
+	int32 Level = 0;
 };
 
 /** What the commander knows about the nearest threat of one fighter. */
@@ -193,6 +207,18 @@ namespace PmcCommanderRules
 
 	/** The angle (deg, 0..180) between the Threat -> A and Threat -> B directions (planar): a flank is >= 60 off the frontal line. */
 	CODEXTACTICS_API float ApproachAngleDeg(const FVector& Threat, const FVector& A, const FVector& B);
+
+	/** The high-ground factor of a position Level height levels above the ground: 1 + HighGround x clamp(Level, 0, HighGroundMaxLevels). */
+	CODEXTACTICS_API float HighGroundFactor(int32 Level, const FPmcWeights& Weights);
+
+	/**
+	 * The arena's seeded spawn pair (Spawns=Random): every candidate pair MinDistCm..MaxDistCm apart (planar) gets a key from a
+	 * FRandomStream(Seed) draw plus a variety bias (+0.35 when the two lie on different levels, +0.15 when either is above the ground);
+	 * the pairs are tried by key, best first, and the first one IsReachable(A, B) accepts (at most MaxReachChecks tries) wins; the
+	 * seed also decides which of the two is side A. Same candidates + seed + reachability -> the same pair. False when none fits.
+	 */
+	CODEXTACTICS_API bool PickSpawnPair(const TArray<FPmcSpawnCandidate>& Candidates, float MinDistCm, float MaxDistCm, int32 Seed,
+		TFunctionRef<bool(int32 A, int32 B)> IsReachable, int32& OutA, int32& OutB, int32 MaxReachChecks = 48);
 
 	/** Parameters of Json over Base (unknown keys ignored, missing ones keep Base). Keys = the field names in snake_case ("take_cover", "heal_below"). */
 	CODEXTACTICS_API FPmcWeights FromJson(const FJsonObject& Json, const FPmcWeights& Base = FPmcWeights());
