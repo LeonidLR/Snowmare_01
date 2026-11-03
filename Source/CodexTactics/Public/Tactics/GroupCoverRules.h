@@ -7,7 +7,8 @@
  * two or more, or group mode = the formation follows the leader, Solo off) sends every member to the same cover object. The
  * direct-order operative (the leader, gold ring - the one the cover ghost was shown for) takes the clicked slot; the others get
  * the nearest free slots along the SAME wall on the SAME side, shoulder to shoulder (SlotSpacingCm); who does not fit (a short
- * barricade) goes PRONE directly behind the cover, facing it. Reverses the 2026-10-11 decision "no automatic cover stacking for
+ * barricade) takes a free cover of ANOTHER object nearby facing the same side (2026-11-03, IsNearbyCoverUsable / ChooseNearbyCovers),
+ * and only when there is none goes PRONE directly behind the cover, facing it. Reverses the 2026-10-11 decision "no automatic cover stacking for
  * followers" for GROUP orders only (Solo / a single selection: only that operative, as before).
  *
  * Pure rules (tested in CodexTactics.Tactics.GroupCover.*): where the probes go along the wall, which probed slots are usable,
@@ -175,6 +176,23 @@ namespace GroupCoverRules
 
 	/** Where a member waits for the leader: WaitStandOffCm straight out from his slot along the wall normal (the squad's side). */
 	CODEXTACTICS_API FVector ComputeWaitPoint(const FVector& SlotLocation, const FVector& WallNormal, const FGroupCoverConfig& Config = FGroupCoverConfig());
+
+	/**
+	 * Nearby covers (the game designer's bug report 2026-11-02 item 3: "prone behind him ONLY when there is NO cover nearby"): a cover slot
+	 * of another object (or another stretch of wall) found round the leader's slot is usable for a member who got no slot at the leader's
+	 * wall when it lies within RadiusCm of the leader's slot (SquadWallTuning follower_cover_radius_m), faces the same threat side (its
+	 * outward normal within SideDeg of the leader's slot's; squad_walls.json follower_cover_side_deg) and nobody else stands / is in cover there.
+	 */
+	CODEXTACTICS_API bool IsNearbyCoverUsable(const FVector2D& LeaderSlot, const FVector2D& LeaderNormal, const FVector2D& Candidate, const FVector2D& CandidateNormal,
+		bool bTaken, float RadiusCm, float SideDeg);
+
+	/**
+	 * Of the usable nearby cover slots (Candidates, cm), up to Count for the members without a place: the nearest the leader's slot first,
+	 * each at least MinSpacingCm from every Claimed point (the leader's slot, the slots chosen along his wall) and from those picked before
+	 * (one man per cover spot: no two followers claim the same). Returns indices into Candidates, nearest first; ties keep the lower index.
+	 */
+	CODEXTACTICS_API TArray<int32> ChooseNearbyCovers(const TArray<FVector2D>& Candidates, const FVector2D& LeaderSlot, const TArray<FVector2D>& Claimed, int32 Count,
+		float MinSpacingCm);
 
 	/**
 	 * A waiting member's slot was taken when he is released: the nearest of Candidates (spare slots of the same wall) to Preferred that

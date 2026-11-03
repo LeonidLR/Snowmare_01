@@ -286,6 +286,48 @@ namespace GroupCoverRules
 		return SlotLocation + WallNormal.GetSafeNormal2D() * Config.WaitStandOffCm;
 	}
 
+	bool IsNearbyCoverUsable(const FVector2D& LeaderSlot, const FVector2D& LeaderNormal, const FVector2D& Candidate, const FVector2D& CandidateNormal, bool bTaken,
+		float RadiusCm, float SideDeg)
+	{
+		const FVector2D A = LeaderNormal.GetSafeNormal();
+		const FVector2D B = CandidateNormal.GetSafeNormal();
+		if (bTaken || RadiusCm <= 0.f || A.IsNearlyZero() || B.IsNearlyZero() || FVector2D::Distance(LeaderSlot, Candidate) > static_cast<double>(RadiusCm))
+		{
+			return false;
+		}
+		return FVector2D::DotProduct(A, B) >= FMath::Cos(FMath::DegreesToRadians(static_cast<double>(SideDeg))) - 1e-6;
+	}
+
+	TArray<int32> ChooseNearbyCovers(const TArray<FVector2D>& Candidates, const FVector2D& LeaderSlot, const TArray<FVector2D>& Claimed, int32 Count, float MinSpacingCm)
+	{
+		TArray<int32> Order;
+		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+		{
+			Order.Add(Index);
+		}
+		Order.StableSort([&Candidates, &LeaderSlot](int32 X, int32 Y)
+		{
+			return FVector2D::DistSquared(Candidates[X], LeaderSlot) < FVector2D::DistSquared(Candidates[Y], LeaderSlot);
+		});
+		TArray<FVector2D> Taken = Claimed;
+		Taken.Add(LeaderSlot);
+		TArray<int32> Picked;
+		for (const int32 Index : Order)
+		{
+			if (Picked.Num() >= Count)
+			{
+				break;
+			}
+			const bool bClash = Taken.ContainsByPredicate([&](const FVector2D& Point) { return FVector2D::Distance(Point, Candidates[Index]) < static_cast<double>(MinSpacingCm); });
+			if (!bClash)
+			{
+				Picked.Add(Index);
+				Taken.Add(Candidates[Index]);
+			}
+		}
+		return Picked;
+	}
+
 	int32 PickFreeSlot(const TArray<FVector2D>& Candidates, const TArray<bool>& Taken, const FVector2D& Preferred)
 	{
 		int32 Best = INDEX_NONE;

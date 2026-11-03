@@ -4,6 +4,7 @@
 // is skipped. UE-only (no golden: the Training Ground simulator models neither the corner peek nor the formation leader).
 
 #include "Misc/AutomationTest.h"
+#include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationWallLeadershipRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -185,6 +186,35 @@ bool FFormationWallLeadershipHoldBehindTest::RunTest(const FString&)
 	TestEqual(TEXT("The third behind the second"), FormationWallLeadership::AheadInLine({ true, true, true }, 2), 1);
 	TestEqual(TEXT("... or behind the leader when the second is down"), FormationWallLeadership::AheadInLine({ true, false, true }, 2), 0);
 	TestEqual(TEXT("The leader keeps behind nobody"), FormationWallLeadership::AheadInLine({ true, true }, 0), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipReformTest, "ReformFast")
+bool FFormationWallLeadershipReformTest::RunTest(const FString&)
+{
+	// Item 2 (the game designer's bug report 2026-11-02: the re-form behind the new leader took 6-9 s - crouch-walking, the trailing man
+	// walking backwards, the last metre a crawl).
+	using namespace FormationWallLeadership;
+	const FFormationConfig Config;
+	TestTrue(TEXT("crouched, 10 m to his place: stands up for the walk"), ReformStands(1000.0, true, 300.0));
+	TestFalse(TEXT("crouched, 2 m: stays crouched (a shuffle along the wall)"), ReformStands(200.0, true, 300.0));
+	TestFalse(TEXT("already standing: nothing to do"), ReformStands(1000.0, false, 300.0));
+	TestFalse(TEXT("reform_stand_m 0 = off"), ReformStands(1000.0, true, 0.0));
+	// The man looking back faces his walk while his place is far (move.rear_turn_lag 150 / rear_turn_back 50), with hysteresis.
+	TestTrue(TEXT("far: faces his walk"), ReformRearFacesWalk(1000.0, false, Config));
+	TestFalse(TEXT("1 m (not turned yet): keeps looking back"), ReformRearFacesWalk(100.0, false, Config));
+	TestTrue(TEXT("1 m (turned): still facing his walk (hysteresis)"), ReformRearFacesWalk(100.0, true, Config));
+	TestFalse(TEXT("within rear_turn_back: looks back again"), ReformRearFacesWalk(40.0, true, Config));
+	// The steered final approach into a wall place (no path follower crawl).
+	TestFalse(TEXT("4 m off: the path follower's way"), FormationRuntime::WallFinalApproach(FVector2D(400.0, 0.0), FVector2D::ZeroVector, 220.f).IsSet());
+	const TOptional<FormationRuntime::FWallFinalApproach> Far = FormationRuntime::WallFinalApproach(FVector2D(250.0, 0.0), FVector2D::ZeroVector, 220.f);
+	TestTrue(TEXT("2.5 m off: steered at his top speed straight at the slot"), Far.IsSet() && FMath::IsNearlyEqual(Far->Speed, 220.f)
+		&& Far->Direction.Equals(FVector2D(-1.0, 0.0), 1e-6));
+	const TOptional<FormationRuntime::FWallFinalApproach> Near = FormationRuntime::WallFinalApproach(FVector2D(0.0, 20.0), FVector2D::ZeroVector, 220.f);
+	TestTrue(TEXT("20 cm off: never slower than the minimum (no crawl)"), Near.IsSet() && FMath::IsNearlyEqual(Near->Speed, FormationRuntime::WallFinalApproachMinSpeed));
+	const TOptional<FormationRuntime::FWallFinalApproach> Mid = FormationRuntime::WallFinalApproach(FVector2D(0.0, 50.0), FVector2D::ZeroVector, 220.f);
+	TestTrue(TEXT("50 cm off: distance x gain"), Mid.IsSet() && FMath::IsNearlyEqual(Mid->Speed, 50.f * FormationRuntime::WallFinalApproachGain));
+	TestFalse(TEXT("within the done radius: the glide's"), FormationRuntime::WallFinalApproach(FVector2D(0.0, 5.0), FVector2D::ZeroVector, 220.f).IsSet());
 	return true;
 }
 

@@ -16,6 +16,7 @@
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationTuning.h"
 #include "Formation/FormationWallLeadershipRules.h"
+#include "Data/SquadWallTuning.h"
 #include "HAL/IConsoleManager.h"
 #include "Tactics/CoverTraceRules.h"
 
@@ -176,6 +177,28 @@ bool USquadSubsystem::OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const
 		}
 	}
 	HoldCornerStack(*Peeker, Plan.StackSlots, Plan.End, bCrouch);
+	// Item 2 (game designer 2026-11-02: the stack ended right but took far too long - the others crept along crouched): a crouched member far
+	// from his place in the stack stands up for the walk (squad_walls.json reform_stand_m); he crouches again at his place (SettleFormationWallPose).
+	const float StandCm = SquadWallTuning::Get().ReformStandCm;
+	for (int32 Index = 0; Index < Who.Num(); ++Index)
+	{
+		AOperativeCharacter* Member = Who[Index];
+		const FFormationSlot* Place = Plan.Roles.IsValidIndex(Index)
+			? Plan.StackSlots.FindByPredicate([&Plan, Index](const FFormationSlot& Each) { return Each.Role == Plan.Roles[Index]; }) : nullptr;
+		if (Index == Plan.Leader || !Member || !Place || !CanTakeWallLead(Member) || Member->bInCover)
+		{
+			continue;
+		}
+		const double Distance = FVector2D::Distance(FVector2D(Member->GetActorLocation()), Place->Position);
+		if (FormationWallLeadership::ReformStands(Distance, Member->GetStance() == EOperativeStance::Crouching, StandCm))
+		{
+			Member->SetFormationWallPose(false);
+			Member->SetStance(EOperativeStance::Standing);
+			Member->MarkStanceFromSquad(); // the squad's stance: he crouches again at his place
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall leadership: %s stands up for the walk to his place in the stack (%.0f cm)"), *Member->DisplayName.ToString(),
+				Distance);
+		}
+	}
 	Sectors.WallOrderSerial = Peeker->GetMoveOrderSerial();
 	Sectors.LastLeaderSerial = Sectors.WallOrderSerial;
 	Sectors.bLastLeaderSerialValid = true;

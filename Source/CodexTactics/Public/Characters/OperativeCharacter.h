@@ -181,8 +181,17 @@ public:
 	/** The heat source's warm reach of WarmSpotSource (Radius + Tolerance), cm. */
 	float WarmSpotReach = 0.f;
 
-	/** Formation move issued by the squad: path to Destination at a fixed speed, keeps stance and sprint state. */
-	EOperativeOrderResult FollowTo(const FVector& Destination, float Speed);
+	/**
+	 * Formation move issued by the squad: path to Destination at a fixed speed, keeps stance and sprint state. PathBrakingCm >= 0: the path's
+	 * braking distance for this move (the movement config's otherwise; item 2 2026-11-03: a wall order's places, SquadWallTuning).
+	 */
+	EOperativeOrderResult FollowTo(const FVector& Destination, float Speed, float PathBrakingCm = -1.f);
+
+	/**
+	 * Item 2 (2026-11-03): one tick of the squad's steered final approach into a wall order's place - a path move in force is handed over (no
+	 * stop), then he walks along Direction at Speed (movement input, his walk animation). Call every tick while it lasts.
+	 */
+	void SteerFormationMove(const FVector2D& Direction, float Speed);
 
 	/**
 	 * Rev 5g (game designer 2026-10-14): a move order of his OWN is running (OrderMoveTo: player, interaction walk-up, relocation,
@@ -279,6 +288,10 @@ public:
 	/** Gold ring under the active leader, cyan under every selected operative (Sprint 06-A). */
 	void UpdateSelectionRing();
 	bool IsSelectionRingShown() const;
+
+	/** Movement-updated hook: re-seats the selection ring after the CMC moved the capsule (the actor tick runs before the CMC tick). */
+	UFUNCTION()
+	void HandleCharacterMovementUpdatedForRing(float DeltaSeconds, FVector OldLocation, FVector OldVelocity);
 
 	/** Configures squad index, name, and role color, then applies visuals. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")

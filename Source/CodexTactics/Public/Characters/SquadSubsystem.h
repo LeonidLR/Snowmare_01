@@ -602,6 +602,16 @@ public:
 	const TArray<FFormationApproachLook>& GetFormationApproachLooks() const { return Sectors.ApproachLooks; }
 	/** The wall layout in force (slots and looks by role; empty when none) - smokes. */
 	const TArray<FFormationSlot>& GetFormationWallSlots() const { return Sectors.WallSlots; }
+	/**
+	 * Rules v2.7 (game designer 2026-11-02 item 5): the wall layout's looks were balanced so both ends are watched and no sector is duplicated
+	 * while another is open (FormationWallSectorRules::Balance); OutBasePct / OutPct = the two-ring share held before / after, %. Smokes, logs.
+	 */
+	bool IsFormationWallSectorsBalanced(float& OutBasePct, float& OutPct) const
+	{
+		OutBasePct = Sectors.WallSectorBasePct;
+		OutPct = Sectors.WallSectorPct;
+		return Sectors.bWallLayoutValid && Sectors.bWallSectorsBalanced;
+	}
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
@@ -726,6 +736,10 @@ private:
 		bool bYielding = false;
 		/** Rules v2.6 (Q2 = b): the lagging rear guard faces forwards while he catches up (FormationSectorRules::RearCatchUp's hysteresis). */
 		bool bRearTurned = false;
+		/** Item 2 (2026-11-03): the wall-leadership re-form's rear cover faces his walk while his place is far (FormationWallLeadership::ReformRearFacesWalk). */
+		bool bReformTurned = false;
+		/** Item 2 (2026-11-03): steering the final approach into his wall place (TryWallFinalApproach); logged once per approach. */
+		bool bFinalApproach = false;
 	};
 
 	/** Formation look sectors: the state over frames (SquadSubsystemFormation.cpp). */
@@ -772,6 +786,16 @@ private:
 		TArray<FFormationApproachLook> ApproachLooks;
 		float WallEndBasePct = 100.f;
 		float WallEndPct = 100.f;
+		/**
+		 * Rules v2.7 (game designer 2026-11-02 item 5, FormationWallSectorRules::Balance): looks changed so both wall ends are watched and no
+		 * sector is duplicated while another is open; the two-ring shares held before / after, %; how many looks changed.
+		 */
+		bool bWallSectorsBalanced = false;
+		float WallSectorBasePct = 100.f;
+		float WallSectorPct = 100.f;
+		int32 WallSectorFixes = 0;
+		/** Item 2 (2026-11-03): the wall order's leader steered onto his place after his own run-in ended short (TryWallFinalApproach). */
+		bool bLeaderFinalApproach = false;
 		FVector2D WallAnchor = FVector2D::ZeroVector;
 		float WallNormalYaw = 0.f;
 		/** The group cover order in group mode as the wall layout (OrderFormationWall). */
@@ -1130,6 +1154,12 @@ private:
 	void EndFormationWallOrder(const TCHAR* Why);
 	/** A member of the wall order at his slot and turned: the baseline pose (crouch facing out). */
 	void SettleFormationWallPose(AOperativeCharacter& Member);
+	/**
+	 * Item 2 (2026-11-03): one tick of the steered final approach into a wall order's place (FormationRuntime::WallFinalApproach) when the line
+	 * is clear (nobody in it, not held behind the man ahead, nothing that blocks a pawn, his level); false = the path follower's way this tick.
+	 */
+	bool TryWallFinalApproach(bool& bInOutApproaching, AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef, const FVector2D& Here,
+		const FVector2D& Target, bool bWallPlace);
 	/**
 	 * Formation sectors part of UpdateFollower: his slot / look this frame, the facing, the speed with the slot's velocity lead.
 	 * Returns false when the old slot math should run instead (no role).

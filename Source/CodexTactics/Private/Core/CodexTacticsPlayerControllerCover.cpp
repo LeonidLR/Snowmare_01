@@ -17,6 +17,7 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GroupCoverRules.h"
+#include "Data/SquadWallTuning.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Tactics/CoverWrapRules.h"
 #include "Tactics/WallSideRules.h"
@@ -46,6 +47,81 @@ namespace
 {
 	TAutoConsoleVariable<int32> CVarGroupCoverLeaderPriority(TEXT("Codex.GroupCover.LeaderPriority"), 1,
 		TEXT("1 (default): in a group cover order the others wait ~1.6 m off the wall until the leader has taken his cover (game designer 2026-10-23); 0: the old rule (everybody runs straight into his slot)."));
+	TAutoConsoleVariable<int32> CVarGroupCoverNearbyCovers(TEXT("Codex.GroupCover.NearbyCovers"), 1,
+		TEXT("1 (default; game designer bug report 2026-11-02 item 3): in a group cover order a member with no slot at the leader's wall takes a free cover of another object within squad_walls.json follower_cover_radius_m facing the same side, prone behind the leader's cover only when none fits; 0: prone behind it at once (before 2026-11-03)."));
+
+	/** Knee height of the nearby cover traces above the slot's feet (finds 60 cm covers, as CoverTraceRules' knee trace), cm. */
+	constexpr float NearbyCoverKneeCm = 45.f;
+	/** The nearby cover traces start this far out from the leader's slot line (two rows), every NearbyCoverStepCm along it, cm. */
+	constexpr float NearbyCoverRowsCm[] = { 250.f, 50.f };
+	constexpr float NearbyCoverStepCm = 50.f;
+	/** A nearby cover slot stays on the leader's level: within this height of his slot, cm. */
+	constexpr float NearbyCoverMaxRiseCm = 150.f;
+
+	/**
+	 * Item 3 (2026-11-03): free cover slots of other objects round the leader's slot for the members who got no slot at his wall - traces
+	 * from the squad's side towards the threat side (along -WallNormal) on two rows across RadiusCm either way along his wall; a face that
+	 * looks the same way (GroupCoverRules::IsNearbyCoverUsable) gives a slot (CoverTraceRules::FindCoverSlotAt); slots of the leader's own
+	 * wall are the probes' (skipped); up to Count, nearest first, one man per spot (GroupCoverRules::ChooseNearbyCovers).
+	 */
+	TArray<FCoverSlot> FindNearbyGroupCoverSlots(UWorld* World, const FCoverSlot& LeaderSlot, const TArray<FCoverSlot>& Claimed, int32 Count, float RadiusCm,
+		float SideDeg, TFunctionRef<bool(const FVector&)> IsTaken)
+	{
+		TArray<FCoverSlot> Result;
+		if (!World || Count <= 0 || RadiusCm <= 0.f)
+		{
+			return Result;
+		}
+		const FVector Normal = LeaderSlot.WallNormal.GetSafeNormal2D();
+		const FVector Tangent = LeaderSlot.RightTangent();
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(GroupCoverNearby), false);
+		for (TActorIterator<APawn> It(World); It; ++It)
+		{
+			Params.AddIgnoredActor(*It);
+		}
+		const FVector Base = LeaderSlot.WorldLocation + FVector(0.f, 0.f, NearbyCoverKneeCm);
+		const FVector2D Leader2D(LeaderSlot.WorldLocation);
+		TArray<FCoverSlot> Found;
+		TArray<FVector2D> Points;
+		for (const float Row : NearbyCoverRowsCm)
+		{
+			for (float Along = -RadiusCm; Along <= RadiusCm + 1.f; Along += NearbyCoverStepCm)
+			{
+				const FVector Start = Base + Tangent * Along + Normal * Row;
+				FHitResult Hit;
+				if (!World->LineTraceSingleByChannel(Hit, Start, Start - Normal * (RadiusCm + Row), ECC_Visibility, Params) || FMath::Abs(Hit.ImpactNormal.Z) > 0.3f)
+				{
+					continue;
+				}
+				const FVector HitNormal = FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
+				FCoverSlot Slot;
+				if (HitNormal.IsNearlyZero() || !CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, -HitNormal, Slot) || !Slot.IsValid()
+					|| CoverTraceRules::IsSameWall(Slot, LeaderSlot) || FMath::Abs(Slot.WorldLocation.Z - LeaderSlot.WorldLocation.Z) > NearbyCoverMaxRiseCm)
+				{
+					continue;
+				}
+				const FVector2D Point(Slot.WorldLocation);
+				if (Points.ContainsByPredicate([&Point](const FVector2D& Each) { return FVector2D::Distance(Each, Point) < 1.0; })
+					|| !GroupCoverRules::IsNearbyCoverUsable(Leader2D, FVector2D(Normal), Point, FVector2D(Slot.WallNormal), IsTaken(Slot.WorldLocation), RadiusCm, SideDeg))
+				{
+					continue;
+				}
+				Found.Add(Slot);
+				Points.Add(Point);
+			}
+		}
+		TArray<FVector2D> ClaimedPoints;
+		for (const FCoverSlot& Each : Claimed)
+		{
+			ClaimedPoints.Add(FVector2D(Each.WorldLocation));
+		}
+		const FGroupCoverConfig Config;
+		for (const int32 Index : GroupCoverRules::ChooseNearbyCovers(Points, Leader2D, ClaimedPoints, Count, Config.SlotSpacingCm))
+		{
+			Result.Add(Found[Index]);
+		}
+		return Result;
+	}
 }
 
 // --- Tactical cover (Sprint 12) ---------------------------------------------------------------------------------
@@ -932,6 +1008,22 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 			SlotPoints.Add(FVector2D(Found->WorldLocation));
 		}
 	}
+	// Item 3 (game designer bug report 2026-11-02, "prone behind him ONLY when there is NO cover nearby"): who has no slot at the leader's
+	// wall takes a free cover of another object nearby facing the same side (squad_walls.json follower_cover_radius_m / _side_deg).
+	int32 NearbyCount = 0;
+	if (Others.Num() > ChosenSlots.Num() && CVarGroupCoverNearbyCovers.GetValueOnGameThread() != 0)
+	{
+		const FSquadWallTuning& WallTuning = SquadWallTuning::Get();
+		TArray<FCoverSlot> Claimed = ChosenSlots;
+		Claimed.Add(DirectSlot);
+		for (const FCoverSlot& Nearby : FindNearbyGroupCoverSlots(World, DirectSlot, Claimed, Others.Num() - ChosenSlots.Num(), WallTuning.FollowerCoverRadiusCm,
+			WallTuning.FollowerCoverSideDeg, IsTaken))
+		{
+			ChosenSlots.Add(Nearby);
+			SlotPoints.Add(FVector2D(Nearby.WorldLocation));
+			++NearbyCount;
+		}
+	}
 	// Who does not fit: prone directly behind the cover (on the navmesh, free), facing it; spares for a refused slot order.
 	const int32 ProneNeeded = Others.Num() - ChosenSlots.Num();
 	const FVector2D Span = GroupCoverRules::ComputeCoverSpan(DirectSlot.bLeftEdgeExposed, DirectSlot.LeftEdgeDistanceCm, DirectSlot.bRightEdgeExposed,
@@ -1130,8 +1222,9 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	}
 	LastGroupCoverSlots = InSlots;
 	LastGroupCoverProne = Prone;
-	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s + %d: %d in the cover (%d free slots, %d probes per side), %d prone behind it%s%s; span %.0f..%.0f cm"),
-		*Direct->DisplayName.ToString(), Others.Num(), InSlots, Free.Num(), Probes, Prone, bPlan ? TEXT(" (planned)") : TEXT(""),
+	LastGroupCoverNearby = NearbyCount;
+	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s + %d: %d in the cover (%d free slots, %d probes per side, %d nearby covers), %d prone behind it%s%s; span %.0f..%.0f cm"),
+		*Direct->DisplayName.ToString(), Others.Num(), InSlots, Free.Num(), Probes, NearbyCount, Prone, bPlan ? TEXT(" (planned)") : TEXT(""),
 		bLeaderSwitch ? TEXT(", the leader by the cover switch") : LeaderWrap ? TEXT(", the leader round the object along its wall") : TEXT(""), Span.X, Span.Y);
 
 	ControllerCommands::Report(this, LeaderWrap ? PlayerCommands::CoverShimmy : PlayerCommands::CoverEnter, nullptr, bPlan, true, Direct, DirectSlot.WorldLocation);

@@ -178,6 +178,16 @@ bool AOperativeCharacter::IsSelectionRingShown() const
 	return SelectionRing && !SelectionRing->IsHidden();
 }
 
+void AOperativeCharacter::HandleCharacterMovementUpdatedForRing(float DeltaSeconds, FVector OldLocation, FVector OldVelocity)
+{
+	// The actor tick (UpdateSelectionRing) runs BEFORE the CMC tick, so the ring lagged one frame behind the capsule
+	// (up to ~10 cm at a run, far more at a low frame rate); re-seat it right after the move.
+	if (SelectionRing && !SelectionRing->IsHidden())
+	{
+		UpdateSelectionRing();
+	}
+}
+
 void AOperativeCharacter::UpdateSelectionRing()
 {
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;

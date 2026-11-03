@@ -91,6 +91,20 @@ namespace WallLeadershipSmoke
 		EClick PendingClick = EClick::None;
 		bool bClickDone = false;
 		FDelegateHandle PreTickHandle;
+		/**
+		 * Item 2 (the game designer's bug report 2026-11-02: the re-form behind the new leader takes far too long, the others jostle and shuffle
+		 * in place): when the leader arrived at his corner (in the peek pose), per member whether he moved / stood still how long / how often
+		 * he started walking again after a stop (a re-path that shows as a shuffle), and the stage time the whole stack settled.
+		 */
+		float LeaderArriveAt = -1.f;
+		TArray<bool> Moved;
+		TArray<float> StillFor;
+		TArray<int32> Restarts;
+		TArray<float> PathCm;
+		TArray<FVector> LastPos;
+		/** The worst re-form of the run (s after the leader's arrival) and the most restarts of one man in one re-form. */
+		float WorstReform = 0.f;
+		int32 WorstRestarts = 0;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -313,6 +327,102 @@ namespace WallLeadershipSmoke
 		State.HoldTime = 0.f;
 		State.bOldLeaderOut = false;
 		State.OldLeaderOutAt = -1.f;
+		State.LeaderArriveAt = -1.f;
+		State.Moved.Init(false, State.Members.Num());
+		State.StillFor.Init(0.f, State.Members.Num());
+		State.Restarts.Init(0, State.Members.Num());
+		State.PathCm.Init(0.f, State.Members.Num());
+		State.LastPos.Reset();
+		for (const TWeakObjectPtr<AOperativeCharacter>& Weak : State.Members)
+		{
+			State.LastPos.Add(Weak.IsValid() ? Weak->GetActorLocation() : FVector::ZeroVector);
+		}
+	}
+
+	/** Moving above this speed, standing below this one for at least RestartStillSeconds = a stop (cm/s, s). */
+	constexpr float ReformMovingSpeed = 30.f;
+	constexpr float ReformStillSpeed = 5.f;
+	constexpr float RestartStillSeconds = 0.2f;
+	/** Item 2 targets (the game designer's bug report 2026-11-02; pending his confirmation): everyone settled this soon after the leader is at his corner, s, and no man starts walking again after a stop more than this often. */
+	constexpr float ReformTargetSeconds = 1.5f;
+	constexpr int32 ReformMaxRestarts = 1;
+
+	/** One frame of the re-form's measurement (item 2). */
+	void SampleReform(FState& State, const AOperativeCharacter* Leader, bool bWest, float DeltaTime, const USquadSubsystem* Squad)
+	{
+		// The re-form's trace every 0.5 s (the evidence of a slow / jostling re-form).
+		if (Squad && FMath::FloorToInt32(State.StageTime / 0.5f) != FMath::FloorToInt32((State.StageTime - DeltaTime) / 0.5f))
+		{
+			FString Line;
+			for (const TWeakObjectPtr<AOperativeCharacter>& Weak : State.Members)
+			{
+				const AOperativeCharacter* Op = Weak.Get();
+				FVector Slot = FVector::ZeroVector;
+				float Look = 0.f;
+				const bool bSlot = Op && Squad->GetFormationTarget(Op, Slot, Look);
+				if (Op)
+				{
+					Line += FString::Printf(TEXT(" %s x %.0f y %.0f v %.0f stance %d%s slot x %.0f (%.0f off);"), *NameOf(Op), Op->GetActorLocation().X, Op->GetActorLocation().Y,
+						Op->GetVelocity().Size2D(), static_cast<int32>(Op->GetStance()), Op->IsSprinting() ? TEXT(" sprint") : TEXT(""), bSlot ? Slot.X : 0.f,
+						bSlot ? FVector::Dist2D(Slot, Op->GetActorLocation()) : -1.f);
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace %.1f s:%s"), State.StageTime, *Line);
+		}
+		if (State.LeaderArriveAt < 0.f && Leader && InPeekPose(*Leader) && FMath::Abs(Leader->GetActorLocation().X - (bWest ? WallWestX : WallEastX)) <= 130.f)
+		{
+			State.LeaderArriveAt = State.StageTime;
+		}
+		for (int32 Index = 0; Index < State.Members.Num() && Index < State.Moved.Num(); ++Index)
+		{
+			const AOperativeCharacter* Op = State.Members[Index].Get();
+			if (!Op || Op == Leader || Op->IsKnockedDown() || Op == State.Knocked.Get())
+			{
+				continue; // the knocked-down man is no part of the re-form (he may get up and walk on later)
+			}
+			State.PathCm[Index] += static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), State.LastPos[Index]));
+			State.LastPos[Index] = Op->GetActorLocation();
+			const float Speed = static_cast<float>(Op->GetVelocity().Size2D());
+			if (Speed >= ReformMovingSpeed)
+			{
+				if (State.Moved[Index] && State.StillFor[Index] >= RestartStillSeconds)
+				{
+					++State.Restarts[Index];
+				}
+				State.Moved[Index] = true;
+				State.StillFor[Index] = 0.f;
+			}
+			else if (Speed < ReformStillSpeed)
+			{
+				State.StillFor[Index] += DeltaTime;
+			}
+		}
+	}
+
+	/** The re-form's numbers once the stack is held (item 2); checked against the targets. */
+	void CheckReform(FState& State, const TCHAR* Label, const AOperativeCharacter* Leader)
+	{
+		const float SettledAt = State.StageTime - State.HoldTime;
+		const float Reform = State.LeaderArriveAt >= 0.f ? FMath::Max(0.f, SettledAt - State.LeaderArriveAt) : SettledAt;
+		int32 MostRestarts = 0;
+		FString Line;
+		for (int32 Index = 0; Index < State.Members.Num() && Index < State.Restarts.Num(); ++Index)
+		{
+			const AOperativeCharacter* Op = State.Members[Index].Get();
+			if (Op && Op != Leader && !Op->IsKnockedDown() && Op != State.Knocked.Get())
+			{
+				MostRestarts = FMath::Max(MostRestarts, State.Restarts[Index]);
+				Line += FString::Printf(TEXT(" %s %d restarts, %.0f cm walked;"), *NameOf(Op), State.Restarts[Index], State.PathCm[Index]);
+			}
+		}
+		State.WorstReform = FMath::Max(State.WorstReform, Reform);
+		State.WorstRestarts = FMath::Max(State.WorstRestarts, MostRestarts);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s: re-form %.2f s after the leader reached his corner (he arrived %.2f s, all settled %.2f s after the click):%s"), Label,
+			Reform, State.LeaderArriveAt, SettledAt, *Line);
+		Check(State, Reform <= ReformTargetSeconds, FString::Printf(TEXT("%s: the stack settled %.2f s after the leader reached his corner (target <= %.1f s)"), Label, Reform,
+			ReformTargetSeconds));
+		Check(State, MostRestarts <= ReformMaxRestarts, FString::Printf(TEXT("%s: no milling about - at most %d restart(s) after a stop per man (%d):%s"), Label, ReformMaxRestarts,
+			MostRestarts, *Line));
 	}
 
 	/** One frame of the walk into the stack: nobody passes the leader, nobody past the corner. */
@@ -556,6 +666,10 @@ namespace WallLeadershipSmoke
 				State.OldLeaderOutAt = State.StageTime;
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the old leader %s left his corner %.2f s after the order"), *NameOf(Old), State.StageTime);
 			}
+			if (State.HoldTime <= 0.f)
+			{
+				SampleReform(State, Leader, bWest, DeltaTime, Squad);
+			}
 			State.HoldTime = StackSettled(State, Leader, bWest) ? State.HoldTime + DeltaTime : 0.f;
 			if (State.HoldTime < HoldSeconds && State.StageTime < 50.f)
 			{
@@ -570,6 +684,7 @@ namespace WallLeadershipSmoke
 					*NameOf(Old), State.OldLeaderOutAt));
 			}
 			CheckStack(State, Label, Leader, bWest);
+			CheckReform(State, Label, Leader);
 			if (State.bShot)
 			{
 				AimStill(World, State, bWest, 0);

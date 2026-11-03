@@ -241,6 +241,28 @@ namespace FormationRuntime
 
 	// --- The squad hugging a wall (game designer's play-test bug 2026-10-27, the lake yard) -------------------------------------------
 
+	/**
+	 * Item 2 (the game designer's bug report 2026-11-02: the re-form along a wall "shuffles in place" for seconds): the last stretch into a wall
+	 * order's place is steered straight at the slot (WallFinalApproach) - the path follower's acceptance (25 cm + his capsule) and braking made
+	 * it a 2-40 cm/s crawl that stopped ~30-60 cm short, and the crowd avoidance slowed a man walking up behind a team-mate already crouched
+	 * at his place. Within WallFinalApproachCm; speed = distance x WallFinalApproachGain, at least
+	 * WallFinalApproachMinSpeed, at most his top; done within WallFinalApproachDoneCm (the wall pose's glide does the rest).
+	 */
+	inline constexpr float WallFinalApproachCm = 300.f;
+	inline constexpr float WallFinalApproachDoneCm = 8.f;
+	inline constexpr float WallFinalApproachGain = 4.f;
+	inline constexpr float WallFinalApproachMinSpeed = 110.f;
+
+	/** WallFinalApproach's answer: the unit direction to the slot and the speed, cm/s. */
+	struct FWallFinalApproach
+	{
+		FVector2D Direction = FVector2D::ZeroVector;
+		float Speed = 0.f;
+	};
+
+	/** The steered final approach into a wall order's place (see WallFinalApproachCm); unset beyond WallFinalApproachCm or within WallFinalApproachDoneCm. */
+	CODEXTACTICS_API TOptional<FWallFinalApproach> WallFinalApproach(const FVector2D& Here, const FVector2D& Slot, float TopSpeed);
+
 	/** The wall pose's glide onto the exact wall slot (WallSlotGlide): this fast, cm/s; done within this, cm. */
 	inline constexpr float WallSlotGlideSpeedCm = 150.f;
 	inline constexpr float WallSlotGlideDoneCm = 1.f;

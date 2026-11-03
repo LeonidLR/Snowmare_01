@@ -23,6 +23,9 @@
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTuning.h"
 #include "Formation/FormationWallRules.h"
+#include "Formation/FormationWallLeadershipRules.h"
+#include "Formation/FormationWallSectorRules.h"
+#include "Data/SquadWallTuning.h"
 #include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
 #include "GameFramework/Pawn.h"
@@ -37,6 +40,10 @@ namespace SquadSubsystemFormationLocal
 		TEXT("1: log the formation probe (each raw terrain class change with its probe hits); 2: also every follower repath; 3: also each member's formation look whenever it changes, and every look ClearLook turns"));
 	TAutoConsoleVariable<int32> CVarFormationWallEnd(TEXT("Codex.Formation.WallEnd"), 1,
 		TEXT("Rules v2.4 (user bug report 2026-10-26): 1 = at a wall END the wall layout's looks are spread over the open arc round it (FormationWallRules::EndLooks); 0 = the face looks (L 8 / K 6 / P 4) everywhere (v2.3)"));
+	TAutoConsoleVariable<int32> CVarFormationWallSectors(TEXT("Codex.Formation.WallSectors"), 1,
+		TEXT("Rules v2.7 (game designer 2026-11-02 item 5): 1 = after the wall end's spread both end men of a short wall look round their own corners (mirrored) and nobody keeps a duplicated sector while an open one is unwatched (FormationWallSectorRules::Balance); 0 = the v2.4 looks"));
+	TAutoConsoleVariable<int32> CVarFormationWallFinalApproach(TEXT("Codex.Formation.WallFinalApproach"), 1,
+		TEXT("Item 2 (game designer 2026-11-02, the re-form at a wall shuffled in place for seconds): 1 = the last 3 m into a wall order's place is steered straight at it (FormationRuntime::WallFinalApproach); 0 = the path follower all the way (its acceptance + braking crawl)"));
 	TAutoConsoleVariable<int32> CVarFormationApproach(TEXT("Codex.Formation.Approach"), 1,
 		TEXT("Rules v2.5 (user rule 2026-10-26): 1 = the covered approach to the wall - the leader runs in and looks along the wall, the man farthest back covers the rear, the others a flank, until everyone is at his wall slot; 0 = everyone walks in facing his travel (v2.4)"));
 	TAutoConsoleVariable<int32> CVarFormationApproachHold(TEXT("Codex.Formation.ApproachHold"), 1,
@@ -70,6 +77,11 @@ namespace SquadSubsystemFormationLocal
 	constexpr float WallArrivalStillSeconds = 0.25f;
 	/** A member of a wall order counts as at his slot within this distance, cm. */
 	constexpr float WallSettleCm = 60.f;
+	/** Item 2: the steered final approach needs nobody within this of its straight line, cm (two bodies' radii). */
+	constexpr float WallFinalApproachClearCm = 70.f;
+	/** Item 2: the final approach's line probe - a sphere of this radius this high above his feet, cm. */
+	constexpr float WallFinalApproachProbeZCm = 60.f;
+	constexpr float WallFinalApproachProbeRadiusCm = 20.f;
 	/** ... and turned to his layout yaw within this angle, deg. */
 	constexpr float WallSettleYawDeg = 30.f;
 	/** The leader of a wall order is at his slot within this distance (his own move stops AcceptanceRadius short), cm. */
@@ -505,7 +517,13 @@ void USquadSubsystem::ApplyFormationWallEnd(const FVector& Origin, const FVector
 	Sectors.bWallEndSpread = false;
 	Sectors.WallEndBasePct = 100.f;
 	Sectors.WallEndPct = 100.f;
-	if (CVarFormationWallEnd.GetValueOnGameThread() == 0 || Sectors.WallSlots.Num() < 3)
+	Sectors.bWallSectorsBalanced = false;
+	Sectors.WallSectorBasePct = 100.f;
+	Sectors.WallSectorPct = 100.f;
+	Sectors.WallSectorFixes = 0;
+	const bool bEndLooks = CVarFormationWallEnd.GetValueOnGameThread() != 0;
+	const bool bBalance = CVarFormationWallSectors.GetValueOnGameThread() != 0;
+	if ((!bEndLooks && !bBalance) || Sectors.WallSlots.Num() < 3)
 	{
 		return; // off, or the pair (its wall looks are a user decision)
 	}
@@ -527,22 +545,50 @@ void USquadSubsystem::ApplyFormationWallEnd(const FVector& Origin, const FVector
 	}
 	const float Reach = Config.WallEndProbeDist + WallEndGatherMarginCm;
 	Walls.Append(GatherFormationWalls(Centre, FVector2D(Reach, Reach), 0.f, static_cast<float>(Origin.Z)));
-	const FFormationWallEndResult End = FormationWallRules::EndLooks(Walls, Sectors.WallSlots, Config, FixedRoles);
-	Sectors.WallEndBasePct = static_cast<float>(End.BasePct);
-	Sectors.WallEndPct = static_cast<float>(End.Pct);
-	if (!End.bSpread)
+	if (bEndLooks)
+	{
+		const FFormationWallEndResult End = FormationWallRules::EndLooks(Walls, Sectors.WallSlots, Config, FixedRoles);
+		Sectors.WallEndBasePct = static_cast<float>(End.BasePct);
+		Sectors.WallEndPct = static_cast<float>(End.Pct);
+		if (End.bSpread)
+		{
+			Sectors.bWallEndSpread = true;
+			FString Line;
+			for (int32 Index = 0; Index < End.Slots.Num(); ++Index)
+			{
+				Line += FString::Printf(TEXT(" %s %.0f -> %.0f;"), FormationNames::ToString(End.Slots[Index].Role), Sectors.WallSlots[Index].Yaw, End.Slots[Index].Yaw);
+			}
+			Sectors.WallSlots = End.Slots;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall END: the looks spread over the open arc (%.0f %% -> %.0f %% held, %d walls):%s"), End.BasePct, End.Pct,
+				Walls.Num(), *Line);
+		}
+	}
+	if (!bBalance)
 	{
 		return;
 	}
-	Sectors.bWallEndSpread = true;
-	FString Line;
-	for (int32 Index = 0; Index < End.Slots.Num(); ++Index)
+	// Rules v2.7 (game designer 2026-11-02 item 5): both ends of a short wall watched alike, no duplicated sector while one is open.
+	const FFormationWallSectorResult Balanced = FormationWallSectorRules::Balance(Walls, Sectors.WallSlots, Sectors.WallNormalYaw, Config, FixedRoles,
+		SquadWallTuning::Get().WallCornerLookDeg);
+	Sectors.WallSectorBasePct = static_cast<float>(Balanced.BasePct);
+	Sectors.WallSectorPct = static_cast<float>(Balanced.Pct);
+	if (!Balanced.bChanged)
 	{
-		Line += FString::Printf(TEXT(" %s %.0f -> %.0f;"), FormationNames::ToString(End.Slots[Index].Role), Sectors.WallSlots[Index].Yaw, End.Slots[Index].Yaw);
+		return;
 	}
-	Sectors.WallSlots = End.Slots;
-	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall END: the looks spread over the open arc (%.0f %% -> %.0f %% held, %d walls):%s"), End.BasePct, End.Pct,
-		Walls.Num(), *Line);
+	FString Line;
+	for (int32 Index = 0; Index < Balanced.Slots.Num(); ++Index)
+	{
+		const EFormationWallSectorFix Fix = Balanced.Fixes[Index];
+		Sectors.WallSectorFixes += Fix != EFormationWallSectorFix::None ? 1 : 0;
+		Line += FString::Printf(TEXT(" %s %.0f -> %.0f%s;"), FormationNames::ToString(Balanced.Slots[Index].Role), Sectors.WallSlots[Index].Yaw, Balanced.Slots[Index].Yaw,
+			Fix == EFormationWallSectorFix::Mirror ? TEXT(" (mirror)") : Fix == EFormationWallSectorFix::Corner ? TEXT(" (round his corner)")
+			: Fix == EFormationWallSectorFix::Dedup ? TEXT(" (open sector)") : TEXT(""));
+	}
+	Sectors.bWallSectorsBalanced = true;
+	Sectors.WallSlots = Balanced.Slots;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall SECTORS: both ends watched, no duplicated sector (%.0f %% -> %.0f %% of the near + far rings, %d -> %d points open and unwatched):%s"),
+		Balanced.BasePct, Balanced.Pct, Balanced.BaseUncovered, Balanced.Uncovered, *Line);
 }
 
 void USquadSubsystem::ApplyFormationApproach(const AOperativeCharacter& LeaderRef)
@@ -953,7 +999,26 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	// His look: run = his path (everybody faces 12); the wall layout: his path until 1 m from his slot (contract 7); else the sector.
 	// Rules v2.5: on the covered approach a member with an approach look (rear, flank, at the wall) holds it all the way in.
 	const TOptional<EFormationApproachDuty> Duty = bWall && !Sectors.bSlide ? FormationApproachDuty(Role.GetValue()) : TOptional<EFormationApproachDuty>();
-	const bool bApproachLook = Duty.IsSet() && Duty.GetValue() != EFormationApproachDuty::Run;
+	// Item 2 (game designer 2026-11-02, the re-form behind the new wall leader took far too long): the covered approach's rear cover walking
+	// into the stack faces his walk while his place is far (the walking rear guard's v2.6 rule) - not a 10 m crawl backwards.
+	const bool bLeadershipReform = Sectors.Peek.bLeadership && Sectors.bCornerStack && Sectors.bWallOrder && !Sectors.bSlide;
+	const bool bWasReformTurned = Follower.bReformTurned;
+	bool bBackwardDuty = Duty.IsSet() && Duty.GetValue() == EFormationApproachDuty::Rear;
+	if (bLeadershipReform && Duty.IsSet() && !bBackwardDuty && Distance > 1.f)
+	{
+		// A flank / along look that has him walk backwards into the stack (the trailing man looking back along the wall): the same rule.
+		const FFormationApproachLook* Look = Sectors.ApproachLooks.FindByPredicate([&Role](const FFormationApproachLook& Each) { return Each.Role == Role.GetValue(); });
+		bBackwardDuty = Look && Look->Yaw.IsSet()
+			&& FormationMath::AngleBetween(Look->Yaw.GetValue(), FormationMath::YawOf(Target - Here)) > FormationRuntime::BackwardAngleDeg;
+	}
+	Follower.bReformTurned = bLeadershipReform && bBackwardDuty
+		&& FormationWallLeadership::ReformRearFacesWalk(Distance, Follower.bReformTurned, FormationTuning::Get());
+	if (Follower.bReformTurned != bWasReformTurned)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall leadership: %s (looking back) %s: %.0f cm off his place in the stack"), *Operative.DisplayName.ToString(),
+			Follower.bReformTurned ? TEXT("faces his walk into the stack") : TEXT("looks back again"), Distance);
+	}
+	const bool bApproachLook = Duty.IsSet() && Duty.GetValue() != EFormationApproachDuty::Run && !Follower.bReformTurned;
 	// Rules v2.6 (game designer 2026-11-01, Q2 = b): the walking rear guard more than move.rear_turn_lag behind his slot turns round and
 	// catches up facing his run (no formation look: he faces his movement, and FollowerMove's backward cap is off once his body has turned);
 	// back within move.rear_turn_back he takes the rear look again and walks backwards (sim: m.rearTurned).
@@ -1021,6 +1086,17 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		GlideToWallSlot(Operative, Target, WallSettleCm, DeltaTime); // bug 2026-10-27: onto his slot, not a hand-span short of it
 	}
 
+	// Item 2 (game designer 2026-11-02, the re-form at a wall "shuffles in place"): the last 3 m into a wall order's place is
+	// steered straight at it, every tick - when nobody stands in that line, the man ahead in a wall-leadership line does not hold him back
+	// and the nav mesh is clear to it.
+	if (TryWallFinalApproach(Follower.bFinalApproach, Operative, LeaderRef, Here, Target, bWall && !bRouted))
+	{
+		Follower.bParked = false;
+		Follower.RepathTimeRemaining = 0.f; // a path move again at once when the steering ends
+		return true;
+	}
+	Follower.bFinalApproach = false;
+
 	Follower.RepathTimeRemaining -= DeltaTime;
 	if (Follower.RepathTimeRemaining > 0.f)
 	{
@@ -1051,7 +1127,8 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	// Running - or crawling (prone: no sector look, he crawls facing his way) - there is no walking backwards to cap.
 	// Rules v2.5: the rear cover on the covered approach walks backwards at the backward cap of the WALK (the approved rear guard), even
 	// while the leader runs in; the others at the approach pace.
-	const bool bRearCover = Duty.IsSet() && Duty.GetValue() == EFormationApproachDuty::Rear && Operative.GetStance() != EOperativeStance::Prone;
+	const bool bRearCover = Duty.IsSet() && Duty.GetValue() == EFormationApproachDuty::Rear && Operative.GetStance() != EOperativeStance::Prone
+		&& !Follower.bReformTurned;
 	const bool bRun = !bRearCover && (LeaderRef.IsSprinting() || Operative.GetStance() == EOperativeStance::Prone);
 	const float Top = Operative.GetMaxSpeed(); // his walk / crawl, or the sprint he copies from the leader
 	// Bug D (2026-10-26): walking into the wall layout along the wall, a team-mate standing in the line between him and his place is stepped
@@ -1195,7 +1272,10 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	}
 	Follower.bParked = false;
 	const FVector2D Destination = FormationRuntime::LeadDestination(MoveTarget, SlotVelocity);
-	const EOperativeOrderResult Result = Operative.FollowTo(FVector(Destination.X, Destination.Y, SlotLocation.Z), Move.Speed);
+	// Item 2 (2026-11-03): into a wall order's place the path's own braking is short - FollowerMove's arrival law already slows him (with both
+	// the last metre was a 2-40 cm/s crawl for seconds: the "shuffle in place").
+	const EOperativeOrderResult Result = Operative.FollowTo(FVector(Destination.X, Destination.Y, SlotLocation.Z), Move.Speed,
+		Sectors.bWallOrder && bWall ? SquadWallTuning::Get().WallPathBrakingCm : -1.f);
 	if (CVarFormationDebug.GetValueOnGameThread() >= 2)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s %s: %.0f cm off his slot, slot %.0f cm/s, speed %.0f%s -> %d (at %.0f, %.0f, to %.0f, %.0f, v %.0f)"),
@@ -1203,6 +1283,78 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 			Move.bBackward ? TEXT(" (backwards)") : TEXT(""), static_cast<int32>(Result), Here.X, Here.Y, Destination.X, Destination.Y,
 			Operative.GetVelocity().Size2D());
 	}
+	return true;
+}
+
+bool USquadSubsystem::TryWallFinalApproach(bool& bInOutApproaching, AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef, const FVector2D& Here,
+	const FVector2D& Target, bool bWallPlace)
+{
+	using namespace SquadSubsystemFormationLocal;
+	if (CVarFormationDebug.GetValueOnGameThread() >= 3 && FVector2D::Distance(Here, Target) <= FormationRuntime::WallFinalApproachCm)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s: final approach check - wall place %d, order %d, slide %d, cover %d/%d, hold %.2f, level %d"),
+			*Operative.DisplayName.ToString(), bWallPlace ? 1 : 0, Sectors.bWallOrder ? 1 : 0, Sectors.bSlide ? 1 : 0, Operative.bInCover ? 1 : 0, Operative.HasPendingCover() ? 1 : 0,
+			Operative.GetMoveHoldSeconds(), FormationGuardRuntime::IsSameLevelLeg(static_cast<float>(Operative.GetActorLocation().Z), static_cast<float>(LeaderRef.GetFloorReferenceLocation().Z)) ? 1 : 0);
+	}
+	if (CVarFormationWallFinalApproach.GetValueOnGameThread() == 0 || !bWallPlace || !Sectors.bWallOrder || Sectors.bSlide || Operative.bInCover
+		|| Operative.HasPendingCover() || Operative.IsKnockedDown() || Operative.GetStance() == EOperativeStance::Prone || Operative.GetMoveHoldSeconds() > 0.f
+		|| !FormationGuardRuntime::IsSameLevelLeg(static_cast<float>(Operative.GetActorLocation().Z), static_cast<float>(LeaderRef.GetFloorReferenceLocation().Z)))
+	{
+		return false;
+	}
+	const TOptional<FormationRuntime::FWallFinalApproach> Final = FormationRuntime::WallFinalApproach(Here, Target, Operative.GetMaxSpeed());
+	const auto Refuse = [&Operative, &Here, &Target](const TCHAR* Why)
+	{
+		if (CVarFormationDebug.GetValueOnGameThread() >= 3)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s: no final approach (%.0f cm): %s"), *Operative.DisplayName.ToString(), FVector2D::Distance(Here, Target), Why);
+		}
+		return false;
+	};
+	if (!Final.IsSet())
+	{
+		return false;
+	}
+	if (!HoldBehindInWallLine(Operative, Target).Equals(Target, 1.0))
+	{
+		return Refuse(TEXT("held behind the man ahead"));
+	}
+	// Nobody in the straight line (a body within FinalApproachClearCm of it, ahead of him).
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
+	{
+		const AOperativeCharacter* Other = Member.Get();
+		if (!Other || Other == &Operative)
+		{
+			continue;
+		}
+		const FVector2D There(Other->GetActorLocation());
+		if (FVector2D::DotProduct(There - Here, Target - Here) > 0.0
+			&& FVector2D::Distance(FormationMath::ClosestOnSegment(There, Here, Target), There) < WallFinalApproachClearCm)
+		{
+			return Refuse(TEXT("a team-mate in the line"));
+		}
+	}
+	// Nothing that blocks a pawn in that line (a sphere at knee height; the team-mates checked above). Not the nav mesh: a wall place lies
+	// inside its agent-radius margin off the face, so a nav raycast to it always "hits".
+	FCollisionQueryParams SweepParams(SCENE_QUERY_STAT(FormationFinalApproach), false);
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
+	{
+		SweepParams.AddIgnoredActor(Member.Get());
+	}
+	const FVector Feet = Operative.GetActorLocation() - FVector(0.f, 0.f, Operative.GetSimpleCollisionHalfHeight());
+	const FVector From = Feet + FVector(0.f, 0.f, WallFinalApproachProbeZCm);
+	const FVector To(Target.X, Target.Y, From.Z);
+	if (GetWorld()->SweepTestByChannel(From, To, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(WallFinalApproachProbeRadiusCm), SweepParams))
+	{
+		return Refuse(TEXT("something blocks the straight line"));
+	}
+	if (!bInOutApproaching)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s: the final approach into his wall place (%.0f cm, steered)"), *Operative.DisplayName.ToString(),
+			FVector2D::Distance(Here, Target));
+	}
+	bInOutApproaching = true;
+	Operative.SteerFormationMove(Final->Direction, Final->Speed);
 	return true;
 }
 
@@ -1265,6 +1417,15 @@ void USquadSubsystem::UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, f
 	// flake (2026-11-02): also before his wall pose. On the covered approach he takes the pose only when everyone is at the wall (his look
 	// is the run-in's until then), and in the lake yard's 2 m passage the rear man walking past him to his place could not get by the
 	// leader standing ~25 cm out of the wall (his run-in's acceptance radius): neither ever arrived. Swept, so a team-mate stops it.
+	// Item 2 (2026-11-03): his own run-in ended short of his place (the followers, now steered in fast, crouched at theirs either side of
+	// it and the crowd avoidance stopped him 1.5 m out - FormationWallHugSmoke's 3.6 m passage): the same steered final approach takes him in.
+	if (Lead && !Sectors.bSlide && !OrderLeader->HasOwnMoveOrder() && !IsFormationPeeker(OrderLeader) && !OrderLeader->bInCover
+		&& FVector2D::Distance(FVector2D(OrderLeader->GetActorLocation()), Lead->Position) > FormationRuntime::WallFinalApproachDoneCm
+		&& TryWallFinalApproach(Sectors.bLeaderFinalApproach, *OrderLeader, *OrderLeader, FVector2D(OrderLeader->GetActorLocation()), Lead->Position, true))
+	{
+		return;
+	}
+	Sectors.bLeaderFinalApproach = false;
 	if (Lead && !Sectors.bSlide && !OrderLeader->IsMoving() && !IsFormationPeeker(OrderLeader) && !OrderLeader->bInCover)
 	{
 		GlideToWallSlot(*OrderLeader, Lead->Position, WallLeaderSettleCm, DeltaTime, /*bBeforePose*/ !OrderLeader->HasOwnMoveOrder());

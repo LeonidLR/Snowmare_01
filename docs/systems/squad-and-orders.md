@@ -309,6 +309,63 @@ from") - the squad only walked to that wall, the member who had peeked stayed in
   his corner within ~0.5-0.7 s, one carried peek, the peek pose held, the others at W_D_10 behind him, nobody left at W_D_9. A/B
   `-PreCmds "Codex.Formation.PeekCarry 0"`. Stills `Saved/Screenshots/Bug04/` (`... SquadPeekNextWallSmoke Shot`, rendered).
 
+### The squad at walls (2026-11-03, branch fix/squad-at-walls; the game designer's bug report 2026-11-02 items 5 / 3 / 2 / 2b on `L_Gen_Depot_1`)
+
+Tunables: `Content/Data/AI/squad_walls.json` (`SquadWallTuning`, read once on first use; **every default is the agent's proposal, pending the
+game designer's confirmation**): `wall_corner_look_deg` 112, `follower_cover_radius_m` 6, `follower_cover_side_deg` 60, `reform_stand_m` 3,
+`wall_path_braking_cm` 30. Smokes `WallSectorsSmoke`, `GroupCoverNearbySmoke` (both `SquadWallsSmokeCommand.cpp`, own arena on L_MovementTest),
+`WallLeadershipSmoke` (now timed); stills `Saved/Screenshots/SquadWalls/` (`-RenderOffscreen ... "-ExecCmds=CodexTactics.WallSectorsSmoke Shot"`).
+
+- **Item 5 - look sectors at a wall with two ends (rules v2.7, `FormationWallSectorRules::Balance`, `Codex.Formation.WallSectors` 1 / 0).** The
+  squad crouched along a short wall / a segment between gaps: the right-end man looked round his corner (EndLooks' spread), the LEFT-end man kept
+  his face look (forward-left, inside K's cone), the sector round the left corner open. Cause (the user's PIE log 2026-11-02 14:47:53: `P 30 -> -22;
+  Z 150 -> 150`, 82 -> 100 % "held"): EndLooks measures ONE probe ring 6 m out - from that far the area round the left corner lies inside the
+  forward-left cone, so its greedy saw nothing left and the left man "added nothing"; which end it served first depended on the geometry. Now,
+  after EndLooks (its golden parity untouched), `Balance` runs on the slots: (1) coverage on TWO rings (3 m and `wall_end.probe_dist`); (2) BOTH
+  ENDS ALIKE - each end man (the two farthest apart along the wall) whose corner is OPEN and BESIDE him (a line 2 m along the wall to his side and
+  1.5 m behind its line is clear, and he sees ring points round it: a wall end or a gap - never a long face, an inner corner or a corner 3 m
+  farther along, FormationLabSmoke's dead end) and who does not look round it yet turns round it: to the MIRROR of the other end
+  man's look when that one looks round his, else `wall_corner_look_deg` (112, the look EndLooks gave the right man in the report); not into a wall
+  next to him (it backs off towards the normal until clear), never holding fewer ring points of his own than before; two end men both round their
+  corners but > 10 deg apart: one takes the other's mirror; (3) NO DUPLICATED SECTOR WHILE ONE IS OPEN - while an open ring point is unwatched, the
+  movable man whose best look gains >= 3 points nobody else holds turns there (once each). K, the corner stack's fixed roles and the pair are never
+  changed; a face keeps the user's L 8 / K 6 / P 4. Log `[Formation] wall SECTORS: ...`. Smoke (before -> after, the arena's 2.4 m wall and a 2.4 m
+  segment between 4 m gaps): end men N-74 / N+74 (forward diagonals, the corners unwatched) -> N-112 / N+112, mirrored; the user's asymmetric case
+  is the unit test `CodexTactics.Formation.WallSectors.LeftEndManMirrorsTheRightEndMan` (Z 150 -> -158 = the mirror of P's -22).
+- **Item 3 - followers prone in the open although cover is near (`CodexTacticsPlayerControllerCover.cpp` `OrderGroupCover`, `GroupCoverRules::
+  IsNearbyCoverUsable` / `ChooseNearbyCovers`, `Codex.GroupCover.NearbyCovers` 1 / 0).** The cover-slot group order (a low cube: the formation wall
+  layout refuses it - "no wall found behind the cover slot" - or the leader's cover switch / wrap) put whoever found no slot along the leader's own
+  wall PRONE behind it at once. Now, before the prone fallback, the members without a slot search free cover slots of OTHER objects round the
+  leader's slot: traces from the squad's side towards the threat side on two rows across `follower_cover_radius_m` (6 m) either way along his wall;
+  a face whose outward normal is within `follower_cover_side_deg` (60) of the leader's gives a slot (`FindCoverSlotAt`), the leader's own wall's
+  slots are skipped (the probes'), nobody else stands / is in cover there, the leader's level; nearest the leader first, at least a slot spacing
+  from the leader, the chosen slots and each other (one man per spot); they join the same-wall slots in the minimal-travel plan, so the plan sends
+  the nearer man to the nearer cover; prone only for whoever is left. HUD log `[GroupCover] ... (N nearby covers)`. Smoke: 3 cubes 3.2 m apart ->
+  before `1 in the cover, 2 prone`, after 3 in cover, one per cube, 1.7 s; one cube alone -> 2 prone (fallback kept). `GroupCoverSmoke` B (one short
+  barricade, no other cover) unchanged.
+- **Item 2 - the wall-leadership re-form too slow (`SquadSubsystemWallLeadership.cpp`, `SquadSubsystemFormation.cpp` `UpdateSectorFollower` /
+  `TryWallFinalApproach`, `FormationWallLeadership::ReformStands` / `ReformRearFacesWalk`, `FormationRuntime::WallFinalApproach`).** Measured in
+  `WallLeadershipSmoke` (lab wall W_B_3, 11-22 m walks): the stack was right but settled **7.75 / 8.72 / 6.00 s** after the new leader reached his
+  corner; no stop-start loops (0 restarts) - the time went into (a) crouch-walking at 150 cm/s while the leader walked upright at 220, (b) the
+  covered approach's rear cover / the trailing man (looking back along the wall) walking backwards at `move.backward_mult`, (c) the last metre: the
+  path follower's acceptance (25 cm + the capsule) and its 140 cm braking on top of FollowerMove's own arrival law plus the crowd avoidance behind
+  a team-mate already crouched at his place - 2-40 cm/s for seconds, stopping 30-60 cm short, then the wall-pose glide (the "shuffle in place").
+  Now: a crouched follower whose place in the stack is > `reform_stand_m` (3 m) away stands up for the walk (crouches again at his place); the man
+  whose approach look has him walk backwards faces his walk while far (the v2.6 rear-turn rule: beyond `move.rear_turn_lag`, back within
+  `move.rear_turn_back`); every move into a wall order's place uses a `wall_path_braking_cm` (30) path braking; and the last 3 m into ANY wall
+  order's place are steered straight at it every tick (`SteerFormationMove`: movement input, his walk animation; speed = distance x 4, at least
+  110 cm/s, at most his top) when nobody stands within 70 cm of that line, the wall-leadership line does not hold him back and nothing that blocks a
+  pawn is in the way (a sphere sweep - not a nav raycast: a wall place lies inside the nav mesh's agent margin). After: **1.20 / 1.17 / 0.92 s**,
+  0 restarts (target, pending confirmation: everyone settled <= 1.5 s after the leader is at his corner, <= 1 restart per man - checked by the smoke).
+  The leader's own run-in that ended short of his place (the followers now crouch at theirs first; in FormationWallHugSmoke's 3.6 m passage the
+  crowd avoidance stopped him 1.5 m out between them) is steered in the same way. `Codex.Formation.WallFinalApproach 0` = the path follower all
+  the way.
+- **Item 2b - the selection ring lagged the operative (`OperativeCharacterOverlays.cpp`).** The ring is a world-space `ARadiusRingActor` re-seated
+  in the operative's own Tick, which runs BEFORE his CharacterMovement tick - so it showed last frame's capsule position (~4 cm behind a walking
+  man at 60 fps, ~10 cm at a run, more at a low frame rate): off his feet and off the cursor on the unit. Now re-seated again from
+  `OnCharacterMovementUpdated` right after the move. Cursor picking itself (`GetHitResultUnderCursor`) was fine. If an offset is still seen while
+  he stands still, the next suspect is a Blueprint's mesh offset vs the capsule (needs a screenshot).
+
 ### Wall leadership (2026-11-01, branch formation/wall-leadership; the game designer's decisions; behind `Codex.Formation.Sectors` + `Codex.Formation.WallLeadership`)
 
 Design and the seven decisions: `docs/design/FORMATION_SECTORS.md` "Wall leadership". The squad's corner peek (the click on an end of the squad's wall,

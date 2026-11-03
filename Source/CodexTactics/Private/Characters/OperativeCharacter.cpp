@@ -125,6 +125,7 @@ void AOperativeCharacter::BeginPlay()
 	Super::BeginPlay();
 	// Blueprints made before the switch may still carry the engine's orient-to-movement: the facing code turns the body.
 	GetCharacterMovement()->bOrientRotationToMovement = false;
+	OnCharacterMovementUpdated.AddUniqueDynamic(this, &AOperativeCharacter::HandleCharacterMovementUpdatedForRing);
 
 	if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
 	{

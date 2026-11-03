@@ -342,6 +342,8 @@ public:
 	/** The last group cover order (smokes / log): members sent into a slot (the direct one included) / prone behind the cover. */
 	int32 GetLastGroupCoverSlotCount() const { return LastGroupCoverSlots; }
 	int32 GetLastGroupCoverProneCount() const { return LastGroupCoverProne; }
+	/** Item 3 (2026-11-03): of the last group cover order's slots, how many were nearby covers of other objects (no slot at the leader's wall). */
+	int32 GetLastGroupCoverNearbyCount() const { return LastGroupCoverNearby; }
 
 	/** N: lean / blind fire toggle of the selected operative(s). */
 	void ToggleCoverFireModeKey();
@@ -790,6 +792,7 @@ private:
 	TObjectPtr<class ACoverGhostActor> CoverGhost;
 	int32 LastGroupCoverSlots = 0;
 	int32 LastGroupCoverProne = 0;
+	int32 LastGroupCoverNearby = 0;
 	FCoverSlot CoverPreviewSlot;
 	TWeakObjectPtr<AOperativeCharacter> CoverPreviewOperative;
 	bool bCoverPreviewTurnBased = false;

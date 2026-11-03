@@ -112,4 +112,19 @@ namespace FormationWallLeadership
 	 * of the nearest able member before Position (the leader for the first); INDEX_NONE for the leader himself or when none is able.
 	 */
 	CODEXTACTICS_API int32 AheadInLine(const TArray<bool>& Able, int32 Position);
+
+	/**
+	 * The re-form behind the new leader (the game designer's bug report 2026-11-02 item 2: the stack ended right but took far too long - the
+	 * others crept along crouched, the trailing man walked backwards, the last metre was a crawl): a crouched member whose place in the stack
+	 * lies farther than StandCm stands up for the walk (squad_walls.json reform_stand_m; he crouches again at his place).
+	 */
+	CODEXTACTICS_API bool ReformStands(double DistanceToPlaceCm, bool bCrouched, double StandCm);
+
+	/**
+	 * The re-form: the man with the covered approach's REAR duty (looking back the way they came - walking backwards at move.backward_mult) -
+	 * and any man whose approach look has him walk backwards into the stack (the trailing man looking back along the wall) -
+	 * faces his walk while his place is far, the walking rear guard's rule v2.6 (FormationSectorRules::RearCatchUp: forward beyond
+	 * move.rear_turn_lag, the rear look again within move.rear_turn_back). bTurned = the last tick's answer.
+	 */
+	CODEXTACTICS_API bool ReformRearFacesWalk(double DistanceToPlaceCm, bool bTurned, const FFormationConfig& Config);
 }
