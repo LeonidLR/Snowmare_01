@@ -5,7 +5,7 @@
   "bounds": null,
   "runs_dir": "Saved/Trainer",
   "evolution": {
-    "population": 12,
+    "population": 8,
     "elitism": 2,
     "tournament_k": 3,
     "crossover_rate": 0.7,
@@ -20,7 +20,7 @@
   },
   "evaluation": {
     "_comment": "Each candidate plays these jobs per generation (one game process each, rounds_per_job rounds, a different seed per job; all candidates of a generation share the seeds). opponent: champion = PMC vs PMC self-play against the current champion, bot = the player squad driven by the playtest bot.",
-    "rounds_per_job": 4,
+    "rounds_per_job": 3,
     "matches": [
       {"opponent": "champion", "jobs": 2}
     ],
