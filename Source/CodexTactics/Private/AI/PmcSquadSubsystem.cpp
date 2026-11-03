@@ -829,7 +829,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			return Path && Path->IsValid() && !Path->IsPartial();
 		};
 		bool bOnNav = ProjectToNav(Point, Goal);
-		if (View.bHasThreat && FMath::Abs(Point.Z - View.Threat.Location.Z) > 250.f && (!bOnNav || !HasFullPath(Goal)))
+		// A goal snapped far from the asked point (the roof edge under an advance point over the street) counts as missed too.
+		if (View.bHasThreat && FMath::Abs(Point.Z - View.Threat.Location.Z) > 250.f
+			&& (!bOnNav || FVector::Dist2D(Goal, Point) > 200.f || !HasFullPath(Goal)))
 		{
 			FVector ThreatLevel;
 			if (ProjectToNav(FVector(Point.X, Point.Y, View.Threat.Location.Z), ThreatLevel) && HasFullPath(ThreatLevel))
@@ -872,9 +874,18 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		}
 		break;
 	case EPmcOrder::Advance:
-		bTaken = View.bHasThreat && Walk(PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights), !View.Threat.bSeenNow);
+	{
+		// AdvancePoint is planar: a threat on another level (a roof above him, the street below) within the stop range in plan would
+		// leave him standing under it - he goes for the threat's own spot instead (up / down through the normal pathing).
+		FVector AdvanceGoal = PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights);
+		if (FMath::Abs(View.Threat.Location.Z - View.Location.Z) > 250.f && FVector::Dist2D(AdvanceGoal, View.Location) < 100.f)
+		{
+			AdvanceGoal = View.Threat.Location;
+		}
+		bTaken = View.bHasThreat && Walk(AdvanceGoal, !View.Threat.bSeenNow);
 		Team.Stats.Advances += bTaken ? 1 : 0;
 		break;
+	}
 	case EPmcOrder::Flank:
 	{
 		FVector Centre = FVector::ZeroVector;

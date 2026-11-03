@@ -125,7 +125,7 @@ a 3 m wall hides both sides from each other, a hound hunts him and he takes it a
 
 ```
 & "C:/Program Files/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "<repo>/CodexTactics.uproject" /Game/Maps/L_FormationLabCombat `
-  -game -nullrhi -nosound -nosplash -unattended -NoTelemetry -LevelJson=L_PmcArena.json -UseFixedTimeStep -FPS=60 -FixedSeed `
+  -game -nullrhi -nosound -nosplash -unattended -NoTelemetry "-LevelJson=L_PmcArena.json" -UseFixedTimeStep -FPS=60 -FixedSeed `
   "-ExecCmds=CodexTactics.PmcArena rounds=3 seed=7 weightsA=pmc_commander.json weightsB=pmc_commander.json opponent=pmc time=120" "-abslog=<repo>/Saved/Logs/PmcArena.log"
 ```
 
@@ -142,10 +142,15 @@ above the ground), the first with a navmesh path BOTH ways wins (24 tries); the 
 its spot on free navmesh (`SmokeUtils::FreeSpot`), facing the other. Same seed + map = the same pair; the log line `[PmcArena] spawns seed N: A
 <xyz> level L, B <xyz> level L, D m apart`. Tested in `CodexTactics.AI.PmcCommander.SpawnPair`. **Depot arena** (the night trainer's default since
 2026-11-03): map `/Game/Maps/Generated/L_Gen_Depot_1` + `-LevelJson=L_PmcArenaDepot.json` (L_PmcArena.json + the Depot's floors 300 / 600 / 900 +
-drop links on), `time_limit_s` 240, `Spawns=Random` in the trainer's `arg_template`. A walk goal at the fighter's height that hangs over a drop or has no full path (a roof squad's advance point over the street)
-is retried on the threat's level (`ExecuteOrder` Walk, only when the two levels differ by > 2.5 m). First Depot run (seed 7, 2 rounds, 240 s):
-round 1 (B on a +9 m roof, 37 m) a draw without contact - B's advance from the roof stuck 13x; round 2 (A on a +9 m roof, 52 m) contact, a ladder
-climbed, 1 kill, 3 flanks, suppression, still a time-limit draw (A's roof advance stuck 13x). Open: the stuck walks down from the high roofs.
+drop links on), `time_limit_s` 240, `Spawns=Random` in the trainer's `arg_template`. Levels in the walks: a walk goal at the fighter's height that hangs over a drop, snaps > 2 m away or has no full path (a roof squad's
+advance point over the street) is retried on the threat's level; an Advance whose planar point is his own spot while the threat is on another
+level (> 2.5 m) goes for the threat's spot (up / down via stairs / ladders / drop links). Both only when the levels differ, the flat lab is
+unchanged. **Cold is off in the arena** (fair, deterministic training): `cold_rate_mult` 0 multiplies the whole cold rate (the weather's too),
+so no frostbite / drain - but ONLY when the level JSON really loads: in PowerShell QUOTE the argument (`"-LevelJson=L_PmcArenaDepot.json"`;
+unquoted, PowerShell 5.1 splits it at the dot, the game reads `L_PmcArenaDepot`, falls back to DA_Level_level_01_outpost with cold, and the
+Depot's Blizzard froze the roof squads prone - the "HP drain" of the first runs). The night trainer passes an argument list (no split).
+Depot run (seed 7, 3 rounds, 240 s, quoted): contact in every round, spawn levels 0 / 3, 3 / 0, 3 / 0; round 1 B down to 1 survivor, round 2
+1 kill each side (a ladder climbed), round 3 B down to 1; all three time-limit draws (no full elimination), no frostbite.
 The game quits after the last round. `opponent=pmc`: team 2 with weights B, the player's squad parked (any number of rounds); `player`: the player's squad
 commanded with weights B (one round: the fallen cannot be revived); `bot`: the player's squad driven by `UPlaytestBotSubsystem` (one round, development
 builds; the bot does not yet see hostile operatives as threats - the squad's own Aggressive fire does the fighting). The attacker alternates per round
@@ -173,7 +178,7 @@ man standing +2 + lead swings x1.5 (the sign of alive A - alive B changing) + su
 **Replay / capture.** The same weights + seed + `-UseFixedTimeStep -FPS=60 -FixedSeed` reproduce the spawns, looks, weapons and the commander's
 decisions; run it RENDERED with `record=1` (the overview camera follows the fighters' centre every tick, HUD off) and the clip recorder in front:
 ```
-UnrealEditor.exe <uproject> /Game/Maps/L_FormationLabCombat -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -unattended -LevelJson=L_PmcArena.json `
+UnrealEditor.exe <uproject> /Game/Maps/L_FormationLabCombat -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -unattended "-LevelJson=L_PmcArena.json" `
   -UseFixedTimeStep -FPS=60 -FixedSeed "-ExecCmds=CodexTactics.ClipRecorder pmcarena nodirector,CodexTactics.PmcArena seed=7 rounds=1 record=1"
 ```
 -> `Saved/Screenshots/Clips/pmcarena/f_NNNNN.png`, then `python Scripts/Tools/clip_assemble.py` (the LevelGenRun mp4 pipeline,
