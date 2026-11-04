@@ -4,7 +4,9 @@
 // enemy archetype stats it fights with. Pure.
 
 import { fieldByPath, fieldValue, isJsonObject, typeWeights } from '../combatLab/pressureSettings.ts';
-import type { AmbushSpotParams, EnemyType, PlanParams, RelocateParams, TypeWeight, WatchParams } from './rules.ts';
+import type { AmbushSpotParams, EnemyType, PlanParams, RelocateParams, TypeWeight, WatchParams, SightConditionsConfig, WeatherState, PmcBandConfig } from './rules.ts';
+export type { WeatherState, SightConditionsConfig, PmcBandConfig };
+import { DEFAULT_SIGHT_CONDITIONS, DEFAULT_PMC_BAND_CONFIG } from './rules.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 
 /** FCombatPressureConfig. */
@@ -158,6 +160,7 @@ export interface EnemyStats {
   sightHalfAngleDeg: number;
   timeToDetectSeconds: number;
   hearGunshotM: number;
+  weaponId?: string;
 }
 
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
@@ -165,7 +168,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   FROSTBITTEN: { hp: 90, speed: 260, patrolSpeed: 150, ranged: false, attackRangeCm: 180, preferredRangeCm: 0, damage: 14, cooldown: 1.4, accuracy: 1, knockdownChance: 0, sightRangeM: 20, sightHalfAngleDeg: 50, timeToDetectSeconds: 1.0, hearGunshotM: 35 },
   SPITTER: { hp: 65, speed: 300, patrolSpeed: 160, ranged: true, attackRangeCm: 1500, preferredRangeCm: 1200, damage: 10, cooldown: 2.0, accuracy: 0.7, knockdownChance: 0, sightRangeM: 25, sightHalfAngleDeg: 50, timeToDetectSeconds: 0.8, hearGunshotM: 40 },
   CUTTER: { hp: 80, speed: 420, patrolSpeed: 180, ranged: false, attackRangeCm: 150, preferredRangeCm: 0, damage: 22, cooldown: 1.5, accuracy: 1, knockdownChance: 0.25, sightRangeM: 25, sightHalfAngleDeg: 55, timeToDetectSeconds: 0.7, hearGunshotM: 40 },
-  MARKSMAN: { hp: 80, speed: 300, patrolSpeed: 160, ranged: true, attackRangeCm: 4500, preferredRangeCm: 2800, damage: 45, cooldown: 4.5 /* aim_duration 2 + shot_cooldown 2.5 */, accuracy: 0.6, knockdownChance: 0.5, sightRangeM: 45, sightHalfAngleDeg: 30, timeToDetectSeconds: 1.0, hearGunshotM: 40 },
+  MARKSMAN: { hp: 80, speed: 300, patrolSpeed: 160, ranged: true, attackRangeCm: 4500, preferredRangeCm: 2800, damage: 45, cooldown: 4.5 /* aim_duration 2 + shot_cooldown 2.5 */, accuracy: 0.6, knockdownChance: 0.5, sightRangeM: 45, sightHalfAngleDeg: 30, timeToDetectSeconds: 1.0, hearGunshotM: 40, weaponId: 'sniper_rifle' },
 };
 
 /**
@@ -243,6 +246,15 @@ export interface SimConstants {
   /** A melee enemy's blows come every cooldown x this (the attack animation, the re-positioning round the squad) and its first blow after a wind-up, s. */
   meleeCadence: number;
   meleeWindupSeconds: number;
+  /** Sight conditions: weather & time-of-day multipliers over squad & human enemy sight (2026-11-04). */
+  useSightConditions?: boolean;
+  weather?: WeatherState | string;
+  sunElevationDeg?: number;
+  sightConditions?: SightConditionsConfig;
+  /** PMC engagement bands: fighting inside weapon reach band, backing off when too close (2026-11-04). */
+  useEngagementBands?: boolean;
+  engagementBands?: PmcBandConfig;
+  weaponReachesCm?: Record<string, number>;
 }
 
 export const DEFAULT_SIM_CONSTANTS: SimConstants = {
@@ -292,6 +304,20 @@ export const DEFAULT_SIM_CONSTANTS: SimConstants = {
   enemyHpScale: 1.5, // the stand-in HP x 1.5 (calibration 2026-11-02: fights 0.8 x the Unreal length, rounds 1.0 x, knockdowns 0.9 x - at x 1 the fights were 0.44 x)
   meleeCadence: 2.5,
   meleeWindupSeconds: 1.0,
+  useSightConditions: false,
+  weather: 'clear',
+  sunElevationDeg: 45,
+  sightConditions: DEFAULT_SIGHT_CONDITIONS,
+  useEngagementBands: false,
+  engagementBands: DEFAULT_PMC_BAND_CONFIG,
+  weaponReachesCm: {
+    m16: 6000,
+    sniper_rifle: 12000,
+    pistol: 2500,
+    shotgun: 1500,
+    plasma_carbine: 1600,
+    marksman_rifle: 4500,
+  },
 };
 
 /** The fight-cover block of a level JSON "bot_route" (BotCoverRules params) applied over the constants. */
@@ -308,6 +334,91 @@ export function withBotRoute(constants: SimConstants, botRoute: unknown): SimCon
     if (typeof fc.min_threat_cm === 'number') out.coverMinThreatCm = fc.min_threat_cm;
     if (typeof fc.min_facing_cos === 'number') out.coverMinFacingCos = fc.min_facing_cos;
     if (fc.enabled === false) out.coverSearchCm = 0;
+  }
+  return out;
+}
+
+/** Parse sight conditions from enemy_perception.json (or raw sight_conditions block). */
+export function parseSightConditions(doc: unknown): SightConditionsConfig {
+  const root = isJsonObject(doc) ? doc : {};
+  const s = isJsonObject(root.sight_conditions) ? (root.sight_conditions as Record<string, unknown>) : root;
+  const weatherObj = isJsonObject(s.weather) ? (s.weather as Record<string, unknown>) : {};
+  const todObj = isJsonObject(s.time_of_day) ? (s.time_of_day as Record<string, unknown>) : {};
+
+  const weather: Record<string, number> = { ...DEFAULT_SIGHT_CONDITIONS.weather };
+  for (const [k, v] of Object.entries(weatherObj)) {
+    if (typeof v === 'number' && Number.isFinite(v)) weather[k] = v;
+  }
+
+  const tod = { ...DEFAULT_SIGHT_CONDITIONS.time_of_day };
+  if (typeof todObj.day === 'number') tod.day = todObj.day;
+  if (typeof todObj.twilight === 'number') tod.twilight = todObj.twilight;
+  if (typeof todObj.night === 'number') tod.night = todObj.night;
+  if (typeof todObj.day_sun_elevation_deg === 'number') tod.day_sun_elevation_deg = todObj.day_sun_elevation_deg;
+  if (typeof todObj.night_sun_elevation_deg === 'number') tod.night_sun_elevation_deg = todObj.night_sun_elevation_deg;
+
+  return {
+    squad_base_range_m: typeof s.squad_base_range_m === 'number' ? s.squad_base_range_m : DEFAULT_SIGHT_CONDITIONS.squad_base_range_m,
+    human_enemy_range_multiplier: typeof s.human_enemy_range_multiplier === 'number' ? s.human_enemy_range_multiplier : DEFAULT_SIGHT_CONDITIONS.human_enemy_range_multiplier,
+    weather,
+    time_of_day: tod,
+  };
+}
+
+/** Parse PMC engagement bands config from pmc_commander.json. */
+export function parsePmcBandConfig(commanderDoc: unknown, weaponsDoc?: unknown): PmcBandConfig {
+  const c = isJsonObject(commanderDoc) ? commanderDoc : {};
+  const bandsObj = isJsonObject(c.engagement_bands) ? (c.engagement_bands as Record<string, unknown>) : {};
+
+  const bands: Record<string, { min_m: number; max_m: number; close_quarters?: boolean }> = {
+    ...DEFAULT_PMC_BAND_CONFIG.bands,
+  };
+
+  for (const [k, v] of Object.entries(bandsObj)) {
+    if (isJsonObject(v)) {
+      const min_m = typeof v.min_m === 'number' ? v.min_m : 0;
+      const max_m = typeof v.max_m === 'number' ? v.max_m : min_m;
+      const close_quarters = typeof v.close_quarters === 'boolean' ? v.close_quarters : undefined;
+      bands[k] = { min_m, max_m, ...(close_quarters !== undefined ? { close_quarters } : {}) };
+    }
+  }
+
+  void weaponsDoc;
+
+  return {
+    useEngagementBands: typeof c.use_engagement_bands === 'boolean' ? c.use_engagement_bands : DEFAULT_PMC_BAND_CONFIG.useEngagementBands,
+    defaultBandMinFrac: typeof c.default_band_min_frac === 'number' ? c.default_band_min_frac : DEFAULT_PMC_BAND_CONFIG.defaultBandMinFrac,
+    defaultBandMaxFrac: typeof c.default_band_max_frac === 'number' ? c.default_band_max_frac : DEFAULT_PMC_BAND_CONFIG.defaultBandMaxFrac,
+    bandReachFrac: typeof c.band_reach_frac === 'number' ? c.band_reach_frac : DEFAULT_PMC_BAND_CONFIG.bandReachFrac,
+    standoff: typeof c.standoff === 'number' ? c.standoff : DEFAULT_PMC_BAND_CONFIG.standoff,
+    standoffTriggerFrac: typeof c.standoff_trigger_frac === 'number' ? c.standoff_trigger_frac : DEFAULT_PMC_BAND_CONFIG.standoffTriggerFrac,
+    bandPosition: typeof c.band_position === 'number' ? c.band_position : DEFAULT_PMC_BAND_CONFIG.bandPosition,
+    bandCloseFloor: typeof c.band_close_floor === 'number' ? c.band_close_floor : DEFAULT_PMC_BAND_CONFIG.bandCloseFloor,
+    cornerBonus: typeof c.corner_bonus === 'number' ? c.corner_bonus : DEFAULT_PMC_BAND_CONFIG.cornerBonus,
+    closeIn: typeof c.close_in === 'number' ? c.close_in : DEFAULT_PMC_BAND_CONFIG.closeIn,
+    proneMinBandCm: typeof c.prone_min_band_cm === 'number' ? c.prone_min_band_cm : DEFAULT_PMC_BAND_CONFIG.proneMinBandCm,
+    advanceStopRangeFrac: typeof c.advance_stop_range_frac === 'number' ? c.advance_stop_range_frac : DEFAULT_PMC_BAND_CONFIG.advanceStopRangeFrac,
+    flankDistanceCm: typeof c.flank_distance_cm === 'number' ? c.flank_distance_cm : 1000,
+    bands,
+  };
+}
+
+/** Parse weapon attack ranges in cm from weapons_tuning.json. */
+export function parseWeaponReaches(weaponsDoc: unknown): Record<string, number> {
+  const out: Record<string, number> = {
+    m16: 6000,
+    sniper_rifle: 12000,
+    pistol: 2500,
+    shotgun: 1500,
+    plasma_carbine: 1600,
+    marksman_rifle: 4500,
+  };
+  if (!isJsonObject(weaponsDoc)) return out;
+  const w = isJsonObject(weaponsDoc.weapons) ? (weaponsDoc.weapons as Record<string, unknown>) : {};
+  for (const [id, row] of Object.entries(w)) {
+    if (isJsonObject(row) && typeof row.attack_range_m === 'number') {
+      out[id] = row.attack_range_m * 100;
+    }
   }
   return out;
 }

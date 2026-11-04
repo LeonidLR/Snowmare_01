@@ -14,7 +14,9 @@ import { configValues } from '../movement/config.ts';
 import { rng, segmentBlocked } from '../movement/geometry.ts';
 import { AGENT_RADIUS } from '../movement/nav.ts';
 import { runBatch, seedRange } from './batch.ts';
-import { DEFAULT_SIM_CONSTANTS, parsePressureConfig } from './config.ts';
+import { DEFAULT_SIM_CONSTANTS, parsePressureConfig, parseSightConditions, parsePmcBandConfig, parseWeaponReaches } from './config.ts';
+import { SightConditionsRules, PmcEngagementRules, DEFAULT_SIGHT_CONDITIONS, DEFAULT_PMC_BAND_CONFIG } from './rules.ts';
+import { loadProjectCombatRules } from './node/files.ts';
 import { calibrationMarkdown, calibrationTable } from './report.ts';
 import type { PressureBox, Watcher } from './rules.ts';
 import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, DEFAULT_PLAN_PARAMS, DEFAULT_RELOCATE_PARAMS, DEFAULT_SPOT_PARAMS, DEFAULT_WATCH_PARAMS, HeightSightRules, findDeltaAngleDeg, unwindDeg } from './rules.ts';
@@ -415,4 +417,163 @@ test('runBatch writes a valid codex.combat_sim/1 document with a <= 40-line repo
   assert.ok(Object.values(batch.aggregate.eventOutcomes).reduce((s, v) => s + v, 0) > 0);
   assert.equal((batch.constants as { dt: number }).dt, DEFAULT_SIM_CONSTANTS.dt);
   assert.deepEqual(validateCombatSimBatch({ schema: 'nope' }).length > 0, true);
+});
+
+// --- SightConditionsRules (user request 2026-11-04) ------------------------------------------------------------------------
+
+test('SightConditionsRules: weather, daylight, combined conditions, armed human check, squad & enemy sight ranges', () => {
+  const cfg = DEFAULT_SIGHT_CONDITIONS;
+
+  // Weather multiplier
+  assert.equal(SightConditionsRules.weatherMultiplier(cfg, 'clear'), 1.0);
+  assert.equal(SightConditionsRules.weatherMultiplier(cfg, 'overcast'), 0.85);
+  assert.equal(SightConditionsRules.weatherMultiplier(cfg, 'snowfall'), 0.6);
+  assert.equal(SightConditionsRules.weatherMultiplier(cfg, 'blizzard'), 0.5);
+  assert.equal(SightConditionsRules.weatherMultiplier(cfg, 'fog'), 0.4);
+  assert.equal(SightConditionsRules.weatherMultiplier(cfg, 'unknown_weather'), 1.0);
+
+  // Blended weather multiplier
+  assert.equal(SightConditionsRules.blendedWeatherMultiplier(cfg, 'clear', 'snowfall', 0), 1.0);
+  assert.equal(SightConditionsRules.blendedWeatherMultiplier(cfg, 'clear', 'snowfall', 1), 0.6);
+  assert.equal(SightConditionsRules.blendedWeatherMultiplier(cfg, 'clear', 'snowfall', 0.5), 0.8);
+
+  // Daylight multiplier by sun elevation
+  assert.equal(SightConditionsRules.daylightMultiplier(cfg, 10), 1.0);
+  assert.equal(SightConditionsRules.daylightMultiplier(cfg, 45), 1.0);
+  assert.equal(SightConditionsRules.daylightMultiplier(cfg, 0), 0.7);
+  assert.equal(SightConditionsRules.daylightMultiplier(cfg, -10), 0.35);
+  assert.equal(SightConditionsRules.daylightMultiplier(cfg, -20), 0.35);
+  // Linear daylight blend
+  assert.equal(SightConditionsRules.daylightMultiplier(cfg, 5), 0.85); // 0.7 + (1.0 - 0.7) * 0.5
+  assert.ok(Math.abs(SightConditionsRules.daylightMultiplier(cfg, -5) - 0.525) < 1e-6); // 0.7 + (0.35 - 0.7) * 0.5
+
+  // Combined conditions multiplier
+  assert.equal(SightConditionsRules.conditionsMultiplier(cfg, 'clear', 10), 1.0);
+  assert.equal(Math.round(SightConditionsRules.conditionsMultiplier(cfg, 'overcast', 0) * 1000) / 1000, 0.595); // 0.85 * 0.7
+  assert.equal(Math.round(SightConditionsRules.conditionsMultiplier(cfg, 'blizzard', -10) * 1000) / 1000, 0.175); // 0.5 * 0.35
+
+  // isArmedHuman
+  assert.equal(SightConditionsRules.isArmedHuman('MARKSMAN'), true);
+  assert.equal(SightConditionsRules.isArmedHuman('PMC'), true);
+  assert.equal(SightConditionsRules.isArmedHuman('HOUND'), false);
+  assert.equal(SightConditionsRules.isArmedHuman('SPITTER'), false);
+  assert.equal(SightConditionsRules.isArmedHuman('CUTTER'), false);
+  assert.equal(SightConditionsRules.isArmedHuman('FROSTBITTEN'), false);
+
+  // Squad sight range
+  const groundRange = SightConditionsRules.squadSightRange(cfg, DEFAULT_HEIGHT_SIGHT, 160, 'clear', 15);
+  assert.equal(groundRange, 12000, '120m base on clear day on ground');
+  const nightRange = SightConditionsRules.squadSightRange(cfg, DEFAULT_HEIGHT_SIGHT, 160, 'clear', -10);
+  assert.equal(nightRange, 12000 * 0.35, 'night drops squad sight by 0.35');
+  const heightRange = SightConditionsRules.squadSightRange(cfg, DEFAULT_HEIGHT_SIGHT, 300 + 160, 'clear', 15);
+  assert.equal(heightRange, 12000 * 1.25, 'height level +1 adds +25%');
+
+  // Enemy sight range: beasts keep base, humans scaled by human_enemy_range_multiplier (2.0)
+  const beastSight = SightConditionsRules.enemySightRange(cfg, 15, false, 'clear', 15);
+  assert.equal(beastSight, 1500, 'hound 15m base stays 15m');
+  const marksmanSight = SightConditionsRules.enemySightRange(cfg, 45, true, 'clear', 15);
+  assert.equal(marksmanSight, 4500 * 2.0, 'marksman 45m scaled x2 = 90m on clear day');
+  const marksmanNightBlizzard = SightConditionsRules.enemySightRange(cfg, 45, true, 'blizzard', -10);
+  assert.equal(marksmanNightBlizzard, 4500 * 2.0 * 0.5 * 0.35, 'marksman in blizzard night');
+});
+
+// --- PmcEngagementRules (user request 2026-11-04) --------------------------------------------------------------------------
+
+test('PmcEngagementRules: resolveBand, isValidBand, bandFactor, isTooClose, advanceStopCm, advancePoint, standoffPoint', () => {
+  const cfg = DEFAULT_PMC_BAND_CONFIG;
+
+  // resolveBand
+  const m16Band = PmcEngagementRules.resolveBand('m16', 6000, cfg);
+  assert.equal(m16Band.minCm, 2500);
+  assert.equal(m16Band.maxCm, 5700, 'capped at 0.95 * 60m = 57m');
+  assert.equal(m16Band.closeQuarters, false);
+  assert.ok(PmcEngagementRules.isValidBand(m16Band));
+
+  const sniperBand = PmcEngagementRules.resolveBand('sniper_rifle', 12000, cfg);
+  assert.equal(sniperBand.minCm, 4500);
+  assert.equal(sniperBand.maxCm, 11000);
+  assert.equal(sniperBand.closeQuarters, false);
+
+  const pistolBand = PmcEngagementRules.resolveBand('pistol', 2500, cfg);
+  assert.equal(pistolBand.minCm, 1000);
+  assert.equal(pistolBand.maxCm, 2375, 'capped at 0.95 * 25m = 23.75m');
+
+  const shotgunBand = PmcEngagementRules.resolveBand('shotgun', 1500, cfg);
+  assert.equal(shotgunBand.minCm, 400);
+  assert.equal(shotgunBand.maxCm, 1400);
+  assert.equal(shotgunBand.closeQuarters, true);
+
+  // default fallback for unknown weapon
+  const unknownBand = PmcEngagementRules.resolveBand('unknown_gun', 5000, cfg);
+  assert.equal(unknownBand.minCm, 5000 * 0.5);
+  assert.equal(unknownBand.maxCm, 5000 * 0.95);
+
+  // bandFactor
+  assert.equal(PmcEngagementRules.bandFactor(3500, m16Band, cfg), 1.0, 'inside band: 1.0');
+  assert.equal(PmcEngagementRules.bandFactor(0, m16Band, cfg), 0.1, 'at point-blank range: bandCloseFloor 0.1');
+  assert.ok(PmcEngagementRules.bandFactor(1250, m16Band, cfg) < 1.0, 'below band: quadratic falloff');
+  assert.ok(PmcEngagementRules.bandFactor(8000, m16Band, cfg) < 1.0, 'above band: linear falloff');
+
+  // isTooClose: standoffTriggerFrac 0.8 * minCm
+  assert.equal(PmcEngagementRules.isTooClose(1500, m16Band, cfg), true, '15m < 0.8 * 25m (20m)');
+  assert.equal(PmcEngagementRules.isTooClose(2200, m16Band, cfg), false, '22m > 20m');
+  assert.equal(PmcEngagementRules.isTooClose(200, shotgunBand, cfg), false, 'shotgun is close quarters: never too close');
+
+  // advanceStopCm
+  const m16Stop = PmcEngagementRules.advanceStopCm(6000, m16Band, cfg);
+  assert.equal(m16Stop, 3600, '0.6 * 60m = 36m inside [25m, 57m]');
+
+  // advancePoint
+  const adv = PmcEngagementRules.advancePoint([0, 0], [5000, 0], 6000, cfg, m16Band);
+  assert.ok(near(adv, [1400, 0]), 'advances until distance reaches 3600 cm (5000 - 3600 = 1400)');
+
+  // standoffPoint: straight away from threat to mid-band distance (0.5 * (2500 + 5700) = 4100 cm)
+  const retreat = PmcEngagementRules.standoffPoint([1500, 0], [0, 0], m16Band);
+  assert.ok(near(retreat, [4100, 0]), 'retreats to middle of m16 band (41 m)');
+});
+
+// --- Project data loading & parsing ----------------------------------------------------------------------------------------
+
+test('parseSightConditions and parsePmcBandConfig parse project configs accurately', () => {
+  const rules = loadProjectCombatRules(ROOT);
+  assert.equal(rules.sightConditions.squad_base_range_m, 120);
+  assert.equal(rules.sightConditions.human_enemy_range_multiplier, 2.0);
+  assert.equal(rules.sightConditions.weather.clear, 1.0);
+  assert.equal(rules.sightConditions.weather.snowfall, 0.6);
+  assert.equal(rules.sightConditions.time_of_day.night, 0.35);
+
+  assert.equal(rules.pmcBandConfig.useEngagementBands, true);
+  assert.equal(rules.pmcBandConfig.bands.m16.max_m, 60);
+  assert.equal(rules.pmcBandConfig.bands.shotgun.close_quarters, true);
+  assert.equal(rules.weaponReachesCm.m16, 6000);
+  assert.equal(rules.weaponReachesCm.sniper_rifle, 12000);
+  assert.equal(rules.weaponReachesCm.pistol, 2500);
+  assert.equal(rules.weaponReachesCm.shotgun, 1500);
+});
+
+// --- Simulator with sight conditions & engagement bands --------------------------------------------------------------------
+
+test('runCombatSim with sight conditions and engagement bands enabled: records engagement metrics', () => {
+  const projectRules = loadProjectCombatRules(ROOT);
+  const track = buildSquadTrack(new SimWorld(fixture, parsePressureConfig(fixture.pressure)), formationConfig, { members: 3 });
+  const world = new SimWorld(fixture, parsePressureConfig(fixture.pressure));
+
+  const result = runCombatSim({
+    world,
+    track,
+    seed: 42,
+    durationSec: 180,
+    constants: {
+      ...DEFAULT_SIM_CONSTANTS,
+      useSightConditions: true,
+      sightConditions: projectRules.sightConditions,
+      useEngagementBands: true,
+      engagementBands: projectRules.pmcBandConfig,
+      weaponReachesCm: projectRules.weaponReachesCm,
+    },
+  });
+
+  assert.ok(result.metrics.contacts >= 0);
+  assert.ok(typeof result.metrics.median_engagement_distance_m === 'number');
+  assert.ok(typeof result.metrics.shots_under_10m_fraction === 'number');
 });

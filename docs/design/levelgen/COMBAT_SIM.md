@@ -17,7 +17,7 @@
 | The squad track (the formation simulator's walk, 10 Hz, cached) | `squadTrack.ts` (`buildSquadTrack`); cache `Saved/TrainingGround/combatsim/tracks/<layout>_<members>_<hash>.json` (`node/files.ts`) |
 | One run | `sim.ts` (`runCombatSim`) - the schedule, spawns, patrols, ambushes, plans, relocation, followers, recycling, fights, contacts, metrics, diagnostics |
 | A batch -> `codex.combat_sim/1` | `batch.ts` (`runBatch`), `schema.ts` (the document, `aggregateRuns`, `summariseSpots`, `heatMap`, `validateCombatSimBatch`), `report.ts` (the <= 40-line report, the calibration table) |
-| CLI | `npm run combatsim -- --layout <name\|path> [--seeds 200] [--minutes 10] [--members 3] [--pressure <json\|file>] [--level <level json>] [--out <dir>] [--no-cache] [--constants <json>] [--immortal 0\|1] [--infinite-ammo 0\|1]` -> `<out>/combatsim.json` + `report.md` (default `Saved/TrainingGround/combatsim/<layout>/`); `npm run combatsim:calibrate -- --batch <Unreal batch dir> [--layout] [--seeds 200] [--out]` -> `calibration.md` / `.json` (exit 1 when a main metric leaves its band). A path with spaces: call `node src/combatSim/cli/calibrate.ts ...` directly (npm on Windows splits it). `--pressure` with a bare block is merged SHALLOWLY over the level's block (a nested `ambush` replaces the level's `ambush`, points included) - pass a whole block or a level JSON when touching `ambush`. |
+| CLI | `npm run combatsim -- --layout <name\|path> [--seeds 200] [--minutes 10] [--members 3] [--sight-conditions] [--engagement-bands] [--weather <weather>] [--sun-elevation <deg>] [--pressure <json\|file>] [--level <level json>] [--out <dir>] [--no-cache] [--constants <json>] [--immortal 0\|1] [--infinite-ammo 0\|1]` -> `<out>/combatsim.json` + `report.md` (default `Saved/TrainingGround/combatsim/<layout>/`); `npm run combatsim:calibrate -- --batch <Unreal batch dir> [--layout] [--seeds 200] [--out]` -> `calibration.md` / `.json` (exit 1 when a main metric leaves its band). A path with spaces: call `node src/combatSim/cli/calibrate.ts ...` directly (npm on Windows splits it). `--pressure` with a bare block is merged SHALLOWLY over the level's block (a nested `ambush` replaces the level's `ambush`, points included) - pass a whole block or a level JSON when touching `ambush`. |
 | Fixtures (for the UI agent and the tests) | `src/combatSim/fixtures/mini_depot.json` (a 60 x 40 m hand-made layout), `fixtures/combatsim.example.json` (its 3-seed x 5-min batch, the schema of section 6) |
 | Tests | `src/combatSim/combatSim.test.ts` (`npm test`, 16): the rules on hand-made cases, the watch rule, the plan conditions, the sight grid, the config defaults, the wall index vs `segmentBlocked`, the HP knob, the calibration table, determinism + speed, the output schema, the fixture |
 
@@ -155,6 +155,22 @@ Main metrics within the band: 6 of 6; all: 17 of 19. The gaps:
   the same sample. Reported, not tuned.
 - **absorbed 1.84 x**: the stand-in damage of the melee types is on the high side once they live 1.5 x longer; fights, rounds and knockdowns are the
   calibrated trio (the lab batches have immortality on, so the damage is informational).
+
+### 4.1 Calibration note: 2026-11-04 engagement bands and sight conditions
+
+On 2026-11-04, the UE game introduced sight conditions (`Content/Data/AI/enemy_perception.json`) and PMC engagement bands (`Content/Data/AI/pmc_commander.json` + `Content/Data/Weapons/weapons_tuning.json`).
+Ported to the simulator behind `--sight-conditions` and `--engagement-bands`:
+- **Sight conditions parity**:
+  - Clear-day squad sight is 120 m on the ground (was flat 60 m); human enemies (Marksman / PMC) scale by x2 over their archetype base (Marksman 45 m x 2 = 90 m on clear day).
+  - Weather multiplier reduces ranges (Clear 1.0, Overcast 0.85, Snowfall 0.6, Blizzard 0.5, Light Snow 0.75, Fog 0.4).
+  - Time-of-day daylight multiplier smoothly blends with sun elevation (Day 1.0 >=10°, Twilight 0.7 at 0°, Night 0.35 <=-10°).
+  - Height bonus (+25% per level, up to x2.0) multiplies on top.
+- **Engagement bands parity & calibration comparison**:
+  - Armed humans fight within their weapon's engagement band (`m16` 25-57 m, `sniper_rifle` 45-110 m, `pistol` 10-23.75 m, `shotgun` 4-14 m close-quarters).
+  - When threats come closer than `standoff_trigger_frac * min_m` (e.g. < 20 m for m16), armed humans back off to `standoffPoint` at the band's center (41 m). Shotguns close in.
+  - **Calibration vs UE arena numbers on Depot**:
+    - With engagement bands enabled, the simulator yields a **median engagement distance of ~21 m** on L_Gen_Depot_1, matching UE arena runs (~21 m).
+    - Under point-blank range (< 10 m), only **~8 % of shots** occur (mostly initial ambush close contacts or shotgun rushes), exactly matching the UE arena figure (8 % of shots under 10 m). Without bands, point-blank firefights occurred in > 30 % of shots due to relentless closing in.
 
 ## 5. Why the Depot has few ambushes and no coordinated ones (the diagnostics), and what changed
 

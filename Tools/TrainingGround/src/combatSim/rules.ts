@@ -676,3 +676,245 @@ export const AmbushRelocateRules = {
     return elapsed >= limit ? 'timed_out' : 'running';
   },
 };
+
+
+// --- SightConditionsRules (Source/CodexTactics/Public/Combat/SightRules.h, user request 2026-11-04) ----------------
+export type WeatherState = 'clear' | 'overcast' | 'snowfall' | 'blizzard' | 'light_snow' | 'fog';
+
+export interface SightConditionsConfig {
+  squad_base_range_m: number;
+  human_enemy_range_multiplier: number;
+  weather: Record<string, number>;
+  time_of_day: {
+    day: number;
+    twilight: number;
+    night: number;
+    day_sun_elevation_deg: number;
+    night_sun_elevation_deg: number;
+  };
+}
+
+export const DEFAULT_SIGHT_CONDITIONS: SightConditionsConfig = {
+  squad_base_range_m: 120,
+  human_enemy_range_multiplier: 2.0,
+  weather: { clear: 1.0, overcast: 0.85, snowfall: 0.6, blizzard: 0.5, light_snow: 0.75, fog: 0.4 },
+  time_of_day: { day: 1.0, twilight: 0.7, night: 0.35, day_sun_elevation_deg: 10, night_sun_elevation_deg: -10 },
+};
+
+export const SightConditionsRules = {
+  /** The range multiplier of one weather state. */
+  weatherMultiplier(config: SightConditionsConfig, weather: WeatherState | string): number {
+    const w = config.weather[weather];
+    return typeof w === 'number' && Number.isFinite(w) ? Math.max(w, 0) : 1;
+  },
+
+  /** Blended weather multiplier between From and To by Blend in [0, 1]. */
+  blendedWeatherMultiplier(config: SightConditionsConfig, from: WeatherState | string, to: WeatherState | string, blend: number): number {
+    const wFrom = SightConditionsRules.weatherMultiplier(config, from);
+    const wTo = SightConditionsRules.weatherMultiplier(config, to);
+    const b = Math.min(1, Math.max(0, blend));
+    return wFrom + (wTo - wFrom) * b;
+  },
+
+  /** Time-of-day daylight multiplier by sun elevation degrees. */
+  daylightMultiplier(config: SightConditionsConfig, sunElevationDeg: number): number {
+    if (!Number.isFinite(sunElevationDeg)) return Math.max(config.time_of_day.day, 0);
+    const dayDeg = Math.max(config.time_of_day.day_sun_elevation_deg, 0.01);
+    const nightDeg = Math.min(config.time_of_day.night_sun_elevation_deg, -0.01);
+    let m: number;
+    if (sunElevationDeg >= 0) {
+      const alpha = Math.min(1, Math.max(0, sunElevationDeg / dayDeg));
+      m = config.time_of_day.twilight + (config.time_of_day.day - config.time_of_day.twilight) * alpha;
+    } else {
+      const alpha = Math.min(1, Math.max(0, sunElevationDeg / nightDeg));
+      m = config.time_of_day.twilight + (config.time_of_day.night - config.time_of_day.twilight) * alpha;
+    }
+    return Math.max(m, 0);
+  },
+
+  /** Combined conditions sight multiplier: weather x time-of-day. */
+  conditionsMultiplier(
+    config: SightConditionsConfig,
+    weather: WeatherState | string,
+    sunElevationDeg: number,
+    to?: WeatherState | string,
+    blend?: number
+  ): number {
+    const wm = to !== undefined && blend !== undefined && blend > 0
+      ? SightConditionsRules.blendedWeatherMultiplier(config, weather, to, blend)
+      : SightConditionsRules.weatherMultiplier(config, weather);
+    const dm = SightConditionsRules.daylightMultiplier(config, sunElevationDeg);
+    return wm * dm;
+  },
+
+  /** Armed human check (Marksman, PMC fighters, ladder climbers) */
+  isArmedHuman(type: EnemyType | string): boolean {
+    return type === 'MARKSMAN' || type === 'PMC';
+  },
+
+  /** Full squad sight range in cm. */
+  squadSightRange(
+    config: SightConditionsConfig,
+    heightConfig: HeightSightConfig,
+    eyeAboveGroundCm: number,
+    weather: WeatherState | string = 'clear',
+    sunElevationDeg = 45,
+    to?: WeatherState | string,
+    blend?: number
+  ): number {
+    const base = config.squad_base_range_m * 100;
+    const cond = SightConditionsRules.conditionsMultiplier(config, weather, sunElevationDeg, to, blend);
+    const height = HeightSightRules.rangeMultiplierAt(heightConfig, eyeAboveGroundCm);
+    return base * cond * height;
+  },
+
+  /** Enemy sight range in cm. */
+  enemySightRange(
+    config: SightConditionsConfig,
+    baseSightM: number,
+    isHuman: boolean,
+    weather: WeatherState | string = 'clear',
+    sunElevationDeg = 45,
+    to?: WeatherState | string,
+    blend?: number
+  ): number {
+    const humanScale = isHuman ? Math.max(config.human_enemy_range_multiplier, 1) : 1;
+    const cond = SightConditionsRules.conditionsMultiplier(config, weather, sunElevationDeg, to, blend);
+    return baseSightM * 100 * humanScale * cond;
+  },
+};
+
+// --- PmcEngagementRules (Source/CodexTactics/Public/AI/PmcCommanderRules.h, user request 2026-11-04) ----------------
+export interface EngagementBand {
+  minCm: number;
+  maxCm: number;
+  closeQuarters: boolean;
+}
+
+export interface PmcBandConfig {
+  useEngagementBands: boolean;
+  defaultBandMinFrac: number;
+  defaultBandMaxFrac: number;
+  bandReachFrac: number;
+  standoff: number;
+  standoffTriggerFrac: number;
+  bandPosition: number;
+  bandCloseFloor: number;
+  cornerBonus: number;
+  closeIn: number;
+  proneMinBandCm: number;
+  advanceStopRangeFrac?: number;
+  flankDistanceCm?: number;
+  bands: Record<string, { min_m: number; max_m: number; close_quarters?: boolean }>;
+}
+
+export const DEFAULT_PMC_BAND_CONFIG: PmcBandConfig = {
+  useEngagementBands: true,
+  defaultBandMinFrac: 0.5,
+  defaultBandMaxFrac: 0.95,
+  bandReachFrac: 0.95,
+  standoff: 1.3,
+  standoffTriggerFrac: 0.8,
+  bandPosition: 0.7,
+  bandCloseFloor: 0.1,
+  cornerBonus: 0.2,
+  closeIn: 1.6,
+  proneMinBandCm: 1500,
+  advanceStopRangeFrac: 0.6,
+  bands: {
+    m16: { min_m: 25, max_m: 60 },
+    plasma_carbine: { min_m: 25, max_m: 60 },
+    sniper_rifle: { min_m: 45, max_m: 110 },
+    pistol: { min_m: 10, max_m: 25 },
+    shotgun: { min_m: 4, max_m: 14, close_quarters: true },
+    lmg: { min_m: 30, max_m: 70 },
+  },
+};
+
+export const PmcEngagementRules = {
+  /** Resolve weapon engagement band given reach and tuning. */
+  resolveBand(weaponId: string, weaponRangeCm: number, weights: PmcBandConfig): EngagementBand {
+    const invalid: EngagementBand = { minCm: 0, maxCm: 0, closeQuarters: false };
+    if (!weights.useEngagementBands || weaponRangeCm <= 0) return invalid;
+
+    const row = weights.bands[weaponId];
+    let minCm: number;
+    let maxCm: number;
+    let closeQuarters = false;
+
+    if (row) {
+      minCm = row.min_m * 100;
+      maxCm = row.max_m * 100;
+      closeQuarters = !!row.close_quarters;
+    } else {
+      minCm = weaponRangeCm * Math.max(weights.defaultBandMinFrac, 0);
+      maxCm = weaponRangeCm * Math.max(weights.defaultBandMaxFrac, 0);
+    }
+
+    const reach = weaponRangeCm * Math.min(1, Math.max(0.1, weights.bandReachFrac));
+    maxCm = Math.min(Math.max(maxCm, 0), reach);
+    minCm = Math.min(0.8 * maxCm, Math.max(0, minCm));
+
+    return { minCm, maxCm, closeQuarters };
+  },
+
+  isValidBand(b: EngagementBand): boolean {
+    return b.maxCm > 0 && b.maxCm >= b.minCm;
+  },
+
+  /** How well a distance fits inside the band, 0..1 (quadratic drop below minCm to bandCloseFloor). */
+  bandFactor(distanceCm: number, band: EngagementBand, weights: PmcBandConfig): number {
+    if (!PmcEngagementRules.isValidBand(band)) return 1.0;
+    if (distanceCm < band.minCm) {
+      const t = Math.min(1, Math.max(0, distanceCm / Math.max(band.minCm, 1)));
+      const floor = Math.min(1, Math.max(0, weights.bandCloseFloor));
+      return floor + (1.0 - floor) * t * t;
+    }
+    if (distanceCm > band.maxCm) {
+      const t = Math.min(1, Math.max(0, (distanceCm - band.maxCm) / Math.max(band.maxCm, 1)));
+      return 1.0 + (0.5 - 1.0) * t;
+    }
+    return 1.0;
+  },
+
+  /** Whether the threat is closer than standoffTriggerFrac * band.minCm and not close-quarters. */
+  isTooClose(distanceCm: number, band: EngagementBand, weights: PmcBandConfig): boolean {
+    return PmcEngagementRules.isValidBand(band) && !band.closeQuarters && distanceCm < band.minCm * Math.max(weights.standoffTriggerFrac, 0);
+  },
+
+  /** Advance stop distance: clamp(advanceStopRangeFrac * reach, minCm, maxCm). */
+  advanceStopCm(weaponRangeCm: number, band: EngagementBand, weights: PmcBandConfig): number {
+    const stop = weaponRangeCm * (weights.advanceStopRangeFrac ?? 0.6);
+    return PmcEngagementRules.isValidBand(band) ? Math.min(band.maxCm, Math.max(band.minCm, stop)) : stop;
+  },
+
+  /** Where an Advance point is located short of the threat. */
+  advancePoint(fighter: Vec2, threat: Vec2, weaponRangeCm: number, weights: PmcBandConfig, band: EngagementBand): Vec2 {
+    const d = dist(fighter, threat);
+    const stop = PmcEngagementRules.advanceStopCm(weaponRangeCm, band, weights);
+    if (d <= stop) return fighter;
+    let dir = sub(threat, fighter);
+    const l = Math.hypot(dir[0], dir[1]);
+    if (l < 1e-4) return fighter;
+    dir = [dir[0] / l, dir[1] / l];
+    return [fighter[0] + dir[0] * (d - stop), fighter[1] + dir[1] * (d - stop)];
+  },
+
+  /** The flank point distance from the threat clamped to band. */
+  flankDistanceFor(band: EngagementBand, weights: PmcBandConfig): number {
+    const f = weights.flankDistanceCm ?? 1000;
+    return PmcEngagementRules.isValidBand(band) ? Math.min(band.maxCm, Math.max(band.minCm, f)) : f;
+  },
+
+  /** Standoff retreat point: straight away from the threat to the middle of the band. */
+  standoffPoint(fighter: Vec2, threat: Vec2, band: EngagementBand): Vec2 {
+    const distance = dist(fighter, threat);
+    const want = 0.5 * (band.minCm + band.maxCm);
+    if (!PmcEngagementRules.isValidBand(band) || distance >= want) return fighter;
+    let away = sub(fighter, threat);
+    const l = Math.hypot(away[0], away[1]);
+    if (l < 1e-4) away = [-1, 0];
+    else away = [away[0] / l, away[1] / l];
+    return [fighter[0] + away[0] * (want - distance), fighter[1] + away[1] * (want - distance)];
+  },
+};

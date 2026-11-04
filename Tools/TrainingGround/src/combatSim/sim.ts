@@ -11,7 +11,7 @@ import { add, dirOf, dist, normYaw, rng, scale, segmentBlocked, sub, yawOf } fro
 import type { EnemyStats, SimCheats, SimConstants } from './config.ts';
 import { DEFAULT_SIM_CONSTANTS, ENEMY_STATS } from './config.ts';
 import type { AmbushSpot, EnemyType, Party, PlanPhase, PressureBox, RouteCandidate, SpawnKind, SpotKind, Watcher } from './rules.ts';
-import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, HeightSightRules, PLAN_PARTIES, findDeltaAngleDeg } from './rules.ts';
+import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, HeightSightRules, SightConditionsRules, PmcEngagementRules, PLAN_PARTIES, findDeltaAngleDeg } from './rules.ts';
 import type { SquadTrack, TrackFrame } from './squadTrack.ts';
 import { frameHeading } from './squadTrack.ts';
 import type { SimWorld } from './world.ts';
@@ -112,6 +112,8 @@ export interface RunMetrics {
   under_fire_seconds: number;
   /** Hits that landed from a side no look covered (the operative's body / look / aim cones). */
   unwatched_hits: number;
+  median_engagement_distance_m?: number;
+  shots_under_10m_fraction?: number;
 }
 
 export interface RunResult {
@@ -272,6 +274,7 @@ export function runCombatSim(o: RunOptions): RunResult {
   // ---- squad -----------------------------------------------------------------------------------------------------------------------
   const members = track.members;
   const ops: Operative[] = track.frames[0].members.map((m) => ({ pos: m.pos, bodyYaw: m.bodyYaw, lookYaw: m.lookYaw, level: 0, target: -1, nextShot: 0, sawAt: -1, knockedUntil: -1, immuneUntil: -1, health: OPERATIVE_HP, absorbed: 0, taken: 0, rounds: 0, knockdowns: 0, underFire: false }));
+  const engagementDistancesCm: number[] = [];
   let trackT = 0; // seconds into the track (wraps per lap)
   let laps = 0, furthest = 0, distanceCm = 0;
   let frame: TrackFrame = track.frames[0];
@@ -331,8 +334,18 @@ export function runCombatSim(o: RunOptions): RunResult {
    * UTacticalSightSubsystem::GetSightRangeCm (2026-11-02): MaxSightCm x the height level's multiplier - his eye over the ground below him (the
    * sim's buildings stand on the street: level x 300 + the eye; in the -3 m cut the cut floor is his ground, level 0).
    */
-  const squadSightRangeCm = (m: Operative): number =>
-    K.sightRangeCm * HeightSightRules.rangeMultiplierAt(DEFAULT_HEIGHT_SIGHT, Math.max(0, m.level) * 300 + K.sightEyeCm);
+  const squadSightRangeCm = (m: Operative): number => {
+    if (K.useSightConditions && K.sightConditions) {
+      return SightConditionsRules.squadSightRange(
+        K.sightConditions,
+        DEFAULT_HEIGHT_SIGHT,
+        Math.max(0, m.level) * 300 + K.sightEyeCm,
+        K.weather ?? 'clear',
+        K.sunElevationDeg ?? 45,
+      );
+    }
+    return K.sightRangeCm * HeightSightRules.rangeMultiplierAt(DEFAULT_HEIGHT_SIGHT, Math.max(0, m.level) * 300 + K.sightEyeCm);
+  };
   /** IsPointInSquadSight: the real eyes (any direction), within his sight range (MaxSightCm x his height bonus). */
   const pointInSquadSight = (p: Vec2, z: number): boolean => {
     for (const m of ops) {
@@ -921,11 +934,20 @@ export function runCombatSim(o: RunOptions): RunResult {
   const perceive = (e: Enemy): boolean => {
     // Patrol perception (enemy_perception.json): sight (range, cone, a clear line, time to detect), proximity.
     let seeing = false;
+    const isHuman = SightConditionsRules.isArmedHuman(e.type);
+    const rangeCm = (K.useSightConditions && K.sightConditions)
+      ? SightConditionsRules.enemySightRange(
+          K.sightConditions,
+          e.stats.sightRangeM,
+          isHuman,
+          K.weather ?? 'clear',
+          K.sunElevationDeg ?? 45,
+        )
+      : e.stats.sightRangeM * 100;
     for (const m of ops) {
       const d = dist(e.pos, m.pos);
       if (d <= PROXIMITY_CM && m.level === 0) return true;
-      // the enemies stand on the street in the sim: level 0, x1 (an armed human on a roof would get the squad's height bonus - UE only)
-      if (d > e.stats.sightRangeM * 100) continue;
+      if (d > rangeCm) continue;
       if (Math.abs(findDeltaAngleDeg(e.yaw, AmbushWatchRules.bearingDeg(e.pos, m.pos))) > e.stats.sightHalfAngleDeg) continue;
       if (world.los(e.pos, K.eyeLiftCm, m.pos, m.level * 300 + K.targetLiftCm)) { seeing = true; break; }
     }
@@ -997,15 +1019,40 @@ export function runCombatSim(o: RunOptions): RunResult {
     if (e.stats.ranged) {
       const clear = world.los(e.pos, K.eyeLiftCm, m.pos, m.level * 300 + K.targetLiftCm);
       const inRange = d <= e.stats.attackRangeCm;
-      if (!clear || d > e.stats.preferredRangeCm * 1.1) {
-        // close in to the preferred range / a clear line
-        if (d > e.stats.preferredRangeCm * 0.9 || !clear) moveTowards(e, m.pos, e.stats.speed);
+      const isArmedHuman = SightConditionsRules.isArmedHuman(e.type);
+
+      if (K.useEngagementBands && K.engagementBands && isArmedHuman) {
+        const weaponId = e.stats.weaponId ?? (e.type === 'MARKSMAN' ? 'sniper_rifle' : 'm16');
+        const reachCm = K.weaponReachesCm?.[weaponId] ?? e.stats.attackRangeCm;
+        const band = PmcEngagementRules.resolveBand(weaponId, reachCm, K.engagementBands);
+
+        if (PmcEngagementRules.isTooClose(d, band, K.engagementBands)) {
+          // threat is closer than band.minCm * standoffTriggerFrac: back off straight away to standoffPoint
+          const retreat = PmcEngagementRules.standoffPoint(e.pos, m.pos, band);
+          moveTowards(e, retreat, e.stats.speed);
+        } else if (band.closeQuarters) {
+          // close quarters (shotgun): close in towards target
+          const stop = PmcEngagementRules.advanceStopCm(reachCm, band, K.engagementBands);
+          if (d > stop || !clear) {
+            moveTowards(e, m.pos, e.stats.speed);
+          }
+        } else if (!clear || d > band.maxCm) {
+          // outside band or no line of sight: advance towards target
+          moveTowards(e, m.pos, e.stats.speed);
+        }
+      } else {
+        if (!clear || d > e.stats.preferredRangeCm * 1.1) {
+          // close in to the preferred range / a clear line
+          if (d > e.stats.preferredRangeCm * 0.9 || !clear) moveTowards(e, m.pos, e.stats.speed);
+        }
       }
+
       if (clear && inRange && clock >= e.nextAttack) {
         e.nextAttack = clock + e.stats.cooldown;
         const covered = squadMode === 'at_wall' && coverTaken;
         const acc = e.stats.accuracy * (covered ? K.coverHitMultiplier : 1) * (clock < m.knockedUntil ? 1.33 : 1);
         m.underFire = true;
+        engagementDistancesCm.push(d);
         if (fightRng() < acc) hitOperative(e, m, e.stats.damage, false);
       }
       return;
@@ -1071,6 +1118,7 @@ export function runCombatSim(o: RunOptions): RunResult {
       if (clock < m.sawAt + K.reactionSeconds || clock < m.nextShot) continue;
       m.nextShot = clock + K.rifleInterval;
       m.rounds++;
+      engagementDistancesCm.push(bestD);
       lastShotAt = clock;
       m.bodyYaw = AmbushWatchRules.bearingDeg(m.pos, best.pos);
       const cell = Math.min(cells.length - 1, Math.floor(bestD / K.rifleCellCm));
@@ -1289,6 +1337,18 @@ export function runCombatSim(o: RunOptions): RunResult {
     route: { laps, progress: r2(Math.min(1, (laps * track.frames.length + frameIndex) / track.frames.length)), distance_m: Math.round(distanceCm / 100), furthest_waypoint: furthest },
     pressure: { events: P.events, events_delayed: P.eventsDelayed, sprung_by_watch: P.sprungByWatch, sprung_by_hold: P.sprungByHold, relocations: P.relocations, runs_spotted: P.runsSpotted, no_route: P.noRoute, followers: P.followers, recycled: P.recycled, lost: P.lost },
     under_fire_seconds: r2(underFireSeconds), unwatched_hits: unwatchedHits,
+    median_engagement_distance_m: (() => {
+      if (!engagementDistancesCm.length) return 0;
+      const sorted = [...engagementDistancesCm].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const medianCm = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+      return r2(medianCm / 100);
+    })(),
+    shots_under_10m_fraction: (() => {
+      if (!engagementDistancesCm.length) return 0;
+      const under10mCount = engagementDistancesCm.filter((x) => x < 1000).length;
+      return r2(under10mCount / engagementDistancesCm.length);
+    })(),
   };
   void members;
   return { metrics, contacts, events, coordinated, spots: spotDiag, contact_positions: contacts.map((c) => c.position) };

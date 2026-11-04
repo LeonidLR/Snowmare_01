@@ -11,7 +11,7 @@ import { parseArgs, readConfigFile, ROOT } from '../../movement/cli/paths.ts';
 import { runBatch, seedRange } from '../batch.ts';
 import type { SimConstants } from '../config.ts';
 import { validateCombatSimBatch } from '../schema.ts';
-import { outDir, readCachedTrack, readLevelJson, resolveLayout, writeCachedTrack } from '../node/files.ts';
+import { loadProjectCombatRules, outDir, readCachedTrack, readLevelJson, resolveLayout, writeCachedTrack } from '../node/files.ts';
 
 const args = parseArgs(process.argv.slice(2));
 const name = typeof args.layout === 'string' ? args.layout : '';
@@ -28,7 +28,19 @@ if (typeof args.pressure === 'string') {
   // a file / text holding a whole level JSON or a settings object: take its pressure block; a bare block: merged over the level's
   pressure = parsed.pressure && typeof parsed.pressure === 'object' ? parsed.pressure : { ...(pressure as Record<string, unknown>), ...parsed };
 }
-const constants = typeof args.constants === 'string' ? (JSON.parse(fs.existsSync(args.constants) ? fs.readFileSync(args.constants, 'utf8') : args.constants) as Partial<SimConstants>) : undefined;
+let constants: Partial<SimConstants> | undefined = typeof args.constants === 'string' ? (JSON.parse(fs.existsSync(args.constants) ? fs.readFileSync(args.constants, 'utf8') : args.constants) as Partial<SimConstants>) : undefined;
+const useSightConditions = args['sight-conditions'] !== undefined && args['sight-conditions'] !== '0';
+const useEngagementBands = args['engagement-bands'] !== undefined && args['engagement-bands'] !== '0';
+if (useSightConditions || useEngagementBands || args.weather || args['sun-elevation']) {
+  const projectRules = loadProjectCombatRules(ROOT);
+  constants = {
+    ...constants,
+    ...(useSightConditions ? { useSightConditions: true, sightConditions: projectRules.sightConditions } : {}),
+    ...(useEngagementBands ? { useEngagementBands: true, engagementBands: projectRules.pmcBandConfig, weaponReachesCm: projectRules.weaponReachesCm } : {}),
+    ...(typeof args.weather === 'string' ? { weather: args.weather as any } : {}),
+    ...(args['sun-elevation'] !== undefined ? { sunElevationDeg: Number(args['sun-elevation']) } : {}),
+  };
+}
 const seeds = seedRange(Number(args.seeds ?? 200), Number(args['seed-base'] ?? 1));
 const minutes = Number(args.minutes ?? 10);
 const members = Number(args.members ?? 3);

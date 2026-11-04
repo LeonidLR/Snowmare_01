@@ -1,3 +1,5 @@
+import type { SightConditionsConfig, PmcBandConfig } from '../rules.ts';
+import { parseSightConditions, parsePmcBandConfig, parseWeaponReaches } from '../config.ts';
 // Training Ground / combat simulator: the Node-side file helpers of the CLI (never imported by the browser): finding a layout by name or
 // path (an accepted levelgen layout, a candidate, a lab layout, a file), its level JSON (the pressure / bot_route blocks by the map name),
 // the squad-track cache (Saved/TrainingGround/combatsim/tracks/<layout>_<members>_<hash>.json - the formation simulator walk takes ~10 s
@@ -105,4 +107,37 @@ export function outDir(layoutName: string, requested?: string): string {
   const dir = requested ? path.resolve(requested) : path.join(COMBATSIM_OUT, safeName(layoutName));
   fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+export const DATA_AI_DIR = path.join(ROOT, 'Content/Data/AI');
+export const DATA_WEAPONS_DIR = path.join(ROOT, 'Content/Data/Weapons');
+
+export function readEnemyPerception(root = ROOT): Record<string, unknown> {
+  const f = path.join(root, 'Content/Data/AI/enemy_perception.json');
+  return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>) : {};
+}
+
+export function readPmcCommander(root = ROOT): Record<string, unknown> {
+  const f = path.join(root, 'Content/Data/AI/pmc_commander.json');
+  return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>) : {};
+}
+
+export function readWeaponsTuning(root = ROOT): Record<string, unknown> {
+  const f = path.join(root, 'Content/Data/Weapons/weapons_tuning.json');
+  return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>) : {};
+}
+
+export function loadProjectCombatRules(root = ROOT): {
+  sightConditions: SightConditionsConfig;
+  pmcBandConfig: PmcBandConfig;
+  weaponReachesCm: Record<string, number>;
+} {
+  const perceptionDoc = readEnemyPerception(root);
+  const commanderDoc = readPmcCommander(root);
+  const weaponsDoc = readWeaponsTuning(root);
+  return {
+    sightConditions: parseSightConditions(perceptionDoc),
+    pmcBandConfig: parsePmcBandConfig(commanderDoc, weaponsDoc),
+    weaponReachesCm: parseWeaponReaches(weaponsDoc),
+  };
 }
