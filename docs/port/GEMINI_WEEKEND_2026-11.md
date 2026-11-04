@@ -116,7 +116,10 @@ Area: `/Game/Characters/Enemies/PMC/Operator/` (Claude's assets, committed). The
 - Check: `CodexTactics.PmcTeamSmoke` and `CodexTactics.PmcArenaSmoke` still pass; a `-RenderOffscreen` screenshot of the three
   variants side by side in `Saved/Screenshots/PmcMaterials/` (never capture the desktop).
 
-### T6. Solo -> formation switch clears the box selection (small C++)
+### T6. Solo -> formation switch clears the box selection; no box selection in formation mode (small C++)
+Addition 2026-11-04 (the user): **in formation mode box selection is not available** - a drag on the ground does not start a
+selection rectangle (the selection stays the leader); box selection works only in solo mode. Keep everything else a drag does
+today (camera, etc.). Cover it in the same smoke (in formation: a drag over all three -> the selection is still the leader).
 User bug 2026-11-03: in SOLO mode he box-selects all three, moves them, then presses **B** (formation). The multi-selection
 stays, so every order is still a group order and the formation is effectively ignored ("sometimes it works, sometimes not").
 Wanted: switching solo -> formation clears the box / group selection and selects the commander (the squad leader), so the
