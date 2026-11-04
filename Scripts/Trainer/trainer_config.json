@@ -43,6 +43,7 @@
       "friendly_fire": {"weight": -1.5, "cap": 3},
       "stuck_events": {"weight": -1.0, "cap": 3}
     },
+    "close_range": {"weight": -4.0, "close_range_m": 10, "shotgun_exempt": true},
     "crash_penalty": -5.0
   },
   "arena": {

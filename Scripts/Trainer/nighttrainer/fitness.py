@@ -4,12 +4,13 @@ Per round:  win * won + survivors * survivors/squad + hp_lost * hp_lost/hp_max
             + duration term (won rounds only: 1 at target_s, 0 beyond +-tolerance_s - decisive but not reckless)
             + sum(behaviour weight * min(value, cap) / cap)   (bonuses > 0, penalties < 0)
 A crashed / timed-out round scores crash_penalty and nothing else. Fitness = the mean over rounds.
+close_range (optional): weight * share of the side's shots fired closer than close_range_m (track_stats.py).
 All weights come from trainer_config.json "fitness".
 """
 from __future__ import annotations
 
 METRICS = ("kills", "flanks_attempted", "flanks_succeeded", "suppression_s", "ambushes", "retreats",
-           "retreats_survived", "heals", "friendly_fire", "stuck_events")
+           "retreats_survived", "heals", "friendly_fire", "stuck_events", "close_shot_ratio", "close_hits_taken")
 
 
 def crash_round() -> dict:
@@ -38,6 +39,9 @@ def round_score(r: dict, cfg: dict) -> float:
         for key, spec in cfg.get(table, {}).items():
             cap = max(1e-6, float(spec.get("cap", 1.0)))
             score += float(spec.get("weight", 0.0)) * min(_num(r, key), cap) / cap
+    cr = cfg.get("close_range")
+    if cr and "close_shot_ratio" in r:  # no track / no shots = no penalty
+        score += float(cr.get("weight", -4.0)) * min(1.0, max(0.0, _num(r, "close_shot_ratio")))
     return score
 
 

@@ -17,6 +17,7 @@ import glob
 import os
 import sys
 
+from . import track_stats
 from .genome import load_json
 
 CANONICAL_SIDE_FIELDS = ("survivors", "squad_size", "hp_lost", "hp_max", "kills", "flanks_attempted",
@@ -46,7 +47,9 @@ def _dig(obj, dotted: str):
 
 
 class ArenaAdapter:
-    def __init__(self, arena_cfg: dict, repo_root: str, mock_cfg: dict | None = None):
+    def __init__(self, arena_cfg: dict, repo_root: str, mock_cfg: dict | None = None, close_range_cfg: dict | None = None):
+        # fitness.close_range (trainer_config.json): when set, rows get close_shot_ratio / close_hits_taken from the track
+        self.close_range_cfg = close_range_cfg
         self.cfg = arena_cfg
         self.repo_root = os.path.abspath(repo_root)
         self.mock_cfg = mock_cfg  # not None = mock mode (synthetic arena, mock_arena.py)
@@ -166,6 +169,14 @@ class ArenaAdapter:
             track = _dig(rnd, rc.get("track_key", "track"))
             if track and result_dir:
                 row["track"] = track if os.path.isabs(track) else os.path.normpath(os.path.join(result_dir, track))
+                if self.close_range_cfg:  # parse now: the trainer prunes tracks after the generation
+                    st = track_stats.load_side_stats(row["track"], mine,
+                                                     float(self.close_range_cfg.get("close_range_m", 10.0)),
+                                                     bool(self.close_range_cfg.get("shotgun_exempt", True)))
+                    if st and st["shots"]:
+                        row["close_shot_ratio"] = float(st["close_shot_ratio"])
+                    if st:
+                        row["close_hits_taken"] = float(st["close_hits_taken"])
             out.append(row)
         if expected_rounds and len(out) < expected_rounds and rc.get("pad_missing_rounds_as_crash", True):
             out += [{"crashed": True, "won": 0.0}] * (expected_rounds - len(out))

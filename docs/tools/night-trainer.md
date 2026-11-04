@@ -24,6 +24,13 @@
 - **Fitness** (`fitness`, per round, averaged): `win*won + survivors*surv/squad + hp_lost*lost/hp_max` + a duration term on won
   rounds (1 at `target_s`, 0 beyond `+-tolerance_s`: decisive but not reckless) + capped behaviour bonuses (flanks succeeded,
   suppression seconds, ambushes, retreats survived, heals) + capped penalties (friendly fire, stuck events).
+  **Close-range penalty** (`fitness.close_range {weight -4.0, close_range_m 10, shotgun_exempt true}`): "with a rifle you keep as far
+  as the weapon allows". The adapter reads the round's track (`nighttrainer/track_stats.py`, BEFORE tracks are pruned) and derives per
+  candidate side `close_shot_ratio` (share of its shots fired at a target closer than `close_range_m`; distance from the frames at the
+  shot's tick, `units` m default / cm scaled) and `close_hits_taken` (hit shots received at that range, stat only). Round score
+  += `weight * close_shot_ratio`. Shots by a shotgun are skipped when the track names the weapon (shot event or fighter `weapon`
+  field containing "shotgun"); the current tracks carry no weapon, so the exemption is inactive until the arena adds it. Missing /
+  unreadable track or no shots = no penalty. Remove the `close_range` key to disable.
 - **Anti-overfit**: each generation the top-3 (`fresh_top_k`) and the champion are re-evaluated on FRESH seeds (same jobs, new
   seed stream); the best contender becomes champion only if its fresh fitness beats the champion's fresh fitness
   (`promotion_margin`, default 0).
