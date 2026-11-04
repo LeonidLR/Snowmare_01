@@ -77,6 +77,12 @@ the maximum (at least 2x the old 60 m; the cone covers practically everything vi
 of the weather, snowfall / blizzard / fog reduce it, enemies use the same model. In your doc treat the range numbers as
 "implemented by Claude, see `docs/systems/sight-and-vision-cones.md`" and focus on ACCURACY (weather x cold x stance /
 suppression), spotting / reaction time and the balance tables.
+**Addition 2026-11-04 (the user) - a section "Blizzard drift":** in a strong blizzard the operatives lose sight of each other,
+fall behind and wander off in different directions unless they keep a proper formation; the **Blizzard Diamond** (the tight
+formation the game already switches to in a blizzard - see `docs/systems/squad-and-orders.md` / FORMATION docs) is the best
+one for it. Design: when a man drifts (distance to the nearest mate vs the blizzard sight range, heading noise, slowdown, how a
+lost man is found again - shouting / whistle / flare / the minimap), how it differs in solo mode vs formation vs the Blizzard
+Diamond, what the player sees (warnings), the numbers, and the smokes that would prove it. Proposal only - Claude implements.
 
 ### T3. Design doc - tactical doorway breach (no code)
 Write `docs/design/DOORWAY_BREACH.md`. The user's request: hovering the cursor over a doorway shows ghost positions: one man at
