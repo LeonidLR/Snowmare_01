@@ -1,7 +1,8 @@
 """Close-range engagement stats from a round track (codex.pmc_arena_track/1), for the close_range fitness penalty.
 
 Per side: shots fired, shots fired at a target closer than close_range_m, and hits taken at that range.
-Shot distance = |shooter - target| from the frames at the shot's tick (last known position if dead at that tick).
+Shooter = (`side`, `from`); target = `to` if it is an unambiguous enemy fighter id, else the nearest living enemy
+fighter at the shot's tick (real tracks name the target as an actor, e.g. BP_Operative_C_6). Distance from the frames at the tick.
 Units: track["units"] ("m" default, "cm" -> /100). Weapon (for shotgun_exempt) is read from the shot event
 ("weapon") or the fighter entry ("weapon"); when the track carries none the exemption cannot apply and is skipped.
 """
@@ -30,29 +31,48 @@ def side_stats(track: dict, side: str, close_range_m: float = 10.0, shotgun_exem
         return None
     dt = float(track.get("dt") or 0.2) or 0.2
     scale = UNIT_TO_M.get(str(track.get("units", "m")).lower(), 1.0)
-    index = {str(f.get("id")): i for i, f in enumerate(fighters)}
-    fside = {str(f.get("id")): str(f.get("side")) for f in fighters}
-    fweapon = {str(f.get("id")): str(f.get("weapon", "")) for f in fighters}
+    # Fighter ids are NOT unique across sides in real tracks (both squads have an "Operator Kessler"), so a fighter is
+    # keyed by (side, id). A shot event names its shooter in `from` + `side` (side falls back to the id's fighter).
+    fighters = [dict(f, id=str(f.get("id")), side=str(f.get("side"))) for f in fighters]
+    by_key = {(f["side"], f["id"]): i for i, f in enumerate(fighters)}
+    by_id = {}
+    for i, f in enumerate(fighters):
+        by_id.setdefault(f["id"], []).append(i)
     shots = close = taken = 0
     for ev in track.get("events") or []:
         if ev.get("type") != "shot":
             continue
-        src, dst = str(ev.get("from")), str(ev.get("to"))
-        if src not in index or dst not in index:
+        src = str(ev.get("from"))
+        sside = str(ev["side"]) if ev.get("side") is not None else None
+        si = by_key.get((sside, src)) if sside else (by_id.get(src) or [None])[0]
+        if si is None:
             continue
+        sside = fighters[si]["side"]
         tick = int(round(float(ev.get("t", 0.0)) / dt))
-        a, b = _pos(frames, tick, index[src]), _pos(frames, tick, index[dst])
-        if a is None or b is None:
+        a = _pos(frames, tick, si)
+        if a is None:
             continue
-        is_close = math.hypot(a[0] - b[0], a[1] - b[1]) * scale < close_range_m
-        if fside.get(src) == side:
-            weapon = str(ev.get("weapon") or fweapon.get(src, "")).lower()
+        # Target: `to` when it names an enemy fighter unambiguously; otherwise (real tracks give actor names such as
+        # "BP_Operative_C_6" or "?") the NEAREST living enemy fighter at that tick - the shooter's engagement distance.
+        cand = [i for i in by_id.get(str(ev.get("to")), []) if fighters[i]["side"] != sside]
+        if len(cand) != 1:
+            cand = [i for i, f in enumerate(fighters) if f["side"] != sside]
+        dists = []
+        for i in cand:
+            pos = frames[min(tick, len(frames) - 1)][i] if i < len(frames[min(tick, len(frames) - 1)]) else None
+            if pos:  # alive at this tick only (no last-known position for the nearest-enemy fallback)
+                dists.append(math.hypot(a[0] - pos[0], a[1] - pos[1]) * scale)
+        if not dists:
+            continue
+        is_close = min(dists) < close_range_m
+        if sside == side:
+            weapon = str(ev.get("weapon") or fighters[si].get("weapon", "")).lower()
             if shotgun_exempt and "shotgun" in weapon:
                 continue  # a shotgun is meant for close range: not counted at all
             shots += 1
             close += is_close
-        elif fside.get(dst) == side and is_close and ev.get("hit"):
-            taken += 1
+        elif is_close and ev.get("hit"):
+            taken += 1  # an enemy shot that hit from close range (credited to every side but the shooter's)
     return {"shots": shots, "close_shots": close,
             "close_shot_ratio": (close / shots) if shots else 0.0, "close_hits_taken": taken}
 

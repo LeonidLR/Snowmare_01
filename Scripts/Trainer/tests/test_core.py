@@ -269,6 +269,17 @@ class CloseRangeTests(unittest.TestCase):
         self.assertEqual(st["shots"], 0)
         self.assertEqual(track_stats.side_stats(self.track(weapon="Shotgun"), "A", 10.0, False)["shots"], 3)
 
+    def test_real_arena_track(self):
+        # real new-format track (cm, duplicate fighter ids across sides, target = actor name "BP_Operative_C_N" / "?")
+        path = os.path.join(os.path.dirname(__file__), "..", "fixtures", "real_arena_round.track.json")
+        a, b = (track_stats.load_side_stats(path, side, 10.0) for side in "AB")
+        self.assertGreater(a["shots"], 20)
+        self.assertGreater(b["shots"], 100)
+        for st in (a, b):
+            self.assertGreater(st["close_shot_ratio"], 0.0)
+            self.assertLess(st["close_shot_ratio"], 0.5)
+        self.assertLess(track_stats.load_side_stats(path, "A", 5.0)["close_shot_ratio"], a["close_shot_ratio"] + 1e-9)
+
     def test_missing_track_no_penalty(self):
         self.assertIsNone(track_stats.load_side_stats("nope.json", "A"))
         base = {"won": 1.0, "survivors": 3, "squad_size": 4, "hp_lost": 100, "hp_max": 400, "duration_s": 150}
