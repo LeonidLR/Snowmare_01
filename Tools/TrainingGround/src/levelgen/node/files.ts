@@ -11,6 +11,7 @@ import { validateProfile } from '../profile.ts';
 
 export const REFS_DIR = path.join(ROOT, 'Content/Data/LevelGen/refs');
 export const ACCEPTED_DIR = path.join(ROOT, 'Content/Data/LevelGen/accepted');
+export const CANDIDATES_DIR = path.join(ROOT, 'Content/Data/LevelGen/candidates');
 export const LEVELGEN_OUT = path.join(ROOT, 'Saved/TrainingGround/levelgen');
 export const SHOTS_DIR = path.join(ROOT, 'Saved/Screenshots/LevelGen');
 export const MAPREFS_DIR = path.join(ROOT, 'Saved/MapRefs');

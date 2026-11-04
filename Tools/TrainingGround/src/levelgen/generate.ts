@@ -454,6 +454,522 @@ export function generateLayout(o: GenerateOptions): GenLayout {
   return layout;
 }
 
+export interface ExtendOptions {
+  baseLayout: GenLayout;
+  seed: number;
+  profile?: Profile;
+  name?: string;
+}
+
+export function extendLayout(o: ExtendOptions): GenLayout {
+  const base = JSON.parse(JSON.stringify(o.baseLayout)) as GenLayout;
+  const seed = o.seed;
+  const name = o.name ?? `gen_ref_01_02_depot_x2_${seed}`;
+  const random = rng(seed * 104729 + 13);
+  const jit = (amp: number) => (random() * 2 - 1) * amp;
+  let n = 0;
+  const id = (p: string) => `${p}_ext_${++n}`;
+
+  // Extend bounds: length in Y doubles from 177m to 354m [-8850, 8850] -> [-8850, 26550]
+  const bounds = { min: [-6200, -8850] as Vec2, max: [6200, 26550] as Vec2 };
+
+  // 1. Extend Cut
+  const cutY1 = 16000 + jit(200);
+  const cutY2 = 22000 + jit(200);
+  const bridgeWidth = 400;
+  const rampWidth = 500;
+
+  const crossings: GenCut['crossings'] = [
+    ...(base.cut?.crossings ?? []),
+    { id: 'X_bridge_ext', poly: [[-467, cutY1 - bridgeWidth / 2], [433, cutY1 - bridgeWidth / 2], [433, cutY1 + bridgeWidth / 2], [-467, cutY1 + bridgeWidth / 2]], kind: 'bridge' },
+    { id: 'X_ramp_ext', poly: [[-467, cutY2 - rampWidth / 2], [433, cutY2 - rampWidth / 2], [433, cutY2 + rampWidth / 2], [-467, cutY2 + rampWidth / 2]], kind: 'ramp' },
+  ];
+
+  const cut: GenCut = {
+    poly: [[283, -8850], [283, 26550], [-317, 26550], [-317, -8850]],
+    level: CUT_LEVEL,
+    floor_z: -300,
+    crossings,
+  };
+
+  // 2. Cut Walls
+  const walls: GenWall[] = [...base.walls];
+  const addW = (wid: string, a: Vec2, b: Vec2, height: number, thickness: number, kind: GenWall['kind'], floor = 0, building?: string) => {
+    if (dist(a, b) < 10) return;
+    walls.push({ id: wid, a, b, height, thickness, kind, ...(floor ? { floor } : {}), ...(building ? { building } : {}) });
+  };
+
+  // Retaining walls: North at X=358, South at X=-392
+  // Split round bridge (cutY1) and ramp (cutY2)
+  addW(id('CUTWALL_N'), [358, 8850], [358, cutY1 - bridgeWidth / 2], 220, 150, 'cut_wall');
+  addW(id('CUTWALL_N'), [358, cutY1 + bridgeWidth / 2], [358, cutY2 - rampWidth / 2], 220, 150, 'cut_wall');
+  addW(id('CUTWALL_N'), [358, cutY2 + rampWidth / 2], [358, 26550], 220, 150, 'cut_wall');
+
+  addW(id('CUTWALL_S'), [-392, 8850], [-392, cutY1 - bridgeWidth / 2], 220, 150, 'cut_wall');
+  addW(id('CUTWALL_S'), [-392, cutY1 + bridgeWidth / 2], [-392, cutY2 - rampWidth / 2], 220, 150, 'cut_wall');
+  addW(id('CUTWALL_S'), [-392, cutY2 + rampWidth / 2], [-392, 26550], 220, 150, 'cut_wall');
+
+  // Cut ladders on south wall
+  const ladders: GenLadder[] = [
+    ...base.ladders,
+    { id: 'LAD_cut_ext_1', pos: [-307, 12500], foot: [-207, 12500], top: [-567, 12500], yaw: 0, rungs: 8, plinth_cm: 8.8, from: 'cut', to: 'ground', level_from: -1, level_to: 0 },
+    { id: 'LAD_cut_ext_2', pos: [-307, 19000], foot: [-207, 19000], top: [-567, 19000], yaw: 0, rungs: 8, plinth_cm: 8.8, from: 'cut', to: 'ground', level_from: -1, level_to: 0 },
+  ];
+
+  // 3. Buildings
+  const buildings: GenBuilding[] = [...base.buildings];
+
+  // Helper to split a wall segment round gaps
+  const splitSeg = (wid: string, a: Vec2, b: Vec2, gaps: [number, number][], height: number, thickness: number, kind: GenWall['kind'], floor = 0, building?: string) => {
+    const isHoriz = Math.abs(a[0] - b[0]) < 1e-3;
+    const lo = isHoriz ? Math.min(a[1], b[1]) : Math.min(a[0], b[0]);
+    const hi = isHoriz ? Math.max(a[1], b[1]) : Math.max(a[0], b[0]);
+    const sortedGaps = gaps.map(([g0, g1]) => [Math.max(lo, Math.min(g0, g1)), Math.min(hi, Math.max(g0, g1))] as [number, number])
+      .filter(([g0, g1]) => g1 > lo && g0 < hi).sort((x, y) => x[0] - y[0]);
+    let cur = lo;
+    let k = 0;
+    const seg = (s: number, e: number) => {
+      if (e - s < 10) return;
+      const pa: Vec2 = isHoriz ? [a[0], s] : [s, a[1]];
+      const pb: Vec2 = isHoriz ? [a[0], e] : [e, a[1]];
+      addW(`${wid}_${k++}`, pa, pb, height, thickness, kind, floor, building);
+    };
+    for (const [g0, g1] of sortedGaps) { seg(cur, g0); cur = Math.max(cur, g1); }
+    seg(cur, hi);
+  };
+
+  // Building 1: B_warehouse_ext (North, level +3)
+  const whFp: [Vec2, Vec2] = [[2200, 10500], [5200, 14500]];
+  const whDoors: Door[] = [
+    { pos: [2200, 12500], floor: 0 }, // South door
+    { pos: [3700, 10500], floor: 0 }, // West door
+  ];
+  const whStairs: Stair[] = [
+    { id: 'B_warehouse_ext_stair_0', pos: [2500, 10800], top: [2500, 12096], from: 0, to: 3, kind: 'stairwell' },
+  ];
+  buildings.push({
+    id: 'B_warehouse_ext',
+    footprint: whFp,
+    height: 900,
+    floors: 3,
+    hollow: true,
+    enterable: true,
+    roof_walkable: true,
+    doors: whDoors,
+    stairs: whStairs,
+    roof_holes: [],
+    floor_holes: [],
+    set_piece: 'warehouse',
+  });
+  // Perimeter walls for warehouse
+  splitSeg('B_warehouse_ext_S', [2200, 10500], [2200, 14500], [[12500 - 90, 12500 + 90]], 900, 30, 'building', 0, 'B_warehouse_ext');
+  splitSeg('B_warehouse_ext_W', [2200, 10500], [5200, 10500], [[3700 - 90, 3700 + 90]], 900, 30, 'building', 0, 'B_warehouse_ext');
+  addW('B_warehouse_ext_N', [5200, 10500], [5200, 14500], 900, 30, 'building', 0, 'B_warehouse_ext');
+  addW('B_warehouse_ext_E', [2200, 14500], [5200, 14500], 900, 30, 'building', 0, 'B_warehouse_ext');
+
+  // Building 2: B_gallery_ext (North, level +1)
+  const galFp: [Vec2, Vec2] = [[3000, 17500], [4500, 20000]];
+  buildings.push({
+    id: 'B_gallery_ext',
+    footprint: galFp,
+    height: 300,
+    floors: 1,
+    hollow: false,
+    enterable: false,
+    roof_walkable: true,
+    doors: [],
+    stairs: [],
+    roof_holes: [],
+    floor_holes: [],
+    set_piece: 'ladder_overwatch',
+  });
+  addW('B_gallery_ext_S', [3000, 17500], [3000, 20000], 300, 30, 'building', 0, 'B_gallery_ext');
+  addW('B_gallery_ext_N', [4500, 17500], [4500, 20000], 300, 30, 'building', 0, 'B_gallery_ext');
+  addW('B_gallery_ext_W', [3000, 17500], [4500, 17500], 300, 30, 'building', 0, 'B_gallery_ext');
+  addW('B_gallery_ext_E', [3000, 20000], [4500, 20000], 300, 30, 'building', 0, 'B_gallery_ext');
+  // Ladder on south face of gallery
+  ladders.push({
+    id: 'LAD_B_gallery_ext',
+    pos: [2990, 18750],
+    foot: [2890, 18750],
+    top: [3100, 18750],
+    yaw: 180, // facing -X
+    rungs: 8,
+    plinth_cm: 8.8,
+    from: 'ground',
+    to: 'roof:B_gallery_ext',
+    level_from: 0,
+    level_to: 1,
+  });
+
+  // Building 3: B_shed_ext in fenced compound (North)
+  const shedFp: [Vec2, Vec2] = [[2200, 22500], [3600, 24000]];
+  const shedDoor: Door = { pos: [2900, 24000], floor: 0 };
+  buildings.push({
+    id: 'B_shed_ext',
+    footprint: shedFp,
+    height: 300,
+    floors: 1,
+    hollow: false,
+    enterable: true,
+    roof_walkable: false,
+    doors: [shedDoor],
+    stairs: [],
+    roof_holes: [],
+    floor_holes: [],
+    set_piece: 'one_entry_compound',
+  });
+  addW('B_shed_ext_W', [2200, 22500], [3600, 22500], 300, 30, 'building', 0, 'B_shed_ext');
+  addW('B_shed_ext_N', [3600, 22500], [3600, 24000], 300, 30, 'building', 0, 'B_shed_ext');
+  addW('B_shed_ext_S', [2200, 22500], [2200, 24000], 300, 30, 'building', 0, 'B_shed_ext');
+  splitSeg('B_shed_ext_E', [2200, 24000], [3600, 24000], [[2900 - 90, 2900 + 90]], 300, 30, 'building', 0, 'B_shed_ext');
+
+  // Compound fence: [1800, 21500] to [5600, 25500] with gate on west at X=3700
+  splitSeg('F_compound_ext_W', [1800, 21500], [5600, 21500], [[3700 - 150, 3700 + 150]], 250, 10, 'fence');
+  addW('F_compound_ext_N', [5600, 21500], [5600, 25500], 250, 10, 'fence');
+  addW('F_compound_ext_S', [1800, 21500], [1800, 25500], 250, 10, 'fence');
+  addW('F_compound_ext_E', [1800, 25500], [5600, 25500], 250, 10, 'fence');
+
+  // Building 4: B_ruin_ext (South, 2 floors with holes & external stair)
+  const ruinFp: [Vec2, Vec2] = [[-4500, 11500], [-2000, 15000]];
+  const ruinExtStair: Stair = { id: 'STAIR_ext_ext', pos: [-4620, 12500], mid: [-4620, 13364], top: [-4340, 13364], from: 0, to: 2, kind: 'external' };
+  const ruinInStair: Stair = { id: 'STAIR_in_ext', pos: [-4300, 11700], top: [-4300, 12132], from: 0, to: 1, kind: 'stairwell' };
+  const ruinRoofHoles: Vec2[] = [[-3800, 12800], [-2700, 13800]];
+  const ruinFloorHoles = [{ pos: [-3800, 13400] as Vec2, floor: 1 }];
+  buildings.push({
+    id: 'B_ruin_ext',
+    footprint: ruinFp,
+    height: 600,
+    floors: 2,
+    hollow: false,
+    enterable: true,
+    roof_walkable: true,
+    doors: [{ pos: [-2000, 13250], floor: 0 }, { pos: [-3250, 11500], floor: 0 }],
+    stairs: [ruinExtStair, ruinInStair],
+    roof_holes: ruinRoofHoles,
+    floor_holes: ruinFloorHoles,
+    set_piece: 'ruined_two_level',
+  });
+  // Ruin walls
+  splitSeg('B_ruin_ext_N', [-2000, 11500], [-2000, 15000], [[13250 - 90, 13250 + 90]], 600, 30, 'building', 0, 'B_ruin_ext');
+  splitSeg('B_ruin_ext_W', [-4500, 11500], [-2000, 11500], [[-3250 - 90, -3250 + 90]], 600, 30, 'building', 0, 'B_ruin_ext');
+  addW('B_ruin_ext_S', [-4500, 11500], [-4500, 15000], 600, 30, 'building', 0, 'B_ruin_ext');
+  addW('B_ruin_ext_E', [-4500, 15000], [-2000, 15000], 600, 30, 'building', 0, 'B_ruin_ext');
+  // Interior partitions on floor 0 and 1
+  addW('B_ruin_ext_p0_a', [-3250, 11500], [-3250, 12900], 300, 30, 'interior', 0, 'B_ruin_ext');
+  addW('B_ruin_ext_p0_b', [-3250, 13100], [-3250, 15000], 300, 30, 'interior', 0, 'B_ruin_ext');
+  addW('B_ruin_ext_p1_a', [-3250, 11500], [-3250, 12900], 300, 30, 'interior', 1, 'B_ruin_ext');
+  addW('B_ruin_ext_p1_b', [-3250, 13100], [-3250, 15000], 300, 30, 'interior', 1, 'B_ruin_ext');
+
+  // Building 5: B_pump_ext (South, in tank farm)
+  const pumpFp: [Vec2, Vec2] = [[-3200, 17000], [-2000, 18500]];
+  buildings.push({
+    id: 'B_pump_ext',
+    footprint: pumpFp,
+    height: 300,
+    floors: 1,
+    hollow: false,
+    enterable: true,
+    roof_walkable: false,
+    doors: [{ pos: [-2600, 17000], floor: 0 }],
+    stairs: [],
+    roof_holes: [],
+    floor_holes: [],
+    set_piece: 'tank_farm',
+  });
+  splitSeg('B_pump_ext_W', [-3200, 17000], [-2000, 17000], [[-2600 - 90, -2600 + 90]], 300, 30, 'building', 0, 'B_pump_ext');
+  addW('B_pump_ext_E', [-3200, 18500], [-2000, 18500], 300, 30, 'building', 0, 'B_pump_ext');
+  addW('B_pump_ext_N', [-2000, 17000], [-2000, 18500], 300, 30, 'building', 0, 'B_pump_ext');
+  addW('B_pump_ext_S', [-3200, 17000], [-3200, 18500], 300, 30, 'building', 0, 'B_pump_ext');
+
+  // Building 6: B_steelworks_ext (South, level +3)
+  const steelFp: [Vec2, Vec2] = [[-4600, 21500], [-1800, 25200]];
+  buildings.push({
+    id: 'B_steelworks_ext',
+    footprint: steelFp,
+    height: 900,
+    floors: 3,
+    hollow: true,
+    enterable: true,
+    roof_walkable: true,
+    doors: [{ pos: [-1800, 23350], floor: 0 }, { pos: [-3200, 21500], floor: 0 }],
+    stairs: [{ id: 'B_steelworks_ext_stair_0', pos: [-4400, 21700], top: [-4400, 22996], from: 0, to: 3, kind: 'stairwell' }],
+    roof_holes: [],
+    floor_holes: [],
+    set_piece: 'industrial_hall',
+  });
+  splitSeg('B_steelworks_ext_N', [-1800, 21500], [-1800, 25200], [[23350 - 90, 23350 + 90]], 900, 30, 'building', 0, 'B_steelworks_ext');
+  splitSeg('B_steelworks_ext_W', [-4600, 21500], [-1800, 21500], [[-3200 - 90, -3200 + 90]], 900, 30, 'building', 0, 'B_steelworks_ext');
+  addW('B_steelworks_ext_S', [-4600, 21500], [-4600, 25200], 900, 30, 'building', 0, 'B_steelworks_ext');
+  addW('B_steelworks_ext_E', [-4600, 25200], [-1800, 25200], 900, 30, 'building', 0, 'B_steelworks_ext');
+
+  // Dead end alley in south-east: walls on north, east, south; open on west (Y=24500)
+  addW('W_deadend_ext_N', [-5000, 24500], [-5000, 26000], 300, 40, 'wall');
+  addW('W_deadend_ext_S', [-5800, 24500], [-5800, 26000], 300, 40, 'wall');
+  addW('W_deadend_ext_E', [-5800, 26000], [-5000, 26000], 300, 40, 'wall');
+
+  // 4. Covers
+  const covers: GenCover[] = [...base.covers];
+  // Add silos in tank farm
+  covers.push({ id: id('COV_silo'), pos: [-4200, 17500], yaw: 0, size: [800, 800, 1200], kind: 'silo' });
+  covers.push({ id: id('COV_silo'), pos: [-4200, 19500], yaw: 0, size: [800, 800, 1200], kind: 'silo' });
+
+  // Additional tactical covers in streets & open spaces
+  const extCoverSpots: { pos: Vec2; kind: CoverKind; yaw: number }[] = [
+    { pos: [1100, 10000], kind: 'jersey', yaw: 90 },
+    { pos: [1600, 11500], kind: 'crate', yaw: 0 },
+    { pos: [1100, 14000], kind: 'sandbag', yaw: 90 },
+    { pos: [1600, 18000], kind: 'jersey', yaw: 90 },
+    { pos: [1100, 20500], kind: 'wreck', yaw: 45 },
+    { pos: [1100, 24000], kind: 'barrel', yaw: 0 },
+    { pos: [-1600, 10500], kind: 'sandbag', yaw: 0 },
+    { pos: [-1600, 15500], kind: 'crate', yaw: 0 },
+    { pos: [-1600, 20000], kind: 'jersey', yaw: 90 },
+    { pos: [-5000, 12000], kind: 'wreck', yaw: 30 },
+    { pos: [-5000, 16000], kind: 'boiler', yaw: 0 },
+    { pos: [-5000, 20000], kind: 'crate', yaw: 0 },
+    { pos: [-5000, 23500], kind: 'barrel', yaw: 0 },
+  ];
+  for (const cs of extCoverSpots) {
+    const size = cs.kind === 'jersey' ? [300, 60, 90] : cs.kind === 'sandbag' ? [250, 80, 100] : cs.kind === 'crate' ? [120, 120, 110] : cs.kind === 'wreck' ? [420, 180, 150] : cs.kind === 'boiler' ? [200, 120, 160] : [60, 60, 90];
+    covers.push({ id: id('COV'), pos: cs.pos, yaw: cs.yaw, size: size as [number, number, number], kind: cs.kind });
+  }
+
+  // 5. Zones
+  const zones = [
+    ...base.zones,
+    { id: 'Z_cut_ext', kind: 'corridor' as const, set_piece: 'cut_crossing' as SetPiece, poly: rect.poly([[-317, 8850], [283, 26550]]), intent: 'kill_zone' as const },
+    { id: 'Z_ST_north_ext', kind: 'corridor' as const, set_piece: 'marksman_lane' as SetPiece, poly: rect.poly([[900, 8850], [1800, 25500]]) },
+    { id: 'Z_ST_south_ext', kind: 'corridor' as const, set_piece: 'marksman_lane' as SetPiece, poly: rect.poly([[-5400, 8850], [-4500, 25500]]) },
+    { id: 'Z_warehouse_ext', kind: 'open' as const, set_piece: 'warehouse' as SetPiece, poly: rect.poly([[2000, 10000], [5400, 15000]]) },
+    { id: 'Z_gallery_ext', kind: 'open' as const, set_piece: 'ladder_overwatch' as SetPiece, poly: rect.poly([[2800, 17000], [4700, 20500]]) },
+    { id: 'Z_compound_ext', kind: 'open' as const, set_piece: 'one_entry_compound' as SetPiece, poly: rect.poly([[1800, 21500], [5600, 25500]]) },
+    { id: 'Z_ruin_ext', kind: 'open' as const, set_piece: 'ruined_two_level' as SetPiece, poly: rect.poly([[-4700, 11000], [-1800, 15500]]) },
+    { id: 'Z_tanks_ext', kind: 'open' as const, set_piece: 'tank_farm' as SetPiece, poly: rect.poly([[-4800, 16500], [-1800, 20500]]) },
+    { id: 'Z_steelworks_ext', kind: 'open' as const, set_piece: 'industrial_hall' as SetPiece, poly: rect.poly([[-4800, 21000], [-1600, 25500]]) },
+    { id: 'Z_deadend_ext', kind: 'wall_end' as const, set_piece: 'dead_end' as SetPiece, poly: rect.poly([[-5800, 24500], [-5000, 26000]]) },
+  ];
+
+  // 6. Routes
+  // Mandatory route: begins with the first 9 points of base R_main (spawn -> compound -> north street),
+  // then crosses seam at [1350, 8850] and threads through the extended sector!
+  const baseMandatory = base.routes.find((r) => r.mandatory)!;
+  // Base points along North Street:
+  // Points up to North street end in base layout:
+  // Let's inspect baseMandatory.points
+  const basePrefix = baseMandatory.points.slice(0, 9); // spawn -> compound -> T-junction -> north street
+  const stairTop = ruinExtStair.top;
+  const stairPos = ruinExtStair.pos;
+
+  const extMandatoryPoints: Vec2[] = [
+    ...basePrefix,
+    // Cross seam at Y=8850 on North Street:
+    [1350, 8850],
+    // Advance on ST_north_ext:
+    [1350, 11500],
+    // Visit warehouse:
+    [2100, 12500], // approach south door
+    [2400, 12500], // inside warehouse
+    [2100, 12500], // out of warehouse
+    [1350, 12500], // back to North Street
+    // Advance to bridge:
+    [1350, cutY1],
+    [0, cutY1], // cross cut on bridge!
+    [-1350, cutY1], // south side of bridge
+    // Approach B_ruin_ext external stair:
+    stairPos, // pos of external stair on ground
+    stairTop, // top of external stair on roof +2
+    [-3800, 13364], // walk across roof
+    stairTop, // back to stair top on roof +2
+    stairPos, // descend external stair to ground
+    [-2000, 13250], // north door of ruin
+    [-1500, 13250], // outside door
+    // To tank farm:
+    [-1500, 17500],
+    [-2600, 17000], // outside pump house door
+    [-1500, 17500],
+    // To south street:
+    [-5000, 17500],
+    [-5000, 23000], // south street past steelworks
+    // Finish in dead end alley:
+    [-5400, 24000],
+    [-5400, 25500], // end in wall layout!
+  ];
+
+  const extLayers: string[] = extMandatoryPoints.map(() => 'ground');
+  const extLinks: { at: number; via: string }[] = [];
+
+  // Indices of vertical transitions in extMandatoryPoints:
+  // stairTop is index basePrefix.length + 10 = 19
+  const stairIdx = basePrefix.length + 10;
+  extLayers[stairIdx] = 'roof:B_ruin_ext';
+  extLayers[stairIdx + 1] = 'roof:B_ruin_ext';
+  extLayers[stairIdx + 2] = 'roof:B_ruin_ext';
+  extLinks.push({ at: stairIdx, via: ruinExtStair.id });
+
+  const stairDownIdx = stairIdx + 3;
+  // ground at stairDownIdx (stairPos)
+  extLinks.push({ at: stairDownIdx, via: ruinExtStair.id });
+
+  const newMandatory: GenRoute = {
+    id: 'R_main',
+    pace: 'walk',
+    points: extMandatoryPoints,
+    mandatory: true,
+    layers: extLayers,
+    links: extLinks,
+    set_pieces: ['street', 'one_entry_compound', 'street', 't_junction', 'marksman_lane', 'warehouse', 'cut_crossing', 'ruined_two_level', 'tank_farm', 'marksman_lane', 'dead_end'],
+    expect: [{ zone: 'Z_ST_north_ext', formation: 'column' }, { zone: 'Z_deadend_ext', formation: 'wall' }],
+  };
+
+  // Variants
+  // V1_ext_cut: through cut via ramp, along trench, out by cut ladder 2
+  const vCut: GenRoute = {
+    id: 'V1_ext_cut',
+    pace: 'walk',
+    points: [
+      [200, cutY2],
+      [-17, cutY2],
+      [0, 19000],
+      [-207, 19000], // ladder foot
+      [-567, 19000], // ladder top
+      [-1350, 19000], // ground
+    ],
+    layers: ['ground', 'cut', 'cut', 'cut', 'ground', 'ground'],
+    links: [
+      { at: 1, via: 'X_ramp_ext' },
+      { at: 4, via: 'LAD_cut_ext_2' },
+    ],
+    set_pieces: ['cut_crossing'],
+    intent: 'kill_zone',
+    intent_note: 'cut trench passage in extended sector',
+  };
+
+  // V2_ext_gallery: up ladder to overwatch roof
+  const vGallery: GenRoute = {
+    id: 'V2_ext_gallery',
+    pace: 'walk',
+    points: [
+      [1350, 18750],
+      [2890, 18750], // ladder foot
+      [3100, 18750], // ladder top
+      [3750, 18750], // roof centre
+    ],
+    layers: ['ground', 'ground', 'roof:B_gallery_ext', 'roof:B_gallery_ext'],
+    links: [{ at: 2, via: 'LAD_B_gallery_ext' }],
+    set_pieces: ['ladder_overwatch'],
+  };
+
+  // V3_ext_warehouse: up warehouse stairwell to roof
+  const vWh: GenRoute = {
+    id: 'V3_ext_warehouse',
+    pace: 'walk',
+    points: [
+      [1350, 12500],
+      [2200, 12500],
+      [2500, 10800], // stairwell pos
+      [2500, 12096], // stairwell top
+      [3700, 12500], // roof centre
+    ],
+    layers: ['ground', 'ground', 'ground', 'roof:B_warehouse_ext', 'roof:B_warehouse_ext'],
+    links: [{ at: 3, via: whStairs[0].id }],
+    set_pieces: ['warehouse'],
+  };
+
+  const routes: GenRoute[] = [newMandatory, vCut, vGallery, vWh];
+
+  // 7. Ambush points
+  const ambush_points = [...base.ambush_points];
+  const newAmbush: Vec2[] = [
+    [1000, 11000],
+    [2100, 10600],
+    [5300, 10600],
+    [5300, 14400],
+    [2100, 14400],
+    [2850, 17600],
+    [4650, 17600],
+    [4650, 19900],
+    [1650, 21600],
+    [5750, 21600],
+    [2050, 22600],
+    [3750, 22600],
+    [-1850, 11600],
+    [-4650, 11600],
+    [-1850, 14900],
+    [-4650, 14900],
+    [-1850, 17100],
+    [-3350, 17100],
+    [-4350, 17600],
+    [-4350, 19400],
+    [-1650, 21600],
+    [-4750, 21600],
+    [-1650, 25100],
+    [-4750, 25100],
+    [-4850, 24600],
+  ];
+  for (const pos of newAmbush) ambush_points.push({ id: id('AMB'), pos });
+
+  // 8. Patrol routes
+  const patrol_routes = [...base.patrol_routes];
+  patrol_routes.push({
+    id: id('PAT'),
+    points: [
+      [3700, 22500],
+      [5000, 22500],
+      [5000, 24500],
+      [3700, 24500],
+    ],
+  });
+  patrol_routes.push({
+    id: id('PAT'),
+    points: [
+      [-3200, 19000],
+      [-2400, 19000],
+      [-2400, 20200],
+      [-3200, 20200],
+    ],
+  });
+
+  // 9. Spawn points
+  const spawn_points = [
+    ...base.spawn_points,
+    { id: id('SPAWN'), pos: [5800, 16000] as Vec2, kind: 'edge' as const },
+    { id: id('SPAWN'), pos: [5800, 24000] as Vec2, kind: 'edge' as const },
+    { id: id('SPAWN'), pos: [-5800, 16000] as Vec2, kind: 'edge' as const },
+    { id: id('SPAWN'), pos: [-5800, 24000] as Vec2, kind: 'edge' as const },
+    { id: id('SPAWN'), pos: [0, 26200] as Vec2, kind: 'edge' as const },
+  ];
+
+  const layout: GenLayout = {
+    schema: base.schema,
+    name,
+    comment: `Extended Depot x2 layout based on ${base.name} (seed ${seed}); original frozen part preserved byte-identically in coordinates.`,
+    profile: base.profile,
+    seed,
+    params: { ...base.params, size_m: [177, 354] },
+    bounds,
+    ground_z: base.ground_z,
+    spawn: base.spawn,
+    end: newMandatory.points[newMandatory.points.length - 1],
+    walls,
+    buildings,
+    cut,
+    ladders,
+    covers,
+    zones,
+    routes,
+    spawn_points,
+    ambush_points,
+    patrol_routes,
+    pressure: {
+      ...base.pressure,
+      ambush: { points: ambush_points.map((a) => a.pos), coordinated: { share: 0.5, max_alive: 8 } },
+    },
+  };
+
+  return layout;
+}
+
 // ---- helpers (metres) -----------------------------------------------------------------------------------------------------
 
 const COVER_SIZE: Record<CoverKind, [number, number, number]> = {

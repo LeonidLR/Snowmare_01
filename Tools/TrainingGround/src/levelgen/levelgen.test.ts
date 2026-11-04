@@ -11,7 +11,7 @@ import { validateLayout } from '../movement/layout.ts';
 import { auditLayout } from '../movement/levelAudit.ts';
 import { criticPrompt, mockCritic } from './critic.ts';
 import { evaluateLayout } from './evaluate.ts';
-import { generateLayout, HOLE_RIM_M } from './generate.ts';
+import { extendLayout, generateLayout, HOLE_RIM_M } from './generate.ts';
 import type { Profile } from './profile.ts';
 import { fromUE, targetScore, toUE, validateProfile } from './profile.ts';
 import type { GenLayout } from './schema.ts';
@@ -321,4 +321,81 @@ test('game designer 2026-11-03: generated layouts keep every building off the cu
     const l = generateLayout({ profile, seed });
     assert.deepEqual(validateGenLayout(l).filter((m) => m.includes('cut wall')), [], `seed ${seed}`);
   }
+});
+
+test('T11: Depot x2 extend mode preserves the frozen layout byte-identically in coordinates (seeds 1..3)', () => {
+  const baseLayout = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json'), 'utf8')) as GenLayout;
+  for (let seed = 1; seed <= 3; seed++) {
+    const ext = extendLayout({ baseLayout, seed, profile });
+    for (const b of baseLayout.buildings) {
+      const eb = ext.buildings.find((x) => x.id === b.id);
+      assert.ok(eb, `seed ${seed}: building ${b.id} missing`);
+      assert.deepEqual(eb.footprint, b.footprint, `seed ${seed}: building ${b.id} footprint changed`);
+      assert.deepEqual(eb.doors, b.doors);
+      assert.deepEqual(eb.stairs, b.stairs);
+      assert.deepEqual(eb.roof_holes, b.roof_holes);
+      assert.deepEqual(eb.floor_holes, b.floor_holes);
+    }
+    for (const w of baseLayout.walls) {
+      const ew = ext.walls.find((x) => x.id === w.id);
+      assert.ok(ew, `seed ${seed}: wall ${w.id} missing`);
+      assert.deepEqual(ew.a, w.a);
+      assert.deepEqual(ew.b, w.b);
+    }
+    for (const l of baseLayout.ladders) {
+      const el = ext.ladders.find((x) => x.id === l.id);
+      assert.ok(el, `seed ${seed}: ladder ${l.id} missing`);
+      assert.deepEqual(el.pos, l.pos);
+      assert.deepEqual(el.foot, l.foot);
+      assert.deepEqual(el.top, l.top);
+      assert.equal(el.yaw, l.yaw);
+    }
+    for (const c of baseLayout.covers) {
+      const ec = ext.covers.find((x) => x.id === c.id);
+      assert.ok(ec, `seed ${seed}: cover ${c.id} missing`);
+      assert.deepEqual(ec.pos, c.pos);
+    }
+    for (const s of baseLayout.spawn_points) {
+      const es = ext.spawn_points.find((x) => x.id === s.id);
+      assert.ok(es, `seed ${seed}: spawn ${s.id} missing`);
+      assert.deepEqual(es.pos, s.pos);
+    }
+  }
+});
+
+test('T11: Depot x2 extended layout passes all validators, audit, and keeps buildings off cut walls (seeds 1..3)', () => {
+  const baseLayout = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json'), 'utf8')) as GenLayout;
+  for (let seed = 1; seed <= 3; seed++) {
+    const ext = extendLayout({ baseLayout, seed, profile });
+    assert.deepEqual(validateGenLayout(ext), [], `seed ${seed} validateGenLayout`);
+    const ground = toFormationLayout(ext, 'ground');
+    assert.deepEqual(validateLayout(ground), [], `seed ${seed} validateLayout ground`);
+    const auditErrors = auditLayout(ground, config).filter((i) => i.severity === 'error');
+    assert.deepEqual(auditErrors, [], `seed ${seed} audit errors`);
+  }
+});
+
+test('T11: Depot x2 mandatory bot route covers both frozen part and extended part, and is completable (seeds 1..3)', () => {
+  const baseLayout = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json'), 'utf8')) as GenLayout;
+  for (let seed = 1; seed <= 3; seed++) {
+    const ext = extendLayout({ baseLayout, seed, profile });
+    const r = mandatoryRoute(ext);
+    const oldPart = r.points.filter((p) => p[1] <= 8850);
+    const newPart = r.points.filter((p) => p[1] > 8850);
+    assert.ok(oldPart.length >= 5, `seed ${seed}: route old points ${oldPart.length}`);
+    assert.ok(newPart.length >= 5, `seed ${seed}: route new points ${newPart.length}`);
+    const ev = evaluateLayout({ layout: ext, profile, config, noSim: true });
+    assert.ok(ev.route.completable, `seed ${seed} route: ${ev.route.fail}`);
+    for (const v of ev.variants) assert.ok(v.completable, `seed ${seed} variant ${v.id}: ${v.fail}`);
+  }
+});
+
+test('T11: Depot x2 extendLayout is deterministic for a seed and differs between seeds', () => {
+  const baseLayout = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json'), 'utf8')) as GenLayout;
+  const a = extendLayout({ baseLayout, seed: 7 });
+  const b = extendLayout({ baseLayout, seed: 7 });
+  const c = extendLayout({ baseLayout, seed: 8 });
+  assert.equal(JSON.stringify(a), JSON.stringify(b));
+  assert.notEqual(JSON.stringify(a), JSON.stringify(c));
+  assert.equal(a.seed, 7);
 });
