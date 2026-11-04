@@ -13,7 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TRAINER = os.path.dirname(HERE)
 sys.path.insert(0, TRAINER)
 
-from nighttrainer import evolution, fitness, genome, highlights, mock_arena  # noqa: E402
+from nighttrainer import evolution, fitness, genome, highlights, mock_arena, track_stats  # noqa: E402
 from nighttrainer.adapter import ArenaAdapter, ArenaResultError  # noqa: E402
 from nighttrainer.runner import BuildLock, JobRunner, is_codex_editor_cmdline  # noqa: E402
 
@@ -237,6 +237,55 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("Rounds=1 Seed=99", execs)
         self.assertIn("Record=1,CodexTactics.ClipRecorder trainer_h seconds=44", execs)
         self.assertIn("-RenderOffscreen", cmd)
+
+
+class CloseRangeTests(unittest.TestCase):
+    @staticmethod
+    def track(units="m", scale=1.0, weapon=None):
+        # A1 at x=0, B1 at x=5 (close) then 30 (far); A1 fires 3 shots: t=0.2 close, t=0.4 close, t=1.0 far; B1 hits A1 close once
+        frames = [[[0, 0], [5 * scale, 0]]] * 3 + [[[0, 0], [30 * scale, 0]]] * 3
+        fighters = [{"id": "A1", "side": "A", "team": 1}, {"id": "B1", "side": "B", "team": 2}]
+        if weapon:
+            fighters[0]["weapon"] = weapon
+        ev = [{"t": 0.2, "type": "shot", "from": "A1", "to": "B1", "hit": False},
+              {"t": 0.4, "type": "shot", "from": "A1", "to": "B1", "hit": True},
+              {"t": 1.0, "type": "shot", "from": "A1", "to": "B1", "hit": False},
+              {"t": 0.2, "type": "shot", "from": "B1", "to": "A1", "hit": True},
+              {"t": 1.0, "type": "shot", "from": "B1", "to": "A1", "hit": True}]
+        return {"dt": 0.2, "units": units, "fighters": fighters, "frames": frames, "events": ev}
+
+    def test_ratio_and_hits_taken(self):
+        st = track_stats.side_stats(self.track(), "A", 10.0)
+        self.assertEqual((st["shots"], st["close_shots"], st["close_hits_taken"]), (3, 2, 1))
+        self.assertAlmostEqual(st["close_shot_ratio"], 2 / 3)
+        self.assertEqual(track_stats.side_stats(self.track(), "B", 10.0)["close_hits_taken"], 1)
+
+    def test_units_cm_and_range(self):
+        self.assertAlmostEqual(track_stats.side_stats(self.track("cm", 100.0), "A", 10.0)["close_shot_ratio"], 2 / 3)
+        self.assertEqual(track_stats.side_stats(self.track(), "A", 3.0)["close_shots"], 0)
+
+    def test_shotgun_exempt(self):
+        st = track_stats.side_stats(self.track(weapon="Shotgun"), "A", 10.0, True)
+        self.assertEqual(st["shots"], 0)
+        self.assertEqual(track_stats.side_stats(self.track(weapon="Shotgun"), "A", 10.0, False)["shots"], 3)
+
+    def test_missing_track_no_penalty(self):
+        self.assertIsNone(track_stats.load_side_stats("nope.json", "A"))
+        base = {"won": 1.0, "survivors": 3, "squad_size": 4, "hp_lost": 100, "hp_max": 400, "duration_s": 150}
+        cfg = dict(CONFIG["fitness"])
+        no = fitness.round_score(base, cfg)
+        self.assertAlmostEqual(fitness.round_score(dict(base, close_shot_ratio=0.5), cfg), no - 2.0)
+        self.assertEqual(fitness.round_score(dict(base, close_shot_ratio=0.5), {k: v for k, v in cfg.items() if k != "close_range"}), no)
+
+    def test_adapter_parses_track(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "r.track.json"), "w") as f:
+                json.dump(self.track(), f)
+            doc = json.loads(json.dumps(json.load(open(os.path.join(os.path.dirname(__file__), "..", "fixtures", "sample_arena_result.json")))))
+            doc["rounds"][0]["track"] = "r.track.json"
+            rows = ArenaAdapter(CONFIG["arena"], "C:/Repo", None, CONFIG["fitness"]["close_range"]).parse_doc(doc, None, d)
+            self.assertAlmostEqual(rows[0]["close_shot_ratio"], 2 / 3)
+            self.assertNotIn("close_shot_ratio", rows[1])
 
 
 class HighlightTests(unittest.TestCase):

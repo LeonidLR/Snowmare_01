@@ -50,7 +50,7 @@ class Trainer:
         if mock_in_process is None:
             mock_in_process = bool(c.get("mock", {}).get("in_process", False))
         mock_cfg = dict(c.get("mock", {}), reference_weights=self.baseline_path) if self.mock else None
-        self.adapter = ArenaAdapter(c["arena"], self.repo_root, mock_cfg)
+        self.adapter = ArenaAdapter(c["arena"], self.repo_root, mock_cfg, c.get("fitness", {}).get("close_range"))
         self.runner = JobRunner(self.adapter, c["arena"], self.parallel, self.mock and mock_in_process, mock_cfg,
                                 self.log)
         self.status = {}
