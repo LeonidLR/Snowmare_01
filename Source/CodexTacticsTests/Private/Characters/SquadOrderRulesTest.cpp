@@ -273,4 +273,16 @@ bool FSquadOrderGroupCoverInCombatTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_ORDER_TEST(FSquadOrderBoxSelectionTest, "BoxSelectionOnlyInSoloMode")
+bool FSquadOrderBoxSelectionTest::RunTest(const FString&)
+{
+	using namespace SquadOrderRules;
+	// T6 addition: box selection is allowed only in solo mode and outside turn-based combat.
+	TestTrue(TEXT("Solo mode, real-time: box selection allowed"), IsBoxSelectionAllowed(true, false));
+	TestFalse(TEXT("Formation mode: box selection disabled"), IsBoxSelectionAllowed(false, false));
+	TestFalse(TEXT("Turn-based combat in solo: box selection disabled"), IsBoxSelectionAllowed(true, true));
+	TestFalse(TEXT("Turn-based combat in formation: box selection disabled"), IsBoxSelectionAllowed(false, true));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
