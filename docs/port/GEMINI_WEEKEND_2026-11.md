@@ -144,6 +144,17 @@ don't run or change it). The next step could be Epic's **Learning Agents** plugi
   existing maps; a new test map inside the plugin's Content if needed). If it doesn't build cleanly within the plugin, stop and
   report - the document is the deliverable.
 
+### T9 (any time, READ-ONLY). Analyse the night trainer's results
+The night trainer runs by itself from Windows Task Scheduler every night 22:15-08:00 (run id `pmc-main`). Don't start, stop,
+pause or configure it; don't edit anything under `Scripts/Trainer/`, `Saved/Trainer/` or `Content/Data/AI/`.
+- Read `docs/tools/night-trainer.md` and `docs/systems/pmc-squad-ai.md`, then the run's outputs (read-only):
+  `Saved/Trainer/pmc-main/report.html`, `leaderboard.json`, `champion_weights.json` vs `Content/Data/AI/pmc_commander.json`,
+  `generation.json` files, the highlight clips / 2D track replays.
+- Write `docs/design/PMC_TRAINING_ANALYSIS.md`: how fitness evolves, which weights drift and in which direction (what that
+  means tactically), what the fights look like (draw rate, time-limit draws, stuck events, friendly fire, flanks), behaviours
+  that look dumb in the clips / tracks, and concrete recommendations for Claude (fitness terms, bounds, arena scenarios,
+  commander bugs). Recommendations only - no code, no config changes.
+
 ## 3. Out-of-plan work is discarded
 
 Claude reviews every `gemini/*` branch file by file against this plan. Changes outside a task's area (refactors, "cleanups",
