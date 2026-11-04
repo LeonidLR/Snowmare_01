@@ -15,6 +15,13 @@
     "bonus_per_level": 0.25,
     "max_multiplier": 2.0
   },
+  "sight_conditions": {
+    "comment": "Sight range by the conditions (user request 2026-11-04 on L_Gen_Depot_1: 'on a clear day the cone should cover practically everything visible; night cuts it drastically whatever the weather; snowfall / blizzard / fog reduce it; the same for the enemies'; the NUMBERS ARE PENDING the user's confirmation). squad_base_range_m = the squad's clear-day range on the ground (was a flat 60 m); human_enemy_range_multiplier = the armed humans (Marksman, PMC, every ladder climber) x this over their archetype sight_range_m below (one model: they see as far as the squad); beasts keep their rows. Every observer's range (the squad, the humans, the beasts) x weather x time_of_day: the weather blended through a transition (the weather amounts), the time of day by the sun's elevation (day at / above day_sun_elevation_deg, twilight at the horizon, night at / below night_sun_elevation_deg, linear between: no pops). The height bonus (height_sight) multiplies on top. There is no LightSnow / Fog weather state yet (the ladder is Clear / Overcast / Snowfall / Blizzard): light_snow 0.75 and fog 0.4 are reserved for them and unused. Console Codex.Sight.Conditions 0 = no weather / time multiplier, Codex.Sight.LongRange 0 = the old 60 m and x1 humans (A/B).",
+    "squad_base_range_m": 120,
+    "human_enemy_range_multiplier": 2.0,
+    "weather": { "clear": 1.0, "overcast": 0.85, "snowfall": 0.6, "blizzard": 0.5, "light_snow": 0.75, "fog": 0.4 },
+    "time_of_day": { "day": 1.0, "twilight": 0.7, "night": 0.35, "day_sun_elevation_deg": 10, "night_sun_elevation_deg": -10 }
+  },
   "lure": {
     "comment": "Stealth lure (user decisions 2026-10-18, docs/design/STEALTH_LURE.md): WHISTLE = a noise at the operative, THROW = a stone / bolt / cartridge, noise at the impact. Infinite, per-operative cooldown, only while exploring undetected. Every patrol / guard enemy within the radius (walls cut it like footsteps: hearing_occlusion_per_wall) investigates the point for investigate_seconds, sweeping within investigate_sweep_radius_m, then returns to its route / post.",
     "whistle_radius_m": 12,

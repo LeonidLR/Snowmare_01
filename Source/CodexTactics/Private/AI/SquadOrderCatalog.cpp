@@ -136,11 +136,20 @@ namespace SquadOrderCatalog
 				[](const FSquadOrderContext& C) { return Gate(C) && !C.WeaponId.IsEmpty() && HasWeapon(*C.Operative, C.WeaponId); },
 				[](const FSquadOrderContext& C) { return C.Operative->SwitchToWeaponById(C.WeaponId); });
 
-			Add(ESquadOrder::Hold, TEXT("Hold"), TEXT("Stop where he stands (his combat facing turns him to the target by itself)."),
+			Add(ESquadOrder::Hold, TEXT("Hold"), TEXT("Stop where he stands; with a Location, turn to face it (his combat facing turns him to a seen target by itself)."),
 				[](const FSquadOrderContext& C) { return Gate(C); },
 				[](const FSquadOrderContext& C)
 				{
-					C.Operative->StopOperative();
+					// As documented (ESquadOrder::Hold): a Location turns him to face it (2026-11-04: a PMC rifleman back at his band after the
+					// standoff walk faced away from the threat and never looked again).
+					if (C.Location.IsNearlyZero())
+					{
+						C.Operative->StopOperative();
+					}
+					else
+					{
+						C.Operative->StopAndFace(C.Location);
+					}
 					return true;
 				});
 			return Entries;

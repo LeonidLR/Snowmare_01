@@ -7,6 +7,11 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
+FPmcWeights::FPmcWeights()
+	: Bands(PmcCommanderRules::DefaultBands())
+{
+}
+
 namespace PmcCommanderRules
 {
 	namespace PmcCommanderLocal
@@ -20,6 +25,9 @@ namespace PmcCommanderRules
 		{
 			return bCondition ? 1.f : 0.f;
 		}
+
+		/** A close-quarters advance must move him at least this far (the arrival radius of a walk). */
+		constexpr float MinAdvanceStepCm = 250.f;
 
 		inline void ReadNumber(const FJsonObject& Json, const TCHAR* Key, float& Out)
 		{
@@ -66,30 +74,52 @@ namespace PmcCommanderRules
 		const float Contact = Step(S.bContact);
 		const float SeenNow = Step(F.bHasThreat && F.Threat.bSeenNow);
 		const float InRange = Step(F.bHasThreat && F.Threat.DistanceCm <= F.WeaponRangeCm);
+		// Engagement bands (2026-11-04): a static order outside his weapon's band is worth less; too close (not a shotgun) he backs off.
+		const bool bBand = F.Band.IsValid();
+		const float BandHere = bBand && F.bHasThreat ? BandFactor(F.Threat.DistanceCm, F.Band, W) : 1.f;
+		const float StaticBand = FMath::Lerp(1.f, BandHere, Clamp01(W.BandPosition));
+		// Hysteresis: a running retreat goes on to the band's middle (else it would stop the moment he crosses the trigger distance).
+		// A running flank passes the threat inside the band on purpose: no standoff then.
+		const bool bTooClose = bBand && F.bHasThreat && F.RunningOrder != EPmcOrder::Flank && (IsTooClose(F.Threat.DistanceCm, F.Band, W)
+			|| (F.RunningOrder == EPmcOrder::FallBack && !F.Band.bCloseQuarters && F.Threat.DistanceCm < 0.5f * (F.Band.MinCm + F.Band.MaxCm)));
 		switch (Order)
 		{
 		case EPmcOrder::Hold:
 			// The baseline: the fighter keeps shooting from where he is; worth more in cover and in contact.
-			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f);
+			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand;
 		case EPmcOrder::TakeCover:
-			// Exposed and badly covered against a known threat, with somewhere to go.
+			// Exposed and badly covered against a known threat, with somewhere to go (a slot at his band's distance preferred).
 			return W.TakeCover * Step(F.bCoverAvailable && F.bHasThreat) * (1.f - F.CoverQuality) * (0.4f + 0.6f * Contact) * (0.5f + 0.5f * Step(F.bExposed))
-				* Step(!F.bInCover || F.CoverQuality < 0.3f);
+				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition));
 		case EPmcOrder::Advance:
-			// Bounding overwatch: one man moves while the others hold; worth it with numbers, health, ammo, and a threat out of reach.
-			return W.Advance * Step(F.bHasThreat) * (S.bContact ? 1.f : 0.4f) * NumbersFactor(S.Alive, S.EnemiesKnown) * F.HealthFrac
-				* Step(F.AmmoFrac > 0.2f) * Step(F.Threat.DistanceCm > F.WeaponRangeCm * W.AdvanceStopRangeFrac) * (S.MatesAdvancing == 0 || S.Alive == 1 ? 1.f : 0.15f);
+		{
+			// Bounding overwatch: one man moves while the others hold; worth it with numbers, health, ammo, and a threat beyond his band (the
+			// stop: AdvanceStopCm). A close-quarters weapon (the shotgun) closes in harder (CloseIn) and less afraid of the numbers.
+			const float Numbers = F.Band.bCloseQuarters ? FMath::Max(0.5f, NumbersFactor(S.Alive, S.EnemiesKnown)) : NumbersFactor(S.Alive, S.EnemiesKnown);
+			return W.Advance * (F.Band.bCloseQuarters ? FMath::Max(W.CloseIn, 0.f) : 1.f) * Step(F.bHasThreat) * (S.bContact ? 1.f : 0.4f) * Numbers * F.HealthFrac
+				* Step(F.AmmoFrac > 0.2f)
+				// A band's advance needs a real step (a shotgunner 4.4 m off a 4.2 m stop re-issued a 20 cm walk every decision, Depot arena).
+				* Step(F.Threat.DistanceCm > (bBand && !F.Band.bCloseQuarters ? F.Band.MaxCm : AdvanceStopCm(F.WeaponRangeCm, F.Band, W) + (bBand ? MinAdvanceStepCm : 0.f)))
+				* (S.MatesAdvancing == 0 || S.Alive == 1 ? 1.f : 0.15f);
+		}
 		case EPmcOrder::Flank:
 			// A second axis onto a seen threat while a mate pins it; one flanker at a time, a healthy man, within a sensible band.
-			return W.Flank * SeenNow * (S.MatesSuppressing > 0 || S.Alive >= 2 ? 1.f : 0.3f) * (S.MatesFlanking == 0 ? 1.f : 0.2f) * F.HealthFrac
+			// A running flank goes on while the threat is only remembered (2026-11-04: the band's longer flank walk loses sight of it on the way).
+			return W.Flank * (F.RunningOrder == EPmcOrder::Flank ? Step(F.bHasThreat) : SeenNow) * (S.MatesSuppressing > 0 || S.Alive >= 2 ? 1.f : 0.3f) * (S.MatesFlanking == 0 ? 1.f : 0.2f) * F.HealthFrac
 				* Step(F.Threat.DistanceCm >= 600.f && F.Threat.DistanceCm <= 3500.f) * (F.bExposed ? 0.7f : 1.f) * Step(F.AmmoFrac > 0.2f);
 		case EPmcOrder::Suppress:
 			// Pin a seen threat so a mate can move; needs ammo and a reason (a mate moving), one suppressor at a time.
 			return W.Suppress * SeenNow * InRange * Step(F.AmmoFrac >= W.SuppressAmmoMin) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.5f)
-				* (S.MatesSuppressing == 0 ? 1.f : 0.4f);
+				* (S.MatesSuppressing == 0 ? 1.f : 0.4f) * StaticBand;
 		case EPmcOrder::FallBack:
+		{
 			// Losing: badly wounded or outnumbered in contact.
-			return W.FallBack * Contact * Step(F.bHasThreat) * Clamp01(Step(F.HealthFrac < W.FallBackBelow) * (1.f - F.HealthFrac) + Step(S.Alive - S.EnemiesKnown <= -1) * 0.6f);
+			const float Losing = W.FallBack * Contact * Step(F.bHasThreat) * Clamp01(Step(F.HealthFrac < W.FallBackBelow) * (1.f - F.HealthFrac) + Step(S.Alive - S.EnemiesKnown <= -1) * 0.6f);
+			// Too close for his weapon (2026-11-04: "never fights at point-blank range"): back off to the band, the closer the more urgent.
+			const float Severity = bTooClose ? Clamp01(1.f - F.Threat.DistanceCm / FMath::Max(F.Band.MinCm, 1.f)) : 0.f;
+			const float Standoff = Step(bTooClose) * FMath::Max(W.Standoff, 0.f) * (0.6f + 0.4f * Severity) * (S.bContact ? 1.f : 0.6f);
+			return FMath::Max(Losing, Standoff);
+		}
 		case EPmcOrder::Heal:
 			// A wounded mate within reach, a medkit in the kit, and nobody looking (seen threats make it a last resort).
 			return W.Heal * Step(F.bHasMedkit && F.WoundedMateDistanceCm >= 0.f && F.WoundedMateHealthFrac < W.HealBelow) * Clamp01(1.f - F.WoundedMateHealthFrac)
@@ -108,7 +138,7 @@ namespace PmcCommanderRules
 			return W.Sidearm * Step(F.bHasSidearm && F.ClipFrac <= 0.f && F.bHasThreat && F.Threat.DistanceCm < 400.f && F.Threat.bSeenNow);
 		case EPmcOrder::Crouch:
 			// In contact, standing still in the open: get low.
-			return W.Crouch * Contact * Step(!F.bMoving && !F.bInCover && F.Stance == EOperativeStance::Standing);
+			return W.Crouch * Contact * Step(!F.bMoving && !F.bInCover && F.Stance == EOperativeStance::Standing) * StaticBand;
 		default:
 			return 0.f;
 		}
@@ -155,7 +185,92 @@ namespace PmcCommanderRules
 		return Order == EPmcOrder::Advance || Order == EPmcOrder::Flank || Order == EPmcOrder::FallBack || Order == EPmcOrder::Relocate || Order == EPmcOrder::TakeCover;
 	}
 
-	FVector FlankPoint(const FVector& Threat, const FVector& SquadCentre, const FVector& Fighter, const FPmcWeights& Weights)
+	TMap<FString, FPmcEngagementBand> DefaultBands()
+	{
+		TMap<FString, FPmcEngagementBand> Out;
+		Out.Add(TEXT("m16"), { 2500.f, 6000.f, false });
+		Out.Add(TEXT("plasma_carbine"), { 2500.f, 6000.f, false });
+		Out.Add(TEXT("sniper_rifle"), { 4500.f, 11000.f, false });
+		Out.Add(TEXT("pistol"), { 1000.f, 2500.f, false });
+		Out.Add(TEXT("shotgun"), { 400.f, 1400.f, true });
+		Out.Add(TEXT("lmg"), { 3000.f, 7000.f, false });
+		return Out;
+	}
+
+	FPmcEngagementBand ResolveBand(const FString& WeaponId, float WeaponRangeCm, const FPmcWeights& Weights)
+	{
+		FPmcEngagementBand Band;
+		if (!Weights.bUseBands || WeaponRangeCm <= 0.f)
+		{
+			return Band;
+		}
+		if (const FPmcEngagementBand* Row = Weights.Bands.Find(WeaponId))
+		{
+			Band = *Row;
+		}
+		else
+		{
+			Band.MinCm = WeaponRangeCm * FMath::Max(Weights.DefaultBandMinFrac, 0.f);
+			Band.MaxCm = WeaponRangeCm * FMath::Max(Weights.DefaultBandMaxFrac, 0.f);
+		}
+		// He must still hit from there: the band ends at the weapon's reach, and keeps a fifth of its width below that.
+		const float Reach = WeaponRangeCm * FMath::Clamp(Weights.BandReachFrac, 0.1f, 1.f);
+		Band.MaxCm = FMath::Min(FMath::Max(Band.MaxCm, 0.f), Reach);
+		Band.MinCm = FMath::Clamp(Band.MinCm, 0.f, 0.8f * Band.MaxCm);
+		return Band;
+	}
+
+	float BandFactor(float DistanceCm, const FPmcEngagementBand& Band, const FPmcWeights& Weights)
+	{
+		if (!Band.IsValid())
+		{
+			return 1.f;
+		}
+		if (DistanceCm < Band.MinCm)
+		{
+			const float T = PmcCommanderLocal::Clamp01(DistanceCm / FMath::Max(Band.MinCm, 1.f));
+			return FMath::Lerp(PmcCommanderLocal::Clamp01(Weights.BandCloseFloor), 1.f, T * T);
+		}
+		if (DistanceCm > Band.MaxCm)
+		{
+			return FMath::Lerp(1.f, 0.5f, PmcCommanderLocal::Clamp01((DistanceCm - Band.MaxCm) / FMath::Max(Band.MaxCm, 1.f)));
+		}
+		return 1.f;
+	}
+
+	bool IsTooClose(float DistanceCm, const FPmcEngagementBand& Band, const FPmcWeights& Weights)
+	{
+		return Band.IsValid() && !Band.bCloseQuarters && DistanceCm < Band.MinCm * FMath::Max(Weights.StandoffTriggerFrac, 0.f);
+	}
+
+	float AdvanceStopCm(float WeaponRangeCm, const FPmcEngagementBand& Band, const FPmcWeights& Weights)
+	{
+		const float Stop = WeaponRangeCm * Weights.AdvanceStopRangeFrac;
+		return Band.IsValid() ? FMath::Clamp(Stop, Band.MinCm, Band.MaxCm) : Stop;
+	}
+
+	float FlankDistanceFor(const FPmcEngagementBand& Band, const FPmcWeights& Weights)
+	{
+		return Band.IsValid() ? FMath::Clamp(Weights.FlankDistanceCm, Band.MinCm, Band.MaxCm) : Weights.FlankDistanceCm;
+	}
+
+	FVector StandoffPoint(const FVector& Fighter, const FVector& Threat, const FPmcEngagementBand& Band)
+	{
+		const float Distance = FVector::Dist2D(Fighter, Threat);
+		const float Want = 0.5f * (Band.MinCm + Band.MaxCm);
+		if (!Band.IsValid() || Distance >= Want)
+		{
+			return Fighter;
+		}
+		FVector Away = (Fighter - Threat).GetSafeNormal2D();
+		if (Away.IsNearlyZero())
+		{
+			Away = FVector::BackwardVector;
+		}
+		return Fighter + Away * (Want - Distance);
+	}
+
+	FVector FlankPoint(const FVector& Threat, const FVector& SquadCentre, const FVector& Fighter, const FPmcWeights& Weights, float DistanceCm)
 	{
 		FVector Axis = (SquadCentre - Threat).GetSafeNormal2D();
 		if (Axis.IsNearlyZero())
@@ -166,13 +281,13 @@ namespace PmcCommanderRules
 		// The side away from the fighter: he comes at the threat from the other flank than the one he stands on.
 		const float Sign = FVector::DotProduct(Fighter - Threat, Side) >= 0.f ? -1.f : 1.f;
 		const FVector Direction = (Axis * FMath::Cos(FMath::DegreesToRadians(Weights.FlankAngleDeg)) + Side * Sign * FMath::Sin(FMath::DegreesToRadians(Weights.FlankAngleDeg))).GetSafeNormal2D();
-		return FVector(Threat.X, Threat.Y, Threat.Z) + Direction * Weights.FlankDistanceCm;
+		return FVector(Threat.X, Threat.Y, Threat.Z) + Direction * (DistanceCm >= 0.f ? DistanceCm : Weights.FlankDistanceCm);
 	}
 
-	FVector AdvancePoint(const FVector& Fighter, const FVector& Threat, float WeaponRangeCm, const FPmcWeights& Weights)
+	FVector AdvancePoint(const FVector& Fighter, const FVector& Threat, float WeaponRangeCm, const FPmcWeights& Weights, const FPmcEngagementBand& Band)
 	{
 		const float Distance = FVector::Dist2D(Fighter, Threat);
-		const float Stop = WeaponRangeCm * Weights.AdvanceStopRangeFrac;
+		const float Stop = AdvanceStopCm(WeaponRangeCm, Band, Weights);
 		if (Distance <= Stop)
 		{
 			return Fighter;
@@ -246,6 +361,51 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("high_ground_max_levels"), MaxLevels);
 		Out.HighGroundMaxLevels = FMath::Max(0, FMath::RoundToInt(MaxLevels));
 		Out.DecisionInterval = FMath::Max(0.1f, Out.DecisionInterval);
+		// Engagement bands (2026-11-04).
+		bool bUseBands = Out.bUseBands;
+		if (Json.TryGetBoolField(TEXT("use_engagement_bands"), bUseBands))
+		{
+			Out.bUseBands = bUseBands;
+		}
+		ReadNumber(Json, TEXT("default_band_min_frac"), Out.DefaultBandMinFrac);
+		ReadNumber(Json, TEXT("default_band_max_frac"), Out.DefaultBandMaxFrac);
+		ReadNumber(Json, TEXT("band_reach_frac"), Out.BandReachFrac);
+		ReadNumber(Json, TEXT("standoff"), Out.Standoff);
+		ReadNumber(Json, TEXT("standoff_trigger_frac"), Out.StandoffTriggerFrac);
+		ReadNumber(Json, TEXT("band_position"), Out.BandPosition);
+		ReadNumber(Json, TEXT("band_close_floor"), Out.BandCloseFloor);
+		ReadNumber(Json, TEXT("corner_bonus"), Out.CornerBonus);
+		ReadNumber(Json, TEXT("close_in"), Out.CloseIn);
+		ReadNumber(Json, TEXT("prone_min_band_cm"), Out.ProneMinBandCm);
+		const TSharedPtr<FJsonObject>* Bands = nullptr;
+		if (Json.TryGetObjectField(TEXT("engagement_bands"), Bands) && Bands && Bands->IsValid())
+		{
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Bands)->Values)
+			{
+				const TSharedPtr<FJsonObject>* Row = nullptr;
+				if (Entry.Key.StartsWith(TEXT("_")) || !Entry.Value.IsValid() || !Entry.Value->TryGetObject(Row) || !Row || !Row->IsValid())
+				{
+					continue; // "_comment" and the like
+				}
+				FPmcEngagementBand Band = Out.Bands.FindRef(Entry.Key);
+				double Meters = 0.0;
+				if ((*Row)->TryGetNumberField(TEXT("min_m"), Meters))
+				{
+					Band.MinCm = FMath::Max(static_cast<float>(Meters) * 100.f, 0.f);
+				}
+				if ((*Row)->TryGetNumberField(TEXT("max_m"), Meters))
+				{
+					Band.MaxCm = FMath::Max(static_cast<float>(Meters) * 100.f, 0.f);
+				}
+				bool bCloseQuarters = Band.bCloseQuarters;
+				if ((*Row)->TryGetBoolField(TEXT("close_quarters"), bCloseQuarters))
+				{
+					Band.bCloseQuarters = bCloseQuarters;
+				}
+				Band.MaxCm = FMath::Max(Band.MaxCm, Band.MinCm);
+				Out.Bands.Add(Entry.Key, Band);
+			}
+		}
 		return Out;
 	}
 

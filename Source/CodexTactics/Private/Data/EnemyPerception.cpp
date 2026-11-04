@@ -34,6 +34,7 @@ namespace EnemyPerception
 	static FPatrolSearchParams CurrentSearch;
 	static FStealthLureParams CurrentLure;
 	static SightRules::FHeightSightConfig CurrentHeightSight;
+	static SightRules::FSightConditionsConfig CurrentSightConditions;
 
 	static void ReadMeters(const FJsonObject& Json, const TCHAR* Key, float& OutCm)
 	{
@@ -173,6 +174,51 @@ void EnemyPerception::ResetToDefaults()
 	CurrentSearch = FPatrolSearchParams();
 	CurrentLure = FStealthLureParams();
 	CurrentHeightSight = SightRules::FHeightSightConfig();
+	CurrentSightConditions = SightRules::FSightConditionsConfig();
+}
+
+SightRules::FSightConditionsConfig EnemyPerception::GetSightConditions()
+{
+	return CurrentSightConditions;
+}
+
+void EnemyPerception::SetSightConditions(const SightRules::FSightConditionsConfig& Config)
+{
+	CurrentSightConditions = Config;
+}
+
+SightRules::FSightConditionsConfig EnemyPerception::SightConditionsFromJson(const FJsonObject& Json, const SightRules::FSightConditionsConfig& Base)
+{
+	SightRules::FSightConditionsConfig Out = Base;
+	ReadMeters(Json, TEXT("squad_base_range_m"), Out.SquadBaseRangeCm);
+	ReadNumber(Json, TEXT("human_enemy_range_multiplier"), Out.HumanEnemyRangeMultiplier);
+	const TSharedPtr<FJsonObject>* Weather = nullptr;
+	if (Json.TryGetObjectField(TEXT("weather"), Weather) && Weather && Weather->IsValid())
+	{
+		ReadNumber(**Weather, TEXT("clear"), Out.WeatherMultipliers[static_cast<int32>(EWeatherState::Clear)]);
+		ReadNumber(**Weather, TEXT("overcast"), Out.WeatherMultipliers[static_cast<int32>(EWeatherState::Overcast)]);
+		ReadNumber(**Weather, TEXT("snowfall"), Out.WeatherMultipliers[static_cast<int32>(EWeatherState::Snowfall)]);
+		ReadNumber(**Weather, TEXT("blizzard"), Out.WeatherMultipliers[static_cast<int32>(EWeatherState::Blizzard)]);
+	}
+	const TSharedPtr<FJsonObject>* Time = nullptr;
+	if (Json.TryGetObjectField(TEXT("time_of_day"), Time) && Time && Time->IsValid())
+	{
+		ReadNumber(**Time, TEXT("day"), Out.DayMultiplier);
+		ReadNumber(**Time, TEXT("twilight"), Out.TwilightMultiplier);
+		ReadNumber(**Time, TEXT("night"), Out.NightMultiplier);
+		// Elevations may be negative: read them raw.
+		double Value = 0.0;
+		if ((*Time)->TryGetNumberField(TEXT("day_sun_elevation_deg"), Value))
+		{
+			Out.DayElevationDeg = FMath::Max(static_cast<float>(Value), 0.01f);
+		}
+		if ((*Time)->TryGetNumberField(TEXT("night_sun_elevation_deg"), Value))
+		{
+			Out.NightElevationDeg = FMath::Min(static_cast<float>(Value), -0.01f);
+		}
+	}
+	Out.SquadBaseRangeCm = FMath::Max(Out.SquadBaseRangeCm, 100.f);
+	return Out;
 }
 
 SightRules::FHeightSightConfig EnemyPerception::GetHeightSight()
@@ -259,6 +305,9 @@ bool EnemyPerception::ApplyJson(const FString& Text)
 	const TSharedPtr<FJsonObject>* HeightSight = nullptr;
 	CurrentHeightSight = Root->TryGetObjectField(TEXT("height_sight"), HeightSight) && HeightSight && HeightSight->IsValid()
 		? HeightSightFromJson(**HeightSight) : SightRules::FHeightSightConfig();
+	const TSharedPtr<FJsonObject>* SightConditions = nullptr;
+	CurrentSightConditions = Root->TryGetObjectField(TEXT("sight_conditions"), SightConditions) && SightConditions && SightConditions->IsValid()
+		? SightConditionsFromJson(**SightConditions) : SightRules::FSightConditionsConfig();
 	const TSharedPtr<FJsonObject>* Archetypes = nullptr;
 	if (Root->TryGetObjectField(TEXT("archetypes"), Archetypes) && Archetypes && Archetypes->IsValid())
 	{

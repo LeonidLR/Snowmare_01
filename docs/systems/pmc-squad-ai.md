@@ -120,6 +120,40 @@ slot over the ground under the fighter (the shared sight's ground measurement). 
 (ladders / ramps / drop links; length <= 3 x the straight distance + 30 m, at most two path queries per decision). Tested in
 `CodexTactics.AI.PmcCommander.HighGround`; the trainer's bounds sidecar has `/high_ground` 0.1-0.3 (`high_ground_max_levels` frozen).
 
+**Engagement bands** (user request 2026-11-04: "a man with an assault rifle keeps as far from his target as his weapon allows, fires from corners,
+prone, never fights at point-blank range; with a pistol he must come closer but still not point-blank; the shotgun is the close-range weapon").
+`pmc_commander.json` `engagement_bands` per weapon id (NUMBERS PENDING the user): m16 / plasma_carbine 25-60 m, sniper_rifle 45-110 m, pistol
+10-25 m, shotgun 4-14 m (`close_quarters`), lmg 30-70 m (no such weapon yet); an unknown weapon 0.5-0.95 x its reach. `PmcCommanderRules::ResolveBand`
+caps a band at `band_reach_frac` (0.95) x the weapon's reach and keeps a fifth of it below that (he must still hit from there): with today's
+reaches m16 (25 m) -> **19-23.75 m**, sniper (30 m) -> 22.8-28.5 m, pistol (10 m) -> 7.6-9.5 m, shotgun (7 m) -> 4-6.65 m. `BandFactor` (1 inside,
+quadratic down to `band_close_floor` 0.1 at point-blank, 0.5 at 2 x max) weighs: Hold / Suppress / Crouch x lerp(1, factor, `band_position` 0.7);
+TakeCover x the best slot's factor (`FindCoverNear` scores every slot by its distance to the threat in the band and a corner slot - a free edge to
+fire round - x (1 + `corner_bonus` 0.2)); **too close** (`IsTooClose`: nearer than `standoff_trigger_frac` 0.8 x the band's min, never a
+close-quarters weapon) -> **FallBack** scores `standoff` 1.3 x (0.6 + 0.4 x severity) and runs as a standoff: a cover slot round him already at
+band distance (sprint), else `StandoffPoint` (straight away to the band's middle); a running retreat keeps scoring until the band's middle
+(`FPmcFighterView::RunningOrder` FallBack, hysteresis); a running Flank never triggers it (the flank walk round the threat passes inside
+the band on purpose - PmcCommanderSmoke's flanker was pulled back at 11 m before), and a running Flank keeps scoring while the threat is only
+remembered (the band's longer flank walk loses sight of it on the way; it used to be dropped by a Hold). Holding in cover against a known
+threat, the commander makes it his priority target (catalog `PriorityTarget`): the cover pose faces it and the low-wall / corner fire stance
+leans out for it; holding in the open with a threat not seen now, the catalog's `Hold` now does what its doc said - `StopAndFace` the
+threat's last known spot (public since this change) - so a man back at his band after the walk turns round and fires (the smoke's riflemen
+stood at 21 m with their backs to the squad before). **Advance** only past the band's max (a rifleman) and stops at `AdvanceStopCm` = clamp(0.6 x reach,
+band) (19 m for the m16, 4.2 m for the shotgun); a close-quarters weapon advances x `close_in` 1.6 with the numbers factor floored at 0.5, and
+only for a step of >= 2.5 m (the first Depot arena run showed a shotgunner 4.4 m off re-issuing a 20 cm advance every decision).
+**Flank** points lie at `FlankDistanceFor` = the flank distance clamped into the band (19 m for a rifleman, 6.65 m for a shotgunner). **Prone:**
+the Crouch order (still, in the open, in contact) lies down for a weapon whose band starts >= `prone_min_band_cm` 15 m when the threat is in the
+band; any walk first gets him up to crouch. `use_engagement_bands` false = the old behaviour (A/B; a bool, not a trainer gene). New genes in
+`pmc_commander.bounds.json` (+-50 %): standoff, standoff_trigger_frac, band_position, band_close_floor, corner_bonus, close_in, prone_min_band_cm;
+the band rows and the reach / default fractions are frozen (designer numbers). Arena JSON: `standoffs` per team. Tested in
+`CodexTactics.AI.PmcCommander.EngagementBand`; smoke **`PmcStandoffSmoke`** (L_MovementTest, an 85 cm wall 19.6 m ahead and 4.5 m aside): three
+riflemen spawned 8 m from the squad FALL BACK (3 standoffs), within 4 s all stand 21.1-21.2 m off and fire from there (prone / suppressing);
+three shotgunners 15 m out close in to 7.9 m (an advance + flanks) with no standoff. `PmcCommanderSmoke` uses a wider clear arena (+-26 m) for
+the band-distance flank points. Known limits: the cover search casts rays from the fighter, so a slot on the far side of a wall that stands
+between him and the band point is found only once he is past it (the standoff walks to the band point first; the operative's own cover walk
+round a wall from the threat's side stopped short in the smoke); the over-the-top / corner **peek view reaches only 18 m**
+(`PeekSightConfig.RangeCm`, PeekSightSmoke checks it) - behind cover taller than his crouched eyes (95 cm) a rifleman at his 19-24 m band does
+not see over it (decision pending: raise the peek range to the band / the sight range?).
+
 Statistics per team (`FPmcTeamStats`): kills, flanks attempted / succeeded (the point reached), suppressions + seconds, ambushes sprung, retreats, heals,
 relocations, advances, covers, friendly-fire hits (`OnWeaponFiredNative` on a mate), stuck events (a walk with < 1 m of progress for 4 s is dropped),
 orders issued. `OnFighterOrder` broadcasts every order taken (the arena's track).

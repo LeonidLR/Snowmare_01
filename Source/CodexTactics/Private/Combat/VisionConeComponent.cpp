@@ -455,6 +455,11 @@ namespace VisionConeConsole
 		Job.Seconds = FPlatformTime::Seconds() - Start;
 	}
 
+	bool IsSameRange(float A, float B)
+	{
+		return FMath::Abs(A - B) <= FMath::Max(1.f, 0.01f * FMath::Max(A, B));
+	}
+
 	bool SameSpec(const FVisionConeSightSpec& A, const FVisionConeSightSpec& B)
 	{
 		if (A.Levels.Num() != B.Levels.Num() || FMath::Abs(A.EyeHeightCm - B.EyeHeightCm) > 1.f || FMath::Abs(A.HalfAngleDeg - B.HalfAngleDeg) > 0.1f)
@@ -463,7 +468,9 @@ namespace VisionConeConsole
 		}
 		for (int32 Index = 0; Index < A.Levels.Num(); ++Index)
 		{
-			if (FMath::Abs(A.Levels[Index].RangeCm - B.Levels[Index].RangeCm) > 1.f
+			// 2026-11-04: the range follows the weather / time of day continuously - a drift under 1 % waits for the normal cadence
+			// (moved / turned / StaticRefreshSeconds) instead of an urgent rebuild every frame of a dusk or a weather blend.
+			if (!IsSameRange(A.Levels[Index].RangeCm, B.Levels[Index].RangeCm)
 				|| FMath::Abs(A.Levels[Index].ProfileHeightCm - B.Levels[Index].ProfileHeightCm) > 1.f)
 			{
 				return false;
@@ -620,7 +627,7 @@ void UVisionConeComponent::UpdateCone(bool bShow, float RangeCm, float HalfAngle
 	const bool bOccluded = bClipToSight && Sight && Sight->Levels.Num() > 0 && GetWorld();
 	if (!bOccluded)
 	{
-		if (bBuiltOccluded || FMath::Abs(RangeCm - BuiltRange) > 1.f || FMath::Abs(Half - BuiltHalfAngle) > 0.1f)
+		if (bBuiltOccluded || !VisionConeConsole::IsSameRange(RangeCm, BuiltRange) || FMath::Abs(Half - BuiltHalfAngle) > 0.1f)
 		{
 			RebuildPlain(RangeCm, Half);
 		}

@@ -242,6 +242,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void StopOperative();
 
+	/** Stops, drops the sprint and turns to face Location (public since 2026-11-04: the order catalog's Hold faces a remembered threat). */
+	void StopAndFace(const FVector& Location);
+
 	/**
 	 * Traffic hold (Demo 01 level obstacles, 2026-10-13): a level actor (ABridgeCrossingVolume waiting for a free span,
 	 * ACrawlGapActor refusing a standing body) holds this operative where he stands - the formation does not pull him
@@ -762,7 +765,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone")
 	bool bShowVisionCone = false;
 
-	/** Cone range = the current weapon's real-time range x the stance multiplier (what it can hit); off: VisionConeRangeCm. */
+	/**
+	 * Cone range = his SIGHT range (user request 2026-11-04: "the cone must show how far he sees, not the weapon"): UTacticalSightSubsystem::
+	 * GetSightRangeCm - the clear-day 120 m x his height bonus x the weather / time of day, what CanOperativeSee uses. Off (or no sight
+	 * subsystem): the older rules below (bVisionConeRangeFromWeapon / VisionConeRangeCm). A peeking man's cone stays the peek cone.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone")
+	bool bVisionConeShowsSightRange = true;
+
+	/** Without bVisionConeShowsSightRange: cone range = the current weapon's real-time range x the stance multiplier (what it can hit); off: VisionConeRangeCm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone")
 	bool bVisionConeRangeFromWeapon = true;
 
@@ -2138,8 +2149,6 @@ private:
 	void ConsumeAmmoAfterShot();
 	/** GetRoundsSpent. */
 	int32 RoundsSpent = 0;
-	/** Stops, drops the sprint and turns to face Location. */
-	void StopAndFace(const FVector& Location);
 	/**
 	 * Range (weapon x stance x elevation), dead zone and line of fire to Enemy (Godot _find_shoot_target ray: walls block,
 	 * barricades by SquadFireRules::JudgeLine, another enemy in the way becomes the target unless bKeepTarget).
