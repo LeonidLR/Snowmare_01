@@ -119,7 +119,7 @@
     "m16": {
       "name": "M16A2 Assault Rifle",
       "base_damage": 18,
-      "attack_range_m": 25,
+      "attack_range_m": 60,
       "fire_rate": 0.65,
       "armor_penetration": 0.2,
       "max_clip_size": 30,
@@ -172,7 +172,7 @@
     "pistol": {
       "name": "Beretta Pistol",
       "base_damage": 16,
-      "attack_range_m": 10,
+      "attack_range_m": 25,
       "fire_rate": 0.45,
       "armor_penetration": 0.1,
       "max_clip_size": 12,
@@ -226,7 +226,7 @@
     "shotgun": {
       "name": "Remington 870 Shotgun",
       "base_damage": 45,
-      "attack_range_m": 7,
+      "attack_range_m": 15,
       "fire_rate": 1.15,
       "armor_penetration": 0.1,
       "max_clip_size": 8,
@@ -249,7 +249,7 @@
     "sniper_rifle": {
       "name": "Sniper Rifle",
       "base_damage": 70,
-      "attack_range_m": 30,
+      "attack_range_m": 120,
       "fire_rate": 2.4,
       "armor_penetration": 0.6,
       "max_clip_size": 5,
