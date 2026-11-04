@@ -36,6 +36,12 @@ float AEnemyCharacter::GetSightHeightMultiplier() const
 	return Sight ? Sight->GetSightRangeMultiplier(*this) : 1.f;
 }
 
+float AEnemyCharacter::GetSightRangeScale() const
+{
+	const UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+	return Sight ? Sight->GetEnemySightRangeScale(*this) : 1.f;
+}
+
 FEnemyPerceptionParams AEnemyCharacter::GetPatrolPerception() const
 {
 	FEnemyPerceptionParams Params = GetPerception();
@@ -44,7 +50,8 @@ FEnemyPerceptionParams AEnemyCharacter::GetPatrolPerception() const
 		Params = PerceptionRules::Scaled(Params, EnemyPerception::GetSearch().PerceptionMultiplier);
 	}
 	// One vision model (game designer 2026-11-02): an armed human on a roof / tower sees farther, like an operative up there (x1 for beasts).
-	Params.SightRangeCm *= GetSightHeightMultiplier();
+	// 2026-11-04: ... an armed human sees x2 its row (the squad's 120 m), and every enemy's range follows the weather and the time of day.
+	Params.SightRangeCm *= GetSightRangeScale();
 	return Params;
 }
 

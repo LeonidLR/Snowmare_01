@@ -26,5 +26,25 @@
   "move_switch_margin": 0.45,
   "commit_seconds": 2,
   "high_ground": 0.2,
-  "high_ground_max_levels": 3
+  "high_ground_max_levels": 3,
+  "_engagement_comment": "Engagement bands (user request 2026-11-04: 'a man with an assault rifle keeps as far from his target as his weapon allows, fires from corners, prone, never at point-blank range; a pistol comes closer but not point-blank; the shotgun is the close-range weapon'; the BAND NUMBERS ARE PENDING the user's confirmation). Per weapon id (weapons_tuning.json) the distance to the threat he wants to fight from; the band is capped at band_reach_frac x the weapon's reach (m16 reaches 25 m, the sniper rifle 30 m: their bands become ~20-24 / ~23-29 m) and keeps a fifth of its width below that; a weapon with no row gets default_band_*_frac x its reach. standoff = the 'too close' FallBack to the band's middle (cover at band distance first) when the threat is nearer than standoff_trigger_frac x the band's min (close_quarters weapons never back off; they close in: Advance x close_in); band_position = how much Hold / Suppress / Crouch / a TakeCover slot lose outside the band (band_close_floor = the factor at point-blank range); corner_bonus = a cover slot at a free corner (peek / fire round it); prone_min_band_cm = a weapon whose band starts this far goes prone instead of crouching in the open at band distance. use_engagement_bands false = the old behaviour (A/B).",
+  "use_engagement_bands": true,
+  "default_band_min_frac": 0.5,
+  "default_band_max_frac": 0.95,
+  "band_reach_frac": 0.95,
+  "standoff": 1.3,
+  "standoff_trigger_frac": 0.8,
+  "band_position": 0.7,
+  "band_close_floor": 0.1,
+  "corner_bonus": 0.2,
+  "close_in": 1.6,
+  "prone_min_band_cm": 1500,
+  "engagement_bands": {
+    "m16": { "min_m": 25, "max_m": 60 },
+    "plasma_carbine": { "min_m": 25, "max_m": 60 },
+    "sniper_rifle": { "min_m": 45, "max_m": 110 },
+    "pistol": { "min_m": 10, "max_m": 25 },
+    "shotgun": { "min_m": 4, "max_m": 14, "close_quarters": true },
+    "lmg": { "min_m": 30, "max_m": 70 }
+  }
 }

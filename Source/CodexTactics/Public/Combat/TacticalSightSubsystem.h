@@ -156,8 +156,29 @@ public:
 	 * squad and the armed human enemies (UsesSharedSight), x1 for beasts or with Codex.Sight.HeightRange 0.
 	 */
 	float GetSightRangeMultiplier(const AActor& Observer) const;
-	/** How far Observer's own eyes reach in the fight / exploration sight: MaxSightCm x GetSightRangeMultiplier. */
+	/**
+	 * How far Observer's own eyes reach in the fight / exploration sight (2026-11-04): the squad and the armed humans GetSquadBaseSightCm
+	 * x GetSightRangeMultiplier (height) x GetSightConditionsMultiplier (weather x time of day); a beast MaxSightCm x the conditions.
+	 * CanOperativeSee, the fight's both directions, the PMC teams' sight and UCombatPressureSubsystem::IsPointInSquadSight all read it.
+	 */
 	float GetSightRangeCm(const AActor& Observer) const;
+	/**
+	 * The weather x time-of-day multiplier in force now (SightRules::ConditionsSightMultiplier of the UEnvironmentSubsystem state: weather ->
+	 * next weather by the transition blend, the sun's elevation); 1 without an initialised environment or with Codex.Sight.Conditions 0.
+	 * Evaluated once per frame.
+	 */
+	float GetSightConditionsMultiplier() const;
+	/**
+	 * The multiplier an enemy's own per-archetype sight range (its enemy_perception.json row: patrol sight, its cone, the bot's view) gets:
+	 * an armed human (UsesHumanSight) GetHumanEnemyRangeMultiplier x its height multiplier x the conditions; a beast the conditions only.
+	 */
+	float GetEnemySightRangeScale(const AEnemyCharacter& Enemy) const;
+	/** The squad's clear-day ground range: enemy_perception.json sight_conditions.squad_base_range_m (120 m), MaxSightCm with Codex.Sight.LongRange 0. */
+	static float GetSquadBaseSightCm();
+	/** The armed humans' range multiplier over their archetype row (2), 1 with Codex.Sight.LongRange 0. */
+	static float GetHumanEnemyRangeMultiplier();
+	/** Codex.Sight.Conditions (1 default; 0 = no weather / time-of-day multiplier). */
+	static bool IsConditionsRangeOn();
 	/**
 	 * One vision model (game designer 2026-11-02): the operatives and the armed human / humanoid enemies (AEnemyCharacter::UsesHumanSight -
 	 * the Marksman, the PMC fighters, every ladder-climbing human) share the eye / profile points, the 3D sight trace, the 2.5D occluded cone
@@ -196,7 +217,10 @@ public:
 	static void KeepPoseWhileHidden(USkinnedMeshComponent& Mesh, bool bHidden, FSavedAnimTickOptions& Saved);
 
 	static constexpr float UpdateInterval = 0.2f;
-	/** No sight beyond this, cm. */
+	/**
+	 * The old flat sight range, cm: the squad's range before 2026-11-04 (Codex.Sight.LongRange 0) and still the beasts' range in the fight's
+	 * enemy -> squad sight (x the conditions). The squad's own range is GetSquadBaseSightCm.
+	 */
 	static constexpr float MaxSightCm = 6000.f;
 
 private:
@@ -250,6 +274,9 @@ private:
 		double Time = -1.0;
 	};
 	mutable TMap<const AActor*, FGroundCache> GroundCache;
+	/** GetSightConditionsMultiplier's value and the frame it was evaluated in (the environment state is read once per frame). */
+	mutable float ConditionsMultiplierCache = 1.f;
+	mutable uint64 ConditionsMultiplierFrame = MAX_uint64;
 	FSavedAnimTickOptions SavedAnimTickOptions;
 
 	UPROPERTY(Transient)

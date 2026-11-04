@@ -27,6 +27,8 @@ struct CODEXTACTICS_API FPmcTeamStats
 	float SuppressionSeconds = 0.f;
 	int32 Ambushes = 0;
 	int32 Retreats = 0;
+	/** Retreats that were the "too close for his weapon" standoff (2026-11-04; counted in Retreats too). */
+	int32 Standoffs = 0;
 	int32 Heals = 0;
 	int32 Relocations = 0;
 	int32 Advances = 0;
@@ -203,8 +205,12 @@ private:
 	bool ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State, EPmcOrder Order, const FPmcFighterView& View,
 		AActor* ThreatActor, const FCoverSlot& Cover, const TArray<AOperativeCharacter*>& Mates);
 	/** The best cover slot against Threat within RadiusCm (rays round him + spots up to Weights.HighGroundMaxLevels floors up), high ground favoured. */
+	/**
+	 * The best cover slot round Fighter against Threat (quality x nearness x height x - 2026-11-04 - the slot's distance to the threat in his
+	 * weapon's Band (PmcCommanderRules::BandFactor, weighted by band_position) x a corner bonus); OutBandFactor = the chosen slot's band factor.
+	 */
 	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
-		FCoverSlot& OutSlot, float& OutQuality) const;
+		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr) const;
 	bool ProjectToNav(const FVector& Point, FVector& OutPoint) const;
 	bool IsExposedTo(int32 TeamId, const AOperativeCharacter& Fighter) const;
 	void HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit);

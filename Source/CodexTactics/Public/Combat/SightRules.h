@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Environment/EnvironmentTypes.h"
 #include "GameFlow/GameFlowTypes.h"
 
 /**
@@ -97,6 +98,48 @@ namespace SightRules
 
 	/** The height level of an eye EyeAboveGroundCm over the ground below it: floor(h / step), never below 0 (a non-positive step: 0). */
 	CODEXTACTICS_API int32 HeightLevel(float EyeAboveGroundCm, float LevelStepCm = 300.f);
+
+	/**
+	 * Sight conditions (user request 2026-11-04, L_Gen_Depot_1: "the cone stops in the middle of an open yard although everything is visible";
+	 * NUMBERS PENDING the user's confirmation): the squad's clear-day base range (was the flat 60 m MaxSightCm), the armed humans' range
+	 * multiplier over their per-archetype perception row (one model: they see as far as the squad), and the weather x time-of-day multiplier
+	 * every observer's range gets (the squad, the armed humans, the beasts; the height bonus stays on top). The weather part is blended through
+	 * a weather transition by the weather amounts; the time of day by the sun's elevation (day at / above DayElevationDeg, twilight at the
+	 * horizon, night at / below NightElevationDeg, linear between) - no pops. Data: enemy_perception.json "sight_conditions"
+	 * (EnemyPerception::GetSightConditions); console Codex.Sight.Conditions 0 = no weather / time multiplier, Codex.Sight.LongRange 0 = the
+	 * old 60 m squad range and x1 humans (A/B).
+	 */
+	struct FSightConditionsConfig
+	{
+		/** The squad's (and an armed human's fight) sight range on a clear day on the ground, cm. */
+		float SquadBaseRangeCm = 12000.f;
+		/** The armed humans' (UsesHumanSight) range x this over their enemy_perception.json row; beasts keep theirs. */
+		float HumanEnemyRangeMultiplier = 2.f;
+		/** Per EWeatherState (ladder order Clear, Overcast, Snowfall, Blizzard). */
+		float WeatherMultipliers[4] = { 1.f, 0.85f, 0.6f, 0.5f };
+		float DayMultiplier = 1.f;
+		float TwilightMultiplier = 0.7f;
+		float NightMultiplier = 0.35f;
+		/** The sun's elevation (degrees) from which on it is full day / up to which it is full night; twilight at 0 (the horizon). */
+		float DayElevationDeg = 10.f;
+		float NightElevationDeg = -10.f;
+	};
+
+	/** The range multiplier of one weather state (an out-of-range state: x1). */
+	CODEXTACTICS_API float WeatherSightMultiplier(const FSightConditionsConfig& Config, EWeatherState Weather);
+
+	/** From -> To by Blend (0 = From, 1 = To, clamped): the weather amounts' weighted multiplier, as the visuals blend. */
+	CODEXTACTICS_API float BlendedWeatherSightMultiplier(const FSightConditionsConfig& Config, EWeatherState From, EWeatherState To, float Blend);
+
+	/**
+	 * The time-of-day multiplier at a sun elevation (degrees): Day at / above DayElevationDeg, Twilight at 0, Night at / below
+	 * NightElevationDeg, linear between (a day/night threshold pair that does not bracket 0 is clamped round it).
+	 */
+	CODEXTACTICS_API float DaylightSightMultiplier(const FSightConditionsConfig& Config, float SunElevationDeg);
+
+	/** BlendedWeatherSightMultiplier x DaylightSightMultiplier: night cuts the range whatever the weather, the weather on top. */
+	CODEXTACTICS_API float ConditionsSightMultiplier(const FSightConditionsConfig& Config, EWeatherState From, EWeatherState To, float Blend,
+		float SunElevationDeg);
 
 	/** The sight range multiplier of a height level: 1 + bonus x level for level >= 1, capped at MaxMultiplier (never below 1). */
 	CODEXTACTICS_API float HeightRangeMultiplier(const FHeightSightConfig& Config, int32 Level);

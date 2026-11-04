@@ -4,7 +4,7 @@
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_PatrolTest -game -RenderOffscreen -ResX=1600 -ResY=900
 //     -ExecCmds="CodexTactics.VisionConeSmoke Shot"   -> Saved/Screenshots/<platform>/vision_cones.png
 // Checks: every operative and enemy carries a UVisionConeComponent, hidden by default (bShowVisionCone false); the actor
-// toggle shows it; the operative cone = its weapon range x stance multiplier when bVisionConeRangeFromWeapon is on, else
+// toggle shows it; the operative cone = his sight range (2026-11-04, bVisionConeShowsSightRange, the default) or, with it off, its weapon range x stance multiplier when bVisionConeRangeFromWeapon is on, else
 // VisionConeRangeCm (BP_Operative turns the flag OFF: Godot's fixed 14 m cone; both ways checked), +-35 deg (Godot 70 deg full), 34 fill
 // vertices (Godot 32 segments), at the feet; red once an enemy stands in it (Godot spotted); the enemy cone = its
 // perception (standing sight range, field-of-view half angle), idle colour while it guards, amber while it searches
@@ -209,9 +209,18 @@ namespace VisionConeSmoke
 		return Feet + Enemy.GetActorForwardVector().GetSafeNormal2D().RotateAngleAxis(AngleDeg, FVector::UpVector) * DistanceCm;
 	}
 
-	/** What the operative's cone should reach: weapon range x stance with bVisionConeRangeFromWeapon, else VisionConeRangeCm. */
+	/**
+	 * What the operative's cone should reach: his sight range with bVisionConeShowsSightRange (2026-11-04, the default: 120 m clear day x
+	 * height x weather / time of day = UTacticalSightSubsystem::GetSightRangeCm); else weapon range x stance with bVisionConeRangeFromWeapon,
+	 * else VisionConeRangeCm.
+	 */
 	float ExpectedConeRange(const AOperativeCharacter* Operative)
 	{
+		const UTacticalSightSubsystem* Sight = Operative->GetWorld() ? Operative->GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+		if (Operative->bVisionConeShowsSightRange && Sight)
+		{
+			return Sight->GetSightRangeCm(*Operative);
+		}
 		return Operative->bVisionConeRangeFromWeapon && Operative->CurrentWeapon
 			? Operative->CurrentWeapon->AttackRangeCm * SquadFireRules::GetPostureRangeMultiplier(Operative->GetStance())
 			: Operative->VisionConeRangeCm;
@@ -378,7 +387,8 @@ namespace VisionConeSmoke
 			// BP_Operative sets bVisionConeRangeFromWeapon OFF (Godot's fixed 14 m cone): check the Blueprint's way here, the
 			// other way in stage 11 (the flag flipped on this one leader, then restored).
 			State.bRangeFromWeapon = Leader->bVisionConeRangeFromWeapon;
-			Check(State, FMath::IsNearlyEqual(Cone->GetConeRangeCm(), ExpectedConeRange(Leader), 1.f),
+			// The sight range follows the clock / weather; the cone rebuilds once it drifts > 1 % (UVisionConeComponent): 1.5 % tolerance.
+			Check(State, FMath::IsNearlyEqual(Cone->GetConeRangeCm(), ExpectedConeRange(Leader), FMath::Max(1.f, 0.015f * ExpectedConeRange(Leader))),
 				FString::Printf(TEXT("operative cone range (range from weapon %d): %.0f cm, expected %.0f (weapon %s)"), State.bRangeFromWeapon ? 1 : 0,
 					Cone->GetConeRangeCm(), ExpectedConeRange(Leader), Leader->CurrentWeapon ? *Leader->CurrentWeapon->WeaponId : TEXT("-")));
 			// 2026-10-20: the operative's cone is his field of view while the squad's sight runs (stance FOV 140 / 110 deg: +-70 / +-55);
@@ -404,6 +414,8 @@ namespace VisionConeSmoke
 				FString::Printf(TEXT("brute cone = its perception (%.0f cm / +-%.0f deg)"), Brute->VisionCone->GetConeRangeCm(), Brute->VisionCone->GetConeHalfAngleDeg()));
 			const FLinearColor Idle = Brute->VisionCone->GetShownColor();
 			Check(State, Brute->IsGuardingPost() && Idle.B > Idle.R, FString::Printf(TEXT("guarding brute: idle colour %s"), *Idle.ToString()));
+			// The older ways (2026-11-04: the sight range is the default): no sight range, the weapon flag flipped.
+			Leader->bVisionConeShowsSightRange = false;
 			Leader->bVisionConeRangeFromWeapon = !State.bRangeFromWeapon;
 			State.Stage = 11;
 			State.Time = 0.f;
@@ -421,6 +433,7 @@ namespace VisionConeSmoke
 				FString::Printf(TEXT("bVisionConeRangeFromWeapon %d: cone %.0f cm, expected %.0f (%s)"), Leader->bVisionConeRangeFromWeapon ? 1 : 0,
 					Leader->VisionCone->GetConeRangeCm(), Expected, Leader->bVisionConeRangeFromWeapon ? TEXT("weapon range x stance") : TEXT("VisionConeRangeCm")));
 			Leader->bVisionConeRangeFromWeapon = State.bRangeFromWeapon;
+			Leader->bVisionConeShowsSightRange = true;
 			SetGlobal(0);
 			State.Stage = 2;
 			State.Time = 0.f;

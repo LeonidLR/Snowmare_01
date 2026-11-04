@@ -32,6 +32,14 @@ namespace OperativeVisionConeConsole
 
 float AOperativeCharacter::GetVisionConeRange() const
 {
+	// 2026-11-04: the cone shows how far he SEES (the same range CanOperativeSee uses: 120 m clear day x height x weather / time of day).
+	if (bVisionConeShowsSightRange)
+	{
+		if (const UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
+		{
+			return Sight->GetSightRangeCm(*this);
+		}
+	}
 	if (!bVisionConeRangeFromWeapon || !CurrentWeapon)
 	{
 		return VisionConeRangeCm;

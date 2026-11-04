@@ -62,6 +62,42 @@ float SightRules::HeightRangeMultiplier(const FHeightSightConfig& Config, int32 
 	return FMath::Clamp(Multiplier, 1.f, FMath::Max(Config.MaxMultiplier, 1.f));
 }
 
+float SightRules::WeatherSightMultiplier(const FSightConditionsConfig& Config, EWeatherState Weather)
+{
+	const int32 Index = static_cast<int32>(Weather);
+	return Index >= 0 && Index < UE_ARRAY_COUNT(Config.WeatherMultipliers) ? FMath::Max(Config.WeatherMultipliers[Index], 0.f) : 1.f;
+}
+
+float SightRules::BlendedWeatherSightMultiplier(const FSightConditionsConfig& Config, EWeatherState From, EWeatherState To, float Blend)
+{
+	return FMath::Lerp(WeatherSightMultiplier(Config, From), WeatherSightMultiplier(Config, To), FMath::Clamp(Blend, 0.f, 1.f));
+}
+
+float SightRules::DaylightSightMultiplier(const FSightConditionsConfig& Config, float SunElevationDeg)
+{
+	if (!FMath::IsFinite(SunElevationDeg))
+	{
+		return FMath::Max(Config.DayMultiplier, 0.f);
+	}
+	const float DayDeg = FMath::Max(Config.DayElevationDeg, 0.01f);
+	const float NightDeg = FMath::Min(Config.NightElevationDeg, -0.01f);
+	float Multiplier;
+	if (SunElevationDeg >= 0.f)
+	{
+		Multiplier = FMath::Lerp(Config.TwilightMultiplier, Config.DayMultiplier, FMath::Clamp(SunElevationDeg / DayDeg, 0.f, 1.f));
+	}
+	else
+	{
+		Multiplier = FMath::Lerp(Config.TwilightMultiplier, Config.NightMultiplier, FMath::Clamp(SunElevationDeg / NightDeg, 0.f, 1.f));
+	}
+	return FMath::Max(Multiplier, 0.f);
+}
+
+float SightRules::ConditionsSightMultiplier(const FSightConditionsConfig& Config, EWeatherState From, EWeatherState To, float Blend, float SunElevationDeg)
+{
+	return BlendedWeatherSightMultiplier(Config, From, To, Blend) * DaylightSightMultiplier(Config, SunElevationDeg);
+}
+
 float SightRules::HeightRangeMultiplierAt(const FHeightSightConfig& Config, float EyeAboveGroundCm)
 {
 	return HeightRangeMultiplier(Config, HeightLevel(EyeAboveGroundCm, Config.LevelStepCm));

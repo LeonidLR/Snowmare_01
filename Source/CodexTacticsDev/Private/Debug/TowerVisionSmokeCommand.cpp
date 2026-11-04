@@ -91,15 +91,21 @@ namespace TowerVisionSmoke
 	void Restore(FState& State)
 	{
 		UVisionConeComponent::SetPlayerSquadCones(false);
+		if (IConsoleVariable* Conditions = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Sight.Conditions")))
+		{
+			Conditions->Set(1, ECVF_SetByCode);
+		}
 		if (AOperativeCharacter* Leader = State.Leader.Get())
 		{
 			Leader->bVisionConeRangeFromWeapon = State.bLeaderRangeFromWeapon;
 			Leader->VisionConeRangeCm = State.LeaderRange;
+			Leader->bVisionConeShowsSightRange = true;
 		}
 		if (AOperativeCharacter* Grounded = State.Grounded.Get())
 		{
 			Grounded->bVisionConeRangeFromWeapon = State.bGroundedRangeFromWeapon;
 			Grounded->VisionConeRangeCm = State.GroundedRange;
+			Grounded->bVisionConeShowsSightRange = true;
 		}
 	}
 
@@ -379,6 +385,12 @@ namespace TowerVisionSmoke
 			{
 				Operative->bVisionConeRangeFromWeapon = false;
 				Operative->VisionConeRangeCm = ConeRangeCm; // reaches past the wall's shadow
+				Operative->bVisionConeShowsSightRange = false; // the scene's own range (2026-11-04: the default cone shows the sight range)
+			}
+			// 2026-11-04: geometry, not the weather - the sight range without the weather / time-of-day multiplier (SightConditionsSmoke checks those).
+			if (IConsoleVariable* Conditions = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Sight.Conditions")))
+			{
+				Conditions->Set(0, ECVF_SetByCode);
 			}
 			UVisionConeComponent::SetPlayerSquadCones(true); // the player's Shift+O
 			HoldFacing(State);

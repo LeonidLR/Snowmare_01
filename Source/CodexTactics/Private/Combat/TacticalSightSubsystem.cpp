@@ -18,6 +18,7 @@
 #include "Data/EnemyPerception.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Materials/MaterialInterface.h"
@@ -39,6 +40,11 @@ namespace TacticalSight
 
 	static TAutoConsoleVariable<int32> CVarHeightRange(TEXT("Codex.Sight.HeightRange"), 1,
 		TEXT("Sight range from a height (2026-11-02): 1 the squad's and the armed human enemies' sight range grows with their height level (enemy_perception.json height_sight: floor(eye over the ground below / 3 m), x(1 + 0.25 x level), max x2); 0 the same range at every height"));
+
+	static TAutoConsoleVariable<int32> CVarConditions(TEXT("Codex.Sight.Conditions"), 1,
+		TEXT("Sight by the conditions (2026-11-04): 1 every observer's sight range x the weather x the time of day (enemy_perception.json sight_conditions; night cuts it, snowfall / blizzard reduce it, blended); 0 the same range in any weather / hour"));
+	static TAutoConsoleVariable<int32> CVarLongRange(TEXT("Codex.Sight.LongRange"), 1,
+		TEXT("Long clear-day sight (2026-11-04): 1 the squad sees sight_conditions.squad_base_range_m (120 m) and the armed humans x human_enemy_range_multiplier (2) over their rows; 0 the old 60 m / x1"));
 
 	/** How far below the feet the ground under an observer is searched, cm. */
 	constexpr float GroundSearchCm = 5000.f;
@@ -262,7 +268,52 @@ float UTacticalSightSubsystem::GetSightRangeMultiplier(const AActor& Observer) c
 
 float UTacticalSightSubsystem::GetSightRangeCm(const AActor& Observer) const
 {
-	return MaxSightCm * GetSightRangeMultiplier(Observer);
+	// 2026-11-04: the squad / the armed humans see GetSquadBaseSightCm (120 m on a clear day) x their height bonus; everybody x the weather
+	// and the time of day. Beasts in the fight keep the old 60 m x the conditions (their patrol sight is their own row: GetEnemySightRangeScale).
+	const float Base = UsesSharedSight(Observer) ? GetSquadBaseSightCm() : MaxSightCm;
+	return Base * GetSightRangeMultiplier(Observer) * GetSightConditionsMultiplier();
+}
+
+bool UTacticalSightSubsystem::IsConditionsRangeOn()
+{
+	return TacticalSight::CVarConditions.GetValueOnGameThread() != 0;
+}
+
+float UTacticalSightSubsystem::GetSquadBaseSightCm()
+{
+	return TacticalSight::CVarLongRange.GetValueOnGameThread() != 0 ? EnemyPerception::GetSightConditions().SquadBaseRangeCm : MaxSightCm;
+}
+
+float UTacticalSightSubsystem::GetHumanEnemyRangeMultiplier()
+{
+	return TacticalSight::CVarLongRange.GetValueOnGameThread() != 0 ? FMath::Max(EnemyPerception::GetSightConditions().HumanEnemyRangeMultiplier, 0.f) : 1.f;
+}
+
+float UTacticalSightSubsystem::GetSightConditionsMultiplier() const
+{
+	if (!IsConditionsRangeOn())
+	{
+		return 1.f;
+	}
+	if (ConditionsMultiplierFrame == GFrameCounter)
+	{
+		return ConditionsMultiplierCache;
+	}
+	ConditionsMultiplierFrame = GFrameCounter;
+	ConditionsMultiplierCache = 1.f;
+	const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(GetWorld());
+	if (Environment && Environment->IsInitialised())
+	{
+		ConditionsMultiplierCache = SightRules::ConditionsSightMultiplier(EnemyPerception::GetSightConditions(), Environment->GetWeather(),
+			Environment->GetNextWeather(), Environment->GetTransitionBlend(), Environment->GetSunElevation());
+	}
+	return ConditionsMultiplierCache;
+}
+
+float UTacticalSightSubsystem::GetEnemySightRangeScale(const AEnemyCharacter& Enemy) const
+{
+	const float Human = Enemy.UsesHumanSight() ? GetHumanEnemyRangeMultiplier() * GetSightRangeMultiplier(Enemy) : 1.f;
+	return Human * GetSightConditionsMultiplier();
 }
 
 bool UTacticalSightSubsystem::HasClearSight(const FVector& From, const FVector& To) const

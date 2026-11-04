@@ -43,9 +43,28 @@ enum class EPmcOrder : uint8
 	Count
 };
 
+/**
+ * A weapon's preferred engagement band (user request 2026-11-04: "a man with an assault rifle keeps as far from his target as his weapon allows,
+ * fires from corners, prone, never fights at point-blank range; with a pistol he must come closer but still not point-blank; the shotgun is the
+ * close-range weapon"): the distance to the threat he wants to fight from, cm. pmc_commander.json "engagement_bands" { "<weapon id>": { "min_m",
+ * "max_m", "close_quarters" } }; PmcCommanderRules::ResolveBand caps it at the weapon's reach.
+ */
+struct CODEXTACTICS_API FPmcEngagementBand
+{
+	float MinCm = 0.f;
+	float MaxCm = 0.f;
+	/** A close-range weapon (the shotgun): no "too close" retreat, it closes in to its band instead. */
+	bool bCloseQuarters = false;
+
+	bool IsValid() const { return MaxCm > 0.f && MaxCm >= MinCm; }
+};
+
 /** One weight per order plus the thresholds the considerations use (pmc_commander.json). */
 struct CODEXTACTICS_API FPmcWeights
 {
+	/** The defaults below plus the built-in engagement bands (PmcCommanderRules::DefaultBands). */
+	FPmcWeights();
+
 	FString Name = TEXT("default");
 	float Hold = 0.35f;
 	float TakeCover = 1.0f;
@@ -89,6 +108,32 @@ struct CODEXTACTICS_API FPmcWeights
 	float HighGround = 0.2f;
 	/** The level count the high-ground bonus stops growing at. */
 	int32 HighGroundMaxLevels = 3;
+
+	// --- Engagement bands (user request 2026-11-04: riflemen keep their distance; docs/systems/pmc-squad-ai.md 4) ---
+
+	/** "use_engagement_bands" (a bool, not a trainer gene): false = the pre-2026-11-04 behaviour (no bands; A/B). */
+	bool bUseBands = true;
+	/** Per weapon id (weapons_tuning.json ids: m16, sniper_rifle, pistol, shotgun, ...); an unknown id gets DefaultBandFracs x its reach. */
+	TMap<FString, FPmcEngagementBand> Bands;
+	/** The band of a weapon with no row: [DefaultBandMinFrac, DefaultBandMaxFrac] x its reach. */
+	float DefaultBandMinFrac = 0.5f;
+	float DefaultBandMaxFrac = 0.95f;
+	/** The band never reaches past this fraction of the weapon's reach (he must still hit from there). */
+	float BandReachFrac = 0.95f;
+	/** The "too close" retreat (a FallBack to the band, cover at band distance preferred): its weight. */
+	float Standoff = 1.3f;
+	/** Too close = the threat nearer than this fraction of the band's min (close-quarters weapons never retreat). */
+	float StandoffTriggerFrac = 0.8f;
+	/** How much a static order (Hold / Suppress / Crouch / TakeCover's slot) loses outside the band: x lerp(1, BandFactor, this). */
+	float BandPosition = 0.7f;
+	/** BandFactor's floor below the band's min (1 = no penalty, 0 = the full penalty at point-blank range). */
+	float BandCloseFloor = 0.1f;
+	/** A cover slot at a corner (a free edge to peek / fire round) scores x (1 + this). */
+	float CornerBonus = 0.2f;
+	/** A close-quarters weapon's Advance towards its band scores x this (the shotgunner closes in). */
+	float CloseIn = 1.6f;
+	/** Prone instead of crouched (the Crouch order in the open) for a weapon whose band starts at least this far, cm (rifles, not pistols / shotguns). */
+	float ProneMinBandCm = 1500.f;
 };
 
 /** One spawn candidate of the arena's seeded spawn pairs: a navmesh point and its height level (0 = the ground). */
@@ -132,6 +177,15 @@ struct CODEXTACTICS_API FPmcFighterView
 	bool bHasSidearm = false;
 	bool bKnockedDown = false;
 	float WeaponRangeCm = 1400.f;
+	/** His weapon's engagement band (ResolveBand; invalid = no bands: the old rules). */
+	FPmcEngagementBand Band;
+	/** The band factor (BandFactor) of the best cover slot nearby (bCoverAvailable): 1 = at band distance from the threat. */
+	float CoverBandFactor = 1.f;
+	/**
+	 * The order he is still running (Count: none). FallBack: the standoff keeps scoring until he reaches the band's middle (not only below the
+	 * trigger); Flank: no standoff - the flank walk round the threat passes it closer than the band on purpose (PmcCommanderSmoke).
+	 */
+	EPmcOrder RunningOrder = EPmcOrder::Count;
 	/** The nearest known threat (bHasThreat false: none known). */
 	bool bHasThreat = false;
 	FPmcThreatView Threat;
@@ -188,13 +242,18 @@ namespace PmcCommanderRules
 	CODEXTACTICS_API bool IsMoveOrder(EPmcOrder Order);
 
 	/**
-	 * The flank point: FlankDistanceCm from Threat, FlankAngleDeg off the Threat -> SquadCentre line, on the threat's side away from
+	 * The flank point: DistanceCm (>= 0; else FlankDistanceCm - the commander passes FlankDistanceFor his band) from Threat, FlankAngleDeg off the Threat -> SquadCentre line, on the threat's side away from
 	 * Fighter (so the two men come at the threat from different directions); planar, Z of the threat.
 	 */
-	CODEXTACTICS_API FVector FlankPoint(const FVector& Threat, const FVector& SquadCentre, const FVector& Fighter, const FPmcWeights& Weights);
+	CODEXTACTICS_API FVector FlankPoint(const FVector& Threat, const FVector& SquadCentre, const FVector& Fighter, const FPmcWeights& Weights,
+		float DistanceCm = -1.f);
 
-	/** The advance goal: on the Fighter -> Threat line, AdvanceStopRangeFrac x WeaponRangeCm short of the threat (the fighter's spot when already that close). */
-	CODEXTACTICS_API FVector AdvancePoint(const FVector& Fighter, const FVector& Threat, float WeaponRangeCm, const FPmcWeights& Weights);
+	/**
+	 * The advance goal: on the Fighter -> Threat line, AdvanceStopCm short of the threat (AdvanceStopRangeFrac x WeaponRangeCm, clamped into
+	 * Band when it is valid); the fighter's spot when already that close.
+	 */
+	CODEXTACTICS_API FVector AdvancePoint(const FVector& Fighter, const FVector& Threat, float WeaponRangeCm, const FPmcWeights& Weights,
+		const FPmcEngagementBand& Band = FPmcEngagementBand());
 
 	/** The fall-back goal: DistanceCm straight away from the threat (planar). */
 	CODEXTACTICS_API FVector FallBackPoint(const FVector& Fighter, const FVector& Threat, float DistanceCm = 800.f);
@@ -207,6 +266,36 @@ namespace PmcCommanderRules
 
 	/** The angle (deg, 0..180) between the Threat -> A and Threat -> B directions (planar): a flank is >= 60 off the frontal line. */
 	CODEXTACTICS_API float ApproachAngleDeg(const FVector& Threat, const FVector& A, const FVector& B);
+
+	/**
+	 * The band of WeaponId (Weights.Bands, else DefaultBandFracs x WeaponRangeCm), capped at the weapon's reach: max = min(band max,
+	 * BandReachFrac x WeaponRangeCm), min = min(band min, 0.8 x that max). Invalid (MaxCm 0) when !Weights.bUseBands or no reach.
+	 */
+	/**
+	 * The built-in bands (NUMBERS PENDING the user's confirmation; weapons_tuning.json ids): m16 / plasma_carbine (rifles) 25-60 m, sniper_rifle
+	 * 45-110 m, pistol 10-25 m, shotgun 4-14 m (close quarters), lmg 30-70 m (no such weapon yet).
+	 */
+	CODEXTACTICS_API TMap<FString, FPmcEngagementBand> DefaultBands();
+
+	CODEXTACTICS_API FPmcEngagementBand ResolveBand(const FString& WeaponId, float WeaponRangeCm, const FPmcWeights& Weights);
+
+	/**
+	 * How good a fighting distance is for Band, 0..1: 1 inside [MinCm, MaxCm]; below MinCm down to BandCloseFloor at 0 (quadratic: a strong
+	 * penalty close in); past MaxCm down to 0.5 at 2 x MaxCm (out of reach, not dangerous). 1 for an invalid band.
+	 */
+	CODEXTACTICS_API float BandFactor(float DistanceCm, const FPmcEngagementBand& Band, const FPmcWeights& Weights);
+
+	/** The threat is "too close" for Band: nearer than StandoffTriggerFrac x MinCm, and the weapon is not a close-quarters one. */
+	CODEXTACTICS_API bool IsTooClose(float DistanceCm, const FPmcEngagementBand& Band, const FPmcWeights& Weights);
+
+	/** Where an Advance stops short of the threat: clamp(AdvanceStopRangeFrac x reach, band min, band max) (the old fraction without a band). */
+	CODEXTACTICS_API float AdvanceStopCm(float WeaponRangeCm, const FPmcEngagementBand& Band, const FPmcWeights& Weights);
+
+	/** The flank point's distance from the threat: FlankDistanceCm clamped into the band (FlankDistanceCm without one). */
+	CODEXTACTICS_API float FlankDistanceFor(const FPmcEngagementBand& Band, const FPmcWeights& Weights);
+
+	/** The standoff goal: straight away from the threat to the middle of the band (planar; the fighter's spot when already that far). */
+	CODEXTACTICS_API FVector StandoffPoint(const FVector& Fighter, const FVector& Threat, const FPmcEngagementBand& Band);
 
 	/** The high-ground factor of a position Level height levels above the ground: 1 + HighGround x clamp(Level, 0, HighGroundMaxLevels). */
 	CODEXTACTICS_API float HighGroundFactor(int32 Level, const FPmcWeights& Weights);

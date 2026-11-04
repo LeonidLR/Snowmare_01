@@ -70,6 +70,7 @@ namespace VisionHeightSmoke
 		TWeakObjectPtr<AOperativeCharacter> Operative;
 		bool bFromWeapon = true;
 		float RangeCm = 0.f;
+		bool bShowsSight = true;
 	};
 
 	struct FState
@@ -122,8 +123,25 @@ namespace VisionHeightSmoke
 		}
 	}
 
+	/**
+	 * 2026-11-04: this smoke checks the height ladder on the old 60 m ground range (its targets lie 62-76 m out): it pins
+	 * Codex.Sight.LongRange 0 (60 m, Marksman x1) and Codex.Sight.Conditions 0 (no weather / time of day) while it runs.
+	 * SightConditionsSmoke checks the 120 m clear-day range and the conditions.
+	 */
+	void SetLegacyRange(bool bLegacy)
+	{
+		for (const TCHAR* Name : { TEXT("Codex.Sight.LongRange"), TEXT("Codex.Sight.Conditions") })
+		{
+			if (IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(Name))
+			{
+				Var->Set(bLegacy ? 0 : 1, ECVF_SetByCode);
+			}
+		}
+	}
+
 	void Restore(FState& State)
 	{
+		SetLegacyRange(false);
 		SetElevatedFixCVar(1);
 		UVisionConeComponent::SetPlayerSquadCones(false);
 		UVisionConeComponent::SetPlayerEnemyCones(false);
@@ -134,6 +152,7 @@ namespace VisionHeightSmoke
 			{
 				Operative->bVisionConeRangeFromWeapon = Saved.bFromWeapon;
 				Operative->VisionConeRangeCm = Saved.RangeCm;
+				Operative->bVisionConeShowsSightRange = Saved.bShowsSight;
 				Operative->bShowVisionCone = false;
 			}
 		}
@@ -228,10 +247,11 @@ namespace VisionHeightSmoke
 		}
 		if (!bKnown)
 		{
-			State.Saved.Add({ &Operative, Operative.bVisionConeRangeFromWeapon, Operative.VisionConeRangeCm });
+			State.Saved.Add({ &Operative, Operative.bVisionConeRangeFromWeapon, Operative.VisionConeRangeCm, Operative.bVisionConeShowsSightRange });
 		}
 		Operative.bVisionConeRangeFromWeapon = false;
 		Operative.VisionConeRangeCm = RangeCm;
+		Operative.bVisionConeShowsSightRange = false; // the scene's own cone range (2026-11-04: the cone shows the sight range by default)
 	}
 
 	/** What the squad's sight sees at a ground point: a standing enemy's profile (+1), a crouched one's (+1) - CanOperativeSee (3D traces). */
@@ -954,6 +974,7 @@ namespace VisionHeightSmoke
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bShot = Args.Num() > 0 && Args[0].Equals(TEXT("Shot"), ESearchCase::IgnoreCase);
+		SetLegacyRange(true);
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTimerHandle Handle;
 		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld, State]()

@@ -739,6 +739,7 @@ namespace PmcArena
 		Json->SetNumberField(TEXT("suppression_s"), FMath::RoundToFloat(Stats.SuppressionSeconds * 10.f) / 10.f);
 		Json->SetNumberField(TEXT("ambushes"), Stats.Ambushes);
 		Json->SetNumberField(TEXT("retreats"), Stats.Retreats);
+		Json->SetNumberField(TEXT("standoffs"), Stats.Standoffs);
 		Json->SetNumberField(TEXT("heals"), Stats.Heals);
 		Json->SetNumberField(TEXT("relocations"), Stats.Relocations);
 		Json->SetNumberField(TEXT("advances"), Stats.Advances);

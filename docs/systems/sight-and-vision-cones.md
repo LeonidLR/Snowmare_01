@@ -8,6 +8,7 @@
 > - `Combat/SightRules`, `Combat/TacticalSightSubsystem`, `Combat/VisionConeRules`, `VisionConeVisibility`, `VisionConeComponent`
 > - Smokes: `SightSmoke`, `PeekSightSmoke`, `VisionConeSmoke`, `TowerVisionSmoke`, `VisionHeightSmoke`; tests `CodexTactics.Combat.VisionCone.*`, `CodexTactics.Combat.Sight.*`
 > - Sight from a height (2026-11-02): the range ladder per height level, the roof sniper's cone, one model for the squad and the armed humans - section "Sight from a height".
+> - Sight by the conditions (2026-11-04): 120 m clear day, x weather x time of day for everybody, humans x2, the cone shows the sight range - section "Sight by the conditions" (supersedes the 60 m / weapon-range cone statements above).
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
@@ -170,6 +171,45 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
   `HeightSightRules` (combatSim `rules.ts`) mirrors the ladder and the sim's squad sight range uses it (its enemies stand on the street: x1).
 - **Known limits:** one target ground per ray (the ground just past the perch's edge: a target on another, lower roof is judged as on the street -
   the cone hides it although he would see it; a target on a roof at his own level further out is hidden too); the peek cone keeps its 18 m.
+
+## Sight by the conditions: 120 m on a clear day, weather and night cut it (2026-11-04)
+
+- **Report (user, L_Gen_Depot_1, over the shoulder):** "the vision cone stops in the middle of an open yard although everything is visible".
+  Wanted: at least 2x the range, a clear day = the maximum (the cone covers practically everything visible from that angle); NIGHT cuts it
+  drastically whatever the weather; snowfall, blizzard and fog reduce it; the same for the enemies ("so they don't cheat"); the height bonus
+  stays on top; the operative's cone shows his SIGHT range, not the weapon's.
+- **Numbers (PENDING the user's confirmation; data `Content/Data/AI/enemy_perception.json` `"sight_conditions"`, `EnemyPerception::GetSightConditions`,
+  pure `SightRules::FSightConditionsConfig`):** squad base `squad_base_range_m` **120 m** (was the flat 60 m `MaxSightCm`); the armed humans
+  (`UsesHumanSight`: Marksman, PMC, ladder climbers) x `human_enemy_range_multiplier` **2** over their archetype `sight_range_m`; beasts keep their
+  rows. Every observer (squad, humans, beasts) x **weather** (Clear 1.0, Overcast 0.85, Snowfall 0.6, Blizzard 0.5; blended through a weather
+  transition by the weather amounts) x **time of day** by the sun's elevation (day 1.0 at >= +10 deg, twilight 0.7 at the horizon, night 0.35 at
+  <= -10 deg, linear between - no pops). Light snow 0.75 / fog 0.4 are in the JSON but unused: the weather ladder has no such states yet.
+  Examples on the ground: clear noon 120 m, blizzard noon 60 m, clear night 42 m, blizzard night 21 m; a Marksman (row 45 m) 90 / 45 / 31.5 /
+  15.75 m; a frost hound (row 15 m) 15 / 7.5 / 5.25 / 2.6 m. The height ladder (x1.25 per 3 m level, cap x2) multiplies on top.
+- **One range everywhere:** `UTacticalSightSubsystem::GetSightRangeCm` = (squad / armed human: `GetSquadBaseSightCm` x height; beast: 60 m) x
+  `GetSightConditionsMultiplier` (the `UEnvironmentSubsystem` weather -> next weather by the blend and `GetSunElevation`, evaluated once per frame;
+  1 without an initialised environment). Read by `CanOperativeSee`, the fight's squad -> enemy and enemy -> squad sight, the PMC teams' sight
+  (`CanOperativeSee` of their fighters) and `UCombatPressureSubsystem::IsPointInSquadSight`. The enemies' own rows go through
+  `AEnemyCharacter::GetSightRangeScale` = `GetEnemySightRangeScale` (human x2 x height x conditions; beast x conditions) in `GetPatrolPerception`
+  (patrol sight, the enemy cone, the bot's stealth view). Console A/B: `Codex.Sight.Conditions 0` (no weather / time multiplier),
+  `Codex.Sight.LongRange 0` (the old 60 m, humans x1).
+- **The operative's cone = his sight range:** `AOperativeCharacter::bVisionConeShowsSightRange` (new, default on; BP_Operative has no saved value)
+  -> `GetVisionConeRange` = `GetSightRangeCm`; off = the older weapon / `VisionConeRangeCm` rules (the weapon-range inner marker was not added -
+  optional, ask). The peek cone keeps its 18 m. The wall / roof shadow cutting is unchanged (the same occluded builder, longer rays).
+  `UVisionConeComponent` now treats a range drift under 1 % as the same shape (a dusk / weather blend moves the range every frame: the cone follows
+  at the normal cadence instead of an urgent rebuild per frame).
+- **Cost (SightConditionsSmoke, the Depot start, the leader's cone, 20 forced rebuilds each):** 60 m: 320 rays / 1882 traces / 3.13 ms task-thread
+  work per rebuild; 120 m: 320 rays / 1891 traces / 3.35 ms (x1.07) - the Depot already hits `MaxRaysPerCone` 320 at 60 m; the rebuild cadence
+  (12 Hz moving, 2 s still, async batches) is unchanged.
+- **Pressure:** at clear noon (the longest sight) the pressure still found a concealed ambush spot on the Depot (23 m from the squad).
+- **Smokes:** `SightConditionsSmoke` (`L_Gen_Depot_1`): clear noon / blizzard noon / clear night / blizzard night via `ForceWeather` + `SetHour`
+  (clock frozen): the multiplier 1 / 0.5 / 0.35 / 0.175, the leader's range and his drawn cone, `CanOperativeSee` of a man 110 m and 38 m out on
+  the longest clear line, a Marksman at those spots spotting the squad exactly within 45 m x2 x it, a hound's patrol 15 m x it (no x2) and fight
+  60 m x it, the Clear -> Blizzard transition blending (largest step 0.0002 per frame), the cone cost, the pressure's concealed spot; arg `Shot` ->
+  `Saved/Screenshots/SightConditions/clear_day.png`, `night.png` (`-RenderOffscreen`). `VisionHeightSmoke` pins `LongRange 0` + `Conditions 0`
+  (it checks the height ladder against the 60 m base), `TowerVisionSmoke` pins `Conditions 0` and both set their scene cone ranges with
+  `bVisionConeShowsSightRange` off; `VisionConeSmoke` expects the sight range by default and checks the weapon / fixed ranges with it off.
+  Tests `CodexTactics.Combat.Sight.ConditionsMultiplier` / `.ConditionsData`.
 
 ## Vision cones - how to switch them on (old §6)
 

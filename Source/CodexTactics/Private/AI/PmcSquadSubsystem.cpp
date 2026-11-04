@@ -826,6 +826,8 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	View.bHasSidearm = PmcSquadLocal::HasWeaponId(Fighter, TEXT("pistol")) && Fighter.CurrentWeapon && Fighter.CurrentWeapon->WeaponId != TEXT("pistol");
 	View.bKnockedDown = Fighter.IsKnockedDown();
 	View.WeaponRangeCm = Fighter.CurrentWeapon ? Fighter.CurrentWeapon->AttackRangeCm : 1400.f;
+	// 2026-11-04: the distance his weapon wants to fight from (riflemen keep their distance, the shotgun closes in).
+	View.Band = PmcCommanderRules::ResolveBand(Fighter.CurrentWeapon ? Fighter.CurrentWeapon->WeaponId : FString(), View.WeaponRangeCm, Team.Weights);
 
 	// The nearest known threat.
 	OutThreatActor = nullptr;
@@ -868,8 +870,8 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.CoverQuality = PmcCommanderRules::CoverQualityAgainst(Fighter.GetCoverSlot().WorldLocation, Fighter.GetCoverSlot().WallNormal, View.Threat.Location);
 		}
 		const FVector* Exclude = Fighter.bInCover ? &View.Location : nullptr;
-		View.bCoverAvailable = FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, Exclude, Team.Weights, OutCover, OutCoverQuality)
-			&& OutCoverQuality > View.CoverQuality + 0.2f;
+		View.bCoverAvailable = FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, Exclude, Team.Weights, OutCover, OutCoverQuality,
+			View.Band, &View.CoverBandFactor) && OutCoverQuality > View.CoverQuality + 0.2f;
 	}
 	// The nearest wounded mate.
 	for (AOperativeCharacter* Mate : Mates)
@@ -951,8 +953,9 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		FCoverSlot Cover;
 		float CoverQuality = 0.f;
 		AActor* ThreatActor = nullptr;
-		const FPmcFighterView View = BuildFighterView(TeamId, Team, *Fighter, State, Mates, Cover, CoverQuality, ThreatActor);
+		FPmcFighterView View = BuildFighterView(TeamId, Team, *Fighter, State, Mates, Cover, CoverQuality, ThreatActor);
 		const bool bRunning = IsOrderRunning(*Fighter, State);
+		View.RunningOrder = bRunning ? State.Order : EPmcOrder::Count;
 		// The mates' counters are about the OTHERS: his own running order is not a mate's.
 		FPmcSquadView Own = Squad;
 		if (bRunning)
@@ -1025,6 +1028,12 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		{
 			return false;
 		}
+		// A rifleman lying at band distance (the prone Crouch order) gets up to crouch before he walks off (no crawling retreats / advances).
+		if (Fighter.GetStance() == EOperativeStance::Prone)
+		{
+			Context.Stance = EOperativeStance::Crouching;
+			SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
+		}
 		Context.Location = Goal;
 		Context.bSprint = bSprint;
 		return SquadOrderCatalog::Execute(ESquadOrder::Move, Context);
@@ -1032,7 +1041,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	switch (Order)
 	{
 	case EPmcOrder::Hold:
-		if (Fighter.HasOwnMoveOrder())
+		// 2026-11-04: in the open with a threat he does not see now (e.g. back at his band after the standoff walk, his back to it), the
+		// catalog's Hold turns him to face its last known spot - his own fire takes over once it is in his field of view.
+		if (Fighter.HasOwnMoveOrder() || (!Fighter.bInCover && View.bHasThreat && !View.Threat.bSeenNow))
 		{
 			Context.Location = View.bHasThreat ? View.Threat.Location : FVector::ZeroVector;
 			bTaken = SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
@@ -1040,6 +1051,13 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		else
 		{
 			bTaken = true;
+		}
+		// 2026-11-04 ("fires from corners / over the cover, not blind"): holding in cover against a known threat, it becomes his priority -
+		// the cover pose faces it and the corner / low-wall fire stance leans out for it (GatherCoverThreat), so he looks and fires from cover.
+		if (Fighter.bInCover && ThreatActor && Fighter.GetManualPriorityTarget() != ThreatActor)
+		{
+			Context.Target = ThreatActor;
+			SquadOrderCatalog::Execute(ESquadOrder::PriorityTarget, Context);
 		}
 		break;
 	case EPmcOrder::TakeCover:
@@ -1058,7 +1076,8 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	{
 		// AdvancePoint is planar: a threat on another level (a roof above him, the street below) within the stop range in plan would
 		// leave him standing under it - he goes for the threat's own spot instead (up / down through the normal pathing).
-		FVector AdvanceGoal = PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights);
+		// 2026-11-04: he stops at his weapon's band (a rifleman ~20 m short, a shotgunner ~4 m), not at a fixed fraction of the reach.
+		FVector AdvanceGoal = PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights, View.Band);
 		if (FMath::Abs(View.Threat.Location.Z - View.Location.Z) > 250.f && FVector::Dist2D(AdvanceGoal, View.Location) < 100.f)
 		{
 			AdvanceGoal = View.Threat.Location;
@@ -1075,7 +1094,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			Centre += Mate->GetActorLocation();
 		}
 		Centre /= FMath::Max(1, Mates.Num());
-		bTaken = View.bHasThreat && Walk(PmcCommanderRules::FlankPoint(View.Threat.Location, Centre, View.Location, Team.Weights), !View.Threat.bSeenNow);
+		// The flank point lies at his band's distance from the threat (2026-11-04: a rifleman flanks at ~20 m, not 10).
+		bTaken = View.bHasThreat && Walk(PmcCommanderRules::FlankPoint(View.Threat.Location, Centre, View.Location, Team.Weights,
+			PmcCommanderRules::FlankDistanceFor(View.Band, Team.Weights)), !View.Threat.bSeenNow);
 		if (bTaken)
 		{
 			++Team.Stats.FlanksAttempted;
@@ -1090,7 +1111,33 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		Team.Stats.Suppressions += bTaken ? 1 : 0;
 		break;
 	case EPmcOrder::FallBack:
-		bTaken = View.bHasThreat && Walk(PmcCommanderRules::FallBackPoint(View.Location, View.Threat.Location), true);
+		if (View.bHasThreat && PmcCommanderRules::IsTooClose(View.Threat.DistanceCm, View.Band, Team.Weights))
+		{
+			// Too close for his weapon (2026-11-04): back to the band - a cover slot round him already at band distance from the threat
+			// (he fires from it), else the band's middle straight away from the threat; there the next decisions take the band's cover
+			// (TakeCover / Relocate score slots by BandFactor; a wall between that point and the threat shows his rays its far side).
+			FCoverSlot BandCover;
+			float BandQuality = 0.f;
+			float BandSlotFactor = 0.f;
+			if (FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, nullptr, Team.Weights, BandCover, BandQuality, View.Band, &BandSlotFactor)
+				&& BandSlotFactor >= 0.95f)
+			{
+				Context.Cover = BandCover;
+				Context.bSprint = true;
+				bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
+				Goal = BandCover.WorldLocation;
+				State.Slot = BandCover;
+			}
+			if (!bTaken)
+			{
+				bTaken = Walk(PmcCommanderRules::StandoffPoint(View.Location, View.Threat.Location, View.Band), true);
+			}
+			Team.Stats.Standoffs += bTaken ? 1 : 0;
+		}
+		else
+		{
+			bTaken = View.bHasThreat && Walk(PmcCommanderRules::FallBackPoint(View.Location, View.Threat.Location), true);
+		}
 		Team.Stats.Retreats += bTaken ? 1 : 0;
 		break;
 	case EPmcOrder::Heal:
@@ -1136,7 +1183,10 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::SwitchWeapon, Context);
 		break;
 	case EPmcOrder::Crouch:
-		Context.Stance = EOperativeStance::Crouching;
+		// 2026-11-04: a rifleman / sniper in the open at his band's distance goes prone (a smaller target, the steadier shot); pistols and
+		// shotguns, and anybody out of his band, crouch.
+		Context.Stance = View.Band.IsValid() && View.Band.MinCm >= Team.Weights.ProneMinBandCm && View.bHasThreat
+			&& PmcCommanderRules::BandFactor(View.Threat.DistanceCm, View.Band, Team.Weights) >= 0.999f ? EOperativeStance::Prone : EOperativeStance::Crouching;
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
 		break;
 	default:
@@ -1155,7 +1205,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 }
 
 bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
-	FCoverSlot& OutSlot, float& OutQuality) const
+	FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band, float* OutBandFactor) const
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -1190,6 +1240,7 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		float Quality = 0.f;
 		float Score = 0.f;
 		bool bElevated = false;
+		float BandFactor = 1.f;
 	};
 	TArray<FCandidate, TInlineAllocator<24>> Candidates;
 	auto TryRay = [&](const FVector& Origin, const FVector& Direction, float Reach, bool bElevated)
@@ -1215,9 +1266,13 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		}
 		const float Distance = FVector::Dist2D(Chest, Slot.WorldLocation);
 		const int32 Level = bHighGround ? SightRules::HeightLevel(static_cast<float>(Slot.WorldLocation.Z) + EyeCm - GroundZ) : 0;
+		// Engagement band (2026-11-04): a slot at his weapon's distance from the threat, at a corner he can fire round, scores best.
+		const float SlotBand = PmcCommanderRules::BandFactor(static_cast<float>(FVector::Dist2D(Slot.WorldLocation, Threat)), Band, Weights);
+		const bool bCorner = Band.IsValid() && (Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed);
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
-			* PmcCommanderRules::HighGroundFactor(Level, Weights);
-		Candidates.Add({ Slot, Quality, Score, bElevated });
+			* PmcCommanderRules::HighGroundFactor(Level, Weights) * FMath::Lerp(1.f, SlotBand, FMath::Clamp(Weights.BandPosition, 0.f, 1.f))
+			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f);
+		Candidates.Add({ Slot, Quality, Score, bElevated, SlotBand });
 	};
 	for (int32 Index = 0; Index < 16; ++Index)
 	{
@@ -1269,6 +1324,10 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		}
 		OutSlot = Candidate.Slot;
 		OutQuality = Candidate.Quality;
+		if (OutBandFactor)
+		{
+			*OutBandFactor = Candidate.BandFactor;
+		}
 		return true;
 	}
 	return false;

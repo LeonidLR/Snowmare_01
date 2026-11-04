@@ -531,6 +531,13 @@ public:
 	float GetSightHeightMultiplier() const;
 
 	/**
+	 * What its per-archetype sight range is multiplied by now (2026-11-04, UTacticalSightSubsystem::GetEnemySightRangeScale): an armed human
+	 * x2 (one model with the squad's 120 m) x its height multiplier x the weather / time of day; a beast the weather / time of day only.
+	 * GetPatrolPerception applies it (patrol sight, its cone, the bot's stealth view).
+	 */
+	float GetSightRangeScale() const;
+
+	/**
 	 * The closest operative its patrol sight sees right now (FindVisibleOperative with GetPatrolPerception: the stance range x its height
 	 * multiplier, its field of view, the eye -> profile trace). Smokes / tools; OutDistance / OutRange as FindVisibleOperative's.
 	 */

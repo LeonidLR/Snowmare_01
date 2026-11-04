@@ -88,6 +88,17 @@ namespace EnemyPerception
 	CODEXTACTICS_API SightRules::FHeightSightConfig HeightSightFromJson(const FJsonObject& Json,
 		const SightRules::FHeightSightConfig& Base = SightRules::FHeightSightConfig());
 
+	/**
+	 * Sight conditions (user request 2026-11-04; NUMBERS PENDING the user's confirmation): the "sight_conditions" section
+	 * { "squad_base_range_m": 120, "human_enemy_range_multiplier": 2, "weather": { "clear": 1, "overcast": 0.85, "snowfall": 0.6, "blizzard": 0.5 },
+	 *   "time_of_day": { "day": 1, "twilight": 0.7, "night": 0.35, "day_sun_elevation_deg": 10, "night_sun_elevation_deg": -10 } }
+	 * (SightRules::FSightConditionsConfig; UTacticalSightSubsystem::GetSightConditionsMultiplier). Built-in defaults = those numbers.
+	 */
+	CODEXTACTICS_API SightRules::FSightConditionsConfig GetSightConditions();
+	CODEXTACTICS_API void SetSightConditions(const SightRules::FSightConditionsConfig& Config);
+	CODEXTACTICS_API SightRules::FSightConditionsConfig SightConditionsFromJson(const FJsonObject& Json,
+		const SightRules::FSightConditionsConfig& Base = SightRules::FSightConditionsConfig());
+
 	/** Back to the built-in defaults (tests). */
 	CODEXTACTICS_API void ResetToDefaults();
 

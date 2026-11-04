@@ -96,7 +96,8 @@ namespace PmcCommanderSmoke
 				Ignore.Add(Member);
 			}
 			const SmokeUtils::FClearArena Arena = SmokeUtils::FindClearArena(World, Members[0]->GetActorLocation(), Members[0]->GetActorForwardVector(),
-				FBox2D(FVector2D(-500.f, -1600.f), FVector2D(3200.f, 1600.f)), Ignore);
+				// 2026-11-04: the flank points lie at the weapon's band (19-23 m from the squad for the rifles), not 10 m: a wider clear arena.
+				FBox2D(FVector2D(-500.f, -2600.f), FVector2D(3200.f, 2600.f)), Ignore);
 			Check(State, Arena.bFound, FString::Printf(TEXT("an empty arena found (tried %d)"), Arena.Tried));
 			if (!Arena.bFound)
 			{
