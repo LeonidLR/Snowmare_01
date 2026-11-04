@@ -72,6 +72,11 @@ drops further with strong cold** (stacked: a frostbitten man in a blizzard hits 
 - data layout (which JSON, keys, defaults), the smokes / unit tests that would prove it, and a balance sanity check with
   numbers (e.g. hit chance at 20 m / 40 m for: warm+clear, warm+blizzard, frostbitten+blizzard).
 Mark every number "proposal - pending the user".
+**Update 2026-11-04 (the user):** the sight RANGE part is being implemented by Claude now with these rules - a clear day =
+the maximum (at least 2x the old 60 m; the cone covers practically everything visible), NIGHT cuts it drastically regardless
+of the weather, snowfall / blizzard / fog reduce it, enemies use the same model. In your doc treat the range numbers as
+"implemented by Claude, see `docs/systems/sight-and-vision-cones.md`" and focus on ACCURACY (weather x cold x stance /
+suppression), spotting / reaction time and the balance tables.
 
 ### T3. Design doc - tactical doorway breach (no code)
 Write `docs/design/DOORWAY_BREACH.md`. The user's request: hovering the cursor over a doorway shows ghost positions: one man at
@@ -120,13 +125,9 @@ formation works. Formation -> solo: keep today's behaviour. Find the B toggle in
 asserting: box-select 3 in solo -> B -> selection == {leader}. Run SquadControlSmoke, SoloRejoinSmoke, CombatFormationSmoke,
 GroupCornerPeekSmoke, WallLeadershipSmoke.
 
-### T7. The operative's vision cone shows the SIGHT range (small C++)
-User decision 2026-11-03: the cone of an operative must show his **sight range** (60 m base x the height bonus), not the
-weapon range as today. Area: `Source/CodexTactics/Private/Combat/VisionConeComponent.cpp` + `TacticalSightSubsystem`
-(see `docs/systems/sight-and-vision-cones.md`). Keep the cone's wall / roof shadow cutting exactly as it is (it was just
-fixed); only the length changes. If the weapon range is still useful, propose (don't build) a thin inner ring/marker. Run
-`VisionConeSmoke`, `VisionHeightSmoke`, `TowerVisionSmoke`, `SightSmoke`, `PeekSightSmoke` and the
-`CodexTactics.Combat.VisionCone*` tests.
+### T7. CANCELLED (2026-11-04)
+The cone / sight-range work moved to Claude together with a new sight-range model (see T2). **Do not touch**
+`VisionConeComponent`, `TacticalSightSubsystem`, `SightRules` or the sight data this weekend.
 
 ### T8 (optional, only after T1-T7 are handed back). Learning Agents - an isolated feasibility spike
 The user wants the PMC fighters to become very smart opponents. Today they are trained by the **night trainer** (an evolutionary
