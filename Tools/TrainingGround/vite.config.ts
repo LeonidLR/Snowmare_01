@@ -7,6 +7,7 @@ import { parseJsonText, patchJsonText } from './src/utils/jsonTextPatch.ts'
 import { setupMovementApi } from './server/movementApi.ts'
 import { setupCombatLabApi } from './server/combatLabApi.ts'
 import { setupLevelgenApi } from './server/levelgenApi.ts'
+import { buildLevelList, type RawLevelMeta, type CampaignConfig } from './src/utils/levelList.ts'
 import {
   applyLevelEncounterPatch, effectiveHorde, isJsonObject, mergeAiTuningCvars, pickLevelEncounter,
   validateCVarEdits, validateHorde, validateLevelPatch, validatePerception,
@@ -14,6 +15,7 @@ import {
 
 const PROJECT_PATH = path.resolve(__dirname, '../../')
 const LEVELS_DIR = path.resolve(__dirname, '../../Content/Data/LevelJson')
+const CAMPAIGN_FILE = path.resolve(__dirname, '../../Content/Data/Campaign/campaign.json')
 // Weapon power (the «Оружие» tab); the game applies it at start (Source/.../Data/WeaponTuning.h).
 const WEAPONS_FILE = path.resolve(__dirname, '../../Content/Data/Weapons/weapons_tuning.json')
 const SQUAD_ROE_FILE = path.resolve(__dirname, '../../Content/Data/AI/squad_roe.json')
@@ -50,31 +52,51 @@ const setupApiMiddlewares = (middlewares: any) => {
     res.end(JSON.stringify({ status: 'ok', projectPath: PROJECT_PATH, levelsDir: LEVELS_DIR }))
   })
 
-  // 1. Получение списка всех этапов
+  // 1. Получение списка всех этапов (Campaign, Generated, Labs & tests, Legacy stage_XX)
   middlewares.use('/api/list-stages', (req: any, res: any) => {
     addCors(res)
     try {
-      const files = fs.readdirSync(LEVELS_DIR)
-      const stages: any[] = []
-      for (const file of files) {
-        if (file.startsWith('stage_') && file.endsWith('.json') && file !== 'stage_template.json') {
-          const p = path.join(LEVELS_DIR, file)
-          const content = JSON.parse(fs.readFileSync(p, 'utf-8'))
-          stages.push({
-            stage_id: content.level_id || file.replace('.json', ''),
-            stage_number: content.stage_number || 1,
-            stage_name: content.level_name || file,
-            act: content.act || 1,
-            biome_id: content.biome_id || 'bunker_industrial',
-            waves_count: content.waves ? content.waves.length : 0,
-            description: content.description || ''
-          })
+      let campaign: CampaignConfig | null = null
+      if (fs.existsSync(CAMPAIGN_FILE)) {
+        try {
+          campaign = JSON.parse(fs.readFileSync(CAMPAIGN_FILE, 'utf-8'))
+        } catch (err) {
+          console.warn('Failed to parse campaign.json:', err)
         }
       }
-      stages.sort((a, b) => a.stage_number - b.stage_number)
+      const files = fs.readdirSync(LEVELS_DIR)
+      const rawLevels: RawLevelMeta[] = []
+      for (const file of files) {
+        if (file.endsWith('.json') && file !== 'stage_template.json') {
+          const p = path.join(LEVELS_DIR, file)
+          try {
+            const content = JSON.parse(fs.readFileSync(p, 'utf-8'))
+            rawLevels.push({
+              file,
+              level_id: content.level_id || file.replace('.json', ''),
+              level_name: content.level_name || file,
+              stage_number: content.stage_number,
+              act: content.act,
+              biome_id: content.biome_id,
+              waves_count: content.waves ? content.waves.length : 0,
+              description: content.description || '',
+              horde_after_firefights: content.horde_after_firefights,
+            })
+          } catch (err) {
+            console.warn(`Failed to parse level JSON ${file}:`, err)
+          }
+        }
+      }
+      const levels = buildLevelList(campaign, rawLevels)
+      // Provide backwards-compatible properties along with the new grouped items
+      const response = levels.map((lvl) => ({
+        ...lvl,
+        stage_id: lvl.id,
+        stage_name: lvl.level_name,
+      }))
       res.statusCode = 200
       res.setHeader('Content-Type', 'application/json; charset=utf-8')
-      res.end(JSON.stringify(stages))
+      res.end(JSON.stringify(response))
     } catch (e: any) {
       res.statusCode = 500
       res.end(JSON.stringify({ error: e.message }))
@@ -85,8 +107,9 @@ const setupApiMiddlewares = (middlewares: any) => {
   middlewares.use('/api/get-stage', (req: any, res: any) => {
     addCors(res)
     const url = new URL(req.url || '', 'http://localhost:5173')
-    const stageId = url.searchParams.get('id') || 'stage_01'
-    const targetPath = path.join(LEVELS_DIR, `${stageId}.json`)
+    const stageId = url.searchParams.get('id') || url.searchParams.get('file') || 'stage_01'
+    const fileName = stageId.endsWith('.json') ? stageId : `${stageId}.json`
+    const targetPath = path.join(LEVELS_DIR, fileName)
     if (fs.existsSync(targetPath)) {
       const content = fs.readFileSync(targetPath, 'utf-8')
       res.statusCode = 200
@@ -105,7 +128,7 @@ const setupApiMiddlewares = (middlewares: any) => {
     }
   })
 
-  // 3. Сохранение этапа на диск
+  // 3. Сохранение этапа на диск (в выбранный файл)
   middlewares.use('/api/save-stage', (req: any, res: any, next: any) => {
     addCors(res)
     if (req.method === 'OPTIONS') {
@@ -118,18 +141,22 @@ const setupApiMiddlewares = (middlewares: any) => {
       req.on('data', (chunk: any) => { body += chunk })
       req.on('end', () => {
         try {
+          const url = new URL(req.url || '', 'http://localhost:5173')
           const data = JSON.parse(body)
-          const stageId = data.level_id || 'stage_01'
-          const targetPath = path.join(LEVELS_DIR, `${stageId}.json`)
+          const targetLeaf = url.searchParams.get('file') || url.searchParams.get('id') || data._file || data.file || data.level_id || 'stage_01'
+          const fileName = targetLeaf.endsWith('.json') ? targetLeaf : `${targetLeaf}.json`
+          const targetPath = path.join(LEVELS_DIR, fileName)
           fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf-8')
-          
-          // Также синхронизируем в рабочий файл игры
-          const activeLevelPath = path.join(LEVELS_DIR, 'level_01_outpost.json')
-          fs.writeFileSync(activeLevelPath, JSON.stringify(data, null, 2), 'utf-8')
+
+          // Only sync to level_01_outpost.json if that is the level being edited
+          if (fileName === 'level_01_outpost.json') {
+            const activeLevelPath = path.join(LEVELS_DIR, 'level_01_outpost.json')
+            fs.writeFileSync(activeLevelPath, JSON.stringify(data, null, 2), 'utf-8')
+          }
 
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ success: true, stage_id: stageId }))
+          res.end(JSON.stringify({ success: true, stage_id: fileName.replace(/\.json$/, ''), file: fileName }))
         } catch (e: any) {
           res.statusCode = 500
           res.end(JSON.stringify({ error: e.message }))

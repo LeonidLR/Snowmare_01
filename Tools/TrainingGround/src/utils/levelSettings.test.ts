@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   GATE_DEFAULTS, getDemo, getGate, isGateFieldInvalid, setDemoEnabled, setDemoKey, setGateKey, validateDemo, validateGate,
   validateLevelSettings, getColdRateMult, setColdRateMult, validateColdRate,
+  HORDE_AFTER_FIREFIGHTS_DEFAULT, HORDE_AFTER_FIREFIGHTS_MIN, getHordeAfterFirefights, getHordeEnabled, setHordeAfterFirefights, setHordeEnabled, validateHordeAfterFirefights,
 } from './levelSettings.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -114,4 +115,30 @@ test('level_01_outpost.json: gate values read, validate, and an edit round-trips
   assert.deepEqual(Object.keys(edited), Object.keys(level));
   // Demo object added then removed leaves the level as loaded.
   assert.deepEqual(setDemoEnabled(setDemoEnabled(level, true), false), level);
+});
+
+
+test('horde_after_firefights: default 6, min 1, set / validate / roundtrip', () => {
+  assert.equal(getHordeAfterFirefights({}), HORDE_AFTER_FIREFIGHTS_DEFAULT);
+  assert.equal(getHordeAfterFirefights({ horde_after_firefights: 10 }), 10);
+  assert.equal(getHordeEnabled({}), true);
+  assert.equal(getHordeEnabled({ horde_enabled: false }), false);
+
+  assert.deepEqual(validateHordeAfterFirefights(6), []);
+  assert.deepEqual(validateHordeAfterFirefights(1), []);
+  assert.equal(validateHordeAfterFirefights(0).length, 1);
+  assert.equal(validateHordeAfterFirefights(-2).length, 1);
+  assert.equal(validateHordeAfterFirefights(2.5).length, 1);
+  assert.equal(validateHordeAfterFirefights(NaN).length, 1);
+
+  const level = { level_id: 'x', waves: [] };
+  const updated = setHordeAfterFirefights(level, 8);
+  assert.equal(updated.horde_after_firefights, 8);
+  assert.equal('horde_after_firefights' in level, false, 'input not mutated');
+
+  const removed = setHordeAfterFirefights(updated, undefined);
+  assert.equal('horde_after_firefights' in removed, false);
+
+  assert.equal(validateLevelSettings({ waves: [], horde_after_firefights: -1 }).length, 1);
+  assert.equal(validateLevelSettings({ waves: [], horde_after_firefights: 8 }).length, 0);
 });

@@ -1,9 +1,10 @@
 import React from 'react';
-import { DoorClosed, FlaskConical, AlertTriangle, Snowflake } from 'lucide-react';
+import { DoorClosed, FlaskConical, AlertTriangle, Snowflake, Skull } from 'lucide-react';
 import {
   COLD_RATE_HINT, COLD_RATE_MAX, COLD_RATE_MIN, DEMO_DEFAULT_STEPS, DEMO_HINTS, GATE_FIELDS, GATE_MODE_OPTIONS, GateOpenMode, LevelLike, Tri,
   getColdRateMult, getDemo, getGate, isGateFieldInvalid, setColdRateMult, setDemoEnabled, setDemoKey, setGateKey, validateColdRate,
   validateDemo, validateGate,
+  HORDE_AFTER_FIREFIGHTS_MIN, getHordeAfterFirefights, getHordeEnabled, setHordeAfterFirefights, setHordeEnabled, validateHordeAfterFirefights,
 } from '../utils/levelSettings';
 
 // Level-wide settings (not per wave): «Бластовая дверь» (gate_* keys), «Демо / туториал» (the "demo" object) and
@@ -192,6 +193,55 @@ export const LevelColdPanel: React.FC<PanelProps> = ({ config, onChange }) => {
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
         Умножается на cold_drain_mult каждой волны и на зоны камеры. Обогрев, разогрев бегом и скриптовые порывы ветра туториала не масштабируются.
+      </p>
+      <Errors errors={errors} />
+    </div>
+  );
+};
+
+
+export const LevelHordePanel: React.FC<PanelProps> = ({ config, onChange }) => {
+  const enabled = getHordeEnabled(config);
+  const firefights = getHordeAfterFirefights(config);
+  const errors = config.horde_after_firefights !== undefined
+    ? validateHordeAfterFirefights(config.horde_after_firefights)
+    : [];
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4" title="Level JSON keys horde_enabled, horde_after_firefights">
+      <div className="flex items-center gap-2 mb-3">
+        <Skull className="w-4 h-4 text-rose-400" />
+        <h3 className="text-sm font-bold text-slate-100">Орда уровня</h3>
+        <span className="text-[11px] text-slate-500">horde_enabled, horde_after_firefights</span>
+      </div>
+      <div className="flex flex-wrap items-end gap-4 text-xs">
+        <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => onChange(setHordeEnabled(config, e.target.checked))}
+            className="accent-rose-500 w-4 h-4"
+          />
+          Орда включена
+        </label>
+        <label className="flex flex-col gap-1" title="Порог вызова орды: орда триггерится после N перестрелок в реальном времени (по умолчанию 6, мин. 1)">
+          <span className="text-slate-500">Horde after N firefights <span className="text-slate-600">(боёв)</span></span>
+          <input
+            type="number"
+            min={HORDE_AFTER_FIREFIGHTS_MIN}
+            step={1}
+            disabled={!enabled}
+            value={Number.isNaN(firefights) ? '' : firefights}
+            onChange={(e) => {
+              const val = e.target.value;
+              onChange(setHordeAfterFirefights(config, val === '' ? undefined : Number(val)));
+            }}
+            className={`${fieldCls(errors.length > 0)} w-28`}
+          />
+        </label>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500">
+        UE: орда после N перестрелок в реальном времени (horde_after_firefights, default 6, min 1).
       </p>
       <Errors errors={errors} />
     </div>

@@ -209,5 +209,55 @@ export function validateColdRate(value: number): string[] {
 /** All level-settings errors of a level (gate + demo + cold); used to block the save. */
 export function validateLevelSettings(level: LevelLike): string[] {
   const waves = Array.isArray(level.waves) ? level.waves.length : 0;
-  return [...validateGate(getGate(level), waves), ...validateDemo(getDemo(level)), ...validateColdRate(getColdRateMult(level))];
+  const hordeErrors = typeof level.horde_after_firefights === 'number'
+    ? validateHordeAfterFirefights(level.horde_after_firefights)
+    : [];
+  return [
+    ...validateGate(getGate(level), waves),
+    ...validateDemo(getDemo(level)),
+    ...validateColdRate(getColdRateMult(level)),
+    ...hordeErrors,
+  ];
+}
+
+// ---- Level Horde ("horde_enabled", "horde_after_firefights") ----
+
+export const HORDE_AFTER_FIREFIGHTS_DEFAULT = 6;
+export const HORDE_AFTER_FIREFIGHTS_MIN = 1;
+
+export function getHordeEnabled(level: LevelLike): boolean {
+  return level.horde_enabled !== false;
+}
+
+export function setHordeEnabled(level: LevelLike, enabled: boolean): LevelLike {
+  const next: LevelLike = { ...level };
+  if (enabled) {
+    if (next.horde_enabled === false) delete next.horde_enabled;
+  } else {
+    next.horde_enabled = false;
+  }
+  return next;
+}
+
+export function getHordeAfterFirefights(level: LevelLike): number {
+  return typeof level.horde_after_firefights === 'number' && Number.isFinite(level.horde_after_firefights)
+    ? level.horde_after_firefights
+    : HORDE_AFTER_FIREFIGHTS_DEFAULT;
+}
+
+export function setHordeAfterFirefights(level: LevelLike, value: number | undefined): LevelLike {
+  const next: LevelLike = { ...level };
+  if (value === undefined || Number.isNaN(value)) {
+    delete next.horde_after_firefights;
+  } else {
+    next.horde_after_firefights = Math.round(value);
+  }
+  return next;
+}
+
+export function validateHordeAfterFirefights(value: number): string[] {
+  if (!Number.isInteger(value) || value < HORDE_AFTER_FIREFIGHTS_MIN) {
+    return [`Орда после N перестрелок: целое число >= ${HORDE_AFTER_FIREFIGHTS_MIN} (по умолчанию ${HORDE_AFTER_FIREFIGHTS_DEFAULT})`];
+  }
+  return [];
 }
