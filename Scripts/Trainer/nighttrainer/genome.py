@@ -15,6 +15,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import time
 from dataclasses import dataclass
 
 BOUNDS_SCHEMA = "codex.trainer_bounds/1"
@@ -128,7 +129,16 @@ def write_json(path: str, data) -> None:
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
-    os.replace(tmp, path)
+    # Windows: a reader (status.ps1, an indexer, the antivirus) can hold the target for a moment ->
+    # PermissionError on replace (killed the 2026-11-04 night run). Retry briefly before giving up.
+    for attempt in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.25)
 
 
 def load_or_create_bounds(weights_path: str, bounds_path: str | None = None, rel: float = 0.5):

@@ -111,9 +111,13 @@ class Trainer:
                             "pid": os.getpid(), "mock": self.mock, "max_generations": self.max_generations,
                             "deadline": (time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(self.deadline))
                                          if self.deadline else None)})
-        write_json(os.path.join(self.run_dir, "status.json"), self.status)
-        write_json(os.path.join(os.path.dirname(self.run_dir), "latest.json"),
-                   {"run_id": self.run_id, "run_dir": self.run_dir, "updated": self.status["updated"]})
+        # The status files are informational: a locked file must never stop the training.
+        try:
+            write_json(os.path.join(self.run_dir, "status.json"), self.status)
+            write_json(os.path.join(os.path.dirname(self.run_dir), "latest.json"),
+                       {"run_id": self.run_id, "run_dir": self.run_dir, "updated": self.status["updated"]})
+        except OSError as error:
+            print(f"[{now_iso()}] status write skipped: {error}", flush=True)
 
     # ---- main loop --------------------------------------------------------------------------------------------------
     def run(self) -> str:
