@@ -28,11 +28,17 @@
   },
   "fitness": {
     "win": 10.0,
+    "_draw_comment": "2026-11-06: pmc-v2 learnt to avoid fighting (time-limit draws paid ~8). In a draw: no win credit, survivors don't count, HP loss counts half; a time-limit end costs -2; kills pay. Order: win >> a fought draw > hiding ~ a loss.",
+    "draw_value": 0.0,
+    "draw_survivor_factor": 0.0,
+    "draw_hp_factor": 0.5,
+    "timeout_penalty": -2.0,
     "survivors": 3.0,
     "hp_lost": -3.0,
     "hp_per_unit": 100.0,
     "duration": {"weight": 1.0, "target_s": 150.0, "tolerance_s": 120.0},
     "bonuses": {
+      "kills": {"weight": 2.5, "cap": 3},
       "flanks_succeeded": {"weight": 0.8, "cap": 3},
       "suppression_s": {"weight": 0.5, "cap": 30},
       "ambushes": {"weight": 0.8, "cap": 2},

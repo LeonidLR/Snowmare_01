@@ -28,9 +28,20 @@ def round_score(r: dict, cfg: dict) -> float:
     won = _num(r, "won")
     squad = max(1.0, _num(r, "squad_size", 4.0))
     hp_max = _num(r, "hp_max") or squad * float(cfg.get("hp_per_unit", 100.0))
-    score = float(cfg.get("win", 10.0)) * won
-    score += float(cfg.get("survivors", 3.0)) * min(1.0, _num(r, "survivors") / squad)
-    score += float(cfg.get("hp_lost", -3.0)) * min(1.0, _num(r, "hp_lost") / hp_max)
+    # 2026-11-06: the pmc-v2 night learnt "don't fight" - a time-limit draw paid ~8 (half a win + all survivors).
+    # A draw now earns draw_value of a win, survivors count draw_survivor_factor in a draw, a time-limit end costs
+    # timeout_penalty (defaults keep the old scoring when the keys are absent).
+    draw = 0.0 < won < 1.0
+    limit = _num(r, "time_limit_s")
+    timed_out = draw and limit > 0.0 and _num(r, "duration_s") >= limit - 1.0
+    win_credit = float(cfg.get("draw_value", won)) if draw else won
+    score = float(cfg.get("win", 10.0)) * win_credit
+    survivor_factor = float(cfg.get("draw_survivor_factor", 1.0)) if draw else 1.0
+    score += float(cfg.get("survivors", 3.0)) * survivor_factor * min(1.0, _num(r, "survivors") / squad)
+    if timed_out:
+        score += float(cfg.get("timeout_penalty", 0.0))
+    hp_factor = float(cfg.get("draw_hp_factor", 1.0)) if draw else 1.0
+    score += float(cfg.get("hp_lost", -3.0)) * hp_factor * min(1.0, _num(r, "hp_lost") / hp_max)
     dur = cfg.get("duration", {})
     if won >= 1.0 and dur:
         target, tol = float(dur.get("target_s", 150.0)), max(1.0, float(dur.get("tolerance_s", 120.0)))
