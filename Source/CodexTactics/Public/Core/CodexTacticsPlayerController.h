@@ -61,7 +61,7 @@ struct FSquadPeekCarry
  * Squad orders from mouse and keyboard. The controller possesses the camera pawn, never an operative.
  * Click ground: leader moves there; double click: sprint; click an operative: make it leader;
  * 1..3: select leader; Z / C / X: stand / crouch / prone (with Alt: whole squad).
- * Camera: wheel zoom, Q/E or arrows rotate, RMB drag rotates, MMB drag pans (WASD / edges are polled by the camera).
+ * Camera: wheel zoom, Q/E rotate, RMB drag rotates, MMB drag pans (WASD / arrow keys / edges are polled by the camera).
  * Ctrl + click: targeted shot by the leader — enemy = priority target, barrel = explode, mine = remote shot (hit chance),
  * supply crate / trapped object = remote detonation; during the tactical pause the shot is planned instead. Ctrl + click
  * anywhere else (no visible enemy within 1.5 m, nothing shootable hit; user decision 2026-10-19) = quick fire: the

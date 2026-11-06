@@ -151,10 +151,9 @@ void ACodexTacticsPlayerController::CreateInputActions()
 		MakeAction(TEXT("IA_StanceProne"), EKeys::V) };
 	SoloModeAction = MakeAction(TEXT("IA_SoloMode"), EKeys::B);
 
+	// 2026-11-06: the Left / Right arrows pan the camera now (TacticalCameraPawn), rotation is Q / E only.
 	CameraRotateLeftAction = MakeAction(TEXT("IA_CameraRotateLeft"), EKeys::Q);
-	MappingContext->MapKey(CameraRotateLeftAction, EKeys::Left);
 	CameraRotateRightAction = MakeAction(TEXT("IA_CameraRotateRight"), EKeys::E);
-	MappingContext->MapKey(CameraRotateRightAction, EKeys::Right);
 	CameraDragRotateAction = MakeAction(TEXT("IA_CameraDragRotate"), EKeys::RightMouseButton);
 	CameraDragPanAction = MakeAction(TEXT("IA_CameraDragPan"), EKeys::MiddleMouseButton);
 	SpaceAction = MakeAction(TEXT("IA_Space"), EKeys::SpaceBar);

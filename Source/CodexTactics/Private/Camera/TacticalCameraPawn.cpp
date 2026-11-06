@@ -444,10 +444,11 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 	FVector2D EdgeInput = FVector2D::ZeroVector;
 	if (PC)
 	{
-		KeyInput.Y += PC->IsInputKeyDown(EKeys::W) ? 1.f : 0.f;
-		KeyInput.Y -= PC->IsInputKeyDown(EKeys::S) ? 1.f : 0.f;
-		KeyInput.X += PC->IsInputKeyDown(EKeys::D) ? 1.f : 0.f;
-		KeyInput.X -= PC->IsInputKeyDown(EKeys::A) ? 1.f : 0.f;
+		// WASD and the arrow keys both pan (user 2026-11-06: his A key is broken); rotation stays on Q / E.
+		KeyInput.Y += (PC->IsInputKeyDown(EKeys::W) || PC->IsInputKeyDown(EKeys::Up)) ? 1.f : 0.f;
+		KeyInput.Y -= (PC->IsInputKeyDown(EKeys::S) || PC->IsInputKeyDown(EKeys::Down)) ? 1.f : 0.f;
+		KeyInput.X += (PC->IsInputKeyDown(EKeys::D) || PC->IsInputKeyDown(EKeys::Right)) ? 1.f : 0.f;
+		KeyInput.X -= (PC->IsInputKeyDown(EKeys::A) || PC->IsInputKeyDown(EKeys::Left)) ? 1.f : 0.f;
 
 		float MouseX = 0.f;
 		float MouseY = 0.f;

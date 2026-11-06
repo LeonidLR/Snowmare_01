@@ -11,7 +11,7 @@ class UCameraComponent;
 
 /**
  * The player's view: perspective isometric camera that follows the squad leader.
- * Controls: WASD / screen edges pan, mouse wheel zooms, Q/E (or arrows) rotate 45 deg,
+ * Controls: WASD / arrow keys / screen edges pan, mouse wheel zooms, Q/E rotate 45 deg,
  * right-mouse drag rotates, middle-mouse drag pans. Exploration and combat keep separate zoom levels.
  * Runs on real (undilated) time so it keeps working during a tactical pause.
  * Turn-based shots shake the view (trauma, Godot trigger_weapon_shake).
