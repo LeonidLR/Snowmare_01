@@ -38,8 +38,16 @@ def round_score(r: dict, cfg: dict) -> float:
     score = float(cfg.get("win", 10.0)) * win_credit
     survivor_factor = float(cfg.get("draw_survivor_factor", 1.0)) if draw else 1.0
     score += float(cfg.get("survivors", 3.0)) * survivor_factor * min(1.0, _num(r, "survivors") / squad)
-    if timed_out:
+    # Hiding is fine when it pays off (the user, 2026-11-06: "hide to ambush better, not just to hide"):
+    # the time-limit penalty only hits a round where nobody hurt anybody; damage dealt and a kill
+    # advantage pay, so a patient ambush that bleeds the enemy outscores both pure hiding and a frontal rush.
+    engaged = (_num(r, "kills") + _num(r, "opp_kills") > 0.0 or _num(r, "hp_lost") > 0.0
+               or _num(r, "opp_hp_lost") > 0.0)
+    if timed_out and not engaged:
         score += float(cfg.get("timeout_penalty", 0.0))
+    if "opp_hp_lost" in r:
+        score += float(cfg.get("damage_dealt", 0.0)) * min(1.0, _num(r, "opp_hp_lost") / hp_max)
+    score += float(cfg.get("kill_advantage", 0.0)) * max(-3.0, min(3.0, _num(r, "kills") - _num(r, "opp_kills")))
     hp_factor = float(cfg.get("draw_hp_factor", 1.0)) if draw else 1.0
     score += float(cfg.get("hp_lost", -3.0)) * hp_factor * min(1.0, _num(r, "hp_lost") / hp_max)
     dur = cfg.get("duration", {})

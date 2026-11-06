@@ -158,6 +158,7 @@ class ArenaAdapter:
             opp = self._side(rnd, theirs)
             for key, src in (("opp_survivors", _dig(opp, fields.get("survivors", "survivors"))),
                              ("opp_kills", _dig(opp, fields.get("kills", "kills"))),
+                             ("opp_hp_lost", _dig(opp, fields.get("hp_lost", "hp_lost"))),
                              ("highlight_score", _dig(rnd, rc.get("highlight_key", "highlight_score"))),
                              ("round_seed", _dig(rnd, rc.get("round_seed_key", "seed"))),
                              ("round_index", _dig(rnd, rc.get("round_index_key", "index")))):
