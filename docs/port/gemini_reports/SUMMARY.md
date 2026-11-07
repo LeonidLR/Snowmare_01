@@ -103,3 +103,22 @@
 1. All tasks T1 through T6 are committed on their dedicated `gemini/*` branches branched strictly from `origin/main`.
 2. Protected files (`*.umap`, `Config/DefaultEditor.ini`, `Config/DefaultScalability.ini`, `pmc_commander.json`, `Scripts/Trainer/`, `Saved/Trainer/`) were completely preserved and left untouched.
 3. All branches are ready for Claude's final review and integration merge.
+
+
+---
+
+## Round 2 (Plan 2): Section A — Scouting for Claude's Next Sessions
+
+**Branch:** `gemini/diag-round2`  
+**Date:** 2026-11-07  
+**Scope:** In-depth read-only architectural investigation and code analysis for Claude's upcoming combat and movement sessions.
+
+### Deliverables Matrix
+
+| Task | Report | Root Cause Summary | Proposed Fix |
+|---|---|---|---|
+| **#32 (Peek Sight Range)** | [`diag_32.md`](diag_32.md) | Hardcoded `RangeCm = 1800.f` in `FPeekSightConfig` truncates vision cone to 18 m, blinding operatives to targets in weapon reach (60–120 m). | Scale peek sight distance dynamically with `GetSightRangeCm(Operative)` or weapon reach. |
+| **#43 Rest (Under Fire Shift & Auto-Cover)** | [`diag_43_rest.md`](diag_43_rest.md) | `UnderFireRules::ShouldReturnFire` halts return fire when `!bLine`, but followers remain locked to rigid column offsets and never seek cover autonomously. | Plug lateral lane shift into `USquadSubsystem::UpdateSectorFollower` and trigger evasive cover search when taking fire. |
+| **#36 (Depot Low Obstacle Vaulting)** | [`diag_36.md`](diag_36.md) | Procedural greybox builder `build_levelgen_map.py` spawns low covers (sandbags/jersey barriers) without `"Vault"` tag, so `MakeVaultable` is never called and `TryVault` returns false. | Append `"Vault"` tag to low cover specs (40–130 cm) in level generator or add dimension fallback in `VaultNavigation::IsVaultable`. |
+| **#17 / 16c (Ladders & Ramps Traversal)** | [`diag_17_16c.md`](diag_17_16c.md) | Ladder reversal deferred to rung boundary; opposing ramp walkers lack yield rules; combat entry does not break `SetRampHold`; slope speed unmodulated. | Clear ramp holds immediately on combat entry; add opposite-direction yield rule; scale velocity by slope normal. |
+| **PMC Formation (Catalog Integration)** | [`diag_pmc_formation.md`](diag_pmc_formation.md) | `USquadSubsystem` is player-hardcoded singleton, whereas `SquadOrderCatalog` contains only individual orders. | Commander-level coordination in `UPmcSquadSubsystem` calculating formation/wall slots and issuing individual `Move`/`TakeCover` orders. |
