@@ -23,6 +23,9 @@
 
 namespace PmcEncounterLocal
 {
+	static TAutoConsoleVariable<int32> CVarPmcEncounters(TEXT("Codex.Pmc.Encounters"), 1,
+		TEXT("Level-JSON PMC encounters (pmc_squads): 1 (default) the scheduled squads arrive; 0 none arrive (their clock waits - long movement / falls smokes); CodexTactics.PmcSpawn still works"));
+
 	bool IsLive(const AOperativeCharacter* Operative)
 	{
 		return IsValid(Operative) && !Operative->IsKilledInAction() && Operative->HealthComponent && Operative->HealthComponent->IsAlive();
@@ -98,7 +101,7 @@ void UPmcEncounterSubsystem::Tick(float DeltaTime)
 			return;
 		}
 	}
-	if (Pending.IsEmpty())
+	if (Pending.IsEmpty() || PmcEncounterLocal::CVarPmcEncounters.GetValueOnGameThread() == 0)
 	{
 		return;
 	}

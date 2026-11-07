@@ -786,6 +786,14 @@ namespace LevelGenLaddersSmoke
 		{
 			Pressure->Set(0, ECVF_SetByConsole);
 		}
+		// Nor the Depot's level-JSON PMC squads / the manoeuvre under fire (#43): a walk check, not a fight.
+		for (const TCHAR* Name : { TEXT("Codex.Pmc.Encounters"), TEXT("Codex.Combat.UnderFireManoeuvre") })
+		{
+			if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))
+			{
+				Variable->Set(0, ECVF_SetByConsole);
+			}
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
 		{
 			return Step(State);

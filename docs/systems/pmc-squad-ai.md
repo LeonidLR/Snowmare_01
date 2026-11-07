@@ -96,7 +96,7 @@ mark, like a monster), never once fallen. The arena turns it off (`SetRevealHost
   manoeuvred to is HELD (`IsHoldingUnderFireSpot` counts in `USquadSubsystem::IsOnOwnOrder`, so the formation does not pull him back into the
   line) until 3 + `hold_seconds` 4 s after the last round or the leader's next move order. Solo / the leader / a PMC fighter: no grace. Commander
   Mode keeps its own cover rules (skipped). The PMC fighters run the same shared path (an uncommanded fighter acts on it alone; the commander's
-  moving orders are own orders and win). Counters `UnderFireCoverMoves` / `UnderFireSidesteps` / `UnderFireProneDrops`, log `[UnderFire]`.
+  moving orders are own orders and win). Counters `UnderFireCoverMoves` / `UnderFireSidesteps` / `UnderFireProneDrops`, log `[UnderFire]`. Console A/B: `Codex.Combat.UnderFireManoeuvre 0` (off); `Codex.Pmc.Encounters 0` keeps the level-JSON PMC squads away (FallDropSmoke, LevelGenRoute / Ladders, DropSoftlock set both: walk / fall checks, not fights).
   Tests `CodexTactics.Combat.UnderFire.ManoeuvreGate` / `.ManoeuvreChoice` / `.SidestepAndMateInLine` / `.HoldSpotAndRise` /
   `.TuningFileMirrorsDefaults`; smoke `UnderFireManoeuvreSmoke` (L_Gen_Depot_1: the halted column in a 3.6 m passage, the shooter at its far end).
   Not done: a walking column keeps its slots (only the turn and the return fire while the leader walks); the cover search casts its rays

@@ -14,6 +14,7 @@
 #include "Combat/UnderFireRules.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "HAL/IConsoleManager.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
@@ -32,6 +33,9 @@ namespace OperativeUnderFireLocal
 	constexpr float StepNavSnapCm = 30.f;
 	/** At most this many path queries per cover search. */
 	constexpr int32 CoverPathChecks = 3;
+
+	static TAutoConsoleVariable<int32> CVarUnderFireManoeuvre(TEXT("Codex.Combat.UnderFireManoeuvre"), 1,
+		TEXT("The manoeuvre under fire (#43, under_fire.json): 1 (default) cover / a side step for a line / prone under fire; 0 off (only the turn and the return fire at the flash)"));
 
 	bool IsLive(const AOperativeCharacter* Operative)
 	{
@@ -213,6 +217,10 @@ void AOperativeCharacter::UpdateUnderFireManoeuvre(float DeltaTime)
 		bUnderFireManoeuvred = false;
 		bUnderFireWentProne = false;
 		bUnderFireIssuedMove = false;
+	}
+	if (OperativeUnderFireLocal::CVarUnderFireManoeuvre.GetValueOnGameThread() == 0)
+	{
+		return;
 	}
 	UnderFireDecisionTimer -= DeltaTime;
 	if (UnderFireDecisionTimer > 0.f)

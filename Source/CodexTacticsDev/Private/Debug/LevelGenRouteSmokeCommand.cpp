@@ -442,6 +442,14 @@ namespace LevelGenRouteSmoke
 			{
 				Pressure->Set(0, ECVF_SetByConsole);
 			}
+			// Nor the Depot's level-JSON PMC squads / the manoeuvre under fire (#43): a walk check, not a fight.
+			for (const TCHAR* Name : { TEXT("Codex.Pmc.Encounters"), TEXT("Codex.Combat.UnderFireManoeuvre") })
+			{
+				if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))
+				{
+					Variable->Set(0, ECVF_SetByConsole);
+				}
+			}
 			World->GetSubsystem<UPlaytestBotSubsystem>()->StartRouteRun(BotRouteLimitSeconds + 60.f, false, 1);
 			State->Stage = EStage::BotRoute;
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRouteSmoke layout %s route %s on %s: the walk handed to the bot's route mode (Codex.Bot.Route; the pressure off)"),
