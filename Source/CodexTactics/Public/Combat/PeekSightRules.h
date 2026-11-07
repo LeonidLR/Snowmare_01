@@ -12,7 +12,7 @@
  * aim / corner hold / manual peek his head and rifle are leaned OUT past the corner, and over a low wall when he aims over it.
  *
  * While he peeks, a second view opens from the leaned-out eye point: a cone of HalfAngleDeg round the pose's aim direction, up to
- * RangeCm, line of sight traced from that point. His own eyes (the capsule) keep seeing what they see. Enemies look at the same
+ * his effective sight range (#32, 2026-11-07: PeekSightRules::EffectiveRangeCm; the fixed RangeCm before), line of sight traced from that point. His own eyes (the capsule) keep seeing what they see. Enemies look at the same
  * leaned-out point (UTacticalSightSubsystem::ProfilePoint): what he sees from there can see him.
  *
  * The trap search of the peek (FTrapPeekSpotConfig, rev 5j) looks from the same eye point, in the same aim and the same 90 deg cone,
@@ -28,7 +28,19 @@ struct CODEXTACTICS_API FPeekSightConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek")
 	bool bEnabled = true;
 
-	/** How far the peek sees an enemy, cm (planar, from the leaned-out eye). */
+	/**
+	 * #32 (2026-11-07): the peek sees as far as his own eyes do - his effective sight range (UTacticalSightSubsystem::GetSightRangeCm: the
+	 * clear-day squad range x his height level x the weather / time of day, enemy_perception.json sight_conditions) x SightRangeFraction.
+	 * Before, a fixed 18 m: a man at a corner could not see a target on his own rifle band (19-24 m). Off: the fixed RangeCm below.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek")
+	bool bRangeFromSight = true;
+
+	/** The peek's share of his effective sight range (bRangeFromSight; 1 = the whole range). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek", meta = (ClampMin = "0", ClampMax = "1", EditCondition = "bRangeFromSight"))
+	float SightRangeFraction = 1.f;
+
+	/** The fixed peek range, cm (planar, from the leaned-out eye): used when bRangeFromSight is off or no squad sight runs. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek", meta = (ClampMin = "0"))
 	float RangeCm = 1800.f;
 
@@ -93,6 +105,19 @@ namespace PeekSightRules
 	/** BaseDirection turned by YawDeg (the upper-body twist), planar unit. */
 	CODEXTACTICS_API FVector TwistedDirection(const FVector& BaseDirection, float YawDeg);
 
-	/** Target lies in the peek cone (enabled, planar distance <= RangeCm, within HalfAngleDeg of Direction). */
+	/** Target lies in the peek cone (enabled, planar distance <= Config.RangeCm, within HalfAngleDeg of Direction). */
 	CODEXTACTICS_API bool IsInCone(const FPeekSightConfig& Config, const FVector& Eye, const FVector& Direction, const FVector& Target);
+
+	/** IsInCone up to RangeCm (EffectiveRangeCm) instead of the fixed Config.RangeCm. */
+	CODEXTACTICS_API bool IsInCone(const FPeekSightConfig& Config, const FVector& Eye, const FVector& Direction, const FVector& Target, float RangeCm);
+
+	/**
+	 * How far the peek sees, cm (#32): bRangeFromSight and a known effective sight range (SightRangeCm >= 0) -> SightRangeCm x
+	 * SightRangeFraction; else the fixed Config.RangeCm. Every reader uses it: the squad's sight (UTacticalSightSubsystem::CanOperativeSee,
+	 * the PMC teams' sight through it), the drawn peek cone, the vision cone's spotted state, the PMC commander's corner bonus.
+	 */
+	CODEXTACTICS_API float EffectiveRangeCm(const FPeekSightConfig& Config, float SightRangeCm);
+
+	/** A cover slot's free corner is worth peeking round against a threat this far away: it lies within the peek range (#32). */
+	CODEXTACTICS_API bool IsCornerInPeekReach(bool bCornerExposed, float ThreatDistanceCm, float PeekRangeCm);
 }

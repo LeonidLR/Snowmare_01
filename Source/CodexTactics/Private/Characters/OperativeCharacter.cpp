@@ -333,6 +333,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 		UpdateCombatFacing(DeltaTime);
 		ProcessCombatShooting(DeltaTime);
 		UpdateSniperPendingShot(DeltaTime);
+		UpdateUnderFireManoeuvre(DeltaTime); // #43: cover / a step for a line / prone under fire
 	}
 	UpdateCoverEntryBlend(DeltaTime);
 	EnforceMeshBaseOffset();

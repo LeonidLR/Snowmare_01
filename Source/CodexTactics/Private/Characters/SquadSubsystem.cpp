@@ -1027,6 +1027,9 @@ bool USquadSubsystem::IsOnOwnOrder(const AOperativeCharacter* Operative) const
 	}
 	// Group cover leader priority (2026-10-23): waiting off the wall for the leader is his order too (the formation leaves him alone).
 	Facts.bObjectTask |= IsWaitingForGroupCoverLeader(Operative);
+	// #43 (2026-11-07): the spot his manoeuvre under fire took him to (a step off the line, prone) is held until the threat is over or the
+	// leader gets a new order - the formation does not pull him back into the line of fire.
+	Facts.bObjectTask |= Operative->IsHoldingUnderFireSpot();
 	// User decision 2026-10-26 (the formation in the fight): a SUPPRESS order / a quick-fire burst runs to its end, then he rejoins.
 	Facts.bFireOrder = Operative->HasSuppressOrder() || Operative->HasQuickFireOrder();
 	return SquadOrderRules::IsOnOwnOrder(Facts);

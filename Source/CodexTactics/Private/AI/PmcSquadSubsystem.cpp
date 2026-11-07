@@ -11,6 +11,7 @@
 #include "CodexTactics.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/PeekSightRules.h"
 #include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
@@ -1258,6 +1259,8 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
 	const float GroundZ = Sight ? static_cast<float>(UTacticalSightSubsystem::EyePoint(Fighter).Z) - Sight->GetEyeAboveGroundCm(Fighter) : static_cast<float>(Feet.Z);
 	const float EyeCm = SightRules::EyeHeight(EOperativeStance::Standing);
+	// #32 (2026-11-07): a corner is worth its bonus only when his peek round it reaches the threat (his sight range, the cover-and-peek rule).
+	const float PeekRangeCm = Fighter.GetPeekSightRangeCm();
 	struct FCandidate
 	{
 		FCoverSlot Slot;
@@ -1291,8 +1294,9 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		const float Distance = FVector::Dist2D(Chest, Slot.WorldLocation);
 		const int32 Level = bHighGround ? SightRules::HeightLevel(static_cast<float>(Slot.WorldLocation.Z) + EyeCm - GroundZ) : 0;
 		// Engagement band (2026-11-04): a slot at his weapon's distance from the threat, at a corner he can fire round, scores best.
-		const float SlotBand = PmcCommanderRules::BandFactor(static_cast<float>(FVector::Dist2D(Slot.WorldLocation, Threat)), Band, Weights);
-		const bool bCorner = Band.IsValid() && (Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed);
+		const float SlotThreatCm = static_cast<float>(FVector::Dist2D(Slot.WorldLocation, Threat));
+		const float SlotBand = PmcCommanderRules::BandFactor(SlotThreatCm, Band, Weights);
+		const bool bCorner = Band.IsValid() && PeekSightRules::IsCornerInPeekReach(Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed, SlotThreatCm, PeekRangeCm);
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
 			* PmcCommanderRules::HighGroundFactor(Level, Weights) * FMath::Lerp(1.f, SlotBand, FMath::Clamp(Weights.BandPosition, 0.f, 1.f))
 			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f);

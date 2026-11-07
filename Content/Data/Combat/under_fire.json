@@ -1,0 +1,19 @@
+{
+  "comment": "Under fire (bug #43, 2026-11-07; docs/systems/pmc-squad-ai.md 'Under fire'). Read by UnderFireRules::GetConfig (Source/CodexTactics/Public/Combat/UnderFireRules.h) at game start; the FUnderFireConfig defaults mirror these values (test CodexTactics.Combat.UnderFire.TuningFileMirrorsDefaults). memory_seconds: a round at him keeps the flash as his threat this long; share_radius_cm: mates this close to the target share it. The manoeuvre (an operative of the squad or a hostile PMC fighter under fire, not in cover, no order of his own): the nearest cover slot within cover.radius_cm shielding him from the flash (quality >= cover.min_quality) -> he takes it; else with no line to the flash (or a mate in it) a step of up to sidestep.max_cm off the line (sidestep.step_cm spacing, both sides, on the navmesh) to a spot with a clear line; else prone (prone.when_no_cover 1), crouching again when the threat is over. A formation follower waits manoeuvre.reaction_seconds (the formation first) and never acts while the formation walks; he holds the spot manoeuvre.hold_seconds after the last round unless the leader gets a new order. Distances cm, times s; manoeuvre.enabled 0 = only the turn / the return fire.",
+  "params": {
+    "memory_seconds": 3,
+    "share_radius_cm": 2500,
+    "manoeuvre.enabled": 1,
+    "manoeuvre.decision_seconds": 0.3,
+    "manoeuvre.reaction_seconds": 0.6,
+    "manoeuvre.hold_seconds": 4,
+    "cover.radius_cm": 800,
+    "cover.min_quality": 0.35,
+    "cover.retry_seconds": 2,
+    "sidestep.max_cm": 200,
+    "sidestep.step_cm": 50,
+    "sidestep.mate_block_radius_cm": 60,
+    "sidestep.cooldown_seconds": 2.5,
+    "prone.when_no_cover": 1
+  }
+}

@@ -170,7 +170,26 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
   Arg `Shot` -> `Saved/Screenshots/VisionHeight/roof_sniper_cone.png`, `roof_sniper_shadow.png` (`-RenderOffscreen`). Training Ground:
   `HeightSightRules` (combatSim `rules.ts`) mirrors the ladder and the sim's squad sight range uses it (its enemies stand on the street: x1).
 - **Known limits:** one target ground per ray (the ground just past the perch's edge: a target on another, lower roof is judged as on the street -
-  the cone hides it although he would see it; a target on a roof at his own level further out is hidden too); the peek cone keeps its 18 m.
+  the cone hides it although he would see it; a target on a roof at his own level further out is hidden too). The peek cone kept its 18 m
+  until #32 (2026-11-07, below): it now reaches his sight range, height bonus included.
+
+## The peek sees as far as his eyes (#32, 2026-11-07)
+
+- **Report (task board #32):** the cover peek saw only 18 m (`FPeekSightConfig::RangeCm` 1800) while the squad's sight is 120 m on a clear day and
+  the rifles reach 60 m (the PMC engagement band 19-24 m): a man firing round a corner / over a wall could not see a target on his own band -
+  corner fire barely worked, for the operatives and the PMC alike.
+- **Now:** `PeekSightRules::EffectiveRangeCm(Config, SightRangeCm)` = `SightRangeCm` x `SightRangeFraction` (1) while `bRangeFromSight` (default on;
+  BP_Operative -> Cover|Peek, data-tunable), the fixed `RangeCm` 1800 only without a squad sight subsystem or with it off.
+  `UTacticalSightSubsystem::GetPeekSightRangeCm(Operative)` feeds it `GetSightRangeCm(Operative)` - the same clear-day range x height level x
+  weather / time of day as his own eyes; `AOperativeCharacter::GetPeekSightRangeCm` wraps it. The peek's own design limits stay: the 90 deg cone
+  (`HalfAngleDeg` 45), the leaned-out / over-the-top eye point, the trap search's own 12 m sweep (`FTrapPeekSpotConfig`).
+- **Every reader uses it:** `CanOperativeSee`'s peek line (the squad's reveal and targeting, and through it the PMC teams' sight of each other:
+  `UPmcSquadSubsystem::UpdateSight` calls `CanOperativeSee` for their fighters), the update's distance pre-filter (max of the eye / peek range),
+  the drawn peek cone and the cone's spotted state (`OperativeCharacterOverlays`), the PMC commander's corner bonus (`FindCoverNear`: a free corner
+  counts only when the threat lies within his peek range, `PeekSightRules::IsCornerInPeekReach`). The enemies' sight of a peeking operative is
+  unchanged: they look at his leaned-out head (`ProfilePoint` -> `GetPeekExposedPoint`) with their own ranges.
+- **Tests:** `CodexTactics.Combat.Sight.PeekRangeIsSightRange`; `PeekSightSmoke` stage 3: the enemy 20 m back behind the wall is now seen, one 40 m
+  out is seen and engaged (a shot line from the corner, his combat pick), the drawn cone's range = `GetPeekSightRangeCm`.
 
 ## Sight by the conditions: 120 m on a clear day, weather and night cut it (2026-11-04)
 
@@ -195,7 +214,7 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
   `Codex.Sight.LongRange 0` (the old 60 m, humans x1).
 - **The operative's cone = his sight range:** `AOperativeCharacter::bVisionConeShowsSightRange` (new, default on; BP_Operative has no saved value)
   -> `GetVisionConeRange` = `GetSightRangeCm`; off = the older weapon / `VisionConeRangeCm` rules (the weapon-range inner marker was not added -
-  optional, ask). The peek cone keeps its 18 m. The wall / roof shadow cutting is unchanged (the same occluded builder, longer rays).
+  optional, ask). The peek cone kept its 18 m (until #32: his sight range now). The wall / roof shadow cutting is unchanged (the same occluded builder, longer rays).
   `UVisionConeComponent` now treats a range drift under 1 % as the same shape (a dusk / weather blend moves the range every frame: the cone follows
   at the normal cadence instead of an urgent rebuild per frame).
 - **Cost (SightConditionsSmoke, the Depot start, the leader's cone, 20 forced rebuilds each):** 60 m: 320 rays / 1882 traces / 3.13 ms task-thread
