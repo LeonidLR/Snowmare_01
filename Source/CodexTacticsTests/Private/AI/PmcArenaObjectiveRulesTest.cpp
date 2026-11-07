@@ -47,15 +47,18 @@ bool FPmcArenaObjectiveClockTest::RunTest(const FString&)
 	TestTrue(TEXT("the attackers hold it"), Clock.bAttackersHolding);
 	TestEqual(TEXT("1 s held"), Clock.Held, 1.f, 0.001f);
 	TestEqual(TEXT("half the clock"), Clock.HoldFrac(), 0.5f, 0.001f);
-	// A defender steps back on: contested, the clock resets, nobody has sole control.
+	// Cumulative with a reset (user 2026-11-07): contested or empty only pauses the clock.
 	Clock.Step(2, 1, 0.1f);
 	TestFalse(TEXT("contested: not held"), Clock.bAttackersHolding);
-	TestEqual(TEXT("the clock reset"), Clock.Held, 0.f, 0.001f);
+	TestEqual(TEXT("contested: the clock paused, not reset"), Clock.Held, 1.f, 0.001f);
+	Clock.Step(0, 0, 0.3f);
+	TestEqual(TEXT("empty point: still paused"), Clock.Held, 1.f, 0.001f);
 	TestEqual(TEXT("attacker control 1 s"), Clock.ControlSeconds[0], 1.f, 0.001f);
-	// The defenders alone on it: their control grows.
+	// The defenders alone on it: their control grows and the attackers' hold resets.
 	Clock.Step(0, 2, 0.5f);
 	TestEqual(TEXT("defender control 0.5 s"), Clock.ControlSeconds[1], 0.5f, 0.001f);
-	// An unbroken 2 s hold captures it - exactly once.
+	TestEqual(TEXT("defenders retook it: the clock reset"), Clock.Held, 0.f, 0.001f);
+	// A 2 s hold (cumulative) captures it - exactly once.
 	bool bCapturedNow = false;
 	for (int32 Step = 0; Step < 25; ++Step)
 	{

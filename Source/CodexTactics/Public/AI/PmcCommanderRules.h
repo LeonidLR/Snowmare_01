@@ -77,13 +77,14 @@ struct CODEXTACTICS_API FPmcObjectiveView
 
 /**
  * The capture clock of one objective round (pure; the arena steps it): the attackers hold the point while at least one live attacker
- * and no live defender stands within the radius; HoldSeconds of an unbroken hold capture it (a defender stepping back on - or the
- * attackers leaving - resets the clock). Per side the seconds of sole control (own men on the point, no enemy) for the result.
+ * and no live defender stands within the radius; HoldSeconds of hold, summed over stints, capture it (user decision 2026-11-07:
+ * cumulative with a reset - a contested or empty point only pauses the clock, the defenders retaking it alone resets it).
+ * Per side the seconds of sole control (own men on the point, no enemy) for the result.
  */
 struct CODEXTACTICS_API FPmcObjectiveClock
 {
 	float HoldSeconds = 15.f;
-	/** The current unbroken attacker hold, s. */
+	/** The attackers' cumulative hold since the defenders last retook the point, s. */
 	float Held = 0.f;
 	bool bAttackersHolding = false;
 	bool bCaptured = false;

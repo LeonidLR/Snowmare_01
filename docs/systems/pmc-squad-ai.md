@@ -255,7 +255,7 @@ starts on the first contact (`combat_start ambush`, a skirmish), a round ends wh
 the way from the defender's spawn to the attacker's, on the navmesh at the defender's level with a path from both spawns (half that,
 then the spawn itself). The attacker (round seed parity, even = A) gets the point as his assault point and the `Attacker` role, the
 other side `Defender` (`SetTeamObjective`); every step the arena counts live men within `objective_radius_m` (planar, +-3 m height) and
-steps `FPmcObjectiveClock`: attackers on it and no defender = holding; `objective_hold_s` unbroken = captured (a defender back on it or
+steps `FPmcObjectiveClock`: attackers on it and no defender = holding; `objective_hold_s` summed over stints = captured (user 2026-11-07: cumulative with a reset - contested / empty only pauses, the defenders retaking it alone resets; was: unbroken) (a defender back on it or
 the attackers leaving resets it); per role the seconds of sole control. `PmcCommanderRules::ResolveRound`: a side down = elimination;
 captured = `objective` (the attacker wins); the time limit = the defender wins with the point not held by the attackers at that moment
 (`held`), else a `contested` draw; without an objective the old time-limit draw. Data: the level JSON's `pmc_arena` object (both

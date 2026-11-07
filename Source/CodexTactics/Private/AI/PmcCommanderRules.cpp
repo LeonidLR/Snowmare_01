@@ -25,8 +25,16 @@ bool FPmcObjectiveClock::Step(int32 AttackersOnPoint, int32 DefendersOnPoint, fl
 	{
 		ControlSeconds[1] += Delta;
 	}
-	// An unbroken hold captures the point; a defender back on it (or the attackers leaving) resets the clock.
-	Held = bAttackersHolding ? Held + Delta : 0.f;
+	// Cumulative hold with a reset (user decision 2026-11-07): the attackers' sole-control time adds up across stints
+	// (leaving, or a contested moment, only pauses it); the defenders taking the point back alone resets it.
+	if (bAttackersHolding)
+	{
+		Held += Delta;
+	}
+	else if (DefendersOnPoint > 0 && AttackersOnPoint == 0)
+	{
+		Held = 0.f;
+	}
 	if (!bCaptured && bAttackersHolding && Held >= HoldSeconds)
 	{
 		bCaptured = true;
