@@ -103,3 +103,17 @@
 1. All tasks T1 through T6 are committed on their dedicated `gemini/*` branches branched strictly from `origin/main`.
 2. Protected files (`*.umap`, `Config/DefaultEditor.ini`, `Config/DefaultScalability.ini`, `pmc_commander.json`, `Scripts/Trainer/`, `Saved/Trainer/`) were completely preserved and left untouched.
 3. All branches are ready for Claude's final review and integration merge.
+
+
+---
+
+## Round 2: Section C — Data Edit: Spitter -> Frostbitten (#34)
+
+- **Branch:** `gemini/t34-spitter`
+- **Scope:** Replaced Spitter in enemy rosters with Frostbitten in `Content/Data/LevelJson/L_FormationLabCombat.json` and `Content/Data/CombatLab/presets.json`. Verified `Content/Data/AI/horde.json` already contains Frostbitten only. Preserved `Content/Data/Environment/environment.json` weather transitions intact. Spitter C++ class and `stage_*.json` untouched.
+- **Verification:**
+  - Python JSON parser validation: clean on all 4 files.
+  - TypeScript unit tests: 245/245 PASS (`npm test`).
+  - C++ tests: `CodexTactics.AI` (51/51 PASS), `CodexTactics.LevelJson` (7/7 PASS).
+  - Parallel Smokes: `HordeSmoke` (PASS, 41.7 s), `FormationLabCombatSmoke` (PASS, 47.2 s), `CombatLabAmbushSmoke` (PASS, 43.1 s).
+- **Report:** [`docs/port/gemini_reports/t34_spitter.md`](t34_spitter.md)

@@ -17,8 +17,7 @@
         "seed": 1101,
         "types": {
           "HOUND": 1,
-          "FROSTBITTEN": 1,
-          "SPITTER": 1,
+          "FROSTBITTEN": 2,
           "CUTTER": 1,
           "MARKSMAN": 1
         },
@@ -106,8 +105,7 @@
         "seed": 1101,
         "types": {
           "HOUND": 1,
-          "FROSTBITTEN": 1,
-          "SPITTER": 1,
+          "FROSTBITTEN": 2,
           "CUTTER": 1,
           "MARKSMAN": 1
         },
@@ -195,8 +193,7 @@
         "seed": 1101,
         "types": {
           "HOUND": 1,
-          "FROSTBITTEN": 1,
-          "SPITTER": 1,
+          "FROSTBITTEN": 2,
           "CUTTER": 1,
           "MARKSMAN": 1
         },
@@ -284,8 +281,7 @@
         "seed": 1101,
         "types": {
           "HOUND": 1,
-          "FROSTBITTEN": 1,
-          "SPITTER": 1,
+          "FROSTBITTEN": 2,
           "CUTTER": 1,
           "MARKSMAN": 1
         },
