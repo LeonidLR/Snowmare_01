@@ -12,7 +12,7 @@
   "cold_rate_mult": 0,
   "intro_dialogue": false,
   "cheats": {
-    "immortal": true,
+    "immortal": false,
     "infinite_ammo": true
   },
   "levelgen_layout": "Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json",
@@ -48,7 +48,17 @@
   ],
   "squad_loadout": {
     "simulation_mode": "EXPLORE_AND_COLLECT",
-    "preset_tier": "STANDARD"
+    "preset_tier": "STANDARD",
+    "turrets_count": 1,
+    "barricades_count": 1,
+    "mines_count": 2,
+    "medkits_count": 2,
+    "m16_ammo": 120,
+    "pistol_ammo": 48,
+    "canned_food": 0,
+    "matches": 3,
+    "grenades_count": 2,
+    "heat_packs_count": 1
   },
   "pressure": {
     "first_event_sec": 30,
