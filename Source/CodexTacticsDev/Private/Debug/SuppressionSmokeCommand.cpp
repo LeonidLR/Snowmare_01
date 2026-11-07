@@ -811,6 +811,15 @@ namespace SuppressionSmoke
 				SmokeUtils::PlaceSquadAtTestStart(PlaceWorld.Get());
 			}), 0.5f, false);
 		}
+		// The manoeuvre under fire (#43) moves the shooters off their scripted spots (the fear zone lands elsewhere, a prone commander
+		// changes the hit chances) and level-JSON PMC squads would join in: this smoke checks suppression alone.
+		for (const TCHAR* Name : { TEXT("Codex.Pmc.Encounters"), TEXT("Codex.Combat.UnderFireManoeuvre") })
+		{
+			if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))
+			{
+				Variable->Set(0, ECVF_SetByConsole);
+			}
+		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTimerHandle Handle;
 		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld]()
