@@ -924,6 +924,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		++SuppressedBlindShots;
 	}
 	ShotsWhilePinned += Suppressed.bMayFire ? 0 : 1;
+	// A target leaned out of cover shows only part of his body (user decision 2026-11-07: -50 %; PMC vs the squad and back).
+	if (const AOperativeCharacter* TargetOperative = Cast<AOperativeCharacter>(Target))
+	{
+		HitChance *= TargetOperative->GetIncomingHitChanceMultiplier(this);
+	}
 	LastShotHitChance = HitChance;
 	if (bInCover)
 	{

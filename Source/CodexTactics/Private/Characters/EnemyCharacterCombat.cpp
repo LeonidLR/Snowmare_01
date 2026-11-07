@@ -326,14 +326,26 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 		{
 			FireSight->NotifyFired(this); // the acid spit gives it away (Sprint 08-E)
 		}
-		const bool bIsCrit = FMath::FRand() < CritChance;
-		Target->TakeHit(AttackDamage * (bIsCrit ? CritMultiplier : 1.f) * Line.Cover, EnemyDisplayName, bIsCrit, false, this, bIsCrit ? CritMultiplier : 1.f);
+		// The spit always hit; a target leaned out of cover shows only part of his body (user decision 2026-11-07: -50 %).
+		const float LeanChance = Target->GetIncomingHitChanceMultiplier(this);
+		const bool bSpitHit = LeanChance >= 1.f || FMath::FRand() < LeanChance;
+		FVector SpitEnd = End;
+		if (bSpitHit)
+		{
+			const bool bIsCrit = FMath::FRand() < CritChance;
+			Target->TakeHit(AttackDamage * (bIsCrit ? CritMultiplier : 1.f) * Line.Cover, EnemyDisplayName, bIsCrit, false, this, bIsCrit ? CritMultiplier : 1.f);
+		}
+		else
+		{
+			SpitEnd += FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(0.f, 1.f)).GetSafeNormal() * 120.f;
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("MISS"), FLinearColor(0.8f, 0.8f, 0.8f));
+		}
 		if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
 		{
-			Feedback->SpawnTracer(Feet + FVector(0.f, 0.f, 90.f), End, FLinearColor(1.f, 0.2f, 0.2f));
+			Feedback->SpawnTracer(Feet + FVector(0.f, 0.f, 90.f), SpitEnd, FLinearColor(1.f, 0.2f, 0.2f));
 		}
-		// Suppression (2026-10-26): the acid that hits him suppresses him (and anyone it passes near).
-		ReportRoundAtSquad(Feet + FVector(0.f, 0.f, 90.f), End, Target, true, false, ESuppressionWeapon::Acid);
+		// Suppression (2026-10-26): the acid that hits him suppresses him (and anyone it passes near); a miss strikes his cover.
+		ReportRoundAtSquad(Feet + FVector(0.f, 0.f, 90.f), SpitEnd, Target, bSpitHit, !bSpitHit, ESuppressionWeapon::Acid);
 	}
 }
 

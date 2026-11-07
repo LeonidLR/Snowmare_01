@@ -15,6 +15,17 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## Leaned out: a smaller target (user decision 2026-11-07)
+
+- While an operative leans out of cover (the corner aim, and the lean shot over a low cover, both `bIsCornerLeaning`) the cover absorbs nothing
+  (`CoverRules::AbsorbFraction`, unchanged) but only part of his body shows: every **ranged** shooter on the wall's far side hits him with his
+  hit chance **x0.5** (`FCoverCombatConfig::LeanExposedHitMultiplier`, console `Codex.Cover.LeanHitMultiplier`, -1 = default; the arc
+  `LeanCoverArcDeg` 180 = the wall's whole far side, so the targets round the corner, ~78 deg from the direction into the wall, count).
+  A shooter on his own side of the wall (a flank / the back), head down in cover (the absorb acts instead), melee and blasts: no change.
+- `CoverRules::LeanIncomingHitMultiplier` (test `CodexTactics.Tactics.Cover.*` in `CoverSystemTest.cpp`) <- `AOperativeCharacter::GetIncomingHitChanceMultiplier(Shooter)`,
+  read by `AOperativeCharacter::ShootAtTarget` (operatives / PMC at an operative, both ways), `AMarksmanEnemyCharacter` (the sniper's chance) and the
+  acid spit of `AEnemyCharacter` (it always hit; now it misses a leaned-out target half the time: "MISS", a deflected tracer, the round strikes his cover).
+
 ## Corner peek reveals traps (old §5)
 
 - **The corner peek reveals hidden traps (rev 5h, every level):** `AOperativeCharacter::IsPeekingRoundCorner` (in cover, corner aim active, at a manual peek spot or the corner-hold spot) -> `UpdatePeekTrapSpotting` (called from `UpdateCover`, cluster file `OperativeCharacterCornerAim.cpp`; every `PeekSpotConfig.IntervalSeconds` 0.2 s; not in the wave fight): every `AInteractableActor::IsHiddenTrap()` (an armed hidden level mine; an armed, laid, concealed PMC wire) inside `TrapSpotRules::IsInPeekSightCone(GetCoverFireOrigin(), CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), Target, RangeCm 1200, HalfAngleDeg 30)` with a clear visibility trace (pawns do not block) is revealed by `RevealByPeek` (the normal spot response of part 1; the spotter is not turned, so the pose stays; extra event `TrapSpotted.Peek`). `FTrapPeekSpotConfig PeekSpotConfig` = BP_Operative Class Defaults -> CodexTactics|Cover|Peek (`bEnabled`, `RangeCm`, `HalfAngleDeg`, `bRequireLineOfSight`, `TargetHeightCm` 20, `IntervalSeconds`). **Trap groups:** `AInteractableActor::SpotEventTag` (Details -> CodexTactics|Trap) raises `TrapSpotted.<tag>` and counts in the tutorial condition stat **`traps_spotted.<tag>`** (`TrapSpotRules::ParseSpottedStatTag`, `TutorialRules::IsKnownStat`, `UTutorialSubsystem::GetConditionStat`: traps of that tag no longer hidden). Tests `Interactables.TrapSpot.PeekCone` / `.GroupEventAndStat`; smoke `PeekMinesSmoke`.

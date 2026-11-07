@@ -1973,6 +1973,12 @@ public:
 	/** Hit chance of his last aimed shot (ShootAtTarget, after cold / blind / suppression; smokes). */
 	float GetLastShotHitChance() const { return LastShotHitChance; }
 	/**
+	 * Every ranged shooter's hit chance at him is multiplied by this (user decision 2026-11-07): 0.5 while he leans out of cover
+	 * and Shooter is on the wall's far side, else 1 (CoverRules::LeanIncomingHitMultiplier). Operatives / PMC, the marksman and
+	 * the acid spitter read it; melee and blasts do not.
+	 */
+	float GetIncomingHitChanceMultiplier(const AActor* Shooter) const;
+	/**
 	 * Bug #39: the hit chance multiplier of his weapon at PlanarDistanceCm from him (WeaponRangeRules: x1 up to the effective range - stretched
 	 * by his stance's and, against Target below him, the elevation's range bonus - falling to the max reach, 0 beyond it).
 	 */

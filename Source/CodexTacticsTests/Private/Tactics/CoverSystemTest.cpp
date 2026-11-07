@@ -114,6 +114,17 @@ bool FCoverDamageArcTest::RunTest(const FString&)
 	TestEqual(TEXT("low cover standing: exposed above it"), AbsorbFraction(Config, ECoverHeight::LowCover, EOperativeStance::Standing, false, true), 0.f);
 	TestEqual(TEXT("low cover prone: hidden like a wall (Sprint 08 60 cm rule)"), AbsorbFraction(Config, ECoverHeight::LowCover, EOperativeStance::Prone, false, true), 0.9f);
 	TestEqual(TEXT("not in cover: nothing"), AbsorbFraction(Config, ECoverHeight::None, EOperativeStance::Crouching, false, true), 0.f);
+
+	// Leaned out (user decision 2026-11-07): shooters on the wall's far side hit him half as often; the corner peek's targets
+	// (~78 deg from the direction into the wall) count, a shooter on his own side does not.
+	const float AtCorner = AngleFromWallDeg(Normal, Slot, FVector(-210.f, 1000.f, 0.f));
+	TestTrue(TEXT("leaning, shooter behind the wall: x0.5"), FMath::IsNearlyEqual(LeanIncomingHitMultiplier(Config, ECoverHeight::HighCover, true, 0.f), 0.5f));
+	TestTrue(TEXT("leaning, the target round the corner (~78 deg): x0.5"), FMath::IsNearlyEqual(LeanIncomingHitMultiplier(Config, ECoverHeight::HighCover, true, AtCorner), 0.5f));
+	TestTrue(TEXT("leaning over a low cover: x0.5"), FMath::IsNearlyEqual(LeanIncomingHitMultiplier(Config, ECoverHeight::LowCover, true, 30.f), 0.5f));
+	TestEqual(TEXT("leaning, shooter on his own side (the back): full"), LeanIncomingHitMultiplier(Config, ECoverHeight::HighCover, true,
+		AngleFromWallDeg(Normal, Slot, FVector(1000.f, 200.f, 0.f))), 1.f);
+	TestEqual(TEXT("head down in cover: full chance (the absorb acts instead)"), LeanIncomingHitMultiplier(Config, ECoverHeight::HighCover, false, 0.f), 1.f);
+	TestEqual(TEXT("no cover: full chance"), LeanIncomingHitMultiplier(Config, ECoverHeight::None, true, 0.f), 1.f);
 	TestTrue(TEXT("100 damage -> 10 through a high wall"), FMath::IsNearlyEqual(ApplyAbsorb(100.f, 0.9f), 10.f, 0.001f));
 	TestTrue(TEXT("flank: 100 stays 100"), FMath::IsNearlyEqual(ApplyAbsorb(100.f, 0.f), 100.f, 0.001f));
 	return true;

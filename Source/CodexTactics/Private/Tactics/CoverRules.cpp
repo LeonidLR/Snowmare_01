@@ -15,6 +15,8 @@ namespace CoverTunables
 		TEXT("Hit chance multiplier of cover blind fire (default 0.6 = -40 %); -1 = default."));
 	static TAutoConsoleVariable<float> CVarMinBlind(TEXT("Codex.Cover.MinBlindHitChance"), -1.f,
 		TEXT("Floor of the hit chance of blind shots (default 0.05); -1 = default."));
+	static TAutoConsoleVariable<float> CVarLeanHit(TEXT("Codex.Cover.LeanHitMultiplier"), -1.f,
+		TEXT("Hit chance multiplier of ranged shots at an operative leaned out of cover (default 0.5, user decision 2026-11-07); -1 = default."));
 }
 
 namespace CoverRules
@@ -29,7 +31,17 @@ namespace CoverRules
 		Config.FrontalArcDeg = Pick(CoverTunables::CVarArc.GetValueOnGameThread(), Defaults.FrontalArcDeg);
 		Config.CoverBlindFireAccuracyMultiplier = Pick(CoverTunables::CVarBlindAccuracy.GetValueOnGameThread(), Defaults.CoverBlindFireAccuracyMultiplier);
 		Config.MinBlindFireHitChance = Pick(CoverTunables::CVarMinBlind.GetValueOnGameThread(), Defaults.MinBlindFireHitChance);
+		Config.LeanExposedHitMultiplier = Pick(CoverTunables::CVarLeanHit.GetValueOnGameThread(), Defaults.LeanExposedHitMultiplier);
 		return Config;
+	}
+
+	float LeanIncomingHitMultiplier(const FCoverCombatConfig& Config, ECoverHeight Height, bool bLeaning, float ShooterAngleFromWallDeg)
+	{
+		if (Height == ECoverHeight::None || !bLeaning || ShooterAngleFromWallDeg > Config.LeanCoverArcDeg * 0.5f)
+		{
+			return 1.f;
+		}
+		return FMath::Clamp(Config.LeanExposedHitMultiplier, 0.f, 1.f);
 	}
 
 	float AngleFromWallDeg(const FVector& WallNormal, const FVector& SlotLocation, const FVector& SourceLocation)

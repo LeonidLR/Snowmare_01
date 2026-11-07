@@ -651,7 +651,8 @@ void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanL
 	}
 	// Bug #39: past the rifle's effective range the chance falls steeply to its max reach (TickEngage never fires beyond it).
 	const float Chance = MarksmanAIRules::ComputeSniperHitChance(MarksmanConfig, Stance, Target->GetStance(), Line.Cover, Distance)
-		* WeaponRangeRules::HitMultiplier(Distance, MarksmanConfig.EffectiveRangeCm, MarksmanConfig.MaxRangeCm, WeaponRangeRules::GetFalloff());
+		* WeaponRangeRules::HitMultiplier(Distance, MarksmanConfig.EffectiveRangeCm, MarksmanConfig.MaxRangeCm, WeaponRangeRules::GetFalloff())
+		* Target->GetIncomingHitChanceMultiplier(this); // leaned out of cover: -50 % (user decision 2026-11-07)
 	const bool bHit = FMath::FRand() < Chance;
 	FVector End = Line.End;
 	if (bHit)

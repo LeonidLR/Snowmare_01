@@ -39,6 +39,14 @@ struct CODEXTACTICS_API FCoverCombatConfig
 	float BlindFireHoldSeconds = 0.6f;
 	/** The muzzle moves this far round the corner for a lean / blind shot, cm. */
 	float CornerPeekOffsetCm = 60.f;
+	/**
+	 * Leaned out of cover (the corner aim / the lean shot over a low cover) only part of the body shows: a ranged shooter
+	 * on the wall's far side hits him with his hit chance x this (user decision 2026-11-07: -50 %). The cover still absorbs
+	 * nothing while he leans out (AbsorbFraction) - the reduction is the smaller target, not the wall.
+	 */
+	float LeanExposedHitMultiplier = 0.5f;
+	/** Full width of the arc (centred into the wall) in which the lean reduction acts: 180 = the wall's whole far side, degrees. */
+	float LeanCoverArcDeg = 180.f;
 };
 
 namespace CoverRules
@@ -58,6 +66,13 @@ namespace CoverRules
 	 * cover 0.35 crouched, 0.9 prone, 0 standing. Blind firing keeps the body behind the cover.
 	 */
 	CODEXTACTICS_API float AbsorbFraction(const FCoverCombatConfig& Config, ECoverHeight Height, EOperativeStance Stance, bool bLeaning, bool bInArc);
+
+	/**
+	 * The hit chance multiplier of a ranged shot at an operative in cover (user decision 2026-11-07): LeanExposedHitMultiplier
+	 * (0.5) while he leans out and the shooter lies within LeanCoverArcDeg of the direction into the wall (AngleFromWallDeg);
+	 * 1 with no cover, head down (the absorb handles that) or a shooter on his own side of the wall (a flank / the back).
+	 */
+	CODEXTACTICS_API float LeanIncomingHitMultiplier(const FCoverCombatConfig& Config, ECoverHeight Height, bool bLeaning, float ShooterAngleFromWallDeg);
 
 	/** Damage left after the cover: Amount x (1 - fraction). */
 	CODEXTACTICS_API float ApplyAbsorb(float Amount, float Fraction);

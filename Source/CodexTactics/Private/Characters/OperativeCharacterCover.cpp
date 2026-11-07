@@ -493,6 +493,16 @@ bool AOperativeCharacter::IsHiddenInCoverFrom(const FVector& ObserverLocation) c
 	return CoverRules::HiddenFromObserver(CurrentCoverHeight, bIsCornerLeaning, bInArc);
 }
 
+float AOperativeCharacter::GetIncomingHitChanceMultiplier(const AActor* Shooter) const
+{
+	if (!bInCover || !Shooter)
+	{
+		return 1.f;
+	}
+	return CoverRules::LeanIncomingHitMultiplier(CoverRules::GetConfig(), CurrentCoverHeight, bIsCornerLeaning,
+		CoverRules::AngleFromWallDeg(CoverSlot.WallNormal, CoverSlot.WorldLocation, Shooter->GetActorLocation()));
+}
+
 void AOperativeCharacter::BeginCoverShot()
 {
 	CoverLastShotTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
