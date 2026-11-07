@@ -48,15 +48,48 @@ bool FCombatPressureTypesTest::RunTest(const FString&)
 {
 	TestTrue(TEXT("Hound allowed"), CombatPressureRules::IsAllowedType(EEnemyArchetype::FrostHound));
 	TestTrue(TEXT("Frostbitten allowed"), CombatPressureRules::IsAllowedType(EEnemyArchetype::Frostbitten));
-	TestTrue(TEXT("Spitter allowed"), CombatPressureRules::IsAllowedType(EEnemyArchetype::Spitter));
+	TestFalse(TEXT("Task #34: never the Spitter (the Military Zombie replaced it)"), CombatPressureRules::IsAllowedType(EEnemyArchetype::Spitter));
 	TestTrue(TEXT("Cutter allowed"), CombatPressureRules::IsAllowedType(EEnemyArchetype::Cutter));
 	TestTrue(TEXT("Marksman allowed"), CombatPressureRules::IsAllowedType(EEnemyArchetype::Marksman));
 	TestFalse(TEXT("Never the Brute"), CombatPressureRules::IsAllowedType(EEnemyArchetype::Brute));
 	TestFalse(TEXT("Never the Cryo Drone"), CombatPressureRules::IsAllowedType(EEnemyArchetype::CryoDrone));
 	TestFalse(TEXT("Never the Base"), CombatPressureRules::IsAllowedType(EEnemyArchetype::Base));
-	TestEqual(TEXT("Empty weights: the five types"), CombatPressureRules::EffectiveWeights({}).Num(), 5);
-	const TArray<FPressureTypeWeight> WithBrute = { { EEnemyArchetype::Brute, 5.f }, { EEnemyArchetype::Spitter, 1.f } };
-	TestEqual(TEXT("A Brute weight is dropped"), CombatPressureRules::EffectiveWeights(WithBrute).Num(), 1);
+	// Task #34 (2026-11-07): the default pool = Hound, Frostbitten, Military Zombie (the Spitter's share), Cutter, Marksman.
+	const TArray<FPressureTypeWeight> Default = CombatPressureRules::EffectiveWeights({});
+	TestEqual(TEXT("Empty weights: the five types"), Default.Num(), 5);
+	const FName Zombie = CombatPressureRules::MilitaryZombieVariant();
+	TestTrue(TEXT("Default pool: Hound, Frostbitten, Military Zombie, Cutter, Marksman"), Default.Num() == 5
+		&& Default[0].Type == EEnemyArchetype::FrostHound && Default[0].Variant.IsNone()
+		&& Default[1].Type == EEnemyArchetype::Frostbitten && Default[1].Variant.IsNone()
+		&& Default[2].Type == EEnemyArchetype::Frostbitten && Default[2].Variant == Zombie
+		&& Default[3].Type == EEnemyArchetype::Cutter && Default[4].Type == EEnemyArchetype::Marksman);
+	TestFalse(TEXT("Default pool: no Spitter"), Default.ContainsByPredicate([](const FPressureTypeWeight& Each) { return Each.Type == EEnemyArchetype::Spitter; }));
+	for (const FPressureTypeWeight& Each : Default)
+	{
+		TestEqual(TEXT("Default pool: equal weights"), Each.Weight, 1.f);
+	}
+	// The variant belongs to the Frostbitten only.
+	TestTrue(TEXT("Military Zombie = an allowed Frostbitten variant"), CombatPressureRules::IsAllowedEnemy(FPressureEnemyType(EEnemyArchetype::Frostbitten, Zombie)));
+	TestFalse(TEXT("The variant on a Cutter is refused"), CombatPressureRules::IsAllowedEnemy(FPressureEnemyType(EEnemyArchetype::Cutter, Zombie)));
+	TestFalse(TEXT("An unknown variant is refused"), CombatPressureRules::IsAllowedEnemy(FPressureEnemyType(EEnemyArchetype::Frostbitten, TEXT("Dragon"))));
+	FPressureEnemyType Parsed(EEnemyArchetype::Base);
+	TestTrue(TEXT("MILITARY_ZOMBIE parses (any case) to Frostbitten + the variant"), CombatPressureRules::ParseVariantKey(TEXT("military_zombie"), Parsed)
+		&& Parsed == FPressureEnemyType(EEnemyArchetype::Frostbitten, Zombie));
+	TestFalse(TEXT("A plain archetype key is not a variant"), CombatPressureRules::ParseVariantKey(TEXT("FROSTBITTEN"), Parsed));
+	TestEqual(TEXT("Label of the variant"), CombatPressureRules::EnemyLabel(FPressureEnemyType(EEnemyArchetype::Frostbitten, Zombie)), FString(TEXT("MILITARY_ZOMBIE")));
+	// The pick carries the variant: Frostbitten 1, Military Zombie 1.
+	const TArray<FPressureTypeWeight> Frost = { { EEnemyArchetype::Frostbitten, 1.f }, { EEnemyArchetype::Frostbitten, 1.f, Zombie } };
+	TestTrue(TEXT("Rand 0.25 -> the plain Frostbitten"), CombatPressureRules::PickEnemy(Frost, 0.25f) == FPressureEnemyType(EEnemyArchetype::Frostbitten));
+	TestTrue(TEXT("Rand 0.75 -> the Military Zombie"), CombatPressureRules::PickEnemy(Frost, 0.75f) == FPressureEnemyType(EEnemyArchetype::Frostbitten, Zombie));
+	TestTrue(TEXT("PickType keeps the archetype"), CombatPressureRules::PickType(Frost, 0.75f) == EEnemyArchetype::Frostbitten);
+	// EnsureRanged over variants: a swapped member becomes the ranged pick, the others keep their variant.
+	TArray<FPressureEnemyType> Plan = { FPressureEnemyType(EEnemyArchetype::FrostHound), FPressureEnemyType(EEnemyArchetype::Cutter),
+		FPressureEnemyType(EEnemyArchetype::Frostbitten, Zombie), FPressureEnemyType(EEnemyArchetype::Frostbitten, Zombie) };
+	TestEqual(TEXT("One ranged wanted: one swapped"), CombatPressureRules::EnsureRangedEnemies(Plan, FPressureEnemyType(EEnemyArchetype::Marksman), 1), 1);
+	TestTrue(TEXT("... the front becomes the plain Marksman, the rear stays the Military Zombie"), Plan[2] == FPressureEnemyType(EEnemyArchetype::Marksman)
+		&& Plan[3] == FPressureEnemyType(EEnemyArchetype::Frostbitten, Zombie) && Plan[0].Type == EEnemyArchetype::FrostHound);
+	const TArray<FPressureTypeWeight> WithBrute = { { EEnemyArchetype::Brute, 5.f }, { EEnemyArchetype::Spitter, 1.f }, { EEnemyArchetype::Cutter, 1.f } };
+	TestEqual(TEXT("A Brute / Spitter weight is dropped"), CombatPressureRules::EffectiveWeights(WithBrute).Num(), 1);
 	TestEqual(TEXT("Only Brute / zero weights: the five types"), CombatPressureRules::EffectiveWeights({ { EEnemyArchetype::Brute, 1.f },
 		{ EEnemyArchetype::Cutter, 0.f } }).Num(), 5);
 	// Weighted pick: hound 1, marksman 3.

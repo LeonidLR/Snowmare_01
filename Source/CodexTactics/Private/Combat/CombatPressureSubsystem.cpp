@@ -1035,7 +1035,7 @@ APatrolRouteActor* UCombatPressureSubsystem::MakeRoute(const FVector& Feet)
 	return Route;
 }
 
-AEnemyCharacter* UCombatPressureSubsystem::SpawnOne(EEnemyArchetype Type, const FVector& Feet, const FVector& FaceTowards, EPressureSpawnKind Kind,
+AEnemyCharacter* UCombatPressureSubsystem::SpawnOne(const FPressureEnemyType& Type, const FVector& Feet, const FVector& FaceTowards, EPressureSpawnKind Kind,
 	int32 Group, bool bPlacedByCaller, const FSpawnTags& Tags)
 {
 	UWorld* World = GetWorld();
@@ -1045,8 +1045,8 @@ AEnemyCharacter* UCombatPressureSubsystem::SpawnOne(EEnemyArchetype Type, const 
 		return nullptr;
 	}
 	const FVector Facing = (FaceTowards - Feet).GetSafeNormal2D();
-	AEnemyCharacter* Enemy = Waves->SpawnLevelEnemy(Type, Feet + FVector(0.f, 0.f, CombatPressureLocal::SpawnLiftCm),
-		Facing.IsNearlyZero() ? FRotator::ZeroRotator : Facing.Rotation());
+	AEnemyCharacter* Enemy = Waves->SpawnLevelEnemy(Type.Type, Feet + FVector(0.f, 0.f, CombatPressureLocal::SpawnLiftCm),
+		Facing.IsNearlyZero() ? FRotator::ZeroRotator : Facing.Rotation(), Type.Variant);
 	if (!Enemy)
 	{
 		return nullptr;
@@ -1054,14 +1054,15 @@ AEnemyCharacter* UCombatPressureSubsystem::SpawnOne(EEnemyArchetype Type, const 
 	FManaged& Entry = Managed.AddDefaulted_GetRef();
 	Entry.Enemy = Enemy;
 	Entry.Kind = Kind;
-	Entry.Type = Type;
+	Entry.Type = Type.Type;
 	Entry.Group = Group;
 	Entry.Plan = Tags.Plan;
 	Entry.Party = Tags.Party;
 	FPressureSpawnRecord& Record = Records.AddDefaulted_GetRef();
 	Record.Enemy = Enemy;
 	Record.Kind = Kind;
-	Record.Type = Type;
+	Record.Type = Type.Type;
+	Record.Variant = Type.Variant;
 	Record.Group = Group;
 	Record.Location = Feet;
 	Record.ClearanceCm = CombatPressureRules::Clearance(CombatPressureLocal::To2D(Feet), GetObstacleBoxes());
@@ -1073,24 +1074,24 @@ AEnemyCharacter* UCombatPressureSubsystem::SpawnOne(EEnemyArchetype Type, const 
 	Record.Plan = Tags.Plan;
 	Record.Party = Tags.Party;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] spawned %s %s (group %d%s) at %s: clearance %.0f cm, squad %.0f cm, concealed %d, watched %d%s"),
-		Kind == EPressureSpawnKind::Patrol ? TEXT("patrol") : TEXT("ambusher"), *UEnum::GetValueAsString(Type), Group,
+		Kind == EPressureSpawnKind::Patrol ? TEXT("patrol") : TEXT("ambusher"), *CombatPressureRules::EnemyLabel(Type), Group,
 		Tags.Plan > 0 ? *FString::Printf(TEXT(", plan %d %s"), Tags.Plan, AmbushPlanRules::PartyName(Tags.Party)) : TEXT(""), *Feet.ToCompactString(),
 		Record.ClearanceCm, Record.SquadDistanceCm, Record.bConcealed ? 1 : 0, Record.bWatched ? 1 : 0,
 		Tags.SpotKind != EAmbushSpotKind::None ? *FString::Printf(TEXT(", %s spot"), AmbushSpotRules::KindName(Tags.SpotKind)) : TEXT(""));
 	return Enemy;
 }
 
-TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnPatrolGroupAt(const FVector& Feet, const TArray<EEnemyArchetype>& Types)
+TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnPatrolGroupAt(const FVector& Feet, const TArray<FPressureEnemyType>& Types)
 {
 	return SpawnPatrolGroup(Feet, Types, true);
 }
 
-TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnAmbushGroupAt(const FVector& Feet, const TArray<EEnemyArchetype>& Types, const FVector& FaceTowards)
+TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnAmbushGroupAt(const FVector& Feet, const TArray<FPressureEnemyType>& Types, const FVector& FaceTowards)
 {
 	return SpawnAmbushGroup(Feet, Types, FaceTowards, true, FSpawnTags());
 }
 
-TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnPatrolGroup(const FVector& Feet, const TArray<EEnemyArchetype>& Types, bool bPlacedByCaller)
+TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnPatrolGroup(const FVector& Feet, const TArray<FPressureEnemyType>& Types, bool bPlacedByCaller)
 {
 	TArray<AEnemyCharacter*> Out;
 	UWorld* World = GetWorld();
@@ -1125,7 +1126,7 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnPatrolGroup(const FVecto
 	return Out;
 }
 
-TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnAmbushGroup(const FVector& Feet, const TArray<EEnemyArchetype>& Types, const FVector& FaceTowards,
+TArray<AEnemyCharacter*> UCombatPressureSubsystem::SpawnAmbushGroup(const FVector& Feet, const TArray<FPressureEnemyType>& Types, const FVector& FaceTowards,
 	bool bPlacedByCaller, const FSpawnTags& Tags)
 {
 	TArray<AEnemyCharacter*> Out;
@@ -1174,10 +1175,10 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerEvent(TOptional<EPress
 		: CombatPressureRules::PickEventKind(RandKind, RandCoordinated, Config.PatrolShare, Config.Coordinated.Share);
 	if (Picked == EPressureSpawnKind::Coordinated)
 	{
-		TArray<EEnemyArchetype> Types;
+		TArray<FPressureEnemyType> Types;
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			Types.Add(CombatPressureRules::PickType(Config.TypeWeights, Stream.FRand()));
+			Types.Add(CombatPressureRules::PickEnemy(Config.TypeWeights, Stream.FRand()));
 		}
 		if (!Types.IsEmpty())
 		{
@@ -1185,7 +1186,7 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerEvent(TOptional<EPress
 			Ranged.RemoveAll([](const FPressureTypeWeight& Each) { return !AmbushPlanRules::IsRanged(Each.Type); });
 			if (!Ranged.IsEmpty())
 			{
-				AmbushPlanRules::EnsureRanged(Types, CombatPressureRules::PickType(Ranged, Stream.FRand()), Config.Coordinated.MinRanged);
+				CombatPressureRules::EnsureRangedEnemies(Types, CombatPressureRules::PickEnemy(Ranged, Stream.FRand()), Config.Coordinated.MinRanged);
 			}
 		}
 		Out = TriggerCoordinated(Types, bIgnoreCap);
@@ -1204,10 +1205,10 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerEvent(TOptional<EPress
 		UE_LOG(LogCodexTactics, Display, TEXT("[Pressure] no room for an event (%d of %d alive)"), GetAliveCount(), Config.MaxAlive);
 		return Out;
 	}
-	TArray<EEnemyArchetype> Types;
+	TArray<FPressureEnemyType> Types;
 	for (int32 Index = 0; Index < Size; ++Index)
 	{
-		Types.Add(CombatPressureRules::PickType(Config.TypeWeights, Stream.FRand()));
+		Types.Add(CombatPressureRules::PickEnemy(Config.TypeWeights, Stream.FRand()));
 	}
 	if (Picked == EPressureSpawnKind::Ambush)
 	{
@@ -1232,7 +1233,7 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerEvent(TOptional<EPress
 	return SpawnPatrolGroup(Spot.GetValue(), Types, false);
 }
 
-TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerCoordinated(const TArray<EEnemyArchetype>& Types, bool bIgnoreCap)
+TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerCoordinated(const TArray<FPressureEnemyType>& Types, bool bIgnoreCap)
 {
 	TArray<AEnemyCharacter*> Out;
 	if (!bConfigRead)
@@ -1241,19 +1242,19 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerCoordinated(const TArr
 	}
 	GetObstacleBoxes();
 	const FAmbushPlanParams& Params = Config.Coordinated;
-	TArray<EEnemyArchetype> Bodies = Types;
+	TArray<FPressureEnemyType> Bodies = Types;
 	if (Bodies.IsEmpty())
 	{
 		const int32 Count = AmbushPlanRules::PlanBodies(Stream.FRand(), Params, bIgnoreCap ? 0 : GetAliveCount());
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			Bodies.Add(CombatPressureRules::PickType(Config.TypeWeights, Stream.FRand()));
+			Bodies.Add(CombatPressureRules::PickEnemy(Config.TypeWeights, Stream.FRand()));
 		}
 		TArray<FPressureTypeWeight> Ranged = CombatPressureRules::EffectiveWeights(Config.TypeWeights);
 		Ranged.RemoveAll([](const FPressureTypeWeight& Each) { return !AmbushPlanRules::IsRanged(Each.Type); });
 		if (!Ranged.IsEmpty())
 		{
-			AmbushPlanRules::EnsureRanged(Bodies, CombatPressureRules::PickType(Ranged, Stream.FRand()), Params.MinRanged);
+			CombatPressureRules::EnsureRangedEnemies(Bodies, CombatPressureRules::PickEnemy(Ranged, Stream.FRand()), Params.MinRanged);
 		}
 	}
 	else if (!bIgnoreCap && GetAliveCount() + Bodies.Num() > Params.MaxAlive)
@@ -1280,7 +1281,7 @@ TArray<AEnemyCharacter*> UCombatPressureSubsystem::TriggerCoordinated(const TArr
 	for (int32 Slot = 0; Slot < 4; ++Slot)
 	{
 		const EAmbushParty Party = AmbushPlanRules::PlanParty(Slot);
-		TArray<EEnemyArchetype> PartyTypes;
+		TArray<FPressureEnemyType> PartyTypes;
 		for (int32 Index = 0; Index < Bodies.Num(); ++Index)
 		{
 			if (AmbushPlanRules::PartyOf(Index) == Party)

@@ -30,6 +30,8 @@ struct CODEXTACTICS_API FPressureSpawnRecord
 	TWeakObjectPtr<AEnemyCharacter> Enemy;
 	EPressureSpawnKind Kind = EPressureSpawnKind::Patrol;
 	EEnemyArchetype Type = EEnemyArchetype::Frostbitten;
+	/** The type's variant (FPressureEnemyType::Variant; CombatPressureRules::MilitaryZombieVariant = BP_Enemy_MilitaryZombie). */
+	FName Variant;
 	int32 Group = 0;
 	/** Feet on the navmesh where it was spawned. */
 	FVector Location = FVector::ZeroVector;
@@ -170,12 +172,12 @@ public:
 	 * rear, then front / rear) or, empty, the seeded bodies / types. bIgnoreCap ignores the plans' alive cap. Empty when there is no room or
 	 * no complete layout (four parties at concealed hiding spots).
 	 */
-	TArray<AEnemyCharacter*> TriggerCoordinated(const TArray<EEnemyArchetype>& Types, bool bIgnoreCap = false);
+	TArray<AEnemyCharacter*> TriggerCoordinated(const TArray<FPressureEnemyType>& Types, bool bIgnoreCap = false);
 
 	/** A patrol group with its leader at Feet (Types[0] leads; the loop round Feet). No validity check: the caller picked the spot. */
-	TArray<AEnemyCharacter*> SpawnPatrolGroupAt(const FVector& Feet, const TArray<EEnemyArchetype>& Types);
+	TArray<AEnemyCharacter*> SpawnPatrolGroupAt(const FVector& Feet, const TArray<FPressureEnemyType>& Types);
 	/** An ambush group at Feet facing FaceTowards (muted perception, holding until its side is unwatched). No validity check. */
-	TArray<AEnemyCharacter*> SpawnAmbushGroupAt(const FVector& Feet, const TArray<EEnemyArchetype>& Types, const FVector& FaceTowards);
+	TArray<AEnemyCharacter*> SpawnAmbushGroupAt(const FVector& Feet, const TArray<FPressureEnemyType>& Types, const FVector& FaceTowards);
 
 	/** Removes every pressure enemy and its patrol route (smokes). */
 	void DespawnAll();
@@ -319,12 +321,12 @@ private:
 	bool PlanLayout(FPressurePlanInfo& OutInfo);
 	/** Valid feet points for Count members round Feet (the first is Feet); bConcealed: only spots out of the squad's sight (ambushers). */
 	TArray<FVector> GroupSpots(const FVector& Feet, int32 Count, bool bConcealed) const;
-	TArray<AEnemyCharacter*> SpawnPatrolGroup(const FVector& Feet, const TArray<EEnemyArchetype>& Types, bool bPlacedByCaller);
-	TArray<AEnemyCharacter*> SpawnAmbushGroup(const FVector& Feet, const TArray<EEnemyArchetype>& Types, const FVector& FaceTowards, bool bPlacedByCaller,
+	TArray<AEnemyCharacter*> SpawnPatrolGroup(const FVector& Feet, const TArray<FPressureEnemyType>& Types, bool bPlacedByCaller);
+	TArray<AEnemyCharacter*> SpawnAmbushGroup(const FVector& Feet, const TArray<FPressureEnemyType>& Types, const FVector& FaceTowards, bool bPlacedByCaller,
 		const FSpawnTags& Tags);
 	/** Feet projected onto the navmesh at ground level near Point2D; unset when off the navmesh. */
 	TOptional<FVector> ProjectFeet(const FVector2D& Point, float GroundZ) const;
-	AEnemyCharacter* SpawnOne(EEnemyArchetype Type, const FVector& Feet, const FVector& FaceTowards, EPressureSpawnKind Kind, int32 Group, bool bPlacedByCaller,
+	AEnemyCharacter* SpawnOne(const FPressureEnemyType& Type, const FVector& Feet, const FVector& FaceTowards, EPressureSpawnKind Kind, int32 Group, bool bPlacedByCaller,
 		const FSpawnTags& Tags);
 	APatrolRouteActor* MakeRoute(const FVector& Feet);
 	void TickAmbushers(float Step);

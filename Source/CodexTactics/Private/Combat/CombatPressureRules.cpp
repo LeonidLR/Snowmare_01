@@ -6,7 +6,6 @@ bool CombatPressureRules::IsAllowedType(EEnemyArchetype Type)
 	{
 	case EEnemyArchetype::FrostHound:
 	case EEnemyArchetype::Frostbitten:
-	case EEnemyArchetype::Spitter:
 	case EEnemyArchetype::Cutter:
 	case EEnemyArchetype::Marksman:
 		return true;
@@ -15,23 +14,59 @@ bool CombatPressureRules::IsAllowedType(EEnemyArchetype Type)
 	}
 }
 
+FName CombatPressureRules::MilitaryZombieVariant()
+{
+	static const FName Name(TEXT("MilitaryZombie"));
+	return Name;
+}
+
+bool CombatPressureRules::IsAllowedEnemy(const FPressureEnemyType& Enemy)
+{
+	if (!IsAllowedType(Enemy.Type))
+	{
+		return false;
+	}
+	return Enemy.Variant.IsNone() || (Enemy.Variant == MilitaryZombieVariant() && Enemy.Type == EEnemyArchetype::Frostbitten);
+}
+
+bool CombatPressureRules::ParseVariantKey(const FString& Key, FPressureEnemyType& OutEnemy)
+{
+	if (Key.Equals(TEXT("MILITARY_ZOMBIE"), ESearchCase::IgnoreCase))
+	{
+		OutEnemy = FPressureEnemyType(EEnemyArchetype::Frostbitten, MilitaryZombieVariant());
+		return true;
+	}
+	return false;
+}
+
+FString CombatPressureRules::EnemyLabel(const FPressureEnemyType& Enemy)
+{
+	if (Enemy.Variant == MilitaryZombieVariant())
+	{
+		return TEXT("MILITARY_ZOMBIE");
+	}
+	const FString Name = UEnum::GetValueAsString(Enemy.Type);
+	return Enemy.Variant.IsNone() ? Name : FString::Printf(TEXT("%s (%s)"), *Name, *Enemy.Variant.ToString());
+}
+
 TArray<FPressureTypeWeight> CombatPressureRules::EffectiveWeights(const TArray<FPressureTypeWeight>& Weights)
 {
 	TArray<FPressureTypeWeight> Out;
 	for (const FPressureTypeWeight& Each : Weights)
 	{
-		if (IsAllowedType(Each.Type) && Each.Weight > 0.f)
+		if (IsAllowedEnemy(FPressureEnemyType(Each.Type, Each.Variant)) && Each.Weight > 0.f)
 		{
 			Out.Add(Each);
 		}
 	}
 	if (Out.IsEmpty())
 	{
-		for (const EEnemyArchetype Type : { EEnemyArchetype::FrostHound, EEnemyArchetype::Frostbitten, EEnemyArchetype::Spitter, EEnemyArchetype::Cutter,
-			EEnemyArchetype::Marksman })
-		{
-			Out.Add({ Type, 1.f });
-		}
+		// Task #34 (2026-11-07): the Military Zombie takes the Spitter's share of the default pool.
+		Out.Add({ EEnemyArchetype::FrostHound, 1.f });
+		Out.Add({ EEnemyArchetype::Frostbitten, 1.f });
+		Out.Add({ EEnemyArchetype::Frostbitten, 1.f, MilitaryZombieVariant() });
+		Out.Add({ EEnemyArchetype::Cutter, 1.f });
+		Out.Add({ EEnemyArchetype::Marksman, 1.f });
 	}
 	return Out;
 }
@@ -69,6 +104,29 @@ EPressureSpawnKind CombatPressureRules::PickEventKind(float Rand01, float RandCo
 
 EEnemyArchetype CombatPressureRules::PickType(const TArray<FPressureTypeWeight>& Weights, float Rand01)
 {
+	return PickEnemy(Weights, Rand01).Type;
+}
+
+int32 CombatPressureRules::EnsureRangedEnemies(TArray<FPressureEnemyType>& Enemies, const FPressureEnemyType& Ranged, int32 MinRanged)
+{
+	TArray<EEnemyArchetype> Types;
+	for (const FPressureEnemyType& Each : Enemies)
+	{
+		Types.Add(Each.Type);
+	}
+	const int32 Swapped = AmbushPlanRules::EnsureRanged(Types, Ranged.Type, MinRanged);
+	for (int32 Index = 0; Index < Enemies.Num(); ++Index)
+	{
+		if (Types[Index] != Enemies[Index].Type)
+		{
+			Enemies[Index] = Ranged;
+		}
+	}
+	return Swapped;
+}
+
+FPressureEnemyType CombatPressureRules::PickEnemy(const TArray<FPressureTypeWeight>& Weights, float Rand01)
+{
 	const TArray<FPressureTypeWeight> Effective = EffectiveWeights(Weights);
 	float Total = 0.f;
 	for (const FPressureTypeWeight& Each : Effective)
@@ -80,11 +138,11 @@ EEnemyArchetype CombatPressureRules::PickType(const TArray<FPressureTypeWeight>&
 	{
 		if (Pick < Each.Weight)
 		{
-			return Each.Type;
+			return FPressureEnemyType(Each.Type, Each.Variant);
 		}
 		Pick -= Each.Weight;
 	}
-	return Effective.Last().Type;
+	return FPressureEnemyType(Effective.Last().Type, Effective.Last().Variant);
 }
 
 float CombatPressureRules::DistanceToBox(const FVector2D& Point, const FPressureBox& Box)

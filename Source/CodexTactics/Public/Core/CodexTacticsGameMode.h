@@ -170,6 +170,14 @@ public:
 	TMap<EEnemyArchetype, TSoftClassPtr<class AEnemyCharacter>> EnemyClasses;
 
 	/**
+	 * Named Blueprint variants of an archetype (task #34, 2026-11-07): UWaveSubsystem::SpawnLevelEnemy's Variant picks one, the archetype
+	 * (stats, AI) stays the caller's. Default: "MilitaryZombie" = /Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie (a
+	 * Frostbitten; the combat pressure's MILITARY_ZOMBIE type, CombatPressureRules::MilitaryZombieVariant).
+	 */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Enemies")
+	TMap<FName, TSoftClassPtr<class AEnemyCharacter>> EnemyVariantClasses;
+
+	/**
 	 * Arsenal of every spawned operative, the first one in hands (Godot player.gd _init_weapons: M16, pistol, grenade,
 	 * knife; assets imported by Scripts/Editor/import_weapons.py).
 	 */

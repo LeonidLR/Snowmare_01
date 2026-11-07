@@ -24,8 +24,13 @@ patrols + ambushers here.
 - **Schedule.** The first event at `first_event_sec` (**30**; designer answer 6, 2026-11-01 - was 15), then one every `interval_sec` (**120**). A group of `group_min`..`group_max`
   (**1-3**) enemies; at most `max_alive` (**4**) pressure enemies alive - a due event WAITS while the cap is full and fires as soon as there is
   room. Turn-based combat stops the clock. No valid spot (the squad in a tight corner): retried in 10 s.
-- **Types.** Hound, Frostbitten, Spitter, Cutter, Marksman by the `types` weights (equal by default). NEVER the Brute or the Cryo Drone (refused by
-  the parser, dropped by the rules).
+- **Types.** Hound, Frostbitten, Military Zombie, Cutter, Marksman by the `types` weights (equal by default). NEVER the Spitter, the Brute or the
+  Cryo Drone (refused by the parser, dropped by the rules). Task #34 (user decision 2026-11-07): the **Military Zombie replaced the Spitter**
+  (it took its share of the default pool; the lab presets / `L_FormationLabCombat.json` say `"MILITARY_ZOMBIE": 1`). `MILITARY_ZOMBIE` is a
+  Frostbitten-archetype VARIANT: `FPressureEnemyType` = archetype + `Variant` (`CombatPressureRules::MilitaryZombieVariant`), spawned through
+  `UWaveSubsystem::SpawnLevelEnemy(..., Variant)` as `ACodexTacticsGameMode::EnemyVariantClasses["MilitaryZombie"]` =
+  `BP_Enemy_MilitaryZombie` (archetype stays Frostbitten: the zombie AI / stats, a LookVariants body, climbs ladders). The Spitter class /
+  archetype stays in the game (stage waves, the weather roster, the horde).
 - **Kind.** `patrol_share` (0.6) patrols, the rest ambushes; seeded (`seed`), so a run is reproducible.
 - **Spawn spot (both kinds).** Never inside or near a wall: at least `wall_clearance_cm` (250) from every wall / tower box (the level's blocking
   static meshes >= 50 cm tall, read as oriented boxes), on the navmesh at ground level (never a roof), inside the navmesh bounds, reachable on
@@ -78,7 +83,7 @@ Pure rules `AmbushSpotRules` (`CodexTactics.Combat.AmbushSpots.*`), `AmbushPlanR
   hiding spot in its SECTOR round the plan's anchor (`anchor_ahead_cm` 5 m ahead of the leader; front +-45 deg of the heading, the flanks
   45-135 deg, the rear beyond), the spot nearest its slot (`flank_offset_cm` 15 m to the side, `front_offset_cm` 16 m, `rear_offset_cm` 15 m),
   10-30 m from the squad (`min_squad_distance_cm` / `max_squad_distance_cm`), the parties >= `min_separation_cm` (6 m) apart. No complete
-  layout (four sides) or no room: a single ambush instead. At least `min_ranged` (1) ranged member (Spitter / Marksman by the type weights; a
+  layout (four sides) or no room: a single ambush instead. At least `min_ranged` (1) ranged member (the Marksman in the pressure roster; a
   melee front, then rear, body is swapped). Phases (`AmbushPlanRules::NextPhase`):
   1. **Waiting** while the nearest operative is beyond `trigger_range_cm` (18 m) of the anchor; **Holding** in range while both flank sides
      are watched (the watch rule per flank party);

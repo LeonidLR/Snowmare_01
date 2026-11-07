@@ -54,20 +54,21 @@ test('validation rejects what the C++ parser would clamp (min / max / integer / 
   assert.equal(validatePressure([]).length, 1);
 });
 
-test('types: the five only (FROST_HOUND alias), never BRUTE / CRYO_DRONE, weights 0..100', () => {
-  assert.deepEqual(validatePressure({ types: { HOUND: 1, frostbitten: 2, SPITTER: 0, CUTTER: 1, MARKSMAN: 0.5 } }), []);
+test('types: the five only (FROST_HOUND alias, MILITARY_ZOMBIE), never SPITTER / BRUTE / CRYO_DRONE, weights 0..100', () => {
+  assert.deepEqual(validatePressure({ types: { HOUND: 1, frostbitten: 2, military_zombie: 0, CUTTER: 1, MARKSMAN: 0.5 } }), []);
+  assert.match(validatePressure({ types: { SPITTER: 1 } })[0], /SPITTER/, 'task #34: the Military Zombie replaced the Spitter');
   assert.match(validatePressure({ types: { BRUTE: 1 } })[0], /BRUTE/);
   assert.match(validatePressure({ types: { CRYO_DRONE: 1 } })[0], /CRYO_DRONE/);
   assert.match(validatePressure({ types: { DRAGON: 1 } })[0], /неизвестный/);
   assert.equal(validatePressure({ types: { HOUND: 1, FROST_HOUND: 1 } }).length, 1, 'the same type twice');
   assert.equal(validatePressure({ types: { HOUND: -1 } }).length, 1);
   assert.equal(validatePressure({ types: { HOUND: 'a' } }).length, 1);
-  assert.deepEqual(typeWeights({}), { HOUND: 1, FROSTBITTEN: 1, SPITTER: 1, CUTTER: 1, MARKSMAN: 1 }, 'absent = equal');
-  assert.deepEqual(typeWeights({ types: { HOUND: 0, CUTTER: 0 } }), { HOUND: 1, FROSTBITTEN: 1, SPITTER: 1, CUTTER: 1, MARKSMAN: 1 }, 'all zero = equal');
+  assert.deepEqual(typeWeights({}), { HOUND: 1, FROSTBITTEN: 1, MILITARY_ZOMBIE: 1, CUTTER: 1, MARKSMAN: 1 }, 'absent = equal');
+  assert.deepEqual(typeWeights({ types: { HOUND: 0, CUTTER: 0 } }), { HOUND: 1, FROSTBITTEN: 1, MILITARY_ZOMBIE: 1, CUTTER: 1, MARKSMAN: 1 }, 'all zero = equal');
   const shares = typeShares({ types: { HOUND: 3, FROST_HOUND: 0, CUTTER: 1 } });
   assert.equal(shares.HOUND, 0.75);
   assert.equal(shares.CUTTER, 0.25);
-  assert.equal(shares.SPITTER, 0);
+  assert.equal(shares.MILITARY_ZOMBIE, 0);
 });
 
 test('ambush points: [[x, y], ...]', () => {

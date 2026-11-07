@@ -473,11 +473,12 @@
     "allowed": [
       "HOUND",
       "FROSTBITTEN",
-      "SPITTER",
+      "MILITARY_ZOMBIE",
       "CUTTER",
       "MARKSMAN"
     ],
     "forbidden": [
+      "SPITTER",
       "BRUTE",
       "CRYO_DRONE"
     ]

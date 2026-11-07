@@ -51,8 +51,11 @@ public:
 	 * Spawns an enemy that is NOT part of the current fight (combat lab, docs/design/COMBAT_LAB.md: the pressure's patrols / ambushers are
 	 * level enemies spawned at runtime): it is not counted as a living enemy of the wave / skirmish until it engages the squad
 	 * (ULevelEncounterSubsystem::NotifyHostileContact -> JoinSkirmish). SpawnEnemy adds every spawn to the fight at once.
+	 * Variant (task #34): a named Blueprint of the archetype from ACodexTacticsGameMode::EnemyVariantClasses (e.g. "MilitaryZombie" =
+	 * BP_Enemy_MilitaryZombie, a Frostbitten); NAME_None / unknown / not loadable = the archetype's EnemyClasses Blueprint.
 	 */
-	AEnemyCharacter* SpawnLevelEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator);
+	AEnemyCharacter* SpawnLevelEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator,
+		FName Variant = NAME_None);
 
 	/** Destroys all currently alive enemies immediately. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Wave")
@@ -218,7 +221,8 @@ private:
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
 
 	/** SpawnEnemy / SpawnLevelEnemy: bJoinFight adds it to the current fight's living enemies. */
-	AEnemyCharacter* SpawnEnemyInternal(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, bool bJoinFight);
+	AEnemyCharacter* SpawnEnemyInternal(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, bool bJoinFight,
+		FName Variant = NAME_None);
 
 	void HandleEnemyDied(AEnemyCharacter* Enemy);
 	void ProcessPendingSpawns(float DeltaTime);
