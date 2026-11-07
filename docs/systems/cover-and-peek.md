@@ -10,6 +10,7 @@
 > - `Private/Characters/OperativeCharacterCover.cpp`, `…CoverEntry.cpp`, `…CornerAim.cpp`; `Interactables/TrapSpotRules`; `Characters/SquadOrderRules`;
 > - `Combat/KnockdownRules::DecideCoverReturn`; smokes `CoverSmoke`, `CornerHoldSmoke`, `PeekMinesSmoke`, `KnockdownCoverSmoke`
 > - Group cover order (2026-10-20): `Tactics/GroupCoverRules`, `Characters/SquadSubsystemGroupCover.cpp`, `ACodexTacticsPlayerController::OrderGroupCover`; smoke `GroupCoverSmoke`
+> - Run-and-peek (#55, 2026-11-07): `Tactics/RunCornerPeekRules`, `CodexTacticsPlayerControllerRunPeek.cpp`, `AOperativeCharacter::OrderRunCornerPeek`; smoke `RunCornerPeekSmoke`
 > - Wall-edge cover switch (2026-10-20): `Tactics/CoverSwitchRules`, `OperativeCharacterCoverEntry.cpp` (`OrderCoverSwitch`, `TryEnterCoverSwitchFromRun`), `UOperativeAnimInstance::CoverStandSwitchEnter`, controller `ConfirmCoverPreview(bDoubleClick)` / `UpdateCoverSwitchHover`; smoke `CoverSwitchSmoke`
 > - Corner-to-corner switch + wall-following round a cover object (2026-10-20, second pass): `Tactics/CoverWrapRules` (footprint, perimeter path, `CoverWrapWorld::PlanWrap`), `CoverSwitchRules::ChooseSwitchCorner`, `OperativeCharacterCoverWrap.cpp` (`OrderCoverWrap`), controller `TryOrderCoverWrap` / `TryHandleCoverWrapClick` / `UpdateCoverWrapHover` / `GetCoverPreviewPath`; smokes `CoverSwitchSmoke` (stage 9), `CoverWrapSmoke`
 >
@@ -19,6 +20,56 @@
 
 - **The corner peek reveals hidden traps (rev 5h, every level):** `AOperativeCharacter::IsPeekingRoundCorner` (in cover, corner aim active, at a manual peek spot or the corner-hold spot) -> `UpdatePeekTrapSpotting` (called from `UpdateCover`, cluster file `OperativeCharacterCornerAim.cpp`; every `PeekSpotConfig.IntervalSeconds` 0.2 s; not in the wave fight): every `AInteractableActor::IsHiddenTrap()` (an armed hidden level mine; an armed, laid, concealed PMC wire) inside `TrapSpotRules::IsInPeekSightCone(GetCoverFireOrigin(), CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), Target, RangeCm 1200, HalfAngleDeg 30)` with a clear visibility trace (pawns do not block) is revealed by `RevealByPeek` (the normal spot response of part 1; the spotter is not turned, so the pose stays; extra event `TrapSpotted.Peek`). `FTrapPeekSpotConfig PeekSpotConfig` = BP_Operative Class Defaults -> CodexTactics|Cover|Peek (`bEnabled`, `RangeCm`, `HalfAngleDeg`, `bRequireLineOfSight`, `TargetHeightCm` 20, `IntervalSeconds`). **Trap groups:** `AInteractableActor::SpotEventTag` (Details -> CodexTactics|Trap) raises `TrapSpotted.<tag>` and counts in the tutorial condition stat **`traps_spotted.<tag>`** (`TrapSpotRules::ParseSpottedStatTag`, `TutorialRules::IsKnownStat`, `UTutorialSubsystem::GetConditionStat`: traps of that tag no longer hidden). Tests `Interactables.TrapSpot.PeekCone` / `.GroupEventAndStat`; smoke `PeekMinesSmoke`.
 - **The peek finds traps PHYSICALLY, one by one (rev 5j, game designer 2026-10-19: "not all lesson mines light up when the peek starts").** `UpdatePeekTrapSpotting` looks from the peek sight's leaned-out eye and aim (`GetPeekSight`, the cone drawn for him) with `FTrapPeekSpotConfig` now `HalfAngleDeg` 45 (= the peek view's 90 deg cone; was 30), `RangeCm` 1200 (shorter than the 18 m enemy view: a mine lies flush with the snow) and new `SweepSeconds` 1.5: the reach grows from 0 to 12 m after he leans out (`TrapSpotRules::PeekSweepRange`, `PeekSpotElapsed`), so the mines are revealed one by one, the nearest first. The sight line ignores hidden traps AND spotted armed mines / wires (a revealed near mine's trigger shape hid the next one). Tests `Interactables.TrapSpot.PeekCone` (cone = the peek view's) / `.PeekSweep`; smoke `PeekMinesSmoke`.
+
+## Run-and-peek: the corner peek in one click from the run (#55, user request 2026-11-07)
+
+User: "the peek works only after hugging the wall first, then the order to peek round the corner - that badly hurts the pace of the fight. I want
+it at once: the operative is running, gets the order to peek round a corner in front of him, runs straight to that spot and peeks immediately."
+
+- **The gesture (real time):** the same click as the in-cover peek - on the END of a peekable wall (its last ~75 cm of face, its end face, its top
+  there: `CoverFacingRules::FindPeekEdge`, `FCoverPeekConfig`) - now works from anywhere: an operative standing / walking / running in the open, or
+  in cover at ANOTHER wall, gets "go to that corner and peek". He runs at his normal order speed (`OrderTakeCover(.., false)`; a double-click on the
+  same corner = the same order at a sprint) to the corner's cover slot (the stand point short of the end) on the face of that wall that LOOKS AT
+  HIM, and the cover entry turns straight into the manual corner peek (`OrderCornerPeek`, the same corner-aim lean as before; the entry is a
+  `MarkCornerPeekArrival`, so coming in along the wall there is no wall-facing enter clip; head-on the enter clip plays as for any cover).
+  No second click, no idle at the wall: in `RunCornerPeekSmoke` the peek pose starts in the same frame as the cover entry (0.00 s). The hover
+  over such an end shows the peek ghost (whose silhouette: the man who will take it) from anywhere, the crosshair cursor as the in-cover peek.
+- **Unchanged:** a click on a wall away from its end = take cover (the cover ghost, then its confirm); in cover at that wall its end = the old
+  in-cover peek (a side-step in cover); a click on a pawn never peeks; objects with their own click (barricade / barrel / crate menus, the APC,
+  silhouettes, enemies) keep it; from a wall EDGE another cover in switch range (`EvaluateCoverSwitch` = Switch on the face slot or the cover
+  click's own slot, `Cover.Switch` taught) keeps the wall-edge cover switch (its ghost, its double-click dash; `CoverSwitchSmoke` /
+  `CoverSwitchLakeSmoke`); Alt (squad-wide) keeps "take cover at that object"; the tutorial lock (`Cover.CornerPeek`, and `Cover.Preview`
+  before cover is taught) keeps the old click; turn-based combat and the tactical pause (planned orders) keep their rules (out of scope).
+  Any later order replaces the run (it is his ordinary cover walk: `OrderMoveTo` / `OrderTakeCover` / `SetPendingCover` / `ClearPendingCover`
+  disarm it); the peek ends as today (another order).
+- **Which face (decision 3):** `GatherRunCornerPeekFaces` probes the clicked component from 8 directions round the click
+  (`RunCornerPeekRules::ProbeDirections`, `LineTraceComponent`, the click pushed 10 cm inside the face / 30 cm under the top); each new face
+  (`IsNewFace`) gets its slot (`CoverTraceRules::FindCoverSlotAt`), must be wide enough (`IsFaceWideEnough`, 1 m: an end face / a thin post is
+  no face of its own) and must have the click at its end (`FindCornerPeekForSlot` - the long-wall probe included); the clicked face with the click
+  in its middle stops the search at once (a cover click, one slot traced). `RunCornerPeekRules::ChooseNearFace` takes the face whose normal points
+  most towards the operative. The end's side / place come from that face's slot; the corner slot = `ResolveCornerStandSlot` (the stand-off of
+  the stance the entry gives: high standing, low crouched; shared with the squad peek). The faces are cached while the cursor rests (5 cm).
+- **Solo first; groups (decision 4):** `RunCornerPeekRules::DecideGroup`. Solo / nobody joining: he alone. A box selection with him in it
+  (`Codex.Squad.GroupCornerPeek` 1): `PlanRunGroupCornerPeek` = `FormationWallLeadership::PlanGroupCornerPeek` over every selected member's place
+  ALONG that face (from wherever they stand) - the able one nearest that end takes the corner (`OrderRunCornerPeek`), the others run into cover
+  slots a slot spacing (1 m) apart behind his stand point on that face (`OrderTakeCover`), nobody passes him; the ghost is his. Formation (not
+  solo, followers joining a cover order): the existing far-wall path - the group wall order at the corner slot (`OrderGroupCover` ->
+  `OrderFormationWall`, the formation wall layout) with the squad's corner peek carried there (`StartSquadPeekCarry(.., bPeekInForce=true)`,
+  bug_04 A): once the squad stands at that wall the member nearest that corner takes it and the lead (wall leadership) - so in formation the peek
+  comes after the squad settled, not on the leader's arrival (an open point for the user). The formation's own wall (the squad in the wall
+  layout) keeps the squad corner peek (`FindSquadCornerPeekForHit`); without the wall layout (legacy group cover) he peeks on arrival
+  (`ArmRunCornerPeek`).
+- **Code:** `Tactics/RunCornerPeekRules` (pure; tests `CodexTactics.Tactics.Cover.RunCornerPeek.*`); controller unit
+  `CodexTacticsPlayerControllerRunPeek.cpp` (`TryHandleRunCornerPeekClick` - called in `TryHandleCoverClick` after the in-cover and the squad-wall
+  peeks, before the object / proximity rules -, `FindRunCornerPeekForHit`, `FindRunCornerPeekClickTarget`, `PlanRunGroupCornerPeek`,
+  `UpdateCornerPeekHover`'s run branch; `PlayerTick` traces the cursor for it also out of cover); operative `OrderRunCornerPeek` /
+  `ArmRunCornerPeek` / `StartRunCornerPeekOnEntry` (end of `EnterCover`; `IsRunCornerPeekPending`, `GetRunCornerPeekCount`) in
+  `OperativeCharacterCornerAim.cpp`. The PMC AI uses the same body but never calls these (no PMC behaviour change).
+- **A/B:** `Codex.Cover.RunCornerPeek 0` = the old rule (the click is a cover ghost). **Smoke** `RunCornerPeekSmoke` (L_FormationLab W_B_3): A the
+  leader running in the open, the click on the west end 13 m ahead -> one cover entry and the peek pose 0.00 s later at the west end, south face;
+  B the face's middle = the cover ghost, its confirm = cover without a peek; C from that cover the east end = the old in-cover peek (stays in cover);
+  D from north of the wall the same click -> the north face's corner; E three box-selected in the open -> the man nearest the west end peeks,
+  the others in cover 0.8 / 2 m behind him.
 
 ## Cover entry turn: the enter clip only where it fits (2026-11-01, the squad corner peek played twice)
 

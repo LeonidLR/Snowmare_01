@@ -365,8 +365,10 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		// Wall leadership (2026-11-01): the leader holding the corner of the squad's own peek stays on the squad's peek (the other corner).
 		const bool bSquadPeek = !PeekTurnBased && PeekSquad && PeekOperative && (!PeekOperative->bInCover || PeekSquad->IsWallLeadershipPeeker(PeekOperative))
 			&& PeekSquad->GetFormationKind() == EFormationKind::Wall;
+		// Run-and-peek (#55): the end of any wall from the open / another wall's cover previews the run there and the peek (real time).
+		const bool bRunPeek = !PeekTurnBased && IsRunCornerPeekEnabled();
 		FHitResult PeekHit;
-		const bool bPeekHit = PeekOperative && (PeekOperative->IsInPeekableCover() || bSquadPeek) && !IsDialogueOpen() && !bRelocateSelectMode && !bOverMinimap
+		const bool bPeekHit = PeekOperative && (PeekOperative->IsInPeekableCover() || bSquadPeek || bRunPeek) && !IsDialogueOpen() && !bRelocateSelectMode && !bOverMinimap
 			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
 		if (!bFreezeCornerPeekHoverForTesting)
 		{
