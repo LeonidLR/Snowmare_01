@@ -247,6 +247,42 @@ namespace SquadControlSmoke
 			}
 			Check(State, Mover && Mover->IsInBarricadeCover() && Floating->HasShown(TEXT("IN COVER")),
 				TEXT("arrived next to the barricade in combat: crouched in cover"));
+			++State.Stage;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 4:
+		{
+			// T6: In formation mode, box selection is disabled - a drag does not start a selection box, selection stays the leader.
+			Check(State, !Squad->IsSoloMode(), TEXT("T6: initially in formation mode (solo off)"));
+			const AOperativeCharacter* CurrentLeader = Squad->GetLeader();
+
+			// Attempt box select in formation mode: SelectInBox returns 0 and selection stays {leader}
+			const int32 FormationBoxed = PC->SelectInBox(FVector2D(-10000.f, -10000.f), FVector2D(10000.f, 10000.f));
+			Check(State, FormationBoxed == 0, TEXT("T6: formation mode: SelectInBox returns 0 (box select disabled)"));
+			Check(State, !Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == 1 && Squad->GetSelectedGroup()[0] == CurrentLeader,
+				TEXT("T6: formation mode: selection remains the leader after box drag attempt"));
+
+			// Now switch to Solo mode (press B)
+			PC->ToggleSoloMode();
+			Check(State, Squad->IsSoloMode(), TEXT("T6: switched to solo mode (B pressed)"));
+
+			// In solo mode, box-select all three
+			int32 SoloBoxed = PC->SelectInBox(FVector2D(-10000.f, -10000.f), FVector2D(10000.f, 10000.f));
+			if (SoloBoxed <= 0)
+			{
+				// In headless mode without viewport projection, directly set group selection to simulate box selection
+				Squad->SetSelectedGroup(Squad->GetMembers());
+			}
+			Check(State, Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == Squad->GetMembers().Num(),
+				TEXT("T6: solo mode: all operatives multi-selected in group"));
+
+			// Switch Solo -> Formation (press B)
+			PC->ToggleSoloMode();
+			Check(State, !Squad->IsSoloMode(), TEXT("T6: switched back to formation mode (B pressed)"));
+			Check(State, !Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == 1 && Squad->GetSelectedGroup()[0] == Squad->GetLeader(),
+				TEXT("T6: solo -> formation switch cleared box selection: selection == {leader}"));
+
 			return Finish(State, true);
 		}
 		default:

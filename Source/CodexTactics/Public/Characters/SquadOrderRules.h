@@ -37,6 +37,12 @@ namespace SquadOrderRules
 	CODEXTACTICS_API bool IsOnOwnOrder(const FOwnOrderFacts& Facts);
 
 	/**
+	 * Box selection is allowed only in solo mode (and outside turn-based combat).
+	 * In formation mode, box selection is disabled (user addition 2026-11-04).
+	 */
+	CODEXTACTICS_API bool IsBoxSelectionAllowed(bool bSoloMode, bool bTurnBasedCombat);
+
+	/**
 	 * Leader switch (a selection): the operative who becomes the leader is stopped only when he was walking a formation move
 	 * (he now waits for the player's orders); an order of his own runs on.
 	 */

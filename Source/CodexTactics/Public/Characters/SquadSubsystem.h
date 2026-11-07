@@ -115,6 +115,9 @@ public:
 	/** More than one operative selected: ground orders move them all (Godot moving_group). */
 	bool HasMultiSelection() const;
 
+	/** Clears group / box selection back to just the squad leader (or empty if no leader). */
+	void ClearGroupSelection();
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	AOperativeCharacter* GetLeader() const { return Leader.Get(); }
 

@@ -158,6 +158,19 @@ void USquadSubsystem::SetSelectedGroup(const TArray<AOperativeCharacter*>& Group
 	}
 }
 
+void USquadSubsystem::ClearGroupSelection()
+{
+	AOperativeCharacter* LeaderRef = Leader.Get();
+	if (LeaderRef)
+	{
+		SetSelectedGroup({ LeaderRef }, false);
+	}
+	else
+	{
+		SetSelectedGroup({}, false);
+	}
+}
+
 TArray<AOperativeCharacter*> USquadSubsystem::GetSelectedGroup() const
 {
 	TArray<AOperativeCharacter*> Result;
@@ -665,6 +678,10 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 		bPostFightHold = SquadOrderRules::KeepsPostFightHold(bPostFightHold, false, /*bRegroup*/ true);
 		UE_LOG(LogCodexTactics, Display, TEXT("Squad: Regroup ends the post-fight hold"));
 	}
+
+	// Solo -> formation switch (regroup): clears group / box multi-selection and selects the squad leader
+	// so orders go to the formation rather than remaining a multi-selection group order (user bug 2026-11-03).
+	ClearGroupSelection();
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	const FText LeaderName = LeaderRef ? LeaderRef->DisplayName : LOCTEXT("SquadDefaultName", "Squad");

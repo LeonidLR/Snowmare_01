@@ -27,6 +27,7 @@
 #include "UI/GameMessageSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/SquadOrderRules.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
@@ -284,11 +285,15 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		}
 	}
 
-	// Selection box: LMB held and dragged past the threshold (not in the grid fight, where clicks are grid orders).
+	// Selection box: LMB held and dragged past the threshold (only in solo mode; disabled in formation mode).
 	if (bLmbDown)
 	{
 		GetMousePosition(BoxCurrent.X, BoxCurrent.Y);
-		if (!bBoxSelecting && FVector2D::Distance(BoxStart, BoxCurrent) > BoxSelectThreshold && !GetActiveTurnBased())
+		const USquadSubsystem* Squad = GetSquad();
+		const bool bSoloMode = Squad && Squad->IsSoloMode();
+		const bool bTurnBased = GetActiveTurnBased() != nullptr;
+		if (!bBoxSelecting && SquadOrderRules::IsBoxSelectionAllowed(bSoloMode, bTurnBased)
+			&& FVector2D::Distance(BoxStart, BoxCurrent) > BoxSelectThreshold)
 		{
 			bBoxSelecting = true;
 		}

@@ -18,6 +18,7 @@
 #include "UI/GameMessageSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/SquadOrderRules.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Tactics/WallSideRules.h"
@@ -220,6 +221,14 @@ void ACodexTacticsPlayerController::OnClickReleased()
 		SelectInBox(FVector2D::Min(BoxStart, BoxCurrent), FVector2D::Max(BoxStart, BoxCurrent));
 		return;
 	}
+	// Not in the grid fight: there a click with a small drag is still a grid order (no box selection there anyway).
+	const bool bDragged = FVector2D::Distance(BoxStart, BoxCurrent) > BoxSelectThreshold && !GetActiveTurnBased();
+	if (bDragged)
+	{
+		// In formation mode box selection is disabled; a drag on the ground does not start a selection
+		// rectangle, nor does it fire a world click/order on release (the selection stays the leader).
+		return;
+	}
 	FHitResult Hit;
 	if (GetSquad() && GetSquad()->GetLeader() && GetHitResultUnderCursor(ECC_Visibility, false, Hit))
 	{
@@ -241,7 +250,9 @@ bool ACodexTacticsPlayerController::GetSelectionBox(FVector2D& OutMin, FVector2D
 int32 ACodexTacticsPlayerController::SelectInBox(const FVector2D& Min, const FVector2D& Max)
 {
 	USquadSubsystem* Squad = GetSquad();
-	if (!Squad)
+	const bool bSoloMode = Squad && Squad->IsSoloMode();
+	const bool bTurnBased = GetActiveTurnBased() != nullptr;
+	if (!Squad || !SquadOrderRules::IsBoxSelectionAllowed(bSoloMode, bTurnBased))
 	{
 		return 0;
 	}
@@ -355,6 +366,8 @@ void ACodexTacticsPlayerController::ToggleSoloMode()
 		{
 			return;
 		}
+		bBoxSelecting = false;
+		bLmbDown = false;
 		Squad->ToggleSoloMode();
 		ControllerCommands::Report(this, Squad->IsSoloMode() ? PlayerCommands::SoloOn : PlayerCommands::Regroup);
 	}

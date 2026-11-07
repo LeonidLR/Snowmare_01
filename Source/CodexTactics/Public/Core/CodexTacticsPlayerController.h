@@ -435,6 +435,7 @@ public:
 	/** B down / up (IA_SoloMode Started / Completed): tap = ToggleSoloMode, hold = the formation menu. Public for the smokes. */
 	void SoloModePressed();
 	void SoloModeReleased();
+	void ToggleSoloMode();
 	/**
 	 * The hold may open the menu now: exploration or the tactical pause (not turn-based, orders not locked), squad mode with
 	 * >= 2 members (FormationMenuRules::IsEnabled), no dialogue, Squad.Formation not tutorial-locked.
@@ -601,7 +602,6 @@ private:
 	void StanceStand() { ApplyStance(EOperativeStance::Standing); }
 	void StanceCrouch() { ApplyStance(EOperativeStance::Crouching); }
 	void StanceProne() { ApplyStance(EOperativeStance::Prone); }
-	void ToggleSoloMode();
 	void ApplyStance(EOperativeStance Stance);
 	USquadSubsystem* GetSquad() const;
 	class ATacticalCameraPawn* GetCameraPawn() const;
