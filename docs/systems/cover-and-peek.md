@@ -1,8 +1,10 @@
 # Cover, peek and corner aim
 
 > Tactical cover lives in the `Cover*` / `CornerAim` clusters of `AOperativeCharacter`. The corner peek leans the operative's head out past an edge:
-> it reveals hidden traps inside a sight cone (growing reach), is the eye point of the peek sight (see [sight-and-vision-cones](sight-and-vision-cones.md))
-> and after a knockdown the operative returns to the same slot unless enemies surround him.
+> it reveals hidden traps inside a sight cone (growing reach), is the eye point of the peek sight (see [sight-and-vision-cones](sight-and-vision-cones.md);
+> since #32, 2026-11-07, the peek sees as far as his own eyes - `GetPeekSightRangeCm`, not the old 18 m - in its 90 deg cone),
+> an operative under fire in the open seeks the nearest cover within 8 m facing the flash by himself (#43, `UnderFireRules`, see
+> [pmc-squad-ai](pmc-squad-ai.md) "The manoeuvre under fire") and after a knockdown the operative returns to the same slot unless enemies surround him.
 >
 > Key files:
 > - `Private/Characters/OperativeCharacterCover.cpp`, `…CoverEntry.cpp`, `…CornerAim.cpp`; `Interactables/TrapSpotRules`; `Characters/SquadOrderRules`;

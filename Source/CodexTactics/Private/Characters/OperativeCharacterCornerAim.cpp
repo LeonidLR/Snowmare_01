@@ -15,6 +15,7 @@
 #include "Combat/PeekSightRules.h"
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionSubsystem.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -532,6 +533,13 @@ bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) c
 	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EyeCm, CoverSlot.WallTopCm);
 	OutDirection = (-CoverSlot.WallNormal).GetSafeNormal2D();
 	return true;
+}
+
+float AOperativeCharacter::GetPeekSightRangeCm() const
+{
+	// #32 (2026-11-07): the peek sees as far as his own eyes (the squad's sight: clear-day range x height level x weather / time of day).
+	const UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+	return Sight ? Sight->GetPeekSightRangeCm(*this) : PeekSightRules::EffectiveRangeCm(PeekSightConfig, -1.f);
 }
 
 bool AOperativeCharacter::GetPeekExposedPoint(FVector& OutPoint) const

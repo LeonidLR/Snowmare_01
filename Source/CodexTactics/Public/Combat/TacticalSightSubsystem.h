@@ -128,10 +128,17 @@ public:
 	/**
 	 * The squad's sight line of one operative to TargetPoint (an enemy's ProfilePoint): from his own eyes (stance height over the
 	 * capsule, MaxSightCm) or - peek sight, 2026-10-19 - while he peeks (AOperativeCharacter::GetPeekSight) from the leaned-out eye
-	 * point inside his peek cone (PeekSightConfig). Hugging a wall he sees only what his position allows; prone with no peek, nothing
-	 * behind a wall.
+	 * point inside his peek cone (PeekSightConfig, up to GetPeekSightRangeCm). Hugging a wall he sees only what his position allows; prone
+	 * with no peek, nothing behind a wall.
 	 */
 	bool CanOperativeSee(const AOperativeCharacter& Operative, const FVector& TargetPoint) const;
+
+	/**
+	 * #32 (2026-11-07): how far Operative's peek view reaches - PeekSightRules::EffectiveRangeCm of his PeekSightConfig and GetSightRangeCm
+	 * (his own eyes' range: the same clear-day range, height level and weather / time of day), so a man at a corner sees as far as he
+	 * would standing in the open (the fixed 18 m before).
+	 */
+	float GetPeekSightRangeCm(const AOperativeCharacter& Operative) const;
 
 	/**
 	 * Field of view (game designer 2026-10-20: operatives see only round their facing): the rule is on while the squad's sight runs, Codex.Sight.Fov 1

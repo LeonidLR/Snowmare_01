@@ -1126,6 +1126,15 @@ namespace FallDropSmoke
 		{
 			Pressure->Set(0, ECVF_SetByConsole); // a movement check, not a fight
 		}
+		// Nor the Depot's level-JSON PMC squads (30 s / 120 s), whose rounds made the men drop prone / step aside under fire (#43) in the
+		// scripted knockback / fall stages.
+		for (const TCHAR* Name : { TEXT("Codex.Pmc.Encounters"), TEXT("Codex.Combat.UnderFireManoeuvre") })
+		{
+			if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))
+			{
+				Variable->Set(0, ECVF_SetByConsole);
+			}
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
 		{
 			return Step(State);

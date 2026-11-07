@@ -41,6 +41,25 @@ namespace PeekSightRules
 
 	bool IsInCone(const FPeekSightConfig& Config, const FVector& Eye, const FVector& Direction, const FVector& Target)
 	{
-		return Config.bEnabled && TrapSpotRules::IsInPeekSightCone(Eye, Direction, Target, Config.RangeCm, Config.HalfAngleDeg);
+		return IsInCone(Config, Eye, Direction, Target, Config.RangeCm);
+	}
+
+	bool IsInCone(const FPeekSightConfig& Config, const FVector& Eye, const FVector& Direction, const FVector& Target, float RangeCm)
+	{
+		return Config.bEnabled && TrapSpotRules::IsInPeekSightCone(Eye, Direction, Target, FMath::Max(RangeCm, 0.f), Config.HalfAngleDeg);
+	}
+
+	float EffectiveRangeCm(const FPeekSightConfig& Config, float SightRangeCm)
+	{
+		if (Config.bRangeFromSight && SightRangeCm >= 0.f)
+		{
+			return SightRangeCm * FMath::Clamp(Config.SightRangeFraction, 0.f, 1.f);
+		}
+		return FMath::Max(Config.RangeCm, 0.f);
+	}
+
+	bool IsCornerInPeekReach(bool bCornerExposed, float ThreatDistanceCm, float PeekRangeCm)
+	{
+		return bCornerExposed && ThreatDistanceCm <= PeekRangeCm;
 	}
 }

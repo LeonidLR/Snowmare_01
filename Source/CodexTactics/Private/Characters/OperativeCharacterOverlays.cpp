@@ -88,7 +88,7 @@ bool AOperativeCharacter::IsEnemySpottedInCone() const
 	FVector PeekDirection;
 	if (GetPeekSight(PeekEye, PeekDirection))
 	{
-		Range = PeekSightConfig.RangeCm;
+		Range = GetPeekSightRangeCm(); // #32: his sight range, not the old fixed 18 m
 		HalfAngle = PeekSightConfig.HalfAngleDeg;
 		Origin = PeekEye;
 		Forward = PeekDirection;
@@ -157,7 +157,7 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 		VisionCone->SetViewOverride(PeekEye - Feet, static_cast<float>(PeekDirection.Rotation().Yaw));
 		EyeHeight = static_cast<float>(PeekEye.Z - Feet.Z);
-		Range = PeekSightConfig.RangeCm;
+		Range = GetPeekSightRangeCm(); // #32: as far as CanOperativeSee's peek line reaches
 		HalfAngle = PeekSightConfig.HalfAngleDeg;
 	}
 	else if (bVisible && bInCover && !GetSightFacing().Equals(GetActorForwardVector().GetSafeNormal2D(), 0.01f))

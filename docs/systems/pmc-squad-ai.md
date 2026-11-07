@@ -81,7 +81,26 @@ mark, like a monster), never once fallen. The arena turns it off (`SetRevealHost
   Without a combat target each of them turns to the flash - standing or walking (the 8-direction locomotion strafes), never in cover /
   sprinting / panicking / against a facing order; with no body line he returns fire AT THE FLASH when a line to it is clear and his posture
   fires on its own (a blind-factor round: x0.2, a hit only while the shooter stays at the spot; `ReturnFireShots`). Symmetric: a PMC fighter
-  fired at does the same. Not done: the rear men do not step aside for a line (they only turn), no automatic cover move, no ghost silhouette.
+  fired at does the same. No ghost silhouette yet.
+- **The manoeuvre under fire (#43 rest, 2026-11-07, `UnderFireRules`, `AOperativeCharacter::UpdateUnderFireManoeuvre` in
+  `OperativeCharacterUnderFire.cpp`; data `Content/Data/Combat/under_fire.json`).** Every 0.3 s an operative under fire (a live flash threat),
+  not in cover / on his way into it, with no order of his own (no own move order - the player's, the autonomy's, the PMC commander's -, no use
+  task / group cover wait, no fire or facing order), not carrying / panicking, in the real-time fight: (1) the nearest cover slot within
+  `cover.radius_cm` 8 m whose wall shields him from the flash (`PmcCommanderRules::CoverQualityAgainst` >= 0.35, 16 rays, a short nav path, not
+  a mate's slot) -> a sprint into it (`OrderTakeCover`); (2) else, with no clear line from his muzzle to the flash or a **mate in it**
+  (`IsMateInLine`, 60 cm), a step **off the line** - 0.5 / 1 / 1.5 / 2 m either side, nearest first, on the navmesh and straight across (inside
+  the passage), clear of mates - to the first spot with a clear line (`OrderMoveTo`, 2.5 s cooldown); (3) else prone (`prone.when_no_cover`),
+  crouching again when it is over. **Solo vs formation:** a formation follower does nothing while the formation walks (the leader on a player's move order
+  / moving; the leader's OWN manoeuvre walk - `IsOnUnderFireManoeuvreMove` - is no formation order: a follower under fire stays put instead of
+  walking after him into the fire, `PmcDeathPoseSmoke`-style smokes switch the manoeuvre off) and waits `reaction_seconds` 0.6 s after the first round (the leader's slot logic first); the spot he
+  manoeuvred to is HELD (`IsHoldingUnderFireSpot` counts in `USquadSubsystem::IsOnOwnOrder`, so the formation does not pull him back into the
+  line) until 3 + `hold_seconds` 4 s after the last round or the leader's next move order. Solo / the leader / a PMC fighter: no grace. Commander
+  Mode keeps its own cover rules (skipped). The PMC fighters run the same shared path (an uncommanded fighter acts on it alone; the commander's
+  moving orders are own orders and win). Counters `UnderFireCoverMoves` / `UnderFireSidesteps` / `UnderFireProneDrops`, log `[UnderFire]`. Console A/B: `Codex.Combat.UnderFireManoeuvre 0` (off); `Codex.Pmc.Encounters 0` keeps the level-JSON PMC squads away (FallDropSmoke, LevelGenRoute / Ladders, DropSoftlock set both: walk / fall checks, not fights).
+  Tests `CodexTactics.Combat.UnderFire.ManoeuvreGate` / `.ManoeuvreChoice` / `.SidestepAndMateInLine` / `.HoldSpotAndRise` /
+  `.TuningFileMirrorsDefaults`; smoke `UnderFireManoeuvreSmoke` (L_Gen_Depot_1: the halted column in a 3.6 m passage, the shooter at its far end).
+  Not done: a walking column keeps its slots (only the turn and the return fire while the leader walks); the cover search casts its rays
+  from him (like `FindCoverNear`), so a slot on the far side of a crate he stands in front of (between him and the flash's back) is not found.
 - **Fire arc (#33, `FireArcRules`).** Every aim turn (auto fire, the combat facing, quick fire, SUPPRESS) runs `TurnAimTowards`: eased,
   never slower than 360 deg/s - PRONE only at the prone turn rate (143 deg/s, once per frame: the facing and the fire loop used to step twice);
   prone (no upper-body twist) the shot residual is the larger of the rifle's and the body's error. A prone man with the target behind his back
@@ -171,9 +190,9 @@ riflemen spawned 8 m from the squad FALL BACK (3 standoffs), within 4 s all stan
 three shotgunners 15 m out close in to 7.9 m (an advance + flanks) with no standoff. `PmcCommanderSmoke` uses a wider clear arena (+-26 m) for
 the band-distance flank points. Known limits: the cover search casts rays from the fighter, so a slot on the far side of a wall that stands
 between him and the band point is found only once he is past it (the standoff walks to the band point first; the operative's own cover walk
-round a wall from the threat's side stopped short in the smoke); the over-the-top / corner **peek view reaches only 18 m**
-(`PeekSightConfig.RangeCm`, PeekSightSmoke checks it) - behind cover taller than his crouched eyes (95 cm) a rifleman at his 19-24 m band does
-not see over it (decision pending: raise the peek range to the band / the sight range?).
+round a wall from the threat's side stopped short in the smoke). The over-the-top / corner peek view reached only 18 m; since #32
+(2026-11-07) it reaches his sight range (`GetPeekSightRangeCm`, docs/systems/sight-and-vision-cones.md), so a rifleman at his 19-24 m band sees
+round / over his cover, and the corner bonus (`corner_bonus`) counts only when the threat lies within that peek range (`PeekSightRules::IsCornerInPeekReach`).
 
 **Round objective** (task #53, the arena only - inactive everywhere else, so every factor below is 1 and the order scores 0): the
 team gets a role + the point (`UPmcSquadSubsystem::SetTeamObjective` / `UpdateTeamObjective`: the round's time fraction, the capture

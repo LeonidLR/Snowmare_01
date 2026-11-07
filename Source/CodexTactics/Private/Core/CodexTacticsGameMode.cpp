@@ -8,6 +8,7 @@
 #include "Characters/OperativeBalance.h"
 #include "CodexTactics.h"
 #include "Combat/SuppressionRules.h"
+#include "Combat/UnderFireRules.h"
 #include "Combat/WaveSubsystem.h"
 #include "Core/LevelFlowRules.h"
 #include "Core/SquadSpawnRules.h"
@@ -112,6 +113,7 @@ void ACodexTacticsGameMode::StartPlay()
 	EnemyPerception::ApplyFile(EnemyPerception::GetDefaultPath()); // patrol sight / hearing / smell, trap search
 	TacticalHeatTuning::ApplyFile(TacticalHeatTuning::GetDefaultPath()); // Sprint 15 heat sources + their starting loadout
 	SuppressionRules::ReloadConfig(); // suppressive fire tunables (Content/Data/Combat/suppression.json, 2026-10-26)
+	UnderFireRules::ReloadConfig(); // the reaction / manoeuvre under fire (Content/Data/Combat/under_fire.json, #43 2026-11-07)
 	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();
