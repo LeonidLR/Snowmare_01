@@ -10,6 +10,9 @@ Canonical round (candidate's point of view), consumed by fitness.py:
   won (1 / 0.5 draw / 0), duration_s, time_limit_s, survivors, squad_size, hp_lost, hp_max, kills,
   flanks_attempted, flanks_succeeded, suppression_s, ambushes, retreats, retreats_survived, heals,
   friendly_fire, stuck_events, crashed (False here; True rows come from the runner on a crash / timeout).
+  Task #53 (objective rounds): damage_from_concealment, first_strike, objective_hold_s, median_engagement_m (per side),
+  role ("attacker" / "defender", a string), objective_win (1.0 = this side won the objective: captured it as the attacker,
+  or held it to the time limit as the defender; derived from winner + end_reason + role).
 """
 from __future__ import annotations
 
@@ -22,7 +25,11 @@ from .genome import load_json
 
 CANONICAL_SIDE_FIELDS = ("survivors", "squad_size", "hp_lost", "hp_max", "kills", "flanks_attempted",
                          "flanks_succeeded", "suppression_s", "ambushes", "retreats", "retreats_survived",
-                         "heals", "friendly_fire", "stuck_events")
+                         "heals", "friendly_fire", "stuck_events",
+                         # task #53: the objective rounds' ambush stats
+                         "damage_from_concealment", "first_strike", "objective_hold_s", "median_engagement_m",
+                         # 2026-11-07 target attention: first hits on a target looking away from the shooter
+                         "strikes_unobserved")
 
 
 class ArenaResultError(ValueError):
@@ -167,6 +174,17 @@ class ArenaAdapter:
             end_reason = _dig(rnd, rc.get("end_reason_key", "end_reason"))
             if end_reason:
                 row["end_reason"] = str(end_reason)
+            # task #53: the side's role and whether it won the objective (attacker: captured; defender: held to the limit)
+            role = _dig(side, fields.get("role", "role"))
+            if isinstance(role, str) and role:
+                row["role"] = role.lower()
+                reason = row.get("end_reason", "")
+                row["objective_win"] = 1.0 if won >= 1.0 and (
+                    (row["role"] == "attacker" and reason == "objective")
+                    or (row["role"] == "defender" and reason == "time_limit")) else 0.0
+            scenario = _dig(rnd, rc.get("scenario_key", "scenario"))
+            if isinstance(scenario, str) and scenario:
+                row["scenario"] = scenario
             track = _dig(rnd, rc.get("track_key", "track"))
             if track and result_dir:
                 row["track"] = track if os.path.isabs(track) else os.path.normpath(os.path.join(result_dir, track))

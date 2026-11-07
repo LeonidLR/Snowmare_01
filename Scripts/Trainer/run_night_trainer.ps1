@@ -41,6 +41,16 @@ if ($Mock) { $PyArgs += "--mock" }
 $LogDir = Join-Path $Repo "Saved\Trainer"
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 $Log = Join-Path $LogDir "scheduler.log"
+
+# Watchdog rule (2026-11-06): "is the trainer running?" = a live python process with night_trainer.py on its command line,
+# NEVER the scheduled task's state (a task can read Ready while its python child still runs - a false restart started a
+# duplicate). night_trainer.py's own single-instance lock (Saved\Trainer\night_trainer.lock) backs this up.
+$Live = @(Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -and $_.CommandLine -like "*night_trainer.py*" -and $_.CommandLine -notlike "*--mock*" })
+if ($Live.Count -gt 0) {
+    Add-Content -Encoding UTF8 $Log "[$($Now.ToString('s'))] skip start of $RunId - night_trainer.py already running (pid $(($Live | ForEach-Object { $_.ProcessId }) -join ', '))"
+    exit 0
+}
 Add-Content -Encoding UTF8 $Log "[$($Now.ToString('s'))] start run $RunId until $($Stop.ToString('s')): python $($PyArgs -join ' ')"
 Push-Location $Repo
 $ErrorActionPreference = "Continue" # python's stderr lines must not become terminating errors (PS 5.1)

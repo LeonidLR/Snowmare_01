@@ -330,7 +330,8 @@ bool FBotRouteGeneratedDepotTest::RunTest(const FString&)
 	TestTrue(TEXT("it has a route"), Route.IsValid());
 	TestTrue(TEXT("a loop"), Route.bLoop);
 	TestTrue(TEXT("an endless pressure level"), Level.Pressure.bEnabled);
-	TestTrue(TEXT("immortal + infinite ammo"), Level.bCheatImmortal && Level.bCheatInfiniteAmmo);
+	// #46 (bcc22613, user 2026-11-06 "the Depot with real stakes"): immortality off, infinite ammo stays until loot exists.
+	TestTrue(TEXT("mortal + infinite ammo (#46)"), !Level.bCheatImmortal && Level.bCheatInfiniteAmmo);
 	TArray<FString> Drops;
 	int32 Roof = 0;
 	int32 Walls = 0;

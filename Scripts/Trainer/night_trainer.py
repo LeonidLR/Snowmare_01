@@ -6,6 +6,8 @@
 The same --run-id resumes (from the last finished generation; finished arena jobs of an unfinished generation are reused).
 Population / rounds / seed overrides only apply when the run is created (a resume keeps run.json's snapshot).
 Stop: create Saved/Trainer/<run_id>/STOP. Pause: create Saved/Trainer/<run_id>/PAUSE (or Saved/Trainer/PAUSE).
+Single instance (2026-11-06): a real (non --mock) run holds Saved/Trainer/night_trainer.lock (its PID); a second start
+while that PID is alive prints the holder and exits 0 without touching anything (a watchdog restart is harmless).
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+from nighttrainer.runner import InstanceLock  # noqa: E402
 from nighttrainer.trainer import Trainer  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -65,6 +68,22 @@ def main(argv=None) -> int:
     if args.seed is not None:
         cfg["seed"] = args.seed
     run_id = args.run_id or (("mock-" if args.mock else "pmc-") + dt.date.today().strftime("%Y%m%d"))
+    lock = None
+    if not args.mock:
+        lock = InstanceLock(args.repo_root, run_id)
+        if not lock.acquire():
+            holder = lock.holder() or {}
+            print(f"night_trainer: another instance is running (pid {holder.get('pid')}, run {holder.get('run_id')!r}, "
+                  f"since {holder.get('started')}) - exiting ({lock.path})")
+            return 0
+    try:
+        return _run(args, cfg, run_id)
+    finally:
+        if lock:
+            lock.release()
+
+
+def _run(args, cfg, run_id) -> int:
     trainer = Trainer(cfg, run_id, args.repo_root, mock=args.mock, deadline=deadline_from(args),
                       max_generations=args.max_generations, parallel=args.parallel,
                       yield_to_editor=args.yield_to_editor, poll_s=args.poll_s)

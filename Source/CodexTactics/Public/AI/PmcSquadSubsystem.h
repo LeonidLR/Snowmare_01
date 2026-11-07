@@ -36,6 +36,8 @@ struct CODEXTACTICS_API FPmcTeamStats
 	int32 FriendlyFireHits = 0;
 	int32 StuckEvents = 0;
 	int32 OrdersIssued = 0;
+	/** Objective orders taken (task #53: walks onto / back to the round's point). */
+	int32 ObjectiveMoves = 0;
 };
 
 /**
@@ -113,6 +115,13 @@ public:
 	void SetTeamAssault(int32 TeamId, const FVector* Point);
 	/** The team has met the enemy in this fight. */
 	bool HasTeamContact(int32 TeamId) const;
+	/**
+	 * The round objective (the arena, task #53): the team's role (attacker / defender), the point and its hold radius - the commander's
+	 * Objective order and the objective considerations (PmcCommanderRules::ObjectivePositionFactor) read it. Role None clears it.
+	 */
+	void SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm);
+	/** The objective's live state for the team's next decisions: the round's time fraction, the capture clock, an enemy on the point. */
+	void UpdateTeamObjective(int32 TeamId, float TimeFrac, float HoldFrac, bool bEnemyOnPoint);
 
 	// --- Encounter postures (level JSON "pmc_squads", CodexTactics.PmcSpawn; docs/systems/pmc-squad-ai.md 7) ---
 	/**
@@ -173,6 +182,8 @@ private:
 		double ProgressTime = 0.0;
 		bool bFlankCounted = false;
 		bool bWasSuppressing = false;
+		/** An ambusher holding his fire (the Passive posture, PmcCommanderRules::ShouldHoldFire; user 2026-11-07). */
+		bool bHoldingFire = false;
 	};
 
 	struct FTeam
@@ -187,8 +198,13 @@ private:
 		float DecisionTimer = 0.f;
 		bool bEverContact = false;
 		double LastContactTime = -1e9;
+		/** The fight's first contact (-1: none yet) and whether a shot was exchanged with an enemy (target attention, 2026-11-07). */
+		double FirstContactTime = -1.0;
+		bool bShotsExchanged = false;
 		FPmcTeamStats Stats;
 		TOptional<FVector> AssaultPoint;
+		/** The round objective (the arena, task #53; DistanceCm is filled per fighter). */
+		TOptional<FPmcObjectiveView> Objective;
 		/** The encounter posture (before contact). */
 		TOptional<EPmcPosture> Posture;
 		FVector PostureAnchor = FVector::ZeroVector;
@@ -220,6 +236,8 @@ private:
 		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr) const;
 	bool ProjectToNav(const FVector& Point, FVector& OutPoint) const;
 	bool IsExposedTo(int32 TeamId, const AOperativeCharacter& Fighter) const;
+	/** The enemies the team sees now: their positions and facings as seen (target attention, 2026-11-07). */
+	void SeenWatchers(const FTeam& Team, TArray<FVector2D>& OutPositions, TArray<float>& OutYaws) const;
 	void HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit);
 
 	TMap<int32, FTeam> Teams;

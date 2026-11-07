@@ -40,6 +40,84 @@ enum class EPmcOrder : uint8
 	Sidearm,
 	/** Crouch where he stands (in contact, not moving, not in cover). */
 	Crouch,
+	/**
+	 * The round's objective point (task #53, the arena): an attacker walks onto it (he wins by holding it), a defender goes back to it
+	 * when the attackers stand on it or he strayed out of its overwatch.
+	 */
+	Objective,
+	Count
+};
+
+/** A side's role in an objective round (the arena, task #53): the attackers take the point, the defenders hold it. */
+enum class EPmcRole : uint8
+{
+	None,
+	Attacker,
+	Defender
+};
+
+/** The round's objective as one fighter's commander sees it (inactive: Role None - every objective factor is 1, the Objective order 0). */
+struct CODEXTACTICS_API FPmcObjectiveView
+{
+	EPmcRole Role = EPmcRole::None;
+	FVector Location = FVector::ZeroVector;
+	/** Planar distance fighter -> point, cm. */
+	float DistanceCm = 0.f;
+	/** The hold radius, cm (attackers within it and no live defender within it = the attackers hold the point). */
+	float RadiusCm = 0.f;
+	/** 0..1 of the round's time limit gone (the attackers' urgency). */
+	float TimeFrac = 0.f;
+	/** 0..1 of the attackers' capture clock (HoldSeconds held without a defender on the point). */
+	float HoldFrac = 0.f;
+	/** An enemy stands within the radius (the attackers for a defender, the defenders for an attacker). */
+	bool bEnemyOnPoint = false;
+
+	bool IsActive() const { return Role != EPmcRole::None && RadiusCm > 0.f; }
+};
+
+/**
+ * The capture clock of one objective round (pure; the arena steps it): the attackers hold the point while at least one live attacker
+ * and no live defender stands within the radius; HoldSeconds of an unbroken hold capture it (a defender stepping back on - or the
+ * attackers leaving - resets the clock). Per side the seconds of sole control (own men on the point, no enemy) for the result.
+ */
+struct CODEXTACTICS_API FPmcObjectiveClock
+{
+	float HoldSeconds = 15.f;
+	/** The current unbroken attacker hold, s. */
+	float Held = 0.f;
+	bool bAttackersHolding = false;
+	bool bCaptured = false;
+	/** Seconds of sole control per role: [0] attackers, [1] defenders. */
+	float ControlSeconds[2] = { 0.f, 0.f };
+
+	/** One step: the live attackers / defenders within the radius now, DeltaSeconds since the last step. True when this step captured it. */
+	bool Step(int32 AttackersOnPoint, int32 DefendersOnPoint, float DeltaSeconds);
+	float HoldFrac() const { return HoldSeconds > 0.f ? FMath::Clamp(Held / HoldSeconds, 0.f, 1.f) : 0.f; }
+};
+
+/** How an arena round ended (pure: PmcCommanderRules::ResolveRound). Winner "A" / "B" / "draw"; Reason elimination / objective / time_limit. */
+struct CODEXTACTICS_API FPmcRoundOutcome
+{
+	FString Winner = TEXT("draw");
+	FString Reason = TEXT("time_limit");
+	/** captured (the attackers took it) / held (the defenders kept it to the time limit) / contested (attackers on it at the limit) / none. */
+	FString ObjectiveResult = TEXT("none");
+	bool bOver = false;
+};
+
+/** The arena's round scenarios (task #53): Scenario=random picks one per round from the round seed. */
+enum class EPmcScenario : uint8
+{
+	/** The seeded random spawn pair (any levels), the objective near the defender. */
+	Skirmish,
+	/** The objective + the defender's spawn at a narrow passage (1-3 m between walls >= 3 m). */
+	Chokepoint,
+	/** The objective on open ground. */
+	Street,
+	/** The objective on a roof level. */
+	Roofs,
+	/** A skirmish in a blizzard (the sight halved). */
+	Blizzard,
 	Count
 };
 
@@ -134,6 +212,28 @@ struct CODEXTACTICS_API FPmcWeights
 	float CloseIn = 1.6f;
 	/** Prone instead of crouched (the Crouch order in the open) for a weapon whose band starts at least this far, cm (rifles, not pistols / shotguns). */
 	float ProneMinBandCm = 1500.f;
+
+	// --- The round objective (task #53, the arena: attackers take the point, defenders hold it; trainer genes +-50 %) ---
+
+	/** The Objective order's weight (an attacker onto the point, a defender back to it). */
+	float Objective = 1.0f;
+	/** The attacker's time pressure: the Objective order x (1 - this + this x the round's time fraction). */
+	float ObjectiveUrgency = 0.65f;
+	/** Attackers value positions on the way to / round the point: a cover slot one radius nearer x (1 + this); Hold on the point x (1 + this). */
+	float ObjectiveApproach = 0.5f;
+	/** Defenders value overwatch of the approaches: a slot / Hold within reach of the point x (1 + this). */
+	float Overwatch = 0.5f;
+
+	// --- Target attention (user 2026-11-07: strike when the enemy looks away; trainer genes +-50 %) ---
+
+	/** Flank / Advance (not a close-quarters weapon's) / an attacker's Objective walk x (1 + this x (AttentionOff - 0.5)): moving while they look away is worth more. */
+	float Attention = 0.6f;
+	/** An objective defender in ambush holds his fire while the seen target's AttentionOff is below this (he still looks our way). 0 = off. */
+	float AmbushPatience = 0.5f;
+	/** ... unless the target is deep in the kill zone: nearer than this x his band's max (the weapon's reach without a band), or on the point. */
+	float KillZoneFrac = 0.6f;
+	/** ... and at most this long after the team's first contact, s (then it fires whatever he looks at). */
+	float AmbushMaxHoldSeconds = 20.f;
 };
 
 /** One spawn candidate of the arena's seeded spawn pairs: a navmesh point and its height level (0 = the ground). */
@@ -150,6 +250,17 @@ struct CODEXTACTICS_API FPmcThreatView
 	float DistanceCm = 0.f;
 	float SecondsSince = 0.f;
 	bool bSeenNow = false;
+	/**
+	 * No enemy known: the team's assault point (the arena's objective / the defender's spawn) stands in for a threat so the men advance
+	 * on it (task #53: no "too close" standoff from it and no band penalty near it - an attacker must be able to stand ON the point).
+	 */
+	bool bStandIn = false;
+	/**
+	 * Target attention (user 2026-11-07: "strike when they look away, through the blind zones"): how far the fighter stands outside the
+	 * look sectors of the enemies his team SEES now (PmcCommanderRules::AttentionOff; their facing as seen): 0 = one looks right at him,
+	 * 1 = all look away; 0.5 = unknown (nobody seen now).
+	 */
+	float AttentionOff = 0.5f;
 };
 
 /** One fighter as the commander sees him. */
@@ -192,6 +303,8 @@ struct CODEXTACTICS_API FPmcFighterView
 	/** The nearest wounded mate (-1: none) and his health fraction. */
 	float WoundedMateDistanceCm = -1.f;
 	float WoundedMateHealthFrac = 1.f;
+	/** The round's objective (the arena, task #53; inactive elsewhere). */
+	FPmcObjectiveView Objective;
 };
 
 /** The squad as a whole. */
@@ -208,6 +321,10 @@ struct CODEXTACTICS_API FPmcSquadView
 	int32 MatesFlanking = 0;
 	int32 MatesAdvancing = 0;
 	int32 MatesHealing = 0;
+	/** A shot was fired between this team and an enemy in this fight (an ambush holding its fire is blown). */
+	bool bShotsExchanged = false;
+	/** Seconds since the team's first contact of the fight (0 before it). */
+	float ContactSeconds = 0.f;
 };
 
 struct CODEXTACTICS_API FPmcOrderScore
@@ -308,6 +425,62 @@ namespace PmcCommanderRules
 	 */
 	CODEXTACTICS_API bool PickSpawnPair(const TArray<FPmcSpawnCandidate>& Candidates, float MinDistCm, float MaxDistCm, int32 Seed,
 		TFunctionRef<bool(int32 A, int32 B)> IsReachable, int32& OutA, int32& OutB, int32 MaxReachChecks = 48);
+
+	// --- The round objective (task #53) ---
+
+	/**
+	 * How far from the point a defender still overwatches it, cm: his band's max (the weapon's reach x 0.8 without a band), at least
+	 * 2 x the radius.
+	 */
+	CODEXTACTICS_API float OverwatchRangeCm(const FPmcObjectiveView& Objective, const FPmcEngagementBand& Band, float WeaponRangeCm);
+
+	/**
+	 * The objective consideration of a position (a cover slot) for a fighter at FighterLocation: an attacker x max(0.25, 1 +
+	 * ObjectiveApproach x gain), gain = (his distance to the point - the slot's) / the radius in -1..1 (1 inside the radius); a defender
+	 * x (1 + Overwatch x reach), reach = 1 within OverwatchRangeCm of the point, falling to 0 at twice that. 1 when inactive.
+	 */
+	CODEXTACTICS_API float ObjectivePositionFactor(const FVector& Position, const FVector& FighterLocation, const FPmcObjectiveView& Objective,
+		const FPmcEngagementBand& Band, float WeaponRangeCm, const FPmcWeights& Weights);
+
+	/**
+	 * The round's end (the arena): a side down = elimination (both down: a draw); the attackers' capture = objective; the time limit =
+	 * the defenders win when the point is not held by the attackers at that moment (else a contested draw). Without an objective the
+	 * time limit is a draw. bAttackerIsA: side A attacks. bOver false while the round goes on.
+	 */
+	CODEXTACTICS_API FPmcRoundOutcome ResolveRound(int32 AliveA, int32 AliveB, bool bTimeUp, bool bObjective, const FPmcObjectiveClock& Clock, bool bAttackerIsA);
+
+	/**
+	 * Target attention at Point (user 2026-11-07): for every watcher (an enemy the team sees now: his position and facing as seen) within
+	 * RangeCm, how far Point lies outside his look sector: clamp((angle off his look - HalfAngleDeg) / 45, 0, 1); the most attentive
+	 * watcher decides (the minimum). 1 with no watcher in range (nobody looks).
+	 */
+	CODEXTACTICS_API float AttentionOff(const TArray<FVector2D>& WatcherPositions, const TArray<float>& WatcherYawsDeg, const FVector2D& Point,
+		float HalfAngleDeg = 45.f, float RangeCm = 5000.f);
+
+	/** The attention consideration of a move: 1 + Attention x (Threat.AttentionOff - 0.5) while a threat is seen now (>= 0), else 1. */
+	CODEXTACTICS_API float AttentionFactor(const FPmcFighterView& Fighter, const FPmcWeights& Weights);
+
+	/**
+	 * An objective defender in ambush holds his fire (the Passive posture) while no shot was exchanged in the fight yet, the enemy does not
+	 * see him and his first contact is younger than AmbushMaxHoldSeconds - lying in wait with nobody seen now, or with a seen threat that
+	 * is not deep in the kill zone (KillZoneFrac x his reach, or on the point) and still looks his way (AttentionOff < AmbushPatience).
+	 */
+	CODEXTACTICS_API bool ShouldHoldFire(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/** The scenario's id in args / JSON ("skirmish", "chokepoint", "street", "roofs", "blizzard"). */
+	CODEXTACTICS_API const TCHAR* ScenarioName(EPmcScenario Scenario);
+	/** Parses a scenario id; false for "random" or an unknown id. */
+	CODEXTACTICS_API bool ParseScenario(const FString& Name, EPmcScenario& Out);
+	/** Scenario=random: the round's scenario from its seed (uniform over the five, deterministic). */
+	CODEXTACTICS_API EPmcScenario PickScenario(int32 RoundSeed);
+
+	/**
+	 * A narrow passage at a probe point (the chokepoint scenario): Hits = the wall distances of 8 horizontal rays (45 deg apart, ray 0 =
+	 * +X; <= 0 = no wall within the probe reach) and Tall = the same ray at 3 m above the floor hit too. A passage = an opposite pair
+	 * (i, i + 4) both hit and tall with MinWidthCm <= the sum <= MaxWidthCm, and the perpendicular pair free (no wall) - OutAxisIndex = the
+	 * free ray (the passage runs along it). The narrowest pair wins.
+	 */
+	CODEXTACTICS_API bool IsPassage(const float Hits[8], const bool Tall[8], float MinWidthCm, float MaxWidthCm, int32& OutAxisIndex, float& OutWidthCm);
 
 	/** Parameters of Json over Base (unknown keys ignored, missing ones keep Base). Keys = the field names in snake_case ("take_cover", "heal_below"). */
 	CODEXTACTICS_API FPmcWeights FromJson(const FJsonObject& Json, const FPmcWeights& Base = FPmcWeights());

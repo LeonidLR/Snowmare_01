@@ -1,5 +1,6 @@
 #include "AI/PmcCommanderRules.h"
 
+#include "AI/AmbushWatchRules.h"
 #include "Dom/JsonObject.h"
 #include "Math/RandomStream.h"
 #include "Misc/FileHelper.h"
@@ -10,6 +11,28 @@
 FPmcWeights::FPmcWeights()
 	: Bands(PmcCommanderRules::DefaultBands())
 {
+}
+
+bool FPmcObjectiveClock::Step(int32 AttackersOnPoint, int32 DefendersOnPoint, float DeltaSeconds)
+{
+	const float Delta = FMath::Max(DeltaSeconds, 0.f);
+	bAttackersHolding = AttackersOnPoint > 0 && DefendersOnPoint == 0;
+	if (bAttackersHolding)
+	{
+		ControlSeconds[0] += Delta;
+	}
+	else if (DefendersOnPoint > 0 && AttackersOnPoint == 0)
+	{
+		ControlSeconds[1] += Delta;
+	}
+	// An unbroken hold captures the point; a defender back on it (or the attackers leaving) resets the clock.
+	Held = bAttackersHolding ? Held + Delta : 0.f;
+	if (!bCaptured && bAttackersHolding && Held >= HoldSeconds)
+	{
+		bCaptured = true;
+		return true;
+	}
+	return false;
 }
 
 namespace PmcCommanderRules
@@ -55,6 +78,7 @@ namespace PmcCommanderRules
 		case EPmcOrder::Reload: return TEXT("Reload");
 		case EPmcOrder::Sidearm: return TEXT("Sidearm");
 		case EPmcOrder::Crouch: return TEXT("Crouch");
+		case EPmcOrder::Objective: return TEXT("Objective");
 		default: return TEXT("?");
 		}
 	}
@@ -76,17 +100,30 @@ namespace PmcCommanderRules
 		const float InRange = Step(F.bHasThreat && F.Threat.DistanceCm <= F.WeaponRangeCm);
 		// Engagement bands (2026-11-04): a static order outside his weapon's band is worth less; too close (not a shotgun) he backs off.
 		const bool bBand = F.Band.IsValid();
-		const float BandHere = bBand && F.bHasThreat ? BandFactor(F.Threat.DistanceCm, F.Band, W) : 1.f;
+		const float BandHere = bBand && F.bHasThreat && !F.Threat.bStandIn ? BandFactor(F.Threat.DistanceCm, F.Band, W) : 1.f;
 		const float StaticBand = FMath::Lerp(1.f, BandHere, Clamp01(W.BandPosition));
 		// Hysteresis: a running retreat goes on to the band's middle (else it would stop the moment he crosses the trigger distance).
 		// A running flank passes the threat inside the band on purpose: no standoff then.
-		const bool bTooClose = bBand && F.bHasThreat && F.RunningOrder != EPmcOrder::Flank && (IsTooClose(F.Threat.DistanceCm, F.Band, W)
+		const bool bTooClose = bBand && F.bHasThreat && !F.Threat.bStandIn && F.RunningOrder != EPmcOrder::Flank && (IsTooClose(F.Threat.DistanceCm, F.Band, W)
 			|| (F.RunningOrder == EPmcOrder::FallBack && !F.Band.bCloseQuarters && F.Threat.DistanceCm < 0.5f * (F.Band.MinCm + F.Band.MaxCm)));
+		// The round objective (task #53): an attacker on the point and a defender within its overwatch value holding where they are.
+		const FPmcObjectiveView& O = F.Objective;
+		const bool bObjective = O.IsActive();
+		const float OverwatchCm = bObjective ? OverwatchRangeCm(O, F.Band, F.WeaponRangeCm) : 0.f;
+		float HoldHere = 1.f;
+		if (bObjective && O.Role == EPmcRole::Attacker && O.DistanceCm <= O.RadiusCm)
+		{
+			HoldHere = 1.f + FMath::Max(W.ObjectiveApproach, 0.f);
+		}
+		else if (bObjective && O.Role == EPmcRole::Defender && O.DistanceCm <= OverwatchCm)
+		{
+			HoldHere = 1.f + FMath::Max(W.Overwatch, 0.f);
+		}
 		switch (Order)
 		{
 		case EPmcOrder::Hold:
 			// The baseline: the fighter keeps shooting from where he is; worth more in cover and in contact.
-			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand;
+			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere;
 		case EPmcOrder::TakeCover:
 			// Exposed and badly covered against a known threat, with somewhere to go (a slot at his band's distance preferred).
 			return W.TakeCover * Step(F.bCoverAvailable && F.bHasThreat) * (1.f - F.CoverQuality) * (0.4f + 0.6f * Contact) * (0.5f + 0.5f * Step(F.bExposed))
@@ -100,13 +137,16 @@ namespace PmcCommanderRules
 				* Step(F.AmmoFrac > 0.2f)
 				// A band's advance needs a real step (a shotgunner 4.4 m off a 4.2 m stop re-issued a 20 cm walk every decision, Depot arena).
 				* Step(F.Threat.DistanceCm > (bBand && !F.Band.bCloseQuarters ? F.Band.MaxCm : AdvanceStopCm(F.WeaponRangeCm, F.Band, W) + (bBand ? MinAdvanceStepCm : 0.f)))
-				* (S.MatesAdvancing == 0 || S.Alive == 1 ? 1.f : 0.15f);
+				* (S.MatesAdvancing == 0 || S.Alive == 1 ? 1.f : 0.15f)
+				// Target attention (2026-11-07): a rifleman's bound waits for the moment they look away; a shotgunner rushes in regardless
+				// (his close-in is the job - PmcStandoffSmoke's shotgunners stalled at 8.9 m under the squad's eyes with it).
+				* (F.Band.bCloseQuarters ? 1.f : AttentionFactor(F, W));
 		}
 		case EPmcOrder::Flank:
 			// A second axis onto a seen threat while a mate pins it; one flanker at a time, a healthy man, within a sensible band.
 			// A running flank goes on while the threat is only remembered (2026-11-04: the band's longer flank walk loses sight of it on the way).
 			return W.Flank * (F.RunningOrder == EPmcOrder::Flank ? Step(F.bHasThreat) : SeenNow) * (S.MatesSuppressing > 0 || S.Alive >= 2 ? 1.f : 0.3f) * (S.MatesFlanking == 0 ? 1.f : 0.2f) * F.HealthFrac
-				* Step(F.Threat.DistanceCm >= 600.f && F.Threat.DistanceCm <= 3500.f) * (F.bExposed ? 0.7f : 1.f) * Step(F.AmmoFrac > 0.2f);
+				* Step(F.Threat.DistanceCm >= 600.f && F.Threat.DistanceCm <= 3500.f) * (F.bExposed ? 0.7f : 1.f) * Step(F.AmmoFrac > 0.2f) * AttentionFactor(F, W);
 		case EPmcOrder::Suppress:
 			// Pin a seen threat so a mate can move; needs ammo and a reason (a mate moving), one suppressor at a time.
 			return W.Suppress * SeenNow * InRange * Step(F.AmmoFrac >= W.SuppressAmmoMin) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.5f)
@@ -129,7 +169,7 @@ namespace PmcCommanderRules
 			return W.Relocate * Contact * Step(F.bExposed && F.SecondsExposedHere >= W.RelocateAfterSeconds && F.bCoverAvailable);
 		case EPmcOrder::Ambush:
 			// No contact yet in this fight: hold in cover, crouched, and let them come.
-			return W.Ambush * Step(!S.bEverContact) * (F.bInCover ? 1.f : 0.6f);
+			return W.Ambush * Step(!S.bEverContact) * (F.bInCover ? 1.f : 0.6f) * HoldHere;
 		case EPmcOrder::Reload:
 			// A low clip with rounds in reserve; best behind cover or out of contact.
 			return W.Reload * Step(F.ClipFrac < 0.3f && F.bHasReserve) * (F.bInCover || S.EnemiesSeenNow == 0 ? 1.f : 0.5f);
@@ -139,6 +179,25 @@ namespace PmcCommanderRules
 		case EPmcOrder::Crouch:
 			// In contact, standing still in the open: get low.
 			return W.Crouch * Contact * Step(!F.bMoving && !F.bInCover && F.Stance == EOperativeStance::Standing) * StaticBand;
+		case EPmcOrder::Objective:
+		{
+			if (!bObjective)
+			{
+				return 0.f;
+			}
+			if (O.Role == EPmcRole::Attacker)
+			{
+				// Onto the point: more urgent as the clock runs down (the defenders win at the time limit), less under fire / against men on it.
+				const float Urgency = Clamp01(W.ObjectiveUrgency);
+				return FMath::Max(W.Objective, 0.f) * Step(O.DistanceCm > 0.7f * O.RadiusCm) * (1.f - Urgency + Urgency * Clamp01(O.TimeFrac)) * F.HealthFrac
+					* Step(F.AmmoFrac > 0.1f) * (SeenNow > 0.f ? 0.6f : 1.f) * (O.bEnemyOnPoint ? 0.8f : 1.f) * AttentionFactor(F, W);
+			}
+			// A defender: back onto the point while the attackers stand on it (the more of their clock ran, the more urgent), or back into
+			// its overwatch when he strayed.
+			const float Retake = Step(O.bEnemyOnPoint && O.DistanceCm > 0.7f * O.RadiusCm) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
+			const float Return = Step(!O.bEnemyOnPoint && O.DistanceCm > OverwatchCm) * 0.7f;
+			return FMath::Max(W.Objective, 0.f) * FMath::Max(Retake, Return) * F.HealthFrac;
+		}
 		default:
 			return 0.f;
 		}
@@ -182,7 +241,8 @@ namespace PmcCommanderRules
 
 	bool IsMoveOrder(EPmcOrder Order)
 	{
-		return Order == EPmcOrder::Advance || Order == EPmcOrder::Flank || Order == EPmcOrder::FallBack || Order == EPmcOrder::Relocate || Order == EPmcOrder::TakeCover;
+		return Order == EPmcOrder::Advance || Order == EPmcOrder::Flank || Order == EPmcOrder::FallBack || Order == EPmcOrder::Relocate || Order == EPmcOrder::TakeCover
+			|| Order == EPmcOrder::Objective;
 	}
 
 	TMap<FString, FPmcEngagementBand> DefaultBands()
@@ -377,6 +437,16 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("corner_bonus"), Out.CornerBonus);
 		ReadNumber(Json, TEXT("close_in"), Out.CloseIn);
 		ReadNumber(Json, TEXT("prone_min_band_cm"), Out.ProneMinBandCm);
+		// The round objective (task #53).
+		ReadNumber(Json, TEXT("objective"), Out.Objective);
+		ReadNumber(Json, TEXT("objective_urgency"), Out.ObjectiveUrgency);
+		ReadNumber(Json, TEXT("objective_approach"), Out.ObjectiveApproach);
+		ReadNumber(Json, TEXT("overwatch"), Out.Overwatch);
+		// Target attention (2026-11-07).
+		ReadNumber(Json, TEXT("attention"), Out.Attention);
+		ReadNumber(Json, TEXT("ambush_patience"), Out.AmbushPatience);
+		ReadNumber(Json, TEXT("kill_zone_frac"), Out.KillZoneFrac);
+		ReadNumber(Json, TEXT("ambush_max_hold_s"), Out.AmbushMaxHoldSeconds);
 		const TSharedPtr<FJsonObject>* Bands = nullptr;
 		if (Json.TryGetObjectField(TEXT("engagement_bands"), Bands) && Bands && Bands->IsValid())
 		{
@@ -407,6 +477,168 @@ namespace PmcCommanderRules
 			}
 		}
 		return Out;
+	}
+
+	float OverwatchRangeCm(const FPmcObjectiveView& Objective, const FPmcEngagementBand& Band, float WeaponRangeCm)
+	{
+		const float Reach = Band.IsValid() ? Band.MaxCm : 0.8f * FMath::Max(WeaponRangeCm, 0.f);
+		return FMath::Max(2.f * FMath::Max(Objective.RadiusCm, 0.f), Reach);
+	}
+
+	float ObjectivePositionFactor(const FVector& Position, const FVector& FighterLocation, const FPmcObjectiveView& Objective,
+		const FPmcEngagementBand& Band, float WeaponRangeCm, const FPmcWeights& Weights)
+	{
+		if (!Objective.IsActive())
+		{
+			return 1.f;
+		}
+		const float SlotDistance = static_cast<float>(FVector::Dist2D(Position, Objective.Location));
+		if (Objective.Role == EPmcRole::Attacker)
+		{
+			const float FighterDistance = static_cast<float>(FVector::Dist2D(FighterLocation, Objective.Location));
+			const float Gain = SlotDistance <= Objective.RadiusCm ? 1.f
+				: FMath::Clamp((FighterDistance - SlotDistance) / FMath::Max(Objective.RadiusCm, 1.f), -1.f, 1.f);
+			return FMath::Max(0.25f, 1.f + FMath::Max(Weights.ObjectiveApproach, 0.f) * Gain);
+		}
+		const float Overwatch = OverwatchRangeCm(Objective, Band, WeaponRangeCm);
+		const float Reach = SlotDistance <= Overwatch ? 1.f : PmcCommanderLocal::Clamp01(1.f - (SlotDistance - Overwatch) / FMath::Max(Overwatch, 1.f));
+		return 1.f + FMath::Max(Weights.Overwatch, 0.f) * Reach;
+	}
+
+	FPmcRoundOutcome ResolveRound(int32 AliveA, int32 AliveB, bool bTimeUp, bool bObjective, const FPmcObjectiveClock& Clock, bool bAttackerIsA)
+	{
+		FPmcRoundOutcome Out;
+		const TCHAR* Attacker = bAttackerIsA ? TEXT("A") : TEXT("B");
+		const TCHAR* Defender = bAttackerIsA ? TEXT("B") : TEXT("A");
+		if (AliveA == 0 || AliveB == 0)
+		{
+			Out.bOver = true;
+			Out.Reason = TEXT("elimination");
+			Out.Winner = AliveA > 0 ? TEXT("A") : (AliveB > 0 ? TEXT("B") : TEXT("draw"));
+			Out.ObjectiveResult = bObjective ? TEXT("eliminated") : TEXT("none");
+		}
+		else if (bObjective && Clock.bCaptured)
+		{
+			Out.bOver = true;
+			Out.Reason = TEXT("objective");
+			Out.Winner = Attacker;
+			Out.ObjectiveResult = TEXT("captured");
+		}
+		else if (bTimeUp)
+		{
+			Out.bOver = true;
+			Out.Reason = TEXT("time_limit");
+			if (bObjective)
+			{
+				Out.Winner = Clock.bAttackersHolding ? TEXT("draw") : Defender;
+				Out.ObjectiveResult = Clock.bAttackersHolding ? TEXT("contested") : TEXT("held");
+			}
+		}
+		return Out;
+	}
+
+	float AttentionOff(const TArray<FVector2D>& WatcherPositions, const TArray<float>& WatcherYawsDeg, const FVector2D& Point, float HalfAngleDeg, float RangeCm)
+	{
+		float Off = 1.f;
+		for (int32 Index = 0; Index < FMath::Min(WatcherPositions.Num(), WatcherYawsDeg.Num()); ++Index)
+		{
+			if (FVector2D::Distance(WatcherPositions[Index], Point) > RangeCm)
+			{
+				continue;
+			}
+			const float Angle = AmbushWatchRules::AngleOffDeg(WatcherYawsDeg[Index], AmbushWatchRules::BearingDeg(WatcherPositions[Index], Point));
+			Off = FMath::Min(Off, PmcCommanderLocal::Clamp01((Angle - HalfAngleDeg) / 45.f));
+		}
+		return Off;
+	}
+
+	float AttentionFactor(const FPmcFighterView& Fighter, const FPmcWeights& Weights)
+	{
+		if (!Fighter.bHasThreat || !Fighter.Threat.bSeenNow || Fighter.Threat.bStandIn)
+		{
+			return 1.f;
+		}
+		return FMath::Max(0.f, 1.f + FMath::Max(Weights.Attention, 0.f) * (PmcCommanderLocal::Clamp01(Fighter.Threat.AttentionOff) - 0.5f));
+	}
+
+	bool ShouldHoldFire(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
+	{
+		if (W.AmbushPatience <= 0.f || !F.Objective.IsActive() || F.Objective.Role != EPmcRole::Defender)
+		{
+			return false;
+		}
+		if (S.bShotsExchanged || F.bExposed || S.ContactSeconds >= W.AmbushMaxHoldSeconds)
+		{
+			return false; // the ambush is blown (a shot exchanged, he is seen) or held long enough
+		}
+		if (!F.bHasThreat || !F.Threat.bSeenNow || F.Threat.bStandIn)
+		{
+			return true; // lying in wait: nobody seen now - the discipline stays armed (no auto fire the moment one appears)
+		}
+		const float Reach = F.Band.IsValid() ? F.Band.MaxCm : F.WeaponRangeCm;
+		if (F.Objective.bEnemyOnPoint || F.Threat.DistanceCm <= PmcCommanderLocal::Clamp01(W.KillZoneFrac) * Reach)
+		{
+			return false; // deep in the kill zone: strike now
+		}
+		return F.Threat.AttentionOff < PmcCommanderLocal::Clamp01(W.AmbushPatience);
+	}
+
+	const TCHAR* ScenarioName(EPmcScenario Scenario)
+	{
+		switch (Scenario)
+		{
+		case EPmcScenario::Chokepoint: return TEXT("chokepoint");
+		case EPmcScenario::Street: return TEXT("street");
+		case EPmcScenario::Roofs: return TEXT("roofs");
+		case EPmcScenario::Blizzard: return TEXT("blizzard");
+		default: return TEXT("skirmish");
+		}
+	}
+
+	bool ParseScenario(const FString& Name, EPmcScenario& Out)
+	{
+		for (int32 Index = 0; Index < static_cast<int32>(EPmcScenario::Count); ++Index)
+		{
+			if (Name.Equals(ScenarioName(static_cast<EPmcScenario>(Index)), ESearchCase::IgnoreCase))
+			{
+				Out = static_cast<EPmcScenario>(Index);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	EPmcScenario PickScenario(int32 RoundSeed)
+	{
+		FRandomStream Stream(RoundSeed * 31 + 17);
+		return static_cast<EPmcScenario>(Stream.RandRange(0, static_cast<int32>(EPmcScenario::Count) - 1));
+	}
+
+	bool IsPassage(const float Hits[8], const bool Tall[8], float MinWidthCm, float MaxWidthCm, int32& OutAxisIndex, float& OutWidthCm)
+	{
+		bool bFound = false;
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			const int32 Opposite = Index + 4;
+			if (Hits[Index] <= 0.f || Hits[Opposite] <= 0.f || !Tall[Index] || !Tall[Opposite])
+			{
+				continue;
+			}
+			const float Width = Hits[Index] + Hits[Opposite];
+			const int32 Along = (Index + 2) % 8;
+			const int32 AlongBack = (Index + 6) % 8;
+			if (Width < MinWidthCm || Width > MaxWidthCm || Hits[Along] > 0.f || Hits[AlongBack] > 0.f)
+			{
+				continue;
+			}
+			if (!bFound || Width < OutWidthCm)
+			{
+				bFound = true;
+				OutWidthCm = Width;
+				OutAxisIndex = Along;
+			}
+		}
+		return bFound;
 	}
 
 	float HighGroundFactor(int32 Level, const FPmcWeights& Weights)

@@ -391,6 +391,47 @@ void UPmcSquadSubsystem::SetTeamAssault(int32 TeamId, const FVector* Point)
 	}
 }
 
+void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm)
+{
+	FTeam& Team = TeamOf(TeamId);
+	if (Role == EPmcRole::None || RadiusCm <= 0.f)
+	{
+		Team.Objective.Reset();
+		return;
+	}
+	FPmcObjectiveView Objective;
+	Objective.Role = Role;
+	Objective.Location = Location;
+	Objective.RadiusCm = RadiusCm;
+	Team.Objective = Objective;
+	// Target attention (2026-11-07): the defenders lie in wait with their fire held from the start (the first decision may come after the
+	// first sighting; their own Aggressive auto-fire would spring the ambush before the commander could hold it).
+	if (Role == EPmcRole::Defender && Team.Weights.AmbushPatience > 0.f)
+	{
+		for (AOperativeCharacter* Member : MembersOf(TeamId))
+		{
+			FSquadOrderContext Discipline;
+			Discipline.Operative = Member;
+			Discipline.Posture = ESquadFirePosture::Passive;
+			if (Member && SquadOrderCatalog::Execute(ESquadOrder::FirePosture, Discipline))
+			{
+				Team.Fighters.FindOrAdd(Member).bHoldingFire = true;
+			}
+		}
+	}
+}
+
+void UPmcSquadSubsystem::UpdateTeamObjective(int32 TeamId, float TimeFrac, float HoldFrac, bool bEnemyOnPoint)
+{
+	FTeam* Team = Teams.Find(TeamId);
+	if (Team && Team->Objective.IsSet())
+	{
+		Team->Objective->TimeFrac = TimeFrac;
+		Team->Objective->HoldFrac = HoldFrac;
+		Team->Objective->bEnemyOnPoint = bEnemyOnPoint;
+	}
+}
+
 bool UPmcSquadSubsystem::HasTeamContact(int32 TeamId) const
 {
 	const FTeam* Team = FindTeam(TeamId);
@@ -552,6 +593,10 @@ void UPmcSquadSubsystem::UpdateSight()
 				Known.bSeenNow = true;
 				Team.LastContactTime = Now;
 				Team.bEverContact = true;
+				if (Team.FirstContactTime < 0.0)
+				{
+					Team.FirstContactTime = Now;
+				}
 			}
 		};
 		if (!Observers.IsEmpty())
@@ -718,8 +763,11 @@ void UPmcSquadSubsystem::ResetTeam(int32 TeamId)
 	Team.Stats = FPmcTeamStats();
 	Team.bEverContact = false;
 	Team.LastContactTime = -1e9;
+	Team.FirstContactTime = -1.0;
+	Team.bShotsExchanged = false;
 	Team.DecisionTimer = 0.f;
 	Team.AssaultPoint.Reset();
+	Team.Objective.Reset();
 	Team.Posture.Reset();
 }
 
@@ -752,6 +800,7 @@ bool UPmcSquadSubsystem::IsOrderRunning(const AOperativeCharacter& Fighter, cons
 	case EPmcOrder::FallBack:
 	case EPmcOrder::Relocate:
 	case EPmcOrder::TakeCover:
+	case EPmcOrder::Objective:
 		return Fighter.HasOwnMoveOrder() || Fighter.HasPendingCover();
 	case EPmcOrder::Suppress:
 		return Fighter.HasSuppressOrder();
@@ -789,7 +838,7 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s reached his flank point"), TeamId, *Fighter->DisplayName.ToString());
 		}
 		const bool bWalking = State.Order == EPmcOrder::Advance || State.Order == EPmcOrder::Flank || State.Order == EPmcOrder::FallBack
-			|| State.Order == EPmcOrder::Relocate || State.Order == EPmcOrder::TakeCover;
+			|| State.Order == EPmcOrder::Relocate || State.Order == EPmcOrder::TakeCover || State.Order == EPmcOrder::Objective;
 		if (bWalking && Fighter->HasOwnMoveOrder())
 		{
 			if (FVector::Dist2D(Location, State.ProgressPoint) >= PmcSquadLocal::StuckProgressCm)
@@ -875,6 +924,13 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.Threat.bSeenNow = Pair.Value.bSeenNow;
 		}
 	}
+	// Target attention (2026-11-07): how far he stands outside the look sectors of the enemies his team sees now.
+	{
+		TArray<FVector2D> Positions;
+		TArray<float> Yaws;
+		SeenWatchers(Team, Positions, Yaws);
+		View.Threat.AttentionOff = Positions.IsEmpty() ? 0.5f : PmcCommanderRules::AttentionOff(Positions, Yaws, FVector2D(View.Location));
+	}
 	// The assault objective stands in for a threat while none is known (the arena's attacking side walks up to the enemy).
 	if (!View.bHasThreat && Team.AssaultPoint.IsSet())
 	{
@@ -883,6 +939,13 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		View.Threat.DistanceCm = FVector::Dist2D(View.Location, View.Threat.Location);
 		View.Threat.SecondsSince = 999.f;
 		View.Threat.bSeenNow = false;
+		View.Threat.bStandIn = true;
+	}
+	// The round objective (the arena, task #53): his distance to the point.
+	if (Team.Objective.IsSet())
+	{
+		View.Objective = Team.Objective.GetValue();
+		View.Objective.DistanceCm = static_cast<float>(FVector::Dist2D(View.Location, View.Objective.Location));
 	}
 	// Cover: the quality of the slot he holds, and the best slot nearby (for TakeCover / Relocate).
 	OutCover = FCoverSlot();
@@ -948,6 +1011,8 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 	}
 	Squad.bContact = Now - Team.LastContactTime <= Team.Weights.ContactMemorySeconds;
 	Squad.bEverContact = Team.bEverContact || Team.AssaultPoint.IsSet(); // an assault never waits in ambush
+	Squad.bShotsExchanged = Team.bShotsExchanged;
+	Squad.ContactSeconds = Team.FirstContactTime >= 0.0 ? static_cast<float>(Now - Team.FirstContactTime) : 0.f;
 	for (AOperativeCharacter* Mate : Mates)
 	{
 		if (const FFighterState* State = Team.Fighters.Find(Mate); State && IsOrderRunning(*Mate, *State))
@@ -988,6 +1053,19 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 			Own.MatesFlanking -= State.Order == EPmcOrder::Flank ? 1 : 0;
 			Own.MatesAdvancing -= State.Order == EPmcOrder::Advance ? 1 : 0;
 			Own.MatesHealing -= State.Order == EPmcOrder::Heal ? 1 : 0;
+		}
+		// Target attention (2026-11-07): an objective defender in ambush holds his fire until the seen target looks away (or is deep in
+		// the kill zone / the ambush is blown) - the Passive posture, back to Aggressive when he strikes.
+		const bool bHoldFire = PmcCommanderRules::ShouldHoldFire(View, Own, Team.Weights);
+		if (bHoldFire != State.bHoldingFire)
+		{
+			FSquadOrderContext Discipline;
+			Discipline.Operative = Fighter;
+			Discipline.Posture = bHoldFire ? ESquadFirePosture::Passive : ESquadFirePosture::Aggressive;
+			SquadOrderCatalog::Execute(ESquadOrder::FirePosture, Discipline);
+			State.bHoldingFire = bHoldFire;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s %s (threat at %.0f cm, attention off %.2f)"), TeamId, *Fighter->DisplayName.ToString(),
+				bHoldFire ? TEXT("holds his fire") : TEXT("opens fire"), View.Threat.DistanceCm, View.Threat.AttentionOff);
 		}
 		const TArray<FPmcOrderScore> Scored = PmcCommanderRules::ScoreAll(View, Own, Team.Weights);
 		// A committed walk, or any order younger than CommitSeconds, is only broken by a clearly better one.
@@ -1119,8 +1197,27 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		}
 		Centre /= FMath::Max(1, Mates.Num());
 		// The flank point lies at his band's distance from the threat (2026-11-04: a rifleman flanks at ~20 m, not 10).
-		bTaken = View.bHasThreat && Walk(PmcCommanderRules::FlankPoint(View.Threat.Location, Centre, View.Location, Team.Weights,
-			PmcCommanderRules::FlankDistanceFor(View.Band, Team.Weights)), !View.Threat.bSeenNow);
+		const float FlankDistance = PmcCommanderRules::FlankDistanceFor(View.Band, Team.Weights);
+		FVector FlankGoal = PmcCommanderRules::FlankPoint(View.Threat.Location, Centre, View.Location, Team.Weights, FlankDistance);
+		// Target attention (2026-11-07): the other side's flank point when the enemies he sees look clearly less that way (their blind zone).
+		if (Team.Weights.Attention > 0.f)
+		{
+			TArray<FVector2D> Positions;
+			TArray<float> Yaws;
+			SeenWatchers(Team, Positions, Yaws);
+			if (!Positions.IsEmpty())
+			{
+				const FVector Axis = (Centre - View.Threat.Location).GetSafeNormal2D();
+				const FVector Offset = View.Location - View.Threat.Location;
+				const FVector Mirrored = View.Threat.Location + Axis * (2.f * FVector::DotProduct(Offset, Axis)) - FVector(Offset.X, Offset.Y, 0.f);
+				const FVector OtherGoal = PmcCommanderRules::FlankPoint(View.Threat.Location, Centre, Mirrored, Team.Weights, FlankDistance);
+				if (PmcCommanderRules::AttentionOff(Positions, Yaws, FVector2D(OtherGoal)) > PmcCommanderRules::AttentionOff(Positions, Yaws, FVector2D(FlankGoal)) + 0.25f)
+				{
+					FlankGoal = OtherGoal;
+				}
+			}
+		}
+		bTaken = View.bHasThreat && Walk(FlankGoal, !View.Threat.bSeenNow);
 		if (bTaken)
 		{
 			++Team.Stats.FlanksAttempted;
@@ -1202,6 +1299,21 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	case EPmcOrder::Reload:
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::Reload, Context);
 		break;
+	case EPmcOrder::Objective:
+	{
+		// Onto the point (task #53): each man to his own spot of a small ring round it (they do not stack on one navmesh point); sprint
+		// while the enemy does not see him.
+		if (!View.Objective.IsActive())
+		{
+			break;
+		}
+		const int32 Index = FMath::Max(0, Mates.IndexOfByKey(&Fighter));
+		const FVector Offset = Index == 0 ? FVector::ZeroVector
+			: FRotator(0.f, Index * 120.f, 0.f).Vector() * 0.4f * View.Objective.RadiusCm;
+		bTaken = Walk(View.Objective.Location + Offset, !(View.bHasThreat && View.Threat.bSeenNow));
+		Team.Stats.ObjectiveMoves += bTaken ? 1 : 0;
+		break;
+	}
 	case EPmcOrder::Sidearm:
 		Context.WeaponId = TEXT("pistol");
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::SwitchWeapon, Context);
@@ -1258,6 +1370,9 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
 	const float GroundZ = Sight ? static_cast<float>(UTacticalSightSubsystem::EyePoint(Fighter).Z) - Sight->GetEyeAboveGroundCm(Fighter) : static_cast<float>(Feet.Z);
 	const float EyeCm = SightRules::EyeHeight(EOperativeStance::Standing);
+	const FTeam* OwnTeam = FindTeam(Fighter.TeamId);
+	const FPmcObjectiveView* Objective = OwnTeam && OwnTeam->Objective.IsSet() && OwnTeam->Objective->IsActive() ? &OwnTeam->Objective.GetValue() : nullptr;
+	const float WeaponRangeCm = Fighter.CurrentWeapon ? Fighter.CurrentWeapon->AttackRangeCm : 1400.f;
 	struct FCandidate
 	{
 		FCoverSlot Slot;
@@ -1293,9 +1408,11 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		// Engagement band (2026-11-04): a slot at his weapon's distance from the threat, at a corner he can fire round, scores best.
 		const float SlotBand = PmcCommanderRules::BandFactor(static_cast<float>(FVector::Dist2D(Slot.WorldLocation, Threat)), Band, Weights);
 		const bool bCorner = Band.IsValid() && (Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed);
+		// The round objective (task #53): attackers prefer slots on the way to / round the point, defenders slots overwatching it.
+		const float ObjectiveFactor = Objective ? PmcCommanderRules::ObjectivePositionFactor(Slot.WorldLocation, Chest, *Objective, Band, WeaponRangeCm, Weights) : 1.f;
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
 			* PmcCommanderRules::HighGroundFactor(Level, Weights) * FMath::Lerp(1.f, SlotBand, FMath::Clamp(Weights.BandPosition, 0.f, 1.f))
-			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f);
+			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f) * ObjectiveFactor;
 		Candidates.Add({ Slot, Quality, Score, bElevated, SlotBand });
 	};
 	for (int32 Index = 0; Index < 16; ++Index)
@@ -1357,6 +1474,20 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	return false;
 }
 
+void UPmcSquadSubsystem::SeenWatchers(const FTeam& Team, TArray<FVector2D>& OutPositions, TArray<float>& OutYaws) const
+{
+	// Only what the team sees now counts (no cheating): the enemy's spot and his body's facing as seen.
+	for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
+	{
+		const AOperativeCharacter* Enemy = Cast<AOperativeCharacter>(Pair.Value.Actor.Get());
+		if (Enemy && Pair.Value.bSeenNow && PmcSquadLocal::IsLiveOperative(Enemy))
+		{
+			OutPositions.Add(FVector2D(Enemy->GetActorLocation()));
+			OutYaws.Add(static_cast<float>(Enemy->GetActorRotation().Yaw));
+		}
+	}
+}
+
 bool UPmcSquadSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) const
 {
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
@@ -1372,7 +1503,23 @@ bool UPmcSquadSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) c
 void UPmcSquadSubsystem::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
 {
 	const AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Target);
-	if (!bHit || !Shooter || !Victim || Victim == Shooter || Victim->TeamId != Shooter->TeamId)
+	if (!Shooter || !Victim || Victim == Shooter)
+	{
+		return;
+	}
+	if (Victim->TeamId != Shooter->TeamId)
+	{
+		// A shot between two teams blows any ambush holding its fire on either side (target attention, 2026-11-07).
+		for (const int32 TeamId : { Shooter->TeamId, Victim->TeamId })
+		{
+			if (FTeam* Team = Teams.Find(TeamId))
+			{
+				Team->bShotsExchanged = true;
+			}
+		}
+		return;
+	}
+	if (!bHit)
 	{
 		return;
 	}
