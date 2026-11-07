@@ -247,13 +247,9 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	}
 	else
 	{
-		// Turn the body to the point (eased, never slower than AimTurnRateDegPerSec); no round where he does not aim.
-		const FRotator LookRot(0.f, (AimAt - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
-		const FRotator Eased = FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f);
-		const FRotator Constant = FMath::RInterpConstantTo(GetActorRotation(), LookRot, DeltaTime, AimTurnRateDegPerSec);
-		const float EasedLeft = FMath::Abs(FRotator::NormalizeAxis(LookRot.Yaw - Eased.Yaw));
-		const float ConstantLeft = FMath::Abs(FRotator::NormalizeAxis(LookRot.Yaw - Constant.Yaw));
-		SetActorRotation(EasedLeft <= ConstantLeft ? Eased : Constant);
+		// Turn the body to the point (eased, never slower than AimTurnRateDegPerSec; prone at the prone turn rate, bug #33); no round
+		// where he does not aim.
+		TurnAimTowards(AimAt, DeltaTime);
 		if (GetShotAimResidualDeg(AimAt) > AimConeDeg)
 		{
 			return TEXT("suppress: turning");

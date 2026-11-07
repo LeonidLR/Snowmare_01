@@ -85,6 +85,11 @@ public:
 	bool IsHostileTo(const AOperativeCharacter& Shooter, const AActor* Actor) const;
 	/** Runs the sight update now (smokes; the tick runs one every SightInterval). */
 	void RefreshSight();
+	/**
+	 * Bug #43 (UnderFireRules): Shooter fired a round at Victim - Victim's team sees the shooter (his muzzle flash) for
+	 * SightRules::DemaskSeconds whatever the range (the 60 m gunfire hearing is for the other teams).
+	 */
+	void NotifyShotAt(const AActor* Shooter, const AOperativeCharacter* Victim);
 
 	// --- Commander ---
 	void SetTeamCommanded(int32 TeamId, bool bCommanded, const FPmcWeights* Weights = nullptr);
@@ -174,6 +179,8 @@ private:
 	{
 		TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 		TMap<TWeakObjectPtr<AActor>, FKnownTarget> Known;
+		/** NotifyShotAt: a shooter who fired at one of the team, seen until this time whatever the range (bug #43). */
+		TMap<TWeakObjectPtr<AActor>, double> ShotRevealUntil;
 		TMap<TWeakObjectPtr<AOperativeCharacter>, FFighterState> Fighters;
 		FPmcWeights Weights;
 		bool bCommanded = false;

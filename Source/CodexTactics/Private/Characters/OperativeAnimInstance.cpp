@@ -762,6 +762,7 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 	if (UKnockdownComponent* Knockdown = Operative ? Operative->KnockdownComponent.Get() : nullptr; !bDeathPlayed && Knockdown && Knockdown->HandleDeath())
 	{
 		bDeathPlayed = true;
+		DeathPoseClip = Knockdown->GetPlayingClip(); // the death from the ground is the corpse pose (UpdateDeathPose)
 		StopSlotAnimation(0.1f, UpperBodySlot);
 		return;
 	}
@@ -770,17 +771,8 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 		return;
 	}
 	bDeathPlayed = true;
-	TArray<UAnimSequenceBase*> StandClips;
-	for (const TObjectPtr<UAnimSequenceBase>& Stand : DeathStandAnimations)
-	{
-		if (Stand)
-		{
-			StandClips.Add(Stand.Get());
-		}
-	}
-	UAnimSequenceBase* Clip = Operative->GetStance() == EOperativeStance::Crouching ? DeathCrouchAnimation.Get()
-		: Operative->GetStance() == EOperativeStance::Prone ? DeathProneAnimation.Get()
-		: StandClips.IsEmpty() ? nullptr : StandClips[FMath::RandRange(0, StandClips.Num() - 1)];
+	UAnimSequenceBase* Clip = PickDeathClip(*Operative);
+	DeathPoseClip = Clip; // null: the knockdown fall below (UpdateDeathPose adopts it)
 	StopSlotAnimation(0.1f, UpperBodySlot);
 	if (!Clip)
 	{
@@ -800,6 +792,88 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 		Stance == EOperativeStance::Standing ? FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f) : 0.f))
 	{
 		// Held on the last frame (the running instance's flag; the montage asset's is copied only at the start).
+		if (FAnimMontageInstance* Instance = GetActiveInstanceForMontage(Montage))
+		{
+			Instance->bEnableAutoBlendOut = false;
+		}
+	}
+}
+
+UAnimSequenceBase* UOperativeAnimInstance::PickDeathClip(const AOperativeCharacter& Operative) const
+{
+	TArray<UAnimSequenceBase*> StandClips;
+	for (const TObjectPtr<UAnimSequenceBase>& Stand : DeathStandAnimations)
+	{
+		if (Stand)
+		{
+			StandClips.Add(Stand.Get());
+		}
+	}
+	return Operative.GetStance() == EOperativeStance::Crouching ? DeathCrouchAnimation.Get()
+		: Operative.GetStance() == EOperativeStance::Prone ? DeathProneAnimation.Get()
+		: StandClips.IsEmpty() ? nullptr : StandClips[FMath::RandRange(0, StandClips.Num() - 1)];
+}
+
+void UOperativeAnimInstance::UpdateDeathPose(const AOperativeCharacter& Operative, float DeltaSeconds)
+{
+	if (!bIsDead)
+	{
+		DeathPoseClip.Reset();
+		DeathPoseSeconds = 0.f;
+		return;
+	}
+	DeathPoseSeconds += DeltaSeconds;
+	// The clip on the FullBody slot now: the death clip, the knockdown's held fall - or something that replaced it.
+	const FAnimMontageInstance* Holding = nullptr;
+	for (const FAnimMontageInstance* Instance : MontageInstances)
+	{
+		if (Instance && Instance->Montage && Instance->IsActive() && !Instance->IsStopped() && Instance->Montage->IsValidSlot(FullBodySlot))
+		{
+			Holding = Instance;
+		}
+	}
+	const UAnimMontage* HoldingMontage = Holding ? Holding->Montage.Get() : nullptr;
+	UAnimSequenceBase* HoldingClip = !HoldingMontage || HoldingMontage->SlotAnimTracks.IsEmpty() || HoldingMontage->SlotAnimTracks[0].AnimTrack.AnimSegments.IsEmpty()
+		? nullptr : HoldingMontage->SlotAnimTracks[0].AnimTrack.AnimSegments[0].GetAnimReference().Get();
+	// The corpse pose: the clip HandleDied played (DeathPoseClip), else the knockdown's held fall (a save restored him dead).
+	UKnockdownComponent* Knockdown = Operative.KnockdownComponent.Get();
+	if (!DeathPoseClip.IsValid() && Knockdown && Knockdown->PlayedDeathFall() && Knockdown->GetPlayingClip())
+	{
+		DeathPoseClip = Knockdown->GetPlayingClip();
+	}
+	UAnimSequenceBase* Clip = DeathPoseClip.Get();
+	if (!Clip)
+	{
+		if (DeathPoseSeconds < 1.f)
+		{
+			return; // HandleDied has not run yet (or the fallback below was tried)
+		}
+		Clip = PickDeathClip(Operative); // no death clip ever started: fall now
+		if (!Clip)
+		{
+			if (Knockdown && !Knockdown->PlayedDeathFall())
+			{
+				FVector Source = Operative.GetActorLocation() + Operative.GetActorForwardVector() * 100.f;
+				Operative.GetLastHitSource(Source);
+				Knockdown->PlayDeathFall(Source);
+			}
+			DeathPoseSeconds = -1000.f; // tried once
+			return;
+		}
+	}
+	else if (HoldingClip == Clip || DeathPoseSeconds < 0.3f)
+	{
+		return; // still lying there (or the death clip still blending in)
+	}
+	// Lost (a cover / stance / interaction clip took the slot): the death clip again from its last frame, held.
+	if (++DeathPoseRestores <= 3)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Death] %s: the corpse pose was lost (%s on the FullBody slot) - %s held again"), *Operative.DisplayName.ToString(),
+			HoldingClip ? *HoldingClip->GetName() : TEXT("nothing"), *Clip->GetName());
+	}
+	DeathPoseClip = Clip;
+	if (UAnimMontage* Montage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.2f, 0.f, 1.f, 1, -1.f, FMath::Max(0.f, Clip->GetPlayLength() - 0.05f)))
+	{
 		if (FAnimMontageInstance* Instance = GetActiveInstanceForMontage(Montage))
 		{
 			Instance->bEnableAutoBlendOut = false;
@@ -959,10 +1033,15 @@ void UOperativeAnimInstance::UpdateState()
 	bIsProne = Stance == EOperativeStance::Prone;
 	bIsReloading = Operative->bIsReloading;
 	bKnockedDown = Operative->IsKnockedDown();
+	// Bug #44 (2026-11-07, "a killed PMC keeps standing in the aim pose"): the death is known BEFORE the cover layer runs. It used to read
+	// last frame's bIsDead: killed in the corner fire stance, HandleDied left the cover, the next update saw "left the cover, alive, in the
+	// fire pose" and played the fire -> idle exit clip (PlayCoverMontage fades out every FullBody montage - the death clip too), so the
+	// corpse blended back to the standing aim pose. UpdateDeathPose holds the corpse pose against anything else that stops it.
+	bIsDead = Operative->HealthComponent && !Operative->HealthComponent->IsAlive();
 	UpdateCoverLayer(*Operative);
+	UpdateDeathPose(*Operative, StateDeltaSeconds);
 	bIsMoving = Speed > 5.f;
 	bIsSprinting = Operative->IsSprinting();
-	bIsDead = Operative->HealthComponent && !Operative->HealthComponent->IsAlive();
 	if (const UColdSurvivalComponent* Cold = Operative->ColdSurvival)
 	{
 		ColdTier = Cold->GetTier();

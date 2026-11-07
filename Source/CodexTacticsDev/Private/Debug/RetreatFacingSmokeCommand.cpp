@@ -19,6 +19,7 @@
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
+#include "Data/WeaponDataAsset.h"
 #include "Containers/Ticker.h"
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
@@ -287,12 +288,17 @@ namespace RetreatFacingSmoke
 				return true;
 			}
 			Check(State, bFiring, FString::Printf(TEXT("both fire at the pack again (%.1f s after facing it)"), State.StageTime));
-			// 4. An explicit facing order is kept (no pull back to the pack): face away, the pack parked far.
+			// 4. An explicit facing order is kept (no pull back to the pack): face away, the pack parked far - beyond the weapon's reach
+			// (bug #39 2026-11-07: the M16 reaches 60 m, so the old spot 24 m ahead of the start, ~50 m from him, was a target in reach and
+			// the AGGRESSIVE auto fire rightly turned him round to it; a target in reach wins over a facing order, as before).
+			const AOperativeCharacter* Holder = State.Pair[0].Get();
+			const float Reach = Holder && Holder->CurrentWeapon ? Holder->CurrentWeapon->AttackRangeCm : 2500.f;
+			const FVector Park = Holder ? Holder->GetActorLocation() + State.F * (Reach + 1500.f) : State.O + State.F * 2400.f;
 			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Pack)
 			{
 				if (Enemy.IsValid())
 				{
-					Enemy->SetActorLocation(State.O + State.F * 2400.f + FVector(0.f, 0.f, 100.f), false, nullptr, ETeleportType::TeleportPhysics);
+					Enemy->SetActorLocation(FVector(Park.X, Park.Y, State.O.Z + 100.f), false, nullptr, ETeleportType::TeleportPhysics);
 					Enemy->CustomTimeDilation = 0.f;
 				}
 			}

@@ -130,6 +130,8 @@ struct FShootCandidate
 	/** Blind fire at a last known position silhouette (Sprint 08-F): aimed at AimPoint, hit chance x0.2. */
 	bool bBlind = false;
 	FVector AimPoint = FVector::ZeroVector;
+	/** A return round at an under-fire muzzle flash (bug #43, UnderFireRules; blind, AimPoint = the flash). */
+	bool bReturnFire = false;
 };
 
 /**
@@ -1569,8 +1571,30 @@ public:
 	/** The lean-out muzzle at Slot's Facing corner for a muzzle at Muzzle (CoverRules::CornerMuzzle). */
 	static FVector CornerFireOriginFor(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Muzzle);
 
-	/** Angle between where the pose aims now (after the twist) and the target, degrees. */
+	/**
+	 * Angle between where the pose aims now (after the twist) and the target, degrees. Prone (no twist) the larger of that and the
+	 * body's own error (bug #33, FireArcRules::ShotResidualDeg).
+	 */
 	float GetShotAimResidualDeg(const FVector& TargetLocation) const;
+
+	/** One frame of the aim turn to AimAt (FireArcRules::StepAimYaw: eased / AimTurnRateDegPerSec, prone at the prone turn rate). */
+	void TurnAimTowards(const FVector& AimAt, float DeltaTime);
+
+	/**
+	 * Under fire (bug #43, UnderFireRules): a hostile Shooter fired a round at him or at a mate near him from FlashPoint (his muzzle).
+	 * The flash is his threat for FUnderFireConfig::MemorySeconds: he turns to it and, with no line to the shooter's body, returns
+	 * fire at it.
+	 */
+	void NoteUnderFire(AOperativeCharacter* Shooter, const FVector& FlashPoint);
+
+	/** The live under-fire threat: the shooter and his flash point; false when none / forgotten. */
+	bool GetUnderFireThreat(AOperativeCharacter*& OutShooter, FVector& OutFlashPoint) const;
+
+	/** Turned to an under-fire flash point this frame (no combat target in his sights). */
+	bool IsFacingUnderFire() const { return bFacingUnderFire; }
+
+	/** Rounds he returned at an under-fire flash point (smokes / bot report). */
+	int32 ReturnFireShots = 0;
 
 	/** Turns the body at once so the barrel points at TargetLocation (a grid shot resolves in the same frame). */
 	void FaceAimAt(const FVector& TargetLocation);
@@ -2185,6 +2209,17 @@ private:
 	void UpdateCombatFacing(float DeltaTime);
 	bool bFacingCombatTarget = false;
 	float BarrelYawOffset = 0.f;
+	/** GetShotAimResidualDeg before the prone body arc (the pose / barrel residual). */
+	float GetPoseAimResidualDeg(const FVector& TargetLocation) const;
+	/** Under fire (NoteUnderFire): the shooter, his flash point and when the last round came in. */
+	TWeakObjectPtr<AOperativeCharacter> UnderFireShooter;
+	FVector UnderFirePoint = FVector::ZeroVector;
+	double UnderFireTime = -1.0e9;
+	bool bFacingUnderFire = false;
+	/** TurnAimTowards steps once per frame (the combat facing and the fire loop both turn him; prone the rate must hold). */
+	uint64 AimTurnFrame = MAX_uint64;
+	/** A return round at the flash point (FindShootTarget, UnderFireRules::ShouldReturnFire). */
+	bool EvaluateReturnFire(FShootCandidate& Out) const;
 	/** Planar velocity smoothed for the movement facing (FacingRules). */
 	FVector SmoothedVelocity = FVector::ZeroVector;
 	float IdleFacingYaw = 0.f;

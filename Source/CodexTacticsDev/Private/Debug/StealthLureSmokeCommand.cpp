@@ -140,8 +140,26 @@ namespace StealthLureSmoke
 		State.Failures += bOk ? 0 : 1;
 	}
 
+	/**
+	 * The legacy sight (Codex.Sight.LongRange 0 + Codex.Sight.Conditions 0) while the smoke runs (2026-11-07). The lure checks were laid
+	 * out for the x1 human sight: since 2026-11-04 the Marksman sees 45 m x2 x0.35 prone = 31.5 m, so stage A's slip-away spot 30 m off
+	 * (the whole 24 x 55 m arena) is in his sight and his search finds the squad. The long range itself is SightConditionsSmoke's;
+	 * this smoke checks hearing, investigation and the return to the posts.
+	 */
+	void SetLegacySight(bool bLegacy)
+	{
+		for (const TCHAR* Name : { TEXT("Codex.Sight.LongRange"), TEXT("Codex.Sight.Conditions") })
+		{
+			if (IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(Name))
+			{
+				Var->Set(bLegacy ? 0 : 1, ECVF_SetByCode);
+			}
+		}
+	}
+
 	bool Finish(FState& State)
 	{
+		SetLegacySight(false);
 		EnemyPerception::SetLure(State.SavedLure);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("StealthLureSmoke"));
@@ -1212,6 +1230,7 @@ namespace StealthLureSmoke
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bShot = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); });
+		SetLegacySight(true);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			return Step(WeakWorld, *State);
