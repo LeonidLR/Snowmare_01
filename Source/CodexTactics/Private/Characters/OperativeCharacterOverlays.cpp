@@ -44,8 +44,8 @@ float AOperativeCharacter::GetVisionConeRange() const
 	{
 		return VisionConeRangeCm;
 	}
-	// What FindBestCombatTarget can reach on flat ground (Godot: the cone range was the M16 range, 14 m).
-	return CurrentWeapon->AttackRangeCm * SquadFireRules::GetPostureRangeMultiplier(Stance);
+	// What FindBestCombatTarget can reach (Godot: the cone range was the M16 range, 14 m; bug #39: the max reach, no stance bonus).
+	return CurrentWeapon->AttackRangeCm;
 }
 
 float AOperativeCharacter::GetVisionConeHalfAngle() const
@@ -171,6 +171,18 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 	}
 	const FVisionConeSightSpec Sight = VisionConeVisibility::MakeOperativeSightSpec(EyeHeight, Range,
 		OperativeVisionConeConsole::CVarSquadConeLevels.GetValueOnGameThread() >= 2 ? 2 : 1);
+	// Bug #38: a team's cones are drawn as one layer; bug #39: the weapon zone on the cone of the operative the player commands (the
+	// leader / the selected group): a line at the weapon's effective range (his stance's bonus in it), a faint band to its max reach.
+	VisionCone->SetMergeGroup(TeamId + 1);
+	FVisionConeWeaponZone Zone;
+	const USquadSubsystem* SquadForZone = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (IsPlayerTeam() && CurrentWeapon && CurrentWeapon->AttackRangeCm >= 500.f && (bGroupSelected || (SquadForZone && SquadForZone->GetLeader() == this)))
+	{
+		Zone.MaxCm = CurrentWeapon->AttackRangeCm;
+		Zone.EffectiveCm = WeaponRangeRules::ScaledEffectiveCm(CurrentWeapon->EffectiveRangeCm, CurrentWeapon->AttackRangeCm,
+			SquadFireRules::GetPostureRangeMultiplier(Stance));
+	}
+	VisionCone->SetWeaponZone(Zone);
 	VisionCone->UpdateCone(bVisible, Range, HalfAngle, Color, DeltaTime, &Sight);
 }
 

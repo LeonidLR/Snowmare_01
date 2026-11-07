@@ -1920,6 +1920,11 @@ public:
 	int32 GetShotsWhilePinned() const { return ShotsWhilePinned; }
 	/** Hit chance of his last aimed shot (ShootAtTarget, after cold / blind / suppression; smokes). */
 	float GetLastShotHitChance() const { return LastShotHitChance; }
+	/**
+	 * Bug #39: the hit chance multiplier of his weapon at PlanarDistanceCm from him (WeaponRangeRules: x1 up to the effective range - stretched
+	 * by his stance's and, against Target below him, the elevation's range bonus - falling to the max reach, 0 beyond it).
+	 */
+	float GetRangeHitMultiplierAt(const AActor* Target, float PlanarDistanceCm) const;
 
 	/** Line-of-fire origin: the feet plus the Godot muzzle height of the stance (1.4 / 0.85 / 0.25 m). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")

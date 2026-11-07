@@ -927,6 +927,12 @@ namespace VisionConeSmoke
 			if (State.PerfStep == 0)
 			{
 				Levels->Set(State.PerfLevels, ECVF_SetByConsole);
+				// Bug #38: batches may run past the next tick (Codex.VisionCones.MaxMsInFlight); the per-rebuild cost is measured with every
+				// request traced (the old wait at the next tick), restored after.
+				if (IConsoleVariable* InFlight = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.VisionCones.MaxMsInFlight")))
+				{
+					InFlight->Set(0.f, ECVF_SetByConsole);
+				}
 				State.PerfStep = 1;
 				return true; // the spec change rebuilds them once (not counted)
 			}
@@ -949,6 +955,10 @@ namespace VisionConeSmoke
 				State.PerfLevels, Stats.Builds, Stats.Rays / Builds, Stats.Traces / Builds, Stats.TaskSeconds * 1000.0 / Builds, Stats.Seconds * 1000.0 / Builds,
 				Stats.ApplySeconds * 1000.0 / Builds);
 			Check(State, Stats.Builds >= 15, FString::Printf(TEXT("squad perf (%d levels): %lld rebuilds measured"), State.PerfLevels, Stats.Builds));
+			if (IConsoleVariable* InFlight = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.VisionCones.MaxMsInFlight")))
+			{
+				InFlight->Set(150.f, ECVF_SetByConsole);
+			}
 			bool bLevels = true;
 			for (const AOperativeCharacter* Member : Members)
 			{

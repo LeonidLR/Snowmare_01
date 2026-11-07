@@ -50,8 +50,13 @@ namespace
 		return A.X * B.Y - A.Y * B.X;
 	}
 
-	/** Closed polyline (planar X / Y, each point at its own Z) as a band WidthCm wide on its inner side (mitred corners, clamped). */
-	void BuildClosedBand(const TArray<FVector>& Points3, float WidthCm, FVisionConeMesh& Mesh)
+	/**
+	 * Closed polyline (planar X / Y, each point at its own Z) as a band WidthCm wide on its inner side (mitred corners, clamped). An edge
+	 * whose ends lie more than MaxZJumpCm apart in height (a perch's ground jump: the band would stand up as a shard) or whose outside
+	 * Hidden reports covered (a merged layer's inside) is left out; its neighbours end square.
+	 */
+	void BuildClosedBand(const TArray<FVector>& Points3, float WidthCm, FVisionConeMesh& Mesh, float MaxZJumpCm = TNumericLimits<float>::Max(),
+		const TFunction<bool(const FVector2D&)>* Hidden = nullptr)
 	{
 		TArray<FVector2D> Points;
 		Points.Reserve(Points3.Num());
@@ -80,12 +85,30 @@ namespace
 			const FVector2D Edge = (Points[(From + 1) % Count] - Points[From]).GetSafeNormal();
 			return FVector2D(-Edge.Y, Edge.X) * Side;
 		};
+		TArray<bool> Skip;
+		Skip.SetNum(Count);
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const int32 Next = (Index + 1) % Count;
+			Skip[Index] = FMath::Abs(Points3[Index].Z - Points3[Next].Z) > MaxZJumpCm || Points[Index].Equals(Points[Next], 0.01f);
+			if (!Skip[Index] && Hidden && *Hidden)
+			{
+				const FVector2D Outside = 0.5f * (Points[Index] + Points[Next]) - InwardNormal(Index) * 30.f;
+				Skip[Index] = (*Hidden)(Outside);
+			}
+		}
 		TArray<FVector2D> Inner;
 		Inner.SetNum(Count);
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			const FVector2D N0 = InwardNormal((Index + Count - 1) % Count);
+			const int32 Previous = (Index + Count - 1) % Count;
+			const FVector2D N0 = InwardNormal(Previous);
 			const FVector2D N1 = InwardNormal(Index);
+			if (Skip[Previous] != Skip[Index])
+			{
+				Inner[Index] = Points[Index] + (Skip[Index] ? N0 : N1) * WidthCm; // one edge kept: a square end
+				continue;
+			}
 			FVector2D Mitre = N0 + N1;
 			Mitre = Mitre.SizeSquared() < 1.e-4f ? N1 : Mitre.GetSafeNormal();
 			const float Length = FMath::Min(WidthCm / FMath::Max(FVector2D::DotProduct(Mitre, N1), 0.34f), WidthCm * 3.f);
@@ -93,6 +116,10 @@ namespace
 		}
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
+			if (Skip[Index])
+			{
+				continue;
+			}
 			const int32 Next = (Index + 1) % Count;
 			const int32 Base = Mesh.Vertices.Num();
 			Mesh.Vertices.Append({ FVector(Points[Index], Points3[Index].Z), FVector(Points[Next], Points3[Next].Z), FVector(Inner[Next], Points3[Next].Z),
@@ -107,6 +134,8 @@ namespace
 		const FVisionConeSightSpec& Spec;
 		TFunctionRef<void(float, FVisionConeRay&)> Sample;
 		int32 Samples = 0;
+		/** This gap's share of the rays (CastRays: the rays left shared out among the gaps that need refining). */
+		int32 GapLimit = TNumericLimits<int32>::Max();
 
 		FVisionConeRay Cast(float AngleDeg)
 		{
@@ -121,7 +150,7 @@ namespace
 		/** Bisects between A and B while they disagree; the rays found go to Out in angle order. */
 		void Refine(const FVisionConeRay& A, const FVisionConeRay& B, int32 Depth, TArray<FVisionConeRay>& Out)
 		{
-			if (Depth <= 0 || Samples >= Spec.MaxRays || B.AngleDeg - A.AngleDeg < 2.f * FMath::Max(Spec.MinRefineGapDeg, 1.e-4f)
+			if (Depth <= 0 || Samples >= Spec.MaxRays || Samples >= GapLimit || B.AngleDeg - A.AngleDeg < 2.f * FMath::Max(Spec.MinRefineGapDeg, 1.e-4f)
 				|| !VisionConeVisibility::NeedsRefine(Spec, A, B))
 			{
 				return;
@@ -132,6 +161,79 @@ namespace
 			Refine(Mid, B, Depth - 1, Out);
 		}
 	};
+
+	/** The height a ray's spans are drawn at: its ground, never above the observer's feet (bug #38: nothing reaches upward). */
+	float DrawGround(const FVisionConeRay& Ray)
+	{
+		return FMath::Min(Ray.GroundCm, 0.f);
+	}
+
+	/**
+	 * Every drawn quad of a fan, as the mesh draws it: joinable neighbours span by span (quads between their hit points), others each up
+	 * to the middle angle. Emit(Level, AngleA, StartA, EndA, AngleB, StartB, EndB, GroundA, GroundB).
+	 */
+	template <typename FEmit>
+	void ForEachQuad(const TArray<FVisionConeRay>& Rays, FEmit&& Emit)
+	{
+		for (int32 Index = 0; Index + 1 < Rays.Num(); ++Index)
+		{
+			const FVisionConeRay& A = Rays[Index];
+			const FVisionConeRay& B = Rays[Index + 1];
+			if (B.AngleDeg - A.AngleDeg <= 1.e-5f)
+			{
+				continue;
+			}
+			const float GroundA = DrawGround(A);
+			const float GroundB = DrawGround(B);
+			if (VisionConeVisibility::IsJoinable(A, B))
+			{
+				for (int32 Span = 0; Span < A.Spans.Num(); ++Span)
+				{
+					Emit(A.Spans[Span].Level, A.AngleDeg, A.Spans[Span].StartCm, A.Spans[Span].EndCm, B.AngleDeg, B.Spans[Span].StartCm, B.Spans[Span].EndCm,
+						GroundA, GroundB);
+				}
+				continue;
+			}
+			// A discontinuity the refinement narrowed down: each ray keeps its own spans up to the middle angle, on its own ground.
+			const float Mid = (A.AngleDeg + B.AngleDeg) * 0.5f;
+			for (const FVisionConeSpan& Span : A.Spans)
+			{
+				Emit(Span.Level, A.AngleDeg, Span.StartCm, Span.EndCm, Mid, Span.StartCm, Span.EndCm, GroundA, GroundA);
+			}
+			for (const FVisionConeSpan& Span : B.Spans)
+			{
+				Emit(Span.Level, Mid, Span.StartCm, Span.EndCm, B.AngleDeg, Span.StartCm, Span.EndCm, GroundB, GroundB);
+			}
+		}
+	}
+}
+
+float FVisionConeSightSpec::GetBaseStepDeg() const
+{
+	const float Range = GetMaxRange();
+	if (RaySpacingCm <= 0.f || Range <= 0.f)
+	{
+		return RayStepDeg;
+	}
+	return FMath::Clamp(FMath::RadiansToDegrees(RaySpacingCm / Range), FMath::Min(MinRayStepDeg, RayStepDeg), RayStepDeg);
+}
+
+uint8 FVisionConeLayerMember::LevelAt(const FVector2D& WorldPoint) const
+{
+	if (!Rays.IsValid())
+	{
+		return 0;
+	}
+	const FVector2D Offset = WorldPoint - Origin;
+	if (Offset.SizeSquared() > FMath::Square(MaxRangeCm + 1.f))
+	{
+		return 0;
+	}
+	float Sin = 0.f;
+	float Cos = 1.f;
+	FMath::SinCos(&Sin, &Cos, FMath::DegreesToRadians(YawDeg));
+	const FVector2D Local(Offset.X * Cos + Offset.Y * Sin, -Offset.X * Sin + Offset.Y * Cos);
+	return VisionConeVisibility::LevelAtPoint(*Rays, HalfAngleDeg, Local);
 }
 
 float FVisionConeSightSpec::GetMaxRange() const
@@ -356,6 +458,37 @@ TArray<float> VisionConeVisibility::BaseAngles(float HalfAngleDeg, float StepDeg
 	return Angles;
 }
 
+TArray<float> VisionConeVisibility::GridAngles(float HalfAngleDeg, float StepDeg, int32 MaxRays, float GridYawDeg)
+{
+	const float Half = VisionConeRules::ClampHalfAngle(HalfAngleDeg);
+	double Step = FMath::Max(StepDeg, 0.05f);
+	const int32 MaxInner = FMath::Max(MaxRays - 2, 1);
+	if (2.0 * Half / Step > MaxInner)
+	{
+		Step = 2.0 * Half / MaxInner;
+	}
+	const double Margin = 0.2 * Step;
+	TArray<float> Angles;
+	Angles.Reserve(FMath::CeilToInt(2.0 * Half / Step) + 2);
+	Angles.Add(-Half);
+	for (int64 K = static_cast<int64>(FMath::CeilToDouble((GridYawDeg - Half + Margin) / Step));; ++K)
+	{
+		const double Angle = K * Step - GridYawDeg;
+		if (Angle >= Half - Margin)
+		{
+			break;
+		}
+		Angles.Add(static_cast<float>(Angle));
+	}
+	Angles.Add(Half);
+	return Angles;
+}
+
+bool VisionConeVisibility::IsJoinable(const FVisionConeRay& A, const FVisionConeRay& B)
+{
+	return SameStructure(A, B) && FMath::Abs(DrawGround(A) - DrawGround(B)) <= GroundToleranceCm;
+}
+
 bool VisionConeVisibility::SameStructure(const FVisionConeRay& A, const FVisionConeRay& B)
 {
 	if (A.Spans.Num() != B.Spans.Num())
@@ -374,6 +507,10 @@ bool VisionConeVisibility::SameStructure(const FVisionConeRay& A, const FVisionC
 
 bool VisionConeVisibility::NeedsRefine(const FVisionConeSightSpec& Spec, const FVisionConeRay& A, const FVisionConeRay& B)
 {
+	if (A.bNoGround || B.bNoGround)
+	{
+		return false; // dropped by CastRays: no ray is spent on finding its edge
+	}
 	if (!SameStructure(A, B) || A.BlockerKey != B.BlockerKey || A.Obstacles.Num() != B.Obstacles.Num()
 		|| FMath::Abs(A.GroundCm - B.GroundCm) > GroundToleranceCm)
 	{
@@ -425,7 +562,9 @@ TArray<FVisionConeRay> VisionConeVisibility::CastRays(const FVisionConeSightSpec
 		}
 		return Rays;
 	}
-	const TArray<float> Angles = BaseAngles(Spec.HalfAngleDeg, Spec.RayStepDeg, Spec.MaxRays);
+	const float Step = Spec.GetBaseStepDeg();
+	const TArray<float> Angles = Spec.bWorldGrid ? GridAngles(Spec.HalfAngleDeg, Step, Spec.MaxRays, Spec.GridYawDeg)
+		: BaseAngles(Spec.HalfAngleDeg, Step, Spec.MaxRays);
 	FCaster Caster{ Spec, Sample };
 	TArray<FVisionConeRay> Base;
 	Base.Reserve(Angles.Num());
@@ -433,12 +572,26 @@ TArray<FVisionConeRay> VisionConeVisibility::CastRays(const FVisionConeSightSpec
 	{
 		Base.Add(Caster.Cast(Angle));
 	}
+	// Bug #38: the rays left are shared out among the gaps that need refining, in order (a gap that needs fewer leaves more to the next) -
+	// the old first-come budget refined the first shadow edges finely and left the rest of the fan stair-stepped.
+	TArray<int32> Needy;
+	for (int32 Index = 1; Index < Base.Num(); ++Index)
+	{
+		if (NeedsRefine(Spec, Base[Index - 1], Base[Index]))
+		{
+			Needy.Add(Index);
+		}
+	}
 	Rays.Reserve(Base.Num() * 2);
+	int32 NextNeedy = 0;
 	for (int32 Index = 0; Index < Base.Num(); ++Index)
 	{
-		if (Index > 0)
+		if (NextNeedy < Needy.Num() && Needy[NextNeedy] == Index)
 		{
+			const int32 GapsLeft = Needy.Num() - NextNeedy;
+			Caster.GapLimit = Caster.Samples + FMath::Max(1, (Spec.MaxRays - Caster.Samples) / GapsLeft);
 			Caster.Refine(Base[Index - 1], Base[Index], Spec.MaxRefineDepth, Rays);
+			++NextNeedy;
 		}
 		Rays.Add(Base[Index]);
 	}
@@ -446,27 +599,106 @@ TArray<FVisionConeRay> VisionConeVisibility::CastRays(const FVisionConeSightSpec
 	{
 		*OutSamples = Caster.Samples;
 	}
+	// Elevated rays without a measured ground are left out (drawn at the roof's level for the whole range they were the needles).
+	const int32 Grounded = Rays.FilterByPredicate([](const FVisionConeRay& Ray) { return !Ray.bNoGround; }).Num();
+	if (Grounded >= 2 && Grounded < Rays.Num())
+	{
+		Rays.RemoveAll([](const FVisionConeRay& Ray) { return Ray.bNoGround; });
+	}
+	else if (Grounded < 2)
+	{
+		for (FVisionConeRay& Ray : Rays)
+		{
+			if (Ray.bNoGround)
+			{
+				Ray.Spans.Reset(); // too few to draw anything between: nothing is drawn rather than the roof's level to the range
+			}
+		}
+	}
+	// Slivers out (a removed one can leave its neighbour's stretch a sliver in turn: a few passes).
+	TArray<TArray<bool, TInlineAllocator<4>>> Slivers;
+	for (int32 Pass = 0; Pass < 16 && Spec.SliverMinWidthCm > 0.f; ++Pass)
+	{
+		if (FindSlivers(Rays, Spec.SliverMinWidthCm, Spec.SliverFromCm, &Slivers) == 0)
+		{
+			break;
+		}
+		{
+			for (int32 Index = 0; Index < Rays.Num(); ++Index)
+			{
+				for (int32 Span = Rays[Index].Spans.Num() - 1; Span >= 0; --Span)
+				{
+					if (Slivers[Index][Span])
+					{
+						Rays[Index].Spans.RemoveAt(Span);
+					}
+				}
+			}
+		}
+	}
 	return Rays;
 }
 
 FVisionConeShape VisionConeVisibility::BuildShape(const TArray<FVisionConeRay>& Rays, int32 LevelCount, float HalfAngleDeg,
 	float OutlineWidthCm, float HeightCm, float OutlineHeightCm)
 {
+	FVisionConeShapeOptions Options;
+	Options.OutlineWidthCm = OutlineWidthCm;
+	Options.HeightCm = HeightCm;
+	Options.OutlineHeightCm = OutlineHeightCm;
+	return BuildShape(Rays, LevelCount, HalfAngleDeg, Options);
+}
+
+FVisionConeShape VisionConeVisibility::BuildShape(const TArray<FVisionConeRay>& Rays, int32 LevelCount, float HalfAngleDeg, const FVisionConeShapeOptions& Options)
+{
 	FVisionConeShape Shape;
 	if (Rays.Num() < 2)
 	{
 		return Shape;
 	}
+	const float HeightCm = Options.HeightCm;
 	auto MeshFor = [&Shape, LevelCount](uint8 Level) -> FVisionConeMesh&
 	{
 		return Level >= LevelCount ? Shape.Full : Shape.Light;
 	};
+	ForEachQuad(Rays, [&MeshFor, HeightCm](uint8 Level, float AngleA, float StartA, float EndA, float AngleB, float StartB, float EndB, float GroundA, float GroundB)
+	{
+		AddSpanQuad(MeshFor(Level), AngleA, StartA, EndA, AngleB, StartB, EndB, HeightCm + GroundA, HeightCm + GroundB);
+	});
+	// The weapon zone (bug #39): the seen ground from the effective range to the max reach, and a line along the effective range.
+	if (Options.Weapon.IsSet())
+	{
+		const float Effective = FMath::Min(Options.Weapon.EffectiveCm, Options.Weapon.MaxCm);
+		const float HalfEdge = 0.5f * FMath::Max(Options.Weapon.EdgeWidthCm, 1.f);
+		ForEachQuad(Options.WeaponRays ? *Options.WeaponRays : Rays, [&Shape, &Options, Effective, HalfEdge, HeightCm](uint8, float AngleA, float StartA, float EndA,
+			float AngleB, float StartB, float EndB, float GroundA, float GroundB)
+		{
+			auto Cut = [&](float Low, float High, FVisionConeMesh& Mesh, float Lift)
+			{
+				const float FromA = FMath::Max(StartA, Low);
+				const float ToA = FMath::Min(EndA, High);
+				const float FromB = FMath::Max(StartB, Low);
+				const float ToB = FMath::Min(EndB, High);
+				if (ToA - FromA > 1.f && ToB - FromB > 1.f)
+				{
+					AddSpanQuad(Mesh, AngleA, FromA, ToA, AngleB, FromB, ToB, HeightCm + GroundA + Lift, HeightCm + GroundB + Lift);
+				}
+			};
+			if (Options.Weapon.MaxCm > Effective + 1.f)
+			{
+				Cut(Effective, Options.Weapon.MaxCm, Shape.WeaponBand, 0.3f);
+			}
+			Cut(Effective - HalfEdge, Effective + HalfEdge, Shape.WeaponEdge, 0.4f);
+		});
+	}
+	// The outline along the outer boundary of what the owner sees (OutlineRays: before a merged layer clipped it).
+	const TArray<FVisionConeRay>& Outer = Options.OutlineRays && Options.OutlineRays->Num() >= 2 ? *Options.OutlineRays : Rays;
 	const bool bAllRound = VisionConeRules::ClampHalfAngle(HalfAngleDeg) >= 180.f;
-	const float OutlineLift = OutlineHeightCm - HeightCm;
+	const float OutlineLift = Options.OutlineHeightCm - HeightCm;
 	TArray<FVector> Envelope;
 	if (!bAllRound)
 	{
-		Envelope.Add(FVector(0.f, 0.f, HeightCm + Rays[0].GroundCm + OutlineLift));
+		Envelope.Add(FVector(0.f, 0.f, HeightCm + DrawGround(Outer[0]) + OutlineLift));
 	}
 	auto AddEnvelope = [&Envelope, HeightCm, OutlineLift](float AngleDeg, float DistanceCm, float GroundCm)
 	{
@@ -477,47 +709,130 @@ FVisionConeShape VisionConeVisibility::BuildShape(const TArray<FVisionConeRay>& 
 			Envelope.Add(Point);
 		}
 	};
-	for (int32 Index = 0; Index < Rays.Num(); ++Index)
+	for (int32 Index = 0; Index < Outer.Num(); ++Index)
 	{
-		const FVisionConeRay& A = Rays[Index];
-		AddEnvelope(A.AngleDeg, FarEnd(A), A.GroundCm);
-		if (Index + 1 >= Rays.Num())
+		const FVisionConeRay& A = Outer[Index];
+		AddEnvelope(A.AngleDeg, FarEnd(A), DrawGround(A));
+		if (Index + 1 >= Outer.Num())
 		{
 			break;
 		}
-		const FVisionConeRay& B = Rays[Index + 1];
-		if (B.AngleDeg - A.AngleDeg <= 1.e-5f)
+		const FVisionConeRay& B = Outer[Index + 1];
+		if (B.AngleDeg - A.AngleDeg <= 1.e-5f || IsJoinable(A, B))
 		{
 			continue;
 		}
-		if (SameStructure(A, B))
-		{
-			for (int32 Span = 0; Span < A.Spans.Num(); ++Span)
-			{
-				AddSpanQuad(MeshFor(A.Spans[Span].Level), A.AngleDeg, A.Spans[Span].StartCm, A.Spans[Span].EndCm,
-					B.AngleDeg, B.Spans[Span].StartCm, B.Spans[Span].EndCm, HeightCm + A.GroundCm, HeightCm + B.GroundCm);
-			}
-			continue;
-		}
-		// A discontinuity the refinement narrowed down: each ray keeps its own spans up to the middle angle.
 		const float Mid = (A.AngleDeg + B.AngleDeg) * 0.5f;
-		for (const FVisionConeSpan& Span : A.Spans)
-		{
-			AddSpanQuad(MeshFor(Span.Level), A.AngleDeg, Span.StartCm, Span.EndCm, Mid, Span.StartCm, Span.EndCm, HeightCm + A.GroundCm, HeightCm + A.GroundCm);
-		}
-		for (const FVisionConeSpan& Span : B.Spans)
-		{
-			AddSpanQuad(MeshFor(Span.Level), Mid, Span.StartCm, Span.EndCm, B.AngleDeg, Span.StartCm, Span.EndCm, HeightCm + B.GroundCm, HeightCm + B.GroundCm);
-		}
-		AddEnvelope(Mid, FarEnd(A), A.GroundCm);
-		AddEnvelope(Mid, FarEnd(B), B.GroundCm);
+		AddEnvelope(Mid, FarEnd(A), DrawGround(A));
+		AddEnvelope(Mid, FarEnd(B), DrawGround(B));
 	}
 	if (Envelope.Num() > 2 && FVector2D::Distance(FVector2D(Envelope[0].X, Envelope[0].Y), FVector2D(Envelope.Last().X, Envelope.Last().Y)) <= 0.5f)
 	{
 		Envelope.Pop(); // all round: the last ray is the first one
 	}
-	BuildClosedBand(Envelope, OutlineWidthCm, Shape.Outline);
+	BuildClosedBand(Envelope, Options.OutlineWidthCm, Shape.Outline, 30.f, Options.OutlineHidden ? &Options.OutlineHidden : nullptr);
 	return Shape;
+}
+
+int32 VisionConeVisibility::ClipToLayer(TArray<FVisionConeRay>& Rays, const FVector2D& Origin, float YawDeg, int32 Priority,
+	TArrayView<const FVisionConeLayerMember> Others, float StepCm)
+{
+	int32 Cut = 0;
+	if (Others.Num() == 0)
+	{
+		return 0;
+	}
+	StepCm = FMath::Max(StepCm, 10.f);
+	TArray<const FVisionConeLayerMember*, TInlineAllocator<4>> Near;
+	for (FVisionConeRay& Ray : Rays)
+	{
+		const float End = FarEnd(Ray);
+		if (End <= 0.f)
+		{
+			continue;
+		}
+		const FVector2D Dir = Direction(YawDeg + Ray.AngleDeg);
+		// Only the members whose reach meets this ray at all.
+		Near.Reset();
+		for (const FVisionConeLayerMember& Other : Others)
+		{
+			if (!Other.Rays.IsValid())
+			{
+				continue;
+			}
+			const float Along = FMath::Clamp(static_cast<float>(FVector2D::DotProduct(Other.Origin - Origin, Dir)), 0.f, End);
+			if (FVector2D::DistSquared(Origin + Dir * Along, Other.Origin) <= FMath::Square(Other.MaxRangeCm))
+			{
+				Near.Add(&Other);
+			}
+		}
+		if (Near.Num() == 0)
+		{
+			continue;
+		}
+		TArray<FVisionConeSpan, TInlineAllocator<4>> Kept;
+		for (const FVisionConeSpan& Span : Ray.Spans)
+		{
+			auto Keeps = [&Near, &Origin, &Dir, &Span, Priority](float Distance)
+			{
+				const FVector2D Point = Origin + Dir * Distance;
+				for (const FVisionConeLayerMember* Other : Near)
+				{
+					const uint8 Level = Other->LevelAt(Point);
+					if (Level > Span.Level || (Level == Span.Level && Other->Priority < Priority))
+					{
+						return false;
+					}
+				}
+				return true;
+			};
+			const float First = FMath::Min(Span.StartCm + 0.5f, Span.EndCm);
+			bool bIn = Keeps(First);
+			float RunStart = Span.StartCm;
+			for (float Distance = Span.StartCm; Distance < Span.EndCm;)
+			{
+				const float Next = FMath::Min(Distance + StepCm, Span.EndCm);
+				const bool bNext = Keeps(FMath::Max(Next - 0.5f, Distance));
+				if (bNext != bIn)
+				{
+					float Low = Distance;
+					float High = Next;
+					for (int32 Step = 0; Step < 7; ++Step)
+					{
+						const float Mid = 0.5f * (Low + High);
+						(Keeps(Mid) == bIn ? Low : High) = Mid;
+					}
+					const float Cross = 0.5f * (Low + High);
+					if (bIn)
+					{
+						Kept.Add({ RunStart, Cross, Span.Level });
+					}
+					else
+					{
+						RunStart = Cross;
+					}
+					bIn = bNext;
+				}
+				Distance = Next;
+			}
+			if (bIn)
+			{
+				Kept.Add({ RunStart, Span.EndCm, Span.Level });
+			}
+		}
+		Kept.RemoveAll([](const FVisionConeSpan& Span) { return Span.EndCm - Span.StartCm < MinSpanCm; });
+		bool bSame = Kept.Num() == Ray.Spans.Num();
+		for (int32 Index = 0; bSame && Index < Kept.Num(); ++Index)
+		{
+			bSame = FMath::IsNearlyEqual(Kept[Index].StartCm, Ray.Spans[Index].StartCm, 0.1f) && FMath::IsNearlyEqual(Kept[Index].EndCm, Ray.Spans[Index].EndCm, 0.1f);
+		}
+		if (!bSame)
+		{
+			++Cut;
+			Ray.Spans = MoveTemp(Kept);
+		}
+	}
+	return Cut;
 }
 
 float VisionConeVisibility::ChordDistance(float AngleA, float DistanceA, float AngleB, float DistanceB, float AngleDeg)
@@ -557,7 +872,7 @@ uint8 VisionConeVisibility::LevelAtPoint(const TArray<FVisionConeRay>& Rays, flo
 	}
 	const FVisionConeRay& A = Rays[Low];
 	const FVisionConeRay& B = Rays[High];
-	if (SameStructure(A, B) && B.AngleDeg - A.AngleDeg > 1.e-5f)
+	if (IsJoinable(A, B) && B.AngleDeg - A.AngleDeg > 1.e-5f)
 	{
 		for (int32 Span = 0; Span < A.Spans.Num(); ++Span)
 		{
@@ -571,4 +886,60 @@ uint8 VisionConeVisibility::LevelAtPoint(const TArray<FVisionConeRay>& Rays, flo
 		return 0;
 	}
 	return LevelAlong(Angle <= (A.AngleDeg + B.AngleDeg) * 0.5f ? A : B, Distance);
+}
+
+int32 VisionConeVisibility::FindSlivers(const TArray<FVisionConeRay>& Rays, float MinWidthCm, float FromCm, TArray<TArray<bool, TInlineAllocator<4>>>* OutSlivers)
+{
+	int32 Count = 0;
+	if (OutSlivers)
+	{
+		OutSlivers->SetNum(Rays.Num());
+	}
+	for (int32 Index = 0; Index < Rays.Num(); ++Index)
+	{
+		const FVisionConeRay& Ray = Rays[Index];
+		if (OutSlivers)
+		{
+			(*OutSlivers)[Index].Init(false, Ray.Spans.Num());
+		}
+		for (int32 Span = 0; Span < Ray.Spans.Num(); ++Span)
+		{
+			const FVisionConeSpan& Stretch = Ray.Spans[Span];
+			if (Stretch.EndCm <= FromCm)
+			{
+				continue;
+			}
+			const float Distance = FMath::Max(0.5f * (Stretch.StartCm + Stretch.EndCm), FromCm);
+			const float Needed = MinWidthCm / FMath::Max(Distance, 1.f); // radians
+			// Walk out both ways while the neighbours see that distance too (stop once the run is wide enough).
+			int32 Left = Index;
+			int32 Right = Index;
+			auto Width = [&Rays, &Left, &Right]()
+			{
+				const float LeftGap = Left > 0 ? 0.5f * (Rays[Left].AngleDeg - Rays[Left - 1].AngleDeg) : 0.f;
+				const float RightGap = Right + 1 < Rays.Num() ? 0.5f * (Rays[Right + 1].AngleDeg - Rays[Right].AngleDeg) : 0.f;
+				return FMath::DegreesToRadians(Rays[Right].AngleDeg - Rays[Left].AngleDeg + LeftGap + RightGap);
+			};
+			while (Width() < Needed)
+			{
+				const bool bGrowLeft = Left > 0 && LevelAlong(Rays[Left - 1], Distance) > 0;
+				const bool bGrowRight = Right + 1 < Rays.Num() && LevelAlong(Rays[Right + 1], Distance) > 0;
+				if (!bGrowLeft && !bGrowRight)
+				{
+					break;
+				}
+				Left -= bGrowLeft ? 1 : 0;
+				Right += bGrowRight ? 1 : 0;
+			}
+			if (Width() < Needed)
+			{
+				++Count;
+				if (OutSlivers)
+				{
+					(*OutSlivers)[Index][Span] = true;
+				}
+			}
+		}
+	}
+	return Count;
 }

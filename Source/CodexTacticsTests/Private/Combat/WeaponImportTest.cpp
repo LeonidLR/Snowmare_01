@@ -22,7 +22,8 @@ bool FWeaponImportParityTest::RunTest(const FString&)
 	TestEqual(TEXT("M16 damage"), M16->BaseDamage, 18.f);
 	// Range 14 -> 25 m, grid 5 -> 8 cells, hit table over 25 m (user decision 2026-10-11, weapons_tuning.json written onto
 	// the asset by Scripts/Editor/apply_weapon_tuning.py).
-	TestEqual(TEXT("M16 range 25 m"), M16->AttackRangeCm, 2500.f);
+	// Since c8af1c6d (user 2026-11-04, ranged fights): 60 m.
+	TestEqual(TEXT("M16 range 60 m"), M16->AttackRangeCm, 6000.f);
 	TestEqual(TEXT("M16 grid range 8 cells"), M16->MaxRangeCells, 8);
 	TestEqual(TEXT("M16 clip"), M16->MaxClipSize, 30);
 	TestEqual(TEXT("M16 reload"), M16->ReloadTime, 2.68f);

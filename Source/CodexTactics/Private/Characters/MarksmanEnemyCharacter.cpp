@@ -1,4 +1,5 @@
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Combat/WeaponRangeRules.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
@@ -648,7 +649,9 @@ void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanL
 	{
 		Anim->NotifyAttack(); // the stance's fire clip (UMarksmanAnimInstance)
 	}
-	const float Chance = MarksmanAIRules::ComputeSniperHitChance(MarksmanConfig, Stance, Target->GetStance(), Line.Cover, Distance);
+	// Bug #39: past the rifle's effective range the chance falls steeply to its max reach (TickEngage never fires beyond it).
+	const float Chance = MarksmanAIRules::ComputeSniperHitChance(MarksmanConfig, Stance, Target->GetStance(), Line.Cover, Distance)
+		* WeaponRangeRules::HitMultiplier(Distance, MarksmanConfig.EffectiveRangeCm, MarksmanConfig.MaxRangeCm, WeaponRangeRules::GetFalloff());
 	const bool bHit = FMath::FRand() < Chance;
 	FVector End = Line.End;
 	if (bHit)
@@ -994,6 +997,11 @@ void AMarksmanEnemyCharacter::TickEngage(float DeltaTime, AOperativeCharacter* T
 	UpdateBeam(AimLine);
 	if (AimTimer >= MarksmanConfig.AimDuration)
 	{
+		if (!WeaponRangeRules::IsWithinReach(Distance, MarksmanConfig.MaxRangeCm))
+		{
+			CancelAim(); // bug #39: seen, beyond the rifle's reach - no shot
+			return;
+		}
 		Fire(Target, AimLine, Distance);
 		AttackTimer = MarksmanConfig.ShotCooldown;
 		CancelAim();

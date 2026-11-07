@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Data/CombatTypes.h"
+#include "Combat/WeaponRangeRules.h"
 #include "WeaponDataAsset.generated.h"
 
 class UStaticMesh;
@@ -71,9 +72,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage")
 	float BaseDamage = 18.0f;
 
-	/** Attack range in Unreal centimeters (Godot attack_range * 100). */
+	/** Attack range in Unreal centimeters (Godot attack_range * 100): the MAX reach - no shot beyond it (bug #39). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage")
 	float AttackRangeCm = 1400.0f;
+
+	/**
+	 * Effective range, cm (bug #39, weapons_tuning.json "effective_range_m"): up to it the distance table applies unchanged, from it to
+	 * AttackRangeCm the hit chance falls steeply (WeaponRangeRules). 0 = AttackRangeCm (no falloff: melee, the grenade).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage", meta = (ClampMin = "0"))
+	float EffectiveRangeCm = 0.0f;
+
+	float GetEffectiveRangeCm() const { return WeaponRangeRules::ResolveEffectiveCm(EffectiveRangeCm, AttackRangeCm); }
+
+	/** Hit chance multiplier at DistanceCm (EffectiveScale: the stance / elevation bonus stretching the effective range); 0 beyond the max reach. */
+	float GetRangeHitMultiplier(float DistanceCm, float EffectiveScale = 1.f) const
+	{
+		return WeaponRangeRules::HitMultiplier(DistanceCm, WeaponRangeRules::ScaledEffectiveCm(EffectiveRangeCm, AttackRangeCm, EffectiveScale), AttackRangeCm,
+			WeaponRangeRules::GetFalloff());
+	}
 
 	/** Interval between shots in real-time seconds. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage")

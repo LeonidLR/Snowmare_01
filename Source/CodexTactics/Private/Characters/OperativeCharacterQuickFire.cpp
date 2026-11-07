@@ -406,6 +406,7 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 		const float DistM = static_cast<float>(FVector::Dist2D(GetActorLocation(), EnemyHit->GetActorLocation())) / 100.f;
 		const int32 DistCells = FMath::Max(1, FMath::RoundToInt(DistM / 1.5f));
 		float Chance = CurrentWeapon ? CurrentWeapon->GetHitChanceForDistance(DistCells) : 0.85f;
+		Chance *= GetRangeHitMultiplierAt(EnemyHit, DistM * 100.f); // bug #39: the falloff past the effective range
 		if (ColdSurvival && ColdLevel > 50.0f)
 		{
 			Chance = FMath::Clamp(Chance - ColdSurvival->GetAimPenalty(), 0.05f, 0.99f);
