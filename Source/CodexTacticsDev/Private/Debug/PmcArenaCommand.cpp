@@ -20,12 +20,26 @@
 //   navmesh spots on any level (ground, roofs, the cut), reachable from each other, spawnmin..spawnmax apart (PmcCommanderRules::PickSpawnPair).
 //   opponent=pmc: team 1 (A) vs team 2 (B), the player's squad parked (any number of rounds); player: A vs the player's squad commanded with
 //   weights B (one round: the fallen cannot be revived); bot: A vs the player's squad driven by the playtest bot (one round, development builds).
+//   objective=0|1 (task #53, default 1): each round has an objective point near the defender's spawn (on the navmesh, reachable by both);
+//   the defenders hold it, the attackers win by holding it (an attacker within the radius, no live defender within it) for hold_s seconds
+//   or by elimination; the defenders win by elimination or at the time limit with the point not held by the attackers (held by them at
+//   the limit = a contested draw). Radius / hold seconds / placement: the level JSON's "pmc_arena" object (PmcArena::LoadConfig).
+//   scenario=random|skirmish|chokepoint|street|roofs|blizzard (default random = per round from its seed, PmcCommanderRules::PickScenario;
+//   needs spawns=random): skirmish = the random spawn pair; chokepoint = the objective + the defender spawn at a narrow passage (1-3 m
+//   between walls >= 3 m); street = the objective on open ground; roofs = the objective on a roof level; blizzard = a skirmish in a
+//   forced Blizzard (the sight halved). A scenario without a site on the map falls back to skirmish (the result names the real one).
+//   Per round per side: role (attacker / defender), damage_dealt, damage_from_concealment (dealt while the shooter was not seen by the
+//   target's team), first_strike (1 = this side's hit came first), objective_hold_s (seconds of sole control of the point),
+//   median_engagement_m (its shots' median distance).
 // CodexTactics.PmcArenaSmoke = one pmc round + the JSON validated (Smoke RESULT: PASS / FAIL).
+// CodexTactics.PmcArenaObjectiveSmoke = one round where the defenders are parked out of the fight: the attackers must walk onto the point
+//   and capture it (end_reason objective, the attacker wins, his objective_hold_s >= hold_s).
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "AI/AmbushWatchRules.h"
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "AI/SquadOrderCatalog.h"
@@ -40,6 +54,8 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/SightRules.h"
 #include "Containers/Ticker.h"
+#include "Data/LevelJsonRules.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
@@ -53,8 +69,10 @@
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
 #include "Math/RandomStream.h"
+#include "Misc/CommandLine.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "NavigationData.h"
 #include "NavigationPath.h"
@@ -95,6 +113,30 @@ namespace PmcArena
 		/** The random spawn pair's planar distance range, cm (SpawnMin= / SpawnMax= in metres). */
 		float SpawnMinCm = 3500.f;
 		float SpawnMaxCm = 8000.f;
+		/** Objective=0|1 (task #53, default on): the round's objective point - the attackers take it, the defenders hold it. */
+		bool bObjective = true;
+		/** Scenario=random|skirmish|chokepoint|street|roofs|blizzard: -1 = random (per round from its seed), else an EPmcScenario. */
+		int32 Scenario = -1;
+		/** PmcArenaObjectiveSmoke: the defenders are parked out of the fight after the spawn - the attackers must take the point. */
+		bool bSmokeCapture = false;
+	};
+
+	/**
+	 * The arena's own data (task #53): the level JSON's "pmc_arena" object (L_PmcArenaDepot.json / L_PmcArena.json), the code defaults
+	 * below without it: objective_radius_m, objective_hold_s, objective_offset_frac (the point from the defender's spawn towards the
+	 * attacker's, x 0.75-1.25 seeded), defender_offset_m (a scenario site -> the defender's spawn), passage_min_m / passage_max_m /
+	 * wall_min_height_m (the chokepoint search).
+	 */
+	struct FArenaConfig
+	{
+		float ObjectiveRadiusCm = 600.f;
+		float HoldSeconds = 15.f;
+		float ObjectiveOffsetFrac = 0.2f;
+		float DefenderOffsetCm = 800.f;
+		float PassageMinCm = 100.f;
+		float PassageMaxCm = 300.f;
+		float WallHeightCm = 300.f;
+		FString Source = TEXT("defaults");
 	};
 
 	struct FSide
@@ -127,6 +169,32 @@ namespace PmcArena
 		int32 LeadSwings = 0;
 		float HighlightScore = 0.f;
 		FString TrackFile;
+		/** Task #53: the scenario played (a site-less one falls back to skirmish) and the one asked for. */
+		FString Scenario = TEXT("skirmish");
+		FString ScenarioRequested = TEXT("random");
+		FString Weather;
+		bool bObjective = false;
+		FVector ObjectiveLocation = FVector::ZeroVector;
+		/** captured / held / contested / eliminated / none (PmcCommanderRules::ResolveRound). */
+		FString ObjectiveResult = TEXT("none");
+		/** The attackers' capture clock at the end, s. */
+		float AttackerHeld = 0.f;
+		float DamageDealt[2] = { 0.f, 0.f };
+		float DamageFromConcealment[2] = { 0.f, 0.f };
+		int32 FirstStrike[2] = { 0, 0 };
+		float ObjectiveHoldS[2] = { 0.f, 0.f };
+		float MedianEngagementM[2] = { 0.f, 0.f };
+		int32 Shots[2] = { 0, 0 };
+		/** First hits on a target that was not looking towards the shooter (his facing > 45 deg off; user 2026-11-07). */
+		int32 StrikesUnobserved[2] = { 0, 0 };
+	};
+
+	/** The last hit a fighter took (the HP drops of the next samples are that shooter's damage). */
+	struct FHitNote
+	{
+		int32 Side = -1;
+		bool bConcealed = false;
+		float Time = 0.f;
 	};
 
 	/**
@@ -148,6 +216,16 @@ namespace PmcArena
 		TArray<FDelegateHandle> FireHandles;
 		TArray<TWeakObjectPtr<AOperativeCharacter>> Listened;
 		FDelegateHandle OrderHandle;
+		/** Task #53 ambush stats: each fighter's HP at the last sample and his last hit; per side damage, damage from concealment, shot distances. */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> LastHp;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, FHitNote> LastHit;
+		float Damage[2] = { 0.f, 0.f };
+		float Concealed[2] = { 0.f, 0.f };
+		int32 FirstStrikeSide = -1;
+		TArray<float> ShotDistM[2];
+		/** Fighters already hit this round, and per side the first hits on a target looking away (strikes_unobserved). */
+		TSet<TWeakObjectPtr<AOperativeCharacter>> StruckOnce;
+		int32 StrikesUnobserved[2] = { 0, 0 };
 	};
 	constexpr float TrackInterval = 0.2f;
 
@@ -177,6 +255,15 @@ namespace PmcArena
 		FString RunName;
 		bool bRoundsLimited = false;
 		FTrack Track;
+		/** Task #53: the arena data, this round's objective / capture clock / attacker, the weather before a blizzard round. */
+		FArenaConfig Config;
+		FPmcObjectiveClock Clock;
+		bool bRoundObjective = false;
+		FVector Objective = FVector::ZeroVector;
+		bool bAAttacks = false;
+		bool bWeatherForced = false;
+		bool bInitialWeatherKnown = false;
+		EWeatherState InitialWeather = EWeatherState::Clear;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -213,6 +300,13 @@ namespace PmcArena
 			else if (Key == TEXT("spawns")) { Options.SpawnMode = Value.Equals(TEXT("random"), ESearchCase::IgnoreCase) ? 2 : 1; }
 			else if (Key == TEXT("spawnmin")) { Options.SpawnMinCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 200.f) * 100.f; }
 			else if (Key == TEXT("spawnmax")) { Options.SpawnMaxCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 300.f) * 100.f; }
+			else if (Key == TEXT("objective")) { Options.bObjective = FCString::Atoi(*Value) != 0; }
+			else if (Key == TEXT("smokecapture")) { Options.bSmokeCapture = FCString::Atoi(*Value) != 0; }
+			else if (Key == TEXT("scenario"))
+			{
+				EPmcScenario Scenario = EPmcScenario::Skirmish;
+				Options.Scenario = PmcCommanderRules::ParseScenario(Value, Scenario) ? static_cast<int32>(Scenario) : -1;
+			}
 			else if (Key == TEXT("opponent"))
 			{
 				const FString Lower = Value.ToLower();
@@ -326,6 +420,326 @@ namespace PmcArena
 			}
 		}
 		return false;
+	}
+
+	/** The level JSON's "pmc_arena" object (the -LevelJson= file, else the map's own); the defaults without one. */
+	FArenaConfig LoadConfig(UWorld* World)
+	{
+		FArenaConfig Config;
+		FString CommandLineJson;
+		FParse::Value(FCommandLine::Get(), TEXT("LevelJson="), CommandLineJson);
+		const FString File = LevelJsonRules::ResolveLevelJsonFile(World->GetMapName(), FString(), CommandLineJson);
+		if (File.IsEmpty())
+		{
+			return Config;
+		}
+		const FString Path = FPaths::IsRelative(File) ? LevelJsonRules::GetLevelsDirectory() / File : File;
+		FString Text;
+		TSharedPtr<FJsonObject> Json;
+		const TSharedPtr<FJsonObject>* Arena = nullptr;
+		if (!FFileHelper::LoadFileToString(Text, *Path) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()
+			|| !Json->TryGetObjectField(TEXT("pmc_arena"), Arena) || !Arena || !Arena->IsValid())
+		{
+			return Config;
+		}
+		auto Read = [Arena](const TCHAR* Key, float& Out, float Scale, float Min, float Max)
+		{
+			double Value = 0.0;
+			if ((*Arena)->TryGetNumberField(Key, Value))
+			{
+				Out = FMath::Clamp(static_cast<float>(Value) * Scale, Min, Max);
+			}
+		};
+		Read(TEXT("objective_radius_m"), Config.ObjectiveRadiusCm, 100.f, 100.f, 3000.f);
+		Read(TEXT("objective_hold_s"), Config.HoldSeconds, 1.f, 1.f, 600.f);
+		Read(TEXT("objective_offset_frac"), Config.ObjectiveOffsetFrac, 1.f, 0.f, 0.5f);
+		Read(TEXT("defender_offset_m"), Config.DefenderOffsetCm, 100.f, 0.f, 3000.f);
+		Read(TEXT("passage_min_m"), Config.PassageMinCm, 100.f, 50.f, 1000.f);
+		Read(TEXT("passage_max_m"), Config.PassageMaxCm, 100.f, 50.f, 1000.f);
+		Read(TEXT("wall_min_height_m"), Config.WallHeightCm, 100.f, 100.f, 2000.f);
+		Config.PassageMaxCm = FMath::Max(Config.PassageMaxCm, Config.PassageMinCm);
+		Config.Source = FPaths::GetCleanFilename(Path);
+		return Config;
+	}
+
+	bool HasNavPath(UWorld* World, UNavigationSystemV1* Nav, const FVector& From, const FVector& To)
+	{
+		const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, From, To) : nullptr;
+		return Path && Path->IsValid() && !Path->IsPartial();
+	}
+
+	/** A seeded navmesh point anywhere in Bounds at about Level x 3 m over GroundZ (the random spawns' sampling). */
+	bool SampleNav(UNavigationSystemV1* Nav, const FBox& Bounds, FRandomStream& Stream, float GroundZ, int32 Level, FVector& Out)
+	{
+		const float X = Stream.FRandRange(static_cast<float>(Bounds.Min.X), static_cast<float>(Bounds.Max.X));
+		const float Y = Stream.FRandRange(static_cast<float>(Bounds.Min.Y), static_cast<float>(Bounds.Max.Y));
+		FNavLocation OnNav;
+		if (!Nav->ProjectPointToNavigation(FVector(X, Y, GroundZ + Level * 300.f + 100.f), OnNav, FVector(300.f, 300.f, 200.f)))
+		{
+			return false;
+		}
+		Out = OnNav.Location;
+		return true;
+	}
+
+	/** The distance to the first non-pawn blocker along Direction within Reach (0 = free). */
+	float RayHit(UWorld* World, const FVector& From, const FVector& Direction, float Reach)
+	{
+		FHitResult Hit;
+		const FCollisionQueryParams Params(SCENE_QUERY_STAT(PmcArenaSite), false);
+		if (!World->LineTraceSingleByChannel(Hit, From, From + Direction * Reach, ECC_Visibility, Params) || Cast<APawn>(Hit.GetActor()))
+		{
+			return 0.f;
+		}
+		return FMath::Max(1.f, static_cast<float>(Hit.Distance));
+	}
+
+	int32 LevelOf(const FState& State, const FVector& NavPoint)
+	{
+		return SightRules::HeightLevel(static_cast<float>(NavPoint.Z) + SightRules::EyeHeight(EOperativeStance::Standing) - State.GroundZ);
+	}
+
+	/**
+	 * A seeded scenario site (task #53): chokepoint = a ground spot between two tall walls 1-3 m apart with the passage free along its
+	 * axis (PmcCommanderRules::IsPassage; OutAxis = along it); street = a ground spot free 10 m round in at least 7 of 8 directions;
+	 * roofs = a navmesh spot one height level or more up. Up to 12 sites from 400 samples, one picked by the seed (Skip = how many
+	 * of the found ones to pass over: the next site when the first has no attacker spawn).
+	 */
+	bool FindSite(const FState& State, UWorld* World, EPmcScenario Scenario, int32 Seed, int32 Skip, FVector& OutSite, FVector& OutAxis)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
+		const FBox Bounds = NavData ? NavData->GetBounds() : FBox(ForceInit);
+		if (!Bounds.IsValid)
+		{
+			return false;
+		}
+		FRandomStream Stream(Seed * 4099 + static_cast<int32>(Scenario) * 31 + 7);
+		TArray<TPair<FVector, FVector>> Sites;
+		const FArenaConfig& Config = State.Config;
+		for (int32 Try = 0; Try < 400 && Sites.Num() < 12; ++Try)
+		{
+			const int32 Level = Scenario == EPmcScenario::Roofs ? Stream.RandRange(1, 3) : 0;
+			FVector Point;
+			if (!SampleNav(Nav, Bounds, Stream, State.GroundZ, Level, Point))
+			{
+				continue;
+			}
+			const int32 Height = LevelOf(State, Point);
+			if (Scenario == EPmcScenario::Roofs)
+			{
+				if (Height >= 1)
+				{
+					Sites.Add({ Point, FVector::ForwardVector });
+				}
+				continue;
+			}
+			if (Height != 0)
+			{
+				continue;
+			}
+			const FVector Chest = Point + FVector(0.f, 0.f, 100.f);
+			if (Scenario == EPmcScenario::Street)
+			{
+				int32 Free = 0;
+				for (int32 Index = 0; Index < 8; ++Index)
+				{
+					Free += RayHit(World, Chest, FRotator(0.f, Index * 45.f, 0.f).Vector(), 1000.f) <= 0.f ? 1 : 0;
+				}
+				if (Free >= 7)
+				{
+					Sites.Add({ Point, FVector::ForwardVector });
+				}
+				continue;
+			}
+			// Chokepoint: chest rays for the walls, rays just under the wall height for "tall".
+			float Hits[8];
+			bool Tall[8];
+			const FVector High = Point + FVector(0.f, 0.f, Config.WallHeightCm - 10.f);
+			for (int32 Index = 0; Index < 8; ++Index)
+			{
+				const FVector Direction = FRotator(0.f, Index * 45.f, 0.f).Vector();
+				Hits[Index] = RayHit(World, Chest, Direction, Config.PassageMaxCm);
+				Tall[Index] = Hits[Index] > 0.f && RayHit(World, High, Direction, Config.PassageMaxCm + 50.f) > 0.f;
+			}
+			int32 Axis = 0;
+			float Width = 0.f;
+			if (PmcCommanderRules::IsPassage(Hits, Tall, Config.PassageMinCm, Config.PassageMaxCm, Axis, Width))
+			{
+				Sites.Add({ Point, FRotator(0.f, Axis * 45.f, 0.f).Vector() });
+			}
+		}
+		if (Sites.IsEmpty())
+		{
+			return false;
+		}
+		const int32 Pick = (Stream.RandRange(0, Sites.Num() - 1) + Skip) % Sites.Num();
+		if (Skip >= Sites.Num())
+		{
+			return false;
+		}
+		OutSite = Sites[Pick].Key;
+		OutAxis = Sites[Pick].Value;
+		return true;
+	}
+
+	/**
+	 * The attackers' spawn for a scenario site: a seeded ground navmesh spot SpawnMin..SpawnMax from it with a path both ways (16 path
+	 * checks at most); a chokepoint wants it along the passage (|cos| >= 0.5 to the axis) so they come through it.
+	 */
+	bool PickFarSpawn(const FState& State, UWorld* World, const FVector& Site, const FVector* Axis, int32 Seed, FVector& Out)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
+		const FBox Bounds = NavData ? NavData->GetBounds() : FBox(ForceInit);
+		if (!Bounds.IsValid)
+		{
+			return false;
+		}
+		FRandomStream Stream(Seed * 6151 + 3);
+		int32 PathChecks = 0;
+		for (int32 Try = 0; Try < 300 && PathChecks < 16; ++Try)
+		{
+			FVector Point;
+			if (!SampleNav(Nav, Bounds, Stream, State.GroundZ, 0, Point) || LevelOf(State, Point) != 0)
+			{
+				continue;
+			}
+			const float Distance = static_cast<float>(FVector::Dist2D(Point, Site));
+			if (Distance < State.Options.SpawnMinCm || Distance > FMath::Max(State.Options.SpawnMinCm, State.Options.SpawnMaxCm))
+			{
+				continue;
+			}
+			if (Axis && FMath::Abs(FVector::DotProduct((Point - Site).GetSafeNormal2D(), *Axis)) < 0.5f)
+			{
+				continue;
+			}
+			++PathChecks;
+			if (HasNavPath(World, Nav, Point, Site) && HasNavPath(World, Nav, Site, Point))
+			{
+				Out = Point;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** The defenders' spawn DefenderOffsetCm behind Site (away from the attackers), on its level with a path from it; Site itself without one. */
+	FVector PickNearSpawn(const FState& State, UWorld* World, const FVector& Site, const FVector& Attacker)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		FVector Away = (Site - Attacker).GetSafeNormal2D();
+		if (!Nav || Away.IsNearlyZero() || State.Config.DefenderOffsetCm <= 0.f)
+		{
+			return Site;
+		}
+		for (const float Bearing : { 0.f, 45.f, -45.f, 90.f, -90.f })
+		{
+			FNavLocation OnNav;
+			const FVector Candidate = Site + Away.RotateAngleAxis(Bearing, FVector::UpVector) * State.Config.DefenderOffsetCm;
+			if (Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(300.f, 300.f, 150.f)) && FMath::Abs(OnNav.Location.Z - Site.Z) < 250.f
+				&& HasNavPath(World, Nav, Site, OnNav.Location))
+			{
+				return OnNav.Location;
+			}
+		}
+		return Site;
+	}
+
+	/**
+	 * The objective of a skirmish / fixed-spawn round: from the defender's spawn towards the attacker's, ObjectiveOffsetFrac x (0.75-1.25,
+	 * seeded) of the way, on the navmesh at the defender's level with a path from both spawns; half that, then the defender's spawn itself.
+	 */
+	FVector PlaceObjectiveNear(const FState& State, UWorld* World, const FVector& Defender, const FVector& Attacker, int32 Seed)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		if (!Nav)
+		{
+			return Defender;
+		}
+		FRandomStream Stream(Seed * 1543 + 11);
+		const float Frac = State.Config.ObjectiveOffsetFrac * Stream.FRandRange(0.75f, 1.25f);
+		for (const float Scale : { 1.f, 0.5f })
+		{
+			FVector Candidate = FMath::Lerp(Defender, Attacker, Frac * Scale);
+			Candidate.Z = Defender.Z;
+			FNavLocation OnNav;
+			if (Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(300.f, 300.f, 150.f)) && FMath::Abs(OnNav.Location.Z - Defender.Z) < 250.f
+				&& HasNavPath(World, Nav, Defender, OnNav.Location) && HasNavPath(World, Nav, Attacker, OnNav.Location))
+			{
+				return OnNav.Location;
+			}
+		}
+		return Defender;
+	}
+
+	/** A chokepoint / street / roofs round: the site = the objective, the attackers far off, the defenders behind it. False = no site / spawn. */
+	bool PlaceScenarioSite(FState& State, UWorld* World, EPmcScenario Scenario, int32 Seed, int32 AttackerIndex)
+	{
+		for (int32 Skip = 0; Skip < 4; ++Skip)
+		{
+			FVector Site;
+			FVector Axis;
+			if (!FindSite(State, World, Scenario, Seed, Skip, Site, Axis))
+			{
+				return false;
+			}
+			FVector Attacker;
+			if (!PickFarSpawn(State, World, Site, Scenario == EPmcScenario::Chokepoint ? &Axis : nullptr, Seed + Skip * 101, Attacker))
+			{
+				continue;
+			}
+			const FVector Defender = PickNearSpawn(State, World, Site, Attacker);
+			FSide& Atk = State.Sides[AttackerIndex];
+			FSide& Def = State.Sides[1 - AttackerIndex];
+			Atk.Spawn = Attacker;
+			Def.Spawn = Defender;
+			Atk.Facing = (Defender - Attacker).GetSafeNormal2D().Rotation();
+			Def.Facing = (Attacker - Defender).GetSafeNormal2D().Rotation();
+			State.Objective = Site;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] scenario %s seed %d: objective %s (level %d), attackers %s, defenders %s, %.0f m apart"),
+				PmcCommanderRules::ScenarioName(Scenario), Seed, *Site.ToCompactString(), LevelOf(State, Site), *Attacker.ToCompactString(),
+				*Defender.ToCompactString(), FVector::Dist2D(Attacker, Defender) / 100.f);
+			return true;
+		}
+		return false;
+	}
+
+	const TCHAR* WeatherName(EWeatherState Weather)
+	{
+		switch (Weather)
+		{
+		case EWeatherState::Overcast: return TEXT("overcast");
+		case EWeatherState::Snowfall: return TEXT("snowfall");
+		case EWeatherState::Blizzard: return TEXT("blizzard");
+		default: return TEXT("clear");
+		}
+	}
+
+	/** The blizzard scenario forces a Blizzard (the sight x 0.5, SightRules weather multipliers); the next round gets the level's weather back. */
+	FString ApplyWeather(FState& State, UWorld* World, bool bBlizzard)
+	{
+		UEnvironmentSubsystem* Env = UEnvironmentSubsystem::Get(World);
+		if (!Env || !Env->IsInitialised())
+		{
+			return TEXT("none");
+		}
+		if (!State.bInitialWeatherKnown)
+		{
+			State.bInitialWeatherKnown = true;
+			State.InitialWeather = Env->GetWeather();
+		}
+		if (bBlizzard)
+		{
+			Env->ForceWeather(EWeatherState::Blizzard, true);
+			State.bWeatherForced = true;
+		}
+		else if (State.bWeatherForced)
+		{
+			Env->ForceWeather(State.InitialWeather, true);
+			State.bWeatherForced = false;
+		}
+		return WeatherName(Env->GetWeather());
 	}
 
 	/**
@@ -519,6 +933,18 @@ namespace PmcArena
 		return TEXT("-");
 	}
 
+	int32 SideIndexOf(const FState& State, const AOperativeCharacter* Operative)
+	{
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			if (Operative && State.Sides[Index].Members.Contains(Operative))
+			{
+				return Index;
+			}
+		}
+		return INDEX_NONE;
+	}
+
 	TSharedRef<FJsonObject> EventJson(const FState& State, const TCHAR* Type)
 	{
 		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
@@ -539,6 +965,15 @@ namespace PmcArena
 		Track.SampleTimer = 0.f;
 		Track.LastLeadSign = 0;
 		Track.LeadSwings = 0;
+		Track.LastHp.Reset();
+		Track.LastHit.Reset();
+		Track.Damage[0] = Track.Damage[1] = 0.f;
+		Track.Concealed[0] = Track.Concealed[1] = 0.f;
+		Track.FirstStrikeSide = INDEX_NONE;
+		Track.ShotDistM[0].Reset();
+		Track.ShotDistM[1].Reset();
+		Track.StruckOnce.Reset();
+		Track.StrikesUnobserved[0] = Track.StrikesUnobserved[1] = 0;
 		FState* StatePtr = &State;
 		for (FSide& Side : State.Sides)
 		{
@@ -550,6 +985,7 @@ namespace PmcArena
 					continue;
 				}
 				Track.Fighters.Add(Operative);
+				Track.LastHp.Add(Operative, Operative->HealthComponent ? FMath::Max(0.f, Operative->HealthComponent->GetCurrentHealth()) : 0.f);
 				if (Track.Listened.Contains(Operative))
 				{
 					continue;
@@ -563,6 +999,38 @@ namespace PmcArena
 					Json->SetStringField(TEXT("side"), SideOf(*StatePtr, Shooter));
 					Json->SetStringField(TEXT("to"), Target ? Target->GetName() : TEXT("?"));
 					Json->SetBoolField(TEXT("hit"), bHit);
+					// Task #53 ambush stats: a shot at the other side - its distance, whether the target's team saw the shooter (checked
+					// before this shot's own demask lands: the team sight updates on its interval), the first hit of the round.
+					const AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Target);
+					const int32 ShooterSide = SideIndexOf(*StatePtr, Shooter);
+					const int32 VictimSide = SideIndexOf(*StatePtr, Victim);
+					if (Shooter && Victim && ShooterSide != INDEX_NONE && VictimSide != INDEX_NONE && ShooterSide != VictimSide)
+					{
+						FTrack& ShotTrack = StatePtr->Track;
+						const float DistM = static_cast<float>(FVector::Dist2D(Shooter->GetActorLocation(), Victim->GetActorLocation())) / 100.f;
+						ShotTrack.ShotDistM[ShooterSide].Add(DistM);
+						const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(Shooter->GetWorld());
+						const bool bConcealed = Pmc && !Pmc->IsVisibleToTeam(Victim->TeamId, Shooter);
+						Json->SetBoolField(TEXT("concealed"), bConcealed);
+						Json->SetNumberField(TEXT("dist_m"), FMath::RoundToFloat(DistM * 10.f) / 10.f);
+						if (bHit)
+						{
+							if (ShotTrack.FirstStrikeSide == INDEX_NONE)
+							{
+								ShotTrack.FirstStrikeSide = ShooterSide;
+							}
+							ShotTrack.LastHit.Add(const_cast<AOperativeCharacter*>(Victim), { ShooterSide, bConcealed, StatePtr->StageTime });
+							// The first hit on him: was he looking away from the shooter (his facing > 45 deg off the bearing to him)?
+							if (!ShotTrack.StruckOnce.Contains(Victim))
+							{
+								ShotTrack.StruckOnce.Add(const_cast<AOperativeCharacter*>(Victim));
+								const float Off = AmbushWatchRules::AngleOffDeg(static_cast<float>(Victim->GetActorRotation().Yaw),
+									AmbushWatchRules::BearingDeg(FVector2D(Victim->GetActorLocation()), FVector2D(Shooter->GetActorLocation())));
+								ShotTrack.StrikesUnobserved[ShooterSide] += Off > 45.f ? 1 : 0;
+								Json->SetBoolField(TEXT("unobserved"), Off > 45.f);
+							}
+						}
+					}
 					StatePtr->Track.Events.Add(MakeShared<FJsonValueObject>(Json));
 				}));
 				if (Operative->HealthComponent)
@@ -672,6 +1140,86 @@ namespace PmcArena
 		}
 	}
 
+	/**
+	 * Damage per side (task #53): each fighter's HP drop since the last sample goes to the side of his last hit (within 3 s) - and to its
+	 * damage from concealment when that shooter was not seen by the target's team.
+	 */
+	void UpdateDamage(FState& State)
+	{
+		FTrack& Track = State.Track;
+		for (const TWeakObjectPtr<AOperativeCharacter>& Fighter : Track.Fighters)
+		{
+			float* Last = Track.LastHp.Find(Fighter);
+			if (!Last)
+			{
+				continue;
+			}
+			const AOperativeCharacter* Operative = Fighter.Get();
+			const float Hp = Operative && !Operative->IsKilledInAction() && Operative->HealthComponent ? FMath::Max(0.f, Operative->HealthComponent->GetCurrentHealth()) : 0.f;
+			const float Drop = *Last - Hp;
+			*Last = Hp;
+			const FHitNote* Note = Drop > 0.01f ? Track.LastHit.Find(Fighter) : nullptr;
+			if (Note && Note->Side != INDEX_NONE && State.StageTime - Note->Time <= 3.f)
+			{
+				Track.Damage[Note->Side] += Drop;
+				Track.Concealed[Note->Side] += Note->bConcealed ? Drop : 0.f;
+			}
+		}
+	}
+
+	/** Live men of Side within the objective's radius (planar) and on its level (3 m). */
+	int32 CountOnPoint(const FState& State, const FSide& Side)
+	{
+		int32 Count = 0;
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Side.Members)
+		{
+			const AOperativeCharacter* Operative = Member.Get();
+			if (Operative && !Operative->IsKilledInAction() && Operative->HealthComponent && Operative->HealthComponent->IsAlive()
+				&& FVector::Dist2D(Operative->GetActorLocation(), State.Objective) <= State.Config.ObjectiveRadiusCm
+				&& FMath::Abs(Operative->GetActorLocation().Z - State.Objective.Z) <= 300.f)
+			{
+				++Count;
+			}
+		}
+		return Count;
+	}
+
+	/** One step of the capture clock and the commanders' objective inputs (the time fraction, the clock, an enemy on the point). */
+	void UpdateObjective(FState& State, UWorld* World)
+	{
+		if (!State.bRoundObjective)
+		{
+			return;
+		}
+		const int32 Atk = State.bAAttacks ? 0 : 1;
+		const int32 AttackersOn = CountOnPoint(State, State.Sides[Atk]);
+		const int32 DefendersOn = CountOnPoint(State, State.Sides[1 - Atk]);
+		if (State.Clock.Step(AttackersOn, DefendersOn, StepSeconds))
+		{
+			TSharedRef<FJsonObject> Json = EventJson(State, TEXT("objective"));
+			Json->SetStringField(TEXT("event"), TEXT("captured"));
+			Json->SetStringField(TEXT("side"), State.Sides[Atk].Label);
+			State.Track.Events.Add(MakeShared<FJsonValueObject>(Json));
+		}
+		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+		{
+			const float TimeFrac = FMath::Clamp(State.StageTime / FMath::Max(State.Options.TimeLimit, 1.f), 0.f, 1.f);
+			Pmc->UpdateTeamObjective(State.Sides[Atk].TeamId, TimeFrac, State.Clock.HoldFrac(), DefendersOn > 0);
+			Pmc->UpdateTeamObjective(State.Sides[1 - Atk].TeamId, TimeFrac, State.Clock.HoldFrac(), AttackersOn > 0);
+		}
+	}
+
+	float Median(TArray<float> Values)
+	{
+		if (Values.IsEmpty())
+		{
+			return 0.f;
+		}
+		Values.Sort();
+		const int32 Mid = Values.Num() / 2;
+		return Values.Num() % 2 == 1 ? Values[Mid] : 0.5f * (Values[Mid - 1] + Values[Mid]);
+	}
+
 	FString WriteTrack(FState& State, UWorld* World, const FRoundResult& Result)
 	{
 		TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -686,6 +1234,16 @@ namespace PmcArena
 		Root->SetStringField(TEXT("winner"), Result.Winner);
 		Root->SetNumberField(TEXT("duration_s"), FMath::RoundToFloat(Result.Duration * 10.f) / 10.f);
 		Root->SetNumberField(TEXT("highlight_score"), Result.HighlightScore);
+		Root->SetStringField(TEXT("scenario"), Result.Scenario);
+		if (Result.bObjective)
+		{
+			TSharedRef<FJsonObject> Objective = MakeShared<FJsonObject>();
+			Objective->SetNumberField(TEXT("x"), FMath::RoundToFloat(Result.ObjectiveLocation.X));
+			Objective->SetNumberField(TEXT("y"), FMath::RoundToFloat(Result.ObjectiveLocation.Y));
+			Objective->SetNumberField(TEXT("radius"), State.Config.ObjectiveRadiusCm);
+			Objective->SetStringField(TEXT("attacker"), Result.Attacker);
+			Root->SetObjectField(TEXT("objective"), Objective);
+		}
 		TArray<TSharedPtr<FJsonValue>> Fighters;
 		for (const TWeakObjectPtr<AOperativeCharacter>& Fighter : State.Track.Fighters)
 		{
@@ -747,6 +1305,7 @@ namespace PmcArena
 		Json->SetNumberField(TEXT("friendly_fire_hits"), Stats.FriendlyFireHits);
 		Json->SetNumberField(TEXT("stuck_events"), Stats.StuckEvents);
 		Json->SetNumberField(TEXT("orders"), Stats.OrdersIssued);
+		Json->SetNumberField(TEXT("objective_moves"), Stats.ObjectiveMoves);
 		return Json;
 	}
 
@@ -766,6 +1325,16 @@ namespace PmcArena
 		Root->SetBoolField(TEXT("record"), State.Options.bRecord);
 		Root->SetStringField(TEXT("weights_a"), State.Options.WeightsA.IsEmpty() ? TEXT("Content/Data/AI/pmc_commander.json") : State.Options.WeightsA);
 		Root->SetStringField(TEXT("weights_b"), State.Options.Opponent == EOpponent::Bot ? TEXT("None") : (State.Options.WeightsB.IsEmpty() ? TEXT("Content/Data/AI/pmc_commander.json") : State.Options.WeightsB));
+		Root->SetBoolField(TEXT("objective"), State.Options.bObjective);
+		Root->SetStringField(TEXT("scenario"), State.Options.Scenario < 0 ? TEXT("random") : PmcCommanderRules::ScenarioName(static_cast<EPmcScenario>(State.Options.Scenario)));
+		{
+			TSharedRef<FJsonObject> Config = MakeShared<FJsonObject>();
+			Config->SetNumberField(TEXT("objective_radius_m"), State.Config.ObjectiveRadiusCm / 100.f);
+			Config->SetNumberField(TEXT("objective_hold_s"), State.Config.HoldSeconds);
+			Config->SetNumberField(TEXT("objective_offset_frac"), State.Config.ObjectiveOffsetFrac);
+			Config->SetStringField(TEXT("source"), State.Config.Source);
+			Root->SetObjectField(TEXT("arena_config"), Config);
+		}
 		Root->SetStringField(TEXT("highlight_formula"), TEXT("kills + decided(1) + last_man_standing(2) + lead_swings*1.5 + flanks_succeeded + 0.5*ambushes + 0.5*heals + duration_20_150s(+1 else -1)"));
 		Root->SetStringField(TEXT("started"), State.Started.ToIso8601());
 		Root->SetStringField(TEXT("finished"), FDateTime::Now().ToIso8601());
@@ -795,6 +1364,24 @@ namespace PmcArena
 			Round->SetNumberField(TEXT("index"), Result.Index);
 			Round->SetNumberField(TEXT("seed"), Result.Seed);
 			Round->SetStringField(TEXT("attacker"), Result.Attacker);
+			Round->SetStringField(TEXT("scenario"), Result.Scenario);
+			Round->SetStringField(TEXT("scenario_requested"), Result.ScenarioRequested);
+			Round->SetStringField(TEXT("weather"), Result.Weather);
+			{
+				TSharedRef<FJsonObject> Objective = MakeShared<FJsonObject>();
+				Objective->SetBoolField(TEXT("enabled"), Result.bObjective);
+				Objective->SetStringField(TEXT("result"), Result.ObjectiveResult);
+				if (Result.bObjective)
+				{
+					Objective->SetNumberField(TEXT("x"), FMath::RoundToFloat(Result.ObjectiveLocation.X));
+					Objective->SetNumberField(TEXT("y"), FMath::RoundToFloat(Result.ObjectiveLocation.Y));
+					Objective->SetNumberField(TEXT("z"), FMath::RoundToFloat(Result.ObjectiveLocation.Z));
+					Objective->SetNumberField(TEXT("radius_m"), State.Config.ObjectiveRadiusCm / 100.f);
+					Objective->SetNumberField(TEXT("hold_s"), State.Config.HoldSeconds);
+					Objective->SetNumberField(TEXT("attacker_clock_s"), FMath::RoundToFloat(Result.AttackerHeld * 10.f) / 10.f);
+				}
+				Round->SetObjectField(TEXT("objective"), Objective);
+			}
 			Round->SetStringField(TEXT("winner"), Result.Winner);
 			Round->SetNumberField(TEXT("duration_s"), FMath::RoundToFloat(Result.Duration * 10.f) / 10.f);
 			Round->SetStringField(TEXT("end_reason"), Result.EndReason);
@@ -824,6 +1411,16 @@ namespace PmcArena
 				Side->SetNumberField(TEXT("heals"), Result.Stats[Index].Heals);
 				Side->SetNumberField(TEXT("friendly_fire"), Result.Stats[Index].FriendlyFireHits);
 				Side->SetNumberField(TEXT("stuck_events"), Result.Stats[Index].StuckEvents);
+				// Task #53: the role and the ambush stats.
+				const bool bAttacker = Result.Attacker == (Index == 0 ? TEXT("A") : TEXT("B"));
+				Side->SetStringField(TEXT("role"), bAttacker ? TEXT("attacker") : TEXT("defender"));
+				Side->SetNumberField(TEXT("damage_dealt"), FMath::RoundToFloat(Result.DamageDealt[Index]));
+				Side->SetNumberField(TEXT("damage_from_concealment"), FMath::RoundToFloat(Result.DamageFromConcealment[Index]));
+				Side->SetNumberField(TEXT("first_strike"), Result.FirstStrike[Index]);
+				Side->SetNumberField(TEXT("objective_hold_s"), FMath::RoundToFloat(Result.ObjectiveHoldS[Index] * 10.f) / 10.f);
+				Side->SetNumberField(TEXT("median_engagement_m"), FMath::RoundToFloat(Result.MedianEngagementM[Index] * 10.f) / 10.f);
+				Side->SetNumberField(TEXT("shots"), Result.Shots[Index]);
+				Side->SetNumberField(TEXT("strikes_unobserved"), Result.StrikesUnobserved[Index]);
 				Sides->SetObjectField(Index == 0 ? TEXT("A") : TEXT("B"), Side);
 			}
 			Round->SetObjectField(TEXT("sides"), Sides);
@@ -886,6 +1483,36 @@ namespace PmcArena
 			{
 				const FString Winner = (*Round)->GetStringField(TEXT("winner"));
 				Check(State, Winner == TEXT("A") || Winner == TEXT("B") || Winner == TEXT("draw"), FString::Printf(TEXT("winner is A / B / draw (%s)"), *Winner));
+				const FString Attacker = (*Round)->GetStringField(TEXT("attacker"));
+				const FString Reason = (*Round)->GetStringField(TEXT("end_reason"));
+				const TSharedPtr<FJsonObject>* RoundSides = nullptr;
+				const bool bRoles = (*Round)->TryGetObjectField(TEXT("sides"), RoundSides)
+					&& (*RoundSides)->GetObjectField(Attacker)->GetStringField(TEXT("role")) == TEXT("attacker")
+					&& (*RoundSides)->GetObjectField(Attacker == TEXT("A") ? TEXT("B") : TEXT("A"))->GetStringField(TEXT("role")) == TEXT("defender");
+				Check(State, bRoles, FString::Printf(TEXT("sides.<X>.role: %s attacks, the other defends"), *Attacker));
+				bool bStats = bRoles;
+				for (const TCHAR* Field : { TEXT("damage_from_concealment"), TEXT("first_strike"), TEXT("objective_hold_s"), TEXT("median_engagement_m"), TEXT("strikes_unobserved") })
+				{
+					bStats &= (*RoundSides)->GetObjectField(TEXT("A"))->HasField(Field) && (*RoundSides)->GetObjectField(TEXT("B"))->HasField(Field);
+				}
+				Check(State, bStats, TEXT("the ambush stats per side (damage_from_concealment, first_strike, objective_hold_s, median_engagement_m)"));
+				Check(State, (*Round)->HasField(TEXT("scenario")) && (*Round)->HasField(TEXT("objective")), FString::Printf(TEXT("scenario '%s' + objective recorded"),
+					*(*Round)->GetStringField(TEXT("scenario"))));
+				Check(State, Reason == TEXT("elimination") || Reason == TEXT("objective") || Reason == TEXT("time_limit"), FString::Printf(TEXT("end_reason %s"), *Reason));
+				if (State.Options.bSmokeCapture)
+				{
+					// PmcArenaObjectiveSmoke: the defenders were parked - the attackers walked onto the point and held it.
+					const TSharedPtr<FJsonObject> Objective = (*Round)->GetObjectField(TEXT("objective"));
+					Check(State, Reason == TEXT("objective") && Winner == Attacker && Objective->GetStringField(TEXT("result")) == TEXT("captured"),
+						FString::Printf(TEXT("the attackers (%s) captured the point (end_reason %s, winner %s, result %s)"), *Attacker, *Reason, *Winner,
+							*Objective->GetStringField(TEXT("result"))));
+					const double Hold = bRoles ? (*RoundSides)->GetObjectField(Attacker)->GetNumberField(TEXT("objective_hold_s")) : 0.0;
+					Check(State, Hold >= State.Config.HoldSeconds - 0.3f, FString::Printf(TEXT("attacker objective_hold_s %.1f >= hold %.0f s"), Hold, State.Config.HoldSeconds));
+					const TSharedPtr<FJsonObject>* RoundStats = nullptr;
+					Check(State, (*Round)->TryGetObjectField(TEXT("stats"), RoundStats) && (*RoundStats)->GetObjectField(Attacker)->GetNumberField(TEXT("objective_moves")) >= 1.0,
+						TEXT("the attackers' commander gave Objective orders"));
+					return;
+				}
 				Check(State, (*Round)->GetBoolField(TEXT("fight_started")), TEXT("the fight started (the squads met)"));
 				Check(State, (*Round)->GetNumberField(TEXT("duration_s")) > 0.0, TEXT("duration recorded"));
 				Check(State, (*Round)->HasField(TEXT("highlight_score")), TEXT("highlight_score present"));
@@ -961,7 +1588,39 @@ namespace PmcArena
 		}
 		Pmc->ResetTeam(TeamA);
 		Pmc->ResetTeam(TeamB);
-		const bool bRandomPair = State.bRandomSpawns && PickRandomSpawns(State, World, Seed);
+		// The attacker alternates with the round seed's parity (even = A); task #53: the round's scenario and objective.
+		const bool bAAttacks = (Seed % 2) == 0;
+		State.bAAttacks = bAAttacks;
+		const int32 AttackerIndex = bAAttacks ? 0 : 1;
+		const FString ScenarioRequested = State.Options.Scenario < 0 ? FString(TEXT("random")) : FString(PmcCommanderRules::ScenarioName(static_cast<EPmcScenario>(State.Options.Scenario)));
+		EPmcScenario Scenario = EPmcScenario::Skirmish;
+		if (State.bRandomSpawns)
+		{
+			Scenario = State.Options.Scenario >= 0 ? static_cast<EPmcScenario>(State.Options.Scenario) : PmcCommanderRules::PickScenario(Seed);
+		}
+		else if (State.Options.Scenario == static_cast<int32>(EPmcScenario::Blizzard))
+		{
+			Scenario = EPmcScenario::Blizzard;
+		}
+		bool bSitePlaced = false;
+		if (Scenario == EPmcScenario::Chokepoint || Scenario == EPmcScenario::Street || Scenario == EPmcScenario::Roofs)
+		{
+			bSitePlaced = PlaceScenarioSite(State, World, Scenario, Seed, AttackerIndex);
+			if (!bSitePlaced)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] seed %d: no %s site on this map - a skirmish instead"), Seed, PmcCommanderRules::ScenarioName(Scenario));
+				Scenario = EPmcScenario::Skirmish;
+			}
+		}
+		const bool bRandomPair = bSitePlaced || (State.bRandomSpawns && PickRandomSpawns(State, World, Seed));
+		State.bRoundObjective = State.Options.bObjective;
+		if (State.bRoundObjective && !bSitePlaced)
+		{
+			State.Objective = PlaceObjectiveNear(State, World, State.Sides[1 - AttackerIndex].Spawn, State.Sides[AttackerIndex].Spawn, Seed);
+		}
+		State.Clock = FPmcObjectiveClock();
+		State.Clock.HoldSeconds = State.Config.HoldSeconds;
+		const FString Weather = ApplyWeather(State, World, Scenario == EPmcScenario::Blizzard);
 		// Side A: a PMC squad at the start (or at the round's random spot).
 		FSide& A = State.Sides[0];
 		for (AOperativeCharacter* Fighter : Pmc->SpawnSquad(TeamA, A.Spawn, A.Facing, State.Options.Squad, Seed))
@@ -1014,16 +1673,39 @@ namespace PmcArena
 				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] no playtest bot in this build: the player's squad fights on its own fire alone"));
 			}
 		}
-		// The attacker alternates with the round seed's parity: the defender waits in ambush, the attacker advances on the defender's spawn.
-		const bool bAAttacks = (Seed % 2) == 0;
-		Pmc->SetTeamAssault(TeamA, bAAttacks ? &B.Spawn : nullptr);
+		// The defender waits in ambush, the attacker advances on the objective (task #53; without one: on the defender's spawn).
+		const FVector AssaultA = State.bRoundObjective ? State.Objective : B.Spawn;
+		const FVector AssaultB = State.bRoundObjective ? State.Objective : A.Spawn;
+		Pmc->SetTeamAssault(TeamA, bAAttacks ? &AssaultA : nullptr);
 		if (State.Options.Opponent == EOpponent::Pmc)
 		{
-			Pmc->SetTeamAssault(TeamB, bAAttacks ? nullptr : &A.Spawn);
+			Pmc->SetTeamAssault(TeamB, bAAttacks ? nullptr : &AssaultB);
 		}
 		else if (State.Options.Opponent == EOpponent::Player)
 		{
-			Pmc->SetTeamAssault(PmcTeam::Player, bAAttacks ? nullptr : &A.Spawn);
+			Pmc->SetTeamAssault(PmcTeam::Player, bAAttacks ? nullptr : &AssaultB);
+		}
+		if (State.bRoundObjective)
+		{
+			Pmc->SetTeamObjective(State.Sides[AttackerIndex].TeamId, EPmcRole::Attacker, State.Objective, State.Config.ObjectiveRadiusCm);
+			Pmc->SetTeamObjective(State.Sides[1 - AttackerIndex].TeamId, EPmcRole::Defender, State.Objective, State.Config.ObjectiveRadiusCm);
+		}
+		// PmcArenaObjectiveSmoke: the defenders out of the fight (parked far away, alive, not commanded) - only the capture can end it.
+		if (State.Options.bSmokeCapture)
+		{
+			FSide& Defenders = State.Sides[1 - AttackerIndex];
+			Pmc->SetTeamCommanded(Defenders.TeamId, false);
+			for (int32 Index = 0; Index < Defenders.Members.Num(); ++Index)
+			{
+				if (AOperativeCharacter* Member = Defenders.Members[Index].Get())
+				{
+					Member->StopOperative();
+					Member->SetActorHiddenInGame(true);
+					Member->SetActorEnableCollision(false);
+					Member->CustomTimeDilation = 0.f;
+					Member->SetActorLocation(Member->GetActorLocation() + FVector(100000.f + Index * 500.f, 50000.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
+				}
+			}
 		}
 		for (FSide& Side : State.Sides)
 		{
@@ -1033,6 +1715,11 @@ namespace PmcArena
 		Result.Index = State.Round;
 		Result.Seed = Seed;
 		Result.Attacker = bAAttacks ? TEXT("A") : TEXT("B");
+		Result.Scenario = PmcCommanderRules::ScenarioName(Scenario);
+		Result.ScenarioRequested = ScenarioRequested;
+		Result.Weather = Weather;
+		Result.bObjective = State.bRoundObjective;
+		Result.ObjectiveLocation = State.Objective;
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
 			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[Index].Members)
@@ -1041,15 +1728,18 @@ namespace PmcArena
 			}
 		}
 		StartTrack(State, World);
-		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d: A %d men at %s vs B %d men at %s, attacker %s"), State.Round, A.Members.Num(), *A.Spawn.ToCompactString(),
-			B.Members.Num(), *B.Spawn.ToCompactString(), *Result.Attacker);
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d: A %d men at %s vs B %d men at %s, attacker %s, scenario %s (asked %s), weather %s, objective %s at %s (r %.0f m, hold %.0f s)"),
+			State.Round, A.Members.Num(), *A.Spawn.ToCompactString(), B.Members.Num(), *B.Spawn.ToCompactString(), *Result.Attacker, *Result.Scenario, *ScenarioRequested, *Weather,
+			State.bRoundObjective ? TEXT("on") : TEXT("off"), *State.Objective.ToCompactString(), State.Config.ObjectiveRadiusCm / 100.f, State.Config.HoldSeconds);
 	}
 
-	void EndRound(FState& State, UWorld* World, const TCHAR* Why)
+	void EndRound(FState& State, UWorld* World, const FPmcRoundOutcome& Outcome)
 	{
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
 		FRoundResult& Result = State.Results.Last();
 		Result.Duration = State.StageTime;
+		UpdateDamage(State);
+		const TCHAR* Why = *Outcome.Reason;
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
 			const FSide& Side = State.Sides[Index];
@@ -1062,20 +1752,22 @@ namespace PmcArena
 			}
 		}
 		Result.bFightStarted = Pmc && (Pmc->HasTeamContact(TeamA) || Pmc->HasTeamContact(State.Sides[1].TeamId));
-		if (Result.Survivors[0] > 0 && Result.Survivors[1] == 0)
-		{
-			Result.Winner = TEXT("A");
-		}
-		else if (Result.Survivors[1] > 0 && Result.Survivors[0] == 0)
-		{
-			Result.Winner = TEXT("B");
-		}
-		else
-		{
-			Result.Winner = TEXT("draw");
-		}
+		Result.Winner = Outcome.Winner;
+		Result.ObjectiveResult = Outcome.ObjectiveResult;
+		Result.AttackerHeld = State.Clock.Held;
 		SampleTrack(State, World, TrackInterval); // the last sample
-		Result.EndReason = FCString::Strcmp(Why, TEXT("time limit")) == 0 ? TEXT("time_limit") : TEXT("elimination");
+		Result.EndReason = Outcome.Reason;
+		const int32 AttackerIndex = State.bAAttacks ? 0 : 1;
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			Result.DamageDealt[Index] = State.Track.Damage[Index];
+			Result.DamageFromConcealment[Index] = State.Track.Concealed[Index];
+			Result.FirstStrike[Index] = State.Track.FirstStrikeSide == Index ? 1 : 0;
+			Result.ObjectiveHoldS[Index] = State.bRoundObjective ? State.Clock.ControlSeconds[Index == AttackerIndex ? 0 : 1] : 0.f;
+			Result.MedianEngagementM[Index] = Median(State.Track.ShotDistM[Index]);
+			Result.Shots[Index] = State.Track.ShotDistM[Index].Num();
+			Result.StrikesUnobserved[Index] = State.Track.StrikesUnobserved[Index];
+		}
 		for (const TWeakObjectPtr<AOperativeCharacter>& Fighter : State.Track.Retreated)
 		{
 			const AOperativeCharacter* Operative = Fighter.Get();
@@ -1092,8 +1784,16 @@ namespace PmcArena
 			Result.Stats[0].FlanksAttempted, Result.Stats[0].FlanksSucceeded, Result.Stats[1].FlanksAttempted, Result.Stats[1].FlanksSucceeded,
 			Result.Stats[0].SuppressionSeconds, Result.Stats[1].SuppressionSeconds, Result.Stats[0].Heals, Result.Stats[1].Heals, Result.Stats[0].Retreats, Result.Stats[1].Retreats,
 			Result.Stats[0].StuckEvents, Result.Stats[1].StuckEvents, Result.HighlightScore, *Result.TrackFile);
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d objective: scenario %s, attacker %s, end %s, objective %s (clock %.1f s), damage A %.0f (concealed %.0f) / B %.0f (concealed %.0f), first strike %s, hold A %.1f s / B %.1f s, median engagement A %.1f m / B %.1f m, unobserved strikes A %d / B %d"),
+			State.Round, *Result.Scenario, *Result.Attacker, *Result.EndReason, *Result.ObjectiveResult, Result.AttackerHeld, Result.DamageDealt[0], Result.DamageFromConcealment[0],
+			Result.DamageDealt[1], Result.DamageFromConcealment[1], Result.FirstStrike[0] ? TEXT("A") : (Result.FirstStrike[1] ? TEXT("B") : TEXT("-")), Result.ObjectiveHoldS[0],
+			Result.ObjectiveHoldS[1], Result.MedianEngagementM[0], Result.MedianEngagementM[1], Result.StrikesUnobserved[0], Result.StrikesUnobserved[1]);
 		if (Pmc)
 		{
+			for (const int32 Team : { TeamA, TeamB, PmcTeam::Player })
+			{
+				Pmc->SetTeamObjective(Team, EPmcRole::None, FVector::ZeroVector, 0.f);
+			}
 			Pmc->SetTeamCommanded(TeamA, false);
 			Pmc->SetTeamCommanded(TeamB, false);
 			Pmc->SetTeamCommanded(PmcTeam::Player, false);
@@ -1186,6 +1886,10 @@ namespace PmcArena
 					Variable->Set(0, ECVF_SetByConsole);
 				}
 			}
+			State.Config = LoadConfig(World);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] objective %s: radius %.0f m, hold %.0f s, offset %.2f (%s); scenario %s"), State.Options.bObjective ? TEXT("on") : TEXT("off"),
+				State.Config.ObjectiveRadiusCm / 100.f, State.Config.HoldSeconds, State.Config.ObjectiveOffsetFrac, *State.Config.Source,
+				State.Options.Scenario < 0 ? TEXT("random") : PmcCommanderRules::ScenarioName(static_cast<EPmcScenario>(State.Options.Scenario)));
 			State.Started = FDateTime::Now();
 			State.StartedUtc = FDateTime::UtcNow();
 			State.RunName = FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S")) + (State.Options.bRecord ? TEXT("-record") : TEXT(""));
@@ -1217,22 +1921,15 @@ namespace PmcArena
 					Shot(State, World, State.ShotsTaken == 0 ? TEXT("contact") : (State.ShotsTaken == 1 ? TEXT("midfight") : TEXT("late")));
 				}
 			}
-			const int32 AliveA = CountAlive(State.Sides[0].Members);
-			const int32 AliveB = CountAlive(State.Sides[1].Members);
-			const TCHAR* Why = nullptr;
-			if (AliveA == 0 || AliveB == 0)
-			{
-				Why = TEXT("a side is down");
-			}
-			else if (State.StageTime >= State.Options.TimeLimit)
-			{
-				Why = TEXT("time limit");
-			}
-			if (!Why)
+			UpdateDamage(State);
+			UpdateObjective(State, World);
+			const FPmcRoundOutcome Outcome = PmcCommanderRules::ResolveRound(CountAlive(State.Sides[0].Members), CountAlive(State.Sides[1].Members),
+				State.StageTime >= State.Options.TimeLimit, State.bRoundObjective, State.Clock, State.bAAttacks);
+			if (!Outcome.bOver)
 			{
 				return true;
 			}
-			EndRound(State, World, Why);
+			EndRound(State, World, Outcome);
 			State.Stage = State.Round >= State.Options.Rounds ? 4 : 3;
 			State.StageTime = 0.f;
 			return true;
@@ -1255,7 +1952,7 @@ namespace PmcArena
 		}
 	}
 
-	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke)
+	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false)
 	{
 		if (!World)
 		{
@@ -1269,6 +1966,13 @@ namespace PmcArena
 			State->Options.Rounds = 1;
 			State->Options.Opponent = EOpponent::Pmc;
 			State->Options.TimeLimit = FMath::Min(State->Options.TimeLimit, 90.f);
+		}
+		if (bSmokeCapture)
+		{
+			// Side A attacks (an even round seed); the objective on, the defenders parked.
+			State->Options.bSmokeCapture = true;
+			State->Options.bObjective = true;
+			State->Options.Seed += (State->Options.Seed % 2 == 0) ? 0 : 1;
 		}
 		State->bWeightsALoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsA, State->WeightsA);
 		State->bWeightsBLoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsB, State->WeightsB);
@@ -1289,15 +1993,25 @@ namespace PmcArena
 		RunWith(Args, World, true);
 	}
 
+	void RunObjectiveSmoke(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, true);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
-		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1; writes Saved/Arena/<timestamp>.json, then exits."),
+		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard; writes Saved/Arena/<timestamp>.json, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 
 	static FAutoConsoleCommandWithWorldAndArgs SmokeCommand(
 		TEXT("CodexTactics.PmcArenaSmoke"),
 		TEXT("Dev check: one PMC-vs-PMC arena round on this map and the result JSON validated; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunSmoke));
+
+	static FAutoConsoleCommandWithWorldAndArgs ObjectiveSmokeCommand(
+		TEXT("CodexTactics.PmcArenaObjectiveSmoke"),
+		TEXT("Dev check (task #53): one arena round with the defenders parked out of the fight - the attackers must walk onto the objective and capture it; logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunObjectiveSmoke));
 }
 
 #endif // !UE_BUILD_SHIPPING

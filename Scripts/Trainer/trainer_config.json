@@ -46,7 +46,12 @@
       "suppression_s": {"weight": 0.5, "cap": 30},
       "ambushes": {"weight": 0.8, "cap": 2},
       "retreats_survived": {"weight": 0.4, "cap": 2},
-      "heals": {"weight": 0.3, "cap": 3}
+      "heals": {"weight": 0.3, "cap": 3},
+      "_objective_comment": "Task #53 (objective rounds): an ambush that hurts from concealment (HP dealt while the shooter was not seen by the target's team, cap = one man's HP), the first hit of the round, and winning the objective (captured as the attacker / held to the time limit as the defender) pay a modest extra on top of the win.",
+      "damage_from_concealment": {"weight": 1.5, "cap": 100},
+      "first_strike": {"weight": 0.75, "cap": 1},
+      "objective_win": {"weight": 2.0, "cap": 1},
+      "strikes_unobserved": {"weight": 0.5, "cap": 2}
     },
     "penalties": {
       "friendly_fire": {"weight": -1.5, "cap": 3},
@@ -61,7 +66,7 @@
     "uproject": "CodexTactics.uproject",
     "map": "/Game/Maps/Generated/L_Gen_Depot_1",
     "console_command": "CodexTactics.PmcArena",
-    "arg_template": ["Map={map}", "Rounds={rounds}", "Seed={seed}", "WeightsA={weights_a}", "Opponent={opponent}", "WeightsB={weights_b}", "TimeLimit={time_limit_s}", "Out={out}", "Spawns=Random"],
+    "arg_template": ["Map={map}", "Rounds={rounds}", "Seed={seed}", "WeightsA={weights_a}", "Opponent={opponent}", "WeightsB={weights_b}", "TimeLimit={time_limit_s}", "Out={out}", "Spawns=Random", "Objective=1", "Scenario=random"],
     "opponent_names": {"bot": "Bot", "champion": "Pmc"},
     "engine_args": ["-game", "-nullrhi", "-nosplash", "-nosound", "-unattended", "-windowed", "-FORCELOGFLUSH", "-NoTelemetry", "-UseFixedTimeStep", "-FPS=60", "-FixedSeed", "-Multiprocess", "-LevelJson=L_PmcArenaDepot.json"],
     "time_limit_s": 240,
@@ -92,6 +97,7 @@
       "round_seed_key": "seed",
       "round_index_key": "index",
       "end_reason_key": "end_reason",
+      "scenario_key": "scenario",
       "track_key": "track",
       "pad_missing_rounds_as_crash": true,
       "fields": {
@@ -108,7 +114,13 @@
         "retreats_survived": "retreats_survived",
         "heals": "heals",
         "friendly_fire": "friendly_fire",
-        "stuck_events": "stuck_events"
+        "stuck_events": "stuck_events",
+        "role": "role",
+        "damage_from_concealment": "damage_from_concealment",
+        "first_strike": "first_strike",
+        "objective_hold_s": "objective_hold_s",
+        "median_engagement_m": "median_engagement_m",
+        "strikes_unobserved": "strikes_unobserved"
       }
     }
   },

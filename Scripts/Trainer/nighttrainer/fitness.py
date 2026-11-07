@@ -10,7 +10,11 @@ All weights come from trainer_config.json "fitness".
 from __future__ import annotations
 
 METRICS = ("kills", "flanks_attempted", "flanks_succeeded", "suppression_s", "ambushes", "retreats",
-           "retreats_survived", "heals", "friendly_fire", "stuck_events", "close_shot_ratio", "close_hits_taken")
+           "retreats_survived", "heals", "friendly_fire", "stuck_events", "close_shot_ratio", "close_hits_taken",
+           # task #53 (objective rounds): bonuses via fitness.bonuses (damage_from_concealment, first_strike,
+           # objective_win), the rest are stats for the report
+           "damage_from_concealment", "first_strike", "objective_hold_s", "median_engagement_m", "objective_win",
+           "strikes_unobserved")
 
 
 def crash_round() -> dict:
@@ -56,6 +60,8 @@ def round_score(r: dict, cfg: dict) -> float:
         score += float(dur.get("weight", 1.0)) * max(0.0, 1.0 - abs(_num(r, "duration_s") - target) / tol)
     for table in ("bonuses", "penalties"):
         for key, spec in cfg.get(table, {}).items():
+            if not isinstance(spec, dict):  # "_comment" keys
+                continue
             cap = max(1e-6, float(spec.get("cap", 1.0)))
             score += float(spec.get("weight", 0.0)) * min(_num(r, key), cap) / cap
     cr = cfg.get("close_range")

@@ -76,6 +76,62 @@ def kill_tree(proc: subprocess.Popen) -> None:
         pass
 
 
+class InstanceLock:
+    """One night_trainer.py at a time (2026-11-06: a watchdog that read the scheduled task's state restarted a trainer that
+    was still running and started a duplicate). Saved/Trainer/night_trainer.lock = JSON {pid, run_id, started}; a second
+    instance finds the holder's PID alive and exits cleanly; a dead holder's lock is stale and taken over. Created with
+    O_EXCL so two starts in the same second cannot both win."""
+
+    def __init__(self, repo_root: str, run_id: str = ""):
+        self.path = os.path.join(repo_root, "Saved", "Trainer", "night_trainer.lock")
+        self.run_id = run_id
+        self.owned = False
+
+    def holder(self):
+        """The live other holder's lock dict, else None (no lock, a stale one, or our own)."""
+        try:
+            lock = load_json(self.path)
+        except (OSError, ValueError):
+            return None
+        pid = int(lock.get("pid") or 0) if str(lock.get("pid") or "0").isdigit() else 0
+        if pid and pid != os.getpid() and pid_alive(pid):
+            return lock
+        return None
+
+    def acquire(self) -> bool:
+        if self.holder():
+            return False
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        for _ in range(2):
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                if self.holder():
+                    return False
+                try:  # stale (dead PID) or our own leftover: take it over
+                    os.remove(self.path)
+                except OSError:
+                    return False
+                continue
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"pid": os.getpid(), "run_id": self.run_id,
+                           "started": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, f)
+            self.owned = True
+            return True
+        return False
+
+    def release(self) -> None:
+        if not self.owned:
+            return
+        try:
+            lock = load_json(self.path)
+            if int(lock.get("pid") or 0) == os.getpid():
+                os.remove(self.path)
+        except (OSError, ValueError):
+            pass
+        self.owned = False
+
+
 class BuildLock:
     """Python side of Scripts/agent_lock.ps1 (Saved/agent.lock JSON: agent, purpose, pid, manual, started)."""
 

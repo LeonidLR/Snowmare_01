@@ -31,6 +31,13 @@
   += `weight * close_shot_ratio`. Shots by a shotgun are skipped when the track names the weapon (shot event or fighter `weapon`
   field containing "shotgun"); the current tracks carry no weapon, so the exemption is inactive until the arena adds it. Missing /
   unreadable track or no shots = no penalty. Remove the `close_range` key to disable.
+  **Draws / fights** (2026-11-06, after pmc-v2 learnt "don't fight"): a draw pays `draw_value` 0, survivors don't count in it, HP
+  loss half; a time-limit end with no damage either way costs `timeout_penalty`; `damage_dealt` (opponent HP lost / HP max) and
+  `kill_advantage` pay. **Objective rounds** (task #53, 2026-11-07; the arena's `Objective=1 Scenario=random`): small capped bonuses
+  `damage_from_concealment` 1.5 (cap 100 HP = one man), `first_strike` 0.75, `objective_win` 2.0 (the adapter's 1.0 when the
+  side won AS the objective's attacker by `end_reason` objective, or as the defender at the time limit), `strikes_unobserved` 0.5
+  (cap 2; first hits on a target looking away). A defender now WINS a held time limit, so hiding only pays for the side that holds
+  the point; the attacker must close in.
 - **Anti-overfit**: each generation the top-3 (`fresh_top_k`) and the champion are re-evaluated on FRESH seeds (same jobs, new
   seed stream); the best contender becomes champion only if its fresh fitness beats the champion's fresh fitness
   (`promotion_margin`, default 0).
@@ -59,6 +66,13 @@ powershell -ExecutionPolicy Bypass -File Scripts\Trainer\status.ps1 [-RunId pmc-
 
 - The task runs `run_night_trainer.ps1` (computes the stop time = next `-UntilDay`/`-UntilTime`, logs to
   `Saved/Trainer/scheduler.log`), as the current user while logged on, `StartWhenAvailable`, never two at once, cut 3 h after the window.
+- **Watchdog rule** (2026-11-06: a check that read the scheduled task's state restarted a trainer that was still running - a
+  duplicate): "is it running?" = a live python process with `night_trainer.py` on its command line
+  (`Get-CimInstance Win32_Process -Filter "Name like 'python%'" | ? CommandLine -like '*night_trainer.py*'`; `status.ps1` prints it as
+  `Process`), NEVER `Get-ScheduledTask` State. `run_night_trainer.ps1` skips its start (logged) while such a process lives, and
+  `night_trainer.py` itself holds a single-instance lock `Saved/Trainer/night_trainer.lock` (JSON pid / run_id / started, O_EXCL; a
+  dead PID's lock is stale and taken over): a second real start prints the holder and exits 0 without touching any run (`--mock`
+  runs are not locked).
 - **Resume**: the same `--run-id` continues from the last finished generation; finished arena jobs of an unfinished generation are
   reused (`gen_NNNN/jobs/*.rounds.json`). `run.json` snapshots the config at creation: edit `trainer_config.json` for NEW runs.
 - **Pause**: `PAUSE` file in the run folder (or `Saved/Trainer/PAUSE` for all runs) - checked before each wave of games.
@@ -107,7 +121,9 @@ Everything the trainer assumes about the arena is in `adapter.py` + `trainer_con
   (`"A"` = the WeightsA squad, `"B"`, or `"draw"`), `duration_s`, `seed` (the round's own seed), `index`, `end_reason`,
   `highlight_score` (optional), `track` (optional, path of the round's track file relative to the result JSON), and
   `sides.A` / `sides.B` (dict, or a list of objects with `side`) with `survivors, squad_size, hp_lost, hp_max, kills,
-  flanks_attempted, flanks_succeeded, suppression_s, ambushes, retreats, retreats_survived, heals, friendly_fire, stuck_events`.
+  flanks_attempted, flanks_succeeded, suppression_s, ambushes, retreats, retreats_survived, heals, friendly_fire, stuck_events`
+  + (task #53) `role` (attacker / defender, a string), `damage_from_concealment, first_strike, objective_hold_s,
+  median_engagement_m, strikes_unobserved`; the round's `scenario` (`result.scenario_key`) is copied to the row.
   Key names are mapped in `arena.result.fields` (dotted paths allowed); missing metrics count as 0; fewer rounds than requested
   are padded as crashes.
 - **Track** `codex.pmc_arena_track/1` (one file per round, optional): `dt` (0.2 s), `units`, `fighters[] {id, side, team}`,
@@ -130,5 +146,5 @@ the round with `Record=1` and that ClipRecorder works with the arena camera; pic
 `apply_champion`, `make_highlights`; `fixtures/` (sample weights + bounds, sample arena result); `tests/`.
 
 ```
-python -m unittest discover -s Scripts/Trainer/tests      # 37 tests, ~15 s (genome, operators, fitness, adapter, guards, loop, resume, highlights)
+python -m unittest discover -s Scripts/Trainer/tests      # 51 tests, ~15-30 s (+ tests/test_objective.py: objective rounds, single-instance lock) (genome, operators, fitness, adapter, guards, loop, resume, highlights)
 ```

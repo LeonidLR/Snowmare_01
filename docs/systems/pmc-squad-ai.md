@@ -175,6 +175,36 @@ round a wall from the threat's side stopped short in the smoke); the over-the-to
 (`PeekSightConfig.RangeCm`, PeekSightSmoke checks it) - behind cover taller than his crouched eyes (95 cm) a rifleman at his 19-24 m band does
 not see over it (decision pending: raise the peek range to the band / the sight range?).
 
+**Round objective** (task #53, the arena only - inactive everywhere else, so every factor below is 1 and the order scores 0): the
+team gets a role + the point (`UPmcSquadSubsystem::SetTeamObjective` / `UpdateTeamObjective`: the round's time fraction, the capture
+clock, an enemy on the point) and every fighter view `FPmcFighterView::Objective` (`FPmcObjectiveView`: role, point, his distance,
+radius). New order **Objective** (a committed walk to the point, each man to his own spot of a 0.4 x radius ring, sprint while unseen):
+an attacker outside 0.7 x radius scores `objective` x (1 - `objective_urgency` + `objective_urgency` x time fraction) x health x
+(0.6 while a threat is seen now) x (0.8 with defenders on the point); a defender scores `objective` x max(retake = 0.2 + 0.8 x
+the attackers' clock while attackers stand on it, return = 0.7 when he is beyond the point's overwatch) x health. The **positions**
+consideration `PmcCommanderRules::ObjectivePositionFactor` multiplies every cover slot `FindCoverNear` scores (TakeCover / Relocate /
+Ambush / the standoff's slot): an attacker x max(0.25, 1 + `objective_approach` x gain), gain = (his distance to the point - the
+slot's) / radius in -1..1 (1 on the point) - cover on the way to / round the point; a defender x (1 + `overwatch` x reach), reach 1
+within `OverwatchRangeCm` (his band's max, >= 2 x radius) of the point, 0 at twice that - overwatch of the approaches. Hold (and Ambush)
+x (1 + `objective_approach`) for an attacker on the point, x (1 + `overwatch`) for a defender within the overwatch. Genes in
+`pmc_commander.json` (`objective` 1.0, `objective_urgency` 0.65, `objective_approach` 0.5, `overwatch` 0.5) + `.bounds.json` +-50 %.
+Tested in `CodexTactics.AI.PmcCommander.Objective`. A team's assault point standing in for a threat (no enemy known) is flagged
+`FPmcThreatView::bStandIn`: no "too close" standoff from it and no band penalty near it (the first objective smoke showed attackers
+backing off the point they walked to).
+
+**Target attention** (user 2026-11-07: "PMC seek the moment the operatives look away and attack through the blind zones"): only the
+enemies the team SEES now count, with their facing as seen (`SeenWatchers`: position + body yaw). `PmcCommanderRules::AttentionOff`
+(the `AmbushWatchRules` bearing / angle maths, a +-45 deg look sector) = how far a point lies outside every watcher's sector, 0..1,
+the most attentive watcher decides; `FPmcThreatView::AttentionOff` is the fighter's own (0.5 = nobody seen). Moves: Flank, Advance (not a
+shotgunner's close-in: PmcStandoffSmoke's shotgunners stalled at 8.9 m with it) and an attacker's Objective walk x (1 + `attention` x (off - 0.5)); a flank takes the mirrored side's point when that one is >= 0.25 less
+watched. Fire discipline (`ShouldHoldFire`): an objective DEFENDER in ambush holds his fire (the catalog's FirePosture Passive, back to
+Aggressive when he strikes; `[PmcAI] ... holds his fire / opens fire`; `SetTeamObjective` puts the defenders Passive at once - the first
+Depot run showed their own auto-fire springing the ambush 0.2 s in, before any decision) while lying in wait with nobody seen now, or
+while the seen threat still looks his way (off < `ambush_patience`), unless the target is deep in the kill zone (`kill_zone_frac` x his band's max / reach, or on the point), a shot was
+already exchanged between the teams (`HandleWeaponFired`), he is seen himself, or `ambush_max_hold_s` passed since the first contact.
+Genes `attention` 0.6, `ambush_patience` 0.5, `kill_zone_frac` 0.6, `ambush_max_hold_s` 20 (bounds +-50 %). Tested in
+`CodexTactics.AI.PmcCommander.Attention`.
+
 Statistics per team (`FPmcTeamStats`): kills, flanks attempted / succeeded (the point reached), suppressions + seconds, ambushes sprung, retreats, heals,
 relocations, advances, covers, friendly-fire hits (`OnWeaponFiredNative` on a mate), stuck events (a walk with < 1 m of progress for 4 s is dropped),
 orders issued. `OnFighterOrder` broadcasts every order taken (the arena's track).
@@ -219,6 +249,33 @@ commanded with weights B (one round: the fallen cannot be revived); `bot`: the p
 builds; the bot does not yet see hostile operatives as threats - the squad's own Aggressive fire does the fighting). The attacker alternates per round
 (by the round seed's parity): the defender waits in ambush, the attacker advances on the defender's spawn (`SetTeamAssault`). The lab's cheats are forced off, the fight
 starts on the first contact (`combat_start ambush`, a skirmish), a round ends when a side is down or at the time limit (a draw).
+
+**Objective rounds and scenarios** (task #53, 2026-11-07; the 2026-11-05 night learnt "don't fight" - every round a time-limit draw):
+`Objective=1` (default) places a point per round - skirmish / fixed spawns: `objective_offset_frac` (0.2, x 0.75-1.25 seeded) of
+the way from the defender's spawn to the attacker's, on the navmesh at the defender's level with a path from both spawns (half that,
+then the spawn itself). The attacker (round seed parity, even = A) gets the point as his assault point and the `Attacker` role, the
+other side `Defender` (`SetTeamObjective`); every step the arena counts live men within `objective_radius_m` (planar, +-3 m height) and
+steps `FPmcObjectiveClock`: attackers on it and no defender = holding; `objective_hold_s` unbroken = captured (a defender back on it or
+the attackers leaving resets it); per role the seconds of sole control. `PmcCommanderRules::ResolveRound`: a side down = elimination;
+captured = `objective` (the attacker wins); the time limit = the defender wins with the point not held by the attackers at that moment
+(`held`), else a `contested` draw; without an objective the old time-limit draw. Data: the level JSON's `pmc_arena` object (both
+L_PmcArena.json and L_PmcArenaDepot.json: radius 6 m, hold 15 s, offset 0.2, defender_offset_m 8, passage 1-3 m, walls >= 3 m).
+`Scenario=random|skirmish|chokepoint|street|roofs|blizzard` (random = `PickScenario(round seed)`, uniform; needs random spawns):
+chokepoint = a ground spot with two tall walls 1-3 m apart and the passage free along its axis (`IsPassage` on 8 chest rays + rays
+just under 3 m; up to 12 sites from 400 seeded samples), the attackers 35-80 m off along the axis, the defenders 8 m behind the point;
+street = a ground spot free 10 m round in 7 of 8 directions; roofs = a navmesh spot >= 1 height level up; blizzard = a skirmish with
+`ForceWeather(Blizzard, instant)` (sight x 0.5; the next round restores the level's weather; cold stays off by `cold_rate_mult` 0). A
+site-less scenario falls back to skirmish (logged; the result names the real one + `scenario_requested`). Per round the result adds
+`scenario, scenario_requested, weather, objective {enabled, result captured|held|contested|eliminated|none, x, y, z, radius_m,
+hold_s, attacker_clock_s}`, per side `role, damage_dealt, damage_from_concealment` (each fighter's HP drop between samples goes to his
+last hit's side within 3 s; concealed = the target's team did not see the shooter at the shot, before the shot's own demask lands),
+`first_strike` (the round's first hit), `objective_hold_s` (sole control), `median_engagement_m` (its shots at the other side),
+`shots`, `strikes_unobserved` (first hits on a target whose facing was > 45 deg off the bearing to the shooter), `stats.<X>.objective_moves`;
+the track gets `scenario`, `objective` and shot fields `concealed / dist_m / unobserved`, an `objective` captured event. Smoke
+**`PmcArenaObjectiveSmoke`** (combat lab, L_PmcArena.json): seed made even (A attacks), the defenders parked out of the fight (alive,
+not commanded) - the attackers' Objective orders walk them onto the point and they capture it in ~18 s (end_reason objective, A wins,
+objective_hold_s 15.0); `PmcArenaSmoke` checks the roles + stats on a real round. Tests `CodexTactics.AI.PmcArena.{ObjectiveClock,
+RoundOutcome, Scenario}`.
 
 **Result JSON** (`Out=`, else `Saved/Arena/<run>.json`, `<run>` = `YYYYMMDD-HHMMSS[-record]`), schema `codex.pmc_arena/1` = the trainer's contract
 plus extras: `map, opponent (Pmc|Player|Bot), seed, rounds_requested, rounds_limited, time_limit_s, squad_size, run, record, weights_a, weights_b

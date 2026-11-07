@@ -23,6 +23,16 @@
     ]
   },
   "drop_links": true,
+  "pmc_arena": {
+    "_comment": "CodexTactics.PmcArena's own data (task #53, docs/systems/pmc-squad-ai.md 5): the round objective - the attackers win by holding it (an attacker within objective_radius_m, no live defender within it) for objective_hold_s; the point lies objective_offset_frac (x 0.75-1.25 seeded) of the way from the defender's spawn to the attacker's; a scenario site (chokepoint / street / roofs) puts the defenders defender_offset_m behind it; the chokepoint search wants a passage passage_min_m..passage_max_m wide between walls >= wall_min_height_m.",
+    "objective_radius_m": 6,
+    "objective_hold_s": 15,
+    "objective_offset_frac": 0.2,
+    "defender_offset_m": 8,
+    "passage_min_m": 1,
+    "passage_max_m": 3,
+    "wall_min_height_m": 3
+  },
   "waves": [
     {
       "wave_index": 1,

@@ -37,5 +37,9 @@ if ($S.deadline) { Write-Host "Stop at    : $($S.deadline)" }
 Write-Host "Updated    : $($S.updated)"
 Write-Host "Report     : $(Join-Path $RunDir 'report.html')"
 foreach ($Flag in "PAUSE", "STOP") { if (Test-Path (Join-Path $RunDir $Flag)) { Write-Host "$Flag file present." -ForegroundColor Yellow } }
+# Is it running = a live night_trainer.py python process (never the scheduled task's state: 2026-11-06 duplicate start).
+$Live = @(Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -and $_.CommandLine -like "*night_trainer.py*" })
+Write-Host "Process    : $(if ($Live.Count) { "night_trainer.py running (pid $(($Live | ForEach-Object { $_.ProcessId }) -join ', '))" } else { 'no night_trainer.py process' })"
 $Task = Get-ScheduledTask -TaskName "CodexTactics Night Trainer" -ErrorAction SilentlyContinue
-if ($Task) { Write-Host "Scheduler  : $($Task.State), next run $((Get-ScheduledTaskInfo -TaskName $Task.TaskName).NextRunTime)" }
+if ($Task) { Write-Host "Scheduler  : $($Task.State), next run $((Get-ScheduledTaskInfo -TaskName $Task.TaskName).NextRunTime) (the task state is not the trainer's liveness)" }
