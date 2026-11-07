@@ -414,12 +414,13 @@ AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVe
 	return SpawnEnemyInternal(Archetype, Location, Rotation, true);
 }
 
-AEnemyCharacter* UWaveSubsystem::SpawnLevelEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation)
+AEnemyCharacter* UWaveSubsystem::SpawnLevelEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, FName Variant)
 {
-	return SpawnEnemyInternal(Archetype, Location, Rotation, false);
+	return SpawnEnemyInternal(Archetype, Location, Rotation, false, Variant);
 }
 
-AEnemyCharacter* UWaveSubsystem::SpawnEnemyInternal(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, bool bJoinFight)
+AEnemyCharacter* UWaveSubsystem::SpawnEnemyInternal(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, bool bJoinFight,
+	FName Variant)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -434,12 +435,24 @@ AEnemyCharacter* UWaveSubsystem::SpawnEnemyInternal(EEnemyArchetype Archetype, c
 	UClass* EnemyClass = Archetype == EEnemyArchetype::Marksman ? AMarksmanEnemyCharacter::StaticClass() : AEnemyCharacter::StaticClass();
 	if (const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>())
 	{
-		if (const TSoftClassPtr<AEnemyCharacter>* Soft = GameMode->EnemyClasses.Find(Archetype))
+		// A variant Blueprint of the archetype (task #34: "MilitaryZombie") first, else the archetype's own.
+		const TSoftClassPtr<AEnemyCharacter>* VariantSoft = Variant.IsNone() ? nullptr : GameMode->EnemyVariantClasses.Find(Variant);
+		UClass* VariantClass = VariantSoft ? VariantSoft->LoadSynchronous() : nullptr;
+		if (VariantClass)
+		{
+			EnemyClass = VariantClass;
+		}
+		else if (const TSoftClassPtr<AEnemyCharacter>* Soft = GameMode->EnemyClasses.Find(Archetype))
 		{
 			if (UClass* Loaded = Soft->LoadSynchronous())
 			{
 				EnemyClass = Loaded;
 			}
+		}
+		if (!Variant.IsNone() && !VariantClass)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Wave] enemy variant '%s' has no loadable Blueprint: the %s Blueprint instead"), *Variant.ToString(),
+				*UEnum::GetValueAsString(Archetype));
 		}
 	}
 	AEnemyCharacter* Enemy = nullptr;

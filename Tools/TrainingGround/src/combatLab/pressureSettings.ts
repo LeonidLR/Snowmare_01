@@ -121,17 +121,17 @@ export const PRESSURE_FIELDS: PressureField[] = [
   { path: 'recycle.after_sec', group: 'recycle', label: 'Дольше', unit: 'с', kind: 'number', def: 60, min: 0, max: 1800, cppClamp: 'min', step: 5, advanced: true },
 ];
 
-/** The five types the pressure spawns (CombatPressureRules::IsAllowedType); "FROST_HOUND" is the C++ alias of HOUND. */
+/** The five types the pressure spawns (CombatPressureRules::IsAllowedEnemy; MILITARY_ZOMBIE = a Frostbitten as BP_Enemy_MilitaryZombie, task #34); "FROST_HOUND" is the C++ alias of HOUND. */
 export const PRESSURE_TYPES: { key: string; label: string }[] = [
   { key: 'HOUND', label: 'Гончая' },
   { key: 'FROSTBITTEN', label: 'Промёрзший' },
-  { key: 'SPITTER', label: 'Плевун' },
+  { key: 'MILITARY_ZOMBIE', label: 'Военный зомби' },
   { key: 'CUTTER', label: 'Резак' },
   { key: 'MARKSMAN', label: 'Стрелок' },
 ];
-const TYPE_ALIASES: Record<string, string> = { HOUND: 'HOUND', FROST_HOUND: 'HOUND', FROSTBITTEN: 'FROSTBITTEN', SPITTER: 'SPITTER', CUTTER: 'CUTTER', MARKSMAN: 'MARKSMAN' };
+const TYPE_ALIASES: Record<string, string> = { HOUND: 'HOUND', FROST_HOUND: 'HOUND', FROSTBITTEN: 'FROSTBITTEN', MILITARY_ZOMBIE: 'MILITARY_ZOMBIE', CUTTER: 'CUTTER', MARKSMAN: 'MARKSMAN' };
 /** Known to the level parser but never spawned by the pressure (the C++ refuses them in "types"). */
-export const FORBIDDEN_TYPES = ['BRUTE', 'CRYO_DRONE'];
+export const FORBIDDEN_TYPES = ['SPITTER', 'BRUTE', 'CRYO_DRONE'];
 export const TYPE_WEIGHT_MAX = 100;
 
 export const CHEAT_FIELDS: { key: 'immortal' | 'infinite_ammo'; label: string; hint: string }[] = [
@@ -252,7 +252,7 @@ export function validatePressure(pressure: unknown): string[] {
     for (const [key, value] of Object.entries(types)) {
       const upper = key.toUpperCase();
       const canonical = TYPE_ALIASES[upper];
-      if (FORBIDDEN_TYPES.includes(upper)) errors.push(`types.${key}: давление никогда не спавнит ${upper} (только HOUND, FROSTBITTEN, SPITTER, CUTTER, MARKSMAN)`);
+      if (FORBIDDEN_TYPES.includes(upper)) errors.push(`types.${key}: давление никогда не спавнит ${upper} (только HOUND, FROSTBITTEN, MILITARY_ZOMBIE, CUTTER, MARKSMAN)`);
       else if (!canonical) errors.push(`types.${key}: неизвестный тип врага`);
       else if (seen.has(canonical)) errors.push(`types.${key}: тип ${canonical} указан дважды`);
       if (canonical) seen.add(canonical);

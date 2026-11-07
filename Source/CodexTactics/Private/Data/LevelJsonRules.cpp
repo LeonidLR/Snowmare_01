@@ -227,8 +227,9 @@ bool LevelJsonRules::ParsePressureSettings(const FJsonObject& Pressure, FCombatP
 	{
 		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : Types->Values)
 		{
-			EEnemyArchetype Type = EEnemyArchetype::Base;
-			if (!ParseEnemyType(Entry.Key, Type))
+			// A variant key ("MILITARY_ZOMBIE" = Frostbitten + BP_Enemy_MilitaryZombie, task #34) or a plain archetype.
+			FPressureEnemyType Enemy(EEnemyArchetype::Base);
+			if (!CombatPressureRules::ParseVariantKey(Entry.Key, Enemy) && !ParseEnemyType(Entry.Key, Enemy.Type))
 			{
 				if (OutError)
 				{
@@ -236,18 +237,18 @@ bool LevelJsonRules::ParsePressureSettings(const FJsonObject& Pressure, FCombatP
 				}
 				return false;
 			}
-			if (!CombatPressureRules::IsAllowedType(Type))
+			if (!CombatPressureRules::IsAllowedEnemy(Enemy))
 			{
 				if (OutError)
 				{
-					*OutError = FString::Printf(TEXT("'%s' is never spawned by the pressure (HOUND, FROSTBITTEN, SPITTER, CUTTER, MARKSMAN)"), *Entry.Key);
+					*OutError = FString::Printf(TEXT("'%s' is never spawned by the pressure (HOUND, FROSTBITTEN, MILITARY_ZOMBIE, CUTTER, MARKSMAN)"), *Entry.Key);
 				}
 				return false;
 			}
 			double Weight = 0.0;
 			if (Entry.Value.IsValid() && Entry.Value->TryGetNumber(Weight) && Weight > 0.0)
 			{
-				Config.TypeWeights.Add({ Type, static_cast<float>(Weight) });
+				Config.TypeWeights.Add({ Enemy.Type, static_cast<float>(Weight), Enemy.Variant });
 			}
 		}
 	}

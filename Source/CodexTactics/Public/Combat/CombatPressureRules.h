@@ -27,11 +27,30 @@ enum class EPressureSpawnKind : uint8
 	Coordinated
 };
 
+/**
+ * One kind of enemy the pressure spawns: an archetype (stats, AI) and an optional VARIANT - a specific Blueprint of that archetype
+ * (ACodexTacticsGameMode::EnemyVariantClasses; task #34, 2026-11-07: the Military Zombie = Frostbitten + BP_Enemy_MilitaryZombie).
+ * Implicit from an archetype (no variant = the game mode's EnemyClasses Blueprint), so `{ EEnemyArchetype::Frostbitten }` lists stay valid.
+ */
+struct CODEXTACTICS_API FPressureEnemyType
+{
+	EEnemyArchetype Type = EEnemyArchetype::Frostbitten;
+	/** NAME_None = the archetype's own Blueprint. */
+	FName Variant;
+
+	FPressureEnemyType() = default;
+	FPressureEnemyType(EEnemyArchetype InType, FName InVariant = NAME_None) : Type(InType), Variant(InVariant) {}
+
+	bool operator==(const FPressureEnemyType& Other) const { return Type == Other.Type && Variant == Other.Variant; }
+};
+
 /** One entry of the type weights ("pressure"."types"). */
 struct CODEXTACTICS_API FPressureTypeWeight
 {
 	EEnemyArchetype Type = EEnemyArchetype::Frostbitten;
 	float Weight = 1.f;
+	/** The entry's variant (FPressureEnemyType::Variant; "MILITARY_ZOMBIE" = Frostbitten + CombatPressureRules::MilitaryZombieVariant()). */
+	FName Variant;
 };
 
 /** The level JSON block "pressure" (defaults = the designer's 2026-11-01 numbers). */
@@ -52,7 +71,7 @@ struct CODEXTACTICS_API FCombatPressureConfig
 	float PatrolShare = 0.6f;
 	/** Random seed (reproducible spawns, "seed"). */
 	int32 Seed = 1;
-	/** Type weights ("types"); empty = the five allowed types equally. */
+	/** Type weights ("types"); empty = the five default types equally (EffectiveWeights). */
 	TArray<FPressureTypeWeight> TypeWeights;
 	/** No spawn point / patrol waypoint closer than this to any wall or obstacle box ("wall_clearance_cm"). */
 	float WallClearanceCm = 250.f;
@@ -125,10 +144,28 @@ struct CODEXTACTICS_API FPressureSpotInput
 
 namespace CombatPressureRules
 {
-	/** Every enemy kind the pressure may spawn (designer 2026-11-01): Hound, Frostbitten, Spitter, Cutter, Marksman - never the Brute or the Cryo Drone. */
+	/**
+	 * Every archetype the pressure may spawn (designer 2026-11-01; task #34 2026-11-07 replaced the Spitter with the Military Zombie):
+	 * Hound, Frostbitten (plain or the Military Zombie variant), Cutter, Marksman - never the Spitter, the Brute or the Cryo Drone.
+	 */
 	CODEXTACTICS_API bool IsAllowedType(EEnemyArchetype Type);
 
-	/** The allowed types with a positive weight (an empty / all-zero list = the five allowed types at weight 1). */
+	/** The variant name of the Military Zombie (a Frostbitten Blueprint, BP_Enemy_MilitaryZombie; ACodexTacticsGameMode::EnemyVariantClasses). */
+	CODEXTACTICS_API FName MilitaryZombieVariant();
+
+	/** IsAllowedType, and the variant is none or one that belongs to the archetype (the Military Zombie = Frostbitten only). */
+	CODEXTACTICS_API bool IsAllowedEnemy(const FPressureEnemyType& Enemy);
+
+	/** A "types" key naming a variant ("MILITARY_ZOMBIE", any case) -> its archetype + variant; false for a plain archetype key. */
+	CODEXTACTICS_API bool ParseVariantKey(const FString& Key, FPressureEnemyType& OutEnemy);
+
+	/** The JSON key of a pressure enemy ("MILITARY_ZOMBIE", or the archetype's enum name for a plain one; logs). */
+	CODEXTACTICS_API FString EnemyLabel(const FPressureEnemyType& Enemy);
+
+	/**
+	 * The allowed entries with a positive weight (an empty / all-zero list = the five default types at weight 1: Hound, Frostbitten,
+	 * Military Zombie, Cutter, Marksman - the Military Zombie took the Spitter's share, task #34).
+	 */
 	CODEXTACTICS_API TArray<FPressureTypeWeight> EffectiveWeights(const TArray<FPressureTypeWeight>& Weights);
 
 	/** The schedule: NotDue before DueAtSeconds; then Spawn while Alive < MaxAlive, else DelayedCapFull (the event waits for room). */
@@ -143,8 +180,17 @@ namespace CombatPressureRules
 	/** PickKind, then an ambush is a Coordinated plan when RandCoordinated01 < CoordinatedShare (designer answer 2, 2026-11-01). */
 	CODEXTACTICS_API EPressureSpawnKind PickEventKind(float Rand01, float RandCoordinated01, float PatrolShare, float CoordinatedShare);
 
-	/** The weighted pick of Rand01 in [0, 1) over EffectiveWeights(Weights). */
+	/** The weighted pick of Rand01 in [0, 1) over EffectiveWeights(Weights): the entry's archetype + variant. */
+	CODEXTACTICS_API FPressureEnemyType PickEnemy(const TArray<FPressureTypeWeight>& Weights, float Rand01);
+
+	/** PickEnemy's archetype. */
 	CODEXTACTICS_API EEnemyArchetype PickType(const TArray<FPressureTypeWeight>& Weights, float Rand01);
+
+	/**
+	 * AmbushPlanRules::EnsureRanged over pressure enemies: the members it swaps become Ranged (its variant with it). Returns how many were
+	 * swapped.
+	 */
+	CODEXTACTICS_API int32 EnsureRangedEnemies(TArray<FPressureEnemyType>& Enemies, const FPressureEnemyType& Ranged, int32 MinRanged);
 
 	/** Planar distance from Point to Box, cm (0 inside). */
 	CODEXTACTICS_API float DistanceToBox(const FVector2D& Point, const FPressureBox& Box);

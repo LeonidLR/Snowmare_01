@@ -440,12 +440,36 @@ namespace FormationLabCombatSmoke
 				const float MinDistance = (Record.Kind == EPressureSpawnKind::Patrol ? Config.MinSquadDistanceCm : Config.AmbushMinDistanceCm) - 2.f * 220.f;
 				const bool bAmbushHidden = Record.Kind != EPressureSpawnKind::Ambush || Record.bConcealed;
 				Check(State, Enemy && !Record.bPlacedByCaller && Record.ClearanceCm >= Clearance - 1.f && bRays && bNav && SquadDistance >= MinDistance && bAmbushHidden
-					&& CombatPressureRules::IsAllowedType(Record.Type),
+					&& CombatPressureRules::IsAllowedEnemy(FPressureEnemyType(Record.Type, Record.Variant)),
 					FString::Printf(TEXT("spawn %d %s %s at %s: clearance %.0f cm (>= %.0f), rays %s, navmesh %d, squad %.0f cm, concealed %d"), Index,
-						Record.Kind == EPressureSpawnKind::Patrol ? TEXT("patrol") : TEXT("ambusher"), *UEnum::GetValueAsString(Record.Type),
+						Record.Kind == EPressureSpawnKind::Patrol ? TEXT("patrol") : TEXT("ambusher"), *CombatPressureRules::EnemyLabel(FPressureEnemyType(Record.Type, Record.Variant)),
 						*Record.Location.ToCompactString(), Record.ClearanceCm, Clearance, bRays ? TEXT("clear") : *Why, bNav ? 1 : 0, SquadDistance,
 						Record.bConcealed ? 1 : 0));
 				++State.SpawnChecked;
+				// Task #34: the MILITARY_ZOMBIE type spawns its own Blueprint, the others never do.
+				const bool bZombieType = Record.Variant == CombatPressureRules::MilitaryZombieVariant();
+				const bool bZombieClass = Enemy && Enemy->GetClass()->GetName() == TEXT("BP_Enemy_MilitaryZombie_C");
+				if (bZombieType != bZombieClass)
+				{
+					Check(State, false, FString::Printf(TEXT("spawn %d: type %s spawned as %s"), Index,
+						*CombatPressureRules::EnemyLabel(FPressureEnemyType(Record.Type, Record.Variant)), *GetNameSafe(Enemy ? Enemy->GetClass() : nullptr)));
+				}
+			}
+			// Task #34 (2026-11-07): a pressure spawn of the MILITARY_ZOMBIE type is a BP_Enemy_MilitaryZombie with its Frostbitten zombie
+			// behaviour: the archetype stays Frostbitten, a LookVariants body is picked, it climbs ladders.
+			if (State.SpawnEvent == 0 && Records.Num() > RecordsBefore)
+			{
+				const FVector Feet = Records[RecordsBefore].Location;
+				const TArray<AEnemyCharacter*> Zombies = Pressure->SpawnAmbushGroupAt(Feet,
+					{ FPressureEnemyType(EEnemyArchetype::Frostbitten, CombatPressureRules::MilitaryZombieVariant()) }, Feet + FVector(100.f, 0.f, 0.f));
+				const AEnemyCharacter* Zombie = Zombies.IsEmpty() ? nullptr : Zombies[0];
+				const FPressureSpawnRecord* ZombieRecord = Pressure->GetSpawnRecords().IsEmpty() ? nullptr : &Pressure->GetSpawnRecords().Last();
+				Check(State, Zombie && Zombie->GetClass()->GetName() == TEXT("BP_Enemy_MilitaryZombie_C") && Zombie->GetArchetype() == EEnemyArchetype::Frostbitten
+					&& Zombie->GetLookMeshIndex() >= 0 && Zombie->CanClimbLadders() && ZombieRecord && ZombieRecord->Enemy.Get() == Zombie
+					&& ZombieRecord->Variant == CombatPressureRules::MilitaryZombieVariant(),
+					FString::Printf(TEXT("a MILITARY_ZOMBIE pressure spawn: class %s, archetype %s, body %d, climbs ladders %d"),
+						*GetNameSafe(Zombie ? Zombie->GetClass() : nullptr), Zombie ? *UEnum::GetValueAsString(Zombie->GetArchetype()) : TEXT("-"),
+						Zombie ? Zombie->GetLookMeshIndex() : -2, Zombie && Zombie->CanClimbLadders() ? 1 : 0));
 			}
 			Pressure->DespawnAll();
 			if (++State.SpawnEvent < SpawnEvents)

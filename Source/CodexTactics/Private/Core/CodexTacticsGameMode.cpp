@@ -76,6 +76,9 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	// Biochemical_Monster_1 (Scripts/Editor/setup_marksman_animation.py); missing -> the C++ AMarksmanEnemyCharacter.
 	EnemyClasses.Add(EEnemyArchetype::Marksman,
 		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman.BP_Enemy_Marksman_C"))));
+	// Task #34 (2026-11-07): the combat pressure's MILITARY_ZOMBIE (a Frostbitten variant; CombatPressureRules::MilitaryZombieVariant).
+	EnemyVariantClasses.Add(FName(TEXT("MilitaryZombie")),
+		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie.BP_Enemy_MilitaryZombie_C"))));
 	LevelConfig = TSoftObjectPtr<ULevelConfigAsset>(FSoftObjectPath(TEXT("/Game/Data/Levels/DA_Level_level_01_outpost.DA_Level_level_01_outpost")));
 	for (const TCHAR* Id : { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife") })
 	{

@@ -18,7 +18,7 @@
         "types": {
           "HOUND": 1,
           "FROSTBITTEN": 1,
-          "SPITTER": 1,
+          "MILITARY_ZOMBIE": 1,
           "CUTTER": 1,
           "MARKSMAN": 1
         },
@@ -107,7 +107,7 @@
         "types": {
           "HOUND": 1,
           "FROSTBITTEN": 1,
-          "SPITTER": 1,
+          "MILITARY_ZOMBIE": 1,
           "CUTTER": 1,
           "MARKSMAN": 1
         },
@@ -196,7 +196,7 @@
         "types": {
           "HOUND": 1,
           "FROSTBITTEN": 1,
-          "SPITTER": 1,
+          "MILITARY_ZOMBIE": 1,
           "CUTTER": 1,
           "MARKSMAN": 1
         },
@@ -285,7 +285,7 @@
         "types": {
           "HOUND": 1,
           "FROSTBITTEN": 1,
-          "SPITTER": 1,
+          "MILITARY_ZOMBIE": 1,
           "CUTTER": 1,
           "MARKSMAN": 1
         },

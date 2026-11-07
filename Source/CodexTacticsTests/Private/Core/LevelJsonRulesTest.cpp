@@ -157,7 +157,7 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 
 	const FString Json = TEXT(R"({"level_id":"p", "cheats": {"immortal": true, "infinite_ammo": true},
 		"pressure": {"interval_sec": 90, "first_event_sec": 5, "group_min": 1, "group_max": 3, "max_alive": 4, "patrol_share": 0.25, "seed": 77,
-			"types": {"HOUND": 2, "frostbitten": 1, "SPITTER": 0, "CUTTER": 1, "MARKSMAN": 0.5},
+			"types": {"HOUND": 2, "frostbitten": 1, "MILITARY_ZOMBIE": 0, "CUTTER": 1, "MARKSMAN": 0.5},
 			"wall_clearance_cm": 300, "min_squad_distance_cm": 2000, "max_squad_distance_cm": 4500,
 			"patrol": {"points": 5, "radius_cm": 900, "wait_sec": 1.5},
 			"ambush": {"min_squad_distance_cm": 1200, "max_squad_distance_cm": 2800, "watch_half_angle_deg": 50, "watch_range_cm": 4000, "strike_range_cm": 1500,
@@ -178,7 +178,7 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 	TestEqual(TEXT("max alive"), P.MaxAlive, 4);
 	TestEqual(TEXT("patrol share"), P.PatrolShare, 0.25f);
 	TestEqual(TEXT("seed"), P.Seed, 77);
-	TestEqual(TEXT("4 positive weights (SPITTER 0 dropped)"), P.TypeWeights.Num(), 4);
+	TestEqual(TEXT("4 positive weights (MILITARY_ZOMBIE 0 dropped)"), P.TypeWeights.Num(), 4);
 	TestEqual(TEXT("clearance"), P.WallClearanceCm, 300.f);
 	TestEqual(TEXT("squad band"), P.MaxSquadDistanceCm, 4500.f);
 	TestEqual(TEXT("patrol points"), P.PatrolPoints, 5);
@@ -260,8 +260,12 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 		TestFalse(TEXT("Lab: no intro briefing"), Lab.bIntroDialogue);
 		for (const FPressureTypeWeight& Weight : Lab.Pressure.TypeWeights)
 		{
-			TestTrue(TEXT("Lab: only the allowed types"), CombatPressureRules::IsAllowedType(Weight.Type));
+			TestTrue(TEXT("Lab: only the allowed types"), CombatPressureRules::IsAllowedEnemy(FPressureEnemyType(Weight.Type, Weight.Variant)));
 		}
+		// Task #34 (2026-11-07): the Military Zombie took the Spitter's place in the lab roster.
+		TestTrue(TEXT("Lab: the Military Zombie is in the roster"), Lab.Pressure.TypeWeights.ContainsByPredicate([](const FPressureTypeWeight& Each)
+			{ return Each.Type == EEnemyArchetype::Frostbitten && Each.Variant == CombatPressureRules::MilitaryZombieVariant(); }));
+		TestEqual(TEXT("Lab: five types"), Lab.Pressure.TypeWeights.Num(), 5);
 	}
 	return true;
 }
