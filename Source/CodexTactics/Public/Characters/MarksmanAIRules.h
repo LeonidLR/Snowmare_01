@@ -30,6 +30,11 @@ struct CODEXTACTICS_API FMarksmanConfig
 	float PreferredMinRange = 2000.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
 	float PreferredMaxRange = 3500.f;
+	/** Bug #39 (WeaponRangeRules): the rifle's effective range (full accuracy) and max reach (no shot beyond), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
+	float EffectiveRangeCm = 8000.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
+	float MaxRangeCm = 11000.f;
 	/** Notices an operative in line of sight this close while patrolling. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
 	float DetectionRange = 4500.f;

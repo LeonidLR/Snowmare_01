@@ -75,6 +75,9 @@ namespace VisionConeConsole
 	static TAutoConsoleVariable<int32> CVarElevatedFix(TEXT("Codex.VisionCones.ElevatedFix"), 1,
 		TEXT("Elevated vision cones (2026-11-02, L_Gen_Depot_1): 1 (default) the perch's supports (a wall top flush with the roof) are skipped, its edge is followed across the roof's slabs, roofs further out and over lower buildings hide the ground under them, 12 low obstacles per ray; 0 = the 2026-11-01 sampler (A/B)."));
 
+	static TAutoConsoleVariable<float> CVarMaxMsInFlight(TEXT("Codex.VisionCones.MaxMsInFlight"), 150.f,
+		TEXT("Occluded vision cones (bug #38): a batch not done by the next actor tick keeps running on the task threads up to this long, ms (its meshes swapped in whole when done; then waited for). 0 = waited for at the next tick (the 2026-10-19 behaviour)."));
+
 	static TAutoConsoleVariable<int32> CVarParallel(TEXT("Codex.VisionCones.Parallel"), 2,
 		TEXT("Occluded vision cones: 2 a frame's rebuilds are traced on the task threads from the end of the actors' tick to the start of the next one (like the engine's async traces; default), 1 in parallel but waited for in the same frame, 0 inline on the game thread."));
 
@@ -85,7 +88,16 @@ namespace VisionConeConsole
 		FVisionConeSightSpec Spec;
 		FVisionConeTraceContext Context;
 		float OutlineWidthCm = 8.f;
-		TArray<FVisionConeRay> Rays;
+		/** Re-traced; else a merged layer's member re-cut from its last rays (Source as it was, Context at its last build). */
+		bool bTrace = true;
+		TSharedPtr<TArray<FVisionConeRay>, ESPMode::ThreadSafe> Source;
+		/** The layer's share of Source (bMerged). */
+		TArray<FVisionConeRay> Drawn;
+		bool bMerged = false;
+		int32 MergeGroup = 0;
+		int32 Priority = 0;
+		float MergeSampleCm = 150.f;
+		FVisionConeWeaponZone Weapon;
 		FVisionConeShape Shape;
 		int32 Samples = 0;
 		double Seconds = 0.0;
@@ -98,6 +110,7 @@ namespace VisionConeConsole
 		TArray<FJob> Jobs;
 		UE::Tasks::FTask Task;
 		bool bLaunched = false;
+		double LaunchSeconds = 0.0;
 		/** Game-thread time spent on it so far (set-up), s. */
 		double GameSeconds = 0.0;
 	};
@@ -105,6 +118,8 @@ namespace VisionConeConsole
 	FVisionConeBuildStats Stats;
 	/** Cones waiting for this frame's batch. */
 	TArray<TWeakObjectPtr<UVisionConeComponent>> Pending;
+	/** Cones with a merge group (the layers). */
+	TArray<TWeakObjectPtr<UVisionConeComponent>> Layer;
 	/** Batches traced on the task threads, completed at the next actor tick of their world. */
 	TArray<TSharedPtr<FBatch, ESPMode::ThreadSafe>> InFlight;
 	FDelegateHandle FlushHandle;
@@ -335,6 +350,13 @@ namespace VisionConeConsole
 		FHitResult Hit;
 		// 0. Elevated (bug 09): the perch's edge, the ground below; the low trace then starts past the edge, the perch ignored.
 		const float PerchEdgeCm = Context.Perch ? SamplePerch(Spec, Context, Dir, Ray) : 0.f;
+	if (Context.Perch && PerchEdgeCm <= 0.f && Context.bElevatedFix)
+	{
+		// Bug #38: no edge / no ground below it found along this ray (a roof's hop limit, the next slab at his level): the old flat model
+		// drew it at the roof's level over the whole range - the needles. Marked, not traced further, dropped by CastRays.
+		Ray.bNoGround = true;
+		return;
+	}
 		const float HighCm = Spec.GetHighTraceHeight(Ray.GroundCm);
 		const float LowCm = Spec.GetLowTraceHeight(Ray.GroundCm);
 		// 1. The sight lines' top: anything this tall hides every level behind it.
@@ -442,17 +464,70 @@ namespace VisionConeConsole
 		}
 	}
 
-	/** One cone's rays and meshes (any thread). */
-	void RunJob(FJob& Job)
+	/** One cone's rays (any thread). */
+	void RunTrace(FJob& Job)
 	{
 		const double Start = FPlatformTime::Seconds();
 		ProbePerch(Job.Context);
-		Job.Rays = VisionConeVisibility::CastRays(Job.Spec, [&Job](float Angle, FVisionConeRay& Ray)
+		Job.Source = MakeShared<TArray<FVisionConeRay>, ESPMode::ThreadSafe>(VisionConeVisibility::CastRays(Job.Spec, [&Job](float Angle, FVisionConeRay& Ray)
 		{
 			SampleRay(Job.Spec, Job.Context, Angle, Ray);
-		}, &Job.Samples);
-		Job.Shape = VisionConeVisibility::BuildShape(Job.Rays, Job.Spec.Levels.Num(), Job.Spec.HalfAngleDeg, Job.OutlineWidthCm, 0.f, 0.5f);
+		}, &Job.Samples));
 		Job.Seconds = FPlatformTime::Seconds() - Start;
+	}
+
+	FVector2D ToWorld(const FVector2D& Origin, float YawDeg, const FVector2D& Local)
+	{
+		float Sin = 0.f;
+		float Cos = 1.f;
+		FMath::SinCos(&Sin, &Cos, FMath::DegreesToRadians(YawDeg));
+		return Origin + FVector2D(Local.X * Cos - Local.Y * Sin, Local.X * Sin + Local.Y * Cos);
+	}
+
+	/** One cone's meshes (any thread, after every job of the batch has its rays): its share of its layer, the outline round the layer, the weapon zone. */
+	void RunShape(FJob& Job, const TArray<FJob>& Jobs)
+	{
+		if (!Job.Source.IsValid())
+		{
+			return;
+		}
+		const double Start = FPlatformTime::Seconds();
+		const FVector2D Origin(Job.Context.Feet.X, Job.Context.Feet.Y);
+		const float Yaw = Job.Context.Yaw;
+		TArray<FVisionConeLayerMember, TInlineAllocator<4>> Others;
+		for (const FJob& Other : Jobs)
+		{
+			if (&Other != &Job && Job.MergeGroup != 0 && Other.MergeGroup == Job.MergeGroup && Other.Source.IsValid())
+			{
+				FVisionConeLayerMember Member;
+				Member.Rays = Other.Source;
+				Member.HalfAngleDeg = Other.Spec.HalfAngleDeg;
+				Member.MaxRangeCm = Other.Spec.GetMaxRange();
+				Member.Origin = FVector2D(Other.Context.Feet.X, Other.Context.Feet.Y);
+				Member.YawDeg = Other.Context.Yaw;
+				Member.Priority = Other.Priority;
+				Others.Add(MoveTemp(Member));
+			}
+		}
+		FVisionConeShapeOptions Options;
+		Options.OutlineWidthCm = Job.OutlineWidthCm;
+		Options.Weapon = Job.Weapon;
+		const TArray<FVisionConeRay>& Own = *Job.Source;
+		if (Others.Num() > 0)
+		{
+			Job.Drawn = Own;
+			VisionConeVisibility::ClipToLayer(Job.Drawn, Origin, Yaw, Job.Priority, Others, Job.MergeSampleCm);
+			Job.bMerged = true;
+			Options.OutlineRays = &Own;
+			Options.WeaponRays = &Own;
+			Options.OutlineHidden = [&Others, Origin, Yaw](const FVector2D& Local)
+			{
+				const FVector2D World = ToWorld(Origin, Yaw, Local);
+				return Others.ContainsByPredicate([&World](const FVisionConeLayerMember& Other) { return Other.LevelAt(World) > 0; });
+			};
+		}
+		Job.Shape = VisionConeVisibility::BuildShape(Job.bMerged ? Job.Drawn : Own, Job.Spec.Levels.Num(), Job.Spec.HalfAngleDeg, Options);
+		Job.Seconds += FPlatformTime::Seconds() - Start;
 	}
 
 	bool IsSameRange(float A, float B)
@@ -545,6 +620,116 @@ int32 UVisionConeComponent::GetLightVertexCount() const
 	return Section ? Section->ProcVertexBuffer.Num() : 0;
 }
 
+const TArray<FVisionConeRay>& UVisionConeComponent::GetBuiltRays() const
+{
+	static const TArray<FVisionConeRay> Empty;
+	return SourceRays.IsValid() ? *SourceRays : Empty;
+}
+
+int32 UVisionConeComponent::GetWeaponZoneVertexCount() const
+{
+	int32 Count = 0;
+	for (const int32 Index : { 3, 4 })
+	{
+		const FProcMeshSection* Section = const_cast<UVisionConeComponent*>(this)->GetProcMeshSection(Index);
+		Count += Section ? Section->ProcVertexBuffer.Num() : 0;
+	}
+	return Count;
+}
+
+void UVisionConeComponent::SetMergeGroup(int32 Group)
+{
+	if (Group == MergeGroup)
+	{
+		return;
+	}
+	RequestLayerReshape(); // the old layer fills the hole
+	MergeGroup = Group;
+	VisionConeConsole::Layer.RemoveAll([this](const TWeakObjectPtr<UVisionConeComponent>& Weak) { return !Weak.IsValid() || Weak.Get() == this; });
+	if (Group != 0)
+	{
+		VisionConeConsole::Layer.Add(this);
+	}
+	bReshapeRequested = true;
+	RequestLayerReshape();
+}
+
+void UVisionConeComponent::RequestLayerReshape() const
+{
+	if (MergeGroup == 0)
+	{
+		return;
+	}
+	for (const TWeakObjectPtr<UVisionConeComponent>& Weak : VisionConeConsole::Layer)
+	{
+		if (UVisionConeComponent* Other = Weak.Get(); Other && Other != this && Other->MergeGroup == MergeGroup)
+		{
+			Other->bReshapeRequested = true;
+		}
+	}
+}
+
+void UVisionConeComponent::OnUnregister()
+{
+	RequestLayerReshape();
+	VisionConeConsole::Layer.RemoveAll([this](const TWeakObjectPtr<UVisionConeComponent>& Weak) { return !Weak.IsValid() || Weak.Get() == this; });
+	Super::OnUnregister();
+}
+
+void UVisionConeComponent::SetWeaponZone(const FVisionConeWeaponZone& Zone)
+{
+	WeaponZone = Zone;
+	WeaponZone.EdgeWidthCm = WeaponEdgeWidthCm;
+	if (!Zone.IsSet())
+	{
+		WeaponZone = FVisionConeWeaponZone();
+	}
+}
+
+uint8 UVisionConeComponent::GetDrawnMergedLevelAt(const FVector& WorldPoint) const
+{
+	if (!bShown || !bBuiltOccluded || !bDrawnMerged)
+	{
+		return GetDrawnLevelAt(WorldPoint);
+	}
+	const FVector Local = GetComponentTransform().InverseTransformPositionNoScale(WorldPoint);
+	return VisionConeVisibility::LevelAtPoint(DrawnRays, BuiltHalfAngle, FVector2D(Local.X, Local.Y));
+}
+
+FVisionConeMeshAudit UVisionConeComponent::AuditMesh(float FarCm) const
+{
+	FVisionConeMeshAudit Audit;
+	UVisionConeComponent* Self = const_cast<UVisionConeComponent*>(this);
+	for (int32 Section = 0; Section < Self->GetNumSections(); ++Section)
+	{
+		const FProcMeshSection* Mesh = Self->GetProcMeshSection(Section);
+		if (!Mesh || !Mesh->bSectionVisible)
+		{
+			continue;
+		}
+		const TArray<FProcMeshVertex>& Vertices = Mesh->ProcVertexBuffer;
+		const TArray<uint32>& Indices = Mesh->ProcIndexBuffer;
+		for (int32 Index = 0; Index + 2 < Indices.Num(); Index += 3)
+		{
+			const FVector Corners[3] = { Vertices[Indices[Index]].Position, Vertices[Indices[Index + 1]].Position, Vertices[Indices[Index + 2]].Position };
+			++Audit.Triangles;
+			const double MinZ = FMath::Min3(Corners[0].Z, Corners[1].Z, Corners[2].Z);
+			const double MaxZ = FMath::Max3(Corners[0].Z, Corners[1].Z, Corners[2].Z);
+			Audit.Slanted += MaxZ - MinZ > 30.0 ? 1 : 0;
+			Audit.Above += MaxZ > 5.0 ? 1 : 0;
+			for (const FVector& Corner : Corners)
+			{
+				if (FMath::Abs(Corner.Z) < 30.0 && FVector2D(Corner.X, Corner.Y).Size() > FarCm)
+				{
+					++Audit.Floating;
+					break;
+				}
+			}
+		}
+	}
+	return Audit;
+}
+
 FVector UVisionConeComponent::GetOwnerFeet() const
 {
 	const AActor* Owner = GetOwner();
@@ -620,6 +805,7 @@ void UVisionConeComponent::UpdateCone(bool bShow, float RangeCm, float HalfAngle
 		{
 			bShown = false;
 			SetVisibility(false);
+			RequestLayerReshape(); // the rest of the layer draws what this cone drew
 		}
 		return;
 	}
@@ -640,15 +826,25 @@ void UVisionConeComponent::UpdateCone(bool bShow, float RangeCm, float HalfAngle
 		Spec.RayStepDeg = RayStepDeg;
 		Spec.MaxRefineDepth = EdgeRefineDepth;
 		Spec.MaxRays = MaxRaysPerCone;
+		Spec.RaySpacingCm = RaySpacingCm;
+		Spec.MinRayStepDeg = MinRayStepDeg;
+		Spec.bWorldGrid = true;
+		Spec.SliverMinWidthCm = SliverMinWidthCm;
+		Spec.SliverFromCm = SliverFromCm;
 		SinceBuildSeconds += DeltaSeconds;
-		const bool bShapeChanged = !bBuiltOccluded || !VisionConeConsole::SameSpec(Spec, BuiltSpec);
+		// While a batch with this cone is still running, the changes are measured against what it was launched with (no second trace of the same pose).
+		const FVisionConeSightSpec& RefSpec = bInFlight ? InFlightSpec : BuiltSpec;
+		const FVector RefFeet = bInFlight ? InFlightFeet : BuiltFeet;
+		const float RefYaw = bInFlight ? InFlightYaw : BuiltYaw;
+		const bool bShapeChanged = (!bBuiltOccluded && !bInFlight) || !VisionConeConsole::SameSpec(Spec, RefSpec);
 		const float Period = 1.f / FMath::Max(RefreshHz, 1.f);
-		const bool bMoved = FVector::Dist2D(GetOwnerFeet(), BuiltFeet) > MoveRebuildCm
-			|| FMath::Abs(FMath::FindDeltaAngleDegrees(BuiltYaw, GetOwnerYaw())) > TurnRebuildDeg
-			|| FMath::Abs(GetOwnerFeet().Z - BuiltFeet.Z) > 30.f;
-		const bool bDue = SinceBuildSeconds >= Period && (bMoved || SinceBuildSeconds >= StaticRefreshSeconds);
+		const bool bMoved = FVector::Dist2D(GetOwnerFeet(), RefFeet) > MoveRebuildCm
+			|| FMath::Abs(FMath::FindDeltaAngleDegrees(RefYaw, GetOwnerYaw())) > TurnRebuildDeg
+			|| FMath::Abs(GetOwnerFeet().Z - RefFeet.Z) > 30.f;
+		const bool bDue = SinceBuildSeconds >= Period && (bMoved || (StaticRefreshSeconds > 0.f && SinceBuildSeconds >= StaticRefreshSeconds));
 		const bool bUrgent = bShapeChanged || bRebuildRequested || !bShown;
-		if (bPendingBuild && PendingFrame != GFrameCounter)
+		const bool bReshape = bBuiltOccluded && (bReshapeRequested || !(WeaponZone == BuiltWeaponZone));
+		if (bPendingBuild && GFrameCounter - PendingFrame > 1)
 		{
 			// Queued in a frame whose batch never ran (no actor tick after it, e.g. a paused world): build it now.
 			bPendingBuild = false;
@@ -656,7 +852,15 @@ void UVisionConeComponent::UpdateCone(bool bShow, float RangeCm, float HalfAngle
 		}
 		if (bPendingBuild)
 		{
-			PendingSpec = Spec; // already in this frame's batch: the latest spec
+			if (bPendingTrace)
+			{
+				PendingSpec = Spec; // already in a batch to come: the latest spec
+			}
+			else if (bUrgent || bDue)
+			{
+				PendingSpec = Spec; // a re-cut waiting: make it a re-trace
+				bPendingTrace = true;
+			}
 		}
 		else if (bUrgent || bDue)
 		{
@@ -668,6 +872,10 @@ void UVisionConeComponent::UpdateCone(bool bShow, float RangeCm, float HalfAngle
 			{
 				QueueOccludedRebuild(Spec);
 			}
+		}
+		else if (bReshape && !bInFlight)
+		{
+			QueueOccludedRebuild(BuiltSpec, /*bTrace*/ false);
 		}
 		SetWorldRotation(FRotator(0.f, BuiltYaw, 0.f));
 	}
@@ -709,7 +917,9 @@ void UVisionConeComponent::RebuildPlain(float RangeCm, float HalfAngleDeg)
 	BuiltRange = RangeCm;
 	BuiltHalfAngle = HalfAngleDeg;
 	bBuiltOccluded = false;
-	BuiltRays.Reset();
+	SourceRays.Reset();
+	DrawnRays.Reset();
+	bDrawnMerged = false;
 	ClearAllMeshSections();
 	// The mesh lies at local Z 0; PlaceAtFeet moves the component to the feet + HeightAboveFeetCm.
 	AddSection(0, VisionConeRules::BuildFill(RangeCm, HalfAngleDeg, Segments), FillAlpha);
@@ -729,11 +939,13 @@ void UVisionConeComponent::RebuildOccluded(const FVisionConeSightSpec& Spec)
 	RebuildBatch(GetWorld(), MakeArrayView(&Self, 1), /*bAsync*/ false);
 }
 
-void UVisionConeComponent::QueueOccludedRebuild(const FVisionConeSightSpec& Spec)
+void UVisionConeComponent::QueueOccludedRebuild(const FVisionConeSightSpec& Spec, bool bTrace)
 {
 	if (VisionConeConsole::CVarParallel.GetValueOnGameThread() <= 0)
 	{
-		RebuildOccluded(Spec);
+		PendingSpec = bTrace ? Spec : PendingSpec;
+		bPendingTrace = bTrace || !bBuiltOccluded;
+		RebuildOccluded(bTrace ? Spec : BuiltSpec);
 		return;
 	}
 	PendingSpec = Spec;
@@ -741,7 +953,12 @@ void UVisionConeComponent::QueueOccludedRebuild(const FVisionConeSightSpec& Spec
 	if (!bPendingBuild)
 	{
 		bPendingBuild = true;
+		bPendingTrace = bTrace || !bBuiltOccluded;
 		VisionConeConsole::Pending.Add(this);
+	}
+	else
+	{
+		bPendingTrace |= bTrace;
 	}
 	if (!VisionConeConsole::FlushHandle.IsValid())
 	{
@@ -753,6 +970,11 @@ void UVisionConeComponent::QueueOccludedRebuild(const FVisionConeSightSpec& Spec
 
 void UVisionConeComponent::FlushPending(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
+	// A batch of this world still running on the task threads: the new rebuilds wait for it (one batch per world at a time).
+	const bool bBusy = VisionConeConsole::InFlight.ContainsByPredicate([World](const TSharedPtr<VisionConeConsole::FBatch, ESPMode::ThreadSafe>& Batch)
+	{
+		return Batch->World.Get() == World;
+	});
 	TArray<UVisionConeComponent*, TInlineAllocator<16>> Batch;
 	for (auto It = VisionConeConsole::Pending.CreateIterator(); It; ++It)
 	{
@@ -763,6 +985,11 @@ void UVisionConeComponent::FlushPending(UWorld* World, ELevelTick TickType, floa
 		}
 		else if (Cone->GetWorld() == World)
 		{
+			if (bBusy)
+			{
+				Cone->PendingFrame = GFrameCounter; // the batch hook ran: not a paused world
+				continue;
+			}
 			Batch.Add(Cone);
 			It.RemoveCurrent();
 		}
@@ -775,7 +1002,7 @@ void UVisionConeComponent::FlushPending(UWorld* World, ELevelTick TickType, floa
 
 void UVisionConeComponent::CompleteOnTick(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
-	CompleteBatches(World);
+	CompleteBatches(World, /*bForce*/ false);
 }
 
 void UVisionConeComponent::CompleteOnCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
@@ -783,14 +1010,23 @@ void UVisionConeComponent::CompleteOnCleanup(UWorld* World, bool bSessionEnded, 
 	CompleteBatches(World);
 }
 
-void UVisionConeComponent::CompleteBatches(UWorld* World)
+void UVisionConeComponent::CompleteBatches(UWorld* World, bool bForce)
 {
+	const double MaxSeconds = FMath::Max(0.f, VisionConeConsole::CVarMaxMsInFlight.GetValueOnGameThread()) / 1000.0;
+	const double Now = FPlatformTime::Seconds();
 	for (int32 Index = 0; Index < VisionConeConsole::InFlight.Num();)
 	{
 		const TSharedPtr<VisionConeConsole::FBatch, ESPMode::ThreadSafe> Batch = VisionConeConsole::InFlight[Index];
 		UWorld* BatchWorld = Batch->World.Get();
 		if (BatchWorld && BatchWorld != World)
 		{
+			++Index;
+			continue;
+		}
+		// Bug #38: not done yet - it keeps running (the meshes swap in whole when it is), up to Codex.VisionCones.MaxMsInFlight.
+		if (!bForce && BatchWorld && Batch->bLaunched && !Batch->Task.IsCompleted() && Now - Batch->LaunchSeconds < MaxSeconds)
+		{
+			++VisionConeConsole::Stats.FramesInFlight;
 			++Index;
 			continue;
 		}
@@ -805,6 +1041,16 @@ void UVisionConeComponent::CompleteBatches(UWorld* World)
 		{
 			ApplyBatch(*Batch);
 		}
+		else
+		{
+			for (VisionConeConsole::FJob& Job : Batch->Jobs)
+			{
+				if (UVisionConeComponent* Cone = Job.Cone.Get())
+				{
+					Cone->bInFlight = false;
+				}
+			}
+		}
 		VisionConeConsole::Stats.Seconds += Batch->GameSeconds + (FPlatformTime::Seconds() - Start);
 	}
 }
@@ -817,11 +1063,18 @@ void UVisionConeComponent::ApplyBatch(VisionConeConsole::FBatch& Batch)
 	{
 		if (UVisionConeComponent* Cone = Job.Cone.Get())
 		{
-			Cone->ApplyOccludedBuild(Job.Spec, Job.Context.Feet, Job.Context.Yaw, MoveTemp(Job.Rays), Job.Shape);
+			Cone->ApplyOccludedBuild(Job);
 		}
-		++Stats.Builds;
-		Stats.Rays += Job.Samples;
-		Stats.Traces += Job.Context.Traces;
+		if (Job.bTrace)
+		{
+			++Stats.Builds;
+			Stats.Rays += Job.Samples;
+			Stats.Traces += Job.Context.Traces;
+		}
+		else
+		{
+			++Stats.Reshapes;
+		}
 		Stats.TaskSeconds += Job.Seconds;
 	}
 	++Stats.Batches;
@@ -846,43 +1099,91 @@ void UVisionConeComponent::RebuildBatch(UWorld* World, TArrayView<UVisionConeCom
 	{
 		Shared.AddIgnoredActor(*It);
 	}
+	// A merged layer is cut as a whole (bug #38): its other shown members join the batch to re-cut their share (no re-trace).
+	TArray<UVisionConeComponent*, TInlineAllocator<16>> All(Cones);
+	TArray<int32, TInlineAllocator<4>> Groups;
+	for (const UVisionConeComponent* Cone : Cones)
+	{
+		if (Cone->MergeGroup != 0)
+		{
+			Groups.AddUnique(Cone->MergeGroup);
+		}
+	}
+	for (const TWeakObjectPtr<UVisionConeComponent>& Weak : VisionConeConsole::Layer)
+	{
+		UVisionConeComponent* Member = Weak.Get();
+		if (Member && Groups.Contains(Member->MergeGroup) && !All.Contains(Member) && Member->GetWorld() == World && Member->bShown
+			&& Member->bBuiltOccluded && Member->SourceRays.IsValid())
+		{
+			Member->bPendingTrace = false;
+			All.Add(Member);
+		}
+	}
 	const TSharedPtr<VisionConeConsole::FBatch, ESPMode::ThreadSafe> Batch = MakeShared<VisionConeConsole::FBatch, ESPMode::ThreadSafe>();
 	Batch->World = World;
-	Batch->Jobs.SetNum(Cones.Num());
-	for (int32 Index = 0; Index < Cones.Num(); ++Index)
+	Batch->Jobs.SetNum(All.Num());
+	for (int32 Index = 0; Index < All.Num(); ++Index)
 	{
-		UVisionConeComponent* Cone = Cones[Index];
+		UVisionConeComponent* Cone = All[Index];
 		VisionConeConsole::FJob& Job = Batch->Jobs[Index];
 		Job.Cone = Cone;
-		Job.Spec = Cone->PendingSpec;
+		Job.bTrace = Cone->bPendingTrace || !Cone->bBuiltOccluded || !Cone->SourceRays.IsValid();
+		Job.Spec = Job.bTrace ? Cone->PendingSpec : Cone->BuiltSpec;
 		Job.OutlineWidthCm = Cone->OutlineWidthCm;
+		Job.MergeGroup = Cone->bShown ? Cone->MergeGroup : 0;
+		Job.Priority = static_cast<int32>(Cone->GetUniqueID());
+		Job.MergeSampleCm = Cone->MergeSampleCm;
+		Job.Weapon = Cone->WeaponZone;
 		Cone->bPendingBuild = false;
+		Cone->bPendingTrace = false;
 		FVisionConeTraceContext& Context = Job.Context;
 		Context.World = World;
 		Context.Params = Shared;
 		Context.ComponentParams = FCollisionQueryParams(SCENE_QUERY_STAT(VisionConeObstacle), /*bTraceComplex*/ false);
-		Context.Feet = Cone->GetOwnerFeet();
-		Context.Yaw = Cone->GetOwnerYaw();
+		Context.Feet = Job.bTrace ? Cone->GetOwnerFeet() : Cone->BuiltFeet;
+		Context.Yaw = Job.bTrace ? Cone->GetOwnerYaw() : Cone->BuiltYaw;
 		Context.RangeCm = Job.Spec.GetMaxRange();
 		Context.MaxLowObstacles = Cone->MaxLowObstaclesPerRay;
 		Context.MaxLowObstaclesElevated = Cone->MaxLowObstaclesPerRayElevated;
 		Context.bElevatedFix = VisionConeConsole::CVarElevatedFix.GetValueOnGameThread() != 0;
 		Context.DepthProbeCm = Cone->ObstacleDepthProbeCm;
+		Job.Spec.GridYawDeg = Context.Yaw;
+		if (Job.bTrace)
+		{
+			Cone->bRebuildRequested = false;
+		}
+		else
+		{
+			Job.Source = Cone->SourceRays;
+		}
+		Cone->bInFlight = true;
+		Cone->InFlightSpec = Job.Spec;
+		Cone->InFlightFeet = Context.Feet;
+		Cone->InFlightYaw = Context.Yaw;
 	}
 	// Scene queries only (nothing in the world changes): the engine's async traces run the same raycasts on task threads,
-	// launched after the actors' tick and waited for before the next one - so does an async batch (CompleteOnTick).
+	// launched after the actors' tick - so does an async batch; one not done by the next actor tick keeps running (CompleteOnTick).
 	auto RunAll = [Batch]()
 	{
 		FGCScopeGuard NoGarbageCollection; // hit results resolve components: no GC while the rays are traced
+		const EParallelForFlags Flags = Batch->Jobs.Num() > 1 ? EParallelForFlags::Unbalanced : EParallelForFlags::ForceSingleThread;
 		ParallelFor(Batch->Jobs.Num(), [&Batch](int32 Index)
 		{
-			VisionConeConsole::RunJob(Batch->Jobs[Index]);
-		}, Batch->Jobs.Num() > 1 ? EParallelForFlags::Unbalanced : EParallelForFlags::ForceSingleThread);
+			if (Batch->Jobs[Index].bTrace)
+			{
+				VisionConeConsole::RunTrace(Batch->Jobs[Index]);
+			}
+		}, Flags);
+		ParallelFor(Batch->Jobs.Num(), [&Batch](int32 Index)
+		{
+			VisionConeConsole::RunShape(Batch->Jobs[Index], Batch->Jobs);
+		}, Flags);
 	};
 	if (bAsync)
 	{
 		Batch->Task = UE::Tasks::Launch(UE_SOURCE_LOCATION, MoveTemp(RunAll));
 		Batch->bLaunched = true;
+		Batch->LaunchSeconds = FPlatformTime::Seconds();
 		Batch->GameSeconds = FPlatformTime::Seconds() - Start;
 		VisionConeConsole::InFlight.Add(Batch);
 		return;
@@ -892,21 +1193,32 @@ void UVisionConeComponent::RebuildBatch(UWorld* World, TArrayView<UVisionConeCom
 	VisionConeConsole::Stats.Seconds += FPlatformTime::Seconds() - Start;
 }
 
-void UVisionConeComponent::ApplyOccludedBuild(const FVisionConeSightSpec& Spec, const FVector& Feet, float Yaw, TArray<FVisionConeRay>&& Rays,
-	const FVisionConeShape& Shape)
+void UVisionConeComponent::ApplyOccludedBuild(VisionConeConsole::FJob& Job)
 {
-	BuiltRays = MoveTemp(Rays);
-	BuiltSpec = Spec;
-	BuiltFeet = Feet;
-	BuiltYaw = Yaw;
-	BuiltRange = Spec.Levels[0].RangeCm;
-	BuiltHalfAngle = Spec.HalfAngleDeg;
-	bBuiltOccluded = true;
-	bRebuildRequested = false;
-	SinceBuildSeconds = 0.f;
-	++BuildCount;
+	bInFlight = false;
+	if (!Job.Source.IsValid())
+	{
+		return;
+	}
+	if (Job.bTrace)
+	{
+		SourceRays = Job.Source;
+		BuiltSpec = Job.Spec;
+		BuiltFeet = Job.Context.Feet;
+		BuiltYaw = Job.Context.Yaw;
+		BuiltRange = Job.Spec.Levels.Num() > 0 ? Job.Spec.Levels[0].RangeCm : 0.f;
+		BuiltHalfAngle = Job.Spec.HalfAngleDeg;
+		bBuiltOccluded = true;
+		SinceBuildSeconds = 0.f;
+		++BuildCount;
+	}
+	DrawnRays = Job.bMerged ? MoveTemp(Job.Drawn) : TArray<FVisionConeRay>();
+	bDrawnMerged = Job.bMerged;
+	BuiltWeaponZone = Job.Weapon;
+	bReshapeRequested = false;
 	SetWorldRotation(FRotator(0.f, BuiltYaw, 0.f));
 
+	const FVisionConeShape& Shape = Job.Shape;
 	AddSection(0, Shape.Full, FillAlpha);
 	if (bDrawOutline)
 	{
@@ -923,6 +1235,8 @@ void UVisionConeComponent::ApplyOccludedBuild(const FVisionConeSightSpec& Spec, 
 		Vertex.Z += 0.2f;
 	}
 	AddSection(2, Light, FillAlpha * LightToneAlphaScale);
+	AddSection(3, Shape.WeaponBand, WeaponBandAlpha);
+	AddSection(4, Shape.WeaponEdge, WeaponEdgeAlpha);
 	EnsureMaterials();
 }
 
@@ -938,10 +1252,14 @@ void UVisionConeComponent::EnsureMaterials()
 		FillMaterial = UMaterialInstanceDynamic::Create(Base, this);
 		LineMaterial = UMaterialInstanceDynamic::Create(Base, this);
 		LightMaterial = UMaterialInstanceDynamic::Create(Base, this);
+		WeaponBandMaterial = UMaterialInstanceDynamic::Create(Base, this);
+		WeaponEdgeMaterial = UMaterialInstanceDynamic::Create(Base, this);
 	}
 	SetMaterial(0, FillMaterial);
 	SetMaterial(1, LineMaterial);
 	SetMaterial(2, LightMaterial);
+	SetMaterial(3, WeaponBandMaterial);
+	SetMaterial(4, WeaponEdgeMaterial);
 	ApplyColor();
 }
 
@@ -965,6 +1283,8 @@ void UVisionConeComponent::ApplyColor()
 	Push(FillMaterial, ShownColor, FillAlpha);
 	Push(LineMaterial, ShownColor, OutlineAlpha);
 	Push(LightMaterial, FMath::Lerp(ShownColor, FLinearColor::White, LightToneWhiten), FillAlpha * LightToneAlphaScale);
+	Push(WeaponBandMaterial, FMath::Lerp(ShownColor, FLinearColor::White, WeaponBandWhiten), WeaponBandAlpha);
+	Push(WeaponEdgeMaterial, FMath::Lerp(ShownColor, FLinearColor::White, WeaponEdgeWhiten), WeaponEdgeAlpha);
 }
 
 void UVisionConeComponent::PlaceAtFeet()
@@ -994,5 +1314,5 @@ uint8 UVisionConeComponent::GetDrawnLevelAt(const FVector& WorldPoint) const
 	{
 		return VisionConeRules::IsInsideCone(FVector::ZeroVector, FVector::ForwardVector, FVector(Local.X, Local.Y, 0.f), BuiltRange, BuiltHalfAngle) ? 1 : 0;
 	}
-	return VisionConeVisibility::LevelAtPoint(BuiltRays, BuiltHalfAngle, FVector2D(Local.X, Local.Y));
+	return VisionConeVisibility::LevelAtPoint(GetBuiltRays(), BuiltHalfAngle, FVector2D(Local.X, Local.Y));
 }

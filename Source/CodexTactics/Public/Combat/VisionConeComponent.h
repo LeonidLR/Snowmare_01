@@ -8,7 +8,7 @@
 
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
-namespace VisionConeConsole { struct FBatch; }
+namespace VisionConeConsole { struct FBatch; struct FJob; }
 
 /** Cost of the occluded cone rebuilds since the last ResetBuildStats (smokes, the perf report). */
 struct CODEXTACTICS_API FVisionConeBuildStats
@@ -28,10 +28,26 @@ struct CODEXTACTICS_API FVisionConeBuildStats
 	int64 Batches = 0;
 	/** Rebuilds put off a frame by the per-frame budget. */
 	int64 Deferred = 0;
+	/** Merged-layer members re-cut without a re-trace (another member of their layer changed). */
+	int64 Reshapes = 0;
+	/** Frames a batch was left running on the task threads (not done at the next actor tick: its meshes swapped in later). */
+	int64 FramesInFlight = 0;
 	/** Rebuilds skipped while the cone was off screen / too far from the camera. */
 	int64 SkippedOffscreen = 0;
 	/** Most rebuilds in one frame. */
 	int32 PeakPerFrame = 0;
+};
+
+/** What the drawn mesh of a cone looks like (smokes: bug #38, the roof shards). */
+struct CODEXTACTICS_API FVisionConeMeshAudit
+{
+	int32 Triangles = 0;
+	/** Triangles whose corners lie more than 30 cm apart in height (a slanted / vertical sliver between two ground levels). */
+	int32 Slanted = 0;
+	/** Triangles reaching above the feet plane (more than 5 cm over the cone's own level). */
+	int32 Above = 0;
+	/** Triangles with a corner at the feet's level (within 30 cm) beyond FarCm - from a perch: drawn at the roof's level far out. */
+	int32 Floating = 0;
 };
 
 /**
@@ -51,6 +67,13 @@ struct CODEXTACTICS_API FVisionConeBuildStats
  * Codex.VisionCones.Parallel 1 = waited for in the same frame, 0 = inline on the game thread). Between rebuilds the shape
  * keeps its world heading (shadows stay on their walls) and follows the owner's feet.
  * Geometry and colours: VisionConeRules / VisionConeVisibility (tests CodexTactics.Combat.VisionCone.*).
+ *
+ * Bug #38 (2026-11-07, the 120 m cones): the base rays adapt to the range (RaySpacingCm) on a world-anchored grid, the refinement's rays are
+ * shared out fairly among the shadow edges, an elevated ray without a measured ground and the slivers (needles through cracks) are left
+ * out, a batch not done by the next actor tick keeps running and its meshes are swapped in whole when it is (Codex.VisionCones.MaxMsInFlight), a still
+ * owner is not re-traced (StaticRefreshSeconds 0), and the cones of one MergeGroup (a team's operatives) are drawn as ONE layer - every
+ * point once, at the best level any of them shows (VisionConeVisibility::ClipToLayer; the outline only round the layer). Bug #39: the
+ * weapon zone (SetWeaponZone) - a line at the weapon's effective range and a faint band to its max reach, sections 3 / 4.
  *
  * Look: ConeMaterial (Gemini's slot; TANDEM request) — a translucent unlit material with a vector parameter
  * ColorParameterName (rgb = colour, a = opacity) and optionally a scalar OpacityParameterName. Without one an engine
@@ -153,9 +176,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0"))
 	float TurnRebuildDeg = 2.f;
 
-	/** A still owner re-traces this often anyway (doors, moved props), s. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0.1"))
-	float StaticRefreshSeconds = 2.f;
+	/** A still owner re-traces this often anyway (doors, moved props), s; 0 (default, bug #38) = only when he moves / turns / the sight changes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0"))
+	float StaticRefreshSeconds = 0.f;
+
+	/** Base rays adapt to the range: the arc between two at the widest range, cm (0 = always RayStepDeg; bug #38). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0"))
+	float RaySpacingCm = 200.f;
+
+	/** The narrowest base step of a long cone, degrees. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0.1", ClampMax = "10"))
+	float MinRayStepDeg = 0.5f;
+
+	/** Seen stretches narrower than this (a crack between two slabs, far out) are not drawn, cm (0 = all drawn; bug #38). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0"))
+	float SliverMinWidthCm = 60.f;
+
+	/** ... from this far out, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0"))
+	float SliverFromCm = 1500.f;
 
 	/** No rebuild while the camera is farther than this from the owner, cm (0 = any distance). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0"))
@@ -169,6 +208,28 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0", ClampMax = "1"))
 	float LightToneWhiten = 0.35f;
 
+	/** Weapon zone band (effective range .. max reach) opacity, drawn over the fill (bug #39). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Weapon Zone", meta = (ClampMin = "0", ClampMax = "1"))
+	float WeaponBandAlpha = 0.1f;
+
+	/** Weapon zone edge line (the effective range) opacity. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Weapon Zone", meta = (ClampMin = "0", ClampMax = "1"))
+	float WeaponEdgeAlpha = 0.6f;
+
+	/** Weapon zone edge line width, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Weapon Zone", meta = (ClampMin = "1"))
+	float WeaponEdgeWidthCm = 20.f;
+
+	/** Weapon zone colours = the state colour blended towards white by these (band, edge). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Weapon Zone", meta = (ClampMin = "0", ClampMax = "1"))
+	float WeaponBandWhiten = 0.2f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Weapon Zone", meta = (ClampMin = "0", ClampMax = "1"))
+	float WeaponEdgeWhiten = 0.7f;
+
+	/** Merged-layer cut: the step its crossings are searched with along each ray, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Merge", meta = (ClampMin = "10"))
+	float MergeSampleCm = 150.f;
+
 	/**
 	 * Called by the owner every tick: shows / hides the cone, rebuilds the mesh when the shape changed (occluded: when the
 	 * owner moved / turned, throttled), eases the colour towards TargetColor and keeps the cone at the feet. Sight: the
@@ -179,6 +240,20 @@ public:
 
 	/** The next UpdateCone rebuilds at once (ignores the throttle and the budget). */
 	void RequestRebuild() { bRebuildRequested = true; }
+
+	/**
+	 * Cones of one group (not 0; the operatives: their team + 1) are drawn as one layer (bug #38): no point is drawn twice, the best level
+	 * any of them shows wins, the outline runs round the layer only. 0 = drawn alone (the enemies).
+	 */
+	void SetMergeGroup(int32 Group);
+	int32 GetMergeGroup() const { return MergeGroup; }
+
+	/** The weapon zone drawn on the cone (bug #39; unset = none). A change re-cuts the mesh (no re-trace). */
+	void SetWeaponZone(const FVisionConeWeaponZone& Zone);
+	float GetWeaponEffectiveCm() const { return BuiltWeaponZone.EffectiveCm; }
+	float GetWeaponMaxCm() const { return BuiltWeaponZone.MaxCm; }
+	/** Vertices of the weapon zone's band + edge sections (smokes). */
+	int32 GetWeaponZoneVertexCount() const;
 
 	/**
 	 * Draws the cone from another point and direction than the owner's feet and facing (peek sight, 2026-10-19: a peeking
@@ -207,8 +282,10 @@ public:
 	int32 GetLevelCount() const { return bBuiltOccluded ? BuiltSpec.Levels.Num() : 1; }
 	/** The sight spec of the last occluded rebuild. */
 	const FVisionConeSightSpec& GetBuiltSpec() const { return BuiltSpec; }
-	/** Rays of the last occluded rebuild (cone frame). */
-	const TArray<FVisionConeRay>& GetBuiltRays() const { return BuiltRays; }
+	/** Rays of the last occluded rebuild (cone frame): the owner's own sight. */
+	const TArray<FVisionConeRay>& GetBuiltRays() const;
+	/** Audits every visible section of the drawn mesh (component space; FarCm: the floating check's distance). */
+	FVisionConeMeshAudit AuditMesh(float FarCm) const;
 	/** Rebuilds of this cone so far. */
 	int32 GetBuildCount() const { return BuildCount; }
 
@@ -217,6 +294,8 @@ public:
 	 * there (occluded: GetLevelCount() = full tone, lower = light tone; plain sector: 1 inside).
 	 */
 	uint8 GetDrawnLevelAt(const FVector& WorldPoint) const;
+	/** The same for the mesh actually drawn: a merged layer's member draws only its share of the layer (0 where another member draws). */
+	uint8 GetDrawnMergedLevelAt(const FVector& WorldPoint) const;
 
 	/** Console Codex.Debug.VisionCones: 0 all off, 1 all on, -1 (default) each actor's bShowVisionCone. */
 	static int32 GetGlobalMode();
@@ -240,12 +319,17 @@ public:
 	static const FVisionConeBuildStats& GetBuildStats();
 	static void ResetBuildStats();
 
+protected:
+	virtual void OnUnregister() override;
+
 private:
 	void RebuildPlain(float RangeCm, float HalfAngleDeg);
+	/** The other shown members of this cone's merged layer re-cut their meshes (it was hidden / left the layer). */
+	void RequestLayerReshape() const;
 	/** Rebuilds now (inline). */
 	void RebuildOccluded(const FVisionConeSightSpec& Spec);
-	/** Rebuilds with this frame's batch (or inline when batching is off). */
-	void QueueOccludedRebuild(const FVisionConeSightSpec& Spec);
+	/** Rebuilds with this frame's batch (or inline when batching is off); bTrace false = re-cut the last rays only (merged layer / zone). */
+	void QueueOccludedRebuild(const FVisionConeSightSpec& Spec, bool bTrace = true);
 	/**
 	 * Traces the pending specs of Cones in parallel on the task threads; bAsync: returns at once and the meshes are uploaded
 	 * at the world's next actor tick (CompleteBatches), else waits and uploads them now.
@@ -254,11 +338,11 @@ private:
 	/** Runs the batch of World's pending cones (FWorldDelegates::OnWorldPostActorTick). */
 	static void FlushPending(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 	/** Waits for World's batches in flight and uploads their meshes (next actor tick, world clean-up, before a new batch). */
-	static void CompleteBatches(UWorld* World);
+	static void CompleteBatches(UWorld* World, bool bForce = true);
 	static void CompleteOnTick(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 	static void CompleteOnCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
 	static void ApplyBatch(VisionConeConsole::FBatch& Batch);
-	void ApplyOccludedBuild(const FVisionConeSightSpec& Spec, const FVector& Feet, float Yaw, TArray<FVisionConeRay>&& Rays, const FVisionConeShape& Shape);
+	void ApplyOccludedBuild(VisionConeConsole::FJob& Job);
 	/** Worth re-tracing now: on screen (owner or cone rendered recently; always without rendering) and near the camera. */
 	bool IsWorthUpdating() const;
 	void AddSection(int32 Index, const FVisionConeMesh& Mesh, float Alpha);
@@ -274,6 +358,27 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> LineMaterial;
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> LightMaterial;
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> WeaponBandMaterial;
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> WeaponEdgeMaterial;
+
+	int32 MergeGroup = 0;
+	FVisionConeWeaponZone WeaponZone;
+	FVisionConeWeaponZone BuiltWeaponZone;
+	/** Re-cut the mesh from the last rays (a member of the layer changed). */
+	bool bReshapeRequested = false;
+	bool bPendingTrace = false;
+	/** In a batch still running on the task threads: what it was launched with (the change checks compare against it). */
+	bool bInFlight = false;
+	FVisionConeSightSpec InFlightSpec;
+	FVector InFlightFeet = FVector::ZeroVector;
+	float InFlightYaw = 0.f;
+	/** The owner's own sight rays (shared with the batches that re-cut the layer). */
+	TSharedPtr<TArray<FVisionConeRay>, ESPMode::ThreadSafe> SourceRays;
+	/** The rays actually drawn when merged (the layer's share); empty = SourceRays. */
+	TArray<FVisionConeRay> DrawnRays;
+	bool bDrawnMerged = false;
 
 	bool bViewOverride = false;
 	FVector ViewOverrideOffset = FVector::ZeroVector;
@@ -291,7 +396,6 @@ private:
 	uint64 PendingFrame = 0;
 	FVisionConeSightSpec PendingSpec;
 	FVisionConeSightSpec BuiltSpec;
-	TArray<FVisionConeRay> BuiltRays;
 	FVector BuiltFeet = FVector::ZeroVector;
 	float BuiltYaw = 0.f;
 	float SinceBuildSeconds = 0.f;

@@ -110,8 +110,9 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 		return false;
 	}
 	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(MyFeet.Z, EnemyFeet.Z);
-	const float Range = (CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f) * SquadFireRules::GetPostureRangeMultiplier(Stance)
-		* (Elevation.bElevated ? Elevation.RangeMultiplier : 1.f);
+	// Bug #39 (2026-11-07): the weapon's max reach is a hard limit - a target farther out is seen but not engaged; the stance / elevation
+	// range bonuses now stretch the effective range (the accuracy falloff, ShootAtTarget), not the reach.
+	const float Range = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f;
 	// Godot: from the operative's centre (1 m above the feet) to the enemy's feet.
 	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), EnemyFeet);
 	if (Distance > Range)
@@ -152,6 +153,22 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	return true;
 }
 
+float AOperativeCharacter::GetRangeHitMultiplierAt(const AActor* Target, float PlanarDistanceCm) const
+{
+	if (!CurrentWeapon)
+	{
+		return 1.f;
+	}
+	float Scale = SquadFireRules::GetPostureRangeMultiplier(Stance);
+	if (Target)
+	{
+		const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(OperativeCharacterInternal::ShotFeet(this).Z,
+			OperativeCharacterInternal::ShotFeet(Target).Z);
+		Scale *= Elevation.bElevated ? Elevation.RangeMultiplier : 1.f;
+	}
+	return CurrentWeapon->GetRangeHitMultiplier(PlanarDistanceCm, Scale);
+}
+
 void AOperativeCharacter::SetBlindFireTarget(AEnemyGhostActor* Ghost)
 {
 	BlindFireGhost = Ghost;
@@ -182,8 +199,8 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 		return false;
 	}
 	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(MyFeet.Z, GhostFeet.Z);
-	const float Range = (CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f) * SquadFireRules::GetPostureRangeMultiplier(Stance)
-		* (Elevation.bElevated ? Elevation.RangeMultiplier : 1.f);
+	// Bug #39: the max reach is a hard limit (EvaluateShotLine).
+	const float Range = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f;
 	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), GhostFeet);
 	if (Distance > Range)
 	{
@@ -814,6 +831,8 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	const int32 DistCells = FMath::Max(1, FMath::RoundToInt(DistM / 1.5f));
 
 	float HitChance = CurrentWeapon ? CurrentWeapon->GetHitChanceForDistance(DistCells) : 0.85f;
+	// Bug #39: past the weapon's effective range (stretched by the stance / elevation bonus) the chance falls steeply to its max reach.
+	HitChance *= GetRangeHitMultiplierAt(Target, Dist);
 	// Shivering hands above 50 % cold (Godot realtime_cold_aim_penalty_max 0.30).
 	if (ColdSurvival && ColdLevel > 50.0f)
 	{

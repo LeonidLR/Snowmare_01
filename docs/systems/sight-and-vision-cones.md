@@ -211,6 +211,65 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
   `bVisionConeShowsSightRange` off; `VisionConeSmoke` expects the sight range by default and checks the weapon / fixed ranges with it off.
   Tests `CodexTactics.Combat.Sight.ConditionsMultiplier` / `.ConditionsData`.
 
+## The 120 m cones fixed, the weapon zone (bugs #38 / #39, 2026-11-07)
+
+- **Report (user, L_Gen_Depot_1, `Saved/UserEvidence/cone_46/47/48.webp`):** since the 120 m sight the cones (a) drop the game well below
+  60 FPS, (b) rebuild visibly frame by frame, (c) are stair-stepped with several translucent layers stacked (three squad cones), (d) from a
+  ROOF shoot thin shards / needles across the scene; and (#39) "operatives with an M16 kill very distant enemies like a sniper".
+- **Measured first (`ConePerfSmoke`, the Depot, 3 operatives turning 1 deg / frame, Shift+O, clear noon, rendered offscreen, uncapped):**
+  before - ground: game thread 0.09 ms / frame, 1.4 ms task work per rebuild (199 rays / 690 traces); roof (crouched, the sight x1.75 =
+  210 m): game thread 0.67 - 0.79 ms / frame of which 0.47 - 0.58 ms WAITING for the batch at the next tick, 14 ms task work per rebuild
+  (320 rays - the cap - / 9 776 traces); roof sweep (6 spots x standing / crouched x 4 yaws): 1 312 slanted triangles, 4 040 triangles at
+  the roof's level beyond 30 m, 3 768 slivers narrower than 60 cm beyond 15 m. After: see the table in the CHANGELOG row / below.
+- **Shards (d), root cause:** from a perch `SamplePerch` returns 0 when it finds no edge / no ground below it along a ray (the hop limit over
+  a multi-slab roof, the next slab at his level, a probe missing the block) - that ray fell back to the FLAT model and was drawn at the
+  roof's level for the whole 120 - 210 m: the needles across the scene; its neighbours on the street 9 m below joined it with slanted quads
+  and the outline band stood up between the two levels. Fix: such a ray is marked `FVisionConeRay::bNoGround` (no more traces spent on it)
+  and `CastRays` drops it (all of them none drawn rather than the roof's level); a span is drawn on its own ray's ground, never above the
+  feet (`DrawGround` = min(GroundCm, 0)); neighbours on grounds more than `GroundToleranceCm` apart are not joined (`IsJoinable`: split at
+  the middle angle, each on its own level) and an outline edge across a ground jump is left out. Plus the **slivers**: a crack between two
+  slabs / a wall top and a roof let single rays see a thin strip far out - `FindSlivers` drops a seen stretch whose run of rays is narrower
+  than `SliverMinWidthCm` 60 at its distance (beyond `SliverFromCm` 15 m; repeated until none is left).
+- **Stair steps (c):** the refinement's rays were first-come (`MaxRays` 320 spent on the first shadow edges, the rest of the fan stepped);
+  now the rays left after the base fan are shared out among the gaps that need refining, in order (`CastRays`, `FCaster::GapLimit`). The
+  base rays adapt to the range (`RaySpacingCm` 200: the arc between two at the widest range, clamped to [`MinRayStepDeg` 0.5, `RayStepDeg`
+  1.5]: 120 m ~0.95 deg, 210 m 0.55 deg, a 18 m peek cone 1.5 deg) and sit on a **world-anchored grid** (`GridAngles`: a turn keeps the
+  inner rays' bearings - the walls are sampled at the same points, the shape no longer "boils" when he turns).
+- **One layer (c):** the cones of one `MergeGroup` (operatives: their team + 1; enemies 0 = alone) are cut as a whole in one batch: each
+  draws only where it shows a higher level than every other member, or the same level and the lower `Priority` (its unique id)
+  (`VisionConeVisibility::ClipToLayer`, sampled every `MergeSampleCm` 150 along each span, crossings bisected to ~1 cm) - every point is
+  drawn once, at the best level any of them shows; the outline runs round the layer only (`FVisionConeShapeOptions::OutlineHidden`). A
+  member that moved re-traces; the others re-cut their share from their last rays (no traces: `Reshapes` in the stats); a member hidden /
+  unregistered makes the rest re-cut. `GetDrawnLevelAt` still answers the owner's OWN sight (the smokes' drawn = sight checks);
+  `GetDrawnMergedLevelAt` answers what the mesh draws.
+- **Cost / cadence (a, b):** a batch not done by the next actor tick keeps running on the task threads (`Codex.VisionCones.MaxMsInFlight`
+  150; then waited for) and its meshes are swapped in whole when it is - no game-thread wait, no half-built mesh; new rebuilds of that world
+  wait for it, the change checks compare against what it was launched with (no second trace of the same pose). A still owner is no longer
+  re-traced every 2 s (`StaticRefreshSeconds` 0): only a move (> 15 cm) / turn (> 2 deg) / a sight change (stance, weather, the hour:
+  the range drifting > 1 %) / a request rebuilds.
+- **Weapon reach (#39, `Combat/WeaponRangeRules`, every real-time shooter):** `weapons_tuning.json` per weapon `attack_range_m` = the MAX
+  reach (a target farther out is seen but never engaged: `EvaluateShotLine` / `EvaluateBlindLine` no longer stretch it by the stance /
+  elevation bonus) and the new `effective_range_m` (`UWeaponDataAsset::EffectiveRangeCm`, 0 = the max): M16 28 / 60 m, sniper rifle
+  90 / 120, pistol 15 / 25, shotgun 8 / 15, plasma carbine 10 / 16, cryo emitter 7 / 10.5, flamethrower 6 / 8.5 (melee, the grenade:
+  none); the Marksman's rifle (`enemy_weapons.marksman_rifle`) 80 / 110 m. Hit chance = the weapon's distance table x `HitMultiplier`:
+  x1 up to the effective range (the stance / elevation range bonus stretches the EFFECTIVE range, capped at the max), then
+  1 - 0.9 t^2 down to x0.1 at the max reach (`range_falloff`: `floor_multiplier` 0.1, `exponent` 2), 0 beyond. M16: 20 m x1 (table
+  0.38), 40 m x0.87 (0.23), 50 m x0.57 (0.15), 60 m x0.1 (0.026), 80 m no shot. Applied in `AOperativeCharacter::ShootAtTarget` and the
+  quick fire (the squad AND the hostile PMC operatives: the same class), the Marksman's `Fire` (and no shot past 110 m). The turn-based
+  grid keeps its own cell ranges.
+- **The weapon zone on the cone:** the operative the player commands (the leader / the selected group) shows a line at his weapon's
+  effective range (his stance's bonus in it) and a faint band from it to the max reach, cut from the ground he sees (`SetWeaponZone`,
+  sections 3 / 4 of the cone's mesh and material: `WeaponBandAlpha` 0.1, `WeaponEdgeAlpha` 0.6, `WeaponEdgeWidthCm` 20).
+- **Verified:** unit `CodexTactics.Combat.VisionCone.Layer.Rays` (adaptive / world-grid angles, the fair budget on a picket fence, the
+  no-ground rays dropped), `.Layer.Shape` (two grounds: no slanted / upward triangle; a crack = one sliver; the weapon band / edge
+  distances), `.Layer.Merge` (three overlapping cones, one light-toned beyond 20 m: on a 50 cm grid every covered point drawn once at the
+  best level, <= 1 % seams), `CodexTactics.Combat.WeaponRange.Falloff`; smokes `ConePerfSmoke` (above; arg `Shot` ->
+  `Saved/Screenshots/ConeFix/roof.png`, `ground.png`) and `WeaponReachSmoke` (an M16 operative and a frozen hound on the Depot's longest
+  clear line: 80 m seen, 0 shots; 50 m fires at chance ~0.15; 20 m at ~0.38, more hits).
+- **Console:** `Codex.VisionCones.MaxMsInFlight` (0 = the old wait at the next tick); the BP knobs on the VisionCone component:
+  `Ray Spacing Cm`, `Min Ray Step Deg`, `Sliver Min Width Cm` (0 = off), `Sliver From Cm`, `Merge Sample Cm`, `Static Refresh Seconds`
+  (0), the Weapon Zone alphas.
+
 ## Vision cones - how to switch them on (old §6)
 
 - **Vision cones - how to switch them on (user request 2026-10-11).** Off by default (as in Godot's shipped config).
@@ -227,6 +286,6 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
   every cone on, `0` every cone off, `-1` (default) each actor's own setting. Nothing was saved into the BPs by the port.
   (6) Occlusion (2026-10-19): the same component -> **Vision Cone | Occlusion**: `Clip To Sight` (off = the plain sector),
   `Ray Step Deg` 1.5, `Edge Refine Depth` 6, `Max Rays Per Cone` 320, `Max Low Obstacles Per Ray` 3, `Refresh Hz` 12,
-  `Move Rebuild Cm` 15, `Turn Rebuild Deg` 2, `Static Refresh Seconds` 2, `Max Update Distance Cm` 9000, `Light Tone Alpha
+  `Move Rebuild Cm` 15, `Turn Rebuild Deg` 2, `Static Refresh Seconds` 0 (was 2; bug #38), `Max Update Distance Cm` 9000, `Light Tone Alpha
   Scale` 0.45, `Light Tone Whiten` 0.35. Console: `Codex.VisionCones.MaxRebuildsPerFrame` 6, `Codex.VisionCones.Parallel` 2.
 

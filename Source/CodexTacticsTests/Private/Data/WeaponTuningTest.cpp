@@ -110,7 +110,10 @@ bool FWeaponTuningM16RangeTest::RunTest(const FString& Parameters)
 	WeaponTuning::ApplyWeapon(**M16Json, *M16);
 	WeaponTuning::ApplyWeapon(**SniperJson, *Sniper);
 
-	TestEqual(TEXT("M16 real-time range 25 m"), M16->AttackRangeCm, 2500.f);
+	// Since c8af1c6d (user 2026-11-04): the max reach 60 m; bug #39 (2026-11-07): the effective range 28 m (the falloff starts there).
+	TestEqual(TEXT("M16 real-time range (max reach) 60 m"), M16->AttackRangeCm, 6000.f);
+	TestEqual(TEXT("M16 effective range 28 m"), M16->GetEffectiveRangeCm(), 2800.f);
+	TestTrue(TEXT("the sniper rifle's effective range (90 m) outranges the M16's"), Sniper->GetEffectiveRangeCm() > M16->GetEffectiveRangeCm());
 	TestTrue(TEXT("the sniper rifle (30 m) still outranges it"), Sniper->AttackRangeCm > M16->AttackRangeCm);
 	TestEqual(TEXT("M16 turn-based range 8 cells (was 5)"), M16->MaxRangeCells, 8);
 	TestTrue(TEXT("the sniper still outranges it on the grid"), Sniper->MaxRangeCells > M16->MaxRangeCells);

@@ -4,6 +4,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/MarksmanAIRules.h"
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Combat/WeaponRangeRules.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Tactics/EnemyTurnRules.h"
 #include "Tactics/TurnBasedRules.h"
@@ -106,6 +107,7 @@ namespace WeaponTuning
 	{
 		Number(Json, TEXT("base_damage"), Weapon.BaseDamage);
 		Number(Json, TEXT("attack_range_m"), Weapon.AttackRangeCm, 100.f);
+		Number(Json, TEXT("effective_range_m"), Weapon.EffectiveRangeCm, 100.f); // bug #39
 		Number(Json, TEXT("fire_rate"), Weapon.FireRate);
 		Number(Json, TEXT("armor_penetration"), Weapon.ArmorPenetration);
 		Integer(Json, TEXT("max_clip_size"), Weapon.MaxClipSize);
@@ -126,6 +128,7 @@ namespace WeaponTuning
 		Json->SetStringField(TEXT("name"), Weapon.WeaponName.ToString());
 		Json->SetNumberField(TEXT("base_damage"), Round4(Weapon.BaseDamage));
 		Json->SetNumberField(TEXT("attack_range_m"), Round4(Weapon.AttackRangeCm / 100.f));
+		Json->SetNumberField(TEXT("effective_range_m"), Round4(Weapon.EffectiveRangeCm / 100.f));
 		Json->SetNumberField(TEXT("fire_rate"), Round4(Weapon.FireRate));
 		Json->SetNumberField(TEXT("armor_penetration"), Round4(Weapon.ArmorPenetration));
 		Json->SetNumberField(TEXT("max_clip_size"), Round4(Weapon.MaxClipSize));
@@ -156,6 +159,15 @@ namespace WeaponTuning
 		if (Root->TryGetObjectField(TEXT("grenade"), Grenade) && Grenade)
 		{
 			GrenadeBlock = *Grenade;
+		}
+		// Bug #39: the accuracy falloff from a weapon's effective range to its max reach (shared by every weapon).
+		const TSharedPtr<FJsonObject>* RangeFalloff = nullptr;
+		if (Root->TryGetObjectField(TEXT("range_falloff"), RangeFalloff) && RangeFalloff)
+		{
+			FWeaponRangeFalloff Falloff;
+			Number(**RangeFalloff, TEXT("floor_multiplier"), Falloff.FloorMultiplier);
+			Number(**RangeFalloff, TEXT("exponent"), Falloff.Exponent);
+			WeaponRangeRules::SetFalloff(Falloff);
 		}
 		const TSharedPtr<FJsonObject>* TurnRules = nullptr;
 		if (Root->TryGetObjectField(TEXT("turn_based_rules"), TurnRules) && TurnRules)
@@ -253,6 +265,8 @@ namespace WeaponTuning
 		Number(Json, TEXT("crouch_accuracy_bonus"), Config.CrouchAccuracyBonus);
 		Number(Json, TEXT("preferred_min_range_m"), Config.PreferredMinRange, 100.f);
 		Number(Json, TEXT("preferred_max_range_m"), Config.PreferredMaxRange, 100.f);
+		Number(Json, TEXT("effective_range_m"), Config.EffectiveRangeCm, 100.f); // bug #39
+		Number(Json, TEXT("max_range_m"), Config.MaxRangeCm, 100.f);
 	}
 
 	void ApplyVehicleWeapons(FVehicleTurretConfig* Turret, FVehicleCrushConfig* Crush, FVehicleHullConfig* Hull)
@@ -367,6 +381,10 @@ namespace WeaponTuning
 			Weapons->SetObjectField(Weapon->WeaponId, WeaponToJson(*Weapon));
 		}
 		Root->SetObjectField(TEXT("weapons"), Weapons);
+		TSharedRef<FJsonObject> RangeFalloff = MakeShared<FJsonObject>();
+		RangeFalloff->SetNumberField(TEXT("floor_multiplier"), Round4(WeaponRangeRules::GetFalloff().FloorMultiplier));
+		RangeFalloff->SetNumberField(TEXT("exponent"), Round4(WeaponRangeRules::GetFalloff().Exponent));
+		Root->SetObjectField(TEXT("range_falloff"), RangeFalloff);
 		TSharedRef<FJsonObject> Grenade = MakeShared<FJsonObject>();
 		const AOperativeCharacter* Defaults = GrenadeDefaults ? GrenadeDefaults : GetDefault<AOperativeCharacter>();
 		Grenade->SetNumberField(TEXT("damage"), Round4(Defaults->GrenadeDamage));
@@ -388,6 +406,8 @@ namespace WeaponTuning
 		Rifle->SetNumberField(TEXT("crouch_accuracy_bonus"), Round4(Marksman.CrouchAccuracyBonus));
 		Rifle->SetNumberField(TEXT("preferred_min_range_m"), Round4(Marksman.PreferredMinRange / 100.f));
 		Rifle->SetNumberField(TEXT("preferred_max_range_m"), Round4(Marksman.PreferredMaxRange / 100.f));
+		Rifle->SetNumberField(TEXT("effective_range_m"), Round4(Marksman.EffectiveRangeCm / 100.f));
+		Rifle->SetNumberField(TEXT("max_range_m"), Round4(Marksman.MaxRangeCm / 100.f));
 		Rifle->SetNumberField(TEXT("tb_damage_scale"), Round4(Turn.DamageScale));
 		Rifle->SetNumberField(TEXT("tb_attack_ap"), Round4(Turn.AttackAPCost));
 		Rifle->SetNumberField(TEXT("tb_min_range_cells"), Round4(Turn.MinRange));
