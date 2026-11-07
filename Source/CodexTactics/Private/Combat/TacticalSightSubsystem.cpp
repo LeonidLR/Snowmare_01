@@ -351,11 +351,18 @@ bool UTacticalSightSubsystem::CanOperativeSee(const AOperativeCharacter& Operati
 	{
 		return true;
 	}
-	// Peek sight (game designer 2026-10-19): leaned out round a corner / over a low wall, the limited peek cone from that eye point.
+	// Peek sight (game designer 2026-10-19): leaned out round a corner / over a low wall, the limited peek cone from that eye point -
+	// #32 (2026-11-07): as far as his own eyes reach (GetPeekSightRangeCm), the cone angle stays the peek's.
 	FVector PeekEye;
 	FVector PeekDirection;
-	return Operative.GetPeekSight(PeekEye, PeekDirection) && PeekSightRules::IsInCone(Operative.PeekSightConfig, PeekEye, PeekDirection, TargetPoint)
+	return Operative.GetPeekSight(PeekEye, PeekDirection)
+		&& PeekSightRules::IsInCone(Operative.PeekSightConfig, PeekEye, PeekDirection, TargetPoint, GetPeekSightRangeCm(Operative))
 		&& HasClearSight(PeekEye, TargetPoint);
+}
+
+float UTacticalSightSubsystem::GetPeekSightRangeCm(const AOperativeCharacter& Operative) const
+{
+	return PeekSightRules::EffectiveRangeCm(Operative.PeekSightConfig, GetSightRangeCm(Operative));
 }
 
 bool UTacticalSightSubsystem::IsDemasked(const AActor* Actor) const
@@ -817,7 +824,7 @@ void UTacticalSightSubsystem::Update()
 			// Bug hunt 2026-10-18: an enemy at arm's length is noticed without a line of sight (a frostbitten waiting 1.7 m off
 			// right behind the wall's corner stayed hidden from the corner hold, so it was never fired at).
 			bSeen |= SightRules::IsWithinTouchReveal(Distance2D);
-			if (!bSeen && Distance <= GetSightRangeCm(*Operative) + 100.f && CanOperativeSee(*Operative, Profile))
+			if (!bSeen && Distance <= FMath::Max(GetSightRangeCm(*Operative), GetPeekSightRangeCm(*Operative)) + 100.f && CanOperativeSee(*Operative, Profile))
 			{
 				bSeen = true;
 			}

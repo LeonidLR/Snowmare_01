@@ -8,8 +8,9 @@
 //  2. hugging the high wall at its corner (no peek): the enemy round the corner is NOT seen (and does not see him - head down); the
 //     one in the open past the corner still is (not blind at the corner);
 //  3. the manual corner peek (the real click on the wall's end): the eye point leans past the edge, the enemy round the corner is
-//     seen, the enemy sees the leaned-out point too (symmetric); an enemy 20 m back behind the wall - beyond the 18 m peek range -
-//     is not; his drawn vision cone is the peek cone (90 deg) from the leaned-out point and covers the enemy round the corner;
+//     seen, the enemy sees the leaned-out point too (symmetric); #32 (2026-11-07): the peek reaches his sight range - an enemy 20 m
+//     back behind the wall (past the old 18 m peek range) is seen, one 40 m out is seen and engaged (shot line, his combat pick);
+//     his drawn vision cone is the peek cone (90 deg, his sight range) from the leaned-out point and covers the enemy round the corner;
 //  4. the low wall, crouched in cover: an enemy 6 m behind it is hidden; aiming over the top (a cover shot) - seen; one 56 deg
 //     off (over the wall, outside the 45 deg half cone) is not, one 35 deg off is;
 //  5. the crouched corner lean round the low wall's end (the real click): the eyes stay at 95 cm, past the end; an enemy round
@@ -33,6 +34,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -319,7 +321,18 @@ namespace PeekSightSmoke
 				&& Sight->HasClearSight(UTacticalSightSubsystem::EyePoint(*Walker), UTacticalSightSubsystem::ProfilePoint(*Op)),
 				FString::Printf(TEXT("... and it sees his leaned-out head (symmetric; exposed point %s)"), *Frame(State, UTacticalSightSubsystem::ProfilePoint(*Op))));
 			Check(State, Op->CanHitEnemy(Walker), TEXT("... and targetable from the corner (a shot line from the lean-out)"));
-			Check(State, !PlaceWalkerAndLook(State, Sight, 2600.f, 240.f), TEXT("an enemy 20 m back behind the wall (beyond the 18 m peek range) is not seen"));
+			// #32 (2026-11-07): the peek reaches his own sight range (120 m on a clear day), not the old fixed 18 m.
+			const float PeekRange = Op->GetPeekSightRangeCm();
+			Check(State, PeekRange >= 4500.f && FMath::IsNearlyEqual(PeekRange, Sight->GetSightRangeCm(*Op) * Op->PeekSightConfig.SightRangeFraction, 1.f),
+				FString::Printf(TEXT("#32: the peek reaches his sight range (%.0f m; his eyes %.0f m)"), PeekRange / 100.f, Sight->GetSightRangeCm(*Op) / 100.f));
+			Check(State, PlaceWalkerAndLook(State, Sight, 2600.f, 240.f), TEXT("#32: an enemy 20 m back behind the wall (past the old 18 m peek range) is SEEN"));
+			// The peeking rifleman sees and engages a target at 40 m (his rifle reaches 60 m): visible, a shot line from the corner, his pick.
+			const bool bSeen40 = PlaceWalkerAndLook(State, Sight, 4600.f, 330.f);
+			const float Distance40 = static_cast<float>(FVector::Dist2D(Eye, Walker->GetActorLocation()));
+			AActor* Pick = Op->FindBestCombatTarget();
+			Check(State, bSeen40 && Distance40 >= 3800.f, FString::Printf(TEXT("#32: peeking, a target %.0f m out is SEEN"), Distance40 / 100.f));
+			Check(State, Op->CanHitEnemy(Walker) && Pick == Walker, FString::Printf(TEXT("#32: ... and engaged - a shot line from the corner, his combat pick (%s, weapon reach %.0f m)"),
+				Pick ? *Pick->GetName() : TEXT("none"), Op->CurrentWeapon ? Op->CurrentWeapon->AttackRangeCm / 100.f : -1.f));
 			Check(State, PlaceWalkerAndLook(State, Sight, 1015.f, 350.f), TEXT("back round the corner: seen again"));
 			Next(State, 4);
 			return true;
@@ -332,7 +345,7 @@ namespace PeekSightSmoke
 			}
 			UVisionConeComponent* Cone = Op->VisionCone;
 			Check(State, Cone && Cone->IsConeShown() && Cone->HasViewOverride() && FMath::IsNearlyEqual(Cone->GetConeHalfAngleDeg(), Op->PeekSightConfig.HalfAngleDeg, 0.5f)
-				&& FMath::IsNearlyEqual(Cone->GetConeRangeCm(), Op->PeekSightConfig.RangeCm, 1.f),
+				&& FMath::IsNearlyEqual(Cone->GetConeRangeCm(), Op->GetPeekSightRangeCm(), 1.f),
 				FString::Printf(TEXT("his drawn cone is the peek cone (half %.0f deg, %.0f cm) from the leaned-out point"), Cone ? Cone->GetConeHalfAngleDeg() : -1.f,
 					Cone ? Cone->GetConeRangeCm() : -1.f));
 			Check(State, Cone && Cone->GetDrawnLevelAt(At(State, 1015.f, 350.f)) > 0 && Cone->GetDrawnLevelAt(At(State, 1015.f, -150.f)) == 0,

@@ -194,7 +194,8 @@ namespace PmcStandoffSmoke
 			}
 			const float GroundZ = World->LineTraceSingleByChannel(Ground, WallXY + FVector(0.f, 0.f, 500.f), WallXY - FVector(0.f, 0.f, 1000.f), ECC_Visibility, GroundParams)
 				? static_cast<float>(Ground.ImpactPoint.Z) : static_cast<float>(State.Origin.Z) - Members[0]->GetSimpleCollisionHalfHeight();
-			// 85 cm: under a crouched man's eyes (95 cm) - he sees over it at 20 m (the over-the-top peek reaches only 18 m, PeekSightConfig).
+			// 85 cm: under a crouched man's eyes (95 cm) - he sees over it at 20 m with his own eyes (since #32 the over-the-top peek reaches
+			// his sight range too, GetPeekSightRangeCm).
 			State.Wall = SpawnWall(World, FVector(WallXY.X, WallXY.Y, GroundZ + 42.5f), State.F.Rotation(), FVector(0.4f, 4.f, 0.85f));
 			Check(State, State.Wall.IsValid(), TEXT("a low wall (85 cm) 19.6 m ahead (the band slot behind it)"));
 			State.Stage = 1;

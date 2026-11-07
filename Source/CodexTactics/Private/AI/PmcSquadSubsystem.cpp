@@ -11,6 +11,7 @@
 #include "CodexTactics.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/PeekSightRules.h"
 #include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
@@ -1373,6 +1374,8 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	const FTeam* OwnTeam = FindTeam(Fighter.TeamId);
 	const FPmcObjectiveView* Objective = OwnTeam && OwnTeam->Objective.IsSet() && OwnTeam->Objective->IsActive() ? &OwnTeam->Objective.GetValue() : nullptr;
 	const float WeaponRangeCm = Fighter.CurrentWeapon ? Fighter.CurrentWeapon->AttackRangeCm : 1400.f;
+	// #32 (2026-11-07): a corner is worth its bonus only when his peek round it reaches the threat (his sight range, the cover-and-peek rule).
+	const float PeekRangeCm = Fighter.GetPeekSightRangeCm();
 	struct FCandidate
 	{
 		FCoverSlot Slot;
@@ -1406,8 +1409,9 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		const float Distance = FVector::Dist2D(Chest, Slot.WorldLocation);
 		const int32 Level = bHighGround ? SightRules::HeightLevel(static_cast<float>(Slot.WorldLocation.Z) + EyeCm - GroundZ) : 0;
 		// Engagement band (2026-11-04): a slot at his weapon's distance from the threat, at a corner he can fire round, scores best.
-		const float SlotBand = PmcCommanderRules::BandFactor(static_cast<float>(FVector::Dist2D(Slot.WorldLocation, Threat)), Band, Weights);
-		const bool bCorner = Band.IsValid() && (Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed);
+		const float SlotThreatCm = static_cast<float>(FVector::Dist2D(Slot.WorldLocation, Threat));
+		const float SlotBand = PmcCommanderRules::BandFactor(SlotThreatCm, Band, Weights);
+		const bool bCorner = Band.IsValid() && PeekSightRules::IsCornerInPeekReach(Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed, SlotThreatCm, PeekRangeCm);
 		// The round objective (task #53): attackers prefer slots on the way to / round the point, defenders slots overwatching it.
 		const float ObjectiveFactor = Objective ? PmcCommanderRules::ObjectivePositionFactor(Slot.WorldLocation, Chest, *Objective, Band, WeaponRangeCm, Weights) : 1.f;
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)

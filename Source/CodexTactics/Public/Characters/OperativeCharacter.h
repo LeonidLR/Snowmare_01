@@ -1342,6 +1342,13 @@ public:
 	 */
 	bool GetPeekSight(FVector& OutEye, FVector& OutDirection) const;
 
+	/**
+	 * How far his peek view reaches, cm (#32, 2026-11-07): his effective sight range (UTacticalSightSubsystem::GetPeekSightRangeCm - the same
+	 * clear-day range x height level x weather / time of day as his own eyes) x PeekSightConfig.SightRangeFraction; the fixed
+	 * PeekSightConfig.RangeCm without a sight subsystem or with bRangeFromSight off.
+	 */
+	float GetPeekSightRangeCm() const;
+
 	/** While peeking: the point an observer sees of him (the leaned-out head and shoulder, profile height). False when not peeking. */
 	bool GetPeekExposedPoint(FVector& OutPoint) const;
 
@@ -1595,6 +1602,27 @@ public:
 
 	/** Rounds he returned at an under-fire flash point (smokes / bot report). */
 	int32 ReturnFireShots = 0;
+
+	/**
+	 * The manoeuvre under fire (#43 rest, 2026-11-07, UnderFireRules): under fire, not in cover, no order of his own - the nearest cover
+	 * slot shielding him from the flash, else a short step off the line for a clear line to the flash (a rear man of a column, a mate in
+	 * the way), else prone. The squad's men and the hostile PMC fighters alike. Throttled (DecisionSeconds); called from Tick.
+	 */
+	void UpdateUnderFireManoeuvre(float DeltaTime);
+
+	/**
+	 * He holds the spot his manoeuvre took him to (UnderFireRules::IsHoldingManoeuvreSpot): USquadSubsystem::IsOnOwnOrder counts it, so the
+	 * formation does not pull him back into the line of fire until the threat is over or the leader gets a new order.
+	 */
+	bool IsHoldingUnderFireSpot() const;
+
+	/** His latest move order is his own manoeuvre under fire (not a player's / commander's order): the formation does not walk after it. */
+	bool IsOnUnderFireManoeuvreMove() const { return bUnderFireManoeuvred && bUnderFireIssuedMove && GetMoveOrderSerial() == UnderFireIssuedSerial; }
+
+	/** What the manoeuvre under fire did so far (smokes / bot report). */
+	int32 UnderFireCoverMoves = 0;
+	int32 UnderFireSidesteps = 0;
+	int32 UnderFireProneDrops = 0;
 
 	/** Turns the body at once so the barrel points at TargetLocation (a grid shot resolves in the same frame). */
 	void FaceAimAt(const FVector& TargetLocation);
@@ -2216,6 +2244,30 @@ private:
 	FVector UnderFirePoint = FVector::ZeroVector;
 	double UnderFireTime = -1.0e9;
 	bool bFacingUnderFire = false;
+	// The manoeuvre under fire (#43, UpdateUnderFireManoeuvre).
+	/** The first round of the current spell under fire (-1e9: none running). */
+	double UnderFireSpellStart = -1.0e9;
+	float UnderFireDecisionTimer = 0.f;
+	double UnderFireNextCoverSearch = -1.0e9;
+	double UnderFireNextSidestep = -1.0e9;
+	/** He manoeuvred in this spell (the formation leaves him on the spot: IsHoldingUnderFireSpot). */
+	bool bUnderFireManoeuvred = false;
+	/** He went prone under fire (crouches again when it is over). */
+	bool bUnderFireWentProne = false;
+	/** The leader's move order serial when he manoeuvred (a new order releases the spot). */
+	uint32 UnderFireLeaderSerial = 0;
+	TWeakObjectPtr<const AOperativeCharacter> UnderFireLeader;
+	/** His own move order serial right after his manoeuvre's walk (a cover sprint / a step) - IsOnUnderFireManoeuvreMove. */
+	uint32 UnderFireIssuedSerial = 0;
+	bool bUnderFireIssuedMove = false;
+	/** One manoeuvre decision (gate, cover search, sidestep search, prone). */
+	void DecideUnderFireManoeuvre(AOperativeCharacter& Shooter, const FVector& Flash);
+	/** The nearest cover slot within the radius whose wall shields him from Flash (UnderFireRules / PmcCommanderRules::CoverQualityAgainst). */
+	bool FindUnderFireCover(const FVector& Flash, struct FCoverSlot& OutSlot) const;
+	/** From Point (feet), his muzzle height: a clear line to Flash (allies ignored, Shooter counts as clear) and no mate in it. */
+	bool HasUnderFireLine(const FVector& Feet, const FVector& Flash, const AOperativeCharacter* Shooter, bool* bOutMateInLine = nullptr) const;
+	/** His team's live members (the squad / his PMC team), himself excluded. */
+	TArray<AOperativeCharacter*> GetUnderFireMates() const;
 	/** TurnAimTowards steps once per frame (the combat facing and the fire loop both turn him; prone the rate must hold). */
 	uint64 AimTurnFrame = MAX_uint64;
 	/** A return round at the flash point (FindShootTarget, UnderFireRules::ShouldReturnFire). */

@@ -314,9 +314,14 @@ void AOperativeCharacter::NoteUnderFire(AOperativeCharacter* Shooter, const FVec
 	{
 		return;
 	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (!UnderFireRules::IsThreatActive(Now, UnderFireTime, UnderFireRules::GetConfig().MemorySeconds))
+	{
+		UnderFireSpellStart = Now; // a new spell under fire (#43: the formation follower's reaction delay counts from here)
+	}
 	UnderFireShooter = Shooter;
 	UnderFirePoint = FlashPoint;
-	UnderFireTime = GetWorld()->GetTimeSeconds();
+	UnderFireTime = Now;
 }
 
 bool AOperativeCharacter::GetUnderFireThreat(AOperativeCharacter*& OutShooter, FVector& OutFlashPoint) const

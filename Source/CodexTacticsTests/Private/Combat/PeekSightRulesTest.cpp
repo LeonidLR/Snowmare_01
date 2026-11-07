@@ -136,7 +136,7 @@ bool FPeekSightConeTest::RunTest(const FString& Parameters)
 	using namespace PeekSightRules;
 	const FPeekSightConfig Config;
 	TestEqual(TEXT("data: 90 degree cone"), Config.HalfAngleDeg * 2.f, 90.f);
-	TestEqual(TEXT("data: 18 m"), Config.RangeCm, 1800.f);
+	TestEqual(TEXT("data: the fixed fallback range 18 m (no squad sight / bRangeFromSight off)"), Config.RangeCm, 1800.f);
 	const FVector Eye(0.f, 0.f, 160.f);
 	const FVector Aim(1.f, 0.f, 0.f);
 	auto At = [](float YawDeg, float DistanceCm) { return FRotator(0.f, YawDeg, 0.f).Vector() * DistanceCm + FVector(0.f, 0.f, 150.f); };
@@ -154,5 +154,45 @@ bool FPeekSightConeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("twist 20 deg: unit planar"), FMath::IsNearlyEqual(static_cast<float>(Twisted.Size()), 1.f, 0.001f) && FMath::IsNearlyZero(static_cast<float>(Twisted.Z)));
 	TestTrue(TEXT("twisted 20 deg: 50 deg off is inside"), IsInCone(Config, Eye, Twisted, At(50.f, 1000.f)));
 	TestFalse(TEXT("twisted 20 deg: -30 deg off is outside"), IsInCone(Config, Eye, Twisted, At(-30.f, 1000.f)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPeekSightRangeTest, "CodexTactics.Combat.Sight.PeekRangeIsSightRange",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPeekSightRangeTest::RunTest(const FString& Parameters)
+{
+	// #32 (2026-11-07): the peek sees as far as his own eyes - a rifleman at a corner sees a target on his rifle band and beyond.
+	using namespace PeekSightRules;
+	const FPeekSightConfig Config;
+	TestTrue(TEXT("data: the range follows his sight by default"), Config.bRangeFromSight);
+	TestEqual(TEXT("data: the whole sight range"), Config.SightRangeFraction, 1.f);
+	TestEqual(TEXT("clear day, on the ground: 120 m"), EffectiveRangeCm(Config, 12000.f), 12000.f);
+	TestEqual(TEXT("blizzard night (x0.175): 21 m"), EffectiveRangeCm(Config, 2100.f), 2100.f);
+	TestEqual(TEXT("a roof (+3, x1.75): 210 m"), EffectiveRangeCm(Config, 21000.f), 21000.f);
+	TestEqual(TEXT("no squad sight running (-1): the fixed 18 m"), EffectiveRangeCm(Config, -1.f), 1800.f);
+	FPeekSightConfig Fixed;
+	Fixed.bRangeFromSight = false;
+	TestEqual(TEXT("bRangeFromSight off: the fixed RangeCm whatever his sight"), EffectiveRangeCm(Fixed, 12000.f), 1800.f);
+	FPeekSightConfig Half;
+	Half.SightRangeFraction = 0.5f;
+	TestEqual(TEXT("a half-range peek (data)"), EffectiveRangeCm(Half, 12000.f), 6000.f);
+	Half.SightRangeFraction = 3.f;
+	TestEqual(TEXT("the fraction is clamped to 1"), EffectiveRangeCm(Half, 12000.f), 12000.f);
+
+	const FVector Eye(0.f, 0.f, 160.f);
+	const FVector Aim(1.f, 0.f, 0.f);
+	auto At = [](float YawDeg, float DistanceCm) { return FRotator(0.f, YawDeg, 0.f).Vector() * DistanceCm + FVector(0.f, 0.f, 150.f); };
+	const float Range = EffectiveRangeCm(Config, 12000.f);
+	TestTrue(TEXT("the PMC rifle band (19-24 m) from a corner: seen"), IsInCone(Config, Eye, Aim, At(10.f, 2200.f), Range));
+	TestTrue(TEXT("40 m (the peeking rifleman smoke): seen"), IsInCone(Config, Eye, Aim, At(-5.f, 4000.f), Range));
+	TestFalse(TEXT("121 m: beyond his sight"), IsInCone(Config, Eye, Aim, At(0.f, 12100.f), Range));
+	TestFalse(TEXT("the cone angle stays the peek's (50 deg off at 20 m: outside)"), IsInCone(Config, Eye, Aim, At(50.f, 2000.f), Range));
+	TestFalse(TEXT("19 m with the old fixed range (the bug)"), IsInCone(Config, Eye, Aim, At(0.f, 1900.f), Config.RangeCm));
+
+	// The PMC commander's corner bonus: a free corner counts only when the peek round it reaches the threat.
+	TestTrue(TEXT("corner, threat at 22 m, peek 120 m: worth it"), IsCornerInPeekReach(true, 2200.f, Range));
+	TestFalse(TEXT("corner, threat at 22 m, the old 18 m peek: not"), IsCornerInPeekReach(true, 2200.f, 1800.f));
+	TestFalse(TEXT("no free corner: never"), IsCornerInPeekReach(false, 500.f, Range));
 	return true;
 }

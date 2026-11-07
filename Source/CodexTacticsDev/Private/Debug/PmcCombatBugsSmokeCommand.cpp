@@ -22,6 +22,7 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/UnderFireRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -300,6 +301,12 @@ namespace PmcCombatBugsSmoke
 			if (!SetUp(World, State, FBox2D(FVector2D(-900.f, -700.f), FVector2D(1600.f, 700.f))))
 			{
 				return Finish(State, false);
+			}
+			{
+				// The bodies must die from their stances: no prone drop under the smoke's rounds (the manoeuvre under fire, #43).
+				FUnderFireConfig NoManoeuvre = UnderFireRules::GetConfig();
+				NoManoeuvre.ManoeuvreEnabled = 0.f;
+				UnderFireRules::SetConfig(NoManoeuvre);
 			}
 			for (int32 Index = 1; Index < 3; ++Index)
 			{
