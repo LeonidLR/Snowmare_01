@@ -9,6 +9,8 @@
 // same checks mirrored; then a ground click away from the wall -> the new leader and the followers' order are kept (no revert); then the
 // layout again mid-wall, the west-end man knocked down, the west end clicked -> the next nearest takes the corner and the lead.
 // A/B: -PreCmds "Codex.Formation.WallLeadership 0" = the v2.4 squad peek (the leader stays: the leadership checks fail).
+// #57 (2026-11-07): both runs set Codex.Formation.TwoCornerHold 0 - the east peek from the west stack moves the stack (the rule before #57; the
+// default two-corner hold is TwoCornerHoldSmoke's).
 // CodexTactics.WallLeadershipSlideSmoke (the game designer's bug 2026-11-03 on L_Gen_Depot_1: the right-end peek after the left-end one at the
 // same long wall - all three stood up, faced their walk and walked along the wall, the rear wide open; item 2's re-form rules): the same
 // path up to the east peek from the west stack (a 22 m slide along the SAME wall), checked for: no follower stands up, someone keeps
@@ -955,6 +957,12 @@ namespace WallLeadershipSmoke
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bSlideMode = bSlideMode;
 		State->bShot = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); });
+		// #57 (user 2026-11-07): by default a peek at the other end of the same wall is the two-corner hold (TwoCornerHoldSmoke) - these runs
+		// check the stack moving to the new end, i.e. that rule's A/B "off" path (Codex.Formation.TwoCornerHold 0).
+		if (IConsoleVariable* TwoCorners = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.TwoCornerHold")))
+		{
+			TwoCorners->Set(0, ECVF_SetByCode);
+		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		State->PreTickHandle = FWorldDelegates::OnWorldPreActorTick.AddLambda([WeakWorld, State](UWorld* Ticking, ELevelTick, float)
 		{

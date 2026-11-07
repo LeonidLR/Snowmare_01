@@ -37,6 +37,7 @@ FSquadWallTuning SquadWallTuning::FromJson(const FJsonObject& Json, const FSquad
 	ReadWallTuningNumber(Json, TEXT("reform_stand_m"), Tuning.ReformStandCm, 0.f, 5000.f, 100.f);
 	ReadWallTuningNumber(Json, TEXT("wall_path_braking_cm"), Tuning.WallPathBrakingCm, 0.f, 500.f);
 	ReadWallTuningNumber(Json, TEXT("reform_along_wall_off_m"), Tuning.ReformAlongWallOffCm, 0.f, 500.f, 100.f);
+	ReadWallTuningNumber(Json, TEXT("corner_sweep_s"), Tuning.CornerSweepSeconds, 1.f, 60.f);
 	return Tuning;
 }
 

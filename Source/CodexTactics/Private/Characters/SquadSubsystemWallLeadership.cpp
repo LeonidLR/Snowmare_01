@@ -90,6 +90,18 @@ bool USquadSubsystem::PlanWallLeadership(const FVector& EdgeOnFace, FWallLeaders
 	// The same walls the slide's corner stack reads (TryStartFormationSlide), so the plan and the squad's other moves agree.
 	const TArray<FFormationWall> NoWalls;
 	const bool bWalls = FormationGuardRuntime::IsEnabled() && Sectors.bWorldWallsValid;
+	// #57 two-corner hold: the other end of the wall while a corner is held - its corner man(s) keep their corners (not candidates); an end
+	// held already - its own man (nobody swaps).
+	AOperativeCharacter* EndHolder = nullptr;
+	const FormationCornerHold::EPeekOrder HoldKind = ClassifyCornerHoldPeek(EdgeOnFace, &EndHolder);
+	for (int32 Index = 0; Index < OutWho.Num(); ++Index)
+	{
+		const bool bCornerMan = OutWho[Index] == Sectors.Peek.Peeker.Get() || OutWho[Index] == Sectors.HeldCorner.Holder.Get();
+		if ((HoldKind == FormationCornerHold::EPeekOrder::SecondCorner && bCornerMan) || (HoldKind == FormationCornerHold::EPeekOrder::AlreadyHeld && OutWho[Index] != EndHolder))
+		{
+			Candidates[Index].bAble = false;
+		}
+	}
 	OutPlan = FormationWallLeadership::Plan(bWalls ? Sectors.WorldWalls : NoWalls, KSlot->Position, Sectors.WallNormalYaw, FVector2D(EdgeOnFace), Candidates,
 		FormationTuning::Get());
 	return OutWho.IsValidIndex(OutPlan.Leader);
@@ -98,6 +110,21 @@ bool USquadSubsystem::PlanWallLeadership(const FVector& EdgeOnFace, FWallLeaders
 bool USquadSubsystem::OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace)
 {
 	using namespace SquadSubsystemWallLeadershipLocal;
+	// #57 two-corner hold: the other end of the wall while a corner man peeks = the second corner (he keeps his); an end held already = nothing.
+	{
+		AOperativeCharacter* EndHolder = nullptr;
+		const FormationCornerHold::EPeekOrder HoldKind = ClassifyCornerHoldPeek(EdgeOnFace, &EndHolder);
+		if (HoldKind == FormationCornerHold::EPeekOrder::AlreadyHeld)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] two-corner hold: the peek at (%.0f, %.0f) - %s holds that corner already, nobody swaps"), EdgeOnFace.X, EdgeOnFace.Y,
+				EndHolder ? *EndHolder->DisplayName.ToString() : TEXT("-"));
+			return true;
+		}
+		if (HoldKind == FormationCornerHold::EPeekOrder::SecondCorner && OrderSecondCornerPeek(Peeker, CornerSlot, EdgeOnFace))
+		{
+			return true;
+		}
+	}
 	AOperativeCharacter* OldLeader = Leader.Get();
 	FWallLeadershipPlan Plan;
 	TArray<AOperativeCharacter*> Who;

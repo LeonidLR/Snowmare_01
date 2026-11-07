@@ -6,6 +6,7 @@
 #include "Characters/SquadFormation.h"
 #include "Characters/FirePostureRules.h"
 #include "Formation/FormationBypassRules.h"
+#include "Formation/FormationCornerHoldRules.h"
 #include "Formation/FormationCornerRules.h"
 #include "Formation/FormationCoverRules.h"
 #include "Formation/FormationCustomRules.h"
@@ -506,6 +507,26 @@ public:
 	/** Squad corner peeks whose peek order was given (the peeker reached his corner) since the level began - smokes. */
 	int32 GetFormationPeekCount() const { return Sectors.PeekCount; }
 
+	// --- Two-corner hold (#57, user request 2026-11-07; Codex.Formation.TwoCornerHold; SquadSubsystemCornerHold.cpp) ---
+
+	/**
+	 * Codex.Formation.TwoCornerHold on (1, the default; 0 = before #57: a peek at the other end of the same wall moves the whole stack there):
+	 * the squad's wall-leadership peek at one end, a later peek at the OTHER end of that wall sends that end's man there (he takes the lead, as
+	 * any wall-leadership peek) while the first corner man KEEPS his corner peek; the members between them stay at the wall and sweep their
+	 * look from one corner's peek direction to the other's and back (FormationCornerHold::SweepFraction / SweepYaw, squad_walls.json
+	 * corner_sweep_s). A peek at an end already held changes nothing. The leader's next order / a new wall order / leaving the formation ends
+	 * both; a corner man down / out of his corner frees his corner only.
+	 */
+	static bool IsTwoCornerHoldEnabled();
+	/** The first corner man of a two-corner hold (he keeps his corner while the second peek is in force); null when none - smokes. */
+	AOperativeCharacter* GetHeldCornerOperative() const { return Sectors.HeldCorner.Holder.Get(); }
+	/** Both corners are held now (the held corner and the squad peek in force) - smokes. */
+	bool IsTwoCornerHoldActive() const { return Sectors.HeldCorner.Holder.IsValid() && Sectors.Peek.Peeker.IsValid(); }
+	/** Middle men whose look the sweep set this frame (0 when no sweep runs) - smokes. */
+	int32 GetCornerSweepMemberCount() const { return Sectors.CornerSweepMembers; }
+	/** Second-corner peeks ordered since the level began - smokes. */
+	int32 GetSecondCornerPeekCount() const { return Sectors.SecondCornerCount; }
+
 	// --- Wall leadership (game designer 2026-11-01; Codex.Formation.WallLeadership; SquadSubsystemWallLeadership.cpp) ---
 
 	/**
@@ -933,6 +954,22 @@ private:
 		};
 		FSquadPeek Peek;
 		int32 PeekCount = 0;
+		/** #57: the two-corner hold's first corner (its man keeps his corner peek while the squad peek holds the other end). */
+		struct FHeldCorner
+		{
+			TWeakObjectPtr<AOperativeCharacter> Holder;
+			/** The end he peeks round on the wall's face line. */
+			FVector EdgeOnFace = FVector::ZeroVector;
+			/** The leader the hold belongs to (another leader ends it) and his move serial when it began. */
+			TWeakObjectPtr<AOperativeCharacter> Leader;
+			uint32 LeaderSerial = 0;
+			float Seconds = 0.f;
+		};
+		FHeldCorner HeldCorner;
+		/** The middle men's sweep clock (runs while both corner men peek), s; members swept this frame; second corners ordered. */
+		float CornerSweepSeconds = 0.f;
+		int32 CornerSweepMembers = 0;
+		int32 SecondCornerCount = 0;
 		/** Members OrderFormationWall took out of their cover / corner / prone spot (bug_04 A) - smokes. */
 		int32 WallReleaseCount = 0;
 		/** Rules v2.6: rear guard turn-rounds (Q2) and side probe hits dropped on short obstacles (Q1) since the level began (smokes). */
@@ -997,9 +1034,26 @@ private:
 	TArray<FFormationWall> GatherWallsAround(const FVector2D& Center, float HalfExtentCm, float FeetZ) const;
 	/** The squad's corner peek per tick: the peek order once the peeker is in cover at the corner; its end (SquadSubsystemFormationPeek.cpp). */
 	void UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, float DeltaTime);
-	void EndFormationCornerPeek(const TCHAR* Why);
-	/** Operative is the squad corner peek's peeker (the formation leaves him to his corner: no follow, no wall pose, no sector look). */
-	bool IsFormationPeeker(const AOperativeCharacter* Operative) const { return Operative && Sectors.Peek.Peeker.Get() == Operative; }
+	/** The squad peek is over; bKeepHeldCorner: the two-corner hold's first corner stays (a second corner order, the peeker down). */
+	void EndFormationCornerPeek(const TCHAR* Why, bool bKeepHeldCorner = false);
+	/**
+	 * Operative is the squad corner peek's peeker - or the two-corner hold's first corner man (#57) - the formation leaves him to his corner:
+	 * no follow, no wall pose, no sector look.
+	 */
+	bool IsFormationPeeker(const AOperativeCharacter* Operative) const
+	{
+		return Operative && (Sectors.Peek.Peeker.Get() == Operative || Sectors.HeldCorner.Holder.Get() == Operative);
+	}
+	/** #57: what a squad peek order at EdgeOnFace is with a corner held (FormationCornerHold::DecidePeekOrder); OutHolder = that end's man. */
+	FormationCornerHold::EPeekOrder ClassifyCornerHoldPeek(const FVector& EdgeOnFace, AOperativeCharacter** OutHolder = nullptr) const;
+	/** #57: the second corner - Peeker takes it and the lead, the first corner man keeps his, nobody else moves. False: nothing ordered. */
+	bool OrderSecondCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace);
+	/** #57 per tick: the held corner's end conditions (its man down / out of his corner, the leader's next order, the formation over). */
+	void UpdateFormationCornerHold(float DeltaTime);
+	/** #57: the hold is over (the held corner man is handed back to the formation, the followers-in-cover rule). */
+	void EndCornerHold(const TCHAR* Why);
+	/** #57 per frame, after the follow: the middle men's sweeping looks between the two corners (FrameLooks of the ones the formation drives). */
+	void ApplyCornerHoldSweep(float DeltaTime);
 	/**
 	 * Wall leadership (SquadSubsystemWallLeadership.cpp): the plan for a corner peek at EdgeOnFace - FormationWallLeadership::Plan over the
 	 * formation's members (OutWho[i] = the plan's member i, the leader first). False when the squad cannot peek as a group.

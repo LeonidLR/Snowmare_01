@@ -406,6 +406,41 @@ game designer's confirmation**): `wall_corner_look_deg` 112, `follower_cover_rad
   `OnCharacterMovementUpdated` right after the move. Cursor picking itself (`GetHitResultUnderCursor`) was fine. If an offset is still seen while
   he stands still, the next suspect is a Blueprint's mesh offset vs the capsule (needs a screenshot).
 
+### Both corners held (#57, 2026-11-07, branch fix/run-and-peek; user request; behind `Codex.Formation.TwoCornerHold`)
+
+User: "the squad pressed against a wall, a peek on the right sends the right man to that corner; then a peek on the left sends the left man
+there - but the right man leaves his position. Each of them must hold his own edge. The one left in the middle should scan from the left corner
+to the right."
+
+- **The rule:** formation mode, the squad's wall-leadership corner peek in force at one end of a wall (its man in cover there, peeking), a
+  squad peek order at the OTHER end of the same wall (`FormationCornerHold::DecidePeekOrder` = `SecondCorner`; the end within 1.5 m of a held end
+  = `AlreadyHeld`) -> `USquadSubsystem::OrderSecondCornerPeek`: the end man of that side (the plan with the corner man not a candidate) takes
+  that corner; the first corner man KEEPS his corner peek (`Sectors.HeldCorner`; `IsFormationPeeker` is true for him, so the formation leaves
+  him in his corner - no follow, no wall pose, no sector look); nobody else moves (the wall order is re-keyed, no new stack). A peek at an end
+  already held swaps nothing. Facing out from the wall the squad's right is the east of `L_FormationLab` W_B_3.
+- **Leadership (decision 4):** today's rule kept - the man taking a corner takes the formation lead (`SetLeader` inside the
+  `bWallLeadershipSwitch` guard), so the second corner man leads; the first corner man takes the second one's old place in the wall order.
+- **The middle men:** everyone at that wall who is not a corner man stays in the wall pose and sweeps his look (`ApplyCornerHoldSweep` sets
+  his formation look after the follow, before `ApplyFormationFrame`): a ping-pong from his direction to one corner along the wall to his direction
+  to the other, through the outward normal, eased at the ends (`SweepFraction`, `SweepYaw`), one way in `squad_walls.json` `corner_sweep_s`
+  (6 s). The ends are the corners as seen from him clamped to 85 deg off the outward normal (`ClampOffOutward`) - NOT the corner men's peek
+  looks: those point round the ends, behind the wall from where he stands (measured 170 deg off, he would face the wall). With several middle
+  men each sweeps his own slice of the arc in step (index by place along the wall), so two never look at the same point and the whole arc is
+  swept between them. The sweep runs only while both corner men are leaning out (`GetPeekSight`); a combat target (the facing priority:
+  combat target > formation look) or an order of his own takes him out of it, it resumes after.
+- **The end (decision 3):** the leader's next order (a move, a new wall order, the formation's own end of the squad peek) ends both - the held
+  corner man is handed back to the formation (the followers-in-cover rule, as the peeker of an ended peek); solo / a box selection / the
+  leader changed / the wall order over end it too (`UpdateFormationCornerHold`). A corner man dead / knocked down / out of his corner frees
+  only his corner (`StillHolds`; the squad peek's end keeps the held corner when its peeker is down); nobody takes it without a new order.
+- **Scope:** solo, box selection, turn-based and the PMC unchanged. `WallLeadershipSmoke` / `WallLeadershipSlideSmoke` now run with
+  `Codex.Formation.TwoCornerHold 0` (they check the stack moving to the new end - the rule before #57).
+- **Code / tests:** `Formation/FormationCornerHoldRules` (tests `CodexTactics.Formation.CornerHold.*`), `Characters/SquadSubsystemCornerHold.cpp`,
+  hooks in `OrderWallLeadershipPeek` / `PlanWallLeadership` / `EndFormationCornerPeek(.., bKeepHeldCorner)` / `UpdateFormationCornerPeek` /
+  `USquadSubsystem::Tick`; `SquadWallTuning::CornerSweepSeconds`. Smoke `TwoCornerHoldSmoke` (L_FormationLab W_B_3): peek right -> the east man
+  at the east corner; peek left -> the west man at the west corner and the east man never out of his peek, the middle man moved 0 cm; over
+  two sweeps the middle man's facing -85 .. 85 deg off the outward normal (both corners reached, never into the wall); a repeated left peek
+  swaps nothing; a ground click away ends both.
+
 ### Wall leadership (2026-11-01, branch formation/wall-leadership; the game designer's decisions; behind `Codex.Formation.Sectors` + `Codex.Formation.WallLeadership`)
 
 Design and the seven decisions: `docs/design/FORMATION_SECTORS.md` "Wall leadership". The squad's corner peek (the click on an end of the squad's wall,

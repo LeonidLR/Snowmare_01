@@ -1107,6 +1107,9 @@ void USquadSubsystem::Tick(float DeltaTime)
 	FramePace = 1.f;
 	Sectors.bActiveThisFrame = false;
 	TickFormationFollow(DeltaTime);
+	// #57: both corners of a wall held - the held corner's end conditions, the middle men's sweeping looks.
+	UpdateFormationCornerHold(DeltaTime);
+	ApplyCornerHoldSweep(DeltaTime);
 	ApplyFormationFrame();
 }
 

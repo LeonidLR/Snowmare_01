@@ -71,6 +71,12 @@ it at once: the operative is running, gets the order to peek round a corner in f
   D from north of the wall the same click -> the north face's corner; E three box-selected in the open -> the man nearest the west end peeks,
   the others in cover 0.8 / 2 m behind him.
 
+## Both corners of a wall held (#57, 2026-11-07)
+
+The squad's corner peek in formation: a peek at the other end of the same wall keeps the first corner man in his corner peek while the
+other end's man takes that corner; the men between them sweep their look between the corners. Details: [squad-and-orders](squad-and-orders.md)
+"Both corners held".
+
 ## Cover entry turn: the enter clip only where it fits (2026-11-01, the squad corner peek played twice)
 
 - The pack's enter clip (`cvr_*_idle_fwd_to_cvr_*_idle`) starts FACING the wall. `CoverFacingRules::DecideCoverEntryTurn` decides per entry: a quiet
