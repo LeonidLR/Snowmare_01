@@ -18,6 +18,7 @@
     "levelgen:critic": "node src/levelgen/cli/critic.ts",
     "combatsim": "node src/combatSim/cli/combatsim.ts",
     "combatsim:calibrate": "node src/combatSim/cli/calibrate.ts",
+    "chokepoints": "node src/levelgen/cli/chokepoints.ts",
     "menu:icons": "node src/movement/cli/genMenuIcons.ts"
   },
   "dependencies": {

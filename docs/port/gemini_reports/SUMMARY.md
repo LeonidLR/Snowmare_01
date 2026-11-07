@@ -103,3 +103,21 @@
 1. All tasks T1 through T6 are committed on their dedicated `gemini/*` branches branched strictly from `origin/main`.
 2. Protected files (`*.umap`, `Config/DefaultEditor.ini`, `Config/DefaultScalability.ini`, `pmc_commander.json`, `Scripts/Trainer/`, `Saved/Trainer/`) were completely preserved and left untouched.
 3. All branches are ready for Claude's final review and integration merge.
+
+---
+
+## Plan 2 - Task D: Chokepoint & Kill Zone Analyzer (#49)
+
+- **Branch:** `gemini/chokepoint-analyzer`
+- **Key Deliverables:**
+  - `Tools/TrainingGround/src/levelgen/chokepoints.ts`: Spatial analyzer detecting 1–3 m corridors flanked by $\ge 3$ m structures; scores elevated ambush perches (height, cover angle, line of sight); categorizes kill zones (`fatal_funnel`, `crossfire_alley`, `elevated_ambush`); generates 200 cm continuous danger heatmap.
+  - `Tools/TrainingGround/src/levelgen/chokepoints.test.ts`: 5 unit and integration tests (filtering, detection, scoring, heatmap, accepted Depot layout).
+  - `Tools/TrainingGround/src/levelgen/cli/chokepoints.ts`: Standalone CLI runner (`npm run chokepoints`).
+  - `Tools/TrainingGround/src/departments/LayoutView.tsx` & `LevelGenDepartment.tsx`: Interactive chokepoint & kill zone visualizer with toggle button, heatmap cell overlay, corridor centerlines, perch tags, and summary card.
+  - `Saved/TrainingGround/chokepoints/gen_ref_01_02_depot_1.chokepoints.json`: Generated analysis artifact for Depot reference layout.
+- **Verification:**
+  - `npm test`: 250/250 tests passed (including 5 chokepoint tests).
+  - `npm run typecheck`: clean (0 errors).
+  - `npm run golden -- --check`: golden files up to date.
+  - `npm run build`: Vite production build passed.
+- **Report:** [`docs/port/gemini_reports/chokepoint_analyzer.md`](chokepoint_analyzer.md)

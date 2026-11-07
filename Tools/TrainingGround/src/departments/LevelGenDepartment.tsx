@@ -16,6 +16,7 @@ import type { Evaluation } from '../levelgen/evaluate';
 import { evaluateLayout } from '../levelgen/evaluate';
 import { generateLayout } from '../levelgen/generate';
 import type { Profile } from '../levelgen/profile';
+import { analyzeChokepoints } from '../levelgen/chokepoints';
 import type { GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
 
@@ -42,6 +43,7 @@ export const LevelGenDepartment: React.FC = () => {
   const [ledger, setLedger] = useState<{ spentUsd: number; calls: unknown[] }>({ spentUsd: 0, calls: [] });
   const [accepted, setAccepted] = useState<{ name: string; seed: number; profile: string; at: string }[]>([]);
   const [refOk, setRefOk] = useState(true);
+  const [showChokepoints, setShowChokepoints] = useState(false);
   const view = useRef<LayoutViewHandle>(null);
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export const LevelGenDepartment: React.FC = () => {
   const config = useMemo(() => (configFile ? configValues(configFile) : null), [configFile]);
   const cur = candidates[sel] ?? null;
   const layers = useMemo(() => (cur ? ['all', ...layersOf(cur.layout)] : ['all']), [cur]);
+  const chokepoints = useMemo(() => (cur && showChokepoints ? analyzeChokepoints(cur.layout) : null), [cur, showChokepoints]);
   const marks = useMemo<Vec2[]>(() => {
     if (!cur) return [];
     const r = mandatoryRoute(cur.layout);
@@ -181,11 +184,12 @@ export const LevelGenDepartment: React.FC = () => {
           <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
           <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
           <button onClick={reject} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-800 text-xs text-white hover:bg-rose-700 disabled:opacity-50"><ThumbsDown size={13} />Отклонить</button>
+          <button onClick={() => setShowChokepoints(!showChokepoints)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${showChokepoints ? 'bg-amber-600 text-slate-950' : 'bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700'}`}>🔥 Узкие места {showChokepoints ? '(ВКЛ)' : ''}</button>
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
           <div>
             <p className="text-[11px] text-slate-500 mb-1">Кандидат (сверху; синий — обязательный маршрут, голубой — варианты, жёлтый — лестницы, зелёная рамка — крыша проходима)</p>
-            <LayoutView ref={view} layout={cur?.layout ?? null} layer={layer} height={520} marks={marks} />
+            <LayoutView ref={view} layout={cur?.layout ?? null} layer={layer} height={520} marks={marks} showChokepoints={showChokepoints} />
           </div>
           <div>
             <p className="text-[11px] text-slate-500 mb-1">Эталон (карта дизайнера, развёрнутая сверху; синее — его маршрут, жёлтое — лестницы, зелёный круг — старт)</p>
@@ -220,6 +224,36 @@ export const LevelGenDepartment: React.FC = () => {
           <details className="text-xs text-slate-300"><summary className="cursor-pointer text-slate-400">Сходство с эталоном по метрикам</summary>
             <ul className="mt-1 flex flex-col gap-0.5">{cur.ev.similarity.metrics.map((m) => <li key={m.key} className={m.score < 1 ? 'text-amber-300' : ''}>{m.key}: {m.value}{m.target ? ` [${m.target[0]}..${m.target[1]}]` : ''}{m.score < 1 ? ` ×${m.score}` : ''}</li>)}</ul>
           </details>
+          {showChokepoints && chokepoints && (
+            <div className="bg-slate-950 border border-amber-900/50 rounded-lg p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-amber-400">🔥 Узкие места (Kill Zones): {chokepoints.corridors.length} коридоров</h4>
+                <span className="text-[11px] text-slate-400">Макс. опасность: {chokepoints.summary.highestKillZoneRating}%</span>
+              </div>
+              {chokepoints.corridors.length === 0 ? (
+                <p className="text-xs text-slate-400">Узких коридоров (1–3 м между зданиями ≥ 3 м) не обнаружено.</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {chokepoints.corridors.map((c) => (
+                    <div key={c.id} className="bg-slate-900 border border-slate-800 rounded p-2 text-xs flex flex-col gap-1">
+                      <div className="flex items-center justify-between font-mono">
+                        <span className="text-amber-300 font-semibold">{c.id}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${c.killZoneRating >= 85 ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-amber-950 text-amber-300 border border-amber-800'}`}>
+                          KZ {c.killZoneRating}% ({c.category})
+                        </span>
+                      </div>
+                      <div className="text-slate-400 text-[11px]">
+                        Ширина: {c.widthM} м | Длина: {c.lengthM} м | Блоки: {c.leftBlockId} ({(c.leftHeightCm / 100).toFixed(0)}м) / {c.rightBlockId} ({(c.rightHeightCm / 100).toFixed(0)}м)
+                      </div>
+                      <div className="text-slate-300 text-[11px]">
+                        Засады: {c.ambushPositions.length} точек (лучшая: {c.ambushPositions[0]?.totalScore ?? 0}/100, +{Math.round((c.ambushPositions[0]?.heightCm ?? 0) / 100)}м)
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400 mt-1">Вердикты</h4>
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => critic('jev')} disabled={!!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Bot size={13} />Jev</button>

@@ -3,9 +3,11 @@
 // (green inner outline = walkable roof, orange squares = roof holes, green squares = stairs, white dots = doors), the cut with
 // its crossings, ladders, covers, the mandatory route (blue) and the variants (light blue), spawns / ambush points / patrols.
 // UE axes: X forward = up on screen, Y right = right. `layer` filters the walls / buildings to one floor layer.
+// Optional `showChokepoints` renders detected 1-3 m corridors between 3m+ blocks, ambush perches and the kill zone heat-map.
 import React, { useEffect, useImperativeHandle, useRef } from 'react';
 import type { Vec2 } from '../movement/geometry';
 import type { GenLayout } from '../levelgen/schema';
+import { analyzeChokepoints } from '../levelgen/chokepoints';
 
 const SET_TINT: Record<string, string> = {
   street: '#787882', marksman_lane: '#8a7070', t_junction: '#8c8c5a', alley: '#969664', facade: '#5a463c', one_entry_compound: '#966e3c',
@@ -22,9 +24,11 @@ interface Props {
   height?: number;
   /** Highlighted points (failing route legs). */
   marks?: Vec2[];
+  /** When true, renders detected chokepoints and heatmap overlay. */
+  showChokepoints?: boolean;
 }
 
-export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', height = 560, marks }, ref) => {
+export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', height = 560, marks, showChokepoints = false }, ref) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   useImperativeHandle(ref, () => ({ toPngBase64: () => canvas.current ? canvas.current.toDataURL('image/png').replace(/^data:image\/png;base64,/, '') : null }), []);
 
@@ -89,7 +93,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     if (layer === 'all' || layer === 'ground') for (const cv of layout.covers) {
       const q = P(cv.pos), rx = Math.max(1.5, cv.size[0] / 2 * s), ry = Math.max(1.5, cv.size[1] / 2 * s);
       g.save(); g.translate(q[0], q[1]); g.rotate(-cv.yaw * Math.PI / 180);
-      g.fillStyle = cv.size[2] >= 140 ? '#8c7c62' : '#6e645a'; g.strokeStyle = '#c8be a0'.replace(' ', ''); g.lineWidth = 0.8;
+      g.fillStyle = cv.size[2] >= 140 ? '#8c7c62' : '#6e645a'; g.strokeStyle = '#c8bea0'; g.lineWidth = 0.8;
       if (cv.kind === 'silo') { g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill(); g.stroke(); } else { g.fillRect(-ry, -rx, ry * 2, rx * 2); g.strokeRect(-ry, -rx, ry * 2, rx * 2); }
       g.restore();
     }
@@ -109,9 +113,56 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     const sq = P(layout.spawn.pos); g.strokeStyle = '#00e65a'; g.lineWidth = 3; g.beginPath(); g.arc(sq[0], sq[1], 9, 0, Math.PI * 2); g.stroke();
     const eq = P(layout.end); g.strokeStyle = '#ff5050'; g.lineWidth = 3; g.strokeRect(eq[0] - 8, eq[1] - 8, 16, 16);
     for (const m of marks ?? []) { const q = P(m); g.strokeStyle = '#f97316'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.stroke(); }
+
+    // Chokepoints and Kill Zone Heatmap overlay (#49)
+    if (showChokepoints) {
+      const chokes = analyzeChokepoints(layout);
+      // 1. Draw Heatmap cells
+      for (const cell of chokes.heatmap.cells) {
+        const [cx, cy] = P([cell.x, cell.y]);
+        const sz = Math.max(4, chokes.heatmap.cellSizeCm * s);
+        const alpha = Math.min(0.6, cell.intensity * 0.5);
+        g.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+        g.fillRect(cx - sz / 2, cy - sz / 2, sz, sz);
+      }
+      // 2. Draw Corridor Centerlines and labels
+      for (const c of chokes.corridors) {
+        const pStart = P(c.start);
+        const pEnd = P(c.end);
+        const pCenter = P(c.center);
+        g.strokeStyle = c.killZoneRating >= 85 ? '#ef4444' : '#f97316';
+        g.lineWidth = 3.5;
+        g.setLineDash([6, 3]);
+        g.beginPath();
+        g.moveTo(pStart[0], pStart[1]);
+        g.lineTo(pEnd[0], pEnd[1]);
+        g.stroke();
+        g.setLineDash([]);
+
+        g.fillStyle = '#ffedd5';
+        g.font = 'bold 10px ui-monospace, monospace';
+        g.fillText(`${c.category.toUpperCase()} (${c.widthM}m x ${c.lengthM}m, KZ ${c.killZoneRating}%)`, pCenter[0] + 8, pCenter[1] - 4);
+
+        // 3. Draw Ambush Perches
+        for (const p of c.ambushPositions) {
+          const pq = P(p.pos);
+          g.fillStyle = p.totalScore >= 90 ? '#ef4444' : '#f59e0b';
+          g.strokeStyle = '#ffffff';
+          g.lineWidth = 1;
+          g.beginPath();
+          g.arc(pq[0], pq[1], 4.5, 0, Math.PI * 2);
+          g.fill();
+          g.stroke();
+          g.fillStyle = '#fde68a';
+          g.font = '9px ui-monospace, monospace';
+          g.fillText(`+${Math.round(p.heightCm / 100)}m (${p.totalScore})`, pq[0] + 6, pq[1] + 3);
+        }
+      }
+    }
+
     g.fillStyle = '#ffe600'; g.font = '11px ui-monospace, monospace'; g.textAlign = 'left';
-    g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer}`, 8, h - 8);
-  }, [layout, layer, height, marks]);
+    g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer}${showChokepoints ? '  [CHOKEPOINTS ON]' : ''}`, 8, h - 8);
+  }, [layout, layer, height, marks, showChokepoints]);
 
   return <canvas ref={canvas} style={{ width: '100%', height }} className="rounded-xl border border-slate-800 block" />;
 });
