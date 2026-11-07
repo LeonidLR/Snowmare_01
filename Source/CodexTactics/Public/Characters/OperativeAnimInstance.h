@@ -601,6 +601,9 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	bool bIsDead = false;
 
+	/** Times the corpse pose had to be held again after something took the FullBody slot from it (bug #44; smokes). */
+	int32 DeathPoseRestores = 0;
+
 	/**
 	 * Sprint 14: in a knockdown (fall / downed / get-up; the clips play on FullBodySlot from UKnockdownComponent): no aim,
 	 * no left-hand IK / aim offset, no upper-body clips, no stance transitions.
@@ -1461,6 +1464,15 @@ private:
 	FDelegateHandle FiredHandle;
 	FDelegateHandle GrenadeHandle;
 	bool bDeathPlayed = false;
+	/** The death clip for his stance (Godot play_death: a random standing one, the crouched / prone one); null = the knockdown fall. */
+	UAnimSequenceBase* PickDeathClip(const AOperativeCharacter& Operative) const;
+	/**
+	 * Bug #44: dead, the clip that first held the FullBody slot (death clip / held fall) is the corpse pose; anything that later takes the
+	 * slot (a cover exit, a stance clip) is replaced by it again, held on its last frame (DeathPoseRestores, a warning line).
+	 */
+	void UpdateDeathPose(const AOperativeCharacter& Operative, float DeltaSeconds);
+	TWeakObjectPtr<UAnimSequenceBase> DeathPoseClip;
+	float DeathPoseSeconds = 0.f;
 	/** Hit reactions (HitReactionRules): game time of the last one, count / clip / slot for the smokes. */
 	double LastHitReactionTime = -1000.0;
 	int32 HitReactionsPlayed = 0;

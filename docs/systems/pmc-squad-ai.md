@@ -72,6 +72,27 @@ must stay false. A muzzle flash shows him at once; the fallen are shown. The min
 mark, like a monster), never once fallen. The arena turns it off (`SetRevealHostileOperatives`). A shooter's demask is noticed by the teams within
 `GunfireHearingCm` 60 m (it was the whole map: one shot told every PMC squad where the player stood).
 
+**Combat bugs #33 / #43 / #44 (user PIE on Depot 2026-11-07, branch `fix/combat-bugs-43-44-33`; smokes `PmcUnderFireSmoke`, `FireArcSmoke`, `PmcDeathPoseSmoke`):**
+- **Under fire (#43, `UnderFireRules`).** The shooter WAS known to the target's team (his flash demasks him within 60 m), but his body stood
+  behind the corner: no body line, so no combat target - a walking man kept facing his path and nobody fired back (mates are never in a squad
+  shot line: `AddShotLineAllies` ignores every operative). Now every round fired at an operative by another team's operative
+  (`AOperativeCharacter::ShootAtTarget`) gives the target and his mates within 25 m the shooter's muzzle flash for 3 s
+  (`NoteUnderFire`); the target's team sees the shooter for `DemaskSeconds` whatever the range (`UPmcSquadSubsystem::NotifyShotAt`).
+  Without a combat target each of them turns to the flash - standing or walking (the 8-direction locomotion strafes), never in cover /
+  sprinting / panicking / against a facing order; with no body line he returns fire AT THE FLASH when a line to it is clear and his posture
+  fires on its own (a blind-factor round: x0.2, a hit only while the shooter stays at the spot; `ReturnFireShots`). Symmetric: a PMC fighter
+  fired at does the same. Not done: the rear men do not step aside for a line (they only turn), no automatic cover move, no ghost silhouette.
+- **Fire arc (#33, `FireArcRules`).** Every aim turn (auto fire, the combat facing, quick fire, SUPPRESS) runs `TurnAimTowards`: eased,
+  never slower than 360 deg/s - PRONE only at the prone turn rate (143 deg/s, once per frame: the facing and the fire loop used to step twice);
+  prone (no upper-body twist) the shot residual is the larger of the rifle's and the body's error. A prone man with the target behind his back
+  now takes over a second before the first round (was 0.15-0.35 s, the body spun round under the shot).
+- **Death pose (#44).** Real cause: `UOperativeAnimInstance::UpdateState` ran the cover layer with LAST frame's `bIsDead`. Killed in the
+  corner fire stance (the Depot PMC at the corner), `HandleDied` left the cover, the next update saw "left the cover, alive, in the fire pose"
+  and played the fire -> idle exit clip - `PlayCoverMontage` fades out every FullBody montage, the death clip too - so the corpse blended
+  back to the crouched / standing aim pose (smoke: `anim_M4_cvr_crch_fire_to_idle_L` on the slot, head 112 -> 93 cm). The death is now read
+  before the cover layer; `UpdateDeathPose` holds the death clip / held fall against anything else that takes the FullBody slot (a
+  `[Death] ... corpse pose was lost` warning, `DeathPoseRestores`). Not a skeleton / slot problem of the PMC body (the Sniper death clips
+  play on `SKM_PmcOperator`), and the player's men had the same trap in cover.
 Not done (follow-ups): no last-known silhouette (ghost) for a concealed fighter, no hearing of them, turn-based combat ignores them, hostile rounds suppress the player's men only through the generic suppression
 rules, hostile fighters never loot / get looted.
 

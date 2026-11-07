@@ -461,6 +461,25 @@ void UPmcSquadSubsystem::RefreshSight()
 	UpdateSight();
 }
 
+void UPmcSquadSubsystem::NotifyShotAt(const AActor* Shooter, const AOperativeCharacter* Victim)
+{
+	UWorld* World = GetWorld();
+	FTeam* Team = Victim && Shooter && World ? Teams.Find(Victim->TeamId) : nullptr;
+	if (!Team)
+	{
+		return;
+	}
+	const double Now = World->GetTimeSeconds();
+	for (auto It = Team->ShotRevealUntil.CreateIterator(); It; ++It)
+	{
+		if (!It->Key.IsValid() || It->Value < Now)
+		{
+			It.RemoveCurrent();
+		}
+	}
+	Team->ShotRevealUntil.Add(const_cast<AActor*>(Shooter), Now + SightRules::DemaskSeconds);
+}
+
 void UPmcSquadSubsystem::UpdateSight()
 {
 	UWorld* World = GetWorld();
@@ -508,6 +527,11 @@ void UPmcSquadSubsystem::UpdateSight()
 				{
 					bSeen |= FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation()) <= PmcSquadLocal::GunfireHearingCm;
 				}
+			}
+			// Bug #43: a shooter who fired at one of us is seen by his flash whatever the range (NotifyShotAt).
+			if (const double* Until = !bSeen ? Team.ShotRevealUntil.Find(Target) : nullptr)
+			{
+				bSeen = *Until > Now;
 			}
 			for (AOperativeCharacter* Observer : Observers)
 			{

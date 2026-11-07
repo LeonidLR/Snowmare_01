@@ -682,6 +682,10 @@ namespace FormationLabCombatSmoke
 				FString::Printf(TEXT("a patrol of %d: the leader walks its loop, the others escort him"), Group.Num()));
 			State.PatrolGoal = Goal.GetValue();
 			State.AmbushStartsBefore = Encounter->GetAmbushStarts();
+			// The walk to the patrol is DEFENSIVE (bug #39 2026-11-07): the M16 now reaches 60 m, so an AGGRESSIVE squad opens fire on the
+			// patrol 30 m away the instant it is seen - at the click, before anybody moved (correct, but no "contact while moving" to check).
+			// Defensive, the contact is the patrol spotting the squad as it walks up; the fight below is AGGRESSIVE again.
+			Squad->SetSquadPosture(ESquadFirePosture::Defensive);
 			Check(State, ClickAt(World, State.PatrolGoal), TEXT("the squad is ordered towards / past the patrol"));
 			QueuePhoto(State, TEXT("02_patrol"), PatrolSpot.GetValue() * 0.6f + LeaderFeet * 0.4f + FVector(0.f, 0.f, 100.f),
 				FRotator(-45.f, static_cast<float>(Direction.Rotation().Yaw) + 120.f, 0.f), 2600.f);

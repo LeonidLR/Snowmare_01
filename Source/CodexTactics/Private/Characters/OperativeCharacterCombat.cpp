@@ -23,6 +23,8 @@
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/UnderFireRules.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
@@ -235,6 +237,42 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	return Out.Enemy != nullptr;
 }
 
+bool AOperativeCharacter::EvaluateReturnFire(FShootCandidate& Out) const
+{
+	UWorld* World = GetWorld();
+	AOperativeCharacter* Shooter = nullptr;
+	FVector Flash = FVector::ZeroVector;
+	if (!World || !GetUnderFireThreat(Shooter, Flash) || !OperativeCharacterInternal::IsLiveTargetOf(*this, Shooter) || !MayAutoFireAtEnemy(Shooter))
+	{
+		return false;
+	}
+	const FVector MyFeet = OperativeCharacterInternal::ShotFeet(this);
+	const float Range = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f;
+	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), Flash);
+	const FVector From = GetMuzzleLocation();
+	// The line to the flash, a hand short of it (the muzzle may poke into the corner it fires round): the operatives never stop it
+	// (the squad's own column included - mates are not in the way of a squad shot line).
+	const FVector End = Flash + (From - Flash).GetSafeNormal() * 15.f;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ReturnFireLine), false, this);
+	OperativeCharacterInternal::AddShotLineAllies(World, Params);
+	FHitResult Hit;
+	const bool bLine = !(World->LineTraceSingleByChannel(Hit, From, End, ECC_Visibility, Params) && Hit.GetActor() != Shooter);
+	if (!UnderFireRules::ShouldReturnFire(true, false, true, bLine, Distance <= Range))
+	{
+		return false;
+	}
+	const FShotLineVerdict Verdict = SquadFireRules::JudgeLine(EShotLineHit::Clear, Stance,
+		SquadFireRules::GetElevationAdvantage(MyFeet.Z, OperativeCharacterInternal::ShotFeet(Shooter).Z));
+	Out = FShootCandidate();
+	Out.Enemy = Shooter;
+	Out.Distance = Distance;
+	Out.Cover = Verdict.Cover;
+	Out.bBlind = true; // a round at the flash: SightRules::BlindFireAccuracyMultiplier, a hit only while he stays at the spot
+	Out.AimPoint = Flash;
+	Out.bReturnFire = true;
+	return true;
+}
+
 AActor* AOperativeCharacter::FindBestCombatTarget() const
 {
 	UWorld* World = GetWorld();
@@ -375,6 +413,12 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 		if (Stance == EOperativeStance::Prone && BarricadeBlocked > 0)
 		{
 			NotifyBarricadeBlocked();
+		}
+		// Bug #43 (UnderFireRules): rounds come in from a shooter whose body he cannot hit (round a corner, over a wall) - he returns
+		// fire at the muzzle flash when a line to it is clear (no combat target: UpdateCombatFacing turns him to the flash).
+		if (FShootCandidate Return; EvaluateReturnFire(Return))
+		{
+			return Return;
 		}
 		return FShootCandidate();
 	}
@@ -671,13 +715,9 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	}
 	if (!bInCover)
 	{
-		const FRotator LookRot(0.f, (AimAt - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
-		// Eased, but never slower than AimTurnRateDegPerSec (a quick, visible turn to a flank rush).
-		const FRotator Eased = FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f);
-		const FRotator Constant = FMath::RInterpConstantTo(GetActorRotation(), LookRot, DeltaTime, AimTurnRateDegPerSec);
-		const float EasedLeft = FMath::Abs(FRotator::NormalizeAxis(LookRot.Yaw - Eased.Yaw));
-		const float ConstantLeft = FMath::Abs(FRotator::NormalizeAxis(LookRot.Yaw - Constant.Yaw));
-		SetActorRotation(EasedLeft <= ConstantLeft ? Eased : Constant);
+		// Eased, but never slower than AimTurnRateDegPerSec (a quick, visible turn to a flank rush); prone the whole body pivots on the
+		// ground at the prone turn rate (bug #33, FireArcRules).
+		TurnAimTowards(AimAt, DeltaTime);
 		// User rule 2026-10-07: no shot where he does not aim - first the turn, then the shot.
 		if (GetShotAimResidualDeg(AimAt) > AimConeDeg)
 		{
@@ -730,6 +770,7 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	TGuardValue<bool> Blind(bBlindShot, Shot.bBlind);
 	TGuardValue<FVector> Aim(BlindAimPoint, Shot.AimPoint);
 	TGuardValue<bool> CoverBlind(bCoverBlindShot, bInCover && (CoverFireMode == ECoverFireMode::BlindFire || SuppressionFire.bBlind));
+	ReturnFireShots += Shot.bReturnFire ? 1 : 0;
 	ShootAtTarget(Target, Shot.Cover);
 	return TEXT("fired");
 }
@@ -822,6 +863,30 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	if (UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
 	{
 		Sight->NotifyFired(this);
+	}
+	// Bug #43 (UnderFireRules): the round's target and his mates near him hear it come in and see the flash.
+	if (AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Target); Victim && Victim != this && Victim->TeamId != TeamId)
+	{
+		const FVector Flash = GetWeaponMuzzleLocation();
+		const float ShareRadius = UnderFireRules::GetConfig().ShareRadiusCm;
+		// The target's team lists (no world scan on the shot path: EnemyRegistry.HotPathsUseRegistry).
+		UPmcSquadSubsystem* TeamPmc = UPmcSquadSubsystem::Get(GetWorld());
+		const USquadSubsystem* PlayerSquad = GetWorld()->GetSubsystem<USquadSubsystem>();
+		TArray<AOperativeCharacter*> Mates = Victim->IsPlayerTeam() ? (PlayerSquad ? PlayerSquad->GetMembers() : TArray<AOperativeCharacter*>())
+			: (TeamPmc ? TeamPmc->GetTeamMembers(Victim->TeamId) : TArray<AOperativeCharacter*>());
+		Mates.AddUnique(Victim); // a recruit not yet in the squad is still the target
+		for (AOperativeCharacter* Mate : Mates)
+		{
+			if (Mate && Mate->TeamId == Victim->TeamId && Mate->HealthComponent && Mate->HealthComponent->IsAlive()
+				&& UnderFireRules::SharesThreat(Mate == Victim, static_cast<float>(FVector::Dist2D(Mate->GetActorLocation(), Victim->GetActorLocation())), ShareRadius))
+			{
+				Mate->NoteUnderFire(this, Flash);
+			}
+		}
+		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld()))
+		{
+			Pmc->NotifyShotAt(this, Victim);
+		}
 	}
 	// Patrols hear the shot (enemy_perception.json hear_gunshot_m) and engage (user request 2026-10-06).
 	AEnemyCharacter::NotifySquadNoise(GetWorld(), GetActorLocation(), ESquadNoise::Gunshot);

@@ -7,7 +7,10 @@
 
 #include "Characters/AimOffsetRules.h"
 #include "Characters/FacingRules.h"
+#include "Characters/FireArcRules.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Characters/ThreatFacingRules.h"
+#include "Combat/UnderFireRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -108,7 +111,42 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		LastThreatLocation = Target->GetActorLocation();
 		bFoughtThisFight = true;
 		const float Yaw = (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
-		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Yaw, 0.f), DeltaTime, 12.f));
+		if (Stance == EOperativeStance::Prone)
+		{
+			TurnAimTowards(Target->GetActorLocation(), DeltaTime); // bug #33: prone the body pivots at the prone turn rate
+		}
+		else
+		{
+			SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Yaw, 0.f), DeltaTime, 12.f));
+		}
+	}
+	// Bug #43 (UnderFireRules): rounds coming in from a shooter he has no line to - he turns to the muzzle flash, walking or not (the
+	// 8-direction locomotion strafes along his path); FindShootTarget returns fire at it when a line to the flash is clear.
+	bFacingUnderFire = false;
+	AOperativeCharacter* FireShooter = nullptr;
+	FVector FlashPoint = FVector::ZeroVector;
+	if (!bFacingCombatTarget && GetUnderFireThreat(FireShooter, FlashPoint))
+	{
+		UnderFireRules::FFaceFacts Facts;
+		Facts.bRealTimeFight = bRealTimeFight;
+		Facts.bAlive = HealthComponent && HealthComponent->IsAlive();
+		Facts.bThreatActive = true;
+		Facts.bHasCombatTarget = false;
+		Facts.bInCover = bInCover;
+		Facts.bSprinting = bSprinting;
+		Facts.bCarrying = bCarrying;
+		Facts.bPanicking = IsPanicking();
+		Facts.bFireOrder = bQuickFireActive || bSuppressActive;
+		Facts.bExplicitFacing = bExplicitFacing;
+		if (UnderFireRules::ShouldFaceThreat(Facts))
+		{
+			bFacingCombatTarget = true;
+			bFacingUnderFire = true;
+			LastThreat = FireShooter;
+			LastThreatLocation = FlashPoint;
+			bFoughtThisFight = true;
+			TurnAimTowards(FlashPoint, DeltaTime);
+		}
 	}
 	// Godot _face_movement_target / _safe_look_at: otherwise the body turns to the (smoothed) movement above 0.35 m/s
 	// with lerp_angle(turn_speed of the stance) and holds still below it — no trembling while braking at the goal.
@@ -249,6 +287,48 @@ float AOperativeCharacter::GetAimTwistLimitDeg() const
 }
 
 float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) const
+{
+	const float Pose = GetPoseAimResidualDeg(TargetLocation);
+	// Bug #33 (FireArcRules): prone there is no upper-body twist - the body's own arc limits the round too (a rifle pose a few degrees off
+	// the body must not let a round leave sideways).
+	const bool bProneArc = Stance == EOperativeStance::Prone && !bInCover;
+	return FireArcRules::ShotResidualDeg(Pose, bProneArc ? AimOffsetRules::YawToTarget(GetMuzzleLocation(), GetActorForwardVector(), TargetLocation, 180.f) : 0.f,
+		bProneArc);
+}
+
+void AOperativeCharacter::TurnAimTowards(const FVector& AimAt, float DeltaTime)
+{
+	if (AimTurnFrame == GFrameCounter)
+	{
+		return;
+	}
+	AimTurnFrame = GFrameCounter;
+	const float LookYaw = (AimAt - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
+	SetActorRotation(FRotator(0.f, FireArcRules::StepAimYaw(GetActorRotation().Yaw, LookYaw, DeltaTime, Stance == EOperativeStance::Prone,
+		AimTurnRateDegPerSec, OperativeMovementRules::GetTurnRate(MovementConfig, EOperativeStance::Prone)), 0.f));
+}
+
+void AOperativeCharacter::NoteUnderFire(AOperativeCharacter* Shooter, const FVector& FlashPoint)
+{
+	if (!Shooter || Shooter == this || !GetWorld())
+	{
+		return;
+	}
+	UnderFireShooter = Shooter;
+	UnderFirePoint = FlashPoint;
+	UnderFireTime = GetWorld()->GetTimeSeconds();
+}
+
+bool AOperativeCharacter::GetUnderFireThreat(AOperativeCharacter*& OutShooter, FVector& OutFlashPoint) const
+{
+	OutShooter = UnderFireShooter.Get();
+	OutFlashPoint = UnderFirePoint;
+	const UHealthComponent* ShooterHealth = OutShooter ? OutShooter->HealthComponent.Get() : nullptr;
+	return OutShooter && ShooterHealth && ShooterHealth->IsAlive() && !OutShooter->IsKilledInAction() && GetWorld()
+		&& UnderFireRules::IsThreatActive(GetWorld()->GetTimeSeconds(), UnderFireTime, UnderFireRules::GetConfig().MemorySeconds);
+}
+
+float AOperativeCharacter::GetPoseAimResidualDeg(const FVector& TargetLocation) const
 {
 	// The real barrel when the rifle is out and level (the pose as animated, the 2D aim offset's twist included): the shot
 	// goes where the rifle points (user rule 2026-10-07). Else the stance rule (the pose's aim direction + the twist).
