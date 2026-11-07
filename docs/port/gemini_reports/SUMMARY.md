@@ -103,3 +103,22 @@
 1. All tasks T1 through T6 are committed on their dedicated `gemini/*` branches branched strictly from `origin/main`.
 2. Protected files (`*.umap`, `Config/DefaultEditor.ini`, `Config/DefaultScalability.ini`, `pmc_commander.json`, `Scripts/Trainer/`, `Saved/Trainer/`) were completely preserved and left untouched.
 3. All branches are ready for Claude's final review and integration merge.
+
+
+---
+
+## Round 2 (Plan 2): Section B — Tactical & Systems Design Drafts
+
+**Branch:** `gemini/design-round2`  
+**Date:** 2026-11-07  
+**Scope:** Architectural specifications for next-generation combat, director, trap planning, and automated QA systems.
+
+### Deliverables Matrix
+
+| Document | Feature Scope | Status | Smokes Mapped |
+|---|---|---|---|
+| [`KILL_ZONE_AMBUSH.md`](../design/KILL_ZONE_AMBUSH.md) | **Kill Zone Ambush (#49)** | DRAFT / PROPOSAL | `CombatLabAmbushSmoke`, `PmcStandoffSmoke`, `RoofCutawaySmoke` |
+| [`AI_DIRECTOR.md`](../design/AI_DIRECTOR.md) | **AI Director & HQ Comms (#47 + #48)** | DRAFT / PROPOSAL | `CombatPressureSmoke`, `WeatherLakeSmoke`, `NarrativeSmoke` |
+| [`TRAP_PLANNER.md`](../design/TRAP_PLANNER.md) | **Procedural Trap Planner (#46a)** | DRAFT / PROPOSAL | `TrapSoloSmoke`, `PMCTripwireSmoke`, `PeekMinesSmoke` |
+| [`AUTO_QA.md`](../design/AUTO_QA.md) | **Autonomous QA Pipeline (#41)** | DRAFT / PROPOSAL | `EnemyStuckProbe`, `RepathProbe` |
+| [`design_round2.md`](design_round2.md) | **Section B Delivery Report** | DONE | N/A |
