@@ -61,8 +61,9 @@ it at once: the operative is running, gets the order to peek round a corner in f
   (`RunCornerPeekRules::ProbeDirections`, `LineTraceComponent`, the click pushed 10 cm inside the face / 30 cm under the top); each new face
   (`IsNewFace`) gets its slot (`CoverTraceRules::FindCoverSlotAt`), must be wide enough (`IsFaceWideEnough`, 1 m: an end face / a thin post is
   no face of its own) and must have the click at its end (`FindCornerPeekForSlot` - the long-wall probe included); the clicked face with the click
-  in its middle stops the search at once (a cover click, one slot traced). `RunCornerPeekRules::ChooseNearFace` takes the face whose normal points
-  most towards the operative. The end's side / place come from that face's slot; the corner slot = `ResolveCornerStandSlot` (the stand-off of
+  in its middle stops the search at once (a cover click, one slot traced). Since 2026-11-08 the face UNDER THE CURSOR decides
+  (`RunCornerPeekRules::ChooseClickedFace`, "The face under the cursor" below); `RunCornerPeekRules::ChooseNearFace` (the face whose normal points
+  most towards the operative - the old decision 3) only when the hit face has no corner of its own (a wall's narrow end face). The end's side / place come from that face's slot; the corner slot = `ResolveCornerStandSlot` (the stand-off of
   the stance the entry gives: high standing, low crouched; shared with the squad peek). The faces are cached while the cursor rests (5 cm).
 - **Solo first; groups (decision 4):** `RunCornerPeekRules::DecideGroup`. Solo / nobody joining: he alone. A box selection with him in it
   (`Codex.Squad.GroupCornerPeek` 1): `PlanRunGroupCornerPeek` = `FormationWallLeadership::PlanGroupCornerPeek` over every selected member's place
@@ -83,7 +84,9 @@ it at once: the operative is running, gets the order to peek round a corner in f
 - **A/B:** `Codex.Cover.RunCornerPeek 0` = the old rule (the click is a cover ghost). **Smoke** `RunCornerPeekSmoke` (L_FormationLab W_B_3): A the
   leader running in the open, the click on the west end 13 m ahead -> one cover entry and the peek pose 0.00 s later at the west end, south face;
   B the face's middle = the cover ghost, its confirm = cover without a peek; C from that cover the east end = the old in-cover peek (stays in cover);
-  D from north of the wall the same click -> the north face's corner; E three box-selected in the open -> the man nearest the west end peeks,
+  D from north of the wall the same click on the SOUTH face -> since the face rule the south face's corner (he runs round the west end; before:
+  the north face); H (the face rule) a free-standing 1.5 m block, he in cover at W_B_3: each of its four faces clicked in turn -> the ghost and
+  the arrival on that face's corner; E three box-selected in the open -> the man nearest the west end peeks,
   the others in cover 0.8 / 2 m behind him; F (Q2) the squad in formation, the followers ~10 m behind the leader -> the carried peek fires
   2.5 s after the click with both followers still walking (~200 cm/s), the corner man peeks round the west end; G (Q3) solo, a fight, the
   tactical pause -> the hover shows the run-and-peek ghost (no cover ghost), the click plans it (armed, the slot pending, one planned move,
@@ -206,6 +209,43 @@ small extra turn."
   intentionally stands 20-45 deg off the corner aim so that his drawn body matches the fire idle's. `-PreCmds "Codex.Cover.RunPeekYawLock 0"`
   fails the Bug_2 checks.
   Frame strips: `CodexTactics.RunCornerPeekSmoke Shot` / `ShotTop` -> `Saved/Screenshots/RunPeekNoHug2/runpeek_<lock|nolock|old>_<side|top>_NN.png`.
+
+### The face under the cursor - any side of the object (#55, game designer's PIE 2026-11-08)
+
+Designer (in cover at one wall, a free-standing ~1.5 m block nearby): "I want to run and peek from the corner of ANOTHER object. The ghost
+appears only on ONE side - roughly the side matching the side I'm pressed to now. I want to press to the face I point at; the other sides
+don't work either."
+
+- **Cause (by design until now):** decision 3 took the face that LOOKS AT HIM (`ChooseNearFace`), whichever face was clicked; and from a wall
+  edge every face of an object in switch range was the wall-edge cover switch (Q1), whose corner rule picks the protected side.
+- **Rule (`RunCornerPeekRules::ChooseClickedFace`):** the face the mouse ray hits decides - of the faces probed round the click the one whose
+  normal agrees most with the hit's normal (at least 0.5); a hit on the edge between two faces (agreement within 0.05) takes the face whose
+  normal points most towards the camera. The corner = the end of THAT face nearest the cursor (`FindCornerPeekForSlot`, as before). All four
+  faces of a free-standing block / pillar / wall end work, the far side too (he paths round the object; the pre-turn / peek stance arrival
+  apply). A hit face with no corner of its own (narrower than 1 m - a wall's end face) falls back to `ChooseNearFace` over the faces round it;
+  thin posts (all faces < 1 m) stay plain cover; a TOP hit never counts (his own floor rule). Box selection / formation use the same face
+  (the corner man of `PlanRunGroupCornerPeek` / the carried squad peek take the chosen face).
+- **Q1 narrowed (`RunCornerPeekRules::KeepsCoverSwitch`):** from a wall edge a click that is also a cover-switch target stays the switch only
+  where the switch goes itself - a face on his protected side (its normal within 60 deg of his own wall's) at its end NEARER to him (the
+  switch's corner in the mirrored pose); every other face and the far end are the run-and-peek to the face under the cursor. (Open for the
+  game designer: drop Q1 for run-and-peek ends altogether?)
+- **Low cover is never a run-and-peek (the game designer's PIE 2026-11-08, L_Gen_Depot_1's low cubes, solo, three box-selected):** "To that
+  corner - covering it, the others stack up behind me" sent the corner man to a low cube's corner and the two others "behind" a cube with no
+  room - they stood in the open (a click in the cube's middle, the group cover, worked: "sometimes it works"). Now only cover tall enough to
+  peek round its side is a run-and-peek (`RunCornerPeekRules::IsRunPeekCover`: high cover - the corner peek; low cover - fire over it):
+  `GatherRunCornerPeekFaces` returns no face for low cover, the click is a plain cover click (a box selection: the group cover order over
+  nearby covers, `squad_walls.json` follower radius / side, prone only as its fallback). The face rule applies to high cover only.
+  A HIGH block too short for the stack: a stack man whose place behind the corner man has no slot on that object's face or stands within
+  50 cm of the corner slot (`RunCornerPeekRules::IsStackPlaceCovered`; `PlanRunGroupCornerPeek`'s `OutUnplaced`) takes a nearby cover by
+  the same group cover rule (`OrderUnplacedStackToNearbyCover` -> `ControllerGroupCover::FindNearbyGroupCoverSlots`, the helper the group
+  cover order uses), prone behind the corner man only when none is within reach. (The tactical pause's planned box run-and-peek keeps its
+  stack as before.)
+- **Tests:** `CodexTactics.Tactics.Cover.RunCornerPeek.FaceUnderCursor` (four faces, the far side, edge hits by the camera, the narrow end
+  face fallback, Q1 narrowed), `.LowCoverIsNoRunPeek`, `.ArrivesTurned.OneWay` (the pre-turn never steps back - round a wall's end the
+  strafe shifting under the turn pulled it 2 deg back); `RunCornerPeekSmoke` I (three 90 cm cubes, all three box-selected: the click on the
+  middle cube's end = no peek ghost, nobody armed, the cover ghost; its confirm -> everybody in cover / prone, nobody in the open); `RunCornerPeekSmoke` H (a spawned 1.5 x 1.5 x 2.5 m block south of W_B_3, the leader back in cover at
+  W_B_3's middle before each click: the real hover + click on each face near one end -> the ghost's and the pending slot's wall normal = that
+  face's, he arrives there and peeks round the clicked end) and D (from the north, the south face clicked -> the south face).
 
 ## Both corners of a wall held (#57, 2026-11-07)
 

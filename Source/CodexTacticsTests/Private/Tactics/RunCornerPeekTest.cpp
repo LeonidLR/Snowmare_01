@@ -378,6 +378,82 @@ bool FRunCornerPeekYawLockTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+RUN_CORNER_PEEK_TEST(FRunCornerPeekFaceUnderCursorTest, "FaceUnderCursor")
+bool FRunCornerPeekFaceUnderCursorTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// The game designer's PIE 2026-11-08: a free-standing 1.5 m block, he in cover at another wall to its north - "I want to press to the
+	// face I point at; the ghost appears only on one side". The four faces, each with a corner at the click (the probes found them all).
+	const auto MakeFace = [](double X, double Y)
+	{
+		FFace Face;
+		Face.Normal = FVector2D(X, Y);
+		Face.Point = FVector2D(X * 75.0, Y * 75.0);
+		return Face;
+	};
+	const TArray<FFace> Faces{ MakeFace(0.0, 1.0), MakeFace(1.0, 0.0), MakeFace(0.0, -1.0), MakeFace(-1.0, 0.0) }; // north (his), east, south, west
+	const FVector2D Him(0.0, 700.0);
+	const FVector2D TowardCamera = FVector2D(-0.3, -1.0).GetSafeNormal(); // the camera south of the block, looking north
+	TestEqual(TEXT("decision 3 (before): the face looking at him, whichever was clicked"), ChooseNearFace(Faces, Him), 0);
+	TestEqual(TEXT("the north face under the cursor: north"), ChooseClickedFace(Faces, FVector2D(0.0, 1.0), TowardCamera), 0);
+	TestEqual(TEXT("the east face: east"), ChooseClickedFace(Faces, FVector2D(1.0, 0.0), TowardCamera), 1);
+	TestEqual(TEXT("the far (south) face: south - he runs round to it"), ChooseClickedFace(Faces, FVector2D(0.0, -1.0), TowardCamera), 2);
+	TestEqual(TEXT("the west face: west"), ChooseClickedFace(Faces, FVector2D(-1.0, 0.0), TowardCamera), 3);
+	TestEqual(TEXT("a slightly tilted hit normal still picks its face"), ChooseClickedFace(Faces, FVector2D(0.9, 0.2), TowardCamera), 1);
+	// Exactly on the south-west edge (an averaged normal): the face facing the camera more - south here.
+	TestEqual(TEXT("an edge hit: the camera-facing face"), ChooseClickedFace(Faces, FVector2D(-1.0, -1.0), TowardCamera), 2);
+	TestEqual(TEXT("an edge hit, the camera west: the west face"), ChooseClickedFace(Faces, FVector2D(-1.0, -1.0), FVector2D(-1.0, -0.2)), 3);
+	// The hit face is no run-and-peek face of its own (a wall's narrow end face east of two long faces): none -> decision 3's fallback.
+	const TArray<FFace> LongFaces{ MakeFace(0.0, 1.0), MakeFace(0.0, -1.0) };
+	TestEqual(TEXT("a click on the narrow end face: no clicked face (the faces round it decide)"), ChooseClickedFace(LongFaces, FVector2D(1.0, 0.0), TowardCamera),
+		static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("no faces: none"), ChooseClickedFace(TArray<FFace>(), FVector2D(1.0, 0.0), TowardCamera), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("a top hit (no planar normal): none"), ChooseClickedFace(Faces, FVector2D::ZeroVector, TowardCamera), static_cast<int32>(INDEX_NONE));
+
+	// Q1 narrowed: from a wall edge (his wall looks south, -Y) a switch target stays the switch only on the protected-side face at its near end.
+	const FVector2D OwnWall(0.0, -1.0);
+	TestTrue(TEXT("the protected-side (south) face, its end nearer to him: the switch (Q1)"), KeepsCoverSwitch(true, FVector2D(0.0, -1.0), OwnWall, 300.f, 420.f));
+	TestFalse(TEXT("the same face's far end: the run-and-peek there"), KeepsCoverSwitch(true, FVector2D(0.0, -1.0), OwnWall, 420.f, 300.f));
+	TestFalse(TEXT("the face towards him (north): the run-and-peek"), KeepsCoverSwitch(true, FVector2D(0.0, 1.0), OwnWall, 200.f, 300.f));
+	TestFalse(TEXT("a side face: the run-and-peek"), KeepsCoverSwitch(true, FVector2D(1.0, 0.0), OwnWall, 200.f, 300.f));
+	TestFalse(TEXT("no switch in range: never"), KeepsCoverSwitch(false, FVector2D(0.0, -1.0), OwnWall, 200.f, 300.f));
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekLowCoverTest, "LowCoverIsNoRunPeek")
+bool FRunCornerPeekLowCoverTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// The game designer's PIE 2026-11-08 (L_Gen_Depot_1, low cubes): the corner man ran to a low cube's corner, the others "stacked behind" a
+	// cube with no room and stood in the open. Only cover tall enough to peek round is a run-and-peek.
+	TestFalse(TEXT("a low cube's end (fire-over cover): no run-and-peek - a plain cover click"), IsRunPeekCover(ECoverHeight::LowCover));
+	TestTrue(TEXT("a standing-height block / wall's end: the run-and-peek"), IsRunPeekCover(ECoverHeight::HighCover));
+	TestFalse(TEXT("no cover: no"), IsRunPeekCover(ECoverHeight::None));
+	// The stack behind the corner man: a place with no slot on that object's face (a block too short) is no cover - a nearby cover instead.
+	TestFalse(TEXT("no slot on the face behind him: not covered"), IsStackPlaceCovered(false, 120.f));
+	TestFalse(TEXT("the slot found is the corner man's own spot: not covered"), IsStackPlaceCovered(true, 20.f));
+	TestTrue(TEXT("a slot a stack spacing behind him: covered"), IsStackPlaceCovered(true, 100.f));
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekOneWayTest, "ArrivesTurned.OneWay")
+bool FRunCornerPeekOneWayTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// RunCornerPeekSmoke D with the face rule (round the wall's end to the clicked face): the strafe shifting under the turn pulled the
+	// planned turn 2 deg back at its end - the pre-turn never steps back.
+	int32 Sign = 0;
+	TestEqual(TEXT("a tiny first step sets no way yet"), OneWayStepYaw(10.f, 10.02f, Sign), 10.02f, 1.0e-4f);
+	TestEqual(TEXT("... no way"), Sign, 0);
+	TestEqual(TEXT("the first real step sets the way (down)"), OneWayStepYaw(10.f, 8.f, Sign), 8.f, 1.0e-4f);
+	TestEqual(TEXT("... down"), Sign, -1);
+	TestEqual(TEXT("on down"), OneWayStepYaw(8.f, 6.5f, Sign), 6.5f, 1.0e-4f);
+	TestEqual(TEXT("a step back up is not taken: the yaw holds"), OneWayStepYaw(6.5f, 7.5f, Sign), 6.5f, 1.0e-4f);
+	int32 WrapSign = 1;
+	TestEqual(TEXT("up across the wrap (179 -> -179 is +2) goes on"), OneWayStepYaw(179.f, -179.f, WrapSign), -179.f, 1.0e-4f);
+	return true;
+}
+
 #undef RUN_CORNER_PEEK_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

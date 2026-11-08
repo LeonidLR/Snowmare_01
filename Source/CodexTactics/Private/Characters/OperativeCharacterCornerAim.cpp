@@ -521,6 +521,7 @@ bool AOperativeCharacter::WantsRunCornerPeekPreTurn()
 	if (bTurn && !bRunCornerPeekPreTurnOn)
 	{
 		bRunCornerPeekRunBodySeeded = false;
+		RunCornerPeekPreTurnSign = 0;
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek pre-turn from %.0f cm out (speed %.0f, the entry %.0f cm short of the slot)"),
 			*DisplayName.ToString(), Distance, Speed, GetRunInGlideCm(Speed));
 	}
@@ -559,7 +560,9 @@ float AOperativeCharacter::StepRunCornerPeekPreTurn(float DeltaTime)
 	}
 	const float Speed = static_cast<float>(GetVelocity().Size2D());
 	const float ToEntry = static_cast<float>(FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation)) - GetRunInGlideCm(Speed);
-	return RunCornerPeekRules::PreTurnStepYaw(Yaw, Target, ToEntry, Speed, DeltaTime);
+	// One way only (RunCornerPeekSmoke D, round a wall's end: the strafe shifting under the turn pulled it 2 deg back): a step against the way it
+	// turns holds instead - the peek stance's yaw lock eases out what is left.
+	return RunCornerPeekRules::OneWayStepYaw(Yaw, RunCornerPeekRules::PreTurnStepYaw(Yaw, Target, ToEntry, Speed, DeltaTime), RunCornerPeekPreTurnSign);
 }
 
 bool AOperativeCharacter::BeginPeekStanceYawLock(float OldActorYaw, ECoverFacing Side, bool bCrouch)

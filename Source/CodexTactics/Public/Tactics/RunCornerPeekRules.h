@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Formation/FormationPeekCarryRules.h"
+#include "Tactics/CoverTypes.h"
 
 /**
  * Run-and-peek (#55, user request 2026-11-07: "the peek works only after hugging the wall first - that badly hurts the pace of the fight; I
@@ -79,6 +80,24 @@ namespace RunCornerPeekRules
 	/** Normal is a face not in Known yet (no known normal within SameFaceDot of it). Planar unit normals. */
 	CODEXTACTICS_API bool IsNewFace(const TArray<FVector2D>& Known, const FVector2D& Normal);
 
+	/**
+	 * Only cover tall enough to peek round its side is a run-and-peek (the game designer's PIE 2026-11-08, L_Gen_Depot_1's low cubes: the
+	 * corner man ran to a low cube's corner, the two others "stacked behind" a cube with no room and stood in the open): high cover (the
+	 * corner peek) yes; low cover (fire over it) never - a click there is a plain cover click (a box selection: the group cover over nearby
+	 * covers). The face rule then applies to high cover only.
+	 */
+	CODEXTACTICS_API bool IsRunPeekCover(ECoverHeight Height);
+
+	/** A stack man's place behind the corner man is no cover when it is not on the face (no slot there) or closer than this to the corner slot, cm. */
+	inline constexpr float StackMinFromCornerCm = 50.f;
+
+	/**
+	 * A stack place behind the corner man is really covered by that object: its slot was found on the same object's face (bSlotOnFace) and
+	 * stands at least MinFromCornerCm from the corner man's slot (a block too short for the stack has no such place - that man takes a nearby
+	 * cover by the group cover rule instead of standing in the open).
+	 */
+	CODEXTACTICS_API bool IsStackPlaceCovered(bool bSlotOnFace, float FromCornerSlotCm, float MinFromCornerCm = StackMinFromCornerCm);
+
 	/** One peekable face of the clicked wall at the click (the probe found its slot, the click lies at its end, it is wide enough). */
 	struct FFace
 	{
@@ -93,6 +112,33 @@ namespace RunCornerPeekRules
 	 * (dot of the normal with the unit direction to him); a tie (within 0.01) goes to the nearer face point. INDEX_NONE without faces.
 	 */
 	CODEXTACTICS_API int32 ChooseNearFace(const TArray<FFace>& Faces, const FVector2D& Operative);
+
+	// --- The face under the cursor (the game designer's PIE 2026-11-08: "I want to press to the face I point at; the ghost appears only on
+	//     ONE side ... the other sides don't work") ---
+
+	/** The clicked face: a face whose normal agrees at least this much (dot) with the hit's normal ... */
+	inline constexpr float ClickedFaceMinDot = 0.5f;
+	/** ... and two faces within this of each other's agreement (a hit on the edge between them) go to the one facing the camera more. */
+	inline constexpr float ClickedFaceTieDot = 0.05f;
+
+	/**
+	 * Supersedes decision 3 when the clicked face has a run-and-peek corner itself: the face UNDER THE CURSOR decides - the face whose normal
+	 * agrees most with the hit's normal (HitNormal, planar), at least MinDot; a hit on the edge between two faces (their agreement within
+	 * TieDot) takes the one whose normal points most towards the camera (TowardCamera, planar). Any face of the object, also the side away
+	 * from him (he paths round to it). INDEX_NONE when no face agrees (the hit face is no run-and-peek face of its own - a wall's narrow end
+	 * face: ChooseNearFace over the faces round it, as before).
+	 */
+	CODEXTACTICS_API int32 ChooseClickedFace(const TArray<FFace>& Faces, const FVector2D& HitNormal, const FVector2D& TowardCamera,
+		float MinDot = ClickedFaceMinDot, float TieDot = ClickedFaceTieDot);
+
+	/**
+	 * Q1 (kept, narrowed with the face rule): from a wall EDGE, a click that is also a cover-switch target (bSwitchVerdict) stays the switch
+	 * only where the switch goes itself - a face on his protected side (ClickedFaceNormal within 60 deg of OwnWallNormal: the switch's corner
+	 * in the mirrored pose) at its end nearer to him (ToClickedEndCm <= ToOtherEndCm). Every other face / the far end = the run-and-peek
+	 * to the face under the cursor.
+	 */
+	CODEXTACTICS_API bool KeepsCoverSwitch(bool bSwitchVerdict, const FVector2D& ClickedFaceNormal, const FVector2D& OwnWallNormal, float ToClickedEndCm,
+		float ToOtherEndCm);
 
 	/**
 	 * The planar directions the clicked wall is probed from to find its faces round the click: Count directions evenly round the circle,
@@ -248,6 +294,12 @@ namespace RunCornerPeekRules
 	 */
 	CODEXTACTICS_API float PreTurnStepYaw(float CurrentYaw, float TargetYaw, float DistanceToEntryCm, float SpeedCmS, float DeltaSeconds,
 		float FinishEarlySeconds = PreTurnFinishEarlySeconds);
+
+	/**
+	 * The pre-turn turns one way only: InOutSign (0 = not yet) takes the way of its first real step (over 0.05 deg); a later step the other
+	 * way is not taken (the yaw holds). Returns the yaw to set.
+	 */
+	CODEXTACTICS_API float OneWayStepYaw(float CurrentYaw, float SteppedYaw, int32& InOutSign);
 
 	/**
 	 * The actor yaw that draws the run's body where the fire idle will draw it: the cover facing he will get (FacingYaw) plus the fire idle's

@@ -2471,6 +2471,8 @@ private:
 	/** The run pose's drawn body yaw (component space) through a short low-pass (the strafe the turn causes shifts it). */
 	bool bRunCornerPeekRunBodySeeded = false;
 	float RunCornerPeekRunBodyCs = 0.f;
+	/** The way the pre-turn turns (+1 / -1; 0 = not yet): it never steps back (RunCornerPeekRules::OneWayStepYaw). */
+	int32 RunCornerPeekPreTurnSign = 0;
 	/** The yaw lock's entry: the drawn body's gap the lock eased out (smokes); the mesh's held yaw for the entry frame only. */
 	float LastPeekStanceBodyGapDeg = 0.f;
 	uint64 PeekStanceBridgeFrame = 0;

@@ -14,6 +14,18 @@
 #include "Engine/World.h"
 #include "Interactables/DeployableRules.h"
 
+namespace ControllerGroupCover
+{
+	/**
+	 * Free cover slots of other objects round LeaderSlot (CodexTacticsPlayerControllerCover.cpp): traces from the squad's side towards the
+	 * threat side on two rows across RadiusCm either way along it; a face looking the same way (GroupCoverRules::IsNearbyCoverUsable, within
+	 * SideDeg) gives a slot; up to Count, nearest first, one man per spot (GroupCoverRules::ChooseNearbyCovers), none in Claimed / IsTaken.
+	 * The group cover order's item 3 (2026-11-03) and the run-and-peek's stack that does not fit behind the corner man (2026-11-08).
+	 */
+	TArray<FCoverSlot> FindNearbyGroupCoverSlots(UWorld* World, const FCoverSlot& LeaderSlot, const TArray<FCoverSlot>& Claimed, int32 Count, float RadiusCm,
+		float SideDeg, TFunctionRef<bool(const FVector&)> IsTaken);
+}
+
 namespace ControllerCommands
 {
 	/**

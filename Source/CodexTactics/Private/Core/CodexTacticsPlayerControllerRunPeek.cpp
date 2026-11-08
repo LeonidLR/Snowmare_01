@@ -32,6 +32,7 @@
 #include "Tactics/GroupCoverRules.h"
 #include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Data/SquadWallTuning.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
@@ -137,6 +138,10 @@ void ACodexTacticsPlayerController::GatherRunCornerPeekFaces(const AOperativeCha
 		{
 			continue;
 		}
+		if (!RunCornerPeekRules::IsRunPeekCover(Base.Height))
+		{
+			return; // low cover (fire over it): never a run-and-peek - a plain cover click (a box selection: the group cover over nearby covers)
+		}
 		if (!RunCornerPeekRules::IsFaceWideEnough(Base.bLeftEdgeExposed, Base.LeftEdgeDistanceCm, Base.bRightEdgeExposed, Base.RightEdgeDistanceCm))
 		{
 			continue; // an end face / a thin post: its corners are the long faces' ends
@@ -198,7 +203,15 @@ bool ACodexTacticsPlayerController::FindRunCornerPeekForHit(const AOperativeChar
 		Face.Point = FVector2D(Each.Base.WallPoint);
 		Faces.Add(Face);
 	}
-	const int32 Near = RunCornerPeekRules::ChooseNearFace(Faces, FVector2D(Operative->GetActorLocation()));
+	// The face under the cursor decides (the game designer's PIE 2026-11-08: "I want to press to the face I point at"): any side of the object,
+	// the far one too (he paths round to it); a hit on the edge between two faces: the one facing the camera. The hit face without a corner
+	// of its own (a wall's narrow end face): the face round it that looks at him (decision 3, as before).
+	const FVector2D TowardCamera = -PlanarUnit(PlayerCameraManager ? PlayerCameraManager->GetCameraRotation().Vector() : FVector::ForwardVector);
+	int32 Near = RunCornerPeekRules::ChooseClickedFace(Faces, PlanarUnit(Hit.ImpactNormal), TowardCamera);
+	if (Near == INDEX_NONE)
+	{
+		Near = RunCornerPeekRules::ChooseNearFace(Faces, FVector2D(Operative->GetActorLocation()));
+	}
 	if (!RunPeekCacheFaces.IsValidIndex(Near))
 	{
 		return false;
@@ -246,10 +259,17 @@ bool ACodexTacticsPlayerController::FindRunCornerPeekClickTarget(AOperativeChara
 	{
 		return false;
 	}
-	// From a wall edge another cover in switch range keeps the wall-edge cover switch (its ghost, its double-click dash).
-	Facts.bCoverSwitchTarget = Operative->bInCover && !(Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverSwitch))
+	// From a wall edge another cover in switch range keeps the wall-edge cover switch (its ghost, its double-click dash) - since the face rule
+	// (2026-11-08) only where the switch goes itself: the protected-side face at its end nearer to him (RunCornerPeekRules::KeepsCoverSwitch);
+	// the other faces / the far end are the run-and-peek to the face under the cursor.
+	const bool bSwitchVerdict = Operative->bInCover && !(Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverSwitch))
 		&& (Operative->EvaluateCoverSwitch(OutFace.Base) == ECoverSwitchVerdict::Switch
 			|| (bRunPeekCacheClickSlot && Operative->EvaluateCoverSwitch(RunPeekCacheClickSlot) == ECoverSwitchVerdict::Switch));
+	const FVector OtherEnd = OutFace.Base.WallPoint + OutFace.Base.RightTangent()
+		* (OutFace.Side == ECoverFacing::Right ? -OutFace.Base.LeftEdgeDistanceCm : OutFace.Base.RightEdgeDistanceCm);
+	Facts.bCoverSwitchTarget = RunCornerPeekRules::KeepsCoverSwitch(bSwitchVerdict, ControllerRunPeekLocal::PlanarUnit(OutFace.Base.WallNormal),
+		ControllerRunPeekLocal::PlanarUnit(Own.WallNormal), static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), OutFace.EdgeOnFace)),
+		static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), OtherEnd)));
 	if (!RunCornerPeekRules::MayRunToPeek(Facts))
 	{
 		OutTarget = FSquadCornerPeekTarget();
@@ -266,13 +286,17 @@ bool ACodexTacticsPlayerController::FindRunCornerPeekClickTarget(AOperativeChara
 }
 
 bool ACodexTacticsPlayerController::PlanRunGroupCornerPeek(AOperativeCharacter* Operative, const FRunCornerPeekFace& Face, AOperativeCharacter*& OutPeeker,
-	TArray<TPair<AOperativeCharacter*, FCoverSlot>>* OutStack) const
+	TArray<TPair<AOperativeCharacter*, FCoverSlot>>* OutStack, TArray<AOperativeCharacter*>* OutUnplaced) const
 {
 	using namespace ControllerRunPeekLocal;
 	OutPeeker = nullptr;
 	if (OutStack)
 	{
 		OutStack->Reset();
+	}
+	if (OutUnplaced)
+	{
+		OutUnplaced->Reset();
 	}
 	const USquadSubsystem* Squad = GetSquad();
 	UWorld* World = GetWorld();
@@ -317,10 +341,20 @@ bool ACodexTacticsPlayerController::PlanRunGroupCornerPeek(AOperativeCharacter* 
 			const bool bInPlace = Member->bInCover && CoverTraceRules::IsSameWall(Base, Member->GetCoverSlot())
 				&& FMath::Abs(Plan.PlaceAlong[Position] - Along[Plan.Order[Position]]) <= 1.0;
 			FCoverSlot Target;
-			if (!bInPlace && CoverTraceRules::FindShimmySlot(World, Base, Base.WallPoint + Base.RightTangent() * static_cast<float>(Plan.PlaceAlong[Position]), Target)
-				&& (!Base.WallActor.IsValid() || Target.WallActor == Base.WallActor))
+			const bool bFound = !bInPlace && CoverTraceRules::FindShimmySlot(World, Base, Base.WallPoint + Base.RightTangent() * static_cast<float>(Plan.PlaceAlong[Position]), Target)
+				&& (!Base.WallActor.IsValid() || Target.WallActor == Base.WallActor);
+			if (bInPlace)
+			{
+				continue;
+			}
+			// The game designer's PIE 2026-11-08: a block too short for the stack - no covered place behind the corner man: a nearby cover instead.
+			if (RunCornerPeekRules::IsStackPlaceCovered(bFound, bFound ? static_cast<float>(FVector::Dist2D(Target.WorldLocation, Face.Corner.WorldLocation)) : 0.f))
 			{
 				OutStack->Add(TPair<AOperativeCharacter*, FCoverSlot>(Member, Target));
+			}
+			else if (OutUnplaced)
+			{
+				OutUnplaced->Add(Member);
 			}
 		}
 	}
@@ -380,7 +414,8 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 	{
 		AOperativeCharacter* Peeker = nullptr;
 		TArray<TPair<AOperativeCharacter*, FCoverSlot>> Stack;
-		if (PlanRunGroupCornerPeek(Operative, Face, Peeker, &Stack) && Peeker)
+		TArray<AOperativeCharacter*> Unplaced;
+		if (PlanRunGroupCornerPeek(Operative, Face, Peeker, &Stack, &Unplaced) && Peeker)
 		{
 			PeekOperative = Peeker;
 			Result = Peeker->OrderRunCornerPeek(Face.Corner, Face.EdgeOnFace, bDouble);
@@ -393,6 +428,7 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 					StackLine += FString::Printf(TEXT(" %s -> (%.0f, %.0f) %d;"), *Each.Key->DisplayName.ToString(), Each.Value.WorldLocation.X, Each.Value.WorldLocation.Y,
 						static_cast<int32>(Step));
 				}
+				StackLine += OrderUnplacedStackToNearbyCover(Face, Stack, Unplaced, bDouble);
 			}
 		}
 		else
@@ -471,6 +507,79 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 		Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("CornerPeekRefused", "⚠️ Can't get to that corner."));
 	}
 	return true;
+}
+
+FString ACodexTacticsPlayerController::OrderUnplacedStackToNearbyCover(const FRunCornerPeekFace& Face, const TArray<TPair<AOperativeCharacter*, FCoverSlot>>& Stack,
+	const TArray<AOperativeCharacter*>& Unplaced, bool bSprint)
+{
+	UWorld* World = GetWorld();
+	if (!World || Unplaced.IsEmpty())
+	{
+		return FString();
+	}
+	// The group cover order's nearby covers (squad_walls.json follower_cover_radius_m / _side_deg) round the corner man's slot, none taken.
+	TArray<FCoverSlot> Claimed{ Face.Corner };
+	for (const TPair<AOperativeCharacter*, FCoverSlot>& Each : Stack)
+	{
+		Claimed.Add(Each.Value);
+	}
+	const USquadSubsystem* Squad = GetSquad();
+	const auto IsTaken = [Squad](const FVector& Point)
+	{
+		if (!Squad)
+		{
+			return false;
+		}
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member && ((Member->bInCover && FVector::Dist2D(Member->GetCoverSlot().WorldLocation, Point) < 60.f)
+				|| (Member->HasPendingCover() && FVector::Dist2D(Member->GetPendingCoverSlot().WorldLocation, Point) < 60.f)))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	const FSquadWallTuning& Tuning = SquadWallTuning::Get();
+	TArray<FCoverSlot> Nearby = ControllerGroupCover::FindNearbyGroupCoverSlots(World, Face.Corner, Claimed, Unplaced.Num(), Tuning.FollowerCoverRadiusCm,
+		Tuning.FollowerCoverSideDeg, IsTaken);
+	FString Line = TEXT(" no room behind him:");
+	TArray<AOperativeCharacter*> Left = Unplaced;
+	// Nearest man to each cover (a short greedy pass; at most a few men).
+	for (const FCoverSlot& Slot : Nearby)
+	{
+		int32 Best = INDEX_NONE;
+		double BestDistance = 0.0;
+		for (int32 Index = 0; Index < Left.Num(); ++Index)
+		{
+			const double Distance = FVector::Dist2D(Left[Index]->GetActorLocation(), Slot.WorldLocation);
+			if (Best == INDEX_NONE || Distance < BestDistance)
+			{
+				Best = Index;
+				BestDistance = Distance;
+			}
+		}
+		if (Best == INDEX_NONE)
+		{
+			break;
+		}
+		AOperativeCharacter* Member = Left[Best];
+		Left.RemoveAt(Best);
+		const EOperativeOrderResult Step = Member->OrderTakeCover(Slot, bSprint);
+		Line += FString::Printf(TEXT(" %s -> a nearby cover (%.0f, %.0f) %d;"), *Member->DisplayName.ToString(), Slot.WorldLocation.X, Slot.WorldLocation.Y,
+			static_cast<int32>(Step));
+	}
+	// No cover within reach: prone behind the corner man (the group cover's last resort), off his corner.
+	const FVector Behind = Face.Corner.WorldLocation + Face.Base.WallNormal.GetSafeNormal2D() * 120.f;
+	for (int32 Index = 0; Index < Left.Num(); ++Index)
+	{
+		AOperativeCharacter* Member = Left[Index];
+		const FVector Spot = Behind - Face.Base.RightTangent() * (Face.Side == ECoverFacing::Right ? 1.f : -1.f) * (80.f * static_cast<float>(Index + 1));
+		Member->OrderMoveTo(Spot, bSprint);
+		Member->SetStance(EOperativeStance::Prone);
+		Line += FString::Printf(TEXT(" %s -> prone behind him (%.0f, %.0f);"), *Member->DisplayName.ToString(), Spot.X, Spot.Y);
+	}
+	return Line;
 }
 
 void ACodexTacticsPlayerController::PlanRunCornerPeek(AOperativeCharacter& Operative, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bSprint, float Radius,
