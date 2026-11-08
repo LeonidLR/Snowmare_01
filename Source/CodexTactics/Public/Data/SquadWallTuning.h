@@ -44,6 +44,11 @@ struct CODEXTACTICS_API FSquadWallTuning
 	 * the other's in this long (one way; there and back = twice this), eased at the ends, s (corner_sweep_s).
 	 */
 	float CornerSweepSeconds = 6.f;
+	/**
+	 * The game designer's answer 3 (2026-11-08, "6 s, option V"): CornerSweepSeconds is the sweep in combat / alert (an enemy seen or heard by
+	 * the squad, a member under fire / suppressed); out of combat it runs slowly, one way in this long, s (corner_sweep_calm_s).
+	 */
+	float CornerSweepCalmSeconds = 12.f;
 };
 
 namespace SquadWallTuning

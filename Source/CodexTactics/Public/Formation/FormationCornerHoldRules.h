@@ -72,4 +72,105 @@ namespace FormationCornerHold
 	 * leaves frees his corner only (nobody takes it without a new order).
 	 */
 	CODEXTACTICS_API bool StillHolds(bool bAlive, bool bKnockedDown, bool bInCoverAtThatWall, bool bPeeking);
+
+	// --- The game designer's answers 2026-11-08 (#57 open questions 1, 2, 3 and 5) ---
+
+	/** The squad's alert state for the middle men's sweep (answer 3, "6 s, option V") - the squad's existing combat / alert facts. */
+	struct FSweepAlertFacts
+	{
+		/** An enemy seen or heard by the squad (its known threats: sight / hearing, within bypass.threat_memory_s). */
+		bool bThreatKnown = false;
+		/** A squad member under fire (his under-fire threat is live). */
+		bool bUnderFire = false;
+		/** A squad member suppressed (a suppression tier above none). */
+		bool bSuppressed = false;
+	};
+
+	/**
+	 * Answer 3 (2026-11-08, "6 s, option V"): the one-way sweep between the two held corners runs SLOWLY out of combat (CalmSeconds,
+	 * squad_walls.json corner_sweep_calm_s 12) and at AlertSeconds (corner_sweep_s 6) in combat / alert (any of the facts). A duration <= 0
+	 * falls back to the other one; both <= 0 -> 0 (SweepFraction then holds the middle of his slice).
+	 */
+	CODEXTACTICS_API float SweepSecondsFor(const FSweepAlertFacts& Facts, float CalmSeconds, float AlertSeconds);
+
+	/** Any of the facts: the squad is in combat / alert. */
+	CODEXTACTICS_API bool IsSweepAlert(const FSweepAlertFacts& Facts);
+
+	/**
+	 * Answer 1: after the first peek the squad is bunched towards the first corner; with BOTH corners held the middle men go back to the
+	 * middle of the wall. Count places spread evenly between the two corner men (CornerA, CornerB: where they stand) on the line through
+	 * LinePoint along the wall (NormalYaw = its outward normal; LinePoint = a point of the wall layout's face-offset line, so the places stay
+	 * against the wall like every other wall slot): place k at (k + 1) / (Count + 1) of the way from A's projection to B's - one man exactly
+	 * in the middle. Ordered from A to B. Empty when Count < 1 or the gap is shorter than (Count + 1) * MinSpacingCm (every neighbour,
+	 * corner men included, at least the wall layout's spacing apart): the wall between the corners is too short for everyone and the caller
+	 * keeps the places it has (today's stack / overflow).
+	 */
+	CODEXTACTICS_API TArray<FVector2D> MiddlePlaces(const FVector2D& CornerA, const FVector2D& CornerB, const FVector2D& LinePoint, float NormalYaw, int32 Count,
+		double MinSpacingCm);
+
+	/**
+	 * Who takes which middle place (nobody crosses another on the way): Order[k] = the index into Positions of the man k-th from CornerA
+	 * along the line A -> B (MiddlePlaces' place k is his). Ties keep the input order.
+	 */
+	CODEXTACTICS_API TArray<int32> OrderAlong(const TArray<FVector2D>& Positions, const FVector2D& CornerA, const FVector2D& CornerB);
+
+	/** The formation leadership through a two-corner hold (ids are the caller's, e.g. squad roster indices; INDEX_NONE = none). */
+	struct FLeaderChain
+	{
+		/** Who leads the formation now. */
+		int32 Leader = INDEX_NONE;
+		/** The man who led before him (answer 5: he leads again if the leader falls). */
+		int32 Previous = INDEX_NONE;
+	};
+
+	/**
+	 * Answer 2 (2026-11-08): the second corner man takes the formation lead and keeps it (today's wall-leadership rule: the man taking a
+	 * corner takes the lead); the man who led until then is remembered as the previous leader. SecondCornerMan == Leader: nothing changes.
+	 */
+	CODEXTACTICS_API FLeaderChain AfterSecondCorner(int32 Leader, int32 SecondCornerMan);
+
+	/** What happens to the formation lead when its leader falls (answer 5). */
+	enum class ELeaderAfterFall : uint8
+	{
+		/** Not a two-corner hold's leader corner man (or the rule is off): the game's existing leader-pick rule, as before. */
+		NotTheHold,
+		/** The man who led before him leads again. */
+		PreviousLeader,
+		/** The previous leader is unknown / the fallen man himself / down as well: the game's existing leader-pick rule. */
+		Fallback,
+	};
+
+	struct FLeaderFallFacts
+	{
+		/** Codex.Formation.TwoCornerHold is on. */
+		bool bEnabled = true;
+		/** The fallen man (dead / knocked down) leads the formation and is the two-corner hold's second corner man (the hold's leader). */
+		bool bFallenLeadsTheHold = false;
+		/** The leader before him is remembered and still in the squad. */
+		bool bPreviousKnown = false;
+		/** ... he is the fallen man himself. */
+		bool bPreviousIsFallen = false;
+		/** ... he can lead (alive, on his feet, not on a ladder / panicking / guarding). */
+		bool bPreviousAble = false;
+		/** ... he is the hold's other corner man and still holds that corner (StillHolds). */
+		bool bPreviousHoldsOtherCorner = false;
+	};
+
+	struct FLeaderAfterFall
+	{
+		ELeaderAfterFall Pick = ELeaderAfterFall::NotTheHold;
+		/**
+		 * The other corner stays held (answer 5: only the fallen man's corner is freed): the new leader is that corner's man, still holding -
+		 * he leads from his corner as the squad's one corner peek (the middle men keep their places). False: the other corner ends with the
+		 * leader change, as before.
+		 */
+		bool bKeepOtherCorner = false;
+	};
+
+	/**
+	 * Answer 5 (2026-11-08): the two-corner hold's leader (the second corner man) goes down and the game must pick a new leader -> the man who
+	 * led before him (normally the first corner man); only the fallen man's corner is freed, the other corner man keeps holding his. That man
+	 * down too / unknown: the existing leader-pick rule (Fallback).
+	 */
+	CODEXTACTICS_API FLeaderAfterFall DecideLeaderAfterFall(const FLeaderFallFacts& Facts);
 }

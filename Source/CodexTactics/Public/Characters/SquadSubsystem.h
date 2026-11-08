@@ -526,6 +526,30 @@ public:
 	int32 GetCornerSweepMemberCount() const { return Sectors.CornerSweepMembers; }
 	/** Second-corner peeks ordered since the level began - smokes. */
 	int32 GetSecondCornerPeekCount() const { return Sectors.SecondCornerCount; }
+	/**
+	 * The game designer's answer 1 (2026-11-08): both corners held, the middle men were sent back to the middle of the wall (spread evenly
+	 * between the corner men, FormationCornerHold::MiddlePlaces) this many times since the level began - smokes.
+	 */
+	int32 GetCornerHoldMiddleSpreadCount() const { return Sectors.CornerMiddleSpreadCount; }
+	/** The two-corner hold's previous leader (answer 5: he leads again if the leader corner man falls); null when none - smokes. */
+	AOperativeCharacter* GetCornerHoldPreviousLeader() const { return Sectors.HeldCorner.PreviousLeader.Get(); }
+	/** Answer 5 (2026-11-08): the lead handed back to the previous leader after the hold's leader corner man fell, since the level began - smokes. */
+	int32 GetCornerHoldLeadHandBackCount() const { return Sectors.CornerLeadHandBackCount; }
+	/**
+	 * Answer 3 (2026-11-08, "6 s, option V"): the one-way duration of the middle men's sweep at the last sweep frame - squad_walls.json
+	 * corner_sweep_calm_s (12) out of combat, corner_sweep_s (6) in combat / alert (FormationCornerHold::SweepSecondsFor); 0 before any - smokes.
+	 */
+	float GetCornerSweepSecondsNow() const { return Sectors.CornerSweepNowSeconds; }
+	/** The squad counted as in combat / alert for the sweep at its last frame (an enemy seen / heard, a member under fire / suppressed) - smokes. */
+	bool IsCornerSweepAlert() const { return Sectors.bCornerSweepAlert; }
+	/**
+	 * Answer 5 (2026-11-08; called by UnregisterOperative for a dead leader, by UpdateFormationCornerHold for a knocked-down one): Fallen - the
+	 * formation leader - is down. When he is the two-corner hold's leader corner man the lead goes back to the man who led before him
+	 * (FormationCornerHold::DecideLeaderAfterFall); that man still holding the other corner keeps it and leads from there as the squad's one
+	 * corner peek (only the fallen man's corner is freed, the middle men keep their places). True: the new leader is set (the caller picks
+	 * none); false: not this case / the previous leader is down too - the existing leader-pick rule.
+	 */
+	bool HandCornerHoldLeadOnFall(AOperativeCharacter& Fallen);
 
 	// --- Wall leadership (game designer 2026-11-01; Codex.Formation.WallLeadership; SquadSubsystemWallLeadership.cpp) ---
 
@@ -964,12 +988,28 @@ private:
 			TWeakObjectPtr<AOperativeCharacter> Leader;
 			uint32 LeaderSerial = 0;
 			float Seconds = 0.f;
+			/** The side of his own cover slot the end lies on (his squad peek's Side) - he leads from there if the lead comes back to him. */
+			ECoverFacing Side = ECoverFacing::Right;
+			/** Answer 5 (2026-11-08): the man who led before the hold's leader (FormationCornerHold::AfterSecondCorner) - he leads if that one falls. */
+			TWeakObjectPtr<AOperativeCharacter> PreviousLeader;
+			/** The leader's fall was decided already (the existing leader-pick rule kept: not asked again every tick). */
+			bool bLeaderFallSeen = false;
 		};
 		FHeldCorner HeldCorner;
 		/** The middle men's sweep clock (runs while both corner men peek), s; members swept this frame; second corners ordered. */
 		float CornerSweepSeconds = 0.f;
 		int32 CornerSweepMembers = 0;
+		/**
+		 * Answer 3 (2026-11-08): the sweep's phase in one-way sweeps (advanced by DeltaTime / the duration now, so a calm <-> alert switch never
+		 * jumps the look), the one-way duration in force and whether the squad was alert at the last sweep frame.
+		 */
+		float CornerSweepPhase = 0.f;
+		float CornerSweepNowSeconds = 0.f;
+		bool bCornerSweepAlert = false;
 		int32 SecondCornerCount = 0;
+		/** Answers 1 / 5 (2026-11-08): middle men spread between the two corners; leads handed back after the leader corner man fell - smokes. */
+		int32 CornerMiddleSpreadCount = 0;
+		int32 CornerLeadHandBackCount = 0;
 		/** Members OrderFormationWall took out of their cover / corner / prone spot (bug_04 A) - smokes. */
 		int32 WallReleaseCount = 0;
 		/** Rules v2.6: rear guard turn-rounds (Q2) and side probe hits dropped on short obstacles (Q1) since the level began (smokes). */
@@ -1054,6 +1094,12 @@ private:
 	void EndCornerHold(const TCHAR* Why);
 	/** #57 per frame, after the follow: the middle men's sweeping looks between the two corners (FrameLooks of the ones the formation drives). */
 	void ApplyCornerHoldSweep(float DeltaTime);
+	/**
+	 * Answer 1 (2026-11-08): both corners held - the middle men's wall slots move to places spread evenly between the corner men (CornerA = the
+	 * held corner man's stand point, CornerB = the second corner man's; FormationCornerHold::MiddlePlaces / OrderAlong, the wall layout's
+	 * spacing as the minimum). The wall too short for everyone: their places stay. True when they were moved.
+	 */
+	bool SpreadCornerHoldMiddle(const FVector2D& CornerA, const FVector2D& CornerB, const AOperativeCharacter* HolderA, const AOperativeCharacter* HolderB);
 	/**
 	 * Wall leadership (SquadSubsystemWallLeadership.cpp): the plan for a corner peek at EdgeOnFace - FormationWallLeadership::Plan over the
 	 * formation's members (OutWho[i] = the plan's member i, the leader first). False when the squad cannot peek as a group.

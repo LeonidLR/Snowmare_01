@@ -5,10 +5,13 @@
 //   (map /Game/Maps/L_FormationLab, "-LevelJson=L_FormationLab.json" - Scripts/test_map.json smokeOptions)
 // The lab wall W_B_3 (x 1500..4000 at y -2700; its south face y -2720), the squad of three south of it in group mode (formation). The two
 // clicks mid-wall = the formation wall layout; the hover + click on the EAST end (the squad's right, facing out south) -> the east-end man
-// peeks there and leads; the click on the WEST end -> the west-end man peeks there and leads, the east man KEEPS his corner peek (never out
-// of it), the middle man stays where he stood; over two sweeps the middle man's facing sweeps across the arc between both corners
-// (sampled min / max yaw against his directions to both corners along the wall, never into the wall); a repeated west click swaps nothing; a ground click away (a move order)
-// ends both holds.
+// peeks there and leads; the click on the WEST end -> the west-end man peeks there and leads (the game designer's answer 2, 2026-11-08: he
+// stays the leader), the east man KEEPS his corner peek (never out of it), the middle man (bunched next to the east man after the first peek)
+// walks back to the middle of the wall between the two corner men and settles there against the wall (answer 1); over two sweeps the middle
+// man's facing sweeps across the arc between both corners (sampled min / max yaw against his directions to both corners along the wall,
+// never into the wall); a repeated west click swaps nothing; the west man (the leader) knocked down -> the east man (the leader before him)
+// leads again and keeps his corner, the west corner is free, the middle man keeps his place (answer 5); a ground click away (a move order)
+// ends the hold.
 // A/B: -PreCmds "Codex.Formation.TwoCornerHold 0" = the rule before #57 (the east man leaves his corner: the checks fail).
 // Godot reference: none (UE-only; docs/systems/squad-and-orders.md "Both corners held").
 
@@ -19,6 +22,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/KnockdownComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -40,8 +44,14 @@ namespace TwoCornerHoldSmoke
 	constexpr float MidX = 2750.f;
 	constexpr float HoldSeconds = 1.5f;
 	constexpr float AtEndCm = 130.f;
-	/** "Stays where he stood": the middle man within this of his place at the second click, cm. */
+	/** "Keeps his place": the middle man within this of his place when the leader went down, cm. */
 	constexpr float StayCm = 60.f;
+	/** Answer 1 (2026-11-08): the middle man's place within this of the midpoint between the corner men along the wall, cm. */
+	constexpr float MidpointCm = 120.f;
+	/** ... and his walk there along the wall: never farther than this off his face line (the stack's line at the first corner), cm. */
+	constexpr float OffWallCm = 150.f;
+	/** The knocked-down leader: the lead back to the east man within this, s. */
+	constexpr float HandBackSeconds = 3.f;
 	/** The sweep reaches within this of each corner's look, deg. */
 	constexpr float SweepReachDeg = 30.f;
 
@@ -66,6 +76,9 @@ namespace TwoCornerHoldSmoke
 		TWeakObjectPtr<AOperativeCharacter> MiddleMan;
 		FVector MiddleAt = FVector::ZeroVector;
 		float MiddleMaxMoveCm = 0.f;
+		float MiddleMaxOffWallCm = 0.f;
+		int32 SpreadsBefore = 0;
+		int32 HandBacksBefore = 0;
 		bool bEastLeft = false;
 		float EastLeftAt = -1.f;
 		float HoldTime = 0.f;
@@ -335,16 +348,18 @@ namespace TwoCornerHoldSmoke
 			AOperativeCharacter* Middle = State.MiddleMan.Get();
 			State.MiddleAt = Middle ? Middle->GetActorLocation() : FVector::ZeroVector;
 			State.MiddleMaxMoveCm = 0.f;
+			State.MiddleMaxOffWallCm = 0.f;
 			State.bEastLeft = false;
 			State.SecondCornersBefore = Squad->GetSecondCornerPeekCount();
-			// The middle man walked into the stack behind the east man: his place from here on.
+			State.SpreadsBefore = Squad->GetCornerHoldMiddleSpreadCount();
+			// The middle man walked into the stack behind the east man (~1 m from the east corner): the second corner sends him back to the middle.
 			State.PendingClick = EClick::WestEnd;
 			Next(State, 5);
 			return true;
 		}
 		case 5:
 		{
-			// The left (west) corner: its end man there; the east man keeps his corner, the middle man stays.
+			// The left (west) corner: its end man there; the east man keeps his corner, the middle man walks back to the middle of the wall.
 			if (State.PendingClick != EClick::None)
 			{
 				return true;
@@ -365,8 +380,11 @@ namespace TwoCornerHoldSmoke
 			if (Middle)
 			{
 				State.MiddleMaxMoveCm = FMath::Max(State.MiddleMaxMoveCm, static_cast<float>(FVector::Dist2D(Middle->GetActorLocation(), State.MiddleAt)));
+				State.MiddleMaxOffWallCm = FMath::Max(State.MiddleMaxOffWallCm, static_cast<float>(FMath::Abs(Middle->GetActorLocation().Y - State.MiddleAt.Y)));
 			}
-			State.HoldTime = InPeekPose(West) && AtEnd(West, true) ? State.HoldTime + DeltaTime : 0.f;
+			// Settled: the west man peeking at his corner and the middle man still in his wall pose at his new place.
+			const bool bMiddleSettled = Middle && Middle->IsInFormationWallPose() && Middle->GetVelocity().Size2D() < 5.f && State.MiddleMaxMoveCm > StayCm;
+			State.HoldTime = InPeekPose(West) && AtEnd(West, true) && bMiddleSettled ? State.HoldTime + DeltaTime : 0.f;
 			if (FMath::FloorToInt32(State.StageTime) != FMath::FloorToInt32(State.StageTime - DeltaTime))
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace %.1f s (west peek):%s"), State.StageTime, *Where(State));
@@ -375,15 +393,26 @@ namespace TwoCornerHoldSmoke
 			{
 				return true;
 			}
-			Check(State, State.HoldTime >= HoldSeconds && Leader == West, FString::Printf(TEXT("peek left: the west-end man %s peeks at the west corner and leads (leader %s, %.1f s)"),
-				*NameOf(West), *NameOf(Leader), State.StageTime));
+			Check(State, InPeekPose(West) && AtEnd(West, true) && Leader == West,
+				FString::Printf(TEXT("peek left: the west-end man %s peeks at the west corner and leads - the second corner man stays the leader (answer 2; leader %s, %.1f s)"),
+					*NameOf(West), *NameOf(Leader), State.StageTime));
 			Check(State, !State.bEastLeft && InPeekPose(East) && AtEnd(East, false), FString::Printf(TEXT("... and the east man %s KEEPS his corner peek all the way (left it at %.1f s)"),
 				*NameOf(East), State.EastLeftAt));
-			Check(State, Squad->IsTwoCornerHoldActive() && Squad->GetHeldCornerOperative() == East && Squad->GetSecondCornerPeekCount() == State.SecondCornersBefore + 1,
-				FString::Printf(TEXT("... both corners held (held corner %s, second corners %d -> %d)"), *NameOf(Squad->GetHeldCornerOperative()), State.SecondCornersBefore,
-					Squad->GetSecondCornerPeekCount()));
-			Check(State, Middle && State.MiddleMaxMoveCm <= StayCm && Middle->IsInFormationWallPose(), FString::Printf(TEXT("... the middle man %s stays at the wall (moved %.0f cm, wall pose %d)"),
-				*NameOf(Middle), State.MiddleMaxMoveCm, Middle && Middle->IsInFormationWallPose() ? 1 : 0));
+			Check(State, Squad->IsTwoCornerHoldActive() && Squad->GetHeldCornerOperative() == East && Squad->GetSecondCornerPeekCount() == State.SecondCornersBefore + 1
+				&& Squad->GetCornerHoldPreviousLeader() == East,
+				FString::Printf(TEXT("... both corners held (held corner %s, second corners %d -> %d, the leader before him %s)"), *NameOf(Squad->GetHeldCornerOperative()),
+					State.SecondCornersBefore, Squad->GetSecondCornerPeekCount(), *NameOf(Squad->GetCornerHoldPreviousLeader())));
+			// Answer 1: the middle man back to the middle of the wall between the corner men, against the wall.
+			const float CornerMidX = East && West ? 0.5f * static_cast<float>(East->GetActorLocation().X + West->GetActorLocation().X) : 0.f;
+			const float OffMid = Middle ? FMath::Abs(static_cast<float>(Middle->GetActorLocation().X) - CornerMidX) : 9999.f;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: the middle man %s from x %.0f to x %.0f (the corner men's midpoint %.0f, %.0f cm off it), %.0f cm off his face line at most, spreads %d -> %d"),
+				*NameOf(Middle), State.MiddleAt.X, Middle ? Middle->GetActorLocation().X : 0.f, CornerMidX, OffMid, State.MiddleMaxOffWallCm, State.SpreadsBefore,
+				Squad->GetCornerHoldMiddleSpreadCount());
+			Check(State, bMiddleSettled && OffMid <= MidpointCm && Squad->GetCornerHoldMiddleSpreadCount() == State.SpreadsBefore + 1,
+				FString::Printf(TEXT("... the middle man %s walked back to the middle of the wall (answer 1: %.0f cm off the corner men's midpoint, within %.0f; wall pose %d)"),
+					*NameOf(Middle), OffMid, MidpointCm, Middle && Middle->IsInFormationWallPose() ? 1 : 0));
+			Check(State, State.MiddleMaxOffWallCm <= OffWallCm, FString::Printf(TEXT("... along the wall (%.0f cm off his face line at most, within %.0f)"), State.MiddleMaxOffWallCm,
+				OffWallCm));
 			State.MinYawOff = 999.f;
 			State.MaxYawOff = -999.f;
 			State.SweptFrames = 0;
@@ -411,7 +440,8 @@ namespace TwoCornerHoldSmoke
 				++State.SweptFrames;
 			}
 			State.bEastLeft |= !InPeekPose(East);
-			const float Cycle = 2.f * SquadWallTuning::Get().CornerSweepSeconds;
+			// Answer 3 (2026-11-08, "6 s, option V"): no enemy in the lab - the calm sweep (corner_sweep_calm_s one way).
+			const float Cycle = 2.f * SquadWallTuning::Get().CornerSweepCalmSeconds;
 			if (State.StageTime < Cycle * 1.25f)
 			{
 				return true;
@@ -426,6 +456,10 @@ namespace TwoCornerHoldSmoke
 			Check(State, State.MinYawOff >= -90.f && State.MaxYawOff <= 90.f, FString::Printf(TEXT("... never into the wall (%.0f .. %.0f within +-90 of the outward normal)"),
 				State.MinYawOff, State.MaxYawOff));
 			Check(State, !State.bEastLeft && InPeekPose(West), TEXT("both corner men kept peeking through the sweep"));
+			Check(State, Leader == West, FString::Printf(TEXT("... and the west man %s still leads (answer 2; leader %s)"), *NameOf(West), *NameOf(Leader)));
+			Check(State, !Squad->IsCornerSweepAlert() && FMath::IsNearlyEqual(Squad->GetCornerSweepSecondsNow(), SquadWallTuning::Get().CornerSweepCalmSeconds, 0.01f),
+				FString::Printf(TEXT("... out of combat the sweep is the calm one (answer 3: %.1f s one way, corner_sweep_calm_s %.1f; alert %d)"), Squad->GetCornerSweepSecondsNow(),
+					SquadWallTuning::Get().CornerSweepCalmSeconds, Squad->IsCornerSweepAlert() ? 1 : 0));
 			State.PendingClick = EClick::WestEnd;
 			Next(State, 7);
 			return true;
@@ -439,13 +473,53 @@ namespace TwoCornerHoldSmoke
 			}
 			Check(State, Leader == State.West.Get() && Squad->GetHeldCornerOperative() == State.East.Get() && InPeekPose(State.West.Get()) && InPeekPose(State.East.Get()),
 				FString::Printf(TEXT("a repeated peek on the left swaps nothing (leader %s, held %s);%s"), *NameOf(Leader), *NameOf(Squad->GetHeldCornerOperative()), *Where(State)));
-			State.PendingClick = EClick::AwayGround;
+			// Answer 5 (2026-11-08): the leader (the west corner man) goes down.
+			AOperativeCharacter* West = State.West.Get();
+			AOperativeCharacter* Middle = State.MiddleMan.Get();
+			State.MiddleAt = Middle ? Middle->GetActorLocation() : FVector::ZeroVector;
+			State.MiddleMaxMoveCm = 0.f;
+			State.HandBacksBefore = Squad->GetCornerHoldLeadHandBackCount();
+			const bool bDown = West && West->KnockdownComponent && West->KnockdownComponent->ForceKnockDown(EKnockdownDirection::Back, EKnockdownCause::HeavyHit);
+			Check(State, bDown && West->IsKnockedDown(), FString::Printf(TEXT("the leader, the west corner man %s, is knocked down"), *NameOf(West)));
+			if (!bDown)
+			{
+				return Finish(State, false);
+			}
 			Next(State, 8);
 			return true;
 		}
 		case 8:
 		{
-			// A move order ends both holds.
+			// The lead back to the man who led before him (the east corner man), his corner still held, the west corner free, the middle man stays.
+			AOperativeCharacter* East = State.East.Get();
+			AOperativeCharacter* West = State.West.Get();
+			AOperativeCharacter* Middle = State.MiddleMan.Get();
+			if (Middle)
+			{
+				State.MiddleMaxMoveCm = FMath::Max(State.MiddleMaxMoveCm, static_cast<float>(FVector::Dist2D(Middle->GetActorLocation(), State.MiddleAt)));
+			}
+			const bool bBack = Leader == East && InPeekPose(East) && Squad->GetFormationPeeker() == East && !Squad->IsTwoCornerHoldActive()
+				&& Squad->GetCornerHoldLeadHandBackCount() == State.HandBacksBefore + 1;
+			State.HoldTime = bBack ? State.HoldTime + DeltaTime : 0.f;
+			if (State.HoldTime < 1.f && State.StageTime < HandBackSeconds + 1.f)
+			{
+				return true;
+			}
+			Check(State, bBack && State.StageTime <= HandBackSeconds + 1.f,
+				FString::Printf(TEXT("the leader down: %s (the leader before him) leads again and KEEPS his east corner peek, the west corner is free (leader %s, peeker %s, two corners %d, hand-backs %d -> %d, %.1f s);%s"),
+					*NameOf(East), *NameOf(Leader), *NameOf(Squad->GetFormationPeeker()), Squad->IsTwoCornerHoldActive() ? 1 : 0, State.HandBacksBefore,
+					Squad->GetCornerHoldLeadHandBackCount(), State.StageTime, *Where(State)));
+			Check(State, West && !West->IsManualCornerPeek() && Squad->GetHeldCornerOperative() == nullptr,
+				FString::Printf(TEXT("... the fallen man %s's corner is freed (nobody holds the west corner)"), *NameOf(West)));
+			Check(State, Middle && State.MiddleMaxMoveCm <= StayCm, FString::Printf(TEXT("... the middle man %s keeps his place (moved %.0f cm, within %.0f)"), *NameOf(Middle),
+				State.MiddleMaxMoveCm, StayCm));
+			State.PendingClick = EClick::AwayGround;
+			Next(State, 9);
+			return true;
+		}
+		case 9:
+		{
+			// A move order (the new leader's) ends the hold.
 			if (State.PendingClick != EClick::None || State.StageTime < 2.f)
 			{
 				return true;
@@ -456,7 +530,7 @@ namespace TwoCornerHoldSmoke
 			{
 				return true;
 			}
-			Check(State, bOver && East && !East->IsManualCornerPeek(), FString::Printf(TEXT("a move order ends both corner holds (%.1f s);%s"), State.StageTime, *Where(State)));
+			Check(State, bOver && East && !East->IsManualCornerPeek(), FString::Printf(TEXT("a move order of the new leader ends the corner hold (%.1f s);%s"), State.StageTime, *Where(State)));
 			return Finish(State, true);
 		}
 		default:
@@ -488,7 +562,7 @@ namespace TwoCornerHoldSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.TwoCornerHoldSmoke"),
-		TEXT("Dev check (#57, two-corner hold): on L_FormationLab the squad at W_B_3 in formation - peek right -> the east man at the east corner; peek left -> the west man at the west corner AND the east man still peeking at his; the middle man stays and sweeps his look between both corner looks; a repeated left peek swaps nothing; a move order ends both. PASS/FAIL, exits."),
+		TEXT("Dev check (#57, two-corner hold): on L_FormationLab the squad at W_B_3 in formation - peek right -> the east man at the east corner; peek left -> the west man at the west corner AND the east man still peeking at his; the middle man walks back to the middle of the wall and sweeps his look between both corner looks; a repeated left peek swaps nothing; the leader (west) knocked down -> the east man leads again and keeps his corner; a move order ends the hold. PASS/FAIL, exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(Args, World); }));
 }
 

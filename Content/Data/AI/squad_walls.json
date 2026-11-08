@@ -1,10 +1,11 @@
 {
-  "_comment": "The squad at walls (game designer bug report 2026-11-02 items 5 / 3 / 2, docs/systems/squad-and-orders.md 'The squad at walls'). Defaults PENDING the game designer's confirmation. Read by SquadWallTuning (C++). reform_along_wall_off_m: the game designer's bug 2026-11-03 - a re-form along the SAME wall keeps the crouch and the looks (0 = item 2's stand-up / face-the-walk everywhere). corner_sweep_s: #57 (user 2026-11-07) - both corners of a wall held, the men between them sweep their look from one corner to the other in this many seconds (one way), eased at the ends.",
+  "_comment": "The squad at walls (game designer bug report 2026-11-02 items 5 / 3 / 2, docs/systems/squad-and-orders.md 'The squad at walls'). Defaults PENDING the game designer's confirmation. Read by SquadWallTuning (C++). reform_along_wall_off_m: the game designer's bug 2026-11-03 - a re-form along the SAME wall keeps the crouch and the looks (0 = item 2's stand-up / face-the-walk everywhere). corner_sweep_s: #57 (user 2026-11-07) - both corners of a wall held, the men between them sweep their look from one corner to the other in this many seconds (one way), eased at the ends - since the game designer's answer 3 (2026-11-08, \"6 s, option V\") in combat / alert (an enemy seen or heard by the squad, a member under fire / suppressed); corner_sweep_calm_s: the same sweep out of combat (slow).",
   "wall_corner_look_deg": 112,
   "follower_cover_radius_m": 6,
   "follower_cover_side_deg": 60,
   "reform_stand_m": 3,
   "wall_path_braking_cm": 30,
   "reform_along_wall_off_m": 1.2,
-  "corner_sweep_s": 6
+  "corner_sweep_s": 6,
+  "corner_sweep_calm_s": 12
 }

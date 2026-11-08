@@ -74,8 +74,9 @@ it at once: the operative is running, gets the order to peek round a corner in f
 ## Both corners of a wall held (#57, 2026-11-07)
 
 The squad's corner peek in formation: a peek at the other end of the same wall keeps the first corner man in his corner peek while the
-other end's man takes that corner; the men between them sweep their look between the corners. Details: [squad-and-orders](squad-and-orders.md)
-"Both corners held".
+other end's man takes that corner (and stays the leader); the men between them walk back to the middle of the wall and sweep their look
+between the corners (12 s one way out of combat, 6 s in combat / alert); the leader corner man down -> the leader before him leads again and
+keeps his corner (the game designer's answers 2026-11-08). Details: [squad-and-orders](squad-and-orders.md) "Both corners held".
 
 ## Cover entry turn: the enter clip only where it fits (2026-11-01, the squad corner peek played twice)
 
