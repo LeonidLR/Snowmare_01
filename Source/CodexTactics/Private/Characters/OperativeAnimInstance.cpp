@@ -67,8 +67,9 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
 	// The run-and-peek's peek stance: what the graph's layers add to the standing fire idles' drawn facing, as measured (learnt on from there).
-	PeekStanceBodyBias[PeekStanceBiasSlot(ECoverFacing::Left, false)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
-	PeekStanceBodyBias[PeekStanceBiasSlot(ECoverFacing::Right, false)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
+	// (The rifle slots 0 / 1 only: a shotgun's left hand is on the pump - no left-hand IK, no bias.)
+	PeekStanceBodyBias[CoverFacingRules::ClipIndex(ECoverFacing::Left)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
+	PeekStanceBodyBias[CoverFacingRules::ClipIndex(ECoverFacing::Right)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
 	LoadShotgunAnimSet(); // the D-1 set (weapon_anim_sets.json), once per instance
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner()))
 	{
@@ -192,7 +193,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	StateDeltaSeconds = DeltaSeconds;
 	LastAnimUpdateFrame = GFrameCounter;
 	SettlePeekStanceYawLock();
-	if (PeekStanceYawLock.bActive && PeekStanceYawLockSeconds() > PeekStanceYawLock.PathSeconds + RunCornerPeekRules::LockFadeSeconds)
+	if (PeekStanceYawLock.bActive && PeekStanceYawLockSeconds() > PeekStanceYawLock.HoldSeconds + RunCornerPeekRules::LockFadeSeconds)
 	{
 		PeekStanceYawLock.bActive = false; // let go (the proxy saw its fade to 0)
 	}
@@ -1334,9 +1335,21 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	if (const UOperativeAnimInstance::FPeekStanceYawLockState& Lock = Instance->PeekStanceYawLock; Lock.bActive)
 	{
 		const float Seconds = static_cast<float>(Instance->PeekStanceYawLockSeconds());
-		PeekLockAlpha = RunCornerPeekRules::LockAlpha(Seconds, Lock.PathSeconds);
-		PeekLockTargetCs = RunCornerPeekRules::LockTargetYaw(Lock.EntryYawCs, Lock.FinalYawCs, Seconds, Lock.PathSeconds);
+		PeekLockAlpha = RunCornerPeekRules::LockAlpha(Seconds, Lock.HoldSeconds);
 		PeekLockShoulderWeight = Instance->PeekStanceBodyShoulderWeight;
+		if (Lock.bWorld)
+		{
+			// The approach: a world yaw, into the mesh's component space as it stands for this evaluation.
+			const USkeletalMeshComponent* Mesh = Instance->GetSkelMeshComponent();
+			const float World = RunCornerPeekRules::ApproachLockTargetYaw(Lock.EntryYawCs, Lock.FinalYawCs, Seconds, Lock.PathSeconds);
+			PeekLockTargetCs = static_cast<float>(FRotator::NormalizeAxis(World - (Mesh ? Mesh->GetComponentRotation().Yaw : 0.0)));
+			PeekLockMaxCorrectionDeg = RunCornerPeekRules::ApproachLockMaxCorrectionDeg;
+		}
+		else
+		{
+			PeekLockTargetCs = RunCornerPeekRules::LockTargetYaw(Lock.EntryYawCs, Lock.FinalYawCs, Seconds, Lock.PathSeconds);
+			PeekLockMaxCorrectionDeg = 360.f;
+		}
 	}
 	if (PeekLockAlpha <= 0.f)
 	{
@@ -1497,7 +1510,8 @@ void FOperativeAnimInstanceProxy::ApplyPeekStanceYawLock(FPoseContext& Output) c
 	const float Natural = OperativePeekStanceLock::BodyYaw(Points, PeekLockShoulderWeight);
 	PeekLockNaturalCs = Natural; // the pose's own drawn yaw (UOperativeAnimInstance::SettlePeekStanceYawLock)
 	bPeekLockNaturalValid = true;
-	const float Correction = RunCornerPeekRules::LockCorrectionDeg(PeekLockTargetCs, Natural, PeekLockAlpha);
+	const float Correction = FMath::Clamp(RunCornerPeekRules::LockCorrectionDeg(PeekLockTargetCs, Natural, PeekLockAlpha), -PeekLockMaxCorrectionDeg,
+		PeekLockMaxCorrectionDeg);
 	// The root bone's local transform is its component-space one: turning it about the vertical turns the whole pose round the capsule's axis
 	// (the mesh origin), as the held yaw on the mesh did.
 	FTransform& Root = Output.Pose[FCompactPoseBoneIndex(0)];
@@ -1505,9 +1519,9 @@ void FOperativeAnimInstanceProxy::ApplyPeekStanceYawLock(FPoseContext& Output) c
 	PeekLockCorrectionDeg = Correction;
 }
 
-int32 UOperativeAnimInstance::PeekStanceBiasSlot(ECoverFacing Side, bool bCrouch)
+int32 UOperativeAnimInstance::PeekStanceBiasSlot(ECoverFacing Side, bool bCrouch) const
 {
-	return (bCrouch ? 2 : 0) + CoverFacingRules::ClipIndex(Side);
+	return (bShotgunWeapon ? 4 : 0) + (bCrouch ? 2 : 0) + CoverFacingRules::ClipIndex(Side);
 }
 
 void UOperativeAnimInstance::SettlePeekStanceYawLock()
@@ -1539,6 +1553,7 @@ void UOperativeAnimInstance::SettlePeekStanceYawLock()
 		Lock.EntryYawCs = Lock.FinalYawCs;
 		Lock.FinalYawCs = Natural;
 		Lock.PathSeconds = RunCornerPeekRules::SettleSeconds;
+		Lock.HoldSeconds = Lock.PathSeconds;
 		Lock.BeginTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] %s: peek stance yaw lock - the fire idle draws the body %.1f deg off the predicted facing (learnt bias %.1f%s)%s"),
@@ -1555,13 +1570,44 @@ double UOperativeAnimInstance::PeekStanceYawLockSeconds() const
 void UOperativeAnimInstance::BeginPeekStanceYawLock(float EntryYawCs, float FinalYawCs, float PathSeconds, ECoverFacing Side, bool bCrouch)
 {
 	PeekStanceYawLock.bActive = true;
+	PeekStanceYawLock.bWorld = false;
 	PeekStanceYawLock.bSettled = false;
 	PeekStanceYawLock.BiasSlot = PeekStanceBiasSlot(Side, bCrouch);
 	PeekStanceYawLock.EntryYawCs = EntryYawCs;
 	PeekStanceYawLock.FinalYawCs = FinalYawCs;
 	PeekStanceYawLock.PathSeconds = FMath::Max(PathSeconds, 0.f);
+	PeekStanceYawLock.HoldSeconds = PeekStanceYawLock.PathSeconds;
 	PeekStanceYawLock.BeginTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	++PeekStanceYawLocks;
+}
+
+void UOperativeAnimInstance::BeginPeekApproachYawLock(float StartWorldYaw, float FinalWorldYaw, float PathSeconds)
+{
+	PeekStanceYawLock.bActive = true;
+	PeekStanceYawLock.bWorld = true;
+	PeekStanceYawLock.bSettled = true; // nothing to learn on the run
+	PeekStanceYawLock.EntryYawCs = StartWorldYaw;
+	PeekStanceYawLock.FinalYawCs = FinalWorldYaw;
+	PeekStanceYawLock.PathSeconds = FMath::Max(PathSeconds, 0.f);
+	PeekStanceYawLock.HoldSeconds = TNumericLimits<float>::Max() * 0.5f; // held until the entry's lock replaces it / released
+	PeekStanceYawLock.BeginTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+}
+
+void UOperativeAnimInstance::ReleasePeekApproachYawLock()
+{
+	if (PeekStanceYawLock.bActive && PeekStanceYawLock.bWorld)
+	{
+		ReleasePeekStanceYawLock();
+	}
+}
+
+bool UOperativeAnimInstance::GetNaturalBodyYawCs(float& OutYawCs) const
+{
+	if (PeekStanceYawLock.bActive && GetProxyOnGameThread<FOperativeAnimInstanceProxy>().GetPeekLockNaturalCs(OutYawCs))
+	{
+		return true;
+	}
+	return GetMeshBodyYawCs(OutYawCs);
 }
 
 void UOperativeAnimInstance::ReleasePeekStanceYawLock()
@@ -1574,11 +1620,14 @@ void UOperativeAnimInstance::ReleasePeekStanceYawLock()
 	if (Seconds < PeekStanceYawLock.PathSeconds)
 	{
 		// The path ends where it is now (the target holds there) and the fade lets the pose's own facing take over.
-		const float Here = RunCornerPeekRules::LockTargetYaw(PeekStanceYawLock.EntryYawCs, PeekStanceYawLock.FinalYawCs, Seconds, PeekStanceYawLock.PathSeconds);
+		const float Here = PeekStanceYawLock.bWorld
+			? RunCornerPeekRules::ApproachLockTargetYaw(PeekStanceYawLock.EntryYawCs, PeekStanceYawLock.FinalYawCs, Seconds, PeekStanceYawLock.PathSeconds)
+			: RunCornerPeekRules::LockTargetYaw(PeekStanceYawLock.EntryYawCs, PeekStanceYawLock.FinalYawCs, Seconds, PeekStanceYawLock.PathSeconds);
 		PeekStanceYawLock.EntryYawCs = Here;
 		PeekStanceYawLock.FinalYawCs = Here;
 		PeekStanceYawLock.PathSeconds = Seconds;
 	}
+	PeekStanceYawLock.HoldSeconds = FMath::Min(PeekStanceYawLock.HoldSeconds, Seconds);
 }
 
 float UOperativeAnimInstance::GetPeekStanceYawLockCorrectionDeg() const

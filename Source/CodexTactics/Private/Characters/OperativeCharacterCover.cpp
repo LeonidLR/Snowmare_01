@@ -147,6 +147,10 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	{
 		ResolveRunCornerPeekEdge(Slot, PeekStanceSide, PeekStanceEdgeAlong);
 	}
+	if (UOperativeAnimInstance* ApproachAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		ApproachAnim->ReleasePeekApproachYawLock(); // the run's approach lock ends here (a peek stance entry begins its own below)
+	}
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;

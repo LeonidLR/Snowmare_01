@@ -191,6 +191,8 @@ private:
 	float PeekLockTargetCs = 0.f;
 	float PeekLockAlpha = 0.f;
 	float PeekLockShoulderWeight = 1.f;
+	/** The largest root yaw the lock may put on this evaluation (the approach lock only takes out what is left, deg). */
+	float PeekLockMaxCorrectionDeg = 360.f;
 	mutable float PeekLockCorrectionDeg = 0.f;
 	/** The evaluated pose's own drawn body yaw before the lock's correction (component space), last evaluation. */
 	mutable float PeekLockNaturalCs = 0.f;
@@ -939,6 +941,24 @@ public:
 
 	/** The lock ends its path where it is now and lets go (leaving the cover, death). */
 	void ReleasePeekStanceYawLock();
+
+	/**
+	 * The run-and-peek's APPROACH (the shotgun Engineer, main's verification 2026-11-08: his jog's torso sways under the turn): from the
+	 * pre-turn's start the drawn body's yaw in WORLD space goes from StartWorldYaw to FinalWorldYaw linearly over PathSeconds (the pre-turn's
+	 * own even plan) and holds there, the root yaw on the evaluated pose capped at RunCornerPeekRules::ApproachLockMaxCorrectionDeg - the
+	 * actor's pre-turn does the turn, the lock takes out the run pose's sway, so the drawn body turns one way. The entry's lock replaces it.
+	 */
+	void BeginPeekApproachYawLock(float StartWorldYaw, float FinalWorldYaw, float PathSeconds);
+
+	/** The approach lock (only) lets go - the run-and-peek dropped / another entry. */
+	void ReleasePeekApproachYawLock();
+
+	/**
+	 * The drawn body's yaw of the pose as the graph and the weapon layer made it - before the peek stance yaw lock's root yaw (the lock's
+	 * last evaluation; the mesh's pose without a lock), component space, deg. The pre-turn steers on it (the lock's own correction must not
+	 * feed back). False without the bones.
+	 */
+	bool GetNaturalBodyYawCs(float& OutYawCs) const;
 
 	/** The peek stance yaw lock is on (its path or its fade). */
 	bool IsPeekStanceYawLockActive() const { return PeekStanceYawLock.bActive; }
@@ -1776,6 +1796,10 @@ private:
 	struct FPeekStanceYawLockState
 	{
 		bool bActive = false;
+		/** The approach lock: the yaws are world yaws, the path linear, held until released / replaced (BeginPeekApproachYawLock). */
+		bool bWorld = false;
+		/** From this many seconds in, the lock fades out (its path's end, or the moment it was released). */
+		float HoldSeconds = 0.f;
 		/** Its path is over and the pose's own facing has been compared with the prediction (SettlePeekStanceYawLock). */
 		bool bSettled = false;
 		/** Its fire idle (PeekStanceBiasSlot). */
@@ -1795,9 +1819,12 @@ private:
 	 * they differ, eased there over RunCornerPeekRules::SettleSeconds (NativeUpdateAnimation).
 	 */
 	void SettlePeekStanceYawLock();
-	/** What the graph's layers add to each fire idle's drawn body yaw (the left-hand IK on the left shoulder...), learnt, deg: [stand _L, _R, crouch _L, _R]. */
-	float PeekStanceBodyBias[4] = { 0.f, 0.f, 0.f, 0.f };
-	static int32 PeekStanceBiasSlot(ECoverFacing Side, bool bCrouch);
+	/**
+	 * What the graph's layers add to each fire idle's drawn body yaw (the left-hand IK on the left shoulder...), learnt, deg: [stand _L, _R,
+	 * crouch _L, _R] for a rifle, the same four for a shotgun (its left hand on the pump: no IK, no bias - main's verification 2026-11-08).
+	 */
+	float PeekStanceBodyBias[8] = { 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
+	int32 PeekStanceBiasSlot(ECoverFacing Side, bool bCrouch) const;
 	/** Left-hand IK: linear blend progress, the upper-body action windows (grenade throw / hit reaction) left, s. */
 	float LeftHandIKLinear = 0.f;
 	/** The chain root the cached LeftHandArmReach was measured from. */
