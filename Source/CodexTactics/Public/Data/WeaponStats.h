@@ -284,7 +284,19 @@ struct CODEXTACTICS_API FWeaponPelletStats
 	float ConeHalfAngleDeg = 0.f;
 };
 
-/** RESERVED per-kind block (Projectile / Thrown; RPG-7, mortar, week 2): the flying round (JSON "projectile"). */
+/** How a projectile flies (JSON projectile.trajectory; ProjectileRules::SolveLaunch). */
+UENUM(BlueprintType)
+enum class EProjectileTrajectory : uint8
+{
+	/** Straight along the aim, no gravity (a rocket: the RPG-7). */
+	Flat,
+	/** The low arc to the aim point (gravity x gravity_scale). */
+	Ballistic,
+	/** The high arc (> 45 deg): plunging fire over walls - walls do not protect, a roof does (the mortar; SQUAD_SIX_FIRE_TEAMS.md 7.3). */
+	HighAngle
+};
+
+/** Per-kind block (Projectile; the shared projectile layer 2026-11-09 - the RPG-7, the mortar): the flying round (JSON "projectile"). */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FWeaponProjectileStats
 {
@@ -302,9 +314,15 @@ struct CODEXTACTICS_API FWeaponProjectileStats
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Projectile", meta = (ClampMin = "0"))
 	float ArmingDistanceCm = 0.f;
 
-	/** Plunging high-angle fire over walls (the mortar; SQUAD_SIX_FIRE_TEAMS.md 7.3). */
+	/** The flight: flat (rocket), ballistic (low arc) or high-angle (plunging; JSON "trajectory"; the legacy "high_angle": true = HighAngle). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Projectile")
-	bool bHighAngle = false;
+	EProjectileTrajectory Trajectory = EProjectileTrajectory::Flat;
+
+	/** Past this flight time the round bursts in the air (a rocket's self-destruct; 0 = the default 10 s). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Projectile", meta = (ClampMin = "0"))
+	float MaxFlightSeconds = 0.f;
+
+	bool IsHighAngle() const { return Trajectory == EProjectileTrajectory::HighAngle; }
 };
 
 /** RESERVED per-kind block (Projectile / Thrown; shared explosion code, week 2): the blast (JSON "explosion"). */

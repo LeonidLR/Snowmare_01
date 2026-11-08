@@ -61,6 +61,12 @@ namespace WeaponStatsRulesInternal
 		{ EArmorClass::Vehicle, TEXT("vehicle") },
 	};
 
+	static const TWeaponEnumName<EProjectileTrajectory> WeaponTrajectoryNames[] = {
+		{ EProjectileTrajectory::Flat, TEXT("flat") },
+		{ EProjectileTrajectory::Ballistic, TEXT("ballistic") },
+		{ EProjectileTrajectory::HighAngle, TEXT("high_angle") },
+	};
+
 	static const TWeaponEnumName<EWeaponReloadMode> WeaponReloadModeNames[] = {
 		{ EWeaponReloadMode::Magazine, TEXT("magazine") },
 		{ EWeaponReloadMode::PerRound, TEXT("per_round") },
@@ -114,7 +120,8 @@ namespace WeaponStatsRulesInternal
 	};
 
 	static const TCHAR* const WeaponPelletKeys[] = { TEXT("comment"), TEXT("count"), TEXT("cone_half_angle_deg") };
-	static const TCHAR* const WeaponProjectileKeys[] = { TEXT("comment"), TEXT("speed_mps"), TEXT("gravity_scale"), TEXT("arming_distance_m"), TEXT("high_angle") };
+	static const TCHAR* const WeaponProjectileKeys[] = { TEXT("comment"), TEXT("speed_mps"), TEXT("gravity_scale"), TEXT("arming_distance_m"), TEXT("trajectory"),
+		TEXT("max_flight_s"), TEXT("high_angle") };
 	static const TCHAR* const WeaponExplosionKeys[] = { TEXT("comment"), TEXT("radius_m"), TEXT("full_damage_radius_m"), TEXT("edge_damage_multiplier"),
 		TEXT("back_blast_length_m"), TEXT("back_blast_half_angle_deg") };
 
@@ -385,7 +392,15 @@ namespace WeaponStatsRules
 			Block.Number(TEXT("speed_mps"), InOut.Projectile.SpeedCmS, 100.f);
 			Block.Number(TEXT("gravity_scale"), InOut.Projectile.GravityScale);
 			Block.Number(TEXT("arming_distance_m"), InOut.Projectile.ArmingDistanceCm, 100.f);
-			Block.Bool(TEXT("high_angle"), InOut.Projectile.bHighAngle);
+			Block.Number(TEXT("max_flight_s"), InOut.Projectile.MaxFlightSeconds);
+			bool bHighAngle = InOut.Projectile.IsHighAngle();
+			if (Projectile->HasField(TEXT("high_angle")))
+			{
+				Block.Bool(TEXT("high_angle"), bHighAngle); // the pre-2026-11-09 key: true = the high-angle trajectory
+				InOut.Projectile.Trajectory = bHighAngle ? EProjectileTrajectory::HighAngle
+					: (InOut.Projectile.IsHighAngle() ? EProjectileTrajectory::Ballistic : InOut.Projectile.Trajectory);
+			}
+			Block.Enum(TEXT("trajectory"), WeaponTrajectoryNames, InOut.Projectile.Trajectory);
 			Read.bOk &= Block.bOk;
 		}
 		if (const FJsonObject* Explosion = Read.Block(TEXT("explosion")))
@@ -448,7 +463,8 @@ namespace WeaponStatsRules
 		Projectile->SetNumberField(TEXT("speed_mps"), WeaponRound4(Stats.Projectile.SpeedCmS / 100.f));
 		Projectile->SetNumberField(TEXT("gravity_scale"), WeaponRound4(Stats.Projectile.GravityScale));
 		Projectile->SetNumberField(TEXT("arming_distance_m"), WeaponRound4(Stats.Projectile.ArmingDistanceCm / 100.f));
-		Projectile->SetBoolField(TEXT("high_angle"), Stats.Projectile.bHighAngle);
+		Projectile->SetStringField(TEXT("trajectory"), EnumToName(WeaponTrajectoryNames, Stats.Projectile.Trajectory));
+		Projectile->SetNumberField(TEXT("max_flight_s"), WeaponRound4(Stats.Projectile.MaxFlightSeconds));
 		Json->SetObjectField(TEXT("projectile"), Projectile);
 		TSharedRef<FJsonObject> Explosion = MakeShared<FJsonObject>();
 		Explosion->SetNumberField(TEXT("radius_m"), WeaponRound4(Stats.Explosion.RadiusCm / 100.f));
@@ -523,8 +539,11 @@ namespace WeaponStatsRules
 		Check(Stats.Pellets.ConeHalfAngleDeg >= 0.f && Stats.Pellets.ConeHalfAngleDeg < 45.f,
 			FString::Printf(TEXT("pellets.cone_half_angle_deg %.1f is outside [0, 45)"), Stats.Pellets.ConeHalfAngleDeg));
 		Check(Stats.Kind != EWeaponKind::Projectile || Stats.Projectile.SpeedCmS > 0.f, TEXT("a projectile weapon needs projectile.speed_mps > 0"));
-		Check(Stats.Projectile.SpeedCmS >= 0.f && Stats.Projectile.GravityScale >= 0.f && Stats.Projectile.ArmingDistanceCm >= 0.f,
+		Check(Stats.Projectile.SpeedCmS >= 0.f && Stats.Projectile.GravityScale >= 0.f && Stats.Projectile.ArmingDistanceCm >= 0.f
+			&& Stats.Projectile.MaxFlightSeconds >= 0.f,
 			TEXT("projectile values must not be negative"));
+		Check(Stats.Kind != EWeaponKind::Projectile || Stats.Projectile.Trajectory == EProjectileTrajectory::Flat || Stats.Projectile.GravityScale > 0.f,
+			TEXT("a ballistic / high-angle projectile needs projectile.gravity_scale > 0"));
 		const FWeaponExplosionStats& Blast = Stats.Explosion;
 		Check(Blast.RadiusCm >= 0.f && Blast.FullDamageRadiusCm >= 0.f && Blast.BackBlastLengthCm >= 0.f, TEXT("explosion radii must not be negative"));
 		Check(Blast.FullDamageRadiusCm <= Blast.RadiusCm, FString::Printf(TEXT("explosion.full_damage_radius_m %.2f is beyond radius_m %.2f"),
