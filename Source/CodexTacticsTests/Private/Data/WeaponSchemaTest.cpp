@@ -283,6 +283,13 @@ bool FWeaponSchemaParityTest::RunTest(const FString&)
 		TestEqual(FString::Printf(TEXT("%s: base values identical (%s)"), Expected.Id, *FString::Join(Diffs, TEXT(", "))), Diffs.Num(), 0);
 		// After the file: the numbers every reader got before the schema.
 		LegacyApply(**Block, Old);
+		// Intended since the D-1 (2026-11-08): the file sets handling ("shotgun": the shotgun animation layer); the old pipeline had no such key.
+		FString HandlingName;
+		if ((*Block)->TryGetStringField(TEXT("handling"), HandlingName))
+		{
+			Old.Handling = HandlingName == TEXT("shotgun") ? EWeaponHandling::Shotgun
+				: (HandlingName == TEXT("sniper_rifle") ? EWeaponHandling::SniperRifle : EWeaponHandling::Standard);
+		}
 		UWeaponDataAsset* Scratch = MakeScratch(Asset->MakeBaseStats());
 		TestTrue(FString::Printf(TEXT("%s: applied"), Expected.Id), WeaponTuning::ApplyWeapon(**Block, *Scratch));
 		Diffs = CompareWithLegacy(Old, Scratch->Stats, Compared);

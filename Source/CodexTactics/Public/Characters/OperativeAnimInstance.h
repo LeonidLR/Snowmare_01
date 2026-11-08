@@ -7,6 +7,7 @@
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
+#include "Characters/WeaponAnimLayerRules.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "Survival/ColdRules.h"
 #include "Survival/WarmIdleRules.h"
@@ -207,6 +208,12 @@ private:
 	mutable FVector KneeIKOffset[2] = { FVector::ZeroVector, FVector::ZeroVector };
 	TStaticArray<FOperativeClipState, static_cast<int32>(EOperativeClip::Count)> Clips;
 	bool bUseNative = true;
+
+	/** The weapon layer (the D-1 shotgun set, 2026-11-08) blended over the graph's pose: upper / lower body weights and its clips. */
+	void BlendWeaponLayer(FPoseContext& Output) const;
+	TStaticArray<FOperativeClipState, 12> WeaponClips;
+	float WeaponUpperWeight = 0.f;
+	float WeaponLowerWeight = 0.f;
 };
 
 /**
@@ -413,6 +420,8 @@ public:
 	/** Hit reactions started / the last clip (smokes). */
 	int32 GetHitReactionsPlayed() const { return HitReactionsPlayed; }
 	UAnimSequenceBase* GetLastHitReactionClip() const { return LastHitReactionClip.Get(); }
+	/** Shots whose fire clip was left out because a stance transition was playing (#51; for the smokes). */
+	int32 GetFireClipsSkippedForStance() const { return FireClipsSkippedForStance; }
 	FName GetLastHitReactionSlot() const { return LastHitReactionSlot; }
 
 	/** Seconds the left-hand IK stays off for an upper-body action (hit reaction, grenade throw, interaction) - smokes. */
@@ -1213,6 +1222,31 @@ public:
 	UAnimSequenceBase* GetSniperLoopClip() const { return SniperLoopClip.Get(); }
 	const TArray<FString>& GetSniperClipLog() const { return SniperClipLog; }
 
+	// --- The shotgun weapon layer (the D-1, designer decision 21, 2026-11-03; WeaponAnimLayerRules) ---------------------------------
+	// The user's ShotgunLocomotionPack clips (Content/Data/Weapons/weapon_anim_sets.json "shotgun") blended natively over the ABP's
+	// pose while a shotgun (EWeaponHandling::Shotgun) is in hands: idle / walk / jog / sprint / crouch by speed and direction, the aim
+	// set while aiming; an upper-body montage (fire, reload, grenade, hit) keeps the torso and the layer drives the legs only; a full-body
+	// montage, cover, prone, ladders, vaults, carrying, death and knockdowns leave the ABP alone. No AnimGraph node.
+
+	/** The layer's mask this frame (smokes, the HUD trace). */
+	EWeaponLayerMask GetShotgunLayerMask() const { return ShotgunMask; }
+
+	/** The layer's current blend weights (0..1) on the torso and on the legs. */
+	float GetShotgunUpperWeight() const { return ShotgunUpperWeight; }
+	float GetShotgunLowerWeight() const { return ShotgunLowerWeight; }
+
+	/** The heaviest shotgun locomotion clip this frame (smokes: "a known shotgun clip plays"). */
+	const UAnimSequenceBase* GetShotgunDominantClip() const;
+
+	/** The shotgun clip set loaded (every clip path resolved: the count). */
+	int32 GetShotgunClipCount() const { return ShotgunClipRefs.Num(); }
+
+	/** Shotgun fire / per-shell reload clips started (smokes). */
+	int32 GetShotgunFireClips() const { return ShotgunFireClips; }
+	int32 GetShotgunShellClips() const { return ShotgunShellClips; }
+	/** The folder the shotgun clips come from for this skeleton (empty: the pack's own clips). */
+	const FString& GetShotgunRetargetFolder() const { return ShotgunRetargetFolder; }
+
 	/** The grenade throw clip is still playing (the arms throw: no rifle shot meanwhile, user rule 2026-10-07). */
 	bool IsThrowingGrenade() const { return GrenadeThrowSecondsLeft > 0.f; }
 	/** In the fire-ready pose (entered, not yet left through the exit transition). */
@@ -1532,6 +1566,68 @@ protected:
 private:
 	friend struct FOperativeAnimInstanceProxy;
 
+	/** The shotgun set's clips, one array so the GC keeps them (WeaponAnimLayer data). */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UAnimSequenceBase>> ShotgunClipRefs;
+
+	struct FShotgunAnimSet
+	{
+		UAnimSequence* StandIdle = nullptr;
+		UAnimSequence* AimIdle = nullptr;
+		UAnimSequence* CrouchIdle = nullptr;
+		UAnimSequence* Sprint = nullptr;
+		TStaticArray<UAnimSequence*, 8> Walk;
+		TStaticArray<UAnimSequence*, 8> AimWalk;
+		TStaticArray<UAnimSequence*, 8> Jog;
+		TStaticArray<UAnimSequence*, 8> Crouch;
+		UAnimSequenceBase* FireAim = nullptr;
+		UAnimSequenceBase* FireHip = nullptr;
+		UAnimSequenceBase* Reload = nullptr;
+		float WalkSpeed = 150.f;
+		float JogSpeed = 350.f;
+		float CrouchSpeed = 120.f;
+		float SprintSpeed = 550.f;
+		float MoveStartSpeed = 15.f;
+		float MoveFullSpeed = 60.f;
+		float ShellStart = 0.f;
+		float ShellEnd = 0.f;
+		float BlendSeconds = 0.2f;
+		FShotgunAnimSet()
+		{
+			for (int32 Index = 0; Index < 8; ++Index)
+			{
+				Walk[Index] = AimWalk[Index] = Jog[Index] = Crouch[Index] = nullptr;
+			}
+		}
+	};
+	void LoadShotgunAnimSet();
+	void UpdateShotgunLayer(float DeltaSeconds);
+	/** The shotgun layer may drive the body now (shotgun in hands, alive, up, not in cover / prone / on a ladder / vaulting / carrying). */
+	bool IsShotgunLayerEligible() const;
+	/** The shot clip of the shotgun (aim / hip) on the upper-body slot; false = not the shotgun set. */
+	bool PlayShotgunFire();
+	/** The per-shell reload clip (one section per shell); true when the shotgun set handled the reload this frame. */
+	bool UpdateShotgunReload(const AOperativeCharacter* Operative);
+	FShotgunAnimSet ShotgunSet;
+	bool bShotgunSetLoaded = false;
+	/** The retargeted-copy folder for this mesh's skeleton (weapon_anim_sets.json "retargeted"); empty = the pack clips play. */
+	FString ShotgunRetargetFolder;
+	bool bShotgunWeapon = false;
+	EWeaponLayerMask ShotgunMask = EWeaponLayerMask::Off;
+	float ShotgunUpperWeight = 0.f;
+	float ShotgunLowerWeight = 0.f;
+	float ShotgunPhase = 0.f;
+	float ShotgunIdleTime = 0.f;
+	/** Eased shares (0..1, over blend_seconds) of the crouch / aim / sprint sets: a stance or aim change cross-fades the clip sets
+	 * instead of switching them in one frame (a ~20 cm torso pop each time, RecoilProbe 2026-11-08). */
+	float ShotgunCrouchShare = 0.f;
+	float ShotgunAimShare = 0.f;
+	float ShotgunSprintShare = 0.f;
+	TStaticArray<FOperativeClipState, 12> ShotgunClips;
+	int32 ShotgunReloadLastClip = -1;
+	int32 ShotgunFireClips = 0;
+	int32 ShotgunShellClips = 0;
+
 	void UpdateState();
 	void UpdateUpperBody(float DeltaSeconds);
 	void UpdateColdLayer(float DeltaSeconds);
@@ -1568,6 +1664,7 @@ private:
 	/** Hit reactions (HitReactionRules): game time of the last one, count / clip / slot for the smokes. */
 	double LastHitReactionTime = -1000.0;
 	int32 HitReactionsPlayed = 0;
+	int32 FireClipsSkippedForStance = 0;
 	TWeakObjectPtr<UAnimSequenceBase> LastHitReactionClip;
 	FName LastHitReactionSlot;
 	/** Vault clip: started on the vault's first frame, foot alternating. */

@@ -102,6 +102,10 @@ AOperativeCharacter::AOperativeCharacter()
 	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
 	WeaponMesh->SetupAttachment(GetMesh(), WeaponSocket);
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	WeaponSkeletalMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponSkeletalMesh"));
+	WeaponSkeletalMesh->SetupAttachment(WeaponMesh);
+	WeaponSkeletalMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	WeaponSkeletalMesh->SetCastShadow(true);
 
 	ColdSurvival = CreateDefaultSubobject<UColdSurvivalComponent>(TEXT("ColdSurvival"));
 	RageComponent = CreateDefaultSubobject<URageComponent>(TEXT("RageComponent"));

@@ -67,6 +67,25 @@
       "plasma_carbine"
     ]
   },
+  "loadouts": {
+    "comment": "The player's squad: each role's weapons, the first in hands (WeaponLoadoutRules; designer decision 21+, 2026-11-03 / 11-08: the Engineer carries the D-1 shotgun as his primary weapon and no M16). A role not listed keeps the game mode's StartingArsenal + ExtraWeapons. PMC fighters: pmc_operators.json weapon_pool.",
+    "commander": [
+      "m16",
+      "pistol",
+      "grenade"
+    ],
+    "engineer": [
+      "shotgun",
+      "pistol",
+      "grenade"
+    ],
+    "medic_sapper": [
+      "m16",
+      "sniper_rifle",
+      "pistol",
+      "grenade"
+    ]
+  },
   "weapons": {
     "grenade": {
       "name": "Hand Grenade",
@@ -187,7 +206,7 @@
       "damage_falloff_floor": 0.6
     },
     "shotgun": {
-      "name": "Remington 870 Shotgun",
+      "name": "D-1 Shotgun",
       "kind": "hitscan",
       "base_damage": 45,
       "attack_range_m": 15,
@@ -217,6 +236,31 @@
       "pellets": {
         "count": 8,
         "cone_half_angle_deg": 6
+      },
+      "handling": "shotgun",
+      "visual": {
+        "comment": "The D-1 model (the user's Fab import /Game/Fab/_Model_D-1__Shotgun, read-only) on the weapon socket hand_r; attach_* = the model relative to hand_r (cm, pitch / yaw / roll deg), tuned on the ShotgunD1Shots render.",
+        "hand_mesh": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Stock_Plastic_-_Matte__Dark_Gray__0.Stock_Plastic_-_Matte__Dark_Gray__0",
+        "attach_location": [
+          -33.02,
+          1.49,
+          6.23
+        ],
+        "attach_rotation_pyr": [
+          10.32,
+          92.29,
+          1.75
+        ],
+        "attach_scale": [
+          0.0118,
+          0.0118,
+          0.0118
+        ],
+        "muzzle_offset": [
+          0,
+          4000,
+          0
+        ]
       }
     },
     "sniper_rifle": {

@@ -507,10 +507,7 @@ namespace
 		}
 		const FString WeaponId = SaveString(Info, TEXT("current_weapon_id"));
 		Member->CurrentWeapon = nullptr; // the saved state of the weapon in hands is in the inventory now
-		if (WeaponId.IsEmpty() || !Member->SwitchToWeaponById(WeaponId))
-		{
-			Member->SwitchToWeaponById(TEXT("m16"));
-		}
+		Member->EquipRestoredWeapon(WeaponId); // the saved weapon, else his primary (an old Engineer save: the M16 -> the D-1)
 		Member->DropOutOfPlayWeapons(); // an old save's knife / flamethrower ammo / plasma bonus: gone (the designer's roster, 2026-11-08)
 	}
 

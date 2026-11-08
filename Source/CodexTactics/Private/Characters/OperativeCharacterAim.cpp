@@ -67,6 +67,13 @@ bool AOperativeCharacter::GetAimTargetPoint(FVector& OutPoint) const
 
 FVector AOperativeCharacter::GetWeaponMuzzleLocation() const
 {
+	static const FName SkeletalMuzzleSocket(TEXT("Muzzle"));
+	if (WeaponSkeletalMesh && WeaponSkeletalMesh->GetSkeletalMeshAsset() && WeaponSkeletalMesh->IsVisible())
+	{
+		// The skeletal model (the D-1): its "Muzzle" socket, else the weapon data's offset in the model's space.
+		return WeaponSkeletalMesh->DoesSocketExist(SkeletalMuzzleSocket) ? WeaponSkeletalMesh->GetSocketLocation(SkeletalMuzzleSocket)
+			: WeaponSkeletalMesh->GetComponentTransform().TransformPosition(CurrentWeapon ? CurrentWeapon->HandMeshMuzzleOffset : MuzzleOffset);
+	}
 	if (WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
 	{
 		static const FName MuzzleSocket(TEXT("Muzzle"));

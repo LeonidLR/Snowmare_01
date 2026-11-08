@@ -671,6 +671,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	TObjectPtr<UStaticMeshComponent> WeaponMesh;
 
+	/**
+	 * A skeletal weapon model (UWeaponDataAsset::HandSkeletalMesh: the D-1 shotgun, 2026-11-08), a child of WeaponMesh so every
+	 * show / hide of the weapon carries it; WeaponMesh holds no static model meanwhile and takes the model's attach transform.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	TObjectPtr<USkeletalMeshComponent> WeaponSkeletalMesh;
+
 	/** Skeletal mesh material slot tinted with the role colour (Godot tints only the coat). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	FName RoleColorMaterialSlot = TEXT("Explorer_Coat");
@@ -887,6 +894,15 @@ public:
 	 * carry call it.
 	 */
 	void DropOutOfPlayWeapons();
+
+	/** The primary weapon: the first non-grenade weapon of the arsenal (the loadout's first; the Engineer's D-1). Empty: none. */
+	FString GetPrimaryWeaponId() const;
+
+	/** Takes the primary weapon in hands; false when there is none / it cannot be taken. */
+	bool TakePrimaryWeapon();
+
+	/** After a save / the campaign carry: the saved weapon if he owns it, else his primary, else his first (WeaponLoadoutRules). */
+	void EquipRestoredWeapon(const FString& SavedWeaponId);
 
 	/**
 	 * Replaces the Blueprint's skeletal mesh before BeginPlay (per-role body, FSquadMemberSpawn::BodyMesh: the Female Soldier

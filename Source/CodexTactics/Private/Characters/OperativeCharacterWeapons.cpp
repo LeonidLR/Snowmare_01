@@ -16,6 +16,7 @@
 #include "Combat/WeaponBallisticsRules.h"
 #include "Data/WeaponDataAsset.h"
 #include "Data/WeaponRoster.h"
+#include "Data/WeaponLoadoutRules.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -58,7 +59,9 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 		else
 		{
 			Ammo.Clip = Weapon->Stats.Ammo.MagazineSize;
-			Ammo.Reserve = Weapon->WeaponId == TEXT("m16") ? RifleReserve : (Weapon->WeaponId == TEXT("pistol") ? 24 : 0);
+			// The M16 takes the level's rifle reserve, the pistol its Godot 24; any other weapon its own data (the D-1: 40 shells; was 0).
+			Ammo.Reserve = Weapon->WeaponId == TEXT("m16") ? RifleReserve
+				: (Weapon->WeaponId == TEXT("pistol") ? 24 : FMath::Max(0, Weapon->Stats.Ammo.ReserveAmmo));
 		}
 	}
 	// Rounds picked up before the arsenal existed (loot) join their weapon.
@@ -75,6 +78,42 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 	if (!AvailableWeapons.IsEmpty())
 	{
 		SwitchToWeaponById(AvailableWeapons[0]->WeaponId);
+	}
+}
+
+FString AOperativeCharacter::GetPrimaryWeaponId() const
+{
+	for (const UWeaponDataAsset* Weapon : AvailableWeapons)
+	{
+		if (Weapon && Weapon->WeaponId != TEXT("grenade"))
+		{
+			return Weapon->WeaponId; // the loadout's first weapon (WeaponLoadoutRules), the one he spawns with in hands
+		}
+	}
+	return FString();
+}
+
+bool AOperativeCharacter::TakePrimaryWeapon()
+{
+	const FString Primary = GetPrimaryWeaponId();
+	return !Primary.IsEmpty() && SwitchToWeaponById(Primary);
+}
+
+void AOperativeCharacter::EquipRestoredWeapon(const FString& SavedWeaponId)
+{
+	TArray<FString> Arsenal;
+	for (const UWeaponDataAsset* Weapon : AvailableWeapons)
+	{
+		if (Weapon)
+		{
+			Arsenal.Add(Weapon->WeaponId);
+		}
+	}
+	// An old save of the Engineer holds the M16 he no longer carries: his primary (the D-1) instead, never empty hands.
+	const FString Held = WeaponLoadoutRules::ResolveHeldWeapon(SavedWeaponId, Arsenal);
+	if (!Held.IsEmpty())
+	{
+		SwitchToWeaponById(Held);
 	}
 }
 
@@ -361,9 +400,11 @@ void AOperativeCharacter::AutoSwitchOnEmpty()
 		const FWeaponAmmoState Ammo = GetAmmoState(Id);
 		return bOwned && (Ammo.Clip > 0 || Ammo.Reserve > 0 || Ammo.Reserve == -1);
 	};
-	if (Usable(TEXT("m16")))
+	// The primary weapon first (the M16; the Engineer's D-1 shotgun, 2026-11-08), then the pistol.
+	const FString Primary = GetPrimaryWeaponId();
+	if (!Primary.IsEmpty() && Primary != TEXT("pistol") && Usable(*Primary))
 	{
-		SwitchToWeaponById(TEXT("m16"));
+		SwitchToWeaponById(Primary);
 		return;
 	}
 	if (Usable(TEXT("pistol")))

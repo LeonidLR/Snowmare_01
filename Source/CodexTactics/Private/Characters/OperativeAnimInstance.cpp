@@ -69,6 +69,7 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 	// The run-and-peek's peek stance: what the graph's layers add to the standing fire idles' drawn facing, as measured (learnt on from there).
 	PeekStanceBodyBias[PeekStanceBiasSlot(ECoverFacing::Left, false)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
 	PeekStanceBodyBias[PeekStanceBiasSlot(ECoverFacing::Right, false)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
+	LoadShotgunAnimSet(); // the D-1 set (weapon_anim_sets.json), once per instance
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner()))
 	{
 		BoundOperative = Operative;
@@ -200,6 +201,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	UpdateUpperBody(DeltaSeconds);
 	UpdateColdLayer(DeltaSeconds);
 	UpdateNativeBlend(DeltaSeconds);
+	UpdateShotgunLayer(DeltaSeconds); // the D-1 shotgun set over the ABP (OperativeAnimInstanceShotgun.cpp)
 	if (bUseRifle2Locomotion)
 	{
 		const AOperativeCharacter* Rifle2Owner = Cast<AOperativeCharacter>(TryGetPawnOwner());
@@ -490,6 +492,20 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 			PlaySlotAnimationAsDynamicMontage(FireProneAnimation, FullBodySlot, 0.05f, 0.15f);
 		}
 		return;
+	}
+	// #51 (designer video 2026-11-06, measured by CodexTactics.RecoilProbe 2026-11-08): a fire montage started while a stance transition
+	// plays (prone -> crouch / stand: the full-body Crawl_to_* clip) stopped that transition at once - montages of one group replace
+	// each other - and the body jumped from the floor to the crouch in ONE frame (40-80 cm), for the squad and the PMC alike: a fighter
+	// rising to shoot looked thrown up / back with every first shot. The shot goes out; the rise keeps playing and the next shot's clip
+	// plays over the finished stance (the prone fire above already waited for it).
+	if (IsPlayingStanceTransition())
+	{
+		++FireClipsSkippedForStance;
+		return;
+	}
+	if (PlayShotgunFire())
+	{
+		return; // the D-1: the pack's aim / hip shot on the upper body (OperativeAnimInstanceShotgun.cpp)
 	}
 	UAnimMontage* Montage = bIsAiming && FireAimMontage ? FireAimMontage : FireMontage;
 	if (Montage && !bIsReloading)
@@ -960,6 +976,11 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	{
 		Reload = nullptr; // never stop the sniper clips at the reload's end
 	}
+	if (UpdateShotgunReload(Operative))
+	{
+		bWasReloading = bIsReloading; // the D-1: one reload section per shell (OperativeAnimInstanceShotgun.cpp)
+		return;
+	}
 	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown && !bIsClimbing)
 	{
 		const float Duration = FMath::Max(0.1f, Operative->ReloadTimer);
@@ -1304,6 +1325,9 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	{
 		PeekLockCorrectionDeg = 0.f;
 	}
+	WeaponClips = Instance->ShotgunClips;
+	WeaponUpperWeight = Instance->ShotgunUpperWeight;
+	WeaponLowerWeight = Instance->ShotgunLowerWeight;
 	for (int32 Index = 0; Index < Slot(EOperativeClip::Count); ++Index)
 	{
 		Clips[Index].Sequence = Instance->GetClip(static_cast<EOperativeClip>(Index));
@@ -1378,12 +1402,17 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 		return Evaluate(Output);
 	}
 	const bool bPeekLock = PeekLockAlpha > 0.f;
-	if ((!LadderIK.bActive && !bPeekLock) || InRootNode != GetRootNode())
+	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || WeaponLowerWeight > MinSampleWeight;
+	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
 	}
 	EvaluateAnimationNode_WithRoot(Output, InRootNode);
+	if (bWeaponLayer)
+	{
+		BlendWeaponLayer(Output); // the shotgun set over the graph (WeaponAnimLayerRules)
+	}
 	if (LadderIK.bActive)
 	{
 		ApplyLadderIK(Output);
