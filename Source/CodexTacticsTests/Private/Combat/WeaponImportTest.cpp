@@ -12,8 +12,8 @@ bool FWeaponImportParityTest::RunTest(const FString&)
 {
 	const UWeaponDataAsset* M16 = LoadObject<UWeaponDataAsset>(nullptr, TEXT("/Game/Data/Weapons/DA_Weapon_m16.DA_Weapon_m16"));
 	const UWeaponDataAsset* Pistol = LoadObject<UWeaponDataAsset>(nullptr, TEXT("/Game/Data/Weapons/DA_Weapon_pistol.DA_Weapon_pistol"));
-	const UWeaponDataAsset* Plasma = LoadObject<UWeaponDataAsset>(nullptr, TEXT("/Game/Data/Weapons/DA_Weapon_plasma_carbine.DA_Weapon_plasma_carbine"));
-	if (!TestNotNull(TEXT("M16 asset"), M16) || !TestNotNull(TEXT("Pistol asset"), Pistol) || !TestNotNull(TEXT("Plasma asset"), Plasma))
+	// The plasma carbine check was retired with the designer's roster (2026-11-08): the weapon is out of play, its asset unreferenced.
+	if (!TestNotNull(TEXT("M16 asset"), M16) || !TestNotNull(TEXT("Pistol asset"), Pistol))
 	{
 		return false;
 	}
@@ -33,9 +33,6 @@ bool FWeaponImportParityTest::RunTest(const FString&)
 	// pistol_beretta.tres: 4 rays, infinite reserve (-1)
 	TestTrue(TEXT("Pistol 4 rays"), Pistol->Stats.TurnBased.AttackShape == EAttackShape::Rays4);
 	TestEqual(TEXT("Pistol reserve -1"), Pistol->Stats.Ammo.ReserveAmmo, -1);
-	// plasma_carbine.tres: energy + SHOCKED (mapped by name)
-	TestTrue(TEXT("Plasma energy"), Plasma->Stats.Damage.DamageType == EDamageType::Energy);
-	TestTrue(TEXT("Plasma shocked"), Plasma->Stats.Status.Effect == EStatusEffect::Shocked);
 	return true;
 }
 

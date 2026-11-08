@@ -15,6 +15,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/WeaponBallisticsRules.h"
 #include "Data/WeaponDataAsset.h"
+#include "Data/WeaponRoster.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -43,9 +44,9 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 	AmmoInventory.Reset();
 	for (UWeaponDataAsset* Weapon : Weapons)
 	{
-		if (!Weapon)
+		if (!Weapon || WeaponRoster::IsOutOfPlay(Weapon->WeaponId))
 		{
-			continue;
+			continue; // out of play (the designer's roster, 2026-11-08): never in an arsenal
 		}
 		AvailableWeapons.Add(Weapon);
 		FWeaponAmmoState& Ammo = AmmoInventory.Add(Weapon->WeaponId);
@@ -70,14 +71,48 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 		}
 	}
 	CurrentWeapon = nullptr;
+	DropOutOfPlayWeapons(); // their loot ammo / bonus items too
 	if (!AvailableWeapons.IsEmpty())
 	{
 		SwitchToWeaponById(AvailableWeapons[0]->WeaponId);
 	}
 }
 
+void AOperativeCharacter::DropOutOfPlayWeapons()
+{
+	// The designer's roster (2026-11-08): no out-of-play weapon in hands, in the arsenal, in the ammo inventory or among the bonus items.
+	AvailableWeapons.RemoveAll([](const UWeaponDataAsset* Weapon) { return Weapon && WeaponRoster::IsOutOfPlay(Weapon->WeaponId); });
+	for (auto It = AmmoInventory.CreateIterator(); It; ++It)
+	{
+		if (WeaponRoster::IsOutOfPlay(It.Key()))
+		{
+			It.RemoveCurrent();
+		}
+	}
+	for (auto It = ExtraAmmo.CreateIterator(); It; ++It)
+	{
+		if (WeaponRoster::IsOutOfPlay(It.Key().ToString()))
+		{
+			It.RemoveCurrent();
+		}
+	}
+	BonusItems.RemoveAll([](const FString& Item) { return WeaponRoster::IsOutOfPlay(Item); });
+	if (CurrentWeapon && WeaponRoster::IsOutOfPlay(CurrentWeapon->WeaponId))
+	{
+		CurrentWeapon = nullptr;
+		if (!SwitchToWeaponById(WeaponRoster::FallbackWeaponId()) && !AvailableWeapons.IsEmpty())
+		{
+			SwitchToWeaponById(AvailableWeapons[0]->WeaponId);
+		}
+	}
+}
+
 bool AOperativeCharacter::SwitchToWeaponById(const FString& WeaponId)
 {
+	if (WeaponRoster::IsOutOfPlay(WeaponId))
+	{
+		return false; // the designer's roster (2026-11-08)
+	}
 	const TObjectPtr<UWeaponDataAsset>* Found = AvailableWeapons.FindByPredicate([&WeaponId](const UWeaponDataAsset* Weapon)
 	{
 		return Weapon && Weapon->WeaponId == WeaponId;
@@ -340,5 +375,5 @@ void AOperativeCharacter::AutoSwitchOnEmpty()
 	{
 		TryAIGrenadeThrow();
 	}
-	SwitchToWeaponById(TEXT("knife")); // Godot _switch_to_melee_knife: the last-chance weapon
+	// Godot _switch_to_melee_knife (the last-chance weapon) is gone: the knife is out of play (the designer's roster, 2026-11-08).
 }

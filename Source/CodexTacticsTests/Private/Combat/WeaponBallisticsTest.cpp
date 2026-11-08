@@ -160,7 +160,7 @@ bool FWeaponBallisticsFalloffTest::RunTest(const FString&)
 
 	// The project weapons (the file in force): only the shotgun and the pistol fall off.
 	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath());
-	for (const TCHAR* Id : { TEXT("m16"), TEXT("sniper_rifle"), TEXT("plasma_carbine"), TEXT("flamethrower"), TEXT("cryo_emitter"), TEXT("knife") })
+	for (const TCHAR* Id : { TEXT("m16"), TEXT("sniper_rifle") })
 	{
 		const UWeaponDataAsset* Weapon = WeaponBallisticsTest::LoadTunedWeapon(Id);
 		if (TestNotNull(Id, Weapon))

@@ -36,6 +36,7 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "Characters/FirePostureRules.h"
+#include "Data/WeaponRoster.h"
 
 #define LOCTEXT_NAMESPACE "ActionBarWidget"
 
@@ -293,6 +294,10 @@ void UActionBarWidget::BuildDefaultLayout()
 		Size->SetHeightOverride(32.f);
 		Size->AddChild(Button);
 		SelectorColumn->AddChildToVerticalBox(Size)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+		if (WeaponRoster::IsOutOfPlay(Id))
+		{
+			Size->SetVisibility(ESlateVisibility::Collapsed); // the designer's roster (2026-11-08): the knife line is gone
+		}
 		SelectorButtons.Add(Button);
 		SelectorTexts.Add(Label);
 	}
@@ -645,7 +650,7 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 {
 	USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (!Leader || (WeaponId == TEXT("grenade") && Leader->GrenadesCount <= 0))
+	if (!Leader || (WeaponId == TEXT("grenade") && Leader->GrenadesCount <= 0) || WeaponRoster::IsOutOfPlay(WeaponId))
 	{
 		return false;
 	}

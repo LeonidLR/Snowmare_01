@@ -14,6 +14,7 @@
 #include "CodexTactics.h"
 #include "Data/WeaponDataAsset.h"
 #include "Data/WeaponStatsRules.h"
+#include "Data/WeaponRoster.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
@@ -128,6 +129,22 @@ namespace WeaponTuning
 		}
 		double FileSchema = 1.0;
 		LastWeaponReport.SchemaVersion = Root->TryGetNumberField(TEXT("schema_version"), FileSchema) ? FMath::RoundToInt(FileSchema) : 1;
+		// The designer's roster (2026-11-08): "roster.out" weapons are out of play (WeaponRoster); no block = the roster stays as it is.
+		{
+			const TSharedPtr<FJsonObject>* RosterBlock = nullptr;
+			if (Root->TryGetObjectField(TEXT("roster"), RosterBlock) && RosterBlock && RosterBlock->IsValid())
+			{
+				FWeaponRoster Roster;
+				TArray<FString> RosterErrors;
+				WeaponRoster::Parse(**RosterBlock, Roster, &RosterErrors);
+				for (const FString& Error : RosterErrors)
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
+				}
+				WeaponRoster::Set(Roster);
+			}
+			LastWeaponReport.RosterOut = WeaponRoster::Get().Out.Num();
+		}
 		// Body armour (weapons framework, decision 1 2026-11-08): "armor.bodies" - class + reduction per body; read by the enemies /
 		// operatives as they spawn (ArmorRules::ApplyBody). No block = the C++ fallbacks.
 		{
@@ -200,6 +217,11 @@ namespace WeaponTuning
 			const TSharedPtr<FJsonObject>* Object = nullptr;
 			if (!Entry.Value.IsValid() || !Entry.Value->TryGetObject(Object) || !Object)
 			{
+				continue;
+			}
+			if (WeaponRoster::IsOutOfPlay(Entry.Key))
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" is out of play (roster) - its block is ignored"), *Entry.Key);
 				continue;
 			}
 			const FString Name = FString::Printf(TEXT("DA_Weapon_%s"), *Entry.Key);
@@ -387,7 +409,27 @@ namespace WeaponTuning
 		All.Sort([](const UWeaponDataAsset& A, const UWeaponDataAsset& B) { return A.WeaponId < B.WeaponId; });
 		for (const UWeaponDataAsset* Weapon : All)
 		{
-			Weapons->SetObjectField(Weapon->WeaponId, WeaponToJson(*Weapon));
+			if (!WeaponRoster::IsOutOfPlay(Weapon->WeaponId)) // the designer's roster: the out-of-play assets stay on disk, not in the file
+			{
+				Weapons->SetObjectField(Weapon->WeaponId, WeaponToJson(*Weapon));
+			}
+		}
+		{
+			const FWeaponRoster& Roster = WeaponRoster::Get();
+			TSharedRef<FJsonObject> RosterJson = MakeShared<FJsonObject>();
+			auto List = [](const TArray<FString>& Ids)
+			{
+				TArray<TSharedPtr<FJsonValue>> Out;
+				for (const FString& Id : Ids)
+				{
+					Out.Add(MakeShared<FJsonValueString>(Id));
+				}
+				return Out;
+			};
+			RosterJson->SetArrayField(TEXT("in_play"), List(Roster.InPlay));
+			RosterJson->SetArrayField(TEXT("next"), List(Roster.Next));
+			RosterJson->SetArrayField(TEXT("out"), List(Roster.Out));
+			Root->SetObjectField(TEXT("roster"), RosterJson);
 		}
 		Root->SetObjectField(TEXT("weapons"), Weapons);
 		// Body armour: the table in force (the file's, read at the last ApplyFile).

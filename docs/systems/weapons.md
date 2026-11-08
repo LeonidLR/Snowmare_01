@@ -45,3 +45,17 @@
   reload tick (interrupted between shells by a target / quick fire / SUPPRESS); **M16 full-auto recoil** bloom in the SUPPRESS order
   (`RecoilBloomDeg`, `SettleRecoil`).
 - Every changed number: `docs/design/WEAPONS_FRAMEWORK.md` 12.2. Tests `CodexTactics.Weapons.Armour.*` / `.Ballistics.*`.
+
+## The roster (game designer decisions 2026-11-08)
+
+- **In play:** M16 + grenade (the grenade unchanged). **Next:** shotgun -> pistol -> sniper rifle + RPG-7 (pistol / sniper keep their
+  current data and places until remade). **Out of play:** hammer, flamethrower, knife, cryo emitter, plasma carbine.
+- `weapons_tuning.json` "roster" (`WeaponRoster`, lazily read before StartPlay); the five left the "weapons" block; their `DA_Weapon_*`
+  assets stay on disk, unreferenced. The starting arsenal is M16 + pistol + grenade (+ the Medic-Sapper's sniper rifle); PMC fighters
+  draw from `pmc_operators.json` weapon_pool (m16 / shotgun / sniper_rifle, unchanged).
+- Gate `WeaponRoster::IsOutOfPlay`: `InitArsenal` / `AddArsenalWeapon` / `SwitchToWeaponById` refuse them; `DropOutOfPlayWeapons` cleans
+  an operative after `InitArsenal`, a save load and the campaign carry (the M16 in hands); `FLootContents::GetCount` returns 0 for
+  fuel / coolant / plasma cells and an out-of-play bonus weapon; `TransferRules::GetAvailable` 0 for their ammo;
+  `CorpseLootRules::IsLootableWeapon` false; the weapon selector hides the knife line; the campfire text drops the fuel option.
+- TRAP: a new weapon path must ask `WeaponRoster::IsOutOfPlay` (or go through `InitArsenal` / `SwitchToWeaponById`); a removed weapon id
+  must go to "roster.out", never only out of a list in code.

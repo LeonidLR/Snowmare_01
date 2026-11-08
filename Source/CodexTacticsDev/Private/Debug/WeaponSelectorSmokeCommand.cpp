@@ -1,7 +1,7 @@
 // Dev-only console command for a headless weapon selector check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.WeaponSelectorSmoke
-// 1. the squad carries the Godot arsenal (M16 in hands, pistol, grenade, knife); 2. the weapon slot opens
-// «ВЫБОР ВООРУЖЕНИЯ» with the M16 line marked «EQUIPPED»; 3. the pistol / knife are taken (slot text follows, the
+// 1. the squad carries the Godot arsenal (M16 in hands, pistol, grenade; the knife is out of play since 2026-11-08); 2. the weapon slot opens
+// «ВЫБОР ВООРУЖЕНИЯ» with the M16 line marked «EQUIPPED»; 3. the pistol is taken (the knife refused) (slot text follows, the
 // selector closes), the grenade starts the throw aim (cancel: the rifle comes back); 4. in turn-based combat the selector
 // switches the active operative's weapon (Godot main.gd _select_weapon_from_selector, switch_active_unit_weapon_to).
 
@@ -77,10 +77,10 @@ namespace WeaponSelectorSmoke
 		for (const AOperativeCharacter* Member : Squad->GetMembers())
 		{
 			// User request 2026-10-09: the Medic-Sapper also carries the sniper rifle (5 weapons).
-			const int32 Expected = Member->SquadRole == EOperativeRole::MedicSapper ? 5 : 4;
+			const int32 Expected = Member->SquadRole == EOperativeRole::MedicSapper ? 4 : 3; // no knife since 2026-11-08
 			bArsenal &= Member->AvailableWeapons.Num() == Expected && WeaponId(Member) == TEXT("m16") && Member->ReserveAmmo == 60;
 		}
-		Check(State, bArsenal, TEXT("every operative: 4 weapons (the Medic-Sapper 5: + sniper rifle), M16 in hands, reserve 60"));
+		Check(State, bArsenal, TEXT("every operative: 3 weapons - M16, pistol, grenade (the Medic-Sapper 4: + sniper rifle), M16 in hands, reserve 60"));
 
 		Check(State, !Bar->IsWeaponSelectorOpen(), TEXT("selector closed at start"));
 		Bar->ToggleWeaponSelector();
@@ -98,10 +98,10 @@ namespace WeaponSelectorSmoke
 			TEXT("grenade taken: throw aim starts"));
 		Grenades->CancelAim(true);
 		Check(State, !Grenades->IsAiming() && WeaponId(Leader) == TEXT("m16"), TEXT("cancelled aim: the rifle is back"));
-		const bool bKnife = Bar->SelectWeapon(TEXT("knife"));
-		const FString KnifeSlot = Bar->GetWeaponText().ToString();
-		Check(State, bKnife && KnifeSlot.StartsWith(TEXT("Knife")), FString::Printf(TEXT("knife taken, slot: %s"), *KnifeSlot.Replace(TEXT("\n"), TEXT(" / "))));
-		Check(State, !Leader->UsesAmmo(), TEXT("the knife uses no ammo"));
+		// The designer's roster (2026-11-08): the knife is out of play - not in the arsenal, the selector refuses it, the rifle stays.
+		Check(State, !Bar->SelectWeapon(TEXT("knife")) && WeaponId(Leader) == TEXT("m16"), TEXT("the knife is out of play: refused, the M16 stays"));
+		Check(State, !Leader->AvailableWeapons.ContainsByPredicate([](const UWeaponDataAsset* W) { return W && W->WeaponId == TEXT("knife"); }),
+			TEXT("no knife in the arsenal"));
 
 		// Turn-based: the selector goes through the combat for the active operative.
 		UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();

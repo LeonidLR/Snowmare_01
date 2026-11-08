@@ -17,7 +17,10 @@
 
 namespace WeaponSchemaTest
 {
-	/** The ten weapons of Content/Data/Weapons (DA_Weapon_<id>) and the kind each has in the schema. */
+	/**
+	 * The weapons of weapons_tuning.json (DA_Weapon_<id>) and their kinds: the designer's roster (2026-11-08) - in play the M16 and the
+	 * grenade, next the shotgun, the pistol, the sniper rifle (their data stays). Out of play (not in the file): OutOfPlay.
+	 */
 	struct FExpectedWeapon
 	{
 		const TCHAR* Id;
@@ -25,17 +28,15 @@ namespace WeaponSchemaTest
 	};
 
 	static const FExpectedWeapon Weapons[] = {
-		{ TEXT("cryo_emitter"), EWeaponKind::Beam },
-		{ TEXT("flamethrower"), EWeaponKind::Beam },
 		{ TEXT("grenade"), EWeaponKind::Thrown },
-		{ TEXT("hammer"), EWeaponKind::Melee },
-		{ TEXT("knife"), EWeaponKind::Melee },
 		{ TEXT("m16"), EWeaponKind::Hitscan },
 		{ TEXT("pistol"), EWeaponKind::Hitscan },
-		{ TEXT("plasma_carbine"), EWeaponKind::Hitscan },
 		{ TEXT("shotgun"), EWeaponKind::Hitscan },
 		{ TEXT("sniper_rifle"), EWeaponKind::Hitscan },
 	};
+
+	/** The designer removed these (2026-11-08); their assets stay on disk, unreferenced. */
+	static const TCHAR* const OutOfPlay[] = { TEXT("hammer"), TEXT("flamethrower"), TEXT("knife"), TEXT("cryo_emitter"), TEXT("plasma_carbine") };
 
 	UWeaponDataAsset* LoadWeapon(const FString& Id)
 	{
@@ -215,7 +216,11 @@ bool FWeaponSchemaEveryWeaponLoadsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestEqual(TEXT("the file lists the ten weapons"), FileWeapons->Values.Num(), static_cast<int32>(UE_ARRAY_COUNT(Weapons)));
+	TestEqual(TEXT("the file lists the roster's five weapons"), FileWeapons->Values.Num(), static_cast<int32>(UE_ARRAY_COUNT(Weapons)));
+	for (const TCHAR* Out : OutOfPlay)
+	{
+		TestFalse(FString::Printf(TEXT("%s: not in the file (out of play)"), Out), FileWeapons->HasField(Out));
+	}
 	for (const FExpectedWeapon& Expected : Weapons)
 	{
 		const UWeaponDataAsset* Asset = LoadWeapon(Expected.Id);
@@ -294,7 +299,7 @@ bool FWeaponSchemaParityTest::RunTest(const FString&)
 		TestEqual(FString::Printf(TEXT("%s: sniper handling"), Expected.Id), Scratch->IsSniperRifle(), Old.Handling == EWeaponHandling::SniperRifle);
 		++Checked;
 	}
-	TestEqual(TEXT("ten weapons checked"), Checked, static_cast<int32>(UE_ARRAY_COUNT(Weapons)));
+	TestEqual(TEXT("every roster weapon checked"), Checked, static_cast<int32>(UE_ARRAY_COUNT(Weapons)));
 	AddInfo(FString::Printf(TEXT("Parity: %d weapons, %d values compared bit-exact (22 per weapon, before + after the file)"), Checked, Compared));
 	return true;
 }
@@ -304,11 +309,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponSchemaProjectFileTest, "CodexTactics.Wea
 
 bool FWeaponSchemaProjectFileTest::RunTest(const FString&)
 {
-	// What StartPlay does: the whole file onto the ten assets, schema v2, nothing rejected, no typo keys.
+	// What StartPlay does: the whole file onto the roster's five assets, schema v2, nothing rejected, no typo keys.
 	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath());
 	const WeaponTuning::FWeaponTuningReport& Report = WeaponTuning::GetLastReport();
 	TestEqual(TEXT("schema version 2"), Report.SchemaVersion, WeaponStatsRules::SchemaVersion);
-	TestEqual(TEXT("ten weapons applied"), Report.Applied, 10);
+	TestEqual(TEXT("five weapons applied"), Report.Applied, 5);
+	TestEqual(TEXT("five weapons out of play"), Report.RosterOut, 5);
 	TestEqual(TEXT("nothing rejected"), Report.Rejected.Num(), 0);
 	TestEqual(TEXT("no unknown keys"), Report.Unknown.Num(), 0);
 	for (const FString& Error : Report.Errors)
@@ -318,15 +324,13 @@ bool FWeaponSchemaProjectFileTest::RunTest(const FString&)
 	// Spot values the game designer knows (the file is the master copy).
 	const UWeaponDataAsset* M16 = WeaponSchemaTest::LoadWeapon(TEXT("m16"));
 	const UWeaponDataAsset* Sniper = WeaponSchemaTest::LoadWeapon(TEXT("sniper_rifle"));
-	const UWeaponDataAsset* Knife = WeaponSchemaTest::LoadWeapon(TEXT("knife"));
-	if (TestTrue(TEXT("assets"), M16 && Sniper && Knife))
+	if (TestTrue(TEXT("assets"), M16 && Sniper))
 	{
 		TestEqual(TEXT("M16 max reach 60 m"), M16->Stats.Range.MaxRangeCm, 6000.f);
 		TestEqual(TEXT("M16 effective 28 m"), M16->Stats.Range.EffectiveRangeCm, 2800.f);
 		TestEqual(TEXT("M16 full-auto 0.1 s"), M16->Stats.Fire.FullAutoIntervalSeconds, 0.1f);
 		TestEqual(TEXT("sniper 70 damage"), Sniper->Stats.Damage.BaseDamage, 70.f);
 		TestTrue(TEXT("sniper handling"), Sniper->IsSniperRifle());
-		TestTrue(TEXT("knife: melee, no ammo"), Knife->Stats.Kind == EWeaponKind::Melee && !Knife->Stats.Ammo.bUsesAmmo);
 	}
 	// Step 2: the game designer's decisions 2026-11-08 written into the file (the intended new values).
 	struct FExpectedClass
@@ -335,10 +339,8 @@ bool FWeaponSchemaProjectFileTest::RunTest(const FString&)
 		EArmorClass Class;
 	};
 	const FExpectedClass Classes[] = {
-		{ TEXT("knife"), EArmorClass::Light }, { TEXT("pistol"), EArmorClass::Light }, { TEXT("shotgun"), EArmorClass::Light },
-		{ TEXT("cryo_emitter"), EArmorClass::Light }, { TEXT("flamethrower"), EArmorClass::Light }, { TEXT("m16"), EArmorClass::Medium },
-		{ TEXT("hammer"), EArmorClass::Medium }, { TEXT("grenade"), EArmorClass::Medium }, { TEXT("sniper_rifle"), EArmorClass::Heavy },
-		{ TEXT("plasma_carbine"), EArmorClass::Heavy },
+		{ TEXT("pistol"), EArmorClass::Light }, { TEXT("shotgun"), EArmorClass::Light }, { TEXT("m16"), EArmorClass::Medium },
+		{ TEXT("grenade"), EArmorClass::Medium }, { TEXT("sniper_rifle"), EArmorClass::Heavy },
 	};
 	for (const FExpectedClass& Expected : Classes)
 	{

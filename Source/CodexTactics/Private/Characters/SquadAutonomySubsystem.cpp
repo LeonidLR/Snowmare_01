@@ -444,7 +444,8 @@ void USquadAutonomySubsystem::UpdateWeapons(AOperativeCharacter& Operative, FOpe
 	{
 		return;
 	}
-	// Sprint 10: a defender body-blocks a point-blank enemy with the knife.
+	// Sprint 10: a defender body-blocks a point-blank enemy with the knife. Since the designer's roster (2026-11-08) nobody carries one
+	// (WeaponRoster): HasWeapon fails and the defender keeps his firearm - kept for a melee weapon the designer may add.
 	if (!bOnSidearm && ShouldDrawMelee(ROE, Operative.TacticalAnchor.Defense, NearestEnemyCm) && State.PrimaryWeaponId != TEXT("knife")
 		&& SquadAutonomy::HasWeapon(Operative, TEXT("knife")) && Operative.SwitchToWeaponById(TEXT("knife")))
 	{

@@ -51,7 +51,6 @@
   "ambush_max_hold_s": 20,
   "engagement_bands": {
     "m16": { "min_m": 25, "max_m": 60 },
-    "plasma_carbine": { "min_m": 25, "max_m": 60 },
     "sniper_rifle": { "min_m": 45, "max_m": 110 },
     "pistol": { "min_m": 10, "max_m": 25 },
     "shotgun": { "min_m": 4, "max_m": 14, "close_quarters": true },

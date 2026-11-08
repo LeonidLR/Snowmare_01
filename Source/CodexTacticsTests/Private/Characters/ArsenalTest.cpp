@@ -33,7 +33,9 @@ bool FArsenalSwitchTest::RunTest(const FString&)
 	Operative->ExtraAmmo.Add(TEXT("pistol"), 6); // picked up earlier
 	Operative->InitArsenal({ M16, Pistol, Grenade, Knife }, 60);
 
-	TestEqual(TEXT("4 weapons"), Operative->AvailableWeapons.Num(), 4);
+	// The designer's roster (2026-11-08): the knife is out of play - InitArsenal drops it (an older loadout may still list it).
+	TestEqual(TEXT("3 weapons (the knife dropped)"), Operative->AvailableWeapons.Num(), 3);
+	TestFalse(TEXT("no knife"), Operative->AvailableWeapons.Contains(Knife));
 	TestTrue(TEXT("M16 in hands"), Operative->CurrentWeapon == M16);
 	TestEqual(TEXT("M16 30 / 60"), Operative->CurrentClip, M16->Stats.Ammo.MagazineSize);
 	TestEqual(TEXT("M16 reserve 60"), Operative->ReserveAmmo, 60);
@@ -57,10 +59,11 @@ bool FArsenalSwitchTest::RunTest(const FString&)
 	TestEqual(TEXT("loot to the M16 in hands"), Operative->ReserveAmmo, 90);
 	TestEqual(TEXT("shotgun outside the arsenal"), Operative->ExtraAmmo.FindRef(TEXT("shotgun")), 8);
 
-	TestTrue(TEXT("knife"), Operative->SwitchToWeaponById(TEXT("knife")));
-	TestFalse(TEXT("knife uses no ammo"), Operative->UsesAmmo());
+	TestFalse(TEXT("the knife refused (out of play)"), Operative->SwitchToWeaponById(TEXT("knife")));
 	TestFalse(TEXT("unknown weapon refused"), Operative->SwitchToWeaponById(TEXT("shotgun")));
-	TestTrue(TEXT("still the knife"), Operative->CurrentWeapon == Knife);
+	TestTrue(TEXT("still the M16"), Operative->CurrentWeapon == M16);
+	Operative->AddArsenalWeapon(Knife);
+	TestFalse(TEXT("AddArsenalWeapon refuses it too"), Operative->AvailableWeapons.Contains(Knife));
 
 	Operative->GrenadesCount = 1; // one used on a trap
 	TestTrue(TEXT("grenade"), Operative->SwitchToWeaponById(TEXT("grenade")));

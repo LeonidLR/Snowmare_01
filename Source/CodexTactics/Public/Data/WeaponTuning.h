@@ -58,6 +58,8 @@ namespace WeaponTuning
 		TArray<FString> Errors;
 		/** Unknown keys (ignored). */
 		TArray<FString> Unknown;
+		/** Weapons out of play (the roster in force). */
+		int32 RosterOut = 0;
 		/** Bodies read from the "armor" block (ArmorRules) and its invalid entries. */
 		int32 ArmorBodies = 0;
 		TArray<FString> ArmorErrors;

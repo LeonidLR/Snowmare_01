@@ -9,6 +9,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
+#include "Data/WeaponRoster.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -154,7 +155,7 @@ void AOperativeCharacter::PlaySniperGridShot()
 
 void AOperativeCharacter::AddArsenalWeapon(UWeaponDataAsset* Weapon, int32 Reserve)
 {
-	if (!Weapon || AvailableWeapons.Contains(Weapon))
+	if (!Weapon || AvailableWeapons.Contains(Weapon) || WeaponRoster::IsOutOfPlay(Weapon->WeaponId)) // the designer's roster (2026-11-08)
 	{
 		return;
 	}

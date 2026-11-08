@@ -869,6 +869,13 @@ public:
 	void AddArsenalWeapon(UWeaponDataAsset* Weapon, int32 Reserve = -1);
 
 	/**
+	 * The designer's roster (2026-11-08, WeaponRoster): removes every out-of-play weapon from the arsenal, the ammo inventory, the loose
+	 * ammo and the bonus items; one in hands is replaced by the M16 (else the first weapon). InitArsenal, a save load and the campaign
+	 * carry call it.
+	 */
+	void DropOutOfPlayWeapons();
+
+	/**
 	 * Replaces the Blueprint's skeletal mesh before BeginPlay (per-role body, FSquadMemberSpawn::BodyMesh: the Female Soldier
 	 * for the Medic-Sapper). The AnimBP stays; the Blueprint's index-based material overrides are dropped (they belong to the
 	 * old mesh's slots).

@@ -3,6 +3,7 @@
 #include "Interactables/DeployableRules.h"
 #include "Interactables/ItemStashComponent.h"
 #include "Data/TacticalHeatTuning.h"
+#include "Data/WeaponRoster.h"
 
 namespace
 {
@@ -96,7 +97,7 @@ int32 TransferRules::GetAvailable(const AOperativeCharacter& Sender, ETransferIt
 	const FString WeaponId = GetAmmoWeaponId(Item);
 	if (!WeaponId.IsEmpty())
 	{
-		return Sender.GetReserve(WeaponId);
+		return WeaponRoster::IsOutOfPlay(WeaponId) ? 0 : Sender.GetReserve(WeaponId); // the designer's roster (2026-11-08)
 	}
 	const int32* Count = TransferCountField(const_cast<AOperativeCharacter&>(Sender), Item);
 	return Count ? *Count : 0;

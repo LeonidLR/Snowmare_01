@@ -14,14 +14,19 @@ bool FLootDefaultsTest::RunTest(const FString&)
 {
 	const FLootContents Crate;
 	const TArray<FLootEntry> Items = Crate.GetItems();
-	// Defaults: medkit 1, food 1, bread 1, chocolate 2, matches 2, rifle 60, pistol 24, shotgun 16, fuel 50, cryo 30, plasma 20;
-	// Sprint 15 (UE-only loot table): + heat pack 1, firewood 1 at the end of the list.
-	TestEqual(TEXT("Thirteen stacks"), Items.Num(), 13);
-	TestTrue(TEXT("Heat pack and firewood last"), Items[11].Item == ELootItem::HeatPack && Items[12].Item == ELootItem::Firewood);
+	// Defaults: medkit 1, food 1, bread 1, chocolate 2, matches 2, rifle 60, pistol 24, shotgun 16 (fuel 50, cryo 30, plasma 20 stay in the
+	// struct but are no loot since the designer's roster of 2026-11-08: their weapons are out of play); Sprint 15 (UE-only loot table):
+	// + heat pack 1, firewood 1 at the end of the list.
+	TestEqual(TEXT("Ten stacks"), Items.Num(), 10);
+	TestTrue(TEXT("Heat pack and firewood last"), Items[8].Item == ELootItem::HeatPack && Items[9].Item == ELootItem::Firewood);
 	TestTrue(TEXT("Medkit first"), Items[0].Item == ELootItem::Medkit);
 	TestEqual(TEXT("Rifle ammo 60"), Crate.GetCount(ELootItem::RifleAmmo), 60);
 	TestEqual(TEXT("Label"), Items[0].GetLabel().ToString(), FString(TEXT("🩹 Medkit: x1")));
-	TestEqual(TEXT("Fuel in units"), Items[8].GetLabel().ToString(), FString(TEXT("🔥 Flamethrower fuel: 50 units")));
+	TestEqual(TEXT("No fuel / coolant / plasma cells (out of play)"), Crate.GetCount(ELootItem::FlameFuel) + Crate.GetCount(ELootItem::CryoAmmo)
+		+ Crate.GetCount(ELootItem::PlasmaAmmo), 0);
+	FLootContents Bonus;
+	Bonus.BonusWeaponId = TEXT("plasma_carbine");
+	TestEqual(TEXT("an out-of-play bonus weapon is no loot"), Bonus.GetCount(ELootItem::BonusWeapon), 0);
 	return true;
 }
 

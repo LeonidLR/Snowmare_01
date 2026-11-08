@@ -269,7 +269,7 @@ void ACodexTacticsPlayerController::GrenadeKey()
 			return;
 		}
 		const bool bSwitched = TurnBased ? (TurnBased->SwitchActiveUnitWeapon(TEXT("m16")) || TurnBased->SwitchActiveUnitWeapon(TEXT("pistol")))
-			: (Leader->SwitchToWeaponById(TEXT("m16")) || Leader->SwitchToWeaponById(TEXT("pistol")) || Leader->SwitchToWeaponById(TEXT("knife")));
+			: (Leader->SwitchToWeaponById(TEXT("m16")) || Leader->SwitchToWeaponById(TEXT("pistol"))); // no knife (roster 2026-11-08)
 		if (bSwitched)
 		{
 			const FString Ammo = Leader->UsesAmmo() ? FString::Printf(TEXT("%d / %d"), Leader->CurrentClip, Leader->ReserveAmmo) : TEXT("∞");

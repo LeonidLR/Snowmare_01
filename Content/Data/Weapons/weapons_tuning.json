@@ -47,59 +47,27 @@
       }
     }
   },
+  "roster": {
+    "comment": "The game designer's roster (2026-11-08): the only weapons in the game are the ones he names. in_play = in the game now; next = the order they are made real (shotgun, pistol, sniper rifle + RPG-7); out = removed from play (never in an arsenal, no loot, no ammo item; a save holding one loads without it, the M16 in hands). Their DA_Weapon_* assets stay on disk unreferenced. The pistol and the sniper rifle keep their current data and places until they are remade on the framework.",
+    "in_play": [
+      "m16",
+      "grenade"
+    ],
+    "next": [
+      "shotgun",
+      "pistol",
+      "sniper_rifle",
+      "rpg7"
+    ],
+    "out": [
+      "hammer",
+      "flamethrower",
+      "knife",
+      "cryo_emitter",
+      "plasma_carbine"
+    ]
+  },
   "weapons": {
-    "cryo_emitter": {
-      "name": "Absolute Cryo Emitter",
-      "kind": "beam",
-      "base_damage": 16,
-      "attack_range_m": 10.5,
-      "effective_range_m": 7,
-      "fire_rate": 0.5,
-      "armor_penetration": 0,
-      "max_clip_size": 30,
-      "default_reserve_ammo": 60,
-      "reload_time": 2.2,
-      "status_duration": 3.5,
-      "status_tick_damage": 0,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": [],
-      "penetration_class": "light"
-    },
-    "flamethrower": {
-      "name": "Prometheus Flamethrower",
-      "kind": "beam",
-      "base_damage": 32,
-      "attack_range_m": 8.5,
-      "effective_range_m": 6,
-      "fire_rate": 0.4,
-      "armor_penetration": 0.3,
-      "max_clip_size": 50,
-      "default_reserve_ammo": 100,
-      "reload_time": 2.8,
-      "status_duration": 4,
-      "status_tick_damage": 10,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": [],
-      "penetration_class": "light"
-    },
     "grenade": {
       "name": "Hand Grenade",
       "kind": "thrown",
@@ -124,56 +92,6 @@
       ],
       "distance_damage_multipliers": [],
       "penetration_class": "medium"
-    },
-    "hammer": {
-      "name": "Heavy Sledgehammer",
-      "kind": "melee",
-      "base_damage": 65,
-      "attack_range_m": 2.2,
-      "fire_rate": 1.25,
-      "armor_penetration": 0.6,
-      "max_clip_size": 0,
-      "default_reserve_ammo": 0,
-      "reload_time": 0,
-      "status_duration": 1.5,
-      "status_tick_damage": 0,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": [],
-      "penetration_class": "medium"
-    },
-    "knife": {
-      "name": "Tactical Knife",
-      "kind": "melee",
-      "base_damage": 22,
-      "attack_range_m": 2,
-      "fire_rate": 0.35,
-      "armor_penetration": 0.15,
-      "max_clip_size": 0,
-      "default_reserve_ammo": 0,
-      "reload_time": 0,
-      "status_duration": 4,
-      "status_tick_damage": 4,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": [],
-      "penetration_class": "light"
     },
     "m16": {
       "name": "M16A2 Assault Rifle",
@@ -267,32 +185,6 @@
       ],
       "penetration_class": "light",
       "damage_falloff_floor": 0.6
-    },
-    "plasma_carbine": {
-      "name": "Spectre Plasma Carbine",
-      "kind": "hitscan",
-      "base_damage": 28,
-      "attack_range_m": 16,
-      "effective_range_m": 10,
-      "fire_rate": 0.8,
-      "armor_penetration": 0.65,
-      "max_clip_size": 20,
-      "default_reserve_ammo": 60,
-      "reload_time": 2.4,
-      "status_duration": 1,
-      "status_tick_damage": 0,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": [],
-      "penetration_class": "heavy"
     },
     "shotgun": {
       "name": "Remington 870 Shotgun",

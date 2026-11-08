@@ -12,6 +12,24 @@
 > `Data/WeaponDataAsset.h` (`UWeaponDataAsset::Stats`), `Data/WeaponTuning.cpp` (the file loader). Tests `CodexTactics.Weapons.Schema.*`.
 > System doc: `docs/systems/weapons.md`.
 
+## 0. Roster - the weapons in the game (game designer decisions 2026-11-08)
+
+"The only weapons in the game are the ones I name." The Godot prototype's extra weapons were added by another AI and are gone.
+
+| Status | Weapons | Notes |
+|---|---|---|
+| **In play now** | M16 (assault rifle), grenade | the grenade stays exactly as it is (designer's answer 2026-11-08) |
+| **Next, in this order** | shotgun -> pistol -> sniper rifle + RPG-7 | shotgun on Nov 9 (with the framework merge); pistol and sniper rifle keep their current data and places until they are remade on the framework (the sniper's `sniper_rifle` data moves onto it); RPG-7 in week 2 |
+| **Out of play** | hammer (sledgehammer), flamethrower, knife, cryo emitter, plasma carbine | "they make no sense"; later weapons the designer adds himself |
+
+Data: `weapons_tuning.json` root `"roster"` {`in_play`, `next`, `out`} (`WeaponRoster`); the five are no longer in the file's `weapons`
+block. Runtime gate (`WeaponRoster::IsOutOfPlay`): never in an arsenal (squad and PMC fighters: `InitArsenal`, `AddArsenalWeapon`), no
+switch to one (`SwitchToWeaponById`, the weapon selector line hidden), no loot (a crate's fuel / coolant / plasma cells and an
+out-of-play bonus weapon count 0, a fallen mate's remains never offer one), no ammo item (transfer / inventory drawer), a save or the
+campaign carry holding one loads without it, the M16 in hands (`AOperativeCharacter::DropOutOfPlayWeapons`). Their `DA_Weapon_*`
+assets stay on disk, unreferenced (deleting them needs the editor and the designer's OK). Creatures' natural attacks (bites, claws,
+spit) are not weapons and are untouched. Tests `CodexTactics.Weapons.Roster.*`.
+
 ## 1. Three layers, one thing the game reads
 
 ```
@@ -91,10 +109,10 @@ Shared by every weapon (not per weapon): `range_falloff` (`floor_multiplier` 0.1
 
 | Kind | Who | Core used | Block | Today's behaviour (unchanged) |
 |---|---|---|---|---|
-| hitscan | M16, pistol, sniper rifle, shotgun, plasma carbine | all | `pellets` (shotgun) | aimed shot = line check (`EvaluateShotLine`) + a roll against `HitChanceByCell` x range falloff x cover / stance / lean; area fire (quick fire / SUPPRESS) traces a stance spread cone |
-| beam | flamethrower, cryo emitter | all; status + thermal matter | none needed yet (a stream = short range + high cadence + status) | fires the same hitscan path with its status / thermal |
+| hitscan | M16 (in play); shotgun, pistol, sniper rifle (next) | all | `pellets` (shotgun) | aimed shot = line check (`EvaluateShotLine`) + a roll against `HitChanceByCell` x range falloff x cover / stance / lean; area fire (quick fire / SUPPRESS) traces a stance spread cone |
+| beam | none in play (the flamethrower / cryo emitter are out, section 0) | all; status + thermal matter | none needed yet (a stream = short range + high cadence + status) | fires the same hitscan path with its status / thermal |
 | thrown | grenade | damage, range (= throw reach), ammo (1 + reserve), grid shape | `projectile` (arc), `explosion` | real time: the operative's grenade values (`grenade` block, see 6.2); turn-based: the asset's stats |
-| melee | knife, hammer | damage, range (reach), cadence, status; `uses_ammo` false | none | blows within reach |
+| melee | none in play (the knife / hammer are out, section 0) | damage, range (reach), cadence, status; `uses_ammo` false | none | blows within reach |
 | projectile | RPG-7, mortar shell (week 2) | all | `projectile` + `explosion` | none yet |
 
 Validation ties kinds to data: a melee weapon uses no ammo; a projectile needs a speed (section 7).
@@ -110,8 +128,8 @@ Schema: `EArmorClass` {None, Light, Medium, Heavy, Vehicle} and the weapon's `pe
 effect). The model below was the recommendation of open question 1; it is decided (section 11) and implemented (section 12): bodies get `armor_class` + the class's reduction moved from C++ into data (the
 `EArmorTier` values above are the starting numbers); the multiplicative rule stays for a weapon at or above the target's class; below it,
 the penetration does not apply (the full class reduction), and against Vehicle only explosives / the RPG matter (the hull factors).
-Classes per weapon (decided, in the file since step 2): knife / pistol / shotgun / cryo / flamethrower light, M16 / hammer / grenade
-medium, sniper / plasma heavy, RPG-7 vehicle (week 2).
+Classes per weapon (decided, in the file since step 2; the roster of section 0 applied): pistol / shotgun light, M16 / grenade medium,
+sniper rifle heavy, RPG-7 vehicle (week 2).
 
 ## 5. Operatives, PMC fighters and enemies share it
 
@@ -161,14 +179,9 @@ to describe each weapon completely (then the asset fields could retire, a later 
 
 | id | kind | damage | eff / max m | interval s | pen | mag / reserve | reload s | full-auto s | cells | status s / tick |
 |---|---|---|---|---|---|---|---|---|---|---|
-| cryo_emitter | beam | 16 | 7 / 10.5 | 0.5 | 0 | 30 / 60 | 2.2 | 0 | 5 | 3.5 / 0 |
-| flamethrower | beam | 32 | 6 / 8.5 | 0.4 | 0.3 | 50 / 100 | 2.8 | 0 | 5 | 4 / 10 |
 | grenade | thrown | 85 | - / 12 | 1 | 0.5 | 1 / 2 | 1 | 0 | 5 | 0 / 0 |
-| hammer | melee | 65 | - / 2.2 | 1.25 | 0.6 | 0 / 0 | 0 | 0 | 5 | 1.5 / 0 |
-| knife | melee | 22 | - / 2 | 0.35 | 0.15 | 0 / 0 | 0 | 0 | 5 | 4 / 4 |
 | m16 | hitscan | 18 | 28 / 60 | 0.65 | 0.2 | 30 / 100 | 2.68 | 0.1 | 8 | 0 / 0 |
 | pistol | hitscan | 16 | 15 / 25 | 0.45 | 0.1 | 12 / -1 | 1.3 | 0 | 6 | 0 / 0 |
-| plasma_carbine | hitscan | 28 | 10 / 16 | 0.8 | 0.65 | 20 / 60 | 2.4 | 0 | 5 | 1 / 0 |
 | shotgun | hitscan | 45 | 8 / 15 | 1.15 | 0.1 | 8 / 40 | 2.4 | 0 | 5 | 0 / 0 |
 | sniper_rifle | hitscan | 70 | 90 / 120 | 2.4 | 0.6 | 5 / 15 | 3.5 | 0 | 10 | 0 / 0 |
 
@@ -233,8 +246,8 @@ pistol / shotgun numbers marked "in data". Contradictions / corrections:
 
 1. **Armour classes: 5** - none / light / medium / heavy / vehicle (today's three enemy tiers + "none" + the APC). A weapon at or above the
    target's class works as today; **below it the weapon's armour penetration does not apply** (the target's full armour reduction); a
-   vehicle is hurt seriously only by explosives / the RPG. The armour formula stays multiplicative (section 4). Per-weapon classes: knife /
-   pistol / shotgun / cryo emitter / flamethrower light, M16 / hammer / grenade medium, sniper rifle / plasma carbine heavy, RPG-7 vehicle.
+   vehicle is hurt seriously only by explosives / the RPG. The armour formula stays multiplicative (section 4). Per-weapon classes (after the
+   roster of section 0): pistol / shotgun light, M16 / grenade medium, sniper rifle heavy, RPG-7 vehicle.
 2. **Shotgun damage:** `base_damage` 45 = the whole shot at point blank, split evenly over 8 pellets (5.625 each); a partial hit does less.
 3. **Shotgun reload: per shell**, ~0.5 s a shell (`reload_mode` per_round, `reload_per_round_s` 0.5), interruptible - he fires as soon as
    one shell is in.
@@ -283,15 +296,12 @@ Class rule (inside the effective range; only these weapon x body pairs change):
 
 | Weapon (class, penetration) | spitter (medium 0.40) | marksman (medium 0.15) | cryo drone (medium 0.05) | brute (heavy 0.75) |
 |---|---|---|---|---|
-| knife 22 (light, 0.15) | 14.52 -> 13.20 | 19.20 -> 18.70 | 21.07 -> 20.90 | 7.98 -> 5.50 |
 | pistol 16 (light, 0.10), point blank | 10.24 -> 9.60 | 13.84 -> 13.60 | 15.28 -> 15.20 | 5.20 -> 4.00 |
 | shotgun 45 (light, 0.10), all pellets in | 28.80 -> 27.00 | 38.92 -> 38.25 | 42.98 -> 42.75 | 14.62 -> 11.25 |
-| flamethrower 32 (light, 0.30) | 23.04 -> 19.20 | 28.64 -> 27.20 | 30.88 -> 30.40 | 15.20 -> 8.00 |
 | M16 18 (medium, 0.20) | 12.24 = | 15.84 = | 17.28 = | 7.20 -> 4.50 |
-| hammer 65 (medium, 0.60) | 54.60 = | 61.10 = | 63.70 = | **45.50 -> 16.25** |
 
-Unchanged: every weapon against the squad / the PMC fighters, hounds, frostbitten, cutters (all light); the cryo emitter (penetration 0:
-nothing to remove); the sniper rifle and the plasma carbine (heavy) against everything; the grenade, the turret, barrels, mines, the
+Unchanged: every weapon against the squad / the PMC fighters, hounds, frostbitten, cutters (all light); the sniper rifle (heavy)
+against everything; the grenade, the turret, barrels, mines, the
 marksman's rifle and every enemy attack (no class limit); turn-based combat.
 
 Damage falloff (against a hound, light 0.10):
@@ -307,5 +317,5 @@ round inside a 0.1 s burst, gone 0.5 s per round after the burst.
 
 A reading of the data for the designer (not a fork): the pistol's own per-cell table (`distance_damage_multipliers` 1 / 0.8 / 0.6 / 0.4 /
 0.25 / 0.12 per 1.5 m, from Godot's turn-based grid) already cuts its real-time damage to 12 % beyond ~8 m; the new falloff only bites past
-15 m on top of that. If the pistol should do real damage at 10-15 m, that table (not the falloff) is the number to change. Likewise the
-hammer against the brute loses most (its 0.60 penetration no longer counts on a heavy body).
+15 m on top of that. If the pistol should do real damage at 10-15 m, that table (not the falloff) is the number to change. (The knife, hammer and
+flamethrower rows of this table were dropped with the roster, section 0: those weapons are out of play.)
