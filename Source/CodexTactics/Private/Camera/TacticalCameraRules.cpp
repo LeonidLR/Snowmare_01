@@ -12,14 +12,73 @@ namespace TacticalCameraRules
 		return FMath::Clamp(CurrentDistance + Notches * Config.ZoomStep, GetMinZoomDistance(Config), FMath::Max(Config.DistanceMax, GetMinZoomDistance(Config)));
 	}
 
+	float GetMinSafeDistance(const FTacticalCameraConfig& Config)
+	{
+		return Config.MinSafeDistance > 0.f ? Config.MinSafeDistance : DefaultMinSafeDistance;
+	}
+
+	float GetMinClearanceHeight(const FTacticalCameraConfig& Config)
+	{
+		const float MinSine = 0.2588190f; // sin 15 deg
+		return GetMinSafeDistance(Config) * FMath::Max(FMath::Abs(FMath::Sin(FMath::DegreesToRadians(Config.Pitch))), MinSine);
+	}
+
+	float ComputeClearanceDolly(const FVector& Camera, const FVector& ViewForward, float MinDistance, float MinHeight, float ConeCos,
+		TConstArrayView<FVector> Points)
+	{
+		const FVector Forward = ViewForward.GetSafeNormal();
+		if (Forward.IsNearlyZero() || MinDistance <= 0.f)
+		{
+			return 0.f;
+		}
+		const float BackZ = -static_cast<float>(Forward.Z); // moving back by t raises the camera by t * BackZ (looking down: > 0)
+		float Dolly = 0.f;
+		for (const FVector& Point : Points)
+		{
+			const FVector ToPoint = Point - Camera;
+			const float Dist = static_cast<float>(ToPoint.Size());
+			const float Depth = static_cast<float>(FVector::DotProduct(ToPoint, Forward));
+			const float Below = static_cast<float>(Camera.Z - Point.Z);
+			if (Dist >= MinDistance || Below >= MinHeight - 0.5f)
+			{
+				continue; // far enough, or as far below the camera as the floor puts the focus
+			}
+			if (Dist > UE_KINDA_SMALL_NUMBER && (Depth <= 0.f || Depth / Dist < ConeCos))
+			{
+				continue; // behind the camera / out of the view: never on screen
+			}
+			// Moving back by t: |V + tB|^2 = Dist^2 + 2 t Depth + t^2 (B = -Forward, V = Camera - Point, V.B = Depth) reaches MinDistance at:
+			const float ByDistance = -Depth + FMath::Sqrt(FMath::Max(0.f, Depth * Depth - Dist * Dist + MinDistance * MinDistance));
+			const float ByHeight = BackZ > 1.e-3f ? (MinHeight - Below) / BackZ : TNumericLimits<float>::Max();
+			Dolly = FMath::Max(Dolly, FMath::Min(ByDistance, ByHeight));
+		}
+		return FMath::Clamp(Dolly, 0.f, MinDistance);
+	}
+
+	float ComputeDetachedFocusZ(const FVector& ViewCentre, float CurrentZ, TConstArrayView<FVector> Points, float Radius)
+	{
+		float BestSq = FMath::Square(FMath::Max(0.f, Radius));
+		float Result = CurrentZ;
+		for (const FVector& Point : Points)
+		{
+			const float DistSq = static_cast<float>(FVector::DistSquared2D(Point, ViewCentre));
+			if (DistSq <= BestSq)
+			{
+				BestSq = DistSq;
+				Result = static_cast<float>(Point.Z);
+			}
+		}
+		return Result;
+	}
+
 	float GetMinZoomDistance(const FTacticalCameraConfig& Config)
 	{
-		return FMath::Max(Config.DistanceMin, Config.MinSafeDistance);
+		return FMath::Max(Config.DistanceMin, GetMinSafeDistance(Config));
 	}
 
 	float ClampMinDistance(const FTacticalCameraConfig& Config, float Distance)
 	{
-		return FMath::Max(Distance, Config.MinSafeDistance);
+		return FMath::Max(Distance, GetMinSafeDistance(Config));
 	}
 
 	FVector PushOutOfCapsule(const FVector& Location, const FVector& CapsuleCenter, float HalfHeight, float Radius, float Clearance)

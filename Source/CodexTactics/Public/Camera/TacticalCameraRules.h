@@ -50,6 +50,27 @@ struct CODEXTACTICS_API FTacticalCameraConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom", meta = (ClampMin = "0"))
 	float CapsuleClearance = 60.f;
 
+	/**
+	 * Operative clearance (bug #52 on L_Gen_Depot_1, 2026-11-08: the squad prone on a 3 m roof, the wheel in - the view 1-2 m above the
+	 * Commander). Squad operatives inside this cone round the view axis, half angle in degrees, are kept clear of the camera: each one closer
+	 * than MinSafeDistance must sit at least the floor's height (MinSafeDistance x sin |Pitch|) below it - else the camera moves back along its
+	 * view axis (TacticalCameraRules::ComputeClearanceDolly). 40 deg: the 30 deg vertical / ~51 deg horizontal view plus a margin.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom", meta = (ClampMin = "1", ClampMax = "89"))
+	float ClearanceConeHalfAngle = 40.f;
+
+	/**
+	 * A camera held by a manual pan (every fight view: the focus is frozen) takes the height of the squad member nearest the view's centre
+	 * within this planar radius, cm - the floor the player looks at (a roof, an upper floor), so the zoom is measured from it, not from the
+	 * ground the pan started on (TacticalCameraRules::ComputeDetachedFocusZ). Nobody that near: the frozen height stays.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom", meta = (ClampMin = "0"))
+	float DetachedHeightRadius = 1500.f;
+
+	/** The held focus height glides to that floor through a critically damped spring of this half-life, s (no jump when he climbs). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom", meta = (ClampMin = "0.01"))
+	float DetachedHeightHalfLife = 0.35f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom", meta = (ClampMin = "0"))
 	float DistanceMax = 4000.f;
 
@@ -150,6 +171,34 @@ namespace TacticalCameraRules
 
 	/** Distance after Notches wheel steps (positive = zoom out), clamped to [DistanceMin, DistanceMax]. */
 	CODEXTACTICS_API float StepZoom(const FTacticalCameraConfig& Config, float CurrentDistance, float Notches);
+
+	/** The floor's default, cm: used when a config holds no floor (MinSafeDistance <= 0, e.g. a Blueprint / data override that zeroed it). */
+	constexpr float DefaultMinSafeDistance = 700.f;
+
+	/** The hard floor in effect: Config.MinSafeDistance, or DefaultMinSafeDistance when it is <= 0 (data can never switch the floor off). */
+	CODEXTACTICS_API float GetMinSafeDistance(const FTacticalCameraConfig& Config);
+
+	/**
+	 * The camera's height above the focus at the floor: GetMinSafeDistance x sin |Pitch| (404 cm at -35.26 deg); the pitch's sine counts as
+	 * at least sin 15 deg so a flat pitch never makes the operative clearance vanish.
+	 */
+	CODEXTACTICS_API float GetMinClearanceHeight(const FTacticalCameraConfig& Config);
+
+	/**
+	 * The operative clearance (bug #52, Depot roof 2026-11-08): how far, cm (>= 0), the camera at Camera looking along ViewForward (unit) must
+	 * move back along its view axis so that every point in front of it within the cone (ConeCos = cos of the half angle) is either at least
+	 * MinDistance away or at least MinHeight below it - the framing the floor gives the focus itself: the squad on flat ground never moves the
+	 * camera (a man at the bottom of the screen is closer than 7 m but as far below it as the focus), a man on a roof under the camera does.
+	 * Points are character capsule centres; points behind the camera or outside the cone are ignored. The result is at most MinDistance.
+	 */
+	CODEXTACTICS_API float ComputeClearanceDolly(const FVector& Camera, const FVector& ViewForward, float MinDistance, float MinHeight, float ConeCos,
+		TConstArrayView<FVector> Points);
+
+	/**
+	 * The height of a focus held by a manual pan (bug #52, Depot roof): the Z of the point nearest (planar) to ViewCentre within Radius, cm -
+	 * the squad member the player looks at; none that near: CurrentZ (the frozen height stays).
+	 */
+	CODEXTACTICS_API float ComputeDetachedFocusZ(const FVector& ViewCentre, float CurrentZ, TConstArrayView<FVector> Points, float Radius);
 
 	/** The wheel's minimum: max(DistanceMin, MinSafeDistance) (bug #52; a Blueprint lowering DistanceMin cannot go under the floor). */
 	CODEXTACTICS_API float GetMinZoomDistance(const FTacticalCameraConfig& Config);

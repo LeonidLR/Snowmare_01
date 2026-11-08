@@ -60,6 +60,87 @@ bool FCameraMinZoomTest::RunTest(const FString&)
 	const FVector AboveHead = PushOutOfCapsule(FVector(0.f, 0.f, 175.f), Centre, 90.f, 35.f, 0.f);
 	TestTrue(TEXT("Over the head, inside the cap: pushed up"), AboveHead.Z >= 90.f + 55.f + 35.f - 0.1f);
 	TestTrue(TEXT("On the axis: pushed straight up"), PushOutOfCapsule(Centre, Centre, 90.f, 35.f, 0.f).Z > Centre.Z);
+	// A config that zeroed the floor (a Blueprint / data override): the default floor holds.
+	FTacticalCameraConfig Zeroed;
+	Zeroed.MinSafeDistance = 0.f;
+	Zeroed.DistanceMin = 0.f;
+	TestEqual(TEXT("MinSafeDistance 0: the 7 m default floor"), GetMinSafeDistance(Zeroed), DefaultMinSafeDistance);
+	TestEqual(TEXT("... the glides still stop at it"), ClampMinDistance(Zeroed, 50.f), DefaultMinSafeDistance);
+	TestEqual(TEXT("... and the wheel"), StepZoom(Zeroed, 900.f, -50.f), DefaultMinSafeDistance);
+	Zeroed.MinSafeDistance = -5.f;
+	TestEqual(TEXT("A negative floor: the default too"), GetMinSafeDistance(Zeroed), DefaultMinSafeDistance);
+	return true;
+}
+
+CAMERA_TEST(FCameraOperativeClearanceTest, "Camera.MinZoom.OperativeClearance")
+bool FCameraOperativeClearanceTest::RunTest(const FString&)
+{
+	// Bug #52 on L_Gen_Depot_1 (game designer 2026-11-08): the squad prone on a 3 m roof, a manual pan had frozen the focus on the ground,
+	// the wheel in to 8 m - the camera 4.6 m above the ground, 1-2 m above the Commander.
+	using namespace TacticalCameraRules;
+	const FTacticalCameraConfig Config;
+	const float Floor = GetMinSafeDistance(Config);
+	const float Height = GetMinClearanceHeight(Config);
+	TestEqual(TEXT("The floor's height at the -35.26 deg pitch: 7 m x sin 35.26 = 404 cm"), Height, 404.f, 1.f);
+	FTacticalCameraConfig Flat;
+	Flat.Pitch = -2.f;
+	TestEqual(TEXT("A flat pitch keeps a clearance height (sin 15 deg at least)"), GetMinClearanceHeight(Flat), 700.f * 0.2588f, 1.f);
+
+	const FVector Forward = FRotator(Config.Pitch, Config.BaseYaw, 0.f).Vector();
+	const float ConeCos = FMath::Cos(FMath::DegreesToRadians(Config.ClearanceConeHalfAngle));
+	const FVector GroundFocus(0.f, 0.f, 40.f); // a prone man's capsule centre on the ground
+	const FVector Camera8 = GroundFocus - Forward * 800.f; // the wheel's minimum
+	const FVector Camera7 = GroundFocus - Forward * Floor; // a cinematic at the floor
+
+	// Flat ground never moves the camera: the focus, a man beside it, a man at the bottom of the screen (closer than 7 m).
+	const FVector Beside = GroundFocus + FVector(0.f, 200.f, 0.f);
+	const FVector NearBottom = GroundFocus - FVector(Forward.X, Forward.Y, 0.f).GetSafeNormal() * 250.f;
+	const TArray<FVector> Ground = { GroundFocus, Beside, NearBottom };
+	TestTrue(TEXT("The bottom-of-screen man is closer than 7 m (the case the height rule exists for)"), FVector::Dist(Camera8, NearBottom) < Floor);
+	TestEqual(TEXT("Flat ground at 8 m: no dolly"), ComputeClearanceDolly(Camera8, Forward, Floor, Height, ConeCos, Ground), 0.f);
+	TestEqual(TEXT("Flat ground at the 7 m floor: no dolly"), ComputeClearanceDolly(Camera7, Forward, Floor, Height, ConeCos, Ground), 0.f);
+
+	// The designer's view: the focus held on the ground, the camera 8 m from it, the Commander prone on a 3 m roof right on the view axis.
+	const FVector OnRoof = Camera8 + Forward * 230.f; // 2.3 m along the axis: 1.3 m under the camera
+	const TArray<FVector> Roof = { GroundFocus, OnRoof };
+	TestTrue(TEXT("Unclamped: the Commander is 2.3 m from the camera (the bug)"), FVector::Dist(Camera8, OnRoof) < 300.0);
+	const float Dolly = ComputeClearanceDolly(Camera8, Forward, Floor, Height, ConeCos, Roof);
+	const FVector Moved = Camera8 - Forward * Dolly;
+	TestTrue(TEXT("Clamped: the camera moved back along its view axis"), Dolly > 0.f);
+	TestTrue(TEXT("... to the 7 m floor from him (or the floor's height above him)"),
+		FVector::Dist(Moved, OnRoof) >= Floor - 1.0 || Moved.Z - OnRoof.Z >= Height - 1.0);
+	TestEqual(TEXT("... on the axis both bounds meet: 7 m"), FVector::Dist(Moved, OnRoof), static_cast<double>(Floor), 2.0);
+	TestEqual(TEXT("A second pass needs nothing more"), ComputeClearanceDolly(Moved, Forward, Floor, Height, ConeCos, Roof), 0.f, 0.5f);
+
+	// A man on a roof off the axis but on screen, 1.5 m under the camera and 3 m in front of it.
+	const FVector OffAxis = Camera8 + FVector(Forward.X, Forward.Y, 0.f).GetSafeNormal() * 300.f + FVector(0.f, 0.f, -150.f);
+	const TArray<FVector> Off = { OffAxis };
+	const float DollyOff = ComputeClearanceDolly(Camera8, Forward, Floor, Height, ConeCos, Off);
+	const FVector MovedOff = Camera8 - Forward * DollyOff;
+	TestTrue(TEXT("Off the axis: moved"), DollyOff > 0.f);
+	TestTrue(TEXT("... the man is then far enough or far enough below"), FVector::Dist(MovedOff, OffAxis) >= Floor - 1.0 || MovedOff.Z - OffAxis.Z >= Height - 1.0);
+	TestTrue(TEXT("The dolly never exceeds the floor"), DollyOff <= Floor);
+
+	// Ignored: behind the camera, outside the view cone, nobody.
+	const TArray<FVector> Behind = { Camera8 - Forward * 200.f };
+	TestEqual(TEXT("A man behind the camera: ignored"), ComputeClearanceDolly(Camera8, Forward, Floor, Height, ConeCos, Behind), 0.f);
+	const TArray<FVector> Side = { Camera8 + FRotationMatrix(Forward.Rotation()).GetUnitAxis(EAxis::Y) * 300.f };
+	TestEqual(TEXT("A man beside the camera, out of the view: ignored"), ComputeClearanceDolly(Camera8, Forward, Floor, Height, ConeCos, Side), 0.f);
+	TestEqual(TEXT("No points: no dolly"), ComputeClearanceDolly(Camera8, Forward, Floor, Height, ConeCos, TConstArrayView<FVector>()), 0.f);
+	return true;
+}
+
+CAMERA_TEST(FCameraDetachedFocusHeightTest, "Camera.MinZoom.DetachedFocusHeight")
+bool FCameraDetachedFocusHeightTest::RunTest(const FString&)
+{
+	// A manual pan freezes the focus; its height takes the floor of the squad member the view is on (bug #52, Depot roof).
+	using namespace TacticalCameraRules;
+	const FVector ViewCentre(1000.f, 0.f, 40.f);
+	const TArray<FVector> Squad = { FVector(1300.f, 200.f, 340.f), FVector(1600.f, 0.f, 340.f), FVector(5000.f, 0.f, 40.f) };
+	TestEqual(TEXT("The nearest man within 15 m: his height (the 3 m roof)"), ComputeDetachedFocusZ(ViewCentre, 40.f, Squad, 1500.f), 340.f);
+	TestEqual(TEXT("Nobody within the radius: the frozen height stays"), ComputeDetachedFocusZ(FVector(-9000.f, 0.f, 40.f), 40.f, Squad, 1500.f), 40.f);
+	TestEqual(TEXT("Planar distance only (a man high above the centre counts)"), ComputeDetachedFocusZ(FVector(1600.f, 0.f, -500.f), -500.f, Squad, 100.f), 340.f);
+	TestEqual(TEXT("No squad: unchanged"), ComputeDetachedFocusZ(ViewCentre, 40.f, TConstArrayView<FVector>(), 1500.f), 40.f);
 	return true;
 }
 
