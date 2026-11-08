@@ -272,9 +272,9 @@ namespace SniperSmoke
 				TEXT("M16 in hands, the sniper rifle next in the X cycle"));
 			const UWeaponDataAsset* Sniper = SniperIndex != INDEX_NONE ? Medic->AvailableWeapons[SniperIndex].Get() : nullptr;
 			Check(State, Sniper && Medic->SwitchToWeaponById(Sniper->WeaponId) && Medic->IsSniperWeaponEquipped(), TEXT("switched to the sniper rifle"));
-			Check(State, Medic->CurrentClip == 5 && Medic->ReserveAmmo == 15 && Sniper && Sniper->FireRate >= 2.f && Sniper->BaseDamage >= 60.f,
+			Check(State, Medic->CurrentClip == 5 && Medic->ReserveAmmo == 15 && Sniper && Sniper->Stats.Fire.ShotIntervalSeconds >= 2.f && Sniper->Stats.Damage.BaseDamage >= 60.f,
 				FString::Printf(TEXT("sniper [%d/%d], damage %.0f, %.1f s per shot (weapons_tuning.json)"), Medic->CurrentClip, Medic->ReserveAmmo,
-					Sniper ? Sniper->BaseDamage : 0.f, Sniper ? Sniper->FireRate : 0.f));
+					Sniper ? Sniper->Stats.Damage.BaseDamage : 0.f, Sniper ? Sniper->Stats.Fire.ShotIntervalSeconds : 0.f));
 			Check(State, Medic->WeaponMesh->GetStaticMesh() == M16Model && M16Model, TEXT("stand-in model: the M16 (HandMesh)"));
 			State.FiredHandle = Medic->OnWeaponFiredNative.AddLambda([StateRef](AOperativeCharacter* Shooter, AActor*, bool)
 			{

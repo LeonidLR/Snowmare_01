@@ -292,7 +292,7 @@ namespace RetreatFacingSmoke
 			// (bug #39 2026-11-07: the M16 reaches 60 m, so the old spot 24 m ahead of the start, ~50 m from him, was a target in reach and
 			// the AGGRESSIVE auto fire rightly turned him round to it; a target in reach wins over a facing order, as before).
 			const AOperativeCharacter* Holder = State.Pair[0].Get();
-			const float Reach = Holder && Holder->CurrentWeapon ? Holder->CurrentWeapon->AttackRangeCm : 2500.f;
+			const float Reach = Holder && Holder->CurrentWeapon ? Holder->CurrentWeapon->Stats.Range.MaxRangeCm : 2500.f;
 			const FVector Park = Holder ? Holder->GetActorLocation() + State.F * (Reach + 1500.f) : State.O + State.F * 2400.f;
 			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Pack)
 			{

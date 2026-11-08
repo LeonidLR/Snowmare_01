@@ -256,7 +256,7 @@ namespace CornerEntrySmoke
 		// the pose, not the magazine: a full clip, so no reload falls into a trace (the corner reload is CornerHoldSmoke's).
 		if (AOperativeCharacter* Traced = State.Op.Get(); Traced && Traced->CurrentWeapon)
 		{
-			Traced->CurrentClip = FMath::Max(Traced->CurrentClip, Traced->CurrentWeapon->MaxClipSize);
+			Traced->CurrentClip = FMath::Max(Traced->CurrentClip, Traced->CurrentWeapon->Stats.Ammo.MagazineSize);
 		}
 		State.bTracing = true;
 		State.TraceTime = 0.f;

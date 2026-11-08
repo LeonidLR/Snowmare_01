@@ -35,7 +35,7 @@ bool FArsenalSwitchTest::RunTest(const FString&)
 
 	TestEqual(TEXT("4 weapons"), Operative->AvailableWeapons.Num(), 4);
 	TestTrue(TEXT("M16 in hands"), Operative->CurrentWeapon == M16);
-	TestEqual(TEXT("M16 30 / 60"), Operative->CurrentClip, M16->MaxClipSize);
+	TestEqual(TEXT("M16 30 / 60"), Operative->CurrentClip, M16->Stats.Ammo.MagazineSize);
 	TestEqual(TEXT("M16 reserve 60"), Operative->ReserveAmmo, 60);
 	TestEqual(TEXT("pistol reserve 24 + 6 looted"), Operative->GetAmmoState(TEXT("pistol")).Reserve, 30);
 	TestFalse(TEXT("pistol ammo left ExtraAmmo"), Operative->ExtraAmmo.Contains(TEXT("pistol")));
@@ -44,11 +44,11 @@ bool FArsenalSwitchTest::RunTest(const FString&)
 
 	Operative->CurrentClip -= 5; // five rounds fired
 	TestTrue(TEXT("switch to the pistol"), Operative->SwitchToWeaponById(TEXT("pistol")));
-	TestEqual(TEXT("pistol full clip"), Operative->CurrentClip, Pistol->MaxClipSize);
+	TestEqual(TEXT("pistol full clip"), Operative->CurrentClip, Pistol->Stats.Ammo.MagazineSize);
 	TestEqual(TEXT("pistol reserve"), Operative->ReserveAmmo, 30);
-	TestEqual(TEXT("M16 state kept"), Operative->GetAmmoState(TEXT("m16")).Clip, M16->MaxClipSize - 5);
+	TestEqual(TEXT("M16 state kept"), Operative->GetAmmoState(TEXT("m16")).Clip, M16->Stats.Ammo.MagazineSize - 5);
 	TestTrue(TEXT("back to the M16"), Operative->SwitchToWeaponById(TEXT("m16")));
-	TestEqual(TEXT("M16 clip restored"), Operative->CurrentClip, M16->MaxClipSize - 5);
+	TestEqual(TEXT("M16 clip restored"), Operative->CurrentClip, M16->Stats.Ammo.MagazineSize - 5);
 
 	Operative->AddAmmo(TEXT("pistol"), 10);
 	Operative->AddAmmo(TEXT("m16"), 30);

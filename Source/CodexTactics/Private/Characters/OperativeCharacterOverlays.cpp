@@ -45,7 +45,7 @@ float AOperativeCharacter::GetVisionConeRange() const
 		return VisionConeRangeCm;
 	}
 	// What FindBestCombatTarget can reach (Godot: the cone range was the M16 range, 14 m; bug #39: the max reach, no stance bonus).
-	return CurrentWeapon->AttackRangeCm;
+	return CurrentWeapon->Stats.Range.MaxRangeCm;
 }
 
 float AOperativeCharacter::GetVisionConeHalfAngle() const
@@ -176,10 +176,10 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 	VisionCone->SetMergeGroup(TeamId + 1);
 	FVisionConeWeaponZone Zone;
 	const USquadSubsystem* SquadForZone = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-	if (IsPlayerTeam() && CurrentWeapon && CurrentWeapon->AttackRangeCm >= 500.f && (bGroupSelected || (SquadForZone && SquadForZone->GetLeader() == this)))
+	if (IsPlayerTeam() && CurrentWeapon && CurrentWeapon->Stats.Range.MaxRangeCm >= 500.f && (bGroupSelected || (SquadForZone && SquadForZone->GetLeader() == this)))
 	{
-		Zone.MaxCm = CurrentWeapon->AttackRangeCm;
-		Zone.EffectiveCm = WeaponRangeRules::ScaledEffectiveCm(CurrentWeapon->EffectiveRangeCm, CurrentWeapon->AttackRangeCm,
+		Zone.MaxCm = CurrentWeapon->Stats.Range.MaxRangeCm;
+		Zone.EffectiveCm = WeaponRangeRules::ScaledEffectiveCm(CurrentWeapon->Stats.Range.EffectiveRangeCm, CurrentWeapon->Stats.Range.MaxRangeCm,
 			SquadFireRules::GetPostureRangeMultiplier(Stance));
 	}
 	VisionCone->SetWeaponZone(Zone);

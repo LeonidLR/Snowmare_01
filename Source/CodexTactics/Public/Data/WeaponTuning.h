@@ -16,7 +16,8 @@ enum class EEnemyArchetype : uint8;
 /**
  * Weapon power tuned in the Wave Editor (user request 2026-10-04: per-weapon tabs — pistol, M16, grenades, ...).
  * Content/Data/Weapons/weapons_tuning.json is the master copy of the numbers (like the level JSON): the game mode
- * applies it at StartPlay onto the loaded DA_Weapon_* assets (in memory) and onto each operative's grenades.
+ * applies it at StartPlay onto the loaded DA_Weapon_* assets' Stats (the unified schema, UWeaponDataAsset::Stats; in memory,
+ * validated - docs/design/WEAPONS_FRAMEWORK.md) and onto each operative's grenades.
  * `CodexTactics.DumpWeaponTuning` writes the file from the current assets (the editor's starting point).
  * Units: metres and seconds (Godot / editor), converted to cm here.
  *
@@ -35,10 +36,30 @@ namespace WeaponTuning
 {
 	CODEXTACTICS_API FString GetDefaultPath();
 
-	/** Applies one weapon's object onto Weapon (missing keys keep the asset value). */
-	CODEXTACTICS_API void ApplyWeapon(const FJsonObject& Json, UWeaponDataAsset& Weapon);
-	/** The weapon's tunable values as a JSON object (the dump). */
+	/**
+	 * Applies one weapon's object onto Weapon.Stats through the unified schema (WeaponStatsRules::ApplyJson + Validate; missing keys
+	 * keep the current value). Invalid data (a wrong type, an unknown enum name, a failed validation rule) changes NOTHING and returns
+	 * false; the problems go to OutErrors, unknown keys (typos) to OutUnknown.
+	 */
+	CODEXTACTICS_API bool ApplyWeapon(const FJsonObject& Json, UWeaponDataAsset& Weapon, TArray<FString>* OutErrors = nullptr, TArray<FString>* OutUnknown = nullptr);
+	/** The weapon's Stats as a JSON object (every schema key + "name"; the dump). */
 	CODEXTACTICS_API TSharedRef<FJsonObject> WeaponToJson(const UWeaponDataAsset& Weapon);
+
+	/** What the last ApplyFile did with the "weapons" block (tests, the log). */
+	struct FWeaponTuningReport
+	{
+		/** The file's "schema_version" (1 when absent). */
+		int32 SchemaVersion = 1;
+		/** Weapons tuned. */
+		int32 Applied = 0;
+		/** Weapon ids whose block failed validation (they keep the asset's own values). */
+		TArray<FString> Rejected;
+		/** Every validation / type error, "<id>: <problem>". */
+		TArray<FString> Errors;
+		/** Unknown keys (ignored). */
+		TArray<FString> Unknown;
+	};
+	CODEXTACTICS_API const FWeaponTuningReport& GetLastReport();
 
 	/** Reads the file (cached for ApplyGrenades) and tunes every DA_Weapon_* in /Game/Data/Weapons; returns the count. */
 	CODEXTACTICS_API int32 ApplyFile(const FString& Path);

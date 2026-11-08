@@ -312,12 +312,12 @@ namespace QuickFireSmoke
 				Member->SwitchToWeaponById(TEXT("m16"));
 				if (Member->CurrentWeapon)
 				{
-					Member->CurrentClip = Member->CurrentWeapon->MaxClipSize;
+					Member->CurrentClip = Member->CurrentWeapon->Stats.Ammo.MagazineSize;
 				}
 				Member->bForceHitForTesting = true; // no spread, sure hits: deterministic
 			}
 			State.Burst = QuickFireRules::GetBurstRounds(Members[0]->UsesAmmo(), Members[0]->IsSniperWeaponEquipped(),
-				Members[0]->CurrentWeapon ? Members[0]->CurrentWeapon->MaxClipSize : 30, QuickFireRules::GetConfig());
+				Members[0]->CurrentWeapon ? Members[0]->CurrentWeapon->Stats.Ammo.MagazineSize : 30, QuickFireRules::GetConfig());
 			Check(State, State.Burst == 3, FString::Printf(TEXT("the M16 fires a %d-round burst"), State.Burst));
 			Squad->SetLeader(Members[0]);
 			GoTo(State, 10);

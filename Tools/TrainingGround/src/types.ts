@@ -123,6 +123,8 @@ export interface TurnBasedRulesTuning {
 
 export interface WeaponTuningFile {
   comment?: string;
+  /** 2 since the weapons framework (2026-11-08, docs/design/WEAPONS_FRAMEWORK.md: "kind" and more keys per weapon, kept as-is by this editor); absent = 1. */
+  schema_version?: number;
   weapons: Record<string, WeaponTuningEntry>;
   grenade: GrenadeTuning;
   turn_based_rules?: TurnBasedRulesTuning;

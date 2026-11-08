@@ -1964,7 +1964,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		const bool bHit = Result.bHit;
 		const int32 Damage = Result.Damage;
 		const FLinearColor Tracer = Weapon ? Weapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor();
-		const EDamageType DamageKind = Weapon ? Weapon->DamageType : EDamageType::Kinetic;
+		const EDamageType DamageKind = Weapon ? Weapon->Stats.Damage.DamageType : EDamageType::Kinetic;
 		Effects = [this, WeakUnit, WeakTarget, Cell, bHit, Damage, Chance, Roll, bThroughCover, bCoverShot, Tracer, DamageKind, ArcName, ArcMultiplier, ShooterName]()
 		{
 			AOperativeCharacter* Shooter = WeakUnit.Get();

@@ -199,7 +199,7 @@ namespace WeaponReachSmoke
 			State.Feet = FeetOf(*Leader);
 			Check(State, Leader->CurrentWeapon && Leader->CurrentWeapon->WeaponId == TEXT("m16"), FString::Printf(TEXT("the leader carries the M16 (%s: effective %.0f m, max %.0f m)"),
 				Leader->CurrentWeapon ? *Leader->CurrentWeapon->WeaponId : TEXT("none"), Leader->CurrentWeapon ? Leader->CurrentWeapon->GetEffectiveRangeCm() / 100.f : 0.f,
-				Leader->CurrentWeapon ? Leader->CurrentWeapon->AttackRangeCm / 100.f : 0.f));
+				Leader->CurrentWeapon ? Leader->CurrentWeapon->Stats.Range.MaxRangeCm / 100.f : 0.f));
 			// A ground line from his eye clear to 80 m (the three spots on it).
 			const FVector Eye = State.Feet + FVector(0.f, 0.f, SightRules::EyeHeight(EOperativeStance::Standing));
 			bool bFound = false;

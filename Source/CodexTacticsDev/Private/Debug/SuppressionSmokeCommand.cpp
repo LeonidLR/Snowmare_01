@@ -290,7 +290,7 @@ namespace SuppressionSmoke
 				Member->SwitchToWeaponById(TEXT("m16"));
 				if (Member->CurrentWeapon)
 				{
-					Member->CurrentClip = Member->CurrentWeapon->MaxClipSize;
+					Member->CurrentClip = Member->CurrentWeapon->Stats.Ammo.MagazineSize;
 				}
 				Member->ReserveAmmo = 100;
 				Member->HealthComponent->SetMaxHealth(100000.f);
@@ -305,7 +305,7 @@ namespace SuppressionSmoke
 			}
 			Squad->SetLeader(Members[0]);
 			Check(State, Members[0]->CurrentWeapon && Members[0]->CurrentWeapon->HasFullAuto(),
-				FString::Printf(TEXT("the M16 has full-auto (interval %.2f s, data: weapons_tuning.json)"), Members[0]->CurrentWeapon ? Members[0]->CurrentWeapon->FullAutoInterval : 0.f));
+				FString::Printf(TEXT("the M16 has full-auto (interval %.2f s, data: weapons_tuning.json)"), Members[0]->CurrentWeapon ? Members[0]->CurrentWeapon->Stats.Fire.FullAutoIntervalSeconds : 0.f));
 			Marksman = Cast<AMarksmanEnemyCharacter>(World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Marksman,
 				State.P + State.F * 1400.f + FVector(0.f, 0.f, 100.f), (-State.F).Rotation()));
 			Check(State, Marksman != nullptr, TEXT("a marksman 14 m out"));
@@ -369,7 +369,7 @@ namespace SuppressionSmoke
 				FString::Printf(TEXT("A: the marksman is SUPPRESSED %.1f s into the order (level %.2f)"), Elapsed, Suppression->GetLevel(Marksman)));
 			Check(State, Commander->GetFullAutoRoundsFired() - State.FullAutoBefore == Rounds && Rounds > 0,
 				FString::Printf(TEXT("A: every round on full-auto (%d)"), Rounds));
-			const float NormalRate = 1.f / FMath::Max(0.1f, Commander->CurrentWeapon ? Commander->CurrentWeapon->FireRate : 0.65f);
+			const float NormalRate = 1.f / FMath::Max(0.1f, Commander->CurrentWeapon ? Commander->CurrentWeapon->Stats.Fire.ShotIntervalSeconds : 0.65f);
 			Check(State, Elapsed > 0.f && Rounds / Elapsed >= 2.f * NormalRate,
 				FString::Printf(TEXT("A: lots of ammo - %.1f rounds/s vs %.1f of the normal fire"), Elapsed > 0.f ? Rounds / Elapsed : 0.f, NormalRate));
 			Check(State, State.AmmoBefore - Ammo(Commander) >= Rounds, FString::Printf(TEXT("A: the ammo went (%d -> %d)"), State.AmmoBefore, Ammo(Commander)));

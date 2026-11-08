@@ -70,7 +70,7 @@ void AOperativeCharacter::EndCornerAim(ECornerAimDecision Reason, const TCHAR* W
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: breaks the corner aim: %s (%s)"), *DisplayName.ToString(),
 		CoverDecisionRules::CornerAimDecisionName(Reason), Why);
 	if (Reason == ECornerAimDecision::DuckToReload && !bIsReloading && UsesAmmo() && ReserveAmmo > 0
-		&& CurrentClip < (CurrentWeapon ? CurrentWeapon->MaxClipSize : 30))
+		&& CurrentClip < (CurrentWeapon ? CurrentWeapon->Stats.Ammo.MagazineSize : 30))
 	{
 		StartReload(); // reload behind the corner (the AnimInstance plays the fire -> idle exit, then the reload)
 	}
@@ -82,7 +82,7 @@ FCornerAimSituation AOperativeCharacter::GatherCornerAimSituation() const
 	FCornerAimSituation Situation;
 	UWorld* World = GetWorld();
 	const double Now = World ? World->GetTimeSeconds() : 0.0;
-	const int32 MaxClip = FMath::Max(1, CurrentWeapon ? CurrentWeapon->MaxClipSize : 30);
+	const int32 MaxClip = FMath::Max(1, CurrentWeapon ? CurrentWeapon->Stats.Ammo.MagazineSize : 30);
 	Situation.ClipFraction = UsesAmmo() ? static_cast<float>(CurrentClip) / MaxClip : 1.f;
 	Situation.bHasReserve = !UsesAmmo() || ReserveAmmo > 0;
 	Situation.SecondsWithoutTarget = static_cast<float>(FMath::Max(0.0, Now - CornerAimLastTargetTime));

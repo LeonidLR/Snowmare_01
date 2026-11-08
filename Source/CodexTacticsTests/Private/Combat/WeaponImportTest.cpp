@@ -19,23 +19,23 @@ bool FWeaponImportParityTest::RunTest(const FString&)
 	}
 	// rifle_m16.tres
 	TestEqual(TEXT("M16 name"), M16->WeaponName.ToString(), FString(TEXT("M16A2 Assault Rifle")));
-	TestEqual(TEXT("M16 damage"), M16->BaseDamage, 18.f);
+	TestEqual(TEXT("M16 damage"), M16->Stats.Damage.BaseDamage, 18.f);
 	// Range 14 -> 25 m, grid 5 -> 8 cells, hit table over 25 m (user decision 2026-10-11, weapons_tuning.json written onto
 	// the asset by Scripts/Editor/apply_weapon_tuning.py).
 	// Since c8af1c6d (user 2026-11-04, ranged fights): 60 m.
-	TestEqual(TEXT("M16 range 60 m"), M16->AttackRangeCm, 6000.f);
-	TestEqual(TEXT("M16 grid range 8 cells"), M16->MaxRangeCells, 8);
-	TestEqual(TEXT("M16 clip"), M16->MaxClipSize, 30);
-	TestEqual(TEXT("M16 reload"), M16->ReloadTime, 2.68f);
-	TestEqual(TEXT("M16 hit curve"), M16->BaseHitChances.Num(), 17);
+	TestEqual(TEXT("M16 range 60 m"), M16->Stats.Range.MaxRangeCm, 6000.f);
+	TestEqual(TEXT("M16 grid range 8 cells"), M16->Stats.TurnBased.MaxRangeCells, 8);
+	TestEqual(TEXT("M16 clip"), M16->Stats.Ammo.MagazineSize, 30);
+	TestEqual(TEXT("M16 reload"), M16->Stats.Ammo.ReloadSeconds, 2.68f);
+	TestEqual(TEXT("M16 hit curve"), M16->Stats.Accuracy.HitChanceByCell.Num(), 17);
 	TestEqual(TEXT("M16 3 cells"), M16->GetHitChanceForDistance(3), 0.75f);
-	TestTrue(TEXT("M16 8 rays"), M16->AttackShape == EAttackShape::Rays8);
+	TestTrue(TEXT("M16 8 rays"), M16->Stats.TurnBased.AttackShape == EAttackShape::Rays8);
 	// pistol_beretta.tres: 4 rays, infinite reserve (-1)
-	TestTrue(TEXT("Pistol 4 rays"), Pistol->AttackShape == EAttackShape::Rays4);
-	TestEqual(TEXT("Pistol reserve -1"), Pistol->DefaultReserveAmmo, -1);
+	TestTrue(TEXT("Pistol 4 rays"), Pistol->Stats.TurnBased.AttackShape == EAttackShape::Rays4);
+	TestEqual(TEXT("Pistol reserve -1"), Pistol->Stats.Ammo.ReserveAmmo, -1);
 	// plasma_carbine.tres: energy + SHOCKED (mapped by name)
-	TestTrue(TEXT("Plasma energy"), Plasma->DamageType == EDamageType::Energy);
-	TestTrue(TEXT("Plasma shocked"), Plasma->StatusEffect == EStatusEffect::Shocked);
+	TestTrue(TEXT("Plasma energy"), Plasma->Stats.Damage.DamageType == EDamageType::Energy);
+	TestTrue(TEXT("Plasma shocked"), Plasma->Stats.Status.Effect == EStatusEffect::Shocked);
 	return true;
 }
 

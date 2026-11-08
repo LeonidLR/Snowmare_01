@@ -877,7 +877,7 @@ bool UPlaytestBotSubsystem::AssaultMarksman()
 	{
 		return false;
 	}
-	const float Reach = Leader->CurrentWeapon ? Leader->CurrentWeapon->AttackRangeCm : 1400.f;
+	const float Reach = Leader->CurrentWeapon ? Leader->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	const float ClearRadius = CVarClearRadius.GetValueOnGameThread();
 	const AMarksmanEnemyCharacter* Nearest = nullptr;
 	float NearestDistance = TNumericLimits<float>::Max();
@@ -1334,7 +1334,7 @@ bool UPlaytestBotSubsystem::TickStealth(float DeltaTime, bool bExploring)
 
 	Input.bHasTarget = Target != nullptr;
 	Input.TargetDistanceCm = Target ? FVector::Dist2D(LeaderLocation, Target->GetActorLocation()) : TNumericLimits<float>::Max();
-	Input.RifleRangeCm = Leader->CurrentWeapon ? Leader->CurrentWeapon->AttackRangeCm : 1400.f;
+	Input.RifleRangeCm = Leader->CurrentWeapon ? Leader->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	Input.bLeaderInCover = Leader->bInCover || Leader->IsBehindBarricade();
 	Input.ElapsedSeconds = static_cast<float>(Now - StealthStartTime);
 	Input.bTrapPending = TrapState == 3;

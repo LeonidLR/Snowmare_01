@@ -104,9 +104,9 @@ float TurnBasedRules::GetDamageForDistance(const UWeaponDataAsset* Weapon, int32
 	{
 		return FallbackDamage;
 	}
-	const TArray<float>& Multipliers = Weapon->DistanceDamageMultipliers;
+	const TArray<float>& Multipliers = Weapon->Stats.Accuracy.DamageMultiplierByCell;
 	const float Multiplier = Multipliers.IsEmpty() ? 1.f : Multipliers[FMath::Clamp(DistanceCells - 1, 0, Multipliers.Num() - 1)];
-	return Weapon->BaseDamage * Multiplier;
+	return Weapon->Stats.Damage.BaseDamage * Multiplier;
 }
 
 bool TurnBasedRules::IsTargetInPattern(const UWeaponDataAsset* Weapon, const FIntPoint& Offset)
@@ -116,12 +116,12 @@ bool TurnBasedRules::IsTargetInPattern(const UWeaponDataAsset* Weapon, const FIn
 		return false;
 	}
 	const int32 Distance = FMath::Max(FMath::Abs(Offset.X), FMath::Abs(Offset.Y));
-	const int32 MaxRange = Weapon ? Weapon->MaxRangeCells : 5;
+	const int32 MaxRange = Weapon ? Weapon->Stats.TurnBased.MaxRangeCells : 5;
 	if (Distance > MaxRange)
 	{
 		return false;
 	}
-	switch (Weapon ? Weapon->AttackShape : EAttackShape::Rays8)
+	switch (Weapon ? Weapon->Stats.TurnBased.AttackShape : EAttackShape::Rays8)
 	{
 	case EAttackShape::Rays8:
 		return Offset.X == 0 || Offset.Y == 0 || FMath::Abs(Offset.X) == FMath::Abs(Offset.Y);
@@ -170,8 +170,8 @@ TMap<FIntPoint, FTurnBasedAttackCell> TurnBasedRules::GetWeaponAttackCells(const
 	const UWeaponDataAsset* Weapon, EOperativeStance Stance, const FTurnBasedBalance& Balance)
 {
 	TMap<FIntPoint, FTurnBasedAttackCell> Result;
-	const EAttackShape Shape = Weapon ? Weapon->AttackShape : EAttackShape::Rays8;
-	const int32 MaxRange = Weapon ? Weapon->MaxRangeCells : 5;
+	const EAttackShape Shape = Weapon ? Weapon->Stats.TurnBased.AttackShape : EAttackShape::Rays8;
+	const int32 MaxRange = Weapon ? Weapon->Stats.TurnBased.MaxRangeCells : 5;
 	switch (Shape)
 	{
 	case EAttackShape::Rays8:

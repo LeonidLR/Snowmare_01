@@ -3,6 +3,7 @@
 > Real-time squad fire follows Godot `player.gd`; Ctrl + click is either a targeted shot (`IssueTargetedShot`) or area quick fire (`IssueQuickFire`).
 > Fire postures (Passive / Defensive / Aggressive) decide automatic fire. Turn-based combat runs on the Gorky grid (`TurnBasedCombatSubsystem`).
 > Knockdown values and weapon tuning live in data (`Content/Data/Weapons/weapons_tuning.json`, `Codex.Knockdown.*` CVars).
+> Since 2026-11-08 every weapon number is read through the unified schema `UWeaponDataAsset::Stats` - see [weapons](weapons.md).
 >
 > Key files:
 > - `Combat/TargetedShotRules`, `QuickFireRules`, `Characters/FirePostureRules`, `Combat/CombatFeedbackSubsystem`, `HealthComponent`, `Tactics/TurnBasedCombatSubsystem`, `GorkyGridManager`

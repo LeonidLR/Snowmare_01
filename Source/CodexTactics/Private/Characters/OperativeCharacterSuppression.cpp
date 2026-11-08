@@ -45,7 +45,7 @@ void AOperativeCharacter::ReportOwnRound(const FVector& Start, const FVector& En
 	Round.bHitTarget = bHit;
 	Round.bStruckCover = bStruckCover;
 	Round.Weapon = GetOwnRoundClass(bFullAuto);
-	Round.WeightScale = CurrentWeapon ? CurrentWeapon->SuppressionWeight : 1.f;
+	Round.WeightScale = CurrentWeapon ? CurrentWeapon->Stats.Fire.SuppressionWeight : 1.f;
 	USuppressionSubsystem::Report(this, Round);
 }
 
@@ -266,8 +266,8 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	FOperativeAreaRound Spec;
 	Spec.SpreadDeg = SuppressionRules::GetOrderSpreadDeg(Config, StanceIndex);
 	Spec.HitMultiplier = Config.OrderHitMultiplier;
-	Spec.NextRoundDelay = SuppressionRules::NextOrderRoundDelay(Config, CurrentWeapon ? CurrentWeapon->FireRate : 0.65f,
-		CurrentWeapon ? CurrentWeapon->FullAutoInterval : 0.f, SuppressBurstCount);
+	Spec.NextRoundDelay = SuppressionRules::NextOrderRoundDelay(Config, CurrentWeapon ? CurrentWeapon->Stats.Fire.ShotIntervalSeconds : 0.65f,
+		CurrentWeapon ? CurrentWeapon->Stats.Fire.FullAutoIntervalSeconds : 0.f, SuppressBurstCount);
 	Spec.bFullAuto = bFullAuto;
 	Spec.LogTag = TEXT("Suppress");
 	const float MisfireBefore = MisfireCooldownTimer;

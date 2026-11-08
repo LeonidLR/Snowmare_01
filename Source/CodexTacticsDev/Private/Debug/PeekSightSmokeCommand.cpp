@@ -332,7 +332,7 @@ namespace PeekSightSmoke
 			AActor* Pick = Op->FindBestCombatTarget();
 			Check(State, bSeen40 && Distance40 >= 3800.f, FString::Printf(TEXT("#32: peeking, a target %.0f m out is SEEN"), Distance40 / 100.f));
 			Check(State, Op->CanHitEnemy(Walker) && Pick == Walker, FString::Printf(TEXT("#32: ... and engaged - a shot line from the corner, his combat pick (%s, weapon reach %.0f m)"),
-				Pick ? *Pick->GetName() : TEXT("none"), Op->CurrentWeapon ? Op->CurrentWeapon->AttackRangeCm / 100.f : -1.f));
+				Pick ? *Pick->GetName() : TEXT("none"), Op->CurrentWeapon ? Op->CurrentWeapon->Stats.Range.MaxRangeCm / 100.f : -1.f));
 			Check(State, PlaceWalkerAndLook(State, Sight, 1015.f, 350.f), TEXT("back round the corner: seen again"));
 			Next(State, 4);
 			return true;

@@ -676,7 +676,7 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		const FText Name = Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponName : FText::FromString(WeaponId);
-		const int32 Damage = Leader->CurrentWeapon ? FMath::FloorToInt(Leader->CurrentWeapon->BaseDamage) : 0;
+		const int32 Damage = Leader->CurrentWeapon ? FMath::FloorToInt(Leader->CurrentWeapon->Stats.Damage.BaseDamage) : 0;
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Equipped", "🔫 Equipped: {0} (Damage: {1})"), Name, Damage));
 	}
 	// Godot: the grenade starts the throw aim (outside turn-based combat the grid does not take the click).

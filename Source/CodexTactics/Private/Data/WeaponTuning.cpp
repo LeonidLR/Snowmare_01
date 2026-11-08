@@ -12,6 +12,7 @@
 #include "Vehicles/VehicleHullRules.h"
 #include "CodexTactics.h"
 #include "Data/WeaponDataAsset.h"
+#include "Data/WeaponStatsRules.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
@@ -33,6 +34,7 @@ namespace WeaponTuning
 		TSharedPtr<FJsonObject> VehicleTurretBlock;
 		TSharedPtr<FJsonObject> VehicleRamBlock;
 		TSharedPtr<FJsonObject> VehicleHullBlock;
+		FWeaponTuningReport LastWeaponReport;
 
 		void Number(const FJsonObject& Json, const TCHAR* Key, float& Value, float Scale = 1.f)
 		{
@@ -50,29 +52,6 @@ namespace WeaponTuning
 			{
 				Value = FMath::RoundToInt(Read);
 			}
-		}
-
-		void Floats(const FJsonObject& Json, const TCHAR* Key, TArray<float>& Values)
-		{
-			const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;
-			if (Json.TryGetArrayField(Key, Array) && Array)
-			{
-				Values.Reset();
-				for (const TSharedPtr<FJsonValue>& Value : *Array)
-				{
-					Values.Add(Value.IsValid() ? static_cast<float>(Value->AsNumber()) : 0.f);
-				}
-			}
-		}
-
-		TArray<TSharedPtr<FJsonValue>> ToArray(const TArray<float>& Values)
-		{
-			TArray<TSharedPtr<FJsonValue>> Out;
-			for (const float Value : Values)
-			{
-				Out.Add(MakeShared<FJsonValueNumber>(FMath::RoundToFloat(Value * 1000.f) / 1000.f));
-			}
-			return Out;
 		}
 
 		/** 4 decimals: no float noise (0.6499999) in the file the user edits. */
@@ -103,45 +82,35 @@ namespace WeaponTuning
 		return FPaths::ProjectContentDir() / TEXT("Data/Weapons/weapons_tuning.json");
 	}
 
-	void ApplyWeapon(const FJsonObject& Json, UWeaponDataAsset& Weapon)
+	bool ApplyWeapon(const FJsonObject& Json, UWeaponDataAsset& Weapon, TArray<FString>* OutErrors, TArray<FString>* OutUnknown)
 	{
-		Number(Json, TEXT("base_damage"), Weapon.BaseDamage);
-		Number(Json, TEXT("attack_range_m"), Weapon.AttackRangeCm, 100.f);
-		Number(Json, TEXT("effective_range_m"), Weapon.EffectiveRangeCm, 100.f); // bug #39
-		Number(Json, TEXT("fire_rate"), Weapon.FireRate);
-		Number(Json, TEXT("armor_penetration"), Weapon.ArmorPenetration);
-		Integer(Json, TEXT("max_clip_size"), Weapon.MaxClipSize);
-		Integer(Json, TEXT("default_reserve_ammo"), Weapon.DefaultReserveAmmo);
-		Number(Json, TEXT("reload_time"), Weapon.ReloadTime);
-		Number(Json, TEXT("status_duration"), Weapon.StatusDuration);
-		Number(Json, TEXT("status_tick_damage"), Weapon.StatusTickDamage);
-		Integer(Json, TEXT("max_range_cells"), Weapon.MaxRangeCells);
-		Number(Json, TEXT("full_auto_interval"), Weapon.FullAutoInterval); // suppressive fire (2026-10-26)
-		Number(Json, TEXT("suppression_weight"), Weapon.SuppressionWeight);
-		Floats(Json, TEXT("base_hit_chances"), Weapon.BaseHitChances);
-		Floats(Json, TEXT("distance_damage_multipliers"), Weapon.DistanceDamageMultipliers);
+		// The schema (WeaponStatsRules) parses onto a copy; only valid data replaces the weapon's stats.
+		FWeaponStats Tuned = Weapon.Stats;
+		TArray<FString> Errors;
+		WeaponStatsRules::ApplyJson(Json, Tuned, OutUnknown, &Errors);
+		WeaponStatsRules::Validate(Tuned, Errors, Weapon.WeaponId);
+		if (OutErrors)
+		{
+			OutErrors->Append(Errors);
+		}
+		if (Errors.Num() > 0)
+		{
+			return false;
+		}
+		Weapon.Stats = MoveTemp(Tuned);
+		return true;
 	}
 
 	TSharedRef<FJsonObject> WeaponToJson(const UWeaponDataAsset& Weapon)
 	{
-		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+		TSharedRef<FJsonObject> Json = WeaponStatsRules::ToJson(Weapon.Stats);
 		Json->SetStringField(TEXT("name"), Weapon.WeaponName.ToString());
-		Json->SetNumberField(TEXT("base_damage"), Round4(Weapon.BaseDamage));
-		Json->SetNumberField(TEXT("attack_range_m"), Round4(Weapon.AttackRangeCm / 100.f));
-		Json->SetNumberField(TEXT("effective_range_m"), Round4(Weapon.EffectiveRangeCm / 100.f));
-		Json->SetNumberField(TEXT("fire_rate"), Round4(Weapon.FireRate));
-		Json->SetNumberField(TEXT("armor_penetration"), Round4(Weapon.ArmorPenetration));
-		Json->SetNumberField(TEXT("max_clip_size"), Round4(Weapon.MaxClipSize));
-		Json->SetNumberField(TEXT("default_reserve_ammo"), Round4(Weapon.DefaultReserveAmmo));
-		Json->SetNumberField(TEXT("reload_time"), Round4(Weapon.ReloadTime));
-		Json->SetNumberField(TEXT("status_duration"), Round4(Weapon.StatusDuration));
-		Json->SetNumberField(TEXT("status_tick_damage"), Round4(Weapon.StatusTickDamage));
-		Json->SetNumberField(TEXT("max_range_cells"), Round4(Weapon.MaxRangeCells));
-		Json->SetNumberField(TEXT("full_auto_interval"), Round4(Weapon.FullAutoInterval));
-		Json->SetNumberField(TEXT("suppression_weight"), Round4(Weapon.SuppressionWeight));
-		Json->SetArrayField(TEXT("base_hit_chances"), ToArray(Weapon.BaseHitChances));
-		Json->SetArrayField(TEXT("distance_damage_multipliers"), ToArray(Weapon.DistanceDamageMultipliers));
 		return Json;
+	}
+
+	const FWeaponTuningReport& GetLastReport()
+	{
+		return LastWeaponReport;
 	}
 
 	int32 ApplyFile(const FString& Path)
@@ -149,12 +118,15 @@ namespace WeaponTuning
 		GrenadeBlock.Reset();
 		MarksmanRifleBlock.Reset();
 		TurnRulesBlock.Reset();
+		LastWeaponReport = FWeaponTuningReport();
 		FString Text;
 		TSharedPtr<FJsonObject> Root;
 		if (!FFileHelper::LoadFileToString(Text, *Path) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid())
 		{
 			return 0;
 		}
+		double FileSchema = 1.0;
+		LastWeaponReport.SchemaVersion = Root->TryGetNumberField(TEXT("schema_version"), FileSchema) ? FMath::RoundToInt(FileSchema) : 1;
 		const TSharedPtr<FJsonObject>* Grenade = nullptr;
 		if (Root->TryGetObjectField(TEXT("grenade"), Grenade) && Grenade)
 		{
@@ -224,15 +196,34 @@ namespace WeaponTuning
 			}
 			if (Weapon)
 			{
-				ApplyWeapon(**Object, *Weapon);
-				++Applied;
+				// Stats = the asset's base + this file (not on top of an earlier run's tuning: a key removed from the file reverts).
+				Weapon->RebuildStatsFromAsset();
+				TArray<FString> Errors;
+				TArray<FString> Unknown;
+				if (ApplyWeapon(**Object, *Weapon, &Errors, &Unknown))
+				{
+					++Applied;
+				}
+				else
+				{
+					LastWeaponReport.Rejected.Add(Entry.Key);
+					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" REJECTED, the asset's own values stay: %s"), *Entry.Key, *FString::Join(Errors, TEXT("; ")));
+				}
+				for (const FString& Key : Unknown)
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" has an unknown key \"%s\" (ignored; typo?)"), *Entry.Key, *Key);
+				}
+				LastWeaponReport.Errors.Append(Errors);
+				LastWeaponReport.Unknown.Append(Unknown);
 			}
 			else
 			{
 				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: no weapon asset for \"%s\""), *Entry.Key);
 			}
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Weapon tuning: %d weapons%s from %s"), Applied, GrenadeBlock.IsValid() ? TEXT(" + grenades") : TEXT(""), *Path);
+		LastWeaponReport.Applied = Applied;
+		UE_LOG(LogCodexTactics, Display, TEXT("Weapon tuning: %d weapons%s from %s (schema v%d, %d rejected)"), Applied, GrenadeBlock.IsValid() ? TEXT(" + grenades") : TEXT(""),
+			*Path, LastWeaponReport.SchemaVersion, LastWeaponReport.Rejected.Num());
 		return Applied;
 	}
 
@@ -373,6 +364,7 @@ namespace WeaponTuning
 	{
 		TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
 		Root->SetStringField(TEXT("comment"), TEXT("Weapon power (Wave Editor \"Weapons\"). Applied at game start onto DA_Weapon_* and the squad's grenades. Metres / seconds."));
+		Root->SetNumberField(TEXT("schema_version"), WeaponStatsRules::SchemaVersion);
 		TSharedRef<FJsonObject> Weapons = MakeShared<FJsonObject>();
 		TArray<UWeaponDataAsset*> All = LoadWeapons();
 		All.Sort([](const UWeaponDataAsset& A, const UWeaponDataAsset& B) { return A.WeaponId < B.WeaponId; });

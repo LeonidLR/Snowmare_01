@@ -82,7 +82,7 @@ bool AOperativeCharacter::OrderQuickFire(const FVector& Point, AActor* Enemy)
 		return false;
 	}
 	const FQuickFireConfig& Config = QuickFireRules::GetConfig();
-	const int32 Rounds = QuickFireRules::GetBurstRounds(UsesAmmo(), IsSniperWeaponEquipped(), CurrentWeapon ? CurrentWeapon->MaxClipSize : 30, Config);
+	const int32 Rounds = QuickFireRules::GetBurstRounds(UsesAmmo(), IsSniperWeaponEquipped(), CurrentWeapon ? CurrentWeapon->Stats.Ammo.MagazineSize : 30, Config);
 	if (Rounds <= 0)
 	{
 		return false;
@@ -288,7 +288,7 @@ void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 	FOperativeAreaRound Spec;
 	Spec.SpreadDeg = QuickFireRules::GetSpreadDeg(StanceIndex, Config);
 	Spec.HitMultiplier = Config.AreaFireHitMultiplier;
-	Spec.NextRoundDelay = FMath::Max(0.08f, CurrentWeapon ? CurrentWeapon->FireRate : 0.65f);
+	Spec.NextRoundDelay = FMath::Max(0.08f, CurrentWeapon ? CurrentWeapon->Stats.Fire.ShotIntervalSeconds : 0.65f);
 	Spec.LogTag = TEXT("QuickFire");
 	FireAreaRound(Aim, Spec);
 }
@@ -346,7 +346,7 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 		const float SpreadRad = FMath::DegreesToRadians(FMath::Clamp(Spec.SpreadDeg * Suppressed.SpreadMultiplier, 0.f, 45.f));
 		Direction = FMath::VRandCone(Direction / Length, SpreadRad) * Length;
 	}
-	const float Range = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f;
+	const float Range = CurrentWeapon ? CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	const FVector End = QuickFireRules::ComputeRoundEnd(Muzzle, Muzzle + Direction, Range, Config);
 
 	// The world (walls, ground, barrels, mines) by the visibility trace; the squad never (no friendly fire, as every squad shot);
@@ -432,7 +432,7 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 	if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
 	{
 		Feedback->SpawnTracer(GetWeaponMuzzleLocation(), TracerEnd, CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
-			CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic);
+			CurrentWeapon ? CurrentWeapon->Stats.Damage.DamageType : EDamageType::Kinetic);
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[%s] %s: round to (%.0f, %.0f, %.0f) -> %s%s%s"), Spec.LogTag, *DisplayName.ToString(), TracerEnd.X,
 		TracerEnd.Y, TracerEnd.Z, Struck ? *Struck->GetName() : (bBlocked && Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("nothing")),

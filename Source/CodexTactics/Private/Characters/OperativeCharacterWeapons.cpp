@@ -27,8 +27,8 @@ void AOperativeCharacter::EquipWeapon(UWeaponDataAsset* NewWeapon)
 	CurrentWeapon = NewWeapon;
 	if (CurrentWeapon)
 	{
-		CurrentClip = CurrentWeapon->MaxClipSize;
-		ReserveAmmo = CurrentWeapon->DefaultReserveAmmo;
+		CurrentClip = CurrentWeapon->Stats.Ammo.MagazineSize;
+		ReserveAmmo = CurrentWeapon->Stats.Ammo.ReserveAmmo;
 	}
 	bIsReloading = false;
 	ReloadTimer = 0.0f;
@@ -55,7 +55,7 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 		}
 		else
 		{
-			Ammo.Clip = Weapon->MaxClipSize;
+			Ammo.Clip = Weapon->Stats.Ammo.MagazineSize;
 			Ammo.Reserve = Weapon->WeaponId == TEXT("m16") ? RifleReserve : (Weapon->WeaponId == TEXT("pistol") ? 24 : 0);
 		}
 	}
@@ -170,7 +170,7 @@ int32 AOperativeCharacter::TakeReserve(const FString& WeaponId, int32 Max)
 
 bool AOperativeCharacter::UsesAmmo() const
 {
-	return !CurrentWeapon || CurrentWeapon->bUsesAmmo;
+	return !CurrentWeapon || CurrentWeapon->Stats.Ammo.bUsesAmmo;
 }
 
 void AOperativeCharacter::StartReload()
@@ -180,14 +180,14 @@ void AOperativeCharacter::StartReload()
 		return;
 	}
 
-	const int32 MaxClip = CurrentWeapon ? CurrentWeapon->MaxClipSize : 30;
+	const int32 MaxClip = CurrentWeapon ? CurrentWeapon->Stats.Ammo.MagazineSize : 30;
 	if (CurrentClip >= MaxClip)
 	{
 		return;
 	}
 
 	bIsReloading = true;
-	ReloadTimer = CurrentWeapon ? CurrentWeapon->ReloadTime : 2.0f;
+	ReloadTimer = CurrentWeapon ? CurrentWeapon->Stats.Ammo.ReloadSeconds : 2.0f;
 
 	// Godot start_reload: radio callout asking for cover.
 	static const TCHAR* Callouts[] = {

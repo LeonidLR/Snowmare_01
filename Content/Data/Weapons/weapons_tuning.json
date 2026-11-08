@@ -1,5 +1,6 @@
 {
-  "comment": "Weapon power (Wave Editor «Оружие»). Applied at game start onto DA_Weapon_* and the squad's grenades. Metres / seconds.",
+  "comment": "Weapon power (Wave Editor «Оружие»). Applied at game start onto DA_Weapon_* Stats (the unified weapon schema, docs/design/WEAPONS_FRAMEWORK.md; validated, an invalid weapon block is rejected) and the squad's grenades. Metres / seconds.",
+  "schema_version": 2,
   "range_falloff": {
     "comment": "bug #39: hit chance x1 up to a weapon's effective_range_m, falling to floor_multiplier at its attack_range_m (the max reach; no shot beyond), eased by exponent (2 = steep right past the effective range)",
     "floor_multiplier": 0.1,
@@ -8,6 +9,7 @@
   "weapons": {
     "cryo_emitter": {
       "name": "Absolute Cryo Emitter",
+      "kind": "beam",
       "base_damage": 16,
       "attack_range_m": 10.5,
       "effective_range_m": 7,
@@ -32,6 +34,7 @@
     },
     "flamethrower": {
       "name": "Prometheus Flamethrower",
+      "kind": "beam",
       "base_damage": 32,
       "attack_range_m": 8.5,
       "effective_range_m": 6,
@@ -56,6 +59,7 @@
     },
     "grenade": {
       "name": "Hand Grenade",
+      "kind": "thrown",
       "base_damage": 85,
       "attack_range_m": 12,
       "fire_rate": 1,
@@ -79,6 +83,7 @@
     },
     "hammer": {
       "name": "Heavy Sledgehammer",
+      "kind": "melee",
       "base_damage": 65,
       "attack_range_m": 2.2,
       "fire_rate": 1.25,
@@ -102,6 +107,7 @@
     },
     "knife": {
       "name": "Tactical Knife",
+      "kind": "melee",
       "base_damage": 22,
       "attack_range_m": 2,
       "fire_rate": 0.35,
@@ -125,6 +131,7 @@
     },
     "m16": {
       "name": "M16A2 Assault Rifle",
+      "kind": "hitscan",
       "base_damage": 18,
       "attack_range_m": 60,
       "effective_range_m": 28,
@@ -179,6 +186,7 @@
     },
     "pistol": {
       "name": "Beretta Pistol",
+      "kind": "hitscan",
       "base_damage": 16,
       "attack_range_m": 25,
       "effective_range_m": 15,
@@ -211,6 +219,7 @@
     },
     "plasma_carbine": {
       "name": "Spectre Plasma Carbine",
+      "kind": "hitscan",
       "base_damage": 28,
       "attack_range_m": 16,
       "effective_range_m": 10,
@@ -235,6 +244,7 @@
     },
     "shotgun": {
       "name": "Remington 870 Shotgun",
+      "kind": "hitscan",
       "base_damage": 45,
       "attack_range_m": 15,
       "effective_range_m": 8,
@@ -259,6 +269,7 @@
     },
     "sniper_rifle": {
       "name": "Sniper Rifle",
+      "kind": "hitscan",
       "base_damage": 70,
       "attack_range_m": 120,
       "effective_range_m": 90,

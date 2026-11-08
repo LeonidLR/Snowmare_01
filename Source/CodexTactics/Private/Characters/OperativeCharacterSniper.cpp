@@ -161,8 +161,8 @@ void AOperativeCharacter::AddArsenalWeapon(UWeaponDataAsset* Weapon, int32 Reser
 	// Right after the main rifle: X goes M16 -> this weapon -> pistol -> ... (the grenade aim stays further down the cycle).
 	AvailableWeapons.Insert(Weapon, FMath::Min(1, AvailableWeapons.Num()));
 	FWeaponAmmoState& Ammo = AmmoInventory.FindOrAdd(Weapon->WeaponId);
-	Ammo.Clip = Weapon->MaxClipSize;
-	Ammo.Reserve = Reserve < 0 ? FMath::Max(0, Weapon->DefaultReserveAmmo) : Reserve;
+	Ammo.Clip = Weapon->Stats.Ammo.MagazineSize;
+	Ammo.Reserve = Reserve < 0 ? FMath::Max(0, Weapon->Stats.Ammo.ReserveAmmo) : Reserve;
 	if (const int32* Extra = ExtraAmmo.Find(FName(*Weapon->WeaponId)))
 	{
 		Ammo.Reserve += *Extra;

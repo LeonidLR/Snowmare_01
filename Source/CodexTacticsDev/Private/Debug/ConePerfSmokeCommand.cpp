@@ -546,7 +546,7 @@ namespace ConePerfSmoke
 			{
 				const UVisionConeComponent& Cone = *Leader->VisionCone;
 				Check(State, FMath::IsNearlyEqual(Cone.GetWeaponEffectiveCm(), Leader->CurrentWeapon->GetEffectiveRangeCm(), 1.f)
-					&& FMath::IsNearlyEqual(Cone.GetWeaponMaxCm(), Leader->CurrentWeapon->AttackRangeCm, 1.f) && Cone.GetWeaponZoneVertexCount() > 0,
+					&& FMath::IsNearlyEqual(Cone.GetWeaponMaxCm(), Leader->CurrentWeapon->Stats.Range.MaxRangeCm, 1.f) && Cone.GetWeaponZoneVertexCount() > 0,
 					FString::Printf(TEXT("the leader's cone shows the %s zone: edge %.0f m, band to %.0f m (%d vertices)"), *Leader->CurrentWeapon->WeaponId,
 						Cone.GetWeaponEffectiveCm() / 100.f, Cone.GetWeaponMaxCm() / 100.f, Cone.GetWeaponZoneVertexCount()));
 			}
