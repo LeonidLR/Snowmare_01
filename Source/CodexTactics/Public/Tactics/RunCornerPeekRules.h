@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Formation/FormationPeekCarryRules.h"
+#include "Tactics/CoverTypes.h"
 
 /**
  * Run-and-peek (#55, user request 2026-11-07: "the peek works only after hugging the wall first - that badly hurts the pace of the fight; I
@@ -79,6 +80,24 @@ namespace RunCornerPeekRules
 	/** Normal is a face not in Known yet (no known normal within SameFaceDot of it). Planar unit normals. */
 	CODEXTACTICS_API bool IsNewFace(const TArray<FVector2D>& Known, const FVector2D& Normal);
 
+	/**
+	 * Only cover tall enough to peek round its side is a run-and-peek (the game designer's PIE 2026-11-08, L_Gen_Depot_1's low cubes: the
+	 * corner man ran to a low cube's corner, the two others "stacked behind" a cube with no room and stood in the open): high cover (the
+	 * corner peek) yes; low cover (fire over it) never - a click there is a plain cover click (a box selection: the group cover over nearby
+	 * covers). The face rule then applies to high cover only.
+	 */
+	CODEXTACTICS_API bool IsRunPeekCover(ECoverHeight Height);
+
+	/** A stack man's place behind the corner man is no cover when it is not on the face (no slot there) or closer than this to the corner slot, cm. */
+	inline constexpr float StackMinFromCornerCm = 50.f;
+
+	/**
+	 * A stack place behind the corner man is really covered by that object: its slot was found on the same object's face (bSlotOnFace) and
+	 * stands at least MinFromCornerCm from the corner man's slot (a block too short for the stack has no such place - that man takes a nearby
+	 * cover by the group cover rule instead of standing in the open).
+	 */
+	CODEXTACTICS_API bool IsStackPlaceCovered(bool bSlotOnFace, float FromCornerSlotCm, float MinFromCornerCm = StackMinFromCornerCm);
+
 	/** One peekable face of the clicked wall at the click (the probe found its slot, the click lies at its end, it is wide enough). */
 	struct FFace
 	{
@@ -93,6 +112,48 @@ namespace RunCornerPeekRules
 	 * (dot of the normal with the unit direction to him); a tie (within 0.01) goes to the nearer face point. INDEX_NONE without faces.
 	 */
 	CODEXTACTICS_API int32 ChooseNearFace(const TArray<FFace>& Faces, const FVector2D& Operative);
+
+	// --- The face under the cursor (the game designer's PIE 2026-11-08: "I want to press to the face I point at; the ghost appears only on
+	//     ONE side ... the other sides don't work") ---
+
+	/** The clicked face: a face whose normal agrees at least this much (dot) with the hit's normal ... */
+	inline constexpr float ClickedFaceMinDot = 0.5f;
+	/** ... and two faces within this of each other's agreement (a hit on the edge between them) go to the one facing the camera more. */
+	inline constexpr float ClickedFaceTieDot = 0.05f;
+
+	/**
+	 * Supersedes decision 3 when the clicked face has a run-and-peek corner itself: the face UNDER THE CURSOR decides - the face whose normal
+	 * agrees most with the hit's normal (HitNormal, planar), at least MinDot; a hit on the edge between two faces (their agreement within
+	 * TieDot) takes the one whose normal points most towards the camera (TowardCamera, planar). Any face of the object, also the side away
+	 * from him (he paths round to it). INDEX_NONE when no face agrees (the hit face is no run-and-peek face of its own - a wall's narrow end
+	 * face: ChooseNearFace over the faces round it, as before).
+	 */
+	CODEXTACTICS_API int32 ChooseClickedFace(const TArray<FFace>& Faces, const FVector2D& HitNormal, const FVector2D& TowardCamera,
+		float MinDot = ClickedFaceMinDot, float TieDot = ClickedFaceTieDot);
+
+	/**
+	 * Q1 (kept, narrowed with the face rule): from a wall EDGE, a click that is also a cover-switch target (bSwitchVerdict) stays the switch
+	 * only where the switch goes itself - a face on his protected side (ClickedFaceNormal within 60 deg of OwnWallNormal: the switch's corner
+	 * in the mirrored pose) at its end nearer to him (ToClickedEndCm <= ToOtherEndCm). Every other face / the far end = the run-and-peek
+	 * to the face under the cursor.
+	 */
+	CODEXTACTICS_API bool KeepsCoverSwitch(bool bSwitchVerdict, const FVector2D& ClickedFaceNormal, const FVector2D& OwnWallNormal, float ToClickedEndCm,
+		float ToOtherEndCm);
+
+	/**
+	 * In cover at the clicked object, only HIS OWN face is left to the in-cover rules (the corner peek / shimmy at that face); ANOTHER face of
+	 * the same block at its end is the run-and-peek to that face's corner (the game designer 2026-11-08: at one end of a long block, the enemy
+	 * beyond its far side - dash the short gap to the far face's corner and peek towards them along that face, not out from the near face with
+	 * the flank open). bInCoverAtObject: he is in cover at the clicked component; bSameFace: the face found is his cover face.
+	 */
+	CODEXTACTICS_API bool IsOwnCoverFace(bool bInCoverAtObject, bool bSameFace);
+
+	/**
+	 * The click hit a face looking the other way than his cover face (HitNormal planar vs OwnWallNormal, dot <= -0.5; a wall face: |HitNormalZ|
+	 * <= 0.3): the far side, never the in-cover peek of his own face (a block 1.5 m thick puts its far face's end right at his own end) - the
+	 * run-and-peek to that face takes it. A top hit / his face / an end face (perpendicular) stay as they were.
+	 */
+	CODEXTACTICS_API bool IsBackFaceHit(const FVector2D& HitNormal, float HitNormalZ, const FVector2D& OwnWallNormal);
 
 	/**
 	 * The planar directions the clicked wall is probed from to find its faces round the click: Count directions evenly round the circle,
@@ -203,4 +264,84 @@ namespace RunCornerPeekRules
 	 * turn by 360 (a one-frame step of 360 x the weight so far instead of a full spin).
 	 */
 	CODEXTACTICS_API bool HeldTurnGoesTheOtherWay(float HeldDeg, float ObservedTurnDeg, float MinSeenDeg = BlendDirectionSeenDeg);
+
+	// --- Arrives already turned: no residual turn on the peek entry (#55, the game designer's video Bug_2 2026-11-08: "when he runs up and
+	//     peeks out from the wall there seems to be another small extra turn") ---
+	//
+	// The residual turn was the gap between two DRAWN facings: the run's last frame (the run pose's shoulder line stands ~35-40 deg off the
+	// actor's yaw) and the fire idle round the corner (its shoulder line ~35-60 deg off the corner aim, by clip). The 1.5 m pre-turn aimed the
+	// ACTOR at the corner aim, so the drawn body still turned ~20 deg after the arrival, inside the 0.3 s blend - and unevenly: the pose blend
+	// (per-bone nlerp over a ~160 deg pelvis turn) and the mesh's linearly released held yaw disagree by up to ~5 deg mid-blend. Now the run
+	// turns the DRAWN body to the fire idle's drawn facing (BodyTargetActorYaw), earlier and at a planned even rate (PreTurnStartCm /
+	// PreTurnStepYaw), and the anim holds the drawn body's yaw through the blend exactly (the peek stance yaw lock: LockTargetYaw / LockAlpha /
+	// LockCorrectionDeg - a root yaw on the evaluated pose instead of the mesh's held yaw).
+
+	/** The pre-turn starts at least this far before the entry (the stretch of the first fix), cm ... */
+	inline constexpr float PreTurnMinCm = PreTurnCm;
+	/** ... or this many seconds of his run before the entry, whichever is further (time-based: a faster run starts it sooner) ... */
+	inline constexpr float PreTurnLeadSeconds = 0.6f;
+	/** ... but never further than this, cm. */
+	inline constexpr float PreTurnMaxCm = 400.f;
+	/** The planned pre-turn ends this long before the entry (his last frames of the run already show the final facing), s. */
+	inline constexpr float PreTurnFinishEarlySeconds = 0.1f;
+	/** The drawn body's yaw: this share of the shoulder line, the rest the hip line (the torso is what the top-down camera reads). */
+	inline constexpr float BodyShoulderWeight = 1.f;
+	/** The peek stance yaw lock lets go over this long after its path (the fire idle's own facing from then on), s. */
+	inline constexpr float LockFadeSeconds = 0.15f;
+	/**
+	 * The fire idle in the game draws the body a little off its clip (the graph's layers - the left-hand IK pulls the left shoulder: +6 deg
+	 * measured on both standing pack clips 2026-11-08): the lock learns that bias at the end of its path (up to MaxDrawnBiasDeg) for the next
+	 * arrival's pre-turn, and a gap over SettleMinDeg is eased out over SettleSeconds instead of the short fade.
+	 */
+	inline constexpr float MaxDrawnBiasDeg = 20.f;
+	inline constexpr float SettleMinDeg = 1.f;
+	inline constexpr float SettleSeconds = 0.4f;
+	/** The bias the standing fire idles start with (measured 2026-11-08: _L +6.2, _R +5.7 deg), so the first arrival is already right. */
+	inline constexpr float StandDrawnBiasSeedDeg = 6.f;
+
+	/** Where the pre-turn starts: max(MinCm, Speed x LeadSeconds) up to MaxCm, plus EntryLeadCm (the run enters that far short of the slot), cm. */
+	CODEXTACTICS_API float PreTurnStartCm(float SpeedCmS, float EntryLeadCm, float MinCm = PreTurnMinCm, float LeadSeconds = PreTurnLeadSeconds,
+		float MaxCm = PreTurnMaxCm);
+
+	/**
+	 * One frame of the planned pre-turn: the yaw moves towards TargetYaw at the even rate that gets there FinishEarlySeconds before the entry
+	 * (DistanceToEntryCm away at SpeedCmS) - never past it, no snap; once the planned end is reached it closes what is left. Returns the yaw.
+	 */
+	CODEXTACTICS_API float PreTurnStepYaw(float CurrentYaw, float TargetYaw, float DistanceToEntryCm, float SpeedCmS, float DeltaSeconds,
+		float FinishEarlySeconds = PreTurnFinishEarlySeconds);
+
+	/**
+	 * The pre-turn turns one way only: InOutSign (0 = not yet) takes the way of its first real step (over 0.05 deg); a later step the other
+	 * way is not taken (the yaw holds). Returns the yaw to set.
+	 */
+	CODEXTACTICS_API float OneWayStepYaw(float CurrentYaw, float SteppedYaw, int32& InOutSign);
+
+	/**
+	 * The actor yaw that draws the run's body where the fire idle will draw it: the cover facing he will get (FacingYaw) plus the fire idle's
+	 * drawn body yaw (FinalBodyYawCs, the mesh's component space) minus the run pose's now (RunBodyYawCs). The mesh's own yaw on the capsule
+	 * cancels out. Normalised, deg.
+	 */
+	CODEXTACTICS_API float BodyTargetActorYaw(float FacingYaw, float FinalBodyYawCs, float RunBodyYawCs);
+
+	/** The yaw a body line (the left bone -> the right bone, X / Y) is drawn facing: its normal, forward +X, right +Y (shoulders / hips), deg. */
+	CODEXTACTICS_API float BodyLineYaw(const FVector2D& Left, const FVector2D& Right);
+
+	/** The drawn body's yaw from its shoulder and hip lines: HipYaw + ShoulderWeight x (ShoulderYaw - HipYaw), the short way, deg. */
+	CODEXTACTICS_API float MixBodyYaw(float ShoulderYaw, float HipYaw, float ShoulderWeight = BodyShoulderWeight);
+
+	/**
+	 * The peek stance yaw lock's drawn body yaw Seconds after the entry: from EntryYaw (the run's last frame) to FinalYaw (the fire idle's own)
+	 * eased over PathSeconds the short way (the pre-turned run: EntryYaw ~ FinalYaw - the body keeps its facing), deg.
+	 */
+	CODEXTACTICS_API float LockTargetYaw(float EntryYaw, float FinalYaw, float Seconds, float PathSeconds);
+
+	/** The lock's strength: 1 over its path, then down to 0 over FadeSeconds (the pose's own facing - by then ~ the target - takes over). */
+	CODEXTACTICS_API float LockAlpha(float Seconds, float PathSeconds, float FadeSeconds = LockFadeSeconds);
+
+	/**
+	 * The root yaw that draws the evaluated pose's body (PoseBodyYaw) at TargetYaw, times Alpha, deg. The pose blend turns the body ~160 deg
+	 * from the run to the fire idle; this counter-turns exactly what it has turned so far (either way round: it is the same rotation), so the
+	 * drawn yaw follows LockTargetYaw frame by frame - no nlerp wobble, no frame of lag.
+	 */
+	CODEXTACTICS_API float LockCorrectionDeg(float TargetYaw, float PoseBodyYaw, float Alpha);
 }

@@ -19,12 +19,17 @@
 #include "Data/SquadWallTuning.h"
 #include "HAL/IConsoleManager.h"
 #include "Tactics/CoverTraceRules.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
+#include "Vehicles/VehicleSubsystem.h"
 
 namespace SquadSubsystemWallLeadershipLocal
 {
 	TAutoConsoleVariable<int32> CVarFormationWallLeadership(TEXT("Codex.Formation.WallLeadership"), 1,
 		TEXT("Game designer 2026-11-01: 1 = the squad's corner peek makes the member nearest that corner the formation leader, the others stack behind him along the near face; 0 = the v2.4 squad peek (the corner stack's point man peeks, the leader stays) - A/B"));
 
+	TAutoConsoleVariable<int32> CVarSquadWallMoveNearestLeads(TEXT("Codex.Squad.WallMoveNearestLeads"), 1,
+		TEXT("1 (default; the game designer's PIE 2026-11-08): a move order to the formation at a wall - the man with the shortest route to the destination takes the lead and leads from his side; 0: the leader leads every move (he walked round the wall's far end)."));
 	TAutoConsoleVariable<int32> CVarFormationReformAlongWall(TEXT("Codex.Formation.ReformAlongWall"), 1,
 		TEXT("The game designer's bug 2026-11-03 (a corner peek at the far end of the same long wall: all three stood up and faced their walk, the rear open): 1 = a member walking into the wall-leadership stack ALONG THE SAME WALL keeps his crouch and his look (squad_walls.json reform_along_wall_off_m); 0 = item 2's stand-up / face-the-walk for every far member (A/B)"));
 
@@ -326,4 +331,61 @@ FVector2D USquadSubsystem::HoldBehindInWallLine(const AOperativeCharacter& Opera
 		return Target;
 	}
 	return FormationWallLeadership::HoldBehind(Target, MyPlace->Position, AheadPlace->Position, FVector2D(Ahead->GetActorLocation()), Sectors.CornerStackEnd.Along);
+}
+
+bool USquadSubsystem::HandOverLeadForWallMove(const FVector& Destination, const TCHAR* Why)
+{
+	AOperativeCharacter* Current = Leader.Get();
+	UWorld* World = GetWorld();
+	if (!World || !Current || SquadSubsystemWallLeadershipLocal::CVarSquadWallMoveNearestLeads.GetValueOnGameThread() == 0 || bIsSoloMode || HasMultiSelection()
+		|| !IsFormationActive())
+	{
+		return false;
+	}
+	const bool bLayout = Sectors.Formation == EFormationKind::Wall && Sectors.bWallLayoutValid;
+	if (!FormationWallLeadership::IsAtWallForMoveLead(Sectors.bWallOrder, bLayout, Sectors.Peek.Peeker.IsValid(), IsTwoCornerHoldActive()))
+	{
+		return false; // an open-ground move keeps its leader
+	}
+	// Each member's nav route to the destination (the straight line when the navmesh gives none).
+	TArray<AOperativeCharacter*> Who;
+	TArray<double> Route;
+	TArray<bool> Able;
+	int32 CurrentIndex = INDEX_NONE;
+	FString Line;
+	for (const TWeakObjectPtr<AOperativeCharacter>& Weak : Members)
+	{
+		AOperativeCharacter* Member = Weak.Get();
+		if (!Member)
+		{
+			continue;
+		}
+		double Length = -1.0;
+		if (const UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(World, Member->GetActorLocation(), Destination, Member);
+			Path && Path->IsValid() && !Path->IsPartial())
+		{
+			Length = Path->GetPathLength();
+		}
+		else
+		{
+			Length = FVector::Dist2D(Member->GetActorLocation(), Destination);
+		}
+		CurrentIndex = Member == Current ? Who.Num() : CurrentIndex;
+		Who.Add(Member);
+		Route.Add(Length);
+		Able.Add(CanLeadFormation(*Member) && !IsOnLadderOrQueued(*Member) && !VehicleQueries::IsMounted(Member));
+		Line += FString::Printf(TEXT(" %s %.0f cm%s;"), *Member->DisplayName.ToString(), Length, Able.Last() ? TEXT("") : TEXT(" (can't lead)"));
+	}
+	const int32 Pick = FormationWallLeadership::PickMoveLeader(Route, Able, CurrentIndex);
+	if (!Who.IsValidIndex(Pick) || Who[Pick] == Current)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Squad] %s at the wall: %s keeps the lead (routes:%s)"), Why, *Current->DisplayName.ToString(), *Line);
+		return false;
+	}
+	AOperativeCharacter* NewLeader = Who[Pick];
+	UE_LOG(LogCodexTactics, Display, TEXT("[Squad] %s at the wall: %s is nearest the destination (%.0f, %.0f) and takes the lead from %s (routes:%s)"), Why,
+		*NewLeader->DisplayName.ToString(), Destination.X, Destination.Y, *Current->DisplayName.ToString(), *Line);
+	SetLeader(NewLeader, true);
+	++WallMoveHandOvers;
+	return Leader.Get() == NewLeader;
 }

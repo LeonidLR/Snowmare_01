@@ -263,6 +263,206 @@ bool FRunCornerPeekHisFloorTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// --- Arrives already turned (the game designer's video Bug_2 2026-11-08: "another small extra turn" on the peek entry) ---
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekPreTurnPlanTest, "ArrivesTurned.PreTurnPlan")
+bool FRunCornerPeekPreTurnPlanTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// Where it starts: ~0.6 s of his run before the entry (which comes the run-in glide short of the slot), at least the first fix's 1.5 m.
+	TestEqual(TEXT("a run (450 cm/s, 90 cm glide): 0.6 s = 270 cm before the entry"), PreTurnStartCm(450.f, 90.f), 360.f, 1.0e-3f);
+	TestEqual(TEXT("a walk (150 cm/s): never shorter than 1.5 m"), PreTurnStartCm(150.f, 30.f), 180.f, 1.0e-3f);
+	TestEqual(TEXT("a very fast run: at most 4 m"), PreTurnStartCm(1000.f, 120.f), 520.f, 1.0e-3f);
+	TestEqual(TEXT("standing: the minimum"), PreTurnStartCm(0.f, 0.f), PreTurnMinCm, 1.0e-3f);
+
+	// The planned turn: a run at 450 cm/s from 270 cm before the entry, 40 deg to turn, 60 fps - an even turn done 0.1 s before the entry.
+	const float Dt = 1.f / 60.f;
+	const float Speed = 450.f;
+	float Yaw = 0.f;
+	float MaxStep = 0.f;
+	bool bMonotonic = true;
+	bool bNeverPast = true;
+	float YawAtFinish = -1.f;
+	for (float ToEntry = 270.f; ToEntry > 0.f; ToEntry -= Speed * Dt)
+	{
+		const float Next = PreTurnStepYaw(Yaw, 40.f, ToEntry, Speed, Dt);
+		const float Step = FRotator::NormalizeAxis(Next - Yaw);
+		bMonotonic &= Step >= -1.0e-4f;
+		bNeverPast &= Next <= 40.f + 1.0e-3f;
+		MaxStep = FMath::Max(MaxStep, Step);
+		Yaw = Next;
+		if (YawAtFinish < 0.f && ToEntry / Speed <= PreTurnFinishEarlySeconds)
+		{
+			YawAtFinish = Yaw;
+		}
+	}
+	TestTrue(TEXT("one way only"), bMonotonic);
+	TestTrue(TEXT("never past the target"), bNeverPast);
+	TestEqual(TEXT("done by 0.1 s before the entry"), YawAtFinish, 40.f, 1.0e-2f);
+	// Even: 40 deg over the 0.5 s to the planned end = 1.33 deg a frame (the first fix's turn rate snapped ~25 deg a frame).
+	TestTrue(FString::Printf(TEXT("an even rate, no snap (max %.2f deg a frame)"), MaxStep), MaxStep <= 40.f * Dt / 0.5f * 1.05f);
+	TestEqual(TEXT("the short way round the wrap: 170 -> -170 turns +20"), static_cast<float>(FRotator::NormalizeAxis(PreTurnStepYaw(170.f, -170.f, 0.f, Speed, Dt) - 170.f)), 20.f, 1.0e-3f);
+	TestEqual(TEXT("no time step: no turn"), PreTurnStepYaw(10.f, 50.f, 200.f, Speed, 0.f), 10.f, 1.0e-4f);
+	TestEqual(TEXT("past the planned end (or no speed): the rest at once"), PreTurnStepYaw(10.f, 50.f, 20.f, Speed, Dt), 50.f, 1.0e-3f);
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekBodyFacingTest, "ArrivesTurned.BodyFacing")
+bool FRunCornerPeekBodyFacingTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// The drawn body: the normal of the left -> right line (forward +X, right +Y - the smoke's shoulder-line metric).
+	TestEqual(TEXT("right shoulder at +Y: facing +X (0)"), BodyLineYaw(FVector2D(0.f, -20.f), FVector2D(0.f, 20.f)), 0.f, 1.0e-3f);
+	TestEqual(TEXT("right shoulder at -X: facing +Y (90)"), BodyLineYaw(FVector2D(20.f, 0.f), FVector2D(-20.f, 0.f)), 90.f, 1.0e-3f);
+	TestEqual(TEXT("right shoulder at +X: facing -Y (-90)"), BodyLineYaw(FVector2D(-20.f, 0.f), FVector2D(20.f, 0.f)), -90.f, 1.0e-3f);
+	TestEqual(TEXT("shoulders only"), MixBodyYaw(30.f, 10.f, 1.f), 30.f, 1.0e-3f);
+	TestEqual(TEXT("hips only"), MixBodyYaw(30.f, 10.f, 0.f), 10.f, 1.0e-3f);
+	TestEqual(TEXT("half and half, the short way round the wrap"), FMath::Abs(MixBodyYaw(170.f, -170.f, 0.5f)), 180.f, 1.0e-3f);
+	// The pre-turn's target: the actor yaw that draws the run's body where the fire idle will draw it. Measured 2026-11-08 (A, the _R fire
+	// idle): the run's shoulders stood 39 deg off his yaw, the fire idle's 59 off the corner aim - the first fix's actor at the corner aim left 20.
+	const float FacingYaw = -100.f; // his cover facing at the slot (back to the wall)
+	const float FinalCs = 150.f;    // the fire idle's drawn body, component space
+	const float RunCs = 130.f;      // the run pose's, component space
+	const float MeshBase = -90.f;   // the mesh's yaw on the capsule (cancels out)
+	const float Actor = BodyTargetActorYaw(FacingYaw, FinalCs, RunCs);
+	TestEqual(TEXT("the actor 20 deg further round"), Actor, -80.f, 1.0e-3f);
+	TestEqual(TEXT("drawn: the run's last frame = the fire idle's first"), static_cast<float>(FRotator::NormalizeAxis(Actor + MeshBase + RunCs)),
+		static_cast<float>(FRotator::NormalizeAxis(FacingYaw + MeshBase + FinalCs)), 1.0e-3f);
+	TestEqual(TEXT("wrapped"), BodyTargetActorYaw(170.f, 20.f, -10.f), -160.f, 1.0e-3f);
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekYawLockTest, "ArrivesTurned.YawLock")
+bool FRunCornerPeekYawLockTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	TestEqual(TEXT("the path starts at the run's last frame"), LockTargetYaw(10.f, 30.f, 0.f, 0.3f), 10.f, 1.0e-3f);
+	TestEqual(TEXT("half way"), LockTargetYaw(10.f, 30.f, 0.15f, 0.3f), 20.f, 1.0e-3f);
+	TestEqual(TEXT("ends at the fire idle's own"), LockTargetYaw(10.f, 30.f, 0.3f, 0.3f), 30.f, 1.0e-3f);
+	TestEqual(TEXT("and stays there"), LockTargetYaw(10.f, 30.f, 1.f, 0.3f), 30.f, 1.0e-3f);
+	TestEqual(TEXT("the short way round the wrap"), FMath::Abs(LockTargetYaw(170.f, -170.f, 0.15f, 0.3f)), 180.f, 1.0e-3f);
+	TestEqual(TEXT("full strength over the path"), LockAlpha(0.3f, 0.3f), 1.f, 1.0e-4f);
+	TestEqual(TEXT("half way through the fade"), LockAlpha(0.3f + 0.5f * LockFadeSeconds, 0.3f), 0.5f, 1.0e-4f);
+	TestEqual(TEXT("let go"), LockAlpha(1.f, 0.3f), 0.f, 1.0e-4f);
+	TestEqual(TEXT("the pose turned 157 deg off the target: counter-turn it"), LockCorrectionDeg(20.f, 177.f, 1.f), -157.f, 1.0e-3f);
+	TestEqual(TEXT("past 180 the same rotation the short way"), LockCorrectionDeg(20.f, -150.f, 1.f), 170.f, 1.0e-3f);
+	TestEqual(TEXT("fading"), LockCorrectionDeg(20.f, 24.f, 0.5f), -2.f, 1.0e-3f);
+
+	// Why a lock on the evaluated pose (the smoke's A trace 2026-11-08: 39 -> 47, a plateau, -> 59): the pose blend turns the pelvis
+	// ~160 deg by per-bone nlerp, not linearly in the weight - a held yaw released linearly with the weight (the first fix) leaves a
+	// wobble even when its total matches the blend's turn exactly; the lock follows the pose itself.
+	const float BlendTurn = 157.f;
+	const FQuat Run = FQuat::Identity;
+	const FQuat Idle(FVector::UpVector, FMath::DegreesToRadians(BlendTurn));
+	const auto PoseYaw = [&Run, &Idle](float Weight)
+	{
+		FQuat Blend = Run * (1.f - Weight) + Idle * Weight; // the slot blend: weighted quaternion sum, normalised (nlerp)
+		Blend.Normalize();
+		const FVector Forward = Blend.RotateVector(FVector::ForwardVector);
+		return FMath::RadiansToDegrees(FMath::Atan2(Forward.Y, Forward.X));
+	};
+	float HeldWobble = 0.f;
+	float LockError = 0.f;
+	for (int32 Frame = 0; Frame <= 18; ++Frame)
+	{
+		const float Weight = Frame / 18.f;
+		const float Pose = PoseYaw(Weight);
+		// The first fix: the mesh holds -BlendTurn x (1 - weight) (the actor turned back to the wall by the same amount).
+		HeldWobble = FMath::Max(HeldWobble, FMath::Abs(FRotator::NormalizeAxis(Pose - BlendTurn * Weight)));
+		// The lock: the drawn body held at the run's last frame (0 here) - the pose plus the lock's correction.
+		const float Drawn = FRotator::NormalizeAxis(Pose + LockCorrectionDeg(0.f, Pose, 1.f));
+		LockError = FMath::Max(LockError, FMath::Abs(Drawn));
+	}
+	TestTrue(FString::Printf(TEXT("the first fix's linear release wobbles (%.1f deg mid-blend)"), HeldWobble), HeldWobble > 4.f);
+	TestTrue(FString::Printf(TEXT("the lock holds the drawn body exactly (%.3f deg)"), LockError), LockError < 0.01f);
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekFaceUnderCursorTest, "FaceUnderCursor")
+bool FRunCornerPeekFaceUnderCursorTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// The game designer's PIE 2026-11-08: a free-standing 1.5 m block, he in cover at another wall to its north - "I want to press to the
+	// face I point at; the ghost appears only on one side". The four faces, each with a corner at the click (the probes found them all).
+	const auto MakeFace = [](double X, double Y)
+	{
+		FFace Face;
+		Face.Normal = FVector2D(X, Y);
+		Face.Point = FVector2D(X * 75.0, Y * 75.0);
+		return Face;
+	};
+	const TArray<FFace> Faces{ MakeFace(0.0, 1.0), MakeFace(1.0, 0.0), MakeFace(0.0, -1.0), MakeFace(-1.0, 0.0) }; // north (his), east, south, west
+	const FVector2D Him(0.0, 700.0);
+	const FVector2D TowardCamera = FVector2D(-0.3, -1.0).GetSafeNormal(); // the camera south of the block, looking north
+	TestEqual(TEXT("decision 3 (before): the face looking at him, whichever was clicked"), ChooseNearFace(Faces, Him), 0);
+	TestEqual(TEXT("the north face under the cursor: north"), ChooseClickedFace(Faces, FVector2D(0.0, 1.0), TowardCamera), 0);
+	TestEqual(TEXT("the east face: east"), ChooseClickedFace(Faces, FVector2D(1.0, 0.0), TowardCamera), 1);
+	TestEqual(TEXT("the far (south) face: south - he runs round to it"), ChooseClickedFace(Faces, FVector2D(0.0, -1.0), TowardCamera), 2);
+	TestEqual(TEXT("the west face: west"), ChooseClickedFace(Faces, FVector2D(-1.0, 0.0), TowardCamera), 3);
+	TestEqual(TEXT("a slightly tilted hit normal still picks its face"), ChooseClickedFace(Faces, FVector2D(0.9, 0.2), TowardCamera), 1);
+	// Exactly on the south-west edge (an averaged normal): the face facing the camera more - south here.
+	TestEqual(TEXT("an edge hit: the camera-facing face"), ChooseClickedFace(Faces, FVector2D(-1.0, -1.0), TowardCamera), 2);
+	TestEqual(TEXT("an edge hit, the camera west: the west face"), ChooseClickedFace(Faces, FVector2D(-1.0, -1.0), FVector2D(-1.0, -0.2)), 3);
+	// The hit face is no run-and-peek face of its own (a wall's narrow end face east of two long faces): none -> decision 3's fallback.
+	const TArray<FFace> LongFaces{ MakeFace(0.0, 1.0), MakeFace(0.0, -1.0) };
+	TestEqual(TEXT("a click on the narrow end face: no clicked face (the faces round it decide)"), ChooseClickedFace(LongFaces, FVector2D(1.0, 0.0), TowardCamera),
+		static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("no faces: none"), ChooseClickedFace(TArray<FFace>(), FVector2D(1.0, 0.0), TowardCamera), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("a top hit (no planar normal): none"), ChooseClickedFace(Faces, FVector2D::ZeroVector, TowardCamera), static_cast<int32>(INDEX_NONE));
+
+	// Q1 narrowed: from a wall edge (his wall looks south, -Y) a switch target stays the switch only on the protected-side face at its near end.
+	const FVector2D OwnWall(0.0, -1.0);
+	TestTrue(TEXT("the protected-side (south) face, its end nearer to him: the switch (Q1)"), KeepsCoverSwitch(true, FVector2D(0.0, -1.0), OwnWall, 300.f, 420.f));
+	TestFalse(TEXT("the same face's far end: the run-and-peek there"), KeepsCoverSwitch(true, FVector2D(0.0, -1.0), OwnWall, 420.f, 300.f));
+	TestFalse(TEXT("the face towards him (north): the run-and-peek"), KeepsCoverSwitch(true, FVector2D(0.0, 1.0), OwnWall, 200.f, 300.f));
+	TestFalse(TEXT("a side face: the run-and-peek"), KeepsCoverSwitch(true, FVector2D(1.0, 0.0), OwnWall, 200.f, 300.f));
+	TestFalse(TEXT("no switch in range: never"), KeepsCoverSwitch(false, FVector2D(0.0, -1.0), OwnWall, 200.f, 300.f));
+	// His own block (the game designer 2026-11-08: at one end of a long block, the enemy beyond its far side): his own face keeps the in-cover
+	// corner peek / shimmy; the far face's end is the run-and-peek round to that corner.
+	TestTrue(TEXT("in cover at the block, his own face's end: the in-cover rules"), IsOwnCoverFace(true, true));
+	TestFalse(TEXT("in cover at the block, the FAR face's end: the run-and-peek there"), IsOwnCoverFace(true, false));
+	TestFalse(TEXT("not in cover at that block: the run-and-peek"), IsOwnCoverFace(false, false));
+	TestTrue(TEXT("the far (back) face of his block: never his in-cover peek"), IsBackFaceHit(FVector2D(0.0, 1.0), 0.f, FVector2D(0.0, -1.0)));
+	TestFalse(TEXT("his own face: the in-cover peek as before"), IsBackFaceHit(FVector2D(0.0, -1.0), 0.f, FVector2D(0.0, -1.0)));
+	TestFalse(TEXT("the block's end face (perpendicular): the in-cover peek as before"), IsBackFaceHit(FVector2D(-1.0, 0.0), 0.f, FVector2D(0.0, -1.0)));
+	TestFalse(TEXT("a top hit: not a face"), IsBackFaceHit(FVector2D(0.0, 0.1), 0.99f, FVector2D(0.0, -1.0)));
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekLowCoverTest, "LowCoverIsNoRunPeek")
+bool FRunCornerPeekLowCoverTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// The game designer's PIE 2026-11-08 (L_Gen_Depot_1, low cubes): the corner man ran to a low cube's corner, the others "stacked behind" a
+	// cube with no room and stood in the open. Only cover tall enough to peek round is a run-and-peek.
+	TestFalse(TEXT("a low cube's end (fire-over cover): no run-and-peek - a plain cover click"), IsRunPeekCover(ECoverHeight::LowCover));
+	TestTrue(TEXT("a standing-height block / wall's end: the run-and-peek"), IsRunPeekCover(ECoverHeight::HighCover));
+	TestFalse(TEXT("no cover: no"), IsRunPeekCover(ECoverHeight::None));
+	// The stack behind the corner man: a place with no slot on that object's face (a block too short) is no cover - a nearby cover instead.
+	TestFalse(TEXT("no slot on the face behind him: not covered"), IsStackPlaceCovered(false, 120.f));
+	TestFalse(TEXT("the slot found is the corner man's own spot: not covered"), IsStackPlaceCovered(true, 20.f));
+	TestTrue(TEXT("a slot a stack spacing behind him: covered"), IsStackPlaceCovered(true, 100.f));
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekOneWayTest, "ArrivesTurned.OneWay")
+bool FRunCornerPeekOneWayTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// RunCornerPeekSmoke D with the face rule (round the wall's end to the clicked face): the strafe shifting under the turn pulled the
+	// planned turn 2 deg back at its end - the pre-turn never steps back.
+	int32 Sign = 0;
+	TestEqual(TEXT("a tiny first step sets no way yet"), OneWayStepYaw(10.f, 10.02f, Sign), 10.02f, 1.0e-4f);
+	TestEqual(TEXT("... no way"), Sign, 0);
+	TestEqual(TEXT("the first real step sets the way (down)"), OneWayStepYaw(10.f, 8.f, Sign), 8.f, 1.0e-4f);
+	TestEqual(TEXT("... down"), Sign, -1);
+	TestEqual(TEXT("on down"), OneWayStepYaw(8.f, 6.5f, Sign), 6.5f, 1.0e-4f);
+	TestEqual(TEXT("a step back up is not taken: the yaw holds"), OneWayStepYaw(6.5f, 7.5f, Sign), 6.5f, 1.0e-4f);
+	int32 WrapSign = 1;
+	TestEqual(TEXT("up across the wrap (179 -> -179 is +2) goes on"), OneWayStepYaw(179.f, -179.f, WrapSign), -179.f, 1.0e-4f);
+	return true;
+}
+
 #undef RUN_CORNER_PEEK_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

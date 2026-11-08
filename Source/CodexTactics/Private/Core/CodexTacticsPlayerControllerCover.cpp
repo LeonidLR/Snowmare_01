@@ -17,6 +17,7 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GroupCoverRules.h"
+#include "Tactics/RunCornerPeekRules.h"
 #include "Data/SquadWallTuning.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationWallLeadershipRules.h"
@@ -56,6 +57,10 @@ namespace
 	/** A box-selected member within this of his place in the group's corner stack stays where he is (no side-step), cm. */
 	constexpr double GroupCornerPeekKeepCm = 30.0;
 
+}
+
+namespace ControllerGroupCover
+{
 	/** Knee height of the nearby cover traces above the slot's feet (finds 60 cm covers, as CoverTraceRules' knee trace), cm. */
 	constexpr float NearbyCoverKneeCm = 45.f;
 	/** The nearby cover traces start this far out from the leader's slot line (two rows), every NearbyCoverStepCm along it, cm. */
@@ -395,6 +400,12 @@ bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharact
 	float& OutEdgeAlongCm) const
 {
 	if (!Operative || !Operative->IsInPeekableCover())
+	{
+		return false;
+	}
+	// The far (back) face of his own cover is no in-cover peek of his face (a thin block puts its end right at his own end): the run-and-peek
+	// to that face's corner (the game designer 2026-11-08, RunCornerPeekRules::IsBackFaceHit).
+	if (RunCornerPeekRules::IsBackFaceHit(FVector2D(Hit.ImpactNormal), static_cast<float>(Hit.ImpactNormal.Z), FVector2D(Operative->GetCoverSlot().WallNormal)))
 	{
 		return false;
 	}
@@ -1141,7 +1152,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		const FSquadWallTuning& WallTuning = SquadWallTuning::Get();
 		TArray<FCoverSlot> Claimed = ChosenSlots;
 		Claimed.Add(DirectSlot);
-		for (const FCoverSlot& Nearby : FindNearbyGroupCoverSlots(World, DirectSlot, Claimed, Others.Num() - ChosenSlots.Num(), WallTuning.FollowerCoverRadiusCm,
+		for (const FCoverSlot& Nearby : ControllerGroupCover::FindNearbyGroupCoverSlots(World, DirectSlot, Claimed, Others.Num() - ChosenSlots.Num(), WallTuning.FollowerCoverRadiusCm,
 			WallTuning.FollowerCoverSideDeg, IsTaken))
 		{
 			ChosenSlots.Add(Nearby);

@@ -39,6 +39,7 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
@@ -433,10 +434,22 @@ namespace PmcCombatBugsSmoke
 				if (Index < 2)
 				{
 					Check(State, All[Index]->IsSilhouetteVisible() && Count > 0, What);
+					// The game designer's decision 2026-11-08: a hostile (PMC) silhouette is RED - on the material the overlay shows, not a role colour.
+					const UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(All[Index]->GetMesh()->GetOverlayMaterial());
+					FLinearColor Shown = FLinearColor::Transparent;
+					const bool bShown = MID && MID->GetVectorParameterValue(TEXT("Color"), Shown);
+					const FLinearColor Wanted = All[Index]->GetSilhouetteColor();
+					Check(State, !All[Index]->IsPlayerTeam() && bShown && Shown.Equals(Wanted, 0.01f) && Wanted.Equals(AOperativeCharacter::HostileSilhouetteColor, 0.01f)
+						&& Shown.R > 0.5f && Shown.G < 0.2f && Shown.B < 0.2f,
+						FString::Printf(TEXT("%s (TeamId %d): its live silhouette is RED (%.2f, %.2f, %.2f)"), Who[Index], All[Index]->TeamId, Shown.R, Shown.G, Shown.B));
 				}
 				else
 				{
 					UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s"), *What);
+					// The squad's own operatives keep their role colours (the leader cyan, the engineer amber, the medic green).
+					const FLinearColor Own = All[Index]->GetSilhouetteColor();
+					Check(State, All[Index]->IsPlayerTeam() && !Own.Equals(AOperativeCharacter::HostileSilhouetteColor, 0.01f),
+						FString::Printf(TEXT("%s (the player's side) keeps its role colour (%.2f, %.2f, %.2f)"), Who[Index], Own.R, Own.G, Own.B));
 				}
 				if (Feedback)
 				{

@@ -11,6 +11,29 @@ namespace FormationWallLeadership
 		return FVector2D::DotProduct(EdgeOnFace - Reference, RightAlong) >= 0.0 ? RightAlong : -RightAlong;
 	}
 
+	bool IsAtWallForMoveLead(bool bWallOrder, bool bWallLayoutActive, bool bCornerPeek, bool bTwoCornerHold)
+	{
+		return bWallOrder || bWallLayoutActive || bCornerPeek || bTwoCornerHold;
+	}
+
+	int32 PickMoveLeader(const TArray<double>& RouteCm, const TArray<bool>& Able, int32 CurrentLeader, double KeepCm)
+	{
+		int32 Best = INDEX_NONE;
+		for (int32 Index = 0; Index < RouteCm.Num() && Index < Able.Num(); ++Index)
+		{
+			if (Able[Index] && RouteCm[Index] >= 0.0 && (Best == INDEX_NONE || RouteCm[Index] < RouteCm[Best]))
+			{
+				Best = Index;
+			}
+		}
+		const bool bCurrentFits = RouteCm.IsValidIndex(CurrentLeader) && Able.IsValidIndex(CurrentLeader) && Able[CurrentLeader] && RouteCm[CurrentLeader] >= 0.0;
+		if (Best != INDEX_NONE && bCurrentFits && RouteCm[CurrentLeader] <= RouteCm[Best] + KeepCm)
+		{
+			return CurrentLeader;
+		}
+		return Best;
+	}
+
 	int32 PickCornerLeader(const TArray<FWallLeadershipMember>& Members, const FVector2D& EdgeOnFace, const FVector2D& Toward)
 	{
 		int32 Best = INDEX_NONE;

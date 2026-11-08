@@ -483,6 +483,25 @@ to the right."
   repeated left peek swaps nothing; the west man (the leader) knocked down -> the east man leads again and keeps his corner, the west corner
   is free, the middle man stays (answer 5); a ground click away ends the hold.
 
+### Moving off a wall: the man nearest the destination leads (2026-11-08, the game designer's PIE; behind `Codex.Squad.WallMoveNearestLeads`)
+
+Designer (L_Gen_Depot_1, Z_square low block, formation, the squad crouched behind a wall with both corners peeked, the leader = the
+right-corner man): a MOVE to a point on the LEFT - the leader left his right corner and walked round the wall's left end, dragging the next
+man with him.
+
+- **Rule:** a move order to the formation AT A WALL (`FormationWallLeadership::IsAtWallForMoveLead`: the wall order / the wall layout in
+  force, a squad corner peek, the two-corner hold; not solo, no box selection) hands the lead, at the order and before it is planned / given,
+  to the member with the shortest nav route to the destination (`FormationWallLeadership::PickMoveLeader`; the straight line when the navmesh
+  gives none; able = can lead, not on a ladder, not mounted). The current leader keeps it while his route is within `MoveLeaderKeepCm` 1.5 m
+  of the shortest (no leader hopping on near ties); open-ground moves keep the leader. `USquadSubsystem::HandOverLeadForWallMove` (called in
+  `ACodexTacticsPlayerController::OrderGroupMove` right after the pending-leader hand-over of the leader-switch-keeps-move rule - the player's
+  own selection is the starting leader, the wall rule then decides) -> `SetLeader` (the formation's role swap, the selection ring, the camera);
+  the order then ends the wall order / the corner hold as before; the others follow behind the new leader in the usual order.
+  `DecideLeaderAfterFall` (#57) is untouched (a fall, not a move order).
+- **Tests:** `CodexTactics.Formation.WallLeadership.MoveNearestLeads`; smoke `WallMoveNearestLeadsSmoke` (TwoCornerHoldSmoke's setup: the
+  west man leading, the east man holding his corner; the real ground click beyond the EAST end, round it behind the wall -> the east man
+  leads at the order, nobody walks round the west end, the hold ends, all three arrive). A/B `-PreCmds "Codex.Squad.WallMoveNearestLeads 0"`.
+
 ### Wall leadership (2026-11-01, branch formation/wall-leadership; the game designer's decisions; behind `Codex.Formation.Sectors` + `Codex.Formation.WallLeadership`)
 
 Design and the seven decisions: `docs/design/FORMATION_SECTORS.md` "Wall leadership". The squad's corner peek (the click on an end of the squad's wall,

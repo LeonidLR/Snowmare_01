@@ -126,6 +126,11 @@ mark, like a monster), never once fallen. The arena turns it off (`SetRevealHost
   comes back. Log `X (corpse): overlay M taken off Mesh`. Smoke `PmcDeathPoseSmoke`: the four bodies seen only through a roof slab (the
   silhouette on), the target highlight flashed at the kill, the two fighters killed concealed and shown again 0.5 s later - no overlay on any
   of their meshes 1 s and 4 s after the kill (without the fix the fighters keep `MID_M_Silhouette`).
+- **A hostile fighter's see-through silhouette is RED (the game designer's decision 2026-11-08).** `AOperativeCharacter::GetSilhouetteColor`:
+  an operative not on the player's side (`!IsPlayerTeam()`, TeamId != 0 - the PMC fighters) returns `HostileSilhouetteColor` (1, 0.04, 0.04,
+  alpha 0.6) instead of the role colour (the default role's orange read as the squad's engineer); the squad keeps leader cyan / engineer amber /
+  medic green / recruit olive. `SilhouetteMID` takes it as before. Smoke `PmcDeathPoseSmoke`: the two live fighters behind the slab show a
+  red silhouette on the overlay material itself, the player's two operatives keep their role colours.
 Not done (follow-ups): no last-known silhouette (ghost) for a concealed fighter, no hearing of them, turn-based combat ignores them, hostile rounds suppress the player's men only through the generic suppression
 rules, hostile fighters never loot / get looted.
 

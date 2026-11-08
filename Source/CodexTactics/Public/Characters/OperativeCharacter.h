@@ -434,8 +434,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Silhouette")
 	TObjectPtr<UMaterialInterface> SilhouetteMaterial;
 
-	/** Godot get_silhouette_color: leader cyan, engineer amber, medic-sapper green, recruit olive (alpha 0.55). */
+	/**
+	 * Godot get_silhouette_color: leader cyan, engineer amber, medic-sapper green, recruit olive (alpha 0.55) - the player's squad. A hostile
+	 * operative (a PMC fighter, !IsPlayerTeam()) is HostileSilhouetteColor (the game designer's decision 2026-11-08).
+	 */
 	FLinearColor GetSilhouetteColor() const;
+
+	/** The see-through silhouette of a hostile operative (TeamId other than the player's): red (the game designer 2026-11-08). */
+	static inline const FLinearColor HostileSilhouetteColor = FLinearColor(1.f, 0.04f, 0.04f, 0.6f);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Silhouette")
 	bool IsSilhouetteVisible() const { return bSilhouetteVisible; }
@@ -1363,6 +1369,21 @@ public:
 	 * clip's wall hug, then the step-out round the corner - A/B).
 	 */
 	static bool IsRunPeekStanceEnabled();
+
+	/**
+	 * The run-and-peek arrives already turned (Codex.Cover.RunPeekYawLock, default 1; the game designer's video Bug_2 2026-11-08 - "another
+	 * small extra turn" on the peek entry): the run's last metres turn his DRAWN body to the fire idle's drawn facing at a planned even rate,
+	 * started sooner (RunCornerPeekRules::PreTurnStartCm / PreTurnStepYaw / BodyTargetActorYaw), and the anim holds the drawn body's yaw
+	 * through the blend exactly (UOperativeAnimInstance::BeginPeekStanceYawLock). 0 = the first fix's arrival (the actor turned to the corner
+	 * aim in the last 1.5 m, the mesh's held yaw released by the blend weight - A/B).
+	 */
+	static bool IsRunPeekYawLockEnabled();
+
+	/**
+	 * The last peek stance arrival with the yaw lock: the fire idle's drawn body yaw minus the run's last drawn body yaw, deg (the turn the
+	 * lock still had to ease out; ~0 when the pre-turn did its job) - smokes.
+	 */
+	float GetLastPeekStanceBodyGapDeg() const { return LastPeekStanceBodyGapDeg; }
 
 	/** A manual corner peek is ordered and not released yet (he may still be walking to the corner). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
@@ -2453,14 +2474,44 @@ private:
 	int32 PeekStanceTurnFlips = 0;
 	int32 PeekStanceEntryCount = 0;
 	float LastPeekStanceArrivalOffDeg = -1.f;
+	/** Arrives already turned (IsRunPeekYawLockEnabled): the armed corner's side and the cover facing yaw he will get there, deg. */
+	ECoverFacing RunCornerPeekSide = ECoverFacing::Right;
+	float RunCornerPeekCoverYaw = 0.f;
+	/** The pre-turn has started for this arming (it then runs on to the entry, whatever the speed does to its start distance). */
+	bool bRunCornerPeekPreTurnOn = false;
+	/** The fire idle's drawn body yaw (component space, UOperativeAnimInstance::GetPeekStanceBodyYawCs), sampled once per arming. */
+	bool bRunCornerPeekFinalBodyValid = false;
+	float RunCornerPeekFinalBodyCs = 0.f;
+	/** The run pose's drawn body yaw (component space) through a short low-pass (the strafe the turn causes shifts it). */
+	bool bRunCornerPeekRunBodySeeded = false;
+	float RunCornerPeekRunBodyCs = 0.f;
+	/** The way the pre-turn turns (+1 / -1; 0 = not yet): it never steps back (RunCornerPeekRules::OneWayStepYaw). */
+	int32 RunCornerPeekPreTurnSign = 0;
+	/** The yaw lock's entry: the drawn body's gap the lock eased out (smokes); the mesh's held yaw for the entry frame only. */
+	float LastPeekStanceBodyGapDeg = 0.f;
+	uint64 PeekStanceBridgeFrame = 0;
+	float PeekStanceBridgeYaw = 0.f;
 	/** EnterCover's end: an armed run-and-peek arriving at its corner turns into the corner peek (always disarms). */
 	void StartRunCornerPeekOnEntry(const FCoverSlot& Slot);
 	/** The armed run-and-peek arrives with this cover entry: still armed, the entered slot on the ordered corner's wall, near the ordered slot. */
 	bool IsRunCornerPeekArrivalAt(const FCoverSlot& Slot) const;
 	/** The armed run-and-peek's end seen from Slot: which corner (OutSide) and where along the wall (OutEdgeAlongCm, from Slot). */
 	void ResolveRunCornerPeekEdge(const FCoverSlot& Slot, ECoverFacing& OutSide, float& OutEdgeAlongCm) const;
-	/** The run-and-peek's last metres turn the runner to the peek facing (RunCornerPeekRules::ShouldPreTurn; UpdateCombatFacing). */
-	bool WantsRunCornerPeekPreTurn() const;
+	/**
+	 * The run-and-peek's last metres turn the runner (RunCornerPeekRules::ShouldPreTurn; UpdateCombatFacing): from PreTurnStartCm before the
+	 * entry with the yaw lock (latched for the arming), the first fix's 1.5 m from the slot without it.
+	 */
+	bool WantsRunCornerPeekPreTurn();
+	/** One frame of that pre-turn: the actor yaw that draws his body at the fire idle's drawn facing by the entry (or the corner aim, A/B). */
+	float StepRunCornerPeekPreTurn(float DeltaTime);
+	/** How far short of its slot the run enters the cover: the glide of his momentum (TryEnterCoverFromRun), cm. */
+	float GetRunInGlideCm(float SpeedCmS) const;
+	/**
+	 * EnterCover of a peek stance arrival with the yaw lock: the drawn body's facing at the entry (OldActorYaw = his yaw before the turn to
+	 * the wall) handed to the anim's lock, eased to the fire idle's own (the entry frame's pose held on the mesh if it is already drawn).
+	 * False when the lock cannot run (no anim / clip / bones): the first fix's held yaw then.
+	 */
+	bool BeginPeekStanceYawLock(float OldActorYaw, ECoverFacing Side, bool bCrouch);
 	/** LeaveCover raises no CoverLeft event (the open-shot step off the wall comes back on its own). */
 	bool bQuietCoverLeaveRequest = false;
 	/** EnterCover ran (new wall, not a quiet return): CoverEntered waits until the body has stopped at the slot. */
