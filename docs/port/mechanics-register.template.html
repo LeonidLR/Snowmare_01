@@ -63,6 +63,21 @@ code { font-family: var(--f-mono); font-size: 12.5px; background: var(--chip); p
 .copy { font: 11px var(--f-mono); border: 1px solid var(--rule); background: transparent; color: var(--ink-2); padding: 0 6px; margin-left: 4px; cursor: pointer; }
 .empty { padding: 24px 0; color: var(--ink-2); }
 .foot { font-size: 13px; color: var(--ink-2); max-width: 68ch; }
+.plan { display: flex; flex-direction: column; gap: 10px; }
+.goal { padding: 0 14px 8px; color: var(--ink-2); font-size: 14px; }
+.day { border-top: 1px solid var(--rule); padding: 9px 14px 10px; display: grid; grid-template-columns: 92px 1fr; gap: 4px 12px; }
+.day.today { background: var(--chip); box-shadow: inset 3px 0 0 var(--new); }
+.dl { font: 500 12.5px var(--f-mono); color: var(--ink-2); font-variant-numeric: tabular-nums; display: flex; flex-direction: column; }
+.dl b { color: var(--ink); font-family: var(--f-display); font-size: 17px; letter-spacing: .02em; }
+.day.today .dl b { color: var(--new); }
+ul.tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+ul.tasks li { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+ul.tasks li span.tx { overflow-wrap: anywhere; min-width: 0; }
+ul.tasks li.done span.tx { color: var(--ink-2); }
+.ts { flex: none; font: 500 10.5px var(--f-mono); letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; color: var(--on-chip); min-width: 74px; text-align: center; }
+.ts.done { background: var(--main); } .ts.doing { background: var(--branch); } .ts.todo { background: var(--planned); } .ts.moved { background: var(--ink-2); } .ts.night { background: var(--ink); }
+.ref { font: 11.5px var(--f-mono); color: var(--ink-2); white-space: nowrap; }
+@media (max-width: 480px) { .day { grid-template-columns: 1fr; } .dl { flex-direction: row; gap: 8px; align-items: baseline; } }
 </style>
 
 <div class="wrap">
@@ -71,6 +86,14 @@ code { font-family: var(--f-mono); font-size: 12.5px; background: var(--chip); p
   <h1>Реестр механик</h1>
   <div class="totals" id="totals"></div>
 </header>
+
+<section id="plan" class="plan" aria-labelledby="planTitle">
+  <div class="planned-head"><div class="eyebrow">выполнение плана · по дням</div><h1 id="planTitle">План</h1></div>
+  <div class="totals" id="planTotals"></div>
+  <div id="planWeeks" style="display:flex;flex-direction:column;gap:10px"></div>
+</section>
+
+<div class="planned-head"><div class="eyebrow">всё, что есть в игре</div><h1>Механики</h1></div>
 
 <div class="bar">
   <input id="q" type="search" placeholder="Поиск: «угол», «Codex.Cover», «ЧВК»…" aria-label="Поиск по механикам">
@@ -135,6 +158,32 @@ code { font-family: var(--f-mono); font-size: 12.5px; background: var(--chip); p
     if (!html.includes('<li')) html = '<p class="empty">Ничего не найдено. Сбросьте фильтр или измените поиск.</p>';
     document.getElementById('list').innerHTML = html;
   }
+  // ---- plan by day ----
+  (function(){
+    const P = D.plan || { weeks: [] };
+    const TS = { done:'сделано', doing:'идёт', todo:'по плану', moved:'перенесено', night:'ночью' };
+    const pad = n => String(n).padStart(2,'0');
+    const now = new Date(); const todayIso = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    const dayMs = 864e5, dOf = iso => new Date(iso + 'T12:00:00');
+    const WD = ['вс','пн','вт','ср','чт','пт','сб'], MON = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+    const rel = iso => { const k = Math.round((dOf(iso) - dOf(todayIso)) / dayMs); return k===0?'сегодня':k===1?'завтра':k===-1?'вчера':k===2?'послезавтра':''; };
+    let nDone=0, nAll=0;
+    const weeksHtml = (P.weeks||[]).map(w => {
+      const cur = todayIso >= w.from && todayIso <= w.to;
+      const items = (w.days||[]).flatMap(d => d.items||[]); const wd = items.filter(i=>i.status==='done').length;
+      const counted = items.filter(i=>i.status!=='night'&&i.status!=='moved'); nAll += counted.length; nDone += counted.filter(i=>i.status==='done').length;
+      const days = (w.days||[]).map(d => {
+        const dt = dOf(d.date), r = rel(d.date);
+        const lis = (d.items||[]).map(i => `<li class="${esc(i.status)}"><span class="ts ${esc(i.status)}">${TS[i.status]||esc(i.status)}</span><span class="tx">${esc(i.text)}${i.ref?` <span class="ref">${esc(i.ref)}</span>`:''}</span></li>`).join('');
+        return `<div class="day${d.date===todayIso?' today':''}"><div class="dl"><b>${r||WD[dt.getDay()]}</b><span>${dt.getDate()} ${MON[dt.getMonth()]}${r?' · '+WD[dt.getDay()]:''}</span></div><ul class="tasks">${lis}</ul></div>`;
+      }).join('');
+      const range = `${dOf(w.from).getDate()} ${MON[dOf(w.from).getMonth()]} – ${dOf(w.to).getDate()} ${MON[dOf(w.to).getMonth()]}`;
+      return `<details class="grp" ${cur?'open':''}><summary><h2>${esc(w.title)}</h2><span class="cnt">${range} · ${wd}/${items.filter(i=>i.status!=='night').length} сделано</span></summary>${w.goal?`<p class="goal">${esc(w.goal)}</p>`:''}${days || '<p class="goal">Раскладка по дням — в начале недели.</p>'}</details>`;
+    }).join('');
+    document.getElementById('planWeeks').innerHTML = weeksHtml || '<p class="empty">План ещё не заполнен.</p>';
+    document.getElementById('planTotals').innerHTML = `<span><b>${nDone}</b> из ${nAll} задач сделано</span><span>сегодня ${dOf(todayIso).getDate()} ${MON[dOf(todayIso).getMonth()]}</span>`;
+  })();
+
   document.getElementById('q').addEventListener('input', render);
   document.getElementById('list').addEventListener('click', e => {
     const b = e.target.closest('.copy'); if (!b) return;
