@@ -19,7 +19,7 @@ namespace TacticalCameraRules
 
 	float ClampMinDistance(const FTacticalCameraConfig& Config, float Distance)
 	{
-		return FMath::Max(Distance, GetMinZoomDistance(Config));
+		return FMath::Max(Distance, Config.MinSafeDistance);
 	}
 
 	FVector PushOutOfCapsule(const FVector& Location, const FVector& CapsuleCenter, float HalfHeight, float Radius, float Clearance)

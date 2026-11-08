@@ -793,9 +793,9 @@
     },
     {
       "name": "camera",
-      "globs": ["Source/**/Camera/**", "Source/**/Debug/InteriorExitSmoke*", "Source/**/Debug/RoofCutawaySmoke*", "Source/**/Debug/RoofCutawayFocusSmoke*"],
+      "globs": ["Source/**/Camera/**", "Source/**/Debug/CameraMinZoomSmoke*", "Source/**/Debug/InteriorExitSmoke*", "Source/**/Debug/RoofCutawaySmoke*", "Source/**/Debug/RoofCutawayFocusSmoke*"],
       "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
-      "smokes": ["CameraStaySmoke", "CameraZoneSmoke", "RoofCutawaySmoke", "RoofCutawayFocusSmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
+      "smokes": ["CameraMinZoomSmoke", "CameraStaySmoke", "CameraZoneSmoke", "RoofCutawaySmoke", "RoofCutawayFocusSmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
     },
     {
       "name": "death-cinematic",

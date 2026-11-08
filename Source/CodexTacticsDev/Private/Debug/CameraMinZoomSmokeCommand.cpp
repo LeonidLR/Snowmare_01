@@ -2,9 +2,10 @@
 // of an operative's hand and rifle):
 //   powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands CodexTactics.CameraMinZoomSmoke
 // 1. the mouse wheel zoomed in 50 times with real input (MouseScrollUp through APlayerController::InputKey): the camera is no closer to its
-// focus than TacticalCameraRules::GetMinZoomDistance and outside every character capsule;
+// focus than the wheel's minimum TacticalCameraRules::GetMinZoomDistance (8 m) and outside every character capsule;
 // 2. the other zoom paths: a glide to the leader / an enemy with a tiny distance (SmoothFocusOnTarget 100 cm, the death cam / enemy focus
-// path) and a snap (SnapFocusOnTarget 50 cm) end at the minimum, not point-blank;
+// path) and a snap (SnapFocusOnTarget 50 cm) end at the hard floor MinSafeDistance (7 m: cinematic / focus shots may close to it, the
+// horde intro's type shot is exactly 7 m), not point-blank;
 // 3. a character teleported onto the camera: the camera leaves his capsule.
 // Code: Camera/TacticalCameraPawn.cpp (Tick clamp, PushOutOfCharacters), Camera/TacticalCameraRules.cpp (ClampMinDistance, PushOutOfCapsule).
 
@@ -87,7 +88,8 @@ namespace CameraMinZoomSmoke
 		{
 			return State.Time < 10.f;
 		}
-		const float MinDistance = TacticalCameraRules::GetMinZoomDistance(Camera->Config);
+		const float MinDistance = TacticalCameraRules::GetMinZoomDistance(Camera->Config); // the wheel's minimum
+		const float FloorDistance = Camera->Config.MinSafeDistance; // the hard floor of the glides / snaps
 		auto Next = [&State]() { ++State.Stage; State.StageTime = 0.f; };
 		FString Who;
 		switch (State.Stage)
@@ -130,7 +132,7 @@ namespace CameraMinZoomSmoke
 			{
 				return true;
 			}
-			Check(State, Camera->GetCurrentDistance() >= MinDistance - 1.f, FString::Printf(TEXT("SmoothFocusOnTarget(leader, 100 cm) ends at %.0f cm >= %.0f"), Camera->GetCurrentDistance(), MinDistance));
+			Check(State, FMath::IsNearlyEqual(Camera->GetCurrentDistance(), FloorDistance, 1.f), FString::Printf(TEXT("SmoothFocusOnTarget(leader, 100 cm) ends at the floor: %.0f cm = %.0f"), Camera->GetCurrentDistance(), FloorDistance));
 			{
 				AEnemyCharacter* Enemy = nullptr;
 				for (TActorIterator<AEnemyCharacter> It(World); It && !Enemy; ++It)
@@ -153,7 +155,7 @@ namespace CameraMinZoomSmoke
 			{
 				return true;
 			}
-			Check(State, Camera->GetCurrentDistance() >= MinDistance - 1.f, FString::Printf(TEXT("focus on an enemy with 100 cm: %.0f cm >= %.0f"), Camera->GetCurrentDistance(), MinDistance));
+			Check(State, Camera->GetCurrentDistance() >= FloorDistance - 1.f, FString::Printf(TEXT("focus on an enemy with 100 cm: %.0f cm >= the floor %.0f"), Camera->GetCurrentDistance(), FloorDistance));
 			Check(State, !InsideAnyCapsule(*World, Camera->GetActorLocation(), Who), TEXT("... the camera is in no capsule ") + Who);
 			Camera->SnapFocusOnTarget(Leader, 50.f);
 			Next();
@@ -163,7 +165,7 @@ namespace CameraMinZoomSmoke
 			{
 				return true;
 			}
-			Check(State, Camera->GetCurrentDistance() >= MinDistance - 1.f, FString::Printf(TEXT("SnapFocusOnTarget(leader, 50 cm): %.0f cm >= %.0f"), Camera->GetCurrentDistance(), MinDistance));
+			Check(State, FMath::IsNearlyEqual(Camera->GetCurrentDistance(), FloorDistance, 1.f), FString::Printf(TEXT("SnapFocusOnTarget(leader, 50 cm): at the floor %.0f cm = %.0f"), Camera->GetCurrentDistance(), FloorDistance));
 			// A character walks into the camera.
 			Leader->SetActorLocation(Camera->GetActorLocation(), false, nullptr, ETeleportType::TeleportPhysics);
 			Next();

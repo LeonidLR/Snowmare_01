@@ -101,7 +101,8 @@ void ATacticalCameraPawn::Tick(float DeltaSeconds)
 	}
 	const bool bWasGliding = bSmoothFocusing || bDramaticShot;
 	UpdateSmoothFocus(RealDelta);
-	// The one place every zoom path ends in (wheel, glides, cinematics, turn-based entry, snaps): never closer than the minimum (bug #52).
+	// The one place every zoom path ends in (wheel, glides, cinematics, turn-based entry, snaps): never closer than the 7 m floor (bug #52).
+	// The wheel itself stops at its own minimum (StepZoom: max(DistanceMin, MinSafeDistance)); cinematic / focus shots may close to the floor.
 	TargetDistance = TacticalCameraRules::ClampMinDistance(Config, TargetDistance);
 	CurrentDistance = TacticalCameraRules::ClampMinDistance(Config, CurrentDistance);
 

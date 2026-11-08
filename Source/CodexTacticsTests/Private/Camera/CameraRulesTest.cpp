@@ -41,6 +41,10 @@ bool FCameraMinZoomTest::RunTest(const FString&)
 	using namespace TacticalCameraRules;
 	FTacticalCameraConfig Config;
 	TestEqual(TEXT("Default minimum is the wheel limit of 8 m"), GetMinZoomDistance(Config), 800.f);
+	TestEqual(TEXT("The wheel stops at its own 8 m"), StepZoom(Config, 900.f, -50.f), 800.f);
+	TestEqual(TEXT("A cinematic / focus shot may close to the 7 m floor (the horde intro's type shot)"), ClampMinDistance(Config, 700.f), 700.f);
+	TestEqual(TEXT("... never below it"), ClampMinDistance(Config, 300.f), Config.MinSafeDistance);
+	TestEqual(TEXT("... the floor is 7 m"), Config.MinSafeDistance, 700.f);
 	Config.DistanceMin = 100.f; // a Blueprint that lowered the wheel limit (bug #52)
 	TestEqual(TEXT("The hard floor wins over a low DistanceMin"), GetMinZoomDistance(Config), Config.MinSafeDistance);
 	TestEqual(TEXT("A tiny glide distance is raised"), ClampMinDistance(Config, 100.f), Config.MinSafeDistance);

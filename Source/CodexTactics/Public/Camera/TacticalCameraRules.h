@@ -37,10 +37,11 @@ struct CODEXTACTICS_API FTacticalCameraConfig
 	float DistanceMin = 800.f;
 
 	/**
-	 * Hard floor of the camera's distance to its focus for EVERY zoom path (wheel, glides, cinematics, turn-based entry, snaps), cm
-	 * (bug #52, game designer video 2026-11-06: the view zoomed point-blank, the screen full of a hand and a rifle). Effective minimum =
-	 * max(DistanceMin, this). 700 cm: with the 30 deg vertical FOV the view is ~3.7 m tall at that range, so a 1.8 m operative fills about
-	 * half the screen - the closest still-tactical framing; 800 (DistanceMin) stays the wheel's own limit.
+	 * Hard floor of the camera's distance to its focus for EVERY zoom path, cm (bug #52, game designer video 2026-11-06: the view zoomed
+	 * point-blank, the screen full of a hand and a rifle). The cinematic / focus paths (horde intro type shots, death cam, dramatic focus,
+	 * enemy focus glides, snaps, turn-based entry) may close down to it, never below; the wheel keeps its own minimum
+	 * max(DistanceMin, this). 700 cm: with the 30 deg vertical FOV the view is ~3.7 m tall at that range, so a 1.8 m operative fills
+	 * about half the screen - the closest still-tactical framing (the horde intro's type shot is exactly 7 m).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom", meta = (ClampMin = "0"))
 	float MinSafeDistance = 700.f;
@@ -150,10 +151,13 @@ namespace TacticalCameraRules
 	/** Distance after Notches wheel steps (positive = zoom out), clamped to [DistanceMin, DistanceMax]. */
 	CODEXTACTICS_API float StepZoom(const FTacticalCameraConfig& Config, float CurrentDistance, float Notches);
 
-	/** Lowest distance any zoom path may use: max(DistanceMin, MinSafeDistance) (bug #52). */
+	/** The wheel's minimum: max(DistanceMin, MinSafeDistance) (bug #52; a Blueprint lowering DistanceMin cannot go under the floor). */
 	CODEXTACTICS_API float GetMinZoomDistance(const FTacticalCameraConfig& Config);
 
-	/** Distance raised to GetMinZoomDistance when below it (the maximum is not touched: cinematics may pull far out). */
+	/**
+	 * The hard floor of every zoom path: Distance raised to MinSafeDistance when below it (cinematic / focus glides, snaps and turn-based
+	 * entry may close to 7 m, the wheel stays at GetMinZoomDistance; the maximum is not touched: cinematics may pull far out).
+	 */
 	CODEXTACTICS_API float ClampMinDistance(const FTacticalCameraConfig& Config, float Distance);
 
 	/**
