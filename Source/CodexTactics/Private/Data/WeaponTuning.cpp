@@ -16,6 +16,7 @@
 #include "Data/WeaponStatsRules.h"
 #include "Data/WeaponRoster.h"
 #include "Data/WeaponLoadoutRules.h"
+#include "Combat/SidearmRules.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Data/GodotBalanceAsset.h"
@@ -212,6 +213,17 @@ namespace WeaponTuning
 				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
 			}
 			LastWeaponReport.Loadouts = WeaponLoadoutRules::Get().Num();
+		}
+		// The sidearm switch (the whole pistol, 2026-11-08): no block = the defaults (on, the pistol, 10 m, 0.35 s draw, back after 3 s).
+		{
+			const TSharedPtr<FJsonObject>* SidearmBlock = nullptr;
+			TArray<FString> SidearmErrors;
+			SidearmRules::Set(Root->TryGetObjectField(TEXT("sidearm"), SidearmBlock) && SidearmBlock && SidearmBlock->IsValid()
+				? SidearmRules::Parse(**SidearmBlock, &SidearmErrors) : FSidearmConfig());
+			for (const FString& Error : SidearmErrors)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
+			}
 		}
 		// The designer's roster (2026-11-08): "roster.out" weapons are out of play (WeaponRoster); no block = the roster stays as it is.
 		{

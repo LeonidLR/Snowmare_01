@@ -336,3 +336,15 @@ flamethrower rows of this table were dropped with the roster, section 0: those w
   copies; PMC fighters: the pack clips) - `docs/systems/animation-setup.md` "Shotgun weapon layer". Reload: the pack has ONE 2.4 s reload
   clip and no per-shell clip; it plays once per shell fitted to the 0.5 s step (x4.8) - `reload_shell_start_s` / `_end_s` in
   `weapon_anim_sets.json` can cut a section of it instead (the designer may pick one after viewing the render).
+
+## 14. The whole pistol (2026-11-08; numbers pending the designer's confirmation, data only)
+
+| What | Before | After |
+|---|---|---|
+| Real-time damage curve | per 1.5 m cell 1 / 0.8 / 0.6 / 0.4 / 0.25 / 0.12, then x0.6 falloff past 15 m | full to 10 m, linear to x0.6 at 25 m, no cell table |
+| Hound (light 0.10) at 5 / 10 / 18 / 25 m | 8.74 / 1.75 / 1.75 / 1.05 | 14.56 / 14.56 / 11.45 / 8.74 |
+| Turn-based, 1..6 cells | x1 / 0.8 / 0.6 / 0.4 / 0.25 / 0.12 | x1 everywhere (the curve at 1.5 m a cell; 9 m < 10 m) |
+| Sidearm | none (the pistol only when the primary had no reserve left) | the pistol when the primary runs dry with an enemy within 10 m; back after 3 s without a target |
+
+The turn-based rule: a weapon without a per-cell table follows its real-time falloff curve at the cells' distance, so the two modes cannot drift
+apart again; weapons with a table keep it.

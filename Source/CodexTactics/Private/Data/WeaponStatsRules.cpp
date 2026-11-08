@@ -24,6 +24,7 @@ namespace WeaponStatsRulesInternal
 		{ EWeaponHandling::Standard, TEXT("standard") },
 		{ EWeaponHandling::SniperRifle, TEXT("sniper_rifle") },
 		{ EWeaponHandling::Shotgun, TEXT("shotgun") },
+		{ EWeaponHandling::Pistol, TEXT("pistol") },
 	};
 
 	static const TWeaponEnumName<EDamageType> WeaponDamageTypeNames[] = {

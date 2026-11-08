@@ -892,6 +892,18 @@ public:
 	void EquipRestoredWeapon(const FString& SavedWeaponId);
 
 	/**
+	 * The sidearm switch (SidearmRules, 2026-11-08): the primary ran dry with an enemy within the threat range -> the pistol now (the reload is
+	 * dropped, the draw delays the first shot). True when he switched.
+	 */
+	bool TryDrawSidearm();
+	/** The sidearm drawn by the rule goes back to the primary (which then reloads) after the holster time without a target / when dry. */
+	void UpdateSidearmReturn(float DeltaTime);
+	/** He holds the sidearm the rule drew (not a weapon the player chose). */
+	bool IsSidearmDrawnByRule() const { return bSidearmDrawnByRule; }
+	/** Sidearm draws by the rule since spawn (for the smokes). */
+	int32 GetSidearmDraws() const { return SidearmDraws; }
+
+	/**
 	 * Replaces the Blueprint's skeletal mesh before BeginPlay (per-role body, FSquadMemberSpawn::BodyMesh: the Female Soldier
 	 * for the Medic-Sapper). The AnimBP stays; the Blueprint's index-based material overrides are dropped (they belong to the
 	 * old mesh's slots).
@@ -2267,6 +2279,10 @@ private:
 	void ConsumeAmmoAfterShot();
 	/** GetRoundsSpent. */
 	int32 RoundsSpent = 0;
+	/** The sidearm switch (TryDrawSidearm / UpdateSidearmReturn). */
+	bool bSidearmDrawnByRule = false;
+	float SidearmNoTargetSeconds = 0.f;
+	int32 SidearmDraws = 0;
 	/**
 	 * Range (weapon x stance x elevation), dead zone and line of fire to Enemy (Godot _find_shoot_target ray: walls block,
 	 * barricades by SquadFireRules::JudgeLine, another enemy in the way becomes the target unless bKeepTarget).

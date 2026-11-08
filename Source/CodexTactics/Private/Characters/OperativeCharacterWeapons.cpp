@@ -8,6 +8,8 @@
 #include "Combat/CombatCheats.h"
 
 #include "Characters/OperativeCharacterInternal.h"
+#include "Characters/EnemyCharacter.h"
+#include "CodexTactics.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/GrenadeActor.h"
@@ -17,6 +19,7 @@
 #include "Data/WeaponDataAsset.h"
 #include "Data/WeaponRoster.h"
 #include "Data/WeaponLoadoutRules.h"
+#include "Combat/SidearmRules.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -165,6 +168,8 @@ bool AOperativeCharacter::SwitchToWeaponById(const FString& WeaponId)
 		AmmoInventory.FindOrAdd(CurrentWeapon->WeaponId) = { CurrentClip, ReserveAmmo };
 	}
 	CurrentWeapon = *Found;
+	bSidearmDrawnByRule = false; // any switch ends the rule's draw (TryDrawSidearm sets it again after its own switch)
+	SidearmNoTargetSeconds = 0.f;
 	FWeaponAmmoState Ammo = AmmoInventory.FindRef(WeaponId);
 	if (WeaponId == TEXT("grenade"))
 	{
@@ -418,3 +423,87 @@ void AOperativeCharacter::AutoSwitchOnEmpty()
 	}
 	// Godot _switch_to_melee_knife (the last-chance weapon) is gone: the knife is out of play (the designer's roster, 2026-11-08).
 }
+
+bool AOperativeCharacter::TryDrawSidearm()
+{
+	const FSidearmConfig& Config = SidearmRules::Get();
+	if (!CurrentWeapon || !Config.bEnabled)
+	{
+		return false;
+	}
+	const bool bOwned = AvailableWeapons.ContainsByPredicate([&Config](const UWeaponDataAsset* Weapon) { return Weapon && Weapon->WeaponId == Config.WeaponId; });
+	const FWeaponAmmoState Sidearm = GetAmmoState(Config.WeaponId);
+	const bool bUsable = bOwned && !WeaponRoster::IsOutOfPlay(Config.WeaponId) && (Sidearm.Clip > 0 || Sidearm.Reserve > 0 || Sidearm.Reserve == -1);
+	// The threat: the nearest live enemy - his combat target, any monster, any fighter of another team (an empty-clip moment only, rare).
+	float Threat = -1.f;
+	auto Consider = [this, &Threat](const AActor* Actor)
+	{
+		const UHealthComponent* Health = IsValid(Actor) ? Actor->FindComponentByClass<UHealthComponent>() : nullptr;
+		if (IsValid(Actor) && (!Health || Health->IsAlive()))
+		{
+			const float Distance = static_cast<float>(FVector::Dist(GetActorLocation(), Actor->GetActorLocation()));
+			Threat = Threat < 0.f ? Distance : FMath::Min(Threat, Distance);
+		}
+	};
+	Consider(CurrentCombatTarget.Get());
+	if (UWorld* World = GetWorld())
+	{
+		for (const AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+		{
+			Consider(Enemy);
+		}
+		for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+		{
+			if (*It != this && It->TeamId != TeamId)
+			{
+				Consider(*It);
+			}
+		}
+	}
+	if (!SidearmRules::ShouldDrawSidearm(Config, CurrentWeapon->WeaponId == Config.WeaponId, UsesAmmo() && CurrentClip <= 0, ReserveAmmo > 0, bUsable, Threat, IsRaging()))
+	{
+		return false;
+	}
+	const FString From = CurrentWeapon->WeaponId;
+	if (!SwitchToWeaponById(Config.WeaponId)) // drops the reload; the primary keeps its empty clip + reserve
+	{
+		return false;
+	}
+	bSidearmDrawnByRule = true;
+	SidearmNoTargetSeconds = 0.f;
+	ShootTimer = FMath::Max(ShootTimer, Config.DrawSeconds);
+	++SidearmDraws;
+	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🔫 Sidearm!"), FLinearColor(1.f, 0.8f, 0.35f));
+	UE_LOG(LogCodexTactics, Display, TEXT("[Sidearm] %s: %s empty, enemy %.1f m away -> %s (draw %.2f s)"), *DisplayName.ToString(), *From, Threat / 100.f,
+		*Config.WeaponId, Config.DrawSeconds);
+	return true;
+}
+
+void AOperativeCharacter::UpdateSidearmReturn(float DeltaTime)
+{
+	const FSidearmConfig& Config = SidearmRules::Get();
+	if (!bSidearmDrawnByRule || !CurrentWeapon || CurrentWeapon->WeaponId != Config.WeaponId)
+	{
+		bSidearmDrawnByRule = false;
+		return;
+	}
+	const AActor* Target = CurrentCombatTarget.Get();
+	const UHealthComponent* Health = IsValid(Target) ? Target->FindComponentByClass<UHealthComponent>() : nullptr;
+	const bool bTarget = IsValid(Target) && (!Health || Health->IsAlive());
+	SidearmNoTargetSeconds = bTarget ? 0.f : SidearmNoTargetSeconds + DeltaTime;
+	const bool bDry = UsesAmmo() && CurrentClip <= 0 && ReserveAmmo == 0;
+	if (!SidearmRules::ShouldReturnToPrimary(Config, true, SidearmNoTargetSeconds, bDry))
+	{
+		return;
+	}
+	if (TakePrimaryWeapon())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Sidearm] %s: back to %s (%s)"), *DisplayName.ToString(), *GetPrimaryWeaponId(), bDry ? TEXT("sidearm dry") : TEXT("no target"));
+		if (UsesAmmo() && CurrentClip <= 0)
+		{
+			StartReload();
+		}
+	}
+	bSidearmDrawnByRule = false;
+}
+

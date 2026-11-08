@@ -1,9 +1,17 @@
 #include "Tactics/TurnBasedRules.h"
+
+#include "Combat/WeaponBallisticsRules.h"
 #include "Tactics/GorkyLineOfSight.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Data/WeaponDataAsset.h"
 #include "Tactics/Gorky17Types.h"
 #include "Tactics/GorkyGridManager.h"
+
+namespace
+{
+	/** The turn-based grid's cell (AGorkyGridManager::CellSize default): the distance a cell count stands for. */
+	constexpr float TurnBasedCellCm = 150.f;
+}
 
 namespace
 {
@@ -104,8 +112,12 @@ float TurnBasedRules::GetDamageForDistance(const UWeaponDataAsset* Weapon, int32
 	{
 		return FallbackDamage;
 	}
+	// A weapon without a per-cell table (the pistol since 2026-11-08: its Godot table cut it to 12 % past ~8 m) takes the real-time falloff
+	// curve at the cells' distance (1.5 m a cell), so both modes agree: the pistol is full up to 10 m, i.e. over its whole 6-cell grid reach.
 	const TArray<float>& Multipliers = Weapon->Stats.Accuracy.DamageMultiplierByCell;
-	const float Multiplier = Multipliers.IsEmpty() ? 1.f : Multipliers[FMath::Clamp(DistanceCells - 1, 0, Multipliers.Num() - 1)];
+	const float Multiplier = Multipliers.IsEmpty()
+		? WeaponBallisticsRules::DamageFalloffMultiplier(Weapon->Stats, static_cast<float>(FMath::Max(1, DistanceCells)) * TurnBasedCellCm)
+		: Multipliers[FMath::Clamp(DistanceCells - 1, 0, Multipliers.Num() - 1)];
 	return Weapon->Stats.Damage.BaseDamage * Multiplier;
 }
 

@@ -539,6 +539,13 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	}
 
 	const bool bRaging = IsRaging();
+	// The sidearm switch (SidearmRules, 2026-11-08): back to the primary when the threat is gone; the pistol instead of an empty primary's
+	// reload when an enemy is close.
+	UpdateSidearmReturn(DeltaTime);
+	if (bIsReloading && !bRaging && TryDrawSidearm())
+	{
+		return TEXT("sidearm drawn");
+	}
 	if (bIsReloading && !bRaging) // Godot: no reloading while raging
 	{
 		ReloadTimer -= DeltaTime;
