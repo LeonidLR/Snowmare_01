@@ -361,10 +361,10 @@ The game designer answered section 6 on 2026-11-08. These answers override the r
 |---|---|---|
 | 1 | **C, yes.** N-scalable core first, then formation groups. | as planned |
 | 2 | **No fixed roles for members 4-6.** Any fighter can be added; there is no "grenadier" or "mortarman" post - any fighter can carry the RPG-7, and the mortar is a crew of at least three. The three free slots go to recruits with **any** Tactics. | no new `EOperativeRole` values; heavy weapons are equipment, not roles; the mortar crew template (P4) takes any three men; the balance prefix / carry / loadout code must stop assuming one member per role (4.1) |
-| 3 | **Keys 4-5-6 select fighters; the whistle and the throw are removed from the number row** (whether the lure mechanic itself goes is to be confirmed, see open items). | `IA_StealthWhistle` (5) / `IA_StealthThrow` (6) leave keys 5 / 6 |
+| 3 | **Keys 4-5-6 select fighters; the whistle and the throw are removed from the number row** and stay as action-bar buttons (7.2). | `IA_StealthWhistle` (5) / `IA_StealthThrow` (6) leave keys 5 / 6 |
 | 4 | **Groups like RTS control groups:** `Shift+1..4` puts the selected fighters into group 1..4; `F1..F4` switches control to group 1..4. Up to **four** groups (not two). | P2's group object must allow 1..4 instances; `F1` (controls screen), `F2` (map panel), `F3` (full map) are taken today and must move (open items) |
 | 5 | **Needs a visual first.** Shapes drawn: `docs/design/squad-six-shapes.html` (5A lozenge, 5B wedge, 5C staggered column; 6A double wedge, 6B wedge + rear guard, 6C staggered column). | awaiting the designer's pick |
-| 6 | Not understood - re-asked in plain words (place names in the formation vs the fighter's identity). | awaiting |
+| 6 | Re-asked in plain words; answer: letters (`C`, `P2`, `L2`), see 7.2. | as recommended |
 | 7 | Yes - three custom slots, up to six places each, applied to the selected group. | as planned |
 | 8 | Yes - narrow column looks alternate by index, the last man the rear guard. | as planned |
 | 9 | Yes - blizzard double file for 5 / 6; the "lost" rule tests the distance to the nearest mate. | as planned |
@@ -387,10 +387,13 @@ The game designer answered section 6 on 2026-11-08. These answers override the r
 4. **Two more fighters** = P1 (shapes for 5 / 6, wall layout N, keys 5 / 6, roster 6 rows) and P2 (groups 1..4, `Shift+1..4`, `F1..F4`).
 5. Crews and the APC (P4) after the weapons and vehicle systems.
 
-### 7.2 Open items after the answers
+### 7.2 Follow-up answers (2026-11-08)
 
-- Q3: remove the stealth lure mechanic entirely (it drives the tutorial ambush lesson, the hound scent and enemy perception), or only take
-  it off keys 5 / 6 (action-bar button / another key)?
-- Q4: new keys for the controls screen (F1), the map panel (F2) and the full map (F3).
-- Q5: the designer's pick from `squad-six-shapes.html`.
-- Q6: re-asked.
+- Q3: **the stealth lure stays** (tutorial ambush lesson, hound scent, enemy perception unchanged); the whistle and the throw leave keys
+  5 / 6 and remain **action-bar buttons** only.
+- Q4: **F1-F4 belong to the groups.** The controls screen moves F1 -> F5, the map panel F2 -> F6, the full map F3 -> F7 (bindings,
+  the controls-screen text, `ControlsScreenSmoke`, `MinimapSmoke`, the HUD hints). Scheduled as its own small task right after the #55 / #57
+  merge.
+- Q6: **letters, as recommended**: places K / P / L / Z for the first four, `C` (centre), `P2`, `L2` for the extra places; shown in the
+  tactical pause and in logs only. A place is a position, not a person - any fighter can take any place.
+- Still open: Q5 (pick from `squad-six-shapes.html`).
