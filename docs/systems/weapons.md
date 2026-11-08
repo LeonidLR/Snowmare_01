@@ -133,3 +133,41 @@
 - **Checks:** tests `CodexTactics.Weapons.Sniper.RifleData`, `.MarksmanOnSchema`; `CodexTactics.SniperSmoke` part 8 (the same damage at 10 / 30 m,
   the Brute, the Marksman's config from the schema, a PMC fighter's rifle); render `CodexTactics.ShotgunD1Shots sniper` -> `Saved/Screenshots/SniperRifle/`.
 
+## The shared explosion model (2026-11-09; `docs/design/WEAPONS_FRAMEWORK.md` 16)
+
+- **One function for every blast:** `Explosions::Detonate(World, FExplosionSpec)` (`Combat/Explosion.h`) - the grenade (`AGrenadeActor::ApplyAreaEffect`),
+  the placed charges (`AInteractableActor::ApplyBlast`: fuel barrel, proximity mine, tripwire, trapped objects / crates / turrets / barricades) and
+  the projectiles. It applies the falloff to enemies / the squad / other bodies, explosive damage = armour class Vehicle (decision 1), the
+  status, chained barrels / traps, the vehicles' hulls, the noise / patrol alert, the knockdown (2.5 m), the explosion event (snow craters +
+  the suppression report) and `Explosions::OnDetonated()` (the camera shake; a knockback hook later). Returns the victims (`FExplosionResult`).
+- **Parity:** `GrenadeSpec` / `ChargeSpec` build the old numbers (grenade half-at-the-edge curve, the squad x0.65, every actor in reach;
+  charges: enemies x0.4 / squad x0.5 linear curves, the trap event); `CodexTactics.Weapons.Explosion.Parity` compares them bit-exact with
+  `GrenadeRules::DamageFalloff` / `DeployableRules::GetBlastDamage` at every caller's numbers. The vehicle cannon's splash keeps its own
+  direct-hit / kill-credit code (`VehicleTurretComponent`; not a blast of this model).
+- **Pure rules** (`ExplosionRules`): the falloff family (`HalfAtEdge`, `Linear`, `FullCore` from a weapon's `explosion` block), the cover rule,
+  the RPG-7 back-blast cone (`BackblastMultiplier`: 1 at the launcher, 0 at `back_blast_length_m` / outside `back_blast_half_angle_deg`), the
+  camera trauma (linear to 0 at 4 radii).
+- **Cover:** `weapons_tuning.json` "explosions": a wall between the blast and a body x`wall_multiplier` (0.25; a Visibility trace from 50 cm
+  above the centre to the body's chest); a plunging round (high-angle) ignores walls - only a roof above the body (a trace 10 m up from its
+  head) protects, x`roof_multiplier` (0). `occlusion` switches the rule per blast kind: on for `projectile`, off for grenade / barrel / mine /
+  tripwire / trap (their numbers stay as they were; the designer can turn it on in data).
+- **Camera shake:** `explosions.camera_trauma` (0 = off, as before) - the tactical camera adds it at its focus on every blast, in real time
+  too (`ATacticalCameraPawn::HandleExplosion`).
+
+## The shared projectile layer (2026-11-09; no RPG-7 yet)
+
+- **Schema:** `kind: projectile`, block `projectile`: `speed_mps`, `gravity_scale`, `arming_distance_m`, `max_flight_s` (0 = 10 s),
+  `trajectory` `flat` / `ballistic` / `high_angle` (the old `high_angle: true` still reads as the high-angle trajectory); a ballistic /
+  high-angle round needs `gravity_scale > 0`. The mortar's band is the core `min_range_m` / `attack_range_m` (30 / 250 m,
+  `ProjectileRules::IsWithinFireBand`).
+- **Flight** (`ProjectileRules`): `SolveLaunch` (flat = straight at the aim point; ballistic = the low arc; high-angle = the high plunging arc;
+  false when out of reach), fixed 1/120 s steps with exact constant-gravity kinematics (the same points at any frame rate; at most 0.5 s per
+  frame), arming by the flown distance.
+- **Actor + pool:** `UProjectileSubsystem::Fire` / `FireAt(FProjectileLaunch, Target)` take a parked `AProjectileActor` (or spawn one). Each step
+  sweeps a sphere (8 cm) against WorldStatic / WorldDynamic / Pawn / PhysicsBody / Vehicle / Destructible, the shooter ignored. Armed impact:
+  the direct share on the actor struck + `Explosions::Detonate` (`AProjectileActor::BlastSpecFor`: every actor in reach, the weapon's full-core
+  curve, plunging for a high-angle round); unarmed: a dud (the direct share as kinetic damage); past `max_flight_s`: an air burst (armed) or
+  gone. `OnProjectileFinished` reports each flight's end; the round goes back to the pool.
+- **Checks:** tests `CodexTactics.Weapons.Explosion.*` (Falloff, Occlusion, ArmorClass, Parity, Backblast) and `CodexTactics.Weapons.Projectile.*`
+  (Launch, FixedStep, Schema); `CodexTactics.ProjectileSmoke` (a flat round at a hound 25 m away, a high-angle round at a hound 40 m away, the
+  pool reuse; a projectile blast behind a wall x0.25, a plunging one ignoring the wall, a roof stopping it, the grenade ignoring the wall).

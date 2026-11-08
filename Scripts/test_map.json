@@ -28,7 +28,7 @@
     "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
-    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke", "ShotgunSmoke", "PistolSmoke",
+    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke", "ShotgunSmoke", "PistolSmoke", "ProjectileSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "SuppressionSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
@@ -415,6 +415,14 @@
         "Content/Characters/Operatives/**", "Scripts/Editor/setup_operative_sniper_animation.py"],
       "tests": ["CodexTactics.Combat.Sniper", "CodexTactics.Core.SquadSpawn"],
       "smokes": ["SniperSmoke", "WeaponSelectorSmoke", "SaveRoundTripSmoke", "TurnBasedSmoke"]
+    },
+    {
+      "name": "projectile-explosion",
+      "_why": "2026-11-09: the shared projectile + explosion layer - every blast (grenade, barrel, mines, tripwires, trapped objects, projectiles) goes through Explosions::Detonate",
+      "globs": ["Source/**/Combat/Explosion*", "Source/**/Combat/Projectile*", "Source/**/Combat/GrenadeActor*", "Source/**/Interactables/InteractableActor*",
+        "Source/**/Debug/ProjectileSmoke*"],
+      "tests": ["CodexTactics.Weapons.Explosion", "CodexTactics.Weapons.Projectile", "CodexTactics.Combat.Grenade", "CodexTactics.Interactables"],
+      "smokes": ["ProjectileSmoke", "GrenadeSmoke", "BarrelSmoke", "AIGrenadeSmoke", "DeployableSmoke", "TripwireSmoke", "TurnBlastDeathSmoke", "KnockdownSmoke", "TrapSoloSmoke"]
     },
     {
       "name": "cover",
