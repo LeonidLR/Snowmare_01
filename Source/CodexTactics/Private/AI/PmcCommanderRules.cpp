@@ -257,7 +257,6 @@ namespace PmcCommanderRules
 	{
 		TMap<FString, FPmcEngagementBand> Out;
 		Out.Add(TEXT("m16"), { 2500.f, 6000.f, false });
-		Out.Add(TEXT("plasma_carbine"), { 2500.f, 6000.f, false });
 		Out.Add(TEXT("sniper_rifle"), { 4500.f, 11000.f, false });
 		Out.Add(TEXT("pistol"), { 1000.f, 2500.f, false });
 		Out.Add(TEXT("shotgun"), { 400.f, 1400.f, true });

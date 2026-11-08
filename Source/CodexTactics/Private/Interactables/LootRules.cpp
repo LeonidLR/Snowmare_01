@@ -1,5 +1,7 @@
 #include "Interactables/LootRules.h"
 
+#include "Data/WeaponRoster.h"
+
 #define LOCTEXT_NAMESPACE "LootRules"
 
 namespace
@@ -53,8 +55,29 @@ FText FLootEntry::GetLabel() const
 		: FText::Format(LOCTEXT("EntryLabel", "{0} {1}: {2} {3}"), FText::FromString(Icon), Name, Count, Unit);
 }
 
+namespace LootRulesRoster
+{
+	/** The weapon a loot ammo item feeds (empty for every other item). */
+	const TCHAR* AmmoWeaponOf(ELootItem Item)
+	{
+		switch (Item)
+		{
+		case ELootItem::FlameFuel: return TEXT("flamethrower");
+		case ELootItem::CryoAmmo: return TEXT("cryo_emitter");
+		case ELootItem::PlasmaAmmo: return TEXT("plasma_carbine");
+		default: return TEXT("");
+		}
+	}
+}
+
 int32 FLootContents::GetCount(ELootItem Item) const
 {
+	// The designer's roster (2026-11-08): the ammo of an out-of-play weapon and an out-of-play bonus weapon are no loot (a crate placed
+	// with the Godot defaults - 50 fuel, 30 coolant, 20 plasma cells - shows none of them).
+	if (WeaponRoster::IsOutOfPlay(LootRulesRoster::AmmoWeaponOf(Item)) || (Item == ELootItem::BonusWeapon && WeaponRoster::IsOutOfPlay(BonusWeaponId)))
+	{
+		return 0;
+	}
 	switch (Item)
 	{
 	case ELootItem::Medkit: return Medkits;

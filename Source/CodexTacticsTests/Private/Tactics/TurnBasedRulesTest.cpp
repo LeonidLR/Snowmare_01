@@ -23,9 +23,9 @@ bool FTurnHitChanceTest::RunTest(const FString&)
 	TestEqual(TEXT("Same cell"), TurnBasedRules::CalculateHitChance(nullptr, 0, EOperativeStance::Standing, Balance), 1.f);
 
 	UWeaponDataAsset* Pistol = NewObject<UWeaponDataAsset>();
-	Pistol->BaseHitChances = { 0.9f, 0.6f };
-	Pistol->BaseDamage = 20.f;
-	Pistol->DistanceDamageMultipliers = { 1.f, 0.5f };
+	Pistol->Stats.Accuracy.HitChanceByCell = { 0.9f, 0.6f };
+	Pistol->Stats.Damage.BaseDamage = 20.f;
+	Pistol->Stats.Accuracy.DamageMultiplierByCell = { 1.f, 0.5f };
 	TestEqual(TEXT("Weapon curve beyond its table uses the last entry"), TurnBasedRules::CalculateHitChance(Pistol, 4, EOperativeStance::Standing, Balance), 0.6f);
 	TestEqual(TEXT("Damage for distance"), TurnBasedRules::GetDamageForDistance(Pistol, 3, 30.f), 10.f);
 	TestEqual(TEXT("Turret 2 cells"), TurnBasedRules::CalculateTurretHitChance(2), 0.85f);
@@ -57,12 +57,12 @@ bool FTurnAttackCellsTest::RunTest(const FString&)
 	TestTrue(TEXT("Behind a mine still reachable"), Cells.Contains(FIntPoint(6, 10)));
 
 	UWeaponDataAsset* Knife = NewObject<UWeaponDataAsset>();
-	Knife->AttackShape = EAttackShape::MeleeAdj;
+	Knife->Stats.TurnBased.AttackShape = EAttackShape::MeleeAdj;
 	TestEqual(TEXT("Melee: 8 neighbours"), TurnBasedRules::GetWeaponAttackCells(*Grid, From, Knife, EOperativeStance::Standing, Balance).Num(), 8);
 
 	UWeaponDataAsset* Grenade = NewObject<UWeaponDataAsset>();
-	Grenade->AttackShape = EAttackShape::FreeTarget;
-	Grenade->MaxRangeCells = 2;
+	Grenade->Stats.TurnBased.AttackShape = EAttackShape::FreeTarget;
+	Grenade->Stats.TurnBased.MaxRangeCells = 2;
 	TestEqual(TEXT("Free target radius 2: 5 x 5 - 1"), TurnBasedRules::GetWeaponAttackCells(*Grid, From, Grenade, EOperativeStance::Standing, Balance).Num(), 24);
 	return true;
 }

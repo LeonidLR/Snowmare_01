@@ -4,6 +4,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/MarksmanAIRules.h"
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Combat/ArmorRules.h"
 #include "Combat/WeaponRangeRules.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Tactics/EnemyTurnRules.h"
@@ -12,6 +13,8 @@
 #include "Vehicles/VehicleHullRules.h"
 #include "CodexTactics.h"
 #include "Data/WeaponDataAsset.h"
+#include "Data/WeaponStatsRules.h"
+#include "Data/WeaponRoster.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
@@ -33,6 +36,7 @@ namespace WeaponTuning
 		TSharedPtr<FJsonObject> VehicleTurretBlock;
 		TSharedPtr<FJsonObject> VehicleRamBlock;
 		TSharedPtr<FJsonObject> VehicleHullBlock;
+		FWeaponTuningReport LastWeaponReport;
 
 		void Number(const FJsonObject& Json, const TCHAR* Key, float& Value, float Scale = 1.f)
 		{
@@ -50,29 +54,6 @@ namespace WeaponTuning
 			{
 				Value = FMath::RoundToInt(Read);
 			}
-		}
-
-		void Floats(const FJsonObject& Json, const TCHAR* Key, TArray<float>& Values)
-		{
-			const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;
-			if (Json.TryGetArrayField(Key, Array) && Array)
-			{
-				Values.Reset();
-				for (const TSharedPtr<FJsonValue>& Value : *Array)
-				{
-					Values.Add(Value.IsValid() ? static_cast<float>(Value->AsNumber()) : 0.f);
-				}
-			}
-		}
-
-		TArray<TSharedPtr<FJsonValue>> ToArray(const TArray<float>& Values)
-		{
-			TArray<TSharedPtr<FJsonValue>> Out;
-			for (const float Value : Values)
-			{
-				Out.Add(MakeShared<FJsonValueNumber>(FMath::RoundToFloat(Value * 1000.f) / 1000.f));
-			}
-			return Out;
 		}
 
 		/** 4 decimals: no float noise (0.6499999) in the file the user edits. */
@@ -103,45 +84,35 @@ namespace WeaponTuning
 		return FPaths::ProjectContentDir() / TEXT("Data/Weapons/weapons_tuning.json");
 	}
 
-	void ApplyWeapon(const FJsonObject& Json, UWeaponDataAsset& Weapon)
+	bool ApplyWeapon(const FJsonObject& Json, UWeaponDataAsset& Weapon, TArray<FString>* OutErrors, TArray<FString>* OutUnknown)
 	{
-		Number(Json, TEXT("base_damage"), Weapon.BaseDamage);
-		Number(Json, TEXT("attack_range_m"), Weapon.AttackRangeCm, 100.f);
-		Number(Json, TEXT("effective_range_m"), Weapon.EffectiveRangeCm, 100.f); // bug #39
-		Number(Json, TEXT("fire_rate"), Weapon.FireRate);
-		Number(Json, TEXT("armor_penetration"), Weapon.ArmorPenetration);
-		Integer(Json, TEXT("max_clip_size"), Weapon.MaxClipSize);
-		Integer(Json, TEXT("default_reserve_ammo"), Weapon.DefaultReserveAmmo);
-		Number(Json, TEXT("reload_time"), Weapon.ReloadTime);
-		Number(Json, TEXT("status_duration"), Weapon.StatusDuration);
-		Number(Json, TEXT("status_tick_damage"), Weapon.StatusTickDamage);
-		Integer(Json, TEXT("max_range_cells"), Weapon.MaxRangeCells);
-		Number(Json, TEXT("full_auto_interval"), Weapon.FullAutoInterval); // suppressive fire (2026-10-26)
-		Number(Json, TEXT("suppression_weight"), Weapon.SuppressionWeight);
-		Floats(Json, TEXT("base_hit_chances"), Weapon.BaseHitChances);
-		Floats(Json, TEXT("distance_damage_multipliers"), Weapon.DistanceDamageMultipliers);
+		// The schema (WeaponStatsRules) parses onto a copy; only valid data replaces the weapon's stats.
+		FWeaponStats Tuned = Weapon.Stats;
+		TArray<FString> Errors;
+		WeaponStatsRules::ApplyJson(Json, Tuned, OutUnknown, &Errors);
+		WeaponStatsRules::Validate(Tuned, Errors, Weapon.WeaponId);
+		if (OutErrors)
+		{
+			OutErrors->Append(Errors);
+		}
+		if (Errors.Num() > 0)
+		{
+			return false;
+		}
+		Weapon.Stats = MoveTemp(Tuned);
+		return true;
 	}
 
 	TSharedRef<FJsonObject> WeaponToJson(const UWeaponDataAsset& Weapon)
 	{
-		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+		TSharedRef<FJsonObject> Json = WeaponStatsRules::ToJson(Weapon.Stats);
 		Json->SetStringField(TEXT("name"), Weapon.WeaponName.ToString());
-		Json->SetNumberField(TEXT("base_damage"), Round4(Weapon.BaseDamage));
-		Json->SetNumberField(TEXT("attack_range_m"), Round4(Weapon.AttackRangeCm / 100.f));
-		Json->SetNumberField(TEXT("effective_range_m"), Round4(Weapon.EffectiveRangeCm / 100.f));
-		Json->SetNumberField(TEXT("fire_rate"), Round4(Weapon.FireRate));
-		Json->SetNumberField(TEXT("armor_penetration"), Round4(Weapon.ArmorPenetration));
-		Json->SetNumberField(TEXT("max_clip_size"), Round4(Weapon.MaxClipSize));
-		Json->SetNumberField(TEXT("default_reserve_ammo"), Round4(Weapon.DefaultReserveAmmo));
-		Json->SetNumberField(TEXT("reload_time"), Round4(Weapon.ReloadTime));
-		Json->SetNumberField(TEXT("status_duration"), Round4(Weapon.StatusDuration));
-		Json->SetNumberField(TEXT("status_tick_damage"), Round4(Weapon.StatusTickDamage));
-		Json->SetNumberField(TEXT("max_range_cells"), Round4(Weapon.MaxRangeCells));
-		Json->SetNumberField(TEXT("full_auto_interval"), Round4(Weapon.FullAutoInterval));
-		Json->SetNumberField(TEXT("suppression_weight"), Round4(Weapon.SuppressionWeight));
-		Json->SetArrayField(TEXT("base_hit_chances"), ToArray(Weapon.BaseHitChances));
-		Json->SetArrayField(TEXT("distance_damage_multipliers"), ToArray(Weapon.DistanceDamageMultipliers));
 		return Json;
+	}
+
+	const FWeaponTuningReport& GetLastReport()
+	{
+		return LastWeaponReport;
 	}
 
 	int32 ApplyFile(const FString& Path)
@@ -149,11 +120,46 @@ namespace WeaponTuning
 		GrenadeBlock.Reset();
 		MarksmanRifleBlock.Reset();
 		TurnRulesBlock.Reset();
+		LastWeaponReport = FWeaponTuningReport();
 		FString Text;
 		TSharedPtr<FJsonObject> Root;
 		if (!FFileHelper::LoadFileToString(Text, *Path) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid())
 		{
 			return 0;
+		}
+		double FileSchema = 1.0;
+		LastWeaponReport.SchemaVersion = Root->TryGetNumberField(TEXT("schema_version"), FileSchema) ? FMath::RoundToInt(FileSchema) : 1;
+		// The designer's roster (2026-11-08): "roster.out" weapons are out of play (WeaponRoster); no block = the roster stays as it is.
+		{
+			const TSharedPtr<FJsonObject>* RosterBlock = nullptr;
+			if (Root->TryGetObjectField(TEXT("roster"), RosterBlock) && RosterBlock && RosterBlock->IsValid())
+			{
+				FWeaponRoster Roster;
+				TArray<FString> RosterErrors;
+				WeaponRoster::Parse(**RosterBlock, Roster, &RosterErrors);
+				for (const FString& Error : RosterErrors)
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
+				}
+				WeaponRoster::Set(Roster);
+			}
+			LastWeaponReport.RosterOut = WeaponRoster::Get().Out.Num();
+		}
+		// Body armour (weapons framework, decision 1 2026-11-08): "armor.bodies" - class + reduction per body; read by the enemies /
+		// operatives as they spawn (ArmorRules::ApplyBody). No block = the C++ fallbacks.
+		{
+			TMap<FString, FBodyArmor> Bodies;
+			const TSharedPtr<FJsonObject>* Armor = nullptr;
+			if (Root->TryGetObjectField(TEXT("armor"), Armor) && Armor && Armor->IsValid())
+			{
+				ArmorRules::ParseBodies(**Armor, Bodies, &LastWeaponReport.ArmorErrors);
+			}
+			for (const FString& Error : LastWeaponReport.ArmorErrors)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s (that body keeps its code value)"), *Error);
+			}
+			LastWeaponReport.ArmorBodies = Bodies.Num();
+			ArmorRules::SetBodies(Bodies);
 		}
 		const TSharedPtr<FJsonObject>* Grenade = nullptr;
 		if (Root->TryGetObjectField(TEXT("grenade"), Grenade) && Grenade)
@@ -213,6 +219,11 @@ namespace WeaponTuning
 			{
 				continue;
 			}
+			if (WeaponRoster::IsOutOfPlay(Entry.Key))
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" is out of play (roster) - its block is ignored"), *Entry.Key);
+				continue;
+			}
 			const FString Name = FString::Printf(TEXT("DA_Weapon_%s"), *Entry.Key);
 			UWeaponDataAsset* Weapon = LoadObject<UWeaponDataAsset>(nullptr, *FString::Printf(TEXT("/Game/Data/Weapons/%s.%s"), *Name, *Name));
 			if (!Weapon)
@@ -224,15 +235,34 @@ namespace WeaponTuning
 			}
 			if (Weapon)
 			{
-				ApplyWeapon(**Object, *Weapon);
-				++Applied;
+				// Stats = the asset's base + this file (not on top of an earlier run's tuning: a key removed from the file reverts).
+				Weapon->RebuildStatsFromAsset();
+				TArray<FString> Errors;
+				TArray<FString> Unknown;
+				if (ApplyWeapon(**Object, *Weapon, &Errors, &Unknown))
+				{
+					++Applied;
+				}
+				else
+				{
+					LastWeaponReport.Rejected.Add(Entry.Key);
+					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" REJECTED, the asset's own values stay: %s"), *Entry.Key, *FString::Join(Errors, TEXT("; ")));
+				}
+				for (const FString& Key : Unknown)
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" has an unknown key \"%s\" (ignored; typo?)"), *Entry.Key, *Key);
+				}
+				LastWeaponReport.Errors.Append(Errors);
+				LastWeaponReport.Unknown.Append(Unknown);
 			}
 			else
 			{
 				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: no weapon asset for \"%s\""), *Entry.Key);
 			}
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Weapon tuning: %d weapons%s from %s"), Applied, GrenadeBlock.IsValid() ? TEXT(" + grenades") : TEXT(""), *Path);
+		LastWeaponReport.Applied = Applied;
+		UE_LOG(LogCodexTactics, Display, TEXT("Weapon tuning: %d weapons%s from %s (schema v%d, %d rejected)"), Applied, GrenadeBlock.IsValid() ? TEXT(" + grenades") : TEXT(""),
+			*Path, LastWeaponReport.SchemaVersion, LastWeaponReport.Rejected.Num());
 		return Applied;
 	}
 
@@ -373,14 +403,54 @@ namespace WeaponTuning
 	{
 		TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
 		Root->SetStringField(TEXT("comment"), TEXT("Weapon power (Wave Editor \"Weapons\"). Applied at game start onto DA_Weapon_* and the squad's grenades. Metres / seconds."));
+		Root->SetNumberField(TEXT("schema_version"), WeaponStatsRules::SchemaVersion);
 		TSharedRef<FJsonObject> Weapons = MakeShared<FJsonObject>();
 		TArray<UWeaponDataAsset*> All = LoadWeapons();
 		All.Sort([](const UWeaponDataAsset& A, const UWeaponDataAsset& B) { return A.WeaponId < B.WeaponId; });
 		for (const UWeaponDataAsset* Weapon : All)
 		{
-			Weapons->SetObjectField(Weapon->WeaponId, WeaponToJson(*Weapon));
+			if (!WeaponRoster::IsOutOfPlay(Weapon->WeaponId)) // the designer's roster: the out-of-play assets stay on disk, not in the file
+			{
+				Weapons->SetObjectField(Weapon->WeaponId, WeaponToJson(*Weapon));
+			}
+		}
+		{
+			const FWeaponRoster& Roster = WeaponRoster::Get();
+			TSharedRef<FJsonObject> RosterJson = MakeShared<FJsonObject>();
+			auto List = [](const TArray<FString>& Ids)
+			{
+				TArray<TSharedPtr<FJsonValue>> Out;
+				for (const FString& Id : Ids)
+				{
+					Out.Add(MakeShared<FJsonValueString>(Id));
+				}
+				return Out;
+			};
+			RosterJson->SetArrayField(TEXT("in_play"), List(Roster.InPlay));
+			RosterJson->SetArrayField(TEXT("next"), List(Roster.Next));
+			RosterJson->SetArrayField(TEXT("out"), List(Roster.Out));
+			Root->SetObjectField(TEXT("roster"), RosterJson);
 		}
 		Root->SetObjectField(TEXT("weapons"), Weapons);
+		// Body armour: the table in force (the file's, read at the last ApplyFile).
+		{
+			TSharedRef<FJsonObject> Armor = MakeShared<FJsonObject>();
+			Armor->SetStringField(TEXT("comment"), TEXT("Armour per body (decision 1, 2026-11-08): class none / light / medium / heavy / vehicle + the share of damage it stops; a weapon of a lower penetration_class gets no armor_penetration against it."));
+			TSharedRef<FJsonObject> Bodies = MakeShared<FJsonObject>();
+			TArray<FString> Keys;
+			ArmorRules::GetBodies().GetKeys(Keys);
+			Keys.Sort();
+			for (const FString& Key : Keys)
+			{
+				const FBodyArmor& Body = ArmorRules::GetBodies()[Key];
+				TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+				Entry->SetStringField(TEXT("class"), WeaponStatsRules::ArmorClassName(Body.Class));
+				Entry->SetNumberField(TEXT("reduction"), Round4(Body.Reduction));
+				Bodies->SetObjectField(Key, Entry);
+			}
+			Armor->SetObjectField(TEXT("bodies"), Bodies);
+			Root->SetObjectField(TEXT("armor"), Armor);
+		}
 		TSharedRef<FJsonObject> RangeFalloff = MakeShared<FJsonObject>();
 		RangeFalloff->SetNumberField(TEXT("floor_multiplier"), Round4(WeaponRangeRules::GetFalloff().FloorMultiplier));
 		RangeFalloff->SetNumberField(TEXT("exponent"), Round4(WeaponRangeRules::GetFalloff().Exponent));

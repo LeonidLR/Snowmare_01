@@ -511,6 +511,7 @@ namespace
 		{
 			Member->SwitchToWeaponById(TEXT("m16"));
 		}
+		Member->DropOutOfPlayWeapons(); // an old save's knife / flamethrower ammo / plasma bonus: gone (the designer's roster, 2026-11-08)
 	}
 
 	/**

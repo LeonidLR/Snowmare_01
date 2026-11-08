@@ -269,13 +269,13 @@ void ACodexTacticsPlayerController::GrenadeKey()
 			return;
 		}
 		const bool bSwitched = TurnBased ? (TurnBased->SwitchActiveUnitWeapon(TEXT("m16")) || TurnBased->SwitchActiveUnitWeapon(TEXT("pistol")))
-			: (Leader->SwitchToWeaponById(TEXT("m16")) || Leader->SwitchToWeaponById(TEXT("pistol")) || Leader->SwitchToWeaponById(TEXT("knife")));
+			: (Leader->SwitchToWeaponById(TEXT("m16")) || Leader->SwitchToWeaponById(TEXT("pistol"))); // no knife (roster 2026-11-08)
 		if (bSwitched)
 		{
 			const FString Ammo = Leader->UsesAmmo() ? FString::Printf(TEXT("%d / %d"), Leader->CurrentClip, Leader->ReserveAmmo) : TEXT("∞");
 			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("WeaponBack", "🔫 Weapon: {0} [{1}] (Damage: {2})"),
 				Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponName : FText::GetEmpty(), FText::FromString(Ammo),
-				Leader->CurrentWeapon ? FMath::FloorToInt(Leader->CurrentWeapon->BaseDamage) : 0));
+				Leader->CurrentWeapon ? FMath::FloorToInt(Leader->CurrentWeapon->Stats.Damage.BaseDamage) : 0));
 		}
 		return;
 	}
@@ -409,7 +409,7 @@ void ACodexTacticsPlayerController::CycleWeaponKey()
 	{
 		const FString Ammo = Leader->UsesAmmo() ? FString::Printf(TEXT("%d / %d"), Leader->CurrentClip, Leader->ReserveAmmo) : TEXT("∞");
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("WeaponCycle", "🔫 Weapon: {0} [{1}] (Damage: {2})"),
-			Next->WeaponName, FText::FromString(Ammo), FMath::FloorToInt(Next->BaseDamage)));
+			Next->WeaponName, FText::FromString(Ammo), FMath::FloorToInt(Next->Stats.Damage.BaseDamage)));
 	}
 	if (Next->WeaponId == TEXT("grenade"))
 	{

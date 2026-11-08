@@ -80,7 +80,8 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	EnemyVariantClasses.Add(FName(TEXT("MilitaryZombie")),
 		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie.BP_Enemy_MilitaryZombie_C"))));
 	LevelConfig = TSoftObjectPtr<ULevelConfigAsset>(FSoftObjectPath(TEXT("/Game/Data/Levels/DA_Level_level_01_outpost.DA_Level_level_01_outpost")));
-	for (const TCHAR* Id : { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife") })
+	// The designer's roster (2026-11-08): the knife is out of play (WeaponRoster drops it even from an older Blueprint list).
+	for (const TCHAR* Id : { TEXT("m16"), TEXT("pistol"), TEXT("grenade") })
 	{
 		StartingArsenal.Add(TSoftObjectPtr<UWeaponDataAsset>(FSoftObjectPath(FString::Printf(TEXT("/Game/Data/Weapons/DA_Weapon_%s.DA_Weapon_%s"), Id, Id))));
 	}

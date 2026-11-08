@@ -222,7 +222,7 @@ namespace VisionConeSmoke
 			return Sight->GetSightRangeCm(*Operative);
 		}
 		return Operative->bVisionConeRangeFromWeapon && Operative->CurrentWeapon
-			? Operative->CurrentWeapon->AttackRangeCm * SquadFireRules::GetPostureRangeMultiplier(Operative->GetStance())
+			? Operative->CurrentWeapon->Stats.Range.MaxRangeCm * SquadFireRules::GetPostureRangeMultiplier(Operative->GetStance())
 			: Operative->VisionConeRangeCm;
 	}
 

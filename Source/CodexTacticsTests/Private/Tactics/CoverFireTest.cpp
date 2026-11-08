@@ -37,8 +37,8 @@ bool FCoverFireTest::RunTest(const FString&)
 
 	// Attack cells from behind the barricade: the cells past it, the hit chance x CoverFireAccuracyMultiplier.
 	UWeaponDataAsset* Rifle = NewObject<UWeaponDataAsset>();
-	Rifle->AttackShape = EAttackShape::Rays8;
-	Rifle->MaxRangeCells = 5;
+	Rifle->Stats.TurnBased.AttackShape = EAttackShape::Rays8;
+	Rifle->Stats.TurnBased.MaxRangeCells = 5;
 	const TMap<FIntPoint, FTurnBasedAttackCell> Cells = TurnBasedRules::GetWeaponAttackCells(*Grid, FIntPoint(2, 0), Rifle, EOperativeStance::Crouching, Balance);
 	const FTurnBasedAttackCell* Past = Cells.Find(FIntPoint(5, 0));
 	TestTrue(TEXT("a cell past his own barricade is attackable"), Past != nullptr && Past->bThroughCover);

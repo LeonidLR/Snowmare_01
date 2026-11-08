@@ -10,6 +10,7 @@
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/PanicComponent.h"
+#include "Combat/ArmorRules.h"
 #include "Combat/EncounterQueries.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Characters/RageComponent.h"
@@ -126,6 +127,17 @@ void AOperativeCharacter::OnConstruction(const FTransform& Transform)
 void AOperativeCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	// Body armour (weapons framework, decision 1 2026-11-08): the squad and the PMC fighters share weapons_tuning.json
+	// "armor.bodies.operative" (class + reduction) over the constructor's fallback.
+	if (HealthComponent)
+	{
+		FBodyArmor Armor{ HealthComponent->GetArmorClass(), HealthComponent->GetBaseArmorReduction() };
+		if (ArmorRules::ApplyBody(ArmorRules::OperativeBodyKey, Armor))
+		{
+			HealthComponent->SetBaseArmorReduction(Armor.Reduction);
+			HealthComponent->SetArmorClass(Armor.Class);
+		}
+	}
 	// Blueprints made before the switch may still carry the engine's orient-to-movement: the facing code turns the body.
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 	OnCharacterMovementUpdated.AddUniqueDynamic(this, &AOperativeCharacter::HandleCharacterMovementUpdatedForRing);

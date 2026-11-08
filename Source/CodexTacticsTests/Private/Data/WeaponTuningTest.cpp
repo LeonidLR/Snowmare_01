@@ -16,9 +16,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponTuningApplyTest, "CodexTactics.Data.Weap
 bool FWeaponTuningApplyTest::RunTest(const FString& Parameters)
 {
 	UWeaponDataAsset* Weapon = NewObject<UWeaponDataAsset>();
-	Weapon->BaseDamage = 18.f;
-	Weapon->AttackRangeCm = 1400.f;
-	Weapon->MaxClipSize = 30;
+	Weapon->Stats.Damage.BaseDamage = 18.f;
+	Weapon->Stats.Range.MaxRangeCm = 1400.f;
+	Weapon->Stats.Ammo.MagazineSize = 30;
 	TSharedPtr<FJsonObject> Json;
 	FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(
 		TEXT("{\"base_damage\": 25, \"attack_range_m\": 16.5, \"max_clip_size\": 40, \"base_hit_chances\": [0.9, 0.8, 0.5]}")), Json);
@@ -27,18 +27,18 @@ bool FWeaponTuningApplyTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	WeaponTuning::ApplyWeapon(*Json, *Weapon);
-	TestEqual(TEXT("damage"), Weapon->BaseDamage, 25.f);
-	TestEqual(TEXT("range metres -> cm"), Weapon->AttackRangeCm, 1650.f);
-	TestEqual(TEXT("clip"), Weapon->MaxClipSize, 40);
-	TestEqual(TEXT("hit chances"), Weapon->BaseHitChances.Num(), 3);
-	TestEqual(TEXT("missing keys keep the asset value"), Weapon->ReloadTime, GetDefault<UWeaponDataAsset>()->ReloadTime);
+	TestEqual(TEXT("damage"), Weapon->Stats.Damage.BaseDamage, 25.f);
+	TestEqual(TEXT("range metres -> cm"), Weapon->Stats.Range.MaxRangeCm, 1650.f);
+	TestEqual(TEXT("clip"), Weapon->Stats.Ammo.MagazineSize, 40);
+	TestEqual(TEXT("hit chances"), Weapon->Stats.Accuracy.HitChanceByCell.Num(), 3);
+	TestEqual(TEXT("missing keys keep the asset value"), Weapon->Stats.Ammo.ReloadSeconds, GetDefault<UWeaponDataAsset>()->Stats.Ammo.ReloadSeconds);
 
 	// The dump of the tuned weapon applies back to the same numbers.
 	const TSharedRef<FJsonObject> Dumped = WeaponTuning::WeaponToJson(*Weapon);
 	UWeaponDataAsset* Copy = NewObject<UWeaponDataAsset>();
 	WeaponTuning::ApplyWeapon(*Dumped, *Copy);
-	TestEqual(TEXT("round trip: range"), Copy->AttackRangeCm, Weapon->AttackRangeCm);
-	TestEqual(TEXT("round trip: damage"), Copy->BaseDamage, Weapon->BaseDamage);
+	TestEqual(TEXT("round trip: range"), Copy->Stats.Range.MaxRangeCm, Weapon->Stats.Range.MaxRangeCm);
+	TestEqual(TEXT("round trip: damage"), Copy->Stats.Damage.BaseDamage, Weapon->Stats.Damage.BaseDamage);
 	return true;
 }
 
@@ -111,16 +111,16 @@ bool FWeaponTuningM16RangeTest::RunTest(const FString& Parameters)
 	WeaponTuning::ApplyWeapon(**SniperJson, *Sniper);
 
 	// Since c8af1c6d (user 2026-11-04): the max reach 60 m; bug #39 (2026-11-07): the effective range 28 m (the falloff starts there).
-	TestEqual(TEXT("M16 real-time range (max reach) 60 m"), M16->AttackRangeCm, 6000.f);
+	TestEqual(TEXT("M16 real-time range (max reach) 60 m"), M16->Stats.Range.MaxRangeCm, 6000.f);
 	TestEqual(TEXT("M16 effective range 28 m"), M16->GetEffectiveRangeCm(), 2800.f);
 	TestTrue(TEXT("the sniper rifle's effective range (90 m) outranges the M16's"), Sniper->GetEffectiveRangeCm() > M16->GetEffectiveRangeCm());
-	TestTrue(TEXT("the sniper rifle (30 m) still outranges it"), Sniper->AttackRangeCm > M16->AttackRangeCm);
-	TestEqual(TEXT("M16 turn-based range 8 cells (was 5)"), M16->MaxRangeCells, 8);
-	TestTrue(TEXT("the sniper still outranges it on the grid"), Sniper->MaxRangeCells > M16->MaxRangeCells);
+	TestTrue(TEXT("the sniper rifle (30 m) still outranges it"), Sniper->Stats.Range.MaxRangeCm > M16->Stats.Range.MaxRangeCm);
+	TestEqual(TEXT("M16 turn-based range 8 cells (was 5)"), M16->Stats.TurnBased.MaxRangeCells, 8);
+	TestTrue(TEXT("the sniper still outranges it on the grid"), Sniper->Stats.TurnBased.MaxRangeCells > M16->Stats.TurnBased.MaxRangeCells);
 
 	// The hit table (per 1.5 m cell; real time reads it by round(m / 1.5), clamped to the last entry) covers the whole
 	// 25 m and keeps every chance inside the old 14 m range (old table 0.95 0.85 0.75 0.65 0.5, then 0.5 clamped).
-	TestTrue(TEXT("table covers 25 m"), M16->BaseHitChances.Num() >= FMath::RoundToInt(25.f / 1.5f));
+	TestTrue(TEXT("table covers 25 m"), M16->Stats.Accuracy.HitChanceByCell.Num() >= FMath::RoundToInt(25.f / 1.5f));
 	const float Old[] = { 0.95f, 0.85f, 0.75f, 0.65f, 0.5f };
 	for (int32 Metres = 1; Metres <= 14; ++Metres)
 	{
@@ -128,13 +128,13 @@ bool FWeaponTuningM16RangeTest::RunTest(const FString& Parameters)
 		TestEqual(FString::Printf(TEXT("%d m: unchanged chance"), Metres), M16->GetHitChanceForDistance(Cells), Old[FMath::Min(Cells, 5) - 1], 0.001f);
 	}
 	bool bFalling = true;
-	for (int32 Index = 1; Index < M16->BaseHitChances.Num(); ++Index)
+	for (int32 Index = 1; Index < M16->Stats.Accuracy.HitChanceByCell.Num(); ++Index)
 	{
-		bFalling &= M16->BaseHitChances[Index] <= M16->BaseHitChances[Index - 1];
+		bFalling &= M16->Stats.Accuracy.HitChanceByCell[Index] <= M16->Stats.Accuracy.HitChanceByCell[Index - 1];
 	}
 	TestTrue(TEXT("never better further out"), bFalling);
 	TestEqual(TEXT("25 m: 0.26"), M16->GetHitChanceForDistance(FMath::RoundToInt(25.f / 1.5f)), 0.26f, 0.001f);
 	TestTrue(TEXT("the sniper is the better long shot"), Sniper->GetHitChanceForDistance(17) > M16->GetHitChanceForDistance(17));
-	TestEqual(TEXT("damage table as long as the hit table"), M16->DistanceDamageMultipliers.Num(), M16->BaseHitChances.Num());
+	TestEqual(TEXT("damage table as long as the hit table"), M16->Stats.Accuracy.DamageMultiplierByCell.Num(), M16->Stats.Accuracy.HitChanceByCell.Num());
 	return true;
 }

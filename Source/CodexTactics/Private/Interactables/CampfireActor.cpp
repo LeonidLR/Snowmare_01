@@ -1,5 +1,6 @@
 #include "Interactables/CampfireActor.h"
 
+#include "Data/WeaponRoster.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -216,10 +217,14 @@ FActionMenuRequest ACampfireActor::BuildActionMenu(const AOperativeCharacter* Le
 			FText::AsNumber(Config.CampfireHeatRadius / 100.f)));
 	}
 	const int32 Craftable = Leader ? Leader->GetDeployableCount(EDeployableType::Campfire) : 0;
-	return FActionMenuRequest::MakeMenu(LOCTEXT("AshesTitle", "🪵 Campfire ashes"),
-		FText::Format(LOCTEXT("AshesDesc", "Rekindle the fire: {0} match + {1} firewood (or {2} units of flamethrower fuel).\n{3} can make {4}."),
+	// The flamethrower is out of play (the designer's roster, 2026-11-08): no fuel exists, the line names matches + firewood only.
+	const FText AshesText = WeaponRoster::IsOutOfPlay(TEXT("flamethrower"))
+		? FText::Format(LOCTEXT("AshesDescNoFuel", "Rekindle the fire: {0} match + {1} firewood.\n{2} can make {3}."),
+			Config.CampfireMatchesCost, Config.CampfireFirewoodCost, Leader ? Leader->DisplayName : LOCTEXT("Nobody", "Nobody"), Craftable)
+		: FText::Format(LOCTEXT("AshesDesc", "Rekindle the fire: {0} match + {1} firewood (or {2} units of flamethrower fuel).\n{3} can make {4}."),
 			Config.CampfireMatchesCost, Config.CampfireFirewoodCost, Config.CampfireFlameFuelCost,
-			Leader ? Leader->DisplayName : LOCTEXT("Nobody", "Nobody"), Craftable),
+			Leader ? Leader->DisplayName : LOCTEXT("Nobody", "Nobody"), Craftable);
+	return FActionMenuRequest::MakeMenu(LOCTEXT("AshesTitle", "🪵 Campfire ashes"), AshesText,
 		Craftable > 0 ? LOCTEXT("Rekindle", "Rekindle") : LOCTEXT("NoMaterials", "No materials"), LOCTEXT("Cancel", "Cancel"), Craftable <= 0);
 }
 

@@ -886,8 +886,8 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	FPmcFighterView View;
 	View.Location = Fighter.GetActorLocation();
 	View.HealthFrac = PmcSquadLocal::HealthFractionOf(Fighter);
-	const int32 ClipSize = Fighter.CurrentWeapon ? FMath::Max(1, Fighter.CurrentWeapon->MaxClipSize) : 30;
-	const int32 Reserve = Fighter.CurrentWeapon ? FMath::Max(1, Fighter.CurrentWeapon->DefaultReserveAmmo) : 60;
+	const int32 ClipSize = Fighter.CurrentWeapon ? FMath::Max(1, Fighter.CurrentWeapon->Stats.Ammo.MagazineSize) : 30;
+	const int32 Reserve = Fighter.CurrentWeapon ? FMath::Max(1, Fighter.CurrentWeapon->Stats.Ammo.ReserveAmmo) : 60;
 	View.ClipFrac = Fighter.UsesAmmo() ? FMath::Clamp(static_cast<float>(Fighter.CurrentClip) / ClipSize, 0.f, 1.f) : 1.f;
 	View.AmmoFrac = Fighter.UsesAmmo() ? FMath::Clamp(static_cast<float>(Fighter.CurrentClip + Fighter.ReserveAmmo) / (ClipSize + Reserve), 0.f, 1.f) : 1.f;
 	View.bHasReserve = Fighter.ReserveAmmo > 0;
@@ -899,7 +899,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	View.bHasMedkit = Fighter.MedkitsCount > 0;
 	View.bHasSidearm = PmcSquadLocal::HasWeaponId(Fighter, TEXT("pistol")) && Fighter.CurrentWeapon && Fighter.CurrentWeapon->WeaponId != TEXT("pistol");
 	View.bKnockedDown = Fighter.IsKnockedDown();
-	View.WeaponRangeCm = Fighter.CurrentWeapon ? Fighter.CurrentWeapon->AttackRangeCm : 1400.f;
+	View.WeaponRangeCm = Fighter.CurrentWeapon ? Fighter.CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	// 2026-11-04: the distance his weapon wants to fight from (riflemen keep their distance, the shotgun closes in).
 	View.Band = PmcCommanderRules::ResolveBand(Fighter.CurrentWeapon ? Fighter.CurrentWeapon->WeaponId : FString(), View.WeaponRangeCm, Team.Weights);
 
@@ -1373,7 +1373,7 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	const float EyeCm = SightRules::EyeHeight(EOperativeStance::Standing);
 	const FTeam* OwnTeam = FindTeam(Fighter.TeamId);
 	const FPmcObjectiveView* Objective = OwnTeam && OwnTeam->Objective.IsSet() && OwnTeam->Objective->IsActive() ? &OwnTeam->Objective.GetValue() : nullptr;
-	const float WeaponRangeCm = Fighter.CurrentWeapon ? Fighter.CurrentWeapon->AttackRangeCm : 1400.f;
+	const float WeaponRangeCm = Fighter.CurrentWeapon ? Fighter.CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	// #32 (2026-11-07): a corner is worth its bonus only when his peek round it reaches the threat (his sight range, the cover-and-peek rule).
 	const float PeekRangeCm = Fighter.GetPeekSightRangeCm();
 	struct FCandidate

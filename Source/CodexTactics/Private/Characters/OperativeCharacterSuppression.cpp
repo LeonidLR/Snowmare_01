@@ -8,6 +8,7 @@
 #include "CodexTactics.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacterInternal.h"
+#include "Combat/WeaponBallisticsRules.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -45,7 +46,7 @@ void AOperativeCharacter::ReportOwnRound(const FVector& Start, const FVector& En
 	Round.bHitTarget = bHit;
 	Round.bStruckCover = bStruckCover;
 	Round.Weapon = GetOwnRoundClass(bFullAuto);
-	Round.WeightScale = CurrentWeapon ? CurrentWeapon->SuppressionWeight : 1.f;
+	Round.WeightScale = CurrentWeapon ? CurrentWeapon->Stats.Fire.SuppressionWeight : 1.f;
 	USuppressionSubsystem::Report(this, Round);
 }
 
@@ -264,10 +265,18 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	const bool bFullAuto = CurrentWeapon && CurrentWeapon->HasFullAuto();
 	const int32 StanceIndex = Stance == EOperativeStance::Prone ? 2 : (Stance == EOperativeStance::Crouching ? 1 : 0);
 	FOperativeAreaRound Spec;
-	Spec.SpreadDeg = SuppressionRules::GetOrderSpreadDeg(Config, StanceIndex);
+	Spec.SpreadDeg = SuppressionRules::GetOrderSpreadDeg(Config, StanceIndex) * (CurrentWeapon ? CurrentWeapon->Stats.Accuracy.SpreadScale : 1.f);
+	// Full-auto recoil (decision 5, 2026-11-08: the M16 +0.3 deg a round, settling in 0.5 s): the bloom widens the spray.
+	const float RecoilPerRound = bFullAuto && CurrentWeapon ? CurrentWeapon->Stats.Accuracy.RecoilPerRoundDeg : 0.f;
+	if (RecoilPerRound > 0.f)
+	{
+		RecoilBloomDeg = WeaponBallisticsRules::SettleRecoil(RecoilBloomDeg, RecoilLastRoundTime < 0.0 ? 1.0e6f : static_cast<float>(Now - RecoilLastRoundTime),
+			RecoilPerRound, CurrentWeapon->Stats.Accuracy.RecoilRecoverySeconds);
+		Spec.SpreadDeg += RecoilBloomDeg;
+	}
 	Spec.HitMultiplier = Config.OrderHitMultiplier;
-	Spec.NextRoundDelay = SuppressionRules::NextOrderRoundDelay(Config, CurrentWeapon ? CurrentWeapon->FireRate : 0.65f,
-		CurrentWeapon ? CurrentWeapon->FullAutoInterval : 0.f, SuppressBurstCount);
+	Spec.NextRoundDelay = SuppressionRules::NextOrderRoundDelay(Config, CurrentWeapon ? CurrentWeapon->Stats.Fire.ShotIntervalSeconds : 0.65f,
+		CurrentWeapon ? CurrentWeapon->Stats.Fire.FullAutoIntervalSeconds : 0.f, SuppressBurstCount);
 	Spec.bFullAuto = bFullAuto;
 	Spec.LogTag = TEXT("Suppress");
 	const float MisfireBefore = MisfireCooldownTimer;
@@ -277,6 +286,11 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	{
 		++SuppressRoundsFired;
 		FullAutoRoundsFired += bFullAuto ? 1 : 0;
+		if (RecoilPerRound > 0.f)
+		{
+			RecoilBloomDeg += RecoilPerRound;
+			RecoilLastRoundTime = Now;
+		}
 	}
 	SuppressLastProgressTime = Now;
 	return bMisfired ? TEXT("suppress: misfire") : TEXT("fired");

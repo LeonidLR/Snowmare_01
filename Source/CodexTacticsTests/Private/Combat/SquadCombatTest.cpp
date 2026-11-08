@@ -15,9 +15,9 @@ bool FSquadCombatWeaponEquipTest::RunTest(const FString&)
 {
 	AOperativeCharacter* Operative = NewObject<AOperativeCharacter>();
 	UWeaponDataAsset* Weapon = NewObject<UWeaponDataAsset>();
-	Weapon->MaxClipSize = 25;
-	Weapon->DefaultReserveAmmo = 100;
-	Weapon->BaseDamage = 22.0f;
+	Weapon->Stats.Ammo.MagazineSize = 25;
+	Weapon->Stats.Ammo.ReserveAmmo = 100;
+	Weapon->Stats.Damage.BaseDamage = 22.0f;
 
 	Operative->EquipWeapon(Weapon);
 
@@ -83,8 +83,8 @@ bool FSquadCombatReloadRefillsClipTest::RunTest(const FString&)
 {
 	AOperativeCharacter* Operative = NewObject<AOperativeCharacter>();
 	UWeaponDataAsset* Weapon = NewObject<UWeaponDataAsset>();
-	Weapon->MaxClipSize = 30;
-	Weapon->ReloadTime = 1.0f;
+	Weapon->Stats.Ammo.MagazineSize = 30;
+	Weapon->Stats.Ammo.ReloadSeconds = 1.0f;
 	Operative->EquipWeapon(Weapon);
 
 	Operative->CurrentClip = 5;

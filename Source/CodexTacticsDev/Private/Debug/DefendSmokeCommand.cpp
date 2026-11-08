@@ -221,7 +221,7 @@ namespace DefendSmoke
 			const bool bKnife = Defender->CurrentWeapon && Defender->CurrentWeapon->WeaponId == TEXT("knife");
 			const bool bHasKnife = Defender->AvailableWeapons.ContainsByPredicate([](const UWeaponDataAsset* W) { return W && W->WeaponId == TEXT("knife"); });
 			Check(State, Stats.DefenseHolds > 0 && !Defender->IsMoving(), FString::Printf(TEXT("point-blank: he holds the spot (holds %d)"), Stats.DefenseHolds));
-			Check(State, bKnife || !bHasKnife, FString::Printf(TEXT("body-block: the knife drawn (%s)"),
+			Check(State, bKnife || !bHasKnife, FString::Printf(TEXT("body-block: the knife drawn when he has one - none since the roster of 2026-11-08 (%s)"),
 				Defender->CurrentWeapon ? *Defender->CurrentWeapon->WeaponId : TEXT("-")));
 			Check(State, State.WorstLeashCm <= 550.f, FString::Printf(TEXT("never beyond the 5 m defense leash (worst %.1f m)"), State.WorstLeashCm / 100.f));
 			// A new player order lifts the line: the marker fades out.

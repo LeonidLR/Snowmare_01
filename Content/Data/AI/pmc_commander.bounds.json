@@ -154,8 +154,6 @@
     "/ambush_max_hold_s": { "min": 10, "max": 30, "step": 2 },
     "/engagement_bands/m16/min_m": { "min": 12.5, "max": 37.5, "step": 2.5, "frozen": true },
     "/engagement_bands/m16/max_m": { "min": 30.0, "max": 90.0, "step": 6.0, "frozen": true },
-    "/engagement_bands/plasma_carbine/min_m": { "min": 12.5, "max": 37.5, "step": 2.5, "frozen": true },
-    "/engagement_bands/plasma_carbine/max_m": { "min": 30.0, "max": 90.0, "step": 6.0, "frozen": true },
     "/engagement_bands/sniper_rifle/min_m": { "min": 22.5, "max": 67.5, "step": 4.5, "frozen": true },
     "/engagement_bands/sniper_rifle/max_m": { "min": 55.0, "max": 165.0, "step": 11.0, "frozen": true },
     "/engagement_bands/pistol/min_m": { "min": 5.0, "max": 15.0, "step": 1.0, "frozen": true },

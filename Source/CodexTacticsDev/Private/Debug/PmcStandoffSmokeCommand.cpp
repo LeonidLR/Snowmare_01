@@ -225,7 +225,7 @@ namespace PmcStandoffSmoke
 			SpawnTeam(World, *Pmc, State, RifleTeam, State.Origin + State.F * 800.f, (-State.F).Rotation(), TEXT("m16"), 31);
 			const AOperativeCharacter* First = State.Fighters.Num() > 0 ? State.Fighters[0].Get() : nullptr;
 			const FPmcWeights* Weights = Pmc->GetTeamWeights(RifleTeam);
-			State.Band = First && First->CurrentWeapon && Weights ? PmcCommanderRules::ResolveBand(First->CurrentWeapon->WeaponId, First->CurrentWeapon->AttackRangeCm, *Weights)
+			State.Band = First && First->CurrentWeapon && Weights ? PmcCommanderRules::ResolveBand(First->CurrentWeapon->WeaponId, First->CurrentWeapon->Stats.Range.MaxRangeCm, *Weights)
 				: FPmcEngagementBand();
 			Check(State, State.Fighters.Num() == 3 && First && First->CurrentWeapon && First->CurrentWeapon->WeaponId == TEXT("m16") && State.Band.IsValid(),
 				FString::Printf(TEXT("three PMC riflemen (m16) 8 m from the squad; their band %.1f-%.1f m"), State.Band.MinCm / 100.f, State.Band.MaxCm / 100.f));

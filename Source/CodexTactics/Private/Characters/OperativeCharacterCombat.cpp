@@ -23,6 +23,7 @@
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/WeaponBallisticsRules.h"
 #include "Combat/UnderFireRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -114,7 +115,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(MyFeet.Z, EnemyFeet.Z);
 	// Bug #39 (2026-11-07): the weapon's max reach is a hard limit - a target farther out is seen but not engaged; the stance / elevation
 	// range bonuses now stretch the effective range (the accuracy falloff, ShootAtTarget), not the reach.
-	const float Range = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f;
+	const float Range = CurrentWeapon ? CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	// Godot: from the operative's centre (1 m above the feet) to the enemy's feet.
 	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), EnemyFeet);
 	if (Distance > Range)
@@ -202,7 +203,7 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	}
 	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(MyFeet.Z, GhostFeet.Z);
 	// Bug #39: the max reach is a hard limit (EvaluateShotLine).
-	const float Range = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f;
+	const float Range = CurrentWeapon ? CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), GhostFeet);
 	if (Distance > Range)
 	{
@@ -247,7 +248,7 @@ bool AOperativeCharacter::EvaluateReturnFire(FShootCandidate& Out) const
 		return false;
 	}
 	const FVector MyFeet = OperativeCharacterInternal::ShotFeet(this);
-	const float Range = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f;
+	const float Range = CurrentWeapon ? CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), Flash);
 	const FVector From = GetMuzzleLocation();
 	// The line to the flash, a hand short of it (the muzzle may poke into the corner it fires round): the operatives never stop it
@@ -544,11 +545,21 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		if (ReloadTimer <= 0.0f)
 		{
 			bIsReloading = false;
-			const int32 MaxClip = CurrentWeapon ? CurrentWeapon->MaxClipSize : 30;
+			const int32 MaxClip = CurrentWeapon ? CurrentWeapon->Stats.Ammo.MagazineSize : 30;
 			const int32 Needed = MaxClip - CurrentClip;
-			const int32 Added = FMath::Min(Needed, ReserveAmmo);
+			// A whole magazine, or one shell of a per-shell weapon (decision 3, 2026-11-08: the shotgun).
+			const int32 Added = CurrentWeapon ? WeaponBallisticsRules::ReloadStepRounds(CurrentWeapon->Stats.Ammo, CurrentClip, ReserveAmmo)
+				: FMath::Min(Needed, ReserveAmmo);
 			CurrentClip += Added;
 			ReserveAmmo -= Added;
+			// Per shell: the next shell, unless full / out of reserve or he has something to fire at with a shell in (interruptible).
+			const bool bWantsToFire = CurrentCombatTarget.IsValid() || bQuickFireActive || bSuppressActive;
+			if (CurrentWeapon && WeaponBallisticsRules::ContinueReload(CurrentWeapon->Stats.Ammo, CurrentClip, ReserveAmmo)
+				&& !WeaponBallisticsRules::InterruptReload(CurrentWeapon->Stats.Ammo, CurrentClip, bWantsToFire))
+			{
+				bIsReloading = true;
+				ReloadTimer += WeaponBallisticsRules::ReloadStepSeconds(CurrentWeapon->Stats.Ammo);
+			}
 		}
 		return TEXT("reloading");
 	}
@@ -858,7 +869,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		return false;
 	}
 
-	ShootTimer = FMath::Max(0.08f, (CurrentWeapon ? CurrentWeapon->FireRate : 0.65f) * (bRagingShot ? RageComponent->Config.FireRateMultiplier : 1.f));
+	ShootTimer = FMath::Max(0.08f, (CurrentWeapon ? CurrentWeapon->Stats.Fire.ShotIntervalSeconds : 0.65f) * (bRagingShot ? RageComponent->Config.FireRateMultiplier : 1.f));
 	// Sprint 08-E: the muzzle flash gives the shooter away for 2 s.
 	if (UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
 	{
@@ -940,7 +951,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		OpenShotLastTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	}
 
-	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);
+	// Pellets (decision 2, 2026-11-08): a shotgun's pellets roll the chance each; one pellet = the single roll as before.
+	const int32 PelletCount = CurrentWeapon ? FMath::Max(1, CurrentWeapon->Stats.Pellets.Count) : 1;
+	const int32 PelletHits = WeaponBallisticsRules::RollPelletHits(PelletCount, HitChance, []() { return FMath::FRand(); }, bForceHitForTesting);
+	const bool bHit = PelletHits > 0;
+	LastShotPelletHits = PelletHits;
 	if (!bHit)
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("MISS!"), FLinearColor(0.75f, 0.75f, 0.75f));
@@ -963,7 +978,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
 	{
 		Feedback->SpawnTracer(GetWeaponMuzzleLocation(), RoundEnd, CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
-			CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic);
+			CurrentWeapon ? CurrentWeapon->Stats.Damage.DamageType : EDamageType::Kinetic);
 	}
 	// Suppression (2026-10-26): the round suppresses its target (hit or near miss; a miss on a target in partial cover strikes it) and
 	// any enemy it passes near.
@@ -971,13 +986,13 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 
 	if (bHit)
 	{
-		ApplyRangedHit(Target, Cover, DistCells, bRagingShot);
+		ApplyRangedHit(Target, Cover, DistCells, bRagingShot, WeaponBallisticsRules::PelletDamageShare(PelletHits, PelletCount));
 	}
 
 	return bHit;
 }
 
-void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot)
+void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot, float PelletShare)
 {
 	// Godot _shoot_at_target: crit on luck (x2), elevation (+15 %), stance, cover and distance factors.
 	const float CritRoll = ForcedCritRollForTesting >= 0.f ? (ForcedCritRollForTesting >= 1.f ? 0.f : 1.f) : FMath::FRand();
@@ -986,10 +1001,17 @@ void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 Dist
 	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(
 		GetActorLocation().Z - GetSimpleCollisionHalfHeight(), Target->GetActorLocation().Z - Target->GetSimpleCollisionHalfHeight());
 	float DistanceMultiplier = 1.f;
-	if (CurrentWeapon && !CurrentWeapon->DistanceDamageMultipliers.IsEmpty())
+	if (CurrentWeapon && !CurrentWeapon->Stats.Accuracy.DamageMultiplierByCell.IsEmpty())
 	{
-		DistanceMultiplier = CurrentWeapon->DistanceDamageMultipliers[FMath::Clamp(DistCells - 1, 0, CurrentWeapon->DistanceDamageMultipliers.Num() - 1)];
+		DistanceMultiplier = CurrentWeapon->Stats.Accuracy.DamageMultiplierByCell[FMath::Clamp(DistCells - 1, 0, CurrentWeapon->Stats.Accuracy.DamageMultiplierByCell.Num() - 1)];
 	}
+	// Damage falloff past the effective range (decision 4, 2026-11-08: the shotgun x0.4 / the pistol x0.6 at the max reach; others x1).
+	if (CurrentWeapon)
+	{
+		DistanceMultiplier *= WeaponBallisticsRules::DamageFalloffMultiplier(CurrentWeapon->Stats,
+			static_cast<float>(FVector::Dist2D(GetActorLocation(), Target->GetActorLocation())));
+	}
+	DistanceMultiplier *= PelletShare;
 	if (bCrit)
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🎯 CRIT x2!"), FLinearColor(1.f, 0.85f, 0.1f));
@@ -1000,18 +1022,19 @@ void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 Dist
 	}
 
 	FDamageSpec Spec;
-	Spec.Amount = SquadFireRules::ComputeShotDamage(CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f, Stance, Cover, bCrit, Elevation, DistanceMultiplier)
+	Spec.Amount = SquadFireRules::ComputeShotDamage(CurrentWeapon ? CurrentWeapon->Stats.Damage.BaseDamage : 18.0f, Stance, Cover, bCrit, Elevation, DistanceMultiplier)
 		* (bRagingShot ? RageComponent->Config.DamageMultiplier : 1.f);
 	Spec.bIsCritical = bCrit;
 	Spec.bMelee = !UsesAmmo(); // the knife
-	Spec.DamageType = CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic;
-	Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->ArmorPenetration : 0.20f;
+	Spec.DamageType = CurrentWeapon ? CurrentWeapon->Stats.Damage.DamageType : EDamageType::Kinetic;
+	Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->Stats.Damage.ArmorPenetration : 0.20f;
+	Spec.PenetrationClass = CurrentWeapon ? CurrentWeapon->Stats.Damage.PenetrationClass : EArmorClass::Vehicle; // decision 1 (no weapon: no class limit)
 	Spec.AttackerSource = DisplayName.ToString();
 	if (CurrentWeapon)
 	{
-		Spec.StatusEffect = CurrentWeapon->StatusEffect;
-		Spec.StatusDuration = CurrentWeapon->StatusDuration;
-		Spec.StatusTickDamage = CurrentWeapon->StatusTickDamage;
+		Spec.StatusEffect = CurrentWeapon->Stats.Status.Effect;
+		Spec.StatusDuration = CurrentWeapon->Stats.Status.DurationSeconds;
+		Spec.StatusTickDamage = CurrentWeapon->Stats.Status.TickDamage;
 	}
 
 	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
@@ -1024,12 +1047,12 @@ void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 Dist
 		Telemetry->RecordWeaponHit(this, CurrentWeapon ? CurrentWeapon->WeaponId : FString(TEXT("m16")), Spec.Amount);
 	}
 	// Cryo weapons chill the shooter, fire weapons warm him (Godot self_cold / self_warmth_generation).
-	if (CurrentWeapon && CurrentWeapon->SelfColdGeneration > 0.f)
+	if (CurrentWeapon && CurrentWeapon->Stats.Thermal.SelfColdPerShot > 0.f)
 	{
-		ColdLevel = FMath::Min(100.f, ColdLevel + CurrentWeapon->SelfColdGeneration);
+		ColdLevel = FMath::Min(100.f, ColdLevel + CurrentWeapon->Stats.Thermal.SelfColdPerShot);
 	}
-	if (CurrentWeapon && CurrentWeapon->SelfWarmthGeneration > 0.f)
+	if (CurrentWeapon && CurrentWeapon->Stats.Thermal.SelfWarmthPerShot > 0.f)
 	{
-		ColdLevel = FMath::Max(0.f, ColdLevel - CurrentWeapon->SelfWarmthGeneration);
+		ColdLevel = FMath::Max(0.f, ColdLevel - CurrentWeapon->Stats.Thermal.SelfWarmthPerShot);
 	}
 }

@@ -124,7 +124,7 @@ namespace SquadOrderCatalog
 				[](const FSquadOrderContext& C)
 				{
 					return Gate(C) && C.Operative->UsesAmmo() && !C.Operative->bIsReloading && C.Operative->ReserveAmmo > 0 && C.Operative->CurrentWeapon
-						&& C.Operative->CurrentClip < C.Operative->CurrentWeapon->MaxClipSize;
+						&& C.Operative->CurrentClip < C.Operative->CurrentWeapon->Stats.Ammo.MagazineSize;
 				},
 				[](const FSquadOrderContext& C)
 				{

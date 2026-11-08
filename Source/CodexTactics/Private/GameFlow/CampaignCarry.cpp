@@ -117,6 +117,7 @@ void CampaignCarry::Apply(AOperativeCharacter& Operative, const FCarriedOperativ
 			Operative.SwitchToWeaponById(TEXT("m16"));
 		}
 	}
+	Operative.DropOutOfPlayWeapons(); // the designer's roster (2026-11-08)
 	Operative.CaptureProgressionBases();
 }
 

@@ -1,4 +1,6 @@
 #include "Combat/HealthComponent.h"
+
+#include "Combat/ArmorRules.h"
 #include "Combat/CombatCheats.h"
 #include "Combat/EncounterQueries.h"
 #include "Combat/KnockdownComponent.h"
@@ -82,13 +84,10 @@ float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 		return 0.0f;
 	}
 
-	// Calculate armor reduction with armor shred (70% reduction) and armor penetration
-	float EffectiveArmor = BaseArmorReduction;
-	if (ArmorShredTimer > 0.0f)
-	{
-		EffectiveArmor = FMath::Max(0.0f, EffectiveArmor * 0.3f);
-	}
-	EffectiveArmor *= (1.0f - FMath::Clamp(Spec.ArmorPenetration, 0.0f, 1.0f));
+	// Armour reduction with armour shred (70% reduction) and armour penetration; the penetration only counts when the weapon's class is
+	// at least this body's (game designer decision 1, 2026-11-08 - ArmorRules).
+	const float EffectiveArmor = ArmorRules::EffectiveReduction(BaseArmorReduction, ArmorShredTimer > 0.0f, Spec.ArmorPenetration, Spec.PenetrationClass,
+		ArmorClass);
 
 	const float DmgAfterArmor = Spec.Amount * (1.0f - EffectiveArmor);
 	// A unit lying after a knockdown takes any damage (shots, melee, blasts) x1.33 (user decision 2026-10-11).

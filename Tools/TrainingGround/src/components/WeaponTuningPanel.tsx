@@ -3,15 +3,13 @@ import { Crosshair, Bomb, Save, RotateCcw, Loader2, AlertTriangle, CheckCircle2 
 import { WeaponTuningFile, WeaponTuningEntry, GrenadeTuning, TurnBasedRulesTuning } from '../types';
 
 // Tab order and labels (weapon ids = WeaponId of DA_Weapon_*); ids not listed here are appended.
+// The designer's roster (2026-11-08): M16 + grenade in play, next shotgun -> pistol -> sniper rifle + RPG-7; the hammer, flamethrower,
+// knife, cryo emitter and plasma carbine are out of play (weapons_tuning.json "roster"; no longer in the file, so no tab).
 const WEAPON_LABELS: Record<string, string> = {
-  pistol: 'Пистолет',
   m16: 'M16',
   shotgun: 'Дробовик',
-  plasma_carbine: 'Плазменный карабин',
-  flamethrower: 'Огнемёт',
-  cryo_emitter: 'Крио-эмиттер',
-  knife: 'Нож',
-  hammer: 'Молот',
+  pistol: 'Пистолет',
+  sniper_rifle: 'Снайперская винтовка',
   grenade: 'Граната (пошаговый бой)',
 };
 const GRENADE_TAB = '__grenade__';

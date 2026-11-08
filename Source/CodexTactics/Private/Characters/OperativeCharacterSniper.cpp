@@ -9,6 +9,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
+#include "Data/WeaponRoster.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -154,15 +155,15 @@ void AOperativeCharacter::PlaySniperGridShot()
 
 void AOperativeCharacter::AddArsenalWeapon(UWeaponDataAsset* Weapon, int32 Reserve)
 {
-	if (!Weapon || AvailableWeapons.Contains(Weapon))
+	if (!Weapon || AvailableWeapons.Contains(Weapon) || WeaponRoster::IsOutOfPlay(Weapon->WeaponId)) // the designer's roster (2026-11-08)
 	{
 		return;
 	}
 	// Right after the main rifle: X goes M16 -> this weapon -> pistol -> ... (the grenade aim stays further down the cycle).
 	AvailableWeapons.Insert(Weapon, FMath::Min(1, AvailableWeapons.Num()));
 	FWeaponAmmoState& Ammo = AmmoInventory.FindOrAdd(Weapon->WeaponId);
-	Ammo.Clip = Weapon->MaxClipSize;
-	Ammo.Reserve = Reserve < 0 ? FMath::Max(0, Weapon->DefaultReserveAmmo) : Reserve;
+	Ammo.Clip = Weapon->Stats.Ammo.MagazineSize;
+	Ammo.Reserve = Reserve < 0 ? FMath::Max(0, Weapon->Stats.Ammo.ReserveAmmo) : Reserve;
 	if (const int32* Extra = ExtraAmmo.Find(FName(*Weapon->WeaponId)))
 	{
 		Ammo.Reserve += *Extra;

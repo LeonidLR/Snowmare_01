@@ -24,12 +24,13 @@ bool FCombatDataWeaponDefaultsTest::RunTest(const FString&)
 	Weapon->ArmorPenetration = 0.20f;
 	Weapon->MaxClipSize = 30;
 	Weapon->ReloadTime = 2.68f;
+	Weapon->RebuildStatsFromAsset(); // the base fields -> the schema gameplay reads
 
-	TestEqual(TEXT("M16 base damage is 18"), Weapon->BaseDamage, 18.0f);
-	TestEqual(TEXT("M16 range is 14m"), Weapon->AttackRangeCm, 1400.0f);
-	TestEqual(TEXT("M16 clip is 30"), Weapon->MaxClipSize, 30);
-	TestEqual(TEXT("M16 fire rate is 0.65s"), Weapon->FireRate, 0.65f);
-	TestEqual(TEXT("M16 reload time is 2.68s"), Weapon->ReloadTime, 2.68f);
+	TestEqual(TEXT("M16 base damage is 18"), Weapon->Stats.Damage.BaseDamage, 18.0f);
+	TestEqual(TEXT("M16 range is 14m"), Weapon->Stats.Range.MaxRangeCm, 1400.0f);
+	TestEqual(TEXT("M16 clip is 30"), Weapon->Stats.Ammo.MagazineSize, 30);
+	TestEqual(TEXT("M16 fire rate is 0.65s"), Weapon->Stats.Fire.ShotIntervalSeconds, 0.65f);
+	TestEqual(TEXT("M16 reload time is 2.68s"), Weapon->Stats.Ammo.ReloadSeconds, 2.68f);
 	return true;
 }
 

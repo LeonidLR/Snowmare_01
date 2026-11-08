@@ -1,61 +1,76 @@
 {
-  "comment": "Weapon power (Wave Editor «Оружие»). Applied at game start onto DA_Weapon_* and the squad's grenades. Metres / seconds.",
+  "comment": "Weapon power (Wave Editor «Оружие»). Applied at game start onto DA_Weapon_* Stats (the unified weapon schema, docs/design/WEAPONS_FRAMEWORK.md; validated, an invalid weapon block is rejected) and the squad's grenades. Metres / seconds.",
+  "schema_version": 2,
   "range_falloff": {
     "comment": "bug #39: hit chance x1 up to a weapon's effective_range_m, falling to floor_multiplier at its attack_range_m (the max reach; no shot beyond), eased by exponent (2 = steep right past the effective range)",
     "floor_multiplier": 0.1,
     "exponent": 2
   },
+  "armor": {
+    "comment": "Armour per body (game designer decision 1, 2026-11-08): class none / light / medium / heavy / vehicle + the share of damage it stops (multiplicative with the weapon's armor_penetration). A weapon whose penetration_class is below the body's class gets NO armor_penetration against it. 'operative' = the squad and the PMC fighters; the rest are the enemy archetypes. The APC hull keeps its own factors (vehicle_weapons.apc_hull).",
+    "bodies": {
+      "operative": {
+        "class": "light",
+        "reduction": 0.1
+      },
+      "base": {
+        "class": "light",
+        "reduction": 0.1
+      },
+      "frost_hound": {
+        "class": "light",
+        "reduction": 0.1
+      },
+      "frostbitten": {
+        "class": "light",
+        "reduction": 0.15
+      },
+      "cutter": {
+        "class": "light",
+        "reduction": 0.15
+      },
+      "spitter": {
+        "class": "medium",
+        "reduction": 0.4
+      },
+      "marksman": {
+        "class": "medium",
+        "reduction": 0.15
+      },
+      "cryo_drone": {
+        "class": "medium",
+        "reduction": 0.05
+      },
+      "brute": {
+        "class": "heavy",
+        "reduction": 0.75
+      }
+    }
+  },
+  "roster": {
+    "comment": "The game designer's roster (2026-11-08): the only weapons in the game are the ones he names. in_play = in the game now; next = the order they are made real (shotgun, pistol, sniper rifle + RPG-7); out = removed from play (never in an arsenal, no loot, no ammo item; a save holding one loads without it, the M16 in hands). Their DA_Weapon_* assets stay on disk unreferenced. The pistol and the sniper rifle keep their current data and places until they are remade on the framework.",
+    "in_play": [
+      "m16",
+      "grenade"
+    ],
+    "next": [
+      "shotgun",
+      "pistol",
+      "sniper_rifle",
+      "rpg7"
+    ],
+    "out": [
+      "hammer",
+      "flamethrower",
+      "knife",
+      "cryo_emitter",
+      "plasma_carbine"
+    ]
+  },
   "weapons": {
-    "cryo_emitter": {
-      "name": "Absolute Cryo Emitter",
-      "base_damage": 16,
-      "attack_range_m": 10.5,
-      "effective_range_m": 7,
-      "fire_rate": 0.5,
-      "armor_penetration": 0,
-      "max_clip_size": 30,
-      "default_reserve_ammo": 60,
-      "reload_time": 2.2,
-      "status_duration": 3.5,
-      "status_tick_damage": 0,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": []
-    },
-    "flamethrower": {
-      "name": "Prometheus Flamethrower",
-      "base_damage": 32,
-      "attack_range_m": 8.5,
-      "effective_range_m": 6,
-      "fire_rate": 0.4,
-      "armor_penetration": 0.3,
-      "max_clip_size": 50,
-      "default_reserve_ammo": 100,
-      "reload_time": 2.8,
-      "status_duration": 4,
-      "status_tick_damage": 10,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": []
-    },
     "grenade": {
       "name": "Hand Grenade",
+      "kind": "thrown",
       "base_damage": 85,
       "attack_range_m": 12,
       "fire_rate": 1,
@@ -75,56 +90,12 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
-    },
-    "hammer": {
-      "name": "Heavy Sledgehammer",
-      "base_damage": 65,
-      "attack_range_m": 2.2,
-      "fire_rate": 1.25,
-      "armor_penetration": 0.6,
-      "max_clip_size": 0,
-      "default_reserve_ammo": 0,
-      "reload_time": 0,
-      "status_duration": 1.5,
-      "status_tick_damage": 0,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": []
-    },
-    "knife": {
-      "name": "Tactical Knife",
-      "base_damage": 22,
-      "attack_range_m": 2,
-      "fire_rate": 0.35,
-      "armor_penetration": 0.15,
-      "max_clip_size": 0,
-      "default_reserve_ammo": 0,
-      "reload_time": 0,
-      "status_duration": 4,
-      "status_tick_damage": 4,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
-      ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "medium"
     },
     "m16": {
       "name": "M16A2 Assault Rifle",
+      "kind": "hitscan",
       "base_damage": 18,
       "attack_range_m": 60,
       "effective_range_m": 28,
@@ -175,10 +146,14 @@
         1,
         1,
         1
-      ]
+      ],
+      "penetration_class": "medium",
+      "recoil_per_round_deg": 0.3,
+      "recoil_recovery_s": 0.5
     },
     "pistol": {
       "name": "Beretta Pistol",
+      "kind": "hitscan",
       "base_damage": 16,
       "attack_range_m": 25,
       "effective_range_m": 15,
@@ -207,34 +182,13 @@
         0.4,
         0.25,
         0.12
-      ]
-    },
-    "plasma_carbine": {
-      "name": "Spectre Plasma Carbine",
-      "base_damage": 28,
-      "attack_range_m": 16,
-      "effective_range_m": 10,
-      "fire_rate": 0.8,
-      "armor_penetration": 0.65,
-      "max_clip_size": 20,
-      "default_reserve_ammo": 60,
-      "reload_time": 2.4,
-      "status_duration": 1,
-      "status_tick_damage": 0,
-      "max_range_cells": 5,
-      "full_auto_interval": 0,
-      "suppression_weight": 1,
-      "base_hit_chances": [
-        0.95,
-        0.75,
-        0.55,
-        0.35,
-        0.15
       ],
-      "distance_damage_multipliers": []
+      "penetration_class": "light",
+      "damage_falloff_floor": 0.6
     },
     "shotgun": {
       "name": "Remington 870 Shotgun",
+      "kind": "hitscan",
       "base_damage": 45,
       "attack_range_m": 15,
       "effective_range_m": 8,
@@ -255,10 +209,19 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "light",
+      "damage_falloff_floor": 0.4,
+      "reload_mode": "per_round",
+      "reload_per_round_s": 0.5,
+      "pellets": {
+        "count": 8,
+        "cone_half_angle_deg": 6
+      }
     },
     "sniper_rifle": {
       "name": "Sniper Rifle",
+      "kind": "hitscan",
       "base_damage": 70,
       "attack_range_m": 120,
       "effective_range_m": 90,
@@ -295,7 +258,8 @@
         1,
         1,
         1
-      ]
+      ],
+      "penetration_class": "heavy"
     }
   },
   "grenade": {

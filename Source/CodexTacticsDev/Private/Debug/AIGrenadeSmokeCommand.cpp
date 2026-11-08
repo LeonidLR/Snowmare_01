@@ -131,8 +131,9 @@ namespace AIGrenadeSmoke
 			Medic->CurrentClip = 0;
 			Medic->ReserveAmmo = 0;
 			Medic->AutoSwitchOnEmpty();
-			const bool bKnife = Medic->CurrentWeapon && Medic->CurrentWeapon->WeaponId == TEXT("knife");
-			Check(State, bPistol && bKnife, TEXT("empty M16 -> pistol, empty pistol -> knife"));
+			// The designer's roster (2026-11-08): no knife - an empty pistol stays in hands (no last-chance melee weapon).
+			const bool bStillPistol = Medic->CurrentWeapon && Medic->CurrentWeapon->WeaponId == TEXT("pistol");
+			Check(State, bPistol && bStillPistol, TEXT("empty M16 -> pistol, empty pistol -> stays (no knife since 2026-11-08)"));
 		}
 			return Finish(State, true);
 		default:

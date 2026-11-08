@@ -876,6 +876,13 @@ public:
 	void AddArsenalWeapon(UWeaponDataAsset* Weapon, int32 Reserve = -1);
 
 	/**
+	 * The designer's roster (2026-11-08, WeaponRoster): removes every out-of-play weapon from the arsenal, the ammo inventory, the loose
+	 * ammo and the bonus items; one in hands is replaced by the M16 (else the first weapon). InitArsenal, a save load and the campaign
+	 * carry call it.
+	 */
+	void DropOutOfPlayWeapons();
+
+	/**
 	 * Replaces the Blueprint's skeletal mesh before BeginPlay (per-role body, FSquadMemberSpawn::BodyMesh: the Female Soldier
 	 * for the Medic-Sapper). The AnimBP stays; the Blueprint's index-based material overrides are dropped (they belong to the
 	 * old mesh's slots).
@@ -2041,6 +2048,7 @@ public:
 	int32 GetShotsWhilePinned() const { return ShotsWhilePinned; }
 	/** Hit chance of his last aimed shot (ShootAtTarget, after cold / blind / suppression; smokes). */
 	float GetLastShotHitChance() const { return LastShotHitChance; }
+	int32 GetLastShotPelletHits() const { return LastShotPelletHits; }
 	/**
 	 * Every ranged shooter's hit chance at him is multiplied by this (user decision 2026-11-07): 0.5 while he leans out of cover
 	 * and Shooter is on the wall's far side, else 1 (CoverRules::LeanIncomingHitMultiplier). Operatives / PMC, the marksman and
@@ -2658,8 +2666,16 @@ private:
 	int32 PinnedFireHolds = 0;
 	int32 ShotsWhilePinned = 0;
 	float LastShotHitChance = 0.f;
-	/** ShootAtTarget's hit: damage (crit, elevation, stance, cover, distance), telemetry, the weapon's self cold / warmth. */
-	void ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot);
+	/** Pellets of the last aimed shot that hit (1 / 0 for a single-bullet weapon). */
+	int32 LastShotPelletHits = 0;
+	/**
+	 * ShootAtTarget's hit: damage (crit, elevation, stance, cover, distance table, the weapon's damage falloff), x PelletShare (the share
+	 * of a shotgun's pellets that hit, WeaponBallisticsRules), the weapon's penetration class, telemetry, the weapon's self cold / warmth.
+	 */
+	void ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot, float PelletShare = 1.f);
+	/** Full-auto recoil bloom of the SUPPRESS order, degrees, and the time of its last round (WeaponBallisticsRules::SettleRecoil). */
+	float RecoilBloomDeg = 0.f;
+	double RecoilLastRoundTime = -1.0;
 	/** The order can be taken now (OrderQuickFire / PlanQuickFire); spawns the refusal floating text when bExplain. */
 	bool CanTakeQuickFire(bool bExplain);
 	bool bQuickFireActive = false;

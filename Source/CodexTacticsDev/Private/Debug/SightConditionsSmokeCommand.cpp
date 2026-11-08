@@ -221,7 +221,7 @@ namespace SightConditionsSmoke
 		const float ConeRange = Leader->VisionCone ? Leader->VisionCone->GetConeRangeCm() : -1.f;
 		Check(State, FMath::IsNearlyEqual(Leader->GetVisionConeRange(), Range, 1.f) && FMath::IsNearlyEqual(ConeRange, Range, FMath::Max(2.f, 0.015f * Range)),
 			FString::Printf(TEXT("... his cone shows the sight range: %.1f m drawn (the weapon reaches %.0f m)"), ConeRange / 100.f,
-				Leader->CurrentWeapon ? Leader->CurrentWeapon->AttackRangeCm / 100.f : 0.f));
+				Leader->CurrentWeapon ? Leader->CurrentWeapon->Stats.Range.MaxRangeCm / 100.f : 0.f));
 		// His eyes vs the targets: seen exactly within the range.
 		for (int32 Index = 0; Index < (State.bNear ? 2 : 1); ++Index)
 		{

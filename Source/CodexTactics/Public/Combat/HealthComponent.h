@@ -74,6 +74,12 @@ public:
 	void SetArmorTier(EArmorTier NewTier) { ArmorTier = NewTier; }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Health")
+	EArmorClass GetArmorClass() const { return ArmorClass; }
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
+	void SetArmorClass(EArmorClass NewClass) { ArmorClass = NewClass; }
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Health")
 	float GetBaseArmorReduction() const { return BaseArmorReduction; }
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
@@ -97,6 +103,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Health")
 	EArmorTier ArmorTier = EArmorTier::Light;
+
+	/** Armour class (ArmorRules; weapons_tuning.json "armor.bodies"): a weapon of a lower penetration class gets no armour penetration. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Health")
+	EArmorClass ArmorClass = EArmorClass::Light;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Health")
 	FElementalAffinities ElementalAffinities;

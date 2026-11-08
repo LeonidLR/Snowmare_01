@@ -1,5 +1,6 @@
 #include "Interactables/CorpseLootRules.h"
 
+#include "Data/WeaponRoster.h"
 #include "Interactables/ItemStashComponent.h"
 
 #define LOCTEXT_NAMESPACE "CorpseLootRules"
@@ -69,7 +70,7 @@ bool CorpseLootRules::IsBodyBone(const FString& BoneName)
 
 bool CorpseLootRules::IsLootableWeapon(const FString& WeaponId)
 {
-	return !WeaponId.IsEmpty() && WeaponId != TEXT("grenade") && WeaponId != TEXT("knife");
+	return !WeaponId.IsEmpty() && WeaponId != TEXT("grenade") && WeaponId != TEXT("knife") && !WeaponRoster::IsOutOfPlay(WeaponId);
 }
 
 bool CorpseLootRules::IsRemainsItem(ETransferItem Item)
