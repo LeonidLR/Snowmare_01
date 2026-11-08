@@ -334,12 +334,44 @@ upper-body slot montage plays (fire / reload / hit / grenade: the legs keep the 
 not eligible (dead, knocked down, ladder, vault, cover, prone, airborne fall, sniper pose, blizzard walk, carrying). Clip choice: idle (stand / aim / crouch) vs
 move by speed; walk -> jog blend by speed, aim-walk while aiming, crouch set crouched, sprint loop; 8 directions from the velocity vs the facing
 (`BlendDirections`, nearest two available); one shared normalized phase; play rate = speed / loop speed (0.5..1.6).
-**Fire:** `PlayShotgunFire` plays `fire_aim` (aiming) or `fire_hip` on UpperBodySlot per shot (instead of AM_Rifle_Fire). **Reload per shell:**
-`UpdateShotgunReload` plays the reload clip (or the configured section) on UpperBodySlot once per shell, fitted to `reload_per_round_s` 0.5 s (x4.8 for the whole
-2.4 s clip - `ShellReloadRate`); an order / shot interrupts between shells (the gameplay rule).
+**Fire:** `PlayShotgunFire` plays `fire_aim` (aiming) or `fire_hip` on UpperBodySlot per shot (instead of AM_Rifle_Fire). **Reload per shell
+(fixed 2026-11-08 after the designer's "he shakes strangely during the reload"):** the first version restarted the pack's single 2.4 s reload clip
+for EVERY shell at x4.8 as a montage - the gun hand snapped back 40 cm in one frame eight times. Now ONE pass of the clip, natively on spine_01 and
+below (`UpdateShotgunReload` + `FOperativeAnimInstanceProxy::BlendWeaponReload`; no montage, so the layer keeps the legs and nothing restarts),
+driven by the pure phase machine `WeaponAnimLayerRules::AdvanceShellReload`: the intro 0 - 0.833 s (left hand to the pouch and up to the port,
+the first shell) once at rate 1, the pack's own shell-insertion loop 0.833 - 1.2 s (the same pose at both ends) once per shell at
+`ShellLoopRate` = 0.367 s / 0.5 s = x0.73, then the current loop plays out and the outro from 1.833 s (the loop's pose again: hand back to the
+fore-end, back to the aim) once. Segments measured by `Scripts/Editor/measure_shotgun_reload.py` (the left hand's path), in
+`weapon_anim_sets.json` (`reload_shell_start_s` / `_end_s`, `reload_outro_start_s`, `reload_blend_in_s` / `_out_s`). Gameplay timing unchanged
+(0.5 s a shell). Blends in 0.15 s, out 0.12 s, and gives way at once to any other upper / full-body clip (a shot that interrupts the reload).
+Measured standing (ShotgunSmoke 4): torso / head 2.7 -> 1.7 cm a frame, left hand 40.3 -> 14.9 cm a frame (the clip's own fastest move ~13).
 **Check:** tests `CodexTactics.Animation.WeaponLayer.*`; `CodexTactics.ShotgunSmoke` (the layer Full standing with an idle copy from the skeleton's folder, a walk
 clip moving, a fire clip per shot, >= 8 shell clips over a reload, the PMC fighter's layer on the pack clips); `CodexTactics.ShotgunD1Shots` (rendered) writes stills
 + idle / walk / aim-fire / reload frames to `Saved/Screenshots/ShotgunD1/`.
+
+## Pistol weapon layer (the whole pistol, 2026-11-08)
+
+The same native layer as the shotgun (`OperativeAnimInstanceShotgun.cpp`, no ABP edit), now with two sets read from
+`Content/Data/Weapons/weapon_anim_sets.json`: "shotgun" and "pistol"; `ActiveWeaponSet()` picks the one of the weapon in hands
+(`EWeaponHandling::Shotgun` / `Pistol`). **Clips:** the user's Fab pack "Pistol and Rifle Locomotion Animations 1700" is a GASP-style motion-
+matching set on the UEFN mannequin; in the project only its mesh had been imported - the animations sit as FBX in the Epic launcher's vault
+cache (`C:/ProgramData/Epic/EpicGamesLauncher/VaultCache/FabLibrary/Pistol_and_Rifle_Locomotion_Animations_1700-*/fbx`, read only). It holds
+locomotion only (relaxed carry: stand / crouch idle loops, walk / run / crouch loops in 10 GASP directions, sprint), no aim / fire / reload /
+equip. `Scripts/Editor/setup_pistol_animation.py` imports the loops used (27) onto the project's UE5 mannequin skeleton
+(`/Game/Characters/Mannequins/Meshes/SK_Mannequin`; the UEFN extra bones such as "attach" are dropped) -> `/Game/Characters/Animations/Pistol/Source`
+(root motion off), maps them onto the layer's 8 directions by their measured travel (forward F / FL / FR, backward B / BL / BR, strafes LL / RL;
+component +X is the body's LEFT), and takes the aimed pistol from the Lyra mannequin set already in the project (`/Game/Characters/Mannequins/Anims/Pistol`:
+`MF_Pistol_Idle_ADS`, `MF_Pistol_Walk_*` 8-way, `MM_Pistol_Fire`, `MM_Pistol_Reload`, `MM_Pistol_Equip`). Every clip used is IK-retargeted onto
+the squad's UE4 skeletons (`RTG_UE5Manny_UE4Manny`, as the shotgun) -> `/Game/Characters/Animations/Pistol/{Male,Female}`; PMC fighters play the
+Source / Lyra clips. Speeds from the clips: walk 176, jog 387, crouch 202 cm/s.
+**Relaxed vs aimed:** not aiming = the Fab carry (stand idle / walk / run / crouch / sprint), aiming = the Lyra ADS idle / walk; cross-faded by the
+eased aim share like the shotgun. **Fire:** `MM_Pistol_Fire` is a mesh-space ADDITIVE recoil, so it is not a montage (a montage would make the
+layer hand the arms back to the rifle pose for each shot): `PlayShotgunFire` starts it natively and `BlendWeaponFireAdditive` adds it over the
+layer's pose (`FAnimationRuntime::AccumulateAdditivePose`). **Reload:** the magazine reload clip (2.0 s) on the upper body through the same
+native reload overlay as the D-1, the whole clip fitted to the 1.3 s reload time. **Equip:** a layer weapon that comes into the hands (the switch
+from the rifle, the sidearm draw) plays the set's `equip` clip once on the upper body (x1.4; `GetWeaponEquipClips`).
+**Check:** `CodexTactics.PistolSmoke`; render `CodexTactics.ShotgunD1Shots pistol` (the Commander: stills, idle, walk, aim + fire, reload, the
+switch from the M16) -> `Saved/Screenshots/PistolD/`.
 
 ## #51: the "thrown back while firing" pop (game designer video 2026-11-06; fixed 2026-11-08)
 

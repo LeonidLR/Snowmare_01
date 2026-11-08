@@ -1,5 +1,5 @@
 {
-  "comment": "Weapon animation sets played by the operative's native weapon layer (UOperativeAnimInstance, OperativeAnimInstanceShotgun.cpp; designer decision 21, 2026-11-03: the D-1 shotgun switches the locomotion / aim set to the user's /Game/ShotgunLocomotionPack - never modified, read here by path). Directions clockwise from forward. *_speed = the loops' authored ground speed, cm/s (the play rate follows the actual speed). retargeted = skeleton name -> the folder of its IK-retargeted copies (same clip names; Scripts/Editor/setup_shotgun_animation.py; skeletons not listed - the PMC operator, Manny hierarchy - play the pack clips). reload_shell_start_s / _end_s = the section of the reload clip one shell plays (both 0 = the whole clip, fitted to the per-shell time).",
+  "comment": "Weapon animation sets played by the operative's native weapon layer (UOperativeAnimInstance, OperativeAnimInstanceShotgun.cpp; designer decision 21, 2026-11-03: the D-1 shotgun switches the locomotion / aim set to the user's /Game/ShotgunLocomotionPack - never modified, read here by path). Directions clockwise from forward. *_speed = the loops' authored ground speed, cm/s (the play rate follows the actual speed). retargeted = skeleton name -> the folder of its IK-retargeted copies (same clip names; Scripts/Editor/setup_shotgun_animation.py; skeletons not listed - the PMC operator, Manny hierarchy - play the pack clips). reload: ONE pass of the pack's single reload clip on the upper body (designer 2026-11-08: restarting it x4.8 per shell shook him) - the intro 0 .. reload_shell_start_s once, the shell-insertion loop reload_shell_start_s .. reload_shell_end_s once per shell (rate = loop length / the per-shell step, kept 0.7..1.4), then the outro from reload_outro_start_s (the loop's end pose) to the clip's end; measured by Scripts/Editor/measure_shotgun_reload.py (the left hand at the loading port, the same pose at 0.833 / 1.2 / 1.833 s).",
   "shotgun": {
     "retargeted": {
       "UE4_Mannequin_Skeleton": "/Game/Characters/Animations/Shotgun/Male",
@@ -54,8 +54,78 @@
     "sprint_speed": 550,
     "move_start_speed": 15,
     "move_full_speed": 60,
+    "reload_shell_start_s": 0.8333,
+    "reload_shell_end_s": 1.2,
+    "reload_outro_start_s": 1.8333,
+    "reload_blend_in_s": 0.15,
+    "reload_blend_out_s": 0.12,
+    "blend_seconds": 0.2
+  },
+  "pistol": {
+    "comment": "The pistol (the whole pistol, 2026-11-08): relaxed carry = the user's Fab pack 'Pistol and Rifle Locomotion Animations 1700' (GASP loops, imported from the launcher's vault cache onto the project's UE5 mannequin by Scripts/Editor/setup_pistol_animation.py -> /Game/Characters/Animations/Pistol/Source; the pack has no aim / fire / reload / equip), aimed = the Lyra mannequin pistol set already in the project (/Game/Characters/Mannequins/Anims/Pistol; MM_Pistol_Fire is a mesh-space additive recoil, played natively over the layer). The squad's UE4 skeletons play the IK-retargeted copies (retargeted); the reload clip (2.0 s) is fitted to the pistol's reload time.",
+    "retargeted": {
+      "UE4_Mannequin_Skeleton": "/Game/Characters/Animations/Pistol/Male",
+      "Female_Soldier_Skeleton": "/Game/Characters/Animations/Pistol/Female"
+    },
+    "stand_idle": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Stand_Idle_Loop_Pistol.M_Neutral_Stand_Idle_Loop_Pistol",
+    "aim_idle": "/Game/Characters/Mannequins/Anims/Pistol/MF_Pistol_Idle_ADS.MF_Pistol_Idle_ADS",
+    "crouch_idle": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Idle_Loop_Pistol.M_Neutral_Crouch_Idle_Loop_Pistol",
+    "sprint": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Sprint_Loop_F_Pistol.M_Neutral_Sprint_Loop_F_Pistol",
+    "walk": {
+      "fwd": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Walk_Loop_F_Pistol.M_Neutral_Walk_Loop_F_Pistol",
+      "fwd_left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Walk_Loop_FL_Pistol.M_Neutral_Walk_Loop_FL_Pistol",
+      "fwd_right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Walk_Loop_FR_Pistol.M_Neutral_Walk_Loop_FR_Pistol",
+      "bwd": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Walk_Loop_B_Pistol.M_Neutral_Walk_Loop_B_Pistol",
+      "bwd_left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Walk_Loop_BL_Pistol.M_Neutral_Walk_Loop_BL_Pistol",
+      "bwd_right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Walk_Loop_BR_Pistol.M_Neutral_Walk_Loop_BR_Pistol",
+      "left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Walk_Loop_LL_Pistol.M_Neutral_Walk_Loop_LL_Pistol",
+      "right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Walk_Loop_RL_Pistol.M_Neutral_Walk_Loop_RL_Pistol"
+    },
+    "aim_walk": {
+      "fwd": "/Game/Characters/Mannequins/Anims/Pistol/Walk/MF_Pistol_Walk_Fwd.MF_Pistol_Walk_Fwd",
+      "fwd_right": "/Game/Characters/Mannequins/Anims/Pistol/Walk/MF_Pistol_Walk_Fwd_Right.MF_Pistol_Walk_Fwd_Right",
+      "right": "/Game/Characters/Mannequins/Anims/Pistol/Walk/MF_Pistol_Walk_Right.MF_Pistol_Walk_Right",
+      "bwd_right": "/Game/Characters/Mannequins/Anims/Pistol/Walk/MF_Pistol_Walk_Bwd_Right.MF_Pistol_Walk_Bwd_Right",
+      "bwd": "/Game/Characters/Mannequins/Anims/Pistol/Walk/MF_Pistol_Walk_Bwd.MF_Pistol_Walk_Bwd",
+      "bwd_left": "/Game/Characters/Mannequins/Anims/Pistol/Walk/MF_Pistol_Walk_Bwd_Left.MF_Pistol_Walk_Bwd_Left",
+      "left": "/Game/Characters/Mannequins/Anims/Pistol/Walk/MF_Pistol_Walk_Left.MF_Pistol_Walk_Left",
+      "fwd_left": "/Game/Characters/Mannequins/Anims/Pistol/Walk/MF_Pistol_Walk_Fwd_Left.MF_Pistol_Walk_Fwd_Left"
+    },
+    "jog": {
+      "fwd": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Run_Loop_F_Pistol.M_Neutral_Run_Loop_F_Pistol",
+      "fwd_left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Run_Loop_FL_Pistol.M_Neutral_Run_Loop_FL_Pistol",
+      "fwd_right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Run_Loop_FR_Pistol.M_Neutral_Run_Loop_FR_Pistol",
+      "bwd": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Run_Loop_B_Pistol.M_Neutral_Run_Loop_B_Pistol",
+      "bwd_left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Run_Loop_BL_Pistol.M_Neutral_Run_Loop_BL_Pistol",
+      "bwd_right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Run_Loop_BR_Pistol.M_Neutral_Run_Loop_BR_Pistol",
+      "left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Run_Loop_LL_Pistol.M_Neutral_Run_Loop_LL_Pistol",
+      "right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Run_Loop_RL_Pistol.M_Neutral_Run_Loop_RL_Pistol"
+    },
+    "crouch": {
+      "fwd": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Loop_F_Pistol.M_Neutral_Crouch_Loop_F_Pistol",
+      "fwd_left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Loop_FL_Pistol.M_Neutral_Crouch_Loop_FL_Pistol",
+      "fwd_right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Loop_FR_Pistol.M_Neutral_Crouch_Loop_FR_Pistol",
+      "bwd": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Loop_B_Pistol.M_Neutral_Crouch_Loop_B_Pistol",
+      "bwd_left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Loop_BL_Pistol.M_Neutral_Crouch_Loop_BL_Pistol",
+      "bwd_right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Loop_BR_Pistol.M_Neutral_Crouch_Loop_BR_Pistol",
+      "left": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Loop_LL_Pistol.M_Neutral_Crouch_Loop_LL_Pistol",
+      "right": "/Game/Characters/Animations/Pistol/Source/M_Neutral_Crouch_Loop_RL_Pistol.M_Neutral_Crouch_Loop_RL_Pistol"
+    },
+    "fire_aim": "/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Fire.MM_Pistol_Fire",
+    "fire_hip": "/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Fire.MM_Pistol_Fire",
+    "reload": "/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Reload.MM_Pistol_Reload",
+    "equip": "/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Equip.MM_Pistol_Equip",
+    "walk_speed": 176,
+    "jog_speed": 387,
+    "crouch_speed": 202,
+    "sprint_speed": 600,
+    "move_start_speed": 15,
+    "move_full_speed": 60,
     "reload_shell_start_s": 0,
     "reload_shell_end_s": 0,
+    "reload_outro_start_s": 0,
+    "reload_blend_in_s": 0.15,
+    "reload_blend_out_s": 0.15,
     "blend_seconds": 0.2
   }
 }

@@ -60,7 +60,12 @@ enum class EWeaponHandling : uint8
 	 * Pump shotgun (the D-1, designer decision 21, 2026-11-03): the operative's locomotion / aim / fire / reload switch to the
 	 * ShotgunLocomotionPack clips (the native weapon layer, UOperativeAnimInstance::UpdateShotgunLayer; any stance, also on the move).
 	 */
-	Shotgun
+	Shotgun,
+	/**
+	 * Pistol (the weapons week, "the whole pistol", 2026-11-08): the operative's locomotion / aim / fire / reload switch to the pistol set
+	 * (the same native weapon layer as the shotgun; weapon_anim_sets.json "pistol").
+	 */
+	Pistol
 };
 
 /** Damage of one round / blow before armour, cover and stance (JSON base_damage, damage_type, armor_penetration, penetration_class). */

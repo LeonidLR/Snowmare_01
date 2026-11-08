@@ -83,3 +83,27 @@
 - **Checks.** Tests `CodexTactics.Weapons.Loadout.*`, `CodexTactics.Animation.WeaponLayer.*`; `CodexTactics.ShotgunSmoke` (loadout, model,
   pellets / falloff at 3 / 8 / 14.5 m, partial pellet hits, per-shell reload + interruption, the layer, a PMC fighter's layer, the #51 probe);
   rendered proof `CodexTactics.ShotgunD1Shots` -> `Saved/Screenshots/ShotgunD1/`.
+
+## The pistol (the weapons week, "the whole pistol", 2026-11-08; the designer's numbers pending his confirmation, data only)
+
+- **Damage by distance.** Full up to 10 m (`effective_range_m` 10, was 15), then a straight ramp down to x0.6 at the 25 m reach
+  (`damage_falloff_floor` 0.6). The Godot per-cell table (`distance_damage_multipliers` 1 / 0.8 / 0.6 / 0.4 / 0.25 / 0.12 per 1.5 m, which cut it
+  to 12 % past ~8 m) is gone (`[]`). Against the hound (light armour 0.10): 14.56 at 5 / 10 m (was 8.74 at 5 m, 1.75 at 10 m), 11.45 at 18 m,
+  8.93 at 24.5 m. Armour class light (unchanged).
+- **Turn-based.** `TurnBasedRules::GetDamageForDistance`: a weapon WITHOUT a per-cell table takes the real-time falloff curve at the cells'
+  distance (1.5 m a cell) - the pistol's 6-cell grid reach (9 m) is all full damage now (was 1 / 0.8 / 0.6 / 0.4 / 0.25 / 0.12). Weapons that
+  keep a table (M16, sniper rifle) are unchanged; the D-1 (no table, 5 cells = 7.5 m < its 8 m effective range) stays full.
+- **Handling** `pistol` (`EWeaponHandling::Pistol`): the pistol set of the weapon layer ([animation-setup](animation-setup.md) "Pistol weapon layer").
+- **The sidearm switch** (`Combat/SidearmRules`, `weapons_tuning.json` "sidearm": enabled, weapon pistol, `threat_range_m` 10, `draw_s` 0.35,
+  `holster_after_s` 3): when the primary (the M16, the Engineer's D-1) runs dry and its reload starts with a live enemy within 10 m (his combat
+  target, any monster, any fighter of another team) the operative draws the pistol instead of standing through the reload (`TryDrawSidearm`,
+  from the combat tick; no shot for the draw time, the equip clip plays); after 3 s without a target (or with the pistol dry) he goes back to the
+  primary, which then reloads (`UpdateSidearmReturn`). A tactical top-up (rounds still in the clip) never switches; an empty primary with no
+  reserve left still switches for good (`AutoSwitchOnEmpty`). The player's own controls are unchanged (X cycles the weapons, the weapon
+  selector). Every operative carries the pistol (12 + 24).
+- **Model.** The placeholder stays (the operative Blueprint's default weapon model) until the optimized Pistol 9mm package (one material,
+  1K atlas, the designer 2026-11-08) is imported; the grip transform will be computed from the retargeted aim pose (barrel along the body's
+  forward, the grip between the wrist and the middle knuckle - `Scripts/Editor/calibrate_pistol_grip.py`, kept out of the commit until then).
+- **Checks.** Tests `CodexTactics.Weapons.Sidearm.Rules`, `CodexTactics.Weapons.Pistol.DamageByDistance` (real time + turn-based);
+  `CodexTactics.PistolSmoke` (loadout, the switch + equip clip + layer, damage at 5 / 10 / 18 / 24.5 m, reload, the sidearm draw and return,
+  a PMC fighter's layer); rendered proof `CodexTactics.ShotgunD1Shots pistol` -> `Saved/Screenshots/PistolD/`.

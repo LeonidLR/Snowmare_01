@@ -67,6 +67,14 @@
       "plasma_carbine"
     ]
   },
+  "sidearm": {
+    "comment": "The sidearm switch (SidearmRules, 2026-11-08): a primary that runs dry with an enemy within threat_range_m -> the pistol instead of the reload (no shot for draw_s while it comes up); back to the primary (which then reloads) after holster_after_s without a target or when the pistol is dry. The player's own switching (X, the weapon selector) is unchanged.",
+    "enabled": true,
+    "weapon": "pistol",
+    "threat_range_m": 10,
+    "draw_s": 0.35,
+    "holster_after_s": 3
+  },
   "loadouts": {
     "comment": "The player's squad: each role's weapons, the first in hands (WeaponLoadoutRules; designer decision 21+, 2026-11-03 / 11-08: the Engineer carries the D-1 shotgun as his primary weapon and no M16). A role not listed keeps the game mode's StartingArsenal + ExtraWeapons. PMC fighters: pmc_operators.json weapon_pool.",
     "commander": [
@@ -172,10 +180,11 @@
     },
     "pistol": {
       "name": "Beretta Pistol",
+      "handling": "pistol",
       "kind": "hitscan",
       "base_damage": 16,
       "attack_range_m": 25,
-      "effective_range_m": 15,
+      "effective_range_m": 10,
       "fire_rate": 0.45,
       "armor_penetration": 0.1,
       "max_clip_size": 12,
@@ -194,14 +203,7 @@
         0.5,
         0.35
       ],
-      "distance_damage_multipliers": [
-        1,
-        0.8,
-        0.6,
-        0.4,
-        0.25,
-        0.12
-      ],
+      "distance_damage_multipliers": [],
       "penetration_class": "light",
       "damage_falloff_floor": 0.6
     },

@@ -81,18 +81,6 @@ namespace WeaponAnimLayerRules
 		return FMath::Clamp(Speed / NominalSpeed, MinRate, MaxRate);
 	}
 
-	float ShellReloadRate(float ClipLength, float ShellStart, float ShellEnd, float StepSeconds, float& OutStart, float& OutEnd)
-	{
-		OutStart = 0.f;
-		OutEnd = FMath::Max(0.f, ClipLength);
-		if (ShellEnd > ShellStart && ShellStart >= 0.f && ShellEnd <= ClipLength + KINDA_SMALL_NUMBER)
-		{
-			OutStart = ShellStart;
-			OutEnd = ShellEnd;
-		}
-		const float Section = OutEnd - OutStart;
-		return Section > KINDA_SMALL_NUMBER && StepSeconds > KINDA_SMALL_NUMBER ? Section / StepSeconds : 1.f;
-	}
 
 	FString RetargetedClipPath(const FString& PackPath, const FString& Folder)
 	{
@@ -111,5 +99,117 @@ namespace WeaponAnimLayerRules
 		}
 		const FString Name = Package.Mid(Slash + 1);
 		return FString::Printf(TEXT("%s/%s.%s"), *Root, *Name, *Name);
+	}
+
+	float ShellLoopRate(float LoopStart, float LoopEnd, float StepSeconds, float MinRate, float MaxRate)
+	{
+		const float Segment = LoopEnd - LoopStart;
+		if (Segment <= KINDA_SMALL_NUMBER || StepSeconds <= KINDA_SMALL_NUMBER)
+		{
+			return 1.f;
+		}
+		return FMath::Clamp(Segment / StepSeconds, MinRate, MaxRate);
+	}
+
+	FShellReloadClip SanitizeShellReloadClip(const FShellReloadClip& Clip)
+	{
+		FShellReloadClip Out = Clip;
+		Out.Length = FMath::Max(0.f, Clip.Length);
+		Out.LoopRate = Clip.LoopRate > KINDA_SMALL_NUMBER ? Clip.LoopRate : 1.f;
+		if (!(Clip.LoopStart >= 0.f && Clip.LoopEnd > Clip.LoopStart + 0.02f && Clip.LoopEnd <= Out.Length + KINDA_SMALL_NUMBER))
+		{
+			Out.LoopStart = 0.f;
+			Out.LoopEnd = Out.Length;
+			Out.OutroStart = 0.f;
+		}
+		if (Out.OutroStart >= Out.Length || Out.OutroStart < Out.LoopEnd - KINDA_SMALL_NUMBER)
+		{
+			Out.OutroStart = 0.f; // no outro (it must start at or after the loop's end)
+		}
+		return Out;
+	}
+
+	void AdvanceShellReload(FShellReloadState& State, const FShellReloadClip& InClip, float DeltaSeconds, bool bReloading)
+	{
+		const FShellReloadClip Clip = SanitizeShellReloadClip(InClip);
+		const float Segment = Clip.LoopEnd - Clip.LoopStart;
+		if (Clip.Length <= KINDA_SMALL_NUMBER || Segment <= KINDA_SMALL_NUMBER)
+		{
+			State = FShellReloadState();
+			return;
+		}
+		const float Dt = FMath::Max(0.f, DeltaSeconds);
+		switch (State.Phase)
+		{
+		case EShellReloadPhase::None:
+			if (!bReloading)
+			{
+				return;
+			}
+			State = FShellReloadState();
+			State.Phase = Clip.LoopStart > KINDA_SMALL_NUMBER ? EShellReloadPhase::Intro : EShellReloadPhase::Loop;
+			State.Time = Clip.LoopStart > KINDA_SMALL_NUMBER ? 0.f : Clip.LoopStart;
+			AdvanceShellReload(State, InClip, Dt, bReloading);
+			return;
+		case EShellReloadPhase::Intro:
+			State.Time += Dt;
+			if (State.Time >= Clip.LoopStart)
+			{
+				const float Over = (State.Time - Clip.LoopStart) * Clip.LoopRate;
+				State.Phase = bReloading ? EShellReloadPhase::Loop : EShellReloadPhase::Finishing;
+				State.Time = Clip.LoopStart;
+				AdvanceShellReload(State, InClip, Over / Clip.LoopRate, bReloading);
+			}
+			return;
+		case EShellReloadPhase::Loop:
+		case EShellReloadPhase::Finishing:
+		{
+			if (State.Phase == EShellReloadPhase::Loop && !bReloading)
+			{
+				State.Phase = EShellReloadPhase::Finishing;
+			}
+			else if (State.Phase == EShellReloadPhase::Finishing && bReloading)
+			{
+				State.Phase = EShellReloadPhase::Loop;
+			}
+			State.Time += Dt * Clip.LoopRate;
+			if (State.Time < Clip.LoopEnd)
+			{
+				return;
+			}
+			const float Over = State.Time - Clip.LoopEnd;
+			if (State.Phase == EShellReloadPhase::Loop)
+			{
+				++State.Loops;
+				State.Time = Clip.LoopStart + FMath::Fmod(Over, Segment);
+				return;
+			}
+			if (Clip.OutroStart <= 0.f)
+			{
+				State = FShellReloadState();
+				return;
+			}
+			State.Phase = EShellReloadPhase::Outro;
+			State.Time = Clip.OutroStart;
+			AdvanceShellReload(State, InClip, Over / Clip.LoopRate, bReloading);
+			return;
+		}
+		case EShellReloadPhase::Outro:
+			if (bReloading)
+			{
+				State = FShellReloadState();
+				AdvanceShellReload(State, InClip, Dt, bReloading);
+				return;
+			}
+			State.Time += Dt;
+			if (State.Time >= Clip.Length)
+			{
+				State = FShellReloadState();
+			}
+			return;
+		default:
+			State = FShellReloadState();
+			return;
+		}
 	}
 }

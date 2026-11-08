@@ -987,9 +987,9 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	{
 		Reload = nullptr; // never stop the sniper clips at the reload's end
 	}
-	if (UpdateShotgunReload(Operative))
+	if (UpdateShotgunReload(Operative, DeltaSeconds))
 	{
-		bWasReloading = bIsReloading; // the D-1: one reload section per shell (OperativeAnimInstanceShotgun.cpp)
+		bWasReloading = bIsReloading; // the D-1: intro, a shell-insertion loop per shell, outro (OperativeAnimInstanceShotgun.cpp)
 		return;
 	}
 	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown && !bIsClimbing)
@@ -1345,6 +1345,11 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	WeaponClips = Instance->ShotgunClips;
 	WeaponUpperWeight = Instance->ShotgunUpperWeight;
 	WeaponLowerWeight = Instance->ShotgunLowerWeight;
+	WeaponReloadClip = Instance->ShotgunReloadWeight > MinSampleWeight ? Instance->ActiveWeaponSet().Reload : nullptr;
+	WeaponReloadTime = Instance->ShotgunReload.Time;
+	WeaponReloadWeight = Instance->ShotgunReloadWeight;
+	WeaponFireAdditive = Instance->WeaponFireAdditiveTime >= 0.f ? Instance->WeaponFireAdditiveClip : nullptr;
+	WeaponFireAdditiveTime = FMath::Max(0.f, Instance->WeaponFireAdditiveTime);
 	for (int32 Index = 0; Index < Slot(EOperativeClip::Count); ++Index)
 	{
 		Clips[Index].Sequence = Instance->GetClip(static_cast<EOperativeClip>(Index));
@@ -1419,7 +1424,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 		return Evaluate(Output);
 	}
 	const bool bPeekLock = PeekLockAlpha > 0.f;
-	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || WeaponLowerWeight > MinSampleWeight;
+	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || WeaponLowerWeight > MinSampleWeight || (WeaponReloadClip && WeaponReloadWeight > MinSampleWeight) || WeaponFireAdditive != nullptr;
 	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;

@@ -28,6 +28,37 @@ enum class EWeaponLayerMask : uint8
 };
 
 /** The two directional clips to blend and the share of the second. */
+/** The per-shell reload's phases on one reload clip: intro (raise / tilt the gun, the first shell) -> the shell-insertion loop while shells go
+ * in -> finish the current loop -> outro (pump, back to the aim). */
+enum class EShellReloadPhase : uint8
+{
+	None,
+	Intro,
+	Loop,
+	Finishing,
+	Outro
+};
+
+/** The reload clip's segments (seconds) and the loop's play rate. */
+struct CODEXTACTICS_API FShellReloadClip
+{
+	float Length = 0.f;
+	float LoopStart = 0.f;
+	float LoopEnd = 0.f;
+	/** Where the outro starts (its first pose = the loop's pose at LoopEnd); <= 0 or >= Length: no outro, the reload ends with the loop. */
+	float OutroStart = 0.f;
+	float LoopRate = 1.f;
+};
+
+/** Where the clip is: phase + clip time. */
+struct CODEXTACTICS_API FShellReloadState
+{
+	EShellReloadPhase Phase = EShellReloadPhase::None;
+	float Time = 0.f;
+	/** Loops completed since the reload began (one per shell at the matching rate). */
+	int32 Loops = 0;
+};
+
 struct CODEXTACTICS_API FWeaponLayerDirectionBlend
 {
 	EWeaponLayerDirection A = EWeaponLayerDirection::Forward;
@@ -63,15 +94,27 @@ namespace WeaponAnimLayerRules
 	/** Play rate of a loop authored at NominalSpeed for the actual Speed, clamped into [MinRate, MaxRate]. */
 	CODEXTACTICS_API float LoopPlayRate(float Speed, float NominalSpeed, float MinRate = 0.5f, float MaxRate = 1.6f);
 
-	/**
-	 * Section of the reload clip one shell plays, seconds [OutStart, OutEnd) and its play rate to fit StepSeconds. With no authored
-	 * section (ShellStart >= ShellEnd) the whole clip plays.
-	 */
-	CODEXTACTICS_API float ShellReloadRate(float ClipLength, float ShellStart, float ShellEnd, float StepSeconds, float& OutStart, float& OutEnd);
 
 	/**
 	 * The retargeted copy of a pack clip: "<Folder>/<Name>.<Name>" for the pack object path "/Game/.../<Name>.<Name>" (or "/Game/.../<Name>");
 	 * empty when Folder or the path is empty. weapon_anim_sets.json "retargeted" maps a skeleton name to its folder.
 	 */
 	CODEXTACTICS_API FString RetargetedClipPath(const FString& PackPath, const FString& Folder);
+
+	/**
+	 * The shell loop's play rate: one loop per gameplay shell step (LoopEnd - LoopStart) / StepSeconds, kept near natural (MinRate..MaxRate)
+	 * - a loop restarted at x4.8 per shell was the designer's "shaking" (2026-11-08). 1 when the segment is invalid.
+	 */
+	CODEXTACTICS_API float ShellLoopRate(float LoopStart, float LoopEnd, float StepSeconds, float MinRate = 0.7f, float MaxRate = 1.4f);
+
+	/** A segment table that always works: an invalid loop = the whole clip as the loop (no intro / outro). */
+	CODEXTACTICS_API FShellReloadClip SanitizeShellReloadClip(const FShellReloadClip& Clip);
+
+	/**
+	 * Advances the per-shell reload by DeltaSeconds: None -> Intro when bReloading; Intro (rate 1) -> Loop at LoopStart; Loop wraps within
+	 * [LoopStart, LoopEnd) at LoopRate (Loops + 1 per wrap) while bReloading; then Finishing plays the current loop out to LoopEnd and
+	 * jumps to OutroStart (the same pose), Outro (rate 1) -> None at the clip's end. A new reload during Finishing goes back to Loop; during
+	 * the outro it starts over at the intro. The clip time never jumps except at those matching poses.
+	 */
+	CODEXTACTICS_API void AdvanceShellReload(FShellReloadState& State, const FShellReloadClip& Clip, float DeltaSeconds, bool bReloading);
 }

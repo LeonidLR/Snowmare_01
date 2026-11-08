@@ -288,6 +288,7 @@ bool FWeaponSchemaParityTest::RunTest(const FString&)
 		if ((*Block)->TryGetStringField(TEXT("handling"), HandlingName))
 		{
 			Old.Handling = HandlingName == TEXT("shotgun") ? EWeaponHandling::Shotgun
+				: HandlingName == TEXT("pistol") ? EWeaponHandling::Pistol // the pistol layer (2026-11-08)
 				: (HandlingName == TEXT("sniper_rifle") ? EWeaponHandling::SniperRifle : EWeaponHandling::Standard);
 		}
 		UWeaponDataAsset* Scratch = MakeScratch(Asset->MakeBaseStats());

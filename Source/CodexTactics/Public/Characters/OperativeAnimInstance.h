@@ -8,6 +8,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
 #include "Characters/WeaponAnimLayerRules.h"
+#include "Data/WeaponStats.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "Survival/ColdRules.h"
 #include "Survival/WarmIdleRules.h"
@@ -211,9 +212,19 @@ private:
 
 	/** The weapon layer (the D-1 shotgun set, 2026-11-08) blended over the graph's pose: upper / lower body weights and its clips. */
 	void BlendWeaponLayer(FPoseContext& Output) const;
+	/** The shotgun's per-shell reload clip on spine_01 and below (after the layer). */
+	void BlendWeaponReload(FPoseContext& Output) const;
+	/** An additive fire clip (the pistol's mesh-space recoil) on top of the layer's pose. */
+	void BlendWeaponFireAdditive(FPoseContext& Output) const;
+	const UAnimSequenceBase* WeaponFireAdditive = nullptr;
+	float WeaponFireAdditiveTime = 0.f;
 	TStaticArray<FOperativeClipState, 12> WeaponClips;
 	float WeaponUpperWeight = 0.f;
 	float WeaponLowerWeight = 0.f;
+	/** The shotgun's per-shell reload on the upper body (spine_01 and below it): clip, time, weight. */
+	const UAnimSequenceBase* WeaponReloadClip = nullptr;
+	float WeaponReloadTime = 0.f;
+	float WeaponReloadWeight = 0.f;
 };
 
 /**
@@ -1245,7 +1256,13 @@ public:
 	int32 GetShotgunFireClips() const { return ShotgunFireClips; }
 	int32 GetShotgunShellClips() const { return ShotgunShellClips; }
 	/** The folder the shotgun clips come from for this skeleton (empty: the pack's own clips). */
-	const FString& GetShotgunRetargetFolder() const { return ShotgunRetargetFolder; }
+	const FString& GetShotgunRetargetFolder() const { return LayerHandling == EWeaponHandling::Pistol ? PistolRetargetFolder : ShotgunRetargetFolder; }
+	/** The handling whose set the weapon layer plays (Shotgun / Pistol; Standard = none). */
+	EWeaponHandling GetWeaponLayerHandling() const { return LayerHandling; }
+	/** Equip clips played when a layer weapon came into the hands (the pistol draw; for the smokes). */
+	int32 GetWeaponEquipClips() const { return WeaponEquipClips; }
+	/** The weapon layer's reload clip weight on the upper body (0..1; the D-1 per shell, the pistol's magazine; for the smokes). */
+	float GetWeaponReloadWeight() const { return ShotgunReloadWeight; }
 
 	/** The grenade throw clip is still playing (the arms throw: no rifle shot meanwhile, user rule 2026-10-07). */
 	bool IsThrowingGrenade() const { return GrenadeThrowSecondsLeft > 0.f; }
@@ -1596,7 +1613,12 @@ private:
 		float MoveFullSpeed = 60.f;
 		float ShellStart = 0.f;
 		float ShellEnd = 0.f;
+		float OutroStart = 0.f;
+		float ReloadBlendIn = 0.15f;
+		float ReloadBlendOut = 0.12f;
 		float BlendSeconds = 0.2f;
+		/** The draw when the weapon comes into the hands (the pistol's equip clip; upper body). */
+		UAnimSequenceBase* Equip = nullptr;
 		FShotgunAnimSet()
 		{
 			for (int32 Index = 0; Index < 8; ++Index)
@@ -1611,9 +1633,20 @@ private:
 	bool IsShotgunLayerEligible() const;
 	/** The shot clip of the shotgun (aim / hip) on the upper-body slot; false = not the shotgun set. */
 	bool PlayShotgunFire();
-	/** The per-shell reload clip (one section per shell); true when the shotgun set handled the reload this frame. */
-	bool UpdateShotgunReload(const AOperativeCharacter* Operative);
-	FShotgunAnimSet ShotgunSet;
+	/** The per-shell reload (intro, the shell-insertion loop per shell, outro - natively on the upper body); true when the shotgun set handles
+	 * the reload this frame. */
+	bool UpdateShotgunReload(const AOperativeCharacter* Operative, float DeltaSeconds);
+	/** The weapon sets of the layer: weapon_anim_sets.json "shotgun" / "pistol" (the pistol, 2026-11-08). */
+	FShotgunAnimSet ShotgunSetData;
+	FShotgunAnimSet PistolSetData;
+	/** The set of the weapon in hands (the pistol's for EWeaponHandling::Pistol, else the shotgun's). */
+	const FShotgunAnimSet& ActiveWeaponSet() const { return LayerHandling == EWeaponHandling::Pistol ? PistolSetData : ShotgunSetData; }
+	/** Reads one block of weapon_anim_sets.json into Set (clips by path, the skeleton's retargeted copies first). */
+	void LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAnimSet& ShotgunSet, FString& OutRetargetFolder);
+	EWeaponHandling LayerHandling = EWeaponHandling::Standard;
+	FString LayerWeaponId;
+	int32 WeaponEquipClips = 0;
+	FString PistolRetargetFolder;
 	bool bShotgunSetLoaded = false;
 	/** The retargeted-copy folder for this mesh's skeleton (weapon_anim_sets.json "retargeted"); empty = the pack clips play. */
 	FString ShotgunRetargetFolder;
@@ -1630,6 +1663,12 @@ private:
 	float ShotgunSprintShare = 0.f;
 	TStaticArray<FOperativeClipState, 12> ShotgunClips;
 	int32 ShotgunReloadLastClip = -1;
+	FShellReloadState ShotgunReload;
+	float ShotgunReloadWeight = 0.f;
+	/** An additive fire clip played natively over the layer (the pistol's recoil; a montage would make the layer give the arms back to the
+	 * rifle pose for every shot): the clip and its time (< 0 = none). */
+	UAnimSequenceBase* WeaponFireAdditiveClip = nullptr;
+	float WeaponFireAdditiveTime = -1.f;
 	int32 ShotgunFireClips = 0;
 	int32 ShotgunShellClips = 0;
 
