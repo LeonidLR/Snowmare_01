@@ -9,6 +9,7 @@
 // FireArcSmoke (#33 "a PRONE PMC faces one way but fires in another"): a prone fighter with the target behind his back turns first
 //   (at the prone turn rate) and fires only with his body / rifle on the target; a prone operative of the squad the same.
 // PmcUnderFireSmoke (#43 "the column in a passage does not react to a PMC firing from a corner"): see its own comment below.
+// PmcFireLineSmoke (designer PIE 2026-11-08: a prone PMC fighter in the open kept firing into the wall the squad stood behind): see below.
 
 #include "CoreMinimal.h"
 
@@ -25,12 +26,14 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/SuppressionRules.h"
 #include "Combat/UnderFireRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Data/WeaponDataAsset.h"
 #include "Debug/SmokeUtils.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Engine/StaticMesh.h"
@@ -919,12 +922,19 @@ namespace PmcCombatBugsSmoke
 			{
 				return Finish(State, false);
 			}
+			// His rifle over the wall (the scenario): he stays standing - the squad's return fire would put him down behind it, where his rounds
+			// (the smoke's) would leave from below the wall's top and his flash is hidden (honest sight, 2026-11-08).
+			if (Hostile->GetStance() != EOperativeStance::Standing)
+			{
+				Hostile->SetStance(EOperativeStance::Standing);
+			}
 			if (State.StageTime >= State.NextForcedShot)
 			{
 				State.NextForcedShot = State.StageTime + 0.5f;
 				AOperativeCharacter* Victim = State.Members[FMath::Min(State.Members.Num() - 1, FMath::FloorToInt(State.StageTime / 0.5f) % 2)].Get();
 				Hostile->ShootAtTarget(Victim ? Victim : Leader, 1.f);
 			}
+			State.bTurned[2] |= Pmc && Pmc->IsVisibleToTeam(0, Hostile); // seen by his flash at some moment of the fire
 			const FVector Flash = Hostile->GetWeaponMuzzleLocation();
 			for (int32 Index = 0; Index < State.Members.Num() && Index < 3; ++Index)
 			{
@@ -944,7 +954,22 @@ namespace PmcCombatBugsSmoke
 			{
 				return true;
 			}
-			Check(State, Pmc && Pmc->IsVisibleToTeam(0, Hostile), TEXT("the squad's team knows the shooter (his flash)"));
+			{
+				// fix/pmc-fire-through-wall (2026-11-08): seen = a clear line from an eye to him or to his flash (honest sight).
+				const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+				FString Lines;
+				for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Members)
+				{
+					if (Member.IsValid() && Sight)
+					{
+						const FVector Eye = UTacticalSightSubsystem::EyePoint(*Member);
+						Lines += FString::Printf(TEXT(" %s: profile %d flash %d;"), *Member->DisplayName.ToString(),
+							Sight->HasClearSight(Eye, UTacticalSightSubsystem::ProfilePoint(*Hostile)) ? 1 : 0, Sight->HasClearSight(Eye, Hostile->GetWeaponMuzzleLocation()) ? 1 : 0);
+					}
+				}
+				Check(State, State.bTurned[2], FString::Printf(TEXT("the squad's team saw the shooter by his flash (now %s; lines now:%s)"),
+					Pmc && Pmc->IsVisibleToTeam(0, Hostile) ? TEXT("seen") : TEXT("known"), *Lines));
+			}
 			int32 Returned = 0;
 			for (int32 Index = 0; Index < State.Members.Num() && Index < 3; ++Index)
 			{
@@ -955,6 +980,315 @@ namespace PmcCombatBugsSmoke
 			}
 			Check(State, State.bLeaderMovedUnderFire, TEXT("the column kept walking while turned to the fire (8-direction strafe)"));
 			Check(State, Returned > 0, FString::Printf(TEXT("the squad returns fire at the flash (%d rounds)"), Returned));
+			return Finish(State, true);
+		}
+		default:
+			return Finish(State, false);
+		}
+	}
+
+	// --- fix/pmc-fire-through-wall ---------------------------------------------------------------------------------------------------------
+	// PmcFireLineSmoke (game designer PIE 2026-11-08, L_Gen_Depot_1 zone Z_ST_south: a hostile PMC fighter lying PRONE in the open kept
+	// shooting at the squad standing behind a solid wall - the tracers straight into the wall, never a hit). The squad stands behind a
+	// 3 m x 8 m wall, the fighter lies prone 20 m beyond it. The squad's shots (demasks) are heard by his team; the squad never fires back.
+	//  A (old rules, Codex.Combat.HonestFire 0 - the report reproduced): a heard shot makes the leader SEEN by his team; a suppress order at
+	//    the leader puts rounds into the wall.
+	//  B (honest rules): the heard leader is known (his spot), not seen; the same suppress order drops at once (no line of fire), no round;
+	//    then his commander runs 10 s against the heard squad - no round into the wall (he moves or holds).
+	//  C: the leader steps out past the wall's end, the fighter sees him (rounds allowed), the leader steps back behind the wall: from 0.7 s
+	//    later on no round into the wall for 6 s (the old suppress order followed him behind the wall).
+
+	struct FFireLineWatch
+	{
+		FBox WallBox = FBox(ForceInit);
+		TWeakObjectPtr<AOperativeCharacter> Hostile;
+		int32 Rounds = 0;
+		int32 WallRounds = 0;
+	};
+
+	FFireLineWatch& FireLineWatch()
+	{
+		static FFireLineWatch Watch;
+		return Watch;
+	}
+
+	void SetHonestFire(bool bOn)
+	{
+		if (IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Combat.HonestFire")))
+		{
+			Var->Set(bOn ? 1 : 0, ECVF_SetByConsole);
+		}
+	}
+
+	void WatchFireLine(UWorld* World, AOperativeCharacter* Hostile, const FBox& WallBox)
+	{
+		FFireLineWatch& Watch = FireLineWatch();
+		Watch.WallBox = WallBox;
+		Watch.Hostile = Hostile;
+		Watch.Rounds = 0;
+		Watch.WallRounds = 0;
+		if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			static FDelegateHandle Handle;
+			Feedback->OnTracerSpawned.Remove(Handle);
+			Handle = Feedback->OnTracerSpawned.AddLambda([](const FVector& Start, const FVector& End, bool)
+			{
+				FFireLineWatch& Watch = FireLineWatch();
+				const AOperativeCharacter* Shooter = Watch.Hostile.Get();
+				if (!Shooter || FVector::Dist(Start, Shooter->GetActorLocation()) > 250.f)
+				{
+					return; // somebody else's round
+				}
+				++Watch.Rounds;
+				const bool bWall = Watch.WallBox.ExpandBy(30.f).IsInside(End);
+				Watch.WallRounds += bWall ? 1 : 0;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the fighter's round (%.0f, %.0f, %.0f) -> (%.0f, %.0f, %.0f)%s"), Start.X, Start.Y, Start.Z, End.X, End.Y, End.Z,
+					bWall ? TEXT(" INTO THE WALL") : TEXT(""));
+			});
+		}
+	}
+
+	void ResetFireLineCount()
+	{
+		FireLineWatch().Rounds = 0;
+		FireLineWatch().WallRounds = 0;
+	}
+
+	bool StepFireLine(UWorld* World, FState& State)
+	{
+		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+		UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+		AOperativeCharacter* Leader = State.Members.IsEmpty() ? nullptr : State.Members[0].Get();
+		AOperativeCharacter* Hostile = State.Hostiles.IsEmpty() ? nullptr : State.Hostiles[0].Get();
+		FFireLineWatch& Watch = FireLineWatch();
+		if (State.Stage > 0 && (!Pmc || !Sight || !Leader || !Hostile))
+		{
+			Check(State, false, TEXT("the leader, the fighter and the subsystems stay valid"));
+			SetHonestFire(true);
+			return Finish(State, false);
+		}
+		// The squad's shots at "something" (the demask) every 0.5 s while a part runs - heard by the fighter's team, never seen through the wall.
+		auto Demask = [&State, Sight, Leader]()
+		{
+			if (State.StageTime >= State.NextForcedShot)
+			{
+				State.NextForcedShot = State.StageTime + 0.5f;
+				Sight->NotifyFired(Leader);
+			}
+		};
+		switch (State.Stage)
+		{
+		case 0:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			if (!SetUp(World, State, FBox2D(FVector2D(-1200.f, -1100.f), FVector2D(2800.f, 1100.f))))
+			{
+				return Finish(State, false);
+			}
+			// The wall 4 m in front of the leader (3 m tall, 8 m wide, 40 cm thick); the fighter prone 20 m beyond it, facing the squad.
+			const FVector WallCentre = State.O + State.F * 400.f + FVector(0.f, 0.f, 150.f);
+			AStaticMeshActor* Wall = SpawnBlock(World, WallCentre, State.F.Rotation(), FVector(40.f, 800.f, 300.f));
+			State.Blocks.Add(Wall);
+			AOperativeCharacter* Spawned = SpawnHostile(World, State, State.O + State.F * 2400.f, (-State.F).Rotation(), 31);
+			Check(State, Wall && Spawned, TEXT("a 3 m wall 4 m in front of the squad, a PMC fighter 20 m beyond it"));
+			if (!Wall || !Spawned)
+			{
+				return Finish(State, false);
+			}
+			MakeTough(Spawned);
+			// The designer's fighter: a rifleman (the pool may hand out a shotgun, whose rounds end short of the wall).
+			if (!Spawned->SwitchToWeaponById(TEXT("m16")))
+			{
+				if (UWeaponDataAsset* Rifle = LoadObject<UWeaponDataAsset>(nullptr, TEXT("/Game/Data/Weapons/DA_Weapon_m16.DA_Weapon_m16")))
+				{
+					Spawned->AddArsenalWeapon(Rifle);
+				}
+				Spawned->SwitchToWeaponById(TEXT("m16"));
+			}
+			Check(State, Spawned->CurrentWeapon && Spawned->CurrentWeapon->WeaponId == TEXT("m16"), TEXT("the fighter carries an M16"));
+			Spawned->CurrentClip = Spawned->CurrentWeapon ? FMath::Max(1, Spawned->CurrentWeapon->Stats.Ammo.MagazineSize) : 30;
+			Spawned->ReserveAmmo = 600;
+			Spawned->SetStance(EOperativeStance::Prone);
+			State.Goal = Spawned->GetActorLocation();
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Members)
+			{
+				Member->bTacticalCeaseFire = true; // the squad never fires back (its "shots" are the demasks)
+			}
+			FVector Origin;
+			FVector Extent;
+			Wall->GetActorBounds(false, Origin, Extent);
+			WatchFireLine(World, Spawned, FBox(Origin - Extent, Origin + Extent));
+			SetHonestFire(false);
+			State.NextForcedShot = 0.f;
+			Next(State);
+			return true;
+		}
+		case 1:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true;
+			}
+			if (!State.bTurned[0])
+			{
+				State.bTurned[0] = true;
+				Check(State, Hostile->GetStance() == EOperativeStance::Prone, TEXT("the fighter lies prone in the open"));
+				Check(State, !Hostile->CanHitEnemy(Leader), TEXT("the wall: no line from his prone muzzle to the leader"));
+			}
+			if (State.StageTime < 3.4f)
+			{
+				Demask();
+				return true;
+			}
+			// A (old rules): the heard shot made the leader SEEN.
+			const bool bSeenOld = Pmc->IsVisibleToTeam(1, Leader);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcFireLine] old rules: a shot heard behind the wall -> the leader %s by the fighter's team"),
+				bSeenOld ? TEXT("SEEN") : TEXT("not seen"));
+			Check(State, bSeenOld, TEXT("A (old rules, the report): a shot heard behind the wall made the leader a seen target (how he acquired them)"));
+			ResetFireLineCount();
+			Hostile->OrderSuppress(Leader, Leader->GetActorLocation());
+			State.NextForcedShot = 0.f;
+			Next(State);
+			return true;
+		}
+		case 2:
+		{
+			Demask();
+			if (State.StageTime < 4.f)
+			{
+				return true;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcFireLine] old rules: the suppress order fired %d round(s), %d into the wall"), Watch.Rounds, Watch.WallRounds);
+			Check(State, Watch.WallRounds > 0, FString::Printf(TEXT("A (old rules, the report): his suppress order put rounds into the wall (%d of %d) - why he fired"),
+				Watch.WallRounds, Watch.Rounds));
+			Hostile->CancelSuppressFire(TEXT("smoke"));
+			SetHonestFire(true);
+			State.NextForcedShot = 0.f;
+			Next(State);
+			return true;
+		}
+		case 3:
+		{
+			if (State.StageTime < 2.6f)
+			{
+				return true; // the old demask runs out (SightRules::DemaskSeconds 2)
+			}
+			if (Hostile->GetStance() != EOperativeStance::Prone)
+			{
+				Hostile->SetStance(EOperativeStance::Prone);
+			}
+			if (State.StageTime < 3.f)
+			{
+				Demask();
+				return true;
+			}
+			FVector Belief;
+			const bool bKnown = Pmc->GetTeamBelief(1, Leader, Belief);
+			const bool bSeen = Pmc->IsVisibleToTeam(1, Leader);
+			Check(State, bKnown && !bSeen, FString::Printf(TEXT("B: the heard leader is known (his spot %.0f cm off) but not seen"),
+				bKnown ? FVector::Dist2D(Belief, Leader->GetActorLocation()) : -1.f));
+			ResetFireLineCount();
+			const int32 SkipsBefore = Hostile->GetNoLineOfFireSkips();
+			Hostile->OrderSuppress(Leader, Leader->GetActorLocation());
+			State.ReturnShots = SkipsBefore;
+			State.NextForcedShot = 0.f;
+			Next(State);
+			return true;
+		}
+		case 4:
+		{
+			Demask();
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			Check(State, !Hostile->HasSuppressOrder() && Hostile->GetLastSuppressStop() == ESuppressOrderStop::NoLineOfFire && Hostile->GetNoLineOfFireSkips() > State.ReturnShots,
+				FString::Printf(TEXT("B: the suppress order at the leader behind the wall dropped (no line of fire; stop %s)"),
+					SuppressionRules::StopName(Hostile->GetLastSuppressStop())));
+			Check(State, Watch.Rounds == 0, FString::Printf(TEXT("B: not a round left for it (%d)"), Watch.Rounds));
+			// His commander now, against the heard squad behind the wall.
+			Pmc->SetTeamCommanded(1, true);
+			State.ShotTimeBefore = { Hostile->GetActorLocation().X, Hostile->GetActorLocation().Y };
+			ResetFireLineCount();
+			State.NextForcedShot = 0.f;
+			Next(State);
+			return true;
+		}
+		case 5:
+		{
+			Demask();
+			if (State.StageTime < 10.f)
+			{
+				return true;
+			}
+			const float Moved = State.ShotTimeBefore.Num() == 2
+				? static_cast<float>(FVector2D::Distance(FVector2D(Hostile->GetActorLocation()), FVector2D(State.ShotTimeBefore[0], State.ShotTimeBefore[1]))) : 0.f;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcFireLine] commanded 10 s against the heard squad: %d round(s), %d into the wall; moved %.0f cm, suppress %s, stance %d"),
+				Watch.Rounds, Watch.WallRounds, Moved, Hostile->HasSuppressOrder() ? TEXT("on") : TEXT("off"), static_cast<int32>(Hostile->GetStance()));
+			Check(State, Watch.WallRounds == 0, FString::Printf(TEXT("B: commanded, no round into the wall (%d of %d rounds; he moved %.0f cm or held)"),
+				Watch.WallRounds, Watch.Rounds, Moved));
+			// C: the fighter back on his spot, prone, uncommanded (the order below is the commander's typical answer); the leader steps out past
+			// the wall's end, in his sight.
+			Pmc->SetTeamCommanded(1, false);
+			Hostile->CancelSuppressFire(TEXT("smoke"));
+			Hostile->StopOperative();
+			Hostile->TeleportTo(FVector(State.Goal.X, State.Goal.Y, State.Goal.Z + 4.f), (-State.F).Rotation(), false, true);
+			Hostile->SetStance(EOperativeStance::Prone);
+			const FVector Out = SmokeUtils::FreeSpot(World, State.O + State.R * 750.f, Leader);
+			Leader->TeleportTo(FVector(Out.X, Out.Y, Out.Z + 4.f), State.F.Rotation(), false, true);
+			State.NextLog = 0.f;
+			Next(State);
+			return true;
+		}
+		case 6:
+		{
+			if (State.NextLog <= 0.f)
+			{
+				if (!Pmc->IsVisibleToTeam(1, Leader))
+				{
+					if (State.StageTime < 6.f)
+					{
+						return true;
+					}
+				}
+				else
+				{
+					State.NextLog = FMath::Max(State.StageTime, 0.01f);
+					Check(State, true, FString::Printf(TEXT("C: the fighter's team sees the leader out past the wall's end (after %.1f s)"), State.StageTime));
+					Hostile->OrderSuppress(Leader, Leader->GetActorLocation()); // pins the seen man (the commander's suppress)
+				}
+			}
+			if (State.NextLog > 0.f && State.StageTime - State.NextLog < 1.5f)
+			{
+				return true; // he engages him in the open (rounds allowed)
+			}
+			Check(State, State.NextLog > 0.f, TEXT("C: the fighter's team saw the leader out past the wall's end"));
+			const FVector Back = SmokeUtils::FreeSpot(World, State.O, Leader);
+			Leader->TeleportTo(FVector(Back.X, Back.Y, Back.Z + 4.f), State.F.Rotation(), false, true);
+			State.NextForcedShot = 0.f;
+			Next(State);
+			return true;
+		}
+		case 7:
+		{
+			if (State.StageTime < 0.7f)
+			{
+				ResetFireLineCount(); // the rounds in flight / the decision of that moment
+				return true;
+			}
+			Demask();
+			if (State.StageTime < 6.7f)
+			{
+				return true;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcFireLine] after the leader stepped back behind the wall: %d round(s), %d into the wall; suppress %s"),
+				Watch.Rounds, Watch.WallRounds, Hostile->HasSuppressOrder() ? TEXT("on") : TEXT("off"));
+			Check(State, Watch.WallRounds == 0, FString::Printf(TEXT("C: seen a moment ago, now behind the wall - no round into the wall (%d of %d)"), Watch.WallRounds, Watch.Rounds));
+			Check(State, !Pmc->IsVisibleToTeam(1, Leader), TEXT("C: behind the wall again he is not seen (only known)"));
+			Watch.Hostile.Reset();
 			return Finish(State, true);
 		}
 		default:
@@ -1007,6 +1341,11 @@ namespace PmcCombatBugsSmoke
 		TEXT("CodexTactics.FireArcSmoke"),
 		TEXT("Dev check (bug #33): a prone PMC fighter / a prone operative with the target behind turns first (prone turn rate) and fires only with the body and the rifle on it; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World) { Start(World, TEXT("FireArcSmoke"), &StepFireArc, 60.f); }));
+
+	static FAutoConsoleCommandWithWorldAndArgs FireLineCommand(
+		TEXT("CodexTactics.PmcFireLineSmoke"),
+		TEXT("Dev check (designer 2026-11-08, fix/pmc-fire-through-wall): a prone PMC fighter in the open never fires into the wall the squad stands behind - heard is not seen, no suppress without a line of fire (A = the old rules reproduce the report); logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World) { Start(World, TEXT("PmcFireLineSmoke"), &StepFireLine, 90.f); }));
 
 	static FAutoConsoleCommandWithWorldAndArgs UnderFireCommand(
 		TEXT("CodexTactics.PmcUnderFireSmoke"),

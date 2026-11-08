@@ -155,6 +155,11 @@ namespace
 			{
 				return;
 			}
+			if (Spec.MinRefineGapCm > 0.f
+				&& FMath::DegreesToRadians(B.AngleDeg - A.AngleDeg) * FMath::Max(FarEnd(A), FarEnd(B)) < 2.f * Spec.MinRefineGapCm)
+			{
+				return;
+			}
 			const FVisionConeRay Mid = Cast((A.AngleDeg + B.AngleDeg) * 0.5f);
 			Refine(A, Mid, Depth - 1, Out);
 			Out.Add(Mid);
@@ -734,6 +739,141 @@ FVisionConeShape VisionConeVisibility::BuildShape(const TArray<FVisionConeRay>& 
 	return Shape;
 }
 
+namespace
+{
+	/**
+	 * A layer member prepared for many point queries (fix/cone-rebuild-cost 2026-11-08: ClipToLayer asks the members' level at ~50 000 points
+	 * per 120 m cone - a third of a rebuild): its yaw's sin / cos once, its rays' angles and directions in flat arrays (the binary search no longer
+	 * walks 300-byte rays), which neighbours are joinable, its best level. LevelAt gives bit for bit FVisionConeLayerMember::LevelAt.
+	 */
+	struct FPreparedMember
+	{
+		const FVisionConeLayerMember* Member = nullptr;
+		const TArray<FVisionConeRay>* Rays = nullptr;
+		float Sin = 0.f;
+		float Cos = 1.f;
+		float MaxRangeSq = 0.f;
+		TArray<float> Angles;
+		TArray<FVector2D> Directions;
+		TArray<bool> Joinable;
+		uint8 MaxLevel = 0;
+		/** The last bracket found (LevelAt walks from it). */
+		mutable int32 Hint = 0;
+		static constexpr int32 MaxWalk = 8;
+
+		void Prepare(const FVisionConeLayerMember& InMember)
+		{
+			Member = &InMember;
+			Rays = InMember.Rays.Get();
+			FMath::SinCos(&Sin, &Cos, FMath::DegreesToRadians(InMember.YawDeg));
+			MaxRangeSq = FMath::Square(InMember.MaxRangeCm + 1.f);
+			const int32 Count = Rays->Num();
+			Angles.SetNumUninitialized(Count);
+			Directions.SetNumUninitialized(Count);
+			Joinable.SetNumUninitialized(FMath::Max(Count - 1, 0));
+			for (int32 Index = 0; Index < Count; ++Index)
+			{
+				const FVisionConeRay& Ray = (*Rays)[Index];
+				Angles[Index] = Ray.AngleDeg;
+				Directions[Index] = Direction(Ray.AngleDeg);
+				for (const FVisionConeSpan& Span : Ray.Spans)
+				{
+					MaxLevel = FMath::Max(MaxLevel, Span.Level);
+				}
+				if (Index + 1 < Count)
+				{
+					Joinable[Index] = VisionConeVisibility::IsJoinable(Ray, (*Rays)[Index + 1]);
+				}
+			}
+		}
+
+		/** VisionConeVisibility::ChordDistance with the rays' directions precomputed (the same operations, the same result). */
+		static float Chord(const FVector2D& DirA, float AngleA, float DistanceA, const FVector2D& DirB, float AngleB, float DistanceB, const FVector2D& Dir, float AngleDeg)
+		{
+			const FVector2D P1 = DirA * DistanceA;
+			const FVector2D P2 = DirB * DistanceB;
+			const FVector2D Along = P2 - P1;
+			const float Denominator = Cross(Dir, Along);
+			if (FMath::Abs(Denominator) < 1.e-4f)
+			{
+				const float Span = AngleB - AngleA;
+				const float Alpha = FMath::Abs(Span) < 1.e-6f ? 0.f : FMath::Clamp((AngleDeg - AngleA) / Span, 0.f, 1.f);
+				return FMath::Lerp(DistanceA, DistanceB, Alpha);
+			}
+			return Cross(P1, Along) / Denominator;
+		}
+
+		/** = Member->LevelAt(WorldPoint) (FVisionConeLayerMember::LevelAt + VisionConeVisibility::LevelAtPoint). */
+		uint8 LevelAt(const FVector2D& WorldPoint) const
+		{
+			const FVector2D Offset = WorldPoint - Member->Origin;
+			if (Offset.SizeSquared() > MaxRangeSq)
+			{
+				return 0;
+			}
+			const int32 Count = Angles.Num();
+			if (Count < 2)
+			{
+				return 0;
+			}
+			const FVector2D Point(Offset.X * Cos + Offset.Y * Sin, -Offset.X * Sin + Offset.Y * Cos);
+			const float Angle = FMath::RadiansToDegrees(FMath::Atan2(Point.Y, Point.X));
+			if (Angle < Angles[0] - 1.e-3f || Angle > Angles[Count - 1] + 1.e-3f)
+			{
+				return 0;
+			}
+			const float Distance = Point.Size();
+			// The bracket = the last ray at or before the angle among [0, Count - 2] (else 0) - what the binary search finds. The points of one ray
+			// of ours come in order along a straight line, whose bearing from this member turns monotonically: walk from the last bracket first.
+			int32 Low = FMath::Clamp(Hint, 0, Count - 2);
+			int32 Steps = 0;
+			if (Angles[Low] <= Angle)
+			{
+				while (Low + 1 <= Count - 2 && Angles[Low + 1] <= Angle && ++Steps <= MaxWalk)
+				{
+					++Low;
+				}
+			}
+			else
+			{
+				while (Low > 0 && Angles[Low] > Angle && ++Steps <= MaxWalk)
+				{
+					--Low;
+				}
+			}
+			if (Steps > MaxWalk)
+			{
+				Low = 0;
+				int32 Top = Count - 1;
+				while (Top - Low > 1)
+				{
+					const int32 Mid = (Low + Top) / 2;
+					(Angles[Mid] <= Angle ? Low : Top) = Mid;
+				}
+			}
+			Hint = Low;
+			const int32 High = Low + 1;
+			const FVisionConeRay& A = (*Rays)[Low];
+			const FVisionConeRay& B = (*Rays)[High];
+			if (Joinable[Low] && B.AngleDeg - A.AngleDeg > 1.e-5f)
+			{
+				const FVector2D Dir = Direction(Angle);
+				for (int32 Span = 0; Span < A.Spans.Num(); ++Span)
+				{
+					const float Start = Chord(Directions[Low], A.AngleDeg, A.Spans[Span].StartCm, Directions[High], B.AngleDeg, B.Spans[Span].StartCm, Dir, Angle);
+					const float End = Chord(Directions[Low], A.AngleDeg, A.Spans[Span].EndCm, Directions[High], B.AngleDeg, B.Spans[Span].EndCm, Dir, Angle);
+					if (Distance >= Start && Distance <= End)
+					{
+						return A.Spans[Span].Level;
+					}
+				}
+				return 0;
+			}
+			return VisionConeVisibility::LevelAlong(Angle <= (A.AngleDeg + B.AngleDeg) * 0.5f ? A : B, Distance);
+		}
+	};
+}
+
 int32 VisionConeVisibility::ClipToLayer(TArray<FVisionConeRay>& Rays, const FVector2D& Origin, float YawDeg, int32 Priority,
 	TArrayView<const FVisionConeLayerMember> Others, float StepCm)
 {
@@ -743,7 +883,16 @@ int32 VisionConeVisibility::ClipToLayer(TArray<FVisionConeRay>& Rays, const FVec
 		return 0;
 	}
 	StepCm = FMath::Max(StepCm, 10.f);
-	TArray<const FVisionConeLayerMember*, TInlineAllocator<4>> Near;
+	TArray<FPreparedMember, TInlineAllocator<4>> Prepared;
+	for (const FVisionConeLayerMember& Other : Others)
+	{
+		if (Other.Rays.IsValid())
+		{
+			Prepared.AddDefaulted_GetRef().Prepare(Other);
+		}
+	}
+	TArray<const FPreparedMember*, TInlineAllocator<4>> Near;
+	TArray<const FPreparedMember*, TInlineAllocator<4>> Rivals;
 	for (FVisionConeRay& Ray : Rays)
 	{
 		const float End = FarEnd(Ray);
@@ -754,14 +903,10 @@ int32 VisionConeVisibility::ClipToLayer(TArray<FVisionConeRay>& Rays, const FVec
 		const FVector2D Dir = Direction(YawDeg + Ray.AngleDeg);
 		// Only the members whose reach meets this ray at all.
 		Near.Reset();
-		for (const FVisionConeLayerMember& Other : Others)
+		for (const FPreparedMember& Other : Prepared)
 		{
-			if (!Other.Rays.IsValid())
-			{
-				continue;
-			}
-			const float Along = FMath::Clamp(static_cast<float>(FVector2D::DotProduct(Other.Origin - Origin, Dir)), 0.f, End);
-			if (FVector2D::DistSquared(Origin + Dir * Along, Other.Origin) <= FMath::Square(Other.MaxRangeCm))
+			const float Along = FMath::Clamp(static_cast<float>(FVector2D::DotProduct(Other.Member->Origin - Origin, Dir)), 0.f, End);
+			if (FVector2D::DistSquared(Origin + Dir * Along, Other.Member->Origin) <= FMath::Square(Other.Member->MaxRangeCm))
 			{
 				Near.Add(&Other);
 			}
@@ -773,13 +918,27 @@ int32 VisionConeVisibility::ClipToLayer(TArray<FVisionConeRay>& Rays, const FVec
 		TArray<FVisionConeSpan, TInlineAllocator<4>> Kept;
 		for (const FVisionConeSpan& Span : Ray.Spans)
 		{
-			auto Keeps = [&Near, &Origin, &Dir, &Span, Priority](float Distance)
+			// A member that never shows more than this span's level and loses the ties (a higher Priority) never takes a point of it: not asked.
+			Rivals.Reset();
+			for (const FPreparedMember* Other : Near)
+			{
+				if (Other->MaxLevel > Span.Level || (Other->MaxLevel == Span.Level && Other->Member->Priority < Priority))
+				{
+					Rivals.Add(Other);
+				}
+			}
+			if (Rivals.Num() == 0)
+			{
+				Kept.Add(Span);
+				continue;
+			}
+			auto Keeps = [&Rivals, &Origin, &Dir, &Span, Priority](float Distance)
 			{
 				const FVector2D Point = Origin + Dir * Distance;
-				for (const FVisionConeLayerMember* Other : Near)
+				for (const FPreparedMember* Other : Rivals)
 				{
 					const uint8 Level = Other->LevelAt(Point);
-					if (Level > Span.Level || (Level == Span.Level && Other->Priority < Priority))
+					if (Level > Span.Level || (Level == Span.Level && Other->Member->Priority < Priority))
 					{
 						return false;
 					}
@@ -802,14 +961,14 @@ int32 VisionConeVisibility::ClipToLayer(TArray<FVisionConeRay>& Rays, const FVec
 						const float Mid = 0.5f * (Low + High);
 						(Keeps(Mid) == bIn ? Low : High) = Mid;
 					}
-					const float Cross = 0.5f * (Low + High);
+					const float Crossing = 0.5f * (Low + High);
 					if (bIn)
 					{
-						Kept.Add({ RunStart, Cross, Span.Level });
+						Kept.Add({ RunStart, Crossing, Span.Level });
 					}
 					else
 					{
-						RunStart = Cross;
+						RunStart = Crossing;
 					}
 					bIn = bNext;
 				}

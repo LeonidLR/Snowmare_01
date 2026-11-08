@@ -24,6 +24,22 @@ struct CODEXTACTICS_API FVisionConeBuildStats
 	double ApplySeconds = 0.0;
 	/** Ray / mesh work summed over the worker threads, s (> Seconds: the batch ran in parallel). */
 	double TaskSeconds = 0.0;
+	/**
+	 * TaskSeconds as CPU time the worker threads actually ran (Windows: the threads' cycle counters, fix/cone-rebuild-cost 2026-11-08), s: the wall
+	 * time of a task thread also counts the time the OS gave its core to another process - under a loaded machine (a build, three smokes) it
+	 * doubled the measured "work". 0 where the platform has no per-thread counter.
+	 */
+	double TaskCpuSeconds = 0.0;
+	/** Of TaskSeconds (fix/cone-rebuild-cost 2026-11-08, the per-phase breakdown): the re-traced cones' perch probe + rays (the scene queries + ClassifyRay + refinement), s. */
+	double TraceSeconds = 0.0;
+	/** Of TraceSeconds: inside the per-ray sampler (the scene queries alone), s. */
+	double SampleSeconds = 0.0;
+	/** Of TaskSeconds: the re-traced cones' merged-layer cut (ClipToLayer), s. */
+	double ClipSeconds = 0.0;
+	/** Of TaskSeconds: the re-traced cones' meshes (BuildShape: fill, light tone, outline, weapon zone), s. */
+	double ShapeSeconds = 0.0;
+	/** Of TaskSeconds: the merged-layer members re-cut without a re-trace (their ClipToLayer + BuildShape), s. */
+	double ReshapeSeconds = 0.0;
 	/** Batches (one per frame with rebuilds). */
 	int64 Batches = 0;
 	/** Rebuilds put off a frame by the per-frame budget. */
@@ -145,6 +161,13 @@ public:
 	/** Bisection steps at a shadow edge / corner (each halves the angle between two rays). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0", ClampMax = "10"))
 	int32 EdgeRefineDepth = 6;
+
+	/**
+	 * Edge rays stop once the gap's arc at its far drawn end is under twice this, cm (fix/cone-rebuild-cost 2026-11-08: a 120 m rebuild spent its
+	 * rays placing near corners to a few mm; 0 = the angle floor only). Console Codex.VisionCones.RefineGapCm overrides it (-1 = this value).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "0"))
+	float MinRefineGapCm = VisionConeVisibility::DefaultMinRefineGapCm;
 
 	/** Hard cap on rays per rebuild (base + edge rays). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vision Cone|Occlusion", meta = (ClampMin = "8", ClampMax = "1024"))

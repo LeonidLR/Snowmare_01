@@ -1045,6 +1045,18 @@ public:
 	bool IsKilledInAction() const { return bKilledInAction; }
 
 	/**
+	 * A body killed off the ground falls first (fix/corpse-falls-to-ground, game designer PIE 2026-11-08: a PMC fighter killed on a ladder hung
+	 * in the air in his death pose): BecomeCorpse leaves him to gravity when FallRules::ShouldCorpseFall (on a ladder - its own drop -, mid-vault,
+	 * the floor > 30 cm below his feet) and stops him once he lands (UpdateCorpseFall); the death pose waits for the landing
+	 * (UOperativeAnimInstance). True while he falls.
+	 */
+	bool IsCorpseFalling() const { return bCorpseFalling; }
+	/** The rule evaluated now (the anim asks it in the death event, before or after BecomeCorpse ran). */
+	bool ShouldCorpseFallNow() const;
+	/** The last corpse fall's height, cm (smokes). */
+	float GetLastCorpseFallCm() const { return LastCorpseFallCm; }
+
+	/**
 	 * Save-game load of a fallen member: lies as a corpse at once (no death cinematic, no remains, no HQ line), out of the
 	 * squad and the turn order. The caller restores his health to 0 itself (UHealthComponent). For the save system.
 	 */
@@ -1986,6 +1998,26 @@ public:
 	/** A live enemy in range and in the line of fire now (the fire's own check, Godot _find_shoot_target ray). */
 	bool CanHitEnemy(AActor* Enemy) const;
 
+	/**
+	 * Honest sight (fix/pmc-fire-through-wall 2026-11-08): his side sees Target now - the squad's sight for the player's men
+	 * (UTacticalSightSubsystem::IsVisibleToSquad), his team's for a hostile fighter (UPmcSquadSubsystem::IsVisibleToTeam). True without them.
+	 */
+	bool IsSeenByOwnSide(const AActor* Target) const;
+
+	/**
+	 * Fire at a point is worth a round (fix/pmc-fire-through-wall 2026-11-08, one rule for the squad and the PMC): the line from his muzzle at
+	 * his stance now (prone 25 cm; in cover the cover's fire origin) to Point, the world only (bodies never stop it), passes
+	 * SuppressionRules::IsFireLineUseful - clear, or blocked only near the point (the target's own cover). OutBlockedAtCm: where it is blocked
+	 * (-1 clear). Console Codex.Combat.HonestFire 0 = always true (the old rule, A/B).
+	 */
+	bool HasUsefulFireLine(const FVector& Point, float* OutBlockedAtCm = nullptr) const;
+	/** The same from a given muzzle (the commander asks before he picks a suppress order). */
+	bool HasUsefulFireLineFrom(const FVector& Muzzle, const FVector& Point, float* OutBlockedAtCm = nullptr) const;
+	/** Codex.Combat.HonestFire (default 1): honest sight for the PMC teams, the fire-line rule for fire at a point. */
+	static bool IsHonestFireOn();
+	/** Rounds at a point not fired because no line of fire reached it (smokes). */
+	int32 GetNoLineOfFireSkips() const { return NoLineOfFireSkips; }
+
 	/** A move by the autonomy: walks like a player order but keeps the tactical anchor. */
 	EOperativeOrderResult AutonomousMoveTo(const FVector& Destination);
 
@@ -2299,6 +2331,15 @@ private:
 	/** Leaves supplies in searchable remains at his feet (Godot corpse_loot). */
 	void SpawnRemainsLoot();
 	bool bKilledInAction = false;
+	/** IsCorpseFalling: since BecomeCorpse, until he lands. */
+	bool bCorpseFalling = false;
+	float CorpseFallSeconds = 0.f;
+	float CorpseFallStartFeetZ = 0.f;
+	float LastCorpseFallCm = 0.f;
+	/** Leaves the falling corpse to gravity until it lands, then stops it (Tick). */
+	void UpdateCorpseFall(float DeltaTime);
+	/** The floor straight below his feet (this body and every pawn ignored): found, and the gap feet -> floor, cm. */
+	bool TraceCorpseFloor(float& OutGapCm, float& OutFloorZ) const;
 	bool bHasLastHitSource = false;
 	FVector LastHitSource = FVector::ZeroVector;
 	/** Knockdown phase change: interrupts (aim, reload, move, cover), frees / restores the capsule and the movement. */
@@ -2727,6 +2768,8 @@ private:
 	/** World time of the order / its last round (the order's timeout counts from it). */
 	double SuppressLastProgressTime = 0.0;
 	int32 SuppressRoundsFired = 0;
+	/** Fire at a point skipped for no line of fire (HasUsefulFireLine). */
+	int32 NoLineOfFireSkips = 0;
 	int32 FullAutoRoundsFired = 0;
 	ESuppressOrderStop LastSuppressStop = ESuppressOrderStop::None;
 	int32 SuppressedBlindShots = 0;

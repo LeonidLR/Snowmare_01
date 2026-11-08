@@ -8,6 +8,7 @@
 > - `Combat/SightRules`, `Combat/TacticalSightSubsystem`, `Combat/VisionConeRules`, `VisionConeVisibility`, `VisionConeComponent`
 > - Smokes: `SightSmoke`, `PeekSightSmoke`, `VisionConeSmoke`, `TowerVisionSmoke`, `VisionHeightSmoke`; tests `CodexTactics.Combat.VisionCone.*`, `CodexTactics.Combat.Sight.*`
 > - Sight from a height (2026-11-02): the range ladder per height level, the roof sniper's cone, one model for the squad and the armed humans - section "Sight from a height".
+> - A 120 m rebuild within 6 ms (2026-11-08, fix/cone-rebuild-cost): the profile, the exact faster layer cut, edge rays by distance, CPU-time budget - section "A 120 m rebuild within its 6 ms".
 > - Sight by the conditions (2026-11-04): 120 m clear day, x weather x time of day for everybody, humans x2, the cone shows the sight range - section "Sight by the conditions" (supersedes the 60 m / weapon-range cone statements above).
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
@@ -289,6 +290,50 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
   `Ray Spacing Cm`, `Min Ray Step Deg`, `Sliver Min Width Cm` (0 = off), `Sliver From Cm`, `Merge Sample Cm`, `Static Refresh Seconds`
   (0), the Weapon Zone alphas.
 
+## A 120 m rebuild within its 6 ms (fix/cone-rebuild-cost, 2026-11-08)
+
+- **Report:** `SightConditionsSmoke` failed every full verification since 2026-11-07 on "a 120 m cone rebuild < 6 ms of task-thread work"
+  (8.9 - 12.4 ms on this machine, more under load). Real cost: every move / turn of an operative rebuilds his cone, and his mates re-cut theirs.
+- **Profile** (the smoke now logs `[SightConditions] cone perf breakdown`; new `FVisionConeBuildStats` fields `TaskCpuSeconds`, `TraceSeconds`,
+  `SampleSeconds`, `ClipSeconds`, `ShapeSeconds`, `ReshapeSeconds`; Unreal Insights scopes `VisionCone_Trace` / `_ClipToLayer` / `_BuildShape`;
+  the leader's cone on the Depot start, 20 forced rebuilds, the squad's three cones on = one merged layer). Per rebuild, ms:
+
+  | 120 m | rays / traces | total | scene queries | classify + refine | own layer cut | own meshes | 2 mates' re-cuts |
+  |---|---|---|---|---|---|---|---|
+  | before (machine 80 % loaded, wall time) | 320 (the cap) / 1452 | 23.5 | 13.8 | 1.0 | 3.9 | 0.33 | 4.4 |
+  | layer cut fixed, fan unchanged (100 % load) | 314 / 1465 | 6.7 CPU / 7.1 wall | 4.3 | 0.66 | 0.24 | 0.25 | 1.6 |
+  | after (96 - 100 % load, 3 runs) | 225 / 889 | 4.3 - 5.2 CPU / 4.4 - 5.5 wall | 2.2 - 3.0 | 0.34 - 0.45 | 0.17 | 0.17 - 0.19 | 1.4 - 1.6 |
+
+  60 m: 10.5 -> 2.6 - 3.0 ms (263 -> 160 rays). Scene queries ~2.7 us each (the high trace ~3.6, a low one ~2.8, a component probe ~1);
+  the game-thread mesh upload (not task work) 0.3 - 0.5 ms. The machine was loaded by the main folder's verification throughout - the quiet
+  numbers are lower.
+- **What changed:**
+  1. **The merged layer's cut (`VisionConeVisibility::ClipToLayer`) - bit for bit the same result:** each member is prepared once (yaw sin / cos,
+     its rays' angles and directions in flat arrays, which neighbours join, its best level); the bracket of a query angle is walked from the last
+     one (the points of one ray come along a straight line, their bearing from a member turns monotonically; > 8 steps -> the binary search); a
+     member that can never take a point of a span (its best level is below the span's, or equal and it loses the ties) is not asked for it.
+     The leader's own cut 3.9 -> 0.17 ms, a mate's re-cut ~2.2 -> ~0.75 ms.
+  2. **Edge rays placed by distance, not by angle (`FVisionConeSightSpec::MinRefineGapCm`, component `MinRefineGapCm` 20, console
+     `Codex.VisionCones.RefineGapCm`, 0 = the old fan):** a gap is no longer bisected once its arc at the farther drawn end of its two rays is
+     under 2 x 20 cm. A shadow running out to 120 m is still refined to 120 m's arc (~5 bisections -> ~4); a corner 8 m away, which the
+     angle floor (0.02 deg) placed to 3 mm, is not refined at all (its base gap is 13 cm there). 320 -> 225 rays at 120 m, 263 -> 160 at 60 m;
+     the rays left over are no longer forced into the first shadow edges (the old fan ran out of its 320 rays on the Depot street).
+  3. **The measurement:** the check reads the worker threads' **CPU time** (`TaskCpuSeconds`, Windows `QueryThreadCycleTime` over the TSC rate)
+     instead of their wall time - a task thread preempted by another process kept "working" on the wall clock (one loaded run measured 30 ms
+     wall / 4 ms CPU for the same 60 m rebuild). The budget stays 6 ms and still includes the mates' re-cuts (they joined the per-rebuild
+     number with the merged layer of #38). The wall time is logged next to it.
+- **Same cone (visual parity):** `CodexTactics.Combat.VisionCone.Cost.ShapeParity` - six fixed scenes (clear day 120 m open; a street of
+  buildings, barricades and a picket fence, twice at two headings; low walls round a crouched man - the light tone; a roof 9 m over the street,
+  210 m; a blizzard 60 m; a night 42 m), each against the old fan and against the exact cone (the same rule traced ~8x finer, no ray cap) on a
+  30 cm grid: the seen area / the full tone within 1.5 % of the old fan (street 0.36 / 0.34 %, low walls 1.47 / 1.29 %, roof 0.09 / 0.10 %,
+  blizzard 0.48 / 0.66 %, night 0.13 / 0.29 %, open 0 %), within 3 % of the exact cone (street: old 2.48 %, new 2.11 % - closer), and **no
+  point drawn wrong off every edge of the exact cone** (0 in every scene: no hole, no shard; the wrong points are edges placed a little off).
+  `Cost.ClipExact`: the new cut = the 2026-11-07 algorithm (kept in the test as the reference) bit for bit on three squads among walls.
+  Smokes unchanged and green: `VisionConeSmoke`, `VisionHeightSmoke`, `TowerVisionSmoke` (drawn = `CanOperativeSee` on their grids),
+  `PeekSightSmoke`, `ConePerfSmoke`, `StealthLureSmoke`, `WeaponReachSmoke`.
+- **Not done (ideas, not needed for the budget):** caching the static hits of a turn on the spot (the world-grid rays keep their bearings),
+  the mates' re-cut skipped when the re-traced cone did not change.
+
 ## Vision cones - how to switch them on (old §6)
 
 - **Vision cones - how to switch them on (user request 2026-10-11).** Off by default (as in Godot's shipped config).
@@ -306,5 +351,5 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
   (6) Occlusion (2026-10-19): the same component -> **Vision Cone | Occlusion**: `Clip To Sight` (off = the plain sector),
   `Ray Step Deg` 1.5, `Edge Refine Depth` 6, `Max Rays Per Cone` 320, `Max Low Obstacles Per Ray` 3, `Refresh Hz` 12,
   `Move Rebuild Cm` 15, `Turn Rebuild Deg` 2, `Static Refresh Seconds` 0 (was 2; bug #38), `Max Update Distance Cm` 9000, `Light Tone Alpha
-  Scale` 0.45, `Light Tone Whiten` 0.35. Console: `Codex.VisionCones.MaxRebuildsPerFrame` 6, `Codex.VisionCones.Parallel` 2.
+  Scale` 0.45, `Light Tone Whiten` 0.35. Console: `Codex.VisionCones.MaxRebuildsPerFrame` 6, `Codex.VisionCones.Parallel` 2, `Codex.VisionCones.RefineGapCm` -1 (= the component's `Min Refine Gap Cm` 20; 0 = the old angle-only refinement).
 

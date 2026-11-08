@@ -185,6 +185,15 @@ bool SightRules::IsWithinTouchReveal(float DistanceCm)
 	return DistanceCm <= SquadTouchRevealCm;
 }
 
+SightRules::EContact SightRules::ResolveContact(bool bEyeSees, bool bHeard, bool bLineToSource)
+{
+	if (bEyeSees || (bHeard && bLineToSource))
+	{
+		return EContact::Seen;
+	}
+	return bHeard ? EContact::Heard : EContact::None;
+}
+
 float SightRules::BlindFireHitChance(float BaseHitChance, float EnemyDistanceFromGhostCm)
 {
 	return EnemyDistanceFromGhostCm <= BlindFireHitRadiusCm ? FMath::Clamp(BaseHitChance * BlindFireAccuracyMultiplier, 0.f, 1.f) : 0.f;

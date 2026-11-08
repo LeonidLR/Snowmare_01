@@ -65,6 +65,12 @@ struct CODEXTACTICS_API FVisionConeSightSpec
 	int32 MaxRefineDepth = 6;
 	/** Rays never below this angular gap when refining, degrees. */
 	float MinRefineGapDeg = 0.02f;
+	/**
+	 * fix/cone-rebuild-cost (2026-11-08): a gap is not bisected once its arc at the farther drawn end of its two rays is under twice this, cm - an
+	 * edge is placed to about this much where it is drawn (a shadow running out to 120 m is refined to 120 m's arc, a corner 8 m away stops
+	 * early); the angle floor alone placed a corner 8 m out to 0.3 cm and spent the rays on it. 0 = MinRefineGapDeg only (the old fan).
+	 */
+	float MinRefineGapCm = 0.f;
 	/** Hard cap on rays per cone (base + refined). */
 	int32 MaxRays = 320;
 	/** Neighbouring rays whose span ends differ by more than max(JumpToleranceCm, JumpToleranceFraction x distance) are refined. */
@@ -206,6 +212,8 @@ namespace VisionConeVisibility
 	 * feet, cm: a crate / step / kerb stays the flat model (ground-level cones unchanged), a tower or a roof does not.
 	 */
 	inline constexpr float ElevatedMinDropCm = 100.f;
+	/** The cones' MinRefineGapCm (UVisionConeComponent::MinRefineGapCm; tests CodexTactics.Combat.VisionCone.Cost.ShapeParity), cm. */
+	inline constexpr float DefaultMinRefineGapCm = 20.f;
 	/** Rays whose ground levels differ by more than this are refined (the edge of a perch), cm. */
 	inline constexpr float GroundToleranceCm = 5.f;
 

@@ -52,7 +52,9 @@ enum class ESuppressOrderStop : uint8
 	/** Magazine + reserve at or below the order's stop threshold. */
 	AmmoLow,
 	/** A weapon without ammo (the knife). */
-	NoWeapon
+	NoWeapon,
+	/** No round can reach near the point from his muzzle (a wall in the way; fix/pmc-fire-through-wall 2026-11-08). */
+	NoLineOfFire
 };
 
 /**
@@ -139,6 +141,14 @@ struct CODEXTACTICS_API FSuppressionConfig
 	float OrderClickRadiusCm = 400.f;
 	/** "order.marker_radius_cm": the red ground ring of a SUPPRESS order; Shift + click within it toggles the order off. */
 	float OrderMarkerRadiusCm = 250.f;
+	/**
+	 * "order.line_near_point_cm" / "order.line_min_clear_fraction" (designer 2026-11-08, a prone PMC fighter firing into the wall the squad
+	 * stood behind): fire at a point - a suppress order, an area round at a last known spot - needs the line from his muzzle (his stance's,
+	 * the cover's lean point) to the point clear up to within this distance of the point (the cover the target hides behind may stop the
+	 * rounds: that is the suppression) and for at least this fraction of its length; else no round leaves (IsFireLineUseful).
+	 */
+	float OrderLineNearPointCm = 250.f;
+	float OrderLineMinClearFraction = 0.5f;
 
 	// --- Explosions (user decision 2026-10-26: they suppress, shorter than gunfire) ---
 	/** "explosion.pressure": the burst a blast adds at its centre (a separate, fast-decaying part of the level). */
@@ -312,6 +322,12 @@ namespace SuppressionRules
 	/** Whether a SUPPRESS order goes on: the target died, ammo low (magazine + reserve <= OrderStopAtRounds), no ammo weapon. */
 	CODEXTACTICS_API ESuppressOrderStop CheckOrder(const FSuppressionConfig& Config, bool bHasTarget, bool bTargetAlive, bool bUsesAmmo,
 		int32 Clip, int32 Reserve);
+
+	/**
+	 * Fire at a point is worth a round (fix/pmc-fire-through-wall 2026-11-08): the line from the muzzle to the point, PointDistanceCm long, is
+	 * clear (BlockedAtCm < 0) or first blocked within OrderLineNearPointCm of the point and at least OrderLineMinClearFraction of the way.
+	 */
+	CODEXTACTICS_API bool IsFireLineUseful(const FSuppressionConfig& Config, float PointDistanceCm, float BlockedAtCm);
 
 	/** Ammo a SUPPRESS order can spend before it stops (magazine + reserve - OrderStopAtRounds, never below 0). */
 	CODEXTACTICS_API int32 OrderAmmoBudget(const FSuppressionConfig& Config, int32 Clip, int32 Reserve);

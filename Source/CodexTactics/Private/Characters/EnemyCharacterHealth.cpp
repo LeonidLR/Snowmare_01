@@ -127,13 +127,20 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	}
 
 	// Godot enemy_cutter.gd _start_airborne_death: shot down mid-leap it keeps flying and crashes on the ground.
-	if (Archetype == EEnemyArchetype::Cutter && (IsJumpAttacking() || GetCharacterMovement()->IsFalling()))
+	// fix/corpse-falls-to-ground (game designer PIE 2026-11-08: bodies hanging in the air): every creature killed in the air (a drop link's
+	// flight, a jump, a pounce) falls the same way onto the floor below (the capsule blocks the world only, Landed stops it); one killed on a
+	// ladder is dropped by the ladder (ULadderClimbComponent::TickDropping: its fall by code onto the floor found under it).
+	const bool bCutterLeap = Archetype == EEnemyArchetype::Cutter && (IsJumpAttacking() || GetCharacterMovement()->IsFalling());
+	if (bCutterLeap || (!IsLadderBusy() && GetCharacterMovement()->IsFalling()))
 	{
 		bAirborneDeath = true;
 		JumpPhase = ECutterJumpPhase::None;
 		GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Ignore);
 		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💀 SHOT DOWN MID-AIR"), FLinearColor(1.f, 0.25f, 0.25f));
+		if (bCutterLeap)
+		{
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💀 SHOT DOWN MID-AIR"), FLinearColor(1.f, 0.25f, 0.25f));
+		}
 	}
 	else
 	{
@@ -210,6 +217,10 @@ void AEnemyCharacter::Landed(const FHitResult& Hit)
 		// Godot _process_airborne_death: crash landing.
 		bAirborneDeath = false;
 		GetCharacterMovement()->StopMovementImmediately();
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💥 CRASH"), FLinearColor(0.9f, 0.5f, 0.2f));
+		GetCharacterMovement()->DisableMovement(); // a body: lies where it landed
+		if (Archetype == EEnemyArchetype::Cutter)
+		{
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💥 CRASH"), FLinearColor(0.9f, 0.5f, 0.2f));
+		}
 	}
 }

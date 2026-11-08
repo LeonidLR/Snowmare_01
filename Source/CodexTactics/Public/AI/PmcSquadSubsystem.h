@@ -88,10 +88,11 @@ public:
 	/** Runs the sight update now (smokes; the tick runs one every SightInterval). */
 	void RefreshSight();
 	/**
-	 * Bug #43 (UnderFireRules): Shooter fired a round at Victim - Victim's team sees the shooter (his muzzle flash) for
-	 * SightRules::DemaskSeconds whatever the range (the 60 m gunfire hearing is for the other teams).
+	 * Bug #43 (UnderFireRules): Shooter fired a round at Victim - Victim's team notices the shooter (his muzzle flash at Flash) for
+	 * SightRules::DemaskSeconds whatever the range (the 60 m gunfire hearing is for the other teams). Honest sight (2026-11-08): he is SEEN
+	 * only while an eye of the team has a clear line to him or to that flash; else known (his spot), not a target.
 	 */
-	void NotifyShotAt(const AActor* Shooter, const AOperativeCharacter* Victim);
+	void NotifyShotAt(const AActor* Shooter, const AOperativeCharacter* Victim, const FVector* Flash = nullptr);
 
 	// --- Commander ---
 	void SetTeamCommanded(int32 TeamId, bool bCommanded, const FPmcWeights* Weights = nullptr);
@@ -192,6 +193,8 @@ private:
 		TMap<TWeakObjectPtr<AActor>, FKnownTarget> Known;
 		/** NotifyShotAt: a shooter who fired at one of the team, seen until this time whatever the range (bug #43). */
 		TMap<TWeakObjectPtr<AActor>, double> ShotRevealUntil;
+		/** Where that shooter's muzzle flash was (fix/pmc-fire-through-wall: seen only with a clear line to it, or to him). */
+		TMap<TWeakObjectPtr<AActor>, FVector> ShotRevealFlash;
 		TMap<TWeakObjectPtr<AOperativeCharacter>, FFighterState> Fighters;
 		FPmcWeights Weights;
 		bool bCommanded = false;

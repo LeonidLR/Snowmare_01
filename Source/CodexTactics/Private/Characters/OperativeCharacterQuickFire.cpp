@@ -167,7 +167,8 @@ const TCHAR* AOperativeCharacter::RunQuickFire(float DeltaTime, AActor*& OutTarg
 		QuickFireTarget.Reset();
 		Enemy = nullptr;
 	}
-	if (Enemy)
+	// Honest sight (fix/pmc-fire-through-wall 2026-11-08): the spot follows the enemy only while this side sees him, then his last spot.
+	if (Enemy && (!IsHonestFireOn() || IsSeenByOwnSide(Enemy)))
 	{
 		QuickFirePoint = Enemy->GetActorLocation();
 	}
@@ -264,6 +265,15 @@ const TCHAR* AOperativeCharacter::RunQuickFire(float DeltaTime, AActor*& OutTarg
 	}
 	if (!bAimed)
 	{
+		// No line of fire to the spot (fix/pmc-fire-through-wall 2026-11-08): a wall in the way, not the target's own cover - no round.
+		if (!HasUsefulFireLine(AimAt))
+		{
+			++NoLineOfFireSkips;
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("NO LINE OF FIRE"), FLinearColor(1.f, 0.7f, 0.2f));
+			UE_LOG(LogCodexTactics, Display, TEXT("[QuickFire] %s: no line of fire to (%.0f, %.0f, %.0f) - the burst ends"), *DisplayName.ToString(), AimAt.X, AimAt.Y, AimAt.Z);
+			CancelQuickFire();
+			return TEXT("quick fire: dropped (no line of fire)");
+		}
 		FireQuickFireRound(AimAt);
 	}
 	const bool bMisfired = MisfireCooldownTimer > MisfireBefore && MisfireCooldownTimer > 0.f;
