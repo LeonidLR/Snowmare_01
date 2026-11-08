@@ -383,6 +383,8 @@ public:
 	/** Hit reactions started / the last clip (smokes). */
 	int32 GetHitReactionsPlayed() const { return HitReactionsPlayed; }
 	UAnimSequenceBase* GetLastHitReactionClip() const { return LastHitReactionClip.Get(); }
+	/** Shots whose fire clip was left out because a stance transition was playing (#51; for the smokes). */
+	int32 GetFireClipsSkippedForStance() const { return FireClipsSkippedForStance; }
 	FName GetLastHitReactionSlot() const { return LastHitReactionSlot; }
 
 	/** Seconds the left-hand IK stays off for an upper-body action (hit reaction, grenade throw, interaction) - smokes. */
@@ -1476,6 +1478,7 @@ private:
 	/** Hit reactions (HitReactionRules): game time of the last one, count / clip / slot for the smokes. */
 	double LastHitReactionTime = -1000.0;
 	int32 HitReactionsPlayed = 0;
+	int32 FireClipsSkippedForStance = 0;
 	TWeakObjectPtr<UAnimSequenceBase> LastHitReactionClip;
 	FName LastHitReactionSlot;
 	/** Vault clip: started on the vault's first frame, foot alternating. */

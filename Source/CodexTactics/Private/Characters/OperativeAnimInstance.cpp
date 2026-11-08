@@ -480,6 +480,16 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 		}
 		return;
 	}
+	// #51 (designer video 2026-11-06, measured by CodexTactics.RecoilProbe 2026-11-08): a fire montage started while a stance transition
+	// plays (prone -> crouch / stand: the full-body Crawl_to_* clip) stopped that transition at once - montages of one group replace
+	// each other - and the body jumped from the floor to the crouch in ONE frame (40-80 cm), for the squad and the PMC alike: a fighter
+	// rising to shoot looked thrown up / back with every first shot. The shot goes out; the rise keeps playing and the next shot's clip
+	// plays over the finished stance (the prone fire above already waited for it).
+	if (IsPlayingStanceTransition())
+	{
+		++FireClipsSkippedForStance;
+		return;
+	}
 	UAnimMontage* Montage = bIsAiming && FireAimMontage ? FireAimMontage : FireMontage;
 	if (Montage && !bIsReloading)
 	{
