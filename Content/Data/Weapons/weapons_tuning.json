@@ -67,6 +67,20 @@
       "plasma_carbine"
     ]
   },
+  "explosions": {
+    "comment": "The shared explosion model (Explosions::Detonate, 2026-11-09): every blast (grenade, barrels, mines, tripwires, trapped objects, projectiles) uses it. The cover rule: a wall between the blast and a body x wall_multiplier; a plunging round (high-angle) ignores walls - only a roof above protects (x roof_multiplier). occlusion: which blast kinds use the cover rule (off for the legacy kinds = the old numbers). camera_trauma: the shake a blast adds at the camera focus (0 = none).",
+    "wall_multiplier": 0.25,
+    "roof_multiplier": 0.0,
+    "camera_trauma": 0.0,
+    "occlusion": {
+      "projectile": true,
+      "grenade": false,
+      "barrel": false,
+      "mine": false,
+      "tripwire": false,
+      "trap": false
+    }
+  },
   "sidearm": {
     "comment": "The sidearm switch (SidearmRules, 2026-11-08): a primary that runs dry with an enemy within threat_range_m -> the pistol instead of the reload (no shot for draw_s while it comes up); back to the primary (which then reloads) after holster_after_s without a target or when the pistol is dry. The player's own switching (X, the weapon selector) is unchanged.",
     "enabled": true,

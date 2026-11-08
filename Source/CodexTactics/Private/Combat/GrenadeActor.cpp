@@ -1,4 +1,5 @@
 #include "Combat/GrenadeActor.h"
+#include "Combat/Explosion.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownComponent.h"
 #include "Characters/EnemyCharacter.h"
@@ -143,76 +144,17 @@ void AGrenadeActor::Detonate()
 		return;
 	}
 	bDetonated = true;
-	ApplyAreaEffect();
-	GameplayEvents::RaiseExplosion(this, GameplayEvents::ExplosionKinds::Grenade, GetActorLocation(), EffectRadius, this); // visual listeners only (snow crater)
+	ApplyAreaEffect(); // raises GameplayEvents::Explosion (snow crater) at its end
 	ReceiveDetonated(GetActorLocation());
 	Destroy();
 }
 
 void AGrenadeActor::ApplyAreaEffect()
 {
-	const FVector Center = GetActorLocation();
-	const FText Source = LOCTEXT("Source", "Grenade");
-	// APC P4: the hull of a vehicle in reach (grenade falloff at the hull side's distance).
-	UVehicleSubsystem::ApplyBlastToVehicles(GetWorld(), Center, EffectRadius, [this](float HullDistance)
-	{
-		return Damage * GrenadeRules::DamageFalloff(HullDistance, EffectRadius);
-	}, nullptr, Source.ToString());
-	// Patrols hear the squad's grenade (enemy_perception.json hear_explosion_m) and engage (user request 2026-10-06).
-	AEnemyCharacter::NotifySquadNoise(GetWorld(), Center, ESquadNoise::Explosion);
-	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	TArray<AActor*> InRadius;
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
-	{
-		if (*It != this && FVector::Dist(Center, It->GetActorLocation()) <= EffectRadius)
-		{
-			InRadius.Add(*It);
-		}
-	}
-	for (AActor* Candidate : InRadius)
-	{
-		if (!IsValid(Candidate))
-		{
-			continue;
-		}
-		// 1. Fuel barrels explode; 2. trapped objects go off (Godot shoot_and_explode / detonate_trap).
-		if (ABarrelActor* Barrel = Cast<ABarrelActor>(Candidate))
-		{
-			Barrel->Explode(Source);
-		}
-		else if (AInteractableActor* Object = Cast<AInteractableActor>(Candidate); Object && Object->bTrapped)
-		{
-			Object->DetonateTrap(true, Source);
-		}
-		// 3. Damage with the falloff.
-		UHealthComponent* Health = IsValid(Candidate) ? Candidate->FindComponentByClass<UHealthComponent>() : nullptr;
-		if (!Health || !Health->IsAlive())
-		{
-			continue;
-		}
-		const float Applied = Damage * GrenadeRules::DamageFalloff(FVector::Dist(Center, Candidate->GetActorLocation()), EffectRadius);
-		if (Candidate->ActorHasTag(TEXT("Enemy")))
-		{
-			FDamageSpec Spec;
-			Spec.Amount = Applied;
-			Spec.DamageType = EDamageType::Explosive;
-			Spec.AttackerSource = Source.ToString();
-			Health->TakeDamage(Spec);
-		}
-		else if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Candidate); Operative && Squad && Squad->GetMembers().Contains(Operative))
-		{
-			Operative->TakeHit(Applied * GrenadeRules::SquadDamageScale, Source.ToString(), false, true); // Godot bypass_avoidance
-		}
-		else
-		{
-			FDamageSpec Spec;
-			Spec.Amount = Applied;
-			Spec.AttackerSource = Source.ToString();
-			Health->TakeDamage(Spec);
-		}
-	}
-	// Sprint 14: everyone (squad and enemies) closer than 2.5 m is knocked down by the blast.
-	UKnockdownComponent::NotifyExplosion(GetWorld(), Center);
+	// The shared explosion model (WEAPONS_FRAMEWORK.md 16; parity with the old inline code: CodexTactics.Weapons.Explosion.Parity): vehicles,
+	// the squad noise (patrols engage), every actor in reach - barrels explode, trapped objects go off, enemies x the grenade curve, the
+	// squad x0.65 (bypass avoidance), other bodies plain - the knockdown (2.5 m) and the explosion event (snow crater + suppression).
+	Explosions::Detonate(GetWorld(), Explosions::GrenadeSpec(GetActorLocation(), Damage, EffectRadius, LOCTEXT("Source", "Grenade").ToString(), this));
 }
 
 #undef LOCTEXT_NAMESPACE
