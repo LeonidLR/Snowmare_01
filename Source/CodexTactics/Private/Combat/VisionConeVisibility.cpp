@@ -155,8 +155,10 @@ namespace
 			{
 				return;
 			}
-			if (Spec.MinRefineGapCm > 0.f
-				&& FMath::DegreesToRadians(B.AngleDeg - A.AngleDeg) * FMath::Max(FarEnd(A), FarEnd(B)) < 2.f * Spec.MinRefineGapCm)
+			// The arc that matters: at the farther drawn end of the two rays - or, when another object blocks each of them, at the range: the
+			// gap between two blockers may open a view out to the range that neither ray shows (VisionHeightSmoke's ruin roof, 2026-11-08).
+			const float ArcAtCm = A.BlockerKey != B.BlockerKey ? Spec.GetMaxRange() : FMath::Max(FarEnd(A), FarEnd(B));
+			if (Spec.MinRefineGapCm > 0.f && FMath::DegreesToRadians(B.AngleDeg - A.AngleDeg) * ArcAtCm < 2.f * Spec.MinRefineGapCm)
 			{
 				return;
 			}
