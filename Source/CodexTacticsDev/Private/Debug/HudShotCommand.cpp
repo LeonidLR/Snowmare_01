@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (run on /Game/Maps/L_MainMenu): the frontend title screen. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the drawer with the Sprint 13 hand-over quantity dialog (M16 rounds to a squad mate, 15 chosen). "pause" / "saves" / "controls": the pause menu / the SAVE GAME slot screen (a quicksave first) / the F1 Controls reference. "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics. "duel" (with "turnbased"): the dramatic shot framing. "frost": the frost vignette of a freezing squad (cold 90 %).
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (run on /Game/Maps/L_MainMenu): the frontend title screen. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the drawer with the Sprint 13 hand-over quantity dialog (M16 rounds to a squad mate, 15 chosen). "pause" / "saves" / "controls": the pause menu / the SAVE GAME slot screen (a quicksave first) / the F8 Controls reference. "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics. "duel" (with "turnbased"): the dramatic shot framing. "frost": the frost vignette of a freezing squad (cold 90 %).
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -546,7 +546,7 @@ namespace HudShot
 		{
 			// The pause stops the world timers: open it last, shoot and quit on the real-time ticker.
 			const bool bSaves = Args.Contains(TEXT("saves"));
-			const bool bControls = Args.Contains(TEXT("controls")); // the F1 Controls reference
+			const bool bControls = Args.Contains(TEXT("controls")); // the F8 Controls reference
 			TWeakObjectPtr<UWorld> PauseWorld(World);
 			FTimerHandle PauseHandle;
 			World->GetTimerManager().SetTimer(PauseHandle, FTimerDelegate::CreateLambda([PauseWorld, bSaves, bControls]()

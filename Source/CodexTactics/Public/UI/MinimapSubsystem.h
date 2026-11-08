@@ -80,7 +80,7 @@ enum class EMinimapClick : uint8
 
 /**
  * Minimap (user decisions 2026-10-18, docs/design/MINIMAP.md; UE-only): in the top-right panel (switched with the message
- * feed, F2 / the header) or full screen (Tab; F3 in turn-based combat where Tab is "next operative"). The level is
+ * feed, F6 / the header) or full screen (Tab; F7 in turn-based combat where Tab is "next operative"). The level is
  * captured ONCE per floor at load (orthographic SceneCapture2D straight down at the level start camera's yaw, 2026-10-21;
  * Codex.Minimap.TopDown 0 = the old iso view at its pitch; characters, markers, effects hidden; per floor the geometry
  * above it left out), live icons are projected over it with the same
@@ -110,7 +110,7 @@ public:
 
 	EMinimapPanelMode GetPanelMode() const { return PanelMode; }
 	void SetPanelMode(EMinimapPanelMode Mode);
-	/** F2 / a header click: MAP <-> MESSAGES (remembered for the session). Returns the new mode. */
+	/** F6 / a header click: MAP <-> MESSAGES (remembered for the session). Returns the new mode. */
 	EMinimapPanelMode TogglePanelMode();
 	bool IsFullMapOpen() const { return bFullMapOpen; }
 	void SetFullMapOpen(bool bOpen);

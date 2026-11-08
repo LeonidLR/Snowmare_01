@@ -18,7 +18,7 @@ struct CODEXTACTICS_API FCodexControlsSection
 };
 
 /**
- * Pure content model of the F1 Controls screen (UCodexControlsScreen): generated from the player command registry
+ * Pure content model of the F8 Controls screen (UCodexControlsScreen): generated from the player command registry
  * (PlayerCommands::GetRegistry / GetSections / GetKeyLabel), so the screen and the registry cannot diverge.
  * No Godot reference (2026-10-11 user decision: tester demo controls reference).
  */

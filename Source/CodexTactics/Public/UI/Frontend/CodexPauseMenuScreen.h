@@ -10,7 +10,7 @@ class UTextBlock;
  * In-game PAUSE menu (Esc; GameMenu layer; the world is paused while it is open): RESUME / SAVE GAME (disabled with the
  * reason, e.g. "Saving is disabled during combat") / LOAD GAME / OPTIONS / QUIT TO MAIN MENU (confirm) / QUIT GAME
  * (confirm). Back = RESUME. The tactical pause (Space) is a separate game mechanic and is not touched.
- * Also CONTROLS (opens the F1 Controls reference), TUTORIAL: ON / OFF (UTutorialSubsystem::SetTutorialEnabled, the player's
+ * Also CONTROLS (opens the F8 Controls reference), TUTORIAL: ON / OFF (UTutorialSubsystem::SetTutorialEnabled, the player's
  * setting), SKIP TUTORIAL (rev 5i: confirm; the tutorial off for this run, UTutorialSubsystem::SkipTutorial; disabled when it is not running)
  * and RESET TUTORIAL (confirm; disabled when the level has no tutorial) after OPTIONS. A Widget Blueprint made
  * before these entries existed gets them added at run time next to OptionsButton (EnsureExtraEntries).

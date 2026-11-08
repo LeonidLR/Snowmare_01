@@ -439,7 +439,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawDropMarkers();
 	DrawFormationPlacement();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
-	// Minimap (2026-10-18): the top-right panel shows the feed or the map (F2 / its header), Tab the full-screen map.
+	// Minimap (2026-10-18): the top-right panel shows the feed or the map (F6 / its header), Tab the full-screen map.
 	UMinimapSubsystem* Minimap = GetWorld()->GetSubsystem<UMinimapSubsystem>();
 	if (Minimap)
 	{

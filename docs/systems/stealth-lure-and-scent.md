@@ -41,7 +41,7 @@ the listener's navmesh walk to it (`GetHearingPathLengthTo`) fits the open-air r
 A leg also ends when the enemy stands >= 0.5 s within 2 m + 1.5 m of its goal (`StealthLureRules::HasArrived`: two enemies on one point). Stone = `ALureStoneActor`
 (grenade arc, noise on impact, placeholder sphere). UI: action-bar buttons with cooldown / refusal tooltips, hearing circle while aiming the
 stone or hovering WHISTLE + `HEARS` over the listeners (`GetPreviewListeners`), `?` over investigating enemies
-(`ACodexTacticsHUD::DrawStealthLureMarkers`), feed `Whistle.` / `Stone thrown.`. Commands `Stealth.Whistle` / `Stealth.Throw` (F1 «Squad»), events
+(`ACodexTacticsHUD::DrawStealthLureMarkers`), feed `Whistle.` / `Stone thrown.`. Commands `Stealth.Whistle` / `Stealth.Throw` (F8 «Squad»), events
 `StealthLure.Whistle` / `.Throw`. Data `enemy_perception.json` `"lure"` (`EnemyPerception::GetLure`, CVar `Codex.Lure.InvestigateSeconds`). Save:
 `world_state.stealth_lure` cooldowns, patrol `lure` / `search_duration` / `search_sweep` / `search_approach`. Tests `CodexTactics.AI.StealthLure.*`;
 smoke `StealthLureSmoke`. Stealth-kill hook: `IsInvestigatingLure` / `HasReachedSearchOrigin` / `GetSearchOrigin` (design doc §8).

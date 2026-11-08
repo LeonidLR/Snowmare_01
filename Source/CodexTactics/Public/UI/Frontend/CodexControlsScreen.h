@@ -7,10 +7,10 @@
 class UScrollBox;
 
 /**
- * CONTROLS reference (F1 anywhere in the game, or CONTROLS in the pause menu; GameMenu layer): every player command with
+ * CONTROLS reference (F8 anywhere in the game, or CONTROLS in the pause menu; GameMenu layer): every player command with
  * its key(s) in sections - generated from the PlayerCommands registry through CodexControlsRules, so it never diverges
- * from it (a rebound key shows its current label). Opened with F1 it pauses the game (world pause, like the Esc menu) and
- * resumes on close; opened over the pause menu the world is already paused and BACK returns to the menu. F1 or Esc
+ * from it (a rebound key shows its current label). Opened with F8 it pauses the game (world pause, like the Esc menu) and
+ * resumes on close; opened over the pause menu the world is already paused and BACK returns to the menu. F8 or Esc
  * (the back action) closes it.
  * Widget names (WBP_Controls): TitleText, ControlsList (a UScrollBox; the rows are added at run time - section headers
  * and key / description lines), BackButton (EntryId Back). The artist restyles the frame; the list contents stay in C++.
@@ -34,7 +34,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|UI")
 	int32 GetRowCount() const { return BuiltRowCount; }
 
-	/** True while this screen paused the world itself (opened with F1 outside the pause menu). */
+	/** True while this screen paused the world itself (opened with F8 outside the pause menu). */
 	bool PausedTheWorld() const { return bPausedWorld; }
 
 protected:

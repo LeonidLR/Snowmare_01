@@ -180,7 +180,7 @@ void UCodexActivatableScreen::HookEntryButton(UCodexMenuButton* Button)
 
 bool UCodexActivatableScreen::HandleHotkey(const FKey& Key)
 {
-	if (bHandlesControlsHotkey && Key == EKeys::F1)
+	if (bHandlesControlsHotkey && Key == EKeys::F8)
 	{
 		if (UCodexUISubsystem* UI = UCodexUISubsystem::Get(this))
 		{

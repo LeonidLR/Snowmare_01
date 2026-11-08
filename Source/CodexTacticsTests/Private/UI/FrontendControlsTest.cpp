@@ -11,7 +11,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// F1 Controls reference (2026-10-11 user decision, no Godot reference): the screen is generated from the PlayerCommands
+// F8 Controls reference (2026-10-11 user decision, no Godot reference): the screen is generated from the PlayerCommands
 // registry, so the registry must be complete and consistent.
 
 #define CONTROLS_TEST(TestClass, TestPath) 	IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, "CodexTactics.UI.Frontend.Controls." TestPath, 		EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -128,8 +128,8 @@ bool FControlsScreenSetupTest::RunTest(const FString&)
 	{
 		TestNotNull(*FString::Printf(TEXT("Controls tree has %s"), Name), Tree->FindWidget(FName(Name)));
 	}
-	TestTrue(TEXT("F1 works from the Controls screen"), UCodexControlsScreen::StaticClass()->GetDefaultObject<UCodexActivatableScreen>()->bHandlesControlsHotkey);
-	TestTrue(TEXT("F1 works from the pause menu"), UCodexPauseMenuScreen::StaticClass()->GetDefaultObject<UCodexActivatableScreen>()->bHandlesControlsHotkey);
+	TestTrue(TEXT("F8 works from the Controls screen"), UCodexControlsScreen::StaticClass()->GetDefaultObject<UCodexActivatableScreen>()->bHandlesControlsHotkey);
+	TestTrue(TEXT("F8 works from the pause menu"), UCodexPauseMenuScreen::StaticClass()->GetDefaultObject<UCodexActivatableScreen>()->bHandlesControlsHotkey);
 	UWidgetTree* PauseTree = NewObject<UWidgetTree>(GetTransientPackage());
 	Cast<ICodexDefaultTree>(UCodexPauseMenuScreen::StaticClass()->GetDefaultObject())->BuildDefaultTree(*PauseTree);
 	for (const TCHAR* Name : { TEXT("ControlsButton"), TEXT("TutorialButton"), TEXT("ResetTutorialButton"), TEXT("VisionConesButton"), TEXT("SquadVisionConesButton") })

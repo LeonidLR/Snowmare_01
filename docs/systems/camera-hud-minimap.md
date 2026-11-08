@@ -12,8 +12,8 @@
 ## Minimap (old §5)
 
 **Minimap (user decisions 2026-10-18, UE-only; design `docs/design/MINIMAP.md`)** — the top-right panel shows the message feed OR the
-map (F2 / a click on its `MAP | MESSAGES` header; session memory `UMissionSessionSubsystem::MinimapPanelMode`, default `Codex.Minimap.DefaultPanel`
-0 = messages; unread count in the header), full-screen map on Tab (not in turn-based combat: Tab = next operative there) / F3, Esc closes it.
+map (F6 / a click on its `MAP | MESSAGES` header; session memory `UMissionSessionSubsystem::MinimapPanelMode`, default `Codex.Minimap.DefaultPanel`
+0 = messages; unread count in the header), full-screen map on Tab (not in turn-based combat: Tab = next operative there) / F7, Esc closes it.
 `UMinimapSubsystem` (`UI/MinimapSubsystem.*`): at load (>= 1 s, navmesh built) area = level JSON `"minimap.bounds_cm"` or the navmesh bounds
 volumes; floors = `"minimap.floors_cm"` or auto (stacked walkable surfaces on a coarse grid refined round stacked columns ->
 `MinimapRules::DetectFloorBases` -> kept only with a navmesh path from the leader); per floor a hidden-component list
@@ -30,7 +30,7 @@ map zoom, LMB = `ATacticalCameraPawn::LookAtPoint` (holds the spot until a pan /
 the resolved spot (trace along the view ignoring the floor's hidden pieces, then the navmesh); the cursor over the map: no edge scroll, no world
 hover. HUD unit `CodexTacticsHUDMinimap.cpp` (image window, fog quad clipped by `MinimapRules::ClipPolygonToRect`, footprint, icons). Save
 `world_state.minimap` (panel + fog per floor, base64; another grid = ignored; a load before setup is applied once set up). Commands `Map.Panel` /
-`Map.Full` / `Map.Camera` / `Map.Move` / `Map.Zoom` (F1 «Movement & camera», never tutorial-locked). Tests `CodexTactics.UI.Minimap.*`; smoke
+`Map.Full` / `Map.Camera` / `Map.Move` / `Map.Zoom` (F8 «Movement & camera», never tutorial-locked). Tests `CodexTactics.UI.Minimap.*`; smoke
 `MinimapSmoke`. Perf: setup 4-7 ms, capture ~1 ms game thread per pass, update 20-80 us / 0.25 s, icons + canvas ~40-70 us a frame; GPU cost of
 the passes -> Gemini request #24.
 
