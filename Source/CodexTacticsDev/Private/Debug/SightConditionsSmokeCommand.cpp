@@ -434,6 +434,14 @@ namespace SightConditionsSmoke
 				Leader->bVisionConeShowsSightRange = true;
 				State.LastMultiplier = -1.f;
 				Environment->SetClockScale(1.f);
+				// The Depot locks a clear day (game designer 2026-11-08): a locked state never steps, so a forced weather would jump at once -
+				// the blend check runs on the live ladder (unlocked for this stage only; the smoke ends the run).
+				if (Environment->IsLocked())
+				{
+					FEnvironmentState Live = Environment->GetState();
+					Live.bLocked = false;
+					Environment->SetState(Live);
+				}
 				Environment->ForceWeather(EWeatherState::Blizzard, false);
 				Enter(State, EStage::Transition);
 				return true;

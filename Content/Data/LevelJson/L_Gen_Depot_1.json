@@ -11,6 +11,14 @@
   "wave_rest_duration": 20,
   "cold_rate_mult": 0,
   "intro_dialogue": false,
+  "environment": {
+    "_comment": "Game designer 2026-11-08: a clear sunny day, no weather changes, while the squad trains on the Depot - the clock and the weather are locked (a campaign arrival no longer continues the lake's night snowfall); snow cover as the lab had it.",
+    "locked": true,
+    "start_hour": 12,
+    "weather": "Clear",
+    "snow_cover": 0.35,
+    "seed": 1
+  },
   "cheats": {
     "immortal": false,
     "infinite_ammo": true

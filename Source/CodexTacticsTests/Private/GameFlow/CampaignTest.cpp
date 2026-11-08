@@ -114,6 +114,10 @@ bool FCampaignDataFileTest::RunTest(const FString&)
 	TestEqual(TEXT("the Depot's campaign arrival fades in over the arrival default"), CampaignRules::ResolveStartFadeSeconds(Depot.StartFadeSeconds, true),
 		CampaignRules::ArrivalFadeSeconds);
 	TestFalse(TEXT("the Depot is mortal (task #46: immortality off)"), Depot.bCheatImmortal);
+	TestTrue(TEXT("the Depot locks a clear sunny day (game designer 2026-11-08: noon, Clear - no lake night on arrival)"), Depot.Environment.bLocked
+		&& Depot.Environment.bHasWeather && Depot.Environment.Weather == EWeatherState::Clear && Depot.Environment.bHasStartHour
+		&& FMath::IsNearlyEqual(Depot.Environment.StartHour, 12.f));
+	TestTrue(TEXT("... cold off, infinite ammo (designer 2026-11-08: keep the Depot as it is)"), Depot.ColdRateMult == 0.f && Depot.bCheatInfiniteAmmo);
 	// Frozen Factory left the campaign but stays on disk (its map and level JSON, used by the ladder smokes).
 	FLevelCombatConfig Factory;
 	TestTrue(TEXT("Frozen Factory's level JSON stays"), LevelJsonRules::LoadLevel(TEXT("L_Demo01_B_FrozenFactory.json"), Factory, Error)

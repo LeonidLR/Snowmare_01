@@ -10,6 +10,8 @@
 //     three operatives at the Depot's PlayerStart (its spawn of the generated layout, on the navmesh, the leader facing its way) with the
 //     carried level / EXP / points / stats / kit - NOT the Depot's squad_loadout - at full health of the carried maximum, warm; the Depot
 //     is the campaign's last level;
+//     the Depot's locked clear day (2026-11-08: noon, Clear, the clock and weather locked) although the level it came from handed over a
+//     snowy night (the environment carry);
 //  2. after the camera settled: the leader in the start camera's frustum, the kit still the carried one (no stage loadout on a carried
 //     squad, LoadoutRules::ShouldApplyStageLoadout);
 //  3. the fade-in clears by hold + fade and never darkens on the way.
@@ -29,6 +31,7 @@
 #include "Core/MissionRules.h"
 #include "Data/WaveConfigTypes.h"
 #include "Debug/FrontendSmokeUtils.h"
+#include "Environment/EnvironmentSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFlow/CampaignRules.h"
@@ -235,6 +238,15 @@ namespace DepotCampaignStartSmoke
 		RecordExpect(State, *Squad);
 		// The lake's exit (ULevelExitSubsystem): CaptureSquad for the next map, then OpenLevel. Captured here on the Depot, so the carry's
 		// FromMap is set to the lake (the log line / "fell on" names read it).
+		// The lake hands over its snowy night (the environment carry takes the leaving level's end state): the Depot must not take it.
+		if (UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World))
+		{
+			FEnvironmentState Night = Environment->GetState();
+			Night.bLocked = false;
+			Environment->SetState(Night);
+			Environment->ForceWeather(EWeatherState::Snowfall, true);
+			Environment->SetHour(23.f);
+		}
 		Campaign->CaptureSquad(World, DepotMap);
 		FCampaignSquadCarry Carry = Campaign->GetCarry();
 		Carry.FromMap = LakeShort;
@@ -312,6 +324,13 @@ namespace DepotCampaignStartSmoke
 			Check(State, State.FirstGameTime > CampaignRules::StartHoldSeconds || State.FirstAlpha >= 0.99f,
 				FString::Printf(TEXT("black at the start (alpha %.2f at %.2f s)"), State.FirstAlpha, State.FirstGameTime));
 			Check(State, Campaign && Campaign->FindNextLevel(World) == nullptr, TEXT("the Depot is the campaign's last level"));
+			// Game designer 2026-11-08: a clear sunny day, no weather changes, while the squad trains - not the lake's night snowfall.
+			const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World);
+			Check(State, Environment && Environment->IsLocked() && Environment->GetState().Weather == EWeatherState::Clear
+				&& FMath::IsNearlyEqual(Environment->GetHour(), 12.f, 0.05f),
+				FString::Printf(TEXT("the Depot's locked clear day, not the handed-over snowy night: %s, hour %.2f, %s"),
+					Environment ? *Environment->GetWeatherDisplayName() : TEXT("-"), Environment ? Environment->GetHour() : -1.f,
+					Environment && Environment->IsLocked() ? TEXT("locked") : TEXT("NOT locked")));
 			// "intro_dialogue": false - no MovementTest briefing (neither the window nor its radio line).
 			const UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
 			const FString IntroRadio = MissionRules::GetModeRadio(EMissionStartMode::Game).ToString();
