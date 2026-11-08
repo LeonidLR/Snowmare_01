@@ -504,6 +504,14 @@ bool AOperativeCharacter::WantsRunCornerPeekPreTurn()
 {
 	if (!bRunCornerPeekPending || !bHasPendingCover || bInCover || !IsRunPeekStanceEnabled())
 	{
+		if (bRunCornerPeekPreTurnOn && !bInCover)
+		{
+			// Dropped on the way (another order): the approach lock lets go.
+			if (UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+			{
+				Anim->ReleasePeekApproachYawLock();
+			}
+		}
 		bRunCornerPeekPreTurnOn = false;
 		return false;
 	}
@@ -522,6 +530,7 @@ bool AOperativeCharacter::WantsRunCornerPeekPreTurn()
 	{
 		bRunCornerPeekRunBodySeeded = false;
 		RunCornerPeekPreTurnSign = 0;
+		BeginPeekApproachYawLock(Distance, Speed);
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek pre-turn from %.0f cm out (speed %.0f, the entry %.0f cm short of the slot)"),
 			*DisplayName.ToString(), Distance, Speed, GetRunInGlideCm(Speed));
 	}
@@ -540,7 +549,8 @@ float AOperativeCharacter::StepRunCornerPeekPreTurn(float DeltaTime)
 	float Target = RunCornerPeekFacingYaw; // without the clip / the bones: the corner aim
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 	float RunBodyCs = 0.f;
-	if (Anim && Anim->GetMeshBodyYawCs(RunBodyCs))
+	// The pose as the graph / the weapon layer drew it, before the approach lock's own root yaw (that must not feed back).
+	if (Anim && Anim->GetNaturalBodyYawCs(RunBodyCs))
 	{
 		if (!bRunCornerPeekFinalBodyValid)
 		{
@@ -550,8 +560,10 @@ float AOperativeCharacter::StepRunCornerPeekPreTurn(float DeltaTime)
 		}
 		if (bRunCornerPeekFinalBodyValid)
 		{
-			// The run pose's drawn yaw shifts as the turn itself changes his strafe (the 8-direction locomotion): followed through ~0.08 s.
-			const float Follow = 1.f - FMath::Exp(-DeltaTime / 0.08f);
+			// The run pose's drawn yaw shifts as the turn itself changes his strafe (the 8-direction locomotion): followed through ~0.08 s - with
+			// the approach lock (it takes the gait's sway out of the drawn body) through ~0.3 s, a stride, so the sway does not steer the actor
+			// (the shotgun jog's torso, main's verification 2026-11-08).
+			const float Follow = 1.f - FMath::Exp(-DeltaTime / RunCornerPeekRules::PreTurnRunPoseFollowSeconds(IsRunPeekYawLockEnabled()));
 			RunCornerPeekRunBodyCs = bRunCornerPeekRunBodySeeded ? FRotator::NormalizeAxis(RunCornerPeekRunBodyCs
 				+ FRotator::NormalizeAxis(RunBodyCs - RunCornerPeekRunBodyCs) * Follow) : RunBodyCs;
 			bRunCornerPeekRunBodySeeded = true;
@@ -563,6 +575,27 @@ float AOperativeCharacter::StepRunCornerPeekPreTurn(float DeltaTime)
 	// One way only (RunCornerPeekSmoke D, round a wall's end: the strafe shifting under the turn pulled it 2 deg back): a step against the way it
 	// turns holds instead - the peek stance's yaw lock eases out what is left.
 	return RunCornerPeekRules::OneWayStepYaw(Yaw, RunCornerPeekRules::PreTurnStepYaw(Yaw, Target, ToEntry, Speed, DeltaTime), RunCornerPeekPreTurnSign);
+}
+
+void AOperativeCharacter::BeginPeekApproachYawLock(float DistanceToSlotCm, float SpeedCmS)
+{
+	UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	float RunBodyCs = 0.f;
+	float FinalBodyCs = 0.f;
+	if (!Anim || !IsRunPeekYawLockEnabled() || !Anim->GetMeshBodyYawCs(RunBodyCs)
+		|| !Anim->GetPeekStanceBodyYawCs(RunCornerPeekSide, CoverRules::DefaultStanceFor(RunCornerPeekSlot.Height) == EOperativeStance::Crouching, FinalBodyCs))
+	{
+		return;
+	}
+	// World yaws: the drawn body now, and where the fire idle will draw it (the cover facing + the mesh's yaw on the capsule + its body yaw).
+	const float MeshOnCapsule = static_cast<float>(FRotator::NormalizeAxis(GetMesh()->GetComponentRotation().Yaw - GetActorRotation().Yaw));
+	const float StartWorld = static_cast<float>(FRotator::NormalizeAxis(GetMesh()->GetComponentRotation().Yaw + RunBodyCs));
+	const float FinalWorld = static_cast<float>(FRotator::NormalizeAxis(RunCornerPeekCoverYaw + MeshOnCapsule + FinalBodyCs));
+	const float ToEntry = FMath::Max(0.f, DistanceToSlotCm - GetRunInGlideCm(SpeedCmS));
+	const float PathSeconds = FMath::Max(SpeedCmS > 1.f ? ToEntry / SpeedCmS - RunCornerPeekRules::PreTurnFinishEarlySeconds : 0.f, 0.1f);
+	Anim->BeginPeekApproachYawLock(StartWorld, FinalWorld, PathSeconds);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek approach lock - the drawn body %.0f -> %.0f deg (world) over %.2f s"), *DisplayName.ToString(),
+		StartWorld, FinalWorld, PathSeconds);
 }
 
 bool AOperativeCharacter::BeginPeekStanceYawLock(float OldActorYaw, ECoverFacing Side, bool bCrouch)

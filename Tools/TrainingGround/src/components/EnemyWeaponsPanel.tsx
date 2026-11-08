@@ -11,10 +11,10 @@ const ENEMY_WEAPON_LABELS: Record<string, string> = {
 type Field = { key: keyof EnemyRangedWeapon; label: string; hint: string; step: number; min: number; max: number };
 
 const REALTIME: Field[] = [
-  { key: 'damage', label: 'Урон выстрела', hint: 'урон одного попадания', step: 1, min: 0, max: 300 },
+  { key: 'base_damage', label: 'Урон выстрела', hint: 'урон одного попадания', step: 1, min: 0, max: 300 },
   { key: 'base_accuracy', label: 'Меткость', hint: 'шанс попасть стоя по стоящей цели в открытую (0..1)', step: 0.05, min: 0, max: 1 },
   { key: 'aim_duration', label: 'Прицеливание, с', hint: 'видимый лазер до выстрела — время игроку среагировать', step: 0.1, min: 0.2, max: 6 },
-  { key: 'shot_cooldown', label: 'Пауза после выстрела, с', hint: 'до следующего прицеливания', step: 0.1, min: 0, max: 10 },
+  { key: 'fire_rate', label: 'Пауза после выстрела, с', hint: 'до следующего прицеливания', step: 0.1, min: 0, max: 10 },
   { key: 'crit_chance', label: 'Шанс крита', hint: '0..1', step: 0.05, min: 0, max: 1 },
   { key: 'crit_multiplier', label: 'Множитель крита', hint: 'урон крита = урон × множитель', step: 0.1, min: 1, max: 5 },
   { key: 'prone_accuracy_bonus', label: 'Бонус меткости лёжа', hint: '× к меткости, когда стрелок лежит', step: 0.05, min: 0.5, max: 3 },

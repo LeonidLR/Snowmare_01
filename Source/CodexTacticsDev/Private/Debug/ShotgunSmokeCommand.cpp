@@ -421,7 +421,8 @@ namespace ShotgunSmoke
 			Check(State, Engineer->CurrentClip == 8 && Engineer->ReserveAmmo == 40, FString::Printf(TEXT("1: 8 shells + 40 (%d + %d)"),
 				Engineer->CurrentClip, Engineer->ReserveAmmo));
 			const USkeletalMesh* Model = Engineer->WeaponSkeletalMesh ? Engineer->WeaponSkeletalMesh->GetSkeletalMeshAsset() : nullptr;
-			Check(State, Model != nullptr && Engineer->WeaponSkeletalMesh->IsVisible(), FString::Printf(TEXT("1: the D-1 model on the weapon socket (%s)"),
+			Check(State, Model != nullptr && Model->GetName() == TEXT("SK_ShotgunD1_1slot") && Engineer->WeaponSkeletalMesh->IsVisible(),
+				FString::Printf(TEXT("1: the optimized D-1 model on the weapon socket (%s)"),
 				Model ? *Model->GetName() : TEXT("none")));
 			const UOperativeAnimInstance* Anim = AnimOf(Engineer);
 			Check(State, Anim && Anim->GetShotgunClipCount() >= 20, FString::Printf(TEXT("1: the shotgun clip set loaded (%d clips)"), Anim ? Anim->GetShotgunClipCount() : 0));

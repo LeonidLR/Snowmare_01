@@ -289,6 +289,15 @@ namespace RunCornerPeekRules
 	/** The peek stance yaw lock lets go over this long after its path (the fire idle's own facing from then on), s. */
 	inline constexpr float LockFadeSeconds = 0.15f;
 	/**
+	 * The approach lock (the shotgun Engineer's jog sways its torso under the pre-turn - main's verification 2026-11-08: back-and-forth 8 deg
+	 * over his last 1.5 m, then a 14 deg turn into the entry): at most this much root yaw - it takes out the sway, the actor's turn does the
+	 * turn, deg.
+	 */
+	inline constexpr float ApproachLockMaxCorrectionDeg = 30.f;
+
+	/** How fast the pre-turn follows the run pose's drawn yaw: ~a stride with the approach lock (no sway steering the actor), else 0.08 s. */
+	CODEXTACTICS_API float PreTurnRunPoseFollowSeconds(bool bApproachLock);
+	/**
 	 * The fire idle in the game draws the body a little off its clip (the graph's layers - the left-hand IK pulls the left shoulder: +6 deg
 	 * measured on both standing pack clips 2026-11-08): the lock learns that bias at the end of its path (up to MaxDrawnBiasDeg) for the next
 	 * arrival's pre-turn, and a gap over SettleMinDeg is eased out over SettleSeconds instead of the short fade.
@@ -334,6 +343,9 @@ namespace RunCornerPeekRules
 	 * eased over PathSeconds the short way (the pre-turned run: EntryYaw ~ FinalYaw - the body keeps its facing), deg.
 	 */
 	CODEXTACTICS_API float LockTargetYaw(float EntryYaw, float FinalYaw, float Seconds, float PathSeconds);
+
+	/** The approach lock's drawn body yaw: from StartYaw to FinalYaw LINEARLY over PathSeconds (the pre-turn's even rate), then FinalYaw, deg. */
+	CODEXTACTICS_API float ApproachLockTargetYaw(float StartYaw, float FinalYaw, float Seconds, float PathSeconds);
 
 	/** The lock's strength: 1 over its path, then down to 0 over FadeSeconds (the pose's own facing - by then ~ the target - takes over). */
 	CODEXTACTICS_API float LockAlpha(float Seconds, float PathSeconds, float FadeSeconds = LockFadeSeconds);

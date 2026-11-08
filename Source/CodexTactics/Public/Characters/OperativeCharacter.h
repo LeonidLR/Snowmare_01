@@ -678,6 +678,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	TObjectPtr<USkeletalMeshComponent> WeaponSkeletalMesh;
 
+	/** The hand model's extra static parts (UWeaponDataAsset::HandMeshParts: the pistol's magazine), children of WeaponMesh at identity. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UStaticMeshComponent>> WeaponMeshParts;
+
 	/** Skeletal mesh material slot tinted with the role colour (Godot tints only the coat). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	FName RoleColorMaterialSlot = TEXT("Explorer_Coat");
@@ -2595,6 +2599,12 @@ private:
 	 * False when the lock cannot run (no anim / clip / bones): the first fix's held yaw then.
 	 */
 	bool BeginPeekStanceYawLock(float OldActorYaw, ECoverFacing Side, bool bCrouch);
+	/**
+	 * The pre-turn's start (WantsRunCornerPeekPreTurn): the anim's approach lock from the drawn body now to the fire idle's drawn facing, over
+	 * the pre-turn's own plan (DistanceToSlotCm at SpeedCmS, entering the glide short of the slot) - main's verification 2026-11-08, the
+	 * shotgun Engineer's jog swayed the drawn body back and forth under the turn.
+	 */
+	void BeginPeekApproachYawLock(float DistanceToSlotCm, float SpeedCmS);
 	/** LeaveCover raises no CoverLeft event (the open-shot step off the wall comes back on its own). */
 	bool bQuietCoverLeaveRequest = false;
 	/** EnterCover ran (new wall, not a quiet return): CoverEntered waits until the body has stopped at the slot. */

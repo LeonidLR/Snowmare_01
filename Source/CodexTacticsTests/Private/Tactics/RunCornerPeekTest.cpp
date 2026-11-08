@@ -445,6 +445,29 @@ bool FRunCornerPeekLowCoverTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+RUN_CORNER_PEEK_TEST(FRunCornerPeekApproachLockTest, "ArrivesTurned.ApproachLock")
+bool FRunCornerPeekApproachLockTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// Main's verification 2026-11-08: the shotgun Engineer's jog sways his torso under the pre-turn - the approach lock holds the drawn body
+	// on the pre-turn's own even (linear) plan in world space, a few degrees of root yaw at most.
+	TestEqual(TEXT("starts at the drawn body"), ApproachLockTargetYaw(100.f, 140.f, 0.f, 0.5f), 100.f, 1.0e-3f);
+	TestEqual(TEXT("linear, as the pre-turn: a quarter in, a quarter of the turn"), ApproachLockTargetYaw(100.f, 140.f, 0.125f, 0.5f), 110.f, 1.0e-3f);
+	TestEqual(TEXT("then holds the fire idle's drawn facing"), ApproachLockTargetYaw(100.f, 140.f, 2.f, 0.5f), 140.f, 1.0e-3f);
+	TestEqual(TEXT("the short way round the wrap"), ApproachLockTargetYaw(170.f, -170.f, 0.25f, 0.5f), 180.f, 1.0e-3f);
+	// The sway: the natural pose 6 deg off the plan either way - the lock's root yaw takes it out (well inside its cap).
+	for (const float Sway : { -6.f, 6.f })
+	{
+		const float Plan = ApproachLockTargetYaw(100.f, 140.f, 0.25f, 0.5f);
+		const float Correction = FMath::Clamp(LockCorrectionDeg(Plan, Plan + Sway, 1.f), -ApproachLockMaxCorrectionDeg, ApproachLockMaxCorrectionDeg);
+		TestEqual(FString::Printf(TEXT("a %.0f deg sway is taken out"), Sway), Plan + Sway + Correction, Plan, 1.0e-3f);
+	}
+	TestTrue(TEXT("the cap stays small (it never steers the turn itself)"), ApproachLockMaxCorrectionDeg <= 30.f);
+	TestTrue(TEXT("with the lock the pre-turn follows the run pose over ~a stride (the sway does not steer the actor)"), PreTurnRunPoseFollowSeconds(true) >= 0.25f);
+	TestEqual(TEXT("without it as before"), PreTurnRunPoseFollowSeconds(false), 0.08f, 1.0e-4f);
+	return true;
+}
+
 RUN_CORNER_PEEK_TEST(FRunCornerPeekOneWayTest, "ArrivesTurned.OneWay")
 bool FRunCornerPeekOneWayTest::RunTest(const FString& Parameters)
 {

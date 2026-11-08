@@ -13,12 +13,17 @@
 // 6. Ctrl + click a barrel while standing: waits for the kneel, then the barrel explodes.
 // 7. turn-based: standing the attack costs kneel 1 + shot 3 AP; with 3 AP it is not offered / refused; with the AP she kneels
 //    (stance on the grid too) and fires.
+// 8. the rifle on the weapon framework (2026-11-09): the same damage at 10 and 30 m (no falloff), the armour class against the Brute (heavy
+//    beats heavy: 0.75 x (1 - 0.6) stopped, vs 0.04 on the hound), the Marksman enemy's rifle from the schema block (45 / 2.5 s / 80 / 110 m),
+//    a PMC fighter with the sniper rifle: the same weapon data, the sniper handling (no shot standing).
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/MarksmanEnemyCharacter.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -97,6 +102,7 @@ namespace SniperSmoke
 		float GridShotTargetHealthAtShow = 0.f;
 		float GridShotTargetHealthAtOrder = 0.f;
 		FDelegateHandle GridShotHandle;
+		TWeakObjectPtr<AOperativeCharacter> PmcFighter;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -684,7 +690,118 @@ namespace SniperSmoke
 				TEXT("ordered at the wall: she crouches in cover first"));
 			Check(State, State.Shots > State.ShotsAtStageStart && State.IllegalShots == 0, TEXT("then fires from the crouched corner, never standing"));
 			Check(State, State.MinSlotWeight > 0.97f, FString::Printf(TEXT("sniper sequence: FullBody slot never dipped (min %.2f) - the legs stay in the kneel / prone"), State.MinSlotWeight));
+			Next(State);
+			return true;
+		case 24: // 8. the rifle on the framework: damage at range, the Brute, the Marksman (all in this one step: KeepScene clears stray enemies)
+		{
+			AEnemyCharacter* Hound = State.Enemy.Get();
+			const UWeaponDataAsset* Rifle = Medic->CurrentWeapon;
+			Check(State, Rifle && Rifle->Stats.IsSniperRifle() && Rifle->Stats.Damage.PenetrationClass == EArmorClass::Heavy && Rifle->Stats.Ammo.MagazineSize == 5,
+				TEXT("8: the sniper rifle in hands: sniper handling, armour class heavy, 5 rounds"));
+			auto ShotOn = [Medic](AActor* Target) -> float
+			{
+				UHealthComponent* Health = Target ? Target->FindComponentByClass<UHealthComponent>() : nullptr;
+				if (!Health)
+				{
+					return -1.f;
+				}
+				Health->SetMaxHealth(100000.f, true);
+				const float Before = Health->GetCurrentHealth();
+				Medic->CurrentClip = FMath::Max(Medic->CurrentClip, 1);
+				Medic->bForceHitForTesting = true;
+				Medic->ForcedCritRollForTesting = 0.f;
+				const bool bShot = Medic->ShootAtTarget(Target);
+				Medic->bForceHitForTesting = false;
+				return bShot ? Before - Health->GetCurrentHealth() : -1.f;
+			};
+			const FVector Forward = Medic->GetActorForwardVector();
+			const FVector From = Medic->GetActorLocation();
+			float Near = -1.f;
+			float Far = -1.f;
+			if (Hound)
+			{
+				Hound->TeleportTo(From + Forward * 1000.f, (-Forward).Rotation(), false, true);
+				Near = ShotOn(Hound);
+				Hound->TeleportTo(From + Forward * 3000.f, (-Forward).Rotation(), false, true);
+				Far = ShotOn(Hound);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("SniperSmoke: framework - hound at 10 m %.2f, at 30 m %.2f"), Near, Far);
+			Check(State, Near > 1.f && FMath::IsNearlyEqual(Near, Far, 0.01f), FString::Printf(TEXT("8: the same damage at 10 and 30 m (%.2f / %.2f: no falloff)"), Near, Far));
+			// The class rule on the Brute (heavy 0.75): the same shot with the rifle's class as heavy (it pierces: 0.75 x (1 - 0.6) = 0.30 stopped) and
+			// as light (it does not: 0.75 stopped) - everything else (the Brute's element / defence factors, the stance) is the same.
+			float BruteHeavy = -1.f;
+			float BruteLight = -1.f;
+			if (IConsoleVariable* Chance = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Knockdown.Chance")))
+			{
+				Chance->Set(0.f, ECVF_SetByConsole);
+			}
+			if (AEnemyCharacter* Big = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute, From + Forward * 1000.f + FVector(0.f, 0.f, 80.f), (-Forward).Rotation()))
+			{
+				Big->GetCharacterMovement()->DisableMovement();
+				BruteHeavy = ShotOn(Big);
+				if (UWeaponDataAsset* Held = Medic->CurrentWeapon)
+				{
+					const EArmorClass Class = Held->Stats.Damage.PenetrationClass;
+					Held->Stats.Damage.PenetrationClass = EArmorClass::Light;
+					BruteLight = ShotOn(Big);
+					Held->Stats.Damage.PenetrationClass = Class;
+				}
+				Big->Destroy();
+			}
+			const float Expected = (1.f - 0.75f * (1.f - 0.6f)) / (1.f - 0.75f);
+			UE_LOG(LogCodexTactics, Display, TEXT("SniperSmoke: framework - brute %.2f with the heavy class, %.2f as light (x%.2f; expected x%.2f)"), BruteHeavy, BruteLight,
+				BruteLight > 0.f ? BruteHeavy / BruteLight : 0.f, Expected);
+			Check(State, BruteHeavy > 0.f && BruteLight > 0.f && FMath::IsNearlyEqual(BruteHeavy / BruteLight, Expected, 0.05f),
+				FString::Printf(TEXT("8: the Brute (heavy 0.75): the heavy rifle pierces it - %.2f vs %.2f as a light weapon (x%.2f, expected x%.2f = 0.70 / 0.25 through)"),
+					BruteHeavy, BruteLight, BruteLight > 0.f ? BruteHeavy / BruteLight : 0.f, Expected));
+			if (AMarksmanEnemyCharacter* Marksman = Cast<AMarksmanEnemyCharacter>(World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Marksman,
+				From + Forward * 4000.f + FVector(0.f, 0.f, 80.f), (-Forward).Rotation())))
+			{
+				const FMarksmanConfig& Config = Marksman->MarksmanConfig;
+				Check(State, Config.ShotDamage == 45.f && Config.ShotCooldown == 2.5f && Config.EffectiveRangeCm == 8000.f && Config.MaxRangeCm == 11000.f
+					&& Config.BaseAccuracy == 0.6f, FString::Printf(TEXT("8: the Marksman's rifle from the schema block: %.0f damage, %.1f s, %.0f / %.0f m, accuracy %.2f (was 45 / 2.5 / 80 / 110 / 0.6)"),
+						Config.ShotDamage, Config.ShotCooldown, Config.EffectiveRangeCm / 100.f, Config.MaxRangeCm / 100.f, Config.BaseAccuracy));
+				Marksman->Destroy();
+			}
+			else
+			{
+				Check(State, false, TEXT("8: a Marksman spawns"));
+			}
+			// A PMC fighter with the sniper rifle.
+			UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+			AOperativeCharacter* Fighter = Pmc ? Pmc->SpawnFighter(1, SmokeUtils::FreeSpot(World, From - Forward * 600.f), Forward.Rotation(), 11, 0) : nullptr;
+			if (Fighter)
+			{
+				Fighter->bTacticalCeaseFire = true;
+				if (UWeaponDataAsset* Sniper = LoadObject<UWeaponDataAsset>(nullptr, TEXT("/Game/Data/Weapons/DA_Weapon_sniper_rifle.DA_Weapon_sniper_rifle")))
+				{
+					Fighter->AddArsenalWeapon(Sniper);
+				}
+				Fighter->SwitchToWeaponById(TEXT("sniper_rifle"));
+				Fighter->SetStance(EOperativeStance::Standing);
+				State.PmcFighter = Fighter;
+			}
+			Check(State, Fighter != nullptr, TEXT("8: a PMC fighter"));
+			Next(State);
+			return true;
+		}
+		case 25:
+		{
+			AOperativeCharacter* Fighter = State.PmcFighter.Get();
+			if (State.StageTime < 1.f || !Fighter)
+			{
+				return !Fighter ? Finish(State, false) : true;
+			}
+			const UWeaponDataAsset* Weapon = Fighter->CurrentWeapon;
+			Check(State, Weapon && Weapon->WeaponId == TEXT("sniper_rifle") && Weapon->Stats.Damage.BaseDamage == 70.f && Weapon->Stats.Damage.PenetrationClass == EArmorClass::Heavy
+				&& Fighter->IsSniperWeaponEquipped(), FString::Printf(TEXT("8: the PMC fighter's sniper rifle = the same weapon data (one schema, both sides), sniper handling (%s, %s, %s)"),
+					Weapon ? *Weapon->WeaponId : TEXT("-"), Weapon ? *Weapon->GetPathName() : TEXT("-"), Medic->CurrentWeapon ? *Medic->CurrentWeapon->GetPathName() : TEXT("-")));
+			const int32 RefusedBefore = Fighter->GetSniperRefusedShots();
+			Fighter->CurrentClip = FMath::Max(Fighter->CurrentClip, 1);
+			Fighter->ShootAtTarget(State.Enemy.Get());
+			Check(State, Fighter->GetSniperRefusedShots() > RefusedBefore, TEXT("8: ... standing he may not fire it (kneel / prone only)"));
 			return Finish(State, true);
+		}
 		default:
 			return Finish(State, false);
 		}
