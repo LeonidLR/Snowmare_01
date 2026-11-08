@@ -25,6 +25,7 @@
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
+#include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -78,6 +79,12 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 	}
 	PendingCoverSlot = Slot;
 	bHasPendingCover = true;
+	if (bRunCornerPeekRequest)
+	{
+		// OrderTakeCoverForPeek: armed before the walk - standing within the slot's arrival range, OrderMoveTo enters it right here.
+		ArmRunCornerPeek(RunCornerPeekRequestEdge);
+		MarkCornerPeekArrival();
+	}
 	TGuardValue<bool> CoverOrder(bCoverMoveOrder, true);
 	const EOperativeOrderResult Result = OrderMoveTo(Slot.WorldLocation, bSprint);
 	if (Result != EOperativeOrderResult::Accepted)
@@ -130,6 +137,16 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	const bool bCornerPeekArrival = bCornerPeekArrivalPending && FVector::Dist2D(PendingCoverSlot.WorldLocation, Slot.WorldLocation) <= 5.f
 		&& CVarCornerPeekEntryTurn.GetValueOnGameThread() != 0;
 	bCornerPeekArrivalPending = false;
+	// The run-and-peek's arrival at its corner goes straight into the peek stance (the game designer's video 2026-11-08: no wall hug, no turn
+	// out): the corner it peeks round is known now, so the entry faces that corner from its first frame.
+	ECoverFacing PeekStanceSide = ECoverFacing::Right;
+	float PeekStanceEdgeAlong = 0.f;
+	const bool bPeekStanceArrival = IsRunPeekStanceEnabled() && !bQuietCoverEntryRequest && !bSameWall && Slot.Height != ECoverHeight::None
+		&& IsRunCornerPeekArrivalAt(Slot) && !IsRaging() && !IsPanicking() && USuppressionSubsystem::MayExposeNow(this);
+	if (bPeekStanceArrival)
+	{
+		ResolveRunCornerPeekEdge(Slot, PeekStanceSide, PeekStanceEdgeAlong);
+	}
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
@@ -145,6 +162,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	bCornerAimActive = false;
 	bQuietCoverEntry = bQuietCoverEntryRequest; // the return after an open shot: no Cover_Enter clip
 	bCoverEntryEasedTurn = false; // decided below for a new wall (CoverFacingRules::DecideCoverEntryTurn)
+	bCoverEntryPeekStance = false; // ditto
 	bCoverEntryFromRun = bCoverEntryFromRunRequest;
 	bCoverSwitchEntry = bCoverSwitchEntryRequest; // the wall-edge switch's run-in clip (TryEnterCoverSwitchFromRun)
 	bCoverLeftToMove = false;
@@ -157,7 +175,8 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		CoverThreatSeenTime = -1.0e9;
 		CoverShotTarget.Reset();
 		// A switch arrives facing the corner it was sent to (the mirrored pose); any other entry by the usual prediction.
-		CoverFacing = bSwitchFacing ? CoverSwitchArrivalFacing : PredictCoverFacing(Slot);
+		// The run-and-peek's peek stance faces its corner at once (the _L / _R stance of that side from the first frame).
+		CoverFacing = bSwitchFacing ? CoverSwitchArrivalFacing : bPeekStanceArrival ? PeekStanceSide : PredictCoverFacing(Slot);
 		if (!bQuietCoverEntry)
 		{
 			bManualCornerPeek = false; // another wall: a manual peek belongs to the old one
@@ -189,10 +208,11 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		// faces the wall) spun him to the wall and back before the peek - that entry eases the turn and goes straight into the step-out.
 		const float NormalYaw = static_cast<float>(Slot.WallNormal.Rotation().Yaw);
 		const ECoverEntryTurn EntryTurn = CoverFacingRules::DecideCoverEntryTurn(bQuietCoverEntry, bHasEnterClip, bCornerPeekArrival, OldYaw, NormalYaw,
-			GetCoverFacingConfig());
+			GetCoverFacingConfig(), bPeekStanceArrival);
 		const bool bEnterClip = EntryTurn == ECoverEntryTurn::EnterClip;
 		bCoverEntryEasedTurn = bHasEnterClip && EntryTurn == ECoverEntryTurn::EasedTurn;
-		if (bCornerPeekArrival)
+		bCoverEntryPeekStance = EntryTurn == ECoverEntryTurn::PeekStance;
+		if (bCornerPeekArrival && !bCoverEntryPeekStance)
 		{
 			CornerPeekArrivalEntryCount += bCoverEntryEasedTurn ? 1 : 0;
 			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: arrives at the corner peek's slot %.0f deg off facing the wall - %s"), *DisplayName.ToString(),
@@ -209,7 +229,38 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		bCoverEntryAwaitClip = bEnterClip && !bQuietCoverEntry && (CoverEntryTurnDeg > 90.f || bCoverSwitchEntry);
 		bCoverEntryClipSeen = false;
 		CoverEntryAwaitSeconds = 0.f;
-		if (bCoverEntryEasedTurn)
+		if (bCoverEntryPeekStance)
+		{
+			// The actor turned its back to the wall at once; the peek stance clip (the fire idle round the corner) turns the body round to the
+			// corner stance's aim from there - about the facing he ran in with (pre-turned: WantsRunCornerPeekPreTurn). The run pose must not
+			// show turned round meanwhile: the mesh holds the old yaw and lets it go WITH the stance clip's weight (as for the enter clip:
+			// EntryHeldYawFraction, the anim's GetCoverEnterBlendWeight is the peek stance's while it blends in), so the drawn body keeps its
+			// facing through the blend (measured 2026-11-08: an eased offset spun it 170 deg round and back in 0.3 s).
+			const float PeekYaw = static_cast<float>(CoverFacingRules::CornerAimDirection(Slot, PeekStanceSide, CornerAimOutwardDeg).Rotation().Yaw);
+			LastPeekStanceArrivalOffDeg = FMath::Abs(FRotator::NormalizeAxis(OldYaw - PeekYaw));
+			// The held turn goes the same way round as the pose blend turns the body (the clips stand ~180 deg from their root: the blend's
+			// direction differs per clip): of the two equal held turns (x and x -/+ 360) the one nearest the blend's turn.
+			float BlendTurn = 0.f;
+			// (The stance the entry gives below - high standing, low crouched: the formation's crouched wall walk stands up at a high wall.)
+			if (EntryAnim && EntryAnim->GetPeekStanceTurnDeg(PeekStanceSide, CoverRules::DefaultStanceFor(Slot.Height) == EOperativeStance::Crouching, BlendTurn))
+			{
+				CoverEntryYawOffset = RunCornerPeekRules::HeldTurnSameWayAsBlend(CoverEntryYawOffset, BlendTurn);
+			}
+			// The guard (UpdateCoverEntryBlend): the pose's pelvis now, to see which way the blend really turns it.
+			bPeekStanceTurnChecked = false;
+			const int32 PelvisIndex = GetMesh() ? GetMesh()->GetBoneIndex(TEXT("pelvis")) : INDEX_NONE;
+			const TArray<FTransform>& EntryPose = GetMesh() ? GetMesh()->GetComponentSpaceTransforms() : TArray<FTransform>();
+			PeekStancePelvisAtEntry = EntryPose.IsValidIndex(PelvisIndex) ? EntryPose[PelvisIndex].GetRotation() : FQuat::Identity;
+			bPeekStanceTurnChecked = !EntryPose.IsValidIndex(PelvisIndex);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: peek stance - the mesh holds %.0f deg (the pose blend turns the body %.0f deg)"), *DisplayName.ToString(),
+				CoverEntryYawOffset, BlendTurn);
+			CoverEntryYawTime = -1.f;
+			bCoverEntryAwaitClip = true;
+			++PeekStanceEntryCount;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek arrival - straight into the %s corner's peek stance (arrived %.0f deg off the peek facing; no enter clip, no wall hug)"),
+				*DisplayName.ToString(), PeekStanceSide == ECoverFacing::Left ? TEXT("left") : TEXT("right"), LastPeekStanceArrivalOffDeg);
+		}
+		if (bCoverEntryEasedTurn || bCoverEntryPeekStance)
 		{
 			// The old yaw on the mesh in this very frame (an arrival entered from the move's end runs after this tick's blend): no frame of
 			// the walk pose snapped round to the wall normal.
@@ -232,12 +283,16 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		Slot.bLeftEdgeExposed ? 1 : 0, Slot.bRightEdgeExposed ? 1 : 0);
 	if (!bWasInCover)
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, Slot.Height == ECoverHeight::HighCover ? TEXT("🧱 AT THE WALL") : TEXT("🧱 BEHIND COVER"),
-			FLinearColor(0.5f, 0.8f, 1.f));
+		// The run-and-peek's peek stance: no "at the wall" - he is peeking (OrderCornerPeek shows CORNER PEEK over him).
+		if (!bCoverEntryPeekStance)
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(this, Slot.Height == ECoverHeight::HighCover ? TEXT("🧱 AT THE WALL") : TEXT("🧱 BEHIND COVER"),
+				FLinearColor(0.5f, 0.8f, 1.f));
+		}
 		if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
 		{
-			Messages->PostMessage(DisplayName, FText::FromString(Slot.Height == ECoverHeight::HighCover
-				? TEXT("🧱 Hugging the wall, holding the corner!") : TEXT("🧱 Behind cover!")));
+			Messages->PostMessage(DisplayName, FText::FromString(bCoverEntryPeekStance ? TEXT("🎯 At the corner - covering it!")
+				: Slot.Height == ECoverHeight::HighCover ? TEXT("🧱 Hugging the wall, holding the corner!") : TEXT("🧱 Behind cover!")));
 		}
 		ReceiveCoverChanged(true, CurrentCoverHeight);
 	}

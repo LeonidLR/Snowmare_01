@@ -15,13 +15,26 @@
 //      way - and the corner man peeks round the west end;
 //   G. (answer Q3) solo, a fight, the TACTICAL PAUSE: the hover over the west end shows the run-and-peek ghost (no cover ghost), the click
 //      plans "run there and peek" (nobody moves in the pause); the pause's end -> he runs there and peeks on arrival.
-// A/B: -PreCmds "Codex.Cover.RunCornerPeek 0" = the old rule (A, D and E fail: the click is a cover ghost).
+// No wall hug (the game designer's video 2026-11-08 "08.11.26_InstantLookUp_Bug_1": "he runs to the edge of the wall, presses his back to it,
+// and only then turns and peeks - like a stage play"): in A, D, E, F and G the peeker's arrival goes STRAIGHT into the peek stance - no
+// cover enter clip, no cover idle / look-around loop, no idle -> fire step-out on him, no frame in cover without the peek pose, the peek pose and
+// its fire idle within ArrivalToPeekMaxSeconds of the entry, and he arrives facing within ArrivalFacingMaxDeg of the peek facing (the corner
+// stance's aim) - the run's last metres turned him there.
+// A/B: -PreCmds "Codex.Cover.RunCornerPeek 0" = the old rule (A, D and E fail: the click is a cover ghost);
+// -PreCmds "Codex.Cover.RunPeekStance 0" = the 2026-11-07 arrival (the no-hug checks fail: the enter clip, then the step-out).
+// "Shot" (rendered, fixed step: UnrealEditor.exe <uproject> /Game/Maps/L_FormationLab -game -RenderOffscreen -ResX=1280 -ResY=720
+// -UseFixedTimeStep -FPS=60 "-LevelJson=L_FormationLab.json" "-ExecCmds=CodexTactics.RunCornerPeekSmoke Shot") saves a frame strip of A's
+// arrival to Saved/Screenshots/RunPeekNoHug/runpeek_<stance|old>_<i>.png (a camera beside the west corner, every 0.1 s from his last 2.5 m).
 // Godot reference: none (UE-only; docs/systems/cover-and-peek.md "Run-and-peek").
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Animation/AnimMontage.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -34,8 +47,11 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "GameFramework/HUD.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/Paths.h"
 #include "Tactics/CoverGhostActor.h"
+#include "UnrealClient.h"
 
 namespace RunCornerPeekSmoke
 {
@@ -80,6 +96,126 @@ namespace RunCornerPeekSmoke
 	constexpr float StillWalkingSpeed = 30.f;
 	/** G: the leader in the open within the pause's order radius of the west end. */
 	const FVector2D PauseStart(2000.f, -3300.f);
+	/** No wall hug: the peek pose and its fire idle within this of the cover entry, s. */
+	constexpr float ArrivalToPeekMaxSeconds = 0.3f;
+	/** He arrives facing within this of the peek facing (the corner stance's aim), deg. */
+	constexpr float ArrivalFacingMaxDeg = 30.f;
+	/** No spin: the drawn body (shoulder line) turns at most this much in all from his last frame of the run to 1 s in the peek, deg. */
+	constexpr float ArrivalBodyTurnMaxDeg = 90.f;
+	/** "Shot": the strip's stills, every this many s from his last StripFromCm to the corner. */
+	constexpr float StripEverySeconds = 0.1f;
+	constexpr int32 StripStills = 16;
+	constexpr float StripFromCm = 250.f;
+	/** The body yaw trace keeps this many frames before the entry. */
+	constexpr int32 TraceFramesBefore = 24;
+
+	/** What one montage on an operative plays (by his AnimInstance's cover clip lists). */
+	enum class EClipKind : uint8
+	{
+		CoverEnter,
+		StepOut,
+		FireIdle,
+		CoverIdle,
+		CornerLoop,
+		Other,
+	};
+
+	const TCHAR* KindName(EClipKind Kind)
+	{
+		switch (Kind)
+		{
+		case EClipKind::CoverEnter: return TEXT("cover enter (the HUG)");
+		case EClipKind::StepOut: return TEXT("idle->fire step-out (the TURN OUT)");
+		case EClipKind::FireIdle: return TEXT("fire idle = the peek stance");
+		case EClipKind::CoverIdle: return TEXT("cover idle (back to the wall)");
+		case EClipKind::CornerLoop: return TEXT("corner look-around loop");
+		default: return TEXT("other");
+		}
+	}
+
+	EClipKind Classify(const UOperativeAnimInstance& Anim, const UAnimSequenceBase* Clip)
+	{
+		const auto In = [Clip](const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) { return Clip && Clips.Contains(Clip); };
+		if (In(Anim.CoverStandEnter) || In(Anim.CoverCrouchEnter) || In(Anim.CoverStandSwitchEnter) || In(Anim.CoverCrouchSwitchEnter))
+		{
+			return EClipKind::CoverEnter;
+		}
+		if (In(Anim.CoverStandFireEnter) || In(Anim.CoverCrouchFireEnter))
+		{
+			return EClipKind::StepOut;
+		}
+		if (In(Anim.CoverStandFireIdle) || In(Anim.CoverCrouchFireIdle))
+		{
+			return EClipKind::FireIdle;
+		}
+		if (In(Anim.CoverStandIdle) || In(Anim.CoverCrouchIdle))
+		{
+			return EClipKind::CoverIdle;
+		}
+		if (In(Anim.CoverStandCorner) || In(Anim.CoverCrouchCorner))
+		{
+			return EClipKind::CornerLoop;
+		}
+		return EClipKind::Other;
+	}
+
+	const UAnimSequenceBase* MontageClip(const UAnimMontage* Montage)
+	{
+		if (Montage)
+		{
+			for (const FSlotAnimationTrack& Track : Montage->SlotAnimTracks)
+			{
+				if (Track.AnimTrack.AnimSegments.Num() > 0)
+				{
+					return Track.AnimTrack.AnimSegments[0].GetAnimReference();
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	/** The body's yaw drawn on screen: the shoulder line's normal (the mesh + its animation), deg; false without the bones. */
+	bool BodyYaw(const AOperativeCharacter& Op, float& OutYaw)
+	{
+		const USkeletalMeshComponent* Mesh = Op.GetMesh();
+		if (!Mesh || Mesh->GetBoneIndex(TEXT("upperarm_l")) == INDEX_NONE || Mesh->GetBoneIndex(TEXT("upperarm_r")) == INDEX_NONE)
+		{
+			return false;
+		}
+		const FVector Line = Mesh->GetSocketLocation(TEXT("upperarm_r")) - Mesh->GetSocketLocation(TEXT("upperarm_l"));
+		if (Line.Size2D() < 5.f)
+		{
+			return false;
+		}
+		OutYaw = static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(-Line.X, Line.Y)));
+		return true;
+	}
+
+	/** One operative's arrival as the stage watches it from the click on (the no-hug checks). */
+	struct FArrivalWatch
+	{
+		bool bWasInCover = false;
+		/** His actor yaw in the last frame out of cover (the facing he arrived with), deg. */
+		float OpenYaw = 0.f;
+		float ArrivalYaw = 0.f;
+		/** Stage times (-1 = not yet): the cover entry, the peek pose, the fire idle montage start. */
+		float EntryAt = -1.f;
+		float PoseAt = -1.f;
+		float FireIdleAt = -1.f;
+		/** Hug clips started on him from the click on (cover enter / cover idle / look-around loop), step-outs. */
+		int32 HugClips = 0;
+		int32 StepOuts = 0;
+		/** Frames in cover before the peek pose was first reached (the hug sub-state). */
+		int32 HugFrames = 0;
+		/** The peek facing (the corner stance's aim, GetStanceAimBaseDirection in the pose), deg; valid once PoseAt >= 0. */
+		float PeekYaw = 0.f;
+		/** The visual body (shoulder line) yaw trace from TraceFramesBefore frames before the entry to 1 s after it, deg. */
+		TArray<float> BodyTrace;
+		/** BodyTrace's first sample in cover (INDEX_NONE before the entry). */
+		int32 EntryTraceIndex = INDEX_NONE;
+		FString Clips;
+		TSet<int32> SeenMontages;
+	};
 
 	struct FState
 	{
@@ -110,6 +246,15 @@ namespace RunCornerPeekSmoke
 		bool bFollowerWalkingAtFire = false;
 		FString AtFire;
 		int32 PlannedBefore = 0;
+		/** The no-hug watch of every member from the stage's click on. */
+		TArray<FArrivalWatch> Watch;
+		/** "Shot": the frame strip of A's arrival. */
+		bool bShot = false;
+		bool bStanceOn = true;
+		bool bStripStarted = false;
+		int32 StripIndex = 0;
+		float NextStripTime = 0.f;
+		TWeakObjectPtr<ACameraActor> Camera;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -134,6 +279,180 @@ namespace RunCornerPeekSmoke
 		State.HoldTime = 0.f;
 		State.bLeftCover = false;
 		State.bClicked = false;
+		State.Watch.Reset();
+		State.Watch.SetNum(State.Members.Num());
+	}
+
+	/** Every frame after the stage's click: each member's arrival (the montages started on him, his facing, the hug frames). */
+	void UpdateWatch(FState& State)
+	{
+		if (!State.bClicked)
+		{
+			return;
+		}
+		for (int32 Index = 0; Index < State.Members.Num() && Index < State.Watch.Num(); ++Index)
+		{
+			const AOperativeCharacter* Op = State.Members[Index].Get();
+			if (!Op)
+			{
+				continue;
+			}
+			FArrivalWatch& W = State.Watch[Index];
+			const bool bIn = Op->bInCover;
+			if (bIn && !W.bWasInCover && W.EntryAt < 0.f)
+			{
+				W.EntryAt = State.StageTime;
+				W.ArrivalYaw = W.OpenYaw;
+				W.EntryTraceIndex = W.BodyTrace.Num();
+			}
+			if (!bIn)
+			{
+				W.OpenYaw = Op->GetActorRotation().Yaw;
+			}
+			W.bWasInCover = bIn;
+			const bool bPose = Op->bInCover && Op->IsManualCornerPeek() && Op->IsCornerAimActive() && Op->bAtCoverCorner && !Op->bShimmying;
+			if (W.EntryAt >= 0.f && W.PoseAt < 0.f && bIn && !bPose)
+			{
+				++W.HugFrames;
+			}
+			if (bPose && W.PoseAt < 0.f)
+			{
+				W.PoseAt = State.StageTime;
+				W.PeekYaw = static_cast<float>(Op->GetStanceAimBaseDirection().Rotation().Yaw);
+			}
+			if (const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr)
+			{
+				for (const FAnimMontageInstance* Instance : Anim->MontageInstances)
+				{
+					if (!Instance || !Instance->Montage || W.SeenMontages.Contains(Instance->GetInstanceID()))
+					{
+						continue;
+					}
+					W.SeenMontages.Add(Instance->GetInstanceID());
+					const UAnimSequenceBase* Clip = MontageClip(Instance->Montage);
+					const EClipKind Kind = Classify(*Anim, Clip);
+					W.HugClips += Kind == EClipKind::CoverEnter || Kind == EClipKind::CoverIdle || Kind == EClipKind::CornerLoop ? 1 : 0;
+					W.StepOuts += Kind == EClipKind::StepOut ? 1 : 0;
+					if (Kind == EClipKind::FireIdle && W.FireIdleAt < 0.f)
+					{
+						W.FireIdleAt = State.StageTime;
+					}
+					W.Clips += FString::Printf(TEXT(" %.2fs %s [%s];"), State.StageTime, Clip ? *Clip->GetName() : TEXT("-"), KindName(Kind));
+				}
+			}
+			float Body = 0.f;
+			const bool bTraceWindow = W.EntryAt < 0.f || State.StageTime - W.EntryAt <= 1.f;
+			if (bTraceWindow && BodyYaw(*Op, Body))
+			{
+				W.BodyTrace.Add(Body);
+				if (W.EntryTraceIndex == INDEX_NONE && W.BodyTrace.Num() > TraceFramesBefore)
+				{
+					W.BodyTrace.RemoveAt(0); // only the last frames before the entry
+				}
+			}
+		}
+	}
+
+	/** The no-hug checks of the stage's peeker (the game designer's video 2026-11-08). */
+	void CheckNoHug(FState& State, const AOperativeCharacter& Peeker, const TCHAR* Label)
+	{
+		const int32 Index = State.Members.IndexOfByPredicate([&Peeker](const TWeakObjectPtr<AOperativeCharacter>& Each) { return Each.Get() == &Peeker; });
+		if (!State.Watch.IsValidIndex(Index))
+		{
+			Check(State, false, FString::Printf(TEXT("%s: %s watched"), Label, *Peeker.DisplayName.ToString()));
+			return;
+		}
+		const FArrivalWatch& W = State.Watch[Index];
+		const float ToPose = W.EntryAt >= 0.f && W.PoseAt >= 0.f ? W.PoseAt - W.EntryAt : -1.f;
+		const float ToFireIdle = W.EntryAt >= 0.f && W.FireIdleAt >= 0.f ? W.FireIdleAt - W.EntryAt : -1.f;
+		const float FacingOff = W.PoseAt >= 0.f ? FMath::Abs(FRotator::NormalizeAxis(W.ArrivalYaw - W.PeekYaw)) : -1.f;
+		FString Trace;
+		float Lo = 1e9f;
+		float Hi = -1e9f;
+		for (const float Yaw : W.BodyTrace)
+		{
+			const float Rel = FRotator::NormalizeAxis(Yaw - W.PeekYaw);
+			Trace += FString::Printf(TEXT(" %.0f"), Rel);
+			Lo = FMath::Min(Lo, Rel);
+			Hi = FMath::Max(Hi, Rel);
+		}
+		const UOperativeAnimInstance* Anim = Peeker.GetMesh() ? Cast<UOperativeAnimInstance>(Peeker.GetMesh()->GetAnimInstance()) : nullptr;
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s no-hug: entry %.2f s, pose +%.2f s, fire idle +%.2f s, hug frames %d, hug clips %d, step-outs %d, arrival facing %.0f deg off the peek facing (yaw %.0f vs %.0f; the operative's own %.0f), peek stance entries %d, anim straight blends %d; clips:%s"),
+			Label, W.EntryAt, ToPose, ToFireIdle, W.HugFrames, W.HugClips, W.StepOuts, FacingOff, W.ArrivalYaw, W.PeekYaw, Peeker.GetLastPeekStanceArrivalOffDeg(),
+			Peeker.GetPeekStanceEntryCount(), Anim ? Anim->GetCoverPeekStanceBlends() : -1, *W.Clips);
+		// The drawn body's turn in all from his last frame of the run on (a spin through the blend shows as ~340 deg).
+		float BodyTurn = -1.f;
+		if (W.EntryTraceIndex > 0 && W.EntryTraceIndex < W.BodyTrace.Num())
+		{
+			BodyTurn = 0.f;
+			for (int32 Sample = W.EntryTraceIndex; Sample < W.BodyTrace.Num(); ++Sample)
+			{
+				BodyTurn += FMath::Abs(FRotator::NormalizeAxis(W.BodyTrace[Sample] - W.BodyTrace[Sample - 1]));
+			}
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s body (shoulder line) yaw vs the peek facing, per frame, the run's last frames -> 1 s in cover: [%s ] (range %.0f..%.0f; turned %.0f deg in all from the entry)"),
+			Label, *Trace, Lo, Hi, BodyTurn);
+		Check(State, BodyTurn >= 0.f && BodyTurn <= ArrivalBodyTurnMaxDeg, FString::Printf(TEXT("%s: no turn / spin of the drawn body on the arrival (%.0f deg in all, <= %.0f)"), Label,
+			BodyTurn, ArrivalBodyTurnMaxDeg));
+		Check(State, W.HugClips == 0 && W.StepOuts == 0, FString::Printf(TEXT("%s: no wall hug - no cover enter / back-to-the-wall idle / look-around clip and no idle->fire step-out on %s (hug clips %d, step-outs %d)"),
+			Label, *Peeker.DisplayName.ToString(), W.HugClips, W.StepOuts));
+		Check(State, W.EntryAt >= 0.f && W.HugFrames == 0, FString::Printf(TEXT("%s: no frame in cover without the peek pose (%d)"), Label, W.HugFrames));
+		Check(State, ToPose >= 0.f && ToPose <= ArrivalToPeekMaxSeconds && ToFireIdle >= 0.f && ToFireIdle <= ArrivalToPeekMaxSeconds,
+			FString::Printf(TEXT("%s: the peek pose (+%.2f s) and its fire idle (+%.2f s) within %.1f s of reaching the slot"), Label, ToPose, ToFireIdle, ArrivalToPeekMaxSeconds));
+		Check(State, FacingOff >= 0.f && FacingOff <= ArrivalFacingMaxDeg, FString::Printf(TEXT("%s: he arrives facing the peek's way (%.0f deg off, <= %.0f)"), Label, FacingOff,
+			ArrivalFacingMaxDeg));
+	}
+
+	void PlaceCamera(UWorld* World, FState& State, const FVector& Eye, const FVector& LookAt)
+	{
+		if (!State.Camera.IsValid())
+		{
+			State.Camera = World->SpawnActor<ACameraActor>(Eye, (LookAt - Eye).Rotation());
+			if (ACameraActor* Created = State.Camera.Get())
+			{
+				Created->GetCameraComponent()->SetFieldOfView(55.f);
+				Created->GetCameraComponent()->bConstrainAspectRatio = false;
+			}
+		}
+		if (ACameraActor* Cam = State.Camera.Get())
+		{
+			Cam->SetActorLocationAndRotation(Eye, (LookAt - Eye).Rotation());
+			if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+			{
+				PC->SetViewTarget(Cam);
+				if (AHUD* Hud = PC->GetHUD())
+				{
+					Hud->bShowHUD = false;
+				}
+			}
+		}
+	}
+
+	/** "Shot": A's arrival as a frame strip from a camera beside the west corner (south-west of it, looking at the corner). */
+	void TakeStripStill(UWorld* World, FState& State, const AOperativeCharacter& Op)
+	{
+		const FVector Corner(WallWestX, SouthFaceY, State.GroundZ + 100.f);
+		if (!State.bShot || State.StripIndex >= StripStills)
+		{
+			return;
+		}
+		if (!State.bStripStarted && (Op.bInCover || FVector::Dist2D(Op.GetActorLocation(), Corner) <= StripFromCm))
+		{
+			State.bStripStarted = true;
+			State.NextStripTime = State.StageTime;
+		}
+		if (!State.bStripStarted || State.StageTime < State.NextStripTime)
+		{
+			return;
+		}
+		PlaceCamera(World, State, Corner + FVector(-520.f, -560.f, 330.f), Corner + FVector(60.f, -90.f, -20.f));
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("RunPeekNoHug") / FString::Printf(TEXT("runpeek_%s_%02d.png"),
+			State.bStanceOn ? TEXT("stance") : TEXT("old"), State.StripIndex);
+		FScreenshotRequest::RequestScreenshot(Path, false, false);
+		UE_LOG(LogCodexTactics, Display, TEXT("RunCornerPeekSmoke: still %s at %.2f s after the click (in cover %d, peek pose %d)"), *Path, State.StageTime,
+			Op.bInCover ? 1 : 0, Op.IsCornerAimActive() ? 1 : 0);
+		++State.StripIndex;
+		State.NextStripTime += StripEverySeconds;
 	}
 
 	FString NameOf(const AOperativeCharacter* Op)
@@ -252,6 +571,7 @@ namespace RunCornerPeekSmoke
 		Check(State, FMath::Abs(At.X - WallWestX) <= AtEndCm, FString::Printf(TEXT("%s: at the WEST end (x %.0f, the end %.0f)"), Label, At.X, WallWestX));
 		const bool bFace = bNorthFace ? At.Y > NorthFaceY && At.Y < NorthFaceY + 120.f : At.Y < SouthFaceY && At.Y > SouthFaceY - 120.f;
 		Check(State, bFace, FString::Printf(TEXT("%s: on the %s face, the one looking at him (y %.0f)"), Label, bNorthFace ? TEXT("north") : TEXT("south"), At.Y));
+		CheckNoHug(State, Peeker, Label);
 		return true;
 	}
 
@@ -267,6 +587,7 @@ namespace RunCornerPeekSmoke
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(World, 0));
+		UpdateWatch(State);
 		if (State.Stage == 0)
 		{
 			if (State.StageTime < 3.f || !Squad || !PC || Squad->GetMembers().Num() < 3)
@@ -359,9 +680,17 @@ namespace RunCornerPeekSmoke
 				Check(State, Leader->IsRunCornerPeekPending() && Leader->HasPendingCover() && !PC->HasCoverPreview(),
 					TEXT("A: the click is the run-and-peek (his cover walk armed with the peek; no cover ghost to confirm)"));
 			}
+			TakeStripStill(World, State, *Leader); // (the strip ends before the 1 s hold does: ~0.7 s of the run + the hold)
 			if (!WatchRunPeek(State, *Leader, DeltaTime, TEXT("A (running, solo)"), false))
 			{
 				return true;
+			}
+			if (State.bShot)
+			{
+				if (APlayerController* Player = UGameplayStatics::GetPlayerController(World, 0))
+				{
+					Player->SetViewTarget(Player->GetPawn());
+				}
 			}
 			Place(State, Leader, FVector2D(2600.f, -3700.f), 90.f);
 			Next(State, 3);
@@ -604,6 +933,10 @@ namespace RunCornerPeekSmoke
 					State.CarryFiredAt, State.bFollowerWalkingAtFire ? 1 : 0, *State.AtFire));
 			Check(State, State.HoldTime >= HoldSeconds, FString::Printf(TEXT("F: the corner man %s peeks round the west end (held %.1f s);%s"), *NameOf(Peeker), State.HoldTime,
 				*Where(State)));
+			if (Peeker)
+			{
+				CheckNoHug(State, *Peeker, TEXT("F (formation, the corner man)"));
+			}
 			// G: solo, a fight in the tactical pause.
 			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 			if (!Flow)
@@ -676,6 +1009,7 @@ namespace RunCornerPeekSmoke
 					Lead->GetVelocity().Size2D()));
 			Flow->ToggleTacticalPause(); // the pause's end: the planned orders run
 			Next(State, 10);
+			State.bClicked = true; // (the arrival watch runs from the release on)
 			return true;
 		}
 		case 10:
@@ -703,6 +1037,9 @@ namespace RunCornerPeekSmoke
 			return;
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->bShot = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); });
+		State->bStanceOn = AOperativeCharacter::IsRunPeekStanceEnabled();
+		UE_LOG(LogCodexTactics, Display, TEXT("RunCornerPeekSmoke: Codex.Cover.RunPeekStance %d%s"), State->bStanceOn ? 1 : 0, State->bShot ? TEXT(", frame strip (Shot)") : TEXT(""));
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FWorldDelegates::OnWorldPreActorTick.AddLambda([WeakWorld, State](UWorld* Ticking, ELevelTick, float)
 		{

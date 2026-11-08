@@ -16,6 +16,7 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/CoverWrapRules.h"
+#include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
 namespace
@@ -52,7 +53,9 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 	const bool bCrouchEntry = EntryStance == EOperativeStance::Crouching;
 	const TArray<TObjectPtr<UAnimSequenceBase>>* EnterClips = Anim ? (bCrouchEntry ? &Anim->CoverCrouchEnter : &Anim->CoverStandEnter) : nullptr;
 	const bool bHasEnterClip = Anim && Anim->bUseNativeCoverClips && EnterClips && EnterClips->ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; });
-	const float ClipLead = bHasEnterClip ? (bCrouchEntry ? CoverEnterClipLeadCrouchCm : CoverEnterClipLeadStandCm) : 0.f;
+	// The run-and-peek's arrival plays no enter clip (it goes straight into the peek stance, EnterCover): no clip start pose to enter at.
+	const bool bPeekStance = IsRunPeekStanceEnabled() && IsRunCornerPeekArrivalAt(PendingCoverSlot);
+	const float ClipLead = bHasEnterClip && !bPeekStance ? (bCrouchEntry ? CoverEnterClipLeadCrouchCm : CoverEnterClipLeadStandCm) : 0.f;
 	const float Speed = static_cast<float>(GetVelocity().Size2D());
 	const float Glide = FMath::Min(Speed * CoverEnterDecelSeconds * 0.5f, CoverEnterMaxGlideCm);
 	const FVector Here = GetActorLocation();
@@ -62,8 +65,9 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 		return; // not there yet (or standing: HandleMoveFinished / UpdateCover enter at the slot)
 	}
 	// The enter clip starts facing the wall out in front of it: only an approach towards the wall matches it (walking in
-	// along the wall it would glide the body sideways; then he enters on arrival as before).
-	if (FVector::DotProduct(GetVelocity().GetSafeNormal2D(), -PendingCoverSlot.WallNormal.GetSafeNormal2D()) < 0.5f)
+	// along the wall it would glide the body sideways; then he enters on arrival as before). The peek stance has no clip start pose: the
+	// run glides into it from any heading.
+	if (!bPeekStance && FVector::DotProduct(GetVelocity().GetSafeNormal2D(), -PendingCoverSlot.WallNormal.GetSafeNormal2D()) < 0.5f)
 	{
 		return;
 	}
@@ -423,6 +427,38 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 		// turned to the wall / round, shimmied "backwards" (the forward clip on a reversed body) and never fired from there.
 		const float EnterWeight = AwaitAnim ? AwaitAnim->GetCoverEnterBlendWeight() : -1.f;
 		CoverEntryAwaitSeconds += DeltaTime;
+		// The run-and-peek's peek stance (#55 fix 2026-11-08): the first frames of its blend show which way round it turns the pose (pelvis,
+		// component space); a held turn the other way round would spin the drawn body a full turn - flipped by 360 instead.
+		if (bCoverEntryPeekStance && !bPeekStanceTurnChecked && EnterWeight > 0.f && GetMesh())
+		{
+			const int32 PelvisIndex = GetMesh()->GetBoneIndex(TEXT("pelvis"));
+			const TArray<FTransform>& Pose = GetMesh()->GetComponentSpaceTransforms();
+			if (Pose.IsValidIndex(PelvisIndex))
+			{
+				FQuat Turned = Pose[PelvisIndex].GetRotation() * PeekStancePelvisAtEntry.Inverse();
+				if (Turned.W < 0.f)
+				{
+					Turned = -Turned;
+				}
+				const float ObservedDeg = FMath::RadiansToDegrees(static_cast<float>(Turned.GetTwistAngle(FVector::UpVector)));
+				if (FMath::Abs(ObservedDeg) >= RunCornerPeekRules::BlendDirectionSeenDeg)
+				{
+					bPeekStanceTurnChecked = true;
+					if (RunCornerPeekRules::HeldTurnGoesTheOtherWay(CoverEntryYawOffset, ObservedDeg))
+					{
+						const float Was = CoverEntryYawOffset;
+						CoverEntryYawOffset += CoverEntryYawOffset > 0.f ? -360.f : 360.f;
+						++PeekStanceTurnFlips;
+						UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: peek stance - the blend turns the body %.0f deg so far, the other way round: the held turn %.0f -> %.0f deg (weight %.2f)"),
+							*DisplayName.ToString(), ObservedDeg, Was, CoverEntryYawOffset, EnterWeight);
+					}
+				}
+			}
+			else
+			{
+				bPeekStanceTurnChecked = true;
+			}
+		}
 		bCoverEntryClipSeen |= EnterWeight >= 0.f;
 		const float Held = bInCover && AwaitAnim ? CoverFacingRules::EntryHeldYawFraction(EnterWeight, bCoverEntryClipSeen, CoverEntryAwaitSeconds) : 0.f;
 		if (Held > 0.f)

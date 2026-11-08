@@ -71,6 +71,12 @@ enum class ECoverEntryTurn : uint8
 	EasedTurn,
 	/** The return after an open shot (a quiet entry): no clip, no turn blend (he only stepped off the wall). */
 	Quiet,
+	/**
+	 * The run-and-peek's arrival (#55, the game designer's video 2026-11-08 "08.11.26_InstantLookUp_Bug_1"): no enter clip, no back-to-the-wall
+	 * idle and no idle -> fire step-out - the run blends straight into the corner peek stance (the fire idle round the corner); the body's
+	 * leftover turn from his run to the peek facing is eased out on the mesh.
+	 */
+	PeekStance,
 };
 
 /**
@@ -342,7 +348,9 @@ namespace CoverFacingRules
 	 * two blurred spins before the one peek. An arrival for a corner peek (bCornerPeekArrival: the squad's peeker taking his corner) more
 	 * than Config.EnterClipMaxOffWallDeg off facing the wall gets no enter clip - the eased turn straight into the peek's step-out. Every
 	 * other entry keeps the clip (the run-in / head-on arrivals it was made for); a quiet entry stays quiet; no clip assigned -> eased.
+	 * bPeekStanceArrival (the run-and-peek's arrival at its corner, #55 fix 2026-11-08): PeekStance whatever the heading and the clips - the
+	 * run goes straight into the peek stance, never the hug (the enter clip) and the turn out (the step-out); a quiet entry stays quiet.
 	 */
 	CODEXTACTICS_API ECoverEntryTurn DecideCoverEntryTurn(bool bQuiet, bool bHasEnterClip, bool bCornerPeekArrival, float ArrivalYawDeg, float WallNormalYawDeg,
-		const FCoverFacingConfig& Config = FCoverFacingConfig());
+		const FCoverFacingConfig& Config = FCoverFacingConfig(), bool bPeekStanceArrival = false);
 }

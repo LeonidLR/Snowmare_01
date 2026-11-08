@@ -37,12 +37,15 @@
 User: "the peek works only after hugging the wall first, then the order to peek round the corner - that badly hurts the pace of the fight. I want
 it at once: the operative is running, gets the order to peek round a corner in front of him, runs straight to that spot and peeks immediately."
 
-- **The gesture (real time):** the same click as the in-cover peek - on the END of a peekable wall (its last ~75 cm of face, its end face, its top
-  there: `CoverFacingRules::FindPeekEdge`, `FCoverPeekConfig`) - now works from anywhere: an operative standing / walking / running in the open, or
+- **The gesture (real time):** the same click as the in-cover peek - on the END of a peekable wall (its last ~75 cm of face, its end face:
+  `CoverFacingRules::FindPeekEdge`, `FCoverPeekConfig`; since 2026-11-08 only at HIS level - `RunCornerPeekRules::IsClickAtHisLevel`: never a
+  top surface (a wall's top, a roof), a face hit up to 2 m above / 1 m below his feet, and `IsCornerOnHisFloor`: the corner slot within 1 m of
+  his floor; the LadderQueueSmoke regression - a box selection's roof click beyond a wall ladder's head ran a peek instead of the climb;
+  tests `RunCornerPeek.HisFloorOnly`) - now works from anywhere: an operative standing / walking / running in the open, or
   in cover at ANOTHER wall, gets "go to that corner and peek". He runs at his normal order speed (`OrderTakeCover(.., false)`; a double-click on the
   same corner = the same order at a sprint) to the corner's cover slot (the stand point short of the end) on the face of that wall that LOOKS AT
-  HIM, and the cover entry turns straight into the manual corner peek (`OrderCornerPeek`, the same corner-aim lean as before; the entry is a
-  `MarkCornerPeekArrival`, so coming in along the wall there is no wall-facing enter clip; head-on the enter clip plays as for any cover).
+  HIM, and the cover entry turns straight into the manual corner peek (`OrderCornerPeek`, the same corner-aim lean as before) - since the
+  fix of 2026-11-08 below with no wall hug at all (the peek stance arrival).
   No second click, no idle at the wall: in `RunCornerPeekSmoke` the peek pose starts in the same frame as the cover entry (0.00 s). The hover
   over such an end shows the peek ghost (whose silhouette: the man who will take it) from anywhere, the crosshair cursor as the in-cover peek.
 - **Unchanged:** a click on a wall away from its end = take cover (the cover ghost, then its confirm); in cover at that wall its end = the old
@@ -100,6 +103,56 @@ it at once: the operative is running, gets the order to peek round a corner in f
     slide to it, no auto-peek after it; Q4 the normal run, a sprint only on a double-click on the same corner (`IsSprintClick`); Q5 a box
     selection's corner man by his place along the wall (`PlanGroupCornerPeek`); Q6 covers narrower than 1 m (posts, columns) and barricades
     stay plain take cover.
+
+### Straight into the peek stance - no wall hug (#55 fix, game designer's video 2026-11-08 "08.11.26_InstantLookUp_Bug_1")
+
+Designer: "#55 logic is right, but now the operative runs to the edge of the wall, presses his back to it, and only then turns and peeks. He
+must run up and peek at once - it looks silly, like a stage play."
+
+- **Root cause (the chain):** `OrderRunCornerPeek` = `OrderTakeCover` to the corner slot -> the cover approach's last 3 m turned him to FACE
+  THE WALL (`UpdateCombatFacing`, `CoverApproachFaceWallCm`) -> head-on, `CoverFacingRules::DecideCoverEntryTurn` (the corner-peek arrival
+  rule lets only arrivals > 60 deg off the wall skip the clip) chose the **enter clip** `std_idle_fwd_to_cvr_std_idle_*` (wall-facing ->
+  back to the wall = the hug), the feed said "Hugging the wall, holding the corner!" -> the peek itself was ordered in the same frame
+  (gameplay state 0.00 s, which is all the old smoke measured) but the AnimInstance's `UpdateCoverLayer` waits for a cover one-shot to end
+  before the fire-ready block, so after the hug it played the **idle -> fire step-out** `cvr_std_idle_*_to_fire` (the turn back out round
+  the corner) and only then the fire idle. Run -> turn to the wall -> back to the wall -> turn out = the stage play.
+- **Fix (`Codex.Cover.RunPeekStance`, default 1; 0 = the old arrival, A/B):**
+  - *Pre-turn:* within `RunCornerPeekRules::PreTurnCm` (1.5 m) of the armed corner slot (`ShouldPreTurn`: armed for this slot, still moving)
+    the runner turns to the **peek facing** (`RunCornerPeekFacingYaw` = the corner stance's aim `CoverFacingRules::CornerAimDirection` from
+    that slot, cached by `ArmRunCornerPeek`) instead of facing the wall; it wins over the combat-target / under-fire turn for those ~0.4 s
+    (`AOperativeCharacter::WantsRunCornerPeekPreTurn`, `UpdateCombatFacing`).
+  - *Peek stance entry:* `EnterCover` of an armed run-and-peek at its slot (`IsRunCornerPeekArrivalAt`; not suppressed / raging / panicking)
+    -> `ECoverEntryTurn::PeekStance` (`DecideCoverEntryTurn(.., bPeekStanceArrival)`): `IsCoverEntryPeekStance()`, the facing = the peek
+    side from the first frame, no "AT THE WALL" / no hug line (the feed says "🎯 At the corner - covering it!"), and the run-in enters
+    without the enter clip's lead (`TryEnterCoverFromRun`: no clip offset, the run's momentum glides in from any heading). The peek order
+    follows at the end of `EnterCover` as before and the corner aim is switched on in that same call (`StartRunCornerPeekOnEntry` ->
+    `BeginCornerAim`), so the anim sees the fire stance wanted in the entry frame.
+  - *Anim (`UOperativeAnimInstance::UpdateCoverLayer`, C++ only - no AnimBP / montage asset changed):* a peek stance entry plays no enter
+    clip and enters the fire-ready pose WITHOUT the step-out: the fire idle (`cvr_*_fire_idle_*`) blends in straight from the run over
+    `CoverPeekStanceBlendSeconds` 0.3 s. The actor turns its back to the wall at once; the mesh holds his old yaw and lets it go with the
+    fire idle's blend weight (`GetCoverEnterBlendWeight` reports the peek stance montage, `EntryHeldYawFraction`), so the drawn body keeps
+    its facing through the blend (an eased offset, the first try, spun the body 170 deg round and back in 0.3 s - the smoke's shoulder-line
+    trace showed it). The pack's fire idles stand ~170-190 deg from their root, so the pose blend turns the body one way or the other by
+    clip (`_R` the long way round): `UOperativeAnimInstance::GetPeekStanceTurnDeg` measures that turn (the pelvis, component space, from
+    the run pose to the fire idle's first frame, the shortest arc) and the held turn is taken the same way round (x or x -/+ 360).
+  - *Groups:* box selection = his `OrderRunCornerPeek` (unchanged path). Formation: the leader's own wall place within
+    `LeaderPlaceAtCornerCm` 60 cm of the corner slot -> his run there is armed as the run-and-peek (pending cover = the corner slot) and the
+    carry, when it fires, attaches the squad's peek to him in cover (`FindSquadCornerPeekForHit(.., bAllowLeaderRunPeek)`: his stack forms
+    behind him, nobody re-ordered); otherwise the carried squad peek (`OrderFormationCornerPeek(.., bRunPeek)` /
+    `OrderWallLeadershipPeek(.., bRunPeek)`) walks the corner man with
+    `OrderTakeCoverForPeek` (armed BEFORE the walk - standing within the arrival range he enters inside the order call) and
+    `UpdateFormationCornerPeek` does not re-order a man who already peeks from his arrival. Planned in the tactical pause: as solo.
+  - `OrderTakeCoverForPeek(CornerSlot, EdgeOnFace)` replaces "OrderTakeCover, then MarkCornerPeekArrival + ArmRunCornerPeek" in
+    `OrderRunCornerPeek` (that order missed an entry that happened inside `OrderTakeCover`).
+- **Unchanged:** the ordinary cover click (the hug with the enter clip), the in-cover peek (shimmy + step-out), the squad corner peek on its
+  own wall (`SquadCornerPeekSmoke`: one step-out), leaving the peek (the normal fire -> idle exit back to the corner cover pose).
+- **Tests:** `CodexTactics.Tactics.Cover.RunCornerPeek.PreTurn` / `.PeekStanceYawBlend`, `CodexTactics.Tactics.Cover.EntryTurnPeekStance`;
+  `RunCornerPeekSmoke` A / D / E / F / G now also check on the peeker: no cover enter / cover idle / look-around clip and no step-out
+  montage started, no frame in cover without the peek pose, the peek pose and its fire idle within 0.3 s of the entry, the arrival facing
+  within 30 deg of the peek facing, and the drawn body (the shoulder line) turning at most 90 deg in all from his last frame of the run to
+  1 s in the peek (measured after the fix: 20-25 deg; a spin through the blend reads ~340). `-PreCmds "Codex.Cover.RunPeekStance 0"`
+  fails those checks.
+  Frame strip: `CodexTactics.RunCornerPeekSmoke Shot` (rendered) -> `Saved/Screenshots/RunPeekNoHug/runpeek_<stance|old>_NN.png`.
 
 ## Both corners of a wall held (#57, 2026-11-07)
 

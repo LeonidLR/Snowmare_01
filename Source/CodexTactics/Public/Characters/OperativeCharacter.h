@@ -1322,11 +1322,33 @@ public:
 	 */
 	bool ArmRunCornerPeek(const FVector& EdgeOnFace);
 
+	/**
+	 * OrderTakeCover(CornerSlot) whose entry is a run-and-peek arrival (armed BEFORE the walk starts, so also when he already stands within
+	 * the slot's arrival range and the entry happens inside this call): the entry goes straight into the corner peek round EdgeOnFace.
+	 * OrderRunCornerPeek and the squad's carried run-and-peek corner man (USquadSubsystem::OrderFormationCornerPeek bRunPeek) use it.
+	 */
+	EOperativeOrderResult OrderTakeCoverForPeek(const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bSprint = false);
+
 	/** A run-and-peek is armed: his walk to the corner is running (OrderRunCornerPeek / ArmRunCornerPeek; smokes). */
 	bool IsRunCornerPeekPending() const { return bRunCornerPeekPending; }
 
 	/** Run-and-peek arrivals whose corner peek order was accepted (smokes / stats). */
 	int32 GetRunCornerPeekCount() const { return RunCornerPeekCount; }
+
+	/**
+	 * Run-and-peek arrivals that went straight into the peek stance (IsCoverEntryPeekStance: no wall hug, no turn out; the game designer's
+	 * video 2026-11-08) - smokes / stats.
+	 */
+	int32 GetPeekStanceEntryCount() const { return PeekStanceEntryCount; }
+
+	/** The last peek stance arrival: his facing as he arrived minus the peek facing (the corner stance's aim), deg (smokes). */
+	float GetLastPeekStanceArrivalOffDeg() const { return LastPeekStanceArrivalOffDeg; }
+
+	/**
+	 * The run-and-peek arrival goes straight into the peek stance (Codex.Cover.RunPeekStance, default 1; 0 = the 2026-11-07 entry: the enter
+	 * clip's wall hug, then the step-out round the corner - A/B).
+	 */
+	static bool IsRunPeekStanceEnabled();
 
 	/** A manual corner peek is ordered and not released yet (he may still be walking to the corner). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
@@ -1501,6 +1523,15 @@ public:
 	 * step-out (the squad corner peek bug 2026-11-01).
 	 */
 	bool IsCoverEntryEasedTurn() const { return bCoverEntryEasedTurn; }
+
+	/**
+	 * This cover entry is a run-and-peek arrival at its corner that goes straight into the corner peek stance (CoverFacingRules::
+	 * DecideCoverEntryTurn -> PeekStance; the game designer's video 2026-11-08 "08.11.26_InstantLookUp_Bug_1": he ran up, hugged the wall,
+	 * then turned and peeked - "like a stage play"): the AnimInstance plays no enter clip, no back-to-the-wall idle and no idle -> fire
+	 * step-out - the run blends into the fire idle round the corner; the corner aim is on in the entry frame; his leftover turn from the run to
+	 * the peek facing eases out on the mesh. He IS in cover at that corner (leaving the peek returns him to the normal corner pose).
+	 */
+	bool IsCoverEntryPeekStance() const { return bCoverEntryPeekStance; }
 
 	/**
 	 * The squad's corner peek (USquadSubsystem::OrderFormationCornerPeek): the pending cover order is the peeker's walk to his corner along the
@@ -2394,8 +2425,27 @@ private:
 	FCoverSlot RunCornerPeekSlot;
 	FVector RunCornerPeekEdge = FVector::ZeroVector;
 	int32 RunCornerPeekCount = 0;
+	/** The armed corner slot's peek facing (the corner stance's aim yaw from that slot, deg): the run's last metres turn to it (#55 fix). */
+	float RunCornerPeekFacingYaw = 0.f;
+	/** OrderTakeCoverForPeek: OrderTakeCover arms the run-and-peek on the walk it starts (before the walk can end in an entry). */
+	bool bRunCornerPeekRequest = false;
+	FVector RunCornerPeekRequestEdge = FVector::ZeroVector;
+	/** The current cover entry goes straight into the peek stance (IsCoverEntryPeekStance). */
+	bool bCoverEntryPeekStance = false;
+	/** The peek stance's guard on its held turn (UpdateCoverEntryBlend): the pose's pelvis at the entry, checked once, flips (smokes / logs). */
+	FQuat PeekStancePelvisAtEntry = FQuat::Identity;
+	bool bPeekStanceTurnChecked = true;
+	int32 PeekStanceTurnFlips = 0;
+	int32 PeekStanceEntryCount = 0;
+	float LastPeekStanceArrivalOffDeg = -1.f;
 	/** EnterCover's end: an armed run-and-peek arriving at its corner turns into the corner peek (always disarms). */
 	void StartRunCornerPeekOnEntry(const FCoverSlot& Slot);
+	/** The armed run-and-peek arrives with this cover entry: still armed, the entered slot on the ordered corner's wall, near the ordered slot. */
+	bool IsRunCornerPeekArrivalAt(const FCoverSlot& Slot) const;
+	/** The armed run-and-peek's end seen from Slot: which corner (OutSide) and where along the wall (OutEdgeAlongCm, from Slot). */
+	void ResolveRunCornerPeekEdge(const FCoverSlot& Slot, ECoverFacing& OutSide, float& OutEdgeAlongCm) const;
+	/** The run-and-peek's last metres turn the runner to the peek facing (RunCornerPeekRules::ShouldPreTurn; UpdateCombatFacing). */
+	bool WantsRunCornerPeekPreTurn() const;
 	/** LeaveCover raises no CoverLeft event (the open-shot step off the wall comes back on its own). */
 	bool bQuietCoverLeaveRequest = false;
 	/** EnterCover ran (new wall, not a quiet return): CoverEntered waits until the body has stopped at the slot. */

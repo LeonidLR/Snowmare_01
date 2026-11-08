@@ -49,14 +49,20 @@ bool USquadSubsystem::CanTakeWallLead(const AOperativeCharacter* Operative) cons
 		&& Members.ContainsByPredicate([Operative](const TWeakObjectPtr<AOperativeCharacter>& Each) { return Each.Get() == Operative; });
 }
 
-bool USquadSubsystem::PlanWallLeadership(const FVector& EdgeOnFace, FWallLeadershipPlan& OutPlan, TArray<AOperativeCharacter*>& OutWho) const
+bool USquadSubsystem::IsLeaderCoverPeekPlannable(const AOperativeCharacter& LeaderRef, bool bAllowLeaderRunPeek) const
+{
+	return IsWallLeadershipPeeker(&LeaderRef)
+		|| (bAllowLeaderRunPeek && LeaderRef.bInCover && LeaderRef.IsManualCornerPeek() && LeaderRef.IsCoverEntryPeekStance());
+}
+
+bool USquadSubsystem::PlanWallLeadership(const FVector& EdgeOnFace, FWallLeadershipPlan& OutPlan, TArray<AOperativeCharacter*>& OutWho, bool bAllowLeaderRunPeek) const
 {
 	OutPlan = FWallLeadershipPlan();
 	OutWho.Reset();
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	// The leader in cover is the single operative's peek - unless it is the corner of this squad's own wall-leadership peek.
 	if (!LeaderRef || !FormationRuntime::IsEnabled() || bIsSoloMode || bFollowersHolding || HasMultiSelection() || !IsFormationActive() || Followers.IsEmpty()
-		|| Sectors.Formation != EFormationKind::Wall || !Sectors.bWallLayoutValid || (LeaderRef->bInCover && !IsWallLeadershipPeeker(LeaderRef)))
+		|| Sectors.Formation != EFormationKind::Wall || !Sectors.bWallLayoutValid || (LeaderRef->bInCover && !IsLeaderCoverPeekPlannable(*LeaderRef, bAllowLeaderRunPeek)))
 	{
 		return false;
 	}
@@ -107,7 +113,7 @@ bool USquadSubsystem::PlanWallLeadership(const FVector& EdgeOnFace, FWallLeaders
 	return OutWho.IsValidIndex(OutPlan.Leader);
 }
 
-bool USquadSubsystem::OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace)
+bool USquadSubsystem::OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bRunPeek)
 {
 	using namespace SquadSubsystemWallLeadershipLocal;
 	// #57 two-corner hold: the other end of the wall while a corner man peeks = the second corner (he keeps his); an end held already = nothing.
@@ -128,7 +134,7 @@ bool USquadSubsystem::OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const
 	AOperativeCharacter* OldLeader = Leader.Get();
 	FWallLeadershipPlan Plan;
 	TArray<AOperativeCharacter*> Who;
-	if (!OldLeader || !Peeker || !CornerSlot.IsValid() || !PlanWallLeadership(EdgeOnFace, Plan, Who) || Who[Plan.Leader] != Peeker)
+	if (!OldLeader || !Peeker || !CornerSlot.IsValid() || !PlanWallLeadership(EdgeOnFace, Plan, Who, bRunPeek) || Who[Plan.Leader] != Peeker)
 	{
 		return false;
 	}
@@ -194,7 +200,8 @@ bool USquadSubsystem::OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const
 		&& FVector::Dist2D(Peeker->GetCoverSlot().WorldLocation, CornerSlot.WorldLocation) <= InPlaceCm;
 	if (!bInPlace)
 	{
-		const EOperativeOrderResult Result = Peeker->OrderTakeCover(CornerSlot, false);
+		// The run-and-peek carry (#55 fix 2026-11-08): his walk into the corner goes straight into the peek stance (armed before the walk).
+		const EOperativeOrderResult Result = bRunPeek ? Peeker->OrderTakeCoverForPeek(CornerSlot, EdgeOnFace, false) : Peeker->OrderTakeCover(CornerSlot, false);
 		if (Result != EOperativeOrderResult::Accepted)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall leadership: %s cannot take the corner (%d)"), *Peeker->DisplayName.ToString(), static_cast<int32>(Result));

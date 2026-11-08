@@ -844,6 +844,26 @@ public:
 	/** Weight of the cover enter clip now (0..1 while it blends in / plays), -1 when none plays. */
 	float GetCoverEnterBlendWeight() const;
 
+	/**
+	 * The run-and-peek's arrival (AOperativeCharacter::IsCoverEntryPeekStance; the game designer's video 2026-11-08): the run blends straight
+	 * into the corner peek stance (the fire idle round the corner) over this long - no enter clip, no back-to-the-wall idle, no idle -> fire
+	 * step-out, s.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
+	float CoverPeekStanceBlendSeconds = 0.3f;
+
+	/** Run-and-peek arrivals that blended straight into the peek stance's fire idle (smokes). */
+	int32 GetCoverPeekStanceBlends() const { return CoverPeekStanceBlends; }
+
+	/**
+	 * The turn about the vertical the peek stance's blend will draw (#55 fix 2026-11-08): from the pose on the mesh now (the run) to the first
+	 * frame of the fire idle of Side (crouched or standing), measured on the pelvis in component space the shortest way - the way the pose
+	 * blend turns the body, signed, deg. The pack's fire idles stand turned ~170-190 deg from their root (back to the wall, the body round the
+	 * corner), so the blend's direction differs per clip; the operative counter-rotates the mesh the same way (no spin). False without the clip
+	 * or the bones.
+	 */
+	bool GetPeekStanceTurnDeg(ECoverFacing Side, bool bCrouch, float& OutTurnDeg) const;
+
 	/** Play the cover clips natively on FullBodySlot (untick once the AnimBP has its own cover states). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation")
 	bool bUseNativeCoverClips = true;
@@ -1524,6 +1544,17 @@ private:
 	bool bCoverEnterPlaying = false;
 	/** The cover was entered in this update (the stance switch clip yields to the enter clip). */
 	bool bCoverEnteredThisFrame = false;
+	/**
+	 * The cover entry was a run-and-peek peek stance arrival: the fire-ready pose it wants is entered without the idle -> fire step-out, its
+	 * fire idle blending in from the run (CoverPeekStanceBlendSeconds). Cleared once the fire idle plays, on leaving the cover, or after
+	 * CoverPeekStanceWaitSeconds without the fire pose (then the ordinary cover loops / step-out go on).
+	 */
+	bool bCoverPeekStanceEntry = false;
+	double CoverPeekStanceEntryTime = 0.0;
+	static constexpr double CoverPeekStanceWaitSeconds = 0.5;
+	int32 CoverPeekStanceBlends = 0;
+	/** The peek stance's fire idle while it blends in from the run (GetCoverEnterBlendWeight reports its weight); reset by the next loop. */
+	TWeakObjectPtr<UAnimMontage> CoverPeekStanceMontage;
 	/** Left-hand IK: linear blend progress, the upper-body action windows (grenade throw / hit reaction) left, s. */
 	float LeftHandIKLinear = 0.f;
 	/** The chain root the cached LeftHandArmReach was measured from. */
