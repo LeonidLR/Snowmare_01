@@ -699,7 +699,7 @@ ClearLook, HUD text), `SquadSubsystemFormationBypass.cpp` (bypass), the pure glu
   turn-based, orders not locked, no dialogue, `Squad.Formation` not tutorial-locked - asked silently); otherwise the hold is a plain tap (the
   toggle on the release). The menu (`UFormationMenuWidget`, NativePaint, created lazily, z 30, never pauses) opens at the cursor pulled in to keep
   the ring + labels on screen (the OS cursor follows a pulled centre); the cursor offset from its centre -> `FormationMenuRules::Move`; the B
-  release -> `Release` -> `SetFormationMenuChoice` + `PlayerCommands::FormationMenu` ("Squad.Formation"; F1 row "Hold B"); Esc (`DialogueSkip`
+  release -> `Release` -> `SetFormationMenuChoice` + `PlayerCommands::FormationMenu` ("Squad.Formation"; F8 row "Hold B"); Esc (`DialogueSkip`
   first) / RMB (`CameraDragRotateStart` first) -> `Cancel` (the later release does nothing); LMB does nothing while open; the camera's edge pan
   stops while open; the menu closes by itself when it becomes unavailable (solo, a dialogue, members lost). Smokes:
   `SetFormationMenuCursorOffset` = a virtual cursor (the menu then opens at the view centre). Check: `FormationMenuSmoke`.

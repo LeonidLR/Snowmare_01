@@ -25,7 +25,7 @@ namespace CodexControlsTree
 UCodexControlsScreen::UCodexControlsScreen()
 {
 	bIsBackHandler = true;
-	bHandlesControlsHotkey = true; // F1 closes it even while the BACK button owns the keyboard focus
+	bHandlesControlsHotkey = true; // F8 closes it even while the BACK button owns the keyboard focus
 }
 
 void UCodexControlsScreen::BindScreenWidgets()
@@ -35,7 +35,7 @@ void UCodexControlsScreen::BindScreenWidgets()
 
 void UCodexControlsScreen::NativeOnActivated()
 {
-	// The Esc pause menu has paused the world already; opened with F1 from the game this screen pauses it.
+	// The Esc pause menu has paused the world already; opened with F8 from the game this screen pauses it.
 	UWorld* World = GetWorld();
 	if (World && !UGameplayStatics::IsGamePaused(World))
 	{
@@ -134,7 +134,7 @@ void UCodexControlsScreen::BuildDefaultTree(UWidgetTree& Tree) const
 	Column->AddChildToVerticalBox(CodexDefaultTree::MakeText(Tree, TEXT("TitleText"), LOCTEXT("Title", "CONTROLS"), 36, CodexDefaultTree::TitleColor, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	Column->AddChildToVerticalBox(CodexDefaultTree::MakeText(Tree, TEXT("HintText"),
-		LOCTEXT("Hint", "F1 or Esc closes this screen. Scroll with the mouse wheel."), 16, CodexDefaultTree::HintColor));
+		LOCTEXT("Hint", "F8 or Esc closes this screen. Scroll with the mouse wheel."), 16, CodexDefaultTree::HintColor));
 	UScrollBox* List = Tree.ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("ControlsList"));
 	CodexDefaultTree::MarkVariable(List);
 	UVerticalBoxSlot* ListSlot = Column->AddChildToVerticalBox(List);

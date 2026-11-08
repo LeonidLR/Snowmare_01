@@ -47,7 +47,7 @@ animations are in; the rest continues as Unreal-only work.
 - APC (BTR-82): board, drive, turret, run over small enemies, hull damage and Engineer repair.
 
 **Game shell**
-- Main menu, pause menu, controls screen (F1), tutorial on / off.
+- Main menu, pause menu, controls screen (F8), tutorial on / off.
 - Saving: checkpoints after each tutorial stage, F5 quicksave, F9 quick load, a load list; no autosaves (decision 2026-10-14).
 - The squad composition is editable in the editor (`BP_CodexTacticsGameMode` → Squad Roster).
 

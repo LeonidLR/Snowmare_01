@@ -7,8 +7,8 @@ Source of the rules: the user's decisions of 2026-10-18 in `production/session-s
 
 | Action | Key / mouse | Effect |
 |---|---|---|
-| Switch the top-right panel | `F2`, or a click on the panel header `MAP` / `MESSAGES` | The panel shows the minimap or the message feed. In map mode the header shows `MESSAGES (n)` for feed lines not read yet. The choice is kept for the session (`UMissionSessionSubsystem::MinimapPanelMode`) and in the save. |
-| Full-screen map | `Tab` (outside turn-based combat), `F3` (any mode) | Opens / closes the map over 88 % x 70 % of the screen, fitted to the whole level. `Esc` closes it too. In turn-based combat `Tab` keeps its old meaning (next operative), so `F3` is the key there. |
+| Switch the top-right panel | `F6`, or a click on the panel header `MAP` / `MESSAGES` | The panel shows the minimap or the message feed. In map mode the header shows `MESSAGES (n)` for feed lines not read yet. The choice is kept for the session (`UMissionSessionSubsystem::MinimapPanelMode`) and in the save. |
+| Full-screen map | `Tab` (outside turn-based combat), `F7` (any mode) | Opens / closes the map over 88 % x 70 % of the screen, fitted to the whole level. `Esc` closes it too. In turn-based combat `Tab` keeps its old meaning (next operative), so `F7` is the key there. |
 | Zoom | Mouse wheel over the map | Zooms the map (the camera's zoom is untouched). On the corner map the zoom is centred on the selected operative; on the full map it zooms round the cursor. |
 | Camera there | LMB on the map | The main camera glides to that spot and stays there. It goes back to following the leader at the next WASD / edge / drag pan, a leader change or a scripted camera move. |
 | Move there | RMB on the map | The selection walks there. The order goes through the normal ground-click path (`HandleWorldHit` with no actor at the spot), so every rule applies: tutorial locks, confinement, the combat dispatch (planned in the tactical pause), the turn-based grid, double RMB = sprint. |
@@ -80,17 +80,17 @@ The GPU cost of the 4 capture passes at load was not measured. Gemini request #2
 | Pure rules (projection, view, zoom, frustum, clipping, floors, fog grid, enemy fade) | `Public/UI/MinimapRules.h`, `Private/UI/MinimapRules.cpp` |
 | State, capture, floors, fog, icons, save | `UMinimapSubsystem` (`Public/UI/MinimapSubsystem.h`) |
 | Drawing | `Private/UI/CodexTacticsHUDMinimap.cpp` (HUD unit); `DrawMessageFeed` starts below the header |
-| Input | `Private/Core/CodexTacticsPlayerControllerMap.cpp` (new controller unit "Map"); hooks in `OnClick` (Selection), `CameraDragRotateStart` / wheel (Camera), `TabPressed` / Esc (Menus), F2 / F3 binds + hover guard (main) |
+| Input | `Private/Core/CodexTacticsPlayerControllerMap.cpp` (new controller unit "Map"); hooks in `OnClick` (Selection), `CameraDragRotateStart` / wheel (Camera), `TabPressed` / Esc (Menus), F6 / F7 binds + hover guard (main) |
 | Camera jump | `ATacticalCameraPawn::LookAtPoint` (holds the spot, no drift back); edge scroll off over the map |
 | Level JSON | `FLevelCombatConfig::MinimapFloorsCm` / `MinimapBoundsCm` (`LevelJsonRules`, `"minimap"`) |
-| Commands (F1 «Movement & camera») | `Map.Panel` F2, `Map.Full` Tab, `Map.Camera` LMB on map, `Map.Move` RMB on map (reported as `Order.Move`), `Map.Zoom` wheel on map; never tutorial-locked (camera-like aids) |
+| Commands (F8 «Movement & camera») | `Map.Panel` F6, `Map.Full` Tab, `Map.Camera` LMB on map, `Map.Move` RMB on map (reported as `Order.Move`), `Map.Zoom` wheel on map; never tutorial-locked (camera-like aids) |
 | Tests | `CodexTactics.UI.Minimap.*` (12): projection round trip / fit, top-down projection (axes at pitch -90, round trip, fit, the CVar's pitch), facing arrows, view mapping, footprint + clipping, floor detection / selection / cut, top-down floor clip, fog reveal + persistence, enemy fade, level JSON |
 | Smoke | `MinimapSmoke` (L_MovementTest); `MinimapSmoke Shot` stills `Saved/Screenshots/minimap_*_<map>.png`, raw capture `minimap_capture_<map>.png`; on other maps also each roofed building's interior (`minimap_interior<n>[_full]_<map>.png`); with `Codex.Minimap.TopDown 0` the names end in `_iso` |
 
 ## 5. Decisions taken (tell the user)
 
-- **Tab** was not free: in turn-based combat it is "next operative". Tab opens the full map in every other mode, and **F3** opens it in any mode.
-- **F2** switches the panel (F1 = controls, F5 / F9 = save / load; F2 / F3 were free).
+- **Tab** was not free: in turn-based combat it is "next operative". Tab opens the full map in every other mode, and **F7** opens it in any mode.
+- **F6** switches the panel (F8 = controls, F5 / F9 = save / load; moved on 2026-11-08: F2 -> F6, F3 -> F7, controls F1 -> F8, to free F1-F4 for squad groups).
 - The panel starts on **MESSAGES** (`Codex.Minimap.DefaultPanel` 0) so the tutorial's feed lines stay visible. In map mode the header counts unread lines. Set the CVar to 1 to start on the map.
 - The minimap commands are **never locked** by the tutorial. They are camera-like aids, and the RMB order is an `Order.Move` that the tutorial already gates.
 - Fog **per floor**: walking the ground floor does not reveal the rooms upstairs.

@@ -9,12 +9,12 @@
 //  0. the level is captured: one floor, its render target, the projection straight down at the start camera's yaw (2026-10-21;
 //     Codex.Minimap.TopDown 0: iso at its pitch), the capture actor's view axes = the projection's, the panel shows the messages
 //     by default;
-//  1. F2 (the real key) switches the panel to the map and back, the session remembers it, a header click switches it too;
+//  1. F6 (the real key) switches the panel to the map and back, the session remembers it, a header click switches it too;
 //  2. the squad's icons sit at the projected positions (leader highlighted, facing arrow, the corner map centred on him);
 //  3. fog: revealed round the squad, dark 40 m away;
 //  4. LMB on the map moves the camera there (it stays), the wheel over the map zooms the map, not the camera;
 //  5. RMB on the map orders the leader there (the normal ground-click path); the fog grows as he walks;
-//  6. Tab (the real key) opens the full map, Tab closes it, Esc closes it too; F3 opens it in turn-based combat too (key bound);
+//  6. Tab (the real key) opens the full map, Tab closes it, Esc closes it too; F7 opens it in turn-based combat too (key bound);
 //  7. a two-storey box with a ramp is spawned at runtime, the navmesh rebuilt, CodexTactics.MinimapRecapture redetects the floors:
 //     2 floors (the roof on top is no floor: no path), the upper floor's walls / roof hidden on the ground capture, the roof hidden
 //     on the 2nd floor's capture, its walls kept;
@@ -247,7 +247,7 @@ namespace MinimapSmoke
 			Check(State, AspectError < 0.01f, TEXT("projection aspect = the render target's (square pixels)"));
 			Camera->RotateStep(+1); // the player turns the camera: the map does not follow
 			Check(State, Minimap->GetPanelMode() == EMinimapPanelMode::Messages, TEXT("the panel shows the messages by default"));
-			Tap(PC, EKeys::F2);
+			Tap(PC, EKeys::F6);
 			Next(State);
 			return true;
 		}
@@ -258,7 +258,7 @@ namespace MinimapSmoke
 				return true;
 			}
 			const UMissionSessionSubsystem* Session = World->GetGameInstance()->GetSubsystem<UMissionSessionSubsystem>();
-			Check(State, Minimap->GetPanelMode() == EMinimapPanelMode::Map, TEXT("F2 (the real key): the panel shows the map"));
+			Check(State, Minimap->GetPanelMode() == EMinimapPanelMode::Map, TEXT("F6 (the real key): the panel shows the map"));
 			Check(State, Session && Session->MinimapPanelMode == 1, TEXT("... remembered for the session"));
 			const FMinimapView& View = Minimap->GetPanelView();
 			Check(State, FMath::IsNearlyEqual(Minimap->GetHeaderRect().GetSize().X, View.ScreenSize.X, 0.5f)
@@ -816,7 +816,7 @@ namespace MinimapSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.MinimapSmoke"),
-		TEXT("Dev check (2026-10-18): minimap capture per floor, F2 panel switch, icons at their projected spots, LMB camera / RMB move on the map, fog, Tab full map, floor switch on a ramp, save state. 'Shot' saves minimap_*.png."),
+		TEXT("Dev check (2026-10-18): minimap capture per floor, F6 panel switch, icons at their projected spots, LMB camera / RMB move on the map, fog, Tab full map, floor switch on a ramp, save state. 'Shot' saves minimap_*.png."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 
 	static FAutoConsoleCommandWithWorldAndArgs RecaptureCommand(

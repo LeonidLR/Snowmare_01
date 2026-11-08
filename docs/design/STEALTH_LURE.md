@@ -70,7 +70,7 @@ Code: pure rules `AI/ScentRules.*` (`Smells`, `IsCloseDetection`, `Step` = the N
 - **Highlight**: the enemies that would hear the noise, with walls already counted, get a cyan `HEARS` box over their heads (`UStealthLureSubsystem::GetPreviewListeners`, drawn by `ACodexTacticsHUD::DrawStealthLureMarkers`).
 - **«?»**: every enemy that is investigating a lure gets an amber `?` box over its head until its search ends. A floating `? NOISE` appears when it starts.
 - **Feed**: `Whistle.`, `Stone thrown.`, plus refusal lines such as `Whistle again in 7 s.` and `The squad has been spotted - nobody will fall for it now.` and `Only while exploring - useless once the fight is on.`
-- **F1 Controls**: two rows in the «Squad» section: `5` Whistle and `6` Throw a stone.
+- **F8 Controls**: two rows in the «Squad» section: `5` Whistle and `6` Throw a stone.
 - **Commands**: `Stealth.Whistle` is reported when he whistled. `Stealth.Throw` is reported when the stone flies. Events: `StealthLure.Whistle` and `StealthLure.Throw` (the Subject is the operative, the Location is the noise point).
 
 ## 4. Numbers (`Content/Data/AI/enemy_perception.json`, section `"lure"`)

@@ -1,8 +1,8 @@
-// Dev-only console command for a headless check of the F1 Controls reference on L_MovementTest (2026-10-11):
+// Dev-only console command for a headless check of the F8 Controls reference on L_MovementTest (2026-10-11):
 //   Scripts/smoke.ps1 -Command CodexTactics.ControlsScreenSmoke
-// F1 (the real key path: PlayerController::InputKey) opens the screen on the GameMenu layer and pauses the world; its sections
-// and rows come from the PlayerCommands registry; F1 again or Esc closes it and resumes; the tactical pause keeps running
-// underneath; in the Esc pause menu CONTROLS opens it over the menu (BACK returns to the menu, F1 toggles it) and
+// F8 (the real key path: PlayerController::InputKey) opens the screen on the GameMenu layer and pauses the world; its sections
+// and rows come from the PlayerCommands registry; F8 again or Esc closes it and resumes; the tactical pause keeps running
+// underneath; in the Esc pause menu CONTROLS opens it over the menu (BACK returns to the menu, F8 toggles it) and
 // TUTORIAL: ON / OFF flips the player's tutorial setting (restored at the end). UE-only (no Godot reference).
 
 #include "CoreMinimal.h"
@@ -112,7 +112,7 @@ namespace ControlsScreenSmoke
 		case 0:
 			State.bTutorialWas = UTutorialSubsystem::IsTutorialEnabled();
 			Check(State, !bPaused && !Controls(UI), TEXT("start: running, no controls screen"));
-			Tap(PC, EKeys::F1);
+			Tap(PC, EKeys::F8);
 			Next();
 			break;
 		case 1:
@@ -120,15 +120,15 @@ namespace ControlsScreenSmoke
 			{
 				const TArray<FString> Expected = { TEXT("Movement & camera"), TEXT("Squad"), TEXT("Stances"), TEXT("Combat"),
 					TEXT("Tactical pause & turn-based"), TEXT("Items & traps"), TEXT("Vehicles"), TEXT("Saving & menus") };
-				Check(State, bPaused && Screen->PausedTheWorld(), TEXT("F1 opened the screen and paused the world"));
+				Check(State, bPaused && Screen->PausedTheWorld(), TEXT("F8 opened the screen and paused the world"));
 				Check(State, UI->GetTopScreen(CodexUITags::Layer_GameMenu) == Screen, TEXT("on the GameMenu layer"));
 				Check(State, Screen->GetSectionTitles() == Expected, FString::Printf(TEXT("sections: %s"), *FString::Join(Screen->GetSectionTitles(), TEXT(" | "))));
 				Check(State, Screen->GetRowCount() == PlayerCommands::GetRegistry().Num(),
 					FString::Printf(TEXT("%d rows = %d registry commands"), Screen->GetRowCount(), PlayerCommands::GetRegistry().Num()));
-				Tap(PC, EKeys::F1);
+				Tap(PC, EKeys::F8);
 				Next();
 			}
-			else if (TimedOut(TEXT("F1 did not open the controls screen")))
+			else if (TimedOut(TEXT("F8 did not open the controls screen")))
 			{
 				return Finish(State, World, false);
 			}
@@ -136,11 +136,11 @@ namespace ControlsScreenSmoke
 		case 2:
 			if (!Controls(UI))
 			{
-				Check(State, !bPaused, TEXT("F1 again closed it and resumed the world"));
-				Tap(PC, EKeys::F1);
+				Check(State, !bPaused, TEXT("F8 again closed it and resumed the world"));
+				Tap(PC, EKeys::F8);
 				Next();
 			}
-			else if (TimedOut(TEXT("F1 did not close the controls screen")))
+			else if (TimedOut(TEXT("F8 did not close the controls screen")))
 			{
 				return Finish(State, World, false);
 			}
@@ -151,7 +151,7 @@ namespace ControlsScreenSmoke
 				Tap(PC, EKeys::Escape);
 				Next();
 			}
-			else if (TimedOut(TEXT("second F1 did not open the controls screen")))
+			else if (TimedOut(TEXT("second F8 did not open the controls screen")))
 			{
 				return Finish(State, World, false);
 			}
@@ -169,7 +169,7 @@ namespace ControlsScreenSmoke
 				}
 				Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause,
 					TEXT("tactical pause on"));
-				Tap(PC, EKeys::F1);
+				Tap(PC, EKeys::F8);
 				Next();
 			}
 			else if (TimedOut(TEXT("Esc did not close the controls screen")))
@@ -180,11 +180,11 @@ namespace ControlsScreenSmoke
 		case 5:
 			if (Controls(UI))
 			{
-				Check(State, bPaused && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("F1 works in the tactical pause (world paused on top)"));
-				Tap(PC, EKeys::F1);
+				Check(State, bPaused && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("F8 works in the tactical pause (world paused on top)"));
+				Tap(PC, EKeys::F8);
 				Next();
 			}
-			else if (TimedOut(TEXT("F1 in the tactical pause did not open the screen")))
+			else if (TimedOut(TEXT("F8 in the tactical pause did not open the screen")))
 			{
 				return Finish(State, World, false);
 			}
@@ -197,7 +197,7 @@ namespace ControlsScreenSmoke
 				Check(State, Hud->HandleEscape() && UGameplayStatics::IsGamePaused(World), TEXT("Esc: pause menu, world paused"));
 				Next();
 			}
-			else if (TimedOut(TEXT("F1 did not close the controls screen in the tactical pause")))
+			else if (TimedOut(TEXT("F8 did not close the controls screen in the tactical pause")))
 			{
 				return Finish(State, World, false);
 			}
@@ -238,7 +238,7 @@ namespace ControlsScreenSmoke
 				Check(State, Pause && bPaused, TEXT("BACK returns to the pause menu, still paused"));
 				if (Pause)
 				{
-					Check(State, Pause->HandleHotkey(EKeys::F1), TEXT("F1 with the menu focused opens the controls (hotkey path)"));
+					Check(State, Pause->HandleHotkey(EKeys::F8), TEXT("F8 with the menu focused opens the controls (hotkey path)"));
 				}
 				Next();
 			}
@@ -250,10 +250,10 @@ namespace ControlsScreenSmoke
 		case 10:
 			if (UCodexControlsScreen* Screen = Controls(UI))
 			{
-				Check(State, Screen->HandleHotkey(EKeys::F1), TEXT("F1 with the controls focused closes them (hotkey path)"));
+				Check(State, Screen->HandleHotkey(EKeys::F8), TEXT("F8 with the controls focused closes them (hotkey path)"));
 				Next();
 			}
-			else if (TimedOut(TEXT("hotkey F1 did not open the controls screen")))
+			else if (TimedOut(TEXT("hotkey F8 did not open the controls screen")))
 			{
 				return Finish(State, World, false);
 			}
@@ -280,7 +280,7 @@ namespace ControlsScreenSmoke
 				Hud->HandleEscape(); // closes the pause menu
 				Next();
 			}
-			else if (TimedOut(TEXT("hotkey F1 did not close the controls screen")))
+			else if (TimedOut(TEXT("hotkey F8 did not close the controls screen")))
 			{
 				return Finish(State, World, false);
 			}
@@ -324,7 +324,7 @@ namespace ControlsScreenSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.ControlsScreenSmoke"),
-		TEXT("Dev check: F1 Controls reference (opens + pauses, sections from the registry, F1/Esc close), pause menu CONTROLS and TUTORIAL toggle; logs PASS/FAIL, then exits."),
+		TEXT("Dev check: F8 Controls reference (opens + pauses, sections from the registry, F8/Esc close), pause menu CONTROLS and TUTORIAL toggle; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

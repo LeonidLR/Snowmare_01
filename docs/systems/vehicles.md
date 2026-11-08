@@ -40,7 +40,7 @@ marksman targets, operative cover / facing / shooting tick, `ResolveIncomingHit`
 followers (a mounted leader: the ones outside hold), Commander Mode, mines / tripwires, the controller's group moves and the click
 pick, turn-based entry (refused while anyone is aboard). Controller: a ground click with the leader aboard drives; a click on the
 vehicle = cover at its hull (`FindCoverSlotForHit` / `TryHandleCoverClick` vehicle exception, `CoverTraceRules` no longer ignores
-vehicle pawns). Commands `Vehicle.Board` / `Vehicle.Disembark` / `Vehicle.Drive` (F1 section «Vehicles»), events `VehicleBoarded` (Kind
+vehicle pawns). Commands `Vehicle.Board` / `Vehicle.Disembark` / `Vehicle.Drive` (F8 section «Vehicles»), events `VehicleBoarded` (Kind
 = seat), `VehicleDisembarked`, `VehicleDriveStarted`, `VehicleArrived`, `VehiclePathBlocked`; `ATutorialTriggerVolume` «Activated By:
 Vehicle». Tests `CodexTactics.Vehicle.*` (10), smoke `VehicleSmoke`; editor script `Scripts/Editor/setup_apc_vehicle.py`.
 

@@ -452,9 +452,9 @@ public:
 
 	// --- Minimap (user decisions 2026-10-18, docs/design/MINIMAP.md; CodexTacticsPlayerControllerMap.cpp) ---
 
-	/** F2 / a click on the panel header: the top-right panel switches MAP <-> MESSAGES (Map.Panel). */
+	/** F6 / a click on the panel header: the top-right panel switches MAP <-> MESSAGES (Map.Panel). */
 	void MapPanelKey();
-	/** Tab outside turn-based combat / F3 always: the full-screen map opens / closes (Map.Full). */
+	/** Tab outside turn-based combat / F7 always: the full-screen map opens / closes (Map.Full). */
 	void FullMapKey();
 	/** Tab: the full map, in turn-based combat the next operative (as before). Public for the smokes. */
 	void TabKey() { TabPressed(); }
@@ -630,7 +630,7 @@ private:
 	/** Turn-based combat subsystem while a grid fight is running, else null. */
 	class UTurnBasedCombatSubsystem* GetActiveTurnBased() const;
 	void DialogueSkip();
-	/** F1: opens / closes the Controls reference (UCodexUISubsystem::ToggleControlsScreen); also while the world is paused. */
+	/** F8: opens / closes the Controls reference (UCodexUISubsystem::ToggleControlsScreen); also while the world is paused. */
 	void ControlsKey();
 	/** I: opens / closes the inventory drawer (ACodexTacticsHUD::ToggleInventoryDrawer; the tutorial may lock it). */
 	void InventoryKey();

@@ -139,7 +139,7 @@ void ACodexTacticsPlayerController::TabPressed()
 		ControllerCommands::Report(this, PlayerCommands::NextUnit);
 		return;
 	}
-	// Minimap (2026-10-18): outside turn-based combat Tab opens / closes the full-screen map (F3 works in every mode).
+	// Minimap (2026-10-18): outside turn-based combat Tab opens / closes the full-screen map (F7 works in every mode).
 	FullMapKey();
 }
 

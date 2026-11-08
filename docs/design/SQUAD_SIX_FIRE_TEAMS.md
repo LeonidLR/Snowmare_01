@@ -391,7 +391,7 @@ The game designer answered section 6 on 2026-11-08. These answers override the r
 
 - Q3: **the stealth lure stays** (tutorial ambush lesson, hound scent, enemy perception unchanged); the whistle and the throw leave keys
   5 / 6 and remain **action-bar buttons** only.
-- Q4: **F1-F4 belong to the groups.** The controls screen moves F1 -> F5, the map panel F2 -> F6, the full map F3 -> F7 (bindings,
+- Q4: **F1-F4 belong to the groups.** The controls screen moves F1 -> F8 (F5 stays quick save, decided 2026-11-08), the map panel F2 -> F6, the full map F3 -> F7 (bindings,
   the controls-screen text, `ControlsScreenSmoke`, `MinimapSmoke`, the HUD hints). Scheduled as its own small task right after the #55 / #57
   merge.
 - Q6: **letters, as recommended**: places K / P / L / Z for the first four, `C` (centre), `P2`, `L2` for the extra places; shown in the

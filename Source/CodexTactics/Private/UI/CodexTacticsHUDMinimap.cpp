@@ -74,8 +74,8 @@ void ACodexTacticsHUD::DrawMinimapHeader()
 		Rect.Min.X + Half + 10.f, TextY, Font, 1.f);
 	float HintW = 0.f;
 	float HintH = 0.f;
-	GetTextSize(TEXT("F2"), HintW, HintH, Font, 1.f);
-	DrawText(TEXT("F2"), HudMinimap::IdleTextColor, Rect.Max.X - HintW - 8.f, TextY, Font, 1.f);
+	GetTextSize(TEXT("F6"), HintW, HintH, Font, 1.f);
+	DrawText(TEXT("F6"), HudMinimap::IdleTextColor, Rect.Max.X - HintW - 8.f, TextY, Font, 1.f);
 }
 
 void ACodexTacticsHUD::DrawMinimapPanel()

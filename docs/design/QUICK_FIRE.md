@@ -72,6 +72,6 @@ that hears it reacts the normal way (detection -> the fight starts through the e
 ## Feedback
 
 A short orange disc at the point (`UCombatFeedbackSubsystem::SpawnFirePing`), the usual tracers / muzzle flash / fire clip per
-round, one feed line «Fire!» per order (the operative's name, «SQUAD» for a group). F1 Controls (Combat): «Ctrl+Click - Fire at
+round, one feed line «Fire!» per order (the operative's name, «SQUAD» for a group). F8 Controls (Combat): «Ctrl+Click - Fire at
 the enemy: targeted shot ...» and «Ctrl+Click - Fire at the point: anywhere else the selected operative(s) turn and fire there at
 once».

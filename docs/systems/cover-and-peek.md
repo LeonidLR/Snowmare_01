@@ -257,7 +257,7 @@ walls never fade.) Details: [squad-and-orders](squad-and-orders.md) "The far sid
   unchanged).
 - **Turn-based:** no switch (the double-click is the ordinary grid cover move at its AP cost; grid walks stop on their cell, so a run-in clip
   has nothing to blend from).
-- **Tutorial:** command `Cover.Switch` (F1 Controls row "Double-click other cover - Double-click another cover from a wall edge: dash to it").
+- **Tutorial:** command `Cover.Switch` (F8 Controls row "Double-click other cover - Double-click another cover from a wall edge: dash to it").
   Demo 01: locked from the hut lesson (A1, after its `Cover.*` unlock) and again at the A2 / A3 beat starts; the A3 cover field card
   (`A3_cover`, its key chips now include it) unlocks `Cover.*` = the switch. A locked switch is the ordinary cover order
   (`TutorialRules::ResolveLockedCommand`: Cover.Switch -> Cover.Enter; the controller checks the lock silently).

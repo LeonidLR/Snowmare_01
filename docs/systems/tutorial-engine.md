@@ -644,7 +644,7 @@ Original header of this file (2026-10-19 split):
   `Item.HeatPack`, `Loot.Open`, `Trap.DisarmMine` / `DisarmObject` / `DisarmTripwire`, `Trap.SetOnObject`, `Deploy.Mine` /
   `Barricade` / `Turret` / `Tripwire`, `Attack.TargetedShot`, `Grenade.Aim`, `Time.Pause` / `Resume` / `TurnBased` / `RealTime`,
   `TB.EndTurn` / `TB.Attack`, `Posture.*`, `System.QuickSave`, camera ...) + a registry (default key label, section, description:
-  the F1 Controls screen is generated from it: `PlayerCommands::GetSections()` order, `GetKeyLabel()` honours `SetKeyLabelOverride()` for rebinds, `CodexControlsRules::BuildSections()`; texts live ONLY in `PlayerCommands.cpp`). `PlayerCommands::Report(Context, Id, FPlayerCommandContext)` -> `UCodexEventBus::OnPlayerCommand`.
+  the F8 Controls screen is generated from it: `PlayerCommands::GetSections()` order, `GetKeyLabel()` honours `SetKeyLabelOverride()` for rebinds, `CodexControlsRules::BuildSections()`; texts live ONLY in `PlayerCommands.cpp`). `PlayerCommands::Report(Context, Id, FPlayerCommandContext)` -> `UCodexEventBus::OnPlayerCommand`.
   Reported (one line each, behaviour unchanged) from `ACodexTacticsPlayerController` handlers (`ControllerCommands::Report`),
   `UInteractionSubsystem` (menu confirm -> light / defuse / use, loot, set trap), `URelocationSubsystem` (relocate / deploy /
   tripwire orders), `ATacticalCameraPawn` (WASD / edge pan start). Gameplay events `GameplayEvents::Raise` ->
@@ -748,7 +748,7 @@ Original header of this file (2026-10-19 split):
    fire `first_use`); `FTutorialStateMachine::HandleCommandHold`, rule `TutorialRules::IsProgressMet`. A wildcard is a plain prefix match
    so it spans segments (`Camera.*`, `Camera.Pan.*`). **Camera ids (2026-10-12, were Camera.Pan / .Rotate):** `Camera.Pan.Keys` (WASD, hold ticks),
    `Camera.Pan.Edge` (cursor at the screen edge, hold ticks), `Camera.Pan.Drag` (MMB drag, hold ticks), `Camera.Rotate.Keys` (Q / E, one per
-   press), `Camera.Rotate.Mouse` (RMB drag, hold ticks), `Camera.Zoom` (one per wheel notch); key hints in the registry = the F1 Controls
+   press), `Camera.Rotate.Mouse` (RMB drag, hold ticks), `Camera.Zoom` (one per wheel notch); key hints in the registry = the F8 Controls
    screen rows (6 camera rows now). **Beat A0 is STAGED:** `A0_cam_pan` (WASD / edge, hold 1 s) -> `A0_cam_rotate_keys` (Q/E x2) ->
    `A0_cam_rotate_mouse` (RMB drag, hold 0.5 s) -> `A0_cam_zoom` (wheel x2) -> `A0_move`; no timeout (skippable); texts
    `TUT_A0_CAM_PAN / _ROTATE_KEYS / _ROTATE_MOUSE / _ZOOM` (draft file). The card counter is per beat ("n / 5" in A0, move included). Sample: `demo_01_steps.json` beat A6 (`A6_*`, volume `VOL_A6_FIELD`). A hint card without completion gets `timeout_s` 12; radio / walk-and-talk steps without completion

@@ -64,7 +64,7 @@ public:
 	bool HandleBackOnTopScreen();
 
 	/**
-	 * F1: opens the Controls reference on the GameMenu layer (over the pause menu when that is open) or closes it when it is
+	 * F8: opens the Controls reference on the GameMenu layer (over the pause menu when that is open) or closes it when it is
 	 * open. Does nothing under a confirm dialog. True when it opened.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|UI")

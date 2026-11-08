@@ -60,7 +60,7 @@ public:
 
 	/**
 	 * A hotkey reached the screen while a menu widget owns the keyboard focus (the game's input component does not see
-	 * keys then). F1 toggles the Controls reference when bHandlesControlsHotkey is set. True = consumed.
+	 * keys then). F8 toggles the Controls reference when bHandlesControlsHotkey is set. True = consumed.
 	 */
 	bool HandleHotkey(const FKey& Key);
 
@@ -68,7 +68,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|UI")
 	TSubclassOf<UCodexMenuButton> EntryButtonClass;
 
-	/** F1 opens / closes the Controls reference from this screen (in-game screens only: the pause menu, the Controls screen). */
+	/** F8 opens / closes the Controls reference from this screen (in-game screens only: the pause menu, the Controls screen). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|UI")
 	bool bHandlesControlsHotkey = false;
 

@@ -128,7 +128,7 @@ void UCodexPauseMenuScreen::EnsureExtraEntries()
 			: FName(Extra.EntryId) == TEXT("VisionCones") ? VisionConesLabel()
 			: FName(Extra.EntryId) == TEXT("SquadVisionCones") ? SquadVisionConesLabel() : LOCTEXT("ResetTutorial", "RESET TUTORIAL");
 		UCodexMenuButton* Button = MakeEntryButton(*WidgetTree, Extra.WidgetName, Extra.EntryId, Label, FText::GetEmpty());
-		Button->SetDescriptionText(FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).")
+		Button->SetDescriptionText(FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("ControlsDesc", "Every key and command (F8 anywhere).")
 			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).")
 			: FName(Extra.EntryId) == TEXT("SkipTutorial") ? LOCTEXT("SkipTutorialDesc", "Skip the whole tutorial for this mission: all controls unlock.")
 			: FName(Extra.EntryId) == TEXT("VisionCones") ? LOCTEXT("VisionConesDesc", "Draw what the enemies can see on the ground (also the O key).")
@@ -328,7 +328,7 @@ void UCodexPauseMenuScreen::BuildDefaultTree(UWidgetTree& Tree) const
 		{ TEXT("SaveButton"), TEXT("Save"), LOCTEXT("Save", "SAVE GAME"), LOCTEXT("SaveDesc", "Save your progress to a slot.") },
 		{ TEXT("LoadButton"), TEXT("Load"), LOCTEXT("Load", "LOAD GAME"), LOCTEXT("LoadDesc", "Load a saved game.") },
 		{ TEXT("OptionsButton"), TEXT("Options"), LOCTEXT("Options", "OPTIONS"), LOCTEXT("OptionsDesc", "Graphics, audio and controls.") },
-		{ TEXT("ControlsButton"), TEXT("Controls"), LOCTEXT("Controls", "CONTROLS"), LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).") },
+		{ TEXT("ControlsButton"), TEXT("Controls"), LOCTEXT("Controls", "CONTROLS"), LOCTEXT("ControlsDesc", "Every key and command (F8 anywhere).") },
 		{ TEXT("TutorialButton"), TEXT("Tutorial"), LOCTEXT("TutorialOn", "TUTORIAL: ON"), LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).") },
 		{ TEXT("SkipTutorialButton"), TEXT("SkipTutorial"), LOCTEXT("SkipTutorial", "SKIP TUTORIAL"), LOCTEXT("SkipTutorialDesc", "Skip the whole tutorial for this mission: all controls unlock.") },
 		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial"), LOCTEXT("ResetTutorial", "RESET TUTORIAL"), LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again.") },

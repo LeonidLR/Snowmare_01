@@ -122,7 +122,7 @@ Check with the designer (?): that a sentry, a cover wall and the quest object ex
 
 **Add:**
 
-- Always-visible footer: `F1 Controls   Esc Menu   F8 Report` (small, bottom-left).
+- Always-visible footer: `F8 Controls   Esc Menu   F8 Report` (small, bottom-left).
 - Objective tracker (see 2.1).
 - **Feedback button (F8 + pause menu entry):** local report folder `Saved/Feedback/<timestamp>/` with a screenshot, the current quicksave, the last 60 s of the feed, log tail, position/phase/wave, build id, and an optional one-line comment box. The tester sends the folder. No network in demo #1.
 - Build stamp (version/changelist/date) bottom-right, very small.

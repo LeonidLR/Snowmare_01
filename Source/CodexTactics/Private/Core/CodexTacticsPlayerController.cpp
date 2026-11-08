@@ -215,19 +215,19 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Slash, IE_Pressed, this, &ACodexTacticsPlayerController::PostureAggressiveKey);
 	// Esc also closes the pause menu, so it runs while the world is paused.
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip).bExecuteWhenPaused = true;
-	// F1: the Controls reference opens / closes at any time (it pauses the world itself, so it runs while paused).
-	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ACodexTacticsPlayerController::ControlsKey).bExecuteWhenPaused = true;
+	// F8: the Controls reference opens / closes at any time (it pauses the world itself, so it runs while paused).
+	InputComponent->BindKey(EKeys::F8, IE_Pressed, this, &ACodexTacticsPlayerController::ControlsKey).bExecuteWhenPaused = true;
 	// Demo 01 (2026-10-13): I = the inventory drawer (a tutorial lock target), O = the enemies' vision cones (Commandos style).
 	InputComponent->BindKey(EKeys::I, IE_Pressed, this, &ACodexTacticsPlayerController::InventoryKey);
 	InputComponent->BindKey(EKeys::O, IE_Pressed, this, &ACodexTacticsPlayerController::VisionConesKey);
 	// Shift + O (2026-10-20): the operatives' own cones (what the squad sees); plain O stays the enemies'.
 	InputComponent->BindKey(FInputChord(EKeys::O, true, false, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::SquadVisionConesKey);
-	// Rev 5g: M = interior camera <-> outside view inside a building (a free key; F1 row Camera.InteriorView).
+	// Rev 5g: M = interior camera <-> outside view inside a building (a free key; F8 screen row Camera.InteriorView).
 	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ACodexTacticsPlayerController::InteriorViewKey);
-	// Minimap (2026-10-18): F2 = the top-right panel MAP <-> MESSAGES, F3 = the full-screen map in any mode (Tab outside
+	// Minimap (2026-10-18): F6 = the top-right panel MAP <-> MESSAGES, F7 = the full-screen map in any mode (Tab outside
 	// turn-based combat, TabPressed).
-	InputComponent->BindKey(EKeys::F2, IE_Pressed, this, &ACodexTacticsPlayerController::MapPanelKey);
-	InputComponent->BindKey(EKeys::F3, IE_Pressed, this, &ACodexTacticsPlayerController::FullMapKey);
+	InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &ACodexTacticsPlayerController::MapPanelKey);
+	InputComponent->BindKey(EKeys::F7, IE_Pressed, this, &ACodexTacticsPlayerController::FullMapKey);
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)

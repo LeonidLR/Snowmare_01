@@ -80,7 +80,7 @@ struct CODEXTACTICS_API FGameplayEventContext
 };
 
 /**
- * One row of the command registry: id -> default key label, section and description. THE table the F1 Controls screen
+ * One row of the command registry: id -> default key label, section and description. THE table the F8 Controls screen
  * (UCodexControlsScreen) is generated from, so the registry and the screen never diverge.
  */
 struct CODEXTACTICS_API FPlayerCommandInfo
@@ -124,9 +124,9 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName CameraInteriorView;
 	/** A click on an EXIT arrow at a door of the building whose interior camera shows: walk out ("Order.ExitBuilding"; never locked). */
 	extern CODEXTACTICS_API const FName ExitBuilding;
-	/** Minimap (2026-10-18, docs/design/MINIMAP.md): F2 / the panel header - the top-right panel MAP <-> MESSAGES ("Map.Panel"). */
+	/** Minimap (2026-10-18, docs/design/MINIMAP.md): F6 / the panel header - the top-right panel MAP <-> MESSAGES ("Map.Panel"). */
 	extern CODEXTACTICS_API const FName MapPanel;
-	/** Tab (outside turn-based combat) / F3: the full-screen map opens / closes ("Map.Full"). */
+	/** Tab (outside turn-based combat) / F7: the full-screen map opens / closes ("Map.Full"). */
 	extern CODEXTACTICS_API const FName MapFull;
 	/** LMB on the map: the camera moves there ("Map.Camera"). */
 	extern CODEXTACTICS_API const FName MapCamera;
@@ -299,7 +299,7 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName QuickSave;
 	/** F9: quick load. */
 	extern CODEXTACTICS_API const FName QuickLoad;
-	/** F1: the Controls reference screen (a UI hotkey: listed here for the screen, never reported). */
+	/** F8: the Controls reference screen (a UI hotkey: listed here for the screen, never reported). */
 	extern CODEXTACTICS_API const FName ControlsScreen;
 	/**
 	 * "Item.Give": an item dragged from the inventory drawer onto a squad mate (his model or his action-bar portrait) is handed

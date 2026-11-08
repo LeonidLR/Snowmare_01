@@ -6,7 +6,7 @@
 #include "UI/MinimapSubsystem.h"
 
 // ACodexTacticsPlayerController: the minimap keys and clicks (user decisions 2026-10-18, docs/design/MINIMAP.md; UE-only) -
-// F2 panel switch, Tab / F3 full-screen map, Esc closes it, wheel = map zoom, LMB = camera there, RMB = move order there.
+// F6 panel switch, Tab / F7 full-screen map, Esc closes it, wheel = map zoom, LMB = camera there, RMB = move order there.
 // The map state lives in UMinimapSubsystem; the RMB order goes through HandleWorldHit like a ground click.
 
 void ACodexTacticsPlayerController::MapPanelKey()
