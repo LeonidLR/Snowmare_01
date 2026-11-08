@@ -346,5 +346,12 @@ flamethrower rows of this table were dropped with the roster, section 0: those w
 | Turn-based, 1..6 cells | x1 / 0.8 / 0.6 / 0.4 / 0.25 / 0.12 | x1 everywhere (the curve at 1.5 m a cell; 9 m < 10 m) |
 | Sidearm | none (the pistol only when the primary had no reserve left) | the pistol when the primary runs dry with an enemy within 10 m; back after 3 s without a target |
 
+**In cover he reloads behind the cover (2026-11-09; the coordinator's default, pending the designer's OK).** `weapons_tuning.json` "sidearm"
+`reload_in_cover` (default true; `FSidearmConfig::bReloadInCover`, `SidearmRules::ShouldDrawSidearm(.., bInCover)`): an operative in cover
+- any cover state, the corner peek and its fire pose included - does not draw the sidearm on an empty primary, he ducks back and reloads (the
+corner aim's DuckToReload); the switch is for the open (moving, exposed). Found by main's verification: CoverSmoke ("reloaded behind the
+corner") and CornerHoldSmoke ("no duck behind the corner except to reload") - the corner man drew the pistol at an enemy 6.6 / 6.8 m away.
+Test `CodexTactics.Weapons.Sidearm.Rules`; PistolSmoke (the open-ground switch) unchanged.
+
 The turn-based rule: a weapon without a per-cell table follows its real-time falloff curve at the cells' distance, so the two modes cannot drift
 apart again; weapons with a table keep it.

@@ -460,7 +460,9 @@ bool AOperativeCharacter::TryDrawSidearm()
 			}
 		}
 	}
-	if (!SidearmRules::ShouldDrawSidearm(Config, CurrentWeapon->WeaponId == Config.WeaponId, UsesAmmo() && CurrentClip <= 0, ReserveAmmo > 0, bUsable, Threat, IsRaging()))
+	// In cover (the corner peek / its fire pose included) he reloads behind it (reload_in_cover; CoverSmoke / CornerHoldSmoke 2026-11-09).
+	if (!SidearmRules::ShouldDrawSidearm(Config, CurrentWeapon->WeaponId == Config.WeaponId, UsesAmmo() && CurrentClip <= 0, ReserveAmmo > 0, bUsable, Threat, IsRaging(),
+		bInCover))
 	{
 		return false;
 	}
