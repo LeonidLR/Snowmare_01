@@ -140,6 +140,20 @@ public:
 	static bool AddFallStateMachine(UAnimBlueprint* AnimBlueprint, FName SlotName, UAnimSequenceBase* FallLoop, UAnimSequenceBase* Land, float FallBlendIn,
 		float LandBlendIn, float GroundBlendIn, FString& OutReport);
 
+	/**
+	 * One line per bone of Skeleton: index, name, parent, translation retargeting mode (0 Animation, 1 Skeleton, 2 AnimationScaled,
+	 * 3 AnimationRelative, 4 OrientAndScale) and the reference pose's local translation (cm). Read-only (inspection, 2026-11-08 #51).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static FString DescribeSkeleton(USkeleton* Skeleton);
+
+	/**
+	 * Sets the translation retargeting mode (EBoneTranslationRetargetingMode as uint8) of the named bones (and their children when
+	 * bChildrenToo) on a Claude-owned skeleton. Returns how many bones were found. Not saved. #51 (2026-11-08).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static int32 SetBoneTranslationRetargeting(USkeleton* Skeleton, const TArray<FName>& Bones, uint8 Mode, bool bChildrenToo);
+
 	/** One line per AnimGraph node with its pose inputs (what feeds them) - the setup scripts' report. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static FString DescribeAnimGraph(UAnimBlueprint* AnimBlueprint);

@@ -135,6 +135,9 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 	if (Squad)
 	{
 		Squad->HandOverLeadForOrder(nullptr, bPlan ? TEXT("a planned move") : TEXT("a move order"));
+		// The game designer's PIE 2026-11-08: moving off a wall, the man nearest the destination leads (decided at the order, before it is
+		// planned / given; the pending leader above first - the player's own choice wins only as the starting leader).
+		Squad->HandOverLeadForWallMove(Destination, bPlan ? TEXT("a planned move") : TEXT("a move order"));
 	}
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Leader)

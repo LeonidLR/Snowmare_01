@@ -418,8 +418,10 @@ public:
 
 	/**
 	 * Run-and-peek (#55, user request 2026-11-07; RunCornerPeekRules): Hit lies on the END of a peekable wall (the manual corner peek's end
-	 * region: CoverFacingRules::FindPeekEdge from that face's slot) that Operative is not in cover at -> the face of that wall facing him
-	 * (RunCornerPeekRules::ChooseNearFace over the faces probed round the click), its end and its corner slot. OutTarget.Peeker = Operative.
+	 * region: CoverFacingRules::FindPeekEdge from that face's slot) that Operative is not in cover at -> the face UNDER THE CURSOR
+	 * (RunCornerPeekRules::ChooseClickedFace: any side of the object, an edge hit to the camera-facing face; the game designer 2026-11-08),
+	 * else - the hit face has no corner of its own (a narrow end face) - the face round it facing him (ChooseNearFace over the faces probed
+	 * round the click), its end and its corner slot. OutTarget.Peeker = Operative.
 	 * False for a body / an object with its own click meaning / the APC / the ground / the middle of a wall (a cover click there). OutFace
 	 * (optional) = the face found. The faces are cached while the cursor rests on the wall.
 	 */
@@ -967,11 +969,19 @@ private:
 	bool TryHandleRunCornerPeekClick(AOperativeCharacter* Operative, const FHitResult& Hit, bool bSquadWide, const class UTurnBasedCombatSubsystem* TurnBased);
 	/**
 	 * Run-and-peek of a box selection: the selected members' places along Face's wall -> FormationWallLeadership::PlanGroupCornerPeek (the
-	 * same rule as the group peek in cover): OutPeeker and, optionally, OutStack = the others' cover slots behind him on that face. False
-	 * without two able selected members.
+	 * same rule as the group peek in cover): OutPeeker and, optionally, OutStack = the others' cover slots behind him on that face and
+	 * OutUnplaced = the others whose place behind him that object does not cover (RunCornerPeekRules::IsStackPlaceCovered: a block too short
+	 * for the stack). False without two able selected members.
 	 */
 	bool PlanRunGroupCornerPeek(AOperativeCharacter* Operative, const FRunCornerPeekFace& Face, AOperativeCharacter*& OutPeeker,
-		TArray<TPair<AOperativeCharacter*, FCoverSlot>>* OutStack) const;
+		TArray<TPair<AOperativeCharacter*, FCoverSlot>>* OutStack, TArray<AOperativeCharacter*>* OutUnplaced = nullptr) const;
+	/**
+	 * The box selection's run-and-peek, the men with no covered place behind the corner man (the game designer's PIE 2026-11-08: they stood
+	 * in the open): the group cover order's nearby covers round his corner slot (ControllerGroupCover::FindNearbyGroupCoverSlots, squad_walls
+	 * follower_cover_radius_m / _side_deg), nearest man first; no cover within reach - prone behind him. Returns the log line.
+	 */
+	FString OrderUnplacedStackToNearbyCover(const FRunCornerPeekFace& Face, const TArray<TPair<AOperativeCharacter*, FCoverSlot>>& Stack,
+		const TArray<AOperativeCharacter*>& Unplaced, bool bSprint);
 	/**
 	 * The corner slot for a peek round Base's end at EdgeAlong (from Base's slot) on Side: the stand point StandAlong along the wall, probed
 	 * a little further in when the wall's last cm do not probe; Base moved there when nothing probes.

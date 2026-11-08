@@ -856,6 +856,48 @@ namespace OperativeAnimGraph
 	}
 }
 
+FString UOperativeAnimGraphLibrary::DescribeSkeleton(USkeleton* Skeleton)
+{
+	if (!Skeleton)
+	{
+		return TEXT("no skeleton");
+	}
+	const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
+	FString Out;
+	for (int32 Index = 0; Index < Ref.GetNum(); ++Index)
+	{
+		const int32 Parent = Ref.GetParentIndex(Index);
+		const FVector T = Ref.GetRefBonePose()[Index].GetTranslation();
+		Out += FString::Printf(TEXT("%d %s parent=%s mode=%d t=(%.2f %.2f %.2f)\n"), Index, *Ref.GetBoneName(Index).ToString(),
+			Parent == INDEX_NONE ? TEXT("-") : *Ref.GetBoneName(Parent).ToString(), static_cast<int32>(Skeleton->GetBoneTranslationRetargetingMode(Index)),
+			T.X, T.Y, T.Z);
+	}
+	return Out;
+}
+
+int32 UOperativeAnimGraphLibrary::SetBoneTranslationRetargeting(USkeleton* Skeleton, const TArray<FName>& Bones, uint8 Mode, bool bChildrenToo)
+{
+	if (!Skeleton)
+	{
+		return 0;
+	}
+	int32 Found = 0;
+	for (const FName& Bone : Bones)
+	{
+		const int32 Index = Skeleton->GetReferenceSkeleton().FindBoneIndex(Bone);
+		if (Index != INDEX_NONE)
+		{
+			Skeleton->SetBoneTranslationRetargetingMode(Index, static_cast<EBoneTranslationRetargetingMode::Type>(Mode), bChildrenToo);
+			++Found;
+		}
+	}
+	if (Found > 0)
+	{
+		Skeleton->MarkPackageDirty();
+	}
+	return Found;
+}
+
 FString UOperativeAnimGraphLibrary::DescribeAnimGraph(UAnimBlueprint* AnimBlueprint)
 {
 	using namespace OperativeAnimGraph;

@@ -7,6 +7,7 @@
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
+#include "Characters/WeaponAnimLayerRules.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "Survival/ColdRules.h"
 #include "Survival/WarmIdleRules.h"
@@ -164,19 +165,55 @@ struct CODEXTACTICS_API FOperativeAnimInstanceProxy : public FAnimInstanceProxy
 
 	virtual void PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds) override;
 	virtual bool Evaluate(FPoseContext& Output) override;
-	/** Graph instances: the graph, then the ladder rung IK (LADDERS.md 6.2) on hands / feet - no ABP node needed. */
+	/**
+	 * Graph instances: the graph, then the ladder rung IK (LADDERS.md 6.2) on hands / feet and the run-and-peek's peek stance yaw lock -
+	 * no ABP node needed.
+	 */
 	virtual bool Evaluate_WithRoot(FPoseContext& Output, FAnimNode_Base* InRootNode) override;
 
 	/** How far the rung IK moved each knee in the last evaluation (component space; 0 = no IK), [0] left, [1] right (smokes). */
 	FVector GetKneeIKOffset(int32 Side) const { return KneeIKOffset[FMath::Clamp(Side, 0, 1)]; }
 
+	/** The root yaw the peek stance yaw lock put on the last evaluated pose, deg (0 = no lock; smokes / logs). */
+	float GetPeekLockCorrectionDeg() const { return PeekLockCorrectionDeg; }
+
 private:
 	/** Two-bone IK of the hands / feet onto their rungs (component space, after the whole graph). */
 	void ApplyLadderIK(FPoseContext& Output) const;
+	/**
+	 * The run-and-peek's peek stance yaw lock (#55, the game designer's video Bug_2 2026-11-08), after the whole graph: a root yaw that draws
+	 * the evaluated pose's body (its shoulder / hip lines, component space) at the lock's target yaw (UOperativeAnimInstance::
+	 * BeginPeekStanceYawLock) - the pose blend's own ~160 deg turn counter-turned exactly, in the very evaluation that draws it.
+	 */
+	void ApplyPeekStanceYawLock(FPoseContext& Output) const;
+	/** The lock for this evaluation (computed in PreUpdate): the drawn body's target yaw in component space, its strength, the shoulder share. */
+	float PeekLockTargetCs = 0.f;
+	float PeekLockAlpha = 0.f;
+	float PeekLockShoulderWeight = 1.f;
+	mutable float PeekLockCorrectionDeg = 0.f;
+	/** The evaluated pose's own drawn body yaw before the lock's correction (component space), last evaluation. */
+	mutable float PeekLockNaturalCs = 0.f;
+	mutable bool bPeekLockNaturalValid = false;
+
+public:
+	/** The pose's own drawn body yaw (component space) the lock saw in its last evaluation; false without one. */
+	bool GetPeekLockNaturalCs(float& OutYawCs) const
+	{
+		OutYawCs = PeekLockNaturalCs;
+		return bPeekLockNaturalValid && PeekLockAlpha > 0.f;
+	}
+
+private:
 	FLadderIKFrame LadderIK;
 	mutable FVector KneeIKOffset[2] = { FVector::ZeroVector, FVector::ZeroVector };
 	TStaticArray<FOperativeClipState, static_cast<int32>(EOperativeClip::Count)> Clips;
 	bool bUseNative = true;
+
+	/** The weapon layer (the D-1 shotgun set, 2026-11-08) blended over the graph's pose: upper / lower body weights and its clips. */
+	void BlendWeaponLayer(FPoseContext& Output) const;
+	TStaticArray<FOperativeClipState, 12> WeaponClips;
+	float WeaponUpperWeight = 0.f;
+	float WeaponLowerWeight = 0.f;
 };
 
 /**
@@ -383,6 +420,8 @@ public:
 	/** Hit reactions started / the last clip (smokes). */
 	int32 GetHitReactionsPlayed() const { return HitReactionsPlayed; }
 	UAnimSequenceBase* GetLastHitReactionClip() const { return LastHitReactionClip.Get(); }
+	/** Shots whose fire clip was left out because a stance transition was playing (#51; for the smokes). */
+	int32 GetFireClipsSkippedForStance() const { return FireClipsSkippedForStance; }
 	FName GetLastHitReactionSlot() const { return LastHitReactionSlot; }
 
 	/** Seconds the left-hand IK stays off for an upper-body action (hit reaction, grenade throw, interaction) - smokes. */
@@ -864,6 +903,48 @@ public:
 	 */
 	bool GetPeekStanceTurnDeg(ECoverFacing Side, bool bCrouch, float& OutTurnDeg) const;
 
+	// --- Arrives already turned (#55, the game designer's video Bug_2 2026-11-08: "when he runs up and peeks out from the wall there seems to
+	//     be another small extra turn"; RunCornerPeekRules "Arrives already turned") ---
+
+	/**
+	 * The drawn body's yaw (RunCornerPeekRules::MixBodyYaw of the shoulder line upperarm_l -> upperarm_r and the hip line thigh_l -> thigh_r)
+	 * at ClipSeconds (the montage starts it at 0) of Side's fire idle (crouched or standing), in the mesh's component space, plus what the
+	 * graph's layers on top of the clip add (the bias learnt from the arrivals so far, SettlePeekStanceYawLock), deg: where the peek stance
+	 * will draw his body. False without the clip or the bones.
+	 */
+	bool GetPeekStanceBodyYawCs(ECoverFacing Side, bool bCrouch, float& OutYawCs, float ClipSeconds = 0.f) const;
+
+	/** The drawn body's yaw of the pose on the mesh now (its last evaluation), component space, deg. False without the bones. */
+	bool GetMeshBodyYawCs(float& OutYawCs) const;
+
+	/**
+	 * The run-and-peek's peek stance yaw lock (AOperativeCharacter::EnterCover of a peek stance arrival): from now the evaluated pose is turned
+	 * about the vertical so that its drawn body yaw (component space, the mesh at its base yaw on the capsule) goes from EntryYawCs (the run's
+	 * last frame, as the actor stands now) to FinalYawCs (the fire idle's own) eased over PathSeconds (RunCornerPeekRules::LockTargetYaw), then
+	 * lets go over RunCornerPeekRules::LockFadeSeconds. Replaces the mesh's held yaw released by the blend weight (the first fix): exact
+	 * frame by frame whatever the pose blend does (its nlerp over the ~160 deg pelvis turn, the run stopping under it).
+	 */
+	void BeginPeekStanceYawLock(float EntryYawCs, float FinalYawCs, float PathSeconds, ECoverFacing Side, bool bCrouch);
+
+	/** The lock ends its path where it is now and lets go (leaving the cover, death). */
+	void ReleasePeekStanceYawLock();
+
+	/** The peek stance yaw lock is on (its path or its fade). */
+	bool IsPeekStanceYawLockActive() const { return PeekStanceYawLock.bActive; }
+
+	/** Peek stance yaw locks begun (smokes / stats). */
+	int32 GetPeekStanceYawLocks() const { return PeekStanceYawLocks; }
+
+	/** The root yaw the lock put on the last evaluated pose, deg (smokes / logs). */
+	float GetPeekStanceYawLockCorrectionDeg() const;
+
+	/** GFrameCounter of this instance's last NativeUpdateAnimation: whether the pose of the current frame has already been decided. */
+	uint64 GetLastAnimUpdateFrame() const { return LastAnimUpdateFrame; }
+
+	/** The drawn body's yaw for the lock and the pre-turn: this share of the shoulder line, the rest the hip line (0..1). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0", ClampMax = "1"))
+	float PeekStanceBodyShoulderWeight = 1.f;
+
 	/** Play the cover clips natively on FullBodySlot (untick once the AnimBP has its own cover states). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation")
 	bool bUseNativeCoverClips = true;
@@ -1140,6 +1221,31 @@ public:
 	/** Smokes: the sniper loop / the last sniper clip started, the clips started in order (capped). */
 	UAnimSequenceBase* GetSniperLoopClip() const { return SniperLoopClip.Get(); }
 	const TArray<FString>& GetSniperClipLog() const { return SniperClipLog; }
+
+	// --- The shotgun weapon layer (the D-1, designer decision 21, 2026-11-03; WeaponAnimLayerRules) ---------------------------------
+	// The user's ShotgunLocomotionPack clips (Content/Data/Weapons/weapon_anim_sets.json "shotgun") blended natively over the ABP's
+	// pose while a shotgun (EWeaponHandling::Shotgun) is in hands: idle / walk / jog / sprint / crouch by speed and direction, the aim
+	// set while aiming; an upper-body montage (fire, reload, grenade, hit) keeps the torso and the layer drives the legs only; a full-body
+	// montage, cover, prone, ladders, vaults, carrying, death and knockdowns leave the ABP alone. No AnimGraph node.
+
+	/** The layer's mask this frame (smokes, the HUD trace). */
+	EWeaponLayerMask GetShotgunLayerMask() const { return ShotgunMask; }
+
+	/** The layer's current blend weights (0..1) on the torso and on the legs. */
+	float GetShotgunUpperWeight() const { return ShotgunUpperWeight; }
+	float GetShotgunLowerWeight() const { return ShotgunLowerWeight; }
+
+	/** The heaviest shotgun locomotion clip this frame (smokes: "a known shotgun clip plays"). */
+	const UAnimSequenceBase* GetShotgunDominantClip() const;
+
+	/** The shotgun clip set loaded (every clip path resolved: the count). */
+	int32 GetShotgunClipCount() const { return ShotgunClipRefs.Num(); }
+
+	/** Shotgun fire / per-shell reload clips started (smokes). */
+	int32 GetShotgunFireClips() const { return ShotgunFireClips; }
+	int32 GetShotgunShellClips() const { return ShotgunShellClips; }
+	/** The folder the shotgun clips come from for this skeleton (empty: the pack's own clips). */
+	const FString& GetShotgunRetargetFolder() const { return ShotgunRetargetFolder; }
 
 	/** The grenade throw clip is still playing (the arms throw: no rifle shot meanwhile, user rule 2026-10-07). */
 	bool IsThrowingGrenade() const { return GrenadeThrowSecondsLeft > 0.f; }
@@ -1465,6 +1571,68 @@ protected:
 private:
 	friend struct FOperativeAnimInstanceProxy;
 
+	/** The shotgun set's clips, one array so the GC keeps them (WeaponAnimLayer data). */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UAnimSequenceBase>> ShotgunClipRefs;
+
+	struct FShotgunAnimSet
+	{
+		UAnimSequence* StandIdle = nullptr;
+		UAnimSequence* AimIdle = nullptr;
+		UAnimSequence* CrouchIdle = nullptr;
+		UAnimSequence* Sprint = nullptr;
+		TStaticArray<UAnimSequence*, 8> Walk;
+		TStaticArray<UAnimSequence*, 8> AimWalk;
+		TStaticArray<UAnimSequence*, 8> Jog;
+		TStaticArray<UAnimSequence*, 8> Crouch;
+		UAnimSequenceBase* FireAim = nullptr;
+		UAnimSequenceBase* FireHip = nullptr;
+		UAnimSequenceBase* Reload = nullptr;
+		float WalkSpeed = 150.f;
+		float JogSpeed = 350.f;
+		float CrouchSpeed = 120.f;
+		float SprintSpeed = 550.f;
+		float MoveStartSpeed = 15.f;
+		float MoveFullSpeed = 60.f;
+		float ShellStart = 0.f;
+		float ShellEnd = 0.f;
+		float BlendSeconds = 0.2f;
+		FShotgunAnimSet()
+		{
+			for (int32 Index = 0; Index < 8; ++Index)
+			{
+				Walk[Index] = AimWalk[Index] = Jog[Index] = Crouch[Index] = nullptr;
+			}
+		}
+	};
+	void LoadShotgunAnimSet();
+	void UpdateShotgunLayer(float DeltaSeconds);
+	/** The shotgun layer may drive the body now (shotgun in hands, alive, up, not in cover / prone / on a ladder / vaulting / carrying). */
+	bool IsShotgunLayerEligible() const;
+	/** The shot clip of the shotgun (aim / hip) on the upper-body slot; false = not the shotgun set. */
+	bool PlayShotgunFire();
+	/** The per-shell reload clip (one section per shell); true when the shotgun set handled the reload this frame. */
+	bool UpdateShotgunReload(const AOperativeCharacter* Operative);
+	FShotgunAnimSet ShotgunSet;
+	bool bShotgunSetLoaded = false;
+	/** The retargeted-copy folder for this mesh's skeleton (weapon_anim_sets.json "retargeted"); empty = the pack clips play. */
+	FString ShotgunRetargetFolder;
+	bool bShotgunWeapon = false;
+	EWeaponLayerMask ShotgunMask = EWeaponLayerMask::Off;
+	float ShotgunUpperWeight = 0.f;
+	float ShotgunLowerWeight = 0.f;
+	float ShotgunPhase = 0.f;
+	float ShotgunIdleTime = 0.f;
+	/** Eased shares (0..1, over blend_seconds) of the crouch / aim / sprint sets: a stance or aim change cross-fades the clip sets
+	 * instead of switching them in one frame (a ~20 cm torso pop each time, RecoilProbe 2026-11-08). */
+	float ShotgunCrouchShare = 0.f;
+	float ShotgunAimShare = 0.f;
+	float ShotgunSprintShare = 0.f;
+	TStaticArray<FOperativeClipState, 12> ShotgunClips;
+	int32 ShotgunReloadLastClip = -1;
+	int32 ShotgunFireClips = 0;
+	int32 ShotgunShellClips = 0;
+
 	void UpdateState();
 	void UpdateUpperBody(float DeltaSeconds);
 	void UpdateColdLayer(float DeltaSeconds);
@@ -1505,6 +1673,7 @@ private:
 	/** Hit reactions (HitReactionRules): game time of the last one, count / clip / slot for the smokes. */
 	double LastHitReactionTime = -1000.0;
 	int32 HitReactionsPlayed = 0;
+	int32 FireClipsSkippedForStance = 0;
 	TWeakObjectPtr<UAnimSequenceBase> LastHitReactionClip;
 	FName LastHitReactionSlot;
 	/** Vault clip: started on the vault's first frame, foot alternating. */
@@ -1564,6 +1733,32 @@ private:
 	int32 CoverPeekStanceBlends = 0;
 	/** The peek stance's fire idle while it blends in from the run (GetCoverEnterBlendWeight reports its weight); reset by the next loop. */
 	TWeakObjectPtr<UAnimMontage> CoverPeekStanceMontage;
+	/** The peek stance yaw lock (BeginPeekStanceYawLock): its path (component space yaws, s) from BeginTime (world seconds). */
+	struct FPeekStanceYawLockState
+	{
+		bool bActive = false;
+		/** Its path is over and the pose's own facing has been compared with the prediction (SettlePeekStanceYawLock). */
+		bool bSettled = false;
+		/** Its fire idle (PeekStanceBiasSlot). */
+		int32 BiasSlot = 0;
+		float EntryYawCs = 0.f;
+		float FinalYawCs = 0.f;
+		float PathSeconds = 0.f;
+		double BeginTime = 0.0;
+	};
+	FPeekStanceYawLockState PeekStanceYawLock;
+	int32 PeekStanceYawLocks = 0;
+	uint64 LastAnimUpdateFrame = 0;
+	/** Seconds into the lock now (0 in the frame it began). */
+	double PeekStanceYawLockSeconds() const;
+	/**
+	 * The lock's path is over (the fire idle fully in): its pose's own drawn yaw vs the predicted one - learnt into PeekStanceBodyBias and, when
+	 * they differ, eased there over RunCornerPeekRules::SettleSeconds (NativeUpdateAnimation).
+	 */
+	void SettlePeekStanceYawLock();
+	/** What the graph's layers add to each fire idle's drawn body yaw (the left-hand IK on the left shoulder...), learnt, deg: [stand _L, _R, crouch _L, _R]. */
+	float PeekStanceBodyBias[4] = { 0.f, 0.f, 0.f, 0.f };
+	static int32 PeekStanceBiasSlot(ECoverFacing Side, bool bCrouch);
 	/** Left-hand IK: linear blend progress, the upper-body action windows (grenade throw / hit reaction) left, s. */
 	float LeftHandIKLinear = 0.f;
 	/** The chain root the cached LeftHandArmReach was measured from. */

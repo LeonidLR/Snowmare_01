@@ -59,3 +59,27 @@
   `CorpseLootRules::IsLootableWeapon` false; the weapon selector hides the knife line; the campfire text drops the fuel option.
 - TRAP: a new weapon path must ask `WeaponRoster::IsOutOfPlay` (or go through `InitArsenal` / `SwitchToWeaponById`); a removed weapon id
   must go to "roster.out", never only out of a list in code.
+
+## The D-1 shotgun: the Engineer's primary weapon (game designer decisions 21 / 21+, 2026-11-03 / 11-08; branch `feat/weapons-framework`)
+
+- **Identity.** Stable id `shotgun` (saves, loadouts, `DA_Weapon_shotgun`, PMC weapon_pool unchanged); `weapons_tuning.json` "name"
+  "D-1 Shotgun" -> `UWeaponDataAsset::WeaponName` (HUD / selector). No save migration needed: the id did not change.
+- **Numbers.** 45 damage per shot at point blank split over 8 pellets (5.625 each, `pellets.count` 8, cone 6 deg), full up to the effective
+  range 8 m, falloff to x0.4 at the 15 m reach (`damage_falloff_floor` 0.4), penetration class light, clip 8 + reserve 40, per-shell reload
+  0.5 s (`reload_mode` per_round; empty -> full 4.0 s), interruptible between shells.
+- **Loadouts (data).** `weapons_tuning.json` "loadouts" (`Data/WeaponLoadoutRules`): commander m16 / pistol / grenade, engineer
+  **shotgun / pistol / grenade (no M16)**, medic_sapper m16 / sniper_rifle / pistol / grenade; the first id is in hands. The game mode's
+  `SpawnOperative` uses it for the player's squad (team 0) roles it lists (`ExtraWeapons` skipped then); other roles keep `StartingArsenal`.
+  Out-of-play ids are dropped. Fallbacks that used to hard-code the M16 now take the operative's primary weapon
+  (`AOperativeCharacter::GetPrimaryWeaponId` / `TakePrimaryWeapon` / `EquipRestoredWeapon`): a save load / the campaign carry restore the
+  saved weapon if owned (`WeaponLoadoutRules::ResolveHeldWeapon`), the grenade throw and a cancelled aim go back to the primary, an empty
+  weapon switches to the primary.
+- **Model.** "visual" block: `hand_mesh` (static or **skeletal**: the Fab D-1 import is a skeletal mesh -> `WeaponSkeletalMesh`, a child of
+  `WeaponMesh`), `attach_location` / `attach_rotation_pyr` / `attach_scale` (relative to the hand_r weapon socket; the import is ~100x scale,
+  so x0.0118), `muzzle_offset` (mesh space). The Fab asset `/Game/Fab/_Model_D-1__Shotgun` is read-only; its second skeletal mesh (the pump,
+  Object_29) is not used.
+- **Animation.** The shotgun weapon layer ([animation-setup](animation-setup.md) "Shotgun weapon layer"): `handling: "shotgun"`
+  (`EWeaponHandling::Shotgun`) switches any operative / PMC fighter holding it to the ShotgunLocomotionPack set.
+- **Checks.** Tests `CodexTactics.Weapons.Loadout.*`, `CodexTactics.Animation.WeaponLayer.*`; `CodexTactics.ShotgunSmoke` (loadout, model,
+  pellets / falloff at 3 / 8 / 14.5 m, partial pellet hits, per-shell reload + interruption, the layer, a PMC fighter's layer, the #51 probe);
+  rendered proof `CodexTactics.ShotgunD1Shots` -> `Saved/Screenshots/ShotgunD1/`.

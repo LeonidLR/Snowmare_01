@@ -67,6 +67,13 @@ bool AOperativeCharacter::GetAimTargetPoint(FVector& OutPoint) const
 
 FVector AOperativeCharacter::GetWeaponMuzzleLocation() const
 {
+	static const FName SkeletalMuzzleSocket(TEXT("Muzzle"));
+	if (WeaponSkeletalMesh && WeaponSkeletalMesh->GetSkeletalMeshAsset() && WeaponSkeletalMesh->IsVisible())
+	{
+		// The skeletal model (the D-1): its "Muzzle" socket, else the weapon data's offset in the model's space.
+		return WeaponSkeletalMesh->DoesSocketExist(SkeletalMuzzleSocket) ? WeaponSkeletalMesh->GetSocketLocation(SkeletalMuzzleSocket)
+			: WeaponSkeletalMesh->GetComponentTransform().TransformPosition(CurrentWeapon ? CurrentWeapon->HandMeshMuzzleOffset : MuzzleOffset);
+	}
 	if (WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
 	{
 		static const FName MuzzleSocket(TEXT("Muzzle"));
@@ -106,7 +113,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bTurningToThreat = false;
 	// Run-and-peek (#55 fix, the game designer's video 2026-11-08): the run's last metres turn him to the peek facing - he arrives looking
 	// where the peek looks and the run blends straight into the peek stance (no turn to the wall, no wall hug, no turn back out). It wins over
-	// the combat target / the under-fire turn for those last ~0.4 s (the peek itself aims round the corner).
+	// the combat target / the under-fire turn for those last ~0.6 s (the peek itself aims round the corner).
 	const bool bPeekPreTurn = WantsRunCornerPeekPreTurn();
 	if (!bPeekPreTurn && bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
@@ -166,7 +173,8 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bool bFacingWall = false;
 	if (bPeekPreTurn)
 	{
-		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, RunCornerPeekFacingYaw, 2.f * OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f, DeltaTime), 0.f));
+		// Bug_2 (2026-11-08): his DRAWN body turns to the fire idle's drawn facing, evenly, done just before the entry (StepRunCornerPeekPreTurn).
+		SetActorRotation(FRotator(0.f, StepRunCornerPeekPreTurn(DeltaTime), 0.f));
 		bFacingWall = true; // the movement facing below stays out of it this frame (the 8-direction locomotion strafes the last steps)
 	}
 	// Running into cover (user report 2026-10-09: two pops on entry): the last metres turn the body to face the wall, the

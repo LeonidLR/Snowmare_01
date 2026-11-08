@@ -238,24 +238,38 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 			// facing through the blend (measured 2026-11-08: an eased offset spun it 170 deg round and back in 0.3 s).
 			const float PeekYaw = static_cast<float>(CoverFacingRules::CornerAimDirection(Slot, PeekStanceSide, CornerAimOutwardDeg).Rotation().Yaw);
 			LastPeekStanceArrivalOffDeg = FMath::Abs(FRotator::NormalizeAxis(OldYaw - PeekYaw));
-			// The held turn goes the same way round as the pose blend turns the body (the clips stand ~180 deg from their root: the blend's
-			// direction differs per clip): of the two equal held turns (x and x -/+ 360) the one nearest the blend's turn.
-			float BlendTurn = 0.f;
 			// (The stance the entry gives below - high standing, low crouched: the formation's crouched wall walk stands up at a high wall.)
-			if (EntryAnim && EntryAnim->GetPeekStanceTurnDeg(PeekStanceSide, CoverRules::DefaultStanceFor(Slot.Height) == EOperativeStance::Crouching, BlendTurn))
+			const bool bStanceCrouched = CoverRules::DefaultStanceFor(Slot.Height) == EOperativeStance::Crouching;
+			if (BeginPeekStanceYawLock(OldYaw, PeekStanceSide, bStanceCrouched))
 			{
-				CoverEntryYawOffset = RunCornerPeekRules::HeldTurnSameWayAsBlend(CoverEntryYawOffset, BlendTurn);
+				// Arrives already turned (the game designer's video Bug_2 2026-11-08): the anim's yaw lock draws the body's facing through the
+				// blend - exactly, whatever the blend does - so the mesh holds no yaw (but this frame's pose if it is already drawn).
+				CoverEntryYawOffset = 0.f;
+				CoverEntryYawTime = -1.f;
+				bCoverEntryAwaitClip = false;
+				bPeekStanceTurnChecked = true;
 			}
-			// The guard (UpdateCoverEntryBlend): the pose's pelvis now, to see which way the blend really turns it.
-			bPeekStanceTurnChecked = false;
-			const int32 PelvisIndex = GetMesh() ? GetMesh()->GetBoneIndex(TEXT("pelvis")) : INDEX_NONE;
-			const TArray<FTransform>& EntryPose = GetMesh() ? GetMesh()->GetComponentSpaceTransforms() : TArray<FTransform>();
-			PeekStancePelvisAtEntry = EntryPose.IsValidIndex(PelvisIndex) ? EntryPose[PelvisIndex].GetRotation() : FQuat::Identity;
-			bPeekStanceTurnChecked = !EntryPose.IsValidIndex(PelvisIndex);
-			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: peek stance - the mesh holds %.0f deg (the pose blend turns the body %.0f deg)"), *DisplayName.ToString(),
-				CoverEntryYawOffset, BlendTurn);
-			CoverEntryYawTime = -1.f;
-			bCoverEntryAwaitClip = true;
+			else
+			{
+				// The first fix (Codex.Cover.RunPeekYawLock 0, or no clip / bones): the held turn goes the same way round as the pose blend
+				// turns the body (the clips stand ~180 deg from their root: the blend's direction differs per clip): of the two equal held
+				// turns (x and x -/+ 360) the one nearest the blend's turn.
+				float BlendTurn = 0.f;
+				if (EntryAnim && EntryAnim->GetPeekStanceTurnDeg(PeekStanceSide, bStanceCrouched, BlendTurn))
+				{
+					CoverEntryYawOffset = RunCornerPeekRules::HeldTurnSameWayAsBlend(CoverEntryYawOffset, BlendTurn);
+				}
+				// The guard (UpdateCoverEntryBlend): the pose's pelvis now, to see which way the blend really turns it.
+				bPeekStanceTurnChecked = false;
+				const int32 PelvisIndex = GetMesh() ? GetMesh()->GetBoneIndex(TEXT("pelvis")) : INDEX_NONE;
+				const TArray<FTransform>& EntryPose = GetMesh() ? GetMesh()->GetComponentSpaceTransforms() : TArray<FTransform>();
+				PeekStancePelvisAtEntry = EntryPose.IsValidIndex(PelvisIndex) ? EntryPose[PelvisIndex].GetRotation() : FQuat::Identity;
+				bPeekStanceTurnChecked = !EntryPose.IsValidIndex(PelvisIndex);
+				UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: peek stance - the mesh holds %.0f deg (the pose blend turns the body %.0f deg)"), *DisplayName.ToString(),
+					CoverEntryYawOffset, BlendTurn);
+				CoverEntryYawTime = -1.f;
+				bCoverEntryAwaitClip = true;
+			}
 			++PeekStanceEntryCount;
 			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek arrival - straight into the %s corner's peek stance (arrived %.0f deg off the peek facing; no enter clip, no wall hug)"),
 				*DisplayName.ToString(), PeekStanceSide == ECoverFacing::Left ? TEXT("left") : TEXT("right"), LastPeekStanceArrivalOffDeg);

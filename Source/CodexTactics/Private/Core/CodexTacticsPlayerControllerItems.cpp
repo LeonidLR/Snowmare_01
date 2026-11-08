@@ -268,8 +268,10 @@ void ACodexTacticsPlayerController::GrenadeKey()
 			Grenades->CancelAim(true);
 			return;
 		}
-		const bool bSwitched = TurnBased ? (TurnBased->SwitchActiveUnitWeapon(TEXT("m16")) || TurnBased->SwitchActiveUnitWeapon(TEXT("pistol")))
-			: (Leader->SwitchToWeaponById(TEXT("m16")) || Leader->SwitchToWeaponById(TEXT("pistol"))); // no knife (roster 2026-11-08)
+		// His primary weapon (the M16; the Engineer's D-1 shotgun), else the pistol; no knife (roster 2026-11-08).
+		const FString Primary = Leader->GetPrimaryWeaponId();
+		const bool bSwitched = TurnBased ? ((!Primary.IsEmpty() && TurnBased->SwitchActiveUnitWeapon(Primary)) || TurnBased->SwitchActiveUnitWeapon(TEXT("pistol")))
+			: (Leader->TakePrimaryWeapon() || Leader->SwitchToWeaponById(TEXT("pistol")));
 		if (bSwitched)
 		{
 			const FString Ammo = Leader->UsesAmmo() ? FString::Printf(TEXT("%d / %d"), Leader->CurrentClip, Leader->ReserveAmmo) : TEXT("∞");

@@ -57,7 +57,7 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 	const bool bPeekStance = IsRunPeekStanceEnabled() && IsRunCornerPeekArrivalAt(PendingCoverSlot);
 	const float ClipLead = bHasEnterClip && !bPeekStance ? (bCrouchEntry ? CoverEnterClipLeadCrouchCm : CoverEnterClipLeadStandCm) : 0.f;
 	const float Speed = static_cast<float>(GetVelocity().Size2D());
-	const float Glide = FMath::Min(Speed * CoverEnterDecelSeconds * 0.5f, CoverEnterMaxGlideCm);
+	const float Glide = GetRunInGlideCm(Speed);
 	const FVector Here = GetActorLocation();
 	const float Distance = static_cast<float>(FVector::Dist2D(Here, PendingCoverSlot.WorldLocation));
 	if (Distance > ClipLead + Glide || Distance < 1.f || Speed < 20.f)
@@ -488,6 +488,19 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 			CoverEntryYawTime = -1.f;
 			bBodyYawFree = false;
 			WantedYaw = 0.f;
+		}
+	}
+	// The peek stance yaw lock's entry frame (BeginPeekStanceYawLock): the run pose already drawn this frame keeps its old yaw on the mesh for
+	// this one frame; from the next anim update on the lock draws the facing.
+	if (PeekStanceBridgeFrame != 0)
+	{
+		if (PeekStanceBridgeFrame == GFrameCounter && bInCover)
+		{
+			WantedYaw = PeekStanceBridgeYaw;
+		}
+		else
+		{
+			PeekStanceBridgeFrame = 0;
 		}
 	}
 	if (!FMath::IsNearlyEqual(WantedYaw, CoverEntryAppliedYaw, 0.01f) && GetMesh())

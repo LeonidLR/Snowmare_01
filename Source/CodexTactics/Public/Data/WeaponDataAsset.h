@@ -7,6 +7,7 @@
 #include "WeaponDataAsset.generated.h"
 
 class UStaticMesh;
+class USkeletalMesh;
 
 /**
  * Data asset for weapons in Operation: Cold Silence. Godot reference: resources/weapon_data.gd.
@@ -38,6 +39,13 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
 	TSoftObjectPtr<UStaticMesh> HandMesh;
+
+	/**
+	 * A skeletal model in the hand instead (the D-1 shotgun is a Fab skeletal mesh with its own pump clips; AOperativeCharacter::
+	 * WeaponSkeletalMesh shows it on the weapon socket, the Blueprint's static WeaponMesh hides). Set from weapons_tuning.json "visual".
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	TSoftObjectPtr<USkeletalMesh> HandSkeletalMesh;
 
 	/** Use HandMeshAttachTransform instead of the Blueprint's WeaponMesh offset (a new model usually needs its own grip offset). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")

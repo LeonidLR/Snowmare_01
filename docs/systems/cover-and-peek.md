@@ -61,8 +61,9 @@ it at once: the operative is running, gets the order to peek round a corner in f
   (`RunCornerPeekRules::ProbeDirections`, `LineTraceComponent`, the click pushed 10 cm inside the face / 30 cm under the top); each new face
   (`IsNewFace`) gets its slot (`CoverTraceRules::FindCoverSlotAt`), must be wide enough (`IsFaceWideEnough`, 1 m: an end face / a thin post is
   no face of its own) and must have the click at its end (`FindCornerPeekForSlot` - the long-wall probe included); the clicked face with the click
-  in its middle stops the search at once (a cover click, one slot traced). `RunCornerPeekRules::ChooseNearFace` takes the face whose normal points
-  most towards the operative. The end's side / place come from that face's slot; the corner slot = `ResolveCornerStandSlot` (the stand-off of
+  in its middle stops the search at once (a cover click, one slot traced). Since 2026-11-08 the face UNDER THE CURSOR decides
+  (`RunCornerPeekRules::ChooseClickedFace`, "The face under the cursor" below); `RunCornerPeekRules::ChooseNearFace` (the face whose normal points
+  most towards the operative - the old decision 3) only when the hit face has no corner of its own (a wall's narrow end face). The end's side / place come from that face's slot; the corner slot = `ResolveCornerStandSlot` (the stand-off of
   the stance the entry gives: high standing, low crouched; shared with the squad peek). The faces are cached while the cursor rests (5 cm).
 - **Solo first; groups (decision 4):** `RunCornerPeekRules::DecideGroup`. Solo / nobody joining: he alone. A box selection with him in it
   (`Codex.Squad.GroupCornerPeek` 1): `PlanRunGroupCornerPeek` = `FormationWallLeadership::PlanGroupCornerPeek` over every selected member's place
@@ -83,7 +84,9 @@ it at once: the operative is running, gets the order to peek round a corner in f
 - **A/B:** `Codex.Cover.RunCornerPeek 0` = the old rule (the click is a cover ghost). **Smoke** `RunCornerPeekSmoke` (L_FormationLab W_B_3): A the
   leader running in the open, the click on the west end 13 m ahead -> one cover entry and the peek pose 0.00 s later at the west end, south face;
   B the face's middle = the cover ghost, its confirm = cover without a peek; C from that cover the east end = the old in-cover peek (stays in cover);
-  D from north of the wall the same click -> the north face's corner; E three box-selected in the open -> the man nearest the west end peeks,
+  D from north of the wall the same click on the SOUTH face -> since the face rule the south face's corner (he runs round the west end; before:
+  the north face); H (the face rule) a free-standing 1.5 m block, he in cover at W_B_3: each of its four faces clicked in turn -> the ghost and
+  the arrival on that face's corner; E three box-selected in the open -> the man nearest the west end peeks,
   the others in cover 0.8 / 2 m behind him; F (Q2) the squad in formation, the followers ~10 m behind the leader -> the carried peek fires
   2.5 s after the click with both followers still walking (~200 cm/s), the corner man peeks round the west end; G (Q3) solo, a fight, the
   tactical pause -> the hover shows the run-and-peek ghost (no cover ghost), the click plans it (armed, the slot pending, one planned move,
@@ -152,7 +155,107 @@ must run up and peek at once - it looks silly, like a stage play."
   within 30 deg of the peek facing, and the drawn body (the shoulder line) turning at most 90 deg in all from his last frame of the run to
   1 s in the peek (measured after the fix: 20-25 deg; a spin through the blend reads ~340). `-PreCmds "Codex.Cover.RunPeekStance 0"`
   fails those checks.
-  Frame strip: `CodexTactics.RunCornerPeekSmoke Shot` (rendered) -> `Saved/Screenshots/RunPeekNoHug/runpeek_<stance|old>_NN.png`.
+  Frame strip: `CodexTactics.RunCornerPeekSmoke Shot` (rendered) -> since Bug_2 below `Saved/Screenshots/RunPeekNoHug2/`.
+
+### Arrives already turned - no residual turn on the peek entry (#55, game designer's video Bug_2 2026-11-08)
+
+Designer (after the fix above): "In game it got much better, but still, when he runs up and peeks out from the wall, there seems to be another
+small extra turn."
+
+- **When (his video, 10 fps):** not during the last metres and not at the arrival frame itself - in the 0.3 s blend right after it
+  (frames 39-42 and 155-158: the body still faces the run's way at the arrival frame, the next 2-3 frames are motion-blurred by a quick
+  turn, then the fire idle stands still). The first fix's smoke measured it: the shoulder line turned 20-25 deg in those 0.3 s (A:
+  39 -> 47, a plateau, -> 59 deg off the peek facing), the formation corner man 53.
+- **Cause (three parts):**
+  1. The pre-turn aimed the ACTOR at the corner aim. But the run pose draws the shoulder line ~35-40 deg off the actor's yaw and the corner
+     fire idle draws it ~35-60 deg off the corner aim (by clip, `_L` / `_R` differ): the drawn body still had ~20 deg to go after the arrival.
+  2. The pose blend turns the pelvis ~160 deg (run -> fire idle) by per-bone nlerp, not linearly in the montage weight; the mesh's held
+     yaw was released linearly with the weight - even a perfectly matched total leaves a ~5 deg wobble mid-blend (the plateau), and any
+     mismatch (the held -190 vs the blend's -157 deg) shows as a quick turn inside the 0.3 s.
+  3. The 1.5 m pre-turn started from the SLOT, but the run enters the cover its glide short of it (~90 cm at a run): it had only ~60 cm
+     (~0.13 s) and snapped at the stance turn rate (the formation trace: 81 -> 26 deg in 3 frames).
+- **Fix (`Codex.Cover.RunPeekYawLock`, default 1; 0 = the first fix's arrival, A/B):**
+  - *Aim the pre-turn at the fire idle's DRAWN facing:* `RunCornerPeekRules::BodyTargetActorYaw` = the cover facing he gets at the slot
+    + the fire idle's drawn body yaw (`UOperativeAnimInstance::GetPeekStanceBodyYawCs`: the shoulder line of its first frame, component
+    space, from the clip) - the run pose's drawn body yaw now (`GetMeshBodyYawCs`, low-passed 0.08 s: the strafe the turn causes shifts it).
+    The mesh's own yaw on the capsule cancels out. Drawn body = `RunCornerPeekRules::MixBodyYaw` of the shoulder line (`upperarm_l -> _r`)
+    and the hip line (`thigh_l -> _r`), `PeekStanceBodyShoulderWeight` 1 (the torso is what the top-down camera reads).
+  - *Start earlier, turn evenly:* `PreTurnStartCm` = max(1.5 m, 0.6 s of his run) (max 4 m) before the ENTRY (+ the run-in glide,
+    `AOperativeCharacter::GetRunInGlideCm`), latched for the arming; `PreTurnStepYaw` turns at the even rate that finishes 0.1 s before
+    the entry (never past it, no snap).
+  - *Hold the drawn body through the blend exactly (anim, C++ only - no AnimBP / montage asset changed):* `EnterCover` of a peek stance
+    arrival calls `AOperativeCharacter::BeginPeekStanceYawLock` -> `UOperativeAnimInstance::BeginPeekStanceYawLock(EntryYawCs, FinalYawCs,
+    Path)`: from then the anim proxy (`FOperativeAnimInstanceProxy::ApplyPeekStanceYawLock`, after the whole graph like the ladder IK)
+    turns the root of the EVALUATED pose about the vertical so that its drawn body yaw follows `LockTargetYaw` (the run's last frame ->
+    the fire idle's own, smoothstep over the blend + 0.1 s), then lets go over `LockFadeSeconds` 0.15 s. It measures the pose it draws,
+    so the nlerp, the run stopping under the slot and the montage's start frame no longer matter. The mesh holds no yaw any more (the
+    first fix's held yaw / `HeldTurnSameWayAsBlend` / the flip guard stay only for `RunPeekYawLock 0`), except for the entry frame when
+    the anim had already drawn that frame (`GetLastAnimUpdateFrame` == `GFrameCounter`: the run pose keeps the old yaw on the mesh for
+    that one frame, `PeekStanceBridgeFrame`). Leaving the cover / death mid-lock: `ReleasePeekStanceYawLock` (the target holds, 0.15 s fade).
+  - *The graph's own few degrees:* in the game the fire idle draws the shoulders ~6 deg off its clip (the graph's layers on top of the
+    slot - the left-hand IK pulls the left shoulder; measured `_L` +6.2, `_R` +5.7, the clip itself is steady over its loop, no root motion,
+    aim offset 0). At the end of its path the lock compares the pose's own drawn yaw with the prediction (`SettlePeekStanceYawLock`):
+    the difference is learnt per fire idle (`PeekStanceBodyBias` [stand / crouch x `_L` / `_R`], added by `GetPeekStanceBodyYawCs`, so
+    the next pre-turn aims right at it; the standing ones start at the measured `RunCornerPeekRules::StandDrawnBiasSeedDeg` 6) and a
+    gap over 1 deg is eased out over `SettleSeconds` 0.4 s instead of the 0.15 s fade.
+  - *The hips:* the lock holds the TORSO (`PeekStanceBodyShoulderWeight` 1). The hip line also carries the legs' stop out of the stride
+    and the run pose's hip twist (10-25 deg against the shoulders, swinging with the gait) - no turn of the whole body takes that out,
+    and holding the hips instead would turn the shoulders by the same amount; it stays a leg motion of the stop (14-25 deg measured).
+- **Unchanged:** everything of the first fix (no wall hug, his own floor only, solo / box / formation / pause variants, the old cvars).
+- **Tests:** `CodexTactics.Tactics.Cover.RunCornerPeek.ArrivesTurned.PreTurnPlan` / `.BodyFacing` / `.YawLock` (incl. a simulated nlerp
+  blend: the linear release wobbles > 4 deg, the lock holds within 0.01). `RunCornerPeekSmoke` A / D / E / F / G: the shoulder line turns
+  < 10 deg in all from his last frame of the run to 1 s in the peek (the hips < 35: no spin), and over his last 1.5 m it turns one way
+  (back-and-forth <= 2 deg); the arrival-facing check (the ACTOR's yaw vs the corner aim) is a 60 deg sanity bound now - the actor
+  intentionally stands 20-45 deg off the corner aim so that his drawn body matches the fire idle's. `-PreCmds "Codex.Cover.RunPeekYawLock 0"`
+  fails the Bug_2 checks.
+  Frame strips: `CodexTactics.RunCornerPeekSmoke Shot` / `ShotTop` -> `Saved/Screenshots/RunPeekNoHug2/runpeek_<lock|nolock|old>_<side|top>_NN.png`.
+
+### The face under the cursor - any side of the object (#55, game designer's PIE 2026-11-08)
+
+Designer (in cover at one wall, a free-standing ~1.5 m block nearby): "I want to run and peek from the corner of ANOTHER object. The ghost
+appears only on ONE side - roughly the side matching the side I'm pressed to now. I want to press to the face I point at; the other sides
+don't work either."
+
+- **Cause (by design until now):** decision 3 took the face that LOOKS AT HIM (`ChooseNearFace`), whichever face was clicked; and from a wall
+  edge every face of an object in switch range was the wall-edge cover switch (Q1), whose corner rule picks the protected side.
+- **Rule (`RunCornerPeekRules::ChooseClickedFace`):** the face the mouse ray hits decides - of the faces probed round the click the one whose
+  normal agrees most with the hit's normal (at least 0.5); a hit on the edge between two faces (agreement within 0.05) takes the face whose
+  normal points most towards the camera. The corner = the end of THAT face nearest the cursor (`FindCornerPeekForSlot`, as before). All four
+  faces of a free-standing block / pillar / wall end work, the far side too (he paths round the object; the pre-turn / peek stance arrival
+  apply). A hit face with no corner of its own (narrower than 1 m - a wall's end face) falls back to `ChooseNearFace` over the faces round it;
+  thin posts (all faces < 1 m) stay plain cover; a TOP hit never counts (his own floor rule). Box selection / formation use the same face
+  (the corner man of `PlanRunGroupCornerPeek` / the carried squad peek take the chosen face).
+- **Q1 narrowed (`RunCornerPeekRules::KeepsCoverSwitch`):** from a wall edge a click that is also a cover-switch target stays the switch only
+  where the switch goes itself - a face on his protected side (its normal within 60 deg of his own wall's) at its end NEARER to him (the
+  switch's corner in the mirrored pose); every other face and the far end are the run-and-peek to the face under the cursor. (Open for the
+  game designer: drop Q1 for run-and-peek ends altogether?)
+- **Another face of HIS OWN block (the game designer's screenshot 2026-11-08, L_Gen_Depot_1, formation Wall):** at one end of a long block
+  with the enemy beyond its far side he wants to dash the short gap to the FAR face's corner and peek along it towards them, not out from
+  the near face with his flank open. In cover at the clicked object only his OWN face keeps the in-cover rules (the corner peek / shimmy);
+  another face of the same block at its end is the run-and-peek to that face's corner (`RunCornerPeekRules::IsOwnCoverFace`, decided once
+  the face is known in `FindRunCornerPeekClickTarget`; it runs before the wrap round the object, which keeps the clicks in a face's middle).
+  Smoke `RunCornerPeekSmoke` J: a 4 x 1.5 m block, he hugs its south face at the west end, the threat coming from the south past the west end
+  (the flank that face leaves open); the hover + click on the FAR (north) face's west end -> the ghost and the pending slot on the north face, he runs
+  round the west end to that corner and peeks round it towards the threat with the block between him and it (aim . to-threat >= 0.5).
+  Also `RunCornerPeekRules::IsBackFaceHit`: the far (back) face of his own cover is never his in-cover peek (a 1.5 m block puts its end right
+  at his own end - the in-cover peek grabbed that click first).
+- **Low cover is never a run-and-peek (the game designer's PIE 2026-11-08, L_Gen_Depot_1's low cubes, solo, three box-selected):** "To that
+  corner - covering it, the others stack up behind me" sent the corner man to a low cube's corner and the two others "behind" a cube with no
+  room - they stood in the open (a click in the cube's middle, the group cover, worked: "sometimes it works"). Now only cover tall enough to
+  peek round its side is a run-and-peek (`RunCornerPeekRules::IsRunPeekCover`: high cover - the corner peek; low cover - fire over it):
+  `GatherRunCornerPeekFaces` returns no face for low cover, the click is a plain cover click (a box selection: the group cover order over
+  nearby covers, `squad_walls.json` follower radius / side, prone only as its fallback). The face rule applies to high cover only.
+  A HIGH block too short for the stack: a stack man whose place behind the corner man has no slot on that object's face or stands within
+  50 cm of the corner slot (`RunCornerPeekRules::IsStackPlaceCovered`; `PlanRunGroupCornerPeek`'s `OutUnplaced`) takes a nearby cover by
+  the same group cover rule (`OrderUnplacedStackToNearbyCover` -> `ControllerGroupCover::FindNearbyGroupCoverSlots`, the helper the group
+  cover order uses), prone behind the corner man only when none is within reach. (The tactical pause's planned box run-and-peek keeps its
+  stack as before.)
+- **Tests:** `CodexTactics.Tactics.Cover.RunCornerPeek.FaceUnderCursor` (four faces, the far side, edge hits by the camera, the narrow end
+  face fallback, Q1 narrowed), `.LowCoverIsNoRunPeek`, `.ArrivesTurned.OneWay` (the pre-turn never steps back - round a wall's end the
+  strafe shifting under the turn pulled it 2 deg back); `RunCornerPeekSmoke` I (three 90 cm cubes, all three box-selected: the click on the
+  middle cube's end = no peek ghost, nobody armed, the cover ghost; its confirm -> everybody in cover / prone, nobody in the open); `RunCornerPeekSmoke` H (a spawned 1.5 x 1.5 x 2.5 m block south of W_B_3, the leader back in cover at
+  W_B_3's middle before each click: the real hover + click on each face near one end -> the ghost's and the pending slot's wall normal = that
+  face's, he arrives there and peeks round the clicked end) and D (from the north, the south face clicked -> the south face).
 
 ## Both corners of a wall held (#57, 2026-11-07)
 

@@ -600,6 +600,19 @@ public:
 	 * leader - selection, portrait frame and camera follow switch to him (SetLeader) - and the others stack behind him along the near face.
 	 */
 	static bool IsWallLeadershipEnabled();
+
+	/**
+	 * A move order given to the formation at a wall (the wall order / layout, a squad corner peek, the two-corner hold; not solo, no box
+	 * selection): the member with the shortest nav route to Destination takes the lead before the order is given (FormationWallLeadership::
+	 * PickMoveLeader; the current leader keeps it within MoveLeaderKeepCm) and leads from his side - the others follow behind him (the game
+	 * designer's PIE 2026-11-08: the right-corner leader walked round the wall's left end). Open-ground moves keep the leader. The order then
+	 * ends the wall order / the corner hold as before. Codex.Squad.WallMoveNearestLeads (default 1; 0 = the leader leads every move). True when
+	 * the lead changed.
+	 */
+	bool HandOverLeadForWallMove(const FVector& Destination, const TCHAR* Why);
+
+	/** Wall-move hand-overs so far (HandOverLeadForWallMove; smokes). */
+	int32 GetWallMoveHandOvers() const { return WallMoveHandOvers; }
 	/**
 	 * Operative leads the squad and holds the corner of a wall-leadership peek (in its cover): the squad's corner peek hover / click stays on
 	 * for the squad's wall while he is there (the leader in cover otherwise means the single operative's peek).
@@ -723,6 +736,7 @@ private:
 
 	/** SetLeader's switch of the formation's leader (the old leader's look memory, the new heading, the followers, Solo's holds). */
 	void SwitchFormationLeader(AOperativeCharacter& NewLeader);
+	int32 WallMoveHandOvers = 0;
 	/**
 	 * Bug 2026-11-08: the operative is carrying out an order the formation follows (SquadOrderRules::FLeaderSwitchFacts::bLeaderOrderRunning).
 	 * bUseOrTask (optional): that order is his walk-up to an object / an object task. bWithLadder false: an order of his own only (a

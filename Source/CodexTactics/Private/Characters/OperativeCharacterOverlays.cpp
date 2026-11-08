@@ -249,6 +249,12 @@ FLinearColor AOperativeCharacter::GetSilhouetteColor() const
 		Color.A = A;
 		return Color;
 	};
+	// The game designer's decision 2026-11-08: a hostile operative (a PMC fighter - TeamId other than the player's) shows RED through the
+	// walls, never a squad role colour (his orange looked like the squad's engineer).
+	if (!IsPlayerTeam())
+	{
+		return HostileSilhouetteColor;
+	}
 	if (Squad && Squad->GetLeader() == this)
 	{
 		return Godot(0.2f, 0.85f, 1.f, 0.55f);

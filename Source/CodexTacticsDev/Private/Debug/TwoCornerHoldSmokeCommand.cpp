@@ -13,6 +13,11 @@
 // leads again and keeps his corner, the west corner is free, the middle man keeps his place (answer 5); a ground click away (a move order)
 // ends the hold.
 // A/B: -PreCmds "Codex.Formation.TwoCornerHold 0" = the rule before #57 (the east man leaves his corner: the checks fail).
+// CodexTactics.WallMoveNearestLeadsSmoke (the game designer's PIE 2026-11-08, L_Gen_Depot_1: both corners held, the right-corner man leading,
+// a move to the LEFT - the leader walked round the wall's left end dragging the next man): the same two-corner hold (the west man leading,
+// the east man holding his corner), then the real ground click beyond the EAST end, round it behind the wall -> the east man (the nearest)
+// takes the lead at the order, nobody walks round the west end (the long way), the hold ends, all three arrive near the point.
+// A/B: -PreCmds "Codex.Squad.WallMoveNearestLeads 0" fails it (the west leader leads the long way round).
 // Godot reference: none (UE-only; docs/systems/squad-and-orders.md "Both corners held").
 
 #include "CoreMinimal.h"
@@ -60,8 +65,15 @@ namespace TwoCornerHoldSmoke
 		None,
 		WestEnd,
 		EastEnd,
-		AwayGround
+		AwayGround,
+		BeyondEast
 	};
+
+	/** WallMoveNearestLeadsSmoke: the move's destination beyond the east end, round it behind the wall. */
+	const FVector2D BeyondEastPoint(WallEastX + 400.f, WallFaceY + 350.f);
+	/** ... all three arrive within this of it, cm; nobody farther west than the west end minus this (the long way round), cm. */
+	constexpr float ArriveCm = 600.f;
+	constexpr float LongWayCm = 60.f;
 
 	struct FState
 	{
@@ -91,6 +103,11 @@ namespace TwoCornerHoldSmoke
 		int32 SecondCornersBefore = 0;
 		EClick PendingClick = EClick::None;
 		bool bClickDone = false;
+		/** WallMoveNearestLeadsSmoke: the move-off-the-wall stage instead of the knock-down; the westmost x seen, the hand-overs before. */
+		bool bMoveOff = false;
+		float WestmostX = 1.0e9f;
+		int32 WallMoveHandOversBefore = 0;
+		TWeakObjectPtr<AOperativeCharacter> LeaderAtOrder;
 		FDelegateHandle PreTickHandle;
 	};
 
@@ -195,6 +212,17 @@ namespace TwoCornerHoldSmoke
 			return;
 		}
 		FHitResult Hit;
+		if (Click == EClick::BeyondEast)
+		{
+			if (GroundHit(World, State, BeyondEastPoint.X, BeyondEastPoint.Y, Hit))
+			{
+				PC->HandleWorldHit(Hit);
+			}
+			State.LeaderAtOrder = Squad->GetLeader();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the ground click beyond the east end at (%.0f, %.0f) -> leader %s;%s"), Hit.ImpactPoint.X, Hit.ImpactPoint.Y,
+				*NameOf(Squad->GetLeader()), *Where(State));
+			return;
+		}
 		if (Click == EClick::AwayGround)
 		{
 			if (GroundHit(World, State, MidX, WallFaceY - 700.f, Hit))
@@ -473,6 +501,15 @@ namespace TwoCornerHoldSmoke
 			}
 			Check(State, Leader == State.West.Get() && Squad->GetHeldCornerOperative() == State.East.Get() && InPeekPose(State.West.Get()) && InPeekPose(State.East.Get()),
 				FString::Printf(TEXT("a repeated peek on the left swaps nothing (leader %s, held %s);%s"), *NameOf(Leader), *NameOf(Squad->GetHeldCornerOperative()), *Where(State)));
+			if (State.bMoveOff)
+			{
+				// WallMoveNearestLeadsSmoke: the move off the wall beyond the east (non-leader) end.
+				State.WallMoveHandOversBefore = Squad->GetWallMoveHandOvers();
+				State.WestmostX = 1.0e9f;
+				State.PendingClick = EClick::BeyondEast;
+				Next(State, 10);
+				return true;
+			}
 			// Answer 5 (2026-11-08): the leader (the west corner man) goes down.
 			AOperativeCharacter* West = State.West.Get();
 			AOperativeCharacter* Middle = State.MiddleMan.Get();
@@ -533,18 +570,54 @@ namespace TwoCornerHoldSmoke
 			Check(State, bOver && East && !East->IsManualCornerPeek(), FString::Printf(TEXT("a move order of the new leader ends the corner hold (%.1f s);%s"), State.StageTime, *Where(State)));
 			return Finish(State, true);
 		}
+		case 10:
+		{
+			// WallMoveNearestLeadsSmoke: the nearest man (east) leads off the wall, nobody the long way round, all arrive.
+			if (State.PendingClick != EClick::None)
+			{
+				return true;
+			}
+			bool bArrived = true;
+			for (const TWeakObjectPtr<AOperativeCharacter>& Weak : State.Members)
+			{
+				if (const AOperativeCharacter* Op = Weak.Get())
+				{
+					State.WestmostX = FMath::Min(State.WestmostX, static_cast<float>(Op->GetActorLocation().X));
+					bArrived &= FVector2D::Distance(FVector2D(Op->GetActorLocation()), BeyondEastPoint) <= ArriveCm && Op->GetVelocity().Size2D() < 10.f;
+				}
+			}
+			if (FMath::FloorToInt32(State.StageTime / 1.f) != FMath::FloorToInt32((State.StageTime - DeltaTime) / 1.f))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace %.1f s (move off the wall): leader %s;%s"), State.StageTime, *NameOf(Leader), *Where(State));
+			}
+			State.HoldTime = bArrived ? State.HoldTime + DeltaTime : 0.f;
+			if (State.HoldTime < 1.f && State.StageTime < 40.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* East = State.East.Get();
+			Check(State, State.LeaderAtOrder.Get() == East && Squad->GetWallMoveHandOvers() == State.WallMoveHandOversBefore + 1,
+				FString::Printf(TEXT("the move beyond the east end: %s (the east corner man, nearest) takes the lead at the order (leader then %s, hand-overs %d -> %d)"),
+					*NameOf(East), *NameOf(State.LeaderAtOrder.Get()), State.WallMoveHandOversBefore, Squad->GetWallMoveHandOvers()));
+			Check(State, State.WestmostX >= WallWestX - LongWayCm, FString::Printf(TEXT("nobody walks round the west end - the long way (westmost x %.0f, the west end %.0f)"),
+				State.WestmostX, WallWestX));
+			Check(State, !Squad->IsTwoCornerHoldActive() && !Squad->GetFormationPeeker(), TEXT("the move ends the corner hold"));
+			Check(State, bArrived, FString::Printf(TEXT("all three arrive near the point (within %.0f cm, %.1f s);%s"), ArriveCm, State.StageTime, *Where(State)));
+			return Finish(State, true);
+		}
 		default:
 			return Finish(State, false);
 		}
 	}
 
-	void Run(const TArray<FString>& Args, UWorld* World)
+	void Run(const TArray<FString>& Args, UWorld* World, bool bMoveOff = false)
 	{
 		if (!World)
 		{
 			return;
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->bMoveOff = bMoveOff;
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		State->PreTickHandle = FWorldDelegates::OnWorldPreActorTick.AddLambda([WeakWorld, State](UWorld* Ticking, ELevelTick, float)
 		{
@@ -564,6 +637,11 @@ namespace TwoCornerHoldSmoke
 		TEXT("CodexTactics.TwoCornerHoldSmoke"),
 		TEXT("Dev check (#57, two-corner hold): on L_FormationLab the squad at W_B_3 in formation - peek right -> the east man at the east corner; peek left -> the west man at the west corner AND the east man still peeking at his; the middle man walks back to the middle of the wall and sweeps his look between both corner looks; a repeated left peek swaps nothing; the leader (west) knocked down -> the east man leads again and keeps his corner; a move order ends the hold. PASS/FAIL, exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(Args, World); }));
+
+	static FAutoConsoleCommandWithWorldAndArgs MoveOffCommand(
+		TEXT("CodexTactics.WallMoveNearestLeadsSmoke"),
+		TEXT("Dev check (the game designer's PIE 2026-11-08): the two-corner hold at W_B_3 (the west man leading), a move order beyond the EAST end -> the east man (nearest) takes the lead, nobody walks round the west end, the hold ends, all arrive. PASS/FAIL, exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(Args, World, /*bMoveOff*/ true); }));
 }
 
 #endif // !UE_BUILD_SHIPPING

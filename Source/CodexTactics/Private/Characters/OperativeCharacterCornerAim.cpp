@@ -7,8 +7,11 @@
 
 #include "CodexTactics.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/FacingRules.h"
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacterInternal.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/GrenadeActor.h"
 #include "Combat/HealthComponent.h"
@@ -17,6 +20,7 @@
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -38,6 +42,11 @@ namespace
 		TEXT("1 (default): a run-and-peek arrival goes straight into the corner peek stance - the run's last metres turn to the peek facing, no ")
 		TEXT("enter clip, no wall hug, no idle -> fire step-out (the game designer's video 2026-11-08). 0: the 2026-11-07 entry (the hug, then ")
 		TEXT("the turn out round the corner; A/B)."));
+	TAutoConsoleVariable<int32> CVarRunPeekYawLock(TEXT("Codex.Cover.RunPeekYawLock"), 1,
+		TEXT("1 (default): the run-and-peek arrives already turned - the run's last ~0.6 s turn his drawn body to the fire idle's drawn facing ")
+		TEXT("at an even rate and the anim holds the drawn body's yaw through the peek stance blend (the game designer's video Bug_2 ")
+		TEXT("2026-11-08: no extra turn on the peek entry). 0: the first fix (the actor turned to the corner aim in the last 1.5 m, the mesh's ")
+		TEXT("held yaw released by the blend weight; A/B)."));
 }
 
 void AOperativeCharacter::BeginCornerAim()
@@ -440,6 +449,12 @@ bool AOperativeCharacter::ArmRunCornerPeek(const FVector& EdgeOnFace)
 	float EdgeAlong = 0.f;
 	ResolveRunCornerPeekEdge(RunCornerPeekSlot, Side, EdgeAlong);
 	RunCornerPeekFacingYaw = static_cast<float>(CoverFacingRules::CornerAimDirection(RunCornerPeekSlot, Side, CornerAimOutwardDeg).Rotation().Yaw);
+	// Arrives already turned (Bug_2): the drawn body is turned to where the fire idle of that side will draw it, from the cover facing he gets.
+	RunCornerPeekSide = Side;
+	RunCornerPeekCoverYaw = CoverFacingRules::FacingYaw(RunCornerPeekSlot, Side);
+	bRunCornerPeekPreTurnOn = false;
+	bRunCornerPeekFinalBodyValid = false;
+	bRunCornerPeekRunBodySeeded = false;
 	return true;
 }
 
@@ -475,15 +490,107 @@ void AOperativeCharacter::ResolveRunCornerPeekEdge(const FCoverSlot& Slot, ECove
 	}
 }
 
-bool AOperativeCharacter::WantsRunCornerPeekPreTurn() const
+bool AOperativeCharacter::IsRunPeekYawLockEnabled()
+{
+	return CVarRunPeekYawLock.GetValueOnGameThread() != 0;
+}
+
+float AOperativeCharacter::GetRunInGlideCm(float SpeedCmS) const
+{
+	return FMath::Min(SpeedCmS * CoverEnterDecelSeconds * 0.5f, CoverEnterMaxGlideCm);
+}
+
+bool AOperativeCharacter::WantsRunCornerPeekPreTurn()
 {
 	if (!bRunCornerPeekPending || !bHasPendingCover || bInCover || !IsRunPeekStanceEnabled())
 	{
+		bRunCornerPeekPreTurnOn = false;
 		return false;
 	}
 	const bool bArmedSlot = FVector::Dist2D(PendingCoverSlot.WorldLocation, RunCornerPeekSlot.WorldLocation) <= 5.f;
-	return RunCornerPeekRules::ShouldPreTurn(bArmedSlot, static_cast<float>(FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation)),
-		static_cast<float>(GetVelocity().Size2D()));
+	const float Distance = static_cast<float>(FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation));
+	const float Speed = static_cast<float>(GetVelocity().Size2D());
+	if (!IsRunPeekYawLockEnabled())
+	{
+		return RunCornerPeekRules::ShouldPreTurn(bArmedSlot, Distance, Speed); // the first fix: the last 1.5 m to the slot
+	}
+	// Arrives already turned (Bug_2): from ~0.6 s of his run before the entry (which comes the glide short of the slot); once started it runs
+	// on to the entry (the start distance moves with his speed).
+	const float StartCm = bRunCornerPeekPreTurnOn ? TNumericLimits<float>::Max() : RunCornerPeekRules::PreTurnStartCm(Speed, GetRunInGlideCm(Speed));
+	const bool bTurn = RunCornerPeekRules::ShouldPreTurn(bArmedSlot, Distance, Speed, StartCm);
+	if (bTurn && !bRunCornerPeekPreTurnOn)
+	{
+		bRunCornerPeekRunBodySeeded = false;
+		RunCornerPeekPreTurnSign = 0;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek pre-turn from %.0f cm out (speed %.0f, the entry %.0f cm short of the slot)"),
+			*DisplayName.ToString(), Distance, Speed, GetRunInGlideCm(Speed));
+	}
+	bRunCornerPeekPreTurnOn = bTurn;
+	return bTurn;
+}
+
+float AOperativeCharacter::StepRunCornerPeekPreTurn(float DeltaTime)
+{
+	const float Yaw = static_cast<float>(GetActorRotation().Yaw);
+	if (!IsRunPeekYawLockEnabled())
+	{
+		// The first fix (A/B): the actor to the corner aim at the stance's turn rate.
+		return FacingRules::StepYaw(Yaw, RunCornerPeekFacingYaw, 2.f * OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f, DeltaTime);
+	}
+	float Target = RunCornerPeekFacingYaw; // without the clip / the bones: the corner aim
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	float RunBodyCs = 0.f;
+	if (Anim && Anim->GetMeshBodyYawCs(RunBodyCs))
+	{
+		if (!bRunCornerPeekFinalBodyValid)
+		{
+			// (The stance the entry gives: high standing, low crouched - EnterCover.)
+			bRunCornerPeekFinalBodyValid = Anim->GetPeekStanceBodyYawCs(RunCornerPeekSide,
+				CoverRules::DefaultStanceFor(RunCornerPeekSlot.Height) == EOperativeStance::Crouching, RunCornerPeekFinalBodyCs);
+		}
+		if (bRunCornerPeekFinalBodyValid)
+		{
+			// The run pose's drawn yaw shifts as the turn itself changes his strafe (the 8-direction locomotion): followed through ~0.08 s.
+			const float Follow = 1.f - FMath::Exp(-DeltaTime / 0.08f);
+			RunCornerPeekRunBodyCs = bRunCornerPeekRunBodySeeded ? FRotator::NormalizeAxis(RunCornerPeekRunBodyCs
+				+ FRotator::NormalizeAxis(RunBodyCs - RunCornerPeekRunBodyCs) * Follow) : RunBodyCs;
+			bRunCornerPeekRunBodySeeded = true;
+			Target = RunCornerPeekRules::BodyTargetActorYaw(RunCornerPeekCoverYaw, RunCornerPeekFinalBodyCs, RunCornerPeekRunBodyCs);
+		}
+	}
+	const float Speed = static_cast<float>(GetVelocity().Size2D());
+	const float ToEntry = static_cast<float>(FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation)) - GetRunInGlideCm(Speed);
+	// One way only (RunCornerPeekSmoke D, round a wall's end: the strafe shifting under the turn pulled it 2 deg back): a step against the way it
+	// turns holds instead - the peek stance's yaw lock eases out what is left.
+	return RunCornerPeekRules::OneWayStepYaw(Yaw, RunCornerPeekRules::PreTurnStepYaw(Yaw, Target, ToEntry, Speed, DeltaTime), RunCornerPeekPreTurnSign);
+}
+
+bool AOperativeCharacter::BeginPeekStanceYawLock(float OldActorYaw, ECoverFacing Side, bool bCrouch)
+{
+	UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	float RunBodyCs = 0.f;
+	float FinalBodyCs = 0.f;
+	if (!IsRunPeekYawLockEnabled() || !Anim || !Anim->GetMeshBodyYawCs(RunBodyCs) || !Anim->GetPeekStanceBodyYawCs(Side, bCrouch, FinalBodyCs))
+	{
+		return false;
+	}
+	// The run's last frame as drawn (the pose on the mesh at his old yaw, plus whatever the mesh held), seen from the mesh at its base yaw on
+	// the capsule as the actor stands now (back to the wall).
+	const float Turned = FRotator::NormalizeAxis(OldActorYaw - static_cast<float>(GetActorRotation().Yaw));
+	const float EntryBodyCs = FRotator::NormalizeAxis(RunBodyCs + Turned + CoverEntryAppliedYaw);
+	LastPeekStanceBodyGapDeg = FRotator::NormalizeAxis(FinalBodyCs - EntryBodyCs);
+	// The path outlasts the fire idle's blend (+0.1 s: it starts an anim update or two after the entry), so the lock lets go of a settled pose.
+	const float PathSeconds = FMath::Max(Anim->CoverPeekStanceBlendSeconds + 0.1f, RunCornerPeekRules::PeekStanceYawBlendSeconds(LastPeekStanceBodyGapDeg));
+	Anim->BeginPeekStanceYawLock(EntryBodyCs, FinalBodyCs, PathSeconds, Side, bCrouch);
+	// Already drawn this frame (the anim updated before this entry): that pose is the run's, so the mesh holds the old yaw for this one frame;
+	// from the next update on the lock draws it (UpdateCoverEntryBlend drops the hold).
+	const bool bDrawnAlready = Anim->GetLastAnimUpdateFrame() == GFrameCounter;
+	PeekStanceBridgeFrame = bDrawnAlready ? GFrameCounter : 0;
+	PeekStanceBridgeYaw = FRotator::NormalizeAxis(Turned + CoverEntryAppliedYaw);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: peek stance yaw lock - the drawn body %.0f -> %.0f deg (component space; gap %.0f deg over %.2f s), run body %.0f, actor turned %.0f%s"),
+		*DisplayName.ToString(), EntryBodyCs, FinalBodyCs, LastPeekStanceBodyGapDeg, PathSeconds, RunBodyCs, Turned,
+		bDrawnAlready ? TEXT(", this frame's pose held on the mesh") : TEXT(""));
+	return true;
 }
 
 void AOperativeCharacter::StartRunCornerPeekOnEntry(const FCoverSlot& Slot)

@@ -41,6 +41,7 @@
 #include "Combat/FirePuddleActor.h"
 #include "Combat/SignalFlareActor.h"
 #include "Data/TacticalHeatTuning.h"
+#include "Data/WeaponLoadoutRules.h"
 #include "Interactables/VaultNavigation.h"
 #include "UI/CodexTacticsHUD.h"
 
@@ -306,17 +307,43 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 		}
 		UGameplayStatics::FinishSpawningActor(Operative, FTransform(Facing, Location));
 		TArray<UWeaponDataAsset*> Arsenal;
-		for (const TSoftObjectPtr<UWeaponDataAsset>& Weapon : StartingArsenal)
+		// The player's squad: the role's loadout from weapons_tuning.json "loadouts" (designer decision 21+: the Engineer = the D-1 shotgun,
+		// no M16); a role without one (and every PMC fighter) keeps StartingArsenal + its ExtraWeapons (the Blueprint data).
+		TArray<FString> LoadoutIds;
+		const UEnum* RoleEnum = StaticEnum<EOperativeRole>();
+		const bool bDataLoadout = InTeamId == 0 && RoleEnum
+			&& WeaponLoadoutRules::Find(WeaponLoadoutRules::RoleKey(RoleEnum->GetNameStringByValue(static_cast<int64>(Entry.Role))), LoadoutIds);
+		if (bDataLoadout)
 		{
-			if (UWeaponDataAsset* Loaded = Weapon.LoadSynchronous())
+			for (const FString& Id : LoadoutIds)
 			{
-				Arsenal.Add(Loaded);
+				if (UWeaponDataAsset* Loaded = LoadObject<UWeaponDataAsset>(nullptr, *WeaponLoadoutRules::WeaponAssetPath(Id)))
+				{
+					Arsenal.Add(Loaded);
+				}
+				else
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Loadout: no weapon asset for \"%s\""), *Id);
+				}
 			}
 		}
-		Operative->InitArsenal(Arsenal, StartingReserveAmmo); // full clips, M16 in hands
+		else
+		{
+			for (const TSoftObjectPtr<UWeaponDataAsset>& Weapon : StartingArsenal)
+			{
+				if (UWeaponDataAsset* Loaded = Weapon.LoadSynchronous())
+				{
+					Arsenal.Add(Loaded);
+				}
+			}
+		}
+		Operative->InitArsenal(Arsenal, StartingReserveAmmo); // full clips, the primary weapon in hands
 		for (const TSoftObjectPtr<UWeaponDataAsset>& Extra : Entry.ExtraWeapons)
 		{
-			Operative->AddArsenalWeapon(Extra.LoadSynchronous()); // reserve = the weapon's DefaultReserveAmmo (weapons_tuning.json)
+			if (!bDataLoadout) // the data loadout lists every weapon of the role (the Medic-Sapper's sniper rifle too)
+			{
+				Operative->AddArsenalWeapon(Extra.LoadSynchronous()); // reserve = the weapon's DefaultReserveAmmo (weapons_tuning.json)
+			}
 		}
 		Operative->ApplyBodyColor();
 		return Operative;

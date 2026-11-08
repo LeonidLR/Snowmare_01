@@ -270,4 +270,28 @@ bool FFormationWallLeadershipGroupPeekTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallMoveLeaderTest, "MoveNearestLeads")
+bool FFormationWallMoveLeaderTest::RunTest(const FString& Parameters)
+{
+	using namespace FormationWallLeadership;
+	// The game designer's PIE 2026-11-08 (L_Gen_Depot_1): the squad behind a wall, both corners held, the right-corner man leading; a move to
+	// the LEFT - he walked round the wall's left end, dragging the next man. Routes (nav) to a point beyond the left end: left man 4 m, middle
+	// 9 m, the leader (right corner) 16 m.
+	const TArray<double> Routes{ 1600.0, 900.0, 400.0 }; // [0] the leader (right), [1] the middle man, [2] the left-corner man
+	const TArray<bool> All{ true, true, true };
+	TestEqual(TEXT("the left-corner man, nearest the destination, takes the lead"), PickMoveLeader(Routes, All, 0), 2);
+	TestEqual(TEXT("a move to the right: the leader (nearest) keeps it"), PickMoveLeader({ 300.0, 900.0, 1500.0 }, All, 0), 0);
+	TestEqual(TEXT("a near tie (within 1.5 m): the leader keeps it - no leader hopping"), PickMoveLeader({ 1000.0, 1200.0, 900.0 }, All, 0), 0);
+	TestEqual(TEXT("the nearest can't lead (knocked down): the next nearest"), PickMoveLeader(Routes, { true, true, false }, 0), 1);
+	TestEqual(TEXT("the leader can't lead: the nearest able"), PickMoveLeader({ 100.0, 900.0, 400.0 }, { false, true, true }, 0), 2);
+	TestEqual(TEXT("no route for the nearest (< 0): skipped"), PickMoveLeader({ 1600.0, 900.0, -1.0 }, All, 0), 1);
+	TestEqual(TEXT("nobody able: none"), PickMoveLeader(Routes, { false, false, false }, 0), static_cast<int32>(INDEX_NONE));
+	// At a wall: the wall order / layout, a corner peek, the two-corner hold; the open ground keeps its leader.
+	TestTrue(TEXT("the two-corner hold is at a wall"), IsAtWallForMoveLead(false, false, true, true));
+	TestTrue(TEXT("the wall layout in force"), IsAtWallForMoveLead(false, true, false, false));
+	TestTrue(TEXT("the wall order"), IsAtWallForMoveLead(true, false, false, false));
+	TestFalse(TEXT("open ground: no hand-over"), IsAtWallForMoveLead(false, false, false, false));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

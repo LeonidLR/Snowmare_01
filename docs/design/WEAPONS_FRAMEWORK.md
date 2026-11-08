@@ -319,3 +319,20 @@ A reading of the data for the designer (not a fork): the pistol's own per-cell t
 0.25 / 0.12 per 1.5 m, from Godot's turn-based grid) already cuts its real-time damage to 12 % beyond ~8 m; the new falloff only bites past
 15 m on top of that. If the pistol should do real damage at 10-15 m, that table (not the falloff) is the number to change. (The knife, hammer and
 flamethrower rows of this table were dropped with the roster, section 0: those weapons are out of play.)
+
+## 13. The whole shotgun: the D-1 for the Engineer (game designer decisions 21 / 21+, 2026-11-03 / 11-08; branch `feat/weapons-framework`)
+
+- **Identity / loadout.** Id `shotgun` kept (saves, PMC weapon_pool, `DA_Weapon_shotgun`); display name "D-1 Shotgun" from the file's "name".
+  `weapons_tuning.json` "loadouts": the Engineer = shotgun (in hands) / pistol / grenade, **no M16**; commander and medic-sapper unchanged.
+  Every former "fall back to the M16" now falls back to the operative's primary weapon (save load, campaign carry, after a grenade, a
+  cancelled aim, an empty weapon). No save migration: old saves holding "m16" for the Engineer load his saved weapon only if he owns it,
+  otherwise the D-1.
+- **Numbers (decided today, unchanged from step 2):** 45 per shot at point blank = 8 pellets x 5.625, full to 8 m, x0.4 at 15 m
+  (`damage_falloff_floor` 0.4), class light, 8 + 40 shells, per-shell reload 0.5 s (empty -> full 4.0 s), interruptible between shells.
+  Measured against the smoke's hound (light armour 0.10): 40.95 at 3 / 8 m, 18.13 at 14.5 m (x0.443).
+- **Model.** The user's Fab D-1 (`/Game/Fab/_Model_D-1__Shotgun`, read-only; a skeletal mesh at ~100x scale, the pump a second mesh not used)
+  through the new "visual" block (skeletal hand mesh support, attach transform, muzzle offset).
+- **Animation.** ShotgunLocomotionPack as a native weapon layer for every body holding a `handling: "shotgun"` weapon (the squad: IK-retargeted
+  copies; PMC fighters: the pack clips) - `docs/systems/animation-setup.md` "Shotgun weapon layer". Reload: the pack has ONE 2.4 s reload
+  clip and no per-shell clip; it plays once per shell fitted to the 0.5 s step (x4.8) - `reload_shell_start_s` / `_end_s` in
+  `weapon_anim_sets.json` can cut a section of it instead (the designer may pick one after viewing the render).

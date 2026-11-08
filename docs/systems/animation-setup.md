@@ -312,6 +312,52 @@ no full-body clip; a shot -> 0 in 0.05 s and stays 0 during the aim hold, back a
 `CodexTactics.BlizzardWalkSmoke clip` (rendered, `-RenderOffscreen -benchmark -fps=30`) writes ~10 s of frames to `Saved/Screenshots/BlizzardWalk/`.
 **Eyeball in PIE:** the rifle follows hand_r up beside the face (rendered check, no clipping through the head); `bHideWeaponInBlizzardWalk` = true hides it instead.
 
+## Shotgun weapon layer: the D-1 on ShotgunLocomotionPack (game designer decision 21, 2026-11-03; implemented 2026-11-08)
+
+**Request:** "when an operative holds the shotgun, locomotion / aim switch to the shotgun animations from `/Game/ShotgunLocomotionPack`; PMC fighters with a
+shotgun use the same layer". The pack (user content, read-only): UE5 Manny (`SK_Mannequin`, 161 bones, spine_01..05, clavicles on spine_05); 8-direction walk /
+aim-walk / jog loops, 4-direction crouch, stand / aim / crouch idles, sprint, aim + hip fire, ONE reload clip (`anim_shotgun_aim_reload`, 2.4 s, no notifies, no
+per-shell clip), in-place loops (the `Loop_Root` folder holds root-motion takes). Inspected by `Scripts/Editor/inspect_shotgun_pack.py`.
+**Skeletons:** the PMC operator skeleton has the pack's hierarchy (+ `root_inner`) -> the pack clips play on it by bone name. The operatives' UE4 skeletons
+(`UE4_Mannequin_Skeleton` 71 bones, `Female_Soldier_Skeleton` 68; spine_01..03, clavicles on spine_03) do not: by bone name the aim pose held the gun level at the
+chest pointing to his left (render 2026-11-08). So the 35 clips the layer uses are IK-retargeted by `Scripts/Editor/setup_shotgun_animation.py` (the M4 pack's
+`RTG_UE5Manny_UE4Manny`, "Blend to Source" off in memory, never saved - as the cold idles / storm walk) to `/Game/Characters/Animations/Shotgun/Male/` (onto
+SK_Post_Apo_Survivor_a) and `.../Female/` (SK_Female_soldier), same names. Measured (`Saved/Logs/setup_shotgun_animation.txt`): gun axis (hand_r -> hand_l)
+cos 0.996-1.000 vs the pack on every measured clip; head / hands vs pelvis within 9-23 cm (the shorter bodies). Re-run: `CODEX_RESET_SHOTGUN_CLIPS=1`.
+**Data:** `Content/Data/Weapons/weapon_anim_sets.json` "shotgun": the pack clip paths, `retargeted` (skeleton name -> copy folder; a skeleton not listed plays the
+pack clips), loop speeds (walk 150 / jog 350 / crouch 120 / sprint 550 cm/s), idle -> move 15..60 cm/s, `reload_shell_start_s` / `_end_s` (0 / 0 = the whole
+reload clip per shell), `blend_seconds` 0.2.
+**ABP: nothing changed** (the user polishes ABP_Operative; same pattern as the sniper / blizzard / ladder layers). `UOperativeAnimInstance`
+(`OperativeAnimInstanceShotgun.cpp`) blends the clip pose natively AFTER the graph in `FOperativeAnimInstanceProxy::Evaluate_WithRoot` (`BlendWeaponLayer`):
+bones under spine_01 take the upper weight, the rest the lower weight, root kept. Mask (`WeaponAnimLayerRules::ResolveMask`): Full when free; **LowerBody** while an
+upper-body slot montage plays (fire / reload / hit / grenade: the legs keep the shotgun walk, the arms play the montage); Off under a full-body montage and when
+not eligible (dead, knocked down, ladder, vault, cover, prone, airborne fall, sniper pose, blizzard walk, carrying). Clip choice: idle (stand / aim / crouch) vs
+move by speed; walk -> jog blend by speed, aim-walk while aiming, crouch set crouched, sprint loop; 8 directions from the velocity vs the facing
+(`BlendDirections`, nearest two available); one shared normalized phase; play rate = speed / loop speed (0.5..1.6).
+**Fire:** `PlayShotgunFire` plays `fire_aim` (aiming) or `fire_hip` on UpperBodySlot per shot (instead of AM_Rifle_Fire). **Reload per shell:**
+`UpdateShotgunReload` plays the reload clip (or the configured section) on UpperBodySlot once per shell, fitted to `reload_per_round_s` 0.5 s (x4.8 for the whole
+2.4 s clip - `ShellReloadRate`); an order / shot interrupts between shells (the gameplay rule).
+**Check:** tests `CodexTactics.Animation.WeaponLayer.*`; `CodexTactics.ShotgunSmoke` (the layer Full standing with an idle copy from the skeleton's folder, a walk
+clip moving, a fire clip per shot, >= 8 shell clips over a reload, the PMC fighter's layer on the pack clips); `CodexTactics.ShotgunD1Shots` (rendered) writes stills
++ idle / walk / aim-fire / reload frames to `Saved/Screenshots/ShotgunD1/`.
+
+## #51: the "thrown back while firing" pop (game designer video 2026-11-06; fixed 2026-11-08)
+
+**Symptom:** PMC fighters jerk violently when they fire (`Videos/PMC_ShootingndZoominBUG_0.avi`). **Measured, not guessed:** `CodexTactics.RecoilProbe`
+(a measuring tool, `Source/CodexTacticsDev/Private/Debug/RecoilProbeCommand.cpp`) watches every operative's / fighter's spine_03 in real PMC arena fights
+and logs each one-frame torso move faster than a sprint (> 15 cm a frame) with the stance, cover, montages and whether he just fired. In three 120 s
+arena rounds the signature was always the same: **stance crouch, a round fired, `AS_Rifle_Fire(_Aim)` on the Fire slot, the torso 40-80 cm UP in one frame
+from floor height** - for the player's squad AND the PMC (the PMC fight more from prone, so it shows on them). Cause: AI fighters get up from prone to fire;
+the prone -> crouch / stand clip is a full-body montage, and the fire montage (same montage group) replaced it the instant the first shot went out, so the
+body jumped from the floor to the crouch. Ruled out with numbers: the fire clips themselves (0 cm torso travel, `Scripts/Editor/measure_pmc_fire_recoil.py`),
+the PMC skeleton's translation retargeting modes (same result Skeleton vs AnimationScaled), root motion / capsule (capsule moves 0 cm), a standing shot
+(torso 1.2 cm). **Fix:** `HandleWeaponFired` plays no upper-body fire clip while a stance transition plays (the shot still goes out; the next shot's clip
+plays over the finished stance), as the prone fire and the hit reactions already did; the shotgun layer also counts a stance transition as full body from its
+first frame (`GetFireClipsSkippedForStance()` counts the skipped clips). **Check:** `CodexTactics.ShotgunSmoke` part 7 - the PMC fighter (M16) and the
+Engineer (D-1) lie down, get up and fire 0.15 s into the rise: the rise keeps playing, the torso moves at most 4.8 / < 15 cm in a frame (the bug: 40-80).
+After the fix the probe shows no more firing pops. **Left (not #51, reported):** sideways 50-60 cm one-frame pops when a fighter leaves a corner fire pose
+of the cover system (`anim_M4_cvr_crch_fire_idle_R`, the pack's sideways root step) - squad and PMC alike, a separate cover task.
+
 ## Frozen PMC Fighter: the Frostbitten's animation on the Cyberpunk_Explorer_A body (game designer 2026-10-20)
 
 **Skeleton check** (read-only, logged by `Scripts/Editor/create_frozen_pmc_fighter.py` into `Saved/Logs/create_frozen_pmc_fighter.txt`):

@@ -23,6 +23,7 @@ namespace WeaponStatsRulesInternal
 	static const TWeaponEnumName<EWeaponHandling> WeaponHandlingNames[] = {
 		{ EWeaponHandling::Standard, TEXT("standard") },
 		{ EWeaponHandling::SniperRifle, TEXT("sniper_rifle") },
+		{ EWeaponHandling::Shotgun, TEXT("shotgun") },
 	};
 
 	static const TWeaponEnumName<EDamageType> WeaponDamageTypeNames[] = {
@@ -107,6 +108,8 @@ namespace WeaponStatsRulesInternal
 		TEXT("spread_scale"), TEXT("recoil_per_round_deg"), TEXT("recoil_recovery_s"),
 		// Reserved per-kind blocks.
 		TEXT("pellets"), TEXT("projectile"), TEXT("explosion"),
+		// Presentation (WeaponTuning::ApplyWeaponVisual: the model in the hand), not stats.
+		TEXT("visual"),
 	};
 
 	static const TCHAR* const WeaponPelletKeys[] = { TEXT("comment"), TEXT("count"), TEXT("cone_half_angle_deg") };

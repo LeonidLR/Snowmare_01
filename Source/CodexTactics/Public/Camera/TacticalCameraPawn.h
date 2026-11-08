@@ -143,6 +143,25 @@ public:
 	/** Current shake trauma 0..1. */
 	float GetShakeTrauma() const { return ShakeTrauma; }
 
+	/**
+	 * How far this frame's operative clearance moved the camera back along its view axis, cm (0 = not needed; smokes / logs). The follow
+	 * smoothing starts from last frame's (already cleared) location, so a held clearance shows as a small per-frame correction.
+	 */
+	float GetClearanceDolly() const { return ClearanceDolly; }
+
+	/**
+	 * Bug #52 on L_Gen_Depot_1 (2026-11-08, the squad prone on a roof, the wheel in): the operative clearance (TacticalCameraRules::
+	 * ComputeClearanceDolly), the held focus height (ComputeDetachedFocusZ) and the view guard of UCodexPlayerCameraManager are on.
+	 * Console Codex.Camera.OperativeClearance (1; 0 = the old camera, A/B).
+	 */
+	static bool IsOperativeClearanceEnabled();
+
+	/**
+	 * Location pushed out of every visible character's capsule in World (within 20 m) grown by Clearance (bug #52): the tactical camera's
+	 * own guard and UCodexPlayerCameraManager's guard of every other view (a zone's fixed camera, a blend).
+	 */
+	static FVector PushOutOfCharacters(const UWorld* World, const FVector& Location, float Clearance);
+
 	/** Shake tuning (DA_GameBalanceConfig camera_shake_* at BeginPlay). */
 	FCameraShakeConfig ShakeConfig;
 
@@ -163,8 +182,10 @@ private:
 	bool IsTurnBased() const;
 	void UpdateZoomMode();
 
-	/** Camera location pushed out of every character capsule (bug #52). */
-	FVector PushOutOfCharacters(const FVector& Location) const;
+	/** The operative clearance (bug #52, Depot roof): Location moved back along ViewForward until no squad operative on screen is point-blank. */
+	FVector KeepClearOfOperatives(const FVector& Location, const FVector& ViewForward);
+	/** Capsule centres of the visible squad operatives. */
+	void GatherOperativePoints(TArray<FVector>& OutPoints) const;
 	void UpdatePan(float RealDelta);
 	void UpdateRotation(float RealDelta);
 	FVector ComputeFocus(float RealDelta);
@@ -209,6 +230,10 @@ private:
 	float LadderZVelocity = 0.f;
 	/** The smoothed focus Z for a climbing follow target (passes TargetZ through otherwise; releases once settled off the ladder). */
 	float SmoothLadderZ(float TargetZ, float RealDelta);
+	/** Spring state of the held (detached) focus height (Config.DetachedHeightHalfLife). */
+	float DetachedZVelocity = 0.f;
+	/** This frame's operative clearance, cm (GetClearanceDolly). */
+	float ClearanceDolly = 0.f;
 
 	float CurrentYaw = 0.f;
 	float TargetYaw = 0.f;
