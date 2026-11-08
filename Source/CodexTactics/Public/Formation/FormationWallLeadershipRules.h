@@ -66,6 +66,26 @@ namespace FormationWallLeadership
 	 */
 	CODEXTACTICS_API int32 PickCornerLeader(const TArray<FWallLeadershipMember>& Members, const FVector2D& EdgeOnFace, const FVector2D& Toward);
 
+	// --- Moving off a wall, the man nearest the destination leads (the game designer's PIE 2026-11-08, L_Gen_Depot_1: the two-corner hold,
+	//     the right-corner man leading, a move to the LEFT - the leader walked round the wall's left end dragging the next man with him) ---
+
+	/** The current leader keeps the lead while his route is within this of the shortest (no leader hopping for a near tie), cm. */
+	inline constexpr double MoveLeaderKeepCm = 150.0;
+
+	/**
+	 * The squad stands at a wall for this rule: the formation's wall order / wall layout in force, a squad corner peek, the two-corner hold.
+	 * An open-ground formation move keeps its leader.
+	 */
+	CODEXTACTICS_API bool IsAtWallForMoveLead(bool bWallOrder, bool bWallLayoutActive, bool bCornerPeek, bool bTwoCornerHold);
+
+	/**
+	 * Who leads a move order given at a wall (the same idea as PickCornerLeader - the man nearest where the squad goes takes the lead, the
+	 * others follow behind him in the usual order): the able member with the shortest route to the destination (RouteCm: the nav path
+	 * length, < 0 = no route); the current leader (CurrentLeader) keeps it while his route is within KeepCm of that. INDEX_NONE when nobody
+	 * able has a route.
+	 */
+	CODEXTACTICS_API int32 PickMoveLeader(const TArray<double>& RouteCm, const TArray<bool>& Able, int32 CurrentLeader, double KeepCm = MoveLeaderKeepCm);
+
 	/**
 	 * The line behind the new leader (decision 4): every other member, the able ones first by their place along Toward (the nearest the
 	 * corner first - nobody crosses another on the way there), then those who cannot walk (in the same order).
