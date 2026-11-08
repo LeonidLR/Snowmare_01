@@ -32,24 +32,22 @@ namespace OperativeShotgunLayer
 		return FPaths::ProjectContentDir() / TEXT("Data/Weapons/weapon_anim_sets.json");
 	}
 
-	/** The "shotgun" block of weapon_anim_sets.json (read once per process). */
-	TSharedPtr<FJsonObject> ShotgunBlock()
+	/** A block of weapon_anim_sets.json ("shotgun", "pistol"; the file read once per process). */
+	TSharedPtr<FJsonObject> WeaponBlock(const TCHAR* Key)
 	{
-		static TSharedPtr<FJsonObject> Cached;
+		static TSharedPtr<FJsonObject> Root;
 		static bool bRead = false;
 		if (!bRead)
 		{
 			bRead = true;
 			FString Text;
-			TSharedPtr<FJsonObject> Root;
-			const TSharedPtr<FJsonObject>* Block = nullptr;
-			if (FFileHelper::LoadFileToString(Text, *AnimSetsPath()) && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root)
-				&& Root.IsValid() && Root->TryGetObjectField(TEXT("shotgun"), Block) && Block)
+			if (!FFileHelper::LoadFileToString(Text, *AnimSetsPath()) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root))
 			{
-				Cached = *Block;
+				Root.Reset();
 			}
 		}
-		return Cached;
+		const TSharedPtr<FJsonObject>* Block = nullptr;
+		return Root.IsValid() && Root->TryGetObjectField(Key, Block) && Block ? *Block : TSharedPtr<FJsonObject>();
 	}
 
 	/** Moves an eased share towards its target at 1 / BlendSeconds a second. */
@@ -73,7 +71,13 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 		return;
 	}
 	bShotgunSetLoaded = true;
-	const TSharedPtr<FJsonObject> Block = OperativeShotgunLayer::ShotgunBlock();
+	LoadWeaponAnimSet(TEXT("shotgun"), ShotgunSetData, ShotgunRetargetFolder);
+	LoadWeaponAnimSet(TEXT("pistol"), PistolSetData, PistolRetargetFolder);
+}
+
+void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAnimSet& ShotgunSet, FString& OutRetargetFolder)
+{
+	const TSharedPtr<FJsonObject> Block = OperativeShotgunLayer::WeaponBlock(BlockKey);
 	if (!Block.IsValid())
 	{
 		return;
@@ -89,7 +93,7 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 	{
 		(*Retargeted)->TryGetStringField(BodySkeleton->GetName(), RetargetFolder);
 	}
-	ShotgunRetargetFolder = RetargetFolder;
+	OutRetargetFolder = RetargetFolder;
 	auto Load = [this, &RetargetFolder](const FString& PackPath) -> UAnimSequenceBase*
 	{
 		if (PackPath.IsEmpty())
@@ -147,6 +151,7 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 	ShotgunSet.FireAim = Block->TryGetStringField(TEXT("fire_aim"), Path) ? Load(Path) : nullptr;
 	ShotgunSet.FireHip = Block->TryGetStringField(TEXT("fire_hip"), Path) ? Load(Path) : nullptr;
 	ShotgunSet.Reload = Block->TryGetStringField(TEXT("reload"), Path) ? Load(Path) : nullptr;
+	ShotgunSet.Equip = Block->TryGetStringField(TEXT("equip"), Path) ? Load(Path) : nullptr;
 	Number(TEXT("walk_speed"), ShotgunSet.WalkSpeed);
 	Number(TEXT("jog_speed"), ShotgunSet.JogSpeed);
 	Number(TEXT("crouch_speed"), ShotgunSet.CrouchSpeed);
@@ -163,6 +168,7 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 
 bool UOperativeAnimInstance::IsShotgunLayerEligible() const
 {
+	const FShotgunAnimSet& ShotgunSet = ActiveWeaponSet();
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner());
 	return bShotgunWeapon && ShotgunSet.StandIdle && Operative && !bIsDead && !bKnockedDown && !bIsClimbing && !bIsVaulting && !bInCover && !bIsProne
 		&& !bFallAirborne && !bSniperPose && !bBlizzardWalkActive && !Operative->bCarrying;
@@ -182,7 +188,31 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 {
 	using namespace WeaponAnimLayerRules;
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner());
-	bShotgunWeapon = Operative && Operative->CurrentWeapon && Operative->CurrentWeapon->Stats.Handling == EWeaponHandling::Shotgun;
+	// The layer's weapons: the D-1 (shotgun set) and the pistol (pistol set, 2026-11-08).
+	const EWeaponHandling Handling = Operative && Operative->CurrentWeapon ? Operative->CurrentWeapon->Stats.Handling : EWeaponHandling::Standard;
+	const FString WeaponId = Operative && Operative->CurrentWeapon ? Operative->CurrentWeapon->WeaponId : FString();
+	LayerHandling = Handling == EWeaponHandling::Shotgun || Handling == EWeaponHandling::Pistol ? Handling : EWeaponHandling::Standard;
+	bShotgunWeapon = LayerHandling != EWeaponHandling::Standard;
+	const FShotgunAnimSet& ShotgunSet = ActiveWeaponSet();
+	if (WeaponFireAdditiveTime >= 0.f)
+	{
+		WeaponFireAdditiveTime += DeltaSeconds;
+		if (!WeaponFireAdditiveClip || WeaponFireAdditiveTime >= WeaponFireAdditiveClip->GetPlayLength() || !bShotgunWeapon)
+		{
+			WeaponFireAdditiveTime = -1.f;
+		}
+	}
+	// The draw: a layer weapon that just came into the hands plays its equip clip once (the pistol from the rifle / the sidearm switch).
+	if (WeaponId != LayerWeaponId)
+	{
+		const bool bFirst = LayerWeaponId.IsEmpty();
+		LayerWeaponId = WeaponId;
+		if (!bFirst && bShotgunWeapon && ShotgunSet.Equip && IsShotgunLayerEligible() && !IsPlayingStanceTransition())
+		{
+			PlaySlotAnimationAsDynamicMontage(ShotgunSet.Equip, UpperBodySlot, 0.08f, 0.15f, 1.4f);
+			++WeaponEquipClips;
+		}
+	}
 	// A stance transition counts as full body from its first frame (its weight is still ~0 then): the layer blending in over the rise from
 	// prone popped the torso ~15 cm (ShotgunSmoke 7).
 	ShotgunMask = ResolveMask(IsShotgunLayerEligible(), GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f || IsPlayingStanceTransition(),
@@ -275,11 +305,20 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 
 bool UOperativeAnimInstance::PlayShotgunFire()
 {
+	const FShotgunAnimSet& ShotgunSet = ActiveWeaponSet();
 	if (!IsShotgunLayerEligible() || (!ShotgunSet.FireAim && !ShotgunSet.FireHip) || bIsReloading)
 	{
 		return false;
 	}
 	UAnimSequenceBase* Clip = bIsAiming && ShotgunSet.FireAim ? ShotgunSet.FireAim : (ShotgunSet.FireHip ? ShotgunSet.FireHip : ShotgunSet.FireAim);
+	if (Clip && Clip->IsValidAdditive())
+	{
+		// The pistol's recoil is an additive clip: played natively on top of the layer's aim (BlendWeaponFireAdditive), no montage.
+		WeaponFireAdditiveClip = Clip;
+		WeaponFireAdditiveTime = 0.f;
+		++ShotgunFireClips;
+		return true;
+	}
 	PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, 0.05f, 0.2f);
 	++ShotgunFireClips;
 	return true;
@@ -292,6 +331,7 @@ bool UOperativeAnimInstance::UpdateShotgunReload(const AOperativeCharacter* Oper
 	// the upper body: the intro (raise / tilt, the first shell) once, the pack's own shell-insertion loop (weapon_anim_sets.json
 	// reload_shell_start_s .. _end_s, measured with Scripts/Editor/measure_shotgun_reload.py) once per shell at a near-natural rate, the
 	// outro (pump, back to the aim) once at the end; no montage, so the layer keeps the legs and nothing restarts.
+	const FShotgunAnimSet& ShotgunSet = ActiveWeaponSet();
 	if (!Operative || !bShotgunWeapon || !ShotgunSet.Reload || bIsProne || bKnockedDown || bIsClimbing || !Operative->CurrentWeapon)
 	{
 		ShotgunReloadLastClip = -1;
@@ -307,7 +347,9 @@ bool UOperativeAnimInstance::UpdateShotgunReload(const AOperativeCharacter* Oper
 	Clip.LoopStart = ShotgunSet.ShellStart;
 	Clip.LoopEnd = ShotgunSet.ShellEnd;
 	Clip.OutroStart = ShotgunSet.OutroStart;
-	Clip.LoopRate = WeaponAnimLayerRules::ShellLoopRate(ShotgunSet.ShellStart, ShotgunSet.ShellEnd, Step);
+	// A magazine weapon (the pistol): the whole clip is the "loop", fitted to the reload time (wider rate band); the D-1: one loop per shell.
+	Clip.LoopRate = bPerRound ? WeaponAnimLayerRules::ShellLoopRate(ShotgunSet.ShellStart, ShotgunSet.ShellEnd, Step)
+		: WeaponAnimLayerRules::ShellLoopRate(0.f, Clip.Length, Step, 0.5f, 2.5f);
 	WeaponAnimLayerRules::AdvanceShellReload(ShotgunReload, Clip, DeltaSeconds, bIsReloading);
 	// A shell in: counted for the smokes (one insertion loop per shell at the matching rate).
 	const int32 Shells = Operative->CurrentClip;
@@ -356,6 +398,7 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 	if (Poses.IsEmpty() || Total <= KINDA_SMALL_NUMBER)
 	{
 		BlendWeaponReload(Output);
+		BlendWeaponFireAdditive(Output);
 		return;
 	}
 	for (float& Weight : Weights)
@@ -392,6 +435,25 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 		}
 	}
 	BlendWeaponReload(Output);
+	BlendWeaponFireAdditive(Output);
+}
+
+void FOperativeAnimInstanceProxy::BlendWeaponFireAdditive(FPoseContext& Output) const
+{
+	if (!WeaponFireAdditive)
+	{
+		return;
+	}
+	FCompactPose Pose;
+	Pose.SetBoneContainer(&Output.Pose.GetBoneContainer());
+	FBlendedCurve Curve;
+	Curve.InitFrom(Output.Curve);
+	UE::Anim::FStackAttributeContainer Attributes;
+	FAnimationPoseData Additive(Pose, Curve, Attributes);
+	WeaponFireAdditive->GetAnimationPose(Additive, FAnimExtractContext(static_cast<double>(WeaponFireAdditiveTime), false));
+	FAnimationPoseData Base(Output);
+	FAnimationRuntime::AccumulateAdditivePose(Base, Additive, 1.f, WeaponFireAdditive->GetAdditiveAnimType());
+	Output.Pose.NormalizeRotations();
 }
 
 void FOperativeAnimInstanceProxy::BlendWeaponReload(FPoseContext& Output) const

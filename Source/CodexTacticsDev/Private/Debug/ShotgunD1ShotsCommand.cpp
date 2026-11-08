@@ -49,6 +49,9 @@ namespace ShotgunD1Shots
 		bool bStillsOnly = false;
 		/** "reload2": only the reload (after a settle), into frames/reload2 (the per-shell loop fix, 2026-11-08). */
 		bool bReloadOnly = false;
+		/** "pistol" (the whole pistol, 2026-11-08): the Commander with the pistol instead -> Saved/Screenshots/PistolD/, plus the switch from the
+		 * rifle (the equip clip) at the end. */
+		bool bPistol = false;
 		FString ReloadClipName = TEXT("reload");
 		int32 ReloadStep = INDEX_NONE;
 		FDelegateHandle Handle;
@@ -216,13 +219,17 @@ namespace ShotgunD1Shots
 			AOperativeCharacter* Hero = nullptr;
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
-				Hero = Member->SquadRole == EOperativeRole::Engineer ? Member : Hero;
+				Hero = Member->SquadRole == (Runner->bPistol ? EOperativeRole::Commander : EOperativeRole::Engineer) ? Member : Hero;
 			}
 			if (!Hero)
 			{
 				return 1;
 			}
 			Runner->Hero = Hero;
+			if (Runner->bPistol)
+			{
+				Hero->SwitchToWeaponById(TEXT("pistol"));
+			}
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->HealthComponent->SetMaxHealth(5000.f, true);
@@ -319,7 +326,7 @@ namespace ShotgunD1Shots
 			{
 				StartClip(Runner->ReloadClipName);
 				Hero->CurrentClip = 0;
-				Hero->ReserveAmmo = 40;
+				Hero->ReserveAmmo = Runner->bPistol ? 24 : 40;
 				Hero->StartReload();
 			}
 			return 10;
@@ -330,12 +337,36 @@ namespace ShotgunD1Shots
 			return Hero && Hero->bIsReloading ? -1 : 45; // the outro (pump, back to the aim) after the last shell
 		});
 		S.Add([](UWorld*) { StopClip(); return 5; });
+		// The pistol: the switch from the rifle (the M16 in hands for a moment, then the pistol: its equip clip).
+		S.Add([](UWorld*)
+		{
+			AOperativeCharacter* Hero = Runner->Hero.Get();
+			if (!Runner->bPistol || !Hero)
+			{
+				return 0;
+			}
+			Hero->SwitchToWeaponById(TEXT("m16"));
+			return 45;
+		});
+		S.Add([](UWorld*)
+		{
+			AOperativeCharacter* Hero = Runner->Hero.Get();
+			if (!Runner->bPistol || !Hero)
+			{
+				return 0;
+			}
+			StartClip(TEXT("switch"));
+			Hero->SwitchToWeaponById(TEXT("pistol"));
+			return 60;
+		});
+		S.Add([](UWorld*) { StopClip(); return 5; });
 	}
 
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
-		Runner->Dir = FPaths::ProjectSavedDir() / TEXT("Screenshots/ShotgunD1");
+		Runner->bPistol = Args.Contains(TEXT("pistol"));
+		Runner->Dir = FPaths::ProjectSavedDir() / (Runner->bPistol ? TEXT("Screenshots/PistolD") : TEXT("Screenshots/ShotgunD1"));
 		Runner->bStillsOnly = Args.Contains(TEXT("stills"));
 		Runner->bReloadOnly = Args.Contains(TEXT("reload2"));
 		Runner->ReloadClipName = Runner->bReloadOnly ? TEXT("reload2") : TEXT("reload");
@@ -347,7 +378,7 @@ namespace ShotgunD1Shots
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.ShotgunD1Shots"),
-		TEXT("Rendered proof: the Engineer with the D-1 shotgun (grip stills, idle, walk, aim + fire, per-shell reload) -> Saved/Screenshots/ShotgunD1/. Arg 'stills' = the grip stills only, 'reload2' = the reload only into frames/reload2."),
+		TEXT("Rendered proof: the Engineer with the D-1 shotgun (grip stills, idle, walk, aim + fire, per-shell reload) -> Saved/Screenshots/ShotgunD1/. Arg 'stills' = the grip stills only, 'reload2' = the reload only into frames/reload2, 'pistol' = the Commander with the pistol -> Saved/Screenshots/PistolD/ (+ the switch from the rifle)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
