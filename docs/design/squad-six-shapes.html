@@ -100,6 +100,23 @@ svg text { font-family: var(--f-mono); }
   <div class="plates" id="pgroups"></div>
 </section>
 
+<section id="sweep57">
+  <h2>#57 · вопрос 3: обзор среднего</h2>
+  <div class="prose"><p>Отряд прижат к стене, оба угла заняты. Угловые смотрят каждый за свой угол (конусы по краям). Средний боец медленно ведёт взглядом от одного угла к другому и обратно — это и есть «обзор». Сейчас он проходит дугу в одну сторону за <b>6 секунд</b> (туда и обратно — 12 с). Ниже анимация в реальном времени: переключите скорость и посмотрите, сколько секунд точка остаётся без присмотра.</p></div>
+  <div class="plate" style="max-width:680px">
+    <header><span class="tag">вид сверху · стена вверху · «наружу» вниз</span><h3 id="swTitle">В одну сторону 6 с</h3></header>
+    <svg id="swSvg" viewBox="0 0 1200 760" role="img" aria-label="Анимация обзора среднего бойца"></svg>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;padding:0 14px 12px" id="swBtns"></div>
+    <dl class="facts" id="swFacts"></dl>
+  </div>
+  <div class="ask">
+    <h3>Что решить</h3>
+    <p><b>Скорость:</b> 3, 6 или 10 секунд в одну сторону. Чем быстрее, тем короче «слепые» паузы, но конус дёргается и в нём легче проглядеть цель. Чем медленнее, тем наоборот.</p>
+    <p><b>Когда:</b> А — всегда, когда заняты оба угла (как сейчас). Б — только в бою или по тревоге (враг замечен или слышен, по отряду стреляют), а вне боя средний просто смотрит прямо «наружу». В — вне боя медленно (например, 12 с), в бою быстрее (6 с).</p>
+    <p>Я рекомендую <b>6 с и вариант В</b>: в спокойной обстановке отряд не «вертит головами», а в бою реагирует быстрее. Ответьте, например, «6, В».</p>
+  </div>
+</section>
+
 <div class="ask">
   <h3>Что выбрать</h3>
   <p>Ответьте буквами, например «5А, 6А». Я рекомендую <b>5А и 6А</b>, а в узких местах они сами складываются в колонну, как сейчас ромб. Если на сгенерированных улицах они будут больше 60 % времени идти колонной, я предложу сделать колонну «ёлочкой» (вариант В) основной.</p>
@@ -268,4 +285,34 @@ put('pgroups', [
       {id:'З',role:'Z',x:450+180,y:-150-220,look:135,scan:[90,270]}],
     facts:[['группа 1','4 бойца → обычный ромб'],['группа 2','2 бойца → обычная пара'],['всего групп','до 4 (F1…F4)']] }
 ]);
+
+// #57 Q3: live sweep of the middle man between the two held corners. Game angles: 0 = up (toward the wall), + = clockwise.
+(function(){
+  const svg = document.getElementById('swSvg'); if (!svg) return;
+  const W=1200, cx=600, wy=120, my=260, R=430, HALF=30, A0=95, A1=265;   // sweep 95..265 = +-85 off outward (180)
+  const P = (x,y,a,r)=>{ const t=a*Math.PI/180; return [x+Math.sin(t)*r, y-Math.cos(t)*r]; };
+  const wedge=(x,y,a0,a1,r,c,op)=>{ const [x0,y0]=P(x,y,a0,r),[x1,y1]=P(x,y,a1,r); return `<path d="M${x} ${y}L${x0} ${y0}A${r} ${r} 0 ${(a1-a0)>180?1:0} 1 ${x1} ${y1}Z" fill="var(${c})" fill-opacity="${op}" stroke="var(${c})" stroke-opacity=".6" stroke-width="4"/>`; };
+  const man=(x,y,a,c,t)=>{ const [lx,ly]=P(x,y,a,80); return `<line x1="${x}" y1="${y}" x2="${lx}" y2="${ly}" stroke="var(--ink)" stroke-width="9" stroke-linecap="round"/><circle cx="${x}" cy="${y}" r="44" fill="var(${c})" stroke="var(--sheet)" stroke-width="8"/><text x="${x}" y="${y+16}" text-anchor="middle" font-size="44" font-weight="500" fill="var(--on-role)">${t}</text>`; };
+  const [ax,ay]=P(cx,my,A0,R+30), [bx,by]=P(cx,my,A1,R+30);
+  const base = `<rect width="${W}" height="760" fill="var(--sheet)"/><line x1="130" y1="${wy}" x2="1070" y2="${wy}" stroke="var(--wall)" stroke-width="40" stroke-linecap="square"/>`
+    + `<path d="M${ax} ${ay}A${R+30} ${R+30} 0 0 1 ${bx} ${by}" fill="none" stroke="var(--ink-2)" stroke-width="4" stroke-dasharray="14 12"/>`
+    + wedge(1000,my,38,98,330,'--c-right',.22) + wedge(200,my,-98,-38,330,'--c-left',.22)
+    + man(1000,my,68,'--c-right','П') + man(200,my,-68,'--c-left','Л');
+  let T=6, t0=performance.now();
+  const btns=document.getElementById('swBtns'), facts=document.getElementById('swFacts'), title=document.getElementById('swTitle');
+  const span=A1-A0, cover=2*HALF;
+  function setT(v){ T=v; t0=performance.now(); title.textContent='В одну сторону '+v+' с';
+    [...btns.children].forEach(b=>b.setAttribute('aria-pressed', String(+b.dataset.t===v)));
+    const pass=cover/span*T, mid=(T-pass).toFixed(1), edge=(2*T-pass).toFixed(1);
+    facts.innerHTML=`<dt>полный цикл</dt><dd>${2*v} с туда и обратно</dd><dt>точка прямо впереди</dt><dd>без взгляда до ${mid} с подряд</dd><dt>точка у края дуги</dt><dd>без взгляда до ${edge} с подряд (края частично видят угловые)</dd><dt>скорость поворота</dt><dd>${Math.round(span/v)}°/с</dd>`; }
+  [3,6,10].forEach(v=>{ const b=document.createElement('button'); b.type='button'; b.dataset.t=v; b.textContent=v+' с'; b.style.cssText='font:500 14px var(--f-mono);padding:6px 14px;border:1px solid var(--rule);background:var(--chip);color:var(--ink);cursor:pointer'; b.onclick=()=>setT(v); btns.appendChild(b); });
+  const style=document.createElement('style'); style.textContent='#swBtns button[aria-pressed="true"]{background:var(--ink);color:var(--sheet)} #swBtns button:focus-visible{outline:2px solid var(--signal);outline-offset:2px}'; document.head.appendChild(style);
+  setT(6);
+  const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function frame(now){ const ph=((now-t0)/1000)%(2*T); const k= ph<T ? ph/T : 2-ph/T; const a=A0+span*k;
+    svg.innerHTML = base + wedge(cx,my,a-HALF,a+HALF,R,'--c-mid',.28) + man(cx,my,a,'--c-mid','Ц')
+      + `<text x="${cx}" y="730" text-anchor="middle" font-size="34" fill="var(--ink-2)">${ph<T?'к левому углу':'к правому углу'} · ${(ph%T).toFixed(1)} / ${T} с</text>`;
+    if (!still) requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+})();
 </script>
