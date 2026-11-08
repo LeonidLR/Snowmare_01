@@ -14,7 +14,8 @@ import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
 import { CommanderROEPanel } from './components/CommanderROEPanel';
 import { StealthCombatPanel } from './components/StealthCombatPanel';
 import { applyLevelEncounterPatch } from './utils/stealthCombat';
-import { BlastDoorPanel, DemoPanel, LevelColdPanel } from './components/LevelSettingsPanels';
+import { BlastDoorPanel, DemoPanel, LevelColdPanel, LevelHordePanel } from './components/LevelSettingsPanels';
+import { LevelItem, LEVEL_GROUPS, LEVEL_GROUP_LABELS } from './utils/levelList';
 import { validateLevelSettings } from './utils/levelSettings';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
 import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2, Eye } from 'lucide-react';
@@ -84,6 +85,24 @@ export const App: React.FC = () => {
   });
 
   const [activeStageId, setActiveStageId] = useState<string>('stage_01');
+  const [levelList, setLevelList] = useState<LevelItem[]>([]);
+
+  useEffect(() => {
+    const loadLevelList = async () => {
+      try {
+        const res = await fetch('/api/list-stages');
+        if (res.ok) {
+          const data: LevelItem[] = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setLevelList(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load level list:', err);
+      }
+    };
+    loadLevelList();
+  }, []);
 
   const handleToggleWaveActive = (waveIndex: number, active: boolean) => {
     const existing = config.waves.find((w) => w.wave_index === waveIndex);
@@ -386,7 +405,8 @@ export const App: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch('/api/save-stage', {
+      const stageParam = activeStageId || config.level_id || 'stage_01';
+      const res = await fetch(`/api/save-stage?id=${encodeURIComponent(stageParam)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config, null, 2),
@@ -500,26 +520,27 @@ export const App: React.FC = () => {
             <select
               value={activeStageId}
               onChange={(e) => handleSelectStage(e.target.value)}
-              className="bg-transparent text-slate-200 text-xs font-bold outline-none cursor-pointer pr-2"
+              className="bg-transparent text-slate-200 text-xs font-bold outline-none cursor-pointer pr-2 max-w-[280px]"
             >
-              <optgroup label="АКТ 1: Бункер / Индустриальная зона">
-                <option value="stage_01" className="bg-slate-900 text-slate-100">Бой 1: Бой у КПП (3 волны)</option>
-                <option value="stage_02" className="bg-slate-900 text-slate-100">Бой 2: Складской терминал (2 волны)</option>
-                <option value="stage_03" className="bg-slate-900 text-slate-100">Бой 3: Вентшахта бункера (3 волны)</option>
-                <option value="stage_04" className="bg-slate-900 text-slate-100">Бой 4: Дизельный узел [Мини-босс] (3 волны)</option>
-              </optgroup>
-              <optgroup label="АКТ 2: Катакомбы / Заброшенный комплекс">
-                <option value="stage_05" className="bg-slate-900 text-slate-100">Бой 5: Затопленный тоннель (3 волны)</option>
-                <option value="stage_06" className="bg-slate-900 text-slate-100">Бой 6: Технический коллектор (3 волны)</option>
-                <option value="stage_07" className="bg-slate-900 text-slate-100">Бой 7: Руины архива (4 волны)</option>
-                <option value="stage_08" className="bg-slate-900 text-slate-100">Бой 8: Насосная станция (4 волны)</option>
-                <option value="stage_09" className="bg-slate-900 text-slate-100">Бой 9: Гермошлюз Цитадели (4 волны)</option>
-              </optgroup>
-              <optgroup label="АКТ 3: Цитадель / Ядро">
-                <option value="stage_10" className="bg-slate-900 text-slate-100">Бой 10: Верхний мост лаборатории (4 волны)</option>
-                <option value="stage_11" className="bg-slate-900 text-slate-100">Бой 11: Криокамера реактора (4 волны)</option>
-                <option value="stage_12" className="bg-slate-900 text-slate-100">Бой 12: Сердцевина Ядра [Финальный босс] (4 волны)</option>
-              </optgroup>
+              {levelList.length > 0 ? (
+                LEVEL_GROUPS.map((grp) => {
+                  const grpItems = levelList.filter((item) => item.group === grp);
+                  if (grpItems.length === 0) return null;
+                  return (
+                    <optgroup key={grp} label={LEVEL_GROUP_LABELS[grp]}>
+                      {grpItems.map((item) => (
+                        <option key={item.id} value={item.id} className="bg-slate-900 text-slate-100">
+                          {item.level_name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })
+              ) : (
+                <option value={activeStageId} className="bg-slate-900 text-slate-100">
+                  {config.level_name || activeStageId}
+                </option>
+              )}
             </select>
           </div>
 
@@ -778,9 +799,10 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Настройки уровня (не волны): бластовая дверь, демо / туториал, холод уровня */}
+        {/* Настройки уровня (не волны): бластовая дверь, демо / туториал, холод уровня, орда */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <BlastDoorPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
+          <LevelHordePanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
           <DemoPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
           <LevelColdPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
         </div>

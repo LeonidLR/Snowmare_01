@@ -1,7 +1,7 @@
 {
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "L_Gen_Depot_1",
-  "level_name": "Generated ref_01_02_depot (seed 1)",
+  "level_name": "0.1 Depot",
   "description": "Generated greybox (docs/design/levelgen/LEVEL_GENERATOR.md) from ref_01_02_depot seed 1 by Scripts/Editor/build_levelgen_map.py; the squad walks the mandatory route (LevelGenRouteSmoke); combat-lab style pressure. ONE small wave only (a valid wave list is required).",
   "combat_start": "ambush",
   "ambush_fight": "skirmish",

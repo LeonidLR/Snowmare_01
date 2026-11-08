@@ -168,6 +168,8 @@ export interface LevelConfig {
   patrol_search_seconds?: number;
   /** UE horde after 4 min of real-time fight (Content/Data/AI/horde.json); false switches it off for the level. */
   horde_enabled?: boolean;
+  /** UE: horde triggers after N real-time firefights (default 6, min 1). */
+  horde_after_firefights?: number;
   /** UE (2026-10-21): placed-enemy fights - level (all of them, wave panel) | skirmish (only those that engaged; straight back to exploration). */
   ambush_fight?: 'level' | 'skirmish';
   /** UE (2026-10-21): the Susanin rescue wave; 0 = never on this level, absent = random among waves 1-3. */
