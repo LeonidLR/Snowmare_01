@@ -352,3 +352,45 @@ TS: `rolesFor`, shapes for 5 / 6, `cli/bot.ts` / `redteam.ts` / `train.ts` membe
 14. **Max in the field.** Six is the whole roster - no bench / base camp until the story has more than six living recruits? - **Recommended: yes.**
 15. **Order of work.** P1 (N-scalable core) in roadmap week 2 before the RPG-7; P2 (groups) only when the mortar crew / APC work starts
     (week 3), with the PMC `FormUp` as P2's first consumer? - **Recommended: yes.**
+
+## 7. Designer decisions (2026-11-08)
+
+The game designer answered section 6 on 2026-11-08. These answers override the recommendations above where they differ.
+
+| Q | Decision | Consequence for the plan |
+|---|---|---|
+| 1 | **C, yes.** N-scalable core first, then formation groups. | as planned |
+| 2 | **No fixed roles for members 4-6.** Any fighter can be added; there is no "grenadier" or "mortarman" post - any fighter can carry the RPG-7, and the mortar is a crew of at least three. The three free slots go to recruits with **any** Tactics. | no new `EOperativeRole` values; heavy weapons are equipment, not roles; the mortar crew template (P4) takes any three men; the balance prefix / carry / loadout code must stop assuming one member per role (4.1) |
+| 3 | **Keys 4-5-6 select fighters; the whistle and the throw are removed from the number row** (whether the lure mechanic itself goes is to be confirmed, see open items). | `IA_StealthWhistle` (5) / `IA_StealthThrow` (6) leave keys 5 / 6 |
+| 4 | **Groups like RTS control groups:** `Shift+1..4` puts the selected fighters into group 1..4; `F1..F4` switches control to group 1..4. Up to **four** groups (not two). | P2's group object must allow 1..4 instances; `F1` (controls screen), `F2` (map panel), `F3` (full map) are taken today and must move (open items) |
+| 5 | **Needs a visual first.** Shapes drawn: `docs/design/squad-six-shapes.html` (5A lozenge, 5B wedge, 5C staggered column; 6A double wedge, 6B wedge + rear guard, 6C staggered column). | awaiting the designer's pick |
+| 6 | Not understood - re-asked in plain words (place names in the formation vs the fighter's identity). | awaiting |
+| 7 | Yes - three custom slots, up to six places each, applied to the selected group. | as planned |
+| 8 | Yes - narrow column looks alternate by index, the last man the rear guard. | as planned |
+| 9 | Yes - blizzard double file for 5 / 6; the "lost" rule tests the distance to the nearest mate. | as planned |
+| 10 | Yes - Tactics tiers 40 / 80. | as planned |
+| 11 | Yes - fifth stat (+5 a point, cap 100) plus drill (+1 / min, cap 60). | as planned |
+| 12 | Yes, with **Susanin 20**; the others as proposed; the designer will set each recruit's value individually. | `susanin_tactics` 20; Tactics is a per-recruit data field, not derived from a type |
+| 13 | **Separate mechanic that will affect Tactics - deferred.** | neophyte / allegiance not in P0-P4; leave a hook (a Tactics modifier source) when it is designed |
+| 14 | **The squad starts with three, grows to six, and can lose fighters.** | roster 3 -> 6 over the campaign; losses as today (permadeath); no bench |
+| 15 | **Order: (1) polish the three-man system; (2) extra weapons for the three - pistol, shotgun, sniper rifle, RPG-7; (3) Susanin on the map as the fourth; (4) two more fighters.** Faster proposals welcome. | phases re-ordered below |
+
+### 7.1 Re-ordered plan (designer's order, with the proposed speed-ups)
+
+1. **Three-man polish** (the current queue: #55 / #57 merge, AI quality, the roadmap W1 items).
+2. **Weapons for the three**: pistol, shotgun, sniper rifle, RPG-7 (roadmap weapons framework). Proposed in parallel, touching no game file:
+   the Training Ground TS prototype of the 5 / 6 shapes and the street-share measurement of section 5 (so Q5's fallback is decided with
+   data before step 4).
+3. **Susanin as the fourth** = P3 (Tactics, tiers, tag-along, Susanin as the pilot at Tactics 20) plus the cheap N-generic groundwork that
+   a fourth recruit already needs: `SelectMember` by `SquadIndex`, save / carry by `SquadIndex` + name, key 4 / action bar slot 4, keys 5 / 6
+   freed.
+4. **Two more fighters** = P1 (shapes for 5 / 6, wall layout N, keys 5 / 6, roster 6 rows) and P2 (groups 1..4, `Shift+1..4`, `F1..F4`).
+5. Crews and the APC (P4) after the weapons and vehicle systems.
+
+### 7.2 Open items after the answers
+
+- Q3: remove the stealth lure mechanic entirely (it drives the tutorial ambush lesson, the hound scent and enemy perception), or only take
+  it off keys 5 / 6 (action-bar button / another key)?
+- Q4: new keys for the controls screen (F1), the map panel (F2) and the full map (F3).
+- Q5: the designer's pick from `squad-six-shapes.html`.
+- Q6: re-asked.

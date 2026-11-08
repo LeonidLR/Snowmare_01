@@ -1,0 +1,271 @@
+<title>Построения на пять и шесть</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans+Extra+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: field-manual sheet (same system as formation-sectors.html) — short prose column, then plates drawn to scale (1 grid square = 1 m). */
+:root {
+  --paper: #eef2f4; --sheet: #f8fafb; --ink: #18242d; --ink-2: #4c5c68; --grid: #d6e0e6; --rule: #b9c7d0;
+  --signal: #c2461f; --c-lead: #b8860b; --c-right: #0f7d86; --c-left: #3d5fb0; --c-rear: #8a4f9e; --c-mid: #5d7a2a;
+  --wall: #5b6770; --chip: #dfe7ec; --on-role: #ffffff; --ok: #2f7d4a;
+  --f-display: "Fira Sans Extra Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1820; --sheet: #142029; --ink: #dfe8ee; --ink-2: #9aabb7; --grid: #1f2e39; --rule: #2e4250;
+    --signal: #f07a4f; --c-lead: #e0b341; --c-right: #3fc1c9; --c-left: #7d9cf0; --c-rear: #c58ad8; --c-mid: #a4c96a;
+    --wall: #8796a1; --chip: #1c2c37; --on-role: #0f1820; --ok: #6fcf8f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1820; --sheet: #142029; --ink: #dfe8ee; --ink-2: #9aabb7; --grid: #1f2e39; --rule: #2e4250;
+  --signal: #f07a4f; --c-lead: #e0b341; --c-right: #3fc1c9; --c-left: #7d9cf0; --c-rear: #c58ad8; --c-mid: #a4c96a;
+  --wall: #8796a1; --chip: #1c2c37; --on-role: #0f1820; --ok: #6fcf8f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 15.5px; line-height: 1.6; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+header, .prose { display: flex; flex-direction: column; gap: 10px; max-width: 68ch; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(32px, 6vw, 50px); line-height: 1.02; text-transform: uppercase; }
+h2 { font-size: 28px; line-height: 1.1; text-transform: uppercase; }
+h3 { font-size: 20px; line-height: 1.15; }
+p { margin: 0; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13.5px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+.plates { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.plate { background: var(--sheet); border: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; }
+.plate.rec { border-color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.plate header { padding: 12px 14px 0; gap: 4px; }
+.tag { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.plate.rec .tag { color: var(--ok); font-weight: 500; }
+.plate svg { width: 100%; height: auto; display: block; }
+.facts { margin: 0; padding: 0 14px 14px; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13.5px; }
+.facts dt { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); padding-top: 2px; }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.note { font-size: 14px; color: var(--ink-2); padding: 0 14px 14px; }
+.ask { background: var(--sheet); border-left: 3px solid var(--signal); padding: 14px 16px; max-width: 68ch; display: flex; flex-direction: column; gap: 6px; }
+svg text { font-family: var(--f-mono); }
+@media (prefers-reduced-motion: no-preference) { .sweep { animation: sw 6s ease-in-out infinite alternate; transform-box: view-box; } }
+@keyframes sw { from { opacity: .35 } to { opacity: .8 } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Отряд из шести · вопрос 5 · масштаб 1 клетка = 1 м</div>
+  <h1>Построения на пять и шесть</h1>
+  <p>Каким будет построение по умолчанию на открытой местности, когда все пять или шесть бойцов в одной группе. Для 2–4 бойцов ничего не меняется: пара, тройка и ромб остаются как сейчас. Ниже — по три варианта на пятерых и на шестерых, нарисованные по текущим расстояниям из <code>formation_config.json</code> (боковые 2,6 м в сторону и 2,8 м назад, замыкающий ромба 5,6 м). Направление движения — вверх.</p>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--c-lead)"></i>К — ведущий</span>
+    <span><i class="dot" style="background:var(--c-right)"></i>П — правый</span>
+    <span><i class="dot" style="background:var(--c-left)"></i>Л — левый</span>
+    <span><i class="dot" style="background:var(--c-mid)"></i>Ц — центр / второй ряд</span>
+    <span><i class="dot" style="background:var(--c-rear)"></i>З — замыкающий</span>
+  </div>
+</header>
+
+<section>
+  <h2>Сейчас: ромб на четверых</h2>
+  <div class="plates" id="p4"></div>
+</section>
+
+<section>
+  <h2>Пятеро</h2>
+  <div class="plates" id="p5"></div>
+</section>
+
+<section>
+  <h2>Шестеро</h2>
+  <div class="plates" id="p6"></div>
+</section>
+
+<section>
+  <h2>Уже решено, для наглядности</h2>
+  <div class="prose"><p>Эти схемы вы уже приняли (вопросы 8, 9 и угловые #57); они показывают, как те же правила выглядят на шестерых.</p></div>
+  <div class="plates" id="pmore"></div>
+</section>
+
+<section>
+  <h2>Группы: Shift+1…4 и F1…F4</h2>
+  <div class="prose"><p>Выделили бойцов → Shift+цифра делает из них группу с этим номером. F-клавиша переключает управление на группу. В каждой группе своё построение по числу людей, своё «прижаться к стене» и свои угловые.</p></div>
+  <div class="plates" id="pgroups"></div>
+</section>
+
+<div class="ask">
+  <h3>Что выбрать</h3>
+  <p>Ответьте буквами, например «5А, 6А». Я рекомендую <b>5А и 6А</b>, а в узких местах они сами складываются в колонну, как сейчас ромб. Если на сгенерированных улицах они будут больше 60 % времени идти колонной, я предложу сделать колонну «ёлочкой» (вариант В) основной.</p>
+</div>
+</div>
+
+<script>
+// Units: centimetres in the game's local frame: x = right, y = forward. Angles: 0 = heading, + = clockwise (right).
+const C = { K:'--c-lead', P:'--c-right', L:'--c-left', Z:'--c-rear', C:'--c-mid' };
+function col(r){ return `var(${C[r[0]]})`; }
+function plate(o){
+  // o: {title, tag, rec, men:[{id,role,x,y,look,half,scan}], walls:[[x1,y1,x2,y2]], facts:[[k,v]], note, R}
+  const R = o.R || 380, pad = 120;
+  const xs=[], ys=[];
+  o.men.forEach(m=>{
+    xs.push(m.x-60, m.x+60); ys.push(m.y-60, m.y+60);
+    const arcs = []; if (m.half!=null) arcs.push([m.look-m.half, m.look+m.half, R]); if (m.scan) arcs.push([m.scan[0], m.scan[1], R*0.9]);
+    arcs.forEach(([a0,a1,r])=>{ for (let a=a0; a<=a1+0.01; a+=(a1-a0)/12){ const t=a*Math.PI/180; xs.push(m.x+Math.sin(t)*r); ys.push(m.y+Math.cos(t)*r); } });
+  });
+  (o.walls||[]).forEach(w=>{ xs.push(w[0],w[2]); ys.push(w[1],w[3]); });
+  let minX=Math.min(...xs)-pad, maxX=Math.max(...xs)+pad, minY=Math.min(...ys)-pad, maxY=Math.max(...ys)+pad;
+  const w=maxX-minX, h=maxY-minY;
+  const sx = x => x-minX, sy = y => maxY-y;            // forward = up on screen
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${o.title}">`;
+  s += `<defs><pattern id="g${o.uid}" width="100" height="100" patternUnits="userSpaceOnUse" x="${(-minX)%100}" y="${(maxY)%100}"><path d="M100 0H0V100" fill="none" stroke="var(--grid)" stroke-width="3"/></pattern></defs>`;
+  s += `<rect width="${w}" height="${h}" fill="url(#g${o.uid})"/>`;
+  (o.walls||[]).forEach(q=>{ s += `<line x1="${sx(q[0])}" y1="${sy(q[1])}" x2="${sx(q[2])}" y2="${sy(q[3])}" stroke="var(--wall)" stroke-width="40" stroke-linecap="square"/>`; });
+  (o.links||[]).forEach(q=>{ s += `<line x1="${sx(q[0])}" y1="${sy(q[1])}" x2="${sx(q[2])}" y2="${sy(q[3])}" stroke="var(--ink-2)" stroke-width="6" stroke-dasharray="20 18"/>`; });
+  const wedge=(m,a0,a1,r,cls,op)=>{
+    const p=a=>{ const t=a*Math.PI/180; return [sx(m.x+Math.sin(t)*r), sy(m.y+Math.cos(t)*r)]; };
+    const [x0,y0]=p(a0),[x1,y1]=p(a1); const large=(a1-a0)>180?1:0;
+    return `<path class="${cls||''}" d="M${sx(m.x)} ${sy(m.y)}L${x0} ${y0}A${r} ${r} 0 ${large} 1 ${x1} ${y1}Z" fill="${col(m.role)}" fill-opacity="${op}" stroke="${col(m.role)}" stroke-opacity=".55" stroke-width="4"/>`;
+  };
+  o.men.forEach(m=>{
+    if (m.scan) s += wedge(m, m.scan[0], m.scan[1], R*0.9, 'sweep', .12);
+    if (m.half!=null) s += wedge(m, m.look-m.half, m.look+m.half, R, '', .2);
+  });
+  o.men.forEach(m=>{
+    const t=m.look*Math.PI/180;
+    s += `<line x1="${sx(m.x)}" y1="${sy(m.y)}" x2="${sx(m.x+Math.sin(t)*95)}" y2="${sy(m.y+Math.cos(t)*95)}" stroke="var(--ink)" stroke-width="9" stroke-linecap="round"/>`;
+    s += `<circle cx="${sx(m.x)}" cy="${sy(m.y)}" r="48" fill="${col(m.role)}" stroke="var(--sheet)" stroke-width="8"/>`;
+    s += `<text x="${sx(m.x)}" y="${sy(m.y)+17}" text-anchor="middle" font-size="48" font-weight="500" fill="var(--on-role)">${m.id}</text>`;
+  });
+  if (o.arrow!==false) s += `<g transform="translate(${w-80} ${70})"><path d="M0 -40L22 0H8V40H-8V0H-22Z" fill="var(--ink-2)"/></g>`;
+  s += `</svg>`;
+  const facts = (o.facts||[]).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('');
+  return `<article class="plate${o.rec?' rec':''}"><header><span class="tag">${o.tag}</span><h3>${o.title}</h3></header>${s}<dl class="facts">${facts}</dl>${o.note?`<p class="note">${o.note}</p>`:''}</article>`;
+}
+let uid=0; const put=(id,list)=>{ document.getElementById(id).innerHTML = list.map(o=>plate({...o, uid:uid++})).join(''); };
+
+const SO=260, BO=280;
+put('p4', [
+  { tag:'как сейчас', title:'Ромб, 4 бойца', men:[
+      {id:'К',role:'K',x:0,y:0,look:0,half:30},
+      {id:'П',role:'P',x:SO,y:-BO,look:45,half:45},
+      {id:'Л',role:'L',x:-SO,y:-BO,look:-45,half:45},
+      {id:'З',role:'Z',x:0,y:-560,look:180,half:30}],
+    facts:[['ширина','5,2 м'],['длина','5,6 м'],['сектора','К 11–1 · П 12–3 · Л 9–12 · З 5–7']] }
+]);
+
+put('p5', [
+  { tag:'5А · рекомендую', rec:true, title:'Ромб с центром', men:[
+      {id:'К',role:'K',x:0,y:0,look:0,half:30},
+      {id:'П',role:'P',x:SO,y:-BO,look:70,half:45},
+      {id:'Л',role:'L',x:-SO,y:-BO,look:-70,half:45},
+      {id:'Ц',role:'C',x:0,y:-560,look:180,scan:[115,245]},
+      {id:'З',role:'Z',x:0,y:-840,look:180,half:30}],
+    facts:[['ширина','5,2 м'],['длина','8,4 м'],['сектора','К 11–1 · П 12:30–4 · Л 8–11:30 · Ц водит 4–8 · З 5–7'],['в проходе 3,6 м','складывается в колонну']],
+    note:'Ромб, как сейчас, плюс центральный в середине. Центральный водит взглядом по тылу 4–8, замыкающий держит 5–7. Самый «читаемый»: это знакомый ромб, только длиннее.' },
+  { tag:'5Б', title:'Клин (V)', men:[
+      {id:'К',role:'K',x:0,y:0,look:0,half:30},
+      {id:'П',role:'P',x:SO,y:-BO,look:45,half:40},
+      {id:'Л',role:'L',x:-SO,y:-BO,look:-45,half:40},
+      {id:'П2',role:'P',x:SO*2,y:-BO*2,look:115,half:40},
+      {id:'Л2',role:'L',x:-SO*2,y:-BO*2,look:-115,half:40}],
+    facts:[['ширина','10,4 м'],['длина','5,6 м'],['сектора','К 11–1 · П 12–3 · Л 9–12 · П2 3–5 · Л2 7–9'],['тыл 5–7','никто']],
+    note:'Классический армейский клин: максимум огня вперёд и в стороны. Но 10 м в ширину — это только поле, а прямо за спиной (5–7) никто не смотрит.' },
+  { tag:'5В', title:'Колонна «ёлочкой»', men:[
+      {id:'К',role:'K',x:0,y:0,look:0,half:30},
+      {id:'П',role:'P',x:60,y:-180,look:70,half:35},
+      {id:'Л',role:'L',x:-60,y:-330,look:-70,half:35},
+      {id:'Ц',role:'C',x:60,y:-480,look:110,half:35},
+      {id:'З',role:'Z',x:-0,y:-630,look:180,half:30}],
+    facts:[['ширина','1,2 м'],['длина','6,3 м'],['сектора','вперёд, стороны поочерёдно, тыл'],['в проходе 3,6 м','идёт как есть']],
+    note:'Уже есть в игре (колонна с шахматкой 60 см). Проходит везде, но бока перекрыты хуже, а стрелять вперёд может почти один ведущий.' }
+]);
+
+put('p6', [
+  { tag:'6А · рекомендую', rec:true, title:'Двойной клин', men:[
+      {id:'К',role:'K',x:0,y:0,look:0,half:30},
+      {id:'П',role:'P',x:SO,y:-BO,look:75,half:45},
+      {id:'Л',role:'L',x:-SO,y:-BO,look:-75,half:45},
+      {id:'Ц',role:'C',x:0,y:-560,look:0,scan:[-40,40]},
+      {id:'З1',role:'Z',x:SO,y:-840,look:150,half:30},
+      {id:'З2',role:'Z',x:-SO,y:-840,look:-150,half:30}],
+    facts:[['ширина','5,2 м'],['длина','8,4 м'],['сектора','К 11–1 · П 1–4 · Л 8–11 · Ц второй взгляд вперёд · З1 4–6 · З2 6–8'],['в проходе 3,6 м','складывается в колонну']],
+    note:'Два замыкающих делят тыл (как ромб, только хвост из двоих). Центральному «дыры» не осталось, поэтому он подстраховывает ведущего вперёд — полезно на поворотах и у углов.' },
+  { tag:'6Б', title:'Клин + замыкающий', men:[
+      {id:'К',role:'K',x:0,y:0,look:0,half:30},
+      {id:'П',role:'P',x:SO,y:-BO,look:45,half:40},
+      {id:'Л',role:'L',x:-SO,y:-BO,look:-45,half:40},
+      {id:'П2',role:'P',x:SO*2,y:-BO*2,look:110,half:40},
+      {id:'Л2',role:'L',x:-SO*2,y:-BO*2,look:-110,half:40},
+      {id:'З',role:'Z',x:0,y:-840,look:180,half:30}],
+    facts:[['ширина','10,4 м'],['длина','8,4 м'],['сектора','полный круг'],['в проходе 3,6 м','складывается в колонну']],
+    note:'Клин из пятерых и замыкающий сзади: круг закрыт полностью. Но ширина 10 м, на улицах почти всегда колонна.' },
+  { tag:'6В', title:'Колонна «ёлочкой»', men:[
+      {id:'К',role:'K',x:0,y:0,look:0,half:30},
+      {id:'П',role:'P',x:60,y:-180,look:70,half:35},
+      {id:'Л',role:'L',x:-60,y:-330,look:-70,half:35},
+      {id:'П2',role:'P',x:60,y:-480,look:100,half:35},
+      {id:'Л2',role:'L',x:-60,y:-630,look:-100,half:35},
+      {id:'З',role:'Z',x:0,y:-780,look:180,half:30}],
+    facts:[['ширина','1,2 м'],['длина','7,8 м'],['сектора','вперёд, стороны поочерёдно, тыл'],['в проходе 3,6 м','идёт как есть']],
+    note:'Самая длинная «змея». Удобна в зданиях и коридорах; на открытом месте отряд растянут на 8 м, середину легко отрезать.' }
+]);
+
+// Already accepted: narrow column looks for 6 (Q8), blizzard double file (Q9), wall of 6 with both corners (#57 rule).
+const wallY = 120;
+put('pmore', [
+  { tag:'вопрос 8 · принято', title:'Узкая колонна на 6', men:[
+      {id:'К',role:'K',x:0,y:0,look:0,half:30},
+      {id:'П',role:'P',x:0,y:-180,look:15,half:30},
+      {id:'Л',role:'L',x:0,y:-330,look:-165,half:30},
+      {id:'Ц',role:'C',x:0,y:-480,look:15,half:30},
+      {id:'П2',role:'P',x:0,y:-630,look:-165,half:30},
+      {id:'З',role:'Z',x:0,y:-780,look:180,half:30}],
+    walls:[[-160,140,-160,-900],[160,140,160,-900]],
+    facts:[['правило','через одного: вперёд через плечо / назад наискось, последний — строго назад']] },
+  { tag:'вопрос 9 · принято', title:'Метель: двойная цепочка', men:[
+      {id:'К',role:'K',x:-60,y:0,look:-20,half:25},
+      {id:'П',role:'P',x:60,y:0,look:20,half:25},
+      {id:'Л',role:'L',x:-60,y:-120,look:-80,half:25},
+      {id:'Ц',role:'C',x:60,y:-120,look:80,half:25},
+      {id:'З1',role:'Z',x:-60,y:-240,look:-160,half:25},
+      {id:'З2',role:'Z',x:60,y:-240,look:160,half:25}], R:240,
+    facts:[['шаг','1,2 м между цепочками и между бойцами'],['правило метели','теряется тот, кто дальше X от ближайшего товарища']] },
+  { tag:'#57 · на 6', title:'Стена: оба угла + центр сканирует', men:[
+      {id:'П',role:'P',x:520,y:0,look:68,half:30},
+      {id:'Ц',role:'C',x:320,y:0,look:180,scan:[95,180]},
+      {id:'К',role:'K',x:120,y:0,look:180,scan:[140,220]},
+      {id:'Ц',role:'C',x:-80,y:0,look:180,scan:[180,265]},
+      {id:'З',role:'Z',x:-280,y:0,look:180,scan:[200,265]},
+      {id:'Л',role:'L',x:-480,y:0,look:-68,half:30}],
+    walls:[[-560,wallY,600,wallY]], arrow:false,
+    facts:[['края','держат свои углы (112° от стены)'],['середина','каждый водит свой кусок дуги, вместе — от угла до угла'],['если стена короткая','кто не влез — лёжа в 1,5 м за линией']],
+    note:'Стена сверху, отряд прижат к ней спиной; «наружу» — вниз.' }
+]);
+
+put('pgroups', [
+  { tag:'пример 3 + 3', title:'Группа 1 держит, группа 2 идёт', men:[
+      {id:'П',role:'P',x:-400,y:0,look:180,scan:[120,240]},
+      {id:'К',role:'K',x:-600,y:0,look:180,half:35},
+      {id:'Л',role:'L',x:-800,y:0,look:-110,half:30},
+      {id:'К',role:'K',x:300,y:-300,look:0,half:30},
+      {id:'П',role:'P',x:560,y:-580,look:60,half:40},
+      {id:'З',role:'Z',x:300,y:-720,look:180,half:30}],
+    walls:[[-900,120,-300,120]],
+    facts:[['F1','группа 1 у стены, держит угол'],['F2','группа 2 (тройка) обходит'],['Shift+1 / Shift+2','собрать выделенных в группу 1 / 2']] },
+  { tag:'пример 4 + 2', title:'Ромб и пара', men:[
+      {id:'К',role:'K',x:-450,y:0,look:0,half:30},
+      {id:'П',role:'P',x:-450+SO,y:-BO,look:45,half:45},
+      {id:'Л',role:'L',x:-450-SO,y:-BO,look:-45,half:45},
+      {id:'З',role:'Z',x:-450,y:-560,look:180,half:30},
+      {id:'К',role:'K',x:450,y:-150,look:0,half:30},
+      {id:'З',role:'Z',x:450+180,y:-150-220,look:135,scan:[90,270]}],
+    facts:[['группа 1','4 бойца → обычный ромб'],['группа 2','2 бойца → обычная пара'],['всего групп','до 4 (F1…F4)']] }
+]);
+</script>
