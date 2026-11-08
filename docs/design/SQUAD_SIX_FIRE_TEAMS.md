@@ -399,3 +399,13 @@ The game designer answered section 6 on 2026-11-08. These answers override the r
 - Q5: **5A (lozenge K / P L / C / Z) and 6A (double wedge K / P L / C / Z1 Z2)**, as recommended; both fold into the trail column in
   narrow passages; if the TS street-share measurement shows > 60 % of time in the column, the staggered column comes back as a proposal.
 - #57 Q3 (wall sweep, same day): 6 s one way in combat / alert, 12 s out of combat (option V).
+
+### 7.3 Mortar = a fixed nest (designer decision 2026-11-08)
+
+The mortar is **not carried**: mortar **nests** (fixed emplacements) are placed around the map, and a nest fires only with a **crew of
+three** at it. This replaces every "deploy / bearer within 3 m / crew moves with the squad" idea above (2.2, 2.4 table, P4) and the
+WEAPONS_BALLISTICS draft's "deployed 3.5 s": the crew is a set of three slots at a map object (closest existing analogue: the turret /
+emplacement code), not a formation group on the march. Code consequences: the mortar no longer depends on the formation-group layer (P2);
+it depends on the projectile + explosion code (shared with the RPG-7) and on nest placement in the levels / level generator.
+Open questions to the designer (asked 2026-11-08): who uses the nests (enemies, the squad, both); with fewer than three at the nest - no
+fire, or slower / less accurate fire; targeting - only where one of ours has line of sight (a spotter), or anywhere on the map.
