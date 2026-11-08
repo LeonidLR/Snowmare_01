@@ -42,6 +42,13 @@ namespace WeaponTuning
 	 * false; the problems go to OutErrors, unknown keys (typos) to OutUnknown.
 	 */
 	CODEXTACTICS_API bool ApplyWeapon(const FJsonObject& Json, UWeaponDataAsset& Weapon, TArray<FString>* OutErrors = nullptr, TArray<FString>* OutUnknown = nullptr);
+	/**
+	 * The weapon's presentation from its JSON object (not stats, never rejected): "name" -> WeaponName (the display name; the id stays),
+	 * "visual" {"hand_mesh": a static or skeletal mesh path, "attach_location" / "attach_rotation_pyr" / "attach_scale": [3] the model
+	 * relative to the weapon socket (hand_r), "muzzle_offset": [3] in the model's space}. In memory, like the stats. Returns whether
+	 * anything was set. The D-1 shotgun (designer decision 21+, 2026-11-08).
+	 */
+	CODEXTACTICS_API bool ApplyWeaponPresentation(const FJsonObject& Json, UWeaponDataAsset& Weapon);
 	/** The weapon's Stats as a JSON object (every schema key + "name"; the dump). */
 	CODEXTACTICS_API TSharedRef<FJsonObject> WeaponToJson(const UWeaponDataAsset& Weapon);
 
@@ -58,6 +65,8 @@ namespace WeaponTuning
 		TArray<FString> Errors;
 		/** Unknown keys (ignored). */
 		TArray<FString> Unknown;
+		/** Roles with a data loadout (WeaponLoadoutRules). */
+		int32 Loadouts = 0;
 		/** Weapons out of play (the roster in force). */
 		int32 RosterOut = 0;
 		/** Bodies read from the "armor" block (ArmorRules) and its invalid entries. */

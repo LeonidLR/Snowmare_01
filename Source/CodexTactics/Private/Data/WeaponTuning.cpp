@@ -15,6 +15,9 @@
 #include "Data/WeaponDataAsset.h"
 #include "Data/WeaponStatsRules.h"
 #include "Data/WeaponRoster.h"
+#include "Data/WeaponLoadoutRules.h"
+#include "Engine/SkeletalMesh.h"
+#include "Engine/StaticMesh.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
@@ -115,6 +118,75 @@ namespace WeaponTuning
 		return LastWeaponReport;
 	}
 
+	bool ApplyWeaponPresentation(const FJsonObject& Json, UWeaponDataAsset& Weapon)
+	{
+		bool bChanged = false;
+		FString Name;
+		if (Json.TryGetStringField(TEXT("name"), Name) && !Name.IsEmpty())
+		{
+			Weapon.WeaponName = FText::FromString(Name); // "D-1 Shotgun" (the id stays "shotgun": saves and loadouts keep working)
+			bChanged = true;
+		}
+		const TSharedPtr<FJsonObject>* Visual = nullptr;
+		if (!Json.TryGetObjectField(TEXT("visual"), Visual) || !Visual || !Visual->IsValid())
+		{
+			return bChanged;
+		}
+		FString MeshPath;
+		if ((*Visual)->TryGetStringField(TEXT("hand_mesh"), MeshPath) && !MeshPath.IsEmpty())
+		{
+			// A static model goes to HandMesh, a skeletal one (the D-1 is a Fab skeletal mesh with its own pump clips) to HandSkeletalMesh.
+			if (UObject* Loaded = LoadObject<UObject>(nullptr, *MeshPath))
+			{
+				if (UStaticMesh* Static = Cast<UStaticMesh>(Loaded))
+				{
+					Weapon.HandMesh = Static;
+					Weapon.HandSkeletalMesh.Reset();
+				}
+				else if (USkeletalMesh* Skeletal = Cast<USkeletalMesh>(Loaded))
+				{
+					Weapon.HandSkeletalMesh = Skeletal;
+					Weapon.HandMesh.Reset();
+				}
+				bChanged = true;
+			}
+			else
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" visual.hand_mesh %s not found"), *Weapon.WeaponId, *MeshPath);
+			}
+		}
+		auto ReadVector = [&Visual](const TCHAR* Key, FVector& Out)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;
+			if ((*Visual)->TryGetArrayField(Key, Array) && Array && Array->Num() == 3)
+			{
+				Out = FVector((*Array)[0]->AsNumber(), (*Array)[1]->AsNumber(), (*Array)[2]->AsNumber());
+				return true;
+			}
+			return false;
+		};
+		FVector Location = Weapon.HandMeshAttachTransform.GetLocation();
+		FVector Rotation(Weapon.HandMeshAttachTransform.Rotator().Pitch, Weapon.HandMeshAttachTransform.Rotator().Yaw,
+			Weapon.HandMeshAttachTransform.Rotator().Roll);
+		FVector Scale = Weapon.HandMeshAttachTransform.GetScale3D();
+		const bool bLocation = ReadVector(TEXT("attach_location"), Location);
+		const bool bRotation = ReadVector(TEXT("attach_rotation_pyr"), Rotation);
+		const bool bScale = ReadVector(TEXT("attach_scale"), Scale);
+		if (bLocation || bRotation || bScale)
+		{
+			Weapon.bOverrideHandMeshTransform = true;
+			Weapon.HandMeshAttachTransform = FTransform(FRotator(Rotation.X, Rotation.Y, Rotation.Z), Location, Scale);
+			bChanged = true;
+		}
+		FVector Muzzle;
+		if (ReadVector(TEXT("muzzle_offset"), Muzzle))
+		{
+			Weapon.HandMeshMuzzleOffset = Muzzle;
+			bChanged = true;
+		}
+		return bChanged;
+	}
+
 	int32 ApplyFile(const FString& Path)
 	{
 		GrenadeBlock.Reset();
@@ -129,6 +201,18 @@ namespace WeaponTuning
 		}
 		double FileSchema = 1.0;
 		LastWeaponReport.SchemaVersion = Root->TryGetNumberField(TEXT("schema_version"), FileSchema) ? FMath::RoundToInt(FileSchema) : 1;
+		// The squad's per-role loadouts (designer decision 21+: the Engineer = the D-1 shotgun); no block = the Blueprint loadouts.
+		{
+			const TSharedPtr<FJsonObject>* LoadoutBlock = nullptr;
+			TArray<FString> LoadoutErrors;
+			WeaponLoadoutRules::Set(Root->TryGetObjectField(TEXT("loadouts"), LoadoutBlock) && LoadoutBlock && LoadoutBlock->IsValid()
+				? WeaponLoadoutRules::Parse(**LoadoutBlock, &LoadoutErrors) : TMap<FString, TArray<FString>>());
+			for (const FString& Error : LoadoutErrors)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
+			}
+			LastWeaponReport.Loadouts = WeaponLoadoutRules::Get().Num();
+		}
 		// The designer's roster (2026-11-08): "roster.out" weapons are out of play (WeaponRoster); no block = the roster stays as it is.
 		{
 			const TSharedPtr<FJsonObject>* RosterBlock = nullptr;
@@ -253,6 +337,7 @@ namespace WeaponTuning
 					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" has an unknown key \"%s\" (ignored; typo?)"), *Entry.Key, *Key);
 				}
 				LastWeaponReport.Errors.Append(Errors);
+				ApplyWeaponPresentation(**Object, *Weapon); // display name + the model in the hand (not stats: never rejected)
 				LastWeaponReport.Unknown.Append(Unknown);
 			}
 			else

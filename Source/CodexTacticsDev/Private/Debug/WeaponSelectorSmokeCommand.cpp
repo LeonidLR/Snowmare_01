@@ -77,10 +77,13 @@ namespace WeaponSelectorSmoke
 		for (const AOperativeCharacter* Member : Squad->GetMembers())
 		{
 			// User request 2026-10-09: the Medic-Sapper also carries the sniper rifle (5 weapons).
+			// Designer decision 21+ (2026-11-08): the Engineer carries the D-1 shotgun instead of the M16 (8 + 40 shells).
 			const int32 Expected = Member->SquadRole == EOperativeRole::MedicSapper ? 4 : 3; // no knife since 2026-11-08
-			bArsenal &= Member->AvailableWeapons.Num() == Expected && WeaponId(Member) == TEXT("m16") && Member->ReserveAmmo == 60;
+			const bool bEngineer = Member->SquadRole == EOperativeRole::Engineer;
+			bArsenal &= Member->AvailableWeapons.Num() == Expected && WeaponId(Member) == (bEngineer ? TEXT("shotgun") : TEXT("m16"))
+				&& Member->ReserveAmmo == (bEngineer ? 40 : 60);
 		}
-		Check(State, bArsenal, TEXT("every operative: 3 weapons - M16, pistol, grenade (the Medic-Sapper 4: + sniper rifle), M16 in hands, reserve 60"));
+		Check(State, bArsenal, TEXT("every operative: 3 weapons - M16 (the Engineer: the D-1 shotgun), pistol, grenade (the Medic-Sapper 4: + sniper rifle), the first in hands, reserve 60 (shotgun 40)"));
 
 		Check(State, !Bar->IsWeaponSelectorOpen(), TEXT("selector closed at start"));
 		Bar->ToggleWeaponSelector();

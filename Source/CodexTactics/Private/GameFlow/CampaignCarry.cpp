@@ -112,10 +112,7 @@ void CampaignCarry::Apply(AOperativeCharacter& Operative, const FCarriedOperativ
 	{
 		// The carried state of the weapon in hands is in the inventory now; take it into the hands from there (SaveGameSubsystem order).
 		Operative.CurrentWeapon = nullptr;
-		if (Carried.CurrentWeaponId.IsEmpty() || !Operative.SwitchToWeaponById(Carried.CurrentWeaponId))
-		{
-			Operative.SwitchToWeaponById(TEXT("m16"));
-		}
+		Operative.EquipRestoredWeapon(Carried.CurrentWeaponId); // the carried weapon, else his primary
 	}
 	Operative.DropOutOfPlayWeapons(); // the designer's roster (2026-11-08)
 	Operative.CaptureProgressionBases();

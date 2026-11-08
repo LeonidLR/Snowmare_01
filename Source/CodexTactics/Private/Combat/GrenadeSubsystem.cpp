@@ -220,7 +220,7 @@ void UGrenadeSubsystem::TakeFirearm(AOperativeCharacter* Operative)
 {
 	if (Operative && Operative->CurrentWeapon && Operative->CurrentWeapon->WeaponId == TEXT("grenade"))
 	{
-		if (!Operative->SwitchToWeaponById(TEXT("m16")))
+		if (!Operative->TakePrimaryWeapon()) // the M16, the Engineer's D-1
 		{
 			Operative->SwitchToWeaponById(TEXT("pistol")); // no knife fallback: out of play (the designer's roster, 2026-11-08)
 		}

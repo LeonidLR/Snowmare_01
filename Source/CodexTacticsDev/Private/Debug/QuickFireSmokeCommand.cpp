@@ -377,12 +377,21 @@ namespace QuickFireSmoke
 		}
 		case 13:
 		{
-			const bool bAll = NewRounds(State, 0) >= State.Burst && NewRounds(State, 1) >= State.Burst && NewRounds(State, 2) >= State.Burst;
+			// Each man's own burst (designer decision 21+, 2026-11-08: the Engineer's D-1 fires one shell - an 8-shell tube is below the burst
+			// clip size).
+			auto BurstOf = [&State](int32 Index)
+			{
+				const AOperativeCharacter* Member = State.Members.IsValidIndex(Index) ? State.Members[Index].Get() : nullptr;
+				return Member ? QuickFireRules::GetBurstRounds(Member->UsesAmmo(), Member->IsSniperWeaponEquipped(),
+					Member->CurrentWeapon ? Member->CurrentWeapon->Stats.Ammo.MagazineSize : 30, QuickFireRules::GetConfig()) : State.Burst;
+			};
+			const bool bAll = NewRounds(State, 0) >= BurstOf(0) && NewRounds(State, 1) >= BurstOf(1) && NewRounds(State, 2) >= BurstOf(2);
 			if (!bAll && State.StageTime < 6.f)
 			{
 				return true;
 			}
-			Check(State, bAll, FString::Printf(TEXT("B: all three fired their burst (%d / %d / %d)"), NewRounds(State, 0), NewRounds(State, 1), NewRounds(State, 2)));
+			Check(State, bAll, FString::Printf(TEXT("B: all three fired their burst (%d / %d / %d of %d / %d / %d)"), NewRounds(State, 0), NewRounds(State, 1), NewRounds(State, 2),
+				BurstOf(0), BurstOf(1), BurstOf(2)));
 			Squad->SetLeader(Commander);
 			GoTo(State, 20);
 			return true;

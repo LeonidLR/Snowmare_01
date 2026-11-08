@@ -12,6 +12,7 @@
 #include "Data/WeaponRoster.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "UI/FloatingTextSubsystem.h"
 
@@ -193,7 +194,16 @@ void AOperativeCharacter::ApplyWeaponVisual()
 	}
 	UStaticMesh* HandAsset = DefaultWeaponMeshAsset;
 	FTransform Transform = DefaultWeaponMeshTransform;
-	if (CurrentWeapon && !CurrentWeapon->HandMesh.IsNull())
+	USkeletalMesh* SkeletalAsset = CurrentWeapon && !CurrentWeapon->HandSkeletalMesh.IsNull() ? CurrentWeapon->HandSkeletalMesh.LoadSynchronous() : nullptr;
+	if (SkeletalAsset)
+	{
+		HandAsset = nullptr; // the skeletal model (the D-1) rides on WeaponMesh: no static model under it
+		if (CurrentWeapon->bOverrideHandMeshTransform)
+		{
+			Transform = CurrentWeapon->HandMeshAttachTransform;
+		}
+	}
+	else if (CurrentWeapon && !CurrentWeapon->HandMesh.IsNull())
 	{
 		if (UStaticMesh* Own = CurrentWeapon->HandMesh.LoadSynchronous())
 		{
@@ -203,6 +213,11 @@ void AOperativeCharacter::ApplyWeaponVisual()
 		{
 			Transform = CurrentWeapon->HandMeshAttachTransform;
 		}
+	}
+	if (WeaponSkeletalMesh && WeaponSkeletalMesh->GetSkeletalMeshAsset() != SkeletalAsset)
+	{
+		WeaponSkeletalMesh->SetSkeletalMeshAsset(SkeletalAsset);
+		WeaponSkeletalMesh->SetRelativeTransform(FTransform::Identity);
 	}
 	if (WeaponMesh->GetStaticMesh() != HandAsset)
 	{

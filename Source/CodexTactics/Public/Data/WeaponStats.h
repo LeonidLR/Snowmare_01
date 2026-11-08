@@ -55,7 +55,12 @@ enum class EWeaponHandling : uint8
 	 * Bolt-action sniper rifle (user request 2026-10-09): fires only kneeling / prone and standing still (SniperRules), works
 	 * the bolt between shots, plays the operative's sniper animation set (UOperativeAnimInstance Sniper* clips).
 	 */
-	SniperRifle
+	SniperRifle,
+	/**
+	 * Pump shotgun (the D-1, designer decision 21, 2026-11-03): the operative's locomotion / aim / fire / reload switch to the
+	 * ShotgunLocomotionPack clips (the native weapon layer, UOperativeAnimInstance::UpdateShotgunLayer; any stance, also on the move).
+	 */
+	Shotgun
 };
 
 /** Damage of one round / blow before armour, cover and stance (JSON base_damage, damage_type, armor_penetration, penetration_class). */
