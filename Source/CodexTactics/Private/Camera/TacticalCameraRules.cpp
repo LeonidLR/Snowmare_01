@@ -9,7 +9,32 @@ namespace TacticalCameraRules
 
 	float StepZoom(const FTacticalCameraConfig& Config, float CurrentDistance, float Notches)
 	{
-		return FMath::Clamp(CurrentDistance + Notches * Config.ZoomStep, Config.DistanceMin, Config.DistanceMax);
+		return FMath::Clamp(CurrentDistance + Notches * Config.ZoomStep, GetMinZoomDistance(Config), FMath::Max(Config.DistanceMax, GetMinZoomDistance(Config)));
+	}
+
+	float GetMinZoomDistance(const FTacticalCameraConfig& Config)
+	{
+		return FMath::Max(Config.DistanceMin, Config.MinSafeDistance);
+	}
+
+	float ClampMinDistance(const FTacticalCameraConfig& Config, float Distance)
+	{
+		return FMath::Max(Distance, GetMinZoomDistance(Config));
+	}
+
+	FVector PushOutOfCapsule(const FVector& Location, const FVector& CapsuleCenter, float HalfHeight, float Radius, float Clearance)
+	{
+		const float AxisHalf = FMath::Max(0.f, HalfHeight - Radius);
+		const float Reach = Radius + FMath::Max(0.f, Clearance);
+		const FVector Closest(CapsuleCenter.X, CapsuleCenter.Y, FMath::Clamp(Location.Z, CapsuleCenter.Z - AxisHalf, CapsuleCenter.Z + AxisHalf));
+		FVector Away = Location - Closest;
+		const float Dist = Away.Size();
+		if (Dist >= Reach)
+		{
+			return Location;
+		}
+		Away = Dist > UE_SMALL_NUMBER ? Away / Dist : FVector::UpVector;
+		return Closest + Away * Reach;
 	}
 
 	FVector2D ComputeEdgeScroll(const FVector2D& MousePosition, const FVector2D& ViewportSize, float Margin)

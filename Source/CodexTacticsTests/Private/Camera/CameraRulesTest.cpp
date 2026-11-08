@@ -35,6 +35,30 @@ bool FCameraZoomClampTest::RunTest(const FString&)
 	return true;
 }
 
+CAMERA_TEST(FCameraMinZoomTest, "Camera.MinZoom")
+bool FCameraMinZoomTest::RunTest(const FString&)
+{
+	using namespace TacticalCameraRules;
+	FTacticalCameraConfig Config;
+	TestEqual(TEXT("Default minimum is the wheel limit of 8 m"), GetMinZoomDistance(Config), 800.f);
+	Config.DistanceMin = 100.f; // a Blueprint that lowered the wheel limit (bug #52)
+	TestEqual(TEXT("The hard floor wins over a low DistanceMin"), GetMinZoomDistance(Config), Config.MinSafeDistance);
+	TestEqual(TEXT("A tiny glide distance is raised"), ClampMinDistance(Config, 100.f), Config.MinSafeDistance);
+	TestEqual(TEXT("A far distance is not touched"), ClampMinDistance(Config, 5000.f), 5000.f);
+	TestEqual(TEXT("The wheel never goes below the floor"), StepZoom(Config, 800.f, -50.f), Config.MinSafeDistance);
+
+	// Capsule push-out: radius 35, half height 90, clearance 60 -> reach 95 cm from the axis.
+	const FVector Centre(0.f, 0.f, 90.f);
+	const FVector Outside(300.f, 0.f, 90.f);
+	TestEqual(TEXT("Outside: unchanged"), PushOutOfCapsule(Outside, Centre, 90.f, 35.f, 60.f), Outside);
+	const FVector Pushed = PushOutOfCapsule(FVector(10.f, 0.f, 120.f), Centre, 90.f, 35.f, 60.f);
+	TestTrue(TEXT("Inside: pushed out sideways to the reach"), FMath::IsNearlyEqual(Pushed.X, 95.f, 0.1f) && FMath::IsNearlyEqual(Pushed.Z, 120.f, 0.1f));
+	const FVector AboveHead = PushOutOfCapsule(FVector(0.f, 0.f, 175.f), Centre, 90.f, 35.f, 0.f);
+	TestTrue(TEXT("Over the head, inside the cap: pushed up"), AboveHead.Z >= 90.f + 55.f + 35.f - 0.1f);
+	TestTrue(TEXT("On the axis: pushed straight up"), PushOutOfCapsule(Centre, Centre, 90.f, 35.f, 0.f).Z > Centre.Z);
+	return true;
+}
+
 CAMERA_TEST(FCameraEdgeScrollTest, "Camera.EdgeScroll")
 bool FCameraEdgeScrollTest::RunTest(const FString&)
 {
