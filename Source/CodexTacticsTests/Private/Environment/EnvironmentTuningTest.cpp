@@ -387,7 +387,9 @@ bool FEnvTuningShippedFileTest::RunTest(const FString&)
 	{
 		TestTrue(TEXT("MARKSMAN -> FROSTBITTEN"), Roster.Pairs[0].From == EEnemyArchetype::Marksman && Roster.Pairs[0].To == EEnemyArchetype::Frostbitten);
 		TestEqual(TEXT("MARKSMAN ratio"), Roster.Pairs[0].Ratio, 2);
-		TestTrue(TEXT("SPITTER -> CUTTER"), Roster.Pairs[1].From == EEnemyArchetype::Spitter && Roster.Pairs[1].To == EEnemyArchetype::Cutter);
+		// Horde #12 / task #34 (2026-11-09): the Spitter swaps into the Military Zombie (a Frostbitten variant Blueprint), not the Cutter.
+		TestTrue(TEXT("SPITTER -> MILITARY_ZOMBIE"), Roster.Pairs[1].From == EEnemyArchetype::Spitter && Roster.Pairs[1].To == EEnemyArchetype::Frostbitten
+			&& Roster.Pairs[1].ToVariant == FName(TEXT("MilitaryZombie")));
 		TestEqual(TEXT("SPITTER ratio"), Roster.Pairs[1].Ratio, 1);
 	}
 	if (TestEqual(TEXT("bonus types"), Roster.BonusTypes.Num(), 1))

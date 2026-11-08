@@ -1,5 +1,5 @@
 {
-  "comment": "Horde after a long real-time fight (user request 2026-10-06, UE-only; Combat/HordeRules.h, UHordeSubsystem). The clock counts only fight time in full real time (not the tactical pause, not turn-based combat, not dialogues / cutscenes) and restarts with every fight (each wave, an ambush fight). Per level: the level JSON \"horde_enabled\": false switches it off, an optional \"horde\": { ...same keys... } overrides these values. Distances in meters, times in seconds. composition = weights per level-JSON enemy type (HOUND / FROST_HOUND, FROSTBITTEN, BRUTE, SPITTER, CUTTER, MARKSMAN, CRYO_DRONE). Console: Codex.Horde.TriggerSeconds / Codex.Horde.RepeatSeconds / Codex.Horde.Enabled (-1 = data), CodexTactics.Horde.Release.",
+  "comment": "Horde (UE-only; Combat/HordeRules.h, UHordeSubsystem). Two triggers: (1) after a long real-time fight (user request 2026-10-06): the clock counts only fight time in full real time (not the tactical pause, not turn-based combat, not dialogues / cutscenes) and restarts with every fight (each wave, an ambush fight); (2) horde #12 (game designer 2026-11-02 / 11-03 / 11-08): after N firefights IN A ROW on the level (level JSON \"horde_after_firefights\", default 6; UFirefightSubsystem / FirefightRules.h) - a firefight = one encounter with the level's enemies (patrols, ambushers, PMC) started by contact in which shots were exchanged with an aware enemy, or an ambush sprung on the squad; it ends when its enemies are down or after firefight_lost_contact_seconds without contact; slipping past an enemy group undetected (the squad came within its detection reach = its vision range clamped to firefight_slip_min/max_reach_m, it never spotted the squad, the squad left the reach x firefight_slip_exit_factor) resets the streak when firefight_slip_past_resets; the HQ hints firefight_hint_before firefights early, warns firefight_warning_seconds before the horde, then the horde intro. Per level: the level JSON \"horde_enabled\": false switches both off, an optional \"horde\": { ...same keys... } overrides these values. Distances in meters, times in seconds. composition = weights per level-JSON enemy type (HOUND / FROST_HOUND, FROSTBITTEN, MILITARY_ZOMBIE = a Frostbitten variant Blueprint, BRUTE, CUTTER, MARKSMAN, CRYO_DRONE); the SPITTER is refused (the Military Zombie took its place outside the stage waves, horde #12 / task #34). Console: Codex.Horde.TriggerSeconds / Codex.Horde.RepeatSeconds / Codex.Horde.Enabled / Codex.Horde.AfterFirefights / Codex.Horde.FirefightWarningSeconds (-1 = data), CodexTactics.Horde.Release.",
   "enabled": true,
   "trigger_seconds": 240,
   "repeats": false,
@@ -17,5 +17,13 @@
   "spawn_samples": 32,
   "apply_wave_modifiers": true,
   "warning_seconds": 6,
-  "warning_sound": ""
+  "warning_sound": "",
+  "firefight_lost_contact_seconds": 20,
+  "firefight_contact_range_m": 40,
+  "firefight_slip_past_resets": true,
+  "firefight_slip_min_reach_m": 15,
+  "firefight_slip_max_reach_m": 40,
+  "firefight_slip_exit_factor": 1.25,
+  "firefight_warning_seconds": 10,
+  "firefight_hint_before": 1
 }

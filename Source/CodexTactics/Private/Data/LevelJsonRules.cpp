@@ -372,6 +372,10 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	// UE-only (user request 2026-10-06): the horde after a long real-time fight (defaults in Content/Data/AI/horde.json).
 	bool bHordeEnabled = true;
 	Config.bHordeEnabled = !Root->TryGetBoolField(TEXT("horde_enabled"), bHordeEnabled) || bHordeEnabled;
+	// Horde #12 (game designer 2026-11-08): the horde after N firefights in a row (Training Ground waves tab), at least 1.
+	Config.HordeAfterFirefights = FMath::Max(1, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("horde_after_firefights"), 6.f)));
+	// Game designer 2026-11-08: every enemy corpse stays; at most corpse_cap of them (the oldest farthest one fades), at least 1.
+	Config.CorpseCap = FMath::Max(1, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("corpse_cap"), 150.f)));
 	// 2026-10-21: "ambush_fight": "level" | "skirmish" (placed-enemy fights) and "susanin_wave" (0 = off).
 	const FString AmbushFight = LevelJsonString(Root, TEXT("ambush_fight"), TEXT("level"));
 	if (AmbushFight != TEXT("level") && AmbushFight != TEXT("skirmish"))

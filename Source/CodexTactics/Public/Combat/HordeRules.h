@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Combat/CombatPressureRules.h"
+#include "Combat/FirefightRules.h"
 #include "Data/CombatTypes.h"
 #include "GameFlow/GameFlowTypes.h"
 
@@ -11,6 +13,11 @@ struct CODEXTACTICS_API FHordeMixEntry
 {
 	EEnemyArchetype Type = EEnemyArchetype::FrostHound;
 	float Weight = 1.f;
+	/**
+	 * The entry's variant Blueprint (task #34's mechanism, horde #12 2026-11-09: "MILITARY_ZOMBIE" = Frostbitten + BP_Enemy_MilitaryZombie via
+	 * ACodexTacticsGameMode::EnemyVariantClasses); NAME_None = the archetype's own Blueprint.
+	 */
+	FName Variant;
 };
 
 /**
@@ -33,7 +40,10 @@ struct CODEXTACTICS_API FHordeConfig
 	int32 Count = 8;
 	/** "count_increase_per_repeat": extra enemies for each further horde of the same fight. */
 	int32 CountIncreasePerRepeat = 0;
-	/** "composition": { "FROST_HOUND": 5, "FROSTBITTEN": 3 } — weights per level-JSON enemy type. */
+	/**
+	 * "composition": { "FROST_HOUND": 5, "FROSTBITTEN": 3 } — weights per level-JSON enemy type or variant key ("MILITARY_ZOMBIE"); the
+	 * Spitter is refused (task #34 / horde #12: the Military Zombie replaced it outside the stage waves).
+	 */
 	TArray<FHordeMixEntry> Composition = { { EEnemyArchetype::FrostHound, 5.f }, { EEnemyArchetype::Frostbitten, 3.f } };
 	/** "min_distance_m" / "max_distance_m": spawn band around the squad's centre. */
 	float MinDistanceCm = 2500.f;
@@ -50,6 +60,13 @@ struct CODEXTACTICS_API FHordeConfig
 	float WarningSeconds = 6.f;
 	/** "warning_sound": optional sound asset path played once (empty: none — the project has no audio cue yet). */
 	FString WarningSound;
+	/**
+	 * Horde #12: the horde comes after this many firefights IN A ROW on the level (the level JSON root key "horde_after_firefights", default
+	 * 6, min 1; console Codex.Horde.AfterFirefights; FirefightRules).
+	 */
+	int32 AfterFirefights = 6;
+	/** Horde #12: the firefight count and slip-past tuning ("firefight_*" keys of horde.json / the level "horde" override). */
+	FFirefightConfig Firefight;
 };
 
 /** A candidate spawn point measured by the subsystem (navmesh, path, squad sight). */
@@ -111,6 +128,15 @@ namespace HordeRules
 	/** The archetypes of one horde of Total enemies by the composition weights (largest remainder, stable order). */
 	CODEXTACTICS_API TArray<EEnemyArchetype> BuildComposition(const FHordeConfig& Config, int32 Total);
 
+	/** BuildComposition with each member's variant (the composition entry's; NAME_None = the archetype's own Blueprint). */
+	CODEXTACTICS_API TArray<FPressureEnemyType> BuildMembers(const FHordeConfig& Config, int32 Total);
+
+	/** A type the horde may spawn: every archetype but the Spitter (it stays in the game for the stage waves only, horde #12). */
+	CODEXTACTICS_API bool IsAllowedHordeType(EEnemyArchetype Type);
+
+	/** A "composition" key: a level-JSON enemy type or a variant key ("MILITARY_ZOMBIE"); false for unknown / refused ones. */
+	CODEXTACTICS_API bool ParseCompositionKey(const FString& Key, FHordeMixEntry& OutEntry);
+
 	/** Spawn offset of member Index of Count within the cluster radius (the first at the centre, then a sunflower). */
 	CODEXTACTICS_API FVector ClusterOffset(int32 Index, int32 Count, float ClusterRadiusCm);
 
@@ -130,5 +156,6 @@ namespace HordeRules
 	 * The config in force for a level: Defaults, then the level's "horde" object (LevelOverrideJson, may be empty), off
 	 * when the level says "horde_enabled": false.
 	 */
-	CODEXTACTICS_API FHordeConfig ResolveForLevel(const FHordeConfig& Defaults, bool bLevelHordeEnabled, const FString& LevelOverrideJson);
+	CODEXTACTICS_API FHordeConfig ResolveForLevel(const FHordeConfig& Defaults, bool bLevelHordeEnabled, const FString& LevelOverrideJson,
+		int32 LevelAfterFirefights = 6);
 }

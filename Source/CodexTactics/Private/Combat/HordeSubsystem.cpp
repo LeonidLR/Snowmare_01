@@ -6,6 +6,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Core/CodexTacticsGameMode.h"
@@ -29,6 +30,10 @@ namespace HordeTuning
 		TEXT("Horde: 1 on, 0 off, -1 data (horde.json enabled && level horde_enabled)"));
 	static TAutoConsoleVariable<float> CVarRepeatSeconds(TEXT("Codex.Horde.RepeatSeconds"), -1.f,
 		TEXT("Horde: > 0 turns repeating hordes on with this period (-1: data)"));
+	static TAutoConsoleVariable<int32> CVarAfterFirefights(TEXT("Codex.Horde.AfterFirefights"), -1,
+		TEXT("Horde #12: >= 1 = the horde after this many firefights in a row (-1: the level JSON horde_after_firefights, default 6)"));
+	static TAutoConsoleVariable<float> CVarFirefightWarningSeconds(TEXT("Codex.Horde.FirefightWarningSeconds"), -1.f,
+		TEXT("Horde #12: >= 0 = seconds from the HQ warning to the firefight horde (-1: horde.json firefight_warning_seconds)"));
 
 	/** Seconds between attempts when no spawn point was found. */
 	constexpr float RetrySeconds = 2.f;
@@ -67,7 +72,13 @@ void UHordeSubsystem::RefreshConfig()
 	const FHordeConfig Defaults = HordeRules::LoadDefaults();
 	const ACodexTacticsGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr;
 	const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
-	Config = Level ? HordeRules::ResolveForLevel(Defaults, Level->Config.bHordeEnabled, Level->Config.HordeOverrideJson) : Defaults;
+	Config = Level ? HordeRules::ResolveForLevel(Defaults, Level->Config.bHordeEnabled, Level->Config.HordeOverrideJson, Level->Config.HordeAfterFirefights)
+		: Defaults;
+	Config.AfterFirefights = FirefightRules::ResolveThreshold(Config.AfterFirefights, HordeTuning::CVarAfterFirefights.GetValueOnGameThread());
+	if (const float Lead = HordeTuning::CVarFirefightWarningSeconds.GetValueOnGameThread(); Lead >= 0.f)
+	{
+		Config.Firefight.WarningLeadSeconds = Lead;
+	}
 	if (const float Trigger = HordeTuning::CVarTriggerSeconds.GetValueOnGameThread(); Trigger > 0.f)
 	{
 		Config.TriggerSeconds = Trigger;
@@ -76,6 +87,10 @@ void UHordeSubsystem::RefreshConfig()
 	{
 		Config.bRepeats = true;
 		Config.RepeatSeconds = Repeat;
+	}
+	if (!DevOverrideJson.IsEmpty())
+	{
+		HordeRules::ApplyJsonText(DevOverrideJson, Config);
 	}
 	if (const int32 Enabled = HordeTuning::CVarEnabled.GetValueOnGameThread(); Enabled >= 0)
 	{
@@ -108,6 +123,7 @@ void UHordeSubsystem::Tick(float DeltaTime)
 	bCountingNow = false;
 	UWorld* World = GetWorld();
 	const UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	TickFirefightHorde(DeltaTime);
 	if (!bFightTracked || !Flow)
 	{
 		return;
@@ -128,6 +144,112 @@ void UHordeSubsystem::Tick(float DeltaTime)
 		--Timer.HordesReleased; // no spawn point now: try again shortly
 		RetryCooldown = HordeTuning::RetrySeconds;
 	}
+}
+
+bool UHordeSubsystem::RequestFirefightHorde()
+{
+	UWorld* World = GetWorld();
+	if (!World || !Config.bEnabled || IsFirefightHordePending())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Horde] firefight horde not announced (%s)"),
+			!Config.bEnabled ? TEXT("the horde is off on this level") : TEXT("one is already on its way"));
+		return false;
+	}
+	FirefightHordeCountdown = FMath::Max(Config.Firefight.WarningLeadSeconds, 0.f);
+	FirefightRetryCooldown = 0.f;
+	++FirefightHordesAnnounced;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Horde] %d firefights in a row: the horde comes in %.0f s (HQ warning now)"), Config.AfterFirefights,
+		FirefightHordeCountdown);
+	if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(FString::Printf(
+			TEXT("⚠️ All that shooting has drawn them in - a HORDE is closing on your position! About %.0f seconds - take up defensive positions!"),
+			FMath::Max(FirefightHordeCountdown, 1.f))));
+	}
+	return true;
+}
+
+void UHordeSubsystem::TickFirefightHorde(float DeltaTime)
+{
+	UWorld* World = GetWorld();
+	UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	if (!IsFirefightHordePending() || !Flow)
+	{
+		return;
+	}
+	if (!Config.bEnabled)
+	{
+		FirefightHordeCountdown = -1.f; // switched off meanwhile (console)
+		return;
+	}
+	const ECodexGamePhase Phase = Flow->GetPhase();
+	const bool bRunning = (Phase == ECodexGamePhase::Exploration || (Phase == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime))
+		&& !UWorldAIPauseSubsystem::IsPausedIn(World);
+	if (!bRunning)
+	{
+		return; // the tactical pause, turn-based combat, a dialogue, a cutscene / preparation / post-combat: the horde waits
+	}
+	if (FirefightRetryCooldown > 0.f)
+	{
+		FirefightRetryCooldown -= DeltaTime;
+		return;
+	}
+	FirefightHordeCountdown = FMath::Max(0.f, FirefightHordeCountdown - DeltaTime);
+	if (FirefightHordeCountdown > 0.f)
+	{
+		return;
+	}
+	if (ReleaseFirefightHorde())
+	{
+		FirefightHordeCountdown = -1.f;
+		++FirefightHordesReleased;
+	}
+	else
+	{
+		FirefightRetryCooldown = HordeTuning::RetrySeconds;
+	}
+}
+
+bool UHordeSubsystem::ReleaseFirefightHorde()
+{
+	UWorld* World = GetWorld();
+	UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	FVector Centre;
+	FVector Point;
+	bool bHidden = false;
+	if (!Flow || !GetSquadCentre(Centre) || !FindSpawnPoint(Centre, Point, bHidden))
+	{
+		return false;
+	}
+	if (Flow->GetPhase() == ECodexGamePhase::Exploration)
+	{
+		// The firefight is over already: the horde starts a fight of its own (a skirmish level ends it when the horde is dead).
+		const EGameFlowResult Started = Flow->StartAmbushCombat();
+		if (Started != EGameFlowResult::Ok)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Horde] firefight horde: the fight cannot start from exploration (%d), retrying"), static_cast<int32>(Started));
+			return false;
+		}
+	}
+	const int32 Spawned = SpawnHorde(0);
+	if (Spawned == 0)
+	{
+		return false;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Horde] firefight horde out: %d enemies"), Spawned);
+	if (UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>())
+	{
+		TArray<AEnemyCharacter*> Members;
+		for (const TWeakObjectPtr<AEnemyCharacter>& Member : LastHorde)
+		{
+			if (AEnemyCharacter* Enemy = Member.Get())
+			{
+				Members.Add(Enemy);
+			}
+		}
+		Intro->BeginExternalHorde(Members);
+	}
+	return true;
 }
 
 int32 UHordeSubsystem::ReleaseHorde()
@@ -276,13 +398,13 @@ int32 UHordeSubsystem::SpawnHorde(int32 HordeIndex)
 			Modifiers = &Level->Config.Waves[Wave - 1].Modifiers;
 		}
 	}
-	const TArray<EEnemyArchetype> Types = HordeRules::BuildComposition(Config, HordeRules::GetHordeSize(Config, HordeIndex));
+	const TArray<FPressureEnemyType> Types = HordeRules::BuildMembers(Config, HordeRules::GetHordeSize(Config, HordeIndex));
 	const FRotator Facing(0.f, (Centre - Point).Rotation().Yaw, 0.f);
 	LastHorde.Reset();
 	for (int32 Index = 0; Index < Types.Num(); ++Index)
 	{
 		const FVector Spot = Waves->FindFreeSpawnSpot(Point + HordeRules::ClusterOffset(Index, Types.Num(), Config.ClusterRadiusCm));
-		AEnemyCharacter* Enemy = Waves->SpawnEnemy(Types[Index], Spot, Facing);
+		AEnemyCharacter* Enemy = Waves->SpawnEnemyVariant(Types[Index].Type, Spot, Facing, Types[Index].Variant); // MILITARY_ZOMBIE: its BP
 		if (!Enemy)
 		{
 			continue;

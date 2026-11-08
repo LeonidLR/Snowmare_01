@@ -1,4 +1,8 @@
 #include "Misc/AutomationTest.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonReader.h"
+#include "Dom/JsonObject.h"
+#include "Data/EnvironmentTuning.h"
 #include "Data/LevelJsonRules.h"
 #include "Environment/EnvironmentRosterRules.h"
 
@@ -381,6 +385,51 @@ bool FEnvRosterLevelJsonLockTest::RunTest(const FString&)
 		RosterTest::SameEntries(*this, TEXT("parsed wave, Blizzard Night"),
 			EnvironmentRosterRules::ResolveSpawns(RosterTest::MakeDefaultRoster(), Spawns, EWeatherState::Blizzard, ETimeOfDayPhase::Night),
 			{{EEnemyArchetype::Marksman, 2}, {EEnemyArchetype::Frostbitten, 4}, {EEnemyArchetype::FrostHound, 5}});
+	}
+	return true;
+}
+
+ROSTER_TEST(FEnvRosterVariantPairTest, "PairSwapsIntoAVariantBlueprint")
+bool FEnvRosterVariantPairTest::RunTest(const FString&)
+{
+	// Horde #12 / task #34 (2026-11-09): the shipped SPITTER pair swaps into the Military Zombie = Frostbitten + its variant Blueprint.
+	FEnvironmentRosterConfig Roster = RosterTest::MakeDefaultRoster();
+	for (FEnvironmentRosterPair& Pair : Roster.Pairs)
+	{
+		if (Pair.From == EEnemyArchetype::Spitter)
+		{
+			Pair.To = EEnemyArchetype::Frostbitten;
+			Pair.ToVariant = FName(TEXT("MilitaryZombie"));
+		}
+	}
+	TArray<FString> Log;
+	const TArray<FEnemySpawnEntry> Out = EnvironmentRosterRules::ResolveSpawns(Roster, {RosterTest::Entry(EEnemyArchetype::Spitter, 2)},
+		EWeatherState::Blizzard, ETimeOfDayPhase::Night, &Log);
+	if (TestEqual(TEXT("one entry (every spitter swapped)"), Out.Num(), 1))
+	{
+		TestTrue(TEXT("a Frostbitten ..."), Out[0].EnemyType == EEnemyArchetype::Frostbitten);
+		TestEqual(TEXT("... of the Military Zombie Blueprint"), Out[0].Variant, FName(TEXT("MilitaryZombie")));
+		TestEqual(TEXT("ratio 1"), Out[0].Count, 2);
+	}
+	TestTrue(TEXT("log names the variant"), Log.Num() == 1 && Log[0].Contains(TEXT("MilitaryZombie")));
+	// A clear day keeps the spitters as written (the stage waves' Spitter stays in the game).
+	const TArray<FEnemySpawnEntry> Clear = EnvironmentRosterRules::ResolveSpawns(Roster, {RosterTest::Entry(EEnemyArchetype::Spitter, 2)},
+		EWeatherState::Clear, ETimeOfDayPhase::Midday);
+	TestTrue(TEXT("clear: spitters as written"), Clear.Num() == 1 && Clear[0].EnemyType == EEnemyArchetype::Spitter && Clear[0].Variant.IsNone());
+	// environment.json "to": "MILITARY_ZOMBIE" parses into the archetype + variant and writes back the same key.
+	FString Text = TEXT("{\"roster\": {\"pairs\": [{\"from\": \"SPITTER\", \"to\": \"MILITARY_ZOMBIE\", \"ratio\": 1}]}}");
+	TSharedPtr<FJsonObject> Root;
+	TestTrue(TEXT("json"), FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid());
+	const FEnvironmentConfig Parsed = EnvironmentTuning::FromJson(*Root);
+	if (TestEqual(TEXT("one pair"), Parsed.Roster.Pairs.Num(), 1))
+	{
+		TestTrue(TEXT("to = Frostbitten"), Parsed.Roster.Pairs[0].To == EEnemyArchetype::Frostbitten);
+		TestEqual(TEXT("variant"), Parsed.Roster.Pairs[0].ToVariant, FName(TEXT("MilitaryZombie")));
+		const TSharedRef<FJsonObject> Back = EnvironmentTuning::ToJson(Parsed);
+		const TArray<TSharedPtr<FJsonValue>>* Pairs = nullptr;
+		FString To;
+		TestTrue(TEXT("written back as MILITARY_ZOMBIE"), Back->GetObjectField(TEXT("roster"))->TryGetArrayField(TEXT("pairs"), Pairs) && Pairs->Num() == 1
+			&& (*Pairs)[0]->AsObject()->TryGetStringField(TEXT("to"), To) && To == TEXT("MILITARY_ZOMBIE"));
 	}
 	return true;
 }

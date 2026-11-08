@@ -1,6 +1,7 @@
 #include "Data/EnvironmentTuning.h"
 
 #include "CodexTactics.h"
+#include "Combat/CombatPressureRules.h"
 #include "Data/LevelJsonRules.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -248,9 +249,17 @@ namespace EnvironmentTuning
 				FString FromName;
 				FString ToName;
 				FEnvironmentRosterPair Pair;
+				FPressureEnemyType ToVariant;
+				const bool bToVariant = PairValue.IsValid() && PairValue->TryGetObject(PairJson) && (*PairJson)->TryGetStringField(TEXT("to"), ToName)
+					&& CombatPressureRules::ParseVariantKey(ToName, ToVariant);
+				if (bToVariant)
+				{
+					Pair.To = ToVariant.Type; // "MILITARY_ZOMBIE": its archetype + the variant Blueprint (horde #12)
+					Pair.ToVariant = ToVariant.Variant;
+				}
 				if (!PairValue.IsValid() || !PairValue->TryGetObject(PairJson) || !(*PairJson)->TryGetStringField(TEXT("from"), FromName)
 					|| !(*PairJson)->TryGetStringField(TEXT("to"), ToName)
-					|| !LevelJsonRules::ParseEnemyType(FromName, Pair.From) || !LevelJsonRules::ParseEnemyType(ToName, Pair.To))
+					|| !LevelJsonRules::ParseEnemyType(FromName, Pair.From) || !(bToVariant || LevelJsonRules::ParseEnemyType(ToName, Pair.To)))
 				{
 					UE_LOG(LogCodexTactics, Warning, TEXT("environment.json roster.pairs: a pair needs known \"from\" and \"to\" enemy types, skipped"));
 					continue;
@@ -319,7 +328,8 @@ namespace EnvironmentTuning
 		{
 			const TSharedRef<FJsonObject> PairJson = MakeShared<FJsonObject>();
 			PairJson->SetStringField(TEXT("from"), EnemyTypeName(Pair.From));
-			PairJson->SetStringField(TEXT("to"), EnemyTypeName(Pair.To));
+			PairJson->SetStringField(TEXT("to"), Pair.ToVariant.IsNone() ? EnemyTypeName(Pair.To)
+				: CombatPressureRules::EnemyLabel(FPressureEnemyType(Pair.To, Pair.ToVariant)));
 			PairJson->SetNumberField(TEXT("ratio"), Pair.Ratio);
 			Pairs.Add(MakeShared<FJsonValueObject>(PairJson));
 		}
@@ -465,7 +475,8 @@ namespace EnvironmentTuning
 		FString Pairs;
 		for (const FEnvironmentRosterPair& Pair : C.Roster.Pairs)
 		{
-			Pairs += FString::Printf(TEXT(" %s->%dx%s"), *EnemyTypeName(Pair.From), Pair.Ratio, *EnemyTypeName(Pair.To));
+			Pairs += FString::Printf(TEXT(" %s->%dx%s"), *EnemyTypeName(Pair.From), Pair.Ratio, Pair.ToVariant.IsNone() ? *EnemyTypeName(Pair.To)
+				: *CombatPressureRules::EnemyLabel(FPressureEnemyType(Pair.To, Pair.ToVariant)));
 		}
 		FString Bonus;
 		for (const EEnemyArchetype Type : C.Roster.BonusTypes)

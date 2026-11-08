@@ -67,6 +67,19 @@ public:
 	/** Ends the intro of the current wave without a pause or flyover: the fight stays in real time (smokes, the bot). */
 	void DismissIntro();
 
+	/**
+	 * Horde #12: a horde that is no sudden wave (UHordeSubsystem's firefight horde, already in the running fight) gets the same intro - the
+	 * wait for its running mass, the «HORDE INCOMING» alert + the HQ line, the flyover by the level's memory (the wide shot once per level,
+	 * then only new types) - over Members instead of the wave's enemies. The flow is not touched (no NotifyHordeWarned). False when another
+	 * intro runs or the fight is not in real time.
+	 */
+	bool BeginExternalHorde(const TArray<AEnemyCharacter*>& Members);
+
+	/** The running intro belongs to an external horde (BeginExternalHorde). */
+	bool IsExternalHordeIntro() const { return bExternalHorde && Stage != EHordeIntroStage::Idle; }
+	/** External hordes whose intro started (smokes). */
+	int32 GetExternalIntroCount() const { return ExternalIntroCount; }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|HordeIntro")
 	EHordeIntroStage GetStage() const { return Stage; }
 
@@ -159,6 +172,10 @@ private:
 
 	FHordeIntroConfig Config;
 	EHordeIntroStage Stage = EHordeIntroStage::Idle;
+	/** Horde #12: the intro films ExternalMembers (a firefight horde), not the wave; the flow's horde-intro flag is not involved. */
+	bool bExternalHorde = false;
+	TArray<TWeakObjectPtr<AEnemyCharacter>> ExternalMembers;
+	int32 ExternalIntroCount = 0;
 	TArray<FHordeIntroShot> Shots;
 	/** What this level's flyovers have shown (game designer 2026-10-25: the wide shot once, then only new types). */
 	FHordeIntroMemory Memory;

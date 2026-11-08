@@ -356,7 +356,8 @@ void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
 	{
 		for (int32 Index = 0; Index < Entry.Count; ++Index)
 		{
-			if (AEnemyCharacter* Enemy = SpawnEnemy(Entry.EnemyType, FindFreeSpawnSpot(GetSpawnLocationForLane(Entry.SpawnLane, Entry.EnemyType))))
+			if (AEnemyCharacter* Enemy = SpawnEnemyInternal(Entry.EnemyType, FindFreeSpawnSpot(GetSpawnLocationForLane(Entry.SpawnLane, Entry.EnemyType)),
+				FRotator::ZeroRotator, true, Entry.Variant))
 			{
 				Enemy->ApplySpawnEntry(Mods, Entry);
 				Counts.FindOrAdd(Entry.EnemyType)++;
@@ -390,7 +391,7 @@ void UWaveSubsystem::ProcessPendingSpawns(float DeltaTime)
 		PendingSpawns.RemoveAt(0);
 
 		FVector Loc = FindFreeSpawnSpot(GetSpawnLocationForLane(NextSpawn.SpawnLane, NextSpawn.EnemyType));
-		SpawnEnemy(NextSpawn.EnemyType, Loc);
+		SpawnEnemyInternal(NextSpawn.EnemyType, Loc, FRotator::ZeroRotator, true, NextSpawn.Variant); // the roster's variant (horde #12)
 
 		SpawnTimer = FMath::Max(0.2f, NextSpawn.SpawnDelaySec);
 	}
@@ -412,6 +413,11 @@ TArray<AEnemyCharacter*> UWaveSubsystem::GetAliveEnemies() const
 AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation)
 {
 	return SpawnEnemyInternal(Archetype, Location, Rotation, true);
+}
+
+AEnemyCharacter* UWaveSubsystem::SpawnEnemyVariant(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, FName Variant)
+{
+	return SpawnEnemyInternal(Archetype, Location, Rotation, true, Variant);
 }
 
 AEnemyCharacter* UWaveSubsystem::SpawnLevelEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, FName Variant)
