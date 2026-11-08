@@ -335,7 +335,8 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 			}
 			return;
 		}
-		if (Squad->SetLeaderByIndex(RosterIndex))
+		// Bug 2026-11-08: in formation mode mid-order he is selected at once but leads from the next order (USquadSubsystem::SelectLeader).
+		if (Squad->SelectLeader(Target))
 		{
 			ControllerCommands::Report(this, PlayerCommands::SelectMember);
 			if (Hud && Hud->GetProfileDialog() && Hud->GetProfileDialog()->IsOpen())
@@ -346,8 +347,7 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 			{
 				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 				{
-					Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"),
-						FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), NewLeader->DisplayName));
+					Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), ControllerCommands::SelectionLine(*Squad, *NewLeader));
 				}
 			}
 		}

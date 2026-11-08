@@ -76,7 +76,7 @@ bool AOperativeCharacter::IsHoldingUnderFireSpot() const
 	// The leader's own manoeuvre under fire (his cover sprint / step) is no formation order: a follower under fire stays where he is
 	// instead of walking after him into the fire (his own manoeuvre comes after the reaction delay).
 	const USquadSubsystem* Squad = IsPlayerTeam() ? World->GetSubsystem<USquadSubsystem>() : nullptr;
-	const AOperativeCharacter* CurrentLeader = Squad ? Squad->GetLeader() : nullptr;
+	const AOperativeCharacter* CurrentLeader = Squad ? Squad->GetFormationLeader() : nullptr;
 	AOperativeCharacter* Shooter = nullptr;
 	FVector Flash = FVector::ZeroVector;
 	if (CurrentLeader && CurrentLeader != this && CurrentLeader->IsOnUnderFireManoeuvreMove() && GetUnderFireThreat(Shooter, Flash))
@@ -246,7 +246,7 @@ void AOperativeCharacter::DecideUnderFireManoeuvre(AOperativeCharacter& Shooter,
 	const UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
 	const USquadSubsystem* Squad = IsPlayerTeam() ? World->GetSubsystem<USquadSubsystem>() : nullptr;
 	const UInteractionSubsystem* Interaction = World->GetSubsystem<UInteractionSubsystem>();
-	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	AOperativeCharacter* Leader = Squad ? Squad->GetFormationLeader() : nullptr; // the one the formation follows
 
 	UnderFireRules::FManoeuvreFacts Facts;
 	Facts.bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);

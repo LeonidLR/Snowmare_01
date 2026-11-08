@@ -12,6 +12,8 @@
  *   operative is selected afterwards, in Solo mode and in group (formation) mode. Only a new order to HIM, Regroup / Solo off,
  *   or game events (knockdown, panic, rage, a combat reaction, a level obstacle holding him) change it.
  * - Group mode: the old leader who still walks to his ordered goal finishes it and only then joins the new leader's formation.
+ *   Since 2026-11-08 a selection switch mid-order in formation mode does not change the formation's leader at all until the order is done
+ *   or the player gives the next order (ShouldDeferLeaderSwitch / StepPendingLeader below).
  * - Group mode: a follower hugging a wall leaves the cover and follows once the leader walks away from him (Solo mode, guards
  *   and the fight keep their own rules: Solo holds, guards are no followers, the formation is off in a fight).
  */
@@ -53,6 +55,83 @@ namespace SquadOrderRules
 	 * order of his own: he finishes it first and then holds where it ended.
 	 */
 	CODEXTACTICS_API bool ShouldHoldNow(bool bOnOwnOrder);
+
+	/**
+	 * Bug 2026-11-08 (the game designer's PIE report: "In FORMATION mode I give the squad an order to move, e.g. onto a roof ... If I then
+	 * switch to another squad member, the squad stops, the new member becomes the commander, and the order I gave is in effect cancelled.
+	 * They must FIRST FINISH their movement, and only from the NEXT order follow the new commander."). A selection switch while the formation
+	 * walks the leader's order no longer re-plans it: the old leader keeps leading the running order (same slots, same destination, the
+	 * ladder queue unchanged) and the selected member is the PENDING leader - selected (HUD, camera, rings, the player's next order), the
+	 * formation's leader from the next order or when the order is done (USquadSubsystem::SelectLeader / StepPendingLeader).
+	 * Codex.Squad.LeaderSwitchKeepsMove 0 = the old rule (the switch takes effect at once).
+	 */
+	struct FLeaderSwitchFacts
+	{
+		/** Codex.Squad.LeaderSwitchKeepsMove. */
+		bool bEnabled = true;
+		/** The formation follows its leader (USquadSubsystem::IsFormationActive, Solo off). */
+		bool bFormationFollows = true;
+		/** The current leader can lead (alive, not knocked down, not panicking). */
+		bool bLeaderCanLead = true;
+		/**
+		 * The current leader is carrying out an order the formation follows: a move of his own (incl. one waiting for his stance clip), a
+		 * walk-up to an object / an object task while he walks, a ladder climb or his wait in its queue, a move / wall layout planned for
+		 * him in the tactical pause.
+		 */
+		bool bLeaderOrderRunning = false;
+		/** The selected member is busy with an order of his own (then the switch is the old one: his order runs on, rev 5g). */
+		bool bSelectedOnOwnOrder = false;
+	};
+
+	/** The selection switch waits for the running order: the selected member becomes the pending leader. */
+	CODEXTACTICS_API bool ShouldDeferLeaderSwitch(const FLeaderSwitchFacts& Facts);
+
+	/** One squad tick of a pending leader (bug 2026-11-08). */
+	enum class EPendingLeaderStep : uint8
+	{
+		/** The old leader still leads his running order. */
+		Keep,
+		/** Hand the lead over now: the order is done (and the pending leader stands at his slot), or nothing carries it any more. */
+		HandOver,
+		/**
+		 * He was given an order of his own some other way than the player's order dispatch (the bot, a scripted order, an object's use
+		 * order): hand the lead over now; the old leader finishes his own order and then joins the new leader (rev 5g).
+		 */
+		HandOverForHisOrder,
+		/** The pending leader is gone (dead, left the squad): the selection returns to the leader. */
+		Drop
+	};
+
+	struct FPendingLeaderFacts
+	{
+		bool bEnabled = true;
+		/** The pending leader is still a live squad member. */
+		bool bPendingValid = true;
+		bool bFormationFollows = true;
+		bool bLeaderCanLead = true;
+		/** As FLeaderSwitchFacts::bLeaderOrderRunning. */
+		bool bLeaderOrderRunning = false;
+		/** The pending leader is busy with an order of his own. */
+		bool bPendingOnOwnOrder = false;
+		/** The pending leader still walks his formation move (he would be stopped short of his slot on becoming the leader). */
+		bool bPendingWalking = false;
+		/** The pending leader is on a ladder or waits in its queue (never stopped there). */
+		bool bPendingOnLadder = false;
+		/** Seconds since the old leader's order ended (the formation settles). */
+		float SecondsSinceOrderDone = 0.f;
+	};
+
+	/** The order done, the hand-over waits up to this long for the pending leader to reach his formation slot, s. */
+	constexpr float PendingLeaderSettleSeconds = 3.f;
+
+	CODEXTACTICS_API EPendingLeaderStep StepPendingLeader(const FPendingLeaderFacts& Facts, float SettleSeconds = PendingLeaderSettleSeconds);
+
+	/**
+	 * The player's next order hands the lead over (USquadSubsystem::HandOverLeadForOrder): it replaces the squad's running order, so the old
+	 * leader's walk ends and he joins the new leader's formation - a move of his own, a move planned for him in this pause, the walk to a
+	 * cover slot. Kept: his climb in progress (he finishes the ladder) and his walk-up to use an object / his object task (his own job).
+	 */
+	CODEXTACTICS_API bool EndsOldLeaderOrder(bool bOnLadder, bool bUseOrObjectTask);
 
 	/**
 	 * Bug 2026-10-20 (game designer, lake demo: after the hut lesson Regroup, then the Commander RUNS - the two others followed in formation

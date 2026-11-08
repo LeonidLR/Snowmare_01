@@ -112,6 +112,20 @@ mark, like a monster), never once fallen. The arena turns it off (`SetRevealHost
   before the cover layer; `UpdateDeathPose` holds the death clip / held fall against anything else that takes the FullBody slot (a
   `[Death] ... corpse pose was lost` warning, `DeathPoseRestores`). Not a skeleton / slot problem of the PMC body (the Sniper death clips
   play on `SKM_PmcOperator`), and the player's men had the same trap in cover.
+- **A dead fighter's body drops the silhouette / highlight overlays (the game designer's screenshot 2026-11-08: a killed PMC fighter lying on
+  the ground kept the orange see-through silhouette).** Root cause: a fighter seen by the camera only through a wall / roof carries the
+  see-through silhouette (`AOperativeCharacter::SetSilhouetteVisible(true)` puts `SilhouetteMID` - the default role's orange - on every shown
+  mesh). Unseen by the squad he is concealed: `UTacticalSightSubsystem::SetOperativeConcealed` hides all his components (`SetHiddenInGame`), and
+  a hidden component is not `IsVisible()`. Killed so, `UpdateSilhouette` ("dead -> off") ran `SetSilhouetteVisible(false)`, which cleared only
+  the SHOWN meshes and set `bSilhouetteVisible` false; the sight subsystem then showed the fallen again (a kill is seen) with the orange overlay
+  still on, and nothing ever took it off (the flag said "off", the corpse never turns it on again). Same leak for any mesh hidden at the
+  moment the silhouette goes off (a weapon hidden on a ladder), for the player's men too. Fix: `SetSilhouetteVisible(false)` also takes the
+  silhouette off hidden meshes; `AOperativeCharacter::ClearBodyOverlays` (every overlay of him and his attached actors, shown or hidden - the
+  silhouette, a hit flash / the target highlight restoring what it saved, a defend / suppress marker) runs in `BecomeCorpse` (killed, the
+  knocked-down -> dead path, a load's `RestoreKilledInAction`, PMC and squad alike) and every tick of a corpse (`UpdateSilhouette`), so none
+  comes back. Log `X (corpse): overlay M taken off Mesh`. Smoke `PmcDeathPoseSmoke`: the four bodies seen only through a roof slab (the
+  silhouette on), the target highlight flashed at the kill, the two fighters killed concealed and shown again 0.5 s later - no overlay on any
+  of their meshes 1 s and 4 s after the kill (without the fix the fighters keep `MID_M_Silhouette`).
 Not done (follow-ups): no last-known silhouette (ghost) for a concealed fighter, no hearing of them, turn-based combat ignores them, hostile rounds suppress the player's men only through the generic suppression
 rules, hostile fighters never loot / get looted.
 

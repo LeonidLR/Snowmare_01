@@ -339,6 +339,10 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 	}
 	UWorld* World = GetWorld();
 	USquadSubsystem* Squad = GetSquad();
+	if (Squad)
+	{
+		Squad->HandOverLeadForOrder(Operative, TEXT("a run-and-peek order")); // bug 2026-11-08: the next order after a switch mid-move
+	}
 	HideCoverPreview();
 	UpdateCornerPeekHover(Operative, nullptr);
 	// A double-click on the same corner: the same order at a sprint (as the ground's double-click).
