@@ -90,10 +90,11 @@ export interface GrenadeTuning {
 
 /** An enemy's ranged weapon (enemy_weapons.<id>): real time + turn based (tb_*). Metres / seconds / cells. */
 export interface EnemyRangedWeapon {
-  damage: number;
+  /** Schema keys since 2026-11-09 (the weapon framework): base_damage, fire_rate (shot interval), effective_range_m, attack_range_m. */
+  base_damage: number;
   base_accuracy: number;
   aim_duration: number;
-  shot_cooldown: number;
+  fire_rate: number;
   crit_chance: number;
   crit_multiplier: number;
   prone_accuracy_bonus: number;

@@ -276,6 +276,7 @@
     },
     "sniper_rifle": {
       "name": "Sniper Rifle",
+      "handling": "sniper_rifle",
       "kind": "hitscan",
       "base_damage": 70,
       "attack_range_m": 120,
@@ -325,10 +326,13 @@
   },
   "enemy_weapons": {
     "marksman_rifle": {
-      "damage": 45,
+      "comment": "The Marksman enemy's rifle (2026-11-09: on the weapon schema). Ballistic part = schema keys (WeaponStatsRules): base_damage, fire_rate (the shot interval after a shot = the old shot_cooldown), effective_range_m, attack_range_m (the old max_range_m). AI part = the enemy's own: base_accuracy, aim_duration, crit_*, the stance bonuses, the preferred band; tb_* = turn based. His shot keeps the enemy-attack formula (no armour-class limit).",
+      "name": "Marksman Rifle",
+      "kind": "hitscan",
+      "base_damage": 45,
       "base_accuracy": 0.6,
       "aim_duration": 2,
-      "shot_cooldown": 2.5,
+      "fire_rate": 2.5,
       "crit_chance": 0.25,
       "crit_multiplier": 2,
       "prone_accuracy_bonus": 1.35,
@@ -336,7 +340,7 @@
       "preferred_min_range_m": 20,
       "preferred_max_range_m": 35,
       "effective_range_m": 80,
-      "max_range_m": 110,
+      "attack_range_m": 110,
       "tb_damage_scale": 1.6,
       "tb_attack_ap": 4,
       "tb_min_range_cells": 3,

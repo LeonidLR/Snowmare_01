@@ -112,3 +112,24 @@
 - **Checks.** Tests `CodexTactics.Weapons.Sidearm.Rules`, `CodexTactics.Weapons.Pistol.DamageByDistance` (real time + turn-based);
   `CodexTactics.PistolSmoke` (loadout, the switch + equip clip + layer, damage at 5 / 10 / 18 / 24.5 m, reload, the sidearm draw and return,
   a PMC fighter's layer); rendered proof `CodexTactics.ShotgunD1Shots pistol` -> `Saved/Screenshots/PistolD/`.
+
+## The sniper rifle on the framework (the Medic-Sapper's rifle, "Roger's sniper rifle" in the plan; 2026-11-09)
+
+- **Data (unchanged numbers, now explicit):** `weapons.sniper_rifle` - `handling: sniper_rifle` (kneel / prone only, the bolt: `SniperRules`,
+  `OperativeCharacterSniper.cpp`), armour class **heavy** (decision 2026-11-08), 70 damage, armour penetration 0.6, reach 120 m / effective 90 m,
+  2.4 s between shots, 5 rounds + 15, reload 3.5 s, no damage falloff (cell table all 1). Against the Brute (heavy 0.75) the heavy class pierces:
+  0.75 x (1 - 0.6) = 30 % stopped (a light weapon: 75 %) - measured in SniperSmoke as x2.80 of the same shot with a light class.
+- **The Marksman enemy's rifle on the schema:** `enemy_weapons.marksman_rifle` now carries schema keys for its ballistic part - `kind`,
+  `base_damage` (was `damage`), `fire_rate` (the shot interval, was `shot_cooldown`), `effective_range_m`, `attack_range_m` (was `max_range_m`) -
+  parsed and validated by `WeaponStatsRules` (`WeaponTuning::ApplyMarksmanRifleJson`, `MarksmanRifleStats`) and written into `FMarksmanConfig`;
+  the AI part (base accuracy, aim time, crit, stance bonuses, the preferred band) and `tb_*` stay the enemy's keys. Same numbers (45 / 2.5 s /
+  80 / 110 m / 0.6). Old files with the old key names still load; an invalid schema part is rejected (the rifle keeps its values). The Training
+  Ground's enemy-weapon panel edits the new key names. His shot keeps the enemy-attack formula (no armour-class limit).
+- **PMC fighters** draw the sniper rifle from `pmc_operators.json` weapon_pool: the same `DA_Weapon_sniper_rifle`, the same sniper handling
+  (no shot standing).
+- **Animation:** the sniper keeps its own native pose set (`OperativeAnimInstanceSniper.cpp`: stand aim idle, kneel / prone aim, fire, bolt,
+  magazine reload) - not the weapon layer (the layer is off in the sniper pose); nothing new needed.
+- **The sidearm** also covers her: an empty sniper magazine with an enemy within 10 m draws the pistol.
+- **Checks:** tests `CodexTactics.Weapons.Sniper.RifleData`, `.MarksmanOnSchema`; `CodexTactics.SniperSmoke` part 8 (the same damage at 10 / 30 m,
+  the Brute, the Marksman's config from the schema, a PMC fighter's rifle); render `CodexTactics.ShotgunD1Shots sniper` -> `Saved/Screenshots/SniperRifle/`.
+
