@@ -672,6 +672,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	TObjectPtr<USkeletalMeshComponent> WeaponSkeletalMesh;
 
+	/** The hand model's extra static parts (UWeaponDataAsset::HandMeshParts: the pistol's magazine), children of WeaponMesh at identity. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UStaticMeshComponent>> WeaponMeshParts;
+
 	/** Skeletal mesh material slot tinted with the role colour (Godot tints only the coat). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	FName RoleColorMaterialSlot = TEXT("Explorer_Coat");

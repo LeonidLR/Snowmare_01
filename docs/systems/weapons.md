@@ -101,9 +101,14 @@
   primary, which then reloads (`UpdateSidearmReturn`). A tactical top-up (rounds still in the clip) never switches; an empty primary with no
   reserve left still switches for good (`AutoSwitchOnEmpty`). The player's own controls are unchanged (X cycles the weapons, the weapon
   selector). Every operative carries the pistol (12 + 24).
-- **Model.** The placeholder stays (the operative Blueprint's default weapon model) until the optimized Pistol 9mm package (one material,
-  1K atlas, the designer 2026-11-08) is imported; the grip transform will be computed from the retargeted aim pose (barrel along the body's
-  forward, the grip between the wrist and the middle knuckle - `Scripts/Editor/calibrate_pistol_grip.py`, kept out of the commit until then).
+- **Model (2026-11-09).** The optimized Pistol 9mm from the art package (ArtPipeline/Weapons/Pistol9mm, one material / 1K atlas; imported by
+  `Scripts/Editor/import_optimized_weapons.py` into `/Game/Weapons/Pistol9mm/` + `Attachments/`, 9.2 MB): the operatives hold
+  `SM_Pistol9mm_Pistol` (3,000 tris) + `SM_Pistol9mm_Magazine` ("visual.hand_mesh_parts": extra static parts attached to the hand model at identity,
+  `AOperativeCharacter::WeaponMeshParts`). Every part shares the grip-centre pivot (muzzle +X, up +Z), so the attachments (suppressors 1-3, laser,
+  flashlights 1-2, red dot, picatinny 1-2; suppressor 2 / 3 poses estimated by the art agent) mount at identity when the customisation comes.
+  Grip transform from the retargeted aim pose (`Scripts/Editor/calibrate_pistol_grip.py`), muzzle at x 14.6 / z 6.4 (the bore). No emissive yet
+  (the designer's decision pending). The D-1 likewise: `/Game/Weapons/ShotgunD1/SK_ShotgunD1_1slot` (4,500 tris, MI_ShotgunD1, 3.2 MB) on the
+  Fab pack's original skeleton (read only); the Fab pack is untouched.
 - **Checks.** Tests `CodexTactics.Weapons.Sidearm.Rules`, `CodexTactics.Weapons.Pistol.DamageByDistance` (real time + turn-based);
   `CodexTactics.PistolSmoke` (loadout, the switch + equip clip + layer, damage at 5 / 10 / 18 / 24.5 m, reload, the sidearm draw and return,
   a PMC fighter's layer); rendered proof `CodexTactics.ShotgunD1Shots pistol` -> `Saved/Screenshots/PistolD/`.

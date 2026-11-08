@@ -156,6 +156,24 @@ namespace WeaponTuning
 				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" visual.hand_mesh %s not found"), *Weapon.WeaponId, *MeshPath);
 			}
 		}
+		const TArray<TSharedPtr<FJsonValue>>* Parts = nullptr;
+		if ((*Visual)->TryGetArrayField(TEXT("hand_mesh_parts"), Parts) && Parts)
+		{
+			Weapon.HandMeshParts.Reset();
+			for (const TSharedPtr<FJsonValue>& Part : *Parts)
+			{
+				const FString PartPath = Part.IsValid() ? Part->AsString() : FString();
+				if (!PartPath.IsEmpty() && LoadObject<UStaticMesh>(nullptr, *PartPath))
+				{
+					Weapon.HandMeshParts.Add(TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(PartPath)));
+				}
+				else
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" visual.hand_mesh_parts %s not found"), *Weapon.WeaponId, *PartPath);
+				}
+			}
+			bChanged = true;
+		}
 		auto ReadVector = [&Visual](const TCHAR* Key, FVector& Out)
 		{
 			const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;

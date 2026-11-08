@@ -47,6 +47,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
 	TSoftObjectPtr<USkeletalMesh> HandSkeletalMesh;
 
+	/**
+	 * More static parts of the model in the hand, each attached to it at identity (the optimized Pistol 9mm: the pistol + its seated magazine,
+	 * every part exported in its mounted pose round the shared grip pivot, 2026-11-09). Set from weapons_tuning.json "visual.hand_mesh_parts".
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	TArray<TSoftObjectPtr<UStaticMesh>> HandMeshParts;
+
 	/** Use HandMeshAttachTransform instead of the Blueprint's WeaponMesh offset (a new model usually needs its own grip offset). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
 	bool bOverrideHandMeshTransform = false;
