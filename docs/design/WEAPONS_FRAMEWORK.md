@@ -135,10 +135,9 @@ sniper rifle heavy, RPG-7 vehicle (week 2).
 
 - **Squad operatives and hostile PMC fighters** are the same class (`AOperativeCharacter`, `TeamId != 0` = PMC) with the same
   `CurrentWeapon` (a `DA_Weapon_*`): one weapon, one set of numbers, both sides. PMC bands (`PmcSquadSubsystem`) read `Stats.Range`.
-- **The Marksman enemy** still has its own rifle block (`enemy_weapons.marksman_rifle` -> `FMarksmanConfig`: damage, accuracy, aim time,
-  cooldown, crit, stance bonuses, preferred band, effective / max range, turn-based `tb_*`). Planned (with "the sniper rifle onto the
-  framework", this week): the ballistic part becomes a `weapons` entry read through `FWeaponStats`; the AI part (aim time, preferred band,
-  stance bonuses) stays the enemy's.
+- **The Marksman enemy** (done 2026-11-09, section 15): the ballistic part of `enemy_weapons.marksman_rifle` is a schema weapon block read through
+  `FWeaponStats` (`kind`, `base_damage`, `fire_rate`, `effective_range_m`, `attack_range_m`); the AI part (aim time, preferred band, stance bonuses,
+  crit) and `tb_*` stay the enemy's.
 - **Melee enemies** (hounds, brutes, cutters, spitter acid) attack from `EnemyArchetypeAsset` / `ai_tuning.json`: not weapons; out of scope.
 - **APC** turret / MG (`vehicle_weapons.apc_turret`): its own block today; week 4 maps cannon / MG onto `FWeaponStats` (cannon = projectile
   + explosion, MG = hitscan with full-auto) and the hull onto armour class Vehicle.
@@ -348,3 +347,11 @@ flamethrower rows of this table were dropped with the roster, section 0: those w
 
 The turn-based rule: a weapon without a per-cell table follows its real-time falloff curve at the cells' distance, so the two modes cannot drift
 apart again; weapons with a table keep it.
+
+## 15. The sniper rifle onto the framework (2026-11-09)
+
+No number changed. `weapons.sniper_rifle` states its handling (`sniper_rifle`) next to the heavy class it already had; the Marksman's rifle block uses
+the schema key names (`damage` -> `base_damage`, `shot_cooldown` -> `fire_rate`, `max_range_m` -> `attack_range_m`, + `kind`, `name`) and is validated
+like a weapon; old files load. Parity: `CodexTactics.Weapons.Sniper.MarksmanOnSchema` (the config from the schema block = the old values) and
+SniperSmoke part 8 (a spawned Marksman's config).
+

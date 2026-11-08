@@ -1,7 +1,7 @@
 // Dev-only console command: the pistol end to end (the weapons week, "the whole pistol", 2026-11-08).
 //   Scripts/smoke_parallel.ps1 -Commands PistolSmoke
 // 1. loadout: every operative carries the pistol (12 + 24); the Commander M16 / pistol / grenade; the pistol's handling is "pistol".
-// 2. the switch to the pistol: a model on the weapon socket (placeholder until the optimized Pistol 9mm package), the equip clip, the pistol layer drives the body with
+// 2. the switch to the pistol: the optimized Pistol 9mm + its magazine on the weapon socket, the equip clip, the pistol layer drives the body with
 //    the skeleton's retargeted copies.
 // 3. damage by distance, forced hits: 5 / 10 m full, 18 m x0.787, 24.5 m x0.613 (full to 10 m, x0.6 at the 25 m reach); every shot plays the
 //    (additive) fire clip.
@@ -203,9 +203,11 @@ namespace PistolSmoke
 			}
 			const UOperativeAnimInstance* Anim = AnimOf(Hero);
 			const UStaticMesh* Model = Hero->WeaponMesh ? Hero->WeaponMesh->GetStaticMesh() : nullptr;
-			// The model stays the placeholder until the optimized Pistol 9mm package is imported (the designer, 2026-11-08: one material / 1K atlas).
-			Check(State, Model && Hero->WeaponMesh->IsVisible(), FString::Printf(TEXT("2: a model on the weapon socket (%s; placeholder until the optimized Pistol 9mm)"),
-				Model ? *Model->GetName() : TEXT("none")));
+			// The optimized Pistol 9mm (the art package, 2026-11-09): the pistol + its seated magazine.
+			const UStaticMesh* Magazine = Hero->WeaponMeshParts.Num() > 0 && Hero->WeaponMeshParts[0] ? Hero->WeaponMeshParts[0]->GetStaticMesh() : nullptr;
+			Check(State, Model && Model->GetName() == TEXT("SM_Pistol9mm_Pistol") && Hero->WeaponMesh->IsVisible() && Magazine
+				&& Magazine->GetName() == TEXT("SM_Pistol9mm_Magazine"), FString::Printf(TEXT("2: the optimized Pistol 9mm + its magazine on the weapon socket (%s + %s)"),
+				Model ? *Model->GetName() : TEXT("none"), Magazine ? *Magazine->GetName() : TEXT("none")));
 			Check(State, Anim && Anim->GetWeaponEquipClips() > State.EquipBefore, TEXT("2: ... the equip clip played at the switch"));
 			Check(State, Anim && Anim->GetWeaponLayerHandling() == EWeaponHandling::Pistol && Anim->GetShotgunLayerMask() == EWeaponLayerMask::Full,
 				FString::Printf(TEXT("2: the pistol layer drives the body (mask %d)"), Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1));

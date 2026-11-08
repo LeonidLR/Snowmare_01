@@ -227,6 +227,30 @@ void AOperativeCharacter::ApplyWeaponVisual()
 	{
 		WeaponMesh->SetRelativeTransform(Transform);
 	}
+	// The extra parts (the pistol's magazine): one component each under WeaponMesh at identity, the spares emptied.
+	const int32 PartCount = HandAsset && CurrentWeapon ? CurrentWeapon->HandMeshParts.Num() : 0;
+	while (WeaponMeshParts.Num() < PartCount)
+	{
+		UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+		Part->SetupAttachment(WeaponMesh);
+		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Part->SetCastShadow(WeaponMesh->CastShadow);
+		Part->RegisterComponent();
+		Part->AttachToComponent(WeaponMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		Part->SetRelativeTransform(FTransform::Identity);
+		WeaponMeshParts.Add(Part);
+	}
+	for (int32 Index = 0; Index < WeaponMeshParts.Num(); ++Index)
+	{
+		if (UStaticMeshComponent* Part = WeaponMeshParts[Index])
+		{
+			UStaticMesh* PartMesh = Index < PartCount ? CurrentWeapon->HandMeshParts[Index].LoadSynchronous() : nullptr;
+			if (Part->GetStaticMesh() != PartMesh)
+			{
+				Part->SetStaticMesh(PartMesh);
+			}
+		}
+	}
 }
 
 void AOperativeCharacter::PlayShotClip(AActor* Target, bool bHit)

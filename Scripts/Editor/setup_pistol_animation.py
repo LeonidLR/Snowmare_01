@@ -1,7 +1,7 @@
 """Pistol weapon layer clips (the whole pistol, 2026-11-08): the user's Fab pack "Pistol and Rifle Locomotion Animations 1700" (GASP-style
 motion-matching set on the UEFN mannequin; in the project only its mesh was imported, the animations sit as FBX in the Epic launcher's vault cache,
 read only) for the relaxed carry - stand / crouch idle, walk / run / crouch / sprint loops - and the Lyra mannequin pistol set already in the
-project (/Game/Characters/Mannequins/Anims/Pistol: aim idle, aim walk / jog 8-way, fire, reload, equip) for the aimed pistol. The Fab pack has no
+project (/Game/Characters/Mannequins/Anims/Pistol: aim idle, aim walk 8-way, fire, reload, equip) for the aimed pistol. The Fab pack has no
 aim / fire / reload / equip clips.
 
 1. Imports the chosen Fab FBX clips onto the project's UE5 mannequin skeleton /Game/Characters/Mannequins/Meshes/SK_Mannequin (the UEFN mannequin's
@@ -40,7 +40,7 @@ for kind, folder in (("Walk", "Walk"), ("Run", "Run"), ("Crouch", "Crouch")):
     for d in ("F", "FL", "FR", "B", "BL", "BR", "LL", "RL"):  # LL / RL: the strafes (LR / RR are the same strafes off the other foot)
         FAB[f"M_Neutral_{kind}_Loop_{d}_Pistol"] = folder
 LYRA_CLIPS = ["MF_Pistol_Idle_ADS", "MM_Pistol_Fire", "MM_Pistol_Reload", "MM_Pistol_Equip"] + [
-    f"{folder}/MF_Pistol_{folder}_{d}" for folder in ("Walk", "Jog") for d in ("Fwd", "Fwd_Right", "Right", "Bwd_Right", "Bwd", "Bwd_Left", "Left", "Fwd_Left")]
+    f"{folder}/MF_Pistol_{folder}_{d}" for folder in ("Walk",) for d in ("Fwd", "Fwd_Right", "Right", "Bwd_Right", "Bwd", "Bwd_Left", "Left", "Fwd_Left")]
 DIRS = ("fwd", "fwd_right", "right", "bwd_right", "bwd", "bwd_left", "left", "fwd_left")
 log = []
 
