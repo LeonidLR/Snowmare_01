@@ -22,6 +22,37 @@ namespace SquadOrderRules
 		return !bOnOwnOrder;
 	}
 
+	bool ShouldDeferLeaderSwitch(const FLeaderSwitchFacts& Facts)
+	{
+		return Facts.bEnabled && Facts.bFormationFollows && Facts.bLeaderCanLead && Facts.bLeaderOrderRunning && !Facts.bSelectedOnOwnOrder;
+	}
+
+	EPendingLeaderStep StepPendingLeader(const FPendingLeaderFacts& Facts, float SettleSeconds)
+	{
+		if (!Facts.bPendingValid)
+		{
+			return EPendingLeaderStep::Drop;
+		}
+		if (!Facts.bEnabled || !Facts.bFormationFollows || !Facts.bLeaderCanLead)
+		{
+			return EPendingLeaderStep::HandOver;
+		}
+		if (Facts.bPendingOnOwnOrder)
+		{
+			return EPendingLeaderStep::HandOverForHisOrder;
+		}
+		if (Facts.bLeaderOrderRunning || Facts.bPendingOnLadder)
+		{
+			return EPendingLeaderStep::Keep;
+		}
+		return Facts.bPendingWalking && Facts.SecondsSinceOrderDone < SettleSeconds ? EPendingLeaderStep::Keep : EPendingLeaderStep::HandOver;
+	}
+
+	bool EndsOldLeaderOrder(bool bOnLadder, bool bUseOrObjectTask)
+	{
+		return !bOnLadder && !bUseOrObjectTask;
+	}
+
 	bool ShouldStandToSprintWithLeader(bool bLeaderSprinting, bool bFollowerCrouching, bool bStanceFromSquad, bool bCanSprint)
 	{
 		return bLeaderSprinting && bFollowerCrouching && bStanceFromSquad && bCanSprint;

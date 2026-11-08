@@ -208,7 +208,7 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 		if (!Need.IsNone() && !TutorialRules::StanceSatisfies(UTutorialSubsystem::GetStanceName(Stance), Need))
 		{
 			const USquadSubsystem* FollowSquad = GetWorld()->GetSubsystem<USquadSubsystem>();
-			const AOperativeCharacter* Leader = FollowSquad ? FollowSquad->GetLeader() : nullptr;
+			const AOperativeCharacter* Leader = FollowSquad ? FollowSquad->GetFormationLeader() : nullptr; // the one he follows
 			if (Leader && Leader != this && TutorialRules::StanceSatisfies(UTutorialSubsystem::GetStanceName(Leader->GetStance()), Need)
 				&& !OperativeMovementRules::ShouldDeferMove(GetMoveHoldSeconds()))
 			{
@@ -230,7 +230,7 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	if (IsHoldCrouch())
 	{
 		const USquadSubsystem* HoldSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-		const AOperativeCharacter* HoldLeader = HoldSquad ? HoldSquad->GetLeader() : nullptr;
+		const AOperativeCharacter* HoldLeader = HoldSquad ? HoldSquad->GetFormationLeader() : nullptr;
 		if (HoldLeader && HoldLeader != this && SquadAutonomyRules::ShouldRiseFromHoldCrouch(true, bCarrying, HoldLeader->GetStance()))
 		{
 			SetStance(EOperativeStance::Standing);

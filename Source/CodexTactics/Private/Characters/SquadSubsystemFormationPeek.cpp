@@ -97,6 +97,7 @@ bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperat
 
 bool USquadSubsystem::OrderFormationCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bRunPeek)
 {
+	HandOverLeadForOrder(nullptr, TEXT("the squad's corner peek")); // bug 2026-11-08: the squad's next order is led by the selected member
 	if (IsWallLeadershipEnabled())
 	{
 		return OrderWallLeadershipPeek(Peeker, CornerSlot, EdgeOnFace, bRunPeek);

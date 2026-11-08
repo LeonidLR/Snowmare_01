@@ -53,6 +53,7 @@ TArray<AOperativeCharacter*> USquadSubsystem::GetGroupCoverMembers(const AOperat
 bool USquadSubsystem::PlanFormationWall(AOperativeCharacter* Direct, const FCoverSlot& Slot, float Radius, FVector& OutPlanned)
 {
 	OutPlanned = Slot.WorldLocation;
+	HandOverLeadForOrder(Direct, TEXT("the planned wall order")); // bug 2026-11-08: a pending leader leads the squad's next order
 	if (!Direct || !Slot.IsValid() || Direct != Leader.Get())
 	{
 		return false;

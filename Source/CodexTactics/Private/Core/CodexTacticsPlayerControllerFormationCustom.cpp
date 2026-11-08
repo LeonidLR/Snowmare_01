@@ -55,6 +55,10 @@ bool ACodexTacticsPlayerController::BeginFormationPlacement(int32 Slot)
 	using namespace FormationCustomPlacementLocal;
 	USquadSubsystem* Squad = GetSquad();
 	UWorld* World = GetWorld();
+	if (Squad)
+	{
+		Squad->HandOverLeadForOrder(nullptr, TEXT("the custom formation")); // bug 2026-11-08: the shape is anchored on the selected member
+	}
 	AOperativeCharacter* LeaderRef = Squad ? Squad->GetLeader() : nullptr;
 	if (FormationPlacement.IsActive())
 	{

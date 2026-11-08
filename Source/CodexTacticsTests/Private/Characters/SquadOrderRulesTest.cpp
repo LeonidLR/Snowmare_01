@@ -273,6 +273,74 @@ bool FSquadOrderGroupCoverInCombatTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_ORDER_TEST(FSquadOrderLeaderSwitchKeepsMoveTest, "LeaderSwitchKeepsMove")
+bool FSquadOrderLeaderSwitchKeepsMoveTest::RunTest(const FString&)
+{
+	using namespace SquadOrderRules;
+	// Bug 2026-11-08 (the game designer's PIE report): formation mode, the squad walks the leader's order, the player selects another member.
+	FLeaderSwitchFacts Switch;
+	Switch.bLeaderOrderRunning = true;
+	TestTrue(TEXT("Formation walking the leader's order: the switch waits (the selected member is the pending leader)"), ShouldDeferLeaderSwitch(Switch));
+	FLeaderSwitchFacts Rest = Switch;
+	Rest.bLeaderOrderRunning = false;
+	TestFalse(TEXT("At rest: the switch at once (as before)"), ShouldDeferLeaderSwitch(Rest));
+	FLeaderSwitchFacts Solo = Switch;
+	Solo.bFormationFollows = false;
+	TestFalse(TEXT("Solo / no formation (turn-based, Commander Mode): at once - each operative is autonomous"), ShouldDeferLeaderSwitch(Solo));
+	FLeaderSwitchFacts Down = Switch;
+	Down.bLeaderCanLead = false;
+	TestFalse(TEXT("The leader knocked down / panicking: at once"), ShouldDeferLeaderSwitch(Down));
+	FLeaderSwitchFacts Busy = Switch;
+	Busy.bSelectedOnOwnOrder = true;
+	TestFalse(TEXT("The selected member busy with an order of his own: the old switch (his order runs on, rev 5g)"), ShouldDeferLeaderSwitch(Busy));
+	FLeaderSwitchFacts Off = Switch;
+	Off.bEnabled = false;
+	TestFalse(TEXT("Codex.Squad.LeaderSwitchKeepsMove 0: the old rule"), ShouldDeferLeaderSwitch(Off));
+
+	// The pending leader's tick.
+	FPendingLeaderFacts Pending;
+	Pending.bLeaderOrderRunning = true;
+	Pending.bPendingWalking = true;
+	TestTrue(TEXT("The order still runs: the old leader keeps leading"), StepPendingLeader(Pending) == EPendingLeaderStep::Keep);
+	FPendingLeaderFacts OnLadder = Pending;
+	OnLadder.bLeaderOrderRunning = false;
+	OnLadder.bPendingOnLadder = true;
+	OnLadder.SecondsSinceOrderDone = 30.f;
+	TestTrue(TEXT("The order done but he is on the ladder / in its queue: never handed over there"), StepPendingLeader(OnLadder) == EPendingLeaderStep::Keep);
+	FPendingLeaderFacts Settling = Pending;
+	Settling.bLeaderOrderRunning = false;
+	Settling.SecondsSinceOrderDone = 1.f;
+	TestTrue(TEXT("The order done, he still walks to his slot: wait (he would be stopped short of it)"), StepPendingLeader(Settling) == EPendingLeaderStep::Keep);
+	Settling.SecondsSinceOrderDone = PendingLeaderSettleSeconds + 0.1f;
+	TestTrue(TEXT("... at most PendingLeaderSettleSeconds"), StepPendingLeader(Settling) == EPendingLeaderStep::HandOver);
+	FPendingLeaderFacts Arrived = Settling;
+	Arrived.bPendingWalking = false;
+	Arrived.SecondsSinceOrderDone = 0.f;
+	TestTrue(TEXT("The order done, he stands at his slot: the hand-over at arrival"), StepPendingLeader(Arrived) == EPendingLeaderStep::HandOver);
+	FPendingLeaderFacts HisOrder = Pending;
+	HisOrder.bPendingOnOwnOrder = true;
+	TestTrue(TEXT("He got an order of his own (bot / script / use order): the lead now, the old order runs on"),
+		StepPendingLeader(HisOrder) == EPendingLeaderStep::HandOverForHisOrder);
+	FPendingLeaderFacts SoloOn = Pending;
+	SoloOn.bFormationFollows = false;
+	TestTrue(TEXT("Solo on / the formation stops following: the lead now"), StepPendingLeader(SoloOn) == EPendingLeaderStep::HandOver);
+	FPendingLeaderFacts Fallen = Pending;
+	Fallen.bLeaderCanLead = false;
+	TestTrue(TEXT("The old leader knocked down mid-order: the selected one leads"), StepPendingLeader(Fallen) == EPendingLeaderStep::HandOver);
+	FPendingLeaderFacts Gone = Pending;
+	Gone.bPendingValid = false;
+	TestTrue(TEXT("The pending leader died: the selection returns to the leader"), StepPendingLeader(Gone) == EPendingLeaderStep::Drop);
+	FPendingLeaderFacts RuleOff = Pending;
+	RuleOff.bEnabled = false;
+	TestTrue(TEXT("The console switched off mid-order: the lead now"), StepPendingLeader(RuleOff) == EPendingLeaderStep::HandOver);
+
+	// The player's next order replaces the squad's running order.
+	TestTrue(TEXT("Next order: the old leader's own walk / plan / cover walk ends - he joins the new leader"), EndsOldLeaderOrder(false, false));
+	TestFalse(TEXT("... a climb in progress is finished"), EndsOldLeaderOrder(true, false));
+	TestFalse(TEXT("... a walk-up to use an object / an object task is his own job"), EndsOldLeaderOrder(false, true));
+	return true;
+}
+
 SQUAD_ORDER_TEST(FSquadOrderBoxSelectionTest, "BoxSelectionOnlyInSoloMode")
 bool FSquadOrderBoxSelectionTest::RunTest(const FString&)
 {

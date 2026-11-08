@@ -122,6 +122,7 @@ void ACodexTacticsPlayerController::GuardKey()
 	}
 	if (USquadSubsystem* Squad = GetSquad(); Squad && Squad->GetLeader())
 	{
+		Squad->HandOverLeadForOrder(nullptr, TEXT("the guard order")); // bug 2026-11-08: the selected member's order (as at rest)
 		Squad->ToggleGuard(Squad->GetLeader());
 		ControllerCommands::Report(this, PlayerCommands::Guard);
 	}
@@ -130,6 +131,11 @@ void ACodexTacticsPlayerController::GuardKey()
 void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, bool bSprint, bool bPlan)
 {
 	USquadSubsystem* Squad = GetSquad();
+	// Bug 2026-11-08: the next order after a selection switch mid-move - the selected member takes the lead, the old leader's walk ends.
+	if (Squad)
+	{
+		Squad->HandOverLeadForOrder(nullptr, bPlan ? TEXT("a planned move") : TEXT("a move order"));
+	}
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Leader)
 	{
@@ -231,6 +237,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	// selected operatives) walks out. Never locked; the arrows are hidden in turn-based combat.
 	if (AInteriorExitArrowActor* ExitArrow = Cast<AInteriorExitArrowActor>(Hit.GetActor()))
 	{
+		Squad->HandOverLeadForOrder(nullptr, TEXT("the exit order")); // bug 2026-11-08: the next order is the selected member's
 		if (UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>(); Exits && Exits->OrderExit(ExitArrow) > 0)
 		{
 			ControllerCommands::Report(this, PlayerCommands::ExitBuilding, ExitArrow, false, !Squad->IsSoloMode(), nullptr, ExitArrow->GetExitTarget());
@@ -260,11 +267,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		bRelocateSelectMode = false;
 		if (AOperativeCharacter* Picked = FindClickedMember(Hit))
 		{
-			Squad->SetLeader(Picked);
+			Squad->SelectLeader(Picked); // bug 2026-11-08: mid-order he leads from the next order
 			ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, Picked);
 			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 			{
-				Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), Picked->DisplayName));
+				Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), ControllerCommands::SelectionLine(*Squad, *Picked));
 			}
 		}
 		else
@@ -324,7 +331,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		HideCoverPreview();
 		if (AOperativeCharacter* Picked = FindClickedMember(Hit))
 		{
-			Squad->SetLeader(Picked);
+			Squad->SelectLeader(Picked);
 			ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, Picked);
 			return;
 		}
@@ -505,12 +512,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		{
 			Interactions->CancelInteraction();
 		}
-		Squad->SetLeader(SelectedMember);
+		Squad->SelectLeader(SelectedMember); // bug 2026-11-08: mid-order he leads from the next order
 		ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, SelectedMember);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"),
-				FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), SelectedMember->DisplayName));
+			Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), ControllerCommands::SelectionLine(*Squad, *SelectedMember));
 		}
 		LastClickTime = -1.0;
 		return;
@@ -536,6 +542,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	{
 		if (Interactions)
 		{
+			Squad->HandOverLeadForOrder(nullptr, TEXT("an object order")); // bug 2026-11-08: the next order is the selected member's
 			// Tutorial command lock (Demo 01: no running until warmed up in A1): a locked sprint walks there instead.
 			Interactions->RequestInteraction(Interactable, bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint);
 			ControllerCommands::Report(this, PlayerCommands::Interact, Interactable);

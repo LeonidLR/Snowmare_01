@@ -1457,6 +1457,7 @@ void USquadSubsystem::EndFormationWallOrder(const TCHAR* Why)
 bool USquadSubsystem::OrderFormationWall(AOperativeCharacter* Direct, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot)
 {
 	using namespace SquadSubsystemFormationLocal;
+	HandOverLeadForOrder(Direct, TEXT("the wall order")); // bug 2026-11-08: a pending leader leads the squad's next order
 	if (!FormationRuntime::IsEnabled() || !Direct || Direct != Leader.Get() || Others.IsEmpty() || Others.Num() > 3 || !Slot.IsValid())
 	{
 		return false;

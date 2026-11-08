@@ -38,7 +38,7 @@ void AOperativeCharacter::UpdateVaultTrigger(float DeltaTime)
 	BlockedTimer = GetVelocity().Size2D() < 25.f ? BlockedTimer + DeltaTime : 0.f;
 	const bool bBlocked = BlockedTimer > 0.2f;
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	const bool bLeader = !Squad || Squad->GetLeader() == this;
+	const bool bLeader = !Squad || Squad->GetFormationLeader() == this; // the formation's leader (a pending one still follows, 2026-11-08)
 	// Followers climb only when their way is blocked (Godot follower_vault_only_when_blocked).
 	if (!bLeader && !bBlocked)
 	{

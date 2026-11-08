@@ -204,6 +204,10 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		{
 			HideCoverPreview();
 			UpdateCornerPeekHover(Operative, nullptr);
+			if (Squad)
+			{
+				Squad->HandOverLeadForOrder(Operative, TEXT("a corner peek order")); // bug 2026-11-08: the next order after a switch mid-move
+			}
 			// The game designer's bug 2026-11-03: a box selection in cover along that wall - the member nearest the end takes the corner, the
 			// others side-step into a stack behind him (not the selection's leader alone, round the man between him and the corner).
 			AOperativeCharacter* GroupPeeker = nullptr;
@@ -958,6 +962,9 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	{
 		return false;
 	}
+	// Bug 2026-11-08: the next order after a selection switch mid-move - the selected member takes the lead first (the old leader's walk
+	// ends, he goes along as a follower), so the group's members and the wall layout are his.
+	Squad->HandOverLeadForOrder(Direct, bPlan ? TEXT("a planned cover order") : TEXT("a cover order"));
 	const TArray<AOperativeCharacter*> Others = Squad->GetGroupCoverMembers(Direct);
 	if (!SquadOrderRules::IsGroupCoverOrder(Others.Num()))
 	{

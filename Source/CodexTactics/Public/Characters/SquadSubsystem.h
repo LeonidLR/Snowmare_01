@@ -98,9 +98,38 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	bool SetLeaderByIndex(int32 RosterIndex);
 
-	/** Makes NewLeader the leader; bResetGroup drops a box-selected group to the leader alone (Godot select_new_leader). */
+	/**
+	 * Makes NewLeader the leader at once; bResetGroup drops a box-selected group to the leader alone (Godot select_new_leader). Programmatic
+	 * switches (save load, turn-based, the bot, the formation's own corner peek / corner hold, smokes) use it; a pending leader ends.
+	 * The player's selection goes through SelectLeader.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	bool SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup = true);
+
+	/**
+	 * The player selects NewLeader (keys 1-4, a portrait, a click on him). Bug 2026-11-08 (the game designer's PIE report): in formation mode
+	 * while the squad still carries out the leader's order (SquadOrderRules::ShouldDeferLeaderSwitch) the formation keeps its leader and its
+	 * walk; NewLeader becomes the PENDING leader - GetLeader() returns him at once (selection, HUD, camera, the next order), and he leads
+	 * the formation from the player's next order (HandOverLeadForOrder) or when the running order is done (the squad tick). Otherwise as
+	 * SetLeader. Selecting the formation's own leader again drops the pending one. Codex.Squad.LeaderSwitchKeepsMove 0 = always SetLeader.
+	 */
+	bool SelectLeader(AOperativeCharacter* NewLeader, bool bResetGroup = true);
+
+	/**
+	 * Bug 2026-11-08: the player's next order (a move / sprint / ladder click, a cover or wall order, a corner peek, an object click, the
+	 * pause's plans) is planned with the selected member - a pending leader takes the lead now and the old leader's running walk ends (he
+	 * joins the new leader's formation; SquadOrderRules::EndsOldLeaderOrder). Ordered: the member the order goes to (nullptr = the squad's
+	 * order); only a pending leader's own / the squad's order hands over. True when the lead was handed over.
+	 */
+	bool HandOverLeadForOrder(const AOperativeCharacter* Ordered, const TCHAR* Why);
+
+	/** The member the player selected while the formation finishes the old leader's order (bug 2026-11-08); nullptr when none. */
+	AOperativeCharacter* GetPendingLeader() const { return PendingLeader.Get(); }
+	/** Pending leaders who took the lead so far (smokes). */
+	int32 GetPendingLeaderHandOverCount() const { return PendingLeaderHandOvers; }
+
+	/** The formation's leader: the one the followers' slots hang on (differs from GetLeader while a leader switch waits, bug 2026-11-08). */
+	AOperativeCharacter* GetFormationLeader() const { return Leader.Get(); }
 
 	/**
 	 * Box selection (Godot main.gd _set_selected_squad): marks the group (rings under the non-leaders, and under the
@@ -119,8 +148,12 @@ public:
 	/** Clears group / box selection back to just the squad leader (or empty if no leader). */
 	void ClearGroupSelection();
 
+	/**
+	 * The selected operative - the one the player controls and orders (HUD, camera, rings, orders). Normally the formation's leader; while a
+	 * leader switch waits for the running order (bug 2026-11-08) the pending leader (GetFormationLeader is the one the formation follows).
+	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
-	AOperativeCharacter* GetLeader() const { return Leader.Get(); }
+	AOperativeCharacter* GetLeader() const { return PendingLeader.IsValid() ? PendingLeader.Get() : Leader.Get(); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	TArray<AOperativeCharacter*> GetMembers() const;
@@ -687,6 +720,27 @@ protected:
 private:
 	/** A wave fight running in real time (the formation's parked followers then leave their facing to the fight). */
 	bool IsRealTimeFight() const;
+
+	/** SetLeader's switch of the formation's leader (the old leader's look memory, the new heading, the followers, Solo's holds). */
+	void SwitchFormationLeader(AOperativeCharacter& NewLeader);
+	/**
+	 * Bug 2026-11-08: the operative is carrying out an order the formation follows (SquadOrderRules::FLeaderSwitchFacts::bLeaderOrderRunning).
+	 * bUseOrTask (optional): that order is his walk-up to an object / an object task. bWithLadder false: an order of his own only (a
+	 * follower's climb behind the leader is the formation's walk).
+	 */
+	bool IsLeaderOrderRunning(const AOperativeCharacter& Operative, bool* bOutUseOrTask = nullptr, bool bWithLadder = true) const;
+	/** Alive, not knocked down, not panicking. */
+	static bool CanLeadFormation(const AOperativeCharacter& Operative);
+	/** He climbs a ladder or waits in its queue. */
+	static bool IsOnLadderOrQueued(const AOperativeCharacter& Operative);
+	/**
+	 * Hands the lead to the pending leader now. bEndOldOrder: the player's next order replaces the squad's running order (the old leader's
+	 * walk ends, SquadOrderRules::EndsOldLeaderOrder); bHisOrderRunning: the new leader's current move is his order (the formation reads it
+	 * as a new order of its leader). Logs Why.
+	 */
+	void CommitPendingLeader(bool bEndOldOrder, bool bHisOrderRunning, const TCHAR* Why);
+	/** The squad tick of a pending leader (SquadOrderRules::StepPendingLeader). */
+	void UpdatePendingLeader();
 
 	struct FPlannedOrder
 	{
@@ -1350,7 +1404,14 @@ private:
 	void SeedFrameGivenSlots(const AOperativeCharacter& LeaderRef);
 
 	TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
+	/** The formation's leader (GetFormationLeader; GetLeader is the selected operative). */
 	TWeakObjectPtr<AOperativeCharacter> Leader;
+	/** Bug 2026-11-08: selected while the formation finishes Leader's order; he takes the lead from the next order / when it is done. */
+	TWeakObjectPtr<AOperativeCharacter> PendingLeader;
+	/** World time the old leader's running order ended while a leader waits (-1: still running). */
+	double PendingLeaderOrderDoneTime = -1.0;
+	/** Hand-overs of a pending leader so far (smokes). */
+	int32 PendingLeaderHandOvers = 0;
 	TArray<TWeakObjectPtr<AOperativeCharacter>> SelectedGroup;
 	TArray<FFollowerState> Followers;
 	FVector FormationHeading = FVector::ZeroVector;

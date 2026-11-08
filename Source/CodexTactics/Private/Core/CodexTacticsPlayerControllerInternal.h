@@ -58,6 +58,21 @@ namespace ControllerCommands
 		default: return PlayerCommands::DeployOther;
 		}
 	}
+
+	/**
+	 * The feed line of a selection: "Operative selected: X"; bug 2026-11-08 - while the formation finishes the old leader's order
+	 * (USquadSubsystem::SelectLeader made X the pending leader) "... - leads from the next order (Y finishes the squad's move)".
+	 */
+	inline FText SelectionLine(const USquadSubsystem& Squad, const AOperativeCharacter& Picked)
+	{
+		const AOperativeCharacter* Formation = Squad.GetFormationLeader();
+		if (Squad.GetPendingLeader() == &Picked && Formation && Formation != &Picked)
+		{
+			return FText::Format(NSLOCTEXT("CodexTacticsPlayerController", "UnitSelectedPending",
+				"👤 Operative selected: {0} - leads from the next order ({1} finishes the squad's move)"), Picked.DisplayName, Formation->DisplayName);
+		}
+		return FText::Format(NSLOCTEXT("CodexTacticsPlayerController", "UnitSelected", "👤 Operative selected: {0}"), Picked.DisplayName);
+	}
 }
 
 namespace OrderLock

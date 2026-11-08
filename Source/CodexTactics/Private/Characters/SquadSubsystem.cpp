@@ -11,6 +11,7 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TrapSpotRules.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -54,6 +55,9 @@ namespace
 		TEXT("1 (default): a follower the squad takes out of his cover drops his pending cover slot and its walk - Regroup any (a walk to a cover slot too), the leave to follow only the side-step along the wall he leaves, e.g. the automatic walk to the corner (bug 2026-11-02); 0: the old rule (the walk ran on and he entered the cover again)."));
 	TAutoConsoleVariable<int32> CVarSquadSoloOwnStance(TEXT("Codex.Squad.SoloOwnStance"), 1,
 		TEXT("1 (default): in Solo every operative keeps the stance the player gave him - a leader switch never re-applies the guard crouch to it, a player's stance order ends a pending guard crouch, a manual corner peek keeps its pose (bug 2026-11-08); 0: the old rule (selecting the next operative crouched the previous one, prone or not)."));
+
+	TAutoConsoleVariable<int32> CVarSquadLeaderSwitchKeepsMove(TEXT("Codex.Squad.LeaderSwitchKeepsMove"), 1,
+		TEXT("1 (default): in formation mode selecting another member while the squad carries out the leader's order lets the formation finish it with the old leader; the selected member leads from the next order / when it is done (bug 2026-11-08); 0: the old rule (the switch re-planned the formation at once - the squad stopped)."));
 
 	/**
 	 * Bug 2026-11-02 (the Medic-Sapper back in her cover after Regroup): ends a follower's pending cover slot and the walk to it when
@@ -115,8 +119,29 @@ void USquadSubsystem::UnregisterOperative(AOperativeCharacter* Operative)
 {
 	Members.Remove(Operative);
 	SelectedGroup.Remove(Operative); // a fallen member drops out of the selection too
+	if (Operative && PendingLeader.Get() == Operative)
+	{
+		// Bug 2026-11-08: the member selected to lead from the next order fell - the selection returns to the formation's leader.
+		UE_LOG(LogCodexTactics, Display, TEXT("[Squad] pending leader %s left the squad - the selection returns to %s"), *Operative->DisplayName.ToString(),
+			Leader.IsValid() ? *Leader->DisplayName.ToString() : TEXT("-"));
+		PendingLeader.Reset();
+		PendingLeaderOrderDoneTime = -1.0;
+		if (AOperativeCharacter* LeaderRef = Leader.Get(); LeaderRef && LeaderRef != Operative)
+		{
+			SetLeader(LeaderRef); // the rings, the camera, the HUD back on him
+		}
+	}
 	if (Leader.Get() == Operative)
 	{
+		// Bug 2026-11-08: the formation's leader fell while the player had already selected the next one - that one leads now.
+		if (AOperativeCharacter* Pending = PendingLeader.Get(); Operative && Pending && Members.Contains(Pending))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Squad] leader %s left the squad mid-order - the selected %s leads now"), *Operative->DisplayName.ToString(),
+				*Pending->DisplayName.ToString());
+			Leader.Reset();
+			SetLeader(Pending);
+			return;
+		}
 		// #57, the game designer's answer 5 (2026-11-08): the two-corner hold's leader corner man killed - the man who led before him leads
 		// again and keeps his corner; else (or he is down too) the first member, as before.
 		if (Operative && Members.Num() > 0 && HandCornerHoldLeadOnFall(*Operative))
@@ -160,7 +185,7 @@ void USquadSubsystem::SetSelectedGroup(const TArray<AOperativeCharacter*>& Group
 	{
 		Selected->SetGroupSelected(true, bMulti);
 	}
-	if (bSwitchLeader && !SelectedGroup.IsEmpty() && !SelectedGroup.Contains(Leader))
+	if (bSwitchLeader && !SelectedGroup.IsEmpty() && !SelectedGroup.Contains(TWeakObjectPtr<AOperativeCharacter>(GetLeader())))
 	{
 		SetLeader(SelectedGroup[0].Get(), false);
 	}
@@ -168,7 +193,7 @@ void USquadSubsystem::SetSelectedGroup(const TArray<AOperativeCharacter*>& Group
 
 void USquadSubsystem::ClearGroupSelection()
 {
-	AOperativeCharacter* LeaderRef = Leader.Get();
+	AOperativeCharacter* LeaderRef = GetLeader(); // the selected one (a pending leader too, bug 2026-11-08)
 	if (LeaderRef)
 	{
 		SetSelectedGroup({ LeaderRef }, false);
@@ -190,9 +215,9 @@ TArray<AOperativeCharacter*> USquadSubsystem::GetSelectedGroup() const
 			Result.Add(Operative);
 		}
 	}
-	if (Result.IsEmpty() && Leader.IsValid())
+	if (Result.IsEmpty() && GetLeader())
 	{
-		Result.Add(Leader.Get());
+		Result.Add(GetLeader()); // the selected one (a pending leader too, bug 2026-11-08)
 	}
 	return Result;
 }
@@ -207,6 +232,104 @@ bool USquadSubsystem::HasMultiSelection() const
 	return GetSelectedGroup().Num() > 1;
 }
 
+void USquadSubsystem::SwitchFormationLeader(AOperativeCharacter& NewLeaderRef)
+{
+	AOperativeCharacter* NewLeader = &NewLeaderRef;
+	AOperativeCharacter* OldLeader = Leader.Get();
+	const bool bSectorLook = FormationRuntime::IsEnabled();
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	const TOptional<float> SquadHeading = Sectors.bHeadingValid && !FormationHeading.IsNearlyZero()
+		? TOptional<float>(static_cast<float>(FormationHeading.Rotation().Yaw)) : TOptional<float>();
+	if (bSectorLook && OldLeader)
+	{
+		LeaderFacingMemory.Add(OldLeader, { static_cast<float>(OldLeader->GetActorRotation().Yaw), Now }); // his own facing as the leader
+	}
+	Leader = NewLeader;
+	// Drop the formation move the new leader was following; it now waits for player orders. Rev 5g (game designer
+	// 2026-10-14): an order of his own runs on (selecting him must not cancel it - SquadOrderRules).
+	if (SquadOrderRules::ShouldStopOnBecomingLeader(IsOnOwnOrder(NewLeader)))
+	{
+		NewLeader->StopOperative();
+	}
+	if (bSectorLook)
+	{
+		// Bug 2026-10-26 (formation sectors): the leader's sector is 12 - a member made the leader keeps no follower look (the rear guard's
+		// 6 o'clock he turned to while another led). The heading (= his halt look for FormationRuntime::LeaderHaltLookSeconds) starts from
+		// FormationRuntime::NewLeaderLookYaw: his walk, his pending order, his own facing from when he last led, else the squad's heading.
+		FormationRuntime::FNewLeaderLookInputs Look;
+		Look.TravelYaw = FormationRuntime::HeadingFromVelocity(FVector2D(NewLeader->GetVelocity()));
+		const FVector2D ToOrder = FVector2D(NewLeader->GetLastMoveDestination() - NewLeader->GetActorLocation());
+		if (NewLeader->HasOwnMoveOrder() && ToOrder.Size() > FormationRuntime::NewLeaderOrderMinCm)
+		{
+			Look.PendingOrderYaw = FormationMath::YawOf(ToOrder);
+		}
+		if (const TPair<float, double>* Remembered = LeaderFacingMemory.Find(NewLeader);
+			Remembered && Now - Remembered->Value <= FormationRuntime::NewLeaderRememberSeconds)
+		{
+			Look.FacingAsLeaderYaw = Remembered->Key;
+		}
+		Look.SquadHeadingYaw = SquadHeading;
+		Look.FacingYaw = static_cast<float>(NewLeader->GetActorRotation().Yaw);
+		const float Yaw = FormationRuntime::NewLeaderLookYaw(Look);
+		FormationHeading = FRotator(0.f, Yaw, 0.f).Vector();
+		Sectors.HeadingYaw = Yaw;
+		Sectors.bHeadingValid = true;
+		Sectors.LeaderStillSeconds = 0.f; // standing: his halt look at 12 (= Yaw) turns him first
+		Sectors.bHeadingTickPosValid = false; // the switch is no teleport of the leader
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] new leader %s looks %.0f (facing %.0f; walk %s, order %s, as leader %s, squad %s)"),
+			*NewLeader->DisplayName.ToString(), Yaw, Look.FacingYaw, Look.TravelYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.TravelYaw.GetValue()) : TEXT("-"),
+			Look.PendingOrderYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.PendingOrderYaw.GetValue()) : TEXT("-"),
+			Look.FacingAsLeaderYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.FacingAsLeaderYaw.GetValue()) : TEXT("-"),
+			SquadHeading.IsSet() ? *FString::Printf(TEXT("%.0f"), SquadHeading.GetValue()) : TEXT("-"));
+	}
+	else
+	{
+		FormationHeading = NewLeader->GetActorForwardVector();
+		Sectors.bHeadingValid = false; // formation sectors: the heading starts from the new leader's facing
+	}
+	RebuildFollowers();
+	if (bSectorLook)
+	{
+		// Bug D (game designer 2026-10-26: "at the wall, change the leader once - the slide along the wall no longer works"): a switch is no
+		// order of the new leader. His move serial was compared with the old leader's, so the switch itself counted as his new order: a phantom
+		// slide / bypass to his stale formation-follow destination (often a team-mate's spot - he pushed against him, "walking" in place).
+		Sectors.LastLeaderSerial = NewLeader->GetMoveOrderSerial();
+		Sectors.bLastLeaderSerialValid = true;
+		Sectors.bLeaderOrderPending = false;
+		EndFormationBypass(TEXT("the leader changed"));
+		// ... and the wall order (the group cover order's wall layout, a slide) goes on with him instead of ending (the hug, crouched).
+		// Wall leadership (2026-11-01): the corner peek that made him the leader re-keys the order itself (the stack behind him).
+		if (!bWallLeadershipSwitch)
+		{
+			PassWallOrderToLeader(*NewLeader);
+		}
+	}
+	if (bIsSoloMode)
+	{
+		// Reapply holding and crouch to followers in solo mode. Rev 5g: the old leader (or anyone) still executing his own
+		// order finishes it first, then holds where it ended (bug: selecting another operative in Solo stopped him).
+		SoloGuardCrouchWait.Remove(NewLeader); // the new leader is nobody's guard
+		for (FFollowerState& Follower : Followers)
+		{
+			// (2026-10-20: one lying behind a cover on a group cover order keeps lying there.)
+			if (AOperativeCharacter* Operative = Follower.Operative.Get();
+				Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !HasGroupCoverProne(Operative))
+			{
+				Operative->StopOperative();
+				// Solo's guard crouch (bug 2026-10-20); a standing one waits hold_crouch_after_sec first (2026-11-02). One already
+				// waiting keeps his clock. Bug 2026-11-08: the old leader keeps the stance the player gave him (prone stays prone).
+				if (!SoloGuardCrouchWait.Contains(Operative))
+				{
+					ArmSoloGuardCrouch(*Operative, /*bLeaderSwitch*/ true);
+				}
+			}
+			Follower.bParked = true;
+			Follower.RepathTimeRemaining = 0.f;
+		}
+	}
+	UE_LOG(LogCodexTactics, Log, TEXT("Squad leader: %s"), *NewLeader->DisplayName.ToString());
+}
+
 bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup)
 {
 	if (!NewLeader || !Members.Contains(NewLeader))
@@ -214,101 +337,12 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 		return false;
 	}
 	const bool bDropGroup = bResetGroup && (SelectedGroup.Num() > 1 || (SelectedGroup.Num() == 1 && SelectedGroup[0].Get() != NewLeader));
+	// Bug 2026-11-08: an immediate switch (a programmatic one, or the player's when nothing waits) ends a waiting one.
+	PendingLeader.Reset();
+	PendingLeaderOrderDoneTime = -1.0;
 	if (Leader.Get() != NewLeader)
 	{
-		AOperativeCharacter* OldLeader = Leader.Get();
-		const bool bSectorLook = FormationRuntime::IsEnabled();
-		const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-		const TOptional<float> SquadHeading = Sectors.bHeadingValid && !FormationHeading.IsNearlyZero()
-			? TOptional<float>(static_cast<float>(FormationHeading.Rotation().Yaw)) : TOptional<float>();
-		if (bSectorLook && OldLeader)
-		{
-			LeaderFacingMemory.Add(OldLeader, { static_cast<float>(OldLeader->GetActorRotation().Yaw), Now }); // his own facing as the leader
-		}
-		Leader = NewLeader;
-		// Drop the formation move the new leader was following; it now waits for player orders. Rev 5g (game designer
-		// 2026-10-14): an order of his own runs on (selecting him must not cancel it - SquadOrderRules).
-		if (SquadOrderRules::ShouldStopOnBecomingLeader(IsOnOwnOrder(NewLeader)))
-		{
-			NewLeader->StopOperative();
-		}
-		if (bSectorLook)
-		{
-			// Bug 2026-10-26 (formation sectors): the leader's sector is 12 - a member made the leader keeps no follower look (the rear guard's
-			// 6 o'clock he turned to while another led). The heading (= his halt look for FormationRuntime::LeaderHaltLookSeconds) starts from
-			// FormationRuntime::NewLeaderLookYaw: his walk, his pending order, his own facing from when he last led, else the squad's heading.
-			FormationRuntime::FNewLeaderLookInputs Look;
-			Look.TravelYaw = FormationRuntime::HeadingFromVelocity(FVector2D(NewLeader->GetVelocity()));
-			const FVector2D ToOrder = FVector2D(NewLeader->GetLastMoveDestination() - NewLeader->GetActorLocation());
-			if (NewLeader->HasOwnMoveOrder() && ToOrder.Size() > FormationRuntime::NewLeaderOrderMinCm)
-			{
-				Look.PendingOrderYaw = FormationMath::YawOf(ToOrder);
-			}
-			if (const TPair<float, double>* Remembered = LeaderFacingMemory.Find(NewLeader);
-				Remembered && Now - Remembered->Value <= FormationRuntime::NewLeaderRememberSeconds)
-			{
-				Look.FacingAsLeaderYaw = Remembered->Key;
-			}
-			Look.SquadHeadingYaw = SquadHeading;
-			Look.FacingYaw = static_cast<float>(NewLeader->GetActorRotation().Yaw);
-			const float Yaw = FormationRuntime::NewLeaderLookYaw(Look);
-			FormationHeading = FRotator(0.f, Yaw, 0.f).Vector();
-			Sectors.HeadingYaw = Yaw;
-			Sectors.bHeadingValid = true;
-			Sectors.LeaderStillSeconds = 0.f; // standing: his halt look at 12 (= Yaw) turns him first
-			Sectors.bHeadingTickPosValid = false; // the switch is no teleport of the leader
-			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] new leader %s looks %.0f (facing %.0f; walk %s, order %s, as leader %s, squad %s)"),
-				*NewLeader->DisplayName.ToString(), Yaw, Look.FacingYaw, Look.TravelYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.TravelYaw.GetValue()) : TEXT("-"),
-				Look.PendingOrderYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.PendingOrderYaw.GetValue()) : TEXT("-"),
-				Look.FacingAsLeaderYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), Look.FacingAsLeaderYaw.GetValue()) : TEXT("-"),
-				SquadHeading.IsSet() ? *FString::Printf(TEXT("%.0f"), SquadHeading.GetValue()) : TEXT("-"));
-		}
-		else
-		{
-			FormationHeading = NewLeader->GetActorForwardVector();
-			Sectors.bHeadingValid = false; // formation sectors: the heading starts from the new leader's facing
-		}
-		RebuildFollowers();
-		if (bSectorLook)
-		{
-			// Bug D (game designer 2026-10-26: "at the wall, change the leader once - the slide along the wall no longer works"): a switch is no
-			// order of the new leader. His move serial was compared with the old leader's, so the switch itself counted as his new order: a phantom
-			// slide / bypass to his stale formation-follow destination (often a team-mate's spot - he pushed against him, "walking" in place).
-			Sectors.LastLeaderSerial = NewLeader->GetMoveOrderSerial();
-			Sectors.bLastLeaderSerialValid = true;
-			Sectors.bLeaderOrderPending = false;
-			EndFormationBypass(TEXT("the leader changed"));
-			// ... and the wall order (the group cover order's wall layout, a slide) goes on with him instead of ending (the hug, crouched).
-			// Wall leadership (2026-11-01): the corner peek that made him the leader re-keys the order itself (the stack behind him).
-			if (!bWallLeadershipSwitch)
-			{
-				PassWallOrderToLeader(*NewLeader);
-			}
-		}
-		if (bIsSoloMode)
-		{
-			// Reapply holding and crouch to followers in solo mode. Rev 5g: the old leader (or anyone) still executing his own
-			// order finishes it first, then holds where it ended (bug: selecting another operative in Solo stopped him).
-			SoloGuardCrouchWait.Remove(NewLeader); // the new leader is nobody's guard
-			for (FFollowerState& Follower : Followers)
-			{
-				// (2026-10-20: one lying behind a cover on a group cover order keeps lying there.)
-				if (AOperativeCharacter* Operative = Follower.Operative.Get();
-					Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !HasGroupCoverProne(Operative))
-				{
-					Operative->StopOperative();
-					// Solo's guard crouch (bug 2026-10-20); a standing one waits hold_crouch_after_sec first (2026-11-02). One already
-					// waiting keeps his clock. Bug 2026-11-08: the old leader keeps the stance the player gave him (prone stays prone).
-					if (!SoloGuardCrouchWait.Contains(Operative))
-					{
-						ArmSoloGuardCrouch(*Operative, /*bLeaderSwitch*/ true);
-					}
-				}
-				Follower.bParked = true;
-				Follower.RepathTimeRemaining = 0.f;
-			}
-		}
-		UE_LOG(LogCodexTactics, Log, TEXT("Squad leader: %s"), *NewLeader->DisplayName.ToString());
+		SwitchFormationLeader(*NewLeader);
 	}
 	if (bDropGroup)
 	{
@@ -328,6 +362,204 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 		Bus->OnSquadMemberSelected.Broadcast(NewLeader);
 	}
 	return true;
+}
+
+bool USquadSubsystem::CanLeadFormation(const AOperativeCharacter& Operative)
+{
+	return Operative.HealthComponent && Operative.HealthComponent->IsAlive() && !Operative.IsKnockedDown() && !Operative.IsPanicking();
+}
+
+bool USquadSubsystem::IsOnLadderOrQueued(const AOperativeCharacter& Operative)
+{
+	return Operative.LadderClimb && Operative.LadderClimb->IsBusy();
+}
+
+bool USquadSubsystem::IsLeaderOrderRunning(const AOperativeCharacter& Operative, bool* bOutUseOrTask, bool bWithLadder) const
+{
+	const UWorld* World = GetWorld();
+	const UInteractionSubsystem* Interaction = World ? World->GetSubsystem<UInteractionSubsystem>() : nullptr;
+	const URelocationSubsystem* Relocation = World ? World->GetSubsystem<URelocationSubsystem>() : nullptr;
+	const bool bUseOrTask = (Interaction && Interaction->HasUseOrder(&Operative)) || (Relocation && Relocation->HasActiveTask(&Operative));
+	if (bOutUseOrTask)
+	{
+		*bOutUseOrTask = bUseOrTask;
+	}
+	const TWeakObjectPtr<AOperativeCharacter> Key(const_cast<AOperativeCharacter*>(&Operative));
+	const bool bPlanned = PlannedOrders.Contains(Key) || PlannedWallOrder.Direct.Get() == &Operative;
+	// A move of his own (the cover walk, one waiting for his stance clip too), a walk-up while he walks, the ladder, the pause's plan.
+	return (Operative.HasOwnMoveOrder() && !Operative.IsOnUnderFireManoeuvreMove()) || ((bUseOrTask || Operative.HasPendingCover()) && Operative.IsMoving())
+		|| (bWithLadder && IsOnLadderOrQueued(Operative)) || bPlanned;
+}
+
+bool USquadSubsystem::SelectLeader(AOperativeCharacter* NewLeader, bool bResetGroup)
+{
+	if (!NewLeader || !Members.Contains(NewLeader))
+	{
+		return false;
+	}
+	AOperativeCharacter* LeaderRef = Leader.Get();
+	if (NewLeader == PendingLeader.Get())
+	{
+		return true; // already selected
+	}
+	if (!LeaderRef || NewLeader == LeaderRef)
+	{
+		return SetLeader(NewLeader, bResetGroup); // the formation's own leader again: a waiting switch ends
+	}
+	SquadOrderRules::FLeaderSwitchFacts Facts;
+	Facts.bEnabled = CVarSquadLeaderSwitchKeepsMove.GetValueOnGameThread() != 0;
+	Facts.bFormationFollows = IsFormationActive() && !bIsSoloMode;
+	Facts.bLeaderCanLead = CanLeadFormation(*LeaderRef);
+	Facts.bLeaderOrderRunning = IsLeaderOrderRunning(*LeaderRef);
+	// His own walk (a follower's cover walk, a use order, a plan of his own); a follower's climb behind the leader is the formation's.
+	Facts.bSelectedOnOwnOrder = IsLeaderOrderRunning(*NewLeader, nullptr, /*bWithLadder*/ false);
+	if (!SquadOrderRules::ShouldDeferLeaderSwitch(Facts))
+	{
+		return SetLeader(NewLeader, bResetGroup);
+	}
+	const bool bDropGroup = bResetGroup && (SelectedGroup.Num() > 1 || (SelectedGroup.Num() == 1 && SelectedGroup[0].Get() != NewLeader));
+	PendingLeader = NewLeader;
+	PendingLeaderOrderDoneTime = -1.0;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Squad] %s selected - leads from the next order; %s finishes the squad's order to (%.0f, %.0f) first (the formation keeps its leader)"),
+		*NewLeader->DisplayName.ToString(), *LeaderRef->DisplayName.ToString(), LeaderRef->GetLastMoveDestination().X, LeaderRef->GetLastMoveDestination().Y);
+	if (bDropGroup)
+	{
+		SetSelectedGroup({ NewLeader }, false);
+	}
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
+	{
+		if (AOperativeCharacter* Operative = Member.Get())
+		{
+			Operative->UpdateSelectionRing(); // the gold ring on the selected one at once
+		}
+	}
+	OnLeaderChanged.Broadcast(NewLeader); // the camera follows the selected one
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnSquadMemberSelected.Broadcast(NewLeader);
+	}
+	return true;
+}
+
+bool USquadSubsystem::HandOverLeadForOrder(const AOperativeCharacter* Ordered, const TCHAR* Why)
+{
+	const AOperativeCharacter* Pending = PendingLeader.Get();
+	if (!Pending || (Ordered && Ordered != Pending))
+	{
+		return false;
+	}
+	CommitPendingLeader(/*bEndOldOrder*/ true, /*bHisOrderRunning*/ false, Why);
+	return Leader.Get() == Pending;
+}
+
+void USquadSubsystem::CommitPendingLeader(bool bEndOldOrder, bool bHisOrderRunning, const TCHAR* Why)
+{
+	AOperativeCharacter* NewLeader = PendingLeader.Get();
+	AOperativeCharacter* OldLeader = Leader.Get();
+	PendingLeader.Reset();
+	PendingLeaderOrderDoneTime = -1.0;
+	if (!NewLeader || NewLeader == OldLeader || !Members.Contains(NewLeader))
+	{
+		return;
+	}
+	bool bOldUseOrTask = false;
+	const bool bOldRunning = OldLeader && IsLeaderOrderRunning(*OldLeader, &bOldUseOrTask);
+	const bool bOldOnLadder = OldLeader && IsOnLadderOrQueued(*OldLeader);
+	SwitchFormationLeader(*NewLeader);
+	++PendingLeaderHandOvers;
+	if (bHisOrderRunning && FormationRuntime::IsEnabled())
+	{
+		// His order came before the hand-over: the formation reads it as its leader's new order (SwitchFormationLeader took his serial as seen).
+		Sectors.LastLeaderSerial = NewLeader->GetMoveOrderSerial() - 1u;
+		Sectors.bLastLeaderSerialValid = true;
+	}
+	const TCHAR* OldOrder = TEXT("none running");
+	if (OldLeader && bOldRunning)
+	{
+		OldOrder = TEXT("runs on - he joins the new leader after it");
+		if (bEndOldOrder && SquadOrderRules::EndsOldLeaderOrder(bOldOnLadder, bOldUseOrTask))
+		{
+			// The player's next order replaces the squad's running order: his walk ends here, the formation takes him to the new leader.
+			ClearPlannedOrder(OldLeader);
+			if (PlannedWallOrder.Direct.Get() == OldLeader)
+			{
+				PlannedWallOrder = FPlannedWallOrder();
+			}
+			DropSquadPendingCoverWalk(*OldLeader, /*bRegroup*/ true, TEXT("the new leader's order"));
+			OldLeader->ReleaseOwnMoveOrder();
+			for (FFollowerState& Follower : Followers)
+			{
+				if (Follower.Operative.Get() == OldLeader)
+				{
+					Follower.RepathTimeRemaining = 0.f;
+					Follower.bParked = false;
+				}
+			}
+			OldOrder = TEXT("ends - he joins the new leader's formation");
+		}
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Squad] %s takes the lead from %s (%s); %s's order %s"), *NewLeader->DisplayName.ToString(),
+		OldLeader ? *OldLeader->DisplayName.ToString() : TEXT("-"), Why, OldLeader ? *OldLeader->DisplayName.ToString() : TEXT("-"), OldOrder);
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
+	{
+		if (AOperativeCharacter* Operative = Member.Get())
+		{
+			Operative->UpdateSelectionRing();
+		}
+	}
+}
+
+void USquadSubsystem::UpdatePendingLeader()
+{
+	if (PendingLeader.IsExplicitlyNull())
+	{
+		return;
+	}
+	AOperativeCharacter* Pending = PendingLeader.Get();
+	AOperativeCharacter* LeaderRef = Leader.Get();
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	SquadOrderRules::FPendingLeaderFacts Facts;
+	Facts.bEnabled = CVarSquadLeaderSwitchKeepsMove.GetValueOnGameThread() != 0;
+	Facts.bPendingValid = Pending && Pending != LeaderRef && Members.Contains(Pending) && Pending->HealthComponent && Pending->HealthComponent->IsAlive();
+	Facts.bFormationFollows = IsFormationActive() && !bIsSoloMode;
+	Facts.bLeaderCanLead = LeaderRef && CanLeadFormation(*LeaderRef);
+	Facts.bLeaderOrderRunning = LeaderRef && IsLeaderOrderRunning(*LeaderRef);
+	if (Facts.bLeaderOrderRunning)
+	{
+		PendingLeaderOrderDoneTime = -1.0;
+	}
+	else if (PendingLeaderOrderDoneTime < 0.0)
+	{
+		PendingLeaderOrderDoneTime = Now;
+	}
+	Facts.SecondsSinceOrderDone = PendingLeaderOrderDoneTime < 0.0 ? 0.f : static_cast<float>(Now - PendingLeaderOrderDoneTime);
+	if (Pending)
+	{
+		Facts.bPendingOnOwnOrder = IsLeaderOrderRunning(*Pending, nullptr, /*bWithLadder*/ false);
+		Facts.bPendingWalking = Pending->IsMoving();
+		Facts.bPendingOnLadder = IsOnLadderOrQueued(*Pending);
+	}
+	switch (SquadOrderRules::StepPendingLeader(Facts))
+	{
+	case SquadOrderRules::EPendingLeaderStep::Drop:
+		UE_LOG(LogCodexTactics, Display, TEXT("[Squad] the pending leader is gone - the selection returns to %s"), LeaderRef ? *LeaderRef->DisplayName.ToString() : TEXT("-"));
+		PendingLeader.Reset();
+		PendingLeaderOrderDoneTime = -1.0;
+		if (LeaderRef)
+		{
+			SetLeader(LeaderRef, false);
+		}
+		break;
+	case SquadOrderRules::EPendingLeaderStep::HandOver:
+		CommitPendingLeader(false, false, !Facts.bEnabled ? TEXT("the rule is off") : !Facts.bFormationFollows ? TEXT("the formation stopped following")
+			: !Facts.bLeaderCanLead ? TEXT("the old leader cannot lead") : TEXT("the squad's order is done"));
+		break;
+	case SquadOrderRules::EPendingLeaderStep::HandOverForHisOrder:
+		CommitPendingLeader(false, true, TEXT("an order of his own"));
+		break;
+	default:
+		break;
+	}
 }
 
 TArray<AOperativeCharacter*> USquadSubsystem::GetMembers() const
@@ -503,6 +735,10 @@ void USquadSubsystem::EnterSoloMode()
 
 void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
 {
+	if (PendingLeader.IsValid())
+	{
+		CommitPendingLeader(/*bEndOldOrder*/ false, /*bHisOrderRunning*/ false, TEXT("Solo on")); // the selected one is the leader Solo starts from
+	}
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (!LeaderRef)
 	{
@@ -1006,6 +1242,7 @@ FVector USquadSubsystem::PlanMove(AOperativeCharacter* Operative, const FVector&
 	{
 		return Destination;
 	}
+	HandOverLeadForOrder(Operative, TEXT("a planned order")); // bug 2026-11-08: a plan for the selected member is the next order
 	const FVector* Origin = PauseOrigins.Find(Operative);
 	const FVector Planned = SquadFormation::ClampToRadius2D(Origin ? *Origin : Operative->GetActorLocation(), Destination, Radius);
 	if (PlannedWallOrder.Direct.Get() == Operative)
@@ -1129,6 +1366,7 @@ void USquadSubsystem::RebuildFollowers()
 void USquadSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	UpdatePendingLeader(); // bug 2026-11-08: a leader switch that waits for the running order (before the formation follows this frame)
 	RetryPlannedShots(DeltaTime);
 	UpdateGroupCoverProne(DeltaTime); // fights too (the formation is off there, a prone order still lies down on arrival)
 	UpdateGroupCoverWait(DeltaTime); // group cover leader priority (2026-10-23)
