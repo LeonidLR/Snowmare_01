@@ -14,7 +14,7 @@
 
 namespace VisionConeCostTest
 {
-	FVector2D Direction(float AngleDeg)
+	FVector2D ConeCostDirection(float AngleDeg)
 	{
 		return FVector2D(FMath::Cos(FMath::DegreesToRadians(AngleDeg)), FMath::Sin(FMath::DegreesToRadians(AngleDeg)));
 	}
@@ -86,7 +86,7 @@ namespace VisionConeCostTest
 
 		void Sample(const FVisionConeSightSpec& Spec, const FVector2D& Origin, float YawDeg, float AngleDeg, FVisionConeRay& Ray) const
 		{
-			const FVector2D Dir = Direction(YawDeg + AngleDeg);
+			const FVector2D Dir = ConeCostDirection(YawDeg + AngleDeg);
 			const float Range = Spec.GetMaxRange();
 			if (PerchHeightCm > 0.f)
 			{
@@ -191,7 +191,7 @@ namespace VisionConeCostTest
 			{
 				continue;
 			}
-			const FVector2D Dir = Direction(YawDeg + Ray.AngleDeg);
+			const FVector2D Dir = ConeCostDirection(YawDeg + Ray.AngleDeg);
 			Near.Reset();
 			for (const FVisionConeLayerMember& Other : Others)
 			{
@@ -413,7 +413,7 @@ bool FVisionConeCostShapeParityTest::RunTest(const FString&)
 	for (int32 Index = 0; Index < 10; ++Index)
 	{
 		const float Angle = -60.f + Index * 13.f;
-		const FVector2D At = Direction(Angle) * (300.f + 250.f * (Index % 4));
+		const FVector2D At = ConeCostDirection(Angle) * (300.f + 250.f * (Index % 4));
 		LowWalls.Boxes.Add({ At - FVector2D(40.f, 120.f), At + FVector2D(40.f, 120.f), Index % 4 == 0 ? 400.f : 70.f + 6.f * Index });
 	}
 	struct FCase
