@@ -229,19 +229,18 @@ pistol / shotgun numbers marked "in data". Contradictions / corrections:
 9. **Shotgun pellets.** Draft: 45 split over 8 pellets, 6 deg half-angle - consistent with the recommendation in open question 2.
 10. The draft's PMC engagement bands (5.1) were not checked against `pmc_commander.json`; they are AI tuning, not weapon data.
 
-## 11. Open questions for the game designer (real gameplay forks only)
+## 11. Decisions 2026-11-08 (the game designer: "Согласен со всеми рекомендациями" - all five recommendations accepted)
 
-1. **How many armour classes, and what happens below a weapon's class?** Recommendation: 5 classes (none / light / medium / heavy /
-   vehicle) = today's three enemy tiers + "none" + the APC; at or above the target's class the hit works as today; below it the weapon's
-   penetration does not apply (the full armour reduction); only explosives / RPG hurt a vehicle seriously. Per-weapon classes as in
-   section 4.
-2. **Shotgun damage per pellet.** Recommendation: `base_damage` stays the WHOLE shell at point blank (45, as today in the Wave Editor) and
-   is split equally over the pellets (8 x 5.6); a partial hit (pellets missing at range / behind cover) does less. Alternative: per-pellet
-   damage (`base_damage` 6 x 8 = 48), which changes what the Wave Editor number means.
-3. **Shotgun reload: per magazine or per shell?** Recommendation: per shell (`reload_mode` per_round, ~0.5 s a shell, interruptible -
-   fire as soon as one shell is in); a pump shotgun reloading a "magazine" in 2.4 s feels wrong and the per-shell rhythm is a tactical
-   choice (top up in a lull).
-4. **Damage falloff past the effective range (besides the hit-chance falloff)?** Recommendation: yes for the shotgun and the pistol only
-   (`damage_falloff_floor` 0.4 / 0.6), none for rifles (they already lose accuracy steeply past it); default 1 = no change.
-5. **Recoil for full-auto (the SUPPRESS order)?** Recommendation: a small bloom on the M16 full-auto only (`recoil_per_round_deg` ~0.3,
-   recovery 0.5 s) so a long burst spreads; aimed single shots stay roll-based without recoil.
+1. **Armour classes: 5** - none / light / medium / heavy / vehicle (today's three enemy tiers + "none" + the APC). A weapon at or above the
+   target's class works as today; **below it the weapon's armour penetration does not apply** (the target's full armour reduction); a
+   vehicle is hurt seriously only by explosives / the RPG. The armour formula stays multiplicative (section 4). Per-weapon classes: knife /
+   pistol / shotgun / cryo emitter / flamethrower light, M16 / hammer / grenade medium, sniper rifle / plasma carbine heavy, RPG-7 vehicle.
+2. **Shotgun damage:** `base_damage` 45 = the whole shot at point blank, split evenly over 8 pellets (5.625 each); a partial hit does less.
+3. **Shotgun reload: per shell**, ~0.5 s a shell (`reload_mode` per_round, `reload_per_round_s` 0.5), interruptible - he fires as soon as
+   one shell is in.
+4. **Damage falloff beyond the effective range: only the shotgun (`damage_falloff_floor` 0.4) and the pistol (0.6)**; linear from the
+   effective range (x1) to the max reach (x floor); rifles none (default 1).
+5. **M16 full-auto recoil:** ~0.3 deg of extra spread per round (`recoil_per_round_deg` 0.3), settling in 0.5 s (`recoil_recovery_s` 0.5);
+   single aimed shots stay roll-based without recoil.
+
+Implementation: step 2 (ballistics + armour penetration), section 12.
