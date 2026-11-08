@@ -434,8 +434,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Silhouette")
 	TObjectPtr<UMaterialInterface> SilhouetteMaterial;
 
-	/** Godot get_silhouette_color: leader cyan, engineer amber, medic-sapper green, recruit olive (alpha 0.55). */
+	/**
+	 * Godot get_silhouette_color: leader cyan, engineer amber, medic-sapper green, recruit olive (alpha 0.55) - the player's squad. A hostile
+	 * operative (a PMC fighter, !IsPlayerTeam()) is HostileSilhouetteColor (the game designer's decision 2026-11-08).
+	 */
 	FLinearColor GetSilhouetteColor() const;
+
+	/** The see-through silhouette of a hostile operative (TeamId other than the player's): red (the game designer 2026-11-08). */
+	static inline const FLinearColor HostileSilhouetteColor = FLinearColor(1.f, 0.04f, 0.04f, 0.6f);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Silhouette")
 	bool IsSilhouetteVisible() const { return bSilhouetteVisible; }
