@@ -15,6 +15,7 @@
 #include "UI/DialogueSubsystem.h"
 #include "Engine/World.h"
 #include "Environment/EnvironmentSubsystem.h"
+#include "GameFlow/CampaignSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -321,6 +322,13 @@ void UMissionSubsystem::RestartMission(bool bQuick)
 void UMissionSubsystem::ApplyStageLoadout()
 {
 	// Godot _apply_stage_exploration_resources: the combat supply by the level's squad_loadout and the start mode.
+	// 2026-11-08: a squad carried in through the campaign keeps the kit it brought (the Depot's squad_loadout must not replace it).
+	const UCampaignSubsystem* Campaign = UCampaignSubsystem::Get(GetWorld());
+	if (!LoadoutRules::ShouldApplyStageLoadout(Campaign && Campaign->GetCarryFor(GetWorld())))
+	{
+		UE_LOG(LogCodexTactics, Log, TEXT("Stage loadout skipped: the squad arrived through the campaign with its carried kit"));
+		return;
+	}
 	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
 	const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
 	const FSquadLoadout Loadout = Level ? Level->Config.SquadLoadout : FSquadLoadout();

@@ -7,7 +7,10 @@
 #include "Core/CodexTacticsGameMode.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Data/GodotBalanceAsset.h"
+#include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/Character.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
@@ -98,6 +101,10 @@ void ATacticalCameraPawn::Tick(float DeltaSeconds)
 	}
 	const bool bWasGliding = bSmoothFocusing || bDramaticShot;
 	UpdateSmoothFocus(RealDelta);
+	// The one place every zoom path ends in (wheel, glides, cinematics, turn-based entry, snaps): never closer than the 7 m floor (bug #52).
+	// The wheel itself stops at its own minimum (StepZoom: max(DistanceMin, MinSafeDistance)); cinematic / focus shots may close to the floor.
+	TargetDistance = TacticalCameraRules::ClampMinDistance(Config, TargetDistance);
+	CurrentDistance = TacticalCameraRules::ClampMinDistance(Config, CurrentDistance);
 
 	if (!bWasGliding)
 	{
@@ -119,7 +126,25 @@ void ATacticalCameraPawn::Tick(float DeltaSeconds)
 	const FVector NewLocation = bSnap ? Desired
 		: FMath::Lerp(GetActorLocation() - ShakeOffset, Desired, FMath::Clamp(FollowSpeed * RealDelta, 0.f, 1.f));
 	ShakeOffset = UpdateShake(RealDelta, ViewRotation);
-	SetActorLocationAndRotation(NewLocation + ShakeOffset, ViewRotation);
+	SetActorLocationAndRotation(PushOutOfCharacters(NewLocation + ShakeOffset), ViewRotation);
+}
+
+FVector ATacticalCameraPawn::PushOutOfCharacters(const FVector& Location) const
+{
+	// A character that walks into the camera (or a low pitch / a pan that skims one) never swallows the view: the camera leaves his capsule.
+	FVector Result = Location;
+	const float Reach = 2000.f; // capsules are ~100 cm; only pawns near the camera are looked at
+	for (TActorIterator<ACharacter> It(GetWorld()); It; ++It)
+	{
+		const UCapsuleComponent* Capsule = It->GetCapsuleComponent();
+		if (!Capsule || It->IsHidden() || FVector::DistSquared(It->GetActorLocation(), Result) > Reach * Reach)
+		{
+			continue;
+		}
+		Result = TacticalCameraRules::PushOutOfCapsule(Result, Capsule->GetComponentLocation(),
+			Capsule->GetScaledCapsuleHalfHeight(), Capsule->GetScaledCapsuleRadius(), Config.CapsuleClearance);
+	}
+	return Result;
 }
 
 void ATacticalCameraPawn::TriggerWeaponShake(const FString& WeaponType)

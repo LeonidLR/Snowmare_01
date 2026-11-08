@@ -16,9 +16,10 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 // 2026-10-22 b (game designer: "if the operatives have unspent points, after the black screen a menu with the character's image and the
-// points ... after that the new level opens"; "the next level is Frozen Factory, the current one 0.0 Frozen Dam"): the campaign level
-// order, the decision after the exit's black screen (points screen / next level / main menu), the level-start fade and the squad carried
-// to the next level. UE-only (the Godot archive had no level-to-level flow).
+// points ... after that the new level opens"; "the next level is Frozen Factory, the current one 0.0 Frozen Dam"; 2026-11-02, reconfirmed
+// 2026-11-08: the generated Depot "0.1 Depot" replaces Frozen Factory as the second level): the campaign level order, the decision after the
+// exit's black screen (points screen / next level / main menu), the level-start fade and the squad carried to the next level. UE-only (the
+// Godot archive had no level-to-level flow).
 
 #define CAMPAIGN_TEST(TestClass, TestPath) \
 	IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, "CodexTactics.GameFlow.Campaign." TestPath, \
@@ -28,7 +29,7 @@ namespace CampaignTestLocal
 {
 	const TCHAR* TwoLevels = TEXT(R"({"campaign_id":"demo","levels":[
 		{"id":"0.0","map":"/Game/Maps/L_Demo01_A_FrozenLake","title":"0.0 Frozen Dam"},
-		{"id":"0.1","map":"/Game/Maps/L_Demo01_B_FrozenFactory","title":"0.1 Frozen Factory"}]})");
+		{"id":"0.1","map":"/Game/Maps/Generated/L_Gen_Depot_1","title":"0.1 Depot"}]})");
 
 	FCampaignConfig Parse(FAutomationTestBase& Test, const TCHAR* Json)
 	{
@@ -66,12 +67,16 @@ bool FCampaignSequenceTest::RunTest(const FString&)
 	TestEqual(TEXT("short name of a path"), CampaignRules::ShortMapName(TEXT("/Game/Maps/L_X.L_X")), FString(TEXT("L_X")));
 	TestEqual(TEXT("short name of a PIE world"), CampaignRules::ShortMapName(TEXT("UEDPIE_0_L_Demo01_A_FrozenLake")), FString(TEXT("L_Demo01_A_FrozenLake")));
 	const FCampaignLevel* Next = CampaignRules::FindNextLevel(Config, TEXT("L_Demo01_A_FrozenLake"));
-	TestTrue(TEXT("the lake (0.0) -> Frozen Factory (0.1)"), Next && Next->Map == TEXT("/Game/Maps/L_Demo01_B_FrozenFactory") && Next->Title == TEXT("0.1 Frozen Factory"));
+	TestTrue(TEXT("the lake (0.0) -> the Depot (0.1)"), Next && Next->Map == TEXT("/Game/Maps/Generated/L_Gen_Depot_1") && Next->Title == TEXT("0.1 Depot"));
 	TestTrue(TEXT("any name form, any case"), CampaignRules::FindNextLevel(Config, TEXT("UEDPIE_2_l_demo01_a_frozenlake")) == Next
 		&& CampaignRules::FindNextLevel(Config, TEXT("/Game/Maps/L_Demo01_A_FrozenLake.L_Demo01_A_FrozenLake")) == Next);
-	TestNull(TEXT("the last level has no next"), CampaignRules::FindNextLevel(Config, TEXT("L_Demo01_B_FrozenFactory")));
+	TestNull(TEXT("the last level (the Depot) has no next"), CampaignRules::FindNextLevel(Config, TEXT("L_Gen_Depot_1")));
+	TestEqual(TEXT("the Depot's index by its long name (a map in a sub-folder)"), CampaignRules::FindLevelIndex(Config, TEXT("/Game/Maps/Generated/L_Gen_Depot_1.L_Gen_Depot_1")), 1);
+	TestNull(TEXT("Frozen Factory left the campaign (2026-11-02): no next level"), CampaignRules::FindNextLevel(Config, TEXT("L_Demo01_B_FrozenFactory")));
+	TestEqual(TEXT("... and no index"), CampaignRules::FindLevelIndex(Config, TEXT("L_Demo01_B_FrozenFactory")), static_cast<int32>(INDEX_NONE));
 	TestNull(TEXT("a map outside the campaign (L_MovementTest) has none"), CampaignRules::FindNextLevel(Config, TEXT("L_MovementTest")));
-	TestEqual(TEXT("title"), CampaignRules::GetLevelTitle(Config, TEXT("L_Demo01_B_FrozenFactory"), TEXT("?")), FString(TEXT("0.1 Frozen Factory")));
+	TestEqual(TEXT("title"), CampaignRules::GetLevelTitle(Config, TEXT("UEDPIE_0_L_Gen_Depot_1"), TEXT("?")), FString(TEXT("0.1 Depot")));
+	TestEqual(TEXT("Frozen Factory: the fallback (no campaign title card)"), CampaignRules::GetLevelTitle(Config, TEXT("L_Demo01_B_FrozenFactory"), FString()), FString());
 	TestEqual(TEXT("title fallback"), CampaignRules::GetLevelTitle(Config, TEXT("L_MovementTest"), TEXT("L_MovementTest")), FString(TEXT("L_MovementTest")));
 	return true;
 }
@@ -90,8 +95,8 @@ bool FCampaignDataFileTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("0.0 = the lake, \"0.0 Frozen Dam\""), Config.Levels[0].Id == TEXT("0.0") && Config.Levels[0].Map == TEXT("/Game/Maps/L_Demo01_A_FrozenLake")
 		&& Config.Levels[0].Title == TEXT("0.0 Frozen Dam"));
-	TestTrue(TEXT("0.1 = the factory copy, \"0.1 Frozen Factory\""), Config.Levels[1].Id == TEXT("0.1")
-		&& Config.Levels[1].Map == TEXT("/Game/Maps/L_Demo01_B_FrozenFactory") && Config.Levels[1].Title == TEXT("0.1 Frozen Factory"));
+	TestTrue(TEXT("0.1 = the generated Depot, \"0.1 Depot\" (2026-11-02 / 2026-11-08: it replaces Frozen Factory)"), Config.Levels[1].Id == TEXT("0.1")
+		&& Config.Levels[1].Map == TEXT("/Game/Maps/Generated/L_Gen_Depot_1") && Config.Levels[1].Title == TEXT("0.1 Depot"));
 	for (const FCampaignLevel& Level : Config.Levels)
 	{
 		TestTrue(FString::Printf(TEXT("%s exists"), *Level.Map), FPackageName::DoesPackageExist(Level.Map));
@@ -100,12 +105,25 @@ bool FCampaignDataFileTest::RunTest(const FString&)
 			LevelJsonRules::LoadLevel(CampaignRules::ShortMapName(Level.Map) + TEXT(".json"), Parsed, Error));
 		TestEqual(TEXT("level_name = the campaign title"), Parsed.LevelName.ToString(), Level.Title);
 	}
+	// The Depot as a campaign arrival: the start fades in (no own "start_fade_seconds" -> the arrival default), no tutorial / intro briefing,
+	// it is the last level (no gate exit to a next one), and its stage loadout never replaces the carried kit (LoadoutRules::ShouldApplyStageLoadout).
+	FLevelCombatConfig Depot;
+	TestTrue(TEXT("the Depot's level JSON loads"), LevelJsonRules::LoadLevel(TEXT("L_Gen_Depot_1.json"), Depot, Error));
+	TestTrue(TEXT("the Depot: no tutorial, no intro briefing, no gate exit, one wave"), !Depot.Demo.bDemo && !Depot.Demo.bTutorial && !Depot.bIntroDialogue
+		&& !Depot.GateExit.bEnabled && Depot.Waves.Num() == 1);
+	TestEqual(TEXT("the Depot's campaign arrival fades in over the arrival default"), CampaignRules::ResolveStartFadeSeconds(Depot.StartFadeSeconds, true),
+		CampaignRules::ArrivalFadeSeconds);
+	TestFalse(TEXT("the Depot is mortal (task #46: immortality off)"), Depot.bCheatImmortal);
+	TestTrue(TEXT("the Depot locks a clear sunny day (game designer 2026-11-08: noon, Clear - no lake night on arrival)"), Depot.Environment.bLocked
+		&& Depot.Environment.bHasWeather && Depot.Environment.Weather == EWeatherState::Clear && Depot.Environment.bHasStartHour
+		&& FMath::IsNearlyEqual(Depot.Environment.StartHour, 12.f));
+	TestTrue(TEXT("... cold off, infinite ammo (designer 2026-11-08: keep the Depot as it is)"), Depot.ColdRateMult == 0.f && Depot.bCheatInfiniteAmmo);
+	// Frozen Factory left the campaign but stays on disk (its map and level JSON, used by the ladder smokes).
 	FLevelCombatConfig Factory;
-	LevelJsonRules::LoadLevel(TEXT("L_Demo01_B_FrozenFactory.json"), Factory, Error);
-	TestTrue(TEXT("the factory: no tutorial, no gate exit, a 2 s start fade, one wave"), !Factory.Demo.bDemo && !Factory.Demo.bTutorial
-		&& !Factory.GateExit.bEnabled && FMath::IsNearlyEqual(Factory.StartFadeSeconds, 2.f) && Factory.Waves.Num() == 1);
-	TestTrue(TEXT("the factory (user 2026-10-22): the lake's cold x0.4, no MovementTest intro briefing"), FMath::IsNearlyEqual(Factory.ColdRateMult, 0.4f)
-		&& !Factory.bIntroDialogue);
+	TestTrue(TEXT("Frozen Factory's level JSON stays"), LevelJsonRules::LoadLevel(TEXT("L_Demo01_B_FrozenFactory.json"), Factory, Error)
+		&& FMath::IsNearlyEqual(Factory.StartFadeSeconds, 2.f));
+	TestTrue(TEXT("... and its map"), FPackageName::DoesPackageExist(TEXT("/Game/Maps/L_Demo01_B_FrozenFactory")));
+	TestEqual(TEXT("... outside the campaign"), CampaignRules::FindLevelIndex(Config, TEXT("L_Demo01_B_FrozenFactory")), static_cast<int32>(INDEX_NONE));
 	return true;
 }
 
@@ -217,7 +235,7 @@ bool FCampaignCarryMatchingTest::RunTest(const FString&)
 	FCampaignSquadCarry Carry;
 	TestTrue(TEXT("no carry: everybody spawns fresh"), CampaignCarry::ShouldSpawn(Carry, EOperativeRole::Commander, 0));
 	Carry.FromMap = TEXT("L_Demo01_A_FrozenLake");
-	Carry.ToMap = TEXT("L_Demo01_B_FrozenFactory");
+	Carry.ToMap = TEXT("L_Gen_Depot_1");
 	FCarriedOperative Commander;
 	Commander.Role = EOperativeRole::Commander;
 	Commander.SquadIndex = 0;

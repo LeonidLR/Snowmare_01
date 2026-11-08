@@ -162,6 +162,9 @@ private:
 	FVector LimitPan(const FVector& Pan, float LeashCm) const;
 	bool IsTurnBased() const;
 	void UpdateZoomMode();
+
+	/** Camera location pushed out of every character capsule (bug #52). */
+	FVector PushOutOfCharacters(const FVector& Location) const;
 	void UpdatePan(float RealDelta);
 	void UpdateRotation(float RealDelta);
 	FVector ComputeFocus(float RealDelta);

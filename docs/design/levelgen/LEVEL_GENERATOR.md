@@ -6,6 +6,10 @@
 > ambush quality, similarity to the reference), lets critics (Jev, the Claude API) judge them, and builds the accepted ones as
 > new UE maps the bot walks. Nothing here copies the reference's layout or art: structure, proportions, densities and tactical
 > patterns only. UE-only (no Godot reference).
+>
+> **2026-11-08:** `L_Gen_Depot_1` ("0.1 Depot") is campaign level 0.1 - the lake leads to it (game designer 2026-11-02 / 2026-11-08, it
+> replaced Frozen Factory). Its generated `LevelGen_PlayerStart` (the layout's `spawn`) is the campaign start; a rebuild must keep one
+> PlayerStart at the route's start. `docs/systems/demo01-lake.md` block "Campaign 2026-11-08", smoke `DepotCampaignStartSmoke`.
 
 ## 1. Where things are
 

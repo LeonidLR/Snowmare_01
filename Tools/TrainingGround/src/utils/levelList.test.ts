@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  buildLevelList, classifyLevelGroup, extractCampaignMapLeaves,
+  buildLevelList, classifyLevelGroup, disambiguateNames, extractCampaignMapLeaves,
   type CampaignConfig, type RawLevelMeta,
 } from './levelList.ts';
 
@@ -14,12 +14,14 @@ const CAMPAIGN_FILE = path.join(ROOT, 'Content/Data/Campaign/campaign.json');
 const LEVELS_DIR = path.join(ROOT, 'Content/Data/LevelJson');
 
 test('classifyLevelGroup: correctly classifies all 4 categories', () => {
-  const campaignMaps = ['L_Demo01_A_FrozenLake', 'L_Demo01_B_FrozenFactory'];
+  // Since 2026-11-08 the campaign is the lake -> the generated Depot (it replaced Frozen Factory).
+  const campaignMaps = ['L_Demo01_A_FrozenLake', 'L_Gen_Depot_1'];
   
   assert.equal(classifyLevelGroup('L_Demo01_A_FrozenLake.json', campaignMaps), 'Campaign');
-  assert.equal(classifyLevelGroup('L_Demo01_B_FrozenFactory.json', campaignMaps), 'Campaign');
+  assert.equal(classifyLevelGroup('L_Gen_Depot_1.json', campaignMaps), 'Campaign', 'a campaign level wins over the Generated prefix');
+  assert.equal(classifyLevelGroup('L_Demo01_B_FrozenFactory.json', campaignMaps), 'Labs & tests', 'Frozen Factory left the campaign');
   
-  assert.equal(classifyLevelGroup('L_Gen_Depot_1.json', campaignMaps), 'Generated');
+  assert.equal(classifyLevelGroup('L_Gen_Depot_1.json', []), 'Generated');
   assert.equal(classifyLevelGroup('L_Gen_Outpost_2.json', campaignMaps), 'Generated');
   
   assert.equal(classifyLevelGroup('L_FormationLab.json', campaignMaps), 'Labs & tests');
@@ -37,11 +39,11 @@ test('extractCampaignMapLeaves: extracts map leaf names from campaign config', (
     campaign_id: 'demo01',
     levels: [
       { id: '0.0', map: '/Game/Maps/L_Demo01_A_FrozenLake', title: '0.0 Frozen Dam' },
-      { id: '0.1', map: '/Game/Maps/L_Demo01_B_FrozenFactory', title: '0.1 Frozen Factory' },
+      { id: '0.1', map: '/Game/Maps/Generated/L_Gen_Depot_1', title: '0.1 Depot' },
     ],
   };
   const leaves = extractCampaignMapLeaves(campaign);
-  assert.deepEqual(leaves, ['L_Demo01_A_FrozenLake', 'L_Demo01_B_FrozenFactory']);
+  assert.deepEqual(leaves, ['L_Demo01_A_FrozenLake', 'L_Gen_Depot_1'], 'a map in a sub-folder gives its leaf name');
 });
 
 test('buildLevelList: sorts by group priority, campaign order, and drops template', () => {
@@ -120,22 +122,60 @@ test('Real repo data verification: campaign.json and LevelJson/*.json produce va
   const list = buildLevelList(campaign, rawLevels);
   assert.ok(list.length >= 20, `expected at least 20 levels, got ${list.length}`);
 
-  // Check L_Gen_Depot_1.json has level_name: "0.1 Depot"
+  // Check L_Gen_Depot_1.json has level_name: "0.1 Depot" - campaign level 0.1 since 2026-11-08
   const depot = list.find((i) => i.id === 'L_Gen_Depot_1');
   assert.ok(depot, 'L_Gen_Depot_1 must be present in level list');
   assert.equal(depot.level_name, '0.1 Depot');
-  assert.equal(depot.group, 'Generated');
+  assert.equal(depot.group, 'Campaign');
 
-  // Check Campaign has Frozen Dam and Frozen Factory
+  // Check Campaign has Frozen Dam and the Depot, in campaign order
   const campaignItems = list.filter((i) => i.group === 'Campaign');
   assert.equal(campaignItems.length, 2);
   assert.equal(campaignItems[0].id, 'L_Demo01_A_FrozenLake');
   assert.equal(campaignItems[0].level_name, '0.0 Frozen Dam');
-  assert.equal(campaignItems[1].id, 'L_Demo01_B_FrozenFactory');
-  assert.equal(campaignItems[1].level_name, '0.1 Frozen Factory');
+  assert.equal(campaignItems[1].id, 'L_Gen_Depot_1');
+  assert.equal(campaignItems[1].level_name, '0.1 Depot');
+
+  // Frozen Factory stays listed (its file is on disk), outside the campaign
+  const factory = list.find((i) => i.id === 'L_Demo01_B_FrozenFactory');
+  assert.ok(factory, 'L_Demo01_B_FrozenFactory must still be listed');
+  assert.equal(factory.group, 'Labs & tests');
+
+  // The legacy pair sharing "Battle 1: Checkpoint Skirmish" is told apart by the file name; nothing shows twice
+  const stage01 = list.find((i) => i.id === 'stage_01');
+  const outpost = list.find((i) => i.id === 'level_01_outpost');
+  assert.ok(stage01 && outpost, 'stage_01 and level_01_outpost must be listed');
+  assert.equal(stage01.level_name, outpost.level_name, 'the real files still share their level_name');
+  assert.equal(stage01.display_name, `${stage01.level_name} (stage_01.json)`);
+  assert.equal(outpost.display_name, `${outpost.level_name} (level_01_outpost.json)`);
+  assert.equal(new Set(list.map((i) => i.display_name)).size, list.length, 'every selector entry is unique');
 
   // Check Labs & tests contains Formation Lab
   const lab = list.find((i) => i.id === 'L_FormationLab');
   assert.ok(lab, 'L_FormationLab must be in Labs & tests');
   assert.equal(lab.group, 'Labs & tests');
+});
+
+test('disambiguateNames: duplicates get the file name in brackets, unique names stay as they are', () => {
+  const names = disambiguateNames([
+    { file: 'stage_01.json', level_name: 'Battle 1: Checkpoint Skirmish' },
+    { file: 'L_FormationLab.json', level_name: 'Formation Lab' },
+    { file: 'level_01_outpost.json', level_name: 'Battle 1: Checkpoint Skirmish ' },
+  ]);
+  assert.deepEqual(names, [
+    'Battle 1: Checkpoint Skirmish (stage_01.json)',
+    'Formation Lab',
+    'Battle 1: Checkpoint Skirmish  (level_01_outpost.json)',
+  ]);
+  assert.deepEqual(disambiguateNames([]), []);
+});
+
+test('buildLevelList: display_name equals level_name unless two files share it', () => {
+  const items = buildLevelList(null, [
+    { file: 'stage_01.json', level_id: 'stage_01', level_name: 'Battle 1', stage_number: 1 },
+    { file: 'level_01_outpost.json', level_id: 'level_01_outpost', level_name: 'Battle 1' },
+    { file: 'stage_02.json', level_id: 'stage_02', level_name: 'Battle 2', stage_number: 2 },
+  ]);
+  assert.deepEqual(items.map((i) => i.display_name), ['Battle 1 (stage_01.json)', 'Battle 2', 'Battle 1 (level_01_outpost.json)']);
+  assert.deepEqual(items.map((i) => i.level_name), ['Battle 1', 'Battle 2', 'Battle 1'], 'level_name itself is untouched');
 });

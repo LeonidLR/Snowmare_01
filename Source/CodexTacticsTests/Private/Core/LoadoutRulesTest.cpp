@@ -79,4 +79,16 @@ bool FLoadoutRulesTest::RunTest(const FString&)
 	return true;
 }
 
+// 2026-11-08 (the Depot replaces Frozen Factory as campaign level 0.1): a squad carried in through the campaign keeps its carried kit -
+// the level's squad_loadout (the Depot: grenades_count 2) is a fresh start's kit only. UE-only (the Godot archive had no campaign).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLoadoutCampaignArrivalTest, "CodexTactics.Core.Loadout.CampaignArrival",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FLoadoutCampaignArrivalTest::RunTest(const FString&)
+{
+	TestTrue(TEXT("a fresh start gets the level's stage loadout"), LoadoutRules::ShouldApplyStageLoadout(false));
+	TestFalse(TEXT("a campaign arrival keeps the carried kit"), LoadoutRules::ShouldApplyStageLoadout(true));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

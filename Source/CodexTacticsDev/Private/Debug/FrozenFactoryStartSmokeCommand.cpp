@@ -1,8 +1,11 @@
-// Dev-only check of the start of campaign level 0.1 (game designer 2026-10-22: "when the next level starts there's a fade, the players are
-// on the new map, and behind them you can see the last point of the previous level - the small fenced compound we were in before"):
+// Dev-only check of the plain level start of L_Demo01_B_FrozenFactory (game designer 2026-10-22: "when the next level starts there's a fade,
+// the players are on the new map, and behind them you can see the last point of the previous level - the small fenced compound we were in
+// before"). Since 2026-11-02 / 2026-11-08 the factory is no campaign level any more (the generated Depot "0.1 Depot" replaced it - its
+// campaign start is CodexTactics.DepotCampaignStartSmoke); the map stays as a test map (the ladder smokes), so this check keeps its own start
+// honest: the level JSON's fade, the set-dressing door, the squad's spawn, the start camera - and NO campaign title card:
 //   Scripts/smoke_parallel.ps1 -Commands FrozenFactoryStartSmoke   (map /Game/Maps/L_Demo01_B_FrozenFactory, Scripts/test_map.json)
-//  1. the level starts behind a black screen with its title "0.1 Frozen Factory" that fades in (level JSON "start_fade_seconds": 2; black
-//     during the hold, never brighter later, clear by the end of hold + fade); the factory's own level JSON (1 wave, no gate exit);
+//  1. the level starts behind a black screen that fades in (level JSON "start_fade_seconds": 2; black during the hold, never brighter later,
+//     clear by the end of hold + fade) without a title (a map outside the campaign); the factory's own level JSON (1 wave, no gate exit);
 //  2. the lake compound's blast door, CLOSED (user decision 2026-10-22: no way back; AGateActor set dressing, inert, not the level's gate -
 //     that is Gate_Checkpoint; its shut leaves block pawns and the navmesh) and its
 //     walls stand behind the start; the three operatives spawned just OUTSIDE the doorway (1.5..12 m beyond its plane, within its width
@@ -153,8 +156,9 @@ namespace FrozenFactoryStartSmoke
 				return true;
 			}
 			const float Fade = Exit->GetStartFadeSeconds();
-			Check(State, FMath::IsNearlyEqual(Fade, 2.f) && Exit->GetStartTitle() == TEXT("0.1 Frozen Factory"),
-				FString::Printf(TEXT("the level starts with a %.1f s fade-in and the title \"%s\""), Fade, *Exit->GetStartTitle()));
+			// 2026-11-02 / 2026-11-08: outside the campaign - no campaign title card (CampaignRules::GetLevelTitle's empty fallback).
+			Check(State, FMath::IsNearlyEqual(Fade, 2.f) && Exit->GetStartTitle().IsEmpty(),
+				FString::Printf(TEXT("the level starts with a %.1f s fade-in and no campaign title (\"%s\")"), Fade, *Exit->GetStartTitle()));
 			Check(State, State.FirstGameTime > CampaignRules::StartHoldSeconds || State.FirstAlpha >= 0.99f,
 				FString::Printf(TEXT("black at the start (alpha %.2f at %.2f s)"), State.FirstAlpha, State.FirstGameTime));
 			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
@@ -328,8 +332,9 @@ namespace FrozenFactoryStartSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.FrozenFactoryStartSmoke"),
-		TEXT("Dev check (2026-10-22 b): campaign level 0.1 L_Demo01_B_FrozenFactory starts with a fade-in from black and its title; the squad spawns just "
-			"outside the lake compound's open blast door (set dressing) facing away from it; the start camera frames the door and the compound wall."),
+		TEXT("Dev check (2026-10-22 b; outside the campaign since 2026-11-08): L_Demo01_B_FrozenFactory starts with its level JSON's fade-in from black, "
+			"no campaign title; the squad spawns just outside the lake compound's closed blast door (set dressing) facing away from it; the start camera "
+			"frames the door and the compound wall."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

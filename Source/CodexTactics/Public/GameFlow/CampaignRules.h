@@ -57,7 +57,7 @@ struct CODEXTACTICS_API FPointsReviewMember
 
 /**
  * Pure rules of the campaign (game designer 2026-10-22: "make the next level now ... it's our first tutorial level; the second level is
- * Frozen Factory"; "if the operatives have unspent points, after the black screen a menu with the character's image and the points,
+ * Frozen Factory" - since 2026-11-02 / 2026-11-08 the generated Depot "0.1 Depot" instead; "if the operatives have unspent points, after the black screen a menu with the character's image and the points,
  * then the new level opens"). The level order lives in Content/Data/Campaign/campaign.json; ULevelExitSubsystem decides after the
  * gate exit's black screen, UCampaignSubsystem carries the squad. UE-only (the Godot archive had no level-to-level flow).
  */
