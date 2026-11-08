@@ -4,6 +4,7 @@
 #include "Camera/CameraComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Data/GodotBalanceAsset.h"
@@ -32,6 +33,10 @@ namespace TacticalCameraPawnLocal
 	TAutoConsoleVariable<int32> CVarFreePanBounds(TEXT("Codex.Camera.FreePanBounds"), 1,
 		TEXT("Bug_04 B (game designer 2026-11-01): 1 = the free pan has no leash to the followed character - only the level's area (the minimap's + FreePanLevelMarginCm) "
 			"keeps the view in; 0 = the old leash (MaxPanCombat round the focus, A/B)"));
+	TAutoConsoleVariable<int32> CVarOperativeClearance(TEXT("Codex.Camera.OperativeClearance"), 1,
+		TEXT("Bug #52 on L_Gen_Depot_1 (game designer 2026-11-08: the squad prone on a roof, the wheel in - the view 1-2 m above the Commander): 1 = a focus held "
+			"by a manual pan takes the height of the squad member the view is on, the camera keeps every operative on screen as far below it as the 7 m floor "
+			"puts the focus (or 7 m away), every view target is kept out of character capsules; 0 = the old camera (A/B)"));
 }
 
 ATacticalCameraPawn::ATacticalCameraPawn()
@@ -59,6 +64,12 @@ void ATacticalCameraPawn::BeginPlay()
 	UserDistanceCombat = Config.DistanceCombat;
 	bCombatView = IsCombatView();
 	CurrentDistance = TargetDistance = bCombatView ? UserDistanceCombat : UserDistanceExploration;
+	if (Config.MinSafeDistance <= 0.f)
+	{
+		// A Blueprint / data override zeroed the floor (bug #52): it never switches off - the default holds (TacticalCameraRules::GetMinSafeDistance).
+		UE_LOG(LogCodexTactics, Warning, TEXT("TacticalCameraPawn %s: MinSafeDistance %.0f <= 0 - the camera uses the %.0f cm floor"), *GetName(), Config.MinSafeDistance,
+			TacticalCameraRules::DefaultMinSafeDistance);
+	}
 
 	if (const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>())
 	{
@@ -126,15 +137,57 @@ void ATacticalCameraPawn::Tick(float DeltaSeconds)
 	const FVector NewLocation = bSnap ? Desired
 		: FMath::Lerp(GetActorLocation() - ShakeOffset, Desired, FMath::Clamp(FollowSpeed * RealDelta, 0.f, 1.f));
 	ShakeOffset = UpdateShake(RealDelta, ViewRotation);
-	SetActorLocationAndRotation(PushOutOfCharacters(NewLocation + ShakeOffset), ViewRotation);
+	// Bug #52 (Depot roof, 2026-11-08): no operative on screen point-blank (a man on a roof under the camera), then out of every capsule.
+	const FVector Clear = KeepClearOfOperatives(NewLocation + ShakeOffset, ViewRotation.Vector());
+	SetActorLocationAndRotation(PushOutOfCharacters(GetWorld(), Clear, Config.CapsuleClearance), ViewRotation);
 }
 
-FVector ATacticalCameraPawn::PushOutOfCharacters(const FVector& Location) const
+bool ATacticalCameraPawn::IsOperativeClearanceEnabled()
+{
+	return TacticalCameraPawnLocal::CVarOperativeClearance.GetValueOnGameThread() != 0;
+}
+
+void ATacticalCameraPawn::GatherOperativePoints(TArray<FVector>& OutPoints) const
+{
+	OutPoints.Reset();
+	if (const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+	{
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member && !Member->IsHidden())
+			{
+				OutPoints.Add(Member->GetActorLocation());
+			}
+		}
+	}
+}
+
+FVector ATacticalCameraPawn::KeepClearOfOperatives(const FVector& Location, const FVector& ViewForward)
+{
+	ClearanceDolly = 0.f;
+	if (!IsOperativeClearanceEnabled())
+	{
+		return Location;
+	}
+	TArray<FVector> Points;
+	GatherOperativePoints(Points);
+	// The floor measured from every operative on screen, not only from the focus: one closer than 7 m sits at least as far below the camera
+	// as the 7 m floor puts the focus (404 cm) - flat ground never moves the camera, a man on a roof under it does.
+	ClearanceDolly = TacticalCameraRules::ComputeClearanceDolly(Location, ViewForward, TacticalCameraRules::GetMinSafeDistance(Config),
+		TacticalCameraRules::GetMinClearanceHeight(Config), FMath::Cos(FMath::DegreesToRadians(Config.ClearanceConeHalfAngle)), Points);
+	return Location - ViewForward.GetSafeNormal() * ClearanceDolly;
+}
+
+FVector ATacticalCameraPawn::PushOutOfCharacters(const UWorld* World, const FVector& Location, float Clearance)
 {
 	// A character that walks into the camera (or a low pitch / a pan that skims one) never swallows the view: the camera leaves his capsule.
 	FVector Result = Location;
+	if (!World)
+	{
+		return Result;
+	}
 	const float Reach = 2000.f; // capsules are ~100 cm; only pawns near the camera are looked at
-	for (TActorIterator<ACharacter> It(GetWorld()); It; ++It)
+	for (TActorIterator<ACharacter> It(const_cast<UWorld*>(World)); It; ++It)
 	{
 		const UCapsuleComponent* Capsule = It->GetCapsuleComponent();
 		if (!Capsule || It->IsHidden() || FVector::DistSquared(It->GetActorLocation(), Result) > Reach * Reach)
@@ -142,7 +195,7 @@ FVector ATacticalCameraPawn::PushOutOfCharacters(const FVector& Location) const
 			continue;
 		}
 		Result = TacticalCameraRules::PushOutOfCapsule(Result, Capsule->GetComponentLocation(),
-			Capsule->GetScaledCapsuleHalfHeight(), Capsule->GetScaledCapsuleRadius(), Config.CapsuleClearance);
+			Capsule->GetScaledCapsuleHalfHeight(), Capsule->GetScaledCapsuleRadius(), Clearance);
 	}
 	return Result;
 }
@@ -561,8 +614,20 @@ FVector ATacticalCameraPawn::ComputeFocus(float RealDelta)
 {
 	if (IsDetachedFromFollow())
 	{
-		return Focus; // frozen by a manual pan
+		// Frozen by a manual pan. Bug #52 (Depot roof, 2026-11-08): the frozen height was the ground the pan started on - with the squad
+		// on a 3 m roof the 7-8 m zoom ended 1-2 m above them. The held focus takes the height of the squad member the view is on.
+		if (!IsOperativeClearanceEnabled())
+		{
+			return Focus;
+		}
+		TArray<FVector> Points;
+		GatherOperativePoints(Points);
+		FVector Held = Focus;
+		const float HeightZ = TacticalCameraRules::ComputeDetachedFocusZ(GetViewCentre(), static_cast<float>(Focus.Z), Points, Config.DetachedHeightRadius);
+		Held.Z = TacticalCameraRules::SpringDamp(static_cast<float>(Focus.Z), DetachedZVelocity, HeightZ, Config.DetachedHeightHalfLife, RealDelta);
+		return Held;
 	}
+	DetachedZVelocity = 0.f;
 	FVector TargetLocation = FollowTarget->GetActorLocation();
 	TargetLocation.Z = SmoothLadderZ(TargetLocation.Z, RealDelta);
 	// Godot: a turn-based target that is not the leader (an enemy on its turn) sits exactly in the centre.

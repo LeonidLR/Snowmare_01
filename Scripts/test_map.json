@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "CameraMinZoomSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "CameraMinZoomSmoke", "CameraMinZoomDepotSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -99,6 +99,7 @@
     "WallSectorsSmoke": { "timeout": 300, "_why": "game designer bug report 2026-11-02 item 5 (L_Gen_Depot_1): the squad along a short wall with two free ends / a segment between two gaps - both end men look round their own corners (mirrored), no duplicated sector while an open one is unwatched (FormationWallSectorRules)" },
     "GroupCoverNearbySmoke": { "timeout": 300, "_why": "game designer bug report 2026-11-02 item 3 (L_Gen_Depot_1 low cube covers): a group cover order at a low cube - the followers take the free cubes nearby, prone behind it only when there is no cover nearby" },
     "CameraMinZoomSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 300, "_why": "bug #52 (game designer video 2026-11-06): the camera zoomed point-blank into an operative hand and rifle - 50 wheel notches in, tiny-distance glides / snaps and a character walking into the camera never get the view closer than the minimum or inside a capsule" },
+    "CameraMinZoomDepotSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 300, "_why": "bug #52 on L_Gen_Depot_1 (game designer PIE 2026-11-08): combat, the squad prone on a 3 m roof, the wheel in - a pan-held focus kept the ground height, the view ended 1-2 m above the Commander; ground / held view / re-attached / glide / snap / selection switch / turn-based zoom never leave an operative on screen point-blank or the view in a capsule" },
     "CameraFreePanSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 300, "_why": "the game designer's play-test 2026-11-01 (bug_04 B): the free pan has no leash to the selected operative - 70 m along X then 70 m along Y keeps moving (the old MaxPanCombat leash stopped it 85 m from him), the level's area stops it, the number key re-centres" },
     "SquadCornerPeekSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 600, "_why": "the game designer's play-test 2026-11-01 (the squad corner peek animation played twice): the squad hugs lab wall W_B_3, the hover + click on its end -> one cover entry, one peek step-out montage, no facing flip, the fire idle of the peek side; both ends" },
     "ConePerfSmoke": { "rendered": true, "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 600, "_why": "bug #38 (user 2026-11-04, L_Gen_Depot_1): the squad's three 120 m cones cost < 1 ms / frame on the game thread on the ground and on a roof (rendered: the wall frame time includes the GPU), no shards from the roof, the squad's cones one layer, the weapon zone on the cone" },
@@ -794,9 +795,9 @@
     },
     {
       "name": "camera",
-      "globs": ["Source/**/Camera/**", "Source/**/Debug/CameraMinZoomSmoke*", "Source/**/Debug/InteriorExitSmoke*", "Source/**/Debug/RoofCutawaySmoke*", "Source/**/Debug/RoofCutawayFocusSmoke*"],
+      "globs": ["Source/**/Camera/**", "Source/**/Debug/CameraMinZoomSmoke*", "Source/**/Debug/CameraMinZoomDepotSmoke*", "Source/**/Debug/InteriorExitSmoke*", "Source/**/Debug/RoofCutawaySmoke*", "Source/**/Debug/RoofCutawayFocusSmoke*"],
       "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
-      "smokes": ["CameraMinZoomSmoke", "CameraStaySmoke", "CameraZoneSmoke", "RoofCutawaySmoke", "RoofCutawayFocusSmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
+      "smokes": ["CameraMinZoomSmoke", "CameraMinZoomDepotSmoke", "CameraStaySmoke", "CameraZoneSmoke", "RoofCutawaySmoke", "RoofCutawayFocusSmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
     },
     {
       "name": "death-cinematic",

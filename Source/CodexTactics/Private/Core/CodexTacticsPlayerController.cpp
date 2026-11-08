@@ -8,6 +8,7 @@
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Application/IInputProcessor.h"
+#include "Camera/CodexPlayerCameraManager.h"
 #include "Camera/InteriorExitArrowActor.h"
 #include "Camera/InteriorExitSubsystem.h"
 #include "Combat/HoldSphereActor.h"
@@ -42,6 +43,8 @@ ACodexTacticsPlayerController::ACodexTacticsPlayerController()
 {
 	// Top-down tactical game: cursor is always visible.
 	bShowMouseCursor = true;
+	// Bug #52 (2026-11-08): every view the player sees stays out of the characters' capsules.
+	PlayerCameraManagerClass = ACodexPlayerCameraManager::StaticClass();
 }
 
 namespace SquadKeys
