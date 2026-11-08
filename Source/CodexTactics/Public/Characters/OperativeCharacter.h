@@ -231,8 +231,17 @@ public:
 	 */
 	void MarkHoldCrouch() { SquadStanceSerial = StanceSerial; HoldCrouchSerial = StanceSerial; }
 	bool IsHoldCrouch() const { return HoldCrouchSerial == StanceSerial && Stance == EOperativeStance::Crouching; }
-	/** The player's stance key / squad stance order (even one that changes nothing): his stance is his own. */
-	void ClearStanceFromSquad() { SquadStanceSerial = MAX_uint32; }
+	/**
+	 * The player's stance key / squad stance order (even one that changes nothing): his stance is his own - no longer the squad's, and the
+	 * player's (IsStanceFromPlayer) until anything changes it again.
+	 */
+	void ClearStanceFromSquad() { SquadStanceSerial = MAX_uint32; PlayerStanceSerial = StanceSerial; }
+	/**
+	 * His current stance is the player's stance order (ClearStanceFromSquad after V / C / Z, Alt + V / C / Z, the action bar cycle). Solo's guard
+	 * crouch on a leader switch leaves it alone (bug 2026-11-08: the previously ordered operative got up from prone into a crouch when the
+	 * player selected the next one; SquadAutonomyRules::KeepsOwnStanceInSolo). Any later stance change ends it.
+	 */
+	bool IsStanceFromPlayer() const { return PlayerStanceSerial == StanceSerial; }
 
 	/**
 	 * Seconds he must stand still while a stance change plays (OperativeMovementRules::ComputeMoveHold): the settle time armed by
@@ -2642,6 +2651,8 @@ private:
 	/** Counts his stance changes; SquadStanceSerial = the count when the squad automation set it (IsStanceFromSquad). */
 	uint32 StanceSerial = 0;
 	uint32 SquadStanceSerial = MAX_uint32;
+	/** StanceSerial when the player's stance order set the stance (IsStanceFromPlayer). */
+	uint32 PlayerStanceSerial = MAX_uint32;
 	/** StanceSerial when the autonomy's hold crouch set the stance (IsHoldCrouch). */
 	uint32 HoldCrouchSerial = MAX_uint32;
 	/** The last RequestMove destination (the walk resumes there after jumping off an obstacle top). */

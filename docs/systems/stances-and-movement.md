@@ -27,6 +27,12 @@
   `Cover` (orders, enter / leave, shimmy, facing, events), `CoverEntry` (run-in, mesh blend, wall clearance),
   `CornerAim` (corner hold / aim / peek / snap, open shot), `Sniper`; shared helpers `OperativeCharacterInternal.h`.
   Net: `CodexTactics.Characters.OperativeUnits.*` + the per-file rules `operative-*-units` in `Scripts/test_map.json`.
+- **Who a stance order goes to / whose stance it is (2026-11-08):** V / C / Z go to the selected operative - a box selection's to every
+  selected one (`ACodexTacticsPlayerController::ApplyStance`); Alt + V / C / Z to the whole squad (`SetEntireSquadStance`). Every player
+  stance order calls `USquadSubsystem::NotePlayerStanceOrder` -> `AOperativeCharacter::ClearStanceFromSquad`: the stance is no longer the
+  squad's (`IsStanceFromSquad`) and is the player's (`IsStanceFromPlayer`) until anything changes it; Solo's guard crouch on a leader
+  switch never overwrites it (bug 2026-11-08, [squad-and-orders](squad-and-orders.md) "Solo operatives keep the stance the player gave
+  them", `Codex.Squad.SoloOwnStance`).
 
 ### Moved barricades are vaulted both ways (game designer play-test 2026-10-22)
 

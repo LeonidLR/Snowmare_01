@@ -171,6 +171,13 @@ public:
 	/** Solo holds him standing and his guard crouch still waits out hold_crouch_after_sec (ArmSoloGuardCrouch; smokes / debug). */
 	bool IsSoloGuardCrouchWaiting(const AOperativeCharacter* Operative) const;
 
+	/**
+	 * The player gave him a stance order (V / C / Z on the selection, Alt + V / C / Z, the action bar cycle; call it after the stance is
+	 * set): his stance is his own (AOperativeCharacter::ClearStanceFromSquad) and Solo's guard crouch waiting for him ends - in Solo every
+	 * operative keeps the stance the player gave him (bug 2026-11-08, Codex.Squad.SoloOwnStance).
+	 */
+	void NotePlayerStanceOrder(AOperativeCharacter& Operative);
+
 	/** He waits in a ramp's file now (bug report 2026-11-02 item 7; smokes / debug). */
 	bool IsRampHeld(const AOperativeCharacter* Operative) const;
 	/** He stands on a ramp / stair now (his movement's floor is a sloped static mesh); OutUphill = its uphill direction (2D). */
@@ -701,8 +708,10 @@ private:
 	 * Solo's guard crouch (2026-11-02, the game designer's review of ambush v3): a holding follower who stands waits squad_roe.json
 	 * hold_crouch_after_sec standing still before he crouches (SquadAutonomyRules::StartSoloGuardCrouch / StepSoloGuardCrouch) - the
 	 * same delay as the autonomy's hold crouch; any other stance becomes the guard crouch at once as before.
+	 * bLeaderSwitch (SetLeader in Solo, bug 2026-11-08): a stance the player gave him is kept, as is a manual corner peek's
+	 * (SquadAutonomyRules::KeepsOwnStanceInSolo) - selecting another operative never changes the previously ordered one's stance.
 	 */
-	void ArmSoloGuardCrouch(AOperativeCharacter& Operative);
+	void ArmSoloGuardCrouch(AOperativeCharacter& Operative, bool bLeaderSwitch = false);
 	/** The waiting followers each frame: crouched once they have stood still long enough, dropped when Solo / the hold ends for them. */
 	void UpdateSoloGuardCrouch(float DeltaTime);
 	/** The guard crouch itself: crouched, the squad's stance mark (ShouldStandToSprintWithLeader), the floating text. */
