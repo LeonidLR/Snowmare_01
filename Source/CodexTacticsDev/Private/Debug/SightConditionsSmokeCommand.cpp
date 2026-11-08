@@ -7,7 +7,9 @@
 //     conditions multiplier = 1 / 0.5 / 0.35 / 0.175; the leader's range = 120 m x it (x his height bonus); CanOperativeSee of both targets =
 //     distance <= that range; his drawn cone's range = that range; an armed human (a Marksman) at each target: its patrol range = 45 m x2 x it,
 //     it spots the leader = distance <= that range; a frost hound's = 15 m x it (a beast: no x2), its fight range 60 m x it;
-//  2. the cone's cost: 20 rebuilds at 60 m and at 120 m (rays / traces / task ms per rebuild logged, "[SightConditions] cone perf");
+//  2. the cone's cost: 20 rebuilds at 60 m and at 120 m (rays / traces / task ms per rebuild logged, "[SightConditions] cone perf", and the
+//     breakdown - CPU vs wall time, the trace (of it the scene queries), the layer cut, the meshes, the mates' re-cuts - "cone perf breakdown");
+//     a 120 m rebuild < 6 ms of task-thread CPU time (fix/cone-rebuild-cost 2026-11-08);
 //  3. a weather transition Clear -> Blizzard blends the multiplier (no step > 0.01 per frame);
 //  4. the pressure still finds a concealed ambush spot on the Depot at clear noon (the longest sight).
 // Arg Shot (a rendered run: -RenderOffscreen instead of -nullrhi): over-the-shoulder screenshots of the leader's cone at clear noon and at
@@ -94,6 +96,15 @@ namespace SightConditionsSmoke
 		double PerfMs[2] = { 0.0, 0.0 };
 		double PerfTraces[2] = { 0.0, 0.0 };
 		double PerfRays[2] = { 0.0, 0.0 };
+		/** Per rebuild, ms (fix/cone-rebuild-cost): trace (of it the scene queries), the layer cut, the meshes, the mates' re-cuts, the game-thread upload; reshapes per rebuild. */
+		double PerfTraceMs[2] = { 0.0, 0.0 };
+		double PerfSampleMs[2] = { 0.0, 0.0 };
+		double PerfClipMs[2] = { 0.0, 0.0 };
+		double PerfShapeMs[2] = { 0.0, 0.0 };
+		double PerfReshapeMs[2] = { 0.0, 0.0 };
+		double PerfApplyMs[2] = { 0.0, 0.0 };
+		double PerfCpuMs[2] = { 0.0, 0.0 };
+		double PerfReshapes[2] = { 0.0, 0.0 };
 		/** Transition sampling. */
 		float LastMultiplier = -1.f;
 		float MaxStep = 0.f;
@@ -429,8 +440,19 @@ namespace SightConditionsSmoke
 				const double Ratio = State.PerfMs[0] > 0.0 ? State.PerfMs[1] / State.PerfMs[0] : 0.0;
 				UE_LOG(LogCodexTactics, Display, TEXT("[SightConditions] cone perf: 60 m %.0f rays / %.0f traces / %.3f ms task per rebuild; 120 m %.0f rays / %.0f traces / %.3f ms (x%.2f)"),
 					State.PerfRays[0], State.PerfTraces[0], State.PerfMs[0], State.PerfRays[1], State.PerfTraces[1], State.PerfMs[1], Ratio);
-				Check(State, State.PerfMs[1] > 0.0 && State.PerfMs[1] < 6.0, FString::Printf(TEXT("a 120 m cone rebuild costs %.3f ms of task-thread work (< 6 ms; 60 m: %.3f ms)"),
-					State.PerfMs[1], State.PerfMs[0]));
+				for (int32 Range = 0; Range < 2; ++Range)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[SightConditions] cone perf breakdown %s: CPU %.3f ms, wall total %.3f ms = trace %.3f (scene queries %.3f, classify / refine %.3f) + own layer cut %.3f + own meshes %.3f + %.1f mates' re-cuts %.3f; game-thread upload %.3f ms"),
+						Range == 0 ? TEXT("60 m") : TEXT("120 m"), State.PerfCpuMs[Range], State.PerfMs[Range], State.PerfTraceMs[Range], State.PerfSampleMs[Range],
+						State.PerfTraceMs[Range] - State.PerfSampleMs[Range], State.PerfClipMs[Range], State.PerfShapeMs[Range], State.PerfReshapes[Range],
+						State.PerfReshapeMs[Range], State.PerfApplyMs[Range]);
+				}
+				// fix/cone-rebuild-cost (2026-11-08): the work is the task threads' CPU time - their wall time also counted the time the OS gave the
+				// core to another process (a loaded machine measured 2-7x the work); the wall time where the platform has no thread counter.
+				const bool bCpu = State.PerfCpuMs[1] > 0.0;
+				const double Work[2] = { bCpu ? State.PerfCpuMs[0] : State.PerfMs[0], bCpu ? State.PerfCpuMs[1] : State.PerfMs[1] };
+				Check(State, Work[1] > 0.0 && Work[1] < 6.0, FString::Printf(TEXT("a 120 m cone rebuild costs %.3f ms of task-thread work (%s, the mates' re-cuts included; < 6 ms; 60 m: %.3f ms)"),
+					Work[1], bCpu ? TEXT("CPU time") : TEXT("wall time"), Work[0]));
 				Leader->bVisionConeShowsSightRange = true;
 				State.LastMultiplier = -1.f;
 				Environment->SetClockScale(1.f);
@@ -467,6 +489,15 @@ namespace SightConditionsSmoke
 				State.PerfMs[Pass] = (Now.TaskSeconds - State.PerfStart.TaskSeconds) * 1000.0 / Builds;
 				State.PerfTraces[Pass] = static_cast<double>(Now.Traces - State.PerfStart.Traces) / Builds;
 				State.PerfRays[Pass] = static_cast<double>(Now.Rays - State.PerfStart.Rays) / Builds;
+				const FVisionConeBuildStats& From = State.PerfStart;
+				State.PerfTraceMs[Pass] = (Now.TraceSeconds - From.TraceSeconds) * 1000.0 / Builds;
+				State.PerfSampleMs[Pass] = (Now.SampleSeconds - From.SampleSeconds) * 1000.0 / Builds;
+				State.PerfReshapeMs[Pass] = (Now.ReshapeSeconds - From.ReshapeSeconds) * 1000.0 / Builds;
+				State.PerfReshapes[Pass] = static_cast<double>(Now.Reshapes - From.Reshapes) / Builds;
+				State.PerfClipMs[Pass] = (Now.ClipSeconds - From.ClipSeconds) * 1000.0 / Builds;
+				State.PerfShapeMs[Pass] = (Now.ShapeSeconds - From.ShapeSeconds) * 1000.0 / Builds;
+				State.PerfApplyMs[Pass] = (Now.ApplySeconds - From.ApplySeconds) * 1000.0 / Builds;
+				State.PerfCpuMs[Pass] = (Now.TaskCpuSeconds - From.TaskCpuSeconds) * 1000.0 / Builds;
 			}
 			++State.PerfFrame;
 			return true;

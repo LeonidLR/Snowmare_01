@@ -16,6 +16,10 @@
 #include "Misc/App.h"
 #include "Tasks/Task.h"
 #include "UObject/GarbageCollection.h"
+#if PLATFORM_WINDOWS
+#include "Windows/WindowsHWrapper.h"
+#include <intrin.h>
+#endif
 
 /** One rebuild's world query set-up (the game's sight trace: ECC_Visibility, simple collision, pawns / silhouettes ignored). */
 struct FVisionConeTraceContext
@@ -78,6 +82,9 @@ namespace VisionConeConsole
 	static TAutoConsoleVariable<float> CVarMaxMsInFlight(TEXT("Codex.VisionCones.MaxMsInFlight"), 150.f,
 		TEXT("Occluded vision cones (bug #38): a batch not done by the next actor tick keeps running on the task threads up to this long, ms (its meshes swapped in whole when done; then waited for). 0 = waited for at the next tick (the 2026-10-19 behaviour)."));
 
+	static TAutoConsoleVariable<float> CVarRefineGapCm(TEXT("Codex.VisionCones.RefineGapCm"), -1.f,
+		TEXT("Occluded vision cones (fix/cone-rebuild-cost 2026-11-08): edge rays stop once the gap's arc at its far drawn end is under twice this, cm. -1 (default) = each cone's MinRefineGapCm (20), 0 = the angle floor only (the fan before 2026-11-08, A/B)."));
+
 	static TAutoConsoleVariable<int32> CVarParallel(TEXT("Codex.VisionCones.Parallel"), 2,
 		TEXT("Occluded vision cones: 2 a frame's rebuilds are traced on the task threads from the end of the actors' tick to the start of the next one (like the engine's async traces; default), 1 in parallel but waited for in the same frame, 0 inline on the game thread."));
 
@@ -101,6 +108,13 @@ namespace VisionConeConsole
 		FVisionConeShape Shape;
 		int32 Samples = 0;
 		double Seconds = 0.0;
+		/** Seconds as the thread's CPU time (FVisionConeBuildStats::TaskCpuSeconds). */
+		double CpuSeconds = 0.0;
+		/** The breakdown of Seconds (FVisionConeBuildStats). */
+		double TraceSeconds = 0.0;
+		double SampleSeconds = 0.0;
+		double ClipSeconds = 0.0;
+		double ShapeSeconds = 0.0;
 	};
 
 	/** A frame's rebuilds. */
@@ -464,16 +478,52 @@ namespace VisionConeConsole
 		}
 	}
 
+	/**
+	 * CPU time of the calling thread, s (Windows: QueryThreadCycleTime - counted in time-stamp-counter ticks - over the TSC rate measured against
+	 * the performance counter since the module loaded); a negative value where there is no such counter. Unlike FPlatformTime::Seconds it
+	 * does not run on while the OS has the thread's core given to another process (the loaded verification machine).
+	 */
+	double ThreadCpuSeconds()
+	{
+#if PLATFORM_WINDOWS
+		struct FCalibration
+		{
+			uint64 Tsc = __rdtsc();
+			double Seconds = FPlatformTime::Seconds();
+		};
+		static const FCalibration Start;
+		const double Elapsed = FPlatformTime::Seconds() - Start.Seconds;
+		ULONG64 Cycles = 0;
+		if (Elapsed < 0.5 || !::QueryThreadCycleTime(::GetCurrentThread(), &Cycles))
+		{
+			return -1.0;
+		}
+		const double TscPerSecond = static_cast<double>(__rdtsc() - Start.Tsc) / Elapsed;
+		return TscPerSecond > 0.0 ? static_cast<double>(Cycles) / TscPerSecond : -1.0;
+#else
+		return -1.0;
+#endif
+	}
+
 	/** One cone's rays (any thread). */
 	void RunTrace(FJob& Job)
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(VisionCone_Trace);
+		const double CpuStart = ThreadCpuSeconds();
 		const double Start = FPlatformTime::Seconds();
 		ProbePerch(Job.Context);
-		Job.Source = MakeShared<TArray<FVisionConeRay>, ESPMode::ThreadSafe>(VisionConeVisibility::CastRays(Job.Spec, [&Job](float Angle, FVisionConeRay& Ray)
+		double SampleSeconds = 0.0;
+		Job.Source = MakeShared<TArray<FVisionConeRay>, ESPMode::ThreadSafe>(VisionConeVisibility::CastRays(Job.Spec, [&Job, &SampleSeconds](float Angle, FVisionConeRay& Ray)
 		{
+			const double RayStart = FPlatformTime::Seconds();
 			SampleRay(Job.Spec, Job.Context, Angle, Ray);
+			SampleSeconds += FPlatformTime::Seconds() - RayStart;
 		}, &Job.Samples));
 		Job.Seconds = FPlatformTime::Seconds() - Start;
+		const double CpuEnd = ThreadCpuSeconds();
+		Job.CpuSeconds = CpuStart >= 0.0 && CpuEnd >= 0.0 ? CpuEnd - CpuStart : 0.0;
+		Job.TraceSeconds = Job.Seconds;
+		Job.SampleSeconds = SampleSeconds;
 	}
 
 	FVector2D ToWorld(const FVector2D& Origin, float YawDeg, const FVector2D& Local)
@@ -491,6 +541,7 @@ namespace VisionConeConsole
 		{
 			return;
 		}
+		const double CpuStart = ThreadCpuSeconds();
 		const double Start = FPlatformTime::Seconds();
 		const FVector2D Origin(Job.Context.Feet.X, Job.Context.Feet.Y);
 		const float Yaw = Job.Context.Yaw;
@@ -515,8 +566,11 @@ namespace VisionConeConsole
 		const TArray<FVisionConeRay>& Own = *Job.Source;
 		if (Others.Num() > 0)
 		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(VisionCone_ClipToLayer);
+			const double ClipStart = FPlatformTime::Seconds();
 			Job.Drawn = Own;
 			VisionConeVisibility::ClipToLayer(Job.Drawn, Origin, Yaw, Job.Priority, Others, Job.MergeSampleCm);
+			Job.ClipSeconds = FPlatformTime::Seconds() - ClipStart;
 			Job.bMerged = true;
 			Options.OutlineRays = &Own;
 			Options.WeaponRays = &Own;
@@ -526,8 +580,15 @@ namespace VisionConeConsole
 				return Others.ContainsByPredicate([&World](const FVisionConeLayerMember& Other) { return Other.LevelAt(World) > 0; });
 			};
 		}
-		Job.Shape = VisionConeVisibility::BuildShape(Job.bMerged ? Job.Drawn : Own, Job.Spec.Levels.Num(), Job.Spec.HalfAngleDeg, Options);
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(VisionCone_BuildShape);
+			const double ShapeStart = FPlatformTime::Seconds();
+			Job.Shape = VisionConeVisibility::BuildShape(Job.bMerged ? Job.Drawn : Own, Job.Spec.Levels.Num(), Job.Spec.HalfAngleDeg, Options);
+			Job.ShapeSeconds = FPlatformTime::Seconds() - ShapeStart;
+		}
 		Job.Seconds += FPlatformTime::Seconds() - Start;
+		const double CpuEnd = ThreadCpuSeconds();
+		Job.CpuSeconds += CpuStart >= 0.0 && CpuEnd >= 0.0 ? CpuEnd - CpuStart : 0.0;
 	}
 
 	bool IsSameRange(float A, float B)
@@ -831,6 +892,8 @@ void UVisionConeComponent::UpdateCone(bool bShow, float RangeCm, float HalfAngle
 		Spec.bWorldGrid = true;
 		Spec.SliverMinWidthCm = SliverMinWidthCm;
 		Spec.SliverFromCm = SliverFromCm;
+		const float RefineGapOverride = VisionConeConsole::CVarRefineGapCm.GetValueOnGameThread();
+		Spec.MinRefineGapCm = RefineGapOverride >= 0.f ? RefineGapOverride : MinRefineGapCm;
 		SinceBuildSeconds += DeltaSeconds;
 		// While a batch with this cone is still running, the changes are measured against what it was launched with (no second trace of the same pose).
 		const FVisionConeSightSpec& RefSpec = bInFlight ? InFlightSpec : BuiltSpec;
@@ -1070,12 +1133,18 @@ void UVisionConeComponent::ApplyBatch(VisionConeConsole::FBatch& Batch)
 			++Stats.Builds;
 			Stats.Rays += Job.Samples;
 			Stats.Traces += Job.Context.Traces;
+			Stats.TraceSeconds += Job.TraceSeconds;
+			Stats.SampleSeconds += Job.SampleSeconds;
+			Stats.ClipSeconds += Job.ClipSeconds;
+			Stats.ShapeSeconds += Job.ShapeSeconds;
 		}
 		else
 		{
 			++Stats.Reshapes;
+			Stats.ReshapeSeconds += Job.Seconds;
 		}
 		Stats.TaskSeconds += Job.Seconds;
+		Stats.TaskCpuSeconds += Job.CpuSeconds;
 	}
 	++Stats.Batches;
 	Stats.ApplySeconds += FPlatformTime::Seconds() - Start;
