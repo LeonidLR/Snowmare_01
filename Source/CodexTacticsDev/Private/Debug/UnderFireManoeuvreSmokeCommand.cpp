@@ -26,6 +26,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/UnderFireRules.h"
 #include "Components/StaticMeshComponent.h"
+#include "Data/WeaponDataAsset.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Debug/SmokeUtils.h"
@@ -374,7 +375,21 @@ namespace UnderFireManoeuvreSmoke
 					Check(State, Member->UnderFireSidesteps + Member->UnderFireCoverMoves > 0 || !State.bMateInLineAtStart[Index],
 						FString::Printf(TEXT("rear man %s (a mate in his line: %d) stepped off the line / took cover"), *Member->DisplayName.ToString(),
 							State.bMateInLineAtStart[Index] ? 1 : 0));
-					Check(State, State.Shots[Index] > 0, FString::Printf(TEXT("rear man %s got a line and returned fire (%d rounds)"), *Member->DisplayName.ToString(), State.Shots[Index]));
+					// Main's verification 2026-11-08: the Engineer is shotgun-only now (the D-1 reaches ~15 m) and the shooter stands ~18 m off -
+					// beyond a weapon's reach holding fire is right (FindShootTarget's range), within it he must fire back.
+					const AOperativeCharacter* FireFrom = State.Shooter.Get();
+					const float Reach = Member->CurrentWeapon ? Member->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
+					const float ToShooter = FireFrom ? static_cast<float>(FVector::Dist(Member->GetActorLocation(), FireFrom->GetActorLocation())) : 0.f;
+					if (ToShooter <= Reach)
+					{
+						Check(State, State.Shots[Index] > 0, FString::Printf(TEXT("rear man %s got a line and returned fire (%d rounds; the shooter %.0f m off, his reach %.0f m)"),
+							*Member->DisplayName.ToString(), State.Shots[Index], ToShooter / 100.f, Reach / 100.f));
+					}
+					else
+					{
+						Check(State, State.Shots[Index] == 0, FString::Printf(TEXT("rear man %s: the shooter %.0f m off is beyond his weapon's reach (%.0f m) - he holds fire (%d rounds)"),
+							*Member->DisplayName.ToString(), ToShooter / 100.f, Reach / 100.f, State.Shots[Index]));
+					}
 				}
 			}
 			Check(State, Covers > 0 && InCover > 0, FString::Printf(TEXT("someone took cover (%d cover moves, %d in cover now)"), Covers, InCover));

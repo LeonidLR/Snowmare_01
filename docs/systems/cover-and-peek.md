@@ -198,6 +198,18 @@ small extra turn."
     the difference is learnt per fire idle (`PeekStanceBodyBias` [stand / crouch x `_L` / `_R`], added by `GetPeekStanceBodyYawCs`, so
     the next pre-turn aims right at it; the standing ones start at the measured `RunCornerPeekRules::StandDrawnBiasSeedDeg` 6) and a
     gap over 1 deg is eased out over `SettleSeconds` 0.4 s instead of the 0.15 s fade.
+  - *The shotgun holder (main's verification 2026-11-08, after the D-1 merge: the Engineer is shotgun-only, his run drawn by the C++ shotgun
+    layer `BlendWeaponLayer` over the graph):* `RunCornerPeekSmoke` E (he is the corner man) turned his drawn body 13 deg after the slot and
+    8 deg back-and-forth over his last 1.5 m, two causes: (1) the learnt bias was the rifle's (+6, left-hand IK) - his left hand is on the pump
+    (IK 0), so the settle eased 8 deg: `PeekStanceBodyBias` is now kept per weapon handling (rifle / shotgun slots, `PeekStanceBiasSlot` reads
+    `bShotgunWeapon`; only the rifle slots start at 6); (2) the shotgun jog's torso sways under the turn and the pre-turn's feedback chased it
+    (one-way, so it closed the rest with a late 14 deg turn into the entry): the APPROACH LOCK - from the pre-turn's start
+    (`AOperativeCharacter::BeginPeekApproachYawLock` -> `UOperativeAnimInstance::BeginPeekApproachYawLock`) the same proxy root yaw holds
+    the drawn body on the pre-turn's own linear plan in WORLD space (`RunCornerPeekRules::ApproachLockTargetYaw`, the component yaw of each
+    evaluation), capped at `ApproachLockMaxCorrectionDeg` 20 (it removes the sway, the actor's turn does the turn); the pre-turn steers on
+    the pose before that root yaw (`GetNaturalBodyYawCs`, no feedback of the lock); the entry's lock replaces it, `EnterCover` / a dropped
+    run-and-peek release it. The proxy's order (graph -> weapon layer -> ladder IK -> the lock) means the lock measures the layer's pose;
+    the layer's fade on the cover entry (0.2 s) happens inside the entry lock's path. Test `RunCornerPeek.ArrivesTurned.ApproachLock`.
   - *The hips:* the lock holds the TORSO (`PeekStanceBodyShoulderWeight` 1). The hip line also carries the legs' stop out of the stride
     and the run pose's hip twist (10-25 deg against the shoulders, swinging with the gait) - no turn of the whole body takes that out,
     and holding the hips instead would turn the shoulders by the same amount; it stays a leg motion of the stop (14-25 deg measured).

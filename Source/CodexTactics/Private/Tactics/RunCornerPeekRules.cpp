@@ -273,6 +273,17 @@ namespace RunCornerPeekRules
 		return FRotator::NormalizeAxis(EntryYaw + FRotator::NormalizeAxis(FinalYaw - EntryYaw) * FMath::SmoothStep(0.f, 1.f, Alpha));
 	}
 
+	float PreTurnRunPoseFollowSeconds(bool bApproachLock)
+	{
+		return bApproachLock ? 0.3f : 0.08f;
+	}
+
+	float ApproachLockTargetYaw(float StartYaw, float FinalYaw, float Seconds, float PathSeconds)
+	{
+		const float Alpha = PathSeconds > 0.f ? FMath::Clamp(Seconds / PathSeconds, 0.f, 1.f) : 1.f;
+		return static_cast<float>(FRotator::NormalizeAxis(StartYaw + FRotator::NormalizeAxis(FinalYaw - StartYaw) * Alpha));
+	}
+
 	float LockAlpha(float Seconds, float PathSeconds, float FadeSeconds)
 	{
 		if (Seconds <= PathSeconds)
