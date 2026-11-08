@@ -1,0 +1,146 @@
+<title>Реестр механик</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans+Extra+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: field-manual index — sticky search/filter bar, then one collapsible block per system; each mechanic a dense row. Same tokens as the formation sheets. */
+:root {
+  --paper: #eef2f4; --sheet: #f8fafb; --ink: #18242d; --ink-2: #4c5c68; --rule: #c9d5dc; --chip: #dfe7ec;
+  --main: #2f7d4a; --branch: #b8860b; --planned: #3d5fb0; --new: #c2461f; --on-chip: #ffffff;
+  --f-display: "Fira Sans Extra Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1820; --sheet: #142029; --ink: #dfe8ee; --ink-2: #9aabb7; --rule: #2e4250; --chip: #1c2c37;
+    --main: #6fcf8f; --branch: #e0b341; --planned: #7d9cf0; --new: #f07a4f; --on-chip: #0f1820; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1820; --sheet: #142029; --ink: #dfe8ee; --ink-2: #9aabb7; --rule: #2e4250; --chip: #1c2c37;
+  --main: #6fcf8f; --branch: #e0b341; --planned: #7d9cf0; --new: #f07a4f; --on-chip: #0f1820; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2 { font-family: var(--f-display); font-weight: 700; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+h1 { font-size: clamp(32px, 6vw, 48px); line-height: 1.02; text-transform: uppercase; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+header { display: flex; flex-direction: column; gap: 8px; }
+.totals { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.totals b { color: var(--ink); font-size: 18px; font-family: var(--f-display); }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); padding-block: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--rule); }
+#q { width: 100%; font: 16px var(--f-body); padding: 9px 12px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
+#q:focus-visible, .f:focus-visible, summary:focus-visible, .copy:focus-visible { outline: 2px solid var(--new); outline-offset: 2px; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.f { font: 500 13px var(--f-mono); padding: 5px 11px; border: 1px solid var(--rule); background: var(--chip); color: var(--ink); cursor: pointer; }
+.f[aria-pressed="true"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+details.grp { background: var(--sheet); border: 1px solid var(--rule); }
+details.grp > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+details.grp > summary::-webkit-details-marker { display: none; }
+details.grp > summary::before { content: "▸"; color: var(--ink-2); width: 1em; }
+details.grp[open] > summary::before { content: "▾"; }
+details.grp h2 { font-size: 22px; text-transform: uppercase; }
+.cnt { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.planned-head { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; }
+.planned-head h1 { font-size: clamp(26px, 5vw, 36px); }
+ul.items { list-style: none; margin: 0; padding: 0 14px 6px; }
+li.it { border-top: 1px solid var(--rule); padding: 10px 0 11px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.nm { font-weight: 600; }
+.st { font: 500 11px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; padding: 1px 7px; color: var(--on-chip); }
+.st.main { background: var(--main); } .st.branch { background: var(--branch); } .st.planned { background: var(--planned); }
+.st.new { background: var(--new); }
+.dt { font: 12px var(--f-mono); color: var(--ink-2); margin-left: auto; font-variant-numeric: tabular-nums; }
+.wh { overflow-wrap: anywhere; }
+.meta { display: grid; grid-template-columns: max-content 1fr; gap: 1px 10px; font-size: 13px; color: var(--ink-2); }
+.meta dt { font-family: var(--f-mono); font-size: 11.5px; padding-top: 2px; }
+.meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+code { font-family: var(--f-mono); font-size: 12.5px; background: var(--chip); padding: 0 4px; color: var(--ink); }
+.copy { font: 11px var(--f-mono); border: 1px solid var(--rule); background: transparent; color: var(--ink-2); padding: 0 6px; margin-left: 4px; cursor: pointer; }
+.empty { padding: 24px 0; color: var(--ink-2); }
+.foot { font-size: 13px; color: var(--ink-2); max-width: 68ch; }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Operation: Cold Silence · <span id="upd"></span></div>
+  <h1>Реестр механик</h1>
+  <div class="totals" id="totals"></div>
+</header>
+
+<div class="bar">
+  <input id="q" type="search" placeholder="Поиск: «угол», «Codex.Cover», «ЧВК»…" aria-label="Поиск по механикам">
+  <div class="filters" id="filters"></div>
+</div>
+
+<main id="list"></main>
+<p class="foot">Как читать: <b>в игре</b> — уже в main; <b>в ветке</b> — сделано и проверено, ждёт вливания; <b>запланировано</b> — решено, но ещё не сделано. <b>новое</b> — добавлено за последние 7 дней. «Выключить» — консольная команда, которая возвращает старое поведение. «Охраняет» — автоматические проверки, которые краснеют, если механика сломалась.</p>
+</div>
+
+<script id="register-data" type="application/json">/*__DATA__*/</script>
+<script>
+(function(){
+  let D; try { D = JSON.parse(document.getElementById('register-data').textContent); } catch(e) { D = { updated:'', groups:[], planned:[] }; }
+  const ST = { main:'в игре', branch:'в ветке', planned:'запланировано' };
+  const upd = D.updated || ''; document.getElementById('upd').textContent = upd ? 'обновлено ' + upd : '';
+  const ref = upd ? new Date(upd + 'T12:00:00') : new Date();
+  const isNew = it => { if (!it.since || it.status === 'planned') return false; const d = new Date(it.since + 'T12:00:00'); return (ref - d) / 864e5 <= 7 && (ref - d) >= 0; };
+  const groupTitle = {}; (D.groups||[]).forEach(g => groupTitle[g.id] = g.title);
+  const all = []; (D.groups||[]).forEach(g => (g.items||[]).forEach(it => all.push({ ...it, _g: g.id })));
+  const plan = (D.planned||[]).map(it => ({ ...it, status: 'planned', _g: it.group || 'other' }));
+  const cnt = s => all.concat(plan).filter(it => it.status === s).length;
+  document.getElementById('totals').innerHTML =
+    `<span><b>${cnt('main')}</b> в игре</span><span><b>${cnt('branch')}</b> в ветке</span><span><b>${plan.length}</b> запланировано</span><span><b>${all.concat(plan).filter(isNew).length}</b> новых в игре за 7 дней</span>`;
+  const FILTERS = [['all','все'],['main','в игре'],['branch','в ветке'],['planned','запланировано'],['new','новое']];
+  let F = 'all'; try { F = localStorage.getItem('mr-filter') || 'all'; } catch(e) {}
+  const fb = document.getElementById('filters');
+  FILTERS.forEach(([k,t]) => { const b = document.createElement('button'); b.type='button'; b.className='f'; b.dataset.k=k; b.textContent=t; b.onclick=()=>{ F=k; try{localStorage.setItem('mr-filter',k);}catch(e){} render(); }; fb.appendChild(b); });
+  const esc = s => String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const match = (it, q) => !q || [it.name,it.what,it.how,it.off,it.decision,(it.smoke||[]).join(' '),it.doc,groupTitle[it._g]].join(' ').toLowerCase().includes(q);
+  const pass = it => F==='all' || (F==='new' ? isNew(it) : it.status===F);
+  function row(it){
+    const meta = [];
+    if (it.how) meta.push(['как', esc(it.how)]);
+    if (it.off) meta.push(['выключить', `<code>${esc(it.off)}</code><button type="button" class="copy" data-c="${esc(it.off)}">копировать</button>`]);
+    if (it.smoke && it.smoke.length) meta.push(['охраняет', it.smoke.map(s=>`<code>${esc(s)}</code>`).join(' ')]);
+    if (it.decision) meta.push(['решение', esc(it.decision)]);
+    if (it.doc) meta.push(['документ', `<code>${esc(it.doc)}</code>`]);
+    return `<li class="it"><div class="top"><span class="nm">${esc(it.name)}</span><span class="st ${it.status}">${ST[it.status]||esc(it.status)}</span>${isNew(it)?'<span class="st new">новое</span>':''}<span class="dt">${esc(it.since)}</span></div>`
+      + `<div class="wh">${esc(it.what)}</div>` + (meta.length?`<dl class="meta">${meta.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`:'') + `</li>`;
+  }
+  function block(id, title, items, open){
+    if (!items.length) return '';
+    return `<details class="grp" ${open?'open':''} data-g="${esc(id)}"><summary><h2>${esc(title)}</h2><span class="cnt">${items.length}</span></summary><ul class="items">${items.map(row).join('')}</ul></details>`;
+  }
+  const opened = new Set();
+  function render(){
+    [...fb.children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.k===F)));
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    const focus = q || F!=='all';
+    document.querySelectorAll('details.grp[open]').forEach(d => opened.add(d.dataset.g));
+    let html = '<div style="display:flex;flex-direction:column;gap:10px">';
+    (D.groups||[]).forEach(g => { const its = all.filter(it => it._g===g.id && pass(it) && match(it,q)); html += block(g.id, g.title, its, focus || opened.has(g.id)); });
+    html += '</div>';
+    const pl = plan.filter(it => pass(it) && match(it,q));
+    if (pl.length) {
+      html += '<div class="planned-head"><div class="eyebrow">решено, ещё не сделано</div><h1>Запланировано</h1></div><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">';
+      const gids = [...new Set(pl.map(it=>it._g))];
+      gids.forEach(gid => { html += block('plan-'+gid, groupTitle[gid] || gid, pl.filter(it=>it._g===gid), focus || opened.has('plan-'+gid) || F==='planned'); });
+      html += '</div>';
+    }
+    if (!html.includes('<li')) html = '<p class="empty">Ничего не найдено. Сбросьте фильтр или измените поиск.</p>';
+    document.getElementById('list').innerHTML = html;
+  }
+  document.getElementById('q').addEventListener('input', render);
+  document.getElementById('list').addEventListener('click', e => {
+    const b = e.target.closest('.copy'); if (!b) return;
+    const t = b.dataset.c; const done = () => { b.textContent = 'скопировано'; setTimeout(()=>b.textContent='копировать', 1500); };
+    try { navigator.clipboard.writeText(t).then(done, ()=>{}); } catch(err) {}
+  });
+  render();
+})();
+</script>
