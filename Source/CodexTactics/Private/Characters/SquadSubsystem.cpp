@@ -52,6 +52,8 @@ namespace
 		TEXT("1 (default): a formation slot off the navmesh (wall, generator, a fallen mate's remains) is replaced by the nearest navigable spot round the leader (bug 2026-10-23); 0: the old rule (the follower stays where he is)."));
 	TAutoConsoleVariable<int32> CVarSquadDropPendingCover(TEXT("Codex.Squad.DropPendingCover"), 1,
 		TEXT("1 (default): a follower the squad takes out of his cover drops his pending cover slot and its walk - Regroup any (a walk to a cover slot too), the leave to follow only the side-step along the wall he leaves, e.g. the automatic walk to the corner (bug 2026-11-02); 0: the old rule (the walk ran on and he entered the cover again)."));
+	TAutoConsoleVariable<int32> CVarSquadSoloOwnStance(TEXT("Codex.Squad.SoloOwnStance"), 1,
+		TEXT("1 (default): in Solo every operative keeps the stance the player gave him - a leader switch never re-applies the guard crouch to it, a player's stance order ends a pending guard crouch, a manual corner peek keeps its pose (bug 2026-11-08); 0: the old rule (selecting the next operative crouched the previous one, prone or not)."));
 
 	/**
 	 * Bug 2026-11-02 (the Medic-Sapper back in her cover after Regroup): ends a follower's pending cover slot and the walk to it when
@@ -296,10 +298,10 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 				{
 					Operative->StopOperative();
 					// Solo's guard crouch (bug 2026-10-20); a standing one waits hold_crouch_after_sec first (2026-11-02). One already
-					// waiting keeps his clock.
+					// waiting keeps his clock. Bug 2026-11-08: the old leader keeps the stance the player gave him (prone stays prone).
 					if (!SoloGuardCrouchWait.Contains(Operative))
 					{
-						ArmSoloGuardCrouch(*Operative);
+						ArmSoloGuardCrouch(*Operative, /*bLeaderSwitch*/ true);
 					}
 				}
 				Follower.bParked = true;
@@ -346,7 +348,7 @@ void USquadSubsystem::SetSquadStance(EOperativeStance Stance)
 	for (AOperativeCharacter* Member : GetMembers())
 	{
 		Member->SetStance(Stance);
-		Member->ClearStanceFromSquad(); // a squad stance order is the player's
+		NotePlayerStanceOrder(*Member); // a squad stance order is the player's
 	}
 }
 
@@ -552,9 +554,36 @@ void USquadSubsystem::ApplySoloGuardCrouch(AOperativeCharacter& Operative)
 	}
 }
 
-void USquadSubsystem::ArmSoloGuardCrouch(AOperativeCharacter& Operative)
+void USquadSubsystem::NotePlayerStanceOrder(AOperativeCharacter& Operative)
+{
+	Operative.ClearStanceFromSquad(); // his stance is his own (and the player's: IsStanceFromPlayer)
+	if (CVarSquadSoloOwnStance.GetValueOnGameThread() != 0 && SoloGuardCrouchWait.Remove(&Operative) > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Solo] %s: the player's stance order (%s) ends his guard crouch wait"), *Operative.DisplayName.ToString(),
+			*AOperativeCharacter::GetStanceDisplayName(Operative.GetStance()).ToString());
+	}
+}
+
+void USquadSubsystem::ArmSoloGuardCrouch(AOperativeCharacter& Operative, bool bLeaderSwitch)
 {
 	using namespace SquadAutonomyRules;
+	// Bug 2026-11-08 (the game designer, PIE: Solo, the first operative ordered prone, the next one selected and ordered prone - the first got up
+	// into a crouch): a leader switch re-armed the guard crouch on the old leader, and a prone / crouched one "takes it at once". In Solo every
+	// operative keeps the stance the player gave him; a manual corner peek keeps its pose.
+	FSoloStanceFacts Facts;
+	Facts.bLeaderSwitch = bLeaderSwitch;
+	Facts.bStanceFromPlayer = Operative.IsStanceFromPlayer();
+	Facts.bManualCornerPeek = Operative.IsManualCornerPeek();
+	Facts.bTrapSoloInCover = bTrapSolo && Operative.bInCover;
+	Facts.bGroupCoverProne = HasGroupCoverProne(&Operative);
+	if (KeepsOwnStanceInSolo(Facts, CVarSquadSoloOwnStance.GetValueOnGameThread() != 0))
+	{
+		SoloGuardCrouchWait.Remove(&Operative);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Solo] %s keeps his own stance (%s%s)"), *Operative.DisplayName.ToString(),
+			*AOperativeCharacter::GetStanceDisplayName(Operative.GetStance()).ToString(),
+			Facts.bManualCornerPeek ? TEXT(", a manual corner peek") : Facts.bStanceFromPlayer ? TEXT(", the player's order") : TEXT(""));
+		return;
+	}
 	if (StartSoloGuardCrouch(Operative.GetStance(), SquadROE::Get().HoldCrouchAfterSeconds) == ESoloGuardCrouch::Crouch)
 	{
 		SoloGuardCrouchWait.Remove(&Operative);
@@ -583,7 +612,11 @@ void USquadSubsystem::UpdateSoloGuardCrouch(float DeltaTime)
 		}
 		const bool bFollower = Followers.ContainsByPredicate([Operative](const FFollowerState& Follower) { return Follower.Operative.Get() == Operative; });
 		const bool bHolding = bIsSoloMode && bFollower && Operative != LeaderRef;
-		const bool bKeepsOwnStance = (bTrapSolo && Operative->bInCover) || HasGroupCoverProne(Operative);
+		SquadAutonomyRules::FSoloStanceFacts Facts;
+		Facts.bManualCornerPeek = Operative->IsManualCornerPeek(); // a peek ordered while he waited keeps its pose (bug 2026-11-08)
+		Facts.bTrapSoloInCover = bTrapSolo && Operative->bInCover;
+		Facts.bGroupCoverProne = HasGroupCoverProne(Operative);
+		const bool bKeepsOwnStance = KeepsOwnStanceInSolo(Facts, CVarSquadSoloOwnStance.GetValueOnGameThread() != 0);
 		It.Value() = StepStillSeconds(Operative->IsMoving() || Operative->GetVelocity().Size2D() > 30.f, It.Value(), DeltaTime);
 		switch (StepSoloGuardCrouch(bHolding, IsOnOwnOrder(Operative), bKeepsOwnStance, Operative->GetStance(), It.Value(), AfterSeconds))
 		{

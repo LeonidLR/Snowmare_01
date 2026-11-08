@@ -205,6 +205,30 @@ namespace SquadAutonomyRules
 	CODEXTACTICS_API ESoloGuardCrouch StepSoloGuardCrouch(bool bHoldingInSolo, bool bOnOwnOrder, bool bKeepsOwnStance, EOperativeStance Current,
 		float StillSeconds, float AfterSeconds);
 
+	/** What a holding follower brings to Solo's guard crouch (KeepsOwnStanceInSolo). */
+	struct FSoloStanceFacts
+	{
+		/** The guard crouch is armed by a leader switch while Solo is on (the player selected another operative), not by Solo coming on. */
+		bool bLeaderSwitch = false;
+		/** His current stance is the player's stance order (V / C / Z, Alt + V / C / Z, the action bar; AOperativeCharacter::IsStanceFromPlayer). */
+		bool bStanceFromPlayer = false;
+		/** He holds a manual corner peek the player ordered (the peek pose and its stand-off depend on his stance). */
+		bool bManualCornerPeek = false;
+		/** The trap hold's Solo and he is in cover (rev 5h: a crouch would drop a corner peek's pose). */
+		bool bTrapSoloInCover = false;
+		/** He lies behind a cover on a group cover order (2026-10-20). */
+		bool bGroupCoverProne = false;
+	};
+
+	/**
+	 * Solo's operatives are autonomous (the game designer's PIE report 2026-11-08: "I gave one operative the order to go prone, switched to the
+	 * next one and gave him the same order - he went prone, but the previous one got up into a crouch"): the guard crouch leaves a holding
+	 * follower's stance alone when it is an order of the player's that a leader switch would otherwise overwrite, or when he holds a manual
+	 * corner peek; the trap hold's cover and a group cover's prone keep theirs as before. Solo coming on keeps "teammates hold crouched" for
+	 * everybody else. bOwnStanceRule = Codex.Squad.SoloOwnStance (0 = the old rule: only the trap cover / group cover prone exceptions).
+	 */
+	CODEXTACTICS_API bool KeepsOwnStanceInSolo(const FSoloStanceFacts& Facts, bool bOwnStanceRule);
+
 	/** Seconds standing still: grows while not moving, back to 0 on any move. */
 	CODEXTACTICS_API float StepStillSeconds(bool bMoving, float StillSeconds, float DeltaSeconds);
 

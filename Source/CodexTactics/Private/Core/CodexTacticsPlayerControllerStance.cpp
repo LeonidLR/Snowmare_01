@@ -37,7 +37,7 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 		{
 			Member->SetStance(Stance);
 		}
-		Member->ClearStanceFromSquad(); // the player's order (Alt + Z / C / V): kept when the leader sprints
+		Squad->NotePlayerStanceOrder(*Member); // the player's order (Alt + Z / C / V): kept when the leader sprints / in Solo
 		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 SQUAD: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
 	}
 	if (Messages)
@@ -80,40 +80,55 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		return;
 	}
 
-	// Rev 5e item 6 (user request 2026-10-14; was the Godot check "cannot go prone while moving"): walking / running he dives
-	// prone on the move, slower he stops first (AOperativeCharacter::DropProne); only in cover / carrying / vaulting is it refused.
-	if (Stance == EOperativeStance::Prone && Leader->DropProne() == EProneEntry::Refused)
-	{
-		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-		{
-			Messages->PostMessage(Leader->DisplayName,
-				LOCTEXT("CannotProneWhileMoving", "⚠️ Cannot go prone while moving! Come to a full stop first."));
-		}
-		return;
-	}
-
 	// Deviation (user decision 2026-10-01; Godot _sync_squad_stances made the others follow): only the selected
-	// operative changes his stance — the whole squad only with Alt + Z / C / V (SetEntireSquadStance).
-	if (Stance != EOperativeStance::Prone)
+	// operative changes his stance — the whole squad only with Alt + Z / C / V (SetEntireSquadStance). Bug 2026-11-08 (the game
+	// designer: "in solo mode every operative must be autonomous; they may run together via box select"): a box selection's stance
+	// order goes to every selected operative (was: its leader alone) and to nobody else; each keeps it through later selection switches
+	// (USquadSubsystem::NotePlayerStanceOrder, ArmSoloGuardCrouch).
+	TArray<AOperativeCharacter*> Targets;
+	if (Squad->HasMultiSelection())
 	{
-		Leader->SetStance(Stance);
+		Targets = Squad->GetSelectedGroup();
 	}
-	Leader->ClearStanceFromSquad();
-	ControllerCommands::Report(this, ControllerCommands::ForStance(Stance, false));
-
-	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	Targets.AddUnique(Leader);
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	FText StanceName;
+	switch (Stance)
 	{
-		FText StanceName;
-		switch (Stance)
+	case EOperativeStance::Standing: StanceName = LOCTEXT("StanceStanding", "STANDING"); break;
+	case EOperativeStance::Crouching: StanceName = LOCTEXT("StanceCrouching", "CROUCHED"); break;
+	case EOperativeStance::Prone: StanceName = LOCTEXT("StanceProne", "PRONE"); break;
+	default: break;
+	}
+	int32 Applied = 0;
+	for (AOperativeCharacter* Member : Targets)
+	{
+		// Rev 5e item 6 (user request 2026-10-14; was the Godot check "cannot go prone while moving"): walking / running he dives
+		// prone on the move, slower he stops first (AOperativeCharacter::DropProne); only in cover / carrying / vaulting is it refused.
+		if (Stance == EOperativeStance::Prone && Member->DropProne() == EProneEntry::Refused)
 		{
-		case EOperativeStance::Standing: StanceName = LOCTEXT("StanceStanding", "STANDING"); break;
-		case EOperativeStance::Crouching: StanceName = LOCTEXT("StanceCrouching", "CROUCHED"); break;
-		case EOperativeStance::Prone: StanceName = LOCTEXT("StanceProne", "PRONE"); break;
-		default: break;
+			if (Messages)
+			{
+				Messages->PostMessage(Member->DisplayName,
+					LOCTEXT("CannotProneWhileMoving", "⚠️ Cannot go prone while moving! Come to a full stop first."));
+			}
+			continue;
 		}
-
-		Messages->PostMessage(Leader->DisplayName,
-			FText::Format(LOCTEXT("SoloStanceFmt", "{0} stance: {1}"), Leader->DisplayName, StanceName));
+		if (Stance != EOperativeStance::Prone)
+		{
+			Member->SetStance(Stance);
+		}
+		Squad->NotePlayerStanceOrder(*Member);
+		++Applied;
+		if (Messages)
+		{
+			Messages->PostMessage(Member->DisplayName,
+				FText::Format(LOCTEXT("SoloStanceFmt", "{0} stance: {1}"), Member->DisplayName, StanceName));
+		}
+	}
+	if (Applied > 0)
+	{
+		ControllerCommands::Report(this, ControllerCommands::ForStance(Stance, false));
 	}
 }
 
@@ -140,7 +155,7 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 	{
 		Leader->SetStance(Next);
 	}
-	Leader->ClearStanceFromSquad();
+	Squad->NotePlayerStanceOrder(*Leader); // the player's order: kept in Solo through selection switches (bug 2026-11-08)
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Next, false));
 }
 

@@ -344,6 +344,19 @@ SquadAutonomyRules::ESoloGuardCrouch SquadAutonomyRules::StepSoloGuardCrouch(boo
 	return ShouldTakeHaltStance(EOperativeStance::Crouching, Current, StillSeconds, AfterSeconds, true) ? ESoloGuardCrouch::Crouch : ESoloGuardCrouch::Wait;
 }
 
+bool SquadAutonomyRules::KeepsOwnStanceInSolo(const FSoloStanceFacts& Facts, bool bOwnStanceRule)
+{
+	if (Facts.bTrapSoloInCover || Facts.bGroupCoverProne)
+	{
+		return true;
+	}
+	if (!bOwnStanceRule)
+	{
+		return false;
+	}
+	return Facts.bManualCornerPeek || (Facts.bLeaderSwitch && Facts.bStanceFromPlayer);
+}
+
 float SquadAutonomyRules::StepStillSeconds(bool bMoving, float StillSeconds, float DeltaSeconds)
 {
 	return bMoving ? 0.f : StillSeconds + FMath::Max(0.f, DeltaSeconds);

@@ -37,7 +37,7 @@
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke", "FormationCustomSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke", "FormationFarSideSmoke",
     "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "VisionHeightSmoke", "WallLeadershipSmoke", "CombatLabAmbushRelocateSmoke", "SquadHaltStanceSmoke", "LevelGenRouteSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke", "RoofCutawayFocusSmoke", "FallDropSmoke", "DropSoftlockSmoke", "DropLinkReachSmoke", "WallSectorsSmoke", "GroupCoverNearbySmoke", "WallLeadershipSlideSmoke", "GroupCornerPeekSmoke", "RunCornerPeekSmoke", "TwoCornerHoldSmoke",
-    "PmcTeamSmoke", "PmcCommanderSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "PmcStandoffSmoke", "SightConditionsSmoke", "ConePerfSmoke", "WeaponReachSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcUnderFireSmoke", "UnderFireManoeuvreSmoke"
+    "PmcTeamSmoke", "PmcCommanderSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "PmcStandoffSmoke", "SightConditionsSmoke", "ConePerfSmoke", "WeaponReachSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcUnderFireSmoke", "UnderFireManoeuvreSmoke", "SoloStanceSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -107,6 +107,7 @@
     "VisionHeightSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 600, "_why": "game designer 2026-11-02 (L_Gen_Depot_1, the Engineer prone at a roof edge as a sniper): his cone cuts every wall's shadow from a +3 roof (a multi-slab roof, the wall tops flush with its edge, walls behind crates) and equals CanOperativeSee on a grid; the sight range grows with the height level (+3 x1.75: a target 63-76 m out seen from the roof, not from the ground; the -3 m cut keeps the ground range); the ruin's +2 roof x1.5; a Marksman on the roof spots the squad at the elevated range, not through walls; a hound gets no bonus" },
     "TowerVisionSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 300, "_why": "bug 09 (game designer 2026-11-01): an operative on a lab tower sees over a 3 m wall only where the line clears it - his cone on the ground below, the roof edge's dead zone and the wall's shadow cut, drawn = CanOperativeSee; an enemy in the shadow unseen, beyond it seen; a ground-level operative's cone the flat model" },
     "CombatLabAmbushRelocateSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 900, "_why": "the game designer's decisions 2026-11-01 night (docs/design/COMBAT_LAB.md 2.1): a plan watched all round strikes after its hold limit; a relocation run spotted by a ground / a tower watcher strikes at once; no concealed route -> no teleport, it stays, then follows the squad as a patrol; a single ambush watched all along strikes after its 60-90 s" },
+    "SoloStanceSmoke": { "timeout": 300, "_why": "the game designer's PIE report 2026-11-08 (Solo: the first operative ordered prone got up into a crouch when the next one was selected and ordered prone): real keys 1-3 / V / C / Z, a stance the player gave stays with that operative through selection switches (prone, crouch, stand), a box selection's V lays both selected down and nobody else, Codex.Squad.SoloOwnStance 0 reproduces the bug" },
     "SquadHaltStanceSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 600, "_why": "decision 6 (2026-11-01 night, the stance jitter): in a fight a 3 s halt crouches no follower, a long halt crouches them after squad_roe.json hold_crouch_after_sec, the next move stands them up at once, Solo's guard crouch waits the same hold_crouch_after_sec (2026-11-02)" },
     "CombatLabAmbushSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 900, "_why": "combat lab ambushes v2 (game designer answers 2026-11-01, docs/design/COMBAT_LAB.md): the first group at 30 s, hiding spots at wall ends / doorways / authored points, a coordinated ambush (flanks first with the ranged ones suppressing, then rear + front, its own alive cap), a bypassed ambush relocates ahead unseen, an operative aiming at another enemy still watches" },
     "FormationLabCombatSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 900, "_why": "combat lab (game designer 2026-11-01, docs/design/COMBAT_LAB.md): seeded patrol / ambush spawns never in or near a wall / tower (record + own rays), the endless timer under max_alive, an ambusher holds while watched and springs when its side is unwatched, a patrol contact starts the skirmish while the squad moves and the squad keeps moving in formation in it, immortal + infinite ammo, the leader climbs a tower" },
@@ -662,8 +663,8 @@
     {
       "name": "operative-movement-squad",
       "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeCrowdFollowing*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
-      "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement", "CodexTactics.Characters.SquadAutonomy.SoloGuardCrouchDelay"],
-      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke", "FormationLabSmoke", "SquadHaltStanceSmoke"]
+      "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement", "CodexTactics.Characters.SquadAutonomy.SoloGuardCrouchDelay", "CodexTactics.Characters.SquadAutonomy.SoloOwnStance"],
+      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke", "FormationLabSmoke", "SquadHaltStanceSmoke", "SoloStanceSmoke"]
     },
     {
       "name": "combat-formation-2026-10-26",
@@ -723,7 +724,7 @@
       "name": "autonomy-postures",
       "globs": ["Source/**/Characters/SquadAutonomy*", "Source/**/Characters/FirePosture*", "Source/**/Data/SquadROE*", "Content/Data/AI/squad_roe.json", "Source/**/Debug/SquadHaltStanceSmoke*"],
       "tests": ["CodexTactics.Characters.SquadAutonomy", "CodexTactics.Squad.Posture", "CodexTactics.Data.SquadROE"],
-      "smokes": ["SquadHaltStanceSmoke", "PostureSmoke", "AmbushSmoke", "SquadFireSmoke", "SquadControlSmoke", "CommanderModeSmoke"]
+      "smokes": ["SquadHaltStanceSmoke", "SoloStanceSmoke", "PostureSmoke", "AmbushSmoke", "SquadFireSmoke", "SquadControlSmoke", "CommanderModeSmoke"]
     },
     {
       "name": "defense-marker",
@@ -824,8 +825,8 @@
     {
       "name": "controller-stance",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerStance*"],
-      "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": ["StanceSmoke", "SquadControlSmoke", "ActionBarSmoke"]
+      "tests": ["CodexTactics.Core.ControllerUnits", "CodexTactics.Characters.SquadAutonomy.SoloOwnStance"],
+      "smokes": ["SoloStanceSmoke", "StanceSmoke", "SquadControlSmoke", "ActionBarSmoke"]
     },
     {
       "name": "controller-items",
